@@ -1,17 +1,17 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
-import { open } from './store.ts'
 import { images } from './images.ts'
 import { responses } from '@yaks/openai'
 import { fileBlobs, memoryBlobs } from '@yaks/blob'
 import { remote } from './remote.ts'
+import { at, harness } from './testing.ts'
 
 const png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
 Deno.test('generated artifacts survive database reopen and keep payloads out of transcript and requests', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graph.db', directory = dir + '/images'
-  let h = open(db)
+  let h = await harness(db)
   let requests: string[] = []
   let image = {
     type: 'image_generation_call',
@@ -60,7 +60,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
     assert(!requests.some((r) => r.includes(png)))
     assertEquals(Array.from(Deno.readDirSync(directory)).length, 1)
     await a.close()
-    let again = open(db)
+    let again = await harness(db)
     try {
       assertEquals((await again.g.read('.artifact&*')).length, 1)
     } finally {
@@ -94,7 +94,7 @@ Deno.test('host store failure returns no artifact and retry repairs partial byte
 Deno.test('image options cross the worker boundary without serializing callbacks', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
-    db: ':memory:',
+    config: at(),
     cwd: dir,
     fake: true,
     images: {
@@ -126,7 +126,12 @@ Deno.test('image configuration defaults to enabled with explicit disable and ove
 
 Deno.test('image disable crosses the worker boundary', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: true, images: false })
+  let r = await remote({
+    config: at(':memory:'),
+    cwd: dir,
+    fake: true,
+    images: false,
+  })
   try {
     let id = await r.agent.start('disabled')
     await r.idle(id)

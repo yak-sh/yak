@@ -4,8 +4,8 @@ import type { Reply } from '@yaks/model'
 import { type ChildLimits, sessionTools } from '@yaks/session'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
-import { open } from './store.ts'
-import { repo } from './testing.ts'
+import type { Harness } from './store.ts'
+import { harness, repo } from './testing.ts'
 
 let reply = (text: string): Reply => ({
   id: 'r',
@@ -30,13 +30,13 @@ let file = async () => {
 }
 // The same limits bound the tools that queue children and the runner that
 // admits them.
-let limited = (h: ReturnType<typeof open>, limits: ChildLimits) => ({
+let limited = (h: Harness, limits: ChildLimits) => ({
   ...limits,
   tools: sessionTools(h.g, limits),
 })
 
 Deno.test('shared FIFO pool admits IDs before preparation and never over-admits across parents', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   let starts: string[] = [], prepared: string[] = []
   let replies = Array.from({ length: 3 }, () => Promise.withResolvers<Reply>())
   let bound = limited(h, {
@@ -97,7 +97,7 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
 
 Deno.test('queued intent survives a restart, and closing does not drain the durable queue', async () => {
   let { path, free } = await file()
-  let h = open(path)
+  let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })
   let a = local({
     cwd: repo(),
@@ -123,7 +123,7 @@ Deno.test('queued intent survives a restart, and closing does not drain the dura
       }, { session: 'p', call: { entity: { eid: 'call' } }, entries: [] }),
     )
     await a.close()
-    h = open(path)
+    h = await harness(path)
     assertEquals((await h.g.read('.dispatch.state=queued&*')).length, 1)
     b = local({
       cwd: repo(),
@@ -144,7 +144,7 @@ Deno.test('queued intent survives a restart, and closing does not drain the dura
 })
 
 Deno.test('cap one nested delegated wait releases and reacquires its slot', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   let turns = new Map<string, number>()
   let finished = false
   let a = local({
@@ -196,7 +196,7 @@ Deno.test('cap one nested delegated wait releases and reacquires its slot', asyn
 
 Deno.test('queued cancellation skips expensive prep; prep failure has one terminal receipt', async () => {
   let { path, free } = await file()
-  let h = open(path)
+  let h = await harness(path)
   let prepared: string[] = []
   let prepare: ChildLimits['prepareChild'] = ({ child }) => {
     prepared.push(child)
@@ -234,7 +234,7 @@ Deno.test('queued cancellation skips expensive prep; prep failure has one termin
       stop: {},
     }])
     await a.close()
-    h = open(path)
+    h = await harness(path)
     b = local({
       cwd: repo(),
       h,
@@ -262,7 +262,7 @@ Deno.test('queued cancellation skips expensive prep; prep failure has one termin
 
 Deno.test('queued submissions and fork anchors survive file reopen without duplicate preparation', async () => {
   let { path, free } = await file()
-  let h = open(path)
+  let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })
   let a = local({
     cwd: repo(),
@@ -292,7 +292,7 @@ Deno.test('queued submissions and fork anchors survive file reopen without dupli
       }, { session: 'p', call: { entity: { eid: 'call' } }, entries }),
     )
     await a.close()
-    h = open(path)
+    h = await harness(path)
     let prep = 0
     bound = limited(h, {
       maxChildren: 1,

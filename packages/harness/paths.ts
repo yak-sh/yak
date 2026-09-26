@@ -8,3 +8,10 @@ export let home = (
 export let worktrees = (
   env: (name: string) => string | undefined = Deno.env.get,
 ): string => env('HARNESS_WORKTREE_DIR') || `${home(env)}/worktrees`
+
+/** The graph in the harness's home: `$HARNESS_DB`, else `yak.db` there. The
+ * one a terminal's drafts are kept for, and the only one whose run may sweep
+ * the worktree root. */
+export let dbPath = (
+  env: (name: string) => string | undefined = Deno.env.get,
+): string => env('HARNESS_DB') || `${home(env)}/yak.db`

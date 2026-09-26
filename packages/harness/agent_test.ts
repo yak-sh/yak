@@ -6,7 +6,7 @@ import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { statusOf } from '@yaks/session'
 import { agent } from './agent.ts'
-import { open } from './store.ts'
+import { harness } from './testing.ts'
 
 let echo: Model = (req) =>
   Promise.resolve({
@@ -15,13 +15,13 @@ let echo: Model = (req) =>
     items: [{ kind: 'assistant', text: 'heard' }],
   })
 
-let host = () => {
-  let { g, fx, vocab, me, close } = open(':memory:')
+let host = async () => {
+  let { g, fx, vocab, me, close } = await harness()
   return { h: { g, fx, vocab, me }, release: close }
 }
 
 Deno.test('the runner needs a graph and a model, nothing of a machine', async () => {
-  let { h, release } = host()
+  let { h, release } = await host()
   let released = false
   let a = agent({
     h,
@@ -42,7 +42,7 @@ Deno.test('the runner needs a graph and a model, nothing of a machine', async ()
 })
 
 Deno.test('what a caller says is signed with them, through the transcript', async () => {
-  let { h, release } = host()
+  let { h, release } = await host()
   let a = agent({ h, model: echo, release })
   try {
     let [caller] = await h.g.apply([
@@ -65,7 +65,7 @@ Deno.test('what a caller says is signed with them, through the transcript', asyn
 
 Deno.test('a new session opens with what its host found for it', async () => {
   let a = agent({
-    ...host(),
+    ...await host(),
     model: echo,
     opening: () =>
       Promise.resolve({

@@ -241,10 +241,12 @@ and the next pass takes them.
 
 A process working the pool claims the runs its own commits owe as it writes
 them, and starts them once the commit is done. What another process wrote is
-picked up by the next pass, at most a second away. A worker that stays up holds
-a presence lease, one per process, and a one-shot `work` leaves the pool to it:
-a command passing through does not race a server for the same rows. `stop`
-leaves the pool, so what the process commits afterwards is left for the others.
+picked up by the next pass, at most a second away. A worker that stays up with
+code for every declared effect holds a presence lease, one per process, and a
+one-shot `work` leaves the pool to it: a command passing through does not race a
+server for the same rows. A worker handling only some of them holds none, since
+it would leave the rest owed to nobody. `stop` leaves the pool, so what the
+process commits afterwards is left for the others.
 
 A run that throws is due again after a backoff (a second, doubling, capped at
 five minutes) until it spends its attempts (`tries`, default three) and stays

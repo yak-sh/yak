@@ -3,6 +3,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { promptEntry } from '@yaks/context'
 import { instructionFiles } from '@yaks/context/host'
 import { input } from '../openai/responses.ts'
+import { harness } from './testing.ts'
 
 Deno.test('instruction admission snapshots files in stable ancestor order', async () => {
   let dir = await Deno.makeTempDir()
@@ -56,11 +57,10 @@ Deno.test('instruction items map to ordered developer messages, never user text'
 Deno.test('root admission is snapshotted and explicit later context is an instruction', async () => {
   let dir = await Deno.makeTempDir()
   let { local } = await import('./local.ts')
-  let { open } = await import('./store.ts')
   let requests: import('@yaks/model').Request[] = []
   await Deno.writeTextFile(dir + '/AGENTS.md', 'shared rule')
   let a = await local({
-    h: open(':memory:'),
+    h: await harness(),
     model: (req) => {
       requests.push(req)
       return Promise.resolve({
@@ -98,9 +98,8 @@ Deno.test('root admission is snapshotted and explicit later context is an instru
 
 Deno.test('retired CLI instructions are omitted on future asks without rewriting history', async () => {
   let { local } = await import('./local.ts')
-  let { open } = await import('./store.ts')
   let dir = await Deno.makeTempDir()
-  let h = open(':memory:')
+  let h = await harness()
   let requests: import('@yaks/model').Request[] = []
   let a = local({
     h,

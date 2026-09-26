@@ -1,9 +1,9 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, graph, type Plugin, type Tool } from '@yaks/graph'
 import { runner, toolEid, UnfinishedCall } from '@yaks/tools'
+import { harness } from './testing.ts'
 
 const TOOL = toolEid('echo')
-import { open } from './store.ts'
 
 // The claim is durable, so a call that ran once is answered from the graph
 // after a reopen rather than run a second time — and a claim with no answer
@@ -11,7 +11,7 @@ import { open } from './store.ts'
 Deno.test('recorded execution survives SQLite reopen and needs no session', async () => {
   const dir = await Deno.makeTempDir({ prefix: 'call-execution-' })
   const path = dir + '/test.db'
-  let h = open(path)
+  let h = await harness(path)
   let runs = 0
   const echo: Tool = {
     name: 'echo',
@@ -37,7 +37,7 @@ Deno.test('recorded execution survives SQLite reopen and needs no session', asyn
     ])
     await runner(h.g, { tools: [echo] }).run('call')
     h.close()
-    h = open(path)
+    h = await harness(path)
     const again = runner(h.g, { tools: [echo] })
     const result = await again.run('call')
     assertEquals(runs, 1)
@@ -52,7 +52,7 @@ Deno.test('recorded execution survives SQLite reopen and needs no session', asyn
 })
 
 Deno.test('failed result commit leaves the claim and never repeats side effects', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   const rejectResult: Plugin = {
     name: 'reject-results',
     hooks: {

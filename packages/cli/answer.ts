@@ -289,15 +289,15 @@ export let painted = async (
 
 /** An answer held in the terminal (@yaks/tui) until Ctrl-C, drawn as a
  * printout draws it ({@link painted}). Loaded only when asked for, so a
- * printed answer never pays for a terminal app. `db` is the file the answer
- * came from, for a view that keeps reading it. A lone answer drawn by a
+ * printed answer never pays for a terminal app. `config` is the config file
+ * naming the graph the answer came from, for a view that keeps reading it. A lone answer drawn by a
  * component of its own (a plugin's `./tui`) is an app, and has the whole
  * terminal; anything else scrolls. */
 export let hold = async (
   views: Held,
   vocab: Vocab,
   answer: Bundle[],
-  db?: string,
+  config?: string,
   named: Bundle[] = [],
   near: Near = nothing,
 ): Promise<void> => {
@@ -308,14 +308,14 @@ export let hold = async (
   ])
   let [lone] = answer
   let app = answer.length == 1 && 'Render' in
-      (resolve(views, lone, viewOf(answer), vocab, { db }) ?? {})
+      (resolve(views, lone, viewOf(answer), vocab, { config }) ?? {})
   await run(() => {
     let { nodes } = drawn<ComponentChild>(
       vocab,
       answer,
       named,
       near,
-      (b, v, c) => mount(views, b, v, vocab, { ...c, db }),
+      (b, v, c) => mount(views, b, v, vocab, { ...c, config }),
     )
     return app ? nodes[0] : h(
       Scroll,
@@ -377,15 +377,15 @@ export let standing = async (
 }
 
 /** An answer shown the way the command asked — held in the terminal under
- * `--tui`, drawn by `held` where the command has terminal views and a file to
- * read ({@link terminal}), painted where stdout is a terminal, and printed
+ * `--tui`, drawn by `held` where the command has terminal views and a config
+ * to read ({@link terminal}), painted where stdout is a terminal, and printed
  * otherwise. The answer of a tool that `wrote` is drawn {@link standing}. */
 export let show = async (
   c: { tui: boolean; tty?: Tty; out: (line: string) => void },
   views: Registry,
   vocab: Vocab,
   said: Bundle[],
-  held: { views?: Held; db?: string } = {},
+  held: { views?: Held; config?: string } = {},
   from: Source = none,
   wrote = false,
 ): Promise<void> => {
@@ -396,7 +396,14 @@ export let show = async (
   let refs = referenced(vocab, [...answer, ...near.links, ...near.comments])
   let named = refs.length ? await from.lookup(refs) : []
   if (c.tui) {
-    return await hold(held.views ?? views, vocab, answer, held.db, named, near)
+    return await hold(
+      held.views ?? views,
+      vocab,
+      answer,
+      held.config,
+      named,
+      near,
+    )
   }
   if (c.tty) {
     let text = await painted(views, vocab, answer, named, c.tty.columns, near)

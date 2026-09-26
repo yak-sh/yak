@@ -5,16 +5,15 @@ import { mount } from '../tui/testing.ts'
 import { until } from '../process/testing.ts'
 import { App, changes } from './app.ts'
 import { frontend } from './frontend.ts'
-import { open } from './store.ts'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
 import { edgeEid } from '@yaks/edge'
 import { identityEid } from '@yaks/graph'
 import type { Request } from '@yaks/model'
-import { repo } from './testing.ts'
+import { harness, repo } from './testing.ts'
 
 Deno.test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
-  const hnd = open(':memory:')
+  const hnd = await harness()
   const requests: Request[] = []
   const a = local({
     cwd: repo(),
@@ -88,7 +87,7 @@ Deno.test('m chooses a model for a new draft; existing choice is passive, Esc pr
 })
 
 Deno.test('model row mouse selection preserves INSERT and does not submit a draft', async () => {
-  const hnd = open(':memory:')
+  const hnd = await harness()
   let requests = 0
   const a = local({
     cwd: repo(),

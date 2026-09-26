@@ -2,8 +2,8 @@
  * deno run -A packages/harness/worker_bench.ts
  */
 import { local } from './local.ts'
-import { open } from './store.ts'
 import { remote } from './remote.ts'
+import { at, harness } from './testing.ts'
 const cwd = await Deno.makeTempDir()
 let results: unknown[] = []
 try {
@@ -11,7 +11,7 @@ try {
     let begin = performance.now()
     let inline = mode == 'inline'
       ? local({
-        h: open(':memory:'),
+        h: await harness(),
         cwd,
         name: 'fake',
         model: () =>
@@ -23,7 +23,7 @@ try {
       })
       : undefined
     let worker = mode == 'worker'
-      ? await remote({ db: ':memory:', cwd, fake: true })
+      ? await remote({ config: at(':memory:'), cwd, fake: true })
       : undefined
     let a = inline ?? worker!.agent
     let startup = performance.now() - begin

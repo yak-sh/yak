@@ -42,7 +42,9 @@
 // A worker that stays up holds a presence lease while it works, one per
 // process, so a process that only passes through — a command line — can tell
 // whether anyone is working the pool, and leaves the work to them when they
-// are.
+// are. Only a worker with code for every declared effect holds one: a process
+// lending one effect its code (a terminal running its own transcripts) works
+// that one, and says nothing about the rest.
 
 import type { Bundle, Comp, Eid, Graph, Tx } from '@yaks/graph'
 import { detached, guard, Stale, then, token } from '@yaks/graph'
@@ -395,7 +397,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // Its presence lease goes with it, so nobody waits out its expiry.
   let stay = async (g: Graph, signal: AbortSignal) => {
     let seat = `${POOL}/${me}`
-    let present = !!opts.owner && !!g.vocab.comp(LEASE)
+    let present = !!opts.owner && !!g.vocab.comp(LEASE) &&
+      ctx.slots().every((s) => !s.effect || !!s.run)
     let until = 0
     try {
       while (!signal.aborted) {

@@ -2,9 +2,8 @@ import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { streamingEnabled } from './streaming.ts'
 import { local } from './local.ts'
-import { open } from './store.ts'
 import { remote } from './remote.ts'
-import { repo } from './testing.ts'
+import { at, harness, repo } from './testing.ts'
 
 Deno.test('streaming defaults on; explicit options override the environment', () => {
   for (const value of [undefined, '1', '0']) {
@@ -29,7 +28,7 @@ const streamAs = (value: string | undefined) => (name: string) =>
 
 Deno.test('default inline streaming admits an ask for a model without deltas; opt-out keeps legacy path', async () => {
   for (const options of [{}, { stream: false }, { streaming: false }]) {
-    const h = open(':memory:')
+    const h = await harness()
     let observed = false
     const a = local({
       cwd: repo(),
@@ -60,7 +59,7 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
   let calls = 0
   const failed = local({
     cwd: repo(),
-    h: open(':memory:'),
+    h: await harness(),
     env: streamAs(undefined),
     model: () => {
       calls++
@@ -92,7 +91,7 @@ Deno.test('worker resolves streaming environment and explicit opt-out before clo
     ] as const
   ) {
     const a = await remote({
-      db: ':memory:',
+      config: at(),
       fake: true,
       env: streamAs(value),
       ...options,

@@ -3,9 +3,10 @@ import { FakeTime } from '@std/testing/time'
 import { remote } from './remote.ts'
 import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
+import { at, harness } from './testing.ts'
 Deno.test('worker owns an isolated database; selected entries replicate and commands stay explicit', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  let r = await remote({ config: at(':memory:'), cwd: dir, fake: true })
   try {
     let id = await r.agent.start('worker test')
     let entries = await r.agent.transcript(id)
@@ -38,7 +39,7 @@ Deno.test('worker rejects bad paths without creating a fallback database', async
   const { assertRejects } = await import('@std/assert')
   let dir = await Deno.makeTempDir()
   try {
-    await assertRejects(() => remote({ db: dir, fake: true }))
+    await assertRejects(() => remote({ config: at(dir), fake: true }))
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
@@ -46,7 +47,7 @@ Deno.test('worker rejects bad paths without creating a fallback database', async
 
 Deno.test('worker stop waits for admitted commands and model turns', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  let r = await remote({ config: at(':memory:'), cwd: dir, fake: true })
   try {
     let work = r.agent.start('finish before shutdown')
     await r.close()
@@ -62,7 +63,7 @@ Deno.test('worker frontend typing stays local after its subscribed view is ready
   const { frontend } = await import('./frontend.ts')
   const { mount } = await import('../tui/testing.ts')
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  let r = await remote({ config: at(':memory:'), cwd: dir, fake: true })
   let local = frontend()
   let screen: Awaited<ReturnType<typeof mount>> | undefined
   try {
@@ -106,9 +107,8 @@ Deno.test('worker frontend typing stays local after its subscribed view is ready
 })
 
 Deno.test('worker subscribes only to selected fork ancestry, respecting each boundary', async () => {
-  const { open } = await import('./store.ts')
   let dir = await Deno.makeTempDir(), path = dir + '/test.db'
-  let store = open(path)
+  let store = await harness(path)
   await store.g.apply([
     { entity: { eid: 'root' }, session: { id: 'root' } },
     {
@@ -135,7 +135,7 @@ Deno.test('worker subscribes only to selected fork ancestry, respecting each bou
     },
   ], { trusted: true })
   store.close()
-  let r = await remote({ db: path, cwd: dir, fake: true })
+  let r = await remote({ config: at(path), cwd: dir, fake: true })
   try {
     assertEquals((await r.agent.transcript('child')).map((b) => b.entity.eid), [
       'a',
@@ -158,7 +158,7 @@ Deno.test('worker subscribes only to selected fork ancestry, respecting each bou
 Deno.test('worker publishes a second input while a slow model is still pending', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
-    db: ':memory:',
+    config: at(),
     cwd: dir,
     fake: 'held',
     streaming: true,
@@ -195,7 +195,7 @@ Deno.test('worker publishes a second input while a slow model is still pending',
 
 Deno.test('worker exit drains a burst and is idempotent', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  let r = await remote({ config: at(':memory:'), cwd: dir, fake: true })
   try {
     let id = await r.agent.start('burst')
     let writes = Array.from(
@@ -218,7 +218,13 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
   // A backend that is killed holds its run until the take runs out, and the
   // next one takes it over then: a short take keeps that wait short.
   let hold = 300
-  let r = await remote({ db, cwd: dir, fake: 'stuck', streaming: true, hold })
+  let r = await remote({
+    config: at(db),
+    cwd: dir,
+    fake: 'stuck',
+    streaming: true,
+    hold,
+  })
   try {
     await r.agent.start('stuck')
     await r.testing!.started()
@@ -237,7 +243,7 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
       assertEquals(await closing, { drained: false })
     }
     let resumed = await remote({
-      db,
+      config: at(db),
       cwd: dir,
       fake: true,
       streaming: true,
@@ -271,7 +277,7 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
 
 Deno.test('selection subscription does not invalidate its own awaiting projection', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  let r = await remote({ config: at(':memory:'), cwd: dir, fake: true })
   try {
     let first = await r.agent.start('first')
     let second = await r.agent.start('second')
@@ -318,7 +324,12 @@ Deno.test('selection subscription does not invalidate its own awaiting projectio
 Deno.test('unbounded graceful close finishes a slow response beyond the old deadline', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graceful.db'
-  let r = await remote({ db, cwd: dir, fake: 'held', streaming: true })
+  let r = await remote({
+    config: at(db),
+    cwd: dir,
+    fake: 'held',
+    streaming: true,
+  })
   try {
     let id = await r.agent.start('finish before exit')
     await r.testing!.started()
@@ -334,7 +345,7 @@ Deno.test('unbounded graceful close finishes a slow response beyond the old dead
       await r.testing!.release()
       assertEquals(await closing, { drained: true })
     }
-    let reopened = await remote({ db, cwd: dir, fake: true })
+    let reopened = await remote({ config: at(db), cwd: dir, fake: true })
     try {
       let entries = await reopened.agent.transcript(id)
       assert(
@@ -358,7 +369,7 @@ Deno.test('unbounded graceful close finishes a slow response beyond the old dead
 
 Deno.test('explicit force releases unbounded close while a provider is stuck', async () => {
   let dir = await Deno.makeTempDir()
-  let r = await remote({ db: ':memory:', cwd: dir, fake: 'stuck' })
+  let r = await remote({ config: at(':memory:'), cwd: dir, fake: 'stuck' })
   try {
     await r.agent.start('wait')
     await r.testing!.started()
@@ -377,7 +388,7 @@ Deno.test('new reads during graceful shutdown are typed expected refusals', asyn
   const { assertRejects } = await import('@std/assert')
   const { ShuttingDown } = await import('./shutdown.ts')
   const dir = await Deno.makeTempDir()
-  const r = await remote({ db: ':memory:', cwd: dir, fake: true })
+  const r = await remote({ config: at(':memory:'), cwd: dir, fake: true })
   try {
     const closing = r.close({ timeout: null })
     await assertRejects(() => r.agent.tasks(), ShuttingDown)
@@ -390,13 +401,12 @@ Deno.test('new reads during graceful shutdown are typed expected refusals', asyn
 
 Deno.test('worker model selection is database-backed, passive, and forwarded on start', async () => {
   const dir = await Deno.makeTempDir()
-  const { open } = await import('./store.ts')
   const { seed } = await import('./agent.ts')
   const path = dir + '/model-picker.db'
-  const h = open(path)
+  const h = await harness(path)
   await h.g.apply(seed({ provider: 'openrouter', model: 'test/model' }))
   h.close()
-  const r = await remote({ db: path, cwd: dir, fake: true })
+  const r = await remote({ config: at(path), cwd: dir, fake: true })
   try {
     const model = identityEid('model', ['test/model'])
     const id = edgeEid(identityEid('provider', ['openrouter']), 'serves', model)

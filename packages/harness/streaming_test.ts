@@ -1,14 +1,13 @@
 import { assert, assertEquals } from '@std/assert'
 import { local } from './local.ts'
-import { open } from './store.ts'
 import { tally } from '@yaks/sql'
 import { type Comp, transient } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
 import { statusOf } from '@yaks/session'
-import { repo } from './testing.ts'
+import { at, harness, repo } from './testing.ts'
 
 Deno.test('streaming records ask before dispatch, projects text without durable token writes, and finalizes same entry', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   let release!: () => void, started!: () => void
   const gate = new Promise<void>((r) => release = r)
   const sent = new Promise<void>((r) => started = r)
@@ -81,7 +80,7 @@ Deno.test('streaming records ask before dispatch, projects text without durable 
 })
 
 Deno.test('partial failure preserves text and does not automatically retry ambiguous request', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   let calls = 0
   const a = local({
     cwd: repo(),
@@ -115,7 +114,7 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
 Deno.test('a real worker transfers transient text before model completion', async () => {
   const { remote } = await import('./remote.ts')
   const a = await remote({
-    db: ':memory:',
+    config: at(),
     streaming: true,
     fake: { delayMs: 300, deltas: 30 },
   })
@@ -150,7 +149,7 @@ Deno.test('a real worker transfers transient text before model completion', asyn
 })
 
 Deno.test('new input while streaming is outside frozen ask boundary and served in follow-up', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   let release!: () => void, started!: () => void, calls = 0
   const gate = new Promise<void>((r) => release = r)
   const sent = new Promise<void>((r) => started = r)
@@ -199,7 +198,7 @@ Deno.test('new input while streaming is outside frozen ask boundary and served i
 })
 
 Deno.test('restart of dispatched attempt is interrupted, never resent', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   const a = local({
     cwd: repo(),
     h,
@@ -252,7 +251,7 @@ Deno.test('restart of dispatched attempt is interrupted, never resent', async ()
 
 Deno.test('fork admission cannot capture mutable in-flight output', async () => {
   const { assertRejects } = await import('@std/assert')
-  const h = open(':memory:')
+  const h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 'parent' }, session: {} },
@@ -295,7 +294,7 @@ Deno.test('fork admission cannot capture mutable in-flight output', async () => 
 })
 
 Deno.test('an empty successful reply completes its ask rather than issuing another request', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   let count = 0
   const a = local({
     cwd: repo(),
@@ -317,7 +316,7 @@ Deno.test('an empty successful reply completes its ask rather than issuing anoth
 })
 
 Deno.test('checkpoints bound blob versions and finalization persists one stable response', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   const blobs = () => tally(h.sql, 'blob_text')
   const initial = blobs()
   let appends = 0
@@ -350,7 +349,7 @@ Deno.test('checkpoints bound blob versions and finalization persists one stable 
 })
 
 Deno.test('operational interruption retains partial context, waits, and continues from completed anchor', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   const requests: import('@yaks/model').Request[] = []
   const model: import('@yaks/model').Model = (req) => {
     requests.push(req)
@@ -402,7 +401,7 @@ Deno.test('operational interruption retains partial context, waits, and continue
 })
 
 Deno.test('unexpected model programming failure remains an exception', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   const a = local({
     cwd: repo(),
     h,
@@ -428,7 +427,7 @@ Deno.test('unexpected model programming failure remains an exception', async () 
 })
 
 Deno.test('input admitted during an aborted turn is served once after interruption', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   let started!: () => void, abort!: () => void
   const entered = new Promise<void>((r) => started = r)
   const gate = new Promise<void>((r) => abort = r)
@@ -477,7 +476,7 @@ Deno.test('input admitted during an aborted turn is served once after interrupti
 
 Deno.test('invalid provider history records a healable exception, not an operational interruption', async () => {
   let { responses } = await import('@yaks/openai')
-  let h = open(':memory:')
+  let h = await harness()
   let a = local({
     cwd: repo(),
     h,
@@ -515,7 +514,7 @@ Deno.test('invalid provider history records a healable exception, not an operati
 })
 
 Deno.test('provider rejection paints crashed and successful recovery clears it', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   let calls = 0
   let a = local({
     cwd: repo(),

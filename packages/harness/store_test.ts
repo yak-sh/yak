@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript } from '@yaks/session'
-import { open } from './store.ts'
+import { harness } from './testing.ts'
 
 let fake: Model = (req) =>
   Promise.resolve({
@@ -15,8 +15,8 @@ let P = identityEid('provider', ['openai'])
 let M = identityEid('model', ['gpt-6-astra'])
 let A = identityEid('model', ['astra'])
 
-let seeded = () => {
-  let h = open(':memory:')
+let seeded = async () => {
+  let h = await harness()
   h.g.apply([
     { entity: { eid: P }, provider: { name: 'openai' } },
     { entity: { eid: M }, model: { name: 'gpt-6-astra' } },
@@ -32,7 +32,7 @@ let seeded = () => {
 }
 
 Deno.test('a transcript is entities in SQLite, read back in order', async () => {
-  let h = seeded()
+  let h = await seeded()
   let entries = await transcript(h.g, 's')
   assertEquals(entries.map((b) => (b.content as Comp).body), ['ping'])
   assertEquals(statusOf(entries), 'pending')
@@ -40,7 +40,7 @@ Deno.test('a transcript is entities in SQLite, read back in order', async () => 
 })
 
 Deno.test('one step against a fake model appends its ask and its prose', async () => {
-  let h = seeded()
+  let h = await seeded()
   let step = await react(h.g, 's', { model: fake, tools: [] })
   assertEquals(step.did, 'asked')
   assertEquals(step.status, 'settled')
@@ -54,7 +54,7 @@ Deno.test('one step against a fake model appends its ask and its prose', async (
 })
 
 Deno.test('session.status is a derived property, so a query filters on it', async () => {
-  let h = seeded()
+  let h = await seeded()
   assertEquals((await h.g.read('.session.status=pending&*')).length, 1)
   assertEquals((await h.g.read('.session.status=settled&*')).length, 0)
   await react(h.g, 's', { model: fake, tools: [] })
@@ -66,7 +66,7 @@ Deno.test('session.status is a derived property, so a query filters on it', asyn
 })
 
 Deno.test('a task applies and reads back with its derived status', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   h.g.apply([{
     entity: { eid: 't1' },
     doc: { title: 'reply with pong' },
@@ -81,32 +81,11 @@ Deno.test('a task applies and reads back with its derived status', async () => {
   h.close()
 })
 
-Deno.test('a stale lease is freed at boot', async () => {
-  let path = `${Deno.makeTempDirSync()}/h.db`
-  let one = open(path)
-  one.g.apply([
-    { entity: { eid: 's' }, session: { id: 'one' } },
-    {
-      entity: { eid: 'p1' },
-      doc: { title: 'a page' },
-      claim: { session: 's' },
-    },
-  ])
-  // The holder never made it to the graph the next boot reads: delete it the
-  // way an abnormal ending would have, leaving the lock behind.
-  one.sql.query({ t: 'delete', from: 'session' })
-  one.close()
-  let two = open(path)
-  let [page] = await two.g.read('.doc&*')
-  assertEquals(page.claim, undefined)
-  two.close()
-})
-
 Deno.test('entries, tasks and sessions omit human numbers, after reopen too', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/numbering.db'
   try {
-    let h = open(path)
+    let h = await harness(path)
     await h.g.apply([
       { entity: { eid: 's' }, session: {} },
       {
@@ -117,7 +96,7 @@ Deno.test('entries, tasks and sessions omit human numbers, after reopen too', as
     ])
     assertEquals((await h.g.read('.entry&*'))[0].entity.num, undefined)
     h.close()
-    h = open(path)
+    h = await harness(path)
     assertEquals((await h.g.read('.entry&*'))[0].entity.num, undefined)
     await h.g.apply([{ entity: { eid: 't' }, task: {} }])
     assertEquals((await h.g.read('.task&*'))[0].entity.num, undefined)
@@ -128,9 +107,9 @@ Deno.test('entries, tasks and sessions omit human numbers, after reopen too', as
   }
 })
 
-Deno.test('a deleted provider leaves past entries saying what answered', () => {
+Deno.test('a deleted provider leaves past entries saying what answered', async () => {
   let dir = Deno.makeTempDirSync()
-  let h = open(dir + '/history.db')
+  let h = await harness(dir + '/history.db')
   try {
     h.g.apply([
       { entity: { eid: P }, provider: { name: 'openai' } },
@@ -156,7 +135,7 @@ Deno.test('a deleted provider leaves past entries saying what answered', () => {
 })
 
 Deno.test('SQLite commits simultaneous append batches with distinct positions', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply([{ entity: { eid: 's' }, session: {} }])
     await Promise.all(

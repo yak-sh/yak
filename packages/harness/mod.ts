@@ -12,8 +12,9 @@
  * ```
  * agent()         the seed rows, the runner lent (@yaks/session), and the
  *                 operations a caller needs                   (./agent.ts)
- * local()         agent() here: the SQLite file, the shell, a checkout per
- *                 child, MCP servers, the terminal       (@yaks/harness/local)
+ * local()         agent() here, over a graph a config composed: the shell, a
+ *                 checkout per child, MCP servers, the terminal
+ *                                                        (@yaks/harness/local)
  * tools           its verbs, as `yak` tools                      (./runs.ts)
  * effects         `session_run`, lent this machine, where a `yak` host
  *                 lists the harness                           (./effects.ts)

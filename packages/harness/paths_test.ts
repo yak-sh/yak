@@ -1,6 +1,5 @@
 import { assertEquals } from '@std/assert'
-import { home, worktrees } from './paths.ts'
-import { dbPath } from './store.ts'
+import { dbPath, home, worktrees } from './paths.ts'
 
 Deno.test('harness state moves together without redirecting HOME', () => {
   let values: Record<string, string> = { HOME: '/owner' }

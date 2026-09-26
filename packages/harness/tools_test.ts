@@ -1,34 +1,34 @@
 import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools, parametersOf } from './tools.ts'
 import { core } from '@yaks/mcp'
-import { open } from './store.ts'
+import { harness } from './testing.ts'
 
-let schemas = () => {
-  let h = open(':memory:')
+let schemas = async () => {
+  let h = await harness()
   let table = core({ vocab: h.vocab, depth: 'names' })
     .map((t) => [t.name, parametersOf(t)] as const)
   h.close()
   return new Map(table)
 }
 
-Deno.test('every graph tool says its arguments as JSON Schema', () => {
-  for (let [name, schema] of schemas()) {
+Deno.test('every graph tool says its arguments as JSON Schema', async () => {
+  for (let [name, schema] of await schemas()) {
     assertEquals(schema.type, 'object', name)
     assert(!('$schema' in schema), `${name} carries a $schema`)
     assert(!JSON.stringify(schema).includes('"$ref"'), `${name} carries a $ref`)
   }
 })
 
-Deno.test('a required argument is required and an optional one is not', () => {
-  let query = schemas().get('graph_query')!
+Deno.test('a required argument is required and an optional one is not', async () => {
+  let query = (await schemas()).get('graph_query')!
   assertEquals(query.required, ['q'])
   let props = query.properties as Record<string, Record<string, unknown>>
   assertEquals(props.q.type, 'string')
   assertEquals(props.limit.type, 'number')
 })
 
-Deno.test('the harness gives an agent the shell and the graph', () => {
-  let h = open(':memory:')
+Deno.test('the harness gives an agent the shell and the graph', async () => {
+  let h = await harness()
   let names = harnessTools(h.g).map((t) => t.name)
   assertEquals(names.slice(0, 3), ['shell', 'wait', 'stop'])
   assertEquals(new Set(names).size, names.length)
@@ -40,7 +40,7 @@ Deno.test('the harness gives an agent the shell and the graph', () => {
 })
 
 Deno.test('a graph tool writes and reads the harness graph', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   let tools = graphTools(h.g)
   let by = (name: string) => tools.find((t) => t.name == name)!
   await by('graph_apply').run({
@@ -52,7 +52,7 @@ Deno.test('a graph tool writes and reads the harness graph', async () => {
 })
 
 Deno.test('the merged wait preserves process output and child status alongside task waiting', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 'p' }, session: {} },

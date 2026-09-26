@@ -811,6 +811,7 @@ export let compose = async (
     let fx = watching = effects(vocab, {
       write: (b) => host.graph.apply(b, { trusted: true }),
       owner: host.me,
+      lease: config.lease,
       nudge: opts.thread?.nudge,
     })
     let rules = ruled.flatMap(([r, options]) => r.rules?.(host, options) ?? [])

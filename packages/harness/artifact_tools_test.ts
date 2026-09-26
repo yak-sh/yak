@@ -1,15 +1,15 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { open } from './store.ts'
 import { artifactTools, imageContext } from './artifact_tools.ts'
 import { input } from '@yaks/openai'
 import type { Bundle } from '@yaks/graph'
 import { artifactStore, fileBlobs } from '@yaks/blob'
+import { harness } from './testing.ts'
 
 const png = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0)
 
 Deno.test('file import snapshots bytes; attach is user-only; explicit view projects bounded image bytes', async () => {
   let dir = await Deno.makeTempDir()
-  let h = open(':memory:')
+  let h = await harness()
   let blobs = fileBlobs(dir + '/blobs')
   try {
     await Deno.writeFile(dir + '/source.png', png)
@@ -75,7 +75,7 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
 Deno.test('tool-driven vision reaches the next model request and survives database reopen', async () => {
   const { local } = await import('./local.ts')
   let dir = await Deno.makeTempDir()
-  let h = open(dir + '/test.db')
+  let h = await harness(dir + '/test.db')
   let record = await artifactStore(h.artifacts)(png, 'image/png')
   await h.g.apply([{ entity: { eid: 'picture' }, artifact: record }])
   let turn = 0
@@ -122,7 +122,7 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
     assertEquals(entries.filter((e) => e.attachment).length, 2)
     assertEquals(entries.filter((e) => e.exception).length, 0)
     await a.close()
-    h = open(dir + '/test.db')
+    h = await harness(dir + '/test.db')
     let restored = await imageContext(h.g, entries, entries, h.artifacts)
     assertEquals(restored.length, 1)
     h.close()
@@ -134,7 +134,7 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
 
 Deno.test('vision admission rejects unsupported files and changed artifact revisions', async () => {
   let dir = await Deno.makeTempDir()
-  let h = open(':memory:')
+  let h = await harness()
   let blobs = fileBlobs(dir)
   try {
     let store = artifactStore(blobs)

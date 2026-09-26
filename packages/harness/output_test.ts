@@ -1,16 +1,15 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { outputView } from '@yaks/context'
 import { valueTools } from '@yaks/blob'
-import { open } from './store.ts'
 import { local } from './local.ts'
 import { harnessTools } from './tools.ts'
 import type { Request } from '@yaks/model'
-import { repo } from './testing.ts'
+import { harness, repo } from './testing.ts'
 
 Deno.test('large outputs snapshot transparently, survive reopen and source mutation', async () => {
   const dir = Deno.makeTempDirSync()
   const path = dir + '/test.db'
-  let h = open(path)
+  let h = await harness(path)
   try {
     const text = ('line 😀 needle\n').repeat(10000)
     await h.g.apply([{ entity: { eid: 'result' }, content: { body: text } }])
@@ -23,7 +22,7 @@ Deno.test('large outputs snapshot transparently, survive reopen and source mutat
     assertEquals((await h.g.read('.context_output&*')).length, 1)
     await h.g.apply([{ entity: { eid: 'result' }, content: { body: 'newer' } }])
     h.close()
-    h = open(path)
+    h = await harness(path)
     const [read, search] = valueTools(async (id) =>
       (await h.g.read('.entity.eid=' + JSON.stringify(id)))[0]
     )
@@ -66,7 +65,7 @@ Deno.test('large outputs snapshot transparently, survive reopen and source mutat
 })
 
 Deno.test('generic text inspection reads doc and content with reader authorization', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   try {
     await h.g.apply([{
       entity: { eid: 'note' },
@@ -97,7 +96,7 @@ Deno.test('generic text inspection reads doc and content with reader authorizati
 })
 
 Deno.test('model receives bounded tool result, UI keeps original and prompt/user stay intact', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   const requests: Request[] = []
   const text = 'TOOL '.repeat(30000)
   const user = 'USER '.repeat(4000)
@@ -146,7 +145,7 @@ Deno.test('model receives bounded tool result, UI keeps original and prompt/user
 })
 
 Deno.test('fork projections reuse snapshots and escaped reads stay bounded', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   try {
     const text = '😀'.repeat(20000)
     await h.g.apply([

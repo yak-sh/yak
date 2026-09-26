@@ -152,7 +152,7 @@ config file.
 | `adopt`    | Preserves incoming entity numbers instead of minting new ones. Intended for store imports.        |
 | `name`     | MCP server name; defaults to `yak`.                                                               |
 | `person`   | Who works at this machine, as any id the graph resolves; a command typed at a terminal is theirs. |
-| `lease`    | Duty lease duration in milliseconds; defaults to `30000`.                                         |
+| `lease`    | Duty lease and effect-run claim duration in milliseconds; defaults to `30000` and `60000`.        |
 | `duties`   | Whether this process runs its duties; defaults to `true`.                                         |
 
 There is no default database path. `compose` throws unless `db` or `$DB_PATH` is

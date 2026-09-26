@@ -1,6 +1,6 @@
-// The harness on this machine: the agent runner (./agent.ts) over a SQLite
-// file, with everything a box lends it. The graph is `~/.yak/yak.db` unless the
-// caller opens another; the shell runs here (@yaks/process), a child assigned a
+// The harness on this machine: the agent runner (./agent.ts) over the graph a
+// `yak` config composed (./store.ts `hosted`), with everything a box lends it.
+// The shell runs here (@yaks/process), a child assigned a
 // task gets its own checkout under the worktree root, a new session snapshots
 // the AGENTS.md files above its directory, pictures live in the image
 // directory, MCP servers and the OpenRouter sign-in are the person's own, and a
@@ -28,13 +28,13 @@ import { imageContext, registered } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
 import { homeAt, workspace } from './workspace.ts'
-import { worktrees } from './paths.ts'
+import { dbPath, worktrees } from './paths.ts'
 import { collecting, going, homes, sweep } from './worktrees.ts'
 import { transcriptViews } from './transcript.ts'
-import { dbPath, type Harness, open } from './store.ts'
+import type { Harness } from './store.ts'
 import { harnessTools } from './tools.ts'
 
-export { dbPath, type Harness, open } from './store.ts'
+export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools, parametersOf } from './tools.ts'
 
 // A Harness must be passed under `h`, never spread into the options. Explicit
@@ -46,8 +46,8 @@ type NotHarness = { [K in keyof Harness]?: never }
 export type Opts = ChildLimits & NotHarness & {
   /** initial default directory; session home is discovered here */
   cwd?: string
-  /** the graph to run over (default: the one at `HARNESS_DB`) */
-  h?: Harness
+  /** the graph to run over */
+  h: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
   model?: Model
   /** the model to ask for by name (default `gpt-6-astra`) */
@@ -126,7 +126,7 @@ export type Here = {
  * credentials and sign-ins, the shell and a checkout per child, the MCP
  * servers, the pictures, the instruction files where a session opens, and
  * where a defect is written. */
-export let here = (h: Harness, opts: Opts = {}): Here => {
+export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
   let env = opts.env ?? Deno.env.get
   let detach = diagnostics().attach(h.g)
   let report = (error: unknown, where: FailureContext) =>
@@ -183,11 +183,11 @@ export let here = (h: Harness, opts: Opts = {}): Here => {
     report,
     // What abnormal endings left in the worktree root, taken back by the same
     // test one child's end applies — plus the checkouts Git itself has
-    // forgotten. Only the harness running out of its own home sweeps: a store
-    // somebody named explicitly (a test, a probe) is not this one, and its run
+    // forgotten. Only the harness running over the graph in its own home
+    // sweeps: another graph (a test's, a probe's) is not this one, and its run
     // must never reach the live root.
     resuming: async () => {
-      if (h.path != dbPath()) return
+      if (h.path != dbPath(env)) return
       sweep(h.g, root, await homes(h.g, await going(h.g), root)).catch(
         (error) => report(error, { phase: 'worktree-sweep' }),
       )
@@ -226,28 +226,28 @@ export let here = (h: Harness, opts: Opts = {}): Here => {
 }
 
 /**
- * Start the harness here: open the graph, lend the agent this machine, and
- * work the runs its commits owe.
+ * Start the harness here, over a graph a `yak` config composed: lend the agent
+ * this machine, and work the runs its commits owe.
  *
  * ```ts
- * import { local, open } from '@yaks/harness/local'
+ * import { hosted, local } from '@yaks/harness/local'
  *
- * let a = local({ h: open(':memory:'), model: fake })
+ * let a = local({ h: hosted(host), model: fake })
  * let s = await a.start('reply with the word pong')
  * await a.idle(s)
  * ```
  */
-export let local = (opts: Opts = {}): Local => {
-  // Check before opening any database: a misspelled handle must not fall back
-  // to the user's persistent store, including for untyped JavaScript callers.
+export let local = (opts: Opts): Local => {
+  // A harness spread into the options is refused, including for untyped
+  // JavaScript callers, whose options TypeScript never saw.
   for (let key of ['path', 'db', 'store', 'g', 'fx', 'vocab', 'close']) {
     if (Object.hasOwn(opts, key)) {
       throw new TypeError(
-        'Pass the harness as local({ h: open(...) }), not spread options',
+        'Pass the harness as local({ h: hosted(host) }), not spread options',
       )
     }
   }
-  let h = opts.h ?? open(dbPath(opts.env ?? Deno.env.get))
+  let h = opts.h
   let env = opts.env ?? Deno.env.get
   let { lent, authorize, anchor, report } = here(h, opts)
   let watch: { stop: () => void } | undefined
@@ -256,7 +256,7 @@ export let local = (opts: Opts = {}): Local => {
     release: async () => {
       watch?.stop()
       await lent.release?.()
-      h.close()
+      await h.close()
     },
   })
   let l: Local = Object.assign(a, {

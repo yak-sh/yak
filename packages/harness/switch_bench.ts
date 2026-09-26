@@ -1,16 +1,16 @@
 /** Isolated session-switch benchmark. No default database is opened. */
-import { open } from './store.ts'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { h as node } from 'preact'
 import { mount } from '../tui/testing.ts'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'
+import { at, harness } from './testing.ts'
 
 let directory = await Deno.makeTempDir()
 let count = Number(Deno.args[0] ?? 100)
 let depth = Number(Deno.args[1] ?? 1000)
-let h = open(directory + '/test.db')
+let h = await harness(directory + '/test.db')
 try {
   for (let i = 0; i < count; i++) {
     let changes: Bundle[] = [{
@@ -33,7 +33,11 @@ try {
 } finally {
   h.close()
 }
-let r = await remote({ db: directory + '/test.db', cwd: directory, fake: true })
+let r = await remote({
+  config: at(directory + '/test.db'),
+  cwd: directory,
+  fake: true,
+})
 let samples: Record<string, number>[] = []
 let ui = frontend()
 let screen = await mount(

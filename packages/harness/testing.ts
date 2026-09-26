@@ -1,6 +1,7 @@
-/** Test fixtures: a harness graph worked by the runner as an agent works it,
- * for a test that drives the graph itself (`working`), and the repositories a
- * harness starts in.
+/** Test fixtures: a harness graph composed as a `yak` config composes one
+ * (`harness`, `at`), the runner working it as an agent works it, for a test
+ * that drives the graph itself (`working`), and the repositories a harness
+ * starts in.
  *
  * The repositories are for code that starts in a checkout or cuts one. A
  * harness started in `Deno.cwd()` works in the repository the suite runs in:
@@ -12,7 +13,61 @@
  * start, and `scratchRepo()` when it cuts checkouts it will look at. */
 
 import { type Runner, running } from '@yaks/session'
-import type { Harness } from './store.ts'
+import { compose, type Config, type Host } from '@yaks/cli/host'
+import { install } from '@yaks/connections'
+import { type Harness, hosted } from './store.ts'
+
+/** The packages a harness graph is made of in these tests: what a transcript
+ * is (@yaks/session), what it asks for and what answers (@yaks/tools,
+ * @yaks/context, @yaks/model and its providers), what a reply carries
+ * (@yaks/blob), the programs it starts (@yaks/process), the sign-ins it keeps
+ * (@yaks/secrets, @yaks/connections), the runs its commits owe (@yaks/effects),
+ * the work it is doing, and the harness's own words. In a config's order: a
+ * later package's computed property wins, so @yaks/session's claim is the step
+ * in a task's status it contributes. */
+export let PLUGINS: string[] = [
+  '@yaks/kernel',
+  '@yaks/id',
+  '@yaks/secrets',
+  '@yaks/edge',
+  '@yaks/blob',
+  '@yaks/doc',
+  '@yaks/effects',
+  '@yaks/task',
+  '@yaks/project',
+  '@yaks/session',
+  '@yaks/tools',
+  '@yaks/model',
+  '@yaks/openai',
+  '@yaks/openrouter',
+  '@yaks/process',
+  '@yaks/context',
+  '@yaks/connections',
+  '@yaks/mcp-client',
+  '@yaks/git',
+  '@yaks/harness',
+]
+
+/** A config naming the graph at `db` (`:memory:` by default) made of
+ * {@link PLUGINS}; `lease` is how long a run it claims stands. */
+export let at = (db = ':memory:', lease?: number): Config => ({
+  db,
+  plugins: PLUGINS,
+  ...lease ? { lease } : {},
+})
+
+/** That graph, composed and open, as a harness runs over it, with the
+ * integrations a process serving its effects installs on the way up (the
+ * OpenRouter sign-in goes through one); closing it closes the graph. */
+export let harness = async (
+  db = ':memory:',
+  lease?: number,
+): Promise<Harness & { sql: Host['sql'] }> => {
+  let host = await compose(at(db, lease), ['graph'])
+  let g = host.graph
+  await g.apply(await install(g.read), { trusted: true })
+  return { ...hosted(host, () => host.close()), sql: host.sql }
+}
 
 /** The runner over `h`, lent `deps`, working its pool as an agent does;
  * `stop()` leaves the pool once what it started has settled. */

@@ -1,5 +1,4 @@
 /** Isolated startup benchmark. Does not open the configured harness database. */
-import { open } from './store.ts'
 import { local } from './local.ts'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
@@ -7,12 +6,13 @@ import { h as node } from 'preact'
 import { mount } from '../tui/testing.ts'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'
+import { at, harness } from './testing.ts'
 
 let directory = await Deno.makeTempDir({ prefix: 'harness-startup-' })
 let count = Number(Deno.args[0] ?? 300)
 let depth = Number(Deno.args[1] ?? 4000)
 let path = directory + '/bench.db'
-let seed = open(path)
+let seed = await harness(path)
 try {
   for (let i = 0; i < count; i++) {
     let rows: Bundle[] = [{
@@ -54,7 +54,7 @@ try {
       times[name] = Math.round(now - last)
       last = now
     }
-    let h = open(path)
+    let h = await harness(path)
     mark('open')
     let a = local({
       h,
@@ -69,7 +69,7 @@ try {
     mark('transcriptRead')
     await a.close()
     mark('close')
-    let r = await remote({ db: path, cwd: directory, fake: true })
+    let r = await remote({ config: at(path), cwd: directory, fake: true })
     mark('remoteReady')
     await r.resume()
     mark('resume')

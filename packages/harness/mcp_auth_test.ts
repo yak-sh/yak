@@ -1,4 +1,3 @@
-import { open } from './store.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { mount } from '../tui/testing.ts'
@@ -9,6 +8,7 @@ import { signins } from './signin.ts'
 import type { UIAgent } from './panels.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { remote } from './remote.ts'
+import { at, harness } from './testing.ts'
 
 Deno.test('authorization UI captures pasted callback privately, preserving draft and never sending it', async () => {
   const ui = frontend()
@@ -91,13 +91,13 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
   )
   origin = 'http://127.0.0.1:' + server.addr.port
   const db = dir + '/graph.db'
-  const seed = open(db)
+  const seed = await harness(db)
   await seed.g.apply([{
     entity: { eid: 'site' },
     mcp_server: { name: 'site', url: origin + '/mcp' },
   }])
   seed.close()
-  const backend = await remote({ db, fake: true })
+  const backend = await remote({ config: at(db), fake: true })
   try {
     assertEquals((await backend.agent.authorizeMCP!('list')).servers, [
       'site [site]',
@@ -115,7 +115,7 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
     // Another process over the same graph finds the sign-in, a connection the
     // server owns, in the vault beside it, and nothing of the exchange that
     // produced it.
-    const again = open(db)
+    const again = await harness(db)
     const signin = signins(again)
     const local = authorizedMCP(
       [{ name: 'site', url: origin + '/mcp' }],

@@ -1,12 +1,11 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
-import { open } from './store.ts'
 import { remote } from './remote.ts'
 import { mcpTools } from './mcp.ts'
 import { signins } from './signin.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
-import { repo } from './testing.ts'
+import { at, harness, repo } from './testing.ts'
 
 Deno.test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
   const f = fixture()
@@ -14,7 +13,7 @@ Deno.test('configured remote MCP tool publishes mockup through existing call/res
     { port: 0, hostname: '127.0.0.1', onListen() {} },
     (req) => f.fetcher(req),
   )
-  const h = open(':memory:')
+  const h = await harness()
   const calls: string[] = []
   let requests = 0
   await h.g.apply([{
@@ -85,7 +84,7 @@ Deno.test('worker owns MCP connection and preserves exact configured tool schema
   )
   const dir = await Deno.makeTempDir()
   const db = dir + '/graph.db'
-  const seed = open(db)
+  const seed = await harness(db)
   await seed.g.apply([{
     entity: { eid: 'site' },
     mcp_server: {
@@ -94,7 +93,7 @@ Deno.test('worker owns MCP connection and preserves exact configured tool schema
     },
   }])
   seed.close()
-  const a = await remote({ db, fake: true })
+  const a = await remote({ config: at(db), fake: true })
   try {
     const id = await a.agent.start('hello')
     await a.idle(id)
@@ -114,7 +113,7 @@ Deno.test('tool isError uses expected tool failure rather than a defect', async 
     { port: 0, hostname: '127.0.0.1', onListen() {} },
     (req) => f.fetcher(req),
   )
-  const h = open(':memory:')
+  const h = await harness()
   await h.g.apply([{
     entity: { eid: 'site' },
     mcp_server: {
@@ -155,7 +154,7 @@ Deno.test('remote images use external artifacts while large text retains bounded
       return f.fetcher(req)
     },
   )
-  const h = open(':memory:')
+  const h = await harness()
   await h.g.apply([{
     entity: { eid: 'site' },
     mcp_server: {

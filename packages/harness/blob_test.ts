@@ -6,7 +6,7 @@ import { assertEquals } from '@std/assert'
 import { address } from '@yaks/blob'
 import type { Bundle, Comp } from '@yaks/graph'
 import { scan, tally } from '@yaks/sql'
-import { open } from './store.ts'
+import { harness } from './testing.ts'
 
 let bodyOf = (b: Bundle, comp = 'content') =>
   (b[comp] as Comp | undefined)?.body
@@ -14,7 +14,7 @@ let bodyOf = (b: Bundle, comp = 'content') =>
 Deno.test('blob prose deduplicates across properties and survives reopen', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/test.db'
-  let h = open(path)
+  let h = await harness(path)
   try {
     let body = 'shared instruction'
     await h.g.apply([
@@ -29,7 +29,7 @@ Deno.test('blob prose deduplicates across properties and survives reopen', async
     assertEquals((await h.g.read('.doc.body="shared instruction"&*')).length, 1)
     h.close()
     // Reopening reads the prose back, never its address hashed again.
-    h = open(path)
+    h = await harness(path)
     assertEquals(bodyOf((await h.g.read('.content&*'))[0]), body)
     await h.g.apply([{
       entity: { eid: 'a' },

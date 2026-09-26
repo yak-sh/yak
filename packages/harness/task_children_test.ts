@@ -2,13 +2,12 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { deliverChild, sessionTools, textOf, transcript } from '@yaks/session'
 import { harnessTools } from './tools.ts'
-import { open } from './store.ts'
 import { local } from './local.ts'
-import { repo, working } from './testing.ts'
+import { harness, repo, working } from './testing.ts'
 
-let setup = () => {
-  let h = open(':memory:')
-  h.g.apply([
+let setup = async () => {
+  let h = await harness()
+  await h.g.apply([
     { entity: { eid: 'p' }, session: {} },
     {
       entity: { eid: 'input' },
@@ -20,7 +19,7 @@ let setup = () => {
       entry: { session: 'p', seq: 2 },
       ask: { through: 'input' },
     },
-    ...['other-call', 'call-0', 'call-1'].map((eid, n) => ({
+    ...['other-call', 'call0', 'call1'].map((eid, n) => ({
       entity: { eid },
       entry: { session: 'p', seq: n + 4 },
       call: {},
@@ -47,7 +46,7 @@ let setup = () => {
 }
 
 Deno.test('task spawn snapshots doc and commits claim before first entry effect; replay and lease collision', async () => {
-  let { h, ctx, spawn } = setup()
+  let { h, ctx, spawn } = await setup()
   let observations: string[] = []
   h.fx.created('entry', async (e) => {
     if (e.comp?.session != 'child:call') return
@@ -100,7 +99,7 @@ Deno.test('task spawn snapshots doc and commits claim before first entry effect;
 })
 
 Deno.test('independent tasks spawn concurrently with ordinary child caps', async () => {
-  let { h, ctx } = setup()
+  let { h, ctx } = await setup()
   await h.g.apply([{
     entity: { eid: 'second' },
     task: {},
@@ -111,7 +110,7 @@ Deno.test('independent tasks spawn concurrently with ordinary child caps', async
   )!
   let out = await Promise.all(
     ['work', 'second'].map((task, n) =>
-      spawn.run({ task }, { ...ctx, call: { entity: { eid: `call-${n}` } } })
+      spawn.run({ task }, { ...ctx, call: { entity: { eid: `call${n}` } } })
     ),
   )
   assertEquals(new Set(out).size, 2)
@@ -121,7 +120,7 @@ Deno.test('independent tasks spawn concurrently with ordinary child caps', async
 })
 
 Deno.test('task wait uses done including contains/requires and cancellation; merged wait validates alternatives', async () => {
-  let { h, ctx, spawn } = setup()
+  let { h, ctx, spawn } = await setup()
   await spawn.run({ task: 'work' }, ctx)
   let wait = harnessTools(h.g).find((t) => t.name == 'wait')!
   let read = async (timeout = 0) =>
@@ -166,7 +165,7 @@ Deno.test('task wait uses done including contains/requires and cancellation; mer
 })
 
 Deno.test('task completion receipt is idempotent, keeps final message, and incomplete children still report', async () => {
-  let { h, ctx, spawn } = setup()
+  let { h, ctx, spawn } = await setup()
   let child = String(await spawn.run({ task: 'work' }, ctx))
   await h.g.apply([
     { entity: { eid: 'work' }, completed: {} },
@@ -195,7 +194,7 @@ Deno.test('task completion receipt is idempotent, keeps final message, and incom
 
 for (let finish of ['complete', 'unlink']) {
   Deno.test(`task effect returns a quiet child when dependency ${finish}s`, async () => {
-    let { h, ctx, spawn } = setup()
+    let { h, ctx, spawn } = await setup()
     let child = String(await spawn.run({ task: 'work' }, ctx))
     await h.g.apply([
       { entity: { eid: 'work' }, completed: {} },
@@ -242,7 +241,7 @@ for (let finish of ['complete', 'unlink']) {
 }
 
 Deno.test('child marks task done through a tool before its final answer: one final receipt', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   await h.g.apply([{
     entity: { eid: 'work' },
     task: {},
@@ -303,7 +302,7 @@ Deno.test('child marks task done through a tool before its final answer: one fin
 })
 
 Deno.test('cancelled task returns cancelled; stopped parents do not receive deliveries', async () => {
-  let { h, ctx, spawn } = setup()
+  let { h, ctx, spawn } = await setup()
   let child = String(await spawn.run({ task: 'work' }, ctx))
   await h.g.apply([
     { entity: { eid: 'work' }, cancelled: {} },
@@ -337,7 +336,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
     'completion by ' + writer +
       ': durable provenance controls only the redundant receipt',
     async () => {
-      let { h, ctx, spawn } = setup()
+      let { h, ctx, spawn } = await setup()
       let child = String(await spawn.run({ task: 'work' }, ctx))
       await h.g.apply([{
         entity: { eid: 'answer' },
@@ -381,7 +380,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       let [work] = await h.g.read('.task&*')
       assertEquals(
         (work.completed as Comp).by ?? null,
-        writer == 'external' ? null : actor,
+        writer == 'external' ? h.me : actor,
       )
       let receiptId = 'delivery:' + child + ':task:work:done'
       assertEquals(
@@ -411,7 +410,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
 }
 
 Deno.test('parent completion does not suppress a later child response', async () => {
-  let { h, ctx, spawn } = setup()
+  let { h, ctx, spawn } = await setup()
   let child = String(await spawn.run({ task: 'work' }, ctx))
   let apply = harnessTools(h.g).find((t) => t.name == 'graph_apply')!
   await apply.run({ change: [{ entity: { eid: 'work' }, completed: {} }] }, ctx)
@@ -434,7 +433,7 @@ Deno.test('parent completion does not suppress a later child response', async ()
 Deno.test('completion author survives database reopen; another parent still receives the result', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/receipt.db'
-  let h = open(path)
+  let h = await harness(path)
   try {
     await h.g.apply([
       { entity: { eid: 'p' }, session: {} },
@@ -455,7 +454,7 @@ Deno.test('completion author survives database reopen; another parent still rece
       $actor: { by: 'p' },
     }])
     h.close()
-    h = open(path)
+    h = await harness(path)
     let before = (await transcript(h.g, 'p')).length
     await deliverChild(h.g, 'c')
     assertEquals((await transcript(h.g, 'p')).length, before)
@@ -473,7 +472,7 @@ Deno.test('completion author survives database reopen; another parent still rece
 })
 
 Deno.test('reopening a task allows a new completion author', async () => {
-  let { h } = setup()
+  let { h } = await setup()
   await h.g.apply([{
     entity: { eid: 'work' },
     completed: {},
@@ -491,7 +490,7 @@ Deno.test('reopening a task allows a new completion author', async () => {
 })
 
 Deno.test('existing fork receipts do not read inherited transcript bodies on resume', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   await h.g.apply([
     { entity: { eid: 'parent' }, session: {} },
     {
@@ -553,7 +552,7 @@ Deno.test('existing fork receipts do not read inherited transcript bodies on res
 })
 
 Deno.test('receipt fast-path refreshes its tail when a child finishes between reads', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   await h.g.apply([
     { entity: { eid: 'p' }, session: {} },
     {
@@ -604,7 +603,7 @@ Deno.test('receipt fast-path refreshes its tail when a child finishes between re
 })
 
 Deno.test('task fork claims original task and snapshots original title/body exactly once', async () => {
-  let { h, ctx } = setup()
+  let { h, ctx } = await setup()
   try {
     let fork = sessionTools(h.g).find((t) => t.name == 'fork')!
     ctx = { ...ctx, entries: await transcript(h.g, 'p') } as typeof ctx

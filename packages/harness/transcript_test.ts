@@ -2,11 +2,14 @@ import { h } from 'preact'
 import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/preact'
-import { vocab } from './store.ts'
+import { words } from '@yaks/cli/host'
+import { at } from './testing.ts'
 import type { Bundle, Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { mount } from '../tui/testing.ts'
 import { transcriptViews } from './transcript.ts'
+
+let { vocab } = await words(at())
 
 Deno.test('transcript dims sequence and tool prose and colors each entry kind', async () => {
   let kinds = [

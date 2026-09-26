@@ -4,8 +4,7 @@ import type { Model } from '@yaks/model'
 import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
 import { seed, sessionTitle, titleOf } from './agent.ts'
 import { local } from './local.ts'
-import { open } from './store.ts'
-import { repo } from './testing.ts'
+import { harness, repo } from './testing.ts'
 
 // A model that answers with whatever it was last told, so a test can see the
 // transcript go round.
@@ -21,11 +20,11 @@ let echo: Model = (req) =>
     }],
   })
 
-let started = (model: Model = echo) =>
-  local({ cwd: repo(), h: open(':memory:'), model, tools: [] })
+let started = async (model: Model = echo) =>
+  local({ cwd: repo(), h: await harness(), model, tools: [] })
 
 Deno.test('the seed is the same rows however many times it is applied', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   h.g.apply(seed(), { trusted: true })
   h.g.apply(seed(), { trusted: true })
   assertEquals((await h.g.read('.provider&*')).length, 1)
@@ -38,7 +37,7 @@ Deno.test('the seed is the same rows however many times it is applied', async ()
 })
 
 Deno.test('a started transcript runs to settled and reads back', async () => {
-  let a = started()
+  let a = await started()
   let s = await a.start('ping')
   await a.idle(s)
   let entries = await a.transcript(s)
@@ -49,7 +48,7 @@ Deno.test('a started transcript runs to settled and reads back', async () => {
 })
 
 Deno.test('a turn is signed: the model wrote it, through this transcript', async () => {
-  let a = started()
+  let a = await started()
   let s = await a.start('ping')
   await a.idle(s)
   let out = (await a.transcript(s)).at(-1)!
@@ -59,7 +58,7 @@ Deno.test('a turn is signed: the model wrote it, through this transcript', async
 })
 
 Deno.test('send appends to a transcript and the runner answers it', async () => {
-  let a = started()
+  let a = await started()
   let s = await a.start('one')
   await a.idle(s)
   await a.send(s, 'two')
@@ -72,7 +71,7 @@ Deno.test('send appends to a transcript and the runner answers it', async () => 
 })
 
 Deno.test('a session lists with its derived status, and renders as a line', async () => {
-  let a = started()
+  let a = await started()
   let s = await a.start('ping')
   await a.idle(s)
   let [row] = await a.sessions()
@@ -88,7 +87,7 @@ Deno.test('the picker lists the recent transcripts, not the whole archive', asyn
   // Naming a transcript costs a read of its first line, so a graph holding
   // years of them (the fleet's 5,463 landed in the harness's own) must not be
   // titled end to end on every refresh.
-  let a = started()
+  let a = await started()
   let h = a.h
   let many = Array.from({ length: 205 }, (_, i) => ({
     entity: { eid: `s${i}` },
@@ -105,7 +104,7 @@ Deno.test('the picker lists the recent transcripts, not the whole archive', asyn
 })
 
 Deno.test('the agent reads bare and filed open work, including claims and blocked facets', async () => {
-  let a = started()
+  let a = await started()
   await a.h.g.apply([
     { entity: { eid: 't1' }, doc: { title: 'first' }, task: {} },
     { entity: { eid: 'holder' }, session: {} },
@@ -147,7 +146,7 @@ Deno.test('the agent reads bare and filed open work, including claims and blocke
 })
 
 Deno.test('resume wakes what a restart left owed a turn', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   // A transcript with an input nobody answered — what a killed harness leaves.
   let quiet = local({ cwd: repo(), h, model: echo, tools: [] })
   let s = await quiet.start('ping')
@@ -174,7 +173,7 @@ Deno.test('transcript doors refuse unknown sessions before doing work', async ()
     asked++
     return echo(req)
   }
-  let a = started(model)
+  let a = await started(model)
   try {
     for (let session of ['unknown-prefix', a.model]) {
       for (
@@ -226,7 +225,7 @@ Deno.test('transcript titles ignore instruction snapshots and lazy notices', () 
 })
 
 Deno.test('archiving is a persistent visibility mark, not an execution transition', async () => {
-  let a = started()
+  let a = await started()
   try {
     let root = await a.start('Archive me')
     await a.idle(root)
@@ -248,7 +247,7 @@ Deno.test('archiving is a persistent visibility mark, not an execution transitio
 })
 
 Deno.test('session titles use local assignment, not inherited parent context', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   await h.g.apply([
     { entity: { eid: 'parent' }, session: { id: 'parent' } },
     {
@@ -301,7 +300,7 @@ Deno.test('session titles use local assignment, not inherited parent context', a
 Deno.test('Agent close stops admission and drains an active model before SQLite closes', async () => {
   let entered = Promise.withResolvers<void>()
   let release = Promise.withResolvers<void>()
-  let a = started(async (req) => {
+  let a = await started(async (req) => {
     entered.resolve()
     await release.promise
     return echo(req)
@@ -329,7 +328,7 @@ Deno.test('Agent close stops admission and drains an active model before SQLite 
 })
 
 Deno.test('close drains a held storage callback without stopping an independent process', async () => {
-  let a = started()
+  let a = await started()
   let entered = Promise.withResolvers<void>()
   let release = Promise.withResolvers<void>()
   let process = new Deno.Command('/bin/sleep', { args: ['10'] }).spawn()
@@ -377,7 +376,7 @@ Deno.test('send commits during a provider turn and unserved input reaches the ne
   // The inflight attempt assertion requires streaming, regardless of HARNESS_STREAM.
   let a = local({
     cwd: repo(),
-    h: open(':memory:'),
+    h: await harness(),
     model,
     tools: [],
     streaming: true,
@@ -426,7 +425,7 @@ Deno.test('send commits during a provider turn and unserved input reaches the ne
 })
 
 Deno.test('session titles read only the first eligible local entry', async () => {
-  let a = started()
+  let a = await started()
   try {
     let id = await a.start('bounded title')
     await a.idle(id)
@@ -451,7 +450,7 @@ Deno.test('session titles read only the first eligible local entry', async () =>
 })
 
 Deno.test('task fork title uses assignment rather than copied local context', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 'parent' }, session: { id: 'parent' } },
@@ -479,7 +478,7 @@ Deno.test('task fork title uses assignment rather than copied local context', as
 })
 
 Deno.test('archive marks exactly the selected child, not its root', async () => {
-  const a = started()
+  const a = await started()
   try {
     await a.h.g.apply([
       { entity: { eid: 'root' }, session: { id: 'root' } },
@@ -499,7 +498,7 @@ Deno.test('archive marks exactly the selected child, not its root', async () => 
 })
 
 Deno.test('session summaries do not depend on task completion', async () => {
-  const a = started()
+  const a = await started()
   try {
     const id = await a.start('answer')
     await a.idle(id)

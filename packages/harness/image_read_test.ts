@@ -1,9 +1,9 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { registered } from './artifact_tools.ts'
-import { open } from './store.ts'
 import { artifactStore } from '@yaks/blob'
+import { at, harness } from './testing.ts'
 Deno.test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     let bytes = new Uint8Array([1, 2, 3])
     let record = await artifactStore(h.artifacts)(bytes, 'image/png')
@@ -26,7 +26,7 @@ Deno.test('worker retrieves registered image bytes for the lazy attachment rende
   const { ansiBackend } = await import('../tui/paint.ts')
   const { render } = await import('preact')
   let directory = await Deno.makeTempDir()
-  let h = open(directory + '/db')
+  let h = await harness(directory + '/db')
   let bytes = new Uint8Array(24)
   bytes.set([137, 80, 78, 71, 13, 10, 26, 10])
   new DataView(bytes.buffer).setUint32(16, 1)
@@ -35,7 +35,7 @@ Deno.test('worker retrieves registered image bytes for the lazy attachment rende
   await h.g.apply([{ entity: { eid: 'image' }, artifact: record }])
   h.close()
   let r = await remote({
-    db: directory + '/db',
+    config: at(directory + '/db'),
     cwd: directory,
     fake: true,
     // A kitty terminal, without setting the variable every test file shares.

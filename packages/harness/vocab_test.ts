@@ -6,9 +6,13 @@ import projection from '../render/vocab.json' with { type: 'json' }
 import runtime from './runtime/vocab.json' with { type: 'json' }
 import backend from './vocab.json' with { type: 'json' }
 import { frontendVocab } from './frontend.ts'
-import { harnessDoc, vocab, workspaceDoc } from './vocab.ts'
+import { harnessDoc, workspaceDoc } from './vocab.ts'
+import { words } from '@yaks/cli/host'
+import { at } from './testing.ts'
 
-Deno.test('package JSON declarations preserve artifact references and backend composition', () => {
+let { vocab } = await words(at())
+
+Deno.test('package JSON declarations preserve artifact references and compose with the rest', () => {
   assertEquals(artifactDoc, artifact)
   assertEquals<unknown>(
     { ...harnessDoc.$defs, ...workspaceDoc.$defs },

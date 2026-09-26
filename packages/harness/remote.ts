@@ -17,7 +17,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { render as tree } from '@yaks/preact'
 import { render } from '@yaks/text'
 import { views } from '@yaks/session'
-import { vocab } from './vocab.ts'
+import { type Config, words } from '@yaks/cli/host'
 import { transcriptViews } from './transcript.ts'
 import type { UIAgent } from './panels.ts'
 import { diagnostics } from './diagnostics.ts'
@@ -26,7 +26,8 @@ export let remote = async (
   options: {
     provider?: string
     name?: string
-    db?: string
+    /** the `yak` config naming the graph the worker composes */
+    config: Config
     cwd?: string
     web?: boolean
     images?: ImageOptions | false
@@ -41,9 +42,10 @@ export let remote = async (
     /** where settings such as `HARNESS_STREAM` are read (default this
      * process's environment); resolved here, never cloned to the worker */
     env?: (name: string) => string | undefined
-  } = {},
+  },
 ) => {
   let { env = Deno.env.get, ...config } = options
+  let { vocab } = await words(options.config)
   let worker = new Worker(
     new URL('./backend_worker.ts', import.meta.url).href,
     { type: 'module' },

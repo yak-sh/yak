@@ -7,8 +7,7 @@ import { mount } from '../tui/testing.ts'
 import { App, changes } from './app.ts'
 import { panels, type UIAgent } from './panels.ts'
 import { local } from './local.ts'
-import { open } from './store.ts'
-import { repo, scratchRepo } from './testing.ts'
+import { harness, repo, scratchRepo } from './testing.ts'
 import { until } from '../process/testing.ts'
 
 let settle = async () => {
@@ -116,7 +115,7 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
   let reply = deferred<Awaited<ReturnType<Model>>>()
   let a = local({
     cwd: repo(),
-    h: open(':memory:'),
+    h: await harness(),
     model: () => reply.promise,
     tools: [],
   })
@@ -331,7 +330,7 @@ Deno.test('task mode paints claimed work and subagent, then its delivered result
   let childAsked = deferred<void>()
   let r = await scratchRepo()
   let a = local({
-    h: open(':memory:'),
+    h: await harness(),
     cwd: r.repo,
     worktrees: r.root,
     tools: [],
@@ -709,7 +708,7 @@ Deno.test('transcript publishes before slow sidebar reads and despite ongoing ch
   let sidebar = deferred<Bundle[]>()
   let dir = await Deno.makeTempDir()
   let a = local({
-    h: open(':memory:'),
+    h: await harness(),
     cwd: dir,
     model: () => reply.promise,
     tools: [],

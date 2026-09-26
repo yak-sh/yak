@@ -15,14 +15,15 @@ provider; shell tools run on this machine and are not sandboxed.
   machine is an option its host lends: tools, remote tools, what a new session
   opens with, defect reports, and what to release on close. `lend()` is that
   runner alone.
-- `local()` is `agent()` here: it opens storage, lends the shell, checkouts,
-  instruction files, images, MCP and the OpenRouter sign-in (`here()`), and adds
-  the terminal's entry rendering.
+- `local()` is `agent()` here, over a graph a `yak` config composed: it lends
+  the shell, checkouts, instruction files, images, MCP and the OpenRouter
+  sign-in (`here()`), and adds the terminal's entry rendering.
 - `@yaks/harness/effects` handles `session_run` where a `yak` host lists the
   harness: the same runner, lent the same machine, wherever that host's effects
   are worked.
-- `open()` creates or opens storage and registers vocabulary and plugins;
-  `hosted()` is the same handle over a graph a `yak` config composed.
+- `hosted()` is a graph a `yak` config composed (@yaks/cli `compose`), as the
+  runner and its tools use it. The harness opens no graph of its own: which
+  packages a graph is made of, and so what a write means, is the config's.
 - `harnessTools()` combines machine, delegation and graph tools.
 - `@yaks/harness/vocab` and `/tools` are its facets as a plugin (@yaks/cli
   `compose`): its own words and the functions behind its tools. `/tui` is its
@@ -40,19 +41,23 @@ input.
 
 ## Exports
 
-| Import                | Main exports                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------------- |
-| `@yaks/harness`       | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only           |
-| `@yaks/harness/local` | `local`, `open`, `dbPath`, `harnessTools`, `graphTools`, `parametersOf`, and their types |
-| `@yaks/harness/tui`   | `views`: a lone session or entry, drawn as the terminal app                              |
-| `@yaks/harness/vocab` | `docs`, the harness's own words; `made` and `vocab`, everything a harness graph loads    |
-| `@yaks/harness/tools` | `runs(host)`, the functions behind the tools `vocab.json` declares                       |
+| Import                | Main exports                                                                     |
+| --------------------- | -------------------------------------------------------------------------------- |
+| `@yaks/harness`       | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only   |
+| `@yaks/harness/local` | `local`, `hosted`, `harnessTools`, `graphTools`, `parametersOf`, and their types |
+| `@yaks/harness/tui`   | `views`: a lone session or entry, drawn as the terminal app                      |
+| `@yaks/harness/vocab` | `docs`, the harness's own words                                                  |
+| `@yaks/harness/tools` | `runs(host)`, the functions behind the tools `vocab.json` declares               |
 
 ## Use
 
 List `@yaks/harness` among a `yak` config's plugins, beside the packages whose
-words it runs over (`@yaks/session`, `@yaks/openrouter`, `@yaks/mcp-client`,
-`@yaks/connections` and the rest of what `made` in `vocab.ts` lists). Then:
+words it runs over: `@yaks/session`, `@yaks/tools`, `@yaks/context`,
+`@yaks/model` and its providers (`@yaks/openai`, `@yaks/openrouter`),
+`@yaks/blob`, `@yaks/process`, `@yaks/secrets`, `@yaks/connections`,
+`@yaks/mcp-client`, `@yaks/git`, `@yaks/effects`, and the work (`@yaks/doc`,
+`@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in `testing.ts` is such
+a list, in a config's order. Then:
 
 ```sh
 yak session new 'reply with the word pong'
@@ -63,32 +68,34 @@ yak task list
 yak model list
 ```
 
-`session new` and `session send` run the transcript here until it settles and
-answer with the entry it settled on, so a command line prints the reply. With
-`--tui` the answer is held as the terminal app, selected on that session:
-`yak session new '…' --tui`, or `yak session list --tui` where the graph holds
-one session. The transcript scrolls and word-wraps beside the Sessions, Tasks,
-and Context usage panels. Enter starts a session (or sends to the selected one);
-Shift+Enter inserts a newline. Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select root
-sessions, Ctrl+O selects a new one, PgUp / PgDn scroll, and Ctrl+C quits.
-Shift+Enter needs a terminal supporting kitty keyboard sequences (Alt+Enter also
-inserts a newline).
+`session new` and `session send` write the input, wait while the transcript runs
+wherever the graph's effects are worked, and answer with the entry it settled
+on, so a command line prints the reply. With `--tui` the answer is held as the
+terminal app, selected on that session: `yak session new '…' --tui`, or
+`yak session list --tui` where the graph holds one session. The transcript
+scrolls and word-wraps beside the Sessions, Tasks, and Context usage panels.
+Enter starts a session (or sends to the selected one); Shift+Enter inserts a
+newline. Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select root sessions, Ctrl+O
+selects a new one, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a
+terminal supporting kitty keyboard sequences (Alt+Enter also inserts a newline).
 
-`$HARNESS_HOME` moves harness state without changing `HOME`: the defaults are
-`$HARNESS_HOME/yak.db` and checkouts for children assigned tasks under
-`$HARNESS_HOME/worktrees`, with `~/.yak` as the state directory when unset.
-`$HARNESS_DB` (including `:memory:`) and `$HARNESS_WORKTREE_DIR` override the
-individual places, as do `open(path)` and `local({worktrees})` in code. For
-probes, set `HARNESS_HOME` and `TASKS_HOME` to scratch directories and clean
-them up; `TASKS_HOME` moves the process supervisor's files (unless `PROCESS_DIR`
-is set). Keep `HOME` unchanged so Deno reuses its module cache. If a probe must
-move `HOME`, export the invoking `DENO_DIR` before moving it.
+`$HARNESS_HOME` moves harness state without changing `HOME`: checkouts for
+children assigned tasks go under `$HARNESS_HOME/worktrees` and drafts under
+`$HARNESS_HOME/drafts`, with `~/.yak` as the state directory when unset.
+`$HARNESS_WORKTREE_DIR` (or `local({worktrees})`) moves the checkouts. Only a
+harness over the graph at `$HARNESS_HOME/yak.db` (`$HARNESS_DB`) sweeps that
+worktree root for checkouts nobody holds. For probes, set `HARNESS_HOME` and
+`TASKS_HOME` to scratch directories and clean them up; `TASKS_HOME` moves the
+process supervisor's files (unless `PROCESS_DIR` is set). Keep `HOME` unchanged
+so Deno reuses its module cache. If a probe must move `HOME`, export the
+invoking `DENO_DIR` before moving it.
 
 The model is `gpt-6-astra` unless `--model` names another, reached with
 `$OPENAI_API_KEY` or the Codex CLI's sign-in (@yaks/openai).
 
 ```ts
-import { local, open } from '@yaks/harness/local'
+import { compose } from '@yaks/cli/host'
+import { hosted, local } from '@yaks/harness/local'
 import type { Model } from '@yaks/model'
 
 // A local model for this example; replace it with a provider adapter.
@@ -97,7 +104,9 @@ let model: Model = async (request) => ({
   model: request.model,
   items: [{ kind: 'assistant', text: 'pong' }],
 })
-let a = local({ h: open(':memory:'), model, tools: [] })
+// A config naming a graph in memory, made of the packages listed above.
+let host = await compose({ db: ':memory:', plugins: [/* … */] }, ['graph'])
+let a = local({ h: hosted(host, () => host.close()), model, tools: [] })
 try {
   let s = await a.start('reply with the word pong')
   await a.idle(s)
@@ -107,11 +116,9 @@ try {
 }
 ```
 
-For tests and embedded instances, pass the storage handle as `h`. Do not spread
-`open()` into the options: `local({ ...open(':memory:') })` is rejected by both
-the type contract and a runtime check. Without an explicit `h`, `local()` opens
-the configured persistent database. A temporary working directory does not
-isolate that database.
+Pass the graph as `h`; closing the agent runs its `close`. Do not spread it into
+the options: `local({ ...hosted(host) })` is rejected by both the type contract
+and a runtime check.
 
 Settled subagents are hidden by default regardless of their assigned tasks.
 Tasks remain available in the Tasks panel. **Ctrl+S** toggles **Show settled**;
@@ -212,8 +219,10 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
   delegation, artifact, text-inspection, and generic graph tools (`graph_apply`,
   `graph_query`, `graph_show`, `graph_schema`). Existing JSON Schemas are
   retained; Zod arguments are converted to JSON Schema for the model.
-- **Restart recovery.** `open()` releases execution leases whose holders are
-  absent from the graph; `resume()` schedules sessions with unfinished work.
+- **Restart recovery.** @yaks/session's service releases execution leases whose
+  holders are absent from the graph; a worker joining the effects pool sweeps up
+  the runs a restart left owed, and `resume()` delivers what ended children left
+  undelivered and answers the transcripts still live.
 
 ## The machine
 
@@ -739,8 +748,8 @@ migrator must allow at least the longest participating polling interval. See
 for failure recovery and timing limitations. In particular, the grace period is
 not a guarantee that all active callbacks finished.
 
-This version protects only **explicitly announced migrations**. Existing
-synchronous `open()` schema installation and legacy startup conversions have not
+This version protects only **explicitly announced migrations**. Existing schema
+installation when a graph is composed and legacy startup conversions have not
 been converted to asynchronous preannounced migrations. Do not assume opening a
 new harness version is coordinated with older running connections. Stop those
 connections before such upgrades. Already-completed migrations are not a version
@@ -752,10 +761,10 @@ A `yak` config lists `@yaks/harness` as one plugin among the packages it runs
 over, and `@yaks/cli`'s `compose` takes three facets from it: `/vocab`, whose
 `docs` are the harness's own words (`home` and its tools), `/tools`, the
 functions behind them, and `/effects`, the runner lent this machine. Every other
-word a harness graph speaks is its own package's plugin. `store.ts` still opens
-a harness graph on its own, loading `made`, the list of those packages'
-documents; the terminal app's worker opens the graph that way. Importing the
-facets does not run a session, open a database, or start a server.
+word a harness graph speaks is its own package's plugin. The terminal app's
+worker composes the graph its command's config names, for the graph role, and
+lends it the runner itself. Importing the facets does not run a session, open a
+database, or start a server.
 
 `session_new`, `session_send` and `model_list` are offered on a command line
 only (`surfaces`), because they run on the machine that typed them.

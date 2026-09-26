@@ -12,8 +12,7 @@ import {
 } from '@yaks/session'
 import { seed } from './agent.ts'
 import { type Local, local } from './local.ts'
-import { open } from './store.ts'
-import { repo } from './testing.ts'
+import { harness, repo } from './testing.ts'
 
 let reply = (text: string): Reply => ({
   id: 'r',
@@ -60,7 +59,7 @@ for (let kind of ['fork', 'spawn']) {
       }
       return Promise.resolve(reply('parent reacted'))
     }
-    let h = open(':memory:')
+    let h = await harness()
     h.g.apply([{ entity: { eid: '$other' }, model: { name: 'alternate' } }])
     let a = local({ h, model, cwd: directory, tools: sessionTools(h.g) })
     let parent = await a.start('parent context')
@@ -114,7 +113,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
   let waiting = deferred<void>()
   let childReply = deferred<Reply>()
   let turns = 0
-  let h = open(':memory:')
+  let h = await harness()
   let tools = sessionTools(h.g)
   let wait = tools.find((t) => t.name == 'wait')!
   let run = wait.run
@@ -152,7 +151,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
 Deno.test('child capacity queues without rejection; root starts retain their separate guard', async () => {
   let pending = deferred<Reply>()
   let childAsked = deferred<void>()
-  let h = open(':memory:')
+  let h = await harness()
   let turns = 0
   let model: Model = (req) => {
     if (req.items.some((i) => i.kind == 'user' && i.text == 'child')) {
@@ -182,7 +181,7 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
   await finish(a, parent)
   await a.close()
 
-  h = open(':memory:')
+  h = await harness()
   pending = deferred<Reply>()
   a = local({
     cwd: repo(),
@@ -204,7 +203,7 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
 })
 
 Deno.test('completion answers an open delegation call; wait rejects foreign children and times out', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   h.g.apply(seed())
   let entries: Bundle[] = [
     { entity: { eid: 'p' }, session: {} },
@@ -274,7 +273,7 @@ Deno.test('completion answers an open delegation call; wait rejects foreign chil
 })
 
 Deno.test('tool admission serializes competing parents, replays a call once, and frees settled slots', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   h.g.apply([
     ...seed(),
     { entity: { eid: 'p1' }, session: {} },
@@ -314,7 +313,7 @@ Deno.test('child completion is queued behind an in-flight parent ask without col
   let parentReply = deferred<Reply>()
   let parentAsked = deferred<void>()
   let turns = 0
-  let h = open(':memory:')
+  let h = await harness()
   let a = local({
     cwd: repo(),
     h,

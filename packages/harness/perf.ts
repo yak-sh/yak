@@ -2,10 +2,10 @@
 // deno run -A packages/harness/perf.ts
 import { type Bundle, identityEid } from '@yaks/graph'
 import { type Runner, settle } from '@yaks/session'
-import { open } from './store.ts'
 import { seed } from './agent.ts'
+import { harness } from './testing.ts'
 
-let h = open(':memory:')
+let h = await harness()
 h.g.apply([...seed({ model: 'fake' }), { entity: { eid: 's' }, session: {} }])
 let prefix: Bundle[] = Array.from({ length: 1000 }, (_, i) => ({
   entity: { eid: `e${i}` },

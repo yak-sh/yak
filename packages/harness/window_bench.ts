@@ -2,8 +2,8 @@
  * Arguments: entries (default 10000), body characters (default 1000), runs (3).
  * Never opens the configured/live harness database.
  */
-import { open } from './store.ts'
 import { remote } from './remote.ts'
+import { at, harness } from './testing.ts'
 const count = Number(Deno.args[0] ?? 10000)
 const length = Number(Deno.args[1] ?? 1000)
 const runs = Number(Deno.args[2] ?? 3)
@@ -12,7 +12,7 @@ if (![count, length, runs].every((v) => Number.isSafeInteger(v) && v > 0)) {
 }
 const directory = await Deno.makeTempDir({ prefix: 'harness-window-bench-' })
 const db = directory + '/bench.sqlite'
-const seed = open(db)
+const seed = await harness(db)
 for (let offset = 0; offset < count; offset += 250) {
   await seed.g.apply([
     ...offset == 0
@@ -29,7 +29,7 @@ seed.close()
 try {
   for (let run = 0; run < runs; run++) {
     for (let mode of ['full', 'window']) {
-      let r = await remote({ db, cwd: directory, fake: true })
+      let r = await remote({ config: at(db), cwd: directory, fake: true })
       try {
         let maxStall = 0, previous = performance.now()
         let timer = setInterval(() => {

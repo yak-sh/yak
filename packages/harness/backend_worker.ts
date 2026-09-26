@@ -5,11 +5,13 @@ import {
   type TranscriptWindow,
 } from '@yaks/session'
 import type { ImageOptions } from './images.ts'
-/** Worker owns the authoritative database and all agent execution. */
+/** Worker owns the authoritative database and all agent execution: the graph
+ * the config it is handed names, composed as any `yak` process composes it. */
 import { portLink } from '@yaks/sync'
 import { subscriptions } from '@yaks/api'
+import { compose, type Config } from '@yaks/cli/host'
 import { type Local, local } from './local.ts'
-import { open } from './store.ts'
+import { hosted } from './store.ts'
 import { diagnostics, uncaught } from './diagnostics.ts'
 import type { Bundle } from '@yaks/graph'
 const removeErrors = uncaught(diagnostics(), self)
@@ -46,7 +48,7 @@ async function handle(method: string, value: unknown): Promise<unknown> {
     let options = args[0] as {
       provider?: string
       name?: string
-      db?: string
+      config: Config
       cwd?: string
       web?: boolean
       images?: ImageOptions | false
@@ -57,8 +59,15 @@ async function handle(method: string, value: unknown): Promise<unknown> {
       fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
     }
     fake = Boolean(options.fake)
+    // The graph role alone: this worker handles the one effect it lends code
+    // (the session runner, below), and leaves every other run the graph owes
+    // to a process serving the effects role.
+    let host = await compose(
+      { ...options.config, ...options.hold ? { lease: options.hold } : {} },
+      ['graph'],
+    )
     a = local({
-      h: open(options.db, { hold: options.hold }),
+      h: hosted(host, () => host.close()),
       hold: options.hold,
       cwd: options.cwd,
       streaming: options.streaming,

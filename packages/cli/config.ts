@@ -61,11 +61,12 @@ export type Config = {
    * (./local.ts `signer`). Left out, nothing is signed as a person: a machine
    * never guesses who is at its keyboard. */
   person?: string
-  /** how long this process's lease on a duty stands before another
-   * process may take it over, in milliseconds (default 30_000). A holder still
-   * doing the work renews it on a timer; one that was killed leaves a lease
-   * that expires, which is how a second long-running process takes over
-   * without anybody having to reap the first. */
+  /** how long this process's lease on a duty, or its claim on an effect
+   * run, stands before another process may take it over, in milliseconds
+   * (default 30_000 for a duty, 60_000 for a run). A holder still doing the
+   * work renews it on a timer; one that was killed leaves a lease that
+   * expires, which is how a second long-running process takes over without
+   * anybody having to reap the first. */
   lease?: number
   /** whether this process runs its duties: the effect pool, each plugin's
    * `./service`, and the start-up passes a plugin holds a lease for (default

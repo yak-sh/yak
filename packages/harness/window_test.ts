@@ -1,13 +1,13 @@
 import { assert, assertEquals } from '@std/assert'
-import { open } from './store.ts'
 import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
 import { transcriptWindow } from '@yaks/session'
+import { at, harness } from './testing.ts'
 
 let M = identityEid('model', ['test'])
 
 Deno.test('SQLite fork window reads limited bodies and projects position metadata', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 'p' }, session: {} },
@@ -37,7 +37,7 @@ Deno.test('SQLite fork window reads limited bodies and projects position metadat
 
 Deno.test('worker pages retained graph data and keeps initial transfer independent of transcript length', async () => {
   let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
-  let h = open(path)
+  let h = await harness(path)
   await h.g.apply([
     { entity: { eid: 's' }, session: {} },
     ...Array.from({ length: 300 }, (_, i) => ({
@@ -47,7 +47,7 @@ Deno.test('worker pages retained graph data and keeps initial transfer independe
     })),
   ])
   h.close()
-  let r = await remote({ db: path, cwd: dir, fake: true })
+  let r = await remote({ config: at(path), cwd: dir, fake: true })
   try {
     let page = await r.agent.transcriptWindow!('s', { limit: 16 })
     assertEquals(page.entries.length, 16)
@@ -95,7 +95,7 @@ Deno.test('mounted bounded transcript navigates beyond loaded edges and restores
   const { App } = await import('./app.ts')
   const { frontend } = await import('./frontend.ts')
   const { until } = await import('../process/testing.ts')
-  let store = open(':memory:')
+  let store = await harness()
   await store.g.apply([
     { entity: { eid: 's' }, session: {} },
     { entity: { eid: 'other' }, session: {} },
@@ -191,7 +191,7 @@ Deno.test('mounted bounded transcript navigates beyond loaded edges and restores
 
 Deno.test('usage panel reads latest inherited ask metadata without transcript bodies', async () => {
   const { transcriptUsage } = await import('@yaks/session')
-  let store = open(':memory:')
+  let store = await harness()
   try {
     await store.g.apply([
       { entity: { eid: 'p' }, session: {} },
@@ -229,7 +229,7 @@ Deno.test('bounded worker subscriptions deliver transient text before final comp
   const { until } = await import('../process/testing.ts')
   let dir = await Deno.makeTempDir()
   let r = await remote({
-    db: ':memory:',
+    config: at(),
     cwd: dir,
     fake: { delayMs: 800, deltas: 20 },
     streaming: true,
@@ -278,7 +278,7 @@ Deno.test('bounded worker subscriptions deliver transient text before final comp
 })
 
 Deno.test('ten thousand large entries load only a bounded body window', async () => {
-  let store = open(':memory:')
+  let store = await harness()
   try {
     const body = 'x'.repeat(100000)
     for (let offset = 0; offset < 10000; offset += 250) {
@@ -305,7 +305,7 @@ Deno.test('ten thousand large entries load only a bounded body window', async ()
 
 Deno.test('detached windows receive frontier notices without loading new offscreen bodies', async () => {
   let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
-  let store = open(path)
+  let store = await harness(path)
   await store.g.apply([
     { entity: { eid: 's' }, session: {} },
     ...Array.from({ length: 100 }, (_, i) => ({
@@ -315,7 +315,7 @@ Deno.test('detached windows receive frontier notices without loading new offscre
     })),
   ])
   store.close()
-  let r = await remote({ db: path, cwd: dir, fake: true })
+  let r = await remote({ config: at(path), cwd: dir, fake: true })
   try {
     let page = await r.agent.transcriptWindow!('s', {
       anchor: 'e30',
@@ -349,7 +349,7 @@ Deno.test('detached windows receive frontier notices without loading new offscre
 })
 
 Deno.test('window counts exclude fork ancestor entries beyond its boundary', async () => {
-  const h = open(':memory:')
+  const h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 'parent' }, session: {} },

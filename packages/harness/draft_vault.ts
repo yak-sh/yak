@@ -2,8 +2,7 @@
 import type { Saved, Vault } from '@yaks/client'
 import { join, resolve } from '@std/path'
 import { frontend } from './frontend.ts'
-import { home } from './paths.ts'
-import { dbPath } from './store.ts'
+import { dbPath, home } from './paths.ts'
 
 export let draftVault = async (directory: string): Promise<Vault> => {
   await Deno.mkdir(directory, { recursive: true, mode: 0o700 })

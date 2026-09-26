@@ -1,6 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { discover, restore } from '@yaks/git/host'
-import { open } from './store.ts'
 import { sessionCwd } from './workspace.ts'
 import {
   collect,
@@ -11,7 +10,7 @@ import {
   over,
   sweep,
 } from './worktrees.ts'
-import { git, scratchRepo } from './testing.ts'
+import { git, harness, scratchRepo } from './testing.ts'
 
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
@@ -73,7 +72,7 @@ Deno.test('a checkout is named after the child it was cut for', () => {
 
 Deno.test('a sweep takes back the root, keeps what is held, and skips a live home', async () => {
   let f = await fixture()
-  let h = open(':memory:')
+  let h = await harness()
   try {
     let gone = await f.cut('gone')
     await f.commit(gone, 'landed')
@@ -107,7 +106,7 @@ Deno.test('a sweep takes back the root, keeps what is held, and skips a live hom
 })
 
 Deno.test('over: a transcript that ended, and a process that exited with it', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 'empty' }, session: {} },
@@ -146,7 +145,7 @@ Deno.test('over: a transcript that ended, and a process that exited with it', as
 
 Deno.test('collect keeps a checkout while its session could still run', async () => {
   let f = await fixture()
-  let h = open(':memory:')
+  let h = await harness()
   try {
     let path = await f.cut('child-one')
     await h.g.apply([{ entity: { eid: 'child:one' }, session: {} }])
@@ -171,7 +170,7 @@ Deno.test('collect keeps a checkout while its session could still run', async ()
 
 Deno.test('a collected checkout is cut again where it stood', async () => {
   let f = await fixture()
-  let h = open(':memory:')
+  let h = await harness()
   try {
     let path = await f.cut('child-one')
     await f.commit(path, 'the work')
@@ -205,7 +204,7 @@ Deno.test('a collected checkout is cut again where it stood', async () => {
 })
 
 Deno.test('a checkout with nothing recorded cannot be cut again', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply([{ entity: { eid: 'w1' }, worktree: { path: '/wt/gone' } }])
     let [row] = await h.g.read('.worktree&*')
@@ -216,7 +215,7 @@ Deno.test('a checkout with nothing recorded cannot be cut again', async () => {
 })
 
 Deno.test('live homes are the checkouts named for a session and the ones it inherited', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 'w1' }, worktree: { path: '/wt/child-inherited' } },
@@ -238,7 +237,7 @@ Deno.test('a child that is over hands its checkout back, and gets it again on re
   // The root is passed, never set in the environment: test files run side by
   // side in one process, and a root set there is where every other file's
   // checkouts go until this one puts it back.
-  let h = open(':memory:')
+  let h = await harness()
   let failed: unknown[] = []
   collecting(h.g, h.fx, (error) => failed.push(error), f.root)
   try {

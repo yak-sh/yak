@@ -41,7 +41,6 @@ import { VIA } from './rpc.ts'
 import type { Command, Ctx } from './run.ts'
 import {
   compose,
-  dbOf,
   type Declared,
   facet,
   type Role,
@@ -252,9 +251,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
           await drawn(),
           host.vocab,
           answer,
-          c.tui
-            ? { views: await terminal(plugins()), db: dbOf(host.config) }
-            : {},
+          c.tui ? { views: await terminal(plugins()), config: c.config } : {},
           {
             lookup: (eids) => host.graph.storage.tx((tx) => tx.get(eids)),
             query: (q) => host.graph.read(q),

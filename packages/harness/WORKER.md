@@ -185,7 +185,7 @@ and content.
 An isolated benchmark is available:
 
 ```sh
-HARNESS_DB=:memory: deno run -A packages/harness/startup_bench.ts 150 4000
+deno run -A packages/harness/startup_bench.ts 150 4000
 ```
 
 It creates a temporary database with 150 sessions, a 4,000-entry parent, and

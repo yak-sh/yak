@@ -162,12 +162,19 @@ Deno.test('a sweep owes what it selects one run, however many workers start at o
   assertEquals(ran.length, 4)
 })
 
+// Code for every effect the blog declares, so a worker can serve the pool.
+let every = (note: Handler) => ({
+  post_note: note,
+  post_gone: note,
+  post_swept: () => {},
+})
+
 Deno.test('a pass on the way through leaves the pool to a process that stays', async () => {
   let s = store()
   let server = proc(s, { owner: 'server' })
   let cli = proc(s, { owner: 'cli' })
-  server.fx.handle({ post_note: server.note })
-  cli.fx.handle({ post_note: cli.note })
+  server.fx.handle(every(server.note))
+  cli.fx.handle(every(cli.note))
   await cli.g.apply([post('p1')])
   let up = new AbortController()
   let serving = server.fx.work(server.g, up.signal)
@@ -186,10 +193,30 @@ Deno.test('a pass on the way through leaves the pool to a process that stays', a
   assertEquals(cli.ran, ['created p2'])
 })
 
+Deno.test('a process working only some effects leaves the rest to a pass through', async () => {
+  let s = store()
+  let some = proc(s, { owner: 'some' })
+  let cli = proc(s, { owner: 'cli' })
+  some.fx.handle({ post_gone: some.note })
+  cli.fx.handle(every(cli.note))
+  await cli.g.apply([post('p0')])
+  await cli.g.apply([{ entity: { eid: 'p0' }, $delete: true }])
+  let up = new AbortController()
+  let serving = some.fx.work(some.g, up.signal)
+  // It has been through a pass, so it would be present by now if it were.
+  await until(() => some.ran.length)
+  await cli.g.apply([post('p1')])
+  await cli.fx.work(cli.g)
+  await cli.fx.idle()
+  assert(cli.ran.includes('created p1'), cli.ran.join())
+  up.abort()
+  await serving
+})
+
 Deno.test('a thread that wrote runs down wakes the worker beside it', async () => {
   let s = store()
   let server = proc(s, { owner: 'server' })
-  server.fx.handle({ post_note: server.note })
+  server.fx.handle(every(server.note))
   let up = new AbortController()
   let serving = server.fx.work(server.g, up.signal)
   await until(async () => (await rows(server.g, '.lease')).length)

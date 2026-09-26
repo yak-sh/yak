@@ -5,10 +5,11 @@
 // settled on its reply.
 //
 // It runs the harness the way the harness always ran in a terminal: the agent
-// and the database in a worker (./remote.ts), drafts in a vault of their own
-// (./draft_vault.ts), the app over both (./app.ts). The database is the file
-// the answer came from. A first Ctrl-C waits for the worker to finish what it
-// admitted, a second forces it (@yaks/tui `useShutdown`).
+// and the graph in a worker (./remote.ts), drafts in a vault of their own
+// (./draft_vault.ts), the app over both (./app.ts). The graph is the one the
+// command's config names, composed there as the command composed it. A first
+// Ctrl-C waits for the worker to finish what it admitted, a second forces it
+// (@yaks/tui `useShutdown`).
 
 import { h } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
@@ -17,6 +18,7 @@ import type { ComponentRenderer } from '@yaks/preact'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
 import { useShutdown } from '@yaks/tui'
+import { read } from '@yaks/cli/host'
 import { App } from './app.ts'
 import { openDrafts } from './draft_vault.ts'
 import { remote } from './remote.ts'
@@ -26,28 +28,33 @@ type Up = {
   drafts: Awaited<ReturnType<typeof openDrafts>>
 }
 
-let boot = async (db: string | undefined, session: string): Promise<Up> => {
+let boot = async (config: string, session: string): Promise<Up> => {
   let drafts = await openDrafts()
-  let backend = await remote({ cwd: Deno.cwd(), db }).catch(async (error) => {
-    await drafts.close()
-    throw error
-  })
+  let backend = await remote({ cwd: Deno.cwd(), config: read(config) }).catch(
+    async (error) => {
+      await drafts.close()
+      throw error
+    },
+  )
   await backend.resume()
   await drafts.ui.patch({ selected: session })
   return { backend, drafts }
 }
 
-let Harness = ({ e, db }: { e: Bundle; db?: string }) => {
+let Harness = ({ e, config }: { e: Bundle; config?: string }) => {
   let session = String((e.entry as Comp | undefined)?.session ?? e.entity.eid)
   let [up, set] = useState<Up | Error>()
   useEffect(() => {
-    let booting = boot(db, session)
+    if (!config) {
+      return void set(new Error('a terminal app needs a config to open'))
+    }
+    let booting = boot(config, session)
     booting.then(set, set)
     return () =>
       void booting.then(({ backend, drafts }) =>
         backend.close().finally(() => drafts.close())
       ).catch(() => {})
-  }, [db, session])
+  }, [config, session])
   useShutdown(async () => {
     if (!up || up instanceof Error) return
     up.drafts.ui.patch({

@@ -1,18 +1,18 @@
 import { kindOf } from '@yaks/session'
 import { local } from './local.ts'
+import type { Harness } from './store.ts'
 import { harnessTools } from './tools.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { checkoutAt, createWorktree, discover } from '@yaks/git/host'
 import { refEid } from '../git/refs.ts'
-import { open } from './store.ts'
 import { homeAt, sessionCwd, workspace } from './workspace.ts'
-import { git, scratchRepo, working } from './testing.ts'
+import { git, harness, scratchRepo, working } from './testing.ts'
 import { worktrees } from './paths.ts'
 
 // The runner over the fixture's graph, bound and prepared as the harness
 // tools that queue its children are (./tools.ts).
-let run = (f: { h: ReturnType<typeof open>; repo: string }) =>
+let run = (f: { h: Harness; repo: string }) =>
   working(f.h, {
     ...workspace(f.h.g, f.repo, worktrees()),
     tools: [],
@@ -21,7 +21,7 @@ let run = (f: { h: ReturnType<typeof open>; repo: string }) =>
 
 let fixture = async () => {
   let { dir, repo, free } = await scratchRepo()
-  let h = open(':memory:')
+  let h = await harness()
   return {
     dir,
     repo,
@@ -375,7 +375,7 @@ Deno.test('user task forks stable context and prepares an independent pinned che
 Deno.test('user task outside a repository fails before minting work', async () => {
   let dir = await Deno.makeTempDir()
   let a = local({
-    h: open(':memory:'),
+    h: await harness(),
     cwd: dir,
     name: 'fake',
     model: () => Promise.resolve({ id: 'r', model: 'fake', items: [] }),

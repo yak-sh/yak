@@ -1,9 +1,9 @@
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { createDiagnostics, uncaught } from './diagnostics.ts'
-import { open } from './store.ts'
+import { harness } from './testing.ts'
 
 Deno.test('a defect is an exception entity, stack and cause kept, secrets redacted, and never an entry', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   let reporter = createDiagnostics({ secrets: ['secret-key-123'] })
   let detach = reporter.attach(h.g)
   let error = new Error('savepoint failed secret-key-123', {

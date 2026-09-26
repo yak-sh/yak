@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { entrySource, SOURCE_LIMIT } from './detail.ts'
-import { open } from './store.ts'
 import { remote } from './remote.ts'
+import { at, harness } from './testing.ts'
 
 const seed = [
   { entity: { eid: 'p' }, session: {} },
@@ -20,7 +20,7 @@ const seed = [
 ]
 
 Deno.test('SOURCE authorizes inherited entry without reading transcript and pages Unicode with revision', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply(seed)
     let queries: string[] = [], read = h.g.read.bind(h.g)
@@ -75,11 +75,11 @@ Deno.test('SOURCE authorizes inherited entry without reading transcript and page
 
 Deno.test('SOURCE worker fake matches inline read and rejects unrelated entries', async () => {
   let dir = await Deno.makeTempDir(), db = dir + '/db.sqlite'
-  let h = open(db)
+  let h = await harness(db)
   await h.g.apply(seed)
   let expected = await entrySource(h.g, 'child', 'a')
   h.close()
-  let r = await remote({ db, cwd: dir, fake: true })
+  let r = await remote({ config: at(db), cwd: dir, fake: true })
   try {
     assertEquals(await r.agent.entrySource!('child', 'a'), expected)
     let next = await r.agent.entrySource!('child', 'a', {
@@ -104,7 +104,7 @@ Deno.test('SOURCE worker fake matches inline read and rejects unrelated entries'
 })
 
 Deno.test('SOURCE prefers full receipt and supports call arguments without searching', async () => {
-  let h = open(':memory:')
+  let h = await harness()
   try {
     await h.g.apply([
       { entity: { eid: 's' }, session: {} },

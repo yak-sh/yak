@@ -4,7 +4,7 @@ import { compose } from '@yaks/cli/host'
 import { argsOf, type Bundle, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { connect } from '../mcp/testing.ts'
-import { open } from './store.ts'
+import { harness } from './testing.ts'
 
 let reads = { file: () => '', stdin: () => '' }
 
@@ -83,7 +83,7 @@ Deno.test('JSON Schema tool uses identical metadata and constraints through MCP 
       output: { source: call.entity.eid },
     }],
   }
-  const h = open(':memory:')
+  const h = await harness()
   const c = await connect({ graph: h.g, tools: [tool] })
   try {
     const listed = (await c.listTools()).tools.find((
