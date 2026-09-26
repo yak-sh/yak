@@ -96,7 +96,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { schema } from '@yaks/sqlite'
+import { FIT, schema } from '@yaks/sqlite'
 import {
   driver,
   type DurableSql,
@@ -279,7 +279,12 @@ let shapeOf = (name: string, declared: string | null): Shape => {
     ...schema(vocab, derived),
     ...ftsSchema(searchable, read),
   ]
-  let stamp = sha256(ddl.map((s) => render(s).sql).join('\n'))
+  // With the revision of the fitting that brings standing tables to it
+  // (@yaks/sqlite `FIT`), which reads what it changes off the tables: a store
+  // an older fitting left behind installs once more when that learns more.
+  let stamp = sha256(
+    [FIT, ...ddl.map((s) => render(s).sql)].join('\n'),
+  )
   let shape = { vocab, own, derived, searchable, stamp }
   shapes.set(key, shape)
   if (shapes.size > SHAPES) shapes.delete(shapes.keys().next().value!)
@@ -684,7 +689,9 @@ export class Store {
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
       for (let stmt of blobSchema()) drive.query(stmt)
-      install(ctx.storage, vocab, blobRead(vocab))
+      for (let e of install(ctx.storage, vocab, blobRead(vocab))) {
+        defect(e, { request: 'schema fit', store: name })
+      }
       if (held) rebuild(drive)
       this.#put('schema', stamp)
     }

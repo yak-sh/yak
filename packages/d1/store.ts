@@ -76,15 +76,24 @@ import {
   type Stmt,
 } from '@yaks/sql'
 import {
+  asked,
+  defined,
+  fitting,
+  grown,
+  heard,
+  indexed,
   minted,
   mintSql,
   numberSql,
   patchSql,
   projected,
+  refit,
   removeSql,
   schema,
+  tabled,
   touched,
   unburySql,
+  unfit,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { type D1Like, prepare, type Prepared, type Row, unbind } from './d1.ts'
@@ -169,6 +178,9 @@ let deadly = (v: Vocab): Set<string> =>
  * name @yaks/sqlite uses: left unset, an entity is its eid and nothing else. */
 export type Opts = BindOpts & {
   number?: boolean | { except: readonly string[] }
+  /** Where a failure the store outlives is told, as @yaks/sqlite's `report`:
+   * the console, by default. */
+  report?: (error: Error) => void
 }
 
 export let storage = <S extends Prepared<S>>(
@@ -177,6 +189,7 @@ export let storage = <S extends Prepared<S>>(
   base: Opts = {},
 ): Store => {
   let bears = deadly(vocab)
+  let report = base.report ?? console.error
   let prep = (s: Stmt): S => prepare(db, s)
 
   // One statement, one round trip.
@@ -511,7 +524,19 @@ export let storage = <S extends Prepared<S>>(
   return {
     ddl: () => schema(vocab),
     install: async () => {
-      await send(schema(vocab))
+      // What stood before, which only a table that did can be behind its
+      // vocabulary in (@yaks/sqlite `fit`): the tables, then what each holds.
+      let defs = await one(defined)
+      let names = defs.map((d) => String(d.name)).filter(fitting(vocab))
+      let before = heard(defs, names, await send(asked(names)))
+      await send([...tabled(vocab), ...grown(vocab, before)])
+      // A rebuild to a batch, which is D1's only transaction: a table whose
+      // rows the new shape refuses stays as it stood, and is told.
+      for (let [comp, stmts] of Object.entries(refit(vocab, before))) {
+        await send(stmts).catch((e) => report(unfit(comp, e)))
+      }
+      // The indexes last: one may stand on a table just rebuilt.
+      await send(indexed(vocab))
     },
     read,
     rows,

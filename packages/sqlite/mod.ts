@@ -59,24 +59,55 @@ import type {
 } from '@yaks/graph'
 import { sha256 } from '@yaks/graph'
 import type { Query } from './read.ts'
-import { analyzed, grown, indexed, refit, schema, tabled } from './ddl.ts'
+import {
+  analyzed,
+  FIT,
+  fit,
+  grown,
+  indexed,
+  schema,
+  standing,
+  tabled,
+} from './ddl.ts'
 import { epoch, installed, meta, SCHEMA } from './meta.ts'
 import { doom, read, rows } from './read.ts'
 import { keyed } from './keyed.ts'
 import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
-import { componentTables, shape, tables as listed } from './physical.ts'
+import { componentTables, shape } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
 
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
-export { columns, objects } from './physical.ts'
+export {
+  asked,
+  checks,
+  columns,
+  defined,
+  heard,
+  objects,
+  type Stood,
+} from './physical.ts'
 export { fold, pointers } from './fold.ts'
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
 export { bindings, matched } from './rules.ts'
 export * from './bundle.ts'
-export { analyzed, grown, indexed, META, refit, schema, tabled } from './ddl.ts'
+export {
+  analyzed,
+  FIT,
+  fit,
+  fitting,
+  grown,
+  indexed,
+  META,
+  refit,
+  schema,
+  type Standing,
+  standing,
+  tabled,
+  unfit,
+} from './ddl.ts'
 export { EPOCH, epoch, type Meta, meta } from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
 export {
@@ -197,6 +228,10 @@ export type Opts = BindOpts & {
    * not requesting one. Off by default, because a store nobody mirrors owns
    * its own numbering. */
   adopt?: boolean
+  /** Where a failure the store outlives is told: a table that stood and could
+   * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). The
+   * console, by default. */
+  report?: (error: Error) => void
 }
 
 // What `install()` runs, known once per vocabulary and read overrides: the
@@ -214,7 +249,10 @@ let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
   if (known) return known
   let stmts = [...tabled(vocab, derived), ...indexed(vocab)]
   let fresh = {
-    print: sha256(stmts.map((s) => render(s).sql).join(';\n')),
+    // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
+    // changes is read off the file, so a fitting that learns something new
+    // installs again over a file whose statements are as they were.
+    print: sha256([FIT, ...stmts.map((s) => render(s).sql)].join(';\n')),
     made: stmts.flatMap((s) =>
       s.t == 'create table' || s.t == 'create index' ||
         s.t == 'create view' || s.t == 'create trigger'
@@ -237,6 +275,7 @@ export let storage = (
   base: Opts = {},
 ): Store => {
   let identity = keyed(driver, vocab, base)
+  let report = base.report ?? console.error
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
     get: identity,
@@ -249,7 +288,7 @@ export let storage = (
   }
   return {
     ddl: () => schema(vocab, base.derived),
-    grown: () => grown(driver, vocab),
+    grown: () => grown(vocab, standing(driver, vocab)),
     install: () => {
       // A file whose schema nothing has touched since this vocabulary
       // installed it is left as it is. Every statement below is a no-op there
@@ -272,32 +311,29 @@ export let storage = (
       let was = installed(driver)
       if (was != mark(was?.split(' ').slice(2) ?? [])) {
         // What stood before: only those tables can be behind the vocabulary,
-        // so a fresh file is asked nothing about its columns or its keys.
-        let held = new Set(listed(driver))
+        // so a fresh file is asked nothing about its columns, keys or checks.
+        let before = standing(driver, vocab)
         for (let stmt of tabled(vocab, base.derived)) driver.query(stmt)
-        // Then the columns a component gained since its table was created —
-        // the half `create table if not exists` cannot add (ddl.ts `grown`).
-        for (let stmt of grown(driver, vocab, held)) driver.query(stmt)
-        // Then the tables whose foreign keys the vocabulary has since changed
-        // its mind about (ddl.ts `refit`). A rebuild drops the table, so it
-        // runs outside the enforcement — a copy that re-checks every key it is
-        // dropping would reject the rows it exists to keep — and before the
-        // indexes, which the drop took with the old table.
-        let rebuilt = refit(driver, vocab, held)
-        if (rebuilt.length) {
-          let keys = (value: string): Stmt => ({
-            t: 'pragma',
-            name: 'foreign_keys',
-            value,
-          })
-          driver.query(keys('off'))
-          try {
-            for (let stmt of rebuilt) driver.query(stmt)
-          } finally {
-            driver.query(keys('on'))
-          }
+        // Then the columns a component gained since its table was created, the
+        // half `create table if not exists` cannot add, and a rebuild of each
+        // table whose keys or checks the vocabulary has since changed its mind
+        // about (ddl.ts `fit`). A rebuild runs outside the enforcement, which
+        // SQLite switches only between transactions: a copy that re-checks a
+        // key the vocabulary only now declares would reject the rows it exists
+        // to keep.
+        let keys = (value: string): Stmt => ({
+          t: 'pragma',
+          name: 'foreign_keys',
+          value,
+        })
+        driver.query(keys('off'))
+        try {
+          for (let e of fit(driver, vocab, before)) report(e)
+        } finally {
+          driver.query(keys('on'))
         }
-        // The indexes last: one may name a column this boot just added.
+        // The indexes last: one may name a column this boot just added, or
+        // stand on a table it just rebuilt.
         for (let stmt of indexed(vocab)) driver.query(stmt)
         // The store's lineage identity, minted on the first install (meta.ts
         // `epoch`).

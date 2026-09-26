@@ -22,7 +22,7 @@ import {
   tally,
   val,
 } from '@yaks/sql'
-import { backfill, grown, indexed, tabled } from '@yaks/sqlite'
+import { backfill, fit, indexed, standing, tabled } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 
 /** The five type words the short manifest used, and the JSON Schema each
@@ -318,19 +318,23 @@ export let rebuild = (d: Driver) => {
 }
 
 /** The schema a vocabulary implies, raised over whatever the object holds.
- * Only the tables that stood before it can be missing a column (@yaks/sqlite
- * `grown`), so a fresh object is asked nothing about its columns. Existing rows
- * need a preparing migration before gaining a unique constraint; empty tables
- * can acquire it now without changing what old rows must satisfy. */
+ * Only the tables that stood before it can be behind their vocabulary
+ * (@yaks/sqlite `fit`), so a fresh object is asked nothing about its columns,
+ * keys or checks. What `fit` had to leave as it stood comes back, for the
+ * caller to report. Existing rows need a preparing migration before gaining a
+ * unique constraint; empty tables can acquire it now without changing what old
+ * rows must satisfy, and an index that stood before a rebuild took it stands
+ * over the same rows again. */
 export let install = (
   storage: DurableStorage,
   vocab: Vocab,
   derived: Derived = {},
-) => {
+): Error[] => {
   let d = driver(storage)
-  let stood = new Set(named(d, 'table').map((t) => t.name))
+  let before = standing(d, vocab)
+  let stood = new Set(named(d, 'index').map((i) => i.name))
   for (let stmt of tabled(vocab, derived)) d.query(stmt)
-  for (let stmt of grown(d, vocab, stood)) d.query(stmt)
+  let unfit = fit(d, vocab, before)
   let held = new Set(named(d, 'index').map((i) => i.name))
   let ready = {
     ...vocab,
@@ -338,7 +342,7 @@ export let install = (
       vocab.indexes(table).filter((i) => {
         let name = `${table}_${i.props.join('_')}`
         if (held.has(name)) return false
-        if (!i.unique || !tally(d, table)) return true
+        if (stood.has(name) || !i.unique || !tally(d, table)) return true
         throw new Error(
           `skipped unique index ${name}: existing rows require a preparing migration`,
         )
@@ -348,6 +352,7 @@ export let install = (
   // Search is app composition, after all indexed columns have been raised.
   for (let stmt of ftsSchema(fields(vocab), derived)) d.query(stmt)
   if (vocab.comp('archetype')) backfill(d, false)
+  return unfit
 }
 
 // A full-text index is several tables — the virtual one and its shadows — and

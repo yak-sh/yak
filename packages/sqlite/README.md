@@ -132,11 +132,14 @@ aggregates.
 | `get(eids)`          | Those entities as stored, read without taking the write lock            |
 | `tx(body)`           | Runs the callback in a transaction and returns its result               |
 
-`install()` preserves existing data, adds missing columns, rebuilds tables when
-required by supported schema changes, and recreates declared indexes. It does
-not replace an application's migration plan. It initializes the store epoch and
-number sequence and runs bounded `PRAGMA optimize` for file-backed drivers, so
-the planner can use table statistics.
+`install()` preserves existing data, adds missing columns, and rebuilds a table
+whose foreign keys or checks (a reference's death word, an enum) no longer match
+the vocabulary, then recreates declared indexes. A table whose rows the new
+shape would refuse, such as a value an enum no longer lists, is left as it stood
+and reported through `base.report` (the console by default): its rows need a
+migration that prepares them. It initializes the store epoch and number sequence
+and runs bounded `PRAGMA optimize` for file-backed drivers, so the planner can
+use table statistics.
 
 A transaction provides `read`, `get(eids, comps?)`, `patch`, `remove`, `revive`,
 `doom`, and `bindings`. `get` retrieves entities including tombstones, whole or

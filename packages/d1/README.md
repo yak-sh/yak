@@ -81,8 +81,11 @@ export default {
 
 The example initializes the schema and writes sample data on every request for
 simplicity. Applications should initialize schema deliberately and map requests
-to their own authorized operations. `install()` runs vocabulary-derived DDL; it
-does not implement the embedded adapter's full schema-upgrade procedure.
+to their own authorized operations. `install()` runs vocabulary-derived DDL and
+brings tables that already stood to the vocabulary the way @yaks/sqlite's does:
+missing columns added, a table whose keys or checks moved rebuilt in a batch of
+its own, and one whose rows would not fit left as it stood and reported through
+`base.report`.
 
 ## API and exports
 

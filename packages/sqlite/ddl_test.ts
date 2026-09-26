@@ -414,6 +414,70 @@ Deno.test('a death word that moved rebuilds its table without the key', () => {
   assertEquals(scan(d, 'product', undefined, ['maker']), [{ maker: 1 }])
 })
 
+// A creature, its kind declared as `kind` says: a list of kinds, or any word.
+let creatures = (kind: Record<string, unknown>) =>
+  loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object', wire: false, properties: {} },
+      creature: {
+        component: true,
+        type: 'object',
+        properties: { kind: { type: 'string', ...kind } },
+      },
+    },
+  })
+
+// The same file, opened under each vocabulary in turn as a later boot opens it,
+// with a creature of each kind in `born` written as it stands.
+let life = (...ages: [Record<string, unknown>, string[]][]) => {
+  let d = mem()
+  let said: Error[] = []
+  let s = ages.map(([kind, born]) => {
+    let s = storage(d, creatures(kind), { report: (e) => void said.push(e) })
+    s.install()
+    for (let k of born) {
+      s.tx((tx) => tx.patch([{ entity: { eid: k }, creature: { kind: k } }]))
+    }
+    return s
+  }).at(-1)!
+  let kinds = s.read('.creature')
+    .map((b) => (b.creature as Record<string, unknown>).kind).sort()
+  return { d, s, said, kinds }
+}
+
+Deno.test('a table takes the kinds its vocabulary grew or stopped listing', () => {
+  let two = { enum: ['fox', 'owl'] }
+  for (let later of [{ enum: ['fox', 'owl', 'hen'] }, {}]) {
+    let { kinds, said } = life([two, ['fox']], [later, ['hen']])
+    assertEquals(kinds, ['fox', 'hen'])
+    assertEquals(said, [])
+  }
+})
+
+Deno.test('a narrowed list refuses the kind it dropped', () => {
+  let { s, kinds } = life(
+    [{ enum: ['fox', 'owl'] }, ['fox']],
+    [{ enum: ['fox'] }, []],
+  )
+  assertEquals(kinds, ['fox'])
+  let owl = [{ entity: { eid: 'owl' }, creature: { kind: 'owl' } }]
+  assertThrows(() => s.tx((tx) => tx.patch(owl)), Error, 'CHECK')
+})
+
+Deno.test('rows a narrowed list would refuse keep their table as it stood', () => {
+  let { d, s, kinds, said } = life(
+    [{ enum: ['fox', 'owl'] }, ['fox', 'owl']],
+    [{ enum: ['fox'] }, []],
+  )
+  assertEquals(kinds, ['fox', 'owl'])
+  assertEquals(said.length, 1)
+  assert(said[0].message.startsWith('creature keeps its old shape'))
+  // and the table it kept is whole: its rows, its check, and nothing beside it
+  let owl = [{ entity: { eid: 'o2' }, creature: { kind: 'owl' } }]
+  s.tx((tx) => tx.patch(owl))
+  assertEquals(objects(d, { name: 'creature__refit' }), [])
+})
+
 Deno.test('a store over a file installs the sizes its planner reads it by', () => {
   let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
   let d = open(path)

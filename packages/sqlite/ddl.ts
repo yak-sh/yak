@@ -54,11 +54,13 @@ import {
   lit,
   notNull,
   NOW,
+  render,
   select,
   type Stmt,
   table,
 } from '@yaks/sql'
-import { tables } from './physical.ts'
+import { checks, type Stood, stood } from './physical.ts'
+import { unit } from './unit.ts'
 
 /**
  * The key/value table's name. Named `server_meta`, not `meta`, because a
@@ -319,131 +321,169 @@ export let indexed = (vocab: Vocab): Stmt[] => [
     .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
 ]
 
-// A table's columns and its foreign keys, as the file holds them.
-let info = (driver: Driver, name: string) =>
-  driver.query({ t: 'pragma', name: 'table_info', arg: name })
-let keys = (driver: Driver, name: string) =>
-  driver.query({ t: 'pragma', name: 'foreign_key_list', arg: name })
-
-// The reference columns a component's table carries a foreign key for: the
-// stored references the vocabulary declares as constrained (a `keep` reference
-// outlives its target's tombstone, so it never is), plus the owner column
-// every component table is keyed by.
-let bound = (v: Vocab, comp: string): Set<string> =>
-  new Set([
-    'entity',
-    ...stored(v, comp).filter((c) => c.category == 'ref' && c.fk).map((c) =>
-      c.prop
-    ),
-  ])
-
-// The component tables `held` names, where `held` is the tables a file stood
-// with before this install created any: a table created by this install is
-// already the shape its vocabulary says, so only the ones that were there
-// before can be wrong. Read off the file when not given (physical.ts `tables`).
-let standing = (vocab: Vocab, held: Set<string>): string[] =>
-  vocab.all.filter((name) => name != 'entity' && held.has(name))
+/**
+ * Which revision of fitting ({@link grown}, {@link refit}) brings a standing
+ * file to its vocabulary. What fitting changes it reads off the file, not off
+ * the vocabulary, so a fingerprint of the statements alone calls a file
+ * current that an older fitting left behind. This is part of every install's
+ * fingerprint instead, and moving it fits every store once more: move it when
+ * fitting learns to see something it did not.
+ */
+export let FIT = 1
 
 /**
- * What `grown()` cannot fix either: a reference whose declared death behavior
- * changed after its table was created. That declaration is what decides whether
- * a column is constrained, so changing it changes the table's foreign keys —
- * and SQLite has no `alter table drop constraint`. The table is rebuilt
- * instead: a fresh one beside it, the rows copied across the columns both have,
- * the old one dropped and the new one renamed into its place.
- *
- * Only a table whose keys disagree with the vocabulary is touched, so this is
- * a no-op on every boot but the one after the vocabulary changed. It must run
- * before `indexed()`, which recreates the indexes the drop took with it.
- * `held` is the tables the file had before this install created any (see
- * `standing`): a fresh file has none, and is asked nothing.
+ * What fitting reads off a file before an install creates anything: each
+ * table the vocabulary names that stood, and the spine. Only those can be
+ * behind the vocabulary, since a table the install creates is already the
+ * shape it says, so a fresh file is asked nothing.
  */
-export let refit = (
-  driver: Driver,
-  vocab: Vocab,
-  held: Set<string> = new Set(tables(driver)),
-): Stmt[] =>
-  standing(vocab, held).flatMap((comp): Stmt[] => {
-    let want = bound(vocab, comp)
-    let has = new Set(keys(driver, comp).map((r) => String(r.from)))
-    if (want.size == has.size && [...want].every((c) => has.has(c))) return []
-    let held = info(driver, comp)
-    if (!held.length) return []
-    // Every column the table has comes across, not every property the
-    // vocabulary declares: a property the vocabulary has since dropped is still
-    // a column this table's rows were written under, and a constraint change is
-    // no reason to remove one. It keeps its type and nothing else: nothing
-    // writes a column the vocabulary no longer declares, so it is neither
-    // required nor filled.
-    let said = new Set(stored(vocab, comp).map((c) => c.prop))
-    let extra = held.filter((r) =>
-      r.name != 'entity' && !said.has(String(r.name))
-    )
-    let fresh = `${comp}__refit`
-    let cols = held.map((r) => String(r.name))
-    return [
-      tableDdl(
-        vocab,
-        comp,
-        fresh,
-        extra.map((r) => ({
+export type Standing = Record<string, Stood>
+
+/** Whether fitting asks a file about the table `name`. */
+export let fitting = (vocab: Vocab) => (name: string): boolean =>
+  name == 'entity' || !!vocab.comp(name)
+
+/** The {@link Standing} a file holds now, read through a driver that answers
+ * at once. */
+export let standing = (driver: Driver, vocab: Vocab): Standing =>
+  stood(driver, fitting(vocab))
+
+// The component tables that stood.
+let comps = (vocab: Vocab, was: Standing): string[] =>
+  vocab.all.filter((name) => name != 'entity' && name in was)
+
+// Whether a table that stood already says what its fresh statement says about
+// the two things only a rebuild changes: which columns are keyed to another
+// table, and what each column checks. A column the table lacks is `grown`'s,
+// and arrives with its check.
+let fits = (t: Stood, fresh: CreateTable): boolean => {
+  let keyed = fresh.cols.filter((c) => c.ref).map((c) => c.name)
+  let checked = checks(render(fresh).sql)
+  let names = ['', ...t.cols.map((r) => String(r.name).toLowerCase())]
+  return keyed.length == t.keys.length &&
+    keyed.every((c) => t.keys.includes(c)) &&
+    names.every((n) => (t.checks[n] ?? '') == (checked[n] ?? ''))
+}
+
+/**
+ * What {@link grown} cannot fix: a constraint the vocabulary changed its mind
+ * about after a table was created. A reference's death word decides whether its
+ * column carries a foreign key, an enum is its column's check (`closed`), and
+ * SQLite alters neither in place. So a table whose keys or checks disagree with
+ * the vocabulary is rebuilt: its rows set aside as they are, the table made
+ * again as the vocabulary says, and the rows brought back. It is made under its
+ * own name rather than renamed into it, because a rename checks every view and
+ * trigger that names the table while it is gone (`doc_value` names `doc`).
+ *
+ * Every column comes back, not only the ones the vocabulary declares: a
+ * property it has since dropped is still a column rows were written under, and
+ * a constraint change is no reason to take a word away from them. Such a column
+ * keeps its type and nothing else, since nothing writes it any more. The
+ * table's triggers and undeclared indexes go with it, for whoever raised them
+ * to raise again at boot (@yaks/fts `adopt`); the declared indexes are
+ * {@link indexed}'s, which runs after.
+ *
+ * Each table's statements, by name: none for a file that already fits, which
+ * is every boot but the one after the vocabulary changed.
+ */
+export let refit = (vocab: Vocab, was: Standing): Record<string, Stmt[]> =>
+  Object.fromEntries(
+    comps(vocab, was).flatMap((comp) => {
+      let t = was[comp]
+      let said = new Set(stored(vocab, comp).map((c) => c.prop))
+      let extra = t.cols
+        .filter((r) => r.name != 'entity' && !said.has(String(r.name)))
+        .map((r) => ({
           name: String(r.name),
           type: String(r.type ?? '') || undefined,
-        })),
-      ),
-      {
+        }))
+      let fresh = tableDdl(vocab, comp, comp, extra)
+      if (fits(t, fresh)) return []
+      let cols = t.cols.map((r) => String(r.name))
+      let aside = `${comp}__refit`
+      let copy = (into: string, from: string): Stmt => ({
         t: 'insert',
-        into: fresh,
+        into,
         cols,
-        q: select({ cols: cols.map((c) => col(c)), from: table(comp) }),
-      },
-      { t: 'drop', kind: 'table', name: comp },
-      { t: 'alter table', table: fresh, rename: comp },
-    ]
-  })
+        q: select({ cols: cols.map((c) => col(c)), from: table(from) }),
+      })
+      return [[comp, [
+        // A column of no type holds each value exactly as it was stored.
+        {
+          t: 'create table',
+          name: aside,
+          cols: cols.map((name) => ({ name })),
+        },
+        copy(aside, comp),
+        { t: 'drop', kind: 'table', name: comp },
+        fresh,
+        copy(comp, aside),
+        { t: 'drop', kind: 'table', name: aside },
+      ]]]
+    }),
+  )
 
 // What `schema()` alone cannot do: add the columns a component gained after its
 // table was already created. `create table if not exists` does nothing to a
 // table that exists, so a vocabulary that gained a property leaves the table at
 // the shape it was first created with, and every read naming the new column
 // fails at the engine ("no such column"). SQLite has no `add column if not
-// exists`, so the live shape is inspected and only the missing columns are
+// exists`, so the standing shape is read and only the missing columns are
 // added.
 //
 // Additive only, and deliberately: nothing is dropped and nothing is retyped,
 // because rows are already written under the columns the table has. A column
 // is emitted in the form SQLite accepts in an `add column` (grownColumn above).
-//
-// Only a table that exists can lack a column, so a table that does not is
-// asked nothing, and neither is one this install created: `held` is the
-// tables the file had before it (see `standing`), which on a fresh file is
-// none. The statements are the same read before the creates or after them,
-// since `create table if not exists` never touches a table that stands.
-export let grown = (
-  driver: Driver,
-  vocab: Vocab,
-  held: Set<string> = new Set(tables(driver)),
-): Stmt[] => [
-  ...(!held.has('entity') ||
-      info(driver, 'entity').some((r) => r.name == 'archetype')
+export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
+  ...(!was.entity || was.entity.cols.some((r) => r.name == 'archetype')
     ? []
     : [{
       t: 'alter table' as const,
       table: 'entity',
       add: { name: 'archetype', type: 'integer', ref: ENTITY },
     }]),
-  ...standing(vocab, held)
-    .flatMap((comp) => {
-      let has = new Set(info(driver, comp).map((r) => String(r.name)))
-      return stored(vocab, comp)
-        .filter((c) => !has.has(c.prop))
-        .map((c) => ({
-          t: 'alter table' as const,
-          table: comp,
-          add: grownColumn(c),
-        }))
-    }),
+  ...comps(vocab, was).flatMap((comp) => {
+    let has = new Set(was[comp].cols.map((r) => String(r.name)))
+    return stored(vocab, comp)
+      .filter((c) => !has.has(c.prop))
+      .map((c) => ({
+        t: 'alter table' as const,
+        table: comp,
+        add: grownColumn(c),
+      }))
+  }),
 ]
+
+/**
+ * Bring the tables that stood to the vocabulary, through a driver that answers
+ * at once: the columns they lack ({@link grown}), then a rebuild of each whose
+ * constraints moved ({@link refit}), in one unit. A table whose rows do not fit
+ * the shape the vocabulary now says (a value its enum no longer lists) is left
+ * exactly as it stood, and returned with the engine's reason: those rows need a
+ * migration that prepares them. Until one runs, the old constraint admits them,
+ * and admission holds every new write to the vocabulary.
+ */
+export let fit = (driver: Driver, vocab: Vocab, was: Standing): Error[] =>
+  unit(driver, () => {
+    for (let stmt of grown(vocab, was)) driver.query(stmt)
+    return Object.entries(refit(vocab, was)).flatMap(([comp, stmts]) => {
+      try {
+        unit(driver, () => stmts.forEach((s) => driver.query(s)))
+        return []
+      } catch (e) {
+        return [unfit(comp, e)]
+      }
+    })
+  })
+
+/** What is reported of a table whose rebuild ({@link refit}) the engine
+ * refused, `e` being its refusal: the table is as it stood. */
+export let unfit = (comp: string, e: unknown): Error =>
+  new Error(
+    `${comp} keeps its old shape: its rows need a migration that prepares ` +
+      `them for the vocabulary's (${e instanceof Error ? e.message : e})`,
+    { cause: e },
+  )
 
 /**
  * How many rows of each index analyze samples. Bounded, because the numbers the

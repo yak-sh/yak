@@ -334,6 +334,33 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   assertEquals((await now.query('lemons', APP)).length, 1)
 })
 
+Deno.test('a kind the vocabulary stopped listing is written beside the rows it kept', async () => {
+  // The table was made when the vocabulary listed kinds, and holds that list
+  // as its check; a deploy that lets any word be a kind raises it again.
+  let now = newer(state(), 'ada/vale')
+  let deploy = (kind: Record<string, unknown>) =>
+    now.door('/vocab', {
+      method: 'POST',
+      body: JSON.stringify({
+        $defs: {
+          creature: {
+            component: true,
+            properties: { kind: { type: 'string', ...kind } },
+          },
+        },
+      }),
+    }, APP)
+  let born = (eid: string, kind: string) =>
+    now.apply([{ entity: { eid }, creature: { kind } }], APP)
+  assertEquals((await deploy({ enum: ['fox', 'owl'] })).status, 200)
+  assertEquals((await born(ONE, 'fox')).status, 200)
+  assertEquals((await deploy({})).status, 200)
+  assertEquals((await born(TWO, 'hen')).status, 200)
+  let kinds = (await now.query('.creature', APP))
+    .map((b) => (b.creature as Record<string, unknown>).kind).sort()
+  assertEquals(kinds, ['fox', 'hen'])
+})
+
 Deno.test('a doc_value-backed legacy index upgrades to the composed FTS schema', async () => {
   let ctx = state()
   let now = newer(ctx, 'ada/cookbook')
