@@ -14,7 +14,7 @@ Deno.test('a page sees nearby world rows and moving heroes', () => {
   })
   let hero = (eid: string, x: number, z: number) => ({
     entity: { eid },
-    player: { name: eid },
+    player: {},
     position: { x, z },
   })
   let found = select([

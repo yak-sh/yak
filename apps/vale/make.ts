@@ -60,30 +60,17 @@ export let anyName = () => pick(NAMES)
 /** How long a name may be. */
 export let LONGEST = 18
 
-/** How a hero looks now: `made`, their player row, and over it `kept`, their
- * newest look row, if they kept one.
+/** A hero's name and colours from their newest look row.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let made = { name: 'Wren', tint: '#111111', hair: '#222222', skin: '#333333' }
- * assertEquals(lookOf(made), made)
- * assertEquals(
- *   lookOf(made, { player: 'h', name: 'Rook', tint: '#444444', at: 2 }),
- *   { name: 'Rook', tint: '#444444', hair: '#222222', skin: '#333333' },
- * )
+ * assertEquals(lookOf({ name: 'Rook', tint: '#444444' }).name, 'Rook')
  * assertEquals(lookOf({}).name, 'Wanderer')
  * ```
  */
-export let lookOf = (
-  made: Record<string, unknown>,
-  kept: Record<string, unknown> = {},
-): Look => {
+export let lookOf = (kept: Record<string, unknown>): Look => {
   let at = (k: keyof Look, or: string): string =>
-    typeof kept[k] == 'string'
-      ? kept[k]
-      : typeof made[k] == 'string'
-      ? made[k]
-      : or
+    typeof kept[k] == 'string' ? kept[k] : or
   return {
     name: at('name', 'Wanderer'),
     tint: at('tint', '#c95f4a'),

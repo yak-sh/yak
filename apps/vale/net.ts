@@ -68,10 +68,10 @@ let spoken = async (): Promise<VocabDoc[]> => {
 
 export let vocab = loadVocab(await spoken())
 
-/** A hero, off their row and their newest look row, if they kept one. */
+/** A hero, off their player row and their newest look row. */
 let heroOf = (b: Bundle, look?: Bundle): Hero => ({
   eid: b.entity.eid,
-  ...lookOf(comp(b, 'player'), comp(look, 'look')),
+  ...lookOf(comp(look, 'look')),
   seen: seenOf(b),
 })
 
@@ -360,7 +360,10 @@ export let connect = (base: URL) => {
     create: (look: Look) => {
       let eid = crypto.randomUUID()
       net.choose(eid)
-      waiting = [...waiting, { entity: { eid }, player: look }]
+      waiting = [...waiting, { entity: { eid }, player: {} }, {
+        entity: { eid: crypto.randomUUID() },
+        look: { player: eid, ...lookOf(look), at: now() },
+      }]
       flush()
       return eid
     },
