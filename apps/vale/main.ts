@@ -745,6 +745,7 @@ let keepUp = (spent: number) => {
 
 let loop = (t: number) => {
   requestAnimationFrame(loop)
+  if (Object.values(h.panels).some((p) => p.open)) hands.unlock()
   let dt = Math.min(0.05, (t - then) / 1000)
   keepUp((t - then) / 1000)
   then = t
