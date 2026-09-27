@@ -40,6 +40,7 @@ import {
   placesOf,
 } from './regions.ts'
 import { type Building, near, placed, type Station, within } from './solid.ts'
+import { type Street, streets } from './streets.ts'
 import {
   along,
   bedAt,
@@ -80,10 +81,10 @@ let dist = (x: number, z: number, [a, b]: Spot) => norm(x - a, z - b)
 let snap = (x: number) => (Math.floor(x / GRID) + 0.5) * GRID
 
 // Every step a build standing aside may take from where it was planned, a
-// cell of the grid at a time, up to 8 metres either way, shortest first.
-let STEPS: Spot[] = Array.from({ length: 33 * 33 }, (_, j): Spot => [
-  (j % 33 - 16) * GRID,
-  (Math.floor(j / 33) - 16) * GRID,
+// cell of the grid at a time, up to 12 metres either way, shortest first.
+let STEPS: Spot[] = Array.from({ length: 49 * 49 }, (_, j): Spot => [
+  (j % 49 - 24) * GRID,
+  (Math.floor(j / 49) - 24) * GRID,
 ]).sort((p, q) => norm(p[0], p[1]) - norm(q[0], q[1]))
 
 /** A prop: something standing on the ground that is part of the world's
@@ -130,6 +131,7 @@ export type Patch = {
  * far or handed in (`adopt`), kept for the chunks asked about last. */
 export type Vale = {
   voxel: number
+  world?: true
   rise: (x: number, z: number) => number
   grow: (ci: number, ck: number) => Patch
   plant: (ci: number, ck: number) => Prop[]
@@ -315,13 +317,14 @@ export let steep = (
 }
 
 /** A place that is a village, where it lies in the world. */
-export type Village = { level: string; name: string; at: Spot }
+export type Village = { level: string; name: string; at: Spot; dress: string }
 
 let VILLAGES: Village[] = Object.keys(LEVELS).flatMap((id) =>
   placesOf(id).filter((p) => isA(p.kind, 'village')).map((p) => ({
     level: id,
     name: p.name,
     at: p.at,
+    dress: p.f.dress ?? 'plaster',
   }))
 )
 
@@ -347,6 +350,7 @@ export let hearthOf = (id: string): Spot | null =>
 // structures are built (`foundation`): its span, or the trunk or row a walker
 // meets, or its foot.
 let raised = new Map<string, Prop[]>()
+let paths = new WeakMap<Vale, Map<string, Street>>()
 /** The ground a structure stands on, metres east–west and north–south, as it
  * stands turned. */
 export let spanOf = (p: Prop): [number, number] | undefined => {
@@ -375,7 +379,9 @@ export let builtOf = (id: string): Prop[] => {
     let [w, d] = half(p)
     return built.every((q) => {
       let [qw, qd] = half(q)
-      return Math.abs(x - q.x) >= w + qw + 1 || Math.abs(z - q.z) >= d + qd + 1
+      let room = KINDS[p.kind].raise && KINDS[q.kind].raise ? 3 : 1
+      return Math.abs(x - q.x) >= w + qw + room ||
+        Math.abs(z - q.z) >= d + qd + room
     }) &&
       (!road ||
         [-1, 0, 1].every((u) =>
@@ -435,19 +441,183 @@ export let builtIn = (x0: number, z0: number, x1: number, z1: number): Prop[] =>
 export let builtNear = (x: number, z: number, r: number): Prop[] =>
   builtIn(x - r, z - r, x + r, z + r).filter((p) => dist(x, z, [p.x, p.z]) < r)
 
+/** The square and streets to the doors of a village, in world metres. */
+export let streetsOf = (v: Vale, village: Village): Street => {
+  let got = paths.get(v)
+  if (!got) paths.set(v, got = new Map())
+  let path = got.get(village.level)
+  if (path) return path
+  let buildings = builtOf(village.level).flatMap((p) => {
+    let b = buildingOf(v, p)
+    return b && dist(b.x, b.z, village.at) < 44 ? [b] : []
+  })
+  got.set(village.level, path = streets(village.at, buildings, v.rise))
+  return path
+}
+
+let details = new WeakMap<Vale, Map<string, Prop[]>>()
+
+// Gardens and stalls use the land's materials and stand beside, never on, a
+// street. Fieldstone walls face the lower side of a sloping building plot.
+let detailsOf = (v: Vale, village: Village): Prop[] => {
+  let got = details.get(v)
+  if (!got) details.set(v, got = new Map())
+  let placed = got.get(village.level)
+  if (placed) return placed
+  let [cx, cz] = village.at, street = streetsOf(v, village)
+  let props = builtOf(village.level)
+  let buildings = props.flatMap((p) => {
+    let b = buildingOf(v, p)
+    return b && dist(b.x, b.z, village.at) < 44 ? [b] : []
+  })
+  let roads = roadsIn(cx - 42, cz - 42, cx + 42, cz + 42, ROAD + 4)
+  let lanes = lanesIn(cx - 42, cz - 42, cx + 42, cz + 42, 4)
+  let out: Prop[] = []
+  let clear = (p: Prop) => {
+    let [w, d] = half(p)
+    let room = Math.max(w, d) + 0.5
+    return v.rise(p.x, p.z) > SHORE + 0.3 &&
+      toRoad(roads, p.x, p.z) > ROAD + room &&
+      toLane(lanes, p.x, p.z) > 0.85 + room &&
+      !props.some((q) => {
+        let [qw, qd] = half(q)
+        return Math.abs(p.x - q.x) < w + qw + 1 &&
+          Math.abs(p.z - q.z) < d + qd + 1
+      }) && !out.some((q) => {
+        let [qw, qd] = half(q)
+        return Math.abs(p.x - q.x) < w + qw + 1 &&
+          Math.abs(p.z - q.z) < d + qd + 1
+      }) &&
+      [-1, 0, 1].every((i) =>
+        [-1, 0, 1].every((k) => !street.lay(p.x + i * w, p.z + k * d, 0))
+      )
+  }
+  let plots: [string, Spot[]][] = [
+    ['garden', [
+      [-28, 14],
+      [28, 14],
+      [-28, -14],
+      [28, -14],
+      [-20, 17],
+      [20, 17],
+      [-34, 2],
+      [34, 2],
+    ]],
+    ['stall', [[-3, 10], [3, 10], [-3, -10], [3, -10], [-13, 12], [13, 12], [
+      -13,
+      -12,
+    ], [13, -12]]],
+  ]
+  plots[0][1].push(
+    ...Array.from({ length: 17 * 17 }, (_, j): Spot => [
+      (j % 17 - 8) * 4,
+      (Math.floor(j / 17) - 8) * 4,
+    ]).filter(([x, z]) => Math.hypot(x, z) > 18 && Math.hypot(x, z) < 38)
+      .sort((a, b) =>
+        Math.abs(Math.hypot(...a) - 26) - Math.abs(Math.hypot(...b) - 26)
+      ),
+  )
+  plots[1][1].push(
+    ...Array.from({ length: 21 * 21 }, (_, j): Spot => [
+      (j % 21 - 10) * 2,
+      (Math.floor(j / 21) - 10) * 2,
+    ]).filter(([x, z]) => Math.hypot(x, z) > 8 && Math.hypot(x, z) < 22)
+      .sort((a, b) =>
+        Math.abs(Math.hypot(...a) - 12) - Math.abs(Math.hypot(...b) - 12)
+      ),
+  )
+  for (let [kind, spots] of plots) {
+    let count = 0
+    for (let [x, z] of spots) {
+      let p: Prop = {
+        kind: `${kind}.${village.dress}`,
+        x: cx + x,
+        z: cz + z,
+        seed: count,
+      }
+      if (clear(p)) out.push(p), count++
+      if (count == 2) break
+    }
+  }
+  let wall = (b: Building, x: number, z: number, turn: number) => {
+    if (b.y - v.rise(x, z) < 0.6 || street.lay(x, z, 0)) return
+    let p: Prop = {
+      kind: `retaining.${village.dress}`,
+      x,
+      z,
+      turn,
+      seed: out.length,
+    }
+    if (
+      !buildings.some((q) =>
+        q != b &&
+        x > q.foot[0] - 0.5 && x < q.foot[2] + 0.5 &&
+        z > q.foot[1] - 0.5 && z < q.foot[3] + 0.5
+      )
+    ) out.push(p)
+  }
+  for (let b of buildings) {
+    let [w, n, e, s] = b.foot
+    for (let x = w + 1; x < e - 0.5; x += 2) {
+      wall(b, x, n - 2.2, 0)
+      wall(b, x, s + 2.2, 0)
+    }
+    for (let z = n + 1; z < s - 0.5; z += 2) {
+      wall(b, w - 2.2, z, 1)
+      wall(b, e + 2.2, z, 1)
+    }
+  }
+  got.set(village.level, out)
+  return out
+}
+
 // The smooth height of the ground across a box, and the lists of what may
 // reach it, found once for all of its points: `m` metres round the box are
 // counted in, for what looks beside a point.
-let area = (x0: number, z0: number, x1: number, z1: number, m = 2) => {
+let area = (v: Vale, x0: number, z0: number, x1: number, z1: number, m = 2) => {
   let near = placesIn(x0 - m, z0 - m, x1 + m, z1 + m)
   let roads = roadsIn(x0 - m, z0 - m, x1 + m, z1 + m, ROAD + EASE + 1.5)
   let lanes = lanesIn(x0 - m, z0 - m, x1 + m, z1 + m, 3)
   let built = builtIn(x0 - 12, z0 - 12, x1 + 12, z1 + 12)
+  built.push(
+    ...VILLAGES.filter((p) =>
+      p.at[0] > x0 - 50 && p.at[0] < x1 + 50 &&
+      p.at[1] > z0 - 50 && p.at[1] < z1 + 50
+    ).flatMap((p) => detailsOf(v, p)).filter((p) =>
+      p.x >= x0 - 12 && p.x < x1 + 12 &&
+      p.z >= z0 - 12 && p.z < z1 + 12
+    ),
+  )
   let villages = VILLAGES.filter((v) =>
     v.at[0] > x0 - 12 && v.at[0] < x1 + 12 && v.at[1] > z0 - 12 &&
     v.at[1] < z1 + 12
   )
-  return { near, roads, lanes, built, villages, height: rising(near, roads) }
+  let streets = VILLAGES.filter((p) =>
+    p.at[0] > x0 - 46 && p.at[0] < x1 + 46 &&
+    p.at[1] > z0 - 46 && p.at[1] < z1 + 46
+  ).map((p) => streetsOf(v, p))
+  return {
+    near,
+    roads,
+    lanes,
+    built,
+    villages,
+    streets,
+    height: rising(near, roads),
+  }
+}
+
+let streetAt = (
+  a: ReturnType<typeof area>,
+  x: number,
+  z: number,
+  h: number,
+) => {
+  for (let s of a.streets) {
+    let laid = s.lay(x, z, h)
+    if (laid) return laid
+  }
+  return null
 }
 
 // Whether a point, this far from the nearest lane and road, is taken: by
@@ -460,7 +630,8 @@ let takenIn = (a: ReturnType<typeof area>) =>
   road = toRoad(a.roads, x, z),
 ) =>
   a.built.some((p) => dist(x, z, [p.x, p.z]) < (KINDS[p.kind].foot ?? 0) + 1) ||
-  a.villages.some((v) => dist(x, z, v.at) < 6) || worn(lane, road)
+  a.villages.some((v) => dist(x, z, v.at) < 6) || worn(lane, road) ||
+  !!streetAt(a, x, z, 0)
 
 // Trees and rocks, one chance per cell of a jittered grid, decided on the
 // smooth ground so they stand in the same places at every voxel size.
@@ -468,7 +639,7 @@ let CELL = 3
 let hold = holder()
 let planted = kept(400, (ci: number, ck: number): Prop[] => {
   let x0 = ci * CHUNK, z0 = ck * CHUNK, x1 = x0 + CHUNK, z1 = z0 + CHUNK
-  let a = area(x0, z0, x1, z1)
+  let a = area(vale(), x0, z0, x1, z1)
   let taken = takenIn(a)
   let props = a.built.filter((p) =>
     p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1
@@ -509,7 +680,7 @@ export let propsIn = (ci: number, ck: number): Prop[] => planted(ci, ck)
 export let decor = (p: Patch): Prop[] => {
   let V = p.voxel, C = p.n - 2
   let x0 = p.ci * CHUNK, z0 = p.ck * CHUNK
-  let a = area(x0, z0, x0 + CHUNK, z0 + CHUNK)
+  let a = area(vale(p.voxel), x0, z0, x0 + CHUNK, z0 + CHUNK)
   let taken = takenIn(a)
   let out: Prop[] = []
   let cells = CHUNK / GRID
@@ -545,7 +716,7 @@ export let decor = (p: Patch): Prop[] => {
 let growing = (v: Vale) => (ci: number, ck: number): Patch => {
   let V = v.voxel, C = Math.round(CHUNK / V), n = C + 2
   let x0 = ci * CHUNK, z0 = ck * CHUNK
-  let a = area(x0, z0, x0 + CHUNK, z0 + CHUNK)
+  let a = area(v, x0, z0, x0 + CHUNK, z0 + CHUNK)
   let mid = (j: number) => (j + 0.5) * V
   let i0 = ci * C - 1, k0 = ck * C - 1
   let h = new Int16Array(n * n)
@@ -596,7 +767,19 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
         : cover(w, fbm(x / 3, z / 3, 11, 2), x, z)
     }
   }
-  layIn(v, ci, ck, h, top)
+  for (let k = 0; k < n; k++) {
+    for (let i = 0; i < n; i++) {
+      let j = i + k * n
+      let x = mid(i0 + i), z = mid(k0 + k)
+      let laid = streetAt(a, x, z, h[j] * V)
+      if (!laid) continue
+      h[j] = Math.round(laid.h / V)
+      if (laid.path && i > 0 && i <= C && k > 0 && k <= C) {
+        top[i - 1 + (k - 1) * C] = laid.step ? Top.stone : Top.path
+      }
+    }
+  }
+  layIn(v, ci, ck, h, top, a)
   return {
     ci,
     ck,
@@ -631,7 +814,13 @@ let LAID = 5.5
  * assertEquals(lay(b, 50, 50, 4), { h: 4, path: false })
  * ```
  */
-export let lay = (b: Building, x: number, z: number, h: number) => {
+export let lay = (
+  b: Building,
+  x: number,
+  z: number,
+  h: number,
+  street = false,
+) => {
   let [w, n, e, s] = b.foot
   if (x > w && x < e && z > n && z < s) {
     return { h: Math.min(h, b.y), path: false }
@@ -645,6 +834,13 @@ export let lay = (b: Building, x: number, z: number, h: number) => {
       return { h: b.y, path: false }
     }
     if (out >= 1.6 && out < 5.6 && side < 0.65) return { h, path: true }
+  }
+  if (!street) {
+    let away = Math.hypot(Math.max(w - x, 0, x - e), Math.max(n - z, 0, z - s))
+    if (away < 1.2) return { h: b.y, path: false }
+    if (away < 3.2) {
+      return { h: lerp(h, b.y, smooth(3.2, 1.2, away)), path: false }
+    }
   }
   return { h, path: false }
 }
@@ -677,6 +873,7 @@ let layIn = (
   ck: number,
   h: Int16Array,
   top: Uint8Array,
+  a?: ReturnType<typeof area>,
 ) => {
   let V = v.voxel, C = Math.round(CHUNK / V), n = C + 2
   let i0 = ci * C - 1, k0 = ck * C - 1
@@ -691,10 +888,14 @@ let layIn = (
         i <= col(b.box[2] + LAID, i0);
         i++
       ) {
-        let j = i + k * n, got = lay(b, mid(i0 + i), mid(k0 + k), h[j] * V)
+        let x = mid(i0 + i), z = mid(k0 + k)
+        let j = i + k * n
+        let got = lay(b, x, z, h[j] * V, !!(a && streetAt(a, x, z, 0)))
         h[j] = Math.round(got.h / V)
         let own = i > 0 && i <= C && k > 0 && k <= C
-        if (got.path && own) top[i - 1 + (k - 1) * C] = Top.path
+        if (got.path && own && top[i - 1 + (k - 1) * C] != Top.stone) {
+          top[i - 1 + (k - 1) * C] = Top.path
+        }
       }
     }
   }
@@ -826,6 +1027,7 @@ export let vale = (voxel = VOXEL): Vale => {
   if (got) return got
   let v: Vale = {
     voxel,
+    world: true,
     rise,
     grow: (ci, ck) => grow(ci, ck),
     plant: propsIn,
@@ -936,10 +1138,18 @@ export let groundAt = (v: Vale, x: number, z: number): number => {
   if (c) return c.p.layers[0][c.j] * V
   let mx = (Math.floor(x / V) + 0.5) * V, mz = (Math.floor(z / V) + 0.5) * V
   let h = Math.round(v.rise(mx, mz) / V) * V
-  for (let b of v.buildings(mx, mz, LAID)) {
-    h = Math.round(lay(b, mx, mz, h).h / V) * V
+  let street = false
+  if (v.world) {
+    for (let s of VILLAGES) {
+      if (dist(mx, mz, s.at) >= 46) continue
+      let laid = streetsOf(v, s).lay(mx, mz, h)
+      if (laid) h = laid.h, street = true
+    }
   }
-  return h
+  for (let b of v.buildings(mx, mz, LAID)) {
+    h = Math.round(lay(b, mx, mz, h, street).h / V) * V
+  }
+  return Math.round(h / V) * V
 }
 
 // The layers at a column, deepest last, in metres; NONE where a cave is not.

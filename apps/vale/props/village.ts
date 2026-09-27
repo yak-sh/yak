@@ -1,7 +1,65 @@
 // The village's well, fire, notice board, lamps and road signs. Homes and
 // workplaces are buildings (buildings.ts), in each land's materials.
 import { ball, box, key, type Vox } from '../mesh.ts'
+import { DRESSES } from '../buildings/dress.ts'
+import type { Dress, Paint } from '../buildings/kit.ts'
 import { FOUND, type Kind, type Model, TIMBER } from './kit.ts'
+
+let color = (p: Paint, x: number, y: number, z: number, s: number) =>
+  typeof p == 'number' ? p : p(x, y, z, s)
+
+// A fenced kitchen garden, with an opening from the lane and beds of herbs.
+let garden = (d: Dress, seed: number): Model => {
+  let v: Vox = new Map()
+  for (let x of [-8, -4, 0, 4, 8]) {
+    for (let z of [-6, 6]) box(v, [x, 0, z], [x, 3, z], d.timber)
+  }
+  for (let z of [-2, 2]) {
+    for (let x of [-8, 8]) box(v, [x, 0, z], [x, 3, z], d.timber)
+  }
+  for (let z of [-6, 6]) {
+    if (z < 0) box(v, [-8, 2, z], [8, 2, z], d.timber)
+    else {
+      box(v, [-8, 2, z], [-2, 2, z], d.timber)
+      box(v, [2, 2, z], [8, 2, z], d.timber)
+    }
+  }
+  for (let x of [-8, 8]) box(v, [x, 2, -6], [x, 2, 6], d.timber)
+  for (let x of [-5, 1]) {
+    box(v, [x, 0, -3], [x + 3, 0, 3], color(d.stone, x, 0, 0, seed))
+    for (let z = -2; z <= 2; z += 2) {
+      box(v, [x + 1, 1, z], [x + 2, 2, z], z & 2 ? 0x6f9a48 : 0x8fae54)
+    }
+  }
+  return { vox: v, size: 0.25 }
+}
+
+// A market table under a roof in the same timber and roof colour as its land.
+let stall = (d: Dress, seed: number): Model => {
+  let v: Vox = new Map(), stone = color(d.stone, 0, 0, 0, seed)
+  for (let x of [-5, 5]) {
+    for (let z of [-4, 4]) {
+      box(v, [x, 0, z], [x, 9, z], d.timber)
+      box(v, [x - 1, 0, z - 1], [x + 1, 0, z + 1], stone)
+    }
+  }
+  box(v, [-5, 5, -3], [5, 5, 2], color(d.floor, 0, 0, 0, seed))
+  box(v, [-6, 10, -5], [6, 10, 5], d.roofs[seed % d.roofs.length])
+  box(v, [-4, 6, -2], [-2, 6, 0], 0xc59a55)
+  box(v, [1, 6, -2], [3, 6, 0], 0x6f9a48)
+  return { vox: v, size: 0.25 }
+}
+
+// A fieldstone retaining wall, laid where a plot's lower side meets a slope.
+let retaining = (d: Dress, seed: number): Model => {
+  let v: Vox = new Map()
+  for (let y = 0; y < 4; y++) {
+    for (let x = -4; x <= 4; x++) {
+      box(v, [x, y, 0], [x, y, 0], color(d.stone, x, y, 0, seed))
+    }
+  }
+  return { vox: v, size: 0.25 }
+}
 
 let well = (): Model => {
   let v: Vox = new Map()
@@ -87,4 +145,22 @@ export let VILLAGE: Record<string, Kind> = {
     glow: { at: [0.5, 2.5, 0], size: 3.2 },
   },
   signpost: { make: signpost, girth: 0.3, foot: 1, aside: true },
+  ...Object.fromEntries(
+    Object.entries(DRESSES).flatMap(([name, dress]) => [
+      [`garden.${name}`, {
+        make: (s: number) => garden(dress, s),
+        span: [4.25, 3.25],
+        foot: 2.4,
+      }],
+      [`stall.${name}`, {
+        make: (s: number) => stall(dress, s),
+        span: [3.25, 2.75],
+        foot: 2,
+      }],
+      [`retaining.${name}`, {
+        make: (s: number) => retaining(dress, s),
+        foot: 1.2,
+      }],
+    ]),
+  ) as Record<string, Kind>,
 }
