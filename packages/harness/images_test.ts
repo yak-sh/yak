@@ -107,7 +107,9 @@ Deno.test('a model row sends OpenRouter audio to the graph as an artifact', asyn
         new Response(
           'data: ' + JSON.stringify({
             id: 'song-1',
-            choices: [{ delta: { audio: { data } } }],
+            choices: [{
+              delta: { audio: { data, transcript: 'Forest theme' } },
+            }],
           }) + '\n\ndata: [DONE]\n\n',
           { headers: { 'content-type': 'text/event-stream' } },
         ),

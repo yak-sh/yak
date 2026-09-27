@@ -171,7 +171,7 @@ export let chat = async (
     let audioPart = obj(delta.audio)
     let said = str(delta.content) || str(audioPart.transcript)
     if (said) {
-      req.onText?.({ index: 0, id: 'text', text: said })
+      req.onText?.({ index: 0, text: said })
       text += said
     }
     if (audioPart.data) chunks.push(str(audioPart.data))
