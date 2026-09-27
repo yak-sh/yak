@@ -14,7 +14,7 @@
 // a staff strike from afar. Armour comes in three weights: plate turns the
 // most of a bite and adds the most health, leather less but runs faster, and
 // cloth least but every blow lands harder.
-import type { Box, Thing } from './items.ts'
+import type { Box, Thing, View } from './items.ts'
 import { metal } from './mesh.ts'
 
 export type Slot = 'main' | 'off' | 'head' | 'body' | 'feet' | 'trinket'
@@ -127,7 +127,12 @@ let C = {
   leather: [0xb8906a, 0x8a5a3a, 0x6a6a70, 0x3a6a5a, 0x7a2a20],
   cloth: [0xe8e0cc, 0x5a7ab8, 0xf4f2ec, 0x8a7ad8, 0xe8622a],
   trim: [0xe2b64c, 0x6a4a30, 0x8fd46a, 0xf4f8ff, 0xffd040],
+  gem: [0xe0405a, 0x3a7ae0, 0x3ac87a, 0xf4f8ff, 0xffd040],
 }
+
+// The shadow inside a hood, a slit or under a sole, and a sandal's sole.
+let HOLLOW = 0x2e2419
+let SOLE = 0xc08c5a
 
 /** How hard a tier's weapons land, against bare level. */
 export let GRADE = [1.2, 1.7, 2.3, 2.9, 3.5]
@@ -138,6 +143,7 @@ type Paint = {
   leather: number
   cloth: number
   trim: number
+  gem: number
 }
 
 // Each kind's look, upright from its foot: the same boxes a hero holds
@@ -203,46 +209,125 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
     [[-0.065, 0.52, -0.065], [0.13, 0.13, 0.13], 0xff8a1a],
     [[-0.04, 0.65, -0.04], [0.08, 0.1, 0.08], 0xffe060],
   ],
+  // Armour faces +z, and each look's first box is the stuff it is made of
+  // and its second its trim, the colours a hero wears it in (figures.ts
+  // `tone`). Plate has bands and pauldrons, leather laces and buckles, cloth
+  // hems and a sash.
   helm: (p) => [
-    [[-0.14, 0, -0.14], [0.28, 0.2, 0.28], p.metal],
-    [[-0.03, 0.2, -0.12], [0.06, 0.06, 0.24], p.trim],
+    [[-0.13, 0, -0.13], [0.26, 0.23, 0.26], p.metal],
+    [[-0.14, 0.15, -0.14], [0.28, 0.035, 0.28], p.trim],
+    [[-0.1, 0.23, -0.1], [0.2, 0.04, 0.2], p.metal],
+    [[-0.02, 0.24, -0.12], [0.04, 0.06, 0.24], p.trim],
+    [[-0.1, 0.1, 0.13], [0.2, 0.03, 0.01], HOLLOW],
+    [[-0.016, 0.03, 0.13], [0.032, 0.08, 0.01], HOLLOW],
   ],
   cuirass: (p) => [
-    [[-0.18, 0, -0.1], [0.36, 0.34, 0.2], p.metal],
-    [[-0.19, 0.04, -0.11], [0.38, 0.05, 0.22], p.trim],
+    [[-0.15, 0, -0.09], [0.3, 0.28, 0.18], p.metal],
+    [[-0.16, 0.04, -0.1], [0.32, 0.04, 0.2], p.trim],
+    [[-0.25, 0.2, -0.1], [0.15, 0.1, 0.2], p.metal],
+    [[0.1, 0.2, -0.1], [0.15, 0.1, 0.2], p.metal],
+    [[-0.08, 0.26, -0.07], [0.16, 0.05, 0.14], p.trim],
+    [[-0.05, 0.28, -0.045], [0.1, 0.035, 0.09], HOLLOW],
   ],
-  greaves: (p) => [
-    [[-0.15, 0, -0.08], [0.12, 0.2, 0.16], p.metal],
-    [[0.03, 0, -0.08], [0.12, 0.2, 0.16], p.metal],
-  ],
+  greaves: (p) =>
+    pair(0.16, 0, (x) => [
+      [[x - 0.05, 0.04, -0.05], [0.1, 0.22, 0.1], p.metal],
+      [[x - 0.06, 0.08, -0.06], [0.12, 0.03, 0.12], p.trim],
+      [[x - 0.065, 0.22, -0.065], [0.13, 0.08, 0.13], p.metal],
+      [[x - 0.055, 0, -0.04], [0.11, 0.05, 0.16], p.metal],
+    ]),
   cowl: (p) => [
-    [[-0.14, 0, -0.14], [0.28, 0.16, 0.28], p.leather],
-    [[-0.1, 0, 0.14], [0.2, 0.06, 0.06], p.leather],
+    [[-0.12, 0.07, -0.12], [0.24, 0.2, 0.24], p.leather],
+    [[-0.03, 0.03, 0.12], [0.06, 0.07, 0.02], p.trim],
+    [[-0.09, 0.27, -0.09], [0.18, 0.03, 0.18], p.leather],
+    [[-0.075, 0.1, 0.12], [0.15, 0.13, 0.01], HOLLOW],
+    [[-0.17, 0, -0.14], [0.34, 0.08, 0.26], p.leather],
   ],
   jerkin: (p) => [
-    [[-0.18, 0, -0.1], [0.36, 0.32, 0.2], p.leather],
-    [[-0.02, 0.05, 0.1], [0.04, 0.24, 0.01], p.trim],
+    [[-0.14, 0, -0.08], [0.28, 0.26, 0.16], p.leather],
+    [[-0.045, 0.19, 0.08], [0.09, 0.025, 0.015], p.trim],
+    [[-0.045, 0.12, 0.08], [0.09, 0.025, 0.015], p.trim],
+    [[-0.02, 0.07, 0.075], [0.04, 0.19, 0.01], HOLLOW],
+    [[-0.14, 0.26, -0.07], [0.08, 0.06, 0.14], p.leather],
+    [[0.06, 0.26, -0.07], [0.08, 0.06, 0.14], p.leather],
+    [[-0.15, 0.02, -0.09], [0.3, 0.04, 0.18], HOLLOW],
+    [[-0.035, 0.01, 0.09], [0.07, 0.06, 0.015], p.trim],
   ],
-  boots: (p) => [
-    [[-0.15, 0, -0.08], [0.12, 0.18, 0.16], p.leather],
-    [[0.03, 0, -0.08], [0.12, 0.18, 0.16], p.leather],
-  ],
+  boots: (p) =>
+    pair(0.12, -0.12, (x) => [
+      [[x - 0.045, 0.04, -0.07], [0.09, 0.15, 0.09], p.leather],
+      [[x - 0.045, 0.02, -0.07], [0.09, 0.06, 0.18], p.leather],
+      [[x - 0.055, 0.17, -0.08], [0.11, 0.05, 0.11], p.leather],
+      [[x - 0.05, 0.09, -0.075], [0.1, 0.025, 0.1], p.trim],
+      [[x - 0.05, 0, -0.075], [0.1, 0.025, 0.19], HOLLOW],
+    ]),
   hood: (p) => [
-    [[-0.14, 0, -0.14], [0.28, 0.18, 0.28], p.cloth],
-    [[-0.06, 0.18, -0.06], [0.12, 0.1, 0.12], p.cloth],
+    [[-0.13, 0.04, -0.12], [0.26, 0.2, 0.24], p.cloth],
+    [[-0.11, 0.03, 0.12], [0.22, 0.19, 0.02], p.trim],
+    [[-0.08, 0.05, 0.13], [0.16, 0.13, 0.02], HOLLOW],
+    [[-0.09, 0.24, -0.11], [0.18, 0.05, 0.18], p.cloth],
+    [[-0.06, 0.29, -0.13], [0.12, 0.05, 0.12], p.cloth],
+    [[-0.035, 0.33, -0.18], [0.07, 0.05, 0.08], p.cloth],
+    [[-0.16, 0, -0.14], [0.32, 0.05, 0.27], p.cloth],
   ],
   robe: (p) => [
-    [[-0.2, 0, -0.12], [0.4, 0.44, 0.24], p.cloth],
-    [[-0.21, 0.24, -0.13], [0.42, 0.05, 0.26], p.trim],
+    [[-0.11, 0.3, -0.08], [0.22, 0.18, 0.16], p.cloth],
+    [[-0.12, 0.28, -0.09], [0.24, 0.045, 0.18], p.trim],
+    [[-0.15, 0, -0.1], [0.3, 0.3, 0.2], p.cloth],
+    [[-0.16, 0, -0.11], [0.32, 0.035, 0.22], p.trim],
+    [[-0.2, 0.28, -0.07], [0.09, 0.2, 0.14], p.cloth],
+    [[0.11, 0.28, -0.07], [0.09, 0.2, 0.14], p.cloth],
+    [[0.04, 0.13, 0.1], [0.04, 0.15, 0.015], p.trim],
+    [[-0.04, 0.43, 0.075], [0.08, 0.05, 0.01], HOLLOW],
   ],
-  sandals: (p) => [
-    [[-0.15, 0, -0.08], [0.12, 0.05, 0.18], p.cloth],
-    [[0.03, 0, -0.08], [0.12, 0.05, 0.18], p.cloth],
-  ],
+  sandals: (p) =>
+    pair(0.13, 0.03, (x) => [
+      [[x - 0.06, 0.025, -0.01], [0.12, 0.03, 0.045], p.cloth],
+      [[x - 0.012, 0.025, 0.035], [0.024, 0.03, 0.06], p.cloth],
+      [[x - 0.05, 0, -0.03], [0.1, 0.025, 0.14], SOLE],
+      [[x - 0.04, 0, -0.1], [0.08, 0.025, 0.08], SOLE],
+      [[x - 0.045, 0.02, -0.105], [0.09, 0.06, 0.03], p.cloth],
+    ]),
   ring: (p) => [
-    [[-0.08, 0, -0.08], [0.16, 0.04, 0.16], p.metal],
-    [[-0.03, 0.04, -0.03], [0.06, 0.05, 0.06], p.trim],
+    [[-0.06, 0, -0.015], [0.12, 0.03, 0.03], p.metal],
+    [[-0.045, 0.175, -0.025], [0.09, 0.025, 0.05], p.trim],
+    [[-0.09, 0.03, -0.015], [0.03, 0.12, 0.03], p.metal],
+    [[0.06, 0.03, -0.015], [0.03, 0.12, 0.03], p.metal],
+    [[-0.06, 0.15, -0.015], [0.12, 0.03, 0.03], p.metal],
+    [[-0.035, 0.195, -0.035], [0.07, 0.06, 0.07], p.gem],
   ],
+}
+
+// Two of a thing worn on the feet, each made about the `x` it stands at,
+// `apart` from side to side and the right one `ahead` of the left: the left
+// one's boxes first.
+let pair = (apart: number, ahead: number, one: (x: number) => Box[]) =>
+  [-1, 1].flatMap((side) =>
+    one(side * apart / 2).map(([[x, y, z], ...rest]): Box => [
+      [x, y, z + side * ahead / 2],
+      ...rest,
+    ])
+  )
+
+// How each kind's picture sees it (sprites.ts), when not from its corner.
+let VIEWS: Record<string, View> = {
+  sword: 'lying',
+  axe: 'lying',
+  hammer: 'lying',
+  dagger: 'lying',
+  bow: 'lying',
+  staff: 'lying',
+  torch: 'lying',
+  shield: 'front',
+  helm: 'front',
+  cuirass: 'front',
+  greaves: 'front',
+  cowl: 'front',
+  jerkin: 'front',
+  boots: 'side',
+  robe: 'front',
+  sandals: 'top',
+  ring: 'front',
 }
 
 /** The three weights of armour, and what each piece of each adds on top of
@@ -298,6 +383,7 @@ let tiers = (make: (t: number, p: Paint) => [string, Thing][]) =>
       leather: C.leather[i],
       cloth: C.cloth[i],
       trim: C.trim[i],
+      gem: C.gem[i],
     })
   }))
 
@@ -323,6 +409,7 @@ let weapon = (family: string, t: number, p: Paint): Thing => ({
   name: `${MADE[family][t - 1]} ${family}`,
   ...wield(family, t),
   look: LOOKS[family](p),
+  view: VIEWS[family],
 })
 
 /** Every kind of arms and armour, by id: the noun and its tier, `sword1` to
@@ -366,6 +453,7 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
         speed: 'speed' in w ? w.speed : undefined,
         force: 'force' in w ? w.force : undefined,
         look: LOOKS[noun](p),
+        view: VIEWS[noun],
       }]
     })
   )
@@ -377,6 +465,7 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
       tier: t,
       armour: ARMOUR.body[i],
       look: LOOKS.shield(p),
+      view: VIEWS.shield,
     }],
     [`tome${t}`, {
       name: `${LORE[i]} tome`,
@@ -393,6 +482,7 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
       tier: t,
       luck: 0.04 + 0.02 * t,
       look: LOOKS.torch(p),
+      view: VIEWS.torch,
     }],
     [`ring${t}`, {
       name: `${METAL[i]} ring`,
@@ -401,6 +491,7 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
       luck: 0.02 + 0.01 * t,
       hp: HEALTH.head[i],
       look: LOOKS.ring(p),
+      view: VIEWS.ring,
     }],
   ]
   return [...arms, ...off, ...worn]

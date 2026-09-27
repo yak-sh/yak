@@ -12,6 +12,13 @@ import { cuboid, type Out, out, type Vec } from './mesh.ts'
  * the rounding of its edges is, when not a small thing's usual. */
 export type Box = [Vec, Vec, number, number?]
 
+/** How a thing's picture sees it (sprites.ts), its front toward +z: from a
+ * corner above, the most of it at once; from the `front`, for what is worn
+ * on a chest or a head; from the `side`, for a boot or a fish; from the
+ * `top`, for what lies flat; `lying` corner to corner, for a blade or a
+ * staff. */
+export type View = 'corner' | 'front' | 'side' | 'top' | 'lying'
+
 export type Thing = {
   name: string
   /** health a drink gives back */
@@ -39,6 +46,8 @@ export type Thing = {
   /** how much likelier a great blow is */
   luck?: number
   look: Box[]
+  /** how its picture sees it; from a corner unless it says */
+  view?: View
 }
 
 export let ITEMS: Record<string, Thing> = {
@@ -109,6 +118,7 @@ export let ITEMS: Record<string, Thing> = {
   blade2: {
     name: 'Boarsbane',
     ...wield('sword', 1, 1.1),
+    view: 'lying',
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.5, 0.04], 0xdfe6ee],
       [[-0.1, 0.1, -0.03], [0.2, 0.04, 0.06], 0xe2b64c],
@@ -117,6 +127,7 @@ export let ITEMS: Record<string, Thing> = {
   blade3: {
     name: 'Cragcleaver',
     ...wield('sword', 2, 1.1),
+    view: 'lying',
     look: [
       [[-0.03, 0, -0.03], [0.06, 0.56, 0.06], 0xbfe2ff],
       [[-0.12, 0.12, -0.04], [0.24, 0.05, 0.08], 0x8fd46a],
@@ -125,6 +136,7 @@ export let ITEMS: Record<string, Thing> = {
   blade4: {
     name: 'Barkbiter',
     ...wield('axe', 3, 1.1),
+    view: 'lying',
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.54, 0.04], 0x6a4a30],
       [[0.02, 0.36, -0.03], [0.16, 0.16, 0.06], 0xc8d0d8],
@@ -133,6 +145,7 @@ export let ITEMS: Record<string, Thing> = {
   blade5: {
     name: 'Skyspear',
     ...wield('staff', 4, 1.1),
+    view: 'lying',
     look: [
       [[-0.02, 0, -0.02], [0.04, 0.62, 0.04], 0xe8dcc0],
       [[-0.04, 0.62, -0.04], [0.08, 0.14, 0.08], 0x9ad8ff],
@@ -142,6 +155,7 @@ export let ITEMS: Record<string, Thing> = {
   blade6: {
     name: 'Wyrmfire',
     ...wield('sword', 5, 1.1),
+    view: 'lying',
     look: [
       [[-0.03, 0, -0.03], [0.06, 0.6, 0.06], 0xff7a2a],
       [[-0.13, 0.12, -0.04], [0.26, 0.05, 0.08], 0x2a2020],
