@@ -176,7 +176,8 @@ export let live =
   '.session.status=pending,running,queued (.entries.using|.entries.ask)'
 
 /** The status of a transcript, from its entries in any order. */
-export let statusOf = (entries: Bundle[]): TranscriptStatus => {
+export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
+  if (ended) return 'stopped'
   let all = ordered(entries).filter((b) => !b.notice)
   let newest = all.at(-1)
   if (!newest) return 'empty'
@@ -258,7 +259,7 @@ export let sessionStatus = {
     'stopped',
     'failed',
   ],
-  deps: [] as string[],
+  deps: ['session'],
   expr: (owner: Expr): Expr => {
     // Whether the entity `of` wears `comp` (and `also` holds of that row, `k`).
     let has = (comp: string, of: Expr, also?: Expr) =>
@@ -415,36 +416,40 @@ export let sessionStatus = {
       from: table('entry'),
       where: eq(col('entity'), ask),
     }))
-    return fn(
-      'coalesce',
-      sub(select({
-        cols: [when(
-          [
-            [wears(STOP_ENTRY), lit('stopped')],
-            [abandoned, lit('running')],
-            [wears(EXCEPTION), lit('failed')],
-            [inflight, lit('running')],
-            [queued, lit('queued')],
+    return iff(
+      has('session', owner, eq(col('ended', 'k'), lit(true))),
+      lit('stopped'),
+      fn(
+        'coalesce',
+        sub(select({
+          cols: [when(
             [
-              wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
-              iff(input(asked), lit('pending'), lit('failed')),
+              [wears(STOP_ENTRY), lit('stopped')],
+              [abandoned, lit('running')],
+              [wears(EXCEPTION), lit('failed')],
+              [inflight, lit('running')],
+              [queued, lit('queued')],
+              [
+                wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
+                iff(input(asked), lit('pending'), lit('failed')),
+              ],
+              [wears(ERROR, eq(col('code', 'k'), lit(LIMIT))), lit('failed')],
+              [wears(ERROR), iff(allErrors, lit('failed'), lit('pending'))],
+              [open, lit('running')],
+              [and(wears(ASK), settled), lit('settled')],
+              [or(wears(ASK), wears(CALL)), lit('running')],
+              [wears(RESULT), owed],
+              [wears(OUTPUT), iff(unread, lit('pending'), lit('settled'))],
             ],
-            [wears(ERROR, eq(col('code', 'k'), lit(LIMIT))), lit('failed')],
-            [wears(ERROR), iff(allErrors, lit('failed'), lit('pending'))],
-            [open, lit('running')],
-            [and(wears(ASK), settled), lit('settled')],
-            [or(wears(ASK), wears(CALL)), lit('running')],
-            [wears(RESULT), owed],
-            [wears(OUTPUT), iff(unread, lit('pending'), lit('settled'))],
-          ],
-          owed,
-        )],
-        from: table('entry', 'n'),
-        where: and(mine('n'), lacks('notice', n)),
-        order: [desc(col('seq', 'n'))],
-        limit: lit(1),
-      })),
-      lit('empty'),
+            owed,
+          )],
+          from: table('entry', 'n'),
+          where: and(mine('n'), lacks('notice', n)),
+          order: [desc(col('seq', 'n'))],
+          limit: lit(1),
+        })),
+        lit('empty'),
+      ),
     )
   },
 }

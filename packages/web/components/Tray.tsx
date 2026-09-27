@@ -73,11 +73,13 @@ let shown = (eid: string, e: Ent) =>
   awake(e) ||
   (trayRecent(e) && !seen.value.includes(eid))
 
-// LIVE: the digest a human wants without opening every session.
+// Live sessions first, then recent sessions, each newest first.
 let started = (e: Ent) => Date.parse(e.created?.at ?? '') || 0
 
 export let traySessions = (rows: [string, Ent][]) =>
-  rows.toSorted(([, a], [, b]) => started(b) - started(a))
+  rows.toSorted(([, a], [, b]) =>
+    Number(awake(b)) - Number(awake(a)) || started(b) - started(a)
+  )
 
 let useLive = () => {
   let active = useQueryEids(trayActiveQuery, true)
@@ -137,14 +139,15 @@ let drop = (e: DragEvent) => {
 // The open panel's rows. Its own component so its SUBSCRIPTION lives exactly as
 // long as it is on screen: the strip's dots ride a projection carrying only the
 // columns a dot decides by (live.ts sessionDots), and a rendered ROW needs more
-// — the identity, model and effort SessionRow shows. So the panel holds the
+// — the work SessionRow shows. So the panel holds the
 // fuller projection of the selected eids, which is a different sub, and gives
 // it back when it closes. A
 // collapsed tray — the default — never asks for those columns at all.
 let LiveRows = ({ ls }: { ls: [string, Ent][] }) => {
   useQueryEids(
     `.eid=${ls.map(([eid]) => eid).join(',')}&` +
-      sessionDetail.split('&')[1],
+      sessionDetail.split('&')[1] +
+      '&.edges[worked]&.edges.peers=doc.title,task.status',
     true,
   )
   return (

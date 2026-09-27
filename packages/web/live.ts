@@ -2793,8 +2793,8 @@ export let projects = (): Ent[] =>
       (paint.peek()[b]?.entity?.num ?? Infinity)
     )
     .map(ent)
-// What a face that RENDERS a session row needs on top of the dot's columns —
-// the identity, model and effort SessionRow shows. Held only while such a face
+// What a face that renders a session row needs on top of the dot's columns —
+// its short account of its work. Held only while such a face
 // is mounted (the Tray's panel while it is open, a project's Dashboard), so the
 // columns nobody is looking at stay off the wire. Same `.session` query as
 // above under a DIFFERENT projection, which makes it a different SUB with its
@@ -2805,6 +2805,7 @@ export let sessionDetail = '.session&.fields=' + [
   'using.model',
   'using.effort',
   'doc.title',
+  'brief.text',
 ].join(',')
 
 export let shelfFor = (client: string): string | undefined => {

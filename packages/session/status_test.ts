@@ -277,3 +277,14 @@ Deno.test('passive notices do not change settled, stopped or empty status', () =
   assertEquals(statusOf([said(3, 'e2'), notice]), 'settled')
   assertEquals(statusOf([entry(3, { stop: {} }), notice]), 'stopped')
 })
+
+Deno.test('a harness ending stays ended while its importer catches up, then clears on resume', () => {
+  let g = store()
+  g.apply([{ entity: { eid: S }, session: { ended: true } }])
+  g.apply([input(1), said(2, S)], { trusted: true })
+  assertEquals(statusOf([input(1), said(2, S)], true), 'stopped')
+  assertEquals((g.read('.session.status=stopped') as Bundle[]).length, 1)
+  g.apply([{ entity: { eid: S }, session: { ended: null } }])
+  g.apply([input(3)], { trusted: true })
+  assertEquals((g.read('.session.status=running') as Bundle[]).length, 1)
+})

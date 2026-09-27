@@ -42,14 +42,21 @@ Deno.test('the tray keeps a newly started session visible', () => {
   assertEquals(trayRecent(run(), now), false)
 })
 
-Deno.test('tray sessions put the newest start at the top', () => {
+Deno.test('tray sessions put live work first, then recent work', () => {
   assertEquals(
     traySessions([
       ['unstarted', run()],
       ['older', run({}, '2026-08-12T10:00:00Z')],
       ['newer', run({}, '2026-08-12T11:00:00Z')],
+      [
+        'live',
+        run(
+          { session: { eid: 'live', id: 'live', status: 'running' } },
+          '2026-08-12T09:00:00Z',
+        ),
+      ],
     ]).map(([eid]) => eid),
-    ['newer', 'older', 'unstarted'],
+    ['live', 'newer', 'older', 'unstarted'],
   )
 })
 

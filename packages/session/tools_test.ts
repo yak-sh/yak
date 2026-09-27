@@ -84,9 +84,10 @@ Deno.test('one word means one run: the lock and the wrap take the same --session
   // The lock names the session, never the word the caller typed.
   assertEquals(comp(took, 'claim'), { session: 's1' })
 
-  let [, freed] = await tools.session_wrap!(
+  let [ended, , freed] = await tools.session_wrap!(
     ...asked({ session: 'abc', brief: 'done' }, rows),
   ) as Bundle[]
+  assertEquals(comp(ended, 'session').ended, true)
   assertEquals([freed.entity.eid, freed.claim], ['t1', null])
 })
 
@@ -125,7 +126,11 @@ Deno.test('a session nobody has seen is minted, holding nothing', async () => {
   let said = await tools.session_context!(
     ...asked({ hook: '{"session_id":"abc"}', actor: 'p1' }),
   ) as Bundle[]
-  assertEquals(comp(said[0], 'session'), { id: 'abc', actor: 'p1' })
+  assertEquals(comp(said[0], 'session'), {
+    id: 'abc',
+    ended: null,
+    actor: 'p1',
+  })
   assert(said[0].entity.eid.startsWith('$'))
   assertEquals(comp(said[1], 'content').body, '## claimed\nnothing')
 })
@@ -167,8 +172,9 @@ Deno.test('a wrap records the account and lets go of everything', async () => {
   let said = await tools.session_wrap!(
     ...asked({ hook: '{"session_id":"abc"}', brief: 'did the thing' }, rows),
   ) as Bundle[]
-  assertEquals(comp(said[0], 'brief'), { text: 'did the thing' })
-  assertEquals(said.slice(1).map((b) => [b.entity.eid, b.claim]), [
+  assertEquals(comp(said[0], 'session').ended, true)
+  assertEquals(comp(said[1], 'brief'), { text: 'did the thing' })
+  assertEquals(said.slice(2).map((b) => [b.entity.eid, b.claim]), [
     ['t1', null],
     ['t2', null],
   ])
@@ -313,4 +319,77 @@ Deno.test('a settled transcript is never stalled, however old', async () => {
     }),
   )
   assertEquals((await checkup('session_check', g)).level, undefined)
+})
+
+Deno.test('session check reconciles a quiet, fully imported harness log', async () => {
+  let path = await Deno.makeTempFile()
+  try {
+    Deno.writeTextFileSync(path, '{"type":"user"}\n')
+    let at = new Date(ago(9))
+    Deno.utimeSync(path, at, at)
+    let s = store()
+    seed(
+      s,
+      { entity: { eid: ids.run1 }, session: { operator: true, log: 'log1' } },
+      {
+        entity: { eid: 'log1' },
+        log: {
+          session: ids.run1,
+          source: path,
+          consumed: 1,
+        },
+      },
+      line(1, ago(9), {
+        entity: { eid: 'l1' },
+        content: { body: 'go' },
+        imported: { source: path, line: 1 },
+      }),
+    )
+    let g = locked(s)
+    let answer = await runs({ vocab: pages }).session_check!(
+      { entity: { eid: 'c1' }, call: { args: {} } },
+      g,
+    ) as Bundle[]
+    assertEquals(answer.length, 2)
+    assertEquals(comp(answer[1], 'session').ended, true)
+    await g.apply(answer.slice(1))
+    assertEquals(comp((await g.get([ids.run1]))[0]!, 'session').ended, true)
+  } finally {
+    await Deno.remove(path)
+  }
+})
+
+Deno.test('session check leaves an incomplete imported log for inspection', async () => {
+  let path = await Deno.makeTempFile()
+  try {
+    Deno.writeTextFileSync(path, '{"type":"user"}\nmore\n')
+    let at = new Date(ago(9))
+    Deno.utimeSync(path, at, at)
+    let s = store()
+    seed(
+      s,
+      { entity: { eid: ids.run1 }, session: { operator: true, log: 'log1' } },
+      {
+        entity: { eid: 'log1' },
+        log: {
+          session: ids.run1,
+          source: path,
+          consumed: 1,
+        },
+      },
+      line(1, ago(9), {
+        entity: { eid: 'l1' },
+        content: { body: 'go' },
+        imported: { source: path, line: 1 },
+      }),
+    )
+    let answer = await runs({ vocab: pages }).session_check!(
+      { entity: { eid: 'c1' }, call: { args: {} } },
+      locked(s),
+    ) as Bundle[]
+    assertEquals(answer.length, 1)
+    assertEquals(comp(answer[0], 'error').code, 'warn')
+  } finally {
+    await Deno.remove(path)
+  }
 })

@@ -3720,13 +3720,12 @@ a[data-ref]:hover {
   text-decoration: underline line-through;
 }
 /* The reply box: a sunken box at the pane's foot, the comment rail's twin. */
-/* A session Tile: model information, then its task history. */
+/* A session row: what it is doing, then its own short account. */
 .SessionRow {
   min-width: 0;
   font-size: 12px;
 }
-.SessionRow_Head,
-.SessionRow_Task {
+.SessionRow_Head {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
@@ -3737,41 +3736,23 @@ a[data-ref]:hover {
   color: inherit;
   text-decoration: none;
 }
-.SessionRow_Identity {
-  color: var(--text);
-}
-.SessionRow_Model {
+.SessionRow_Title {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
-  letter-spacing: 0.01em;
 }
-.SessionRow_Effort {
-  padding: 0 0.35em;
+.SessionRow_Brief {
+  display: block;
+  overflow: hidden;
+  padding-left: calc(8px + var(--half-gap));
   color: var(--muted);
-  background: var(--soft);
-  border: 1px solid var(--border2);
-  border-radius: 1em;
-  font-size: 10px;
-  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .SessionRow_Head .Stamp {
   margin-left: auto;
-}
-.SessionRow_Tasks {
-  display: grid;
-  gap: 1px;
-  padding: 1px 0 0 calc(8px + var(--half-gap));
-}
-.SessionRow_Task {
-  overflow: hidden;
-}
-.SessionRow_Task .Inline {
-  min-width: 0;
-  overflow: hidden;
-}
-.SessionRow_Task .Inline_Title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* The Run door: the task verb's little form, placed where the menu was. */
@@ -4385,8 +4366,7 @@ a[data-ref]:hover {
     font-size: 11px;
   }
   .Tile > .Show_Meta,
-  .SessionRow_Actor,
-  .SessionRow_Task,
+  .SessionRow_Brief,
   .List_Label,
   .Stamp {
     display: none;

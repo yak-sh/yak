@@ -1,4 +1,4 @@
-// A session row keeps the actor it works for visible in every shared list.
+// A session row names the work rather than the actor or model.
 import { tick } from '../../testing.ts'
 import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
@@ -38,7 +38,7 @@ let entryPage = (eid: string, limit = 200) => {
   return querySubscription(resolveRefs(parseQuery(q), findEid), q)!.sub
 }
 
-Deno.test('session list Tile omits its chip and falls back to its actor', () => {
+Deno.test('session list Tile names its brief when it has no task or ask', () => {
   cache.value = {
     actor: {
       entity: { eid: 'actor', num: 1 },
@@ -48,18 +48,61 @@ Deno.test('session list Tile omits its chip and falls back to its actor', () => 
     session: {
       entity: { eid: 'session', num: 2 },
       session: { eid: 'session', id: 'session-id', actor: 'actor' },
+      brief: { eid: 'session', text: 'Ship the update' },
     },
   }
   let e = ent('session')
   let mounted = mount(h(resolve(e, 'List.Tile').Render, { e }))
   try {
     assertEquals(
-      mounted.root.querySelector('.SessionRow_Identity')?.textContent,
-      'Acme',
+      mounted.root.querySelector('.SessionRow_Title')?.textContent,
+      'Ship the update',
     )
     assertEquals(mounted.root.querySelector('.Id'), null)
   } finally {
     mounted.free()
+    cache.value = {}
+  }
+})
+
+Deno.test('session row names the first ask and keeps the brief beneath it', async () => {
+  let prior = useRoute(() => {})
+  cache.value = {
+    asking: {
+      entity: { eid: 'asking', num: 2 },
+      session: { eid: 'asking', id: 'opaque-run-id' },
+      brief: { eid: 'asking', text: 'Found the cause' },
+    },
+  }
+  let mounted = mount(h(resolve(ent('asking'), 'Tray.List.Tile').Render, {
+    e: ent('asking'),
+  }))
+  try {
+    let line = '.entry.session=asking&.content&!output&!notice&' +
+      '.order=entry.seq&.limit=1&.fields=content.body'
+    let sub = querySubscription(parseQuery(line), line)!.sub
+    landSub({
+      sub,
+      replace: true,
+      fields: [{ comp: 'content', prop: 'body', wake: true }],
+      changes: [
+        { eid: 'ask', name: 'entity', comp: { num: 3 } },
+        { eid: 'ask', name: 'entry', comp: { session: 'asking', seq: 1 } },
+        { eid: 'ask', name: 'content', comp: { body: 'Fix the tray\nplease' } },
+      ],
+    })
+    await tick()
+    assertEquals(
+      mounted.root.querySelector('.SessionRow_Title')?.textContent,
+      'Fix the tray please',
+    )
+    assertEquals(
+      mounted.root.querySelector('.SessionRow_Brief')?.textContent,
+      'Found the cause',
+    )
+  } finally {
+    mounted.free()
+    useRoute(prior)
     cache.value = {}
   }
 })
@@ -394,51 +437,57 @@ Deno.test('sessionMentions == resolveMentions(threadMentions)', () => {
   assertEquals(sessionMentions(thread), resolveMentions(threadMentions(thread)))
 })
 
-Deno.test('SessionRow loads its actor face when no peer delivered it', async () => {
+Deno.test('SessionRow loads its task title when no peer delivered it', async () => {
   let { SessionRow } = await import('./Session.tsx')
   let { routeName, unsubscribe } = await import('../../live.ts')
   let { tick } = await import('../../testing.ts')
   let prior = useRoute(() => {})
   cache.value = {
-    'actor-row-session': {
-      entity: { eid: 'actor-row-session', num: 910 },
-      session: { eid: 'actor-row-session', id: 'native', actor: 'cold-actor' },
+    'task-row-session': {
+      entity: { eid: 'task-row-session', num: 910 },
+      session: { eid: 'task-row-session', id: 'native' },
     },
   }
-  let sub = routeName('cold-actor', 'doc.title,client.user_agent,session.id')
-  let mounted = mount(<SessionRow e={ent('actor-row-session')} />)
+  deps.value = [{
+    parent: 'task-row-session',
+    type: 'worked',
+    child: 'cold-task',
+  }]
+  let sub = routeName('cold-task', 'doc.title,client.user_agent,session.id')
+  let mounted = mount(<SessionRow e={ent('task-row-session')} />)
   try {
     assertEquals(
-      mounted.root.querySelector('.SessionRow_Identity')?.textContent,
-      'Loading…',
+      mounted.root.querySelector('.SessionRow_Title')?.textContent,
+      'Session',
     )
     landSub({
       sub,
       replace: true,
       fields: [{ comp: 'doc', prop: 'title', wake: true }],
       changes: [
-        { eid: 'cold-actor', name: 'entity', comp: { num: 911 } },
+        { eid: 'cold-task', name: 'entity', comp: { num: 911 } },
         {
-          eid: 'cold-actor',
+          eid: 'cold-task',
           name: 'doc',
-          comp: { title: 'Actor outside the cache' },
+          comp: { title: 'Task outside the cache' },
         },
       ],
     })
     await tick()
     assertEquals(
-      mounted.root.querySelector('.SessionRow_Identity')?.textContent,
-      'Actor outside the cache',
+      mounted.root.querySelector('.SessionRow_Title')?.textContent,
+      'Task outside the cache',
     )
   } finally {
     mounted.free()
     unsubscribe(sub)
     useRoute(prior)
     cache.value = {}
+    deps.value = []
   }
 })
 
-Deno.test('session Tile omits its chip and lists every worked task', () => {
+Deno.test('session Tile names its work and brief without model metadata', () => {
   let prior = globalThis.fetch
   let fetched = 0
   globalThis.fetch = (() => {
@@ -460,6 +509,7 @@ Deno.test('session Tile omits its chip and lists every worked task', () => {
       entity: { eid: 'session', num: 2 },
       session: { eid: 'session', id: 'session-id', actor: 'persona' },
       using: { eid: 'session', model, effort: 'high' },
+      brief: { eid: 'session', text: 'Finished the first part' },
       created: { eid: 'session', at: '2026-08-15T09:00:00-04:00' },
     },
     one: {
@@ -489,30 +539,18 @@ Deno.test('session Tile omits its chip and lists every worked task', () => {
       [...head.children].map((x) => x.className.split(' ')[0]),
       [
         'Dot',
-        'SessionRow_Identity',
-        'SessionRow_Model',
-        'SessionRow_Effort',
+        'SessionRow_Title',
         'Stamp',
       ],
     )
     assertEquals(head.querySelector('.Id'), null)
     assertEquals(
-      head.querySelector('.SessionRow_Identity')?.textContent,
-      'Ada',
+      head.querySelector('.SessionRow_Title')?.textContent,
+      'Second task',
     )
     assertEquals(
-      head.querySelector('.SessionRow_Model')?.textContent,
-      'GPT 5.6 Sol',
-    )
-    assertEquals(
-      head.querySelector('.SessionRow_Effort')?.textContent,
-      'high',
-    )
-    assertEquals(
-      [...root.querySelectorAll('.SessionRow_Task')].map((x) =>
-        x.textContent.replace(/\s+/g, ' ').trim()
-      ).sort(),
-      ['First task', 'Second task'],
+      root.querySelector('.SessionRow_Brief')?.textContent,
+      'Finished the first part',
     )
     assertEquals(fetched, 0)
   } finally {

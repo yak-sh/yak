@@ -51,6 +51,7 @@ import {
   type Comp,
   type Graph,
   Refused,
+  token,
   TOMBSTONE,
   who,
 } from '@yaks/graph'
@@ -134,6 +135,30 @@ let transcript = (graph: Pick<Graph, 'read'>, session: string) =>
 // nothing has no timestamp to judge a stall by, which the check reports rather
 // than passing silently.
 let writtenAt = (b: Bundle): number => Date.parse(str(comp(b, 'created').at))
+
+// An imported file that has been quiet beyond the stall threshold and whose
+// last complete line the graph consumed. The second stat closes a race with
+// a harness appending while this check reads.
+let endedFile = (path: string, consumed: number, cutoff: number): boolean => {
+  try {
+    let before = Deno.statSync(path)
+    if (!before.isFile || (before.mtime?.getTime() ?? Infinity) > cutoff) {
+      return false
+    }
+    let bytes = Deno.readFileSync(path)
+    let after = Deno.statSync(path)
+    if (
+      before.size != after.size ||
+      before.mtime?.getTime() != after.mtime?.getTime() ||
+      bytes.at(-1) != 10
+    ) return false
+    let lines = 0
+    for (let byte of bytes) if (byte == 10) lines++
+    return lines == consumed
+  } catch {
+    return false
+  }
+}
 
 // The session a call speaks for: the one `--session` names, else whoever is
 // asking — the actor the caller was authenticated as records which run the
@@ -241,7 +266,7 @@ export let runs = (
       // not this tool's to restate.
       {
         entity: found?.entity ?? { eid },
-        [SESSION]: { id, ...(actor ? { actor } : {}) },
+        [SESSION]: { id, ended: null, ...(actor ? { actor } : {}) },
       },
       {
         entity: { eid: '$said' },
@@ -267,6 +292,7 @@ export let runs = (
     let eid = s.entity.eid
     let held = await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
     return [
+      { entity: { eid }, [SESSION]: { ended: true } },
       ...(args.brief == null ? [] : [briefed(eid, args.brief)]),
       ...held.map((b): Bundle => ({
         entity: { eid: b.entity.eid },
@@ -304,7 +330,10 @@ export let runs = (
     )
     let over = new Map<string, string>()
     for (let eid of held.keys()) {
-      let state = statusOf(await transcript(graph, eid))
+      let state = statusOf(
+        await transcript(graph, eid),
+        comp(held.get(eid), SESSION).ended == true,
+      )
       if (ENDED.includes(state)) over.set(eid, state)
     }
     let found = locks.flatMap((b): Finding[] => {
@@ -357,13 +386,40 @@ export let runs = (
           'stalled cannot be told from one that is merely quiet — UNVERIFIED',
       }])
     }
+    let logs = await graph.get(
+      sessions.flatMap((s) =>
+        comp(s, SESSION).log ? [str(comp(s, SESSION).log)] : []
+      ),
+    )
+    let byLog = new Map(logs.map((b) => [b.entity.eid, b]))
+    let repairs: Bundle[] = []
     let found = sessions.flatMap((s): Finding[] => {
       let entries = lines.get(s.entity.eid) ?? []
-      let state = statusOf(entries)
+      let state = statusOf(entries, comp(s, SESSION).ended == true)
       if (state != 'pending' && state != 'running') return []
       let newest = ordered(entries).at(-1)
       let at = newest ? writtenAt(newest) : NaN
       if (isNaN(at) || at > cutoff) return []
+      let log = byLog.get(str(comp(s, SESSION).log))
+      let source = str(comp(log, 'log').source)
+      let imported = str(comp(newest, 'imported').source)
+      if (
+        s.exit ||
+        (comp(s, SESSION).operator == true && source && source == imported &&
+          endedFile(source, Number(comp(log, 'log').consumed), cutoff))
+      ) {
+        repairs.push({
+          entity: { eid: s.entity.eid },
+          [SESSION]: { ended: true },
+          $was: {
+            [SESSION]: { ended: token(comp(s, SESSION).ended) },
+            ...(host.vocab.comp('updated')
+              ? { updated: { at: token(comp(s, 'updated').at) } }
+              : {}),
+          },
+        })
+        return []
+      }
       return [{
         level: 'warn',
         text: `${id(s)} has been ${state} since ${
@@ -373,6 +429,12 @@ export let runs = (
         }, with nothing appended since`,
       }]
     })
-    return checked(call.entity.eid, 'no transcript has stalled', found)
+    let answer = checked(call.entity.eid, 'no transcript has stalled', found)
+    if (repairs.length) {
+      ;(answer[0].content as Comp).body =
+        `${repairs.length} ended session(s) reconciled\n` +
+        str((answer[0].content as Comp).body)
+    }
+    return [...answer, ...repairs]
   },
 })

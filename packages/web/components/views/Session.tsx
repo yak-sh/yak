@@ -1,4 +1,4 @@
-import { useModel, useReference, useRepoUrl } from '../subscriptions.ts'
+import { useReference, useRepoUrl } from '../subscriptions.ts'
 import {
   useEffect,
   useLayoutEffect,
@@ -6,14 +6,7 @@ import {
   useRef,
   useState,
 } from 'preact/hooks'
-import {
-  awake,
-  type Ent,
-  friendly,
-  idOf,
-  kilo,
-  type LogRow,
-} from '../../types.ts'
+import { awake, type Ent, idOf, kilo, type LogRow } from '../../types.ts'
 import {
   ent,
   findEid,
@@ -30,7 +23,12 @@ import { Dot } from '../Dot.tsx'
 import { Composer, Note } from '../Comments.tsx'
 import { Entity, resolve } from '../Entity.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
-import { useBacklinks, useCommentsOn, useReferences } from '../useQuery.ts'
+import {
+  useBacklinks,
+  useCommentsOn,
+  useQueryResult,
+  useReferences,
+} from '../useQuery.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
@@ -722,60 +720,40 @@ export let Session = ({ e }: { e: Ent }) => {
   )
 }
 
-// A session Tile is a model-information line followed by every task the
-// session has worked on. Each line keeps its own link target.
+// A session row names the work behind it. The first human input is a small
+// held query, so a list never loads every session's transcript.
 let RowLine = block('div', 'SessionRow', {
   Head: 'div',
-  Identity: 'span',
-  Model: 'span',
-  Effort: 'span',
-  Tasks: 'div',
-  Task: 'span',
+  Title: 'span',
+  Brief: 'span',
 })
 
+let excerpt = (text?: string | null) => text?.trim().replace(/\s+/g, ' ')
+
 export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
-  let s = e.session!
-  let tasks = e.refs.filter((r) => r.type == 'worked').map((r) => ent(r.child))
-    .filter((x) => x.task)
-  let face = useReference(s.actor)
-  let identity = face.value
-  let model = useModel(e)
+  let task = e.refs.find((r) => r.type == 'worked')?.child
+  let face = useReference(task)
+  let first = useQueryResult(
+    `.entry.session=${e.eid}&.content&!output&!notice&` +
+      '.order=entry.seq&.limit=1&.fields=content.body',
+    true,
+    true,
+  ).eids[0]
+  let ask = excerpt(first && ent(first).content?.body)
+  let brief = excerpt(e.brief?.text)
+  let title = excerpt(face.value?.doc?.title) || ask || brief || 'Session'
+  let detail = face.value?.doc?.title ? brief || ask : ask && brief
   return (
     <RowLine>
       <RowLine.Head {...tileLink(e, onOpen)}>
         {slot(slots, 'before')}
         <SessionDot e={e} />
-        {slots?.title != null ? <RowLine.Model {...tileTitle(slots, '')} /> : (
-          <>
-            {s.actor && (
-              <RowLine.Identity>
-                {identity
-                  ? identity.doc?.title || idOf(identity)
-                  : face.state?.status == 'failed'
-                  ? 'could not load'
-                  : face.ready
-                  ? 'unavailable'
-                  : 'Loading…'}
-              </RowLine.Identity>
-            )}
-            {model.name && <RowLine.Model>{friendly(model.name)}
-            </RowLine.Model>}
-            {model.effort && <RowLine.Effort>{model.effort}</RowLine.Effort>}
-          </>
-        )}
+        <RowLine.Title {...tileTitle(slots, title)} />
         {slot(slots, 'after')}
         <Stamp at={e.created?.at} />
       </RowLine.Head>
       {slot(slots, 'body')}
-      {tasks.length > 0 && (
-        <RowLine.Tasks>
-          {tasks.map((task) => (
-            <RowLine.Task key={task.eid}>
-              <Entity eid={task.eid} view='Inline' />
-            </RowLine.Task>
-          ))}
-        </RowLine.Tasks>
-      )}
+      {detail && <RowLine.Brief>{detail}</RowLine.Brief>}
     </RowLine>
   )
 }
