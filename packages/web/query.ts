@@ -24,8 +24,8 @@
 //                    nothing, the same mismatch @yaks/sql declines to compile
 //
 //   .limit=200       a WINDOW: 200 matches, not the whole set
-//   .after=13882     continue that window past one entity, named by its spine
-//                    num — the next page, in whatever order was asked for
+//   .after=13882     continue that window past one entity, named by its number
+//                    or eid — the next page, in whatever order was asked for
 //
 // Bare words are TEXT preds — FTS5 terms over the doc (title or body), with a
 // trailing `*` for token-prefix matching; "quoted words" stay one phrase pred.
@@ -144,7 +144,7 @@ export type Pred = {
   // change-signal, so a churny value like a pin's z delivers yet never re-fires).
   fields?: Field[]
   // A WINDOW rather than a filter: `.limit=200` bounds the answer to a prefix,
-  // `.after=<num>` continues it below a spine num. op is WINDOW, so matchQuery
+  // `.after=<id>` continues it past an entity. op is WINDOW, so matchQuery
   // passes it through (the filter part selects the whole set) and windowOf()
   // reads the bound; comp/prop stay empty. A window states a SIZE, never a
   // membership — which is why a reply that carries one also states the total it
@@ -173,12 +173,12 @@ export type Pred = {
 // A window: how many of the selection to answer with, and where to continue.
 // Both optional — `.limit=` alone is the first page, `.after=` alone continues
 // an unbounded read below a cursor. A window states a SIZE, never a sequence:
-// with no `.order` the sequence is spine num, so `after` reads as "older than
-// this num"; with one (`.order=hot`, `.order=similar`) the asked-for order
+// with no `.order` the sequence is spine order; with one (`.order=hot`,
+// `.order=similar`) the asked-for order
 // survives and `after` names the entity to continue past IN THAT ORDER.
-// One cursor spelling — the entity's num — serves
+// One cursor spelling — the entity's number or eid — serves
 // every ordering, so a caller pages without learning the order key.
-export type Win = { limit?: number; after?: number }
+export type Win = { limit?: number; after?: number | string }
 
 // A window over a RANKING (`.order=hot`, `.order=similar`) rather than over the
 // spine. An explicit order SURVIVES a window — a window says how much of a
@@ -188,11 +188,15 @@ export type Win = { limit?: number; after?: number }
 // entity sits in the order it was asked for (the same rule @yaks/sql compiles as
 // a keyset and @yaks/match answers in memory). An anchor the ranking does not
 // hold restarts from the front, which is what a first page already is.
-export let pageRanked = <T extends { num: number }>(
+export let pageRanked = <T extends { num?: number; eid?: string }>(
   rows: T[],
   win: Win,
 ): T[] => {
-  let at = win.after == null ? -1 : rows.findIndex((r) => r.num == win.after)
+  let at = win.after == null
+    ? -1
+    : rows.findIndex((r) =>
+      typeof win.after == 'number' ? r.num == win.after : r.eid == win.after
+    )
   let rest = rows.slice(at + 1)
   return win.limit == null ? rest : rest.slice(0, win.limit)
 }
@@ -721,14 +725,16 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
         })),
       }]
     case 'limit':
-    case 'after':
+    case 'after': {
+      let cursor = 'n' in c ? c.n : c.eid
       return [{
         comp: '',
         prop: '',
         op: WINDOW,
-        value: String(c.n),
-        win: { [c.kind]: c.n },
+        value: String(cursor),
+        win: { [c.kind]: cursor },
       }]
+    }
     case 'edges': {
       let edge: EdgeSelector | undefined
       if (c.select) {
