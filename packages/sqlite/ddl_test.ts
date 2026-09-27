@@ -374,6 +374,30 @@ Deno.test('a grown column keeps a literal default, takes the clock only ahead', 
   assertEquals(scan(d, 'created', undefined, ['at']), [{ at: null }])
 })
 
+Deno.test('refitting removes only empty undeclared columns', () => {
+  let d = mem()
+  storage(d, shop).install()
+  d.query(insert('entity', { id: 1, eid: 'm' }, { id: 2, eid: 'p' }))
+  d.query(insert('product', { entity: 2, maker: 1 }))
+  d.query({
+    t: 'alter table',
+    table: 'product',
+    add: { name: 'old', type: 'text' },
+  })
+  d.query({
+    t: 'alter table',
+    table: 'product',
+    add: { name: 'used', type: 'text' },
+  })
+  d.query({ t: 'update', table: 'product', set: { used: val('kept') } })
+  storage(d, shop).install()
+  assertEquals(cols(d, 'product').includes('old'), false)
+  assertEquals(cols(d, 'product').includes('used'), true)
+  assertEquals(scan(d, 'product', undefined, ['used']), [{ used: 'kept' }])
+  storage(d, shop).install()
+  assertEquals(cols(d, 'product').includes('used'), true)
+})
+
 Deno.test('a death word that moved rebuilds its table without the key', () => {
   let d = mem()
   storage(d, shop).install()

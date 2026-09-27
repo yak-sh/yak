@@ -109,6 +109,7 @@ export {
   standing,
   tabled,
   unfit,
+  vacant,
 } from './ddl.ts'
 export { EPOCH, epoch, type Meta, meta } from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'

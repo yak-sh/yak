@@ -95,6 +95,7 @@ import {
   touched,
   unburySql,
   unfit,
+  vacant,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { type D1Like, prepare, type Prepared, type Row, unbind } from './d1.ts'
@@ -533,7 +534,19 @@ export let storage = <S extends Prepared<S>>(
       await send([...tabled(vocab), ...grown(vocab, before)])
       // A rebuild to a batch, which is D1's only transaction: a table whose
       // rows the new shape refuses stays as it stood, and is told.
-      for (let [comp, stmts] of Object.entries(refit(vocab, before))) {
+      let empty = Object.fromEntries(
+        await Promise.all(
+          Object.entries(vacant(vocab, before)).map(async ([comp, queries]) => [
+            comp,
+            (await Promise.all(
+              Object.entries(queries).map(async ([name, q]) =>
+                (await one(q)).length ? null : name
+              ),
+            )).filter((n) => n != null),
+          ]),
+        ),
+      ) as Record<string, string[]>
+      for (let [comp, stmts] of Object.entries(refit(vocab, before, empty))) {
         await send(stmts).catch((e) => report(unfit(comp, e)))
       }
       // The indexes last: one may stand on a table just rebuilt.

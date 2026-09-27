@@ -375,10 +375,8 @@ let fits = (t: Stood, fresh: CreateTable): boolean => {
  * own name rather than renamed into it, because a rename checks every view and
  * trigger that names the table while it is gone (`doc_value` names `doc`).
  *
- * Every column comes back, not only the ones the vocabulary declares: a
- * property it has since dropped is still a column rows were written under, and
- * a constraint change is no reason to take a word away from them. Such a column
- * keeps its type and nothing else, since nothing writes it any more. The
+ * Undeclared columns with any non-null value come back; empty ones do not.
+ * A kept column keeps its type and nothing else. The
  * table's triggers and undeclared indexes go with it, for whoever raised them
  * to raise again at boot (@yaks/fts `adopt`); the declared indexes are
  * {@link indexed}'s, which runs after.
@@ -386,38 +384,76 @@ let fits = (t: Stood, fresh: CreateTable): boolean => {
  * Each table's statements, by name: none for a file that already fits, which
  * is every boot but the one after the vocabulary changed.
  */
-export let refit = (vocab: Vocab, was: Standing): Record<string, Stmt[]> =>
+// Ask whether an undeclared column holds anything. Both SQLite and D1 use
+// this statement; only the caller knows how to await the answer.
+export let vacant = (
+  vocab: Vocab,
+  was: Standing,
+): Record<string, Record<string, Stmt>> =>
+  Object.fromEntries(
+    comps(vocab, was).flatMap((comp) => {
+      let said = new Set(stored(vocab, comp).map((c) => c.prop))
+      let cols = was[comp].cols.map((r) => String(r.name))
+        .filter((name) => name != 'entity' && !said.has(name))
+      return cols.length
+        ? [[
+          comp,
+          Object.fromEntries(cols.map((name) => [
+            name,
+            select({
+              cols: [col(name)],
+              from: table(comp),
+              where: notNull(col(name)),
+              limit: lit(1),
+            }),
+          ])),
+        ]]
+        : []
+    }),
+  )
+
+export let refit = (
+  vocab: Vocab,
+  was: Standing,
+  empty: Record<string, string[]> = {},
+): Record<string, Stmt[]> =>
   Object.fromEntries(
     comps(vocab, was).flatMap((comp) => {
       let t = was[comp]
       let said = new Set(stored(vocab, comp).map((c) => c.prop))
       let extra = t.cols
-        .filter((r) => r.name != 'entity' && !said.has(String(r.name)))
+        .filter((r) =>
+          r.name != 'entity' && !said.has(String(r.name)) &&
+          !empty[comp]?.includes(String(r.name))
+        )
         .map((r) => ({
           name: String(r.name),
           type: String(r.type ?? '') || undefined,
         }))
       let fresh = tableDdl(vocab, comp, comp, extra)
-      if (fits(t, fresh)) return []
-      let cols = t.cols.map((r) => String(r.name))
+      if (fits(t, fresh) && !empty[comp]?.length) return []
+      let old = t.cols.map((r) => String(r.name))
+      let cols = fresh.cols.map((r) => r.name).filter((name) =>
+        old.includes(name)
+      )
       let aside = `${comp}__refit`
-      let copy = (into: string, from: string): Stmt => ({
+      let copy = (into: string, from: string, names: string[]): Stmt => ({
         t: 'insert',
         into,
-        cols,
-        q: select({ cols: cols.map((c) => col(c)), from: table(from) }),
+        cols: names,
+        q: select({ cols: names.map((c) => col(c)), from: table(from) }),
       })
       return [[comp, [
         // A column of no type holds each value exactly as it was stored.
         {
           t: 'create table',
           name: aside,
-          cols: cols.map((name) => ({ name })),
+          cols: old.map((name) => ({ name })),
         },
-        copy(aside, comp),
+        copy(aside, comp, old),
         { t: 'drop', kind: 'table', name: comp },
         fresh,
-        copy(comp, aside),
+        copy(comp, aside, cols),
         { t: 'drop', kind: 'table', name: aside },
       ]]]
     }),
@@ -466,7 +502,16 @@ export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
 export let fit = (driver: Driver, vocab: Vocab, was: Standing): Error[] =>
   unit(driver, () => {
     for (let stmt of grown(vocab, was)) driver.query(stmt)
-    return Object.entries(refit(vocab, was)).flatMap(([comp, stmts]) => {
+    let empty = Object.fromEntries(
+      Object.entries(vacant(vocab, was)).map(
+        ([comp, queries]) => [
+          comp,
+          Object.entries(queries)
+            .filter(([, q]) => !driver.query(q).length).map(([name]) => name),
+        ],
+      ),
+    )
+    return Object.entries(refit(vocab, was, empty)).flatMap(([comp, stmts]) => {
       try {
         unit(driver, () => stmts.forEach((s) => driver.query(s)))
         return []

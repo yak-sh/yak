@@ -5,6 +5,8 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { schema } from '@yaks/sqlite'
+import { col, notNull, select, table, val } from '@yaks/sql'
+import { prepare } from './d1.ts'
 import { d1 } from './testing.ts'
 import { storage } from './store.ts'
 
@@ -34,6 +36,44 @@ Deno.test('the d1 schema is the sqlite schema, constraints included', async () =
   assertEquals(s.ddl(), schema(strict))
   await s.install()
   await s.install() // a second install finds everything standing
+})
+
+Deno.test('a d1 install removes empty old columns but keeps written ones', async () => {
+  let db = d1(), s = storage(db, strict)
+  await s.install()
+  await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, repo: {} }]))
+  await db.batch([
+    prepare(db, {
+      t: 'alter table',
+      table: 'repo',
+      add: { name: 'old', type: 'text' },
+    }),
+    prepare(db, {
+      t: 'alter table',
+      table: 'repo',
+      add: { name: 'used', type: 'text' },
+    }),
+    prepare(db, { t: 'update', table: 'repo', set: { used: val('kept') } }),
+  ])
+  await s.install()
+  let has = (name: string) =>
+    prepare(
+      db,
+      select({
+        cols: [col(name)],
+        from: table('repo'),
+        where: notNull(col(name)),
+      }),
+    ).all()
+  assertEquals(
+    (await (await prepare(db, { t: 'pragma', name: 'table_info', arg: 'repo' })
+      .all()).results)
+      .map((r) => r.name).includes('old'),
+    false,
+  )
+  assertEquals((await has('used')).results.length, 1)
+  await s.install()
+  assertEquals((await has('used')).results.length, 1)
 })
 
 Deno.test('a d1 store takes a state its vocabulary stopped listing', async () => {
