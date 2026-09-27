@@ -3,9 +3,10 @@
 // time a hero comes; what they said back, where they chose to go and how they
 // feel, off their transcripts; the line a hero says beside one, which asks
 // them to answer, told what they hold, what deals stand between them and the
-// hero (deals.ts), how they feel and where the land's people went lately; and
-// the news of a quest handed in. What keeps a level's villagers awake while
-// somebody plays in it is where the hero was last seen (seen.ts).
+// hero (deals.ts), their job on the notice board, how they feel and where
+// the land's people went lately; and the news of a quest handed in. What
+// keeps a level's villagers awake while somebody plays in it is where the
+// hero was last seen (seen.ts).
 //
 // A guest reads what villagers say and is not heard by them: only a person
 // signed in speaks (chat.ts).
@@ -155,6 +156,7 @@ export let village = (net: Net, deal: Deals) => {
           taken: v.state == 'taken',
           steps: v.steps,
         })),
+        board: deal.board(g.id),
         quests: f.sheet.quests.filter((q) => q.quest.giver == g.id),
         deeds: deeds(falls(f), net.now() - LATELY),
         here: f.others.map((o) => o.name),

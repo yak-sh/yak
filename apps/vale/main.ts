@@ -152,11 +152,14 @@ let skills = board(h.panels.skills, {
 let log = journal(h.panels.journal, { pin: g.pin })
 let trades = ledger(h.panels.trades)
 // A quest taken from a notice board is pinned while it is on offer, so the
-// way to whoever gives it is tracked.
+// way to whoever gives it is tracked; a villager's job is agreed to.
 let notes = noticeboard(h.panels.notices, {
   take: (n) => {
-    g.pin(n.id, true)
-    h.toast(`Tracked: ${n.title}. Find ${n.from}.`, 'Toast-big')
+    let said = n.job
+      ? deal.agree(n.job.giver.id, n.job.eid)
+      : (g.pin(n.id, true), `Tracked: ${n.title}. Find ${n.from}.`)
+    if (!said) return
+    h.toast(said, 'Toast-big')
     sound.quest()
   },
 })
@@ -862,8 +865,9 @@ let loop = (t: number) => {
       // And so does a board's. What each board in sight holds for the hero:
       // the one they stand at, to read, and a paper for each notice.
       if (notes.open && !job.board) notes.close()
+      let jobs = deal.posted(f.sheet)
       let read = (b: Board) =>
-        notices(f.sheet.quests, b.level, givers, [b.at[0], b.at[2]])
+        notices(f.sheet.quests, b.level, givers, [b.at[0], b.at[2]], jobs)
       notes.show(job.board ? read(job.board) : [])
       pins.tick([f.body.x, f.body.z], (b) => read(b).length, job)
       settings.show()

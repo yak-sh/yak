@@ -422,7 +422,7 @@
       "kind": false,
       "floor": "person",
       "pace": "2s",
-      "description": "What a villager promised a hero out of what they hold, and for what: nothing, which is a gift, or things to bring and creatures to fell. The villager's model writes it (give, offer), as the person talking to them, and only a row that came through the villager's own turn counts (created.via, which the store stamps); the hero agrees to it and hands it in once what it asks is done, and only then does anything change hands. Whether it counts is the rules' (stock.ts): a villager promises only what they hold, a gift only a little and never their own things, and a deal asks only what their land has and never gives much more than that is worth. What they hold is counted from these rows and the heroes' replies, in the order the store took them.",
+      "description": "What a villager promised a hero out of what they hold, and for what: nothing, which is a gift, or things to bring and creatures to fell; or, naming no hero, a job pinned on their village's notice board, which the first hero to agree to it takes. The villager's model writes it (give, offer, post), as the person talking to them, and only a row that came through the villager's own turn counts (created.via, which the store stamps); the hero agrees to it and hands it in once what it asks is done, and only then does anything change hands. Whether it counts is the rules' (stock.ts): a villager promises only what they hold, a gift only a little and never their own things, a deal asks only what their land has and never gives much more than that is worth, and a board holds a few jobs, each villager's one at a time and rarely. What they hold is counted from these rows and the heroes' replies, in the order the store took them.",
       "properties": {
         "villager": {
           "type": "string",
@@ -432,7 +432,7 @@
         "player": {
           "type": "string",
           "index": true,
-          "description": "The hero it is made with."
+          "description": "The hero it is made with; none for a job on the notice board, whose hero is the first to agree to it."
         },
         "give": {
           "type": "string",
@@ -449,7 +449,7 @@
       "type": "object",
       "kind": false,
       "floor": "person",
-      "description": "A hero agreeing to a deal, written by their page: it stands a day from then rather than lapsing, a newer offer no longer takes its place, and the creatures it asks count from when it was agreed. It counts only from the person who made the hero.",
+      "description": "A hero agreeing to a deal, written by their page: it stands a day from then rather than lapsing, a newer offer no longer takes its place, and the creatures it asks count from when it was agreed. For a job on the notice board, the first hero to agree takes it, and it is gone from the board. It counts only from the person who made the hero.",
       "properties": {
         "deal": {
           "type": "string",
@@ -603,6 +603,35 @@
         "deal": {
           "villager": "$session",
           "player": "$player",
+          "give": "$give",
+          "take": "$take"
+        }
+      }
+    },
+    "post": {
+      "tool": true,
+      "model": true,
+      "description": "Pin a job on your village's notice board, for whichever hero takes it first: something you hold, for things of your land brought to you or creatures of your land to fell, or both. They do it and hand it in to you. Now and then only: one job of yours stands on the board at a time, the board holds a few, and a job nobody takes comes down in a day. Only what you hold, only what your land has, and never worth much more than what you ask; anything else stands for nothing, whatever anyone says.",
+      "input": {
+        "give": {
+          "type": "string",
+          "description": "What you give, a count and a kind each: 12 coin, 1 tonic."
+        },
+        "take": {
+          "type": "string",
+          "description": "What you ask, a count and a kind each: things to bring and creatures to fell, 3 tusk, 1 thornback."
+        }
+      },
+      "required": [
+        "give",
+        "take"
+      ],
+      "apply": {
+        "entity": {
+          "eid": "$deal"
+        },
+        "deal": {
+          "villager": "$session",
           "give": "$give",
           "take": "$take"
         }

@@ -1,10 +1,12 @@
 // The limits on what a villager hands over, through the rules that hold them
 // (stock.ts): whatever a hero talked a villager into writing, a deal counts
 // only as far as the villager's stock, the land and the worth of what it asks
-// allow, and every page that reads the same rows reaches the same answer.
+// allow, a job on the board goes to one hero, and every page that reads the
+// same rows reaches the same answer.
 import { assertEquals } from '@std/assert'
 import { GIVERS } from './quests.ts'
 import {
+  BOARD,
   type Deal,
   GAP,
   goods,
@@ -12,11 +14,16 @@ import {
   ledger,
   OFFER,
   pay,
+  POSTED,
+  RARE,
   type Reply,
 } from './stock.ts'
 
-let wren = GIVERS.find((g) => g.id == 'wren')!
 let MIN = 60_000
+
+// A land's people, each by the row their deals name.
+let land = (level: string) =>
+  new Map(GIVERS.filter((g) => g.level == level).map((g) => [g.id, g]))
 
 // Ada made the hero `hero`, Bob made `rook`.
 let owner = (hero: string) => ({ hero: 'ada', rook: 'bob' })[hero] ?? null
@@ -40,7 +47,16 @@ let deal = (
   at: at * MIN,
 })
 
-// The hero's reply to a deal at `at` minutes: handed in, or agreed to.
+// A job a villager pins on the board at `at` minutes, for any hero.
+let job = (at: number, give: string, take: string, villager = 'wren') => ({
+  ...deal(at, give, take, 'ada', ''),
+  eid: `job/${villager}/${at}`,
+  villager,
+  via: villager,
+})
+
+// A hero's reply to a deal at `at` minutes: handed in, or agreed to; by the
+// hero it names, or for a job, the hero `by` made.
 let reply = (
   d: Deal,
   at: number,
@@ -49,7 +65,7 @@ let reply = (
 ): Reply => ({
   eid: `${did}/${d.eid}/${by}`,
   deal: d.eid,
-  player: d.player,
+  player: d.player || ({ ada: 'hero', bob: 'rook' })[by] || '',
   did,
   by,
   at: at * MIN,
@@ -60,7 +76,7 @@ let agree = (d: Deal, at: number, by = 'ada') => reply(d, at, by, 'agreed')
 // What Wren's rows come to at `now` minutes: each deal's state, and how many
 // of each of `kinds` she holds.
 let book = (deals: Deal[], hands: Reply[] = [], now = 10, kinds = ['coin']) => {
-  let b = ledger(wren, deals, hands, owner, now * MIN)
+  let b = ledger(land('mossvale'), deals, hands, owner, now * MIN).get('wren')!
   return {
     states: deals.map((d) => b.states.get(d.eid)),
     holds: kinds.map((k) => b.holds.get(k) ?? 0),
@@ -199,4 +215,59 @@ Deno.test('every page reaches the same answer from the same rows', () => {
     book(deals.toReversed(), hands, 10).states.toReversed(),
     a.states,
   )
+})
+
+Deno.test('a job on the board goes to the first hero to take it', () => {
+  let j = job(0, '5 coin', '2 boar')
+  let states = (replies: Reply[]) => book([j], replies).states
+  let rook = agree(j, 1, 'bob')
+  // Taken by Rook, it is gone for the hero after, and Rook's to hand in.
+  assertEquals(states([rook, agree(j, 2)]), ['taken'])
+  assertEquals(states([rook, hand(j, 3)]), ['taken'])
+  assertEquals(states([rook, hand(j, 3, 'bob')]), ['done'])
+})
+
+Deno.test('a job holds to what the villager holds, the land has, and its worth', () => {
+  let one = (give: string, take: string) => book([job(0, give, take)]).states
+  assertEquals(
+    [
+      one('1000 coin', '2 boar'),
+      one('5 coin', '1 frostwolf'),
+      one('1 staff2', '1 slime'),
+      one('5 coin', ''),
+    ].flat(),
+    ['void', 'void', 'void', 'void'],
+  )
+  assertEquals(one('1 staff2', '1 thornback, 1 toadstone'), ['open'])
+})
+
+Deno.test('a villager posts now and then, and a board holds a few jobs', () => {
+  let first = job(0, '1 coin', '1 slime')
+  let again = (at: number, replies: Reply[] = []) =>
+    book([first, job(at, '1 coin', '1 slime')], replies, at + 1).states[1]
+  let done = [agree(first, 1), hand(first, 2)]
+  // One of theirs on the board at a time, and a while between them.
+  assertEquals(again(RARE / MIN), 'void')
+  assertEquals(again(30, done), 'void')
+  assertEquals(again(RARE / MIN, done), 'open')
+  // Every one of Birchmere's people posts one: the board takes the first
+  // few, and has room again once a hero takes one of them.
+  let mere = land('birchmere')
+  let jobs = [...mere.keys()].map((v, i) => job(i, '1 coin', '1 adder', v))
+  let at = (replies: Reply[]) => ledger(mere, jobs, replies, owner, 20 * MIN)
+  let books = at([])
+  assertEquals(
+    jobs.map((j) => books.get(j.villager)!.states.get(j.eid)),
+    jobs.map((_, i) => i < BOARD ? 'open' : 'void'),
+  )
+  let last = jobs.at(-1)!.villager
+  assertEquals(books.get(last)!.room, false)
+  assertEquals(at([agree(jobs[0], 15, 'bob')]).get(last)!.room, true)
+})
+
+Deno.test('a job nobody takes comes down, and what it set aside is free again', () => {
+  let j = job(0, '1 tonic', '6 tusk')
+  let tonics = (now: number) => book([j], [], now, ['tonic']).holds
+  assertEquals(tonics(60), [1])
+  assertEquals(tonics(POSTED / MIN + 1), [2])
 })

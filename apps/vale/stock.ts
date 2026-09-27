@@ -6,14 +6,16 @@
 //
 // A deal is what a villager promised a hero out of that stock, and for what:
 // nothing, which is a gift; things from the hero's bag; creatures of the land
-// to fell, a quest of their own making. The villager's model writes it
-// (vocab.json `give` and `offer`); the hero agrees to it, and hands it in once
-// every step it asks is done, and only then do things change hands. Whether a
-// deal counts is decided here, never by the words that talked a villager into
-// it: a villager promises only what it holds, asks only what its land has,
-// and never gives much more than what it asks is worth. What a villager holds
-// is counted from its deals and the heroes' replies in the order the store
-// took them, so every page reaches the same answer.
+// to fell, a quest of their own making. A job is a deal pinned on their
+// village's notice board for whichever hero takes it first. The villager's
+// model writes it (vocab.json `give`, `offer` and `post`); the hero agrees to
+// it, and hands it in once every step it asks is done, and only then do
+// things change hands. Whether a deal counts is decided here, never by the
+// words that talked a villager into it: a villager promises only what it
+// holds, asks only what its land has, and never gives much more than what it
+// asks is worth, and a board holds a few jobs, each villager's rarely. What a
+// land's villagers hold is counted from their deals and the heroes' replies
+// in the order the store took them, so every page reaches the same answer.
 import { tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { isA } from './features.ts'
@@ -323,7 +325,9 @@ export let stockOf = (g: Giver): Shelf[] => {
 /** A deal as the store holds it: the villager's row, the hero's, what the
  * villager gives and what for, in words (`goods`), who wrote it, what it came
  * through (the transcript of the turn whose command wrote it, which the store
- * stamps and no page can) and when the store took it, in ms. */
+ * stamps and no page can) and when the store took it, in ms. A deal naming no
+ * hero is a job the villager posted on their village's notice board, open to
+ * whichever hero takes it first. */
 export type Deal = {
   eid: string
   villager: string
@@ -347,21 +351,37 @@ export type Reply = {
 }
 
 /** What became of a deal: never counted, standing, agreed to, handed in, or
- * gone back (lapsed, or replaced by a newer offer to the same hero). */
+ * gone back (lapsed, taken down, or replaced by a newer offer to the same
+ * hero). */
 export type State = 'void' | 'open' | 'taken' | 'done' | 'gone'
 
-/** What a villager's rows come to at a moment: each deal's state, what each
- * counted deal promised and asked, when the hero agreed to each they took
- * up, why each that never counted did not, what the villager holds free to
- * promise, by kind, and what they have set aside for deals still standing. */
+/** What a land's rows come to at a moment, for one of its villagers: each
+ * deal's state, what each counted deal promised and asked, when the hero
+ * agreed to each they took up, who took each job off the board, why each
+ * that never counted did not, what the villager holds free to promise, by
+ * kind, and what they have set aside for deals still standing; their job
+ * standing on the board, if one, and whether they may post one now. */
 export type Book = {
   states: Map<string, State>
   terms: Map<string, { give: Goods; take: Goods }>
   since: Map<string, number>
+  taker: Map<string, string>
   why: Map<string, string>
   holds: Map<string, number>
   aside: Map<string, number>
+  post: string | null
+  room: boolean
 }
+
+/** How long a job on a notice board stands before it comes down, unless a
+ * hero takes it. */
+export let POSTED = 24 * HOUR
+
+/** How long a villager waits after posting a job before posting another. */
+export let RARE = 2 * HOUR
+
+/** How many jobs a land's notice board holds at most. */
+export let BOARD = 3
 
 type Event =
   | { at: number; eid: string; deal: Deal }
@@ -374,78 +394,124 @@ let rank = (e: Event) =>
 let order = (a: Event, b: Event) =>
   a.at - b.at || rank(a) - rank(b) || (a.eid < b.eid ? -1 : +(a.eid > b.eid))
 
+// One villager's side of a land's ledger: what they keep and hold, what is
+// set aside, when their shelves last filled, the gifts and offers they made,
+// and their job on the board.
+let stall = (g: Giver) => {
+  let shelves = new Map(stockOf(g).map((s) => [s.kind, s]))
+  return {
+    g,
+    shelves,
+    held: new Map([...shelves].map(([k, s]) => [k, s.most])),
+    aside: new Map<string, number>(),
+    t0: -Infinity,
+    has: wares(g.level),
+    gifted: new Map<string, number>(),
+    offered: new Map<string, string>(),
+    post: null as string | null,
+    posted: -Infinity,
+  }
+}
+type Stall = ReturnType<typeof stall>
+
 /**
- * What a villager's deals and the heroes' replies come to at `now`, taken
- * in the order the store took them. A deal counts only if the villager made
- * it, in a turn of their own, and held what it gives when they made it; a
- * gift only if it is small, none of their
- * own things, and the person's first from them in a while; any other deal
- * only if it asks for what the land has and gives no more than half again
- * what that is worth. What a counted deal gives is set aside at once, still
- * theirs, so it does not come back on the shelf. The hero's own person
- * agrees to a deal, which then stands a while, or hands it in, which passes
- * what it gives over and takes what was brought; an offer nobody agreed to
- * lapses soon, or gives way to a newer one to the same hero, and what a deal
- * set aside is free again once it is gone. `owner` names who made a hero.
+ * What the deals of a land's villagers (`land`, by the row a deal names as
+ * its villager) and the heroes' replies come to at `now`, taken in the order
+ * the store took them. A deal counts only if the villager made it, in a turn
+ * of their own, and held what it gives when they made it; a gift only if it
+ * is small, none of their own things, and the person's first from them in a
+ * while; any other deal only if it asks for what the land has and gives no
+ * more than half again what that is worth. A job posted on the land's board
+ * counts only if it asks something, the villager has no other job standing
+ * there and posted none a while ago, and the board has room. What a counted
+ * deal gives is set aside at once, still theirs, so it does not come back on
+ * the shelf. The hero's own person agrees to a deal, which then stands a
+ * while, or hands it in, which passes what it gives over and takes what was
+ * brought; the first hero to agree to a job takes it off the board, and it is
+ * theirs to hand in. An offer nobody agreed to lapses soon, or gives way to a
+ * newer one to the same hero, a job nobody took comes down in a day, and
+ * what a deal set aside is free again once it is gone. `owner` names who made
+ * a hero.
  */
 export let ledger = (
-  g: Giver,
+  land: Map<string, Giver>,
   deals: Deal[],
   replies: Reply[],
   owner: (hero: string) => string | null,
   now: number,
-): Book => {
-  let shelves = new Map(stockOf(g).map((s) => [s.kind, s]))
-  let held = new Map([...shelves].map(([k, s]) => [k, s.most]))
-  let aside = new Map<string, number>()
-  let t0 = -Infinity
-  let fill = (t: number) => {
-    for (let [kind, s] of shelves) {
-      let l = held.get(kind) ?? 0
-      if (l < s.most) held.set(kind, Math.min(s.most, l + (t - t0) / s.every))
+): Map<string, Book> => {
+  let stalls = new Map([...land].map(([v, g]) => [v, stall(g)]))
+  let fill = (st: Stall, t: number) => {
+    for (let [kind, s] of st.shelves) {
+      let l = st.held.get(kind) ?? 0
+      if (l < s.most) {
+        st.held.set(kind, Math.min(s.most, l + (t - st.t0) / s.every))
+      }
     }
-    t0 = t
+    st.t0 = t
   }
   let add = (to: Map<string, number>, goods: Goods, sign: number) => {
     for (let { kind, n } of goods) {
       if (!BEASTS[kind]) to.set(kind, (to.get(kind) ?? 0) + sign * n)
     }
   }
-  let free = (kind: string) =>
-    Math.floor(held.get(kind) ?? 0) - (aside.get(kind) ?? 0)
-  let has = wares(g.level)
+  let free = (st: Stall, kind: string) =>
+    Math.floor(st.held.get(kind) ?? 0) - (st.aside.get(kind) ?? 0)
   let byEid = new Map(deals.map((d) => [d.eid, d]))
   let states = new Map<string, State>()
   let terms = new Map<string, { give: Goods; take: Goods }>()
   let since = new Map<string, number>()
+  let taker = new Map<string, string>()
   let why = new Map<string, string>()
-  let offered = new Map<string, string>()
-  let gifted = new Map<string, number>()
-  let back = (d: Deal) => {
-    states.set(d.eid, 'gone')
-    add(aside, terms.get(d.eid)!.give, -1)
+  // The jobs on the board that no hero has taken yet.
+  let board = new Set<string>()
+  let down = (st: Stall, d: Deal) => {
+    board.delete(d.eid)
+    if (st.post == d.eid) st.post = null
   }
-  let worthy = (x: Goods) => worthOf(x, g.level)
+  let back = (st: Stall, d: Deal) => {
+    states.set(d.eid, 'gone')
+    add(st.aside, terms.get(d.eid)!.give, -1)
+    down(st, d)
+  }
   // Why a deal is not one the villager would make, whatever they hold.
-  let unfair = (d: Deal, give: Goods, take: Goods) =>
-    !take.length
-      ? worthy(give) > most(g.level)
+  let unfair = (st: Stall, d: Deal, give: Goods, take: Goods) => {
+    let worthy = (x: Goods) => worthOf(x, st.g.level)
+    return !d.player
+      ? !take.length
+        ? 'a job on the board asks for something'
+        : st.post
+        ? 'you have a job on the board already'
+        : d.at - st.posted < RARE
+        ? 'you posted a job a short while ago'
+        : board.size >= BOARD
+        ? 'the board is full'
+        : null
+      : !take.length
+      ? worthy(give) > most(st.g.level)
         ? 'a gift that large is more than you can spare'
-        : give.some((x) => shelves.get(x.kind)?.own)
+        : give.some((x) => st.shelves.get(x.kind)?.own)
         ? 'your own things are not for giving away'
-        : d.at - (gifted.get(d.by) ?? -Infinity) < GAP
+        : d.at - (st.gifted.get(d.by) ?? -Infinity) < GAP
         ? 'you gave them something a short while ago'
         : null
-      : !take.every((x) => has.has(x.kind))
+      : null
+  }
+  // Why what a deal asks is not the villager's to ask, or not worth it.
+  let unfit = (st: Stall, give: Goods, take: Goods) =>
+    !take.length
+      ? null
+      : !take.every((x) => st.has.has(x.kind))
       ? 'it asks for what your land does not have'
-      : worthy(give) > BAND * worthy(take)
+      : worthOf(give, st.g.level) > BAND * worthOf(take, st.g.level)
       ? 'what you give is worth far more than what you ask'
       : null
+  let made = deals.filter((d) => stalls.has(d.villager))
   let events: Event[] = [
-    ...deals.map((d) => ({ at: d.at, eid: d.eid, deal: d })),
+    ...made.map((d) => ({ at: d.at, eid: d.eid, deal: d })),
     ...replies.map((r) => ({ at: r.at, eid: r.eid, reply: r })),
-    ...deals.map((d) => ({
-      at: d.at + OFFER,
+    ...made.map((d) => ({
+      at: d.at + (d.player ? OFFER : POSTED),
       eid: d.eid,
       lapse: d,
       from: 'open' as State,
@@ -464,17 +530,24 @@ export let ledger = (
     }),
   ].filter((e) => e.at <= now).sort(order)
   for (let e of events) {
-    fill(e.at)
+    let d = 'deal' in e
+      ? e.deal
+      : 'reply' in e
+      ? byEid.get(e.reply.deal)
+      : e.lapse
+    let st = d && stalls.get(d.villager)
+    if (!d || !st) continue
+    fill(st, e.at)
     if ('deal' in e) {
-      let d = e.deal, give = goods(d.give), take = goods(d.take)
+      let give = goods(d.give), take = goods(d.take)
       let no = d.via != d.villager
         ? 'it was not yours'
         : !give?.length
         ? 'it names nothing you could give'
         : !take
         ? 'it asks for something the world does not have'
-        : unfair(d, give, take) ??
-          (give.every((x) => free(x.kind) >= x.n)
+        : unfair(st, d, give, take) ?? unfit(st, give, take) ??
+          (give.every((x) => free(st, x.kind) >= x.n)
             ? null
             : 'you do not have that to give')
       if (no || !give || !take) {
@@ -484,41 +557,65 @@ export let ledger = (
       }
       states.set(d.eid, 'open')
       terms.set(d.eid, { give, take })
-      add(aside, give, 1)
-      if (!take.length) gifted.set(d.by, d.at)
+      add(st.aside, give, 1)
+      if (!d.player) {
+        board.add(d.eid)
+        st.post = d.eid
+        st.posted = d.at
+      } else if (!take.length) st.gifted.set(d.by, d.at)
       else {
-        let was = byEid.get(offered.get(d.player) ?? '')
-        if (was && states.get(was.eid) == 'open') back(was)
-        offered.set(d.player, d.eid)
+        let was = byEid.get(st.offered.get(d.player) ?? '')
+        if (was && states.get(was.eid) == 'open') back(st, was)
+        st.offered.set(d.player, d.eid)
       }
     } else if ('reply' in e) {
-      let r = e.reply, d = byEid.get(r.deal)
-      let state = d && states.get(d.eid)
-      if (!d || r.player != d.player || r.by != owner(d.player)) continue
+      let r = e.reply, state = states.get(d.eid)
+      // Who the deal is with: the hero it names, whoever took it off the
+      // board, or, while it is still there, whoever agrees to it.
+      let whose = d.player || taker.get(d.eid) ||
+        (r.did == 'agreed' ? r.player : '')
+      if (r.player != whose || r.by != owner(whose)) continue
       let { give, take } = terms.get(d.eid) ?? { give: [], take: [] }
       if (r.did == 'agreed') {
         if (state != 'open' || !take.length) continue
         states.set(d.eid, 'taken')
         since.set(d.eid, r.at)
-        if (offered.get(d.player) == d.eid) offered.delete(d.player)
+        if (!d.player) {
+          taker.set(d.eid, r.player)
+          board.delete(d.eid)
+        }
+        if (st.offered.get(d.player) == d.eid) st.offered.delete(d.player)
       } else if (state == 'open' || state == 'taken') {
         states.set(d.eid, 'done')
-        add(aside, give, -1)
-        add(held, give, -1)
-        add(held, take, 1)
+        add(st.aside, give, -1)
+        add(st.held, give, -1)
+        add(st.held, take, 1)
+        down(st, d)
       }
     } else if (
-      states.get(e.lapse.eid) == e.from &&
-      (e.from == 'open' || since.get(e.lapse.eid) == e.since)
-    ) back(e.lapse)
+      states.get(d.eid) == e.from &&
+      (e.from == 'open' || since.get(d.eid) == e.since)
+    ) back(st, d)
   }
-  fill(Math.max(now, t0))
-  let holds = new Map(
-    [...held.keys()].map((k) => [k, free(k)] as [string, number])
-      .filter(([, n]) => n > 0),
-  )
-  for (let [k, n] of aside) if (!n) aside.delete(k)
-  return { states, terms, since, why, holds, aside }
+  return new Map([...stalls].map(([v, st]): [string, Book] => {
+    fill(st, Math.max(now, st.t0))
+    let holds = new Map(
+      [...st.held.keys()].map((k) => [k, free(st, k)] as [string, number])
+        .filter(([, n]) => n > 0),
+    )
+    for (let [k, n] of st.aside) if (!n) st.aside.delete(k)
+    return [v, {
+      states,
+      terms,
+      since,
+      taker,
+      why,
+      holds,
+      aside: st.aside,
+      post: st.post,
+      room: !st.post && now - st.posted >= RARE && board.size < BOARD,
+    }]
+  }))
 }
 
 /** One step of what a deal asks, and how far a hero has come with it: a

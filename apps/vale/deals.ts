@@ -1,11 +1,12 @@
 // The villagers' deals as this page holds them (stock.ts says what counts):
 // the deals of the villagers of the level the hero is in and the heroes'
 // replies to them; what each villager's rows come to; the gifts this page
-// takes up for its hero; the offers it lets them agree to or turn down, and
-// the deals it lets them hand in; and what it says of them. A gift is taken
-// up a moment after the store took it, once every deal made beside it has
-// reached every page. Each write is named by its deal, so a second tab
-// writing the same writes nothing new.
+// takes up for its hero; the offers it lets them agree to or turn down, the
+// jobs on the land's notice board it lets them take, and the deals it lets
+// them hand in; and what it says of them. A gift is taken up a moment after
+// the store took it, once every deal made beside it has reached every page.
+// Each write is named by its deal and its hero, so a second tab writing the
+// same writes nothing new.
 //
 // Only a person signed in deals, and only for a hero they made: a reply from
 // anyone else counts for nothing.
@@ -23,6 +24,7 @@ import {
   ledger,
   OFFER,
   pay,
+  POSTED,
   type Reply,
   said,
   type State,
@@ -147,28 +149,23 @@ export let deals = (net: Net) => {
     let t = Math.floor(net.now() / 1000)
     if ([r, a, h, t].every((k, i) => k === kept[i])) return books
     kept = [r, a, h, t]
-    let mine = new Map(
-      GIVERS.filter((g) => g.level == level).map((g) => [
-        eidOf(g.id),
-        { g, deals: [] as Deal[], replies: [] as Reply[] },
-      ]),
+    let land = new Map(
+      GIVERS.filter((g) => g.level == level).map((g) => [eidOf(g.id), g]),
     )
     // A row counts from when the store took it: one this page is still
     // sending has only this page's stamp, with nobody's name on it, and no
     // place in the order yet.
-    for (let b of r.filter(stamped)) {
-      mine.get(str(comp(b, 'deal').villager))?.deals.push(dealOf(b))
-    }
-    for (let [did, got] of [['agreed', a], ['handed', h]] as const) {
-      for (let b of got.filter(stamped)) {
-        mine.get(str(comp(b, did).villager))?.replies.push(replyOf(did)(b))
-      }
-    }
+    let deals = r.filter(stamped).map(dealOf)
+    let replies = [
+      ...a.filter(stamped).map(replyOf('agreed')),
+      ...h.filter(stamped).map(replyOf('handed')),
+    ]
+    let ledgers = ledger(land, deals, replies, owner, t * 1000)
     books = new Map(
-      [...mine.values()].map(({ g, deals, replies }) => [g.id, {
+      [...land].map(([v, g]) => [g.id, {
         g,
-        deals,
-        book: ledger(g, deals, replies, owner, t * 1000),
+        deals: deals.filter((d) => d.villager == v),
+        book: ledgers.get(v)!,
       }]),
     )
     return books
@@ -179,13 +176,16 @@ export let deals = (net: Net) => {
   let done = new Set<string>()
   let told = new Set<string>()
   let refused = new Set<string>()
+  // The jobs this page took off the board, until the store says whose they
+  // are.
+  let took = new Set<string>()
 
   // Whether this page speaks for its hero: a person signed in, who made it.
   let mine = () => {
     let hero = net.hero
     return hero && me?.person && owner(hero) == me.person ? hero : null
   }
-  let nameOf = (hero: string) => net.who(hero)?.name ?? 'them'
+  let nameOf = (hero: string, or = 'them') => net.who(hero)?.name ?? or
 
   // The creatures the hero felled, as a deed counts them.
   let kills = () =>
@@ -196,14 +196,17 @@ export let deals = (net: Net) => {
   let worn = (s: Sheet) =>
     new Set(Object.values(s.worn).flatMap((h) => h ? [h.eid] : []))
 
-  // A deal of a villager's that stands, as the rules have it.
+  // A deal of a villager's that stands between them and this page's hero,
+  // or a job on the board nobody has taken yet, as the rules have it.
   let find = (id: string, eid: string) => {
     let k = read().get(id)
     let d = k?.deals.find((d) => d.eid == eid)
     let state = k?.book.states.get(eid)
     let terms = k?.book.terms.get(eid)
-    return k && d && terms && (state == 'open' || state == 'taken')
-      ? { g: k.g, d, ...terms, since: k.book.since.get(eid) ?? d.at }
+    let whose = d?.player || k?.book.taker.get(eid)
+    return k && d && terms && (state == 'open' || state == 'taken') &&
+        (!whose || whose == net.hero)
+      ? { g: k.g, d, state, ...terms, since: k.book.since.get(eid) ?? d.at }
       : null
   }
 
@@ -235,9 +238,17 @@ export let deals = (net: Net) => {
       let name = nameOf(hero)
       for (let { g, deals, book } of read().values()) {
         for (let d of deals) {
-          if (d.player != hero) continue
+          // A job on the board: whoever took it first has it.
+          let job = !d.player
+          let whose = book.taker.get(d.eid)
+          if (job && whose && took.delete(d.eid) && whose != hero) {
+            out.push({
+              text: `${nameOf(whose, 'Someone')} took that job first.`,
+            })
+          }
+          if (!job && d.player != hero) continue
           let state = book.states.get(d.eid), terms = book.terms.get(d.eid)
-          let gift = terms ? !terms.take.length : !d.take.trim()
+          let gift = !job && (terms ? !terms.take.length : !d.take.trim())
           if (
             state == 'open' && terms && gift && now - d.at >= SETTLE &&
             !done.has(d.eid)
@@ -246,18 +257,26 @@ export let deals = (net: Net) => {
             d.by != me?.person || d.via != d.villager ||
             now - d.at >= FRESH || told.has(d.eid)
           ) continue
+          let what = job ? 'post' : gift ? 'give' : 'offer'
           if (state == 'void') {
             told.add(d.eid)
-            out.push({
-              text: `${g.name} could not ${gift ? 'give' : 'offer'} that.`,
-            })
+            out.push({ text: `${g.name} could not ${what} that.` })
             write([hears(
               g.id,
-              `(You found you could not ${gift ? 'give' : 'offer'} ${d.give}${
+              `(You found you could not ${what} ${d.give}${
                 gift ? '' : ` for ${d.take}`
-              } to ${name}: ${book.why.get(d.eid)}.)`,
+              }${job ? ' on the notice board' : ` to ${name}`}: ${
+                book.why.get(d.eid)
+              }.)`,
               uuidOf(`heard/void/${d.eid}`),
             )])
+          } else if (state == 'open' && terms && job) {
+            told.add(d.eid)
+            out.push({
+              text: `${g.name} pinned a job on the notice board: ${
+                said(terms.take)
+              } for ${said(terms.give)}.`,
+            })
           } else if (state == 'open' && terms && !gift) {
             told.add(d.eid)
             out.push({
@@ -274,8 +293,42 @@ export let deals = (net: Net) => {
     /** what a villager of this level holds free to give, by kind */
     holds: (id: string): Map<string, number> =>
       read().get(id)?.book.holds ?? new Map(),
+    /** a villager's job on the notice board, if one, whether a hero took
+     * it, and whether they may post one now */
+    board: (id: string) => {
+      let book = read().get(id)?.book
+      let terms = book?.post ? book.terms.get(book.post) : undefined
+      return {
+        job: book?.post && terms
+          ? { ...terms, taken: book.states.get(book.post) == 'taken' }
+          : null,
+        room: !!book?.room,
+      }
+    },
+    /** the jobs on the level's notice board that no hero has taken, as the
+     * hero would stand with each */
+    posted: (s: Sheet): View[] => {
+      let now = net.now(), felled = kills()
+      return [...read().values()].flatMap(({ g, deals, book }) =>
+        deals.flatMap((d): View[] => {
+          let terms = book.terms.get(d.eid)
+          return !d.player && terms && book.states.get(d.eid) == 'open'
+            ? [{
+              eid: d.eid,
+              giver: g,
+              ...terms,
+              state: 'open',
+              ends: d.at + POSTED,
+              steps: steps(terms.take, now, felled, s.bag),
+              ready: false,
+            }]
+            : []
+        })
+      )
+    },
     /** the deals standing between a villager of this level and the hero,
-     * newest first; with no villager, every one in the level */
+     * a job they took off the board among them, newest first; with no
+     * villager, every one in the level */
     standing: (s: Sheet, id?: string): View[] => {
       let hero = net.hero
       if (!hero) return []
@@ -286,7 +339,8 @@ export let deals = (net: Net) => {
             let state = book.states.get(d.eid)
             let terms = book.terms.get(d.eid)
             if (
-              d.player != hero || !terms || !terms.take.length ||
+              (d.player || book.taker.get(d.eid)) != hero || !terms ||
+              !terms.take.length ||
               (state != 'open' && state != 'taken') || refused.has(d.eid)
             ) return []
             let since = book.since.get(d.eid)
@@ -304,25 +358,34 @@ export let deals = (net: Net) => {
           })
         ).sort((a, b) => b.ends - a.ends)
     },
-    /** the hero agrees to a villager's offer */
+    /** the hero agrees to a villager's offer, or takes their job off the
+     * board */
     agree: (id: string, eid: string): string | null => {
       let hero = mine(), f = find(id, eid)
-      if (!hero || !f || done.has(`agreed/${eid}`)) return null
+      if (!hero || !f || f.state != 'open' || done.has(`agreed/${eid}`)) {
+        return null
+      }
       done.add(`agreed/${eid}`)
+      let job = !f.d.player
+      if (job) took.add(eid)
       write([
         {
-          entity: { eid: uuidOf(`agreed/${eid}`) },
+          entity: { eid: uuidOf(`agreed/${eid}/${hero}`) },
           agreed: { deal: eid, villager: eidOf(id), player: hero },
         },
         hears(
           id,
-          `(${nameOf(hero)} agreed to your offer: ${said(f.take)} for your ${
-            said(f.give)
-          }.)`,
-          uuidOf(`heard/agreed/${eid}`),
+          `(${nameOf(hero)} ${
+            job ? 'took your job off the notice board' : 'agreed to your offer'
+          }: ${said(f.take)} for your ${said(f.give)}.)`,
+          uuidOf(`heard/agreed/${eid}/${hero}`),
         ),
       ])
-      return `You agreed: ${said(f.take)} for ${f.g.name}'s ${said(f.give)}.`
+      return job
+        ? `Job taken: ${said(f.take)}, then back to ${f.g.name} for ${
+          said(f.give)
+        }.`
+        : `You agreed: ${said(f.take)} for ${f.g.name}'s ${said(f.give)}.`
     },
     /** the hero hands a deal in: what it asks leaves their bag, and what
      * it gives comes into it */

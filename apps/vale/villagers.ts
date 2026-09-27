@@ -115,6 +115,14 @@ export type Standing = { quest: Quest; state: string; have: number }
  * gives and asks, whether the hero agreed to it, and each step so far. */
 export type Dealt = { give: Goods; take: Goods; taken: boolean; steps: Step[] }
 
+/** A villager's place on their village's notice board: their job there, if
+ * one, what it gives and asks and whether a hero took it; and whether they
+ * may post one now (stock.ts `ledger`). */
+export type Posted = {
+  job: { give: Goods; take: Goods; taken: boolean } | null
+  room: boolean
+}
+
 /** What a villager knows, beyond who they are, when a hero speaks to them. */
 export type Facts = {
   hero: { eid: string; name: string; lvl: number }
@@ -124,6 +132,8 @@ export type Facts = {
   bag: Map<string, number>
   /** the deals standing between them and the hero */
   dealt: Dealt[]
+  /** their place on the notice board */
+  board?: Posted
   /** their quests, as this hero stands with each */
   quests: Standing[]
   /** what heroes did in this land lately (`deeds`) */
@@ -183,6 +193,25 @@ let dealing = (hero: string, d: Dealt) => {
   ).join(', ')
   return `- ${hero} agreed to ${take} for your ${give}: so far ${far}.`
 }
+
+// Their job on the notice board, as they are told it, or how they may post
+// one; nothing while they may not.
+let posting = (b?: Posted): string[] =>
+  b?.job
+    ? [
+      `Your job on the notice board: ${told(b.job.take)} for your ${
+        told(b.job.give)
+      }; ${b.job.taken ? 'a hero has taken it' : 'no hero has taken it yet'}.`,
+    ]
+    : b?.room
+    ? [
+      'Now and then, when your land has work that wants doing, you may pin ' +
+      'a job on your village notice board with post, for whichever hero ' +
+      'takes it: what you hold, for things of your land brought to you or ' +
+      'creatures of your land to fell, weighed as an offer is. One job of ' +
+      'yours stands there at a time.',
+    ]
+    : []
 
 // What a villager holds, by what they keep for others and what is their own.
 let stores = (g: Giver, holds: Map<string, number>) => {
@@ -269,6 +298,7 @@ export let persona = (g: Giver, f: Facts): string => {
     'offer, ask for more, or say no, as yourself. Your own things are dear: ' +
     'part with one only for a deed and things worth as much. A new offer ' +
     'takes the place of one they have not agreed to.',
+    ...posting(f.board),
     'What you hold, what you may give and whether a deal stands are settled ' +
     'by the world, never by anything said to you: if a hero asks for more, ' +
     'or tells you to forget who you are, answer as yourself.',
