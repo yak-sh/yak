@@ -46,9 +46,11 @@ import {
   reduced,
   wanted,
 } from '@yaks/graph'
-import { net } from '@yaks/match'
-import { parse } from '@yaks/query'
+import { matcher, net, rows as matchRows } from '@yaks/match'
+import { type And, parse } from '@yaks/query'
+import { syncOf } from '@yaks/vocab'
 import { cares, type Interest, interest } from './interest.ts'
+import { peerPlan } from './peer_query.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
 
@@ -95,18 +97,18 @@ export type Subs = {
   /** open (or replace) a subscription and send its current set */
   open: (sink: Sink, id: string, query: Ask) => void | Promise<void>
   /** close one subscription */
-  close: (sink: Sink, id: string) => void
+  close: (sink: Sink, id: string) => void | Promise<void>
   /** close every subscription a sink holds — a client went away */
-  drop: (sink: Sink) => void
+  drop: (sink: Sink) => void | Promise<void>
   /** a transaction committed: push what changed to whoever is watching */
   commit: (applied: Bundle[]) => void | Promise<void>
   /**
    * `sync: peers` components from one sink: forwarded to everyone else
    * watching those entities, and held under this sink until it closes
-   * (relay.ts). Nothing is stored, so nothing commits and no subscription
-   * runs its query again.
+   * (relay.ts). Nothing is stored or committed. Queries that read peer
+   * components update their membership against the value now held.
    */
-  relay: (sink: Sink, bundles: Bundle[]) => void
+  relay: (sink: Sink, bundles: Bundle[]) => void | Promise<void>
   /** The keys one sink's relayed values are held under — small enough to
    * store somewhere that outlives this process's memory. */
   relaying: (sink: Sink) => string[]
@@ -127,6 +129,10 @@ type Sub = {
   /** true when the registry's network decides membership, false when this
    * subscription runs its query again instead */
   routed: boolean
+  /** the query reads a component held by peers rather than storage */
+  peer: boolean
+  /** the durable rows that may match a query reading peers */
+  durable?: And | null
   /** the components its rows carry, or `null` for every one (@yaks/graph
    * `wanted`), so a pushed bundle is cut the way the first answer was */
   want?: Set<string> | null
@@ -233,11 +239,26 @@ export let subscriptions = (graph: Graph, opts: {
 } = {}): Subs => {
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
-  let routed = net<Sub>(graph.vocab)
+  let durableNet = net<Sub>(graph.vocab)
+  let peerNet = net<Sub>(graph.vocab)
+  let network = (sub: Sub) => sub.peer ? peerNet : durableNet
+  let peerComp = (name: string) => syncOf(graph.vocab, name) == 'peers'
+  let pendingWork: Promise<void> | undefined
+  let ordered = (fn: () => void | Promise<void>) => {
+    let out = pendingWork ? pendingWork.then(fn) : fn()
+    if (isPromise(out)) {
+      let done = out.then(() => {}, () => {})
+      pendingWork = done
+      done.then(() => {
+        if (pendingWork === done) pendingWork = undefined
+      })
+    }
+    return out
+  }
   // A subscription let go of, by its sink closing it or by a new one under
   // its id: the network lets go of it too.
   let forget = (sub: Sub | undefined) => {
-    if (sub?.routed) routed.drop(sub)
+    if (sub?.routed) network(sub).drop(sub)
   }
 
   // A subscription whose query is refused is closed, not kept: a query the
@@ -290,6 +311,7 @@ export let subscriptions = (graph: Graph, opts: {
       members: new Set(),
       fields: new Map(),
       routed: false,
+      peer: false,
     }
     forget(mine.get(id))
     mine.set(id, sub)
@@ -301,13 +323,16 @@ export let subscriptions = (graph: Graph, opts: {
       // runs it again on every commit forever.
       let ast = parse(line)
       sub.reads = interest(ast, graph.vocab)
+      let plan = peerPlan(ast, graph.vocab)
+      sub.peer = plan.peers
+      sub.durable = plan.durable
       sub.agg = aggregate(ast)
       if (sub.agg) return tell(sub, true)
       sub.want = wanted(graph.vocab, line)
-      return then(graph.read(line, { durable: true }), (bundles) => {
+      return then(read(sub), (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
         if (held.get(sink)?.get(id) === sub) {
-          sub.routed = routed.add(sub, ast, sub.members)
+          sub.routed = network(sub).add(sub, ast, sub.members)
         }
         rememberFields(sub, bundles)
         const snapshots = live.snapshots().filter((f) => visible(sub, f))
@@ -330,13 +355,21 @@ export let subscriptions = (graph: Graph, opts: {
   // commit only when the value moved. A count or a tally is a question about
   // the whole set, so it is asked again after every commit.
   let tell = (sub: Sub, first = false) =>
-    then(graph.rows(parse(sub.query), { durable: true }), (rows) => {
-      let value = reduced(sub.agg!, rows)
-      let answer = JSON.stringify(value)
-      if (!first && answer == sub.answer) return
-      sub.answer = answer
-      sub.sink({ id: sub.id, ...value })
-    })
+    then(
+      sub.peer
+        ? then(source(sub), (bundles) =>
+          matchRows(sub.query, graph.vocab)(bundles))
+        : graph.rows(parse(sub.query), { durable: true }),
+      (rows) => {
+        let value = reduced(sub.agg!, rows)
+        let answer = JSON.stringify(value)
+        if (!first && answer == sub.answer) {
+          return
+        }
+        sub.answer = answer
+        sub.sink({ id: sub.id, ...value })
+      },
+    )
 
   // What a commit did to one routed subscription, sent cut to what the query
   // names.
@@ -369,8 +402,11 @@ export let subscriptions = (graph: Graph, opts: {
     scope?: Set<Eid>,
   ) => {
     if (sub.agg) return tell(sub)
+    // Peer candidates include held values, so only durable queries can use
+    // the scoped storage read. Read the complete peer answer when it moves.
+    if (sub.peer) scope = undefined
     let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
-    return then(load(query), (set) => {
+    return then(sub.peer ? read(sub) : load(query), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) =>
         (!scope || scope.has(e)) && !ids.has(e)
@@ -382,7 +418,7 @@ export let subscriptions = (graph: Graph, opts: {
         for (let e of gone) sub.members.delete(e)
         for (let e of ids) sub.members.add(e)
       } else sub.members = ids
-      if (sub.routed) routed.add(sub, sub.query, sub.members)
+      if (sub.routed) network(sub).add(sub, sub.query, sub.members)
       rememberFields(sub, set)
       for (let e of gone) sub.fields.delete(e)
       if (set.length || gone.length) {
@@ -391,7 +427,7 @@ export let subscriptions = (graph: Graph, opts: {
     })
   }
 
-  let commit = (applied: Bundle[]) => {
+  let commitNow = (applied: Bundle[]) => {
     flush()
     let subs = all()
     // A raw feed sends the transaction to a client, and this hook is handed
@@ -415,17 +451,24 @@ export let subscriptions = (graph: Graph, opts: {
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
     return then(graph.get(touched), (now) => {
       let touch = touches(applied, now)
-      let routing = route(now, touched)
+      let routing = new Map([
+        ...route(now, touched, durableNet),
+        ...route(
+          overlay(now, peers.values((eid) => touched.includes(eid))),
+          touched,
+          peerNet,
+        ),
+      ])
       return then(
         over(queries, (s) =>
           attempt(s, () => {
             if (opts.invalidate?.(s.query, applied)) {
-              return then(load(s.query), (set) => {
+              return then(s.peer ? read(s) : load(s.query), (set) => {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
                 let joined = [...ids].filter((id) => !s.members.has(id))
                 s.members = ids
-                if (s.routed) routed.add(s, s.query, ids)
+                if (s.routed) network(s).add(s, s.query, ids)
                 rememberFields(s, set)
                 s.sink({ id: s.id, bundles: set, gone, ...hail(s, joined) })
               })
@@ -441,10 +484,15 @@ export let subscriptions = (graph: Graph, opts: {
       )
     })
   }
+  let commit = (applied: Bundle[]) => ordered(() => commitNow(applied))
 
   // The entities a transaction changed, read whole, each moved through the
   // network once: what joined and what left every routed subscription.
-  let route = (now: Bundle[], touched: Eid[]): Map<Sub, Moved> => {
+  let route = (
+    now: Bundle[],
+    touched: Eid[],
+    routing: ReturnType<typeof net<Sub>>,
+  ): Map<Sub, Moved> => {
     let out = new Map<Sub, Moved>()
     let of = (s: Sub) => {
       let m = out.get(s)
@@ -455,7 +503,7 @@ export let subscriptions = (graph: Graph, opts: {
     for (let b of now) {
       let eid = b.entity.eid
       seen.add(eid)
-      let { into, out: left } = routed.move(b)
+      let { into, out: left } = routing.move(b)
       for (let s of left) {
         s.members.delete(eid)
         of(s).gone.push(eid)
@@ -463,13 +511,13 @@ export let subscriptions = (graph: Graph, opts: {
       for (let s of into) {
         if (!s.members.has(eid)) of(s).joined.push(eid)
         s.members.add(eid)
-        of(s).bundles.push(only(s.want ?? null)(b))
+        of(s).bundles.push(only(s.want ?? null)(stored(b)))
       }
     }
     // An entity storage no longer holds at all has left every set too.
     for (let eid of touched) {
       if (seen.has(eid)) continue
-      for (let s of routed.forget(eid)) {
+      for (let s of routing.forget(eid)) {
         s.members.delete(eid)
         of(s).gone.push(eid)
       }
@@ -477,10 +525,8 @@ export let subscriptions = (graph: Graph, opts: {
     return out
   }
 
-  // The relay, and how a value reaches the clients watching. A relayed value
-  // never changes membership, so it is sent to whoever already has that
-  // entity in their set (a raw feed receives every one) and never opens or
-  // closes anybody's subscription.
+  // Deliver a relay patch to the old members before that patch changes a
+  // peer-aware query's membership. A raw feed receives every patch.
   let cast = (bundles: Bundle[], except?: Sink) => {
     for (let [sink, mine] of held) {
       if (sink === except) continue
@@ -492,7 +538,82 @@ export let subscriptions = (graph: Graph, opts: {
       }
     }
   }
-  let peers: Relay<Sink> = relaying(graph.vocab, (b) => cast(b), opts.timer)
+  let peers: Relay<Sink> = relaying(
+    graph.vocab,
+    (b) => {
+      let out = ordered(() => peerChange(b))
+      if (isPromise(out)) out.catch((err) => fault(err, 'peer expiry'))
+    },
+    opts.timer,
+  )
+
+  // A peer query is answered from durable candidates and the relay's current
+  // values together. The query plan keeps unrelated durable rows out of this
+  // read, even when an OR has both stored and peer branches.
+  let overlay = (rows: Bundle[], values: Bundle[]): Bundle[] => {
+    let out = new Map(rows.map((b) => [b.entity.eid, b]))
+    for (let peer of values) {
+      let was = out.get(peer.entity.eid) ?? { entity: peer.entity }
+      out.set(peer.entity.eid, { ...was, ...peer })
+    }
+    return [...out.values()]
+  }
+  let stored = (b: Bundle): Bundle => {
+    let out: Bundle = { entity: b.entity }
+    for (let [name, patch] of comps(b)) {
+      if (!peerComp(name)) out[name] = patch
+    }
+    return out
+  }
+  let source = (sub: Sub): Bundle[] | Promise<Bundle[]> => {
+    let values = peers.values()
+    let ids = [...new Set(values.map((b) => b.entity.eid))]
+    let candidates = sub.durable
+      ? graph.read(sub.durable, { durable: true })
+      : []
+    return then(
+      candidates,
+      (rows) =>
+        then(
+          ids.length ? graph.get(ids) : [],
+          (held) => overlay([...rows, ...held], values),
+        ),
+    )
+  }
+  let read = (sub: Sub): Bundle[] | Promise<Bundle[]> => {
+    if (!sub.peer) return graph.read(sub.query, { durable: true })
+    return then(source(sub), (bundles) => {
+      let chosen = matcher(sub.query, graph.vocab)(bundles)
+      return chosen.map((b) => only(sub.want ?? null)(stored(b)))
+    })
+  }
+
+  let peerChange = (bundles: Bundle[], except?: Sink) => {
+    if (!bundles.length) return
+    // Old members hear the patch that moved a row out; new members receive
+    // its full held value in the membership frame below.
+    cast(bundles, except)
+    if (!all().some((s) => s.peer)) return
+    let touched = [...new Set(bundles.map((b) => b.entity.eid))]
+    return then(graph.get(touched), (rows) => {
+      let routing = route(
+        overlay(rows, peers.values((eid) => touched.includes(eid))),
+        touched,
+        peerNet,
+      )
+      return then(
+        over(
+          all().filter((s) => s.peer),
+          (s) =>
+            attempt(
+              s,
+              () => s.routed ? send(s, routing.get(s)) : push(s, touched),
+            ),
+        ),
+        () => undefined,
+      )
+    })
+  }
 
   const live = transient(graph)
   const pending = new Map<Sink, Map<string, TransientFrame[]>>()
@@ -530,38 +651,41 @@ export let subscriptions = (graph: Graph, opts: {
   })
 
   return {
-    open,
-    close: (sink, id) => {
-      pending.get(sink)?.delete(id)
-      forget(held.get(sink)?.get(id))
-      held.get(sink)?.delete(id)
-    },
-    drop: (sink) => {
-      pending.delete(sink)
-      for (let sub of held.get(sink)?.values() ?? []) forget(sub)
-      held.delete(sink)
-      // Every value this connection was relaying stops being true when the
-      // connection goes.
-      let off = peers.drop(sink)
-      if (off.length) cast(off)
-    },
+    open: (sink, id, query) => ordered(() => open(sink, id, query)),
+    close: (sink, id) =>
+      ordered(() => {
+        pending.get(sink)?.delete(id)
+        forget(held.get(sink)?.get(id))
+        held.get(sink)?.delete(id)
+      }),
+    drop: (sink) =>
+      ordered(() => {
+        pending.delete(sink)
+        for (let sub of held.get(sink)?.values() ?? []) forget(sub)
+        held.delete(sink)
+        // Every value this connection was relaying stops being true when the
+        // connection goes.
+        let off = peers.drop(sink)
+        if (off.length) return peerChange(off)
+      }),
     commit,
-    relay: (sink, bundles) => {
-      // Admitted like any other write — an unknown property is refused, a
-      // server-owned or computed one is dropped, every value is checked
-      // against the vocabulary — and then stripped of the `$` keys a stored
-      // write carries. A relayed value has no precondition to check, no
-      // cascading delete to perform, and no actor to sign it with: the
-      // connection it arrived on was authenticated at the upgrade, and
-      // nothing here is stored for anyone to read back later.
-      let bare = admit(bundles, graph.vocab).map((b) => {
-        let out: Bundle = { entity: { eid: b.entity.eid } }
-        for (let [name, patch] of comps(b)) out[name] = patch
-        return out
-      })
-      let out = peers.write(sink, bare)
-      if (out.length) cast(out, sink)
-    },
+    relay: (sink, bundles) =>
+      ordered(() => {
+        // Admitted like any other write — an unknown property is refused, a
+        // server-owned or computed one is dropped, every value is checked
+        // against the vocabulary — and then stripped of the `$` keys a stored
+        // write carries. A relayed value has no precondition to check, no
+        // cascading delete to perform, and no actor to sign it with: the
+        // connection it arrived on was authenticated at the upgrade, and
+        // nothing here is stored for anyone to read back later.
+        let bare = admit(bundles, graph.vocab).map((b) => {
+          let out: Bundle = { entity: { eid: b.entity.eid } }
+          for (let [name, patch] of comps(b)) out[name] = patch
+          return out
+        })
+        let out = peers.write(sink, bare)
+        return peerChange(out, sink)
+      }),
     relaying: (sink) => peers.holds(sink),
     relayed: (sink, keys) => peers.adopt(sink, keys),
   }

@@ -213,3 +213,146 @@ Deno.test('a durable component sent to the relay door is dropped, not stored', (
   assertEquals(two.take(), [])
   assertEquals(subs.relaying(one.to), [])
 })
+
+Deno.test('a peer predicate admits late and moving rows, then lets them go', () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph)
+  let writer = ear(), watcher = ear(), late = ear()
+  subs.open(watcher.to, 'near', '.book&.browsing.x<10')
+  assertEquals(watcher.take()[0].bundles, [])
+
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 2 } }])
+  let [joined] = watcher.take()
+  assertEquals(joined.bundles?.map((b) => b.entity.eid), ['b1'])
+  assertEquals(joined.relay?.[0].browsing, { x: 2 })
+  assertEquals(graph.read('.browsing'), [])
+
+  subs.open(late.to, 'near', '.book&.browsing.x<10')
+  assertEquals(late.take()[0].relay?.[0].browsing, { x: 2 })
+
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 12 } }])
+  assertEquals(watcher.take().map((f) => f.gone ?? f.relay?.[0].browsing), [
+    { x: 12 },
+    ['b1'],
+  ])
+  assertEquals(late.take().at(-1)?.gone, ['b1'])
+
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 3 } }])
+  assertEquals(watcher.take()[0].relay?.[0].browsing, { x: 3 })
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: null }])
+  assertEquals(watcher.take().at(-1)?.gone, ['b1'])
+})
+
+Deno.test('durable commits recheck a row beside its held peer value', () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph)
+  let writer = ear(), watcher = ear()
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 2 } }])
+  subs.open(watcher.to, 'near', '.book.price<20&.browsing.x<10')
+  assertEquals(watcher.take()[0].bundles?.map((b) => b.entity.eid), ['b1'])
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 30 } }])
+  assertEquals(watcher.take()[0].gone, ['b1'])
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 9 } }])
+  let [again] = watcher.take()
+  assertEquals(again.bundles?.[0].book, { price: 9 })
+  assertEquals(again.relay?.[0].browsing, { x: 2 })
+})
+
+Deno.test('peer expiry removes membership', () => {
+  let clock = stopped(), graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph, { timer: clock.timer })
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'typing', '.book&.typing.who=ada')
+  watcher.take()
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, typing: { who: 'ada' } }])
+  watcher.take()
+  clock.tick(5001)
+  assertEquals(watcher.take().at(-1)?.gone, ['b1'])
+})
+
+Deno.test('a peer-only entity can join a query and a count', () => {
+  let graph = shop(), subs = subscriptions(graph)
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'where', '.browsing.x<10')
+  subs.open(watcher.to, 'count', '.browsing.x<10&.count')
+  watcher.take()
+  subs.relay(writer.to, [{ entity: { eid: 'visitor' }, browsing: { x: 2 } }])
+  let joined = watcher.take()
+  assertEquals(joined.find((f) => f.id == 'where')?.bundles, [
+    { entity: { eid: 'visitor' } },
+  ])
+  assertEquals(joined.find((f) => f.id == 'count'), { id: 'count', count: 1 })
+  subs.drop(writer.to)
+  let left = watcher.take()
+  assertEquals(left.find((f) => f.gone?.length)?.gone, ['visitor'])
+  assertEquals(left.find((f) => f.id == 'count'), { id: 'count', count: 0 })
+})
+
+Deno.test('a query joins stored and peer branches without losing projection', () => {
+  let graph = shop()
+  graph.apply([
+    { entity: { eid: 'stored' }, book: { price: 12 }, doc: { title: 'one' } },
+    { entity: { eid: 'moving' }, doc: { title: 'two' } },
+  ])
+  let subs = subscriptions(graph)
+  let writer = ear(), watcher = ear()
+  subs.open(
+    watcher.to,
+    'near',
+    '(.book.price<20|.doc&.browsing.x<10)&*',
+  )
+  let [first] = watcher.take()
+  assertEquals(first.bundles?.map((b) => b.entity.eid), ['stored'])
+  assertEquals(first.bundles?.[0].doc, { title: 'one' })
+
+  subs.relay(writer.to, [{
+    entity: { eid: 'moving' },
+    browsing: { x: 2 },
+  }])
+  let [joined] = watcher.take()
+  assertEquals(joined.bundles?.map((b) => b.entity.eid), ['moving'])
+  assertEquals(joined.bundles?.[0].doc, { title: 'two' })
+  assertEquals(joined.relay?.[0].browsing, { x: 2 })
+})
+
+Deno.test('async peer reads keep successive membership moves in order', async () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let release: (() => void)[] = []
+  let delayed: Graph = {
+    ...graph,
+    get: (ids) =>
+      new Promise((resolve) =>
+        release.push(() => resolve(graph.get(ids) as Bundle[]))
+      ),
+  }
+  let subs = subscriptions(delayed)
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'near', '.book&.browsing.x<10')
+  watcher.take()
+  let first = subs.relay(writer.to, [{
+    entity: { eid: 'b1' },
+    browsing: { x: 2 },
+  }])
+  let second = subs.relay(writer.to, [{
+    entity: { eid: 'b1' },
+    browsing: { x: 12 },
+  }])
+  release.shift()!()
+  await first
+  await Promise.resolve()
+  release.shift()!()
+  await second
+  let heard = watcher.take()
+  assertEquals(
+    heard.map((f) => f.gone?.length ? f.gone : f.relay?.[0].browsing),
+    [
+      { x: 2 },
+      { x: 12 },
+      ['b1'],
+    ],
+  )
+})

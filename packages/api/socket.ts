@@ -10,6 +10,7 @@
 // while sending its own initial result.
 
 import { fault, refusal } from './refuse.ts'
+import { isPromise } from '@yaks/graph'
 import type { Frame, Sink, Subs } from './subs.ts'
 
 /** The part of a WebSocket this package uses: the standard `WebSocket`
@@ -70,6 +71,10 @@ export let sink = (socket: Socket): Sink => {
  */
 export let receive = (subs: Subs, to: Sink, data: unknown): void => {
   let id = ''
+  let fail = (err: unknown) => {
+    fault(err, 'socket message')
+    to({ id, refused: refusal(err) })
+  }
   try {
     let msg = JSON.parse(String(data))
     id = msg?.id == null ? '' : String(msg.id)
@@ -82,13 +87,13 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
       return
     }
     if (Array.isArray(msg?.relay)) {
-      subs.relay(to, msg.relay)
+      let out = subs.relay(to, msg.relay)
+      if (isPromise(out)) out.catch(fail)
       return
     }
     throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')
   } catch (err) {
-    fault(err, 'socket message')
-    to({ id, refused: refusal(err) })
+    fail(err)
   }
 }
 
@@ -100,6 +105,9 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
 export let attach = (subs: Subs, socket: Socket): Sink => {
   let to = sink(socket)
   socket.addEventListener('message', (e) => receive(subs, to, e.data))
-  socket.addEventListener('close', () => subs.drop(to))
+  socket.addEventListener('close', () => {
+    let out = subs.drop(to)
+    if (isPromise(out)) out.catch((err) => fault(err, 'socket close'))
+  })
   return to
 }

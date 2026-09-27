@@ -65,6 +65,8 @@ export type Relay<C> = {
    * connection holds, for the entities it can see. What it holds itself, it
    * already has. */
   snapshot: (mine: C, sees: (eid: Eid) => boolean) => Bundle[]
+  /** The values currently said by all connections, for query membership. */
+  values: (sees?: (eid: Eid) => boolean) => Bundle[]
   /** A connection went away: forget it, and return the nulls to forward for
    * what it still held. */
   drop: (conn: C) => Bundle[]
@@ -165,6 +167,19 @@ export let relay = <C>(
     return out
   }
 
+  let values = (sees: (eid: Eid) => boolean, mine?: C): Bundle[] => {
+    let out = new Map<Eid, Bundle>()
+    for (let [k, { conn, patch }] of held) {
+      if (mine === conn || patch == null) continue
+      let [eid, comp] = split(k)
+      if (!sees(eid)) continue
+      let b = out.get(eid) ?? { entity: { eid } }
+      b[comp] = patch
+      out.set(eid, b)
+    }
+    return [...out.values()]
+  }
+
   return {
     write,
     holds: (conn) => [...saying.get(conn) ?? []],
@@ -174,20 +189,8 @@ export let relay = <C>(
       // value.
       for (let k of keys) if (!held.has(k)) hold(conn, k, null)
     },
-    snapshot: (mine, sees) => {
-      let out = new Map<Eid, Bundle>()
-      for (let [k, { conn, patch }] of held) {
-        if (conn === mine) continue
-        // adopted after a restart, so its value is not known any more
-        if (patch == null) continue
-        let [eid, comp] = split(k)
-        if (!sees(eid)) continue
-        let b = out.get(eid) ?? { entity: { eid } }
-        b[comp] = patch
-        out.set(eid, b)
-      }
-      return [...out.values()]
-    },
+    snapshot: (mine, sees) => values(sees, mine),
+    values: (sees = () => true) => values(sees),
     drop: (conn) => {
       let mine = [...saying.get(conn) ?? []]
       saying.delete(conn)

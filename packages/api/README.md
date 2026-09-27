@@ -195,6 +195,12 @@ what it holds itself. Values clear when a writer clears them, the connection
 holding them closes, or the vocabulary's duration, such as `durable: "5s"`,
 expires; a clear is sent as a component set to `null`.
 
+A query may select by a relayed component, such as
+`.player&.position.region=east`. The registry tests the held peer values beside
+durable rows when it opens and when either half changes. Moving, clearing, or
+expiring a peer value changes membership; `bundles` still carry only durable
+components, while `relay` carries the peer value.
+
 The registry observes the graph's `effect` phase, including writes made directly
 by the application. For queries that can be tested one entity at a time,
 [@yaks/match](../match/README.md) rechecks changed entities. Queries involving
