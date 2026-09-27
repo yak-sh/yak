@@ -1,12 +1,12 @@
-// The skill board, drawn into its panel (panel.ts) as a pack is: the three
-// disciplines side by side, each skill a tile in its row, gold once learned,
-// bright while a point can go on it, dim until what it needs is learned. Tap
-// one to see what it does and learn it. By a village's fire, every skill can
+// The skill board, drawn into the hero's Skills tab as a pack is: the points
+// to spend, and the three disciplines side by side, each skill a tile in its
+// row, gold once learned, bright while a point can go on it, dim until what
+// it needs is learned. Tap one to see what it does and learn it. By a village's fire, every skill can
 // be forgotten, free, to spend the points again. K or the tray's sparkles
 // opens it. It is written again only when what it shows changed.
 import { ABILITIES, OFF } from './abilities.ts'
 import { glyph, glyphText } from './glyphs.ts'
-import type { Panel } from './panel.ts'
+import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
 import { tipped } from './tip.ts'
@@ -28,8 +28,8 @@ let COLS = Object.entries(DISCIPLINES).map(([d, about]) => {
   }
 })
 
-/** The board, drawn into its panel (panel.ts). */
-export let board = (panel: Panel, acts: Learning) => {
+/** The board, drawn into its tab (panel.ts). */
+export let board = (panel: Page, acts: Learning) => {
   let box = panel.body
   let picked = ''
   let was: unknown[] = []
@@ -106,12 +106,10 @@ export let board = (panel: Panel, acts: Learning) => {
       : f.rack
       ? `<button class="Btn Btn-small" data-do=respec>Forget them all, to choose again</button>`
       : `<p class=Pack_Hint>By a village's fire you can forget them all, free, to choose again.</p>`
-    panel.head(
-      `Skills <span class="Badge${
-        s.points ? ' Badge-points' : ''
-      }">✦ ${s.points} to spend</span>`,
-    )
     box.innerHTML = `<div class="Pack Board">` +
+      `<span class="Badge Board_Points${
+        s.points ? ' Badge-points' : ''
+      }">✦ ${s.points} to spend</span>` +
       `<div class=Board_Cols>${cols}</div>${forget}` +
       `<div class=Pack_Pick>${card(s)}</div></div>`
   }

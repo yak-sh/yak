@@ -1,4 +1,4 @@
-// The hero's pack, drawn into its panel (panel.ts): what they wear in each
+// The hero's pack, drawn into their panel's Bag tab: what they wear in each
 // slot, how they fight in it and the abilities it gives them, everything else
 // they carry, and by a village's fire, the rack of plain arms anyone may take
 // to try. Each piece of gear is its own, framed and named in its rarity's
@@ -29,9 +29,9 @@ import { glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
 import { piece, RARITIES, tint } from './rarity.ts'
 import { icon } from './sprites.ts'
-import type { Panel } from './panel.ts'
+import type { Page } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
-import { type Held, need } from './rules.ts'
+import type { Held } from './rules.ts'
 import { formOf } from './skills.ts'
 import { cards, tipped } from './tip.ts'
 
@@ -101,8 +101,8 @@ let against = (s: Sheet, from: From, key: string) => {
     )
 }
 
-/** The pack, drawn into its panel (panel.ts). */
-export let pack = (panel: Panel, acts: Acts) => {
+/** The pack, drawn into its tab (panel.ts). */
+export let pack = (panel: Page, acts: Acts) => {
   let box = panel.body
   // What is picked.
   let picked: { from: From; key: string } | null = null
@@ -294,14 +294,6 @@ export let pack = (panel: Panel, acts: Acts) => {
         ).join('')
       }</div>`
       : ''
-    let from = need(s.lvl), to = need(s.lvl + 1)
-    panel.head(
-      `${
-        esc(s.name)
-      } <span class=Badge>Level ${s.lvl}</span><small class=Panel_Note>${
-        s.xp - from
-      } / ${to - from} xp</small>`,
-    )
     box.innerHTML = `<div class=Pack>` +
       `<div class=Pack_Worn>${worn}</div>` +
       `<div class=Pack_Nums>${stats}</div>` +

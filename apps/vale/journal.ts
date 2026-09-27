@@ -1,6 +1,6 @@
-// The hero's journal, drawn into its panel (panel.ts): every quest under way,
-// with who asked it and where, its steps and how far each has come, the ones
-// on offer, and the ones done. A quest is the vale's own (quests.ts) or a
+// The hero's journal, drawn into their panel's Journal tab: every quest under
+// way, with who asked it and where, its steps and how far each has come, the
+// ones on offer, and the ones done. A quest is the vale's own (quests.ts) or a
 // villager's deal (deals.ts); both are a task here, a list of steps, so the
 // journal, the tracker on the glass (hud.ts), the map (map.ts) and the
 // compass show them the same way. A task under way is pinned until the hero
@@ -13,7 +13,7 @@ import { type Glyph, glyph } from './glyphs.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
 import { ACROSS, LEVELS, type Side, type Spot } from './levels.ts'
-import type { Panel } from './panel.ts'
+import type { Page } from './panel.ts'
 import type { Sheet } from './play.ts'
 import { GIVERS } from './quests.ts'
 import type { Standing } from './rules.ts'
@@ -310,8 +310,8 @@ export let toward = ([x, z]: Spot, [tx, tz]: Spot) =>
 
 export type Acts = { pin: (task: string, on: boolean) => void }
 
-/** The journal, drawn into its panel. */
-export let journal = (panel: Panel, acts: Acts) => {
+/** The journal, drawn into its tab (panel.ts). */
+export let journal = (panel: Page, acts: Acts) => {
   let was = ''
   panel.body.addEventListener('click', (e) => {
     let b = e.target instanceof Element
@@ -375,16 +375,13 @@ export let journal = (panel: Panel, acts: Acts) => {
           }</ul>`
           : '') +
         (done.length
-          ? `<h3 class=Journal_Head>Done</h3><ul class=Journal_Done>${
+          ? `<h3 class=Journal_Head>Done · ${done.length}</h3><ul class=Journal_Done>${
             done.map((t) =>
               `<li>${glyph('done')}<span>${esc(t.title)}</span></li>`
             ).join('')
           }</ul>`
           : '') +
         `</div>`
-      panel.head(
-        `Journal <small class=Panel_Note>${done.length} done</small>`,
-      )
       if (html == was) return
       was = html
       panel.body.innerHTML = html

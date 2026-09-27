@@ -41,7 +41,11 @@ let KEYS = [
   ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
   [kbd(['Enter']), 'Chat'],
   ...Object.values(SHEETS).flatMap((s) =>
-    'keys' in s ? [[kbd(s.keys.map(cap)), s.title]] : []
+    'keys' in s
+      ? [[kbd(s.keys.map(cap)), s.title]]
+      : 'tabs' in s
+      ? Object.values(s.tabs).map((t) => [kbd(t.keys.map(cap)), t.title])
+      : []
   ),
 ].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
 

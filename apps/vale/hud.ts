@@ -8,15 +8,17 @@
 // touch it is not shown (`under`).
 //
 // How a panel plugs in. Every sheet that opens over the glass is a panel
-// (panel.ts), one open at a time: the map, the pack, a station's crafting,
+// (panel.ts), one open at a time: the map, the hero's, a station's crafting,
 // the menu, and the ones standing ready below. A panel is a row of SHEETS;
 // `h.panels.<id>` hands its owner a `body` to draw into and `open` to say
 // whether to. Draw only while it is open and only when what it shows changed,
 // as map.ts and pack.ts do. Give it keys to open it, and a tray button with
 // `tray(...)` below if it needs one; one opened from where it is used (a
-// station, a villager) calls `show()`. Style its body in ui/<Name>.css, one
-// block, from ui/theme.css's tokens; the sheet around it (head, close,
-// scrolling, safe areas) is ui/Panel.css's and is never restyled per panel.
+// station, a villager) calls `show()`. What is about the hero is a tab of
+// their panel instead, a row of its `tabs`, handed out the same way. Style its
+// body in ui/<Name>.css, one block, from ui/theme.css's tokens; the sheet
+// around it (head, tabs, close, scrolling, safe areas) is ui/Panel.css's and
+// is never restyled per panel.
 //
 // How a button for the thumbs plugs in. `pad(action, face, title)` adds one,
 // pressing its action (input.ts). Touched, each sits in its own slot of the
@@ -40,7 +42,7 @@ import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import { next, type Task, told, toward } from './journal.ts'
 import type { Spot } from './levels.ts'
-import { cap, type Panel, panels, type Spec } from './panel.ts'
+import { cap, type Page, panels, type Spec, type TabSpec } from './panel.ts'
 import type { Quest } from './quests.ts'
 import { need } from './rules.ts'
 import { icon } from './sprites.ts'
@@ -92,19 +94,29 @@ let MICS: Record<Mic, string> = {
   spent: "This space's voice is spent for the month",
 }
 
-/** The panels the glass holds, and the keys that open them. Crafting opens
- * at a station (station.ts), and the deals beside a villager (dealbox.ts).
- * The map and the menu are one size whatever is done in them, so each is as
- * tall as it is; every other sheet keeps one height (ui/Panel.css). */
+/** The panels the glass holds, and the keys that open them. The hero's is
+ * one panel of tabs, each opened by its own keys (pack.ts, board.ts,
+ * journal.ts). Crafting opens at a station (station.ts), and the deals beside
+ * a villager (dealbox.ts). The map and the menu are one size whatever is done
+ * in them, so each is as tall as it is; every other sheet keeps one height
+ * (ui/Panel.css). */
 export let SHEETS = {
   map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
-  pack: { title: 'Pack', keys: ['KeyB', 'KeyI'] },
+  hero: {
+    title: 'Your hero',
+    tabs: {
+      bag: { title: 'Bag', icon: 'backpack', keys: ['KeyB', 'KeyI'] },
+      skills: { title: 'Skills', icon: 'sparkles', keys: ['KeyK'] },
+      journal: { title: 'Journal', icon: 'journal', keys: ['KeyL'] },
+    },
+  },
   menu: { title: 'Menu', keys: ['Escape'], tall: 'auto' },
-  skills: { title: 'Skills', keys: ['KeyK'] },
-  journal: { title: 'Journal', keys: ['KeyL'] },
   craft: { title: 'Crafting' },
   deal: { title: 'Deals' },
-} satisfies Record<string, Spec>
+} satisfies Record<string, Spec & { tabs?: Record<string, TabSpec> }>
+
+// The keys of the hero's tabs.
+let TABS = SHEETS.hero.tabs
 
 /** Build the HUD into `root`. `press` sends a button's action to the game;
  * `busy` says when the keyboard belongs to something else. */
@@ -157,33 +169,30 @@ export let hud = (
   tips(root)
 
   let shelf = panels(root, busy)
-  let sheet = (id: keyof typeof SHEETS) => shelf.add(id, SHEETS[id])
   let panel = {
-    map: sheet('map'),
-    pack: sheet('pack'),
-    menu: sheet('menu'),
-    skills: sheet('skills'),
-    journal: sheet('journal'),
-    craft: sheet('craft'),
-    deal: sheet('deal'),
+    map: shelf.add('map', SHEETS.map),
+    ...shelf.book('hero', SHEETS.hero),
+    menu: shelf.add('menu', SHEETS.menu),
+    craft: shelf.add('craft', SHEETS.craft),
+    deal: shelf.add('deal', SHEETS.deal),
   }
   rose.addEventListener('click', panel.map.toggle)
   quest.addEventListener('click', panel.journal.toggle)
   tip(quest, {
     name: 'Your journal',
-    key: cap(SHEETS.journal.keys[0]),
+    key: cap(TABS.journal.keys[0]),
     says: 'Every quest and deal you have, and how far each has come.',
   })
 
   // A round button in the tray, and with a keyboard its key; one that opens a
   // panel is marked while it is open.
-  let marked: [HTMLElement, Panel][] = []
+  let marked: [HTMLElement, Page][] = []
   let tray = (
     name: string,
     mark: Glyph,
     t: Tip & { key: string },
     click: () => void,
-    opens?: Panel,
+    opens?: Page,
   ) => {
     let b = el(
       `Orb Orb-${name}`,
@@ -205,19 +214,19 @@ export let hud = (
     'pack',
     'backpack',
     {
-      name: 'Your pack',
-      key: cap(SHEETS.pack.keys[0]),
+      name: 'Your bag',
+      key: cap(TABS.bag.keys[0]),
       says: 'What you wear and carry, and by a fire, arms to try.',
     },
-    panel.pack.toggle,
-    panel.pack,
+    panel.bag.toggle,
+    panel.bag,
   )
   tray(
     'journal',
     'journal',
     {
       name: 'Your journal',
-      key: cap(SHEETS.journal.keys[0]),
+      key: cap(TABS.journal.keys[0]),
       says: 'Every quest and deal you have, and how far each has come.',
     },
     panel.journal.toggle,
@@ -229,7 +238,7 @@ export let hud = (
     'sparkles',
     {
       name: 'Your skills',
-      key: cap(SHEETS.skills.keys[0]),
+      key: cap(TABS.skills.keys[0]),
       says: 'Spend the point each level brings on a skill.',
     },
     panel.skills.toggle,
@@ -255,7 +264,7 @@ export let hud = (
 
   // Said once, to a hero by a fire with nothing in hand.
   let nudged = false
-  // Arms or armour found since the pack was last open.
+  // Arms or armour found since the bag was last open.
   let fresh = false
 
   // A button for the thumbs, and with a keyboard its key.
@@ -365,7 +374,7 @@ export let hud = (
         )
       }).join('')
     }
-    let key = cap(SHEETS.journal.keys[0])
+    let key = cap(TABS.journal.keys[0])
     if (on.length) {
       return line(`${on.length} under way`, `Open your journal (${key})`)
     }
@@ -498,7 +507,7 @@ export let hud = (
             ? `<span class="Badge Badge-points"${
               tipped({
                 name: 'Skill points to spend',
-                key: cap(SHEETS.skills.keys[0]),
+                key: cap(TABS.skills.keys[0]),
               })
             }>Level ${s.lvl} · ✦ ${s.points}</span>`
             : `<span class=Badge>Level ${s.lvl}</span>`
@@ -547,18 +556,25 @@ export let hud = (
         aim.style.setProperty('--at', `${way || 0}deg`)
       }
       for (let [b, p] of marked) b.classList.toggle('Orb-on', p.open)
-      // Arms or armour found mark the bag, until the pack is opened.
-      fresh = !panel.pack.open &&
+      // Arms or armour found mark the bag, until it is opened; points to
+      // spend mark the skills.
+      fresh = !panel.bag.open &&
         (fresh ||
           f.events.some((e) => e.type == 'loot' && ITEMS[e.item]?.slot))
       bag.classList.toggle('Orb-new', fresh)
+      panel.bag.mark(fresh)
       skills.classList.toggle('Orb-new', s.points > 0 && !panel.skills.open)
+      panel.skills.mark(s.points > 0)
       // Nothing in hand by a fire: the rack there has arms to try.
       let bare = f.rack && !s.worn.main
       bag.classList.toggle('Orb-call', bare)
       if (bare && !nudged) {
         nudged = true
-        toast('The rack by the fire has arms to try. Open your pack (B).')
+        toast(
+          `The rack by the fire has arms to try. Open your bag (${
+            cap(TABS.bag.keys[0])
+          }).`,
+        )
       }
       // Whatever mends, which drinking takes (play.ts), the first first.
       let mends = s.bag.filter((h) => ITEMS[h.kind]?.heals)

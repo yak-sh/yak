@@ -1,9 +1,10 @@
-/* The skill board (board.ts), a pack whose tiles are skills: the three
-   disciplines side by side, each skill a tile in its row, gold once learned,
-   dim until it can be. Where the panel is narrow, as on a phone, the
-   disciplines stack, each across the whole panel, so every name reads. */
-.Board {
-  width: min(36rem, 100cqw - 2rem);
+/* The skill board (board.ts), a pack whose tiles are skills: the points to
+   spend, then the three disciplines side by side, each skill a tile in its
+   row, gold once learned, dim until it can be. Where the panel is narrow, as
+   on a phone, the disciplines stack, each across the whole panel, so every
+   name reads. */
+.Board_Points {
+  align-self: start;
 }
 
 .Board_Cols {

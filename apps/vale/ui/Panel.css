@@ -8,7 +8,13 @@
    the panel's room with container units, cqw and cqh, never by what is in
    it), and `--tall` tall, or as tall as there is room for. A panel whose
    body is one size whatever happens in it sets `--tall` to `auto` (hud.ts
-   `SHEETS`), and is as tall as its body. */
+   `SHEETS`), and is as tall as its body.
+
+   A panel with tabs (panel.ts `book`) wears them in its head in place of a
+   title, the one showing filled, each dotted while something new waits
+   behind it. It keeps one width whichever shows, and what each shows is as
+   wide as the sheet. Where the sheet is narrower than its tabs, each tab but
+   the one showing is only its glyph. */
 .Panel {
   --tall: 40rem;
   position: absolute;
@@ -76,6 +82,77 @@
   font-weight: 400;
   color: var(--faint);
   text-overflow: ellipsis;
+}
+
+.Panel-tabs .Panel_Sheet {
+  width: min(40rem, 100%);
+}
+
+.Panel-tabs .Panel_Body > * {
+  width: auto;
+}
+
+.Panel_Tabs {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.Panel_Tab {
+  --face: var(--well);
+  --tint: var(--muted);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 2.1rem;
+  padding: 0 0.65rem;
+  border: 0;
+  border-radius: var(--round);
+  background: var(--face);
+  box-shadow: 0 2px 0 var(--lip);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--tint);
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  & .Glyph {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  &[aria-selected='true'] {
+    --face: var(--deep);
+    --tint: var(--paper);
+  }
+
+  &:active {
+    translate: 0 2px;
+    box-shadow: none;
+  }
+}
+
+.Panel_Tab-new::after {
+  content: '';
+  position: absolute;
+  top: -0.1rem;
+  right: -0.1rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+@container panel (width < 42rem) {
+  .Panel_Tab:not([aria-selected='true']) > span {
+    display: none;
+  }
 }
 
 /* Where a scrollbar takes room, its room is kept whether or not the body is

@@ -151,7 +151,7 @@ let h = hud(glass, hands.press, elsewhere)
 let marks = overlay(h.layer, camera, h.under)
 let chat = chatbox(glass, h.orbs.chat, net, marks, folk)
 let m = map(h.panels.map)
-let p = pack(h.panels.pack, { wear: g.wear, take: g.take })
+let p = pack(h.panels.bag, { wear: g.wear, take: g.take })
 let bench = station(h.panels.craft, {
   make: toil.make,
   upgrade: toil.upgrade,
