@@ -679,6 +679,11 @@ let worked = (e: Work) => {
       size: 0.08,
       fall: 1,
     })
+    marks.float(
+      `+${e.xp} ${TRADES[e.trade].name}`,
+      target.clone().setY(target.y + 1.2),
+      'xp',
+    )
     sound.done(e.at, e.trade)
     sound.spoil(null, 'rare')
   } else if (e.type == 'trade') {

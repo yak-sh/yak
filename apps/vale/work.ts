@@ -6,9 +6,9 @@
 // item it gave, wearing the `gathered` row that spends the node for everyone
 // until it grows back; when a thing is made, the item made, wearing its
 // `crafted` row, with `used` rows for what it took, in one write; when a piece
-// is upgraded, the `upgraded` row naming it, and the `used` rows. The work
-// stops when the hero walks off, strikes, rolls, jumps or faints, or someone
-// else gathers the node first.
+// is upgraded, the `upgraded` row naming it, and the `used` rows. Each is xp
+// to its trade. The work stops when the hero walks off, strikes, rolls, jumps
+// or faints, or someone else gathers the node first.
 import { isStation, madeXp, plan, RECIPES, spare, STATIONS } from './craft.ts'
 import {
   chipOf,
@@ -24,7 +24,7 @@ import { ITEMS } from './items.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
 import type { Frame, Vec3 } from './play.ts'
 import { made, type Rarity } from './rarity.ts'
-import { upgradeOf } from './upgrade.ts'
+import { upgradeOf, upgradeWorth, upgradeXp } from './upgrade.ts'
 import { fallOf } from './rules.ts'
 import { groundAt, type Vale, WATER } from './terrain.ts'
 import {
@@ -81,6 +81,7 @@ export type Work =
     rarity?: Rarity
     plus: number
     trade: Trade
+    xp: number
     at: Vec3
   }
   | { type: 'station'; craft: Craft }
@@ -184,16 +185,24 @@ export let working = (net: Net) => {
   // next frame.
   let asked: { recipe: string; piece: string | null } | null = null
 
-  // My trades, worked out again only when my items changed; and the last
-  // ones, to see a level gained.
-  let itemsWas: Bundle[] | null = null
+  // My trades, from what my items were worth and my upgrades, worked out
+  // again only when either changed; and the last ones, to see a level
+  // gained.
+  let key: Bundle[][] = []
   let trades = tradesOf([])
   let was: Trades | null = null
   let tradesOfMine = () => {
-    let items = net.mine('item')
-    if (items == itemsWas) return trades
-    itemsWas = items
-    trades = tradesOf(items.flatMap(worth))
+    let items = net.mine('item'), ups = net.mine('upgraded')
+    if (items == key[0] && ups == key[1]) return trades
+    key = [items, ups]
+    let kinds = new Map(
+      items.map((b) => [b.entity.eid, str(comp(b, 'item').kind)]),
+    )
+    let rows = ups.map((b) => {
+      let u = comp(b, 'upgraded')
+      return { item: str(u.item), at: num(u.at) }
+    })
+    trades = tradesOf([...items.flatMap(worth), ...upgradeWorth(rows, kinds)])
     return trades
   }
 
@@ -306,6 +315,7 @@ export let working = (net: Net) => {
       rarity: h.rarity,
       plus,
       trade: r.at,
+      xp: upgradeXp(r.tier, plus),
       at,
     }
   }

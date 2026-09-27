@@ -10,7 +10,8 @@
 // Making a thing writes an item wearing a `crafted` row, and spends the items
 // it took with `used` rows in the same write, so the bag is still items held
 // less items spent. A hero's crafting trades are counted from the crafted
-// rows on their items, as their gathering trades are from the gathered ones.
+// rows on their items, as their gathering trades are from the gathered ones,
+// and from their upgrades (upgrade.ts).
 import { ARMS } from './arms.ts'
 import { LODES } from './gather.ts'
 import { ITEMS } from './items.ts'

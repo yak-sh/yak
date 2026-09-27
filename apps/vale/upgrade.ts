@@ -7,9 +7,11 @@
 // An upgrade writes an `upgraded` row naming the piece, and spends what it
 // took with `used` rows in the same write, so the bag is still items held
 // less items spent; how far a piece is upgraded is how many rows name it
-// (`plusOf`), so a guest, who can only add rows, keeps theirs.
-import { type Recipe, RECIPES } from './craft.ts'
+// (`plusOf`), so a guest, who can only add rows, keeps theirs. Each step is
+// worth xp to the station's trade, as making is (`upgradeWorth`).
+import { madeXp, type Recipe, RECIPES } from './craft.ts'
 import { ITEMS } from './items.ts'
+import type { Trade } from './trades.ts'
 
 /** The furthest a piece is upgraded. */
 export let MOST = 5
@@ -73,4 +75,46 @@ export let plusOf = (rows: { item: string }[]): Map<string, number> => {
     by.set(item, Math.min(MOST, (by.get(item) ?? 0) + 1))
   }
   return by
+}
+
+/** What taking a piece of `tier` to step `to` is worth to its trade: half
+ * of making one at the first step, and half again at each step after, so
+ * the last is worth more than two makings, for what it asks.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { madeXp } from './craft.ts'
+ * assertEquals(upgradeXp(2, 1), madeXp(2) / 2)
+ * assertEquals(upgradeXp(2, MOST) > 2 * madeXp(2), true)
+ * ```
+ */
+export let upgradeXp = (tier: number, to: number): number =>
+  madeXp(tier) * to / 2
+
+/** What a hero's upgrades were worth, trade by trade: each row, to the trade
+ * of the station that makes its piece, by its tier and the step it reached,
+ * counted in the order they were made; `kinds` says what each piece is.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let rows = [{ item: 'a', at: 2 }, { item: 'a', at: 1 }, { item: 'b', at: 3 }]
+ * let kinds = new Map([['a', 'sword2'], ['b', 'bow1']])
+ * assertEquals(upgradeWorth(rows, kinds), [
+ *   ['forge', upgradeXp(2, 1)],
+ *   ['forge', upgradeXp(2, 2)],
+ *   ['bench', upgradeXp(1, 1)],
+ * ])
+ * ```
+ */
+export let upgradeWorth = (
+  rows: { item: string; at: number }[],
+  kinds: Map<string, string>,
+): [Trade, number][] => {
+  let steps = new Map<string, number>()
+  return [...rows].sort((a, b) => a.at - b.at).flatMap(({ item }) => {
+    let to = Math.min(MOST, (steps.get(item) ?? 0) + 1)
+    let r = madeBy(kinds.get(item) ?? '')
+    steps.set(item, to)
+    return r ? [[r.at, upgradeXp(r.tier, to)] as [Trade, number]] : []
+  })
 }
