@@ -266,6 +266,32 @@ Deno.test('a peek keeps the entire last multiline output within its entry limit'
   assert(!seen.includes('earlier'))
 })
 
+Deno.test('a transcript-only wait returns when its output settles', async () => {
+  let { g } = host()
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    {
+      entity: { eid: 'e1' },
+      entry: { session: 's' },
+      content: { body: 'go' },
+      ask: {},
+    },
+    {
+      entity: { eid: 'e2' },
+      entry: { session: 's' },
+      content: { body: 'finished' },
+      output: { source: 'e1' },
+    },
+    { entity: { eid: 's' }, brief: { text: 'all done' } },
+  ])
+  let said = body(
+    await through(g, 'session_wait', { session: 's', timeout: '0' }),
+  )
+  assertStringIncludes(said, 'settled')
+  assertStringIncludes(said, 'all done')
+  assert(!said.includes('still running'))
+})
+
 Deno.test('a wait answers "still running" rather than killing anything', async () => {
   let { g } = host()
   await g.apply([

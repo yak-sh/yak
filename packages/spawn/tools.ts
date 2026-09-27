@@ -68,10 +68,9 @@ let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-// A transcript that is over: `stopped` means nothing more to do, `failed`
-// means nothing that can be done. `settled` is neither — a turn that returned
-// text is a run between turns.
-let ENDED = new Set(['stopped', 'failed'])
+// A transcript-only wait ends when its current turn settles, stops or fails.
+// A managed run is instead judged by the process exit (see `over`).
+let ENDED = new Set(['settled', 'stopped', 'failed'])
 
 /**
  * A duration written the way a person writes one: `45m`, `2h`, or bare
