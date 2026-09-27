@@ -18,28 +18,77 @@ export type AuthIO = {
   hidden: () => Promise<string>
 }
 
+let START = '\x1b[200~'
+let END = '\x1b[201~'
+
+/** Read one private line, including a terminal's bracketed paste protocol. */
+export let readHidden = async (
+  read: () => Promise<Uint8Array | null>,
+  mask: (shown: boolean) => void = () => {},
+): Promise<string> => {
+  let input: number[] = []
+  let escape = ''
+  let pasted = false
+  let shown = false
+  let text = () => new TextDecoder().decode(new Uint8Array(input)).trim()
+  for (;;) {
+    let chunk = await read()
+    if (!chunk) return text()
+    for (let byte of chunk) {
+      if (escape) {
+        escape += String.fromCharCode(byte)
+        if (escape == START || escape == END) {
+          pasted = escape == START
+          escape = ''
+        } else if (!START.startsWith(escape) && !END.startsWith(escape)) {
+          escape = ''
+        }
+        continue
+      }
+      if (byte == 27) {
+        escape = '\x1b'
+        continue
+      }
+      if (byte == 3) throw new Refused('Authorization cancelled')
+      if (byte == 10 || byte == 13) {
+        if (!pasted) return text()
+        continue
+      }
+      if (byte == 8 || byte == 127) {
+        input.pop()
+        if (!input.length && shown) mask(shown = false)
+        continue
+      }
+      if (byte < 32) continue
+      input.push(byte)
+      if (input.length > 16384) throw new Refused('Return URL is too long')
+      if (!shown) mask(shown = true)
+    }
+  }
+}
+
 let hidden = async (): Promise<string> => {
   let bytes = new Uint8Array(1024)
-  let text = ''
   let raw = Deno.stdin.isTerminal()
-  if (raw) Deno.stdin.setRaw(true)
+  if (raw) {
+    Deno.stdin.setRaw(true)
+    Deno.stderr.writeSync(new TextEncoder().encode('\x1b[?2004h'))
+  }
   try {
-    for (;;) {
-      let n = await Deno.stdin.read(bytes)
-      if (n == null) break
-      for (let byte of bytes.subarray(0, n)) {
-        if (byte == 3) throw new Refused('Authorization cancelled')
-        if (byte == 10 || byte == 13) return text
-        if (byte == 8 || byte == 127) text = text.slice(0, -1)
-        else text += String.fromCharCode(byte)
-        if (text.length > 16384) throw new Refused('Return URL is too long')
-      }
-    }
-    return text
+    return await readHidden(
+      async () => {
+        let n = await Deno.stdin.read(bytes)
+        return n == null ? null : bytes.subarray(0, n)
+      },
+      (shown) =>
+        Deno.stderr.writeSync(
+          new TextEncoder().encode(shown ? '****' : '\b\b\b\b    \b\b\b\b'),
+        ),
+    )
   } finally {
     if (raw) {
+      Deno.stderr.writeSync(new TextEncoder().encode('\x1b[?2004l\n'))
       Deno.stdin.setRaw(false)
-      console.error()
     }
   }
 }

@@ -69,7 +69,7 @@ yak session peek <session>
 yak task list
 yak model list
 yak connection authorize
-yak connection authorize 'OpenAI (model provider)'
+yak auth openai
 ```
 
 `session new` and `session send` write the input, wait while the transcript runs
@@ -98,12 +98,11 @@ so Deno reuses its module cache. If a probe must move `HOME`, export the
 invoking `DENO_DIR` before moving it.
 
 The model is `gpt-6-astra` unless `--model` names another, reached with
-`$OPENAI_API_KEY` or the OpenAI connection. `yak connection authorize` lists
-model providers and MCP servers; pass one of those names to sign in. It prints
-an authorization link and reads the complete return URL with terminal echo
-disabled. The return URL is never a command argument or transcript entry.
-`yak model list` lists names from the OpenAI endpoint reached by that
-credential.
+`$OPENAI_API_KEY` or the OpenAI connection. `yak auth` lists model providers and
+MCP servers; pass one of those names to sign in. It prints an authorization link
+and reads the complete return URL with terminal echo disabled. The return URL is
+never a command argument or transcript entry. `yak model list` lists names from
+the OpenAI endpoint reached by that credential.
 
 ```ts
 import { compose } from '@yaks/cli/host'
@@ -922,13 +921,13 @@ behavior.
 ### Sign in to an MCP server
 
 Add an `mcp_server` entity as above, then press **Esc**, **A** in the TUI or run
-`yak connection authorize` to list it and sign in on the command line. In the
-TUI, choose a server with j/k and Enter. On the command line, pass its listed
-name to `yak connection authorize`. Open the displayed authorization link in
-your browser. After approval, copy the complete return URL from the address bar
-and paste it into the authorization panel or command prompt. The return URL is
-hidden and never sent to the model or a transcript. Esc cancels in the TUI;
-Ctrl+C cancels the command prompt.
+`yak auth` to list it and sign in on the command line. In the TUI, choose a
+server with j/k and Enter. On the command line, pass its listed name to
+`yak auth`. Open the displayed authorization link in your browser. After
+approval, copy the complete return URL from the address bar and paste it into
+the authorization panel or command prompt. The return URL is hidden and never
+sent to the model or a transcript. Esc cancels in the TUI; Ctrl+C cancels the
+command prompt.
 
 The default callback is `http://localhost:8765/oauth/callback`. No listener is
 started, so a browser connection error at that address is expected; copy the
@@ -978,14 +977,14 @@ of the model, and its `name` is what OpenRouter calls the model — what every
 request it serves asks for.
 
 Choose a model identifier available to your OpenRouter account. Then press
-**Esc, A**, select **OpenRouter (model provider)**, open the authorization URL,
-and paste the full return URL into the private authorization input. No callback
-listener runs: a browser connection-error page is expected; copy its address
-bar. The API key is kept as a connection the provider owns
-([@yaks/connections](../connections)): its secret is in the vault, never in the
-graph, transcript, or draft. This is a separate account from MCP servers and
-OpenAI; existing credentials are never borrowed. No model request is sent merely
-by configuring or authorizing the provider.
+**Esc, A**, select **openrouter**, open the authorization URL, and paste the
+full return URL into the private authorization input. No callback listener runs:
+a browser connection-error page is expected; copy its address bar. The API key
+is kept as a connection the provider owns ([@yaks/connections](../connections)):
+its secret is in the vault, never in the graph, transcript, or draft. This is a
+separate account from MCP servers and OpenAI; existing credentials are never
+borrowed. No model request is sent merely by configuring or authorizing the
+provider.
 
 To select that model for a session, append an entry containing `using` with the
 returned provider/model EIDs. This selects the next request intentionally:
@@ -1005,9 +1004,9 @@ this harness can reach that serves it answers, and a model two reachable
 providers serve needs the provider named in `using`. The command
 `harness new --provider openrouter --model vendor/model 'message'` creates a new
 session under that provider; authorize beforehand in the TUI or with
-`yak connection authorize 'OpenRouter (model provider)'`. Embedding applications
-can use `local({provider: 'openrouter', name: 'vendor/model'})`; configuration
-is recorded in the graph. Tests can inject `providers: {openrouter: fakeModel}`.
+`yak auth openrouter`. Embedding applications can use
+`local({provider: 'openrouter', name: 'vendor/model'})`; configuration is
+recorded in the graph. Tests can inject `providers: {openrouter: fakeModel}`.
 
 OpenRouter Responses is stateless: full applicable context is sent on every
 request, including forks. Provider/model switches don't reuse another model's

@@ -72,13 +72,15 @@ Deno.test('connection authorization is a CLI command without a stored call', asy
   let out: string[] = []
   await Deno.writeTextFile(path, JSON.stringify(at(':memory:')))
   try {
-    let code = await cli([], {
-      argv: ['--config', path, '--no-duties', 'connection', 'authorize'],
-      more: localCommands,
-      out: (line) => out.push(line),
-    })
-    assertEquals(code, 0)
-    assert(out.join('\n').includes('OpenAI (model provider)'))
+    for (let words of [['connection', 'authorize'], ['auth']]) {
+      let code = await cli([], {
+        argv: ['--config', path, '--no-duties', ...words],
+        more: localCommands,
+        out: (line) => out.push(line),
+      })
+      assertEquals(code, 0)
+      assert(out.pop()?.includes('openai'))
+    }
     let host = await opened(path, ['graph'], false)
     assertEquals(await host.graph.read('.call&*'), [])
   } finally {

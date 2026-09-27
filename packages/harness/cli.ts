@@ -6,7 +6,7 @@ import { authorize } from './authorize.ts'
 import { authorizeCLI } from './authorize_cli.ts'
 import { hosted } from './store.ts'
 
-export let commands: CliCommand[] = [{
+let authorizeCommand: CliCommand = {
   name: 'connection_authorize',
   noun: 'connection',
   verb: 'authorize',
@@ -26,4 +26,14 @@ export let commands: CliCommand[] = [{
     context.out(result)
     return 0
   },
-}]
+}
+
+export let commands: CliCommand[] = [
+  authorizeCommand,
+  {
+    ...authorizeCommand,
+    name: 'auth',
+    noun: undefined,
+    verb: undefined,
+  },
+]

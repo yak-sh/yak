@@ -13,13 +13,13 @@ let OPENAI = identityEid('provider', ['openai'])
 let OPENROUTER = identityEid('provider', ['openrouter'])
 let PROVIDERS = [
   {
-    label: 'OpenAI (model provider)',
+    label: 'openai',
     owner: OPENAI,
     integration: 'openai',
     redirect: 'http://127.0.0.1:1455/auth/callback',
   },
   {
-    label: 'OpenRouter (model provider)',
+    label: 'openrouter',
     owner: OPENROUTER,
     integration: 'openrouter',
     redirect: REDIRECT,

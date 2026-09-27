@@ -2,7 +2,11 @@
 // to private input and the authorization controller.
 
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Authorization, authorizeCLI } from './authorize_cli.ts'
+import {
+  type Authorization,
+  authorizeCLI,
+  readHidden,
+} from './authorize_cli.ts'
 
 Deno.test('connection authorize lists targets without starting a sign-in', async () => {
   let calls: string[] = []
@@ -10,7 +14,7 @@ Deno.test('connection authorize lists targets without starting a sign-in', async
     run: (action) => {
       calls.push(action)
       return Promise.resolve({
-        servers: ['site [site]', 'OpenAI (model provider)'],
+        servers: ['site [site]', 'openai'],
       })
     },
     close: () => {
@@ -18,8 +22,37 @@ Deno.test('connection authorize lists targets without starting a sign-in', async
       return Promise.resolve()
     },
   }
-  assertEquals(await authorizeCLI(auth), 'site [site]\nOpenAI (model provider)')
+  assertEquals(await authorizeCLI(auth), 'site [site]\nopenai')
   assertEquals(calls, ['list', 'close'])
+})
+
+Deno.test('private line accepts bracketed paste across reads and masks it', async () => {
+  let bytes = new TextEncoder().encode(
+    '\x1b[200~http://localhost/callback?state=synthetic\x1b[201~\r',
+  )
+  let chunks = [
+    bytes.subarray(0, 2),
+    bytes.subarray(2, 29),
+    bytes.subarray(29, 52),
+    bytes.subarray(52),
+  ]
+  let marks: boolean[] = []
+  let line = await readHidden(
+    () => Promise.resolve(chunks.shift() ?? null),
+    (shown) => marks.push(shown),
+  )
+  assertEquals(line, 'http://localhost/callback?state=synthetic')
+  assertEquals(marks, [true])
+})
+
+Deno.test('private line ignores pasted line endings until paste closes', async () => {
+  let chunks = [new TextEncoder().encode(
+    '\x1b[200~\rhttp://localhost/callback?state=synthetic\n\x1b[201~\r',
+  )]
+  assertEquals(
+    await readHidden(() => Promise.resolve(chunks.shift() ?? null)),
+    'http://localhost/callback?state=synthetic',
+  )
 })
 
 Deno.test('connection authorize sends a pasted return URL only to completion', async () => {

@@ -22,8 +22,8 @@ Deno.test('OpenAI authorization starts before a session or model exists', async 
   let auth = authorize(h)
   try {
     let listed = await auth.run('list')
-    assert(listed.servers?.includes('OpenAI (model provider)'))
-    let begun = await auth.run('begin', 'OpenAI (model provider)')
+    assert(listed.servers?.includes('openai'))
+    let begun = await auth.run('begin', 'openai')
     let url = new URL(begun.url!)
     assertEquals(url.origin, 'https://auth.openai.com')
     assertEquals(url.pathname, '/oauth/authorize')

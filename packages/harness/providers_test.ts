@@ -150,17 +150,17 @@ Deno.test('worker authorization panel offers graph-configured OpenRouter without
   const r = await remote({ worker: worker(), config: at(path) })
   try {
     const list = await r.agent.authorizeMCP!('list')
-    assert(list.servers?.includes('OpenRouter (model provider)'))
+    assert(list.servers?.includes('openrouter'))
     const begun = await r.agent.authorizeMCP!(
       'begin',
-      'OpenRouter (model provider)',
+      'openrouter',
     )
     assertEquals(new URL(begun.url!).origin, 'https://openrouter.ai')
     assertEquals(
       new URL(begun.url!).searchParams.get('code_challenge_method'),
       'S256',
     )
-    await r.agent.authorizeMCP!('cancel', 'OpenRouter (model provider)')
+    await r.agent.authorizeMCP!('cancel', 'openrouter')
   } finally {
     await r.close()
     await Deno.remove(dir, { recursive: true })
