@@ -28,6 +28,21 @@ Deno.test('graph-native prose is one ordered input entry', () => {
     { eid: 'input', name: 'content', comp: { body: 'keep going' } },
   ])
   assertEquals(
+    composerChanges('session', 'continue here', true, 'switch', {
+      provider: 'openai',
+      model: 'sol',
+    }),
+    [
+      { eid: 'switch', name: 'entry', comp: { session: 'session' } },
+      { eid: 'switch', name: 'content', comp: { body: 'continue here' } },
+      {
+        eid: 'switch',
+        name: 'using',
+        comp: { provider: 'openai', model: 'sol' },
+      },
+    ],
+  )
+  assertEquals(
     composerChanges('session', ':fix T-1', true, 'command').map((c) => c.name),
     ['doc', 'comment'],
   )

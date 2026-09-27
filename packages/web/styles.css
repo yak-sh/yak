@@ -1053,8 +1053,7 @@ html {
   color: var(--dim);
   margin-left: auto;
 }
-/* The delivery switch a session composer grows: armed, posting also
-   resumes the session — the button wears the accent to say so. */
+/* The composer button is a thumb sized way to post a draft. */
 .Comments_Send {
   justify-self: start;
   font: inherit;
@@ -3096,9 +3095,8 @@ a[data-ref]:hover {
   color: var(--dim);
 }
 
-/* A session is one console grid: shared head and composer around two
-   independently scrolling middle cells. Narrow hosts swipe between the
-   full-width transcript and references; wide hosts show them together. */
+/* A session keeps every control in sight on a phone. Wide hosts place
+   references beside the transcript. */
 .Card_Scroll:has(> .Session),
 .Peek_Body:has(> .Session) {
   padding: 0;
@@ -3126,34 +3124,31 @@ a[data-ref]:hover {
 .Session {
   display: grid;
   gap: 0;
-  grid-template-columns: 100% 100%;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'head head'
-    'body references'
-    'foot foot';
+    'head'
+    'related'
+    'references'
+    'body'
+    'foot';
   height: 100%;
   min-height: 100%;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  container-type: inline-size;
+  overflow: hidden;
 }
 .Session:not(:has(> .Session_References)) {
-  grid-template-columns: 100%;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
     'head'
+    'related'
     'body'
     'foot';
 }
 .Session_Head {
   grid-area: head;
-  position: sticky;
-  left: 0;
   z-index: 1;
   box-sizing: border-box;
-  width: 100cqw;
   display: flex;
   align-items: center;
   gap: var(--half-gap);
@@ -3161,6 +3156,69 @@ a[data-ref]:hover {
   padding: var(--half-gap) var(--gap);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+.SessionManage_Related {
+  grid-area: related;
+  display: flex;
+  gap: var(--gap);
+  min-width: 0;
+  padding: var(--half-gap) var(--gap);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+.SessionManage_Group {
+  min-width: 0;
+}
+.SessionManage_Gist {
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.SessionManage_List {
+  display: grid;
+  gap: var(--half-gap);
+  max-height: min(22dvh, 10rem);
+  overflow-y: auto;
+  padding: var(--half-gap) 0;
+}
+.SessionManage_Link {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.SessionManage_Empty {
+  color: var(--dim);
+}
+.SessionManage_Input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--half-gap);
+}
+.SessionManage_Label {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  color: var(--dim);
+  font-size: 11px;
+}
+.SessionManage_Label select {
+  max-width: min(34vw, 12rem);
+  min-height: var(--tap);
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.SessionManage_Input .Comments_Box {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.SessionManage_Input .Comments_Hints {
+  grid-column: 1 / -1;
+}
+.SessionManage_Input .Comments_Send {
+  min-height: var(--tap);
+  align-self: stretch;
 }
 .Session_Body {
   grid-area: body;
@@ -3171,7 +3229,6 @@ a[data-ref]:hover {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scroll-snap-align: start;
   padding: var(--half-gap) var(--gap) var(--gap);
 }
 .Session_References {
@@ -3180,12 +3237,14 @@ a[data-ref]:hover {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scroll-snap-align: start;
-  padding: var(--gap);
-  border-left: 1px solid var(--border);
+  padding: var(--half-gap) var(--gap);
+  border-bottom: 1px solid var(--border);
   background: var(--card);
   color: var(--muted);
   font-size: 12px;
+}
+.Session_References[open] {
+  max-height: min(30dvh, 14rem);
 }
 .Session_ReferencesGist {
   color: var(--dim);
@@ -3218,17 +3277,29 @@ a[data-ref]:hover {
 @container (min-width: 50rem) {
   .Session {
     grid-template-columns: minmax(0, 1fr) auto;
-    overflow-x: hidden;
-    scroll-snap-type: none;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head head'
+      'related references'
+      'body references'
+      'foot foot';
   }
   .Session:has(> .Session_References[open]) {
     grid-template-columns: minmax(0, 1fr) minmax(14rem, 22rem);
   }
   .Session:not(:has(> .Session_References)) {
     grid-template-columns: 100%;
+    grid-template-areas:
+      'head'
+      'related'
+      'body'
+      'foot';
   }
   .Session_References:not([open]) {
     justify-self: end;
+  }
+  .Session_References[open] {
+    max-height: none;
   }
 }
 /* The two-pane inbox (Split view, T-17321). Same responsive shape as the
@@ -3296,11 +3367,8 @@ a[data-ref]:hover {
 /* The composer, pinned like the bar. */
 .Session_Foot {
   grid-area: foot;
-  position: sticky;
-  left: 0;
   z-index: 1;
   box-sizing: border-box;
-  width: 100cqw;
   display: grid;
   background: var(--surface);
   border-top: 1px solid var(--border);
@@ -3735,6 +3803,11 @@ a[data-ref]:hover {
   /* the tile IS a link; it must not read as one word-by-word */
   color: inherit;
   text-decoration: none;
+}
+.SessionRow_Id {
+  flex: none;
+  color: var(--dim);
+  font: 11px var(--mono);
 }
 .SessionRow_Title {
   overflow: hidden;

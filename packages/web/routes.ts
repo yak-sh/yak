@@ -22,6 +22,7 @@ import { prefixOf } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
 import { bundle } from './bundle.ts'
 import { type Body, kept } from './kept.ts'
+import { addressId } from './url.ts'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
@@ -70,7 +71,7 @@ let files: [string, string, () => Promise<Body>][] = [
 // entity alive. A name no plugin resolves is taken as an eid, and one a plugin
 // recognises but finds naming nothing is refused: both are no entity.
 let names = async (graph: Graph, path: string): Promise<boolean> => {
-  let id = decodeURIComponent(path.slice(1))
+  let id = addressId(decodeURIComponent(path.slice(1)))
   if (!id || id.includes('/')) return false
   try {
     let eid = (await graph.address([id])).get(id) ?? id

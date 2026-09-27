@@ -20,7 +20,7 @@ import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { linkProps } from '../nav.tsx'
 import { ago, block, pretty, Stamp } from '../ui.tsx'
 import { Dot } from '../Dot.tsx'
-import { Composer, Note } from '../Comments.tsx'
+import { Note } from '../Comments.tsx'
 import { Entity, resolve } from '../Entity.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
 import {
@@ -32,6 +32,7 @@ import {
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
+import { SessionInput, SessionRelated } from './SessionManage.tsx'
 import {
   EntryBody,
   EntryLens,
@@ -250,7 +251,9 @@ export let mentionSig = (a: {
   ].join('|')
 
 export let SessionReferences = ({ items }: { items: Mentioned[] }) => {
-  let [open, setOpen] = useState(true)
+  let [open, setOpen] = useState(
+    () => !globalThis.matchMedia?.('(max-width: 700px)').matches,
+  )
   if (!items.length) return null
   return (
     <References
@@ -649,6 +652,7 @@ export let Session = ({ e }: { e: Ent }) => {
           </Stop>
         )}
       </Head>
+      <SessionRelated eid={e.eid} />
       <Panel elRef={frame}>
         {/* markdown, escaped of any markup by md.ts — as with a task body */}
         {fault && <Fault mod='error'>{fault}</Fault>}
@@ -714,7 +718,7 @@ export let Session = ({ e }: { e: Ent }) => {
           TO it (Comments.tsx knows which sessions can take words) */
       }
       <Foot>
-        <Composer eid={e.eid} entry />
+        <SessionInput e={e} />
       </Foot>
     </Frame>
   )
@@ -724,6 +728,7 @@ export let Session = ({ e }: { e: Ent }) => {
 // held query, so a list never loads every session's transcript.
 let RowLine = block('div', 'SessionRow', {
   Head: 'div',
+  Id: 'span',
   Title: 'span',
   Brief: 'span',
 })
@@ -748,6 +753,7 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
       <RowLine.Head {...tileLink(e, onOpen)}>
         {slot(slots, 'before')}
         <SessionDot e={e} />
+        <RowLine.Id>{idOf(e)}</RowLine.Id>
         <RowLine.Title {...tileTitle(slots, title)} />
         {slot(slots, 'after')}
         <Stamp at={e.created?.at} />

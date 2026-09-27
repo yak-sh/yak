@@ -80,18 +80,15 @@ export let useReference = (eid?: string | null) => {
   }
 }
 
-// The name of the model a session runs on: `using.model` points at a model
-// entity, so its name is one small held row away.
-// What a session runs on, in words: its model's name and its effort. An
-// adopted session carries its own `using`; a spawned one's is on its first
-// entry, where @yaks/spawn writes the ask.
+// The newest input chooses the next model. An adopted session may hold its
+// starting choice itself; a spawned one's is on its first entry.
 export let useModel = (e: Ent): { name?: string; effort?: string } => {
-  let first = useQueryResult(
-    `.entry.session=${e.eid}&.entry.seq=1&.fields=using.model,using.effort`,
-    !!e.session && !e.using,
+  let latest = useQueryResult(
+    `.entry.session=${e.eid}&.using&!ask&.order=-entry.seq&.limit=1&.fields=using.model,using.effort`,
+    !!e.session,
     true,
   ).eids[0]
-  let using = e.using ?? (first ? ent(first).using : undefined)
+  let using = (latest ? ent(latest).using : undefined) ?? e.using
   let model = using?.model
   useEntity(model, 'model.name')
   return {

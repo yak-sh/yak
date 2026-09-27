@@ -38,7 +38,7 @@ let entryPage = (eid: string, limit = 200) => {
   return querySubscription(resolveRefs(parseQuery(q), findEid), q)!.sub
 }
 
-Deno.test('session list Tile names its brief when it has no task or ask', () => {
+Deno.test('session list Tile names its brief and id', () => {
   cache.value = {
     actor: {
       entity: { eid: 'actor', num: 1 },
@@ -57,6 +57,10 @@ Deno.test('session list Tile names its brief when it has no task or ask', () => 
     assertEquals(
       mounted.root.querySelector('.SessionRow_Title')?.textContent,
       'Ship the update',
+    )
+    assertEquals(
+      mounted.root.querySelector('.SessionRow_Id')?.textContent,
+      'S-2',
     )
     assertEquals(mounted.root.querySelector('.Id'), null)
   } finally {
@@ -537,6 +541,7 @@ Deno.test('session Tile names its work and brief without model metadata', () => 
       [...head.children].map((x) => x.className.split(' ')[0]),
       [
         'Dot',
+        'SessionRow_Id',
         'SessionRow_Title',
         'Stamp',
       ],

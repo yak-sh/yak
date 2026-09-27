@@ -1,9 +1,10 @@
 import { signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
 import { favoritePin, navigationQuery, navigationView } from '../navigation.ts'
-import { cache, ent, mode, mutate } from '../live.ts'
+import { cache, ent, mode, mutate, sessionDetail } from '../live.ts'
+import { trayActiveQuery } from '../tray_query.ts'
 import { block } from './ui.tsx'
-import { useQuery } from './useQuery.ts'
+import { useQuery, useQueryResult } from './useQuery.ts'
 import { Entity } from './Entity.tsx'
 import { Icon } from './icons.tsx'
 import { CARD_DATA, cardData } from './drag.ts'
@@ -55,6 +56,16 @@ export let NavigationToggle = () => (
 
 export let Navigation = () => {
   let favorites = useQuery(navigationQuery)
+  let active = useQueryResult(
+    `${trayActiveQuery}&.order=-created.at&.limit=12`,
+    navigationOpen.value,
+    true,
+  )
+  let recent = useQueryResult(
+    `${sessionDetail}&.order=-created.at&.limit=12`,
+    navigationOpen.value,
+    true,
+  )
   let [over, setOver] = useState(false)
   useEffect(() => {
     let key = (e: KeyboardEvent) => {
@@ -73,6 +84,7 @@ export let Navigation = () => {
     return () => removeEventListener('keydown', key)
   }, [])
   if (!navigationOpen.value) return null
+  let sessions = [...new Set([...recent.eids, ...active.eids])]
   let closeMobile = () => narrow() && toggleNavigation(false)
   let accepts = (ev: DragEvent) =>
     !!ev.dataTransfer && Array.from(ev.dataTransfer.types).includes(CARD_DATA)
@@ -127,6 +139,16 @@ export let Navigation = () => {
               navigation.
             </Empty>
           )}
+          <Title>Sessions</Title>
+          {sessions.map((eid) => (
+            <Entity
+              key={eid}
+              eid={eid}
+              view='Navigation.List.Tile'
+              onOpen={closeMobile}
+            />
+          ))}
+          {!sessions.length && <Empty>No sessions yet.</Empty>}
         </Items>
       </Frame>
     </>

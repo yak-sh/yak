@@ -1,4 +1,4 @@
-import { entityPath } from '../url.ts'
+import { addressId, entityPath } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import { block, copy, setFollow } from './ui.tsx'
@@ -33,9 +33,15 @@ export { peek, trail }
 // the host's as it stands when asked, never as it stood when this loaded.
 let loc = () => (globalThis as { location?: Location }).location
 let his = () => (globalThis as { history?: History }).history
-let address = (l: Location) => l.pathname + l.search
+let address = (l: Location) =>
+  l.pathname == '/' && SHORT.test(l.hash)
+    ? entityPath(l.hash) + l.search
+    : l.pathname + l.search
 
 export let route = signal(loc() ? address(loc()!) : '/')
+if (loc()?.pathname == '/' && SHORT.test(loc()!.hash)) {
+  his()?.replaceState(null, '', address(loc()!))
+}
 globalThis.addEventListener?.('popstate', () => {
   let was = screenTarget()?.eid
   route.value = address(loc()!)
@@ -152,7 +158,9 @@ export let eidOf = (id: string) => {
 // Whether the route names an id the server is still resolving — the App shows
 // a resolving state instead of a premature Lost while its one-row sub is open.
 export let screenResolving = (at = route.value) => {
-  let id = decodeURIComponent(new URL(at, 'http://x').pathname.slice(1))
+  let id = addressId(
+    decodeURIComponent(new URL(at, 'http://x').pathname.slice(1)),
+  )
   return !!id && resolvingId(id)
 }
 
@@ -243,7 +251,7 @@ export let linkProps = (e: Ent) => ({
 // the screen uses — a route naming a dead entity resolves to nothing.
 export let screenTarget = (at = route.value) => {
   let url = new URL(at, 'http://x')
-  let id = decodeURIComponent(url.pathname.slice(1))
+  let id = addressId(decodeURIComponent(url.pathname.slice(1)))
   let view = url.searchParams.get('v') ?? undefined
   let eid = id ? routed(id) : rootCanvas()
   return eid ? { eid, view } : null

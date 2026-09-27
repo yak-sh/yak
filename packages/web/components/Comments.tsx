@@ -28,13 +28,14 @@ let Frame = block('div', 'Comments', {
   Body: 'div',
   Box: 'div',
   New: 'textarea',
+  Send: 'button',
   Hints: 'div',
   Hint: 'div',
   Name: 'span',
   Args: 'span',
   About: 'span',
 })
-let { Item, Who, Via, Verdict, When, Body, Box, New } = Frame
+let { Item, Who, Via, Verdict, When, Body, Box, New, Send } = Frame
 let { Hints, Hint, Name, Args, About } = Frame
 
 // Every composer starts with the same sunken writing surface. Export the
@@ -129,11 +130,13 @@ export let composerChanges = (
   body: string,
   entry: boolean,
   id = uuid(),
+  using?: { provider: string; model?: string; effort?: string },
 ): Change[] =>
   entry && !orderIn(body.split('\n')[0])
     ? [
       { eid: id, name: 'entry', comp: { session: eid } },
       { eid: id, name: 'content', comp: { body } },
+      ...(using ? [{ eid: id, name: 'using', comp: using }] : []),
     ]
     : [
       { eid: id, name: 'doc', comp: { title: '', body } },
@@ -141,7 +144,11 @@ export let composerChanges = (
     ]
 
 export let Composer = (
-  { eid, entry = false }: { eid: string; entry?: boolean },
+  { eid, entry = false, using }: {
+    eid: string
+    entry?: boolean
+    using?: { provider: string; model?: string; effort?: string }
+  },
 ) => {
   let box = useRef<HTMLTextAreaElement>(null)
   let model = useModel(ent(eid)).name
@@ -179,7 +186,7 @@ export let Composer = (
   let post = () => {
     let body = box.current!.value.trim()
     if (!body) return
-    mutate(...composerChanges(eid, body, entry))
+    mutate(...composerChanges(eid, body, entry, uuid(), using))
     box.current!.value = ''
     setLine('')
     setPick(0)
@@ -243,6 +250,14 @@ export let Composer = (
         placeholder={prompt(ent(eid), entry, model)}
         onKeyDown={key}
       />
+      <Send
+        type='button'
+        mod={line.trim() && 'on'}
+        disabled={!line.trim()}
+        onClick={post}
+      >
+        send
+      </Send>
     </Box>
   )
 }

@@ -5,6 +5,7 @@ import { handler } from '@yaks/api/routes'
 import { aliasDoc, aliases } from '@yaks/alias'
 import { docDoc } from '@yaks/doc'
 import { graph as open } from '@yaks/graph'
+import { ids } from '@yaks/id/rules'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -19,10 +20,18 @@ let vocab = loadVocab([kernelDoc, docDoc, taskDoc, keyDoc, aliasDoc], [
 let graph = open({
   storage: ram(vocab),
   vocab,
-  plugins: [keys(vocab), aliases()],
+  plugins: [keys(vocab), aliases(), ids(vocab)],
 })
 await graph.apply([
   { entity: { eid: '$r' }, alias: { name: 'lemon-cake' }, doc: { title: 'x' } },
+  {
+    entity: { eid: 'a83446de-17c9-45df-8f57-719b4102667d' },
+    doc: { title: 'session link' },
+  },
+  {
+    entity: { eid: '0123456789abcdef0123456789abcdef01234567' },
+    doc: { title: 'sha address' },
+  },
 ])
 let table = routes({ vocab, graph })
 
@@ -70,6 +79,12 @@ Deno.test('a name opens the page, and a path naming nothing is the 404 page', as
     return [r.status, (await r.text()).includes('src="/web/app.js"')]
   }
   assertEquals(await page('/lemon-cake'), [200, true])
+  assertEquals(await page('/%23a83446de17'), [200, true])
+  assertEquals(await page('/a83446de17'), [200, true])
+  assertEquals(await page('/0123456789abcdef0123456789abcdef01234567'), [
+    200,
+    true,
+  ])
   assertEquals(await page('/T-9'), [200, true])
   for (
     let path of ['/lemon-pie', '/lemon-cake/x', '/favicon.ico', '/T%23abc123']

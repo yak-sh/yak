@@ -11,6 +11,11 @@ let origin = 'https://tasks.yak.sh'
 export let entityPath = (id: string) => `/${encodeURIComponent(id)}`
 export let entityUrl = (id: string) => `${origin}${entityPath(id)}`
 
+// A copied short handle may arrive as a bare path segment after a person
+// drops the # that a browser treats as a fragment. It still names that eid.
+export let addressId = (id: string) =>
+  /^[0-9a-f]{10}$/i.test(id) ? `#${id}` : id
+
 // entityUrl's inverse: the id token a graph entity link names — undefined for
 // any other address. Only id-shaped path segments count (prefix-num, short
 // eid, uuid): every other path is a capability (/query, /telemetry), and handing
@@ -25,7 +30,8 @@ export let entityId = (raw: string): string | undefined => {
   if (u.origin != origin) return undefined
   let id: string
   try {
-    id = decodeURIComponent(u.pathname.slice(1))
+    id = addressId(decodeURIComponent(u.pathname.slice(1))) ||
+      (SHORT.test(u.hash) ? u.hash : '')
   } catch {
     return undefined
   }
