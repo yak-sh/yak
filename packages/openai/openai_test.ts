@@ -5,7 +5,7 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { ModelError, type Request } from '@yaks/model'
 import { body, fromCodex, fromEnv, items, responses } from './mod.ts'
-import { codexPaths, credential } from './credential.ts'
+import { codexPaths, credential, source } from './credential.ts'
 
 let req: Request = {
   model: 'm',
@@ -224,12 +224,14 @@ Deno.test('a credential comes from the environment or a Codex auth.json', async 
   assertEquals(fromCodex('not json'), undefined)
   assertEquals(codexPaths(env({ HOME: '/h', CODEX_HOME: '/c' })), [
     '/c/auth.json',
-    '/h/.local/state/tasks/codex/auth.json',
     '/h/.codex/auth.json',
   ])
 
-  // the environment wins; then the first file that opens and holds one
+  // A task-local copy cannot shadow the file the Codex CLI rotates.
   let files: Record<string, string> = {
+    '/h/.local/state/tasks/codex/auth.json': JSON.stringify({
+      tokens: { access_token: 'stale', account_id: 'acct' },
+    }),
     '/h/.codex/auth.json': JSON.stringify({
       tokens: { access_token: 'a', account_id: 'acct' },
     }),
@@ -237,6 +239,10 @@ Deno.test('a credential comes from the environment or a Codex auth.json', async 
   let read = (p: string) =>
     p in files ? Promise.resolve(files[p]) : Promise.reject(new Error('ENOENT'))
   assertEquals((await credential(env({ HOME: '/h' }), read)()).token, 'a')
+  assertEquals(
+    (await source(env({ HOME: '/h' }), read)).path,
+    '/h/.codex/auth.json',
+  )
   assertEquals(
     (await credential(env({ HOME: '/h', OPENAI_API_KEY: 'k' }), read)()).token,
     'k',

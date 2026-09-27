@@ -30,6 +30,7 @@ export {
   fromCodex,
   fromEnv,
   OPENAI,
+  source,
 } from './credential.ts'
 export {
   body,

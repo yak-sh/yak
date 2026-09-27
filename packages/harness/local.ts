@@ -11,7 +11,7 @@
 // reads one.
 
 import { responses as openrouter } from '@yaks/openrouter'
-import { credential, responses } from '@yaks/openai'
+import { responses } from '@yaks/openai'
 import type { Model } from '@yaks/model'
 import { type Bundle, identityEid } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
@@ -21,6 +21,7 @@ import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
 import { signins } from './signin.ts'
+import { codex } from './codex.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
 import { streamingEnabled } from './streaming.ts'
@@ -133,9 +134,10 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     diagnostics().report(error, where)
   let cwd = opts.cwd ?? Deno.cwd()
   let root = opts.worktrees ?? worktrees(env)
+  let auth = codex(env, (p) => Deno.readTextFile(p))
   let model = opts.model ??
     responses({
-      credential: credential(env, (p) => Deno.readTextFile(p)),
+      ...auth,
       images: configuredImages(h.artifacts, opts.images),
       web: opts.web ?? env('HARNESS_WEB') != '0',
     })

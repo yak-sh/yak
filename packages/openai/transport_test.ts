@@ -375,7 +375,8 @@ Deno.test('responses refreshes once on 401 and never returns credentials', async
           account: 'acct-1',
           base: 'https://chatgpt.example/codex',
         }),
-      refresh: () => {
+      refresh: (stale) => {
+        assertEquals(stale.token, 'secret-old')
         refreshed++
         return Promise.resolve({
           token: 'secret-new',

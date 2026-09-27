@@ -10,7 +10,9 @@ export type TransportCredential = Omit<ProviderCredential, 'base'> & {
 
 export type CredentialSource = {
   get: () => TransportCredential | Promise<TransportCredential>
-  refresh?: () => TransportCredential | Promise<TransportCredential>
+  refresh?: (
+    stale: TransportCredential,
+  ) => TransportCredential | Promise<TransportCredential>
   /** A safe, caller-authored recovery instruction; never a loader exception. */
   hint?: string
 }
@@ -626,7 +628,7 @@ export let transport = (options: ResponseOptions): {
           dog.close()
           await response.body?.cancel()
           auth = await credentials(
-            options.credentials.refresh,
+            () => options.credentials.refresh!(auth),
             'responses: credential refresh failed',
             options.authentication == 'optional',
             retries,

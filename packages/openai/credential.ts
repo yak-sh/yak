@@ -4,15 +4,8 @@
 // environment on its own — both are handed in — so the same code decides for a
 // CLI, a server, and a test, and a token is never printed by anything here.
 //
-// Which is why the expiry check is not here. The fleet's doctor watched its
-// Codex credential run out (a sign-in nothing but a person can renew, and
-// every spawn failing `credential unavailable` until they do) by reading one
-// file on one box against that box's clock. That is a deployment's health, not
-// this package's concern: which file, which machine, and what to do about it
-// all belong to the deployment, and a package that reads neither a file nor the
-// environment cannot find out. A deployment that wants the warning implements
-// its own `check` (a tool whose verb is `check`, @yaks/tools), where the answer
-// is about the machine it runs on.
+// Refresh is the host's work: this package only locates and parses what Codex
+// wrote, while the host asks Codex to rotate a rejected token.
 
 /** A bearer and the endpoint it is good for. */
 export type Credential = {
@@ -59,29 +52,25 @@ export let fromCodex = (body: string): Credential | undefined => {
   return token && account ? { token, account, base: CODEX } : undefined
 }
 
-/** Where a Codex `auth.json` may be, most specific first: the tasks server's
- * own copy, then the Codex CLI's. */
+/** Where Codex keeps `auth.json`: an explicit home, then the CLI's home.
+ * Old task-local copies are not a sign-in: Codex rotates tokens in its own
+ * file, so a copy can remain well-shaped long after its token was revoked. */
 export let codexPaths = (env: Env): string[] => {
   let roots = [
     env('TASKS_CODEX_HOME'),
     env('CODEX_HOME'),
-    env('XDG_STATE_HOME') && `${env('XDG_STATE_HOME')}/tasks/codex`,
-    env('HOME') && `${env('HOME')}/.local/state/tasks/codex`,
     env('HOME') && `${env('HOME')}/.codex`,
   ]
   return roots.filter((r): r is string => !!r).map((r) => `${r}/auth.json`)
 }
 
-/** The first credential found: the environment, then the first Codex
- * `auth.json` that `read` can open and that holds one. Throws when there is
- * none. */
-export let credential = (
+/** The credential and the file Codex will rotate, or the environment's key. */
+export let source = async (
   env: Env,
   read: (path: string) => Promise<string>,
-) =>
-async (): Promise<Credential> => {
+): Promise<{ cred: Credential; path?: string }> => {
   let key = fromEnv(env)
-  if (key) return key
+  if (key) return { cred: key }
   for (let path of codexPaths(env)) {
     let body: string
     try {
@@ -90,7 +79,14 @@ async (): Promise<Credential> => {
       continue
     }
     let found = fromCodex(body)
-    if (found) return found
+    if (found) return { cred: found, path }
   }
   throw new Error('no credential: set OPENAI_API_KEY or sign in to Codex')
 }
+
+/** The first credential found, read afresh for every request. */
+export let credential = (
+  env: Env,
+  read: (path: string) => Promise<string>,
+) =>
+async (): Promise<Credential> => (await source(env, read)).cred

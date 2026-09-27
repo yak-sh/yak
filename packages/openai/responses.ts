@@ -19,6 +19,7 @@ import {
   type ResponseRequest,
   type RunOptions,
   transport,
+  type TransportCredential,
 } from './transport.ts'
 
 /** The one comp this provider stamps on an ask it answered:
@@ -31,7 +32,7 @@ export let OPENAI_COMP = 'openai'
 export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   credential: () => Credential | Promise<Credential>
   /** Retry a rejected credential once with a fresh bearer. */
-  refresh?: () => Credential | Promise<Credential>
+  refresh?: (stale: TransportCredential) => Credential | Promise<Credential>
   /** Configure native image storage and offer the tool on every ask. */
   images?: Images
   /** Offer provider-hosted web search, page opening, and find-in-page. */

@@ -12,9 +12,9 @@ application.
 - `responses(options)` returns a provider-neutral `Model` from `@yaks/model`.
 - `transport(options)` returns the lower-level Responses client, with `run()`
   and `reach()` methods. `frames(stream)` decodes server-sent events (SSE).
-- `credential`, `fromEnv`, `fromCodex`, and `codexPaths` read or locate
-  credentials through application-supplied environment and file functions.
-  `OPENAI` and `CODEX` identify the two default endpoints.
+- `credential`, `source`, `fromEnv`, `fromCodex`, and `codexPaths` read or
+  locate credentials through application-supplied environment and file
+  functions. `OPENAI` and `CODEX` identify the two default endpoints.
 - `input`, `body`, and `items` convert between model requests/replies and
   Responses API data. `ResponseError` describes transport failures; exported
   types describe options, credentials, events, results, usage, and images.
@@ -45,11 +45,12 @@ console.log(reply.items)
 ```
 
 `credential` checks `OPENAI_API_KEY` first. It then checks `auth.json` in
-`TASKS_CODEX_HOME`, `CODEX_HOME`, `$XDG_STATE_HOME/tasks/codex`,
-`~/.local/state/tasks/codex`, and `~/.codex`, in that order, skipping absent
-roots and unreadable or unusable files. API keys use the public API; Codex OAuth
-tokens use the Codex backend with their account ID. The application supplies
-file and environment access, so the client itself needs only web-standard APIs.
+`TASKS_CODEX_HOME`, `CODEX_HOME`, and `~/.codex`, in that order, skipping absent
+roots and unreadable or unusable files. Task-local copies of `auth.json` are not
+used, since Codex rotates credentials in its own file. API keys use the public
+API; Codex OAuth tokens use the Codex backend with their account ID. The
+application supplies file and environment access, so the client itself needs
+only web-standard APIs.
 
 Every HTTP request streams and is read to the end. The returned reply contains
 completed model items. Supply `request.onText` to receive text deltas while the
