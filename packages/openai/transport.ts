@@ -1,7 +1,7 @@
 // One implementation of the Responses HTTP protocol, shared by the
 // provider-neutral Model adapter and
 // callers that need provider-native items, usage, evidence, and frame hooks.
-import type { Credential as ProviderCredential } from './credential.ts'
+import { CODEX, type Credential as ProviderCredential } from './credential.ts'
 import { jsonFrames } from './sse.ts'
 
 /** A bearer; omitted base uses the public API (or the transport's base). */
@@ -297,17 +297,27 @@ let explain = (body: string, secrets: string[]) => {
   try {
     parsed = scrub(JSON.parse(body), secrets)
   } catch {
-    return {}
+    let reason = scrub(body, secrets)
+    return typeof reason == 'string' && reason.trim()
+      ? { reason: reason.trim() }
+      : {}
   }
-  if (!record(parsed)) return {}
+  if (!record(parsed)) {
+    return typeof parsed == 'string' && parsed.trim()
+      ? { reason: parsed.trim() }
+      : {}
+  }
   let error = record(parsed.error)
     ? parsed.error
     : record(parsed.detail)
     ? parsed.detail
     : parsed
   let code = codeOf(error.code) ?? codeOf(error.type)
+  let detail = typeof parsed.detail == 'string' ? parsed.detail : undefined
   let reason = typeof error.message == 'string' && error.message.trim()
     ? error.message.trim()
+    : detail?.trim()
+    ? detail.trim()
     : undefined
   return { code, reason }
 }
@@ -536,11 +546,21 @@ export let transport = (options: ResponseOptions): {
     let failures = 0
     let waited = 0
     let requestId = id()
-    let payload = JSON.stringify(
-      options.shape?.(value) ?? request(value, options.store),
-    )
+    let shaped = options.shape?.(value) ?? request(value, options.store)
     while (true) {
       run.signal?.throwIfAborted()
+      let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
+        .replace(/\/$/, '')
+      // The Codex endpoint rejects max_output_tokens; the public API accepts it.
+      let payload = JSON.stringify(
+        endpoint == CODEX
+          ? Object.fromEntries(
+            Object.entries(shaped).filter(([key]) =>
+              key != 'max_output_tokens'
+            ),
+          )
+          : shaped,
+      )
       let headers = new Headers(options.headers)
       headers.set('accept', 'text/event-stream')
       if (auth.token) headers.set('authorization', `Bearer ${auth.token}`)
@@ -556,8 +576,6 @@ export let transport = (options: ResponseOptions): {
       try {
         let response: Response
         try {
-          let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
-            .replace(/\/$/, '')
           response = await fetcher(`${endpoint}/responses`, {
             method: 'POST',
             headers,

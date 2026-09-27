@@ -3,7 +3,7 @@ import { local } from './local.ts'
 import { tally } from '@yaks/sql'
 import { type Comp, transient } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
-import { statusOf } from '@yaks/session'
+import { react, statusOf } from '@yaks/session'
 import { until } from '../process/testing.ts'
 import { at, harness, repo, worker } from './testing.ts'
 import { seed } from './agent.ts'
@@ -522,6 +522,51 @@ Deno.test('invalid provider history records a healable exception, not an operati
     )
   } finally {
     await a.close()
+  }
+})
+
+Deno.test('a compaction refusal keeps the provider detail in its error entry', async () => {
+  let { CODEX, responses } = await import('@yaks/openai')
+  let h = await harness()
+  try {
+    await h.g.apply([
+      ...seed({ model: 'gpt-6-sol' }),
+      { entity: { eid: 'session' }, session: {} },
+      {
+        entity: { eid: 'input' },
+        entry: { session: 'session' },
+        content: { body: 'Summarize this transcript before answering.' },
+        using: {
+          provider: identityEid('provider', ['openai']),
+          model: identityEid('model', ['gpt-6-sol']),
+        },
+      },
+    ], { trusted: true })
+    let model = responses({
+      credential: () => ({ token: 'test', account: 'acct', base: CODEX }),
+      fetch: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              detail: 'Unsupported parameter: max_output_tokens',
+            }),
+            { status: 400 },
+          ),
+        ),
+    })
+    let step = await react(h.g, 'session', {
+      model,
+      tools: [],
+      contextTokens: 4,
+    })
+    let error = step.added.find((b) => b.error)!
+    assertEquals((error.error as Comp).code, 'http_400')
+    assertEquals(
+      (error.content as Comp).body,
+      'responses: HTTP 400 — Unsupported parameter: max_output_tokens',
+    )
+  } finally {
+    await h.close()
   }
 })
 

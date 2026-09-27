@@ -4,7 +4,7 @@
 
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { ModelError, type Request } from '@yaks/model'
-import { body, fromChatGPT, fromEnv, items, responses } from './mod.ts'
+import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
 
 let req: Request = {
   model: 'm',
@@ -105,6 +105,38 @@ let serving = (status: number, text: string) => {
 }
 
 let codex = { token: 't', account: 'acct', base: 'https://x.test/codex' }
+
+Deno.test('a compaction request succeeds on the Codex endpoint', async () => {
+  let asked: Record<string, unknown>[] = []
+  let model = responses({
+    credential: () => ({ ...codex, base: CODEX }),
+    fetch: (_url, init) => {
+      let body = JSON.parse(String(init?.body))
+      asked.push(body)
+      return Promise.resolve(
+        'max_output_tokens' in body
+          ? new Response(
+            JSON.stringify({
+              detail: 'Unsupported parameter: max_output_tokens',
+            }),
+            { status: 400 },
+          )
+          : new Response(sse({
+            type: 'response.completed',
+            response: { id: 'summary', model: 'm', status: 'completed' },
+          })),
+      )
+    },
+  })
+  let reply = await model({
+    model: 'm',
+    items: [{ kind: 'user', text: 'Summarize this transcript.' }],
+    tools: [],
+    tokens: 4096,
+  })
+  assertEquals(reply.id, 'summary')
+  assertEquals(asked.length, 1)
+})
 
 Deno.test('a streamed reply is read to its end', async () => {
   let { asked, fetcher } = serving(
