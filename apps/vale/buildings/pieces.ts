@@ -33,7 +33,7 @@ export let forge: Piece = {
   name: 'forge',
   station: 'forge',
   use: { at: [-1, 3], for: 'work' },
-  glow: { at: [-1.5, 2.5, -0.5], size: 2.4, color: 0xff7a2a },
+  glow: { at: [-1.5, 2.5, -0.5], size: 2.4, color: 0xff7a2a, fire: true },
   make: (d, s) => {
     let v = vox()
     for (let x = -4; x <= 1; x++) {

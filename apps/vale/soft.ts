@@ -71,12 +71,14 @@ varying vec3 vTv;
 varying vec3 vCell;
 varying vec3 vAt;
 varying float vMaterial;
+varying float vWarmth;
 `
 
 let VERTEX = /* glsl */ `
 vAt = (modelMatrix * vec4(transformed, 1.)).xyz;
 vFace = edge.xy;
 vMaterial = edge.w;
+vWarmth = floor(edge.z / 16.) / 15.;
 vRim = mod(floor(edge.z / vec4(1., 2., 4., 8.)), 2.);
 vBw = bw.xy;
 // The face's own axes, from its normal as it was meshed, turned as the mesh
@@ -111,6 +113,7 @@ let FRAGMENT_PARS = /* glsl */ `
 uniform vec3 flash;
 uniform float flashing;
 uniform float speckle;
+uniform float night;
 varying vec2 vFace;
 varying vec4 vRim;
 varying vec2 vBw;
@@ -119,6 +122,7 @@ varying vec3 vTv;
 varying vec3 vCell;
 varying vec3 vAt;
 varying float vMaterial;
+varying float vWarmth;
 uniform vec3 seeFrom;
 uniform vec3 seeFeet;
 uniform float seeTall;
@@ -235,6 +239,7 @@ if (metal()) {
     + around * mix(diffuseColor.rgb, vec3(1.), grazing) * .7
     + reflectedLight.directSpecular;
 }
+outgoingLight += vec3(1., .32, .08) * vWarmth * (.18 + .82 * night);
 `
 
 /** A soft material: `speckle` is how much each voxel's shade wobbles, and a
@@ -255,6 +260,7 @@ export let soft = (
   })
   let uniforms = {
     speckle: { value: opts.speckle ?? 0.1 },
+    night: { value: 0 },
     flash: { value: new THREE.Color(1, 0.35, 0.3) },
     flashing: { value: 0 },
     seeFrom: { value: new THREE.Vector3() },
@@ -338,4 +344,10 @@ export let flash = (m: THREE.Material, amount: number, color?: THREE.Color) => {
   if (!u) return
   u.flashing.value = amount
   if (color) u.flash.value.copy(color)
+}
+
+/** How much the day's light has fallen, shared by every soft mesh. */
+export let night = (m: THREE.Material, amount: number) => {
+  let u = m.userData.soft
+  if (u) u.night.value = amount
 }

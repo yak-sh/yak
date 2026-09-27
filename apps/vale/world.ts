@@ -14,8 +14,10 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { airOf } from './air.ts'
+import type { Glow } from './buildings/kit.ts'
 import type { Chunk } from './chunks.ts'
 import { doors } from './doors.ts'
+import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
 import { LEVELS, type Spot } from './levels.ts'
 import type { Vec } from './mesh.ts'
@@ -23,7 +25,7 @@ import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { blend } from './regions.ts'
 import { type Building, cutaway } from './solid.ts'
-import { cut, CUTS, geometry, sight, soft } from './soft.ts'
+import { cut, CUTS, geometry, night, sight, soft } from './soft.ts'
 import { type Want, wanted } from './stream.ts'
 import {
   adopt,
@@ -238,6 +240,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     solid: THREE.Mesh
     small: THREE.Mesh | null
     lamps: Lamp[]
+    glows: Glow[]
     doors: ReturnType<typeof doors>
     /** its middle */
     x: number
@@ -265,19 +268,23 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // What glows at dusk in a chunk, the village's lamps, a forge's coals and
   // the like: a bright lantern in a round halo.
   let halo = glowTexture()
-  let lampsOf = (ci: number, ck: number): Lamp[] =>
-    v.plant(ci, ck).flatMap((p) => {
+  let glowsOf = (ci: number, ck: number): Glow[] => {
+    let glows: Glow[] = []
+    for (let p of v.plant(ci, ck)) {
       let lit = KINDS[p.kind].glow
-      return [
-        ...lit
-          ? [{
-            ...lit,
-            at: [p.x + lit.at[0], standAt(v, p) + lit.at[1], p.z + lit.at[2]],
-          }]
-          : [],
-        ...buildingOf(v, p)?.glows ?? [],
-      ]
-    }).map((lit) => {
+      if (lit) {
+        glows.push({
+          ...lit,
+          at: [p.x + lit.at[0], standAt(v, p) + lit.at[1], p.z + lit.at[2]],
+        })
+      }
+      let b = buildingOf(v, p)
+      if (b) glows.push(...b.glows)
+    }
+    return glows
+  }
+  let lampsOf = (glows: Glow[]): Lamp[] =>
+    glows.map((lit) => {
       let [x, y, z] = lit.at
       let lantern = new THREE.MeshBasicMaterial({
         color: lit.color ?? 0xffc860,
@@ -339,6 +346,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     // doors.
     let was = drawn.get(k)
     let lamps = was?.lamps, hung = was?.doors
+    let glows = was?.glows ?? glowsOf(c.ci, c.ck)
     drop(k, true)
     let solid = meshOf(c.solid, c.ci, c.ck)
     solid.castShadow = true
@@ -352,7 +360,8 @@ export let world = (v: Vale, mesh: Mesher): World => {
       lod,
       solid,
       small,
-      lamps: lamps ?? lampsOf(c.ci, c.ck),
+      lamps: lamps ?? lampsOf(glows),
+      glows,
       doors: hung ?? doorsOf(c.ci, c.ck),
       x,
       z,
@@ -455,25 +464,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
   cam.far = 160
   scene.add(sun, sun.target)
 
-  // The fire of the village nearest the focus: its light, and flames of
-  // glowing boxes that lick and turn.
+  // The nearest village's fire and the forges in drawn chunks share one
+  // flame mesh. The village fire alone has its own point light.
   let fire = new THREE.PointLight(0xffa04a, 0, 18, 1.6)
   scene.add(fire)
-  let flames = [0xff6a24, 0xff9a30, 0xffd25a].map((color, i) => {
-    let m = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0.85,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }),
-    )
-    m.userData.size = 0.62 - i * 0.16
-    scene.add(m)
-    return m
-  })
+  let burn = flames(scene)
 
   let hearth: Spot | null = null
   let floor = 0
@@ -484,13 +479,15 @@ export let world = (v: Vale, mesh: Mesher): World => {
     if (h?.[0] == hearth?.[0] && h?.[1] == hearth?.[1]) return
     hearth = h
     fire.visible = !!h
-    for (let m of flames) m.visible = !!h
     if (!h) return
     floor = groundAt(v, h[0], h[1])
     fire.position.set(h[0], floor + 1.1, h[1])
-    for (let m of flames) m.position.set(h[0], floor, h[1])
   }
 
+  // One nearby source lights people in a room; the walls and furniture use
+  // their baked light, so this does not grow with the village.
+  let nearby = new THREE.PointLight(0xffb45c, 0, 7, 1.8)
+  scene.add(nearby)
   let drift = airOf(scene)
   // How far each building's roof and upper floors have faded, from the
   // height they fade over.
@@ -591,21 +588,37 @@ export let world = (v: Vale, mesh: Mesher): World => {
       sun.intensity = l.lux * Math.min(1, Math.sin(a) * 3 + 0.15)
       hemi.intensity = l.fill
       hemi.color.copy(l.top).lerp(new THREE.Color(0xffffff), 0.5)
-      hemi.groundColor.copy(GRASS).lerp(DARK, skyMat.uniforms.night.value)
+      let dark = smooth(0.24, 0.18, d) + smooth(0.76, 0.82, d)
+      hemi.groundColor.copy(GRASS).lerp(DARK, dark)
+      night(ground, dark)
       // Lamps unlit by day are left undrawn.
       for (let c of drawn.values()) {
         for (let l of c.lamps) {
-          l.lantern.opacity = 0.95 * skyMat.uniforms.night.value
-          l.halo.opacity = 0.55 * skyMat.uniforms.night.value
+          l.lantern.opacity = 0.95 * dark
+          l.halo.opacity = 0.55 * dark
           l.box.visible = l.sprite.visible = l.halo.opacity > 0.005
         }
+      }
+      let lit: Glow | null = null, score = -Infinity
+      for (let c of drawn.values()) {
+        for (let g of c.glows) {
+          let worth = 12 - Math.hypot(g.at[0] - focus.x, g.at[2] - focus.z)
+          if (worth > score) score = worth, lit = g
+        }
+      }
+      nearby.intensity = lit
+        ? (0.2 + dark * 0.8) * 5 * Math.min(1, Math.max(0, score / 4))
+        : 0
+      if (lit) {
+        nearby.position.set(lit.at[0], lit.at[1], lit.at[2])
+        nearby.color.setHex(lit.color ?? 0xffc860)
+        nearby.distance = 2 + lit.size * 2
       }
       skyMat.uniforms.top.value.copy(l.top)
       skyMat.uniforms.low.value.copy(l.low)
       skyMat.uniforms.sunDir.value.copy(dir)
       skyMat.uniforms.sunColor.value.copy(l.sun).multiplyScalar(up ? 1 : 0.4)
-      skyMat.uniforms.night.value = smooth(0.24, 0.18, d) +
-        smooth(0.76, 0.82, d)
+      skyMat.uniforms.night.value = dark
       fog.color.copy(l.low)
       water.position.set(
         Math.round(focus.x / CHUNK) * CHUNK,
@@ -617,13 +630,19 @@ export let world = (v: Vale, mesh: Mesher): World => {
       waterMat.uniforms.sunColor.value.copy(l.sun).multiplyScalar(l.lux / 2.7)
       fire.intensity = 14 + 26 * skyMat.uniforms.night.value +
         Math.sin(t * 9) * 2 + Math.sin(t * 23) * 1.2
-      flames.forEach((m, i) => {
-        let s = m.userData.size
-        let lick = 1 + Math.sin(t * (7 + i * 3) + i) * 0.18
-        m.scale.set(s * (2 - lick), s * lick * 1.3, s * (2 - lick))
-        m.position.y = floor + 0.3 + i * 0.24 + s * lick * 0.5
-        m.rotation.y = t * (0.8 + i * 0.5) + i
-      })
+      let fires: Fire[] = []
+      if (hearth) {
+        fires.push({
+          at: [hearth[0], floor + 0.3, hearth[1]],
+          size: 0.62,
+        })
+      }
+      for (let c of drawn.values()) {
+        for (let g of c.glows) {
+          if (g.fire) fires.push({ at: g.at, size: 0.42 })
+        }
+      }
+      burn(t, focus, fires)
       sky.position.copy(focus)
       for (let d of drawn.values()) {
         if (d.small) {

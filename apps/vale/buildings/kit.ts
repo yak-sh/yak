@@ -88,7 +88,7 @@ export type Piece = {
   name: string
   make: (d: Dress, seed: number) => Vox
   use?: { at: [number, number]; for: string }
-  glow?: { at: Vec; size: number; color?: number }
+  glow?: Glow
   station?: Craft
 }
 
@@ -108,7 +108,7 @@ export type Door = {
  * in metres and radians (0 faces +z). */
 export type Use = { for: string; at: Vec; yaw: number }
 /** A light: where, how big its halo is, in metres, and its colour. */
-export type Glow = { at: Vec; size: number; color?: number }
+export type Glow = { at: Vec; size: number; color?: number; fire?: boolean }
 
 /** A building raised: its voxels, their edge and where voxel (0, 0, 0)'s
  * corner is, in metres (a Model, props/kit.ts); its doors; each storey's

@@ -6,7 +6,8 @@
 // a level places one (terrain.ts `props`), and measured, so what a walker
 // bumps into or stands on is the size it is drawn (`bulk`).
 import { BUILDINGS } from './buildings.ts'
-import { type Raised, spun } from './buildings/kit.ts'
+import { type Glow, type Raised, spin, spun } from './buildings/kit.ts'
+import { light } from './buildings/light.ts'
 import { blob, type Out, out, unkey } from './mesh.ts'
 import { COAST } from './props/coast.ts'
 import { DEEP } from './props/deep.ts'
@@ -63,6 +64,14 @@ export let model = (kind: string, seed: number, turn = 0): Out => {
   if (o) return o
   let { vox, size, at = [-size / 2, 0, -size / 2] } = shape()
   o = blob(out(), spun(vox, turn, 1 + (at[0] + at[2]) / size), size, at)
+  let raised = raisedOf(kind, seed)
+  if (raised?.glows.length) {
+    let glows = raised.glows.map((g): Glow => {
+      let [x, z] = spin(g.at[0], g.at[2], turn)
+      return { ...g, at: [x, g.at[1], z] }
+    })
+    light(o, glows)
+  }
   meshed.set(`${id}:${turn}`, o)
   return o
 }

@@ -216,6 +216,18 @@ export let ambience = (v: Vale, ear: Vec3) => {
       at: [x, groundAt(v, x, z) + 0.5, z],
     })
   }
+  for (let b of v.buildings(ear[0], ear[2], 30)) {
+    for (let g of b.glows) {
+      if (!g.fire || Math.hypot(g.at[0] - ear[0], g.at[2] - ear[2]) > 30) {
+        continue
+      }
+      out.push({
+        id: `forge:${b.x}:${b.z}`,
+        kind: 'fire',
+        at: g.at,
+      })
+    }
+  }
   let places = placesOf(regionOf(ear[0], ear[2]))
   let kind = WATERS.find(([k]) => places.some((p) => isA(p.kind, k)))?.[1]
   let at = kind && shore(v, ear)

@@ -923,6 +923,18 @@ let loop = (t: number) => {
       },
     )
   }
+  for (let b of v.buildings(target.x, target.z, 20)) {
+    if (Math.hypot(b.x - target.x, b.z - target.z) > 20) continue
+    for (let fire of b.glows) {
+      if (!fire.fire || Math.random() >= 0.35) continue
+      glow.emit(
+        new THREE.Vector3(...fire.at),
+        0xffa040,
+        1,
+        { speed: 0.22, up: 0.9, life: 0.9, size: 0.045, fall: -0.2 },
+      )
+    }
+  }
   if ((w.day < 0.24 || w.day > 0.76) && Math.random() < 0.25) {
     let a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 14
     let x = target.x + Math.cos(a) * r, z = target.z + Math.sin(a) * r
