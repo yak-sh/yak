@@ -81,7 +81,7 @@ let excerpt = (text: string): string =>
   safe(
     // deno-lint-ignore no-control-regex -- FTS marks matches with these bytes.
     text.replace(/\x01([^\x02]*)\x02/g, (_match, word: string) => `*${word}*`),
-  )
+  ).replace(/\s+/g, ' ').trim()
 
 let hit = <Node>(
   b: Bundle,

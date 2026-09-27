@@ -95,7 +95,7 @@ Deno.test('search excerpts strip raw controls and compact multiple kinds', () =>
   }
   let b = {
     entity: { eid: '33333333-3333-4333-8333-333333333333', num: 10 },
-    hit: { kind: 'comment', snippet: 'Near this idea', source: 'meaning' },
+    hit: { kind: 'comment', snippet: 'Near\nthis idea', source: 'meaning' },
   }
   let lines = said(a, b)
   assertEquals(
