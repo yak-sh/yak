@@ -214,8 +214,11 @@ Deno.test('a stop on the session reaches the agent', async () => {
     )
     assert(over, 'no ending stamped')
     // It was killed rather than finishing, and the transcript says so.
-    let lines = await said(g.g)
-    assertEquals(comp(lines.at(-1), 'stop'), {})
+    let stop = await until(
+      async () => comp((await said(g.g)).at(-1), 'stop'),
+      'the transcript to record its stop',
+    )
+    assertEquals(stop, {})
   } finally {
     Deno.removeSync(where, { recursive: true })
   }
