@@ -398,8 +398,9 @@ export let subscriptions = (graph: Graph, opts: {
   // A limit, order or unlocated dependency still needs the whole answer.
   let push = (
     sub: Sub,
-    load: (q: string) => Bundle[] | Promise<Bundle[]>,
     scope?: Set<Eid>,
+    load = (q: string): Bundle[] | Promise<Bundle[]> =>
+      graph.read(q, { durable: true }),
   ) => {
     if (sub.agg) return tell(sub)
     // Peer candidates include held values, so only durable queries can use
@@ -478,7 +479,7 @@ export let subscriptions = (graph: Graph, opts: {
             }
             let scope = affected(s, touch)
             if (scope === undefined) return
-            return push(s, load, scope ?? undefined)
+            return push(s, scope ?? undefined, load)
           })),
         () => undefined,
       )
@@ -607,7 +608,7 @@ export let subscriptions = (graph: Graph, opts: {
           (s) =>
             attempt(
               s,
-              () => s.routed ? send(s, routing.get(s)) : push(s, touched),
+              () => s.routed ? send(s, routing.get(s)) : push(s),
             ),
         ),
         () => undefined,
