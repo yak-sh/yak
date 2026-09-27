@@ -2,6 +2,7 @@
 // provider-neutral Model adapter and
 // callers that need provider-native items, usage, evidence, and frame hooks.
 import type { Credential as ProviderCredential } from './credential.ts'
+import { jsonFrames } from './sse.ts'
 
 /** A bearer; omitted base uses the public API (or the transport's base). */
 export type TransportCredential = Omit<ProviderCredential, 'base'> & {
@@ -349,63 +350,16 @@ let limits = (headers: Headers): RateLimits => {
   return out
 }
 
-let event = (block: string) => {
-  let data = block
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trimStart())
-    .join('\n')
-  if (!data || data == '[DONE]') return null
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(data)
-  } catch {
-    throw fault('malformed_stream', 'responses: malformed SSE data')
-  }
-  if (!record(parsed) || typeof parsed.type != 'string') {
-    throw fault('malformed_stream', 'responses: stream event has no type')
-  }
-  return parsed as ResponseEvent
-}
-
 /** Decode SSE across arbitrary byte chunks, including CRLF and a final frame
  * without a blank line. The reader is released even if a consumer throws. */
 export let frames = async function* (
   body: ReadableStream<Uint8Array>,
 ): AsyncGenerator<ResponseEvent> {
-  let reader = body.getReader()
-  try {
-    let decoder = new TextDecoder()
-    let pending = ''
-    while (true) {
-      // Only a reader rejection is a transport fault. Parser defects and the
-      // caller's event hook must never be mistaken for a dropped connection.
-      let part: ReadableStreamReadResult<Uint8Array>
-      try {
-        part = await reader.read()
-      } catch (error) {
-        if ((error as Error)?.name == 'AbortError') throw error
-        throw fault(
-          'transport',
-          'responses: error reading a body from connection',
-        )
-      }
-      pending += decoder.decode(part.value, { stream: !part.done })
-      let blocks = pending.split(/\r?\n\r?\n/)
-      pending = blocks.pop() ?? ''
-      for (let block of blocks) {
-        let parsed = event(block)
-        if (parsed) yield parsed
-      }
-      if (part.done) break
+  for await (let value of jsonFrames(body, fault)) {
+    if (typeof value.type != 'string') {
+      throw fault('malformed_stream', 'responses: stream event has no type')
     }
-    if (pending.trim()) {
-      let parsed = event(pending)
-      if (parsed) yield parsed
-    }
-  } finally {
-    await reader.cancel().catch(() => {})
-    reader.releaseLock()
+    yield value as ResponseEvent
   }
 }
 

@@ -12,6 +12,7 @@
 
 import { responses as openrouter } from '@yaks/openrouter'
 import { responses } from '@yaks/openai'
+import { artifactStore } from '@yaks/blob'
 import type { Model } from '@yaks/model'
 import { type Bundle, identityEid } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
@@ -163,6 +164,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     providers: {
       openai: model,
       openrouter: openrouter({
+        media: { store: artifactStore(h.artifacts) },
         key: async () =>
           await auth.signin.key(OPENROUTER, 'openrouter') ?? refuse(
             'OpenRouter is not connected. Press Esc then A to authorize OpenRouter.',

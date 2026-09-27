@@ -129,6 +129,8 @@ export type Request = {
   signal?: AbortSignal
   onText?: (delta: TextDelta) => void
   model: string
+  /** Output modalities requested of a model that can generate media. */
+  modalities?: ('text' | 'image' | 'audio')[]
   effort?: string
   instructions?: string
   items: Item[]

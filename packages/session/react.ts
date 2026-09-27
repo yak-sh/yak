@@ -508,9 +508,15 @@ export let react = async (
     )
     : undefined
   let questions = asking && comp(asking, QUESTIONS)!.asked as Questions
+  let modalities = Array.isArray(served?.modalities)
+    ? served.modalities.filter((v): v is 'text' | 'image' | 'audio' =>
+      v == 'text' || v == 'image' || v == 'audio'
+    )
+    : undefined
   let req: Request = {
     signal: deps.signal,
     model: spelled,
+    ...modalities ? { modalities } : {},
     ...questions ? { questions } : {},
     effort: effort == null ? undefined : String(effort),
     instructions: deps.resolveInstructions
@@ -721,7 +727,7 @@ export let react = async (
       },
       [OUTPUT]: { source: ask.entity.eid },
       [CONTENT]: {
-        body: 'Generated image: ' + eid + ' (' + artifact.media_type + ', ' +
+        body: 'Generated media: ' + eid + ' (' + artifact.media_type + ', ' +
           artifact.size + ' bytes)',
       },
     }))

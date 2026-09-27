@@ -2,7 +2,9 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { images } from './images.ts'
 import { responses } from '@yaks/openai'
-import { fileBlobs, memoryBlobs } from '@yaks/blob'
+import { responses as router } from '@yaks/openrouter'
+import { artifactStore, fileBlobs, memoryBlobs } from '@yaks/blob'
+import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
 import { at, harness, worker } from './testing.ts'
 
@@ -88,6 +90,61 @@ Deno.test('host store failure returns no artifact and retry repairs partial byte
     )
   } finally {
     await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('a model row sends OpenRouter audio to the graph as an artifact', async () => {
+  let h = await harness(':memory:')
+  let bytes = new TextEncoder().encode('ID3music')
+  let data = btoa(String.fromCharCode(...bytes))
+  let model = router({
+    key: () => 'test',
+    media: { store: artifactStore(h.artifacts) },
+    fetch: (_url, init) => {
+      let request = JSON.parse(String(init?.body))
+      assertEquals(request.modalities, ['text', 'audio'])
+      return Promise.resolve(
+        new Response(
+          'data: ' + JSON.stringify({
+            id: 'song-1',
+            choices: [{ delta: { audio: { data } } }],
+          }) + '\n\ndata: [DONE]\n\n',
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+      )
+    },
+  })
+  let a = local({
+    h,
+    provider: 'openrouter',
+    name: 'google/lyria-3-clip-preview',
+    providers: { openrouter: model },
+    tools: [],
+  })
+  try {
+    await h.g.apply([{
+      entity: {
+        eid: identityEid('model', ['google/lyria-3-clip-preview']),
+      },
+      model: {
+        name: 'google/lyria-3-clip-preview',
+        modalities: ['text', 'audio'],
+      },
+    }])
+    let id = await a.start('Music for a quiet forest')
+    await a.idle(id)
+    let artifacts = await h.g.read('.artifact&*')
+    assertEquals(artifacts.length, 1)
+    let artifact = artifacts[0].artifact as {
+      address: string
+      media_type: string
+      size: number
+    }
+    assertEquals(artifact.media_type, 'audio/mpeg')
+    assertEquals(await h.artifacts.get(artifact.address), bytes)
+    assert((await a.transcript(id)).some((e) => e.attachment))
+  } finally {
+    await a.close()
   }
 })
 

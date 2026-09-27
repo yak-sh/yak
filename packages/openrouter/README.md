@@ -1,10 +1,10 @@
 # @yaks/openrouter
 
-OpenRouter model access through its stateless Responses API. Implements
-`@yaks/model`, including streaming public text, function calls/results, images
-as input, cancellation, and reported token usage. It reuses the portable
-Responses transport and parsing from `@yaks/openai`, but does not use OpenAI
-credentials, enable OpenAI native tools, or write OpenAI response metadata.
+OpenRouter model access through `@yaks/model`. Text requests use its stateless
+Responses API, including streaming text and function calls. A request whose
+model row asks for image or audio output uses Chat Completions instead. Both
+routes accept image input and report usage. They share media decoding and SSE
+parsing with `@yaks/openai`, but use only OpenRouter credentials.
 
 This fragment assumes `myPrivateKey` was obtained from private application
 configuration. Do not store it in graph entities or shared configuration files.
@@ -23,6 +23,23 @@ const reply = await model({
 Model identifiers are OpenRouter's opaque `vendor/model` strings. Choose one
 available to your account. Tool use and image input depend on the selected
 model. There is no automatic model fallback or rewriting of identifiers.
+
+## Generated media
+
+Set `model.modalities` to the output modes the model serves, for example
+`["text", "audio"]` on Lyria. The session runner carries that into the request.
+The local harness supplies the graph's `@yaks/blob` artifact store to this
+adapter. Direct callers supply `media: { store }`. Audio uses OpenRouter's
+streamed Chat Completions output; MP3 is the default format, and `media.audio`
+can choose another documented format or a voice where the model supports it.
+Image output uses Chat Completions' `message.images` data URLs. Decoded bytes
+are checked and stored before the reply returns; `reply.artifacts` carries
+addresses and media types, never the encoded payload.
+
+The two Lyria rows use `google/lyria-3-clip-preview` and
+`google/lyria-3-pro-preview`, served by the `openrouter` provider. Neither
+supports function tools. A media request sends the conversation and requested
+modalities without tool declarations.
 
 ## Exports and stored data
 
@@ -47,14 +64,15 @@ complete applicable conversation. This adapter sends `store: false`, never
 `openrouter{response_id}` for diagnostics only. Expect higher request bytes than
 a provider supporting stored continuation, especially for forks.
 
-Streaming calls retain the shared transport's no-retry behavior. Cancellation
-uses `Request.signal`. Native `image_generation` and `web_search` declarations
-are not enabled; function tools (including MCP tools) remain available. No
-special OpenRouter plugin or native-tool configuration is implemented yet.
+Streaming Responses calls retain the shared transport's no-retry behavior.
+Cancellation uses `Request.signal`. Native `image_generation` and `web_search`
+declarations are not enabled on text requests; function tools remain available
+there.
 
 Official protocol references:
 
 - https://openrouter.ai/docs/api_reference/responses/overview
+- https://openrouter.ai/docs/guides/overview/multimodal/audio
 - https://openrouter.ai/docs/guides/overview/auth/oauth
 
 Tests use mocked responses, not paid provider calls.

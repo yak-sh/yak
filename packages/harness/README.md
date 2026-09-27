@@ -576,10 +576,14 @@ Current provider errors do not reliably distinguish unsupported image tools from
 other invalid requests, so there is no negative capability cache or speculative
 fallback. Disable images explicitly if your endpoint rejects them.
 
-Images are `@yaks/blob` artifacts: each is an entity named by its bytes'
-SHA-256, and the bytes are kept in the graph's byte store (`h.artifacts`), the
-`images` directory beside the database (`~/.yak/images`), or memory for a graph
-in memory. Keep that directory with database backups.
+Generated media are `@yaks/blob` artifacts: each is an entity named by its
+bytes' SHA-256, and the bytes are kept in the graph's byte store
+(`h.artifacts`), the `images` directory beside the database (`~/.yak/images`),
+or memory for a graph in memory. Keep that directory with database backups.
+
+OpenRouter audio and image models use the same store. Set their model row's
+`modalities` to the outputs they produce; the local provider passes that to
+OpenRouter and registers the returned artifact in the graph.
 
 Configure it in code with:
 
