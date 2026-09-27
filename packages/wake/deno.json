@@ -1,6 +1,6 @@
 {
   "name": "@yaks/wake",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "exports": {
     ".": "./mod.ts",
     "./cloudflare": "./cloudflare.ts",
