@@ -176,10 +176,13 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       harnessTools(h.g, { ...opts, worktrees: root, artifacts: h.artifacts }),
     remote: mcp.snapshot,
     streaming: streamingEnabled(opts, env),
-    opening: async () => {
+    opening: async (persona) => {
       let home = await homeAt(h.g, cwd)
       let files = await instructionFiles(cwd)
-      return { home, files: [...files, ...await owing(h.g, home, files)] }
+      return {
+        home,
+        files: [...files, ...await owing(h.g, home, files, persona)],
+      }
     },
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),

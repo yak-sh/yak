@@ -58,6 +58,11 @@
         "provider": {
           "type": "string",
           "description": "the backend that serves it: openai or openrouter"
+        },
+        "persona": {
+          "type": "string",
+          "ref": "persona",
+          "description": "the persona to carry, by id or name (default: the checkout's persona)"
         }
       },
       "options": {

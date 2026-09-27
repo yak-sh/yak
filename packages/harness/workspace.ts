@@ -30,12 +30,13 @@ export let owing = async (
   g: Graph,
   home: Comp,
   files: Snapshot[],
+  persona?: string,
 ): Promise<Snapshot[]> => {
   let [tree] = home.worktree ? await g.get([String(home.worktree)]) : []
   let path = (tree?.worktree as Comp | undefined)?.path
-  let owes = path == null
+  let owes = path == null && !persona
     ? undefined
-    : await owed(g, String(path), files.map((f) => f.body))
+    : await owed(g, String(path ?? ''), files.map((f) => f.body), persona)
   return owes ? [await snapshot(owes.text, owes.source)] : []
 }
 export let sessionCwd = async (g: Graph, session: string, fallback: string) => {

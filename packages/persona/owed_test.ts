@@ -1,14 +1,14 @@
 // What an agent in a checkout is owed of its persona, given the instruction
 // files its provider reads there.
 
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { human } from '@yaks/id'
 import { fleet } from './testing.ts'
 import { personaFiles } from './files.ts'
 import { voice } from './voice.ts'
 import { wear } from './worn.ts'
-import { owed } from './owed.ts'
+import { owed, projection } from './owed.ts'
 
 let then = (g: Graph, ...batch: Bundle[]): Graph => (g.apply(batch), g)
 
@@ -50,4 +50,22 @@ Deno.test('a checkout the graph does not know, or a project with no common perso
     persona: { home: null },
   })
   assertEquals(await owed(bare, '/r/agent', []), undefined)
+})
+
+Deno.test('a chosen persona is omitted when its file says it', async () => {
+  let g = fleet('/r')
+  let worn = (await wear(g.storage, g.vocab)('n2'))!
+  assertEquals(
+    (await owed(g, '/elsewhere', [], 'n2'))?.text,
+    await spoken(g, 'n2'),
+  )
+  assertEquals(
+    await owed(g, '/r', [projection(g.vocab)(worn)], 'n2'),
+    undefined,
+  )
+  await assertRejects(
+    () => owed(g, '/r', [], 'missing'),
+    Error,
+    'no persona called missing',
+  )
 })

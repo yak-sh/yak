@@ -23,6 +23,11 @@
           "ref": "model",
           "description": "id or registered name of the model the run uses; optional"
         },
+        "persona": {
+          "type": "string",
+          "ref": "persona",
+          "description": "the persona to carry, by id or name (default: the checkout's persona)"
+        },
         "effort": {
           "type": "string",
           "description": "the reasoning effort, where the model accepts such a setting"

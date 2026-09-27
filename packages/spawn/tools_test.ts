@@ -18,6 +18,7 @@ import { effects } from '@yaks/effects'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
+import { personaDoc } from '@yaks/persona'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import {
@@ -48,6 +49,7 @@ let host = () => {
       sessionDoc,
       toolsDoc,
       modelDoc,
+      personaDoc,
       processDoc,
       docDoc,
       taskDoc,
@@ -137,6 +139,22 @@ Deno.test('a spawn lands the session, the request and the lease', async () => {
   let [held] = await g.read('.claim&*')
   assertEquals(held.entity.eid, 'the-task')
   assertEquals(comp(held, 'claim')?.session, session.entity.eid)
+})
+
+Deno.test('a spawn records the chosen persona on its session', async () => {
+  let { g } = host()
+  let persona = crypto.randomUUID()
+  await g.apply([
+    ...shelf,
+    { entity: { eid: persona }, doc: { title: 'Operator' }, persona: {} },
+  ])
+  await through(g, 'session_spawn', {
+    task: 'the-task',
+    provider: P,
+    persona,
+  })
+  let [session] = await g.read('.session&*')
+  assertEquals(comp(session, 'session')?.persona, persona)
 })
 
 Deno.test('a spawn refuses what is not a provider, and work that is not there', async () => {

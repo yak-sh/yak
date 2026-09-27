@@ -3,6 +3,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { promptEntry } from '@yaks/context'
 import { instructionFiles } from '@yaks/context/host'
 import { input } from '../openai/responses.ts'
+import { voice, wear } from '@yaks/persona'
 import { harness } from './testing.ts'
 
 Deno.test('instruction admission snapshots files in stable ancestor order', async () => {
@@ -90,6 +91,51 @@ Deno.test('root admission is snapshotted and explicit later context is an instru
       ),
       ['shared rule', 'additional rule'],
     )
+  } finally {
+    await a.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('a native session carries its chosen graph persona into the model request', async () => {
+  let dir = await Deno.makeTempDir()
+  let { local } = await import('./local.ts')
+  let h = await harness()
+  let requests: import('@yaks/model').Request[] = []
+  let persona = crypto.randomUUID()
+  await h.g.apply([{
+    entity: { eid: persona },
+    doc: { title: 'Operator', body: 'Attend to the task graph.' },
+    persona: {},
+  }])
+  await Deno.writeTextFile(dir + '/AGENTS.md', 'Repository guidance.')
+  let a = local({
+    h,
+    cwd: dir,
+    name: 'fake',
+    model: (req) => {
+      requests.push(req)
+      return Promise.resolve({
+        id: 'r',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'ok' }],
+      })
+    },
+  })
+  try {
+    let id = await a.start('work', { persona })
+    await a.idle(id)
+    let expected = voice(h.g.vocab)(
+      (await wear(h.g.storage, h.g.vocab)(persona))!,
+    )
+    assertEquals(
+      requests[0].items.filter((i) => i.kind == 'instruction').map((i) =>
+        i.text
+      ),
+      ['Repository guidance.', expected],
+    )
+    let [session] = await h.g.get([id])
+    assertEquals((session.session as Comp).persona, persona)
   } finally {
     await a.close()
     await Deno.remove(dir, { recursive: true })

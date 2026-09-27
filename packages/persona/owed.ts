@@ -18,7 +18,13 @@
 // which ones its provider reads.
 
 import { and, eq, type Input, list, present } from '@yaks/query'
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Eid,
+  type Graph,
+  Refused,
+} from '@yaks/graph'
 import { relations } from '@yaks/edge'
 import { DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
@@ -102,7 +108,16 @@ export let owed = async (
   g: Graph,
   path: string,
   files: string[],
+  persona?: string,
 ): Promise<Owed | undefined> => {
+  if (persona) {
+    let found = await g.address([persona])
+    let worn = await wear(g.storage, g.vocab)(found.get(persona) ?? persona)
+    if (!worn) throw new Refused(`no persona called ${persona}`)
+    return files.includes(projection(g.vocab)(worn))
+      ? undefined
+      : { source: human(g.vocab)(worn.persona), text: voice(g.vocab)(worn) }
+  }
   let needs = ['worktree', 'repo', 'project', PERSONA]
   if (!needs.every((c) => g.vocab.comp(c))) return
   let repos = (await g.storage.read(and(eq('worktree.path', path))))

@@ -306,6 +306,12 @@
           "death": "detach",
           "description": "who it speaks as — the identity that survives a /clear, where `created.via` is the run"
         },
+        "persona": {
+          "type": "string",
+          "ref": "persona",
+          "death": "keep",
+          "description": "the instructions chosen when this session began"
+        },
         "log": {
           "type": "string",
           "ref": "log",

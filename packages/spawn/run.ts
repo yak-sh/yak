@@ -268,7 +268,13 @@ let given = async (
   adapter: Adapter,
 ): Promise<string | undefined> => {
   let found = adapter.file ? await text(`${checkout}/${adapter.file}`) : null
-  let owes = await owed(g, checkout, found == null ? [] : [found])
+  let selected = comp(await one(g, session), SESSION)?.persona
+  let owes = await owed(
+    g,
+    checkout,
+    found == null ? [] : [found],
+    selected == null ? undefined : String(selected),
+  )
   if (!owes) return undefined
   if (g.vocab.comp('prompt')) {
     let s = await snapshot(owes.text, owes.source)

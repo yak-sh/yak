@@ -47,6 +47,7 @@ export let PLUGINS: string[] = [
   '@yaks/connections',
   '@yaks/mcp-client',
   '@yaks/git',
+  '@yaks/persona',
   '@yaks/harness',
 ]
 

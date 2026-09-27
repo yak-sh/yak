@@ -119,7 +119,7 @@ export type Where = { phase: string; session?: Eid }
 /** What a new session opens with: where it lives, and the instruction files
  * found there, each snapshotted into the transcript ahead of the first
  * message. */
-export type Opening = { home?: Comp; files?: Snapshot[] }
+export type Opening = { home?: Comp; files?: Snapshot[]; persona?: Eid }
 
 /** How an agent is started: the graph it runs over, what serves it, what it
  * may do, and what its host lends it. */
@@ -145,7 +145,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   outputLimit?: number
   /** each step of every transcript, as it lands */
   each?: (step: Step) => void
-  opening?: () => Promise<Opening>
+  opening?: (persona?: Eid) => Promise<Opening>
   /** context an ask carries without storing its bytes in entries */
   context?: Deps['contextItems']
   /** defects, apart from refusals (default `console.error`) */
@@ -171,7 +171,7 @@ export type Agent<H extends Host = Host> = {
    * `by` is who wrote the instruction, where the caller knows. */
   start: (
     prompt: string,
-    o?: { effort?: string; model?: Eid; by?: Eid },
+    o?: { effort?: string; model?: Eid; persona?: Eid; by?: Eid },
   ) => Promise<Eid>
   /** the configured models, and what this session asks for next */
   models: (session?: Eid) => Promise<ModelSelection>
@@ -257,7 +257,10 @@ export let begin = async (
     ...context,
     {
       entity: { eid: session },
-      session: { id: session.slice(0, 8) },
+      session: {
+        id: session.slice(0, 8),
+        ...o.persona ? { persona: o.persona } : {},
+      },
       ...o.home ? { home: o.home } : {},
       ...prompt ? {} : { using: o.using },
       $actor: through(session, o.by),
@@ -469,14 +472,15 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     },
     start: admitted((
       prompt: string,
-      o: { effort?: string; model?: Eid; by?: Eid } = {},
+      o: { effort?: string; model?: Eid; persona?: Eid; by?: Eid } = {},
     ) =>
       admit(h.g, undefined, opts, async () => {
         const chosen = o.model
           ? await modelUsing(h.g, o.model, implementations)
           : {}
         return begin(h.g, prompt, {
-          ...await opts.opening?.(),
+          ...await opts.opening?.(o.persona),
+          ...o.persona ? { persona: o.persona } : {},
           by: o.by,
           using: {
             ...using,

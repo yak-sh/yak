@@ -113,6 +113,34 @@ Deno.test('session new opens an empty TUI session and requires input otherwise',
   }
 })
 
+Deno.test('session new accepts a graph persona and snapshots its instructions', async () => {
+  let h = await harness()
+  let persona = crypto.randomUUID()
+  await h.g.apply([{
+    entity: { eid: persona },
+    doc: { title: 'Operator', body: 'Guide this work.' },
+    persona: {},
+  }])
+  try {
+    let [session] = await runs().session_new!({
+      entity: { eid: crypto.randomUUID() },
+      call: { args: { tui: true, persona } },
+    }, h.g)
+    assertEquals((session.session as Record<string, unknown>).persona, persona)
+    let entries = await transcript(h.g, session.entity.eid)
+    assert(
+      entries.some((e) =>
+        e.prompt &&
+        String((e.content as Record<string, unknown>)?.body).includes(
+          'Guide this work.',
+        )
+      ),
+    )
+  } finally {
+    await h.close()
+  }
+})
+
 Deno.test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {
   const { parametersOf } = await import('./tools.ts')
   const { toolDefinition } = await import('@yaks/vocab/tools')

@@ -182,6 +182,7 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
       let task = str(args.task)
       let provider = str(args.provider)
       let model = str(args.model)
+      let persona = str(args.persona)
       let on = (await one(graph, task))!
       if (model && await spelling(graph, provider, model) == null) {
         throw new Error(
@@ -201,7 +202,10 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
       // it.
       await graph.apply(
         signed([
-          { entity: { eid: session }, [SESSION]: {} },
+          {
+            entity: { eid: session },
+            [SESSION]: persona ? { persona } : {},
+          },
           {
             entity: { eid: uuid() },
             [ENTRY]: { session },

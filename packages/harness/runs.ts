@@ -32,7 +32,7 @@ import { ASTRA, begin, seed, through } from './agent.ts'
 import { selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
-import { homeAt } from './workspace.ts'
+import { homeAt, owing } from './workspace.ts'
 
 type Args = Record<string, unknown>
 let word = (args: Args, name: string): string | undefined => {
@@ -128,9 +128,13 @@ export let runs = (host?: Host): Runs => ({
     await graph.apply(seed({ provider, model }), { trusted: true })
     let cwd = Deno.cwd()
     let effort = word(args, 'effort')
+    let persona = word(args, 'persona')
+    let home = await homeAt(graph, cwd)
+    let files = await instructionFiles(cwd)
     let s = await begin(graph, prompt || undefined, {
-      home: await homeAt(graph, cwd),
-      files: await instructionFiles(cwd),
+      home,
+      files: [...files, ...await owing(graph, home, files, persona)],
+      ...persona ? { persona } : {},
       by: caller(call),
       using: {
         provider: identityEid(PROVIDER, [provider]),
