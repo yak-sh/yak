@@ -18,7 +18,7 @@
     "codex_cli_simplified_flow": "true",
     "originator": "yaks_harness"
   },
-  "refreshEncoding": "json",
-  "clientId": "app_EMoamEEZ73f0CkXaXp7hrann",
+  "refresh_encoding": "json",
+  "client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
   "hosts": ["chatgpt.com"]
 }

@@ -14,7 +14,7 @@ swaps sentinels on the way out with them.
 ## Stored data
 
 - `integration{name, title, tagline, site, logo, authorize, token, scopes,
-  params, auth, refreshEncoding, client, clientId, hosts, signature, testing, built}`
+  params, auth, refresh_encoding, client, client_id, hosts, signature, testing, built}`
   is an outside service. `name` is its identity, so one name is one integration.
   `title`, `tagline`, `site` and `logo` are how a page shows it: what a person
   calls it, one line saying what it is, its address on the web, and its mark as
@@ -71,7 +71,7 @@ holds its handle and the vault its id and secret, and `clientOf` reads it back
 at sign-in. A custom integration never signs in as a client a built one names,
 whose secret would go to the custom one's token endpoint. `connectable` says
 whether an integration can be connected there at all, and the page offers only
-those. A built integration with a public OAuth client carries its `clientId`
+those. A built integration with a public OAuth client carries its `client_id`
 directly as data; there is no secret to register or reveal.
 
 ## Verbs

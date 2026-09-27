@@ -56,7 +56,7 @@
           "enum": ["basic", "post"],
           "description": "how the client authenticates at the token endpoint (default basic)"
         },
-        "refreshEncoding": {
+        "refresh_encoding": {
           "type": "string",
           "enum": ["form", "json"],
           "description": "how the token endpoint receives refresh grants (default form)"
@@ -78,7 +78,7 @@
           "type": "string",
           "description": "the OAuth client it signs in as, by name: kept once as the secret `oauth_client <name>`, and shared by every integration naming it. Only a built integration signs in as a client a built one names"
         },
-        "clientId": {
+        "client_id": {
           "type": "string",
           "description": "a public OAuth client's id, shipped with a built integration"
         },

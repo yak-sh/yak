@@ -3,6 +3,7 @@
 
 import { identityEid } from '@yaks/graph'
 import { install, known } from '@yaks/connections'
+import openai from './openai.json' with { type: 'json' }
 import { graphMCP } from './mcp_registry.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { REDIRECT, type SignIns, signins } from './signin.ts'
@@ -66,7 +67,15 @@ export let authorize = (h: Pick<Harness, 'g' | 'vault'>): Authorization => {
       // A CLI command may reach this graph before its integration-install
       // effect runs. Apply the same seed change before asking for its link.
       if (!await known(h.g.read, provider.integration)) {
-        let seed = await install(h.g.read)
+        let seed = await install(
+          h.g.read,
+          provider.integration == 'openai'
+            ? [{
+              ...openai,
+              refresh_encoding: 'json',
+            }]
+            : undefined,
+        )
         if (seed.length) await h.g.apply(seed, { trusted: true })
       }
       // A CLI sign-in can start before a model or session seeded this provider.
