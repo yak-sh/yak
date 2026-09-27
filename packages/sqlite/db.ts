@@ -26,8 +26,11 @@ export type Opened = Driver & { close: () => void }
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
- * `synchronous = normal` and a five-second busy timeout; a database in memory
- * belongs to this process alone and needs none of that.
+ * `synchronous = normal` and a one-minute busy timeout; a database in memory
+ * belongs to this process alone and needs none of that. A graph change may be
+ * a large atomic batch, so contention gives the one writer that bounded
+ * minute to finish. A writer held longer is a performance failure, not a
+ * reason for every other process to wait forever.
  *
  * ```ts
  * import { open } from '@yaks/sqlite/db'
@@ -45,9 +48,10 @@ export let open = (path: string): Opened => {
   let db = new Database(path)
   // The busy timeout before anything else: the driver reads the schema as it
   // is built, and a file another connection holds locked (its last checkpoint,
-  // as it closes) is waited for, never refused.
+  // as it closes, or a large atomic batch) is waited for, never refused while
+  // that bounded transaction finishes.
   if (path != ':memory:') {
-    db.exec(render({ t: 'pragma', name: 'busy_timeout', value: 5000 }).sql)
+    db.exec(render({ t: 'pragma', name: 'busy_timeout', value: 60_000 }).sql)
   }
   let d = driver(db)
   let set = (name: string, value: string | number) =>

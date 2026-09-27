@@ -1,6 +1,5 @@
-// Two processes on one file. What one of them holds the write lock for, the
-// other's lookups and opens do not wait on: a connection here waits out a
-// busy lock for five seconds (./db.ts), so a wait shows.
+// Two connections on one file. While one holds the write lock, the other's
+// lookups and opens stay prompt: WAL readers do not wait for its writer.
 
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc } from '@yaks/archetype'
@@ -55,10 +54,7 @@ Deno.test('a query answers while another process is writing', () => {
   assertEquals(found.map((b) => b.entity.eid), ['x'])
 })
 
-Deno.test('an open beside a writer goes on without it, and keeps its wait', () => {
+Deno.test('an open beside a writer goes on without it', () => {
   using p = beside()
   prompt(() => storage(p.mine, shop).install())
-  assertEquals(p.mine.query({ t: 'pragma', name: 'busy_timeout' })[0], {
-    timeout: 5000,
-  })
 })

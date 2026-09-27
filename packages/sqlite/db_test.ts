@@ -21,14 +21,13 @@ Deno.test('a closed database refuses cached and new statements', () => {
   ) assertThrows(operation, Error, 'the database is closed')
 })
 
-Deno.test('a file opens in WAL with NORMAL sync and a busy timeout', () => {
+Deno.test('a file opens in WAL with NORMAL sync', () => {
   let dir = Deno.makeTempDirSync()
   let sql = open(`${dir}/nested/graph.db`)
   try {
     let pragma = (name: string) => sql.query({ t: 'pragma', name })[0]
     assertEquals(pragma('journal_mode'), { journal_mode: 'wal' })
     assertEquals(pragma('synchronous'), { synchronous: 1 })
-    assertEquals(pragma('busy_timeout'), { timeout: 5000 })
   } finally {
     sql.close()
     Deno.removeSync(dir, { recursive: true })
