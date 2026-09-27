@@ -3,8 +3,6 @@
 // (`read`) and gets one answer: which way to move, relative to the camera,
 // what was pressed since the last frame, and how far the view was dragged.
 
-import { pointer } from './pointer.ts'
-
 export type Intent = {
   /** right and forward, relative to the camera, at most 1 long */
   move: [number, number]
@@ -113,7 +111,10 @@ export let listen = (
     number,
     { x: number; y: number; far: number; button: number; type: string }
   >()
-  let cursor = pointer(stage, glass)
+  let mouseDrags = new Set<number>()
+  let showCursor = () => {
+    if (!mouseDrags.size) stage.style.cursor = ''
+  }
 
   let base = document.createElement('div')
   base.className = 'Stick'
@@ -137,11 +138,25 @@ export let listen = (
     if (a) pressed.add(a)
   })
   addEventListener('keyup', (e) => held.delete(e.code))
-  addEventListener('blur', () => held.clear())
+  addEventListener('blur', () => {
+    held.clear()
+    for (let id of drags.keys()) {
+      if (stage.hasPointerCapture(id)) stage.releasePointerCapture(id)
+    }
+    drags.clear()
+    stick = null
+    rest()
+    mouseDrags.clear()
+    showCursor()
+  })
 
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
-    if (e.pointerType == 'touch') stage.setPointerCapture(e.pointerId)
+    stage.setPointerCapture(e.pointerId)
+    if (e.pointerType == 'mouse') {
+      mouseDrags.add(e.pointerId)
+      stage.style.cursor = 'none'
+    }
     if (e.pointerType == 'touch' && !stick && e.clientX < innerWidth * 0.45) {
       stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
       base.classList.remove('Stick-rest')
@@ -169,8 +184,8 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     if (!d) return
-    let mx = cursor.locked() ? e.movementX : e.clientX - d.x
-    let my = cursor.locked() ? e.movementY : e.clientY - d.y
+    let mx = e.pointerType == 'touch' ? e.clientX - d.x : e.movementX
+    let my = e.pointerType == 'touch' ? e.clientY - d.y : e.movementY
     d.far += Math.hypot(mx, my)
     d.x = e.clientX
     d.y = e.clientY
@@ -187,6 +202,8 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     drags.delete(e.pointerId)
+    mouseDrags.delete(e.pointerId)
+    showCursor()
     // A click that did not drag is a blow, or a dodge from the right
     // button; a tap on the right of a phone is a blow too, where the thumb
     // already is.
@@ -197,9 +214,14 @@ export let listen = (
   }
   stage.addEventListener('pointerup', up)
   stage.addEventListener('pointercancel', up)
-  document.addEventListener('pointerlockchange', () => {
-    if (cursor.locked()) return
-    for (let [id, d] of drags) if (d.type != 'touch') drags.delete(id)
+  stage.addEventListener('lostpointercapture', (e) => {
+    drags.delete(e.pointerId)
+    mouseDrags.delete(e.pointerId)
+    showCursor()
+    if (stick?.id == e.pointerId) {
+      stick = null
+      rest()
+    }
   })
   stage.addEventListener('wheel', (e) => {
     e.preventDefault()

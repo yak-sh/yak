@@ -141,7 +141,7 @@
     color: var(--deep);
   }
 
-  &:is(:hover, .Pointer-hover):not([aria-selected='true']) {
+  &:hover:not([aria-selected='true']) {
     background: var(--paper);
   }
 }
