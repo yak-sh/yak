@@ -21,8 +21,9 @@
 //    and no `launch` property: the transaction that writes that entry is the
 //    request, and ./effects.ts is what answers it.
 //
-// A run starts with its persona. The persona its checkout's repository carries
-// (@yaks/persona `owed`) goes to the provider through its own instruction flag,
+// A run starts with its selected persona, or the one its checkout's repository
+// carries by default (@yaks/persona `owed`). It goes through the provider's
+// instruction flag,
 // unless the instruction file the provider reads there already says it: a
 // run's own worktree has the repository's AGENTS.md link but not the ignored
 // directory it points into. What it was given is snapshotted into its

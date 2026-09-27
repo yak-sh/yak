@@ -97,7 +97,8 @@ export type Owed = { source: string; text: string }
  * repository carries, given the text of each instruction file its provider
  * reads there. Nothing when a file already is that persona's projection, when
  * the graph knows no checkout at `path`, or when its project has no common
- * persona.
+ * persona. Passing `persona` selects a graph persona instead of the checkout's
+ * common one, even when the checkout is not known to the graph.
  *
  * ```ts ignore
  * let owes = await owed(g, '/srv/runs/S-1', [agentsMd])

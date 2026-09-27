@@ -24,8 +24,8 @@ export let homeAt = async (g: Graph, cwd: string): Promise<Comp> => {
   return { ...(tree ? { worktree: tree.entity.eid } : {}), cwd }
 }
 /** What a session opening at `home` is owed beside the instruction files it
- * found there: the persona its checkout carries (@yaks/persona `owed`), as one
- * more snapshot, or nothing where one of those files already says it. */
+ * found there: its chosen persona, or the checkout's common persona by
+ * default, as one snapshot unless a file already says it. */
 export let owing = async (
   g: Graph,
   home: Comp,
