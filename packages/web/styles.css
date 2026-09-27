@@ -3999,7 +3999,7 @@ a[data-ref]:hover {
 .Tray_Row:hover {
   background: var(--soft);
 }
-.Tray_Row-live {
+.Tray_Row-session {
   align-items: flex-start;
 }
 /* The summary row (a List.Tile) takes the width; the ✕ stays a thumbnail. */

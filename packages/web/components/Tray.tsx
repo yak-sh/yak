@@ -136,52 +136,59 @@ let drop = (e: DragEvent) => {
   shelve(target, view, pin)
 }
 
-// The open panel's rows. Its own component so its SUBSCRIPTION lives exactly as
+// The open panel's rows. Its own component so its subscription lives exactly as
 // long as it is on screen: the strip's dots ride a projection carrying only the
 // columns a dot decides by (live.ts sessionDots), and a rendered ROW needs more
 // — the work SessionRow shows. So the panel holds the
 // fuller projection of the selected eids, which is a different sub, and gives
 // it back when it closes. A
 // collapsed tray — the default — never asks for those columns at all.
-let LiveRows = ({ ls }: { ls: [string, Ent][] }) => {
+let SessionGroup = (
+  { label, ls }: { label: 'live' | 'recent'; ls: [string, Ent][] },
+) => (
+  <Group>
+    <Label>{label}</Label>
+    {ls.map(([eid, s]) => (
+      <Row
+        mod='session'
+        key={eid}
+        draggable
+        // no pin in the payload: a session row isn't shelved, so
+        // dropping it on the canvas spawns a session card
+        onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
+      >
+        <Entity eid={eid} view='Tray.List.Tile' />
+        {!awake(s) && (
+          <X
+            type='button'
+            aria-label='dismiss'
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+              dismiss(eid)
+            }}
+          >
+            ×
+          </X>
+        )}
+      </Row>
+    ))}
+  </Group>
+)
+
+export let SessionRows = ({ ls }: { ls: [string, Ent][] }) => {
   useQueryEids(
     `.eid=${ls.map(([eid]) => eid).join(',')}&` +
       sessionDetail.split('&')[1] +
       '&.edges[worked]&.edges.peers=doc.title,task.status',
     true,
   )
+  let live = ls.filter(([, s]) => awake(s))
+  let recent = ls.filter(([, s]) => !awake(s))
   return (
-    <Group>
-      <Label>live</Label>
-      {ls.map(([eid, s]) => (
-        <Row
-          mod='live'
-          key={eid}
-          draggable
-          // no pin in the payload: a live row isn't shelved, so
-          // dropping it on the canvas SPAWNS a session card
-          onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
-        >
-          <Entity eid={eid} view='Tray.List.Tile' />
-          {
-            /* only a settled run dismisses — a live one wants your
-              eyes (stop it from its own view) */
-          }
-          {!awake(s) && (
-            <X
-              type='button'
-              aria-label='dismiss'
-              onClick={(e: MouseEvent) => {
-                e.stopPropagation()
-                dismiss(eid)
-              }}
-            >
-              ×
-            </X>
-          )}
-        </Row>
-      ))}
-    </Group>
+    <>
+      {live.length > 0 && <SessionGroup label='live' ls={live} />}
+      {recent.length > 0 && <SessionGroup label='recent' ls={recent} />}
+    </>
   )
 }
 
@@ -251,8 +258,8 @@ export let Tray = () => {
       </Strip>
       {trayOpen.value && (
         <Panel>
-          {ls.length > 0 && <LiveRows ls={ls} />}
-          {!ls.length && <Hint>no live sessions</Hint>}
+          {ls.length > 0 && <SessionRows ls={ls} />}
+          {!ls.length && <Hint>no sessions</Hint>}
         </Panel>
       )}
     </Frame>

@@ -2,9 +2,17 @@
 // shortcuts before it toggles the tray state.
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { mode } from '../live.ts'
+import { h } from 'preact'
+import { cache, ent, mode } from '../live.ts'
 import { type Ent, type Session } from '../types.ts'
-import { trayKey, trayOpen, trayRecent, traySessions } from './Tray.tsx'
+import { mount } from './mount.ts'
+import {
+  SessionRows,
+  trayKey,
+  trayOpen,
+  trayRecent,
+  traySessions,
+} from './Tray.tsx'
 import { graphStanding } from './session_status.tsx'
 
 Deno.test('t opens and closes the tray only from normal mode', () => {
@@ -58,6 +66,42 @@ Deno.test('tray sessions put live work first, then recent work', () => {
     ]).map(([eid]) => eid),
     ['live', 'newer', 'older', 'unstarted'],
   )
+})
+
+Deno.test('the tray shows live and recent sessions in separate sections', () => {
+  cache.value = {
+    live: {
+      entity: { eid: 'live', num: 1 },
+      session: { eid: 'live', id: 'live', status: 'running' },
+      brief: { eid: 'live', text: 'Active work' },
+    },
+    done: {
+      entity: { eid: 'done', num: 2 },
+      session: { eid: 'done', id: 'done', status: 'settled' },
+      brief: { eid: 'done', text: 'Completed work' },
+    },
+  }
+  let mounted = mount(h(SessionRows, {
+    ls: [['done', ent('done')], ['live', ent('live')]],
+  }))
+  try {
+    let groups = [...mounted.root.querySelectorAll('.Tray_Group')]
+    assertEquals(
+      groups.map((g) => g.querySelector('.Tray_Label')?.textContent),
+      ['live', 'recent'],
+    )
+    assertEquals(
+      groups.map((g) => g.querySelector('.SessionRow_Title')?.textContent),
+      ['Active work', 'Completed work'],
+    )
+    assertEquals(groups.map((g) => g.querySelectorAll('.Tray_X').length), [
+      0,
+      1,
+    ])
+  } finally {
+    mounted.free()
+    cache.value = {}
+  }
 })
 
 let status = (s: Session['status'], standing?: string) =>
