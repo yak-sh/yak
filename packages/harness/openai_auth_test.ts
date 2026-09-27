@@ -1,8 +1,8 @@
 // The harness signs in to OpenAI as a graph connection and reads its bearer
 // through the vault; an API key still selects the public API explicitly.
 
-import { assert, assertEquals } from '@std/assert'
-import { identityEid } from '@yaks/graph'
+import { assert, assertEquals, assertRejects } from '@std/assert'
+import { identityEid, Refused } from '@yaks/graph'
 import { compose } from '@yaks/cli/host'
 import { CODEX, OPENAI } from '@yaks/openai'
 import { authorize } from './authorize.ts'
@@ -78,6 +78,28 @@ Deno.test('OpenAI credential uses its grant, refreshes it, or selects an explici
       signin,
     )
     assertEquals(await key.credential(), { token: 'key', base: OPENAI })
+  } finally {
+    await h.close()
+  }
+})
+
+Deno.test('missing OpenAI sign-ins are refusals', async () => {
+  let h = await harness()
+  try {
+    let signin = signins(h)
+    signin.key = () => Promise.resolve(undefined)
+    signin.refresh = () => Promise.resolve(undefined)
+    let auth = openaiCredential(h, () => undefined, signin)
+    await assertRejects(
+      auth.credential,
+      Refused,
+      'Authorize OpenAI or set OPENAI_API_KEY',
+    )
+    await assertRejects(
+      () => auth.refresh({ token: 'stale', base: CODEX }),
+      Refused,
+      'Authorize OpenAI again',
+    )
   } finally {
     await h.close()
   }
