@@ -148,7 +148,7 @@ type Paint = {
 
 // Each kind's look, upright from its foot: the same boxes a hero holds
 // (figures.ts), lying on the ground and in the bag. A weapon is sized for a
-// child's hand, as the vale's people are drawn (figures.ts `BUILDS`), and
+// hand of the vale's people (figures.ts `BUILD`), and
 // swings its edge forward, toward −z: a blade and its guard run from −z to
 // +z, its flats to either side; a box's fourth number is how round its edges
 // are, crisp for a blade.

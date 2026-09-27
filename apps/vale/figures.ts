@@ -10,8 +10,7 @@
 //
 // People are built like children, the way they are in Portal Knights: a big
 // head, a short straight middle, short arms and legs bending at elbow and
-// knee, big hands and feet. A hero stands 1.3 m. A build is a few measures
-// (`BUILDS`), so they can be drawn grown instead, to compare. A hero wears
+// knee, big hands and feet. A hero stands 1.3 m. A hero wears
 // what they wear: their weapon in the right hand, what goes with it in the
 // left, and their armour over their tunic, each drawn from the item's own
 // look (items.ts). How they swing is their weapon's: up and over for a blade,
@@ -115,18 +114,17 @@ let HOLDS: Record<string, Hold> = {
   tome: { at: 0.03, out: 0.08 },
 }
 
-// A thing held, from its look (items.ts), in the hand's space, `k` times the
-// size it is in a child's hand.
-let grip = (kind: string, k: number): Box[] => {
+// A thing held, from its look (items.ts), in the hand's space.
+let grip = (kind: string): Box[] => {
   let t = ITEMS[kind]
   let h = HOLDS[t?.family ?? ''] ?? { at: 0 }
   let boxes: Box[] = (t?.look ?? []).map((
     [[x, y, z], [w, tall, d], c, round = 0.02],
   ) => [
-    [x * k, (h.hung ? h.at - y - tall : y - h.at) * k, (z + (h.out ?? 0)) * k],
-    [w * k, tall * k, d * k],
+    [x, h.hung ? h.at - y - tall : y - h.at, z + (h.out ?? 0)],
+    [w, tall, d],
     c,
-    round * k,
+    round,
   ])
   return h.across ? boxes.map(topple) : boxes
 }
@@ -196,50 +194,30 @@ export type Build = {
   hand: number
   /** the head's width, height and depth */
   head: Vec
-  /** how much larger than in a child's hand what they hold is drawn */
-  held: number
 }
 
-/** How the people of the vale are built: like children, the way they are in
- * Portal Knights (a big head, short arms and legs, big hands and boots), or
- * grown, as they were first drawn (`?build=grown`, main.ts). */
-export let BUILDS: Record<string, Build> = {
-  child: {
-    hips: 0.44,
-    leg: 0.18,
-    stance: 0.105,
-    boot: [0.2, 0.27],
-    torso: [0.44, 0.42, 0.3],
-    shoulder: [0.31, 0.34],
-    arm: 0.43,
-    sleeve: 0.14,
-    hand: 0.17,
-    head: [0.44, 0.4, 0.4],
-    held: 1,
-  },
-  grown: {
-    hips: 0.8,
-    leg: 0.2,
-    stance: 0.13,
-    boot: [0.22, 0.26],
-    torso: [0.54, 0.62, 0.32],
-    shoulder: [0.36, 0.56],
-    arm: 0.56,
-    sleeve: 0.18,
-    hand: 0.16,
-    head: [0.38, 0.38, 0.36],
-    held: 1.2,
-  },
+/** The build of a grown person in the vale. */
+export let BUILD: Build = {
+  hips: 0.44,
+  leg: 0.18,
+  stance: 0.105,
+  boot: [0.2, 0.27],
+  torso: [0.44, 0.42, 0.3],
+  shoulder: [0.31, 0.34],
+  arm: 0.43,
+  sleeve: 0.14,
+  hand: 0.17,
+  head: [0.44, 0.4, 0.4],
 }
 
 /** How tall someone of a build stands, ground to crown. */
 export let stature = (b: Build) => b.hips + b.torso[1] + b.head[1]
 
-// How much bigger than a child's `v` is, along each axis.
-let over = (v: Vec, child: Vec): Vec => [
-  v[0] / child[0],
-  v[1] / child[1],
-  v[2] / child[2],
+// How a build's `v` fits the usual measure along each axis.
+let over = (v: Vec, base: Vec): Vec => [
+  v[0] / base[0],
+  v[1] / base[1],
+  v[2] / base[2],
 ]
 
 /** One of the people of the vale, built `b`, in their own colours: a sword
@@ -265,8 +243,8 @@ export let person = (
   let pants = weight('feet') == 'plate' ? tone(feet) : 0x5b4a3e
   let boots = feet ? tone(feet) : 0x5a3c28
   let sole = weight('feet') == 'cloth' ? 0.08 : 0.14
-  let kt = over(b.torso, BUILDS.child.torso)
-  let kh = over(b.head, BUILDS.child.head)
+  let kt = over(b.torso, BUILD.torso)
+  let kh = over(b.head, BUILD.head)
   let root = new THREE.Group()
   let body = new THREE.Group()
   root.add(body)
@@ -353,7 +331,7 @@ export let person = (
         ],
         [[-0.07, tip, -0.07], [0.14, 0.12, 0.14], 0x8fd46a],
       ]
-      : grip(dress ? worn('main') : 'sword2', b.held),
+      : grip(dress ? worn('main') : 'sword2'),
     fist,
     0.05,
   )
@@ -361,7 +339,7 @@ export let person = (
   let off = worn('off'), side = ITEMS[off]?.family
   // A blade in the left hand too is held as the right holds its own.
   let twin = ITEMS[off]?.slot == 'main'
-  let other = partOf(grip(off, b.held), fist, 0.05)
+  let other = partOf(grip(off), fist, 0.05)
   foreL.add(other)
   let head = partOf(
     fit([

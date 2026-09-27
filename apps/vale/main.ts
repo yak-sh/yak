@@ -24,7 +24,7 @@ import { dealbox } from './dealbox.ts'
 import { deals } from './deals.ts'
 import { map } from './map.ts'
 import { menu } from './menu.ts'
-import { BUILDS, type Figure, hero, stature } from './figures.ts'
+import { BUILD, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
 import { ahead, grown, meshed } from './grown.ts'
@@ -91,9 +91,6 @@ let asked = Number(new URLSearchParams(location.search).get('voxel'))
 let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(SIZE / asked)
   ? asked
   : VOXEL
-// How the people are built: `?build=grown` draws them grown, to compare.
-let built = new URLSearchParams(location.search).get('build') ?? ''
-let BUILD = Object.hasOwn(BUILDS, built) ? BUILDS[built] : BUILDS.child
 // The first level starts growing before anything else, in every worker, since
 // it takes longest: the one this tab's hero was last seen in, or Mossvale. It
 // is let go once drawn, so a level the hero has left is not kept.
