@@ -3,11 +3,11 @@
 // they carry, and by a village's fire, the rack of plain arms anyone may take
 // to try. Each piece of gear is its own, framed and named in its rarity's
 // colour (rarity.ts); everything else is a stack of its kind. Tap a thing to
-// see what it is, what it rolled, the abilities it gives, and what wearing it
-// would change, then wear it, take it off, or take it from the rack; a second
-// dagger, for a hero who knows how, shows what it would change in the other
-// hand. B or the tray's bag opens it. It is written again only when what it
-// shows changed.
+// see, at the sheet's foot, what it is, what it rolled, the abilities it
+// gives, and what wearing it would change, then wear it, take it off, or take
+// it from the rack; a second dagger, for a hero who knows how, shows what it
+// would change in the other hand. B or the tray's bag opens it. It is written
+// again only when what it shows changed.
 import { ABILITIES, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
 import { bare, diff, into, LINES, numbers, rolled, trying } from './compare.ts'
@@ -235,11 +235,11 @@ export let pack = (panel: Panel, acts: Acts) => {
     box.innerHTML = `<div class=Pack>` +
       `<div class=Pack_Worn>${worn}</div>` +
       `<div class=Pack_Nums>${stats}</div>` +
-      `<div class=Pack_Pick>${card(s, f)}</div>` +
       `<h3 class=Pack_Head>In your bag</h3>` +
       `<div class=Pack_Grid>${
         bag || '<span class=Pack_Hint>Your bag is empty.</span>'
-      }</div>${rack}</div>`
+      }</div>${rack}` +
+      `<div class=Pack_Pick>${card(s, f)}</div></div>`
   }
 
   return {

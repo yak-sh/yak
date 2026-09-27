@@ -111,8 +111,8 @@ export let board = (panel: Panel, acts: Learning) => {
       }">✦ ${s.points} to spend</span>`,
     )
     box.innerHTML = `<div class="Pack Board">` +
-      `<div class=Board_Cols>${cols}</div>` +
-      `<div class=Pack_Pick>${card(s)}</div>${forget}</div>`
+      `<div class=Board_Cols>${cols}</div>${forget}` +
+      `<div class=Pack_Pick>${card(s)}</div></div>`
   }
 
   return {

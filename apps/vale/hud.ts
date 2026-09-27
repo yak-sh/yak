@@ -87,11 +87,13 @@ let MICS: Record<Mic, string> = {
 }
 
 /** The panels the glass holds, and the keys that open them. Crafting opens
- * at a station (station.ts), and the deals beside a villager (dealbox.ts). */
+ * at a station (station.ts), and the deals beside a villager (dealbox.ts).
+ * The map and the menu are one size whatever is done in them, so each is as
+ * tall as it is; every other sheet keeps one height (ui/Panel.css). */
 export let SHEETS = {
-  map: { title: 'Map', keys: ['KeyM'] },
+  map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
   pack: { title: 'Pack', keys: ['KeyB', 'KeyI'] },
-  menu: { title: 'Menu', keys: ['Escape'] },
+  menu: { title: 'Menu', keys: ['Escape'], tall: 'auto' },
   skills: { title: 'Skills', keys: ['KeyK'] },
   journal: { title: 'Journal', keys: ['KeyL'] },
   craft: { title: 'Crafting' },

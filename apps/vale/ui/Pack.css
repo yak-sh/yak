@@ -1,11 +1,16 @@
 /* The pack (pack.ts): what is worn, six slots in a grid; the numbers they
-   make; the thing picked, what it rolled, and what it would change; then the
-   bag, and by a fire the rack. A piece finer than common is framed and
-   tinted in its rarity's colour (Rarity.css), and a legendary glows. */
+   make; the bag, and by a fire the rack; and at the sheet's foot the thing
+   picked, what it rolled, and what it would change. A piece finer than
+   common is framed and tinted in its rarity's colour (Rarity.css), and a
+   legendary glows. The skill board and a station's crafting are packs too.
+   The card for the thing picked is last, so nothing moves when it changes,
+   and stays at the foot of the sheet while the rest scrolls. */
 .Pack {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--gap);
   width: min(30rem, 100cqw - 2rem);
+  min-height: 100%;
 }
 
 .Pack_Worn {
@@ -126,12 +131,16 @@
 }
 
 .Pack_Pick {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: grid;
   gap: 0.35rem;
   min-height: 3.2rem;
+  margin-top: auto;
   padding: 0.45rem 0.55rem;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--well) 45%, transparent);
+  background: color-mix(in srgb, var(--well) 45%, var(--paper));
 }
 
 .Pack_Card {

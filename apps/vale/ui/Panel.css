@@ -1,14 +1,21 @@
 /* A panel (panel.ts): a sheet over the glass, the world dimmed behind it, its
    title and close button over a body its owner draws, which scrolls when it
    is long. On a phone held upright it rises from the bottom, where the thumbs
-   are; otherwise it stands in the middle. It keeps inside the safe areas, and
-   is as wide as what is in it, up to the room there is. A body sizes itself
-   against the panel's room with container units (cqw, cqh). */
+   are; otherwise it stands in the middle. It keeps inside the safe areas.
+
+   A sheet keeps its place and size while it is open, whatever is picked or
+   shown in it: it is as wide as its body says (a body sizes itself against
+   the panel's room with container units, cqw and cqh, never by what is in
+   it), and `--tall` tall, or as tall as there is room for. A panel whose
+   body is one size whatever happens in it sets `--tall` to `auto` (hud.ts
+   `SHEETS`), and is as tall as its body. */
 .Panel {
+  --tall: 40rem;
   position: absolute;
   inset: 0;
   z-index: 3;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
   background: var(--scrim);
@@ -26,6 +33,7 @@
   width: fit-content;
   min-width: min(18rem, 100%);
   max-width: 100%;
+  height: var(--tall);
   max-height: 100%;
   overflow: hidden;
   border-radius: var(--radius-big);
@@ -70,11 +78,14 @@
   text-overflow: ellipsis;
 }
 
+/* Where a scrollbar takes room, its room is kept whether or not the body is
+   long enough for one, so the sheet's width never changes with it. */
 .Panel_Body {
   min-height: 0;
   padding: 0 1rem 1rem;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 @media (orientation: portrait) and (pointer: coarse) {

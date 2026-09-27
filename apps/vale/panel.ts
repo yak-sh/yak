@@ -23,6 +23,10 @@ export type Spec = {
   title: string
   /** the keys that open it and fold it away, as `KeyboardEvent.code`s */
   keys?: string[]
+  /** how tall its sheet stands, whatever is picked or shown in it, as CSS
+   * (ui/Panel.css `--tall`): `auto` for one whose body is one size whatever
+   * happens in it, which is then as tall as its body */
+  tall?: string
 }
 
 let el = (tag: string, cls: string) => {
@@ -40,6 +44,7 @@ export let panels = (glass: HTMLElement, busy: () => boolean) => {
     let box = el('section', `Panel Panel-${id}`)
     box.hidden = true
     box.setAttribute('aria-label', spec.title)
+    if (spec.tall) box.style.setProperty('--tall', spec.tall)
     let sheet = el('div', 'Panel_Sheet')
     let top = el('header', 'Panel_Head')
     let title = el('h2', 'Panel_Title')
