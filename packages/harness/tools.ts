@@ -1,4 +1,4 @@
-import { toolName } from '@yaks/graph'
+import { derivedEid, toolName } from '@yaks/graph'
 import { answerOf, runner, toolEid, worded } from '@yaks/tools'
 import { artifactTools } from './artifact_tools.ts'
 
@@ -78,11 +78,26 @@ export let graphTools = (
       await r.ensure()
       return worded(answerOf(
         await r.call({
-          entity: { eid: '$call' },
+          entity: {
+            eid: call?.call
+              ? derivedEid(`harness graph tool ${call.call.entity.eid}`)
+              : '$call',
+          },
           call: { to: toolEid(toolName(t)), args: args ?? {} },
           ...(actor ? { $actor: { by: actor.eid } } : {}),
         }),
       ))
+    },
+    recover: async (_, ctx) => {
+      let id = derivedEid(`harness graph tool ${ctx.call.entity.eid}`)
+      let [call] = await g.get([id])
+      if (!call) return undefined
+      let answer = await r.interruptCall(
+        id,
+        'Graph tool execution was interrupted. Its write may have landed; ' +
+          'inspect the graph before repeating it.',
+      )
+      return worded(answerOf(answer))
     },
   }))
 }

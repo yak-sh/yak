@@ -31,8 +31,9 @@ The ask is persisted **before calling the model**, with
 `attempt.state=inflight`, its original `ask.through` boundary, and resolved
 request configuration. Local context-image loading finishes first. A dispatch
 crash after admission but before network send is indistinguishable from a crash
-after send; either is treated conservatively as interrupted on restart. No
-automatic resend occurs.
+after send; either is treated as interrupted on restart. The resumed session
+asks the model to continue from its saved transcript and inspect state before
+repeating an action that may have completed.
 
 Each text item starts with a durable identity and empty body. The body is live
 until a checkpoint or finalization. Checkpoints occur on the next delta after 2
@@ -43,20 +44,19 @@ timer-based checkpoint while the provider is silent.
 
 Success patches the original ask to `completed` and updates the same response
 entries; it does not append duplicate final messages. Operational interruption
-(abort, transport/provider error, or an unfinished attempt recovered on restart)
-preserves received/checkpointed text and marks the attempt `interrupted`. An
-`error{code: "interrupted"}` entry records the outcome; it is not a defect or a
-crashed session. With no newer input the session settles, without automatically
-resending the request. New inputs already admitted during the attempt, or
-submitted afterward, continue normally. Repeated restarts do not append
-additional interruption records.
+(abort or transport/provider error) preserves received/checkpointed text and
+marks the attempt `interrupted`. An `error{code: "interrupted"}` entry records
+that outcome; a newer input can continue it. A worker restart instead adds a
+local recovery instruction and continues the session on its own. It preserves
+partial output and marks the prior attempt `interrupted`; repeated restarts do
+not append additional records for that attempt.
 
 Continuation uses the last completed response, never an interrupted attempt's
 provider ID. Intervening user inputs and partial assistant text are included as
 conversation history. Partial tool arguments are not admitted as executable
 calls. This is not a guarantee of exactly-once execution for provider-native
 side effects: an interrupted image or other native operation may have executed
-remotely, and a new explicit request may repeat it.
+remotely, so the resumed model is instructed to inspect before repeating it.
 
 Unexpected adapter/programming exceptions and checkpoint/finalization failures
 remain defects with exception records. Recognized operational errors bypass the
@@ -71,8 +71,8 @@ completed request's original prefix, as before.
 
 Shutdown lets the step in flight finish. A forced worker termination leaves the
 ask in flight and the transcript's lease held until its take runs out; the next
-run marks it interrupted rather than repeating it. Old inline readers must not
-be running against a streaming database.
+run marks it interrupted and asks the model to continue from saved history. Old
+inline readers must not be running against a streaming database.
 
 ## Measurements and limitations
 

@@ -22,7 +22,9 @@ export type Proc = { pid?: number; exit?: { code: number | null } }
 /** What a host lends the machine tools. */
 export type Machine = {
   /** starts a command line, run by bash, and answers its id */
-  start(command: string, cwd?: string): Promise<string>
+  start(command: string, cwd?: string, call?: string): Promise<string>
+  /** the process a durable call started, where this machine can recover one */
+  receipt?: (call: string) => Promise<string | undefined>
   /** the process by that id, or null when the machine has none */
   look(id: string): Promise<Proc | null>
   /** the last `n` lines it printed */
@@ -183,6 +185,18 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
   let told = async (id: string, head: string) =>
     [head, ...await m.tail(id, lines)].join('\n')
 
+  let shellResult = (id: string, p: Proc | null, ms?: number) =>
+    told(
+      id,
+      p?.exit
+        ? `process ${id} ${code(p.exit.code)}`
+        : !p?.pid
+        ? `process ${id} start unconfirmed — inspect before retrying`
+        : `process ${id} still running${pid(p)}${
+          ms == null ? '' : ` after ${ms}ms`
+        } — wait or stop it by that id`,
+    )
+
   let runs: Record<string, Tool['run']> = {
     shell: async (args, ctx) => {
       let ms = Number(args.timeout ?? o.budget ?? BUDGET)
@@ -190,15 +204,13 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
       // outlived it is reported as running even if it exits a moment later.
       let end = Date.now() + ms
       let cwd = args.cwd == null ? await here(ctx) : String(args.cwd)
-      let id = await m.start(String(args.command ?? ''), cwd)
-      let p = await settle(id, end - Date.now()) ?? {}
-      return told(
-        id,
-        p.exit
-          ? `process ${id} ${code(p.exit.code)}`
-          : `process ${id} still running${pid(p)} after ${ms}ms — ` +
-            'wait or stop it by that id',
+      let id = await m.start(
+        String(args.command ?? ''),
+        cwd,
+        ctx?.call.entity.eid,
       )
+      let p = await settle(id, end - Date.now()) ?? {}
+      return shellResult(id, p, ms)
     },
     wait: async (args) => {
       let id = String(args.process ?? '')
@@ -236,5 +248,16 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
       return `wrote ${path}`
     },
   }
-  return machineDeclared(o).map((d) => ({ ...d, run: runs[d.name] }))
+  let recover = async (_args: Record<string, unknown>, ctx?: ToolContext) => {
+    let call = ctx?.call.entity.eid
+    let id = call && await m.receipt?.(call)
+    return id
+      ? await shellResult(id, await m.look(id))
+      : 'Shell execution has no process receipt; inspect before retrying.'
+  }
+  return machineDeclared(o).map((d) => ({
+    ...d,
+    run: runs[d.name],
+    ...d.name == 'shell' ? { recover } : {},
+  }))
 }

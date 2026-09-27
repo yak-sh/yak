@@ -10,7 +10,7 @@
 // looked at here.
 
 import { dirname } from '@std/path'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import { CONTENT, OUTPUT } from '@yaks/session'
 import {
   EXIT,
@@ -42,6 +42,7 @@ export let boxMachine = (g: Graph, o: Opts = {}): Machine => {
   // lines arrive and the exit code is written within it, not a second later.
   let opts: Opts = { ...o, poll: o.poll ?? 100 }
   let processes = store(g)
+  let processFor = (call: string) => derivedEid(`shell process ${call}`)
   let look = async (eid: string): Promise<Proc | null> => {
     let [self] = await g.get([eid])
     if (!self) return null
@@ -54,13 +55,27 @@ export let boxMachine = (g: Graph, o: Opts = {}): Machine => {
   }
   return {
     poll: opts.poll,
-    start: async (command, cwd) =>
-      (await launch(processes, {
+    start: async (command, cwd, call) => {
+      let eid = call ? processFor(call) : undefined
+      if (eid) {
+        let [prior] = await g.get([eid])
+        if (prior?.[PROCESS]) return eid
+        // The receipt precedes the external act. An interrupted launch can
+        // then be inspected without starting the command a second time.
+        await g.apply([{ entity: { eid }, [PROCESS]: {} }])
+      }
+      return (await launch(processes, {
         command: 'bash',
         args: ['-c', command],
         env: Deno.env.toObject(),
         cwd,
-      }, opts)).eid,
+      }, { ...opts, ...eid ? { eid } : {} })).eid
+    },
+    receipt: async (call) => {
+      let eid = processFor(call)
+      let [row] = await g.get([eid])
+      return row?.[PROCESS] ? eid : undefined
+    },
     look,
     tail: async (eid, n) =>
       (await g.read(`.${OUTPUT}.source=${eid}&?${CONTENT}`))

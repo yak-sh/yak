@@ -287,12 +287,13 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
         (await resumed.agent.transcript(id)).some((b) =>
           (b.attempt as { state?: string })?.state == 'interrupted'
         ),
-        'an ambiguously dispatched streaming request must not be replayed',
+        'the interrupted ask remains in the transcript',
       )
       assert(
-        !(await resumed.agent.transcript(id)).some((b) =>
+        (await resumed.agent.transcript(id)).some((b) =>
           (b.content as { body?: string })?.body == 'ok'
         ),
+        'the new worker finishes the session',
       )
     } finally {
       await resumed.close()

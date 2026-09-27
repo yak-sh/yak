@@ -190,8 +190,10 @@ text as `content{body}` plus `output{source}` beside a `result` entry with its
 sequence allocation. The general tool-runner plugin is not registered because
 its effect-phase execution would race the session loop. An unknown tool is
 handled by a refusing tool, producing an `error{code}` result. A durable
-`execution.state=running` without a result requires explicit recovery and is not
-replayed automatically (`UnfinishedCall`).
+`execution.state=running` without a result is not replayed. On restart, a tool
+may recover its outcome from durable state; otherwise the runner records an
+interrupted result so the model can inspect the state before taking another
+action. The session then continues.
 
 ## Reading transcripts
 

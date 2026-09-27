@@ -81,6 +81,33 @@ Deno.test('wait answers the code of a child that outlived its call', async () =>
   )
 })
 
+Deno.test('an interrupted shell call recovers its process without running twice', async () => {
+  let g = tracked()
+  let o = opts()
+  let dir = await Deno.makeTempDir({ prefix: 'yaks-shell-recovery-' })
+  let command = `printf 'once\\n' >> '${dir}/started'; sleep 0.05; echo done`
+  let call = { entity: { eid: crypto.randomUUID() } }
+  let ctx = { session: crypto.randomUUID(), call, entries: [] }
+  let m = boxMachine(g, o)
+  let shell = machineTools(m).find((t) => t.name == 'shell')!
+  let wait = machineTools(m).find((t) => t.name == 'wait')!
+  try {
+    let id = eidIn(await shell.run({ command, timeout: 1 }, ctx))
+    assertEquals(await m.start(command, undefined, call.entity.eid), id)
+    await wait.run({ process: id })
+    let resumed = machineTools(boxMachine(g, o)).find((t) => t.name == 'shell')!
+    assertEquals(
+      await resumed.recover!({ command }, ctx),
+      `process ${id} exited 0\ndone`,
+    )
+    assertEquals(await Deno.readTextFile(`${dir}/started`), 'once\n')
+    assertEquals((await g.read('.process&*')).length, 1)
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+    await Deno.remove(o.dir!, { recursive: true })
+  }
+})
+
 Deno.test('wait says still running when its own timeout passes, and names nothing it cannot find', async () => {
   let g = tracked()
   let { shell, wait, stop } = named(g)

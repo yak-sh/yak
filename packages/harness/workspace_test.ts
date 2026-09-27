@@ -264,11 +264,16 @@ Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults 
     assertEquals(said.filter((b) => kindOf(b) == 'input').length, 1)
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/child')
     let shell = tools.find((t) => t.name == 'shell')!
-    let out = await shell.run({ command: 'pwd' }, { ...ctx, session: child })
+    let out = await shell.run({ command: 'pwd' }, {
+      ...ctx,
+      session: child,
+      call: { entity: { eid: 'shell-default' } },
+    })
     assert(out.includes(f.dir + '/child'))
     let explicit = await shell.run({ command: 'pwd', cwd: f.repo }, {
       ...ctx,
       session: child,
+      call: { entity: { eid: 'shell-explicit' } },
     })
     assert(explicit.includes(f.repo))
     assertEquals(await sessionCwd(f.h.g, child, '/wrong'), f.dir + '/child')

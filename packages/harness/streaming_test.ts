@@ -6,6 +6,8 @@ import { ModelError } from '@yaks/model'
 import { statusOf } from '@yaks/session'
 import { until } from '../process/testing.ts'
 import { at, harness, repo, worker } from './testing.ts'
+import { seed } from './agent.ts'
+import { identityEid } from '@yaks/graph'
 
 Deno.test('streaming records ask before dispatch, projects text without durable token writes, and finalizes same entry', async () => {
   const h = await harness()
@@ -189,23 +191,37 @@ Deno.test('new input while streaming is outside frozen ask boundary and served i
   }
 })
 
-Deno.test('restart of dispatched attempt is interrupted, never resent', async () => {
+Deno.test('restart resumes a dispatched attempt from its partial history', async () => {
   const h = await harness()
+  let requests = 0
   const a = local({
     cwd: repo(),
     h,
     streaming: true,
-    model: () => {
-      throw new Error('must not dispatch')
+    model: (req) => {
+      requests++
+      assert(
+        req.items.some((i) => i.kind == 'assistant' && i.text == 'checkpoint'),
+      )
+      return Promise.resolve({
+        id: 'continued',
+        model: 'fake',
+        items: [{ kind: 'assistant', text: 'continued' }],
+      })
     },
   })
   try {
     await h.g.apply([
+      ...seed(),
       { entity: { eid: 'interrupted-session' }, session: {} },
       {
         entity: { eid: 'question' },
         entry: { session: 'interrupted-session' },
         content: { body: 'question' },
+        using: {
+          provider: identityEid('provider', ['openai']),
+          model: identityEid('model', ['gpt-6-astra']),
+        },
       },
       {
         entity: { eid: 'request' },
@@ -225,9 +241,10 @@ Deno.test('restart of dispatched attempt is interrupted, never resent', async ()
     await a.resume()
     await a.idle('interrupted-session')
     const entries = await a.transcript('interrupted-session')
-    assertEquals(entries.filter((b) => b.error).length, 1)
+    assertEquals(requests, 1)
+    assertEquals(entries.filter((b) => b.error).length, 0)
     assertEquals(entries.filter((b) => b.exception).length, 0)
-    assertEquals(statusOf(entries), 'failed')
+    assertEquals(statusOf(entries), 'settled')
     assertEquals(
       (entries.find((b) => b.ask)!.attempt as Comp).state,
       'interrupted',
@@ -235,6 +252,9 @@ Deno.test('restart of dispatched attempt is interrupted, never resent', async ()
     assertEquals(
       (entries.find((b) => b.entity.eid == 'partial')!.content as Comp).body,
       'checkpoint',
+    )
+    assert(
+      entries.some((b) => (b.content as Comp | undefined)?.body == 'continued'),
     )
   } finally {
     await a.close()

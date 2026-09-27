@@ -204,6 +204,13 @@ export type Runner = {
    * that holder claimed and never answered instead, read from the graph: what
    * is written for a process that ended without writing it itself. */
   interrupt: (why: string, holder?: Eid) => Promise<Bundle[]>
+  /** Give an abandoned, anonymously claimed call a result without invoking
+   * its tool again. Its effects may have landed before the runner died. */
+  interruptCall: (
+    call: Eid,
+    why: string,
+    answer?: Bundle[],
+  ) => Promise<Bundle[]>
 }
 
 /** The most characters of an answer's text {@link worded} says: the copy on
@@ -683,6 +690,37 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return out
   }
 
+  let interruptCall = async (
+    id: Eid,
+    why: string,
+    answer?: Bundle[],
+  ): Promise<Bundle[]> => {
+    let [call] = await g.get([id])
+    if (!call?.call) throw new CallError('call', 'Not a call: ' + id)
+    let prior = await recalled(id)
+    if (prior.length) return prior
+    let execution = call.execution as Comp | undefined
+    if (execution?.state != 'running' || execution.by != null) {
+      throw new UnfinishedCall(id)
+    }
+    let fault: Bundle = {
+      entity: { eid: '$fault' },
+      content: { body: why },
+      output: { source: id },
+      error: { code: 'interrupted' },
+    }
+    let said = answer ?? [fault]
+    try {
+      return await g.apply([
+        ...said,
+        ...ending(call, undefined, answer ? 'done' : 'failed', said),
+      ])
+    } catch (error) {
+      if (error instanceof Stale) return await recalled(id)
+      throw error
+    }
+  }
+
   return {
     rules: plans,
     tools,
@@ -741,6 +779,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       }
       return out
     },
+    interruptCall,
   }
 }
 

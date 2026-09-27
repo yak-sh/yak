@@ -90,6 +90,12 @@ export type Tool = Declared & {
     args: Record<string, unknown>,
     ctx?: ToolContext,
   ) => Promise<string> | string
+  /** Recover an invocation whose process ended before it recorded a result.
+   * Return its known outcome, or nothing when its effects are uncertain. */
+  recover?: (
+    args: Record<string, unknown>,
+    ctx: ToolContext,
+  ) => Promise<string | undefined> | string | undefined
 }
 
 /** A model as one provider serves it: the adapter that asks, and the name
@@ -307,13 +313,16 @@ export let react = async (
     (b.attempt as Comp | undefined)?.state == 'inflight'
   )
   if (unfinished) {
-    // A live invocation is serialized by the runner. Re-entering an unfinished
-    // attempt means interrupted execution, not permission to repeat a request.
+    // The request may have reached the provider. Its partial output stays in
+    // the transcript, but only a completed ask can be used as an anchor.
+    // Continue from that history after the former worker has gone.
     return append([
       { entity: unfinished.entity, attempt: { state: 'interrupted' } },
       line(
-        { [ERROR]: { code: 'interrupted' } },
-        'Response interrupted.',
+        {},
+        'System recovery: the previous response was interrupted. ' +
+          'Continue from the transcript. ' +
+          'Inspect the state before repeating any action that may have completed.',
       ),
     ])
   }
@@ -414,11 +423,33 @@ export let react = async (
         added.push(...await run.run(pending.entity.eid))
       } catch (error) {
         if (!(error instanceof UnfinishedCall)) throw error
-        return append([line(
-          { [EXCEPTION]: {} },
-          'Unfinished tool execution; inspect before retrying: ' +
+        let tool = toolEntities.get(String(comp(pending, CALL)?.to))
+        let answer: Bundle[] | undefined
+        try {
+          let recovered = await tool?.recover?.(argsOf(pending), {
+            session,
+            call: pending,
+            entries,
+            signal: deps.stopping,
+          })
+          if (recovered != null) {
+            answer = [{
+              entity: { eid: '$said' },
+              [CONTENT]: { body: recovered },
+              [OUTPUT]: { source: pending.entity.eid },
+            }]
+          }
+        } catch (failure) {
+          deps.report?.(failure, session, 'tool-recovery')
+        }
+        added.push(
+          ...await run.interruptCall(
             pending.entity.eid,
-        )])
+            'Tool execution was interrupted. Its effects may have completed. ' +
+              'Inspect the state before repeating it.',
+            answer,
+          ),
+        )
       }
     }
     return { did: 'ran', status: statusOf(await transcript(g, session)), added }
