@@ -1,15 +1,16 @@
 // Buildings as a walker and the camera meet them. A building's model is
 // voxels (buildings/kit.ts `raise`); its solid shape is the same voxels,
-// column by column, so it is solid exactly where it is drawn. A level keeps
-// each building it built, placed and turned (terrain.ts `buildings`), and
-// here is what stands in a walker's way (`hits`), what it stands on
-// (`standOn`), what is over its head (`over`), which building someone is in
-// (`within`), whether the camera may stand somewhere (`walled`), and which
-// roofs and upper floors to fade (`cutaway`).
+// column by column, so it is solid exactly where it is drawn. Each question
+// is asked of one building and a point: what of it stands in a walker's way
+// (`blocks`), what they stand on in it (`floorIn`), what is over their head
+// (`ceilingIn`), whether they are in it (`holds`), whether the camera may
+// stand there (`walls`), and what of it fades (`cutOf`). A level answers
+// with the buildings near the point (`hits`, `standOn`, `over`, `within`,
+// `walled`, `cutaway`).
 //
 // A door is not in the voxels: it swings open for whoever comes near it, so a
 // walker that opens doors (a hero, a villager) is never stopped by one, and
-// one that does not (a creature) is stopped by every one (`shut`).
+// one that does not (a creature) is stopped by every one (`shutIn`, `shut`).
 import {
   type Door,
   type Glow,
@@ -191,40 +192,42 @@ let reach = (
 let near = (b: Building, x: number, z: number, r: number) =>
   x > b.box[0] - r && x < b.box[2] + r && z > b.box[1] - r && z < b.box[3] + r
 
-/** Whether anything of a building within `r` metres of (x, z) is solid
+// Each question below is asked of one building and a point. What a level
+// answers is the answer of the buildings near that point, and this is the
+// one place that says which those are.
+let around = (v: Vale, x: number, z: number, r: number) =>
+  v.buildings.filter((b) => near(b, x, z, r))
+
+/** Whether anything of building `b` within `r` metres of (x, z) is solid
  * anywhere from height `lo` up to `hi`. */
-export let hits = (
-  v: Vale,
+export let blocks = (
+  b: Building,
   x: number,
   z: number,
   lo: number,
   hi: number,
   r: number,
 ): boolean =>
-  v.buildings.some((b) =>
-    near(b, x, z, r) &&
-    reach(b, x, z, r, (from, to) => {
-      let runs = b.solid.runs
-      for (let n = from; n < to; n += 2) {
-        if (b.y + runs[n] * b.size < hi && b.y + runs[n + 1] * b.size > lo) {
-          return true
-        }
+  near(b, x, z, r) && reach(b, x, z, r, (from, to) => {
+    let runs = b.solid.runs
+    for (let n = from; n < to; n += 2) {
+      if (b.y + runs[n] * b.size < hi && b.y + runs[n + 1] * b.size > lo) {
+        return true
       }
-    })
-  )
+    }
+  })
 
-/** The highest top of a building's voxels within `r` of (x, z) at or under
- * height `y`, or −Infinity. */
-export let standOn = (
-  v: Vale,
+/** The highest top of `b`'s voxels within `r` of (x, z) at or under height
+ * `y`, or −Infinity. */
+export let floorIn = (
+  b: Building,
   x: number,
   z: number,
   y: number,
   r: number,
 ): number => {
   let best = -Infinity
-  for (let b of v.buildings) {
-    if (!near(b, x, z, r)) continue
+  if (near(b, x, z, r)) {
     reach(b, x, z, r, (from, to) => {
       for (let n = from; n < to; n += 2) {
         let top = b.y + b.solid.runs[n + 1] * b.size
@@ -235,18 +238,17 @@ export let standOn = (
   return best
 }
 
-/** The lowest underside of a building's voxels within `r` of (x, z) over
- * height `y`, or Infinity: what a jump bumps its head on. */
-export let over = (
-  v: Vale,
+/** The lowest underside of `b`'s voxels within `r` of (x, z) over height
+ * `y`, or Infinity: what a jump bumps its head on. */
+export let ceilingIn = (
+  b: Building,
   x: number,
   z: number,
   y: number,
   r: number,
 ): number => {
   let best = Infinity
-  for (let b of v.buildings) {
-    if (!near(b, x, z, r)) continue
+  if (near(b, x, z, r)) {
     reach(b, x, z, r, (from, to) => {
       for (let n = from; n < to; n += 2) {
         let low = b.y + b.solid.runs[n] * b.size
@@ -268,8 +270,100 @@ export let opensFor = (d: Door, x: number, y: number, z: number) => {
   return Math.hypot(mx - x, mz - z) < OPEN && Math.abs(y - d.hinge[1]) < 2
 }
 
+/** Whether one of `b`'s doors, shut, stands within `r` of (x, z), anywhere
+ * from `lo` up to `hi`: in the way of a walker that opens no doors. */
+export let shutIn = (
+  b: Building,
+  x: number,
+  z: number,
+  lo: number,
+  hi: number,
+  r: number,
+): boolean =>
+  near(b, x, z, r) && b.doors.some((d) => {
+    if (d.hinge[1] >= hi || d.hinge[1] + d.tall <= lo) return false
+    let px = x - d.hinge[0], pz = z - d.hinge[2]
+    let t = Math.max(0, Math.min(d.wide, px * d.along[0] + pz * d.along[1]))
+    return Math.hypot(px - d.along[0] * t, pz - d.along[1] * t) < r + 0.06
+  })
+
+/** Whether someone at (x, y, z) stands within `b`'s walls. */
+export let holds = (b: Building, x: number, y: number, z: number) =>
+  x > b.foot[0] && x < b.foot[2] && z > b.foot[1] && z < b.foot[3] &&
+  y > b.floors[0] - 0.6 && y < b.top
+
+/** How high a building's ground storey reaches before the floor over it: the
+ * camera meets what is under it, and looks through what fades over it. */
+let ceiling = (b: Building) => b.floors[1] - b.size
+
+/** Whether `b` stands solid at (x, y, z) under its first ceiling: where the
+ * camera may not stand, unless it is looking into `b`. */
+export let walls = (b: Building, x: number, y: number, z: number) =>
+  y < ceiling(b) && near(b, x, z, 0) &&
+  reach(b, x, z, 1e-3, (from, to) => {
+    for (let n = from; n < to; n += 2) {
+      if (
+        b.y + b.solid.runs[n] * b.size <= y &&
+        b.y + b.solid.runs[n + 1] * b.size > y
+      ) return true
+    }
+  })
+
+/** A building to fade, from height `from` up. */
+export type Cut = { b: Building; from: number }
+
+/** What of `b` fades for a hero whose feet are at `feet`, seen from `eye`:
+ * over the storey they stand in, the floors above and the roof, if they are
+ * in it; over its ground storey, if it stands between them and the eye; or
+ * nothing. */
+export let cutOf = (b: Building, feet: Vec, eye: Vec): Cut | null => {
+  if (holds(b, ...feet)) {
+    let f = b.floors, s = 0
+    while (s + 1 < f.length - 1 && f[s + 1] <= feet[1] + 0.3) s++
+    return {
+      b,
+      from: s + 1 < f.length - 1 ? f[s + 1] - b.size : f[f.length - 1],
+    }
+  }
+  let head: Vec = [feet[0], feet[1] + 1.2, feet[2]]
+  return crosses(b, eye, head) ? { b, from: ceiling(b) } : null
+}
+
+/** Whether anything of a building within `r` metres of (x, z) is solid
+ * anywhere from height `lo` up to `hi`. */
+export let hits = (
+  v: Vale,
+  x: number,
+  z: number,
+  lo: number,
+  hi: number,
+  r: number,
+): boolean => around(v, x, z, r).some((b) => blocks(b, x, z, lo, hi, r))
+
+/** The highest top of a building's voxels within `r` of (x, z) at or under
+ * height `y`, or −Infinity. */
+export let standOn = (
+  v: Vale,
+  x: number,
+  z: number,
+  y: number,
+  r: number,
+): number =>
+  Math.max(-Infinity, ...around(v, x, z, r).map((b) => floorIn(b, x, z, y, r)))
+
+/** The lowest underside of a building's voxels within `r` of (x, z) over
+ * height `y`, or Infinity. */
+export let over = (
+  v: Vale,
+  x: number,
+  z: number,
+  y: number,
+  r: number,
+): number =>
+  Math.min(Infinity, ...around(v, x, z, r).map((b) => ceilingIn(b, x, z, y, r)))
+
 /** Whether a shut door stands within `r` of (x, z), anywhere from `lo` up
- * to `hi`: in the way of a walker that opens no doors. */
+ * to `hi`. */
 export let shut = (
   v: Vale,
   x: number,
@@ -277,27 +371,11 @@ export let shut = (
   lo: number,
   hi: number,
   r: number,
-): boolean =>
-  v.buildings.some((b) =>
-    near(b, x, z, r) &&
-    b.doors.some((d) => {
-      if (d.hinge[1] >= hi || d.hinge[1] + d.tall <= lo) return false
-      let px = x - d.hinge[0], pz = z - d.hinge[2]
-      let t = Math.max(0, Math.min(d.wide, px * d.along[0] + pz * d.along[1]))
-      return Math.hypot(px - d.along[0] * t, pz - d.along[1] * t) < r + 0.06
-    })
-  )
+): boolean => around(v, x, z, r).some((b) => shutIn(b, x, z, lo, hi, r))
 
 /** The building whose walls someone at (x, y, z) stands within, if any. */
 export let within = (v: Vale, x: number, y: number, z: number) =>
-  v.buildings.find((b) =>
-    x > b.foot[0] && x < b.foot[2] && z > b.foot[1] && z < b.foot[3] &&
-    y > b.floors[0] - 0.6 && y < b.top
-  ) ?? null
-
-/** How high a building's ground storey reaches before the floor over it: the
- * camera meets what is under it, and looks through what fades over it. */
-let ceiling = (b: Building) => b.floors[1] - b.size
+  around(v, x, z, 0).find((b) => holds(b, x, y, z)) ?? null
 
 /** Whether a building other than `home` (the one the hero is in, which the
  * camera sees into) stands solid at (x, y, z), under its first ceiling. */
@@ -307,26 +385,10 @@ export let walled = (
   y: number,
   z: number,
   home: Building | null,
-): boolean =>
-  v.buildings.some((b) =>
-    b != home && near(b, x, z, 0) && y < ceiling(b) &&
-    reach(b, x, z, 1e-3, (from, to) => {
-      for (let n = from; n < to; n += 2) {
-        if (
-          b.y + b.solid.runs[n] * b.size <= y &&
-          b.y + b.solid.runs[n + 1] * b.size > y
-        ) return true
-      }
-    })
-  )
-
-/** A building to fade, from height `from` up. */
-export type Cut = { b: Building; from: number }
+): boolean => around(v, x, z, 0).some((b) => b != home && walls(b, x, y, z))
 
 /** What of which buildings fades for a hero whose feet are at `feet`, seen
- * from `eye`: over the storey they stand in, the floors above and the roof
- * of the building they are in; and over the ground storey, the rest of any
- * building between them and the eye.
+ * from `eye` (`cutOf`), of the buildings near the line between them.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -345,22 +407,9 @@ export type Cut = { b: Building; from: number }
  * ```
  */
 export let cutaway = (v: Vale, feet: Vec, eye: Vec): Cut[] => {
-  let home = within(v, feet[0], feet[1], feet[2])
-  let cuts: Cut[] = []
-  if (home) {
-    let f = home.floors, s = 0
-    while (s + 1 < f.length - 1 && f[s + 1] <= feet[1] + 0.3) s++
-    cuts.push({
-      b: home,
-      from: s + 1 < f.length - 1 ? f[s + 1] - home.size : f[f.length - 1],
-    })
-  }
-  let head: Vec = [feet[0], feet[1] + 1.2, feet[2]]
-  for (let b of v.buildings) {
-    if (b == home || !crosses(b, eye, head)) continue
-    cuts.push({ b, from: ceiling(b) })
-  }
-  return cuts
+  let mx = (feet[0] + eye[0]) / 2, mz = (feet[2] + eye[2]) / 2
+  let r = Math.hypot(feet[0] - eye[0], feet[2] - eye[2]) / 2
+  return around(v, mx, mz, r).flatMap((b) => cutOf(b, feet, eye) ?? [])
 }
 
 // Whether the segment from `a` to `c` passes through a building's box, from
