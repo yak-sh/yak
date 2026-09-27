@@ -1,6 +1,7 @@
 /* A station's crafting (station.ts), a pack showing what can be made there:
    its tiers as tabs, and what the thing picked asks, each line red while the
-   bag is short of it. The button fills as it is made. */
+   bag is short of it. The button fills as it is made. The last tab, set
+   apart, upgrades what the hero carries. */
 .Craft_Tiers {
   display: flex;
   gap: 0.3rem;
@@ -10,6 +11,12 @@
     height: 2rem;
     padding: 0 0.75rem;
     font-weight: 700;
+  }
+
+  & .Craft_Up {
+    display: flex;
+    gap: 0.3rem;
+    margin-left: auto;
   }
 }
 

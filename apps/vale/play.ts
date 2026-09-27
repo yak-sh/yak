@@ -72,6 +72,7 @@ import { type Rarity, rarityOf } from './rarity.ts'
 import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimOf, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
+import { plusOf } from './upgrade.ts'
 import { groundAt, type Vale } from './terrain.ts'
 
 export type Vec3 = [number, number, number]
@@ -487,10 +488,20 @@ export let game = (
   let sheetOf = (): Sheet => {
     let slain = net.mine('slain'), items = net.mine('item')
     let used = net.mine('used'), journal = net.mine('journal')
-    let equip = net.mine('equip')
+    let equip = net.mine('equip'), upgraded = net.mine('upgraded')
     let learning = net.mine('learned'), respecs = net.mine('respec')
     let name = str(comp(c.ent(net.hero ?? ''), 'player').name, 'Wanderer')
-    let key = [slain, items, used, journal, equip, learning, respecs, name]
+    let key = [
+      slain,
+      items,
+      used,
+      journal,
+      equip,
+      upgraded,
+      learning,
+      respecs,
+      name,
+    ]
     if (sheet && key.every((k, i) => k == sheetKey[i])) return sheet
     sheetKey = key
     let kills = slain.map((b): Slain => {
@@ -504,6 +515,9 @@ export let game = (
       }
     })
     let spent = new Set(used.map((b) => str(comp(b, 'used').item)))
+    let ups = plusOf(upgraded.map((b) => ({
+      item: str(comp(b, 'upgraded').item),
+    })))
     let bag = items.filter((b) => !spent.has(b.entity.eid)).map((b): Held => {
       let i = comp(b, 'item')
       return {
@@ -511,6 +525,7 @@ export let game = (
         kind: str(i.kind),
         n: num(i.n, 1),
         rarity: rarityOf(i.rarity),
+        plus: ups.get(b.entity.eid),
       }
     })
     let entries = journal.map((b) => {

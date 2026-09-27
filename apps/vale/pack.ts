@@ -10,15 +10,15 @@
 // shows changed.
 import { ABILITIES, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
-import { hands, kitOf, RACK, twins, type Worn } from './gear.ts'
-import { type Glyph, glyphText } from './glyphs.ts'
+import { bare, diff, into, LINES, numbers, rolled, trying } from './compare.ts'
+import { RACK } from './gear.ts'
+import { glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
-import { BONUSES, GRADES, piece, RARITIES, tint } from './rarity.ts'
+import { GRADES, piece, RARITIES, tint } from './rarity.ts'
 import { icon } from './sprites.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
-import { type Held, maxHp, need, power } from './rules.ts'
-import { skilled } from './skills.ts'
+import { type Held, need } from './rules.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -26,52 +26,6 @@ export type Acts = {
   wear: (slot: Slot, item?: string) => void
   take: (kind: string) => void
 }
-
-// What a hero would do wearing `worn`, with their level and skills, in the
-// numbers a sheet shows.
-let numbers = ({ lvl, learned }: Sheet, worn: Worn) => {
-  let k = skilled(kitOf(worn), learned, maxHp(lvl))
-  let blow = (dmg: number) => Math.round(power(lvl, dmg) * (1 + k.force))
-  return {
-    blow: blow(k.dmg),
-    twin: k.twin ? blow(k.twin) : 0,
-    pace: k.pace / 1000,
-    reach: k.reach,
-    armour: k.armour,
-    hp: maxHp(lvl) + k.hp,
-    speed: Math.round(k.speed * 100),
-    luck: Math.round((0.12 + k.luck) * 100),
-  }
-}
-type Numbers = ReturnType<typeof numbers>
-
-// Each number, how it reads, and whether more is better.
-let LINES: [keyof Numbers, Glyph, (n: number) => string, boolean][] = [
-  ['blow', 'blow', (n) => `${n} a blow`, true],
-  ['twin', 'blow', (n) => `${n} with the other hand`, true],
-  ['pace', 'pace', (n) => `every ${n.toFixed(2)} s`, false],
-  ['reach', 'reach', (n) => `reach ${n} m`, true],
-  ['armour', 'armour', (n) => `armour ${n}`, true],
-  ['hp', 'health', (n) => `health ${n}`, true],
-  ['speed', 'speed', (n) => `speed +${n}%`, true],
-  ['luck', 'luck', (n) => `great blows ${n}%`, true],
-]
-
-// What the hero would wear with `h` put on in `slot`, its own unless said
-// (gear.ts `hands`): a weapon for both hands empties the other, a thing for
-// the other hand drops one, and a new weapon drops a second blade that is no
-// longer its twin.
-let trying = (worn: Worn, h: Held, slot = ITEMS[h.kind]?.slot): Worn =>
-  slot ? hands({ ...worn, [slot]: h }, slot == 'off' ? 'off' : 'main') : worn
-
-// What the hero would wear with a slot taken off.
-let bare = (worn: Worn, slot: string): Worn =>
-  Object.fromEntries(Object.entries(worn).filter(([s]) => s != slot))
-
-// Where a thing taken up goes: a second blade the hero knows how to hold in
-// the other hand goes there (gear.ts `twins`), anything else in its slot.
-let into = (s: Sheet, kind: string): Slot | undefined =>
-  twins(kind, s.worn, s.learned) ? 'off' : ITEMS[kind]?.slot
 
 // The abilities a weapon or a thing for the other hand gives, held in `slot`,
 // and what each does.
@@ -190,20 +144,11 @@ export let pack = (panel: Panel, acts: Acts) => {
       ? `Drink it to mend ${t.heals} (Q)`
       : 'Carried'
     // Worn, what taking it off loses; else, what putting it on gains.
-    let [a, b] = from == 'worn' ? [then, now] : [now, then]
-    let diff = t.slot
-      ? LINES.filter(([k]) => a[k] != b[k]).map(([k, mark, say, more]) => {
-        let d = Math.round((b[k] - a[k]) * 100) / 100
-        let good = more ? d > 0 : d < 0
-        let sign = d > 0 ? '+' : '−'
-        let shown = k == 'pace' ? `${Math.abs(d).toFixed(2)} s` : Math.abs(d)
-        return `<span class=Pack_Num>${glyphText(mark)} ${
-          say(b[k])
-        } <em class="${
-          good ? 'Pack_Up' : 'Pack_Down'
-        }">${sign}${shown}</em></span>`
-      }).join('')
-      : ''
+    let changes = !t.slot
+      ? ''
+      : from == 'worn'
+      ? diff(then, now)
+      : diff(now, then)
     // The rack gives one of each, and a second of a blade for the other hand.
     let held = s.bag.filter((b) => b.kind == kind).length >=
       (slot == t.slot ? 1 : 2)
@@ -223,27 +168,17 @@ export let pack = (panel: Panel, acts: Acts) => {
       }</button>`
       : ''
     let can = gives(t, slot)
-    let rolled =
-      t.bonuses.map(([stat, n]) =>
-        `<span class=Pack_Num>${glyphText(BONUSES[stat].icon)} ${
-          BONUSES[stat].says(n)
-        }</span>`
-      ).join('') +
-      (t.legend
-        ? `<span class=Pack_Legend>${glyphText(t.legend.icon)} ${
-          esc(t.legend.says)
-        }</span>`
-        : '')
+    let rolls = rolled(t)
     return `<div class=Pack_Card><i class="Pack_Big ${tint(t.rarity)}">${
       icon(kind)
     }</i><div><b class="Rarity ${tint(t.rarity)}">${esc(t.name)}</b><span>${
       esc(what)
     }</span></div>${act}</div>${
-      rolled
-        ? `<div class="Pack_Rolled Rarity ${tint(t.rarity)}">${rolled}</div>`
+      rolls
+        ? `<div class="Pack_Rolled Rarity ${tint(t.rarity)}">${rolls}</div>`
         : ''
     }${can ? `<div class=Pack_Abilities>${can}</div>` : ''}${
-      diff ? `<div class=Pack_Nums>${diff}</div>` : ''
+      changes ? `<div class=Pack_Nums>${changes}</div>` : ''
     }`
   }
 

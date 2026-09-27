@@ -328,12 +328,15 @@ export let LEGENDS: Record<string, Legend> = {
   },
 }
 
-/** A piece as it rolled: its kind's numbers, finer by its rarity, the
- * bonuses it rolled folded into them, and, for a legendary, its legend. */
+/** A piece as it rolled: its kind's numbers, finer by its rarity and by
+ * every upgrade (`plus`), the bonuses it rolled folded into them, and, for a
+ * legendary, its legend. */
 export type Piece = Thing & {
   eid: string
   kind: string
   rarity: Rarity
+  /** how many times it was upgraded (upgrade.ts) */
+  plus: number
   /** the bonuses it rolled, each its stat and how much */
   bonuses: [Stat, number][]
   legend?: Legend
@@ -347,10 +350,10 @@ let roll = (eid: string, kind: string, rarity: Rarity): Piece => {
   let t: Thing = ITEMS[kind] ?? { name: kind, look: [] }
   let slot = t.slot
   if (!slot || rarity == 'common') {
-    return { ...t, eid, kind, rarity: 'common', bonuses: [] }
+    return { ...t, eid, kind, rarity: 'common', plus: 0, bonuses: [] }
   }
   let g = GRADES[rarity], r = stream(hashOf(eid)), tier = t.tier ?? 1
-  let p: Piece = { ...t, eid, kind, rarity, bonuses: [] }
+  let p: Piece = { ...t, eid, kind, rarity, plus: 0, bonuses: [] }
   let fine = g.fine * (0.96 + 0.08 * r())
   if (t.dmg) p.dmg = two(t.dmg * fine)
   if (t.armour) p.armour = Math.round(t.armour * fine)
@@ -378,11 +381,35 @@ let roll = (eid: string, kind: string, rarity: Rarity): Piece => {
   return p
 }
 
+/** How much finer each upgrade makes a piece's numbers (upgrade.ts). */
+export let UP = 0.1
+
+// A piece upgraded `plus` times: every number of it, and each bonus it
+// rolled, a tenth finer for each, and its name counting them.
+let hone = (p: Piece, plus: number): Piece => {
+  if (!plus || !p.slot) return p
+  let k = 1 + UP * plus
+  let q: Piece = {
+    ...p,
+    plus,
+    name: `+${plus} ${p.name}`,
+    bonuses: p.bonuses.map((
+      [s, n],
+    ) => [s, BONUSES[s].whole ? Math.round(n * k) : two(n * k)]),
+  }
+  if (p.dmg) q.dmg = two(p.dmg * k)
+  for (let s of STATS) {
+    let n = p[s]
+    if (n) q[s] = BONUSES[s].whole ? Math.round(n * k) : two(n * k)
+  }
+  return q
+}
+
 let rolled = new Map<string, Piece>()
 
-/** A piece of gear as it rolled, from its item row: the same eid always
- * rolls the same, and a common piece, or a thing that is not gear, is its
- * kind as items.ts has it.
+/** A piece of gear as it rolled, from its item row, and as far as it was
+ * upgraded: the same eid always rolls the same, and a common piece, or a
+ * thing that is not gear, is its kind as items.ts has it.
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
@@ -404,15 +431,19 @@ let rolled = new Map<string, Piece>()
  * assert(many.size > 1)
  * // A tonic has no rarity to roll.
  * assertEquals(p('epic', 'e2', 'tonic').rarity, 'common')
+ * // Each upgrade makes it finer, and its name counts them.
+ * let up = piece({ eid: 'e1', kind: 'sword3', rarity: 'epic', plus: 2 })
+ * assertEquals(up.name, `+2 ${p('epic').name}`)
+ * assert(up.dmg! > p('epic').dmg! && up.bonuses[0][1] >= p('epic').bonuses[0][1])
  * ```
  */
 export let piece = (
-  h: { eid: string; kind: string; rarity?: Rarity },
+  h: { eid: string; kind: string; rarity?: Rarity; plus?: number },
 ): Piece => {
-  let rarity = h.rarity ?? 'common'
-  let key = `${h.eid}:${h.kind}:${rarity}`
+  let rarity = h.rarity ?? 'common', plus = h.plus ?? 0
+  let key = `${h.eid}:${h.kind}:${rarity}:${plus}`
   let p = rolled.get(key)
-  if (!p) rolled.set(key, p = roll(h.eid, h.kind, rarity))
+  if (!p) rolled.set(key, p = hone(roll(h.eid, h.kind, rarity), plus))
   return p
 }
 

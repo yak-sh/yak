@@ -1,10 +1,12 @@
 // A hero's work: at the nodes of the level they are in (gather.ts), and at a
-// village's stations (craft.ts). This reads where the hero stands and what
+// village's stations, making things (craft.ts) or upgrading them
+// (upgrade.ts). This reads where the hero stands and what
 // they asked for: which node or station is near enough to work, the work
 // under way, and what it yields. When a node's work is done it writes the
 // item it gave, wearing the `gathered` row that spends the node for everyone
 // until it grows back; when a thing is made, the item made, wearing its
-// `crafted` row, with `used` rows for what it took, in one write. The work
+// `crafted` row, with `used` rows for what it took, in one write; when a piece
+// is upgraded, the `upgraded` row naming it, and the `used` rows. The work
 // stops when the hero walks off, strikes, rolls, jumps or faints, or someone
 // else gathers the node first.
 import { isStation, madeXp, plan, RECIPES, spare, STATIONS } from './craft.ts'
@@ -22,6 +24,7 @@ import { ITEMS } from './items.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
 import type { Frame, Vec3 } from './play.ts'
 import { made, type Rarity } from './rarity.ts'
+import { upgradeOf } from './upgrade.ts'
 import { fallOf } from './rules.ts'
 import { groundAt, type Vale, WATER } from './terrain.ts'
 import {
@@ -70,6 +73,16 @@ export type Work =
     piece?: string
     rarity?: Rarity
   }
+  /** a piece upgraded a step, to `plus` */
+  | {
+    type: 'upgraded'
+    piece: string
+    item: string
+    rarity?: Rarity
+    plus: number
+    trade: Trade
+    at: Vec3
+  }
   | { type: 'station'; craft: Craft }
   | { type: 'trade'; trade: Trade; lvl: number }
   | { type: 'say'; text: string }
@@ -88,6 +101,8 @@ export type Job = {
     at: Vec3
     node: Seen | null
     recipe: string | null
+    /** the piece being upgraded, if it is one */
+    piece: string | null
     k: number
     swing: number
   } | null
@@ -132,6 +147,25 @@ let worth = (b: Bundle): [Trade, number][] => {
   return out
 }
 
+// What a plan spends (craft.ts `plan`), as rows: a used row for each item
+// row it takes, and an item row for what is left of a stack taken whole.
+let spending = (
+  took: { spend: string[]; change: [string, number][] },
+  me: string,
+  now: number,
+) => [
+  ...took.spend.map((eid) => ({
+    entity: { eid: crypto.randomUUID() },
+    used: { item: eid, by: me, at: now },
+  })),
+  ...took.change.map(([kind, n]) => ({
+    entity: { eid: crypto.randomUUID() },
+    item: { kind, n, owner: me, at: now },
+  })),
+]
+
+let short: Work = { type: 'say', text: 'You no longer have all it asks.' }
+
 /** A hero's work over one store. */
 export let working = (net: Net) => {
   let job: {
@@ -139,14 +173,16 @@ export let working = (net: Net) => {
     at: Vec3
     eid: string
     recipe: string | null
+    piece: string | null
     from: number
     until: number
     x: number
     z: number
     strokes: number
   } | null = null
-  // A recipe the sheet asked to make, taken up at the next frame.
-  let asked: string | null = null
+  // A recipe the sheet asked to make, or a piece to upgrade, taken up at the
+  // next frame.
+  let asked: { recipe: string; piece: string | null } | null = null
 
   // My trades, worked out again only when my items changed; and the last
   // ones, to see a level gained.
@@ -210,9 +246,7 @@ export let working = (net: Net) => {
   ): Work => {
     let r = RECIPES[key]
     let took = plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))
-    if (!took) {
-      return { type: 'say', text: 'You no longer have all it asks.' }
-    }
+    if (!took) return short
     let piece = crypto.randomUUID()
     let rarity = ITEMS[r.makes]?.slot
       ? made(Math.random(), lvl, least(r.tier))
@@ -229,14 +263,7 @@ export let working = (net: Net) => {
         },
         crafted: { recipe: key, at: now },
       },
-      ...took.spend.map((eid) => ({
-        entity: { eid: crypto.randomUUID() },
-        used: { item: eid, by: me, at: now },
-      })),
-      ...took.change.map(([kind, n]) => ({
-        entity: { eid: crypto.randomUUID() },
-        item: { kind, n, owner: me, at: now },
-      })),
+      ...spending(took, me, now),
     )
     return {
       type: 'got',
@@ -251,10 +278,47 @@ export let working = (net: Net) => {
     }
   }
 
+  // A piece upgraded a step, from what the bag holds now: the row naming it,
+  // what it took spent, and what was left of a stack taken whole given back.
+  let upgrade = (
+    eid: string,
+    me: string,
+    now: number,
+    at: Vec3,
+    f: Frame,
+  ): Work => {
+    let h = f.sheet.bag.find((h) => h.eid == eid)
+    let r = h && upgradeOf(h.kind, h.plus ?? 0)
+    let took = r && plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))
+    if (!h || !r || !took) return short
+    net.keep(
+      {
+        entity: { eid: crypto.randomUUID() },
+        upgraded: { item: eid, by: me, at: now },
+      },
+      ...spending(took, me, now),
+    )
+    let plus = (h.plus ?? 0) + 1
+    return {
+      type: 'upgraded',
+      piece: eid,
+      item: h.kind,
+      rarity: h.rarity,
+      plus,
+      trade: r.at,
+      at,
+    }
+  }
+
   return {
     /** make a thing by a recipe, at the station the hero stands at */
     make: (recipe: string) => {
-      asked = recipe
+      asked = { recipe, piece: null }
+    },
+    /** upgrade a piece the hero carries a step, at the station that makes
+     * one like it */
+    upgrade: (piece: string) => {
+      asked = { recipe: '', piece }
     },
     /** A frame of work: `want` is the player asking to work what is near,
      * `stop` their doing something else. */
@@ -343,6 +407,7 @@ export let working = (net: Net) => {
             at: near.at,
             eid: near.eid,
             recipe: null,
+            piece: null,
             from: now,
             until: now + effort(near.lode, mine[near.lode.trade].lvl),
             x: f.body.x,
@@ -352,9 +417,12 @@ export let working = (net: Net) => {
         }
       }
 
-      // Asked to make a thing: at its station, with the trade and the stuff
-      // it asks.
-      let r = asked ? RECIPES[asked] : null
+      // Asked to make a thing, or to upgrade a piece: at its station, with
+      // the trade and the stuff it asks.
+      let held = f.sheet.bag.find((h) => h.eid == asked?.piece)
+      let r = held
+        ? upgradeOf(held.kind, held.plus ?? 0)
+        : RECIPES[asked?.recipe ?? '']
       asked = null
       if (r && !job && !f.down && me && bench?.craft == r.at) {
         if (mine[r.at].lvl < least(r.tier)) {
@@ -370,6 +438,7 @@ export let working = (net: Net) => {
             at: bench.at,
             eid: '',
             recipe: r.makes,
+            piece: held?.eid ?? null,
             from: now,
             until: now + making(r.tier),
             x: f.body.x,
@@ -382,7 +451,7 @@ export let working = (net: Net) => {
       // The work under way: a stroke landing, and at the end what it gave.
       let doing: Job['doing'] = null
       if (job && me) {
-        let { trade, at, eid, recipe } = job
+        let { trade, at, eid, recipe, piece } = job
         let n = recipe ? null : nodes.find((n) => n.eid == eid) ?? null
         let stroke = STROKE[trade]
         let into = now - job.from
@@ -399,6 +468,7 @@ export let working = (net: Net) => {
         if (now >= job.until) {
           job = null
           if (n) events.push(gather(n, me, now, mine))
+          else if (piece) events.push(upgrade(piece, me, now, at, f))
           else if (recipe) {
             events.push(make(recipe, me, now, at, f, mine[trade].lvl))
           }
@@ -408,6 +478,7 @@ export let working = (net: Net) => {
             at,
             node: n,
             recipe,
+            piece,
             k: into / (job.until - job.from),
             swing: trade != 'fish'
               ? (into % stroke) / stroke

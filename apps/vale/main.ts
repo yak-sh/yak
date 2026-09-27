@@ -143,7 +143,10 @@ let marks = overlay(h.layer, camera, h.under)
 let chat = chatbox(glass, h.orbs.chat, net, marks, folk)
 let m = map(h.panels.map)
 let p = pack(h.panels.pack, { wear: g.wear, take: g.take })
-let bench = station(h.panels.craft, { make: toil.make })
+let bench = station(h.panels.craft, {
+  make: toil.make,
+  upgrade: toil.upgrade,
+})
 let actions = bar(h.acts)
 let skills = board(h.panels.skills, {
   learn: (id) => {
@@ -636,6 +639,23 @@ let worked = (e: Work) => {
       'xp',
     )
     sound.done(e.at, e.trade)
+  } else if (e.type == 'upgraded') {
+    let t = piece({
+      eid: e.piece,
+      kind: e.item,
+      rarity: e.rarity,
+      plus: e.plus,
+    })
+    h.toast(`Upgraded: ${t.name}`, `Toast-loot ${tint(t.rarity)}`, icon(e.item))
+    glow.emit(v3(e.at, 1), GRADES[t.rarity].light, 24, {
+      speed: 2,
+      up: 2.5,
+      life: 0.9,
+      size: 0.08,
+      fall: 1,
+    })
+    sound.done(e.at, e.trade)
+    sound.spoil(null, 'rare')
   } else if (e.type == 'trade') {
     let t = TRADES[e.trade]
     h.toast(`${t.name} ${e.lvl}!`, 'Toast-big', glyphText(t.icon))

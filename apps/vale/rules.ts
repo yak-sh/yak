@@ -263,8 +263,14 @@ export let wander = (
 
 export type Entry = { quest: string; step: string; at: number }
 /** An item row in the bag: its kind, how many, and for a piece of gear, how
- * fine it is (rarity.ts). */
-export type Held = { eid: string; kind: string; n: number; rarity?: Rarity }
+ * fine it is (rarity.ts) and how far it is upgraded (upgrade.ts). */
+export type Held = {
+  eid: string
+  kind: string
+  n: number
+  rarity?: Rarity
+  plus?: number
+}
 
 /** Where one player stands with a quest: done, taken (with how far along),
  * open to take once the quest it comes after is done, or not yet; and, while

@@ -1,0 +1,76 @@
+// Upgrading a piece of gear, +1 and up to +5, at the station that makes one
+// like it (craft.ts `RECIPES`): what is smithed at the forge, what is made at
+// the bench there, and wherever a recipe moves, its upgrades follow. Each
+// step asks more of the stuff the piece is made from, and from +3 a gem too,
+// and makes the piece a tenth finer (rarity.ts `piece`).
+//
+// An upgrade writes an `upgraded` row naming the piece, and spends what it
+// took with `used` rows in the same write, so the bag is still items held
+// less items spent; how far a piece is upgraded is how many rows name it
+// (`plusOf`), so a guest, who can only add rows, keeps theirs.
+import { type Recipe, RECIPES } from './craft.ts'
+import { ITEMS } from './items.ts'
+
+/** The furthest a piece is upgraded. */
+export let MOST = 5
+
+/** The recipe a piece of `kind` is made by, or one like it: a quest's blade
+ * is upgraded as a plain one of its family and tier.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(madeBy('sword2')?.at, 'forge')
+ * assertEquals(madeBy('robe2')?.at, 'bench')
+ * assertEquals(madeBy('blade4')?.makes, 'axe3')
+ * assertEquals(madeBy('tonic')?.at, 'cauldron')
+ * ```
+ */
+export let madeBy = (kind: string): Recipe | undefined => {
+  let t = ITEMS[kind]
+  return RECIPES[kind] ?? RECIPES[`${t?.family}${t?.tier}`]
+}
+
+/** What taking a piece of `kind` from +`plus` to the next step asks, as a
+ * recipe at its station: one more of its first stuff than the step it goes
+ * to, and from +3 a gem, two for the last. Nothing past the last step, or
+ * for what is not gear.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(upgradeOf('sword2', 0)?.needs, [['metal', 2]])
+ * assertEquals(upgradeOf('robe1', 2)?.needs, [['cloth', 4], ['gems', 1]])
+ * assertEquals(upgradeOf('bow3', 4), {
+ *   makes: 'bow3',
+ *   at: 'bench',
+ *   tier: 3,
+ *   needs: [['wood', 6], ['gems', 2]],
+ * })
+ * assertEquals(upgradeOf('sword2', MOST), null)
+ * assertEquals(upgradeOf('tonic', 0), null)
+ * ```
+ */
+export let upgradeOf = (kind: string, plus: number): Recipe | null => {
+  let r = madeBy(kind)
+  if (!r || !ITEMS[kind]?.slot || plus >= MOST) return null
+  let to = plus + 1
+  let needs: [string, number][] = [[r.needs[0][0], to + 1]]
+  if (to >= 3) needs.push(['gems', to >= MOST ? 2 : 1])
+  return { makes: kind, at: r.at, tier: r.tier, needs }
+}
+
+/** How far each piece is upgraded, by its eid: the rows naming it, to the
+ * last step.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let rows = ['a', 'b', 'a', ...Array(9).fill('c')].map((item) => ({ item }))
+ * assertEquals(Object.fromEntries(plusOf(rows)), { a: 2, b: 1, c: MOST })
+ * ```
+ */
+export let plusOf = (rows: { item: string }[]): Map<string, number> => {
+  let by = new Map<string, number>()
+  for (let { item } of rows) {
+    by.set(item, Math.min(MOST, (by.get(item) ?? 0) + 1))
+  }
+  return by
+}

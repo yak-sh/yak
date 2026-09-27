@@ -171,6 +171,7 @@ export let connect = (base: URL) => {
       slain: c.watch(`.slain.by=${q}`),
       item: c.watch(`.item.owner=${q}&?gathered&?crafted`),
       used: c.watch(`.used.by=${q}`),
+      upgraded: c.watch(`.upgraded.by=${q}`),
       journal: c.watch(`.journal.player=${q}`),
       equip: c.watch(`.equip.player=${q}`),
       learned: c.watch(`.learned.player=${q}`),
