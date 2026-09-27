@@ -39,7 +39,6 @@ import {
   type ChildLimits,
   children,
   CONTENT,
-  deliverChild,
   type Deps,
   ENTRY,
   live,
@@ -556,21 +555,13 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     transcriptWindow: (session, request) =>
       transcriptWindow(h.g, session, request),
     resume: admitted(async () => {
-      let woken = (await h.g.read(live)).map((b) => b.entity.eid)
-      // Receipts a finished child never delivered, delivered: telling is
-      // idempotent, and runs nothing more of the child.
-      for (
-        let b of await h.g.read(
-          '.spawned .session.status=settled,failed,stopped',
-        )
-      ) {
-        await deliverChild(h.g, b.entity.eid).catch((error) =>
-          report(error, {
-            phase: 'resume-receipt',
-            session: String((b.spawned as Comp).parent),
-          })
-        )
-      }
+      // A child stays active until its receipt lands. Waking that dispatch
+      // retries an interrupted delivery without revisiting finished children.
+      let woken = [
+        ...new Set((await h.g.read(
+          `${live}|.session&.dispatch.state=active,queued`,
+        )).map((b) => b.entity.eid)),
+      ]
       await opts.resuming?.()
       for (let s of woken) {
         answer(h.g, s, r).catch((error) =>

@@ -5,6 +5,7 @@ import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
 import { seed, sessionTitle, titleOf } from './agent.ts'
 import { local } from './local.ts'
 import { harness, repo } from './testing.ts'
+import { until } from '../../bin/testing.ts'
 
 // A model that answers with whatever it was last told, so a test can see the
 // transcript go round.
@@ -170,6 +171,40 @@ Deno.test('resume wakes what a restart left owed a turn', async () => {
   await quiet.idle(s)
   assertEquals(statusOf(await quiet.transcript(s)), 'settled')
   quiet.close()
+})
+
+Deno.test('resume delivers an ended child whose dispatch was interrupted', async () => {
+  let a = await started()
+  try {
+    let parent = await a.start('parent')
+    await a.idle(parent)
+    let using = (await a.transcript(parent)).find((b) => b.using)!.using
+    await a.h.g.apply([{
+      entity: { eid: 'child' },
+      session: { id: 'child' },
+      spawned: { parent },
+      dispatch: { state: 'active', order: 1 },
+    }, {
+      entity: { eid: 'child-input' },
+      entry: { session: 'child', seq: 1 },
+      content: { body: 'work' },
+      using,
+    }, {
+      entity: { eid: 'child-answer' },
+      entry: { session: 'child', seq: 2 },
+      content: { body: 'done' },
+      output: { source: 'child-input' },
+    }], { trusted: true })
+    assertEquals(await a.resume(), ['child'])
+    await until(async () => {
+      let [child] = await a.h.g.get(['child'])
+      return (child.dispatch as Comp).state == 'settled'
+    }, { label: 'child dispatch to settle' })
+    let entries = await a.transcript(parent)
+    assert(entries.some((b) => b.entity.eid == 'delivery:child:child-answer'))
+  } finally {
+    await a.close()
+  }
 })
 
 Deno.test('transcript doors refuse unknown sessions before doing work', async () => {

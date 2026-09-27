@@ -28,7 +28,11 @@ type Up = {
   drafts: Awaited<ReturnType<typeof openDrafts>>
 }
 
-let boot = async (config: string, session: string): Promise<Up> => {
+let boot = async (
+  config: string,
+  session: string,
+  progress: (text: string) => void,
+): Promise<Up> => {
   let drafts = await openDrafts()
   let backend = await remote({ cwd: Deno.cwd(), config: read(config) }).catch(
     async (error) => {
@@ -36,19 +40,33 @@ let boot = async (config: string, session: string): Promise<Up> => {
       throw error
     },
   )
-  await backend.resume()
-  await drafts.ui.patch({ selected: session })
-  return { backend, drafts }
+  try {
+    progress('resuming unfinished sessions…')
+    await backend.resume().catch((error) => {
+      throw new Error(
+        `resuming unfinished sessions: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    })
+    await drafts.ui.patch({ selected: session })
+    return { backend, drafts }
+  } catch (error) {
+    backend.force()
+    await drafts.close()
+    throw error
+  }
 }
 
 let Harness = ({ e, config }: { e: Bundle; config?: string }) => {
   let session = String((e.entry as Comp | undefined)?.session ?? e.entity.eid)
   let [up, set] = useState<Up | Error>()
+  let [stage, progress] = useState('opening the harness graph…')
   useEffect(() => {
     if (!config) {
       return void set(new Error('a terminal app needs a config to open'))
     }
-    let booting = boot(config, session)
+    let booting = boot(config, session, progress)
     booting.then(set, set)
     return () =>
       void booting.then(({ backend, drafts }) =>
@@ -65,7 +83,7 @@ let Harness = ({ e, config }: { e: Bundle; config?: string }) => {
     await up.backend.close({ timeout: null })
   }, up && !(up instanceof Error) ? up.backend.force : undefined)
   if (up instanceof Error) return h('div', null, `harness: ${up.message}`)
-  if (!up) return h('div', null, 'starting the harness…')
+  if (!up) return h('div', null, stage)
   return h(App, {
     agent: up.backend.agent,
     subscribe: up.backend.subscribe,
