@@ -18,6 +18,7 @@ import type { Frame } from './play.ts'
 import type { Body } from './sim.ts'
 import { sound } from './sound.ts'
 import { loud, near, TALK } from './voice.ts'
+import { voiceMeter } from './voice-meter.ts'
 
 // How long a voice that could not be had waits before it is asked again.
 let AGAIN = 5000
@@ -38,6 +39,7 @@ type Voice = {
   heard: Heard | null
   failed: number
   gain: GainNode | null
+  analyser: AnalyserNode | null
   let: () => void
   gone: boolean
 }
@@ -53,6 +55,37 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
   let track: MediaStreamTrack | null = null
   let sent: { stop: () => Promise<void> } | null = null
   let held = new Map<string, Voice>()
+  let local: {
+    analyser: AnalyserNode
+    source: MediaStreamAudioSourceNode
+    silence: GainNode
+    context: AudioContext | null
+  } | null = null
+  let stopMeter = () => {
+    if (!local) return
+    local.source.disconnect()
+    local.analyser.disconnect()
+    local.silence.disconnect()
+    if (local.context) void local.context.close()
+    local = null
+  }
+  let startMeter = (track: MediaStreamTrack) => {
+    stopMeter()
+    // The game's context may be asleep if the player has muted its sounds.
+    let context = sound.context ?? new AudioContext()
+    let source = context.createMediaStreamSource(new MediaStream([track]))
+    let analyser = context.createAnalyser()
+    analyser.fftSize = 256
+    let silence = context.createGain()
+    silence.gain.value = 0
+    source.connect(analyser).connect(silence).connect(context.destination)
+    local = {
+      analyser,
+      source,
+      silence,
+      context: sound.context ? null : context,
+    }
+  }
   let moved = (m: Mic) => told(mic = m)
 
   // While the microphone is on, the vale plays through a loop the browser's
@@ -84,6 +117,7 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
     held.delete(eid)
     v.gone = true
     v.let()
+    v.analyser?.disconnect()
     void v.heard?.stop().catch(() => {})
   }
 
@@ -116,6 +150,7 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
       heard: null,
       failed: 0,
       gain: null,
+      analyser: null,
       let: () => {},
       gone: false,
     }
@@ -135,12 +170,19 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
       let src = ctx.createMediaStreamSource(stream)
       let gain = ctx.createGain()
       gain.gain.value = 0
-      src.connect(gain).connect(into)
+      let analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      src.connect(analyser).connect(gain).connect(into)
+      v.analyser = analyser
       v.gain = gain
       return () => {
         gain.gain.setTargetAtTime(0, ctx.currentTime, 0.1)
         setTimeout(() => src.disconnect(), 500)
-        if (v.gain == gain) v.gain = null
+        if (v.gain == gain) {
+          v.gain = null
+          v.analyser = null
+        }
+        analyser.disconnect()
       }
     }, TALK)
   }
@@ -148,6 +190,11 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
   return {
     get mic() {
       return mic
+    },
+    /** Samples at the listener for others, and at the microphone for me. */
+    meter: (eid: string) => {
+      let analyser = eid == net.hero ? local?.analyser : held.get(eid)?.analyser
+      return analyser ? voiceMeter(analyser) : null
     },
     /** The loop the vale plays through while the microphone is on, if any. */
     get loop() {
@@ -169,6 +216,7 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
         let was = sent
         sent = null
         track?.stop()
+        stopMeter()
         track = null
         moved('off')
         await was?.stop().catch(() => {})
@@ -182,9 +230,11 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
       }
       try {
         sent = await (await joined()).publish(track)
+        startMeter(track)
         moved('on')
       } catch {
         track.stop()
+        stopMeter()
         track = null
         moved(mic == 'spent' ? 'spent' : 'off')
       }

@@ -80,3 +80,20 @@
 .Plate-locked .Plate_In {
   opacity: 0.75;
 }
+
+/* The quiet line and live audio trace share a scale; brightness indicates
+   samples above the talking threshold, never a peer's claimed state. */
+.Plate_Voice {
+  display: block;
+  width: 4rem;
+  height: 1rem;
+  overflow: visible;
+  fill: none;
+  stroke: #b5b9ae;
+  stroke-width: 1.5;
+  filter: drop-shadow(0 1px 2px #162722);
+}
+.Plate_Voice-talking {
+  stroke: #c1ff78;
+  stroke-width: 2;
+}

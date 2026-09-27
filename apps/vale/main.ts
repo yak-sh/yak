@@ -790,6 +790,8 @@ let loop = (t: number) => {
         net.hero,
         dressed,
         dt,
+        voice.meter,
+        mine.name,
         d ? { swing: d.swing, x: d.at[0], z: d.at[2] } : null,
       )
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)

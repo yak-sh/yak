@@ -142,6 +142,17 @@ let beamOf = (r: Rarity, glow: THREE.Material) => {
   return g
 }
 
+/** A voice is marked only when its own audio samples arrive at this page. */
+type Meter = { talking: boolean; points: string } | null
+let voicePlate = (meter: Meter) =>
+  meter
+    ? `<svg class="Plate_Voice${
+      meter.talking ? ' Plate_Voice-talking' : ''
+    }" viewBox="0 0 64 16" width="64" height="16" role="img" aria-label="${
+      meter.talking ? 'Talking' : 'Quiet'
+    }"><polyline points="${meter.points}" /></svg>`
+    : ''
+
 /** The stage over one level's scene, its people built `build`. */
 export let cast = (
   scene: THREE.Scene,
@@ -395,6 +406,8 @@ export let cast = (
       me: string,
       look: Look,
       dt: number,
+      meter: (eid: string) => Meter,
+      name: string,
       work: { swing: number; x: number; z: number } | null = null,
     ) => {
       let t = performance.now() / 1000
@@ -414,6 +427,14 @@ export let cast = (
         : f.body.yaw
       glide(mine, f.body.x, f.body.y, f.body.z, facing, dt, 30)
       tumble(mine, f.roll)
+      plates.plate(
+        me,
+        head(mine, 0.25),
+        `<span><b>${esc(name)}</b> <em>${f.vitals.lvl}</em></span>${
+          voicePlate(meter(me))
+        }`,
+        'Plate Plate-friend',
+      )
       mine.speed = f.body.speed
       let hurt = f.events.some((e) => e.type == 'hurt')
       if (hurt) mine.hurtAt = now
@@ -482,8 +503,8 @@ export let cast = (
           o.eid,
           head(a, 0.25),
           `<span><b>${esc(o.name)}</b> <em>${o.vitals.lvl}</em></span>${
-            life < 0.999 ? bar(life, 'Plate_Bar-friend') : ''
-          }`,
+            voicePlate(meter(o.eid))
+          }${life < 0.999 ? bar(life, 'Plate_Bar-friend') : ''}`,
           'Plate Plate-friend',
         )
       }
