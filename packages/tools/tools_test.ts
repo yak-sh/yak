@@ -414,6 +414,22 @@ Deno.test('an answer is worded whole within its budget, and counted past it', ()
   )
 })
 
+Deno.test('a search answer says its marked hit as text', () => {
+  let found: Bundle[] = [{
+    entity: { eid: 'book-1' },
+    hit: {
+      kind: 'book',
+      title: 'The Hobbit',
+      snippet: 'A \x01burglar\x02\nleaves home',
+      source: 'text',
+    },
+  }]
+  assertEquals(
+    worded(found),
+    'book-1 The Hobbit · book — A *burglar* leaves home',
+  )
+})
+
 Deno.test('a refused argument is an error code, not an exception', async () => {
   let { r } = world()
   await r.ensure()

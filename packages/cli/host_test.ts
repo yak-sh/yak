@@ -1151,7 +1151,10 @@ Deno.test('a property that declares its words searched is indexed, and ranked', 
       }),
     )
     let reply = await said.json() as {
-      result: { structuredContent: { result: { entity: { eid: string } }[] } }
+      result: {
+        content: { text: string }[]
+        structuredContent: { result: { entity: { eid: string } }[] }
+      }
     }
     assertEquals(
       reply.result.structuredContent.result.map((b) => b.entity.eid),
@@ -1165,6 +1168,8 @@ Deno.test('a property that declares its words searched is indexed, and ranked', 
     assertEquals(hit.hit.kind, 'book')
     assertEquals(hit.hit.source, 'text')
     assert(hit.hit.snippet.includes('\x01bread\x02'))
+    assert(reply.result.content[0].text.includes('*bread*'))
+    assert(!reply.result.content[0].text.includes('"hit"'))
   } finally {
     host.close()
   }

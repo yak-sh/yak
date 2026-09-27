@@ -254,9 +254,33 @@ let spent = <T>(
 let inset = (b: Bundle) =>
   '  ' + JSON.stringify(b, null, 2).replaceAll('\n', '\n  ')
 
+// A search answer carries a query-only hit, not the entity's whole body. Say
+// that hit as one line for an MCP reader; structuredContent keeps its fields.
+let hitLine = (b: Bundle): string | null => {
+  let hit = b.hit
+  if (
+    !hit || typeof hit != 'object' || !('kind' in hit) ||
+    !('snippet' in hit) || typeof hit.kind != 'string' ||
+    typeof hit.snippet != 'string'
+  ) return null
+  // deno-lint-ignore no-control-regex -- the search markers are intentional
+  let mark = /\x01([^\x02]*)\x02/g
+  // deno-lint-ignore no-control-regex -- a result must not command a terminal
+  let ctrl = /[\x00-\x1f\x7f-\x9f]/g
+  let clean = (s: string) => s.replace(/\s+/g, ' ').replace(ctrl, '').trim()
+  let title = 'title' in hit && typeof hit.title == 'string'
+    ? clean(hit.title)
+    : ''
+  let source = 'source' in hit && hit.source == 'meaning' ? ' (meaning)' : ''
+  let snippet = clean(hit.snippet.replace(mark, '*$1*'))
+  return `${b.entity.eid}${title ? ` ${title}` : ''} · ${
+    clean(hit.kind)
+  }${source}${snippet ? ` — ${snippet}` : ''}`
+}
+
 /**
- * A tool's answer as text: the `content{body}` values its bundles carry, or
- * the bundles themselves as JSON when they carry none. It is copied onto the
+ * A tool's answer as text: its `content{body}` values, compact `hit` lines for
+ * search results, or the bundles as JSON otherwise. It is copied onto the
  * result entity as `content{body}` so a model, a terminal and a transcript all
  * read the answer the same way. It says at most `most` characters and counts
  * the rest, so an answer of any size words in bounded time and space.
@@ -275,14 +299,20 @@ export let worded = (answer: Bundle[], most = WORDS): string => {
   let said = answer
     .map((b) => (b.content as Comp | undefined)?.body)
     .filter((body): body is string => typeof body == 'string')
+  let hits = answer.map(hitLine).filter((s): s is string => s != null)
+  let searched = hits.length > 0 && hits.length == answer.length
   let { text, left } = said.length
     ? spent(said, (s) => s, '\n', most)
+    : searched
+    ? spent(hits, (s) => s, '\n', most)
     : spent(answer, inset, ',\n', most)
-  let open = said.length ? '' : '[\n'
+  let open = said.length || searched ? '' : '[\n'
   return left
     ? `${open}${text}\n… ${left} of ${said.length || answer.length} ` +
       `not said: an answer is worded in ${most} characters`
     : said.length
+    ? text
+    : searched
     ? text
     : answer.length
     ? `[\n${text}\n]`
