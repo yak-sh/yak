@@ -4,9 +4,9 @@
 // which used to be SQL in here and are now a rule read off the vocabulary.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
-import { isPromise, Stale, token } from '@yaks/graph'
-import { shopGraph } from './testing.ts'
+import { type Bundle, graph, isPromise, Stale, token } from '@yaks/graph'
+import { storage } from './mod.ts'
+import { mem, shop, shopGraph, spy } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over an embedded database')
@@ -15,6 +15,30 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 
 let one = (g: ReturnType<typeof shopGraph>, q: string) =>
   (g.read(q) as Bundle[])[0]
+
+Deno.test('a projected read fetches only the components it returns', () => {
+  let seen: string[] = []
+  let driver = spy(mem(), (sql) => void seen.push(sql))
+  let s = storage(driver, shop)
+  s.install()
+  let g = graph({ storage: s, vocab: shop })
+  g.apply([{
+    entity: { eid: 'p1' },
+    doc: { title: 'Mug', body: 'large body' },
+    product: { price: 12 },
+  }])
+
+  seen.length = 0
+  assertEquals((g.read('.product') as Bundle[])[0].doc, undefined)
+  assert(!seen.some((sql) => sql.includes('from "doc"')))
+
+  seen.length = 0
+  assertEquals((g.read('.product&*') as Bundle[])[0].doc, {
+    title: 'Mug',
+    body: 'large body',
+  })
+  assert(seen.some((sql) => sql.includes('from "doc"')))
+})
 
 Deno.test('apply lands a batch and stamps it, synchronously', () => {
   let g = shopGraph()

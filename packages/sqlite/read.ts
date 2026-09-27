@@ -442,13 +442,14 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
   }
 }
 
-// The matched entities as whole bundles. Built for a membership query — one
-// that returns a set of entities; an aggregate query wants `rows()` instead.
+// The matched entities, with only `comps` when named. A membership query
+// returns entities; an aggregate query wants `rows()` instead.
 export let read = (
   driver: Driver,
   vocab: Vocab,
   query: Query,
   opts: BindOpts = {},
+  comps?: string[],
 ): Bundle[] =>
   get(
     driver,
@@ -456,4 +457,5 @@ export let read = (
     rows(driver, vocab, query, opts)
       .filter((r) => r.eid != null).map((r) => String(r.eid)),
     opts,
+    comps,
   )

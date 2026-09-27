@@ -121,8 +121,12 @@ export type Storage = {
   /** make the store ready for the bound vocabulary: its schema, where it has
    * one */
   install: () => void | Promise<void>
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  /** a query → its entities, with `comps` only where the caller names them */
+  read: (
+    query: Query,
+    opts?: ReadOpts,
+    comps?: string[],
+  ) => Bundle[] | Promise<Bundle[]>
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: ReadOpts) => Row[] | Promise<Row[]>
   /** these entities as they stand, carrying the components `comps` names or

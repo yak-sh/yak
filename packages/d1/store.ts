@@ -115,8 +115,8 @@ export type Store = {
   ddl: () => Stmt[]
   /** run them — create the tables, indexes and triggers the vocabulary needs */
   install: () => Promise<void>
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: BindOpts) => Promise<Bundle[]>
+  /** a query → its entities, with `comps` only where named */
+  read: (query: Query, opts?: BindOpts, comps?: string[]) => Promise<Bundle[]>
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Promise<Row[]>
   /** these entities as they stand, carrying the components `comps` names or
@@ -229,11 +229,13 @@ export let storage = <S extends Prepared<S>>(
   let read = async (
     query: Query,
     opts: BindOpts = {},
+    comps?: string[],
   ): Promise<Bundle[]> => {
     let hits = await rows(query, opts)
     return gather(
       hits.filter((r) => r.eid != null).map((r) => String(r.eid)),
       { ...base, ...opts },
+      comps,
     )
   }
 

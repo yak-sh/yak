@@ -12,8 +12,9 @@
 // One rule for every door (T-38063): `Graph.read` answers it, and a
 // subscription cuts the bundles a commit pushes the same way (@yaks/api
 // subs.ts), so a page that swaps a query for a subscription gets the same rows.
-// Storage answers whole entities; this is the graph's answer, not the
-// adapter's.
+// The graph decides the projection and asks storage for only those component
+// tables. `only` keeps the answer true for an adapter that cannot narrow its
+// read.
 
 import { parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'

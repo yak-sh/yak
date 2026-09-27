@@ -200,8 +200,8 @@ export type Store = {
    * classify what the archetype backfill finds unclassified; nothing, where
    * the file's schema is as this vocabulary last installed it */
   install: () => void
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: BindOpts) => Bundle[]
+  /** a query → its entities, with `comps` only where named */
+  read: (query: Query, opts?: BindOpts, comps?: string[]) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts) => Row[]
   /** these entities as they stand, carrying the components `comps` names or
@@ -365,7 +365,8 @@ export let storage = (
       // the statements above just raised.
       analyzed(driver)
     },
-    read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
+    read: (query, opts, comps) =>
+      read(driver, vocab, query, { ...base, ...opts }, comps),
     rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),
     get: (eids, comps) => unit(driver, () => identity(eids, comps), 'read'),
     tx: (body) => unit(driver, () => body(tx)),

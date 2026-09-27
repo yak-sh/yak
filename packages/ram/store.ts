@@ -95,8 +95,8 @@ export type Tx = {
 export type Store = {
   /** nothing to create — installing a map is a no-op */
   install: () => void
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: ReadOpts) => Bundle[]
+  /** a query → its entities, with `comps` only where named */
+  read: (query: Query, opts?: ReadOpts, comps?: string[]) => Bundle[]
   /** a query → one raw `{ eid }` row per match, or an aggregate's rows */
   rows: (query: Query, opts?: ReadOpts) => Row[]
   /** these entities as they stand, carrying the components `comps` names or
@@ -290,11 +290,17 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
-  let read = (query: Query, opts: ReadOpts = {}): Bundle[] =>
-    matcher(query, vocab, {
+  let read = (
+    query: Query,
+    opts: ReadOpts = {},
+    comps?: string[],
+  ): Bundle[] => {
+    let found = matcher(query, vocab, {
       now: opts.now ?? base.now,
       computed: base.computed,
     })(view())
+    return comps ? found.map(only(new Set(comps))) : found
+  }
 
   // The raw-rows path: one `{ eid }` per match, or an aggregate's rows in the
   // shape @yaks/sql returns, so a caller reads the same shape from either

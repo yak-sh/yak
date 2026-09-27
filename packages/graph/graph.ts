@@ -681,9 +681,13 @@ export let graph = (opts: Options): Graph => {
     read: (query, readOpts) =>
       then(
         aim(mean(query), address),
-        (q) =>
-          then(storage.read(q, readOpts), (rows) =>
-            rows.map(only(named(vocab, q)))),
+        (q) => {
+          let want = named(vocab, q)
+          return then(
+            storage.read(q, readOpts, want ? [...want] : undefined),
+            (rows) => rows.map(only(want)),
+          )
+        },
       ),
     rows: (query, readOpts) =>
       then(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
