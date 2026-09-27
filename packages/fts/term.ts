@@ -51,3 +51,25 @@ let WORDS = /"[^"]*"?|\S+/g
 // from here. Returns '' for text containing no word, just as `term` does.
 export let match = (text: string): string =>
   (text.match(WORDS) ?? []).map(term).filter(Boolean).join(' ')
+
+// Grammatical words still participate in matching and ranking. In an excerpt
+// they obscure the useful words and make FTS5 scan large matches just to cut
+// the display text. This list affects display only, never search membership.
+let COMMON = new Set(
+  'a an and are as at be by for from in is it of on or the to was were with about after all also am any before between but can could did do does each had has have if into its may more my not our out per so than that their them there these this those through up we what when where which who will would your'
+    .split(' '),
+)
+
+// Mark distinctive words in a snippet, while still searching for *all* words.
+// Keep quoted phrases intact, even those made only of common words. If the
+// query has nothing else, marking one word is better than a blank excerpt
+// or an expensive snippet of all common terms.
+export let excerpt = (text: string): string => {
+  let words = (text.match(WORDS) ?? []).filter((word) =>
+    word.startsWith('"') || word.endsWith('*') ||
+    !COMMON.has(word.toLowerCase())
+  )
+  return words.length
+    ? words.map(term).filter(Boolean).join(' ')
+    : term((text.match(WORDS) ?? []).find((word) => term(word)) ?? '')
+}

@@ -1,7 +1,7 @@
 // What a person types, spelled safely for FTS5.
 
 import { assertEquals } from '@std/assert'
-import { match, term } from './term.ts'
+import { excerpt, match, term } from './term.ts'
 
 Deno.test('a word is quoted, so every character in it is literal', () => {
   assertEquals(term('dragon'), '"dragon"*')
@@ -47,4 +47,15 @@ Deno.test('a quoted run stays one phrase, beside the loose words', () => {
   )
   // Half a phrase is still a phrase — somebody is mid-sentence.
   assertEquals(match('"entropy purge'), '"entropy purge"')
+})
+
+Deno.test('excerpt retains useful terms without discarding search words', () => {
+  assertEquals(
+    match('a burglar with a dragon'),
+    '"a"* "burglar"* "with"* "a"* "dragon"*',
+  )
+  assertEquals(excerpt('a burglar with a dragon'), '"burglar"* "dragon"*')
+  assertEquals(excerpt('a with'), term('a'))
+  assertEquals(excerpt('the "a dragon" with wings'), '"a dragon" "wings"*')
+  assertEquals(excerpt('with* wings'), '"with"* "wings"*')
 })

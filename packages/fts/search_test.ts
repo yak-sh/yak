@@ -75,7 +75,7 @@ Deno.test('a word reaches the longer word it starts', () => {
   )
 })
 
-Deno.test('every word of a search is marked in the snippet', () => {
+Deno.test('distinctive words of a search are marked in the snippet', () => {
   let [book] = find(shelf(), text, 'burglar dragon')
   assert(book.snippet.includes(`${OPEN}burglar${CLOSE}`), book.snippet)
   assert(book.snippet.includes(`${OPEN}dragon${CLOSE}`), book.snippet)
@@ -85,4 +85,23 @@ Deno.test('a search that cannot be asked finds nothing', () => {
   assertEquals(hits(text, '  '), null)
   assertEquals(hits([], 'dragon'), null)
   assertEquals(find(shelf(), text, ''), [])
+})
+
+Deno.test('common words still narrow a search but are not highlighted', () => {
+  let db = shelf()
+  let [book] = find(db, text, 'a burglar with a dragon')
+  // The book has no "with", even though it contains both distinctive words.
+  assertEquals(book, undefined)
+  let [hit] = find(db, text, 'a burglar and a dragon')
+  assert(hit.snippet.includes(`${OPEN}burglar${CLOSE}`), hit.snippet)
+  assert(hit.snippet.includes(`${OPEN}dragon${CLOSE}`), hit.snippet)
+  assert(!hit.snippet.includes(`${OPEN}a${CLOSE}`), hit.snippet)
+  assert(!hit.snippet.includes(`${OPEN}and${CLOSE}`), hit.snippet)
+  let [common] = find(db, text, 'a and')
+  assert(common.snippet.includes(OPEN), common.snippet)
+  let [phrase] = find(db, text, '"a burglar leaves"')
+  assert(
+    phrase.snippet.includes(`${OPEN}A burglar leaves${CLOSE}`),
+    phrase.snippet,
+  )
 })

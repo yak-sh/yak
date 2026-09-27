@@ -38,7 +38,7 @@ import {
   when,
 } from '@yaks/sql'
 import { type Field, indexes, indexName } from './fields.ts'
-import { CLOSE, match, OPEN } from './term.ts'
+import { CLOSE, excerpt, match, OPEN } from './term.ts'
 
 // One search hit: the entity, its rank, and a snippet marking the matches.
 export type Hit = {
@@ -46,7 +46,7 @@ export type Hit = {
   entity: Eid
   // the relevance rank — FTS5's bm25, where a lower number is a closer match
   rank: number
-  // the matching text with each match wrapped in OPEN…CLOSE, for display
+  // matching text with distinctive terms wrapped in OPEN…CLOSE for display
   snippet: string
 }
 
@@ -79,6 +79,9 @@ export let hits = (
   let best = chosen(fields, t, opts)
   if (!best) return null
   let context = opts.context ?? 10
+  // Membership and rank still use the full match; the excerpt leaves common
+  // terms unmarked, so FTS5 does less work cutting large matching texts.
+  let marked = excerpt(text)
   let b = at('best')
   let snippet = when(
     indexes(fields).map(({ name }, i) => {
@@ -97,7 +100,7 @@ export let hits = (
           )],
           from: table(fts),
           where: and(
-            op('match', col(fts), val(t)),
+            op('match', col(fts), val(marked)),
             eq(col('rowid'), b('owner')),
           ),
         })),
