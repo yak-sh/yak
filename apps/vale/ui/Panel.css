@@ -38,7 +38,7 @@
   overflow: hidden;
   border-radius: var(--radius-big);
   background: var(--paper);
-  box-shadow: 0 3px 0 var(--lip), 0 12px 30px rgba(20, 30, 15, 0.3);
+  box-shadow: 0 12px 30px rgba(20, 30, 15, 0.3);
   animation: panel-in 0.18s ease-out;
 }
 

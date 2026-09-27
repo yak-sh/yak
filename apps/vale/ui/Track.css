@@ -1,5 +1,6 @@
 /* The quests tracked (hud.ts, journal.ts): each its title over the step it
-   is on, and how far that has come. A tap opens the journal. */
+   is on, and how far that has come. It is a button, which opens the journal,
+   so it stands on a lip. */
 .Track {
   display: grid;
   gap: 0.3rem;
@@ -7,7 +8,7 @@
   border: 0;
   border-radius: var(--radius);
   background: var(--glass);
-  box-shadow: var(--lift);
+  box-shadow: 0 3px 0 var(--lip), 0 6px 16px rgba(20, 30, 15, 0.14);
   font: inherit;
   font-size: 0.8rem;
   line-height: 1.25;
@@ -15,6 +16,11 @@
   color: var(--muted);
   cursor: pointer;
   pointer-events: auto;
+
+  &:active {
+    translate: 0 2px;
+    box-shadow: 0 1px 0 var(--lip);
+  }
 }
 
 .Track_Quest {

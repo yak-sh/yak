@@ -5,7 +5,7 @@
   padding: 0.25rem;
   border-radius: var(--round);
   background: var(--glass);
-  box-shadow: var(--lift);
+  box-shadow: var(--flat);
 
   &[hidden] {
     display: none;

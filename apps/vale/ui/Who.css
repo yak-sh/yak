@@ -7,7 +7,7 @@
   padding: 0.3rem 0.75rem;
   border-radius: var(--round);
   background: var(--glass);
-  box-shadow: var(--lift);
+  box-shadow: var(--flat);
   font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;

@@ -1,7 +1,8 @@
 /* The vale's look, as tokens every component reads: moss and paper, a lip
-   under whatever can be pressed, round corners. A component declares its own
-   variables from these and a variant re-points one; nothing below this file
-   names a colour of its own unless it is the colour of a thing in the world. */
+   under whatever can be pressed and under nothing else, round corners. A
+   component declares its own variables from these and a variant re-points
+   one; nothing below this file names a colour of its own unless it is the
+   colour of a thing in the world. */
 :root {
   color-scheme: light;
 
@@ -29,10 +30,13 @@
   --shade: rgba(28, 36, 26, 0.55);
   --scrim: rgba(20, 30, 15, 0.38);
 
-  /* A thing on the glass: paper you can nearly see through, on a lip. */
+  /* A card on the glass: paper you can nearly see through, lying flat, its
+     edge a hairline and a soft shadow under it. What can be pressed stands
+     on a `--lip` instead (Btn, Orb, Pad, Track), and sinks when pressed. */
   --glass: color-mix(in srgb, var(--paper) 93%, transparent);
   --lip: color-mix(in srgb, var(--rim) 75%, transparent);
-  --lift: 0 3px 0 var(--lip), 0 8px 22px rgba(20, 30, 15, 0.18);
+  --flat: 0 0 0 1px color-mix(in srgb, var(--rim) 55%, transparent),
+    0 6px 18px rgba(20, 30, 15, 0.14);
   --text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
 
   --radius: 14px;

@@ -22,7 +22,7 @@
   padding: 0.9rem 1.3rem;
   border-radius: var(--radius-big);
   background: var(--glass);
-  box-shadow: var(--lift);
+  box-shadow: var(--flat);
   text-align: center;
 
   & b {

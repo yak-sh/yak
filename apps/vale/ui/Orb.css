@@ -36,7 +36,7 @@
 .Orb-small {
   --size: 2.1rem;
   --face: var(--well);
-  box-shadow: none;
+  box-shadow: 0 2px 0 var(--lip);
 }
 
 .Orb-on {

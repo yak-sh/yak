@@ -20,7 +20,7 @@
   padding: 1.6rem 1.5rem 1.4rem;
   border-radius: 22px;
   background: var(--paper);
-  box-shadow: 0 0.5rem 0 #d9ceb0, 0 1.2rem 2.5rem rgba(20, 30, 15, 0.35);
+  box-shadow: 0 1.2rem 2.5rem rgba(20, 30, 15, 0.35);
   text-align: center;
 }
 
