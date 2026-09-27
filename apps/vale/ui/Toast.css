@@ -27,7 +27,7 @@
 /* A legendary found: bigger, and glowing a while. */
 .Toast-legend {
   font-size: 1.2rem;
-  box-shadow: var(--lift), 0 0 0 2px var(--legendary),
+  box-shadow: var(--flat), 0 0 0 2px var(--legendary),
     0 0 24px color-mix(in srgb, var(--legendary) 70%, transparent);
   animation: toast-in 0.25s ease-out, toast-glow 0.9s ease-in-out 3 alternate;
 }
@@ -46,7 +46,7 @@
 
 @keyframes toast-glow {
   to {
-    box-shadow: var(--lift), 0 0 0 3px var(--legendary),
+    box-shadow: var(--flat), 0 0 0 3px var(--legendary),
       0 0 40px var(--legendary);
   }
 }
