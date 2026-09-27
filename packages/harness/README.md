@@ -88,9 +88,8 @@ and Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select roots on the visible page.
 Ctrl+O selects a new session, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter
 needs a terminal supporting kitty keyboard sequences (Alt+Enter also inserts a
 newline). On a new session, NORMAL `P` chooses a persona from the graph for that
-session.
-`--persona` accepts a persona id or registered name; the session keeps that
-choice and snapshots its instructions before its first message.
+session. `--persona` accepts a persona id or registered name; the session keeps
+that choice and snapshots its instructions before its first message.
 
 `$HARNESS_HOME` moves harness state without changing `HOME`: checkouts for
 children assigned tasks go under `$HARNESS_HOME/worktrees` and drafts under
