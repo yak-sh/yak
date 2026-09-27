@@ -11,6 +11,12 @@ import { cap, type Panel } from './panel.ts'
 export type Settings = {
   muted: () => boolean
   mute: () => void
+  music: {
+    readonly level: number
+    readonly muted: boolean
+    set: (value: number) => void
+    toggle: () => void
+  }
   follows: () => boolean
   follow: () => void
 }
@@ -63,8 +69,18 @@ export let menu = (panel: Panel, o: Settings) => {
       ? e.target.closest<HTMLElement>('[data-do]')?.dataset.do
       : null
     if (act == 'sound') o.mute()
+    if (act == 'music') o.music.toggle()
     if (act == 'follow') o.follow()
-    was = ''
+    if (act == 'sound' || act == 'music' || act == 'follow') was = ''
+  })
+  panel.body.addEventListener('input', (e) => {
+    if (
+      !(e.target instanceof HTMLInputElement) ||
+      e.target.dataset.do != 'volume'
+    ) return
+    o.music.set(Number(e.target.value) / 100)
+    let value = panel.body.querySelector('.Menu_VolumeValue')
+    if (value) value.textContent = `${e.target.value}%`
   })
   let toggle = (act: string, on: boolean, icon: string, what: string) =>
     `<button class="Menu_Set${
@@ -75,6 +91,11 @@ export let menu = (panel: Panel, o: Settings) => {
     show: () => {
       if (!panel.open) return
       let sound = !o.muted(), follows = o.follows()
+      let playing = !o.music.muted
+      let key = `${sound} ${playing} ${follows}`
+      if (key == was) return
+      was = key
+      let volume = Math.round(o.music.level * 100)
       let html = `<div class=Menu>` +
         toggle(
           'sound',
@@ -82,6 +103,16 @@ export let menu = (panel: Panel, o: Settings) => {
           glyph(sound ? 'sound' : 'soundOff'),
           sound ? 'Sound is on' : 'Sound is off',
         ) +
+        toggle(
+          'music',
+          playing,
+          glyph(playing ? 'sound' : 'soundOff'),
+          playing ? 'Music is on' : 'Music is off',
+        ) +
+        `<label class=Menu_Volume>Music volume ` +
+        `<output class=Menu_VolumeValue>${volume}%</output>` +
+        `<input type=range data-do=volume min=0 max=100 value=${volume} ` +
+        `aria-label="Music volume"></label>` +
         toggle(
           'follow',
           follows,
@@ -93,8 +124,6 @@ export let menu = (panel: Panel, o: Settings) => {
         `<h3 class=Menu_Head>Touch</h3><dl class="Menu_Keys Menu_Keys-touch">${TOUCH}</dl>` +
         `<h3 class=Menu_Head>Keys</h3><dl class="Menu_Keys Menu_Keys-keys">${KEYS}</dl>` +
         `</div>`
-      if (html == was) return
-      was = html
       panel.body.innerHTML = html
     },
   }

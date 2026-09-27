@@ -234,6 +234,7 @@ h.orbs.mic.addEventListener('click', () => void voice.toggle())
 let settings = menu(h.panels.menu, {
   muted: () => sound.muted,
   mute: () => sound.toggle(),
+  music: sound.music,
   follows: () => cam.follow,
   follow: () => hands.press('follow'),
 })

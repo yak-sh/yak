@@ -25,6 +25,7 @@ import {
   QUIET,
 } from './ears.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
+import { music } from './music.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
 import * as voices from './voices.ts'
@@ -104,6 +105,7 @@ let wake = () => {
       surf: voices.surf(ctx),
       marsh: voices.marsh(ctx),
     }
+    void music.start(ctx, out).catch(console.error)
   } catch {
     ctx = null
   }
@@ -240,6 +242,7 @@ export let sound = {
   get muted() {
     return muted
   },
+  music,
   toggle: () => {
     muted = !muted
     try {
@@ -267,6 +270,7 @@ export let sound = {
     spots = f && me ? where(f, me) : new Map()
     ears = ear(camera, me ? spots.get(me) : undefined)
     listenAt(ctx.listener, ears)
+    music.at(ears.at)
     let around = ambience(v, ears.at)
     for (let a of around) spots.set(a.id, a.at)
     let t = ctx.currentTime
