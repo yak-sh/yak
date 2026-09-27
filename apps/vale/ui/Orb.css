@@ -23,8 +23,8 @@
   touch-action: manipulation;
 
   & .Glyph {
-    width: 48%;
-    height: 48%;
+    width: calc(var(--size) * 0.48);
+    height: calc(var(--size) * 0.48);
   }
 
   &:active {

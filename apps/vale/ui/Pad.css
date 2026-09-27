@@ -25,9 +25,11 @@
   touch-action: none;
   isolation: isolate;
 
+  /* Sized from the pad, not from what holds it: an ability's glyph sits in
+     a .Pad_Icon, and a share of that would be a share of itself. */
   & .Glyph {
-    width: 52%;
-    height: 52%;
+    width: calc(var(--size) * 0.52);
+    height: calc(var(--size) * 0.52);
     stroke-width: 2.4;
   }
 
@@ -135,6 +137,8 @@
 }
 
 .Pad_Icon {
+  display: grid;
+  place-items: center;
   font-size: 1.4rem;
   line-height: 1;
 }
