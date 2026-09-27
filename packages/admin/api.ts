@@ -25,6 +25,7 @@ import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import { PLATFORM, SLUG } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
+import { INVITE } from '../../workers/yak/invite.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => Deno.env.get('YAKS_ZONE') ?? PLATFORM
@@ -98,18 +99,64 @@ let sent = async (
   url: string,
   session?: string,
   init: RequestInit & { headers?: Record<string, string> } = {},
+  quiet = false,
 ) => {
   let asked = {
     ...init,
     headers: { ...init.headers, ...(session ? head(session) : {}) },
   }
   let go = () => fetch(url, asked)
-  let r = timing.on
+  let r = timing.on && !quiet
     ? await timed(timing.say, go)(new Request(url, asked))
     : await go()
   let fresh = session ? cookieOf(r.headers.get('set-cookie')) : null
   if (fresh && fresh != session) told(fresh)
   return r
+}
+
+// The letter stays in the graph; only its recipient may turn its sealed
+// invitation into a seat. Do not put the link in a CLI argument or log it.
+export let inviteIn = (letter: Bundle | undefined, address: string) => {
+  let mail = letter?.mail as Comp | undefined
+  let doc = letter?.doc as Comp | undefined
+  if (mail?.to != address || typeof doc?.body != 'string') {
+    throw new CallError('letter', 'no invitation letter for this account')
+  }
+  let links = (doc.body.match(/https:\/\/[^\s<>]+/g) ?? []).filter((text) => {
+    try {
+      let url = new URL(text)
+      return url.origin == new URL(apex('/')).origin &&
+        url.pathname == INVITE &&
+        !!url.searchParams.get('t')
+    } catch {
+      return false
+    }
+  })
+  if (links.length != 1) {
+    throw new CallError('letter', 'the letter has no single invitation link')
+  }
+  return links[0]
+}
+
+export let acceptInvite = async (
+  session: string,
+  letter: Bundle | undefined,
+  address: string,
+) => {
+  let url = inviteIn(letter, address)
+  let r: Response
+  try {
+    r = await sent(url, session, { redirect: 'manual' }, true)
+  } catch {
+    throw new Error('invitation request failed')
+  }
+  await r.body?.cancel()
+  if (r.status != 303) {
+    throw new CallError(
+      'invite',
+      `the invitation was not accepted (${r.status})`,
+    )
+  }
 }
 
 let form = (fields: Record<string, string>) =>

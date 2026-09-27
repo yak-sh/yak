@@ -65,6 +65,29 @@
       "options": { "positional": ["address"] },
       "openWorld": true
     },
+    "admin_accept": {
+      "tool": true,
+      "surfaces": ["cli"],
+      "noun": "admin",
+      "verb": "accept",
+      "title": "Accept an invitation addressed to this account",
+      "description": "Accept the signed invitation link in a local mail entity using this account’s session. The link and session are never printed.\n\n  yak admin accept E-41217 --admin",
+      "input": {
+        "letter": {
+          "type": "string",
+          "description": "the invitation letter’s id"
+        },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform’s admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["letter"],
+      "options": { "positional": ["letter"] },
+      "openWorld": true
+    },
     "admin_use": {
       "tool": true,
       "noun": "admin",

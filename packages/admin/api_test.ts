@@ -16,11 +16,13 @@ import { mailDoc } from '@yaks/mail/vocab'
 import { CallError } from '@yaks/tools'
 import { lined } from '../../workers/yak/wire.ts'
 import {
+  acceptInvite,
   claimsOf,
   codeFor,
   codeIn,
   cookieOf,
   feeNow,
+  inviteIn,
   listedOn,
   plain,
   renewing,
@@ -31,6 +33,30 @@ import {
   storeUrl,
   timing,
 } from './api.ts'
+
+Deno.test('an invitation is accepted through the invitee session', async () => {
+  let url = 'https://yaks.app/invite?t=sealed'
+  let mail: Bundle = {
+    entity: { eid: crypto.randomUUID() },
+    mail: { to: 'admin@bot.yak.sh' },
+    doc: { body: `Accept with one click:\n\n${url}\n` },
+  }
+  assertEquals(inviteIn(mail, 'admin@bot.yak.sh'), url)
+  assertThrows(() => inviteIn(mail, 'other@bot.yak.sh'), CallError)
+  let old = globalThis.fetch
+  let sent: RequestInit | undefined
+  globalThis.fetch = ((_url: string, init: RequestInit) => {
+    sent = init
+    return Promise.resolve(new Response(null, { status: 303 }))
+  }) as typeof fetch
+  try {
+    await acceptInvite('private.session', mail, 'admin@bot.yak.sh')
+    assertEquals(sent?.headers, { cookie: 'yak_session=private.session' })
+    assertEquals(sent?.redirect, 'manual')
+  } finally {
+    globalThis.fetch = old
+  }
+})
 
 let letter = (title: string, to: string, at: string): Bundle => ({
   entity: { eid: crypto.randomUUID() },

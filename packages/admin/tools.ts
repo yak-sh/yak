@@ -59,6 +59,7 @@ import {
   usable,
 } from './accounts.ts'
 import {
+  acceptInvite,
   askCode,
   claimsOf,
   close,
@@ -308,6 +309,18 @@ export let runs = (
       return [
         await signIn(graph, address, word(a, 'code'), host.state),
         said(call, `signed in as ${address}`),
+      ]
+    }),
+
+    admin_accept: verb(async (call, vault, keep, graph) => {
+      let a = argsOf(call)
+      let at = acting(vault, a, keep, host.state)
+      let letter = String(a.letter)
+      let eid = (await graph.address([letter])).get(letter) ?? letter
+      let [mail] = await graph.get([eid])
+      await acceptInvite(at.session, mail, at.address)
+      return [
+        said(call, `accepted the invitation in ${letter} as ${at.address}`),
       ]
     }),
 
