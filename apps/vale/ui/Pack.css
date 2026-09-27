@@ -130,17 +130,20 @@
   color: #c0442a;
 }
 
+/* The card is the sheet's foot: as wide as the sheet and down to its edge,
+   over the body's padding (Panel.css), so what scrolls under it never shows
+   below or beside it. */
 .Pack_Pick {
   position: sticky;
-  bottom: 0;
+  bottom: -1rem;
   z-index: 1;
   display: grid;
   gap: 0.35rem;
   min-height: 3.2rem;
-  margin-top: auto;
-  padding: 0.45rem 0.55rem;
-  border-radius: 12px;
+  margin: auto -1rem -1rem;
+  padding: 0.55rem 1.55rem 1rem;
   background: color-mix(in srgb, var(--well) 45%, var(--paper));
+  box-shadow: 0 -1px 0 var(--line);
 }
 
 .Pack_Card {
