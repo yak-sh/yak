@@ -4,7 +4,7 @@
     "check:fmt": "deno fmt --check",
     "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
-    "check:types": "deno check --doc",
+    "check:types": "bash bin/check-types",
     "check:publish": {
       "command": "deno publish --dry-run --allow-dirty --no-check",
       "files": [

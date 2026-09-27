@@ -20,8 +20,8 @@ type Land = {
   gain: GainNode
   next: number
   source: AudioBufferSourceNode | null
-  wait: number | null
-  retire: number | null
+  wait: ReturnType<typeof setTimeout> | null
+  retire: ReturnType<typeof setTimeout> | null
   target: number
 }
 
