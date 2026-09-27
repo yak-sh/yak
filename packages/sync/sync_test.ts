@@ -131,6 +131,47 @@ Deno.test('a server refusal reverts the client and is reported', async () => {
   c.wire.close()
 })
 
+Deno.test('a refused store write keeps local and relayed values', async () => {
+  let srv = server()
+  srv.graph.use({
+    name: 'the cook',
+    hooks: {
+      precondition: (bundles) => {
+        if (
+          bundles.some((b) =>
+            (b.recipe as { serves?: number } | undefined)?.serves == 40
+          )
+        ) throw new Refused('a recipe serves at most 12')
+        return bundles
+      },
+    },
+  })
+  let a = client(srv)
+  let b = client(srv)
+  a.wire.subscribe('.course=dinner', 'dinners')
+  b.wire.subscribe('.course=dinner', 'dinners')
+  a.graph.apply([dal()])
+  await a.idle()
+  await b.idle()
+
+  a.graph.apply([{
+    entity: { eid: 'r1' },
+    recipe: { serves: 40 },
+    pointing: { x: 3 },
+    draft: { text: 'more cumin?' },
+  }])
+  await a.idle()
+
+  assertEquals(comp(at(a.graph, 'r1'), 'recipe').serves, 4)
+  assertEquals(comp(at(a.graph, 'r1'), 'pointing').x, 3)
+  assertEquals(comp(at(b.graph, 'r1'), 'pointing').x, 3)
+  assertEquals(comp(at(a.graph, 'r1'), 'draft').text, 'more cumin?')
+  assertEquals(comp(at(srv.graph, 'r1'), 'pointing'), {})
+  assertEquals(a.trouble[0].reverted, true)
+  a.wire.close()
+  b.wire.close()
+})
+
 Deno.test('a refused write on an entity the server never had leaves it bare', async () => {
   let srv = server()
   srv.graph.use({

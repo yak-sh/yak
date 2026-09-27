@@ -109,7 +109,7 @@ export let exchange = async (
   }
   if (!res.ok) {
     let refused = await refusalOf(res)
-    let back = opts.held ? [] : inverse(batch)
+    let back = opts.held ? [] : inverse(batch, graph.vocab)
     if (back.length) await replicate(graph, back)
     opts.report({ sent, refused, reverted: back.length > 0 })
     return { settled: true, refused }

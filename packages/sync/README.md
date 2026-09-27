@@ -84,10 +84,11 @@ follows:
   prevent the plugin from sending them back. A response is a set of applied
   patches, not a complete snapshot of every affected entity.
 - **Refused:** an HTTP error response causes the plugin to apply inverse patches
-  from the state recorded before the local write. These restore touched
-  properties, clear previously absent values, and remove newly introduced
-  components. The `report` callback receives the refusal, sent batch, and
-  whether it reverted local data.
+  for the properties in the refused request, using the state recorded before the
+  local write. These restore previous values, clear previously absent values,
+  and remove newly introduced components. Local and relayed values in the same
+  batch stay in place. The `report` callback receives the refusal, sent batch,
+  and whether it reverted local data.
 - **Unreachable:** a failed request is reported with `reverted: false`. The
   local change remains because the server may have applied it before the
   connection failed. There is no automatic HTTP retry or guarantee that a later

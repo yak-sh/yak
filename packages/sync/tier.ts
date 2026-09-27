@@ -122,22 +122,22 @@ export let relayed = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
   leaving(bundles, vocab, 'peers', false)
 
 /**
- * The inverse of one committed list of bundles: what to patch back when the
- * server refuses it. Each bundle is restored from the copy {@link before} took
- * of it — a property it did not hold is cleared, a component it did not have is
- * dropped — so the local graph returns to where it stood before the optimistic
- * write.
+ * The inverse of the server-owned part of one committed list of bundles: what
+ * to patch back when the server refuses it. Each sent property is restored
+ * from the copy {@link before} took of it. Local and relayed values were not
+ * in the refused request, so they stay as they are.
  *
  * A DELETE gets no inverse here: a write that deletes is never applied
  * optimistically — it waits for the server (sync.ts), so there is never a
  * tombstone to lift.
  */
-export let inverse = (bundles: Bundle[]): Bundle[] =>
+export let inverse = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
   bundles.flatMap((b) => {
     let was = before(b)
-    if (was === undefined || dead(b)) return []
+    let sent = outward([b], vocab)[0]
+    if (was === undefined || !sent || dead(b)) return []
     let out: Bundle = { entity: { eid: b.entity.eid } }
-    for (let [name, patch] of comps(b)) {
+    for (let [name, patch] of comps(sent)) {
       let held = was?.[name] as Comp | undefined
       // Not present before this write: the whole component is dropped.
       if (!held) out[name] = null

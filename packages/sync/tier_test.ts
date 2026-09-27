@@ -69,7 +69,7 @@ Deno.test('the inverse restores a property, clears one that was absent, drops a 
     recipe: { serves: 8, course: 'dinner' },
     doc: { title: 'Dal' },
   }, before)]
-  assertEquals(inverse(batch), [{
+  assertEquals(inverse(batch, box), [{
     entity: { eid: 'r1' },
     recipe: { serves: 4, course: null },
     doc: null,
@@ -77,11 +77,30 @@ Deno.test('the inverse restores a property, clears one that was absent, drops a 
 })
 
 Deno.test('the inverse of a dropped component puts it back whole', () => {
-  let before: Bundle = { entity: { eid: 'r1' }, draft: { text: 'hm' } }
+  let before: Bundle = { entity: { eid: 'r1' }, doc: { title: 'Dal' } }
   assertEquals(
-    inverse([sent({ entity: { eid: 'r1' }, draft: null }, before)]),
-    [{ entity: { eid: 'r1' }, draft: { text: 'hm' } }],
+    inverse([sent({ entity: { eid: 'r1' }, doc: null }, before)], box),
+    [{ entity: { eid: 'r1' }, doc: { title: 'Dal' } }],
   )
+})
+
+Deno.test('the inverse contains only fields in the refused request', () => {
+  let before: Bundle = {
+    entity: { eid: 'r1' },
+    recipe: { serves: 4 },
+    pointing: { x: 1 },
+    draft: { text: 'old' },
+  }
+  let batch = [sent({
+    entity: { eid: 'r1' },
+    recipe: { serves: 40 },
+    pointing: { x: 3 },
+    draft: { text: 'new' },
+  }, before)]
+  assertEquals(inverse(batch, box), [{
+    entity: { eid: 'r1' },
+    recipe: { serves: 4 },
+  }])
 })
 
 Deno.test('a bundle no caller sent has no inverse, and neither has a death', () => {
@@ -89,8 +108,11 @@ Deno.test('a bundle no caller sent has no inverse, and neither has a death', () 
     entity: { eid: 'r1' },
     recipe: { serves: 4 },
   })
-  assertEquals(inverse([dead]), [])
-  assertEquals(inverse([{ entity: { eid: 'r1' }, recipe: { serves: 4 } }]), [])
+  assertEquals(inverse([dead], box), [])
+  assertEquals(
+    inverse([{ entity: { eid: 'r1' }, recipe: { serves: 4 } }], box),
+    [],
+  )
 })
 
 Deno.test('an echoed bundle is marked, and the marks come off what a caller sees', () => {
