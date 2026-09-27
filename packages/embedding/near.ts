@@ -14,10 +14,7 @@
 // reads only those vectors, and the cut to `limit` happens after. Filter, then
 // rank, then cut.
 //
-// A neighbour carries its integer owner id beside its eid. That is not an
-// implementation detail leaking for no reason: the ranking has to become SQL,
-// and an integer id is the one thing an ORDER BY can carry safely without a
-// bound parameter.
+// A neighbour carries its integer owner id beside its eid for SQL ranking.
 
 import type { Eid } from '@yaks/graph'
 import {
@@ -72,7 +69,7 @@ let e = at('e')
 let o = at('o')
 let vectors = (db: Driver, model: string, within?: Screen) => {
   let rows = db.query(select({
-    cols: [as(e('entity'), 'owner'), as(o('eid'), 'eid'), as(e('vec'), 'vec')],
+    cols: [as(e('entity'), 'owner'), as(e('vec'), 'vec')],
     from: table(TABLE, 'e'),
     joins: [join(table('entity', 'o'), eq(o('id'), e('entity')))],
     where: and(
@@ -85,11 +82,7 @@ let vectors = (db: Driver, model: string, within?: Screen) => {
       ...(within ? [among(o('eid'), within)] : []),
     ),
   }))
-  return rows.map((r) => ({
-    owner: Number(r.owner),
-    eid: String(r.eid),
-    vec: r.vec as Uint8Array,
-  }))
+  return rows
 }
 
 /**
@@ -125,25 +118,90 @@ export type NearOpts = {
   within?: Screen
 }
 
-/**
- * The entities nearest a query vector, most similar first. An exact cosine scan
- * over the model's stored vectors; see the note at the top of this file about
- * when to replace it.
- */
+// Keep only the best `limit` scores. The root is the worst retained score;
+// for equal scores, a later row is worse (matching stable sort over the scan).
+type Hit = { owner: number; similarity: number; order: number }
+let worse = (a: Hit, b: Hit) =>
+  a.similarity < b.similarity ||
+  (a.similarity == b.similarity && a.order > b.order)
+
+let push = (heap: Hit[], hit: Hit) => {
+  let i = heap.length
+  heap.push(hit)
+  while (i) {
+    let p = (i - 1) >> 1
+    if (!worse(hit, heap[p])) break
+    heap[i] = heap[p]
+    i = p
+  }
+  heap[i] = hit
+}
+
+let replace = (heap: Hit[], hit: Hit) => {
+  let i = 0
+  while (2 * i + 1 < heap.length) {
+    let child = 2 * i + 1
+    if (child + 1 < heap.length && worse(heap[child + 1], heap[child])) {
+      child++
+    }
+    if (!worse(heap[child], hit)) break
+    heap[i] = heap[child]
+    i = child
+  }
+  heap[i] = hit
+}
+
+/** The entities nearest a query vector, most similar first. */
 export let nearest = (
   db: Driver,
   query: Float32Array,
   opts: NearOpts,
 ): Near[] => {
+  let limit = opts.limit ?? 8
+  if (limit <= 0) return []
   let floor = opts.floor ?? 0
-  return vectors(db, opts.model, opts.within)
-    .filter((r) => r.eid != opts.without)
-    .map((r) => ({
-      entity: r.eid,
-      owner: Number(r.owner),
-      similarity: cosine(query, unpack(r.vec)),
+  let heap: Hit[] = []
+  let without = opts.without && db.query(select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: eq(col('eid'), val(opts.without)),
+  }))[0]?.id
+  let order = 0
+  for (let row of vectors(db, opts.model, opts.within)) {
+    let index = order++
+    if (row.owner == without) continue
+    let bytes = row.vec as Uint8Array
+    // A driver may return a slice with an unaligned offset. A view avoids a
+    // second copy for aligned blobs while retaining unpack's safe fallback.
+    let vec = bytes.byteOffset % 4 == 0
+      ? new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)
+      : unpack(bytes)
+    let similarity = cosine(query, vec)
+    if (
+      !(similarity >= floor) ||
+      (heap.length == limit && similarity <= heap[0].similarity)
+    ) continue
+    let hit = {
+      owner: Number(row.owner),
+      similarity,
+      order: index,
+    }
+    if (heap.length < limit) push(heap, hit)
+    else replace(heap, hit)
+  }
+  let owners = heap.map((h) => h.owner)
+  if (!owners.length) return []
+  let eids = new Map(
+    db.query(select({
+      cols: [col('id'), col('eid')],
+      from: table('entity'),
+      where: among(col('id'), owners.map((id) => val(id))),
+    })).map((r) => [Number(r.id), String(r.eid)]),
+  )
+  return heap.sort((a, b) => b.similarity - a.similarity || a.order - b.order)
+    .map(({ owner, similarity }) => ({
+      entity: eids.get(owner)!,
+      owner,
+      similarity,
     }))
-    .filter((n) => n.similarity >= floor)
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, opts.limit ?? 8)
 }

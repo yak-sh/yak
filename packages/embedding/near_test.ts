@@ -2,11 +2,21 @@
 // a moved model does to it.
 
 import { assert, assertEquals } from '@std/assert'
-import { among, col, render, select, table, tally, val } from '@yaks/sql'
+import {
+  among,
+  col,
+  insert,
+  render,
+  select,
+  table,
+  tally,
+  val,
+} from '@yaks/sql'
 import { bury } from '../sqlite/testing.ts'
 import { nearest, vectorOf } from './near.ts'
 import { TABLE } from './ddl.ts'
-import { embedder, stocked } from './testing.ts'
+import { pack, unit } from './vector.ts'
+import { embedder, shelf, stocked } from './testing.ts'
 
 let model = embedder.model
 let names = (db: Awaited<ReturnType<typeof stocked>>, of: string, n = 8) =>
@@ -78,4 +88,64 @@ Deno.test('another model is another space, and it is empty', async () => {
 Deno.test('an entity with no vector has none to anchor on', async () => {
   let db = await stocked()
   assertEquals(vectorOf(db, 'nobody', model), null)
+})
+
+Deno.test('a bounded scan keeps the nearest across more than one screen', () => {
+  let db = shelf()
+  let model = 'rank-test'
+  // Ties straddle the heap boundary; an earlier row wins just as in a stable
+  // descending sort. The remaining rows exercise replacement of its root.
+  for (let id = 10; id < 50; id++) {
+    db.query(insert('entity', { id, eid: `rank-${id}` }))
+    let vec = unit(
+      new Float32Array([
+        1,
+        id == 10 || id == 11 ? 0 : id == 13 ? 0.3 : id == 14 ? 0.5 : id,
+      ]),
+    )
+    db.query(insert(TABLE, { entity: id, model, hash: 'test', vec: pack(vec) }))
+  }
+  let query = new Float32Array([1, 0])
+  let got = nearest(db, query, { model, limit: 3 })
+  assertEquals(got.map((n) => n.entity), ['rank-10', 'rank-11', 'rank-13'])
+  assertEquals(got.map((n) => n.owner), [10, 11, 13])
+  assertEquals(
+    nearest(db, query, { model, limit: 3, floor: 0.99 })
+      .map((n) => n.entity),
+    ['rank-10', 'rank-11'],
+  )
+  assertEquals(
+    nearest(db, query, { model, limit: 3, without: 'rank-10' }).map((n) =>
+      n.entity
+    ),
+    ['rank-11', 'rank-13', 'rank-14'],
+  )
+  assertEquals(nearest(db, query, { model, limit: 0 }), [])
+})
+
+Deno.test('an unaligned blob still ranks and returns its neighbour', () => {
+  let db = shelf()
+  db.query(insert('entity', { id: 10, eid: 'rank-10' }))
+  db.query(insert(TABLE, {
+    entity: 10,
+    model: 'rank-test',
+    hash: 'test',
+    vec: pack(new Float32Array([1, 0])),
+  }))
+  let unaligned = {
+    ...db,
+    query: (stmt: Parameters<typeof db.query>[0]) =>
+      db.query(stmt).map((row) => {
+        if (!(row.vec instanceof Uint8Array)) return row
+        let bytes = new Uint8Array(row.vec.length + 1)
+        bytes.set(row.vec, 1)
+        return { ...row, vec: bytes.subarray(1) }
+      }),
+  }
+  assertEquals(
+    nearest(unaligned, new Float32Array([1, 0]), {
+      model: 'rank-test',
+    }).map((n) => n.entity),
+    ['rank-10'],
+  )
 })
