@@ -54,6 +54,59 @@ Deno.test('several entities are a line each; nothing is no lines', () => {
   assertEquals(said(), '')
 })
 
+Deno.test('search hits show kind, title and marked excerpt even for one hit', async () => {
+  let found = {
+    entity: t9.entity,
+    hit: {
+      kind: 'task',
+      title: 'Fix the bar',
+      snippet: 'Find the \x01bar\x02 before it closes',
+      source: 'text',
+    },
+  }
+  let line = 'T-9 Fix the bar · task — Find the *bar* before it closes'
+  assertEquals(said(found), line)
+  let lines: string[] = []
+  await show(
+    { tui: false, out: (text) => lines.push(text) },
+    views,
+    vocab,
+    [found] as never,
+    {},
+    {
+      lookup: () => [],
+      query: () => {
+        throw new Error('unexpected query')
+      },
+    },
+  )
+  assertEquals(lines, [line])
+})
+
+Deno.test('search excerpts strip raw controls and compact multiple kinds', () => {
+  let a = {
+    entity: t9.entity,
+    hit: {
+      kind: 'task',
+      title: 'Fix the bar',
+      snippet: '\x1b[31m\x01bar\x02 and \x01baz\x02',
+      source: 'both',
+    },
+  }
+  let b = {
+    entity: { eid: '33333333-3333-4333-8333-333333333333', num: 10 },
+    hit: { kind: 'comment', snippet: 'Near this idea', source: 'meaning' },
+  }
+  let lines = said(a, b)
+  assertEquals(
+    lines,
+    'T-9 Fix the bar · task — [31m*bar* and *baz*\n' +
+      'C-10 · comment — Near this idea',
+  )
+  // deno-lint-ignore no-control-regex -- the line separator is the sole control.
+  assert(!/[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(lines))
+})
+
 Deno.test('a lone entity is shown whole', () => {
   assertEquals(
     said(t10),

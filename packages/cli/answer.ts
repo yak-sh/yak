@@ -21,10 +21,12 @@
 // They are never printed, because a component is not text.
 
 import type { Bundle } from '@yaks/graph'
-import { human, short } from '@yaks/id'
+import { human, idOf, short } from '@yaks/id'
 import {
   define,
+  type H,
   type Registry,
+  type RenderContext,
   type Renderer,
   resolve,
   type Selection,
@@ -32,7 +34,7 @@ import {
 import type { ComponentRenderer } from '@yaks/preact'
 import type { ComponentChild } from 'preact'
 import { names, reversed } from '@yaks/edge/vocab'
-import { type Node, plain, tree } from '@yaks/text'
+import { type Node, plain, safe, tree } from '@yaks/text'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import {
   type Related,
@@ -48,6 +50,61 @@ import type { Tty } from './run.ts'
  * hands its modules over inline. */
 export type Views = (plugin: string) => Promise<{ views?: Registry } | null>
 
+type Hit = {
+  kind: string
+  title?: string
+  snippet: string
+  source: 'text' | 'meaning' | 'both'
+}
+
+let hitOf = (b: Bundle): Hit | null => {
+  let h = b.hit
+  if (
+    !h || typeof h != 'object' || !('kind' in h) ||
+    !('snippet' in h) || !('source' in h) ||
+    typeof h.kind != 'string' || typeof h.snippet != 'string' ||
+    !['text', 'meaning', 'both'].includes(String(h.source))
+  ) return null
+  return {
+    kind: h.kind,
+    title: 'title' in h && typeof h.title == 'string' ? h.title : undefined,
+    snippet: h.snippet,
+    source: h.source == 'text'
+      ? 'text'
+      : h.source == 'meaning'
+      ? 'meaning'
+      : 'both',
+  }
+}
+
+let excerpt = (text: string): string =>
+  safe(
+    // deno-lint-ignore no-control-regex -- FTS marks matches with these bytes.
+    text.replace(/\x01([^\x02]*)\x02/g, (_match, word: string) => `*${word}*`),
+  )
+
+let hit = <Node>(
+  b: Bundle,
+  h: H<Node>,
+  ctx: RenderContext<Node>,
+): Node => {
+  let found = hitOf(b)!
+  let s = ctx as Shown<Node>
+  let title = safe(found.title ?? '')
+  let kind = safe(found.kind)
+  let snippet = excerpt(found.snippet)
+  return h(
+    'span',
+    { class: 'SearchHit' },
+    s.id(b),
+    title ? ` ${title}` : '',
+    ` · ${kind}`,
+    snippet ? ` — ${snippet}` : '',
+  )
+}
+
+let search: Renderer = { view: 'Search.Tile', match: true, render: hit }
+
 /** Every view the `yak` command draws with, most knowing first. */
 export let registry = async (
   plugins: string[],
@@ -57,6 +114,7 @@ export let registry = async (
   let found = await Promise.all(named.map(load))
   return define([
     ...found.flatMap((m) => m?.views?.renderers ?? []),
+    search,
     ...generic.renderers,
   ])
 }
@@ -91,10 +149,14 @@ let shown = <Node>(
   named: Bundle[] = [],
 ): Shown<Node> => {
   let id = human(vocab)
+  let idAs = idOf(vocab)
   let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
   let ctx: Shown<Node> = {
-    id,
-    kind: (b) => vocab.kindOf(b) || 'entity',
+    id: (b) => {
+      let hit = hitOf(b)
+      return hit ? idAs({ ...b.entity, kind: hit.kind }) : id(b)
+    },
+    kind: (b) => hitOf(b)?.kind ?? (vocab.kindOf(b) || 'entity'),
     name: (eid) => {
       let b = held.get(eid)
       return b ? id(b) : short(eid)
@@ -106,7 +168,12 @@ let shown = <Node>(
   return ctx
 }
 
-let viewOf = (answer: Bundle[]) => answer.length == 1 ? 'Page' : 'Tile'
+let viewOf = (answer: Bundle[]) =>
+  answer.length && answer.every(hitOf)
+    ? 'Search.Tile'
+    : answer.length == 1
+    ? 'Page'
+    : 'Tile'
 
 // The relation an edge states: the component beside `edge` that the
 // vocabulary declares one (@yaks/edge).
@@ -228,6 +295,9 @@ let drawn = <Node>(
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
 ): { nodes: (Node | null)[]; gap: string } => {
   let ctx = shown(vocab, answer, draw, named)
+  if (viewOf(answer) == 'Search.Tile') {
+    return { nodes: answer.map((b) => draw(b, 'Search.Tile', ctx)), gap: '\n' }
+  }
   let [lone] = answer
   if (answer.length != 1) {
     return { nodes: answer.map((b) => draw(b, viewOf(answer), ctx)), gap: '\n' }
@@ -391,7 +461,9 @@ export let show = async (
 ): Promise<void> => {
   let answer = wrote ? await standing(said, from) : said
   let [lone] = answer
-  let asked = answer.length == 1 ? nearQuery(vocab, lone.entity.eid) : null
+  let asked = answer.length == 1 && !hitOf(lone)
+    ? nearQuery(vocab, lone.entity.eid)
+    : null
   let near = asked ? nearOf(lone.entity.eid, await from.query(asked)) : nothing
   let refs = referenced(vocab, [...answer, ...near.links, ...near.comments])
   let named = refs.length ? await from.lookup(refs) : []
