@@ -12,6 +12,8 @@ import { isA } from './features.ts'
 import { HOPS, type Level, LEVELS, type Place } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
 import { nearby, originOf, regionOf } from './regions.ts'
+import { RADIUS } from './sim.ts'
+import { onFoot } from './solid.ts'
 import { rise, SHORE, type Spot, steep, vale, wallsNear } from './terrain.ts'
 
 /** A place of a level a kind of creature lives around, by one of its
@@ -130,8 +132,11 @@ export let homesOf = (id: string): Home[] => {
       })
     }
   }
-  listed.set(id, out)
-  return out
+  // Keep the generated slots and their eids fixed: a home under a building
+  // disappears, while the other homes and their falls keep their meaning.
+  let clear = out.filter((h) => !onFoot(v, ...h.home, RADIUS * 2))
+  listed.set(id, clear)
+  return clear
 }
 
 // How far past its level's cell a creature may live, in metres: as far as a

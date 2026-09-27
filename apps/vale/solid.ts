@@ -195,6 +195,47 @@ let reach = (
 export let near = (b: Building, x: number, z: number, r: number): boolean =>
   x > b.box[0] - r && x < b.box[2] + r && z > b.box[1] - r && z < b.box[3] + r
 
+/** Whether a point and its room touch any building's ground footprint. */
+export let onFoot = (v: Vale, x: number, z: number, r: number): boolean =>
+  v.buildings(x, z, r).some((b) =>
+    x > b.foot[0] - r && x < b.foot[2] + r &&
+    z > b.foot[1] - r && z < b.foot[3] + r
+  )
+
+/** The last point on a line from `from` to `to` before it enters a building's
+ * footprint, with `r` metres of room round the walker. */
+export let beforeFoot = (
+  v: Vale,
+  from: [number, number],
+  to: [number, number],
+  r: number,
+): [number, number] => {
+  let [x, z] = from, dx = to[0] - x, dz = to[1] - z
+  let mx = (x + to[0]) / 2, mz = (z + to[1]) / 2
+  let reach = Math.hypot(dx, dz) / 2 + r
+  let stop = 1
+  for (let b of v.buildings(mx, mz, reach)) {
+    let enter = 0, leave = 1
+    for (
+      let [at, step, lo, hi] of [
+        [x, dx, b.foot[0] - r, b.foot[2] + r],
+        [z, dz, b.foot[1] - r, b.foot[3] + r],
+      ]
+    ) {
+      if (!step) {
+        if (at <= lo || at >= hi) leave = -1
+      } else {
+        let a = (lo - at) / step, c = (hi - at) / step
+        enter = Math.max(enter, Math.min(a, c))
+        leave = Math.min(leave, Math.max(a, c))
+      }
+    }
+    if (enter <= leave && leave >= 0) stop = Math.min(stop, enter)
+  }
+  stop = Math.max(0, stop - (stop < 1 ? 1e-4 : 0))
+  return [x + dx * stop, z + dz * stop]
+}
+
 /** Whether anything of building `b` within `r` metres of (x, z) is solid
  * anywhere from height `lo` up to `hi`. */
 export let blocks = (

@@ -8,11 +8,12 @@ import { assert, assertEquals } from '@std/assert'
 import { BUILDINGS } from './buildings.ts'
 import type { Use } from './buildings/kit.ts'
 import { isA } from './features.ts'
+import { homesOf } from './homes.ts'
 import { LEVELS } from './levels.ts'
 import type { Vec } from './mesh.ts'
 import { KINDS, model } from './props.ts'
 import { placesOf } from './regions.ts'
-import { type Body, fits, floorAt, walk } from './sim.ts'
+import { type Body, fits, floorAt, RADIUS, rest, walk } from './sim.ts'
 import { type Building, within } from './solid.ts'
 import {
   builtOf,
@@ -76,6 +77,34 @@ Deno.test('a door lets in whoever opens doors, and no creature', () => {
   assertEquals(hero.y, b.floors[0])
   let boar = go(v, door.at, ahead(door, 3), false)
   assertEquals(within(v, boar.x, boar.y, boar.z), null)
+})
+
+Deno.test('creatures live and wander outside building footprints', () => {
+  let v = vale(), room = RADIUS * 2
+  let clear = (v: Vale, x: number, z: number) =>
+    v.buildings(x, z, room).every((b) =>
+      x <= b.foot[0] - room || x >= b.foot[2] + room ||
+      z <= b.foot[1] - room || z >= b.foot[3] + room
+    )
+  for (let id of ['mossvale', 'birchmere', 'fernwood']) {
+    let homes = homesOf(id)
+    assert(homes.length > 0)
+    for (let h of homes) {
+      assert(clear(v, ...h.home), `${id}: ${h.kind} lives in a building`)
+    }
+  }
+
+  let town = flat(5, [], [
+    { kind: 'tailor.plaster', x: 64, z: 64, seed: 0 },
+    { kind: 'smithy.plaster', x: 96, z: 64, seed: 0 },
+  ])
+  for (let home of [[64, 52], [96, 52]] as [number, number][]) {
+    for (let t of [72_000, 73_000]) {
+      let b = rest(town, home, 18, 1, t)
+      assertEquals(within(town, b.x, b.y + 1, b.z), null)
+      assert(clear(town, b.x, b.z))
+    }
+  }
 })
 
 Deno.test('stairs carry a walker to the floor above', () => {

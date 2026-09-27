@@ -11,7 +11,7 @@
 // stairs carry it, and its doors open for it unless it is a creature.
 import { type Beast } from './beasts.ts'
 import { wander } from './rules.ts'
-import { hits, over, shut, standOn } from './solid.ts'
+import { beforeFoot, hits, over, shut, standOn } from './solid.ts'
 import {
   floorUnder,
   groundAt,
@@ -41,7 +41,7 @@ export type Push = { x: number; z: number; jump: boolean }
 let STEP = 0.55
 let GRAVITY = 24
 let JUMP = 7.6
-let RADIUS = 0.34
+export let RADIUS = 0.34
 
 /** How far from a village's fire no creature comes. */
 export let SAFE = 15
@@ -245,8 +245,10 @@ export let rest = (
     }
     return [x, z]
   }
-  let [x, z] = clear(wander(home, roam, seed, t / 1000))
-  let [px, pz] = clear(wander(home, roam, seed, (t - 250) / 1000))
+  let at = (time: number) =>
+    beforeFoot(v, home, clear(wander(home, roam, seed, time)), RADIUS * 2)
+  let [x, z] = at(t / 1000)
+  let [px, pz] = at((t - 250) / 1000)
   let speed = Math.hypot(x - px, z - pz) / 0.25
   return {
     x,
