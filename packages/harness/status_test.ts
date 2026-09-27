@@ -62,22 +62,15 @@ Deno.test('status indicators paint colored single-column glyphs in the sidebar',
     entity: { eid: 's' },
     session: { id: 'worker', status: 'settled' },
   }]
-  let rows: Bundle[] = [{
-    entity: { eid: 't', num: 1 },
-    task: { status: 'wip' },
-    claim: { session: 's' },
-    doc: { title: 'unfinished' },
-  }]
-  let panel = panels.find((p) => p.title == 'Tasks')!
+  let panel = panels.find((p) => p.title == 'Sessions')!
   let ui = await mount(
-    () => h(panel.Render, { rows, sessions, agent: {} as never }),
+    () => h(panel.Render, { rows: sessions, sessions, agent: {} as never }),
     60,
     4,
   )
   try {
-    assertEquals(ui.text().includes('◐ 1 unfinished'), true)
-    assertEquals(ui.out.join('').includes('◐'), true)
-    assertEquals(panel.titleClass, 'Task')
+    assertEquals(ui.text().includes('● worker'), true)
+    assertEquals(ui.out.join('').includes('●'), true)
   } finally {
     ui.free()
   }

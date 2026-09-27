@@ -205,16 +205,16 @@ may supply the order expression. Explicit ordering uses entity `num` descending
 as the tie-breaker. Without `.order=`, a `.limit` or `.after` window returns
 newest numbers first; a complete result returns oldest numbers first.
 
-`.after=<num>` identifies the entity to continue after. With explicit ordering,
-the compiler reads its order value in a correlated subquery and compares that
-value, then its number for equal values. NULL values sort first ascending and
-last descending; the number breaks ties between NULL values too. An anchor that
-no longer matches the filters can still define a position. With explicit
-ordering, a nonexistent anchor starts at the first page; without it, `.after`
-uses the numeric condition `entity.num < ?` directly. Number-based cursors
-require entities with assigned numbers. Unnumbered entities do not gain a unique
-tie-breaker from this expression. `@yaks/match` implements the corresponding
-in-memory sorting and cursor comparison.
+`.after=<id>` identifies the entity by number, human id, or eid. With explicit
+ordering, the compiler reads its order value in a correlated subquery and
+compares that value, then the spine order for equal values. NULL values sort
+first ascending and last descending; the spine breaks ties between NULL values
+too. An anchor that no longer matches the filters can still define a position.
+With explicit ordering, a nonexistent anchor starts at the first page; without
+it, `.after` uses the numeric condition `entity.num < ?` directly for numeric
+cursors. An eid cursor uses the anchor's spine position, including for
+unnumbered entities. `@yaks/match` implements the corresponding in-memory
+sorting and cursor comparison.
 
 ## What it compiles, and what it refuses
 

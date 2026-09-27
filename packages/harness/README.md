@@ -78,11 +78,13 @@ on, so a command line prints the reply. With `--tui` the answer is held as the
 terminal app, selected on that session: `yak session new '…' --tui`,
 `yak session new --tui` for an empty session ready for input, or
 `yak session list --tui` where the graph holds one session. The transcript
-scrolls and word-wraps beside the Sessions, Tasks, and Context usage panels.
-Enter starts a session (or sends to the selected one); Shift+Enter inserts a
-newline. Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select root sessions, Ctrl+O
-selects a new one, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter needs a
-terminal supporting kitty keyboard sequences (Alt+Enter also inserts a newline).
+scrolls and word-wraps beside the Sessions and Context usage panels. Enter
+starts a session (or sends to the selected one); Shift+Enter inserts a newline.
+In NORMAL mode, `b` opens a 20-row session browser, `>` and `<` change pages,
+and Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select roots on the visible page.
+Ctrl+O selects a new session, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter
+needs a terminal supporting kitty keyboard sequences (Alt+Enter also inserts a
+newline).
 
 `$HARNESS_HOME` moves harness state without changing `HOME`: checkouts for
 children assigned tasks go under `$HARNESS_HOME/worktrees` and drafts under
@@ -135,12 +137,13 @@ Pass the graph as `h`; closing the agent runs its `close`. Do not spread it into
 the options: `local({ ...hosted(host) })` is rejected by both the type contract
 and a runtime check.
 
-Settled subagents are hidden by default regardless of their assigned tasks.
-Tasks remain available in the Tasks panel. **Ctrl+S** toggles **Show settled**;
-NORMAL mode also provides `s`. Root sessions, the selected child, and ancestors
-of active descendants stay reachable. Explicit archival remains separate. This
-filter changes display/navigation only; completion messages and child
-transcripts remain available. Failed and stopped children remain visible.
+Settled subagents are hidden by default regardless of their assigned tasks. The
+sidebar shows the selected session; `b` opens a paged session browser.
+**Ctrl+S** toggles **Show settled**; NORMAL mode also provides `s`. Root
+sessions on the visible page, the selected child, and its visible ancestors stay
+reachable. Explicit archival remains separate. This filter changes
+display/navigation only; completion messages and child transcripts remain
+available. Failed and stopped children remain visible.
 
 ## Keyboard modes
 
@@ -169,6 +172,7 @@ There is no permanent shortcut panel.
 | `Ctrl+w h` / `Ctrl+w l`      | Focus transcript / sidebar                              |
 | `j` / `k` with sidebar focus | Select visible rows                                     |
 | `n` / `p`                    | Next / previous root                                    |
+| `b` / `>` / `<`              | Browse sessions / next page / previous page             |
 | `o`                          | New session                                             |
 | `t`                          | Toggle message / task composer                          |
 | `a` / `z` / `s`              | Archive selected session / show archived / show settled |
@@ -201,8 +205,7 @@ text is the body. The queued execution request, task, edges, child and claim are
 one atomic write through `taskEntry(graph, session, text, limits?)` from
 `@yaks/session`. A rejected submission creates nothing and appears by the
 composer. The parent stays selected and available for messages; the child and
-its open/wip task appear in the sidebar, and completion arrives in the parent
-transcript without a keypress.
+its completion arrives in the parent transcript without a keypress.
 
 Typing only touches the editor. Post-commit graph effects refresh the content,
 including model replies arriving while stdin is idle; there is no polling loop
@@ -227,9 +230,9 @@ bundles from graph-backed interfaces. To embed the app, mount `App` with
   that same status.
 - **Work need not be filed.** `doc` + bare `task{}` is a task without project
   metadata; optional `filed{project, priority, domain, assignee}` adds project
-  and assignment metadata. `a.tasks()` reads `.task.status=open,wip`, oldest
-  first, without requiring filing or a project. The CLI and sidebar use that
-  same interface.
+  and assignment metadata. `a.tasks()` reads a page of open/wip work, newest
+  first, without requiring filing or a project. The session sidebar does not
+  query that graph-wide list.
 - **Tools use the session's graph.** `harnessTools()` combines machine,
   delegation, artifact, text-inspection, and generic graph tools (`graph_apply`,
   `graph_query`, `graph_show`, `graph_schema`). Existing JSON Schemas are
@@ -462,15 +465,15 @@ editing an existing mark preserves its original author.
 
 ### Session tree
 
-Sessions are grouped beneath their root, with assignment titles and compact IDs.
-Branches are always open. `Ctrl+j/k` traverse selectable sidebar rows in visual
-order, including New session and tasks. `Ctrl+h/l` focus the transcript/sidebar.
-Panels expose selectable contributions alongside their renderers, so navigation
-follows the same panel order as rendering. Selecting a claimed task opens its
-worker session; an unclaimed task stays highlighted without changing transcript.
-`Ctrl+N/P` (also Alt+Down/Up) switch roots, skipping descendants. The selected
-row has a subtle background; tree connectors show relationships without
-selection or expansion arrows. `Ctrl+S` reveals settled children.
+The selected session is shown with its assignment title and compact ID. `b`
+opens a 20-row browser; `>` and `<` move between pages. `Ctrl+j/k` traverse
+visible sidebar rows, including New session and the browser controls. `Ctrl+h/l`
+focus the transcript/sidebar. Panels expose selectable contributions alongside
+their renderers, so navigation follows the same panel order as rendering.
+`Ctrl+N/P` (also Alt+Down/Up) switch roots on the visible page, skipping
+descendants. The selected row has a subtle background; tree connectors show
+relationships without selection or expansion arrows. `Ctrl+S` reveals settled
+children.
 
 Ctrl+h and Ctrl+j require extended keyboard reporting to distinguish them from
 Backspace and Enter. Legacy Backspace/Enter continue editing/submitting; they
@@ -478,8 +481,8 @@ are never reinterpreted as navigation. Ctrl+k is reserved for navigation in the
 harness (the standalone textarea retains its kill-to-end binding). Plain hjkl
 still types; VISUAL mode retains priority.
 
-The Tasks panel shrinks to their content within bounded shares. Context usage is
-last at the bottom; the session tree receives remaining height and scrolls.
+Context usage is last at the bottom; the session browser receives remaining
+height and scrolls.
 
 `Alt+a` archives/unarchives only the selected session, never its root. `Alt+z`
 shows archived roots so they can be selected and restored. Archiving writes a
@@ -529,9 +532,9 @@ Transcript positions are retained per session, including detached item anchors,
 while asynchronous session reads are pending. **Ctrl+End** jumps to the
 transcript end and resumes following; plain End still moves the input cursor.
 Sidebar panels share the available height instead of letting a large session
-tree hide Tasks or Context usage. Wheel over a panel to scroll its contents;
-tree keyboard selection is automatically revealed. Long tree labels are clipped
-to one row.
+tree hide Context usage. Wheel over a panel to scroll its contents; tree
+keyboard selection is automatically revealed. Long tree labels are clipped to
+one row.
 
 ### Inspecting large tool results
 
@@ -791,8 +794,7 @@ only (`surfaces`), because they run on the machine that typed them.
 session`) derive from the same noun and verb, without alias declarations.
 See [the command-line entry point and the export shape](../cli/README.md).
 
-Mouse clicks select session rows, **New session**, and task rows in the sidebar.
-A claimed task opens its worker session; an unclaimed task selects only the row.
+Mouse clicks select session rows, **New session**, and browser controls.
 Clicking a row focuses the sidebar without changing the current mode or
 submitting the draft. In INSERT mode, typing continues in the composer. The
 whole painted row, including its trailing background, is clickable. Mouse

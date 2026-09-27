@@ -46,6 +46,9 @@ export type Context = {
   sidebar?: string
   showSettled?: boolean
   showArchived?: boolean
+  browse?: boolean
+  page?: string
+  canBack?: boolean
 }
 /** A panel's data stays in bundles, not in a second model of the graph. */
 export type Panel = {
@@ -87,19 +90,6 @@ export let sessionLine = (b: Bundle) => {
     ? label + ' [' + shortSessionId(b.entity.eid) + ']'
     : shortSessionId(b.entity.eid)
 }
-let list = (
-  rows: Bundle[],
-  line: (b: Bundle) => import('preact').ComponentChildren,
-  empty: string,
-) =>
-  h(
-    'div',
-    null,
-    rows.length
-      ? rows.map((b) => h('div', { key: b.entity.eid }, line(b)))
-      : h('div', { class: 'Muted' }, empty),
-  )
-
 /** The stock sidebar. Add a contribution by adding one row to this list. */
 export let panels: Panel[] = [
   {
@@ -107,6 +97,7 @@ export let panels: Panel[] = [
     selectionViewport: 'session-tree',
     selectable: (ctx, rows) => [
       { id: 'new' },
+      { id: 'browse' },
       ...sessionTree(rows, {
         selected: ctx.session,
         showSettled: ctx.showSettled,
@@ -115,11 +106,23 @@ export let panels: Panel[] = [
         id: bundle.entity.eid,
         session: bundle.entity.eid,
       })),
+      ...ctx.browse && rows.length >= 20 ? [{ id: 'older' }] : [],
+      ...ctx.canBack ? [{ id: 'newer' }] : [],
     ],
     scrollable: true,
     read: (c) => c.sessions,
     Render: (
-      { rows, session, sidebar, active, showSettled, showArchived, select },
+      {
+        rows,
+        session,
+        sidebar,
+        active,
+        showSettled,
+        showArchived,
+        browse,
+        canBack,
+        select,
+      },
     ) => {
       let tree = sessionTree(rows, {
         selected: session,
@@ -137,7 +140,7 @@ export let panels: Panel[] = [
           reveal: Math.max(
             0,
             tree.findIndex((r) => r.bundle.entity.eid == (sidebar ?? session)) +
-              1,
+              2,
           ),
         },
         h(
@@ -153,6 +156,17 @@ export let panels: Panel[] = [
               onClick: () => select?.({ id: 'new' }),
             },
             'New session',
+          ),
+          h(
+            'div',
+            {
+              class: sidebar == 'browse' && active
+                ? 'Selection_Active'
+                : 'Muted',
+              fill: '1',
+              onClick: () => select?.({ id: 'browse' }),
+            },
+            browse ? 'Close session browser' : 'Browse sessions',
           ),
           ...tree.map(({ bundle: b, prefix }) =>
             h(
@@ -172,55 +186,31 @@ export let panels: Panel[] = [
               sessionLine(b),
             )
           ),
+          browse && rows.length >= 20
+            ? h(
+              'div',
+              {
+                class: 'Muted',
+                fill: '1',
+                onClick: () => select?.({ id: 'older' }),
+              },
+              'Next page',
+            )
+            : null,
+          browse && canBack
+            ? h(
+              'div',
+              {
+                class: 'Muted',
+                fill: '1',
+                onClick: () => select?.({ id: 'newer' }),
+              },
+              'Previous page',
+            )
+            : null,
         ),
       )
     },
-  },
-  {
-    title: 'Tasks',
-    selectionViewport: 'task-list',
-    scrollable: true,
-    selectable: (_ctx, rows) =>
-      rows.map((b) => ({
-        id: b.entity.eid,
-        session: (b.claim as Comp | undefined)?.session as string | undefined,
-      })),
-    fit: true,
-    titleClass: 'Task',
-    read: (c) => c.agent.tasks(),
-    Render: ({ rows, sessions, sidebar, active, select }) =>
-      h(
-        Scroll,
-        {
-          id: 'task-list',
-          follow: false,
-          keyboard: false,
-          grow: '1',
-          reveal: Math.max(0, rows.findIndex((b) => b.entity.eid == sidebar)),
-        },
-        list(rows, (b) => {
-          let held = (b.claim as Comp | undefined)?.session
-          return h(
-            'div',
-            {
-              onClick: () =>
-                select?.({
-                  id: b.entity.eid,
-                  session: held == null ? undefined : String(held),
-                }),
-              fill: '1',
-              class: sidebar == b.entity.eid
-                ? (active ? 'Selection_Active' : 'Session_Selected')
-                : '',
-            },
-            indicator(b, sessions),
-            ' ',
-            `${b.entity.num ?? b.entity.eid.slice(0, 8)} ${
-              (b.doc as Comp | undefined)?.title ?? b.entity.eid
-            }${held ? ` [${shortSessionId(String(held))}]` : ''}`,
-          )
-        }, 'No open tasks'),
-      ),
   },
   {
     title: 'Context usage',

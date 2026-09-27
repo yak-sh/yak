@@ -81,10 +81,11 @@ export type Fields = { kind: 'fields'; fields: FieldSel[] }
 // the full-text term `*`, which matches nothing anywhere.
 export type Every = { kind: 'every' }
 export type Limit = { kind: 'limit'; n: number }
-// The paging cursor: the spine number of the entity to continue past. It names
-// an entity, never a position or an order key, so this one form pages any
-// ordering — an evaluator works out where that entity sits.
-export type After = { kind: 'after'; n: number }
+// The paging cursor names an entity by number or eid, never an order key.
+export type After = { kind: 'after'; n: number } | {
+  kind: 'after'
+  eid: string
+}
 // Carries stored edges back with the answer. `select` picks one edge type and
 // optionally projects an endpoint through a reference property (`via`, raw
 // segments); `peers` names the properties of the far endpoint (each a raw path)
@@ -298,7 +299,8 @@ export let tally = (field: string): Tally => ({
   path: dot(field),
 })
 export let limit = (n: number): Limit => ({ kind: 'limit', n })
-export let after = (n: number): After => ({ kind: 'after', n })
+export let after = (id: number | string): After =>
+  typeof id == 'number' ? { kind: 'after', n: id } : { kind: 'after', eid: id }
 export let walk = (
   field: string,
   dir: Dir,
@@ -368,11 +370,13 @@ export let nearOf = (ast: Query): string | undefined =>
 
 // The window a query asks for, collected from its `.limit` and `.after`
 // clauses.
-export let windowOf = (ast: Query): { limit?: number; after?: number } => {
-  let out: { limit?: number; after?: number } = {}
+export let windowOf = (
+  ast: Query,
+): { limit?: number; after?: number | string } => {
+  let out: { limit?: number; after?: number | string } = {}
   for (let c of ast.clauses) {
     if (c.kind == 'limit') out.limit = c.n
-    if (c.kind == 'after') out.after = c.n
+    if (c.kind == 'after') out.after = 'n' in c ? c.n : c.eid
   }
   return out
 }

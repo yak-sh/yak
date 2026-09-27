@@ -425,18 +425,15 @@ export let parseDot = (token: string): Clause[] | null => {
     }
     return [{ kind: 'limit', n: Number(val) }]
   }
-  // `.after=13882` / `.after=T-13882` — the paging cursor. It names an entity
-  // by its spine number, never a position or an order key: an evaluator works
-  // out where that entity sits in whatever order the query asked for, so this
-  // one form pages every ordering. A human id is that same number with a
-  // display prefix, so it is read here without consulting the store: inputs
-  // accept human ids.
+  // `.after=13882` / `.after=T-13882` / `.after=<eid>` name the anchor
+  // entity, including one with no human number. Evaluation locates its place
+  // in the requested order.
   if (pathStr == 'after') {
-    let n = op == '=' ? cursor(val) : undefined
-    if (n == null) {
-      throw new SyntaxError('.after takes an entity number or id: .after=T-200')
+    if (op != '=' || !val) {
+      throw new SyntaxError('.after takes an entity number or eid')
     }
-    return [{ kind: 'after', n }]
+    let n = cursor(val)
+    return [n == null ? { kind: 'after', eid: val } : { kind: 'after', n }]
   }
   // `.edges.limit=200` / `.edges.peers=status,title` — how the edges `.edges`
   // carries back are cut and projected.

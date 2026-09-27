@@ -312,9 +312,9 @@ descending order reverses that property order.
 
 `.limit=n` keeps the first n results, and `.limit=0` keeps none. An aggregate in
 `rows()` ignores `.order`, `.limit` and `.after` and counts every match, as
-@yaks/sql does. `.after=<num>` continues past the entity with that number,
+@yaks/sql does. `.after=<id>` continues past the entity with that number or eid,
 wherever it sits in the order. It is one cursor form for every ordering, so
-callers need only the last entity number to request another page:
+callers need only the last entity's number or eid to request another page:
 
 - The anchor is looked up in the whole array rather than among the matches, so
   an anchor that no longer matches the query still names a place in the order.
@@ -329,9 +329,10 @@ numbers directly to `.after`, even if that entity is absent; this matcher
 returns the first page when its anchor is absent.
 
 With `.limit` or `.after` but no `.order`, results come back newest entity
-number first. With none of the three, this matcher keeps input order while
-`@yaks/sql` defaults to oldest entity number first. For a query without ordering
-or pagination, compare membership rather than result order.
+number first; unnumbered entities keep reverse input order. With none of the
+three, this matcher keeps input order while `@yaks/sql` defaults to oldest
+entity number first. For a query without ordering or pagination, compare
+membership rather than result order.
 
 ## Computed properties
 

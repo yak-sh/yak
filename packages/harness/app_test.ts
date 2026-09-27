@@ -71,10 +71,10 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
   try {
     await settle()
     for (let p of panels) assert(ui.text().includes(p.title), p.title)
-    assert(ui.text().includes('test task'))
+    assert(!ui.text().includes('test task'))
     let ansi = ui.out.join('')
     assert(ansi.includes('38;2;167;192;128mmessage'))
-    assert(ansi.includes('38;2;230;152;117;1mTasks'))
+    assert(ansi.includes('Browse sessions'))
     assert(ansi.includes('38;2;122;132;120;2m╭'))
     await ui.send('\t')
     assert(ui.out.join('').includes('38;2;230;152;117mtask'))
@@ -109,6 +109,66 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
     ui.free()
   }
   assert(freed)
+})
+
+Deno.test('selected session opens alone and the browser requests one page at a time', async () => {
+  let f = frontend()
+  f.patch({ selected: 's1' })
+  let asked: (string | undefined)[] = []
+  let taskReads = 0
+  let first = Array.from({ length: 20 }, (_, i) => ({
+    entity: { eid: 's' + (i + 1) },
+    session: { id: 's' + (i + 1), status: 'settled' },
+  }))
+  let a: UIAgent = {
+    sessions: (selected, page) => {
+      assertEquals(selected, 's1')
+      asked.push(page?.after == null ? undefined : String(page.after))
+      return Promise.resolve(
+        page
+          ? page.after
+            ? [{ entity: { eid: 's1' }, session: {} }, {
+              entity: { eid: 's21' },
+              session: {},
+            }]
+            : first
+          : first.slice(0, 1),
+      )
+    },
+    tasks: () => {
+      taskReads++
+      return Promise.resolve([])
+    },
+    children: () => Promise.resolve([]),
+    transcript: () => Promise.resolve([]),
+    entry: () => null,
+    line: () => '',
+    start: () => Promise.resolve('s1'),
+    send: () => Promise.resolve('input'),
+    taskEntry: () => Promise.resolve({ task: 't', child: 'c' }),
+  }
+  let ui = await mount(
+    () => h(App, { agent: a, frontend: f, subscribe: () => () => {} }),
+    120,
+    32,
+  )
+  try {
+    await until(() => asked.length > 0)
+    assertEquals(asked, [undefined])
+    assert(!ui.text().includes('s20'))
+    await ui.send('\x1b')
+    await ui.send('b')
+    await until(() => asked.length > 1)
+    assertEquals(asked.at(-1), undefined)
+    await ui.send('>')
+    await until(() => asked.includes('s20'))
+    await ui.send('<')
+    await until(() => asked.at(-1) == undefined)
+    assertEquals(taskReads, 0)
+  } finally {
+    ui.free()
+    f.close()
+  }
 })
 
 Deno.test('graph effects paint a model reply without a keypress; sends are input bundles', async () => {
@@ -166,7 +226,7 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
       doc: { title: 'live task' },
     }])
     await settle()
-    assert(ui.text().includes('live task'))
+    assert(!ui.text().includes('live task'))
     await a.h.g.apply([{ entity: { eid: 't1' }, completed: {} }])
     await settle()
     assert(!ui.text().includes('live task'))
@@ -692,11 +752,11 @@ Deno.test('large open tree reserves room for all sidebar headings and reveals se
   )
   try {
     await settle()
-    for (let p of panels) assert(ui.text().includes(p.title), ui.text())
+    assert(ui.text().includes('Context usage'), ui.text())
     f.patch({ selected: 'child-79' })
     await settle()
     assert(ui.text().includes('Worker-79'), ui.text())
-    for (let p of panels) assert(ui.text().includes(p.title), ui.text())
+    assert(ui.text().includes('Context usage'), ui.text())
   } finally {
     ui.free()
     f.close()
@@ -868,17 +928,11 @@ Deno.test('sidebar selectable contributions follow visual order and archive only
       spawned: { parent: 'root', call: null },
     },
   ]
-  const task: Bundle = {
-    entity: { eid: 'task' },
-    task: {},
-    doc: { title: 'Selectable task' },
-    claim: { session: 'child' },
-  }
   const archived: string[] = []
   const a: UIAgent = {
     sessions: () => Promise.resolve(sessions),
     children: () => Promise.resolve([]),
-    tasks: () => Promise.resolve([task]),
+    tasks: () => Promise.resolve([]),
     transcript: () => Promise.resolve([]),
     entry: () => null,
     line: () => '',
@@ -906,15 +960,14 @@ Deno.test('sidebar selectable contributions follow visual order and archive only
     await ui.send('\x17l')
     await ui.send('j')
     await settle()
+    assertEquals(cursor(), 'browse')
+    await ui.send('j')
+    await settle()
     assertEquals(cursor(), 'root')
     await ui.send('j')
     await settle()
     assertEquals(cursor(), 'child')
     await ui.send('j')
-    await settle()
-    assertEquals(cursor(), 'task')
-    assert(ui.text().includes('Selectable task'))
-    await ui.send('k')
     await settle()
     assertEquals(cursor(), 'child')
     await ui.send('a')
@@ -927,7 +980,7 @@ Deno.test('sidebar selectable contributions follow visual order and archive only
   }
 })
 
-Deno.test('mouse clicks preserve mode while selecting sessions, new session and task rows', async () => {
+Deno.test('mouse clicks preserve mode while selecting sessions and new session', async () => {
   const f = frontend()
   const sessions: Bundle[] = ['s1', 's2'].map((id) => ({
     entity: { eid: id },
@@ -935,13 +988,7 @@ Deno.test('mouse clicks preserve mode while selecting sessions, new session and 
   }))
   const a: UIAgent = {
     sessions: () => Promise.resolve(sessions),
-    tasks: () =>
-      Promise.resolve([{
-        entity: { eid: 't1' },
-        task: {},
-        doc: { title: 'click task' },
-        claim: { session: 's2' },
-      }]),
+    tasks: () => Promise.resolve([]),
     children: () => Promise.resolve([]),
     transcript: () => Promise.resolve([]),
     start: () => Promise.resolve('created'),
@@ -980,10 +1027,10 @@ Deno.test('mouse clicks preserve mode while selecting sessions, new session and 
     assertEquals(mode(), 'INSERT')
     assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's1')
     assertEquals((f.client.ent('keyboard')?.keyboard as Comp)?.focus, 'sidebar')
-    await click('click task')
+    await click('s2')
     assertEquals(mode(), 'INSERT')
     assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's2')
-    assertEquals((f.client.ent('view')?.frontend as Comp)?.sidebar, 't1')
+    assertEquals((f.client.ent('view')?.frontend as Comp)?.sidebar, 's2')
     await click('New session')
     assertEquals(mode(), 'INSERT')
     assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, null)
@@ -992,7 +1039,7 @@ Deno.test('mouse clicks preserve mode while selecting sessions, new session and 
     assertEquals((f.client.ent('draft')?.draft as Comp)?.text, 'unsent more')
     f.keys({ mode: 'NORMAL' })
     await settle()
-    for (const label of ['s1', 'click task', 'New session']) {
+    for (const label of ['s1', 's2', 'New session']) {
       await click(label)
       assertEquals(mode(), 'NORMAL')
     }

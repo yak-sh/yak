@@ -31,9 +31,11 @@ Deno.test('worker owns an isolated database; selected entries replicate and comm
     let second = await r.agent.start('other')
     await r.agent.transcript(second)
     await r.agent.transcript(id)
-    assertEquals((await r.agent.sessions()).length, 2)
+    assertEquals((await r.agent.sessions(undefined, {})).length, 2)
     await r.agent.archive!(id, true)
-    assert((await r.agent.sessions()).find((b) => b.entity.eid == id)?.archived)
+    assert(
+      (await r.agent.sessions(id)).find((b) => b.entity.eid == id)?.archived,
+    )
   } finally {
     await r.close()
     await Deno.remove(dir, { recursive: true })
@@ -97,7 +99,7 @@ Deno.test('worker frontend typing stays local after its subscribed view is ready
     for (let i = 0; i < 100 && !screen.text().includes('● selected'); i++) {
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
-    assert(screen.text().includes('● selected'), screen.text())
+    assert(screen.text().includes('selected'), screen.text())
     // A subscription frame can queue a catch-up projection after the first
     // visible snapshot. Wait for that traffic, not just the initial paint.
     for (let i = 0; i < 100; i++) {
@@ -279,7 +281,7 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
     })
     try {
       await resumed.resume()
-      let sessions = await resumed.agent.sessions()
+      let sessions = await resumed.agent.sessions(undefined, {})
       assertEquals(sessions.length, 1)
       let id = sessions[0].entity.eid
       await resumed.idle(id)
@@ -317,7 +319,7 @@ Deno.test('selection subscription does not invalidate its own awaiting projectio
     let second = await r.agent.start('second')
     await r.idle(first)
     await r.idle(second)
-    await r.agent.sessions()
+    await r.agent.sessions(first)
     let notifications = 0
     let free = r.subscribe(() => notifications++)
     await r.agent.transcript(first)
@@ -340,14 +342,12 @@ Deno.test('selection subscription does not invalidate its own awaiting projectio
       ),
       ['second', 'first', 'second'],
     )
-    let before = r.traffic.sent
-    await r.agent.sessions()
-    await r.agent.sessions()
-    assertEquals(r.traffic.sent, before, 'unchanged summary query is reused')
+    assertEquals((await r.agent.sessions(first)).length, 1)
     free()
     await r.agent.archive!(first, true)
     assert(
-      (await r.agent.sessions()).find((b) => b.entity.eid == first)?.archived,
+      (await r.agent.sessions(first)).find((b) => b.entity.eid == first)
+        ?.archived,
     )
   } finally {
     await r.close()

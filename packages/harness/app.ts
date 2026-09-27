@@ -100,6 +100,9 @@ export let App = (
       mode: String((ui.client.ent('composer')!.composer as Comp).mode),
       showSettled: Boolean(value.showSettled),
       showArchived: Boolean(value.showArchived),
+      browse: Boolean(value.browse),
+      page: String(value.page ?? ''),
+      pageTrail: JSON.parse(String(value.pageTrail ?? '[]')) as string[],
     }
   }
   let setError = (error: string) => ui.patch({ error })
@@ -121,6 +124,9 @@ export let App = (
       selected: s.id ?? null,
       sidebar: s.id ?? 'new',
       generation: current().generation + 1,
+      browse: false,
+      page: '',
+      pageTrail: '[]',
     })
     // Preserve the accepted display while another session loads. A deliberate
     // new-session selection is empty immediately, not a pending remote read.
@@ -135,6 +141,38 @@ export let App = (
   }
 
   const selectSidebar = (row: { id: string; session?: string }) => {
+    let state = current()
+    if (row.id == 'browse') {
+      ui.patch({
+        browse: !state.browse,
+        page: '',
+        pageTrail: '[]',
+        sidebar: 'browse',
+      })
+      return
+    }
+    if (row.id == 'older') {
+      let last = projection.peek().sessions.at(-1)?.entity.eid
+      if (last != null && last != state.page) {
+        ui.patch({
+          page: last,
+          pageTrail: JSON.stringify([...state.pageTrail, state.page]),
+          sidebar: 'older',
+        })
+      }
+      return
+    }
+    if (row.id == 'newer') {
+      let trail = state.pageTrail
+      if (trail.length) {
+        ui.patch({
+          page: trail.at(-1) ?? '',
+          pageTrail: JSON.stringify(trail.slice(0, -1)),
+          sidebar: 'newer',
+        })
+      }
+      return
+    }
     if (row.id == 'new') choose({})
     else if (row.session && row.session != current().id) {
       choose({ id: row.session })
@@ -225,13 +263,17 @@ export let App = (
         while (active() && dirty) {
           dirty = false
           let s = current()
-          let sessions = await a.sessions()
+          let sessions = await a.sessions(
+            s.id,
+            s.browse ? { after: s.page || undefined } : undefined,
+          )
           if (!active()) return
           let ctx: Context = { agent: a, session: s.id, sessions }
           let rows = await Promise.all(sidebar.map((p) => p.read(ctx)))
           if (
             active() && s.id == current().id &&
-            s.generation == current().generation
+            s.generation == current().generation &&
+            s.browse == current().browse && s.page == current().page
           ) {
             setData((d) => ({ ...d, sessions, rows }))
           }
@@ -252,15 +294,21 @@ export let App = (
         }
       }
     }
-    let changed = () => {
+    let changedSidebar = () => {
       if (!active()) return
       dirty = true
+      queueMicrotask(() => {
+        if (alive) void read()
+      })
+    }
+    let changed = () => {
+      if (!active()) return
+      changedSidebar()
       transcriptDirty = true
       // Return synchronously to the writer, and coalesce the batch's effects.
       queueMicrotask(() => {
         if (alive) {
           void readTranscript()
-          void read()
         }
       })
     }
@@ -270,6 +318,8 @@ export let App = (
       let next = current()
       if (next.id != selected.id || next.generation != selected.generation) {
         changed()
+      } else if (next.browse != selected.browse || next.page != selected.page) {
+        changedSidebar()
       }
       selected = next
     })
@@ -297,9 +347,24 @@ export let App = (
       choose({})
       return true
     }
+    if (k.ctrl && k.text == 'b') {
+      selectSidebar({ id: 'browse' })
+      return true
+    }
+    if (k.ctrl && k.text == 'f' && current().browse) {
+      selectSidebar({ id: 'older' })
+      return true
+    }
+    if (k.ctrl && k.text == 'g' && current().browse) {
+      selectSidebar({ id: 'newer' })
+      return true
+    }
     // Ordinary typing must never build the session tree.
     if (
-      !(k.ctrl && ['n', 'p', 'h', 'j', 'k', 'l'].includes(k.text ?? '') ||
+      !(k.ctrl &&
+          ['n', 'p', 'h', 'j', 'k', 'l', 'b', 'f', 'g'].includes(
+            k.text ?? '',
+          ) ||
         k.alt && (['a', 'z'].includes(k.text ?? '') ||
             k.name == 'up' || k.name == 'down'))
     ) return false
@@ -342,6 +407,9 @@ export let App = (
         sessions: rows,
         showSettled: state.showSettled,
         showArchived: state.showArchived,
+        browse: state.browse,
+        page: state.page,
+        canBack: state.pageTrail.length > 0,
       }
       const snapshot = projection.value
       const choices = sidebar.flatMap((panel, i) =>
@@ -449,6 +517,9 @@ export let App = (
     active: (ui.keyboard.value[0].keyboard as Comp).mode == 'NORMAL' &&
       (ui.keyboard.value[0].keyboard as Comp).focus == 'sidebar',
     showArchived: Boolean(state.showArchived),
+    browse: Boolean(state.browse),
+    page: String(state.page ?? ''),
+    canBack: JSON.parse(String(state.pageTrail ?? '[]')).length > 0,
   }
   let transcriptItems = useMemo(
     () => data.entries.map((b) => ({ id: b.entity.eid, bundle: b })),

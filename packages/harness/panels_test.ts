@@ -105,41 +105,26 @@ Deno.test('sidebar labels keep names and indicators without redundant status tex
       session: { id: 'Meaningful name', status: 'running' },
     },
   ]
-  for (let title of ['Sessions', 'Tasks']) {
-    let p = panels.find((p) => p.title == title)!
-    let rows = title == 'Tasks'
-      ? [{
-        entity: { eid: 'task', num: 42 },
-        task: { status: 'wip' },
-        claim: { session: child },
-        doc: { title: 'Fix labels' },
-      }]
-      : sessions
-    let ui = await mount(
-      () =>
-        h(p.Render, {
-          ...context(() => Promise.resolve([]), child),
-          rows,
-          sessions,
-        }),
-      80,
-      10,
-    )
-    try {
-      let shown = ui.text()
-      assert(shown.includes('abcdef01'), shown)
-      assert(!shown.includes('child:'), shown)
-      assert(!/\b(settled|running|wip)\b/.test(shown), shown)
-      if (title == 'Tasks') {
-        assert(shown.includes('◐ 42 Fix labels [abcdef01]'), shown)
-      } else {
-        assert(shown.includes('● abcdef01'), shown)
-        assert(shown.includes('Meaningful name'), shown)
-        if (title == 'Sessions') assert(shown.includes('● abcdef01'), shown)
-      }
-    } finally {
-      ui.free()
-    }
+  let p = panels.find((p) => p.title == 'Sessions')!
+  let ui = await mount(
+    () =>
+      h(p.Render, {
+        ...context(() => Promise.resolve([]), child),
+        rows: sessions,
+        sessions,
+      }),
+    80,
+    10,
+  )
+  try {
+    let shown = ui.text()
+    assert(shown.includes('abcdef01'), shown)
+    assert(!shown.includes('child:'), shown)
+    assert(!/\b(settled|running|wip)\b/.test(shown), shown)
+    assert(shown.includes('● abcdef01'), shown)
+    assert(shown.includes('Meaningful name'), shown)
+  } finally {
+    ui.free()
   }
 })
 

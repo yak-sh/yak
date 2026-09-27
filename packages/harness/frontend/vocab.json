@@ -107,6 +107,15 @@
         "showArchived": {
           "type": "boolean"
         },
+        "browse": {
+          "type": "boolean"
+        },
+        "page": {
+          "type": "string"
+        },
+        "pageTrail": {
+          "type": "string"
+        },
         "newModel": {
           "type": "string"
         },

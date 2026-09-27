@@ -91,6 +91,9 @@ const bindings: Binding[] = [
     action: { name: 'char', text: 'z', alt: true },
   },
   { keys: ['s'], help: 'show settled', action: ctrl('s') },
+  { keys: ['b'], help: 'browse or close recent sessions', action: ctrl('b') },
+  { keys: ['>'], help: 'next session page', action: ctrl('f') },
+  { keys: ['<'], help: 'previous session page', action: ctrl('g') },
 ]
 export const shortcuts = [
   ['i', 'INSERT: edit the draft'],

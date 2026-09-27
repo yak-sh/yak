@@ -5,6 +5,7 @@ import {
   type TranscriptWindow,
 } from '@yaks/session'
 import type { ImageOptions } from './images.ts'
+import type { ListPage } from './agent.ts'
 /** Worker owns the authoritative database and all agent execution: the graph
  * the config it is handed names, composed as any `yak` process composes it.
  *
@@ -213,11 +214,14 @@ let serve = (port: MessagePort) => {
       case 'idle':
         return a.idle(String(args[0]))
       case 'sessions':
-        return a.sessions()
+        return a.sessions(
+          args[0] == null ? undefined : String(args[0]),
+          args[1] as ListPage | undefined,
+        )
       case 'usage':
         return a.usage(String(args[0]))
       case 'tasks':
-        return a.tasks()
+        return a.tasks(args[0] as ListPage | undefined)
       case 'children':
         return a.children(String(args[0]))
       case 'entrySource':

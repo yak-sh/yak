@@ -183,10 +183,10 @@ export type Agent<H extends Host = Host> = {
   /** mint and delegate unfiled work under an existing session */
   taskEntry: (session: Eid, text: string) => Promise<{ task: Eid; child: Eid }>
   archive: (session: Eid, archived: boolean) => Promise<void>
-  /** every session, oldest first, each carrying its derived status */
-  sessions: () => Promise<Bundle[]>
-  /** open/wip tasks, filed or bare, oldest first */
-  tasks: () => Promise<Bundle[]>
+  /** selected session or a bounded, cursor-paged list */
+  sessions: (selected?: Eid, page?: ListPage) => Promise<Bundle[]>
+  /** A bounded page of open/wip tasks, requested explicitly. */
+  tasks: (page?: ListPage) => Promise<Bundle[]>
   /** direct delegated sessions, including forks */
   children: (session: Eid) => Promise<Bundle[]>
   /** one transcript's entries, in order */
@@ -221,20 +221,15 @@ export type Agent<H extends Host = Host> = {
   close: (reason?: Error) => Promise<void>
 }
 
-// A handle can be minted long after birth; it is not a clock. Stable ties
-// preserve the read order for rows written in the same millisecond.
-let byBirth = (a: Bundle, b: Bundle) =>
-  String((a.created as Comp)?.at ?? '').localeCompare(
-    String((b.created as Comp)?.at ?? ''),
-  )
-
-/** How many transcripts — and how many tasks — the panels list. Naming a
- * transcript costs a read of its first line and mirroring one costs its whole
- * bundle, so the lists are the recent ones: a graph holding years of archive
- * (the fleet's 5,463 transcripts and 5,806 tasks landed in this one) would
- * otherwise be mirrored end to end on every refresh, and the panels time out
- * and paint nothing at all. A week of work is well inside this. */
-export let LISTED = 200
+/** A page of sidebar rows. A selected session alone needs no list query. */
+export type ListPage = { after?: string | number; limit?: number }
+export let LISTED = 20
+let page = (query: string, options: ListPage = {}) =>
+  query +
+  `&.order=-created.at&.limit=${
+    Math.min(LISTED, Math.max(1, options.limit ?? LISTED))
+  }` +
+  (options.after == null ? '' : `&.after=${options.after}`) + '&*'
 
 // What attributes a write made here: the transcript it is about, and who
 // wrote it where the caller said. The harness runs for whoever is at the
@@ -520,25 +515,27 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
         $actor: through(session),
       }])
     }),
-    sessions: admitted(async () =>
-      Promise.all(
-        (await h.g.read('.session&*')).toSorted(byBirth).slice(-LISTED).map(
-          async (b) => ({
-            ...b,
-            session: {
-              ...b.session as Comp,
-              title: await sessionTitle(h.g, b),
-            },
-          }),
-        ),
-      )
-    ),
+    sessions: admitted(async (selected?: Eid, options?: ListPage) => {
+      let rows = options || !selected
+        ? await h.g.read(page('.session', options))
+        : (await h.g.get([selected])).filter((b) => b.session)
+      // A selected session need not belong to the current page.
+      if (selected && !rows.some((b) => b.entity.eid == selected)) {
+        rows = [
+          ...(await h.g.get([selected])).filter((b) => b.session),
+          ...rows,
+        ]
+      }
+      return await Promise.all(rows.map(async (b) => ({
+        ...b,
+        session: { ...b.session as Comp, title: await sessionTitle(h.g, b) },
+      })))
+    }),
     runtime: (session) => runtimeRows(h.g, session),
     control: (session, action) => runtimeAction(a, session, action),
     children: admitted((session: Eid) => children(h.g, session)),
-    tasks: admitted(async () =>
-      (await h.g.read('.task.status=open,wip&*')).toSorted(byBirth)
-        .slice(-LISTED)
+    tasks: admitted(async (options?: ListPage) =>
+      await h.g.read(page('.task.status=open,wip', options))
     ),
     entrySource: (session, eid, request) =>
       entrySource(h.g, session, eid, request),

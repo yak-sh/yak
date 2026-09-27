@@ -6,7 +6,6 @@ import type {
   TranscriptWindow,
 } from '@yaks/session'
 import { streamingEnabled } from './streaming.ts'
-import { LISTED } from './agent.ts'
 import { transient } from '@yaks/graph'
 import type { ImageOptions } from './images.ts'
 import type { ModelSelection } from './model_selection.ts'
@@ -71,7 +70,6 @@ export let remote = async (
   let members = new Map<string, string[]>()
   // Memoize the asynchronous projection until its authoritative subscription
   // changes. Selection changes do not change session titles or task summaries.
-  let summaries = new Map<string, Promise<Bundle[]>>()
   // Initial subscription data is returned to its awaiting caller. Publishing it
   // as a new change would invalidate that same read and force a second refresh.
   let initializing = new Set<string>()
@@ -82,7 +80,6 @@ export let remote = async (
     frame: (frame: Frame) => {
       queued = queued.then(async () => {
         if (frame.refused) throw new Error(frame.refused.message)
-        summaries.delete(frame.id)
         if (frame.id.startsWith('window:') && frame.gone?.length) {
           windowRevision++
         }
@@ -193,26 +190,22 @@ export let remote = async (
       initializing.delete(id)
     }
   }
-  // Only summaries and tasks are global. Entry subscriptions follow selection.
-  // Bounded, both of them: these two mirror whole bundles — prose and all —
-  // into the replica and re-send the set whenever a commit invalidates it, so
-  // an unbounded pair is a whole-graph sync on every keystroke. A graph
-  // holding an archive (the fleet's 5,463 transcripts and 5,806 tasks landed
-  // in the harness's own) took longer than the port's patience and the panels
-  // painted empty. The picker is the recent ones; anything older is reached by
-  // asking for it.
-  try {
-    await listen('sessions', `.session&.order=-created.at&.limit=${LISTED}&*`)
-    await listen('tasks', `.task&.order=-created.at&.limit=${LISTED}&*`)
-  } catch (error) {
-    detachDiagnostics()
-    release()
-    replica.close()
-    throw error
-  }
   let selected: string | undefined,
     plans: string[] = [],
     serial: Promise<unknown> = Promise.resolve()
+  let selectedKey: string | undefined
+  let watchSelected = async (session: string) => {
+    let key = 'session:' + session
+    if (selectedKey == key) return
+    if (selectedKey) {
+      await request('unsubscribe', [selectedKey])
+      await queued
+      members.delete(selectedKey)
+      replica.cache.unsubscribe(selectedKey)
+    }
+    await listen(key, `.session&.entity.eid=${JSON.stringify(session)}&*`)
+    selectedKey = key
+  }
   let snapshot = () =>
     plans.flatMap((key) =>
       rows(key).sort((a, b) =>
@@ -225,6 +218,7 @@ export let remote = async (
         await queued
         return snapshot()
       }
+      await watchSelected(session)
       if (windowKeys.length || frontierKeys.length) await clearWindow()
       for (let id of plans) {
         await request('unsubscribe', [id])
@@ -272,6 +266,7 @@ export let remote = async (
     options: TranscriptWindow = {},
   ): Promise<TranscriptPage> => {
     let result = serial.catch(() => {}).then(async () => {
+      await watchSelected(session)
       for (let id of plans) {
         await request('unsubscribe', [id])
         await queued
@@ -331,18 +326,6 @@ export let remote = async (
     serial = result
     return result
   }
-  // Summaries still use the existing authoritative projection because session
-  // status and local titles are derived. This is a measured pilot limitation.
-  let summary = (method: string) => {
-    let found = summaries.get(method)
-    if (found) return found
-    let pending = request(method).then((rows) => rows as Bundle[])
-    summaries.set(method, pending)
-    pending.catch(() => {
-      if (summaries.get(method) === pending) summaries.delete(method)
-    })
-    return pending
-  }
   let agent: UIAgent = {
     start: async (text, options) =>
       await request('start', [text, options]) as string,
@@ -366,8 +349,9 @@ export let remote = async (
     runtime: async (id) => await request('runtime', [id]) as Bundle[],
     control: async (id, action) =>
       await request('control', [id, action]) as string,
-    sessions: () => summary('sessions'),
-    tasks: () => summary('tasks'),
+    sessions: async (selected, page) =>
+      await request('sessions', [selected, page]) as Bundle[],
+    tasks: async (page) => await request('tasks', [page]) as Bundle[],
     usage: async (session) => await request('usage', [session]) as Bundle[],
     children: async (id) => await request('children', [id]) as Bundle[],
     entrySource: async (session, eid, options) =>

@@ -210,15 +210,24 @@ let sorter = (
   ctx: Ctx,
   cs: Clause[],
   windowed: boolean,
-): ((a: Bundle, b: Bundle) => number) | null => {
+): (
+  from: readonly Bundle[],
+) => ((a: Bundle, b: Bundle) => number) | null => {
   let order = find<Order>(cs, 'order')
-  if (!order) return windowed ? newest : null
-  let desc = order.value.startsWith('-')
-  let read = field(ctx, desc ? order.value.slice(1) : order.value).read
-  return (a, b) => (desc ? -1 : 1) * compare(read(a), read(b)) || newest(a, b)
+  let desc = order?.value.startsWith('-') ?? false
+  let read = order && field(ctx, desc ? order.value.slice(1) : order.value).read
+  return (from) => {
+    let place = new Map(from.map((b, i) => [b.entity.eid, i]))
+    let newest = (a: Bundle, b: Bundle) =>
+      -compare(a.entity.num ?? null, b.entity.num ?? null) ||
+      (place.get(b.entity.eid) ?? 0) - (place.get(a.entity.eid) ?? 0)
+    return read
+      ? (a, b) => (desc ? -1 : 1) * compare(read(a), read(b)) || newest(a, b)
+      : windowed
+      ? newest
+      : null
+  }
 }
-let newest = (a: Bundle, b: Bundle) =>
-  -compare(a.entity.num ?? null, b.entity.num ?? null)
 
 // The bundles a run tests: the smallest of the sets the query's matches lie
 // inside that the source can hand over, or all of them. An array hands over
@@ -281,15 +290,16 @@ let selection = (ctx: Ctx, q: And): Select => {
   let { cs, test, needs } = compiled(ctx, q)
   let limit = find<Limit>(cs, 'limit')
   let after = find<After>(cs, 'after')
-  let sort = sorter(ctx, cs, !!(limit || after))
+  let sorted = sorter(ctx, cs, !!(limit || after))
   return (from) => {
     let among = indexed(from)
+    let sort = sorted(among.list)
     let out: Bundle[] = []
     for (let b of candidates(needs, among)) {
       if (live(b) && test(b, among)) out.push(b)
     }
     if (sort) out.sort(sort)
-    if (after && sort) out = past(out, among.list, after.n, sort)
+    if (after && sort) out = past(out, among.list, after, sort)
     return limit ? out.slice(0, limit.n) : out
   }
 }
@@ -304,10 +314,12 @@ let selection = (ctx: Ctx, q: And): Select => {
 let past = (
   out: Bundle[],
   bundles: readonly Bundle[],
-  n: number,
+  after: After,
   sort: (a: Bundle, b: Bundle) => number,
 ): Bundle[] => {
-  let at = bundles.find((b) => b.entity.num == n)
+  let at = bundles.find((b) =>
+    'n' in after ? b.entity.num == after.n : b.entity.eid == after.eid
+  )
   return at ? out.filter((b) => sort(at, b) < 0) : out
 }
 

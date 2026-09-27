@@ -92,14 +92,19 @@ Deno.test('the picker lists the recent transcripts, not the whole archive', asyn
   let many = Array.from({ length: 205 }, (_, i) => ({
     entity: { eid: `s${i}` },
     session: { id: `s${i}` },
-    created: { at: `2026-01-01T00:${String(i).padStart(2, '0')}:00.000Z` },
+    created: { at: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() },
   }))
   await h.g.apply(many, { trusted: true })
   let rows = await a.sessions()
-  assertEquals(rows.length, 200)
+  assertEquals(rows.length, 20)
   // The newest end of the list, and the oldest are the ones left out.
   assert(rows.some((b) => b.entity.eid == 's204'))
   assert(!rows.some((b) => b.entity.eid == 's0'))
+  let next = await a.sessions(undefined, { after: rows.at(-1)!.entity.eid })
+  assertEquals(next.length, 20)
+  assert(
+    !next.some((b) => rows.some((first) => first.entity.eid == b.entity.eid)),
+  )
   await a.close()
 })
 
@@ -134,14 +139,14 @@ Deno.test('the agent reads bare and filed open work, including claims and blocke
   let work = await a.tasks()
   assertEquals(
     work.map((b) => (b.doc as Comp).title),
-    ['first', 'claimed microtask', 'filed work'],
+    ['filed work', 'claimed microtask', 'first'],
   )
   assertEquals(work.map((b) => (b.task as Comp).status), [
     'open',
     'wip',
     'open',
   ])
-  assertEquals(work.slice(0, 2).map((b) => b.filed), [undefined, undefined])
+  assertEquals(work.slice(1).map((b) => b.filed), [undefined, undefined])
   await a.close()
 })
 

@@ -1110,7 +1110,7 @@ export let bound = (
   // The cursor names its anchor by that entity's number, so a store which
   // mints none has nothing for it to name: `num < n` over a column of NULLs
   // answers with an empty page instead of saying so.
-  if (after && !numbered) {
+  if (after && 'n' in after && !numbered) {
     throw new Unsupported('.after', 'this store does not number its entities')
   }
   let ordered = sort ? [`${sort.row}${sort.desc ? ' desc' : ''}`] : []
@@ -1135,7 +1135,9 @@ export let bound = (
     ...rel(ctx.d.spine, {
       cols,
       joins: joinsOf(ctx),
-      where: after ? and(where, cond(keyset(ctx, sort, after.n))) : where,
+      where: after
+        ? and(where, cond(keyset(ctx, sort, after, numbered)))
+        : where,
       order: ordered,
     }),
     limit: limit ? val(limit.n) : undefined,
@@ -1179,17 +1181,20 @@ let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
   return null
 }
 
-// The `.after` anchor as an owner id. The cursor names an entity by its entity
-// num — written the same way however the results are ordered, so a client pages
-// without ever learning the order key — and the num is a whole number the
-// grammar has already validated, written into the SQL directly because an order
-// expression carries no bound parameters (Site.owner is a string, and the order
-// by in this representation holds none).
-let anchor = (ctx: Ctx, n: number) =>
-  `(select "__cur"."id" from ${ctx.d.spine} as "__cur" where "__cur"."num" = ${n})`
+// Resolve a number or eid to the spine owner used by the order expression.
+// An eid is quoted here because the order hook accepts an expression rather
+// than parameters; doubling apostrophes keeps it a single SQL string literal.
+let anchorWhere = (after: After) =>
+  'n' in after
+    ? `"__cur"."num" = ${after.n}`
+    : `"__cur"."eid" = '${after.eid.replaceAll("'", "''")}'`
+let anchor = (ctx: Ctx, after: After, field = 'id') =>
+  `(select "__cur"."${field}" from ${ctx.d.spine} as "__cur" where ${
+    anchorWhere(after)
+  })`
 
 // `.after` as a keyset condition over the effective order: the rows strictly
-// past the anchor's own place in it, with the entity num breaking ties
+// past the anchor's own place in it, with the spine breaking ties
 // (descending, so that an unordered window still reads newest first). Absent
 // values sort first when ascending — SQLite puts NULLs first, and @yaks/match
 // does the same — and comparing anything to NULL yields NULL rather than a
@@ -1199,17 +1204,41 @@ let anchor = (ctx: Ctx, n: number) =>
 // anchor that no longer matches the query still has an order value to page
 // from, one with no value pages by its num alone (the tie branch), and one that
 // names no entity leaves the condition true, which is the first page.
-let keyset = (ctx: Ctx, sort: Sort | null, n: number): Frag => {
-  let tie = { sql: `"entity"."num" < ?`, params: [n] as Bind[] }
-  if (!sort) return tie
-  let a = sort.at(anchor(ctx, n))
+let keyset = (
+  ctx: Ctx,
+  sort: Sort | null,
+  after: After,
+  numbered: boolean,
+): Frag => {
+  let owner = anchor(ctx, after)
+  let exists = `exists (select 1 from ${ctx.d.spine} as "__cur" where ${
+    anchorWhere(after)
+  })`
+  let tie: Frag = 'n' in after
+    ? { sql: `"entity"."num" < ?`, params: [after.n] }
+    : numbered
+    ? {
+      sql: `("entity"."num" < ${anchor(ctx, after, 'num')}` +
+        ` or ("entity"."num" is null and ${
+          anchor(ctx, after, 'num')
+        } is not null)` +
+        ` or ("entity"."num" is ${anchor(ctx, after, 'num')}` +
+        ` and "entity"."id" < ${owner}))`,
+      params: [],
+    }
+    : { sql: `"entity"."id" < ${owner}`, params: [] }
+  if (!sort) {
+    return 'n' in after
+      ? tie
+      : { sql: `(not ${exists} or ${tie.sql})`, params: tie.params }
+  }
+  let a = sort.at(owner)
   let v = sort.row
   let past = sort.desc
     ? `(${v} is null and ${a} is not null) or ${v} < ${a}`
     : `(${a} is null and ${v} is not null) or ${v} > ${a}`
   return {
-    sql:
-      `(not exists (select 1 from ${ctx.d.spine} as "__cur" where "__cur"."num" = ${n})` +
+    sql: `(not ${exists}` +
       ` or ${past} or (${v} is ${a} and ${tie.sql}))`,
     params: tie.params,
   }

@@ -204,13 +204,13 @@ projection, aggregation or pagination; `.refs` filters by references:
 | `.after=13882`         | continue past this entity                                                                                                                 |
 | `.edges`               | the edges touching the answer; `.edges.peers=status,title` projects the far endpoint; `.edges[watches,author.team]` selects one edge type |
 
-`.after=<num>` is the paging cursor: the entity number to continue past, and the
-only cursor form there is (`.after=T-13882` is the same number written with its
-display prefix). It deliberately does not depend on the ordering — an evaluator
-works out where that entity sits in whatever order the query asked for, so a
-caller does not need the ordered property's value to request the next page. This
-parser only records which entity it names; working out where that entity sits is
-evaluation (`@yaks/sql`, `@yaks/match`).
+`.after=<id>` is the paging cursor: an entity number, human id, or eid to
+continue past (`.after=T-13882` names the same number as `.after=13882`). An eid
+pages entities that have no number. It does not depend on the ordering — an
+evaluator works out where that entity sits in whatever order the query asked
+for, so a caller does not need the ordered property's value to request the next
+page. This parser only records which entity it names; working out where that
+entity sits is evaluation (`@yaks/sql`, `@yaks/match`).
 
 `.limit=0` answers no rows. `.order`, `.limit` and `.after` shape a list of
 rows, so an aggregate ignores them: `.count&.limit=20` counts every match.

@@ -131,6 +131,7 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.after=13882', and(after(13882))],
   // a human id is the same number wearing its display prefix
   ['.after=T-13882', and(after(13882))],
+  ['.after=child:abc', and(after('child:abc'))],
   ['.edges', and(edges())],
   [
     '.edges.peers=status,title',
@@ -250,7 +251,7 @@ Deno.test('quotes glue a value across & and spaces', () => {
     and(contains('title', 'say "hi"')),
   )
   assertThrows(() => parse('.title~="open'), Error, 'unclosed quote')
-  assertThrows(() => parse('.after=T-'), Error, 'entity number or id')
+  assertThrows(() => parse('.after='), Error, 'entity number or eid')
   assertThrows(() => parse('.limit=T-3'), Error, 'whole number')
 })
 

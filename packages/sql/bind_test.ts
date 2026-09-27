@@ -318,6 +318,15 @@ Deno.test('a cursor names an entity by number, and a store with none says so', (
   )
 })
 
+Deno.test('an eid cursor pages a store with no numbers', () => {
+  let { sql } = compile(
+    parse('.priority=1&.order=-title&.limit=2&.after=child:abc'),
+    unnumbered,
+  )
+  assert(sql.includes(`"__cur"."eid" = 'child:abc'`), sql)
+  assert(sql.includes('"entity"."id" < (select'), sql)
+})
+
 Deno.test('an explicit .order survives a window', () => {
   let { sql } = compile(parse('.priority=1&.order=-title&.limit=2'), v)
   assert(

@@ -294,6 +294,7 @@ export let QUERIES: string[] = [
   '.kind=book&.order=price&.limit=2',
   '.kind=book&.order=price&.after=5',
   '.kind=book&.order=price&.limit=2&.after=6',
+  '.kind=book&.order=price&.limit=2&.after=b4',
   '.kind=book&.order=-price&.limit=2&.after=4',
   '.kind=book&.order=title&.after=4',
   '.kind=book&.order=-released&.limit=2&.after=5',

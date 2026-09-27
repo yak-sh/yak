@@ -121,6 +121,7 @@ Deno.test('a window pages WITHIN the order it was asked for', () => {
   // the cursor names an entity, and paging continues from its place in the
   // order — b4 is the second cheapest, so the next page is the two dearest
   assertEquals(sel('.kind=book&.order=price&.limit=2&.after=6'), ['b1', 'b2'])
+  assertEquals(sel('.kind=book&.order=price&.limit=2&.after=b4'), ['b1', 'b2'])
   assertEquals(sel('.kind=book&.order=-price&.after=4'), ['b1', 'b4', 'b3'])
   // an anchor no entity has is the first page again
   assertEquals(sel('.kind=book&.order=price&.limit=2&.after=99'), ['b3', 'b4'])
@@ -132,6 +133,13 @@ Deno.test('a window pages WITHIN the order it was asked for', () => {
     'b1',
     'b2',
   ])
+})
+
+Deno.test('an eid cursor pages entities without human numbers', () => {
+  let bare = bundles.map((b) => ({ ...b, entity: { eid: b.entity.eid } }))
+  let read = (q: string) => matcher(q, shop)(bare).map((b) => b.entity.eid)
+  assertEquals(read('.kind=book&.limit=2'), ['b4', 'b3'])
+  assertEquals(read('.kind=book&.limit=2&.after=b3'), ['b2', 'b1'])
 })
 
 Deno.test('a time phrase answers for the moment each run is asked at', () => {
