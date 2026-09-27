@@ -6,7 +6,9 @@
 // chunk at a time as the page asks (stream.ts), and the page turns each packed
 // chunk into meshes (world.ts), and keeps the ground it was grown from.
 import { groundChunk } from './ground.ts'
-import { cuboid, out, pack, type Packed, place } from './mesh.ts'
+import { cuboids } from './boxes.ts'
+import { out, pack, type Packed, place } from './mesh.ts'
+>>>>>>> 7e18319f (Mossvale: a model built of boxes never draws two faces in one plane. Its boxes are one solid (boxes.ts): each is worn over those before it, a side within a step (5 mm, mesh.ts STEP) of an earlier box's same side standing a step outside it, or flush where both are the same stuff; and a face is drawn only where it shows, cut where another box lies against it or over it. A figure's parts are worn over the parts before them that stand square to them as it is built (parts.ts knit), so a thigh no longer flickers against a flank. Figures, a thing's look, logs and stumps and a foundation all go through it; mesh.ts `fights` finds any two faces the depth buffer cannot tell apart, and tests over every creature, every hero's dress, every look and every prop find none (T-40879))
 import { KINDS, model } from './props.ts'
 import {
   adopt,
@@ -63,7 +65,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     let base = foundation(v, p)
     if (base) {
       let [[x, y, z], size] = base
-      cuboid(solid, [x - ox, y, z - oz], size, FOUND, 0.25, 0.04)
+      cuboids(solid, [[[x - ox, y, z - oz], size, FOUND]], 0.25, 0.04)
     }
   }
   return {

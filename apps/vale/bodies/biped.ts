@@ -4,10 +4,10 @@
 // what it is.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import type { Box } from '../boxes.ts'
 import type { Figure } from '../figures.ts'
 import {
   both,
-  type Box,
   given,
   type Limb,
   limb,

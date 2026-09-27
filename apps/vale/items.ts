@@ -6,11 +6,10 @@
 // gathers is a row of materials.ts, both listed here too.
 import { ARMS, forged, type Slot, wield } from './arms.ts'
 import { lump, MATERIALS } from './materials.ts'
-import { cuboid, metal, type Out, out, type Vec } from './mesh.ts'
-
-/** One box of a model: its low corner, its size, its colour, and how wide
- * the rounding of its edges is, when not a small thing's usual. */
-export type Box = [Vec, Vec, number, number?]
+import { type Box, cuboids } from './boxes.ts'
+import { metal, type Out, out } from './mesh.ts'
+export type { Box } from './boxes.ts'
+>>>>>>> 7e18319f (Mossvale: a model built of boxes never draws two faces in one plane. Its boxes are one solid (boxes.ts): each is worn over those before it, a side within a step (5 mm, mesh.ts STEP) of an earlier box's same side standing a step outside it, or flush where both are the same stuff; and a face is drawn only where it shows, cut where another box lies against it or over it. A figure's parts are worn over the parts before them that stand square to them as it is built (parts.ts knit), so a thigh no longer flickers against a flank. Figures, a thing's look, logs and stumps and a foundation all go through it; mesh.ts `fights` finds any two faces the depth buffer cannot tell apart, and tests over every creature, every hero's dress, every look and every prop find none (T-40879))
 
 /** How a thing's picture sees it (sprites.ts), its front toward +z: from a
  * corner above, the most of it at once; from the `front`, for what is worn
@@ -591,13 +590,7 @@ export let ITEMS: Record<string, Thing> = {
 /** A look as triangles to draw (mesh.ts), in voxels 5 cm across, each box as
  * soft at its edges as a small thing is unless it says: what lies on the
  * ground (cast.ts) and what flies to a hero (nodes.ts). */
-export let meshed = (look: Box[]): Out => {
-  let o = out()
-  for (let [min, size, hex, round = 0.02] of look) {
-    cuboid(o, min, size, hex, 0.05, round)
-  }
-  return o
-}
+export let meshed = (look: Box[]): Out => cuboids(out(), look, 0.05, 0.02)
 
 /** How much larger than itself a thing lying on the ground is drawn: a small
  * thing, a coin or a jelly, grown so it is seen from where the camera looks,

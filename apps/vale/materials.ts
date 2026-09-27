@@ -3,8 +3,10 @@
 // of four shapes in its own colours: a log, a lump of ore, a sprig, a fish.
 // Iron ore and the mushroom cap were creature drops before there was
 // gathering, and stay in items.ts.
-import type { Box, Thing, View } from './items.ts'
+import type { Box } from './boxes.ts'
+import type { Thing, View } from './items.ts'
 import { metal } from './mesh.ts'
+>>>>>>> 7e18319f (Mossvale: a model built of boxes never draws two faces in one plane. Its boxes are one solid (boxes.ts): each is worn over those before it, a side within a step (5 mm, mesh.ts STEP) of an earlier box's same side standing a step outside it, or flush where both are the same stuff; and a face is drawn only where it shows, cut where another box lies against it or over it. A figure's parts are worn over the parts before them that stand square to them as it is built (parts.ts knit), so a thigh no longer flickers against a flank. Figures, a thing's look, logs and stumps and a foundation all go through it; mesh.ts `fights` finds any two faces the depth buffer cannot tell apart, and tests over every creature, every hero's dress, every look and every prop find none (T-40879))
 
 // A look and how its picture sees it.
 type Made = { look: Box[]; view: View }

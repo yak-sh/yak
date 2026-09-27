@@ -15,7 +15,12 @@
 // `blob` meshes a small voxel model: a tree, a rock, a house. Faces alike in
 // colour, rounding and shade merge into larger quads; the shader still tints
 // each voxel of a merged face on its own, so the merge cannot be seen. The
-// ground has its own mesher (ground.ts) because it is a heightfield.
+// ground has its own mesher (ground.ts) because it is a heightfield, and a
+// model built of boxes its own (boxes.ts).
+//
+// No mesher writes two faces the depth buffer cannot tell apart (`fights`):
+// none in one plane, and none facing the same way closer than a step
+// (`STEP`).
 
 export type Vec = [number, number, number]
 
@@ -79,7 +84,8 @@ export type Packed = {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let p = pack(cuboid(out(), [0, 0, 0], [1, 1, 1], 0x80c020))
+ * import { cuboids } from './boxes.ts'
+ * let p = pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x80c020]]))
  * assertEquals([p.pos.length / 3, p.idx.length / 3], [24, 12])
  * assertEquals(p.idx instanceof Uint16Array, true)
  * assertEquals([...p.col.slice(0, 4)], [0x80, 0xc0, 0x20, 255])
@@ -99,6 +105,125 @@ export let pack = (o: Out): Packed => ({
 /** The buffers a packed mesh is made of, to hand over rather than copy. */
 export let buffers = (p: Packed): ArrayBuffer[] =>
   [p.pos, p.nrm, p.col, p.edge, p.bw, p.idx].map((a) => a.buffer)
+
+/** The least distance two surfaces facing the same way keep apart, in metres,
+ * so the depth buffer always tells which is in front: a worn layer over what
+ * it covers (boxes.ts), a thing standing on the ground or in another
+ * (chunks.ts). A 24-bit depth buffer parts two surfaces d metres off when
+ * they are about d² / (near · 2²⁴) apart, near being the camera's near plane
+ * (cam.ts `NEAR`): a millimetre at 100 m, so a step holds out to the fog. */
+export let STEP = 0.005
+
+// A face as `fights` measures it: the axis it looks along and which way, the
+// plane it lies in, and its extent in that plane.
+type Flat = {
+  axis: number
+  sign: number
+  at: number
+  u0: number
+  v0: number
+  u1: number
+  v1: number
+}
+
+// Every face of a packed mesh: each quad `quad` wrote, four vertices and two
+// triangles, looking the way its first triangle winds.
+let facesOf = (p: Packed): Flat[] => {
+  let at = (i: number, a: number) => p.pos[i * 3 + a]
+  let faces: Flat[] = []
+  for (let q = 0; q < p.idx.length; q += 6) {
+    let [a, b, c] = [p.idx[q], p.idx[q + 1], p.idx[q + 2]]
+    let e = [0, 1, 2].map((k) => at(b, k) - at(a, k))
+    let f = [0, 1, 2].map((k) => at(c, k) - at(a, k))
+    let n = [
+      e[1] * f[2] - e[2] * f[1],
+      e[2] * f[0] - e[0] * f[2],
+      e[0] * f[1] - e[1] * f[0],
+    ]
+    let axis = [1, 2].reduce(
+      (m, k) => Math.abs(n[k]) > Math.abs(n[m]) ? k : m,
+      0,
+    )
+    let [ua, va] = axes(axis)
+    let base = Math.min(...p.idx.subarray(q, q + 6))
+    let us = [0, 1, 2, 3].map((i) => at(base + i, ua))
+    let vs = [0, 1, 2, 3].map((i) => at(base + i, va))
+    faces.push({
+      axis,
+      sign: Math.sign(n[axis]),
+      at: at(base, axis),
+      u0: Math.min(...us),
+      v0: Math.min(...vs),
+      u1: Math.max(...us),
+      v1: Math.max(...vs),
+    })
+  }
+  return faces
+}
+
+// How near, in metres, is as good as touching, for a packed mesh's 32-bit
+// numbers.
+let TOUCH = 1e-5
+
+/** Every pair of faces in `p` the depth buffer could not tell apart, by their
+ * order in it: where they overlap, two looking the same way less than a step
+ * apart, or two back to back in one plane, where two solids meet and neither
+ * shows. Nothing a mesher writes ever does (boxes.ts, `blob`, ground.ts).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let white = Array(12).fill(1), plain: [0, 0, 0, 0] = [0, 0, 0, 0]
+ * let floor = (y: number, sign = 1, x = 0) => {
+ *   let o = out()
+ *   quad(o, [x, y, 0], 1, 1, 1, sign, white, plain, 0)
+ *   return o
+ * }
+ * let both = (a: Out, b: Out) => {
+ *   let o = out()
+ *   place(o, a, [0, 0, 0])
+ *   place(o, b, [0, 0, 0])
+ *   return fights(pack(o))
+ * }
+ * assertEquals(both(floor(0), floor(0.002)), [[0, 1]])
+ * assertEquals(both(floor(0), floor(STEP)), [])
+ * assertEquals(both(floor(0), floor(0, -1)), [[0, 1]])
+ * assertEquals(both(floor(0), floor(0, 1, 1)), []) // side by side
+ * ```
+ */
+export let fights = (p: Packed): [number, number][] => {
+  let faces = facesOf(p)
+  // Faces by axis and slab of planes a step deep: a pair closer than a step
+  // lies in one slab or two neighbouring.
+  let slabs = new Map<string, number[]>()
+  for (let [i, f] of faces.entries()) {
+    let k = `${f.axis} ${Math.floor(f.at / STEP)}`
+    let slab = slabs.get(k)
+    if (slab) slab.push(i)
+    else slabs.set(k, [i])
+  }
+  let got: [number, number][] = []
+  for (let [k, own] of slabs) {
+    let [axis, n] = k.split(' ').map(Number)
+    let next = slabs.get(`${axis} ${n + 1}`) ?? []
+    let near = [...own, ...next].sort((a, b) => faces[a].u0 - faces[b].u0)
+    let mine = new Set(own)
+    for (let x = 0; x < near.length; x++) {
+      let a = faces[near[x]]
+      for (let y = x + 1; y < near.length; y++) {
+        let b = faces[near[y]]
+        if (b.u0 > a.u1 - TOUCH) break
+        if (!mine.has(near[x]) && !mine.has(near[y])) continue
+        if (Math.min(a.u1, b.u1) - Math.max(a.u0, b.u0) < TOUCH) continue
+        if (Math.min(a.v1, b.v1) - Math.max(a.v0, b.v0) < TOUCH) continue
+        let d = Math.abs(a.at - b.at)
+        if (a.sign == b.sign ? d < STEP - TOUCH : d < TOUCH) {
+          got.push([Math.min(near[x], near[y]), Math.max(near[x], near[y])])
+        }
+      }
+    }
+  }
+  return got.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+}
 
 /** What a face is made of, besides its colour: matte, the soft look of
  * everything in the vale, or metal, which mirrors the sky and catches the sun
@@ -228,51 +353,6 @@ export let rgb = (hex: number): Vec => [
   linear(((hex >> 8) & 255) / 255),
   linear((hex & 255) / 255),
 ]
-
-/** A box, soft on every edge: `min` its lowest corner and `size` its extent,
- * in metres, drawn as if built of voxels `cell` across, of whatever its colour
- * says it is made of. The part a figure is made of (figures.ts).
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let blade = cuboid(out(), [0, 0, 0], [1, 1, 1], metal(0xdfe6ee))
- * // each vertex's edge ends in what it is made of
- * assertEquals(blade.edge[3], METAL)
- * ```
- */
-export let cuboid = (
-  o: Out,
-  min: Vec,
-  size: Vec,
-  hex: number,
-  cell = 0.1,
-  round = 0.035,
-) => {
-  let c = rgb(hex)
-  let cs = [...c, ...c, ...c, ...c]
-  for (let axis = 0; axis < 3; axis++) {
-    let [ua, va] = axes(axis)
-    for (let sign of [-1, 1]) {
-      let at: Vec = [min[0], min[1], min[2]]
-      if (sign > 0) at[axis] += size[axis]
-      quad(
-        o,
-        at,
-        axis,
-        size[ua],
-        size[va],
-        sign,
-        cs,
-        [1, 1, 1, 1],
-        round,
-        undefined,
-        cell,
-        materialOf(hex),
-      )
-    }
-  }
-  return o
-}
 
 /** A small voxel model: voxel coordinates, packed, to a colour, and what the
  * voxel is made of (`metal`). */

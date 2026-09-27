@@ -4,16 +4,9 @@
 // two alternating sets, as an insect's do.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import type { Box } from '../boxes.ts'
 import type { Figure } from '../figures.ts'
-import {
-  both,
-  type Box,
-  given,
-  lunge,
-  mirror,
-  partOf,
-  shade,
-} from '../parts.ts'
+import { both, given, lunge, mirror, partOf, shade } from '../parts.ts'
 import { flash, soft } from '../soft.ts'
 
 export type Crawler = {

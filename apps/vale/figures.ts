@@ -20,6 +20,7 @@
 // before them, both hands up, or both blades across the foe.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import type { Box } from './boxes.ts'
 import type { Pose } from './abilities.ts'
 import { BEASTS, type Look, type Plans } from './beasts.ts'
 import type { Hand } from './gear.ts'
@@ -36,7 +37,6 @@ import { slime } from './bodies/slime.ts'
 import { wisp } from './bodies/wisp.ts'
 import type { Vec } from './mesh.ts'
 import {
-  type Box,
   ease,
   fit,
   knit,

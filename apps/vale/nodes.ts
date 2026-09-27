@@ -17,11 +17,11 @@ import { STATIONS } from './craft.ts'
 import { chipOf, GATHER, type Look } from './gather.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, meshed } from './items.ts'
+import { type Box, cuboids } from './boxes.ts'
 import {
   ball,
   blob,
   box,
-  cuboid,
   key,
   type Out,
   out,
@@ -52,32 +52,38 @@ let SWELL = 0.5
 // How long what a node gives takes to fly to the hero, in seconds.
 let FLIGHT = 0.45
 
-// Logs cut and stacked beside a tree, south of its trunk.
-let logs = (o: Out, bark: number, wood: number) => {
-  for (let [x, y, z] of [[-0.3, 0, 0.6], [-0.3, 0, 0.95], [-0.3, 0.3, 0.78]]) {
-    cuboid(o, [x, y, z], [1.1, 0.32, 0.32], bark, 0.08, 0.04)
-    for (let e of [x - 0.02, x + 1.1]) {
-      cuboid(o, [e, y + 0.04, z + 0.04], [0.02, 0.24, 0.24], wood, 0.06, 0.02)
-    }
-  }
-}
+// Logs cut and stacked beside a tree, south of its trunk, their ends the
+// colour of the wood.
+let logs = (o: Out, bark: number, wood: number) =>
+  cuboids(
+    o,
+    [[-0.3, 0, 0.6], [-0.3, 0, 0.95], [-0.3, 0.3, 0.78]].flatMap((
+      [x, y, z],
+    ): Box[] => [
+      [[x, y, z], [1.1, 0.32, 0.32], bark],
+      ...[x - 0.02, x + 1.1].map((e): Box => [
+        [e, y + 0.04, z + 0.04],
+        [0.02, 0.24, 0.24],
+        wood,
+        0.02,
+      ]),
+    ]),
+    0.08,
+    0.04,
+  )
 
 // A stump, its cut face the colour of the wood, and chips round it.
 let stump = (o: Out, bark: number, wood: number, seed: number) => {
-  cuboid(o, [-0.32, 0, -0.32], [0.64, 0.55, 0.64], bark, 0.12, 0.05)
-  cuboid(o, [-0.27, 0.55, -0.27], [0.54, 0.03, 0.54], wood, 0.1, 0.02)
+  cuboids(o, [
+    [[-0.32, 0, -0.32], [0.64, 0.55, 0.64], bark, 0.05],
+    [[-0.27, 0.55, -0.27], [0.54, 0.03, 0.54], wood, 0.02],
+  ], 0.12)
   let r = stream(seed)
-  for (let i = 0; i < 6; i++) {
+  let chips = Array.from({ length: 6 }, (): Box => {
     let a = r() * Math.PI * 2, d = 0.5 + r() * 0.5
-    cuboid(
-      o,
-      [Math.cos(a) * d, 0, Math.sin(a) * d],
-      [0.12, 0.04, 0.07],
-      wood,
-      0.05,
-      0.01,
-    )
-  }
+    return [[Math.cos(a) * d, 0, Math.sin(a) * d], [0.12, 0.04, 0.07], wood]
+  })
+  cuboids(o, chips, 0.05, 0.01)
 }
 
 // The highest voxel of a column of `v`, or -1.
