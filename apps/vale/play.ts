@@ -28,7 +28,14 @@
 //     in this life (rules.ts `hpOf`), and one that a fight says is held
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
-import { ABILITIES, abilitiesOf, BLEEDS, WARD } from './abilities.ts'
+import {
+  ABILITIES,
+  abilitiesOf,
+  again,
+  BLEEDS,
+  WARD,
+  type Went,
+} from './abilities.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { heed } from './gaze.ts'
@@ -1244,6 +1251,12 @@ export let game = (
           Math.atan2(m.body.x - body.x, m.body.z - body.z),
           1.9,
         )
+      // How an ability's blow went: ready again at once, if its row says so
+      // for how it went (abilities.ts `again`).
+      let went = (id: string, how: Went) => {
+        let a = formOf(id, s.learned)
+        if (a && again(a, how)) ready.set(id, now)
+      }
       // What my next blow or ability would take, worked out once: the mark
       // shows it, and whatever I do now is aimed at it. It looks as far as a
       // blow reaches, or an ability on the bar that is ready or under way.
@@ -1356,6 +1369,13 @@ export let game = (
         let taken = a
           ? takenBy(a, mobs, body, k, target)
           : [landOf(mobs, body, k, aimed)].flatMap((m) => m ? [m] : [])
+        // An ability that took nothing it was aimed at, stopped short by the
+        // world or with its foe gone, went wide.
+        if (
+          a && a.shape != 'self' && !taken.some((m) => !aimed || m.eid == aimed)
+        ) {
+          went(doing, 'miss')
+        }
         let sure = taken.length > 0 && now - riposte < RIPOSTE
         if (sure) riposte = -1e9
         let lead = taken.find((m) => m.eid == aimed) ?? taken[0]
@@ -1423,16 +1443,14 @@ export let game = (
           }
         }
       }
-      // Blows arriving. An ability whose blow fells what it struck is ready
-      // again at once, if a skill made it so (`renew`).
+      // Blows arriving. One an ability struck that fells what it lands on is
+      // that ability's killing blow.
       blows = blows.filter((b) => {
         if (b.lands > now) return true
         let m = mobs.find((m) => m.eid == b.eid)
         if (m && !m.down) {
           land(m, b.dmg, b.great, b.held)
-          if (m.down && b.by && formOf(b.by, s.learned)?.renew) {
-            ready.set(b.by, now)
-          }
+          if (m.down && b.by) went(b.by, 'kill')
         }
         return false
       })

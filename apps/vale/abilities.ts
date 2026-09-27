@@ -69,6 +69,9 @@ export type Ability = {
   cool: number
   /** a killing blow with it makes it ready again at once */
   renew?: boolean
+  /** its cooldown is given back when it takes nothing it was aimed at:
+   * stopped short by the world, or its foe gone before it lands */
+  refund?: boolean
   /** the colour of its dust and light, when not the dust's own */
   tint?: number
 }
@@ -149,14 +152,40 @@ let words = (a: Ability, { blow, max }: Doer): Words => ({
  *   does(formOf('crush', ['earthbreaker'])!, d),
  *   'One enormous overhead blow for 64 damage, and the foe is senseless for 1.5 s.',
  * )
- * // Relentless readies a Lunge that kills, and Lunge says so.
+ * // A Lunge that misses is given back, and Relentless readies one that
+ * // kills; Lunge says so.
  * assertNotMatch(does(ABILITIES.lunge, d), /kill/)
+ * assertMatch(does(ABILITIES.lunge, d), /misses/)
  * assertMatch(does(formOf('lunge', ['relentless'])!, d), /killing blow/)
+ * assertNotMatch(does(ABILITIES.crush, d), /again/)
  * ```
  */
-export let does = (a: Ability, d: Doer): string =>
-  a.says(words(a, d)) +
-  (a.renew ? ' Ready again at once after a killing blow.' : '')
+export let does = (a: Ability, d: Doer): string => {
+  let when = [a.renew && 'after a killing blow', a.refund && 'if it misses']
+    .filter(Boolean)
+  return a.says(words(a, d)) +
+    (when.length ? ` Ready again at once ${when.join(', or ')}.` : '')
+}
+
+/** How an ability's blow went, as far as its cooldown cares: it felled what
+ * it struck, or it took nothing it was aimed at. */
+export type Went = 'kill' | 'miss'
+
+/** Whether an ability is ready again at once, as its blow went: after a
+ * killing blow, one a skill renews (`renew`); after a miss, one that gives
+ * its cooldown back (`refund`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let a = ABILITIES.crush
+ * let went = (b: Ability) => [again(b, 'kill'), again(b, 'miss')]
+ * assertEquals(went(a), [false, false])
+ * assertEquals(went({ ...a, renew: true }), [true, false])
+ * assertEquals(went({ ...a, refund: true }), [false, true])
+ * ```
+ */
+export let again = (a: Ability, went: Went): boolean =>
+  went == 'kill' ? !!a.renew : !!a.refund
 
 /** Every ability, by id. */
 export let ABILITIES: Record<string, Ability> = {
@@ -193,6 +222,7 @@ export let ABILITIES: Record<string, Ability> = {
     dash: 4.5,
     dmg: 2,
     cool: 9000,
+    refund: true,
   },
   whirl: {
     name: 'Whirl',
