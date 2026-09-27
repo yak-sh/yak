@@ -318,15 +318,31 @@ let add = (
 }
 
 // Noise through the filter `f`, added all the way round the loop `d`. The
-// filter first hears the noise the loop ends with, so it comes into the
-// start as it leaves the end.
+// filter first hears the quarter second of noise the loop ends with, so it
+// comes into the start as it leaves the end.
 let round = (d: Float32Array, rate: number, f: (x: number) => number) => {
-  let tail = Array.from({ length: Math.floor(rate / 10) }, white)
+  let tail = Array.from({ length: Math.floor(rate / 4) }, white)
   tail.forEach((x) => f(x))
   let from = d.length - tail.length
   for (let i = 0; i < d.length; i++) {
     d[i] += f(i < from ? white() : tail[i - from])
   }
+  return d
+}
+
+// A lowpass at `f` Hz, twice over, a sample at a time.
+let lowpass = (rate: number, f: number) => {
+  let k = 1 - Math.exp(-2 * Math.PI * f / rate), a = 0, b = 0
+  return (x: number) => b += ((a += (x - a) * k) - b) * k
+}
+
+// `d` scaled to be `to` loud, root mean square.
+let loud = (d: Float32Array, to: number) => {
+  let sum = 0
+  for (let x of d) sum += x * x
+  let k = to / (Math.sqrt(sum / d.length) || 1)
+  for (let i = 0; i < d.length; i++) d[i] *= k
+  return d
 }
 
 // A band that rings, a sample at a time: `x` through a band round `f` Hz, `q`
@@ -407,11 +423,19 @@ let laps = (
   }
 }
 
-/** A fire, to loop: a low roar, and pops and snaps. */
+/** A wood fire, to loop: a soft, low rush that flutters as its flames do,
+ * and pops and snaps. */
 export let fire = (c: BaseAudioContext) =>
   seamless(c, 4, (d, rate) => {
-    let low = 0
-    round(d, rate, (x) => low += (x - low) * 0.03)
+    // The flames flicker far slower than a sample, so they are drawn at a
+    // 64th of the rate and eased between.
+    let n = d.length, m = Math.ceil(n / 64), slow = rate * m / n
+    let rush = loud(round(new Float32Array(n), rate, lowpass(rate, 220)), 0.05)
+    let flames = loud(round(new Float32Array(m), slow, lowpass(slow, 7)), 0.6)
+    for (let i = 0; i < n; i++) {
+      let p = i * m / n, j = Math.floor(p), a = flames[j]
+      d[i] += rush[i] * Math.max(0, 1 + a + (flames[(j + 1) % m] - a) * (p - j))
+    }
     for (let k = 0; k < 70; k++) {
       let len = rate * (0.001 + Math.random() * 0.012),
         fade = Math.exp(-1 / len)
