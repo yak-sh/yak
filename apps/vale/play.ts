@@ -28,7 +28,7 @@
 //     in this life (rules.ts `hpOf`), and one that a fight says is held
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
-import { ABILITIES, abilitiesOf } from './abilities.ts'
+import { ABILITIES, abilitiesOf, BLEEDS, WARD } from './abilities.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { heed } from './gaze.ts'
@@ -50,6 +50,7 @@ import { type Bundle, comp, type Net, num, str } from './net.ts'
 import { GIVERS, type Quest, QUESTS } from './quests.ts'
 import {
   blow,
+  blowOf,
   type Dealing,
   type Dealt,
   fallOf,
@@ -60,7 +61,6 @@ import {
   levelOf,
   lootOf,
   maxHp,
-  power,
   questsOf,
   type Slain,
   type Standing,
@@ -281,14 +281,12 @@ let LUNGE = 0.6
 // A blow this soon after rolling through a bite, or blocking one, is always
 // a great one.
 let RIPOSTE = 1200
-// A ward lasts this long; the blows of an ability that lands more than once
-// land this far apart; and a bleed or a burn lands this many times, a second
-// apart. A boss is held a third as long.
-let WARD = 8000
 // How long a legendary's rally takes to come back, in ms.
 let RALLY = 60_000
+// The blows of an ability that lands more than once land this far apart. A
+// boss is held a third as long. (How long a ward lasts and how many times a
+// bleed lands are the abilities', abilities.ts.)
 let HITS = 130
-let BLEEDS = 4
 let BOSS_HELD = 1 / 3
 // A lunge covers its ground this fast, in metres a second.
 let DASH = 24
@@ -1311,8 +1309,7 @@ export let game = (
           events.push({ type: 'burst', id: doing, at: to, r: a.far ?? 0, ms })
         }
         if (!taken.length && a?.shape != 'self') events.push({ type: 'whiff' })
-        let might = power(s.lvl, !a && hand == 'off' ? k.twin : k.dmg) *
-          (1 + k.force)
+        let might = blowOf(s.lvl, k, !a && hand == 'off' ? k.twin : k.dmg)
         for (let [j, m] of taken.entries()) {
           let hits = (a?.hits ?? 1) + +(Math.random() < (k.powers.echo ?? 0))
           for (let i = 0; i < hits; i++) {

@@ -1,35 +1,47 @@
 // What wearing a piece would change, for the glass to show: the numbers a
-// hero's sheet shows for what they wear (`numbers`), what they would wear
-// with a piece put on or a slot taken off (`trying`, `bare`), the difference
-// between two of those, line by line in green or red (`diff`), and what a
-// piece rolled, in its rarity's colour (`rolled`). The pack's card, the
-// compare tip over the bag, and a station's upgrades all say it this way.
+// hero's sheet shows for what they wear (`numbers`), the blow and health an
+// ability would be done with (`doer`), what they would wear with a piece put
+// on or a slot taken off (`trying`, `bare`), the difference between two of
+// those, line by line in green or red (`diff`), and what a piece rolled, in
+// its rarity's colour (`rolled`). The pack's card, the compare tip over the
+// bag, and a station's upgrades all say it this way.
+import type { Doer } from './abilities.ts'
 import type { Slot } from './arms.ts'
 import { hands, kitOf, twins, type Worn } from './gear.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Sheet } from './play.ts'
 import { BONUSES, type Piece } from './rarity.ts'
-import { type Held, maxHp, power } from './rules.ts'
+import { blowOf, type Held, maxHp } from './rules.ts'
 import { skilled } from './skills.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
+type Hero = Pick<Sheet, 'lvl' | 'learned'>
+
+// What a hero would fight with wearing `worn`, with their level and skills.
+let kitWith = ({ lvl, learned }: Hero, worn: Worn) =>
+  skilled(kitOf(worn), learned, maxHp(lvl))
+
+/** Who would do an ability wearing `worn`: the blow and the health it would
+ * give them (abilities.ts `does`). */
+export let doer = (s: Hero, worn: Worn): Doer => {
+  let k = kitWith(s, worn)
+  return { blow: blowOf(s.lvl, k), max: maxHp(s.lvl) + k.hp }
+}
+
 /** What a hero would do wearing `worn`, with their level and skills, in the
  * numbers a sheet shows. */
-export let numbers = (
-  { lvl, learned }: Pick<Sheet, 'lvl' | 'learned'>,
-  worn: Worn,
-) => {
-  let k = skilled(kitOf(worn), learned, maxHp(lvl))
-  let blow = (dmg: number) => Math.round(power(lvl, dmg) * (1 + k.force))
+export let numbers = (s: Hero, worn: Worn) => {
+  let k = kitWith(s, worn)
+  let blow = (dmg: number) => Math.round(blowOf(s.lvl, k, dmg))
   return {
     blow: blow(k.dmg),
     twin: k.twin ? blow(k.twin) : 0,
     pace: k.pace / 1000,
     reach: k.reach,
     armour: k.armour,
-    hp: maxHp(lvl) + k.hp,
+    hp: maxHp(s.lvl) + k.hp,
     speed: Math.round(k.speed * 100),
     luck: Math.round((0.12 + k.luck) * 100),
   }

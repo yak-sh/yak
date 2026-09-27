@@ -11,6 +11,10 @@
 // in reach; an `arc` sweeps everything before the hero; a `ring` takes
 // everything about them; a `burst` lands on the creature aimed at and
 // everything about it; `self` takes nothing, and does its work on the hero.
+//
+// What an ability says it does is written from its row as the hero does it
+// (`does`): the numbers a skill changed, and the damage and health their own
+// blow and health make, so it never says what it no longer does.
 import type { Glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Worn } from './gear.ts'
@@ -25,8 +29,8 @@ export type Pose = 'swing' | 'spin' | 'guard' | 'cast' | 'cross'
 export type Ability = {
   name: string
   icon: Glyph
-  /** what it does, in a few words, for the bar and the pack */
-  says: string
+  /** what it does, as a sentence of its numbers in words (`does`) */
+  says: (w: Words) => string
   shape: Shape
   pose: Pose
   /** metres past the weapon's reach for `one` and `arc`; the radius of a
@@ -66,12 +70,93 @@ export type Ability = {
   tint?: number
 }
 
+/** A bleed or a burn lands this many times, a second apart, and a ward lasts
+ * this long, in ms (play.ts does them). */
+export let BLEEDS = 4
+export let WARD = 8000
+
+/** Who does an ability: how hard their blow lands before the dice (rules.ts
+ * `blowOf`), and the most health they can have. */
+export type Doer = { blow: number; max: number }
+
+/** An ability's numbers as a doer does it, each in words, or empty where it
+ * has none: the damage of each of its blows, how far it reaches, how wide it
+ * sweeps and how far it dashes, how long it holds a foe, what a bleed or a
+ * burn adds, how long a guard holds, what a ward takes and for how long,
+ * what it mends, and how many times it lands. */
+export type Words = Record<
+  | 'dmg'
+  | 'far'
+  | 'arc'
+  | 'dash'
+  | 'held'
+  | 'bleed'
+  | 'guard'
+  | 'ward'
+  | 'lasts'
+  | 'heal'
+  | 'hits',
+  string
+>
+
+/** A span in ms, as a person reads it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals([1500, 18000, 8000].map(secs), ['1.5 s', '18 s', '8 s'])
+ * ```
+ */
+export let secs = (ms: number): string => `${+(ms / 1000).toFixed(1)} s`
+
+let words = (a: Ability, { blow, max }: Doer): Words => ({
+  dmg: a.dmg ? `${Math.round(blow * a.dmg)} damage` : '',
+  far: a.far ? `${a.far} m` : '',
+  arc: a.arc ? `${Math.round((a.arc * 360) / Math.PI)}°` : '',
+  dash: a.dash ? `${a.dash} m` : '',
+  held: a.held ? secs(a.held) : '',
+  bleed: a.bleed
+    ? `${Math.round((blow * a.bleed) / BLEEDS) * BLEEDS} more over ${
+      secs(BLEEDS * 1000)
+    }`
+    : '',
+  guard: a.guard ? secs(a.guard) : '',
+  ward: a.ward ? `${Math.round(max * a.ward)} damage` : '',
+  lasts: secs(WARD),
+  heal: a.heal ? `${Math.round(max * a.heal)} health` : '',
+  hits: String(a.hits ?? 1),
+})
+
+/** What `a` does, done by `d`, with its numbers: pass the ability as their
+ * skills make it (skills.ts `formOf`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { formOf } from './skills.ts'
+ * let d = { blow: 20, max: 120 }
+ * assertEquals(does(ABILITIES.mend, d), 'Read a word of healing: 36 health back.')
+ * // Kindness mends nearer half, and Mend says so.
+ * assertEquals(does(formOf('mend', ['kindness'])!, d), 'Read a word of healing: 54 health back.')
+ * assertEquals(
+ *   does(ABILITIES.rend, d),
+ *   'A deep cut for 28 damage. The foe bleeds 32 more over 4 s.',
+ * )
+ * // Earthbreaker's Crush leaves the foe senseless; the plain one does not.
+ * assertEquals(does(ABILITIES.crush, d), 'One enormous overhead blow for 52 damage.')
+ * assertEquals(
+ *   does(formOf('crush', ['earthbreaker'])!, d),
+ *   'One enormous overhead blow for 64 damage, and the foe is senseless for 1.5 s.',
+ * )
+ * ```
+ */
+export let does = (a: Ability, d: Doer): string => a.says(words(a, d))
+
 /** Every ability, by id. */
 export let ABILITIES: Record<string, Ability> = {
   haymaker: {
     name: 'Haymaker',
     icon: 'handFist',
-    says: 'A big swing that knocks the foe senseless for a second.',
+    says: (w) =>
+      `A big swing for ${w.dmg} that knocks the foe senseless for ${w.held}.`,
     shape: 'one',
     pose: 'swing',
     dmg: 2,
@@ -81,7 +166,8 @@ export let ABILITIES: Record<string, Ability> = {
   cleave: {
     name: 'Cleave',
     icon: 'axe',
-    says: 'A wide sweep through everything in front of you.',
+    says: (w) =>
+      `A sweep ${w.arc} wide, for ${w.dmg} on everything in front of you.`,
     shape: 'arc',
     pose: 'swing',
     far: 0.5,
@@ -92,7 +178,8 @@ export let ABILITIES: Record<string, Ability> = {
   lunge: {
     name: 'Lunge',
     icon: 'zap',
-    says: 'Dash at a foe a few strides off and run it through.',
+    says: (w) =>
+      `Dash at a foe up to ${w.dash} off and run it through for ${w.dmg}.`,
     shape: 'one',
     pose: 'swing',
     dash: 4.5,
@@ -102,7 +189,8 @@ export let ABILITIES: Record<string, Ability> = {
   whirl: {
     name: 'Whirl',
     icon: 'tornado',
-    says: 'Spin round, striking everything about you.',
+    says: (w) =>
+      `Spin round, striking everything within ${w.far} of you for ${w.dmg}.`,
     shape: 'ring',
     pose: 'spin',
     far: 2.8,
@@ -112,7 +200,7 @@ export let ABILITIES: Record<string, Ability> = {
   rend: {
     name: 'Rend',
     icon: 'droplet',
-    says: 'A deep cut. The foe bleeds for four seconds.',
+    says: (w) => `A deep cut for ${w.dmg}. The foe bleeds ${w.bleed}.`,
     shape: 'one',
     pose: 'swing',
     dmg: 1.4,
@@ -123,7 +211,8 @@ export let ABILITIES: Record<string, Ability> = {
   quake: {
     name: 'Quake',
     icon: 'activity',
-    says: 'Slam the ground. Everything about you is stunned for 2 s.',
+    says: (w) =>
+      `Slam the ground: everything within ${w.far} of you takes ${w.dmg}, and is stunned for ${w.held}.`,
     shape: 'ring',
     pose: 'swing',
     far: 3.4,
@@ -135,7 +224,10 @@ export let ABILITIES: Record<string, Ability> = {
   crush: {
     name: 'Crush',
     icon: 'hammer',
-    says: 'One enormous overhead blow, more than twice as hard.',
+    says: (w) =>
+      `One enormous overhead blow for ${w.dmg}${
+        w.held ? `, and the foe is senseless for ${w.held}` : ''
+      }.`,
     shape: 'one',
     pose: 'swing',
     dmg: 2.6,
@@ -144,7 +236,8 @@ export let ABILITIES: Record<string, Ability> = {
   flurry: {
     name: 'Flurry',
     icon: 'blow',
-    says: 'Three quick stabs, the last a sure great blow.',
+    says: (w) =>
+      `${w.hits} quick stabs for ${w.dmg} each, the last a sure great blow.`,
     shape: 'one',
     pose: 'swing',
     dmg: 0.8,
@@ -156,8 +249,8 @@ export let ABILITIES: Record<string, Ability> = {
   crosscut: {
     name: 'Crosscut',
     icon: 'scissors',
-    says:
-      'Both daggers across the foe at once: two cuts, and it bleeds for 4 s.',
+    says: (w) =>
+      `Both daggers across the foe at once: ${w.hits} cuts for ${w.dmg} each, and it bleeds ${w.bleed}.`,
     shape: 'one',
     pose: 'cross',
     dmg: 0.9,
@@ -170,7 +263,8 @@ export let ABILITIES: Record<string, Ability> = {
   shadowstep: {
     name: 'Shadowstep',
     icon: 'mask',
-    says: 'Step behind a foe a few strides off and stab it: a sure great blow.',
+    says: (w) =>
+      `Step behind a foe up to ${w.dash} off and stab it for ${w.dmg}: a sure great blow.`,
     shape: 'one',
     pose: 'swing',
     dash: 6,
@@ -183,7 +277,8 @@ export let ABILITIES: Record<string, Ability> = {
   volley: {
     name: 'Volley',
     icon: 'cloudRain',
-    says: 'Rain arrows on your foe and everything within 3 m of it.',
+    says: (w) =>
+      `Rain arrows on your foe and everything within ${w.far} of it, for ${w.dmg}.`,
     shape: 'burst',
     pose: 'swing',
     far: 3,
@@ -194,7 +289,8 @@ export let ABILITIES: Record<string, Ability> = {
   pin: {
     name: 'Pinning shot',
     icon: 'locateFixed',
-    says: 'An arrow that pins the foe where it stands for 3 s.',
+    says: (w) =>
+      `An arrow for ${w.dmg} that pins the foe where it stands for ${w.held}.`,
     shape: 'one',
     pose: 'swing',
     dmg: 1.2,
@@ -204,7 +300,8 @@ export let ABILITIES: Record<string, Ability> = {
   blaze: {
     name: 'Blaze',
     icon: 'flame',
-    says: 'A bolt that bursts into flame on your foe and all about it.',
+    says: (w) =>
+      `A bolt that bursts into flame on your foe and everything within ${w.far} of it, for ${w.dmg}.`,
     shape: 'burst',
     pose: 'swing',
     far: 2.5,
@@ -215,7 +312,8 @@ export let ABILITIES: Record<string, Ability> = {
   ward: {
     name: 'Ward',
     icon: 'shieldCheck',
-    says: 'A ward of light that takes the next bites for you, for 8 s.',
+    says: (w) =>
+      `A ward of light that takes the next ${w.ward} of bites for you, for up to ${w.lasts}.`,
     shape: 'self',
     pose: 'cast',
     ward: 0.3,
@@ -225,8 +323,8 @@ export let ABILITIES: Record<string, Ability> = {
   block: {
     name: 'Block',
     icon: 'shield',
-    says:
-      'Raise your shield: bites are turned, and leave the biter open to a great blow.',
+    says: (w) =>
+      `Raise your shield for ${w.guard}: bites are turned, and leave the biter open to a great blow.`,
     shape: 'self',
     pose: 'guard',
     guard: 1500,
@@ -237,7 +335,7 @@ export let ABILITIES: Record<string, Ability> = {
   mend: {
     name: 'Mend',
     icon: 'handHeart',
-    says: 'Read a word of healing: a third of your health back.',
+    says: (w) => `Read a word of healing: ${w.heal} back.`,
     shape: 'self',
     pose: 'cast',
     heal: 0.3,
@@ -247,7 +345,8 @@ export let ABILITIES: Record<string, Ability> = {
   scorch: {
     name: 'Scorch',
     icon: 'flameKindling',
-    says: 'Sweep the flame before you. What it catches burns for 4 s.',
+    says: (w) =>
+      `Sweep the flame ${w.arc} wide before you, for ${w.dmg}. What it catches burns ${w.bleed}.`,
     shape: 'arc',
     pose: 'swing',
     far: 1.2,

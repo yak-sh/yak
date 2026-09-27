@@ -1,5 +1,6 @@
 /* A key on the keyboard, as a little cap: on a button it presses, at its
-   corner, and only where there is a keyboard to press it on. */
+   corner, or in the button's tip (Tip.css), and only where there is a
+   keyboard to press it on. */
 .Key {
   display: inline-block;
   min-width: 1.4em;
@@ -25,7 +26,7 @@
 }
 
 @media (pointer: coarse) {
-  :is(.Orb, .Pad, .Rose) > .Key {
+  :is(.Orb, .Pad, .Rose, .Tip_Head) > .Key {
     display: none;
   }
 }

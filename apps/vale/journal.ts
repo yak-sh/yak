@@ -18,6 +18,7 @@ import type { Sheet } from './play.ts'
 import { GIVERS } from './quests.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
+import { tipped } from './tip.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -335,9 +336,16 @@ export let journal = (panel: Panel, acts: Acts) => {
       t.pinned ? ' Journal_Task-pinned' : ''
     }"><header class=Journal_Top><b class=Journal_Title>${
       esc(t.title)
-    }</b><button class="Orb Orb-small Journal_Pin" data-pin="${t.id}" aria-pressed=${t.pinned} title="${
-      t.pinned ? 'Tracked: tap to stop tracking' : 'Track it'
-    }">${glyph(pin)}</button></header><p class=Journal_From>${esc(t.from)} · ${
+    }</b><button class="Orb Orb-small Journal_Pin" data-pin="${t.id}" aria-pressed=${t.pinned}${
+      tipped(
+        t.pinned
+          ? {
+            name: 'Tracked',
+            says: 'On the glass and the compass. Tap to stop.',
+          }
+          : { name: 'Track it', says: 'Show it on the glass and the compass.' },
+      )
+    }>${glyph(pin)}</button></header><p class=Journal_From>${esc(t.from)} · ${
       esc(nameOf(t.level))
     } · ${esc(t.gives)}</p><ol class=Journal_Steps>${
       t.steps.map((s) => line(s, here)).join('')

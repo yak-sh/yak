@@ -8,17 +8,28 @@
 // it from the rack; a second dagger, for a hero who knows how, shows what it
 // would change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
-import { ABILITIES, GIVES, OFF } from './abilities.ts'
+import { ABILITIES, type Doer, does, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
-import { bare, diff, into, LINES, numbers, rolled, trying } from './compare.ts'
+import {
+  bare,
+  diff,
+  doer,
+  into,
+  LINES,
+  numbers,
+  rolled,
+  trying,
+} from './compare.ts'
 import { RACK } from './gear.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
-import { GRADES, piece, RARITIES, tint } from './rarity.ts'
+import { GRADES, type Piece, piece, RARITIES, tint } from './rarity.ts'
 import { icon } from './sprites.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { type Held, need } from './rules.ts'
+import { formOf } from './skills.ts'
+import { tipped } from './tip.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -28,26 +39,36 @@ export type Acts = {
 }
 
 // The abilities a weapon or a thing for the other hand gives, held in `slot`,
-// and what each does.
-let gives = (t: Thing, slot = t.slot) => {
+// and what each does, as the hero would do it holding it: with the skills
+// they know (`learned`), and the blow and health it would give them.
+let gives = (t: Thing, slot: Slot | undefined, learned: string[], d: Doer) => {
   let ids = slot == 'main'
     ? GIVES[t.family ?? ''] ?? []
     : slot == 'off'
     ? [OFF[t.family ?? '']].filter((id) => id)
     : []
-  return ids.map((id) => {
-    let a = ABILITIES[id]
-    return `<span class=Pack_Ability>${glyphText(a.icon)}<b>${
-      esc(a.name)
-    }</b> ${esc(a.says)}</span>`
+  return ids.flatMap((id) => {
+    let a = formOf(id, learned)
+    return a
+      ? [
+        `<span class=Pack_Ability>${glyphText(a.icon)}<b>${esc(a.name)}</b> ${
+          esc(does(a, d))
+        }</span>`,
+      ]
+      : []
   }).join('')
 }
 
 // A thing's tier, as pips.
 let pips = (t?: Thing) =>
-  t?.tier
-    ? `<i class=Pack_Tier title="Tier ${t.tier}">${'•'.repeat(t.tier)}</i>`
-    : ''
+  t?.tier ? `<i class=Pack_Tier>${'•'.repeat(t.tier)}</i>` : ''
+
+// What sort of thing a piece of gear is: its rarity when finer than common,
+// its sort, and its tier.
+let sortLine = (t: Piece) =>
+  `${t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `}${sortOf(t)}${
+    t.tier ? ` · tier ${t.tier}` : ''
+  }`
 
 /** The pack, drawn into its panel (panel.ts). */
 export let pack = (panel: Panel, acts: Acts) => {
@@ -109,9 +130,9 @@ export let pack = (panel: Panel, acts: Acts) => {
     let p = piece(h)
     return `<button class="Pack_Tile ${tint(p.rarity)}${
       on ? ' Pack_Tile-on' : ''
-    }${had ? ' Pack_Tile-had' : ''}" data-pick="${pick}" title="${
-      esc(p.name)
-    }"><i>${icon(h.kind) || '•'}</i>${n > 1 ? `<b>${n}</b>` : ''}${
+    }${had ? ' Pack_Tile-had' : ''}" data-pick="${pick}"${
+      tipped({ name: p.name, note: p.slot ? sortLine(p) : undefined })
+    }><i>${icon(h.kind) || '•'}</i>${n > 1 ? `<b>${n}</b>` : ''}${
       pips(p)
     }</button>`
   }
@@ -135,11 +156,9 @@ export let pack = (panel: Panel, acts: Acts) => {
     let then = from == 'worn'
       ? numbers(s, bare(s.worn, key))
       : numbers(s, trying(s.worn, h, slot))
-    let sort = sortOf(t)
     let both = HANDLES[t.family ?? '']?.hands == 2 ? ' · both hands' : ''
-    let fine = t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `
     let what = t.slot
-      ? `${fine}${sort}${t.tier ? ` · tier ${t.tier}` : ''}${both}`
+      ? `${sortLine(t)}${both}`
       : t.heals
       ? `Drink it to mend ${t.heals} (Q)`
       : 'Carried'
@@ -167,7 +186,12 @@ export let pack = (panel: Panel, acts: Acts) => {
         t.slot == 'main' || t.slot == 'off' ? 'Hold it' : 'Wear it'
       }</button>`
       : ''
-    let can = gives(t, slot)
+    let can = gives(
+      t,
+      slot,
+      s.learned,
+      doer(s, from == 'worn' ? s.worn : trying(s.worn, h, slot)),
+    )
     let rolls = rolled(t)
     return `<div class=Pack_Card><i class="Pack_Big ${tint(t.rarity)}">${
       icon(kind)

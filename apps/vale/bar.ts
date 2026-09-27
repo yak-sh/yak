@@ -3,56 +3,76 @@
 // glass's pads (hud.ts), which on a phone sit under the right thumb about the
 // strike. What is left of an ability's cooldown is swept over it, with the
 // seconds, and it flashes when it is ready again; one a skill made stronger
-// (skills.ts) wears a star. A slot nothing fills is not shown.
+// (skills.ts) wears a star. A slot nothing fills is not shown. Each one's tip
+// (tip.ts) says what it does with the numbers the hero's gear and skills
+// make: an ability's name, cooldown and what it does, and the strike's blow.
 // Each slot is written only when what it shows changed.
+import { does, secs } from './abilities.ts'
 import { HANDLES } from './arms.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { type Action, keysOf } from './input.ts'
 import { cap } from './panel.ts'
 import type { Frame } from './play.ts'
+import { blowOf } from './rules.ts'
 import { formOf, SKILLS } from './skills.ts'
+import { type Tip, tip } from './tip.ts'
 
 // Each slot's action, and the key it shows.
 let ACTS: Action[] = ['strike', 'ability1', 'ability2', 'ability3']
 let keyOf = (i: number) => cap(keysOf(ACTS[i])[0])
 
-// What a slot shows: its glyph, what it says, and what is left of its
-// cooldown, 0 to 1, and in whole seconds.
+// What a slot shows: its glyph, its tip, and what is left of its cooldown,
+// 0 to 1, and in whole seconds.
 type Slot = {
   id: string
   icon: Glyph | ''
-  says: string
+  tip: Tip
   cd: number
   s: number
   strong: boolean
 }
 let slotOf = (f: Frame, i: number): Slot => {
-  let k = f.sheet.kit
+  let { kit: k, lvl, max, learned } = f.sheet
+  let blow = blowOf(lvl, k)
   if (!i) {
-    let h = HANDLES[k.family]
+    let h = HANDLES[k.family], pace = (k.pace / 1000).toFixed(2)
     return {
       id: '',
       icon: '',
-      says: k.twin
-        ? `Two ${h.name.toLowerCase()}s: strike, a hand at a time (F or click)`
-        : `${h.name}: strike (F or click)`,
+      tip: {
+        name: 'Strike',
+        key: keyOf(i),
+        note: k.twin
+          ? `Two ${h.name.toLowerCase()}s, a hand at a time, a blow every ${pace} s`
+          : `${h.name}, a blow every ${pace} s`,
+        says: `${Math.round(blow)} damage a blow${
+          k.twin
+            ? `, and ${Math.round(blowOf(lvl, k, k.twin))} with the other hand`
+            : ''
+        }. A click or a tap on the world strikes too.`,
+      },
       cd: 0,
       s: 0,
       strong: false,
     }
   }
   let id = f.sheet.abilities[i - 1] ?? ''
-  let a = formOf(id, f.sheet.learned)
-  if (!a) return { id, icon: '', says: '', cd: 0, s: 0, strong: false }
+  let a = formOf(id, learned)
+  if (!a) return { id, icon: '', tip: { name: '' }, cd: 0, s: 0, strong: false }
   let left = f.cool[id] ?? 0
-  let by = f.sheet.learned.filter((k) => SKILLS[k].ability == id)
+  let by = learned.filter((k) => SKILLS[k].ability == id)
     .map((k) => SKILLS[k].name)
   return {
     id,
     icon: a.icon,
-    says: `${a.name} (${keyOf(i)}): ${a.says}${
-      by.length ? ` Made stronger by ${by.join(' and ')}.` : ''
-    }`,
+    tip: {
+      name: a.name,
+      key: keyOf(i),
+      note: `${secs(a.cool)} cooldown`,
+      says: `${does(a, { blow, max })}${
+        by.length ? ` Made stronger by ${by.join(' and ')}.` : ''
+      }`,
+    },
     strong: by.length > 0,
     cd: Math.round((left / a.cool) * 50) / 50,
     s: Math.ceil(left / 1000),
@@ -81,8 +101,7 @@ export let bar = (pads: HTMLElement[]) => {
         if (key == sl.was) continue
         sl.was = key
         if (sl.icon) sl.icon.innerHTML = s.icon ? glyph(s.icon) : ''
-        sl.b.title = s.says
-        sl.b.setAttribute('aria-label', s.says)
+        tip(sl.b, s.tip)
         sl.b.style.setProperty('--cd', String(s.cd))
         if (sl.left) sl.left.textContent = s.s ? String(s.s) : ''
         sl.b.classList.toggle('Pad-none', !!i && !s.icon)

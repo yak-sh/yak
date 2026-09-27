@@ -9,6 +9,7 @@ import { glyph, glyphText } from './glyphs.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { canLearn, DISCIPLINES, SKILLS } from './skills.ts'
+import { tipped } from './tip.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -56,9 +57,9 @@ export let board = (panel: Panel, acts: Learning) => {
       : 'shut'
     return `<button class="Board_Skill Board_Skill-${state}${
       picked == id ? ' Board_Skill-on' : ''
-    }" data-skill=${id} title="${esc(k.name)}"><i>${glyph(k.icon)}</i><span>${
-      esc(k.name)
-    }</span></button>`
+    }" data-skill=${id}${tipped({ name: k.name, says: k.says })}><i>${
+      glyph(k.icon)
+    }</i><span>${esc(k.name)}</span></button>`
   }
 
   // What the picked skill does, what it needs, and learning it.

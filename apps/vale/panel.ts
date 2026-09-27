@@ -5,6 +5,7 @@
 // Escape among its keys. Each is a head, its title and whatever its owner
 // puts beside it, over a body its owner draws into while it is open.
 import { glyph } from './glyphs.ts'
+import { tip } from './tip.ts'
 
 /** One panel, as its owner holds it. */
 export type Panel = {
@@ -51,7 +52,10 @@ export let panels = (glass: HTMLElement, busy: () => boolean) => {
     title.textContent = spec.title
     let shut = el('button', 'Orb Orb-small Panel_Close')
     shut.innerHTML = glyph('x')
-    shut.title = `Close${spec.keys?.length ? ` (${cap(spec.keys[0])})` : ''}`
+    tip(shut, {
+      name: 'Close',
+      key: spec.keys?.length ? cap(spec.keys[0]) : 'Esc',
+    })
     let body = el('div', 'Panel_Body')
     top.append(title, shut)
     sheet.append(top, body)

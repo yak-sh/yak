@@ -15,6 +15,7 @@ import type { Frame } from './play.ts'
 import { bulk, KINDS } from './props.ts'
 import { clamp } from './rand.ts'
 import { SIZE, type Vale, WATER } from './terrain.ts'
+import { tipped } from './tip.ts'
 import type { Seen } from './work.ts'
 
 // What is built, seen from above.
@@ -139,16 +140,16 @@ export let map = (panel: Panel) => {
       let at = (x: number, z: number) => `left:${pct(x)};top:${pct(z)}`
       let html =
         goals.map((g) =>
-          `<i class=Map_Goal style="${at(...g.at)}" title="${
-            esc(g.title)
-          }"></i>`
+          `<i class=Map_Goal style="${at(...g.at)}"${
+            tipped({ name: g.title })
+          }></i>`
         ).join('') +
         nodes.map((n) =>
           `<i class="Map_Node Map_Node-${n.lode.trade}${
             n.spent ? ' Map_Node-spent' : ''
-          }${n.able ? '' : ' Map_Node-far'}" style="${
-            at(n.at[0], n.at[2])
-          }" title="${esc(n.lode.name)}"></i>`
+          }${n.able ? '' : ' Map_Node-far'}" style="${at(n.at[0], n.at[2])}"${
+            tipped({ name: n.lode.name })
+          }></i>`
         ).join('') +
         v.roads.map((r) =>
           `<span class="Map_Road Map_Road-${r.side}" style="${at(r.x, r.z)}">${
@@ -158,12 +159,12 @@ export let map = (panel: Panel) => {
         f.givers.map((g) =>
           `<i class="Map_Giver${g.mark ? ' Map_Giver-quest' : ''}" style="${
             at(g.x, g.z)
-          }" title="${esc(g.name)}">${g.mark}</i>`
+          }"${tipped({ name: g.name })}>${g.mark}</i>`
         ).join('') +
         f.others.map((o) =>
-          `<i class=Map_Other style="${at(o.body.x, o.body.z)}" title="${
-            esc(o.name)
-          }"></i>`
+          `<i class=Map_Other style="${at(o.body.x, o.body.z)}"${
+            tipped({ name: o.name })
+          }></i>`
         ).join('') +
         // The hero's arrow points the way they face: (sin yaw, cos yaw) on
         // the ground, which is π − yaw clockwise from north.

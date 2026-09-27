@@ -27,6 +27,7 @@ import { GRADES, piece, RARITIES, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { icon } from './sprites.ts'
 import type { Sheet } from './play.ts'
+import { tipped } from './tip.ts'
 import { type Craft, least, tradeNeed, TRADES, type Trades } from './trades.ts'
 import { madeBy, MOST, upgradeOf } from './upgrade.ts'
 import type { Job } from './work.ts'
@@ -204,7 +205,7 @@ export let station = (panel: Panel, acts: Acts) => {
       (Object.values(RECIPES).some((r) => r.at == c && ITEMS[r.makes]?.slot)
         ? `<button class="Pack_Tile Craft_Up${
           up ? ' Pack_Tile-on' : ''
-        }" data-tier=up title="Upgrade what you carry">${
+        }" data-tier=up${tipped({ name: 'Upgrade what you carry' })}>${
           glyphText('sparkles')
         }<span>Upgrade</span></button>`
         : '')
@@ -215,7 +216,7 @@ export let station = (panel: Panel, acts: Acts) => {
           picked == h.eid ? ' Pack_Tile-on' : ''
         }${
           upgradeOf(h.kind, h.plus ?? 0) ? '' : ' Pack_Tile-had'
-        }" data-pick="${h.eid}" title="${esc(t.name)}"><i>${
+        }" data-pick="${h.eid}"${tipped({ name: t.name })}><i>${
           icon(h.kind) || '•'
         }</i>${h.plus ? `<b>+${h.plus}</b>` : ''}</button>`
       }).join('') ||
@@ -227,9 +228,9 @@ export let station = (panel: Panel, acts: Acts) => {
           let ready = able(r, mine.lvl) && plan(r, bag)
           return `<button class="Pack_Tile${
             picked == r.makes ? ' Pack_Tile-on' : ''
-          }${ready ? '' : ' Pack_Tile-had'}" data-pick="${r.makes}" title="${
-            esc(t?.name ?? r.makes)
-          }"><i>${icon(r.makes) || '•'}</i></button>`
+          }${ready ? '' : ' Pack_Tile-had'}" data-pick="${r.makes}"${
+            tipped({ name: t?.name ?? r.makes })
+          }><i>${icon(r.makes) || '•'}</i></button>`
         }).join('')
     panel.head(
       `${STATIONS[c].name} <span class=Badge>${

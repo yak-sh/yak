@@ -26,11 +26,16 @@
 // `Pad-none` hides a pad, `Pad-off` dims it, `--k` from 0 to 1 rings it with
 // progress, and `--cd` sweeps a cooldown over it. Talking and gathering (or
 // working a station) share one slot, and only one of them shows at a time.
+//
+// Every button says what it does in its tip (tip.ts), shown while a mouse
+// rests on it or a thumb holds it: its name, its key, and a line of what it
+// does; an ability's is bar.ts's, with its numbers. Give a new button one.
 import { type Action, keysOf } from './input.ts'
 import type { Under } from './fx.ts'
 import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
 import { BEASTS } from './beasts.ts'
+import { STATIONS } from './craft.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import { next, type Task, told, toward } from './journal.ts'
@@ -39,6 +44,7 @@ import { cap, type Panel, panels, type Spec } from './panel.ts'
 import type { Quest } from './quests.ts'
 import { need } from './rules.ts'
 import { icon } from './sprites.ts'
+import { type Tip, tip, tipped, tips } from './tip.ts'
 import { TRADES } from './trades.ts'
 import type { Mic } from './voicebox.ts'
 
@@ -130,7 +136,11 @@ export let hud = (
       }</kbd>`,
     'button',
   )
-  rose.title = `The map (${cap(SHEETS.map.keys[0])})`
+  tip(rose, {
+    name: 'Map',
+    key: cap(SHEETS.map.keys[0]),
+    says: 'Where you are, where your quest goes next, and who is where.',
+  })
   // Where the first quest tracked goes next, on the compass's rim.
   let aim = rose.querySelector<HTMLElement>('.Rose_Goal')!
   nav.append(who, rose, trayBox)
@@ -144,6 +154,7 @@ export let hud = (
   )
   faint.hidden = true
   root.append(layer, vitals, quest, foe, nav, toasts, pads, talk, faint)
+  tips(root)
 
   let shelf = panels(root, busy)
   let sheet = (id: keyof typeof SHEETS) => shelf.add(id, SHEETS[id])
@@ -158,7 +169,11 @@ export let hud = (
   }
   rose.addEventListener('click', panel.map.toggle)
   quest.addEventListener('click', panel.journal.toggle)
-  quest.title = `Your journal (${cap(SHEETS.journal.keys[0])})`
+  tip(quest, {
+    name: 'Your journal',
+    key: cap(SHEETS.journal.keys[0]),
+    says: 'Every quest and deal you have, and how far each has come.',
+  })
 
   // A round button in the tray, and on a desktop its key; one that opens a
   // panel is marked while it is open.
@@ -166,36 +181,45 @@ export let hud = (
   let tray = (
     name: string,
     mark: Glyph,
-    title: string,
-    key: string,
+    t: Tip & { key: string },
     click: () => void,
     opens?: Panel,
   ) => {
     let b = el(
       `Orb Orb-${name}`,
-      `${glyph(mark)}<kbd class=Key>${key}</kbd>`,
+      `${glyph(mark)}<kbd class=Key>${t.key}</kbd>`,
       'button',
     )
-    b.title = `${title} (${key})`
+    tip(b, t)
     b.addEventListener('click', click)
     trayBox.append(b)
     if (opens) marked.push([b, opens])
     return b
   }
-  let chat = tray('chat', 'chat', 'Chat', 'Enter', () => {})
+  let chat = tray('chat', 'chat', {
+    name: 'Chat',
+    key: 'Enter',
+    says: 'Say something to whoever is here.',
+  }, () => {})
   let bag = tray(
     'pack',
     'backpack',
-    'Your pack',
-    cap(SHEETS.pack.keys[0]),
+    {
+      name: 'Your pack',
+      key: cap(SHEETS.pack.keys[0]),
+      says: 'What you wear and carry, and by a fire, arms to try.',
+    },
     panel.pack.toggle,
     panel.pack,
   )
   tray(
     'journal',
     'journal',
-    'Your journal',
-    cap(SHEETS.journal.keys[0]),
+    {
+      name: 'Your journal',
+      key: cap(SHEETS.journal.keys[0]),
+      says: 'Every quest and deal you have, and how far each has come.',
+    },
     panel.journal.toggle,
     panel.journal,
   )
@@ -203,18 +227,28 @@ export let hud = (
   let skills = tray(
     'skills',
     'sparkles',
-    'Your skills',
-    cap(SHEETS.skills.keys[0]),
+    {
+      name: 'Your skills',
+      key: cap(SHEETS.skills.keys[0]),
+      says: 'Spend the point each level brings on a skill.',
+    },
     panel.skills.toggle,
     panel.skills,
   )
   let micKey = cap(keysOf('mic')[0])
-  let mic = tray('mic', 'micOff', MICS.off, micKey, () => {})
+  let mic = tray('mic', 'micOff', {
+    name: 'Microphone',
+    key: micKey,
+    says: MICS.off,
+  }, () => {})
   tray(
     'menu',
     'menu',
-    'Menu',
-    cap(SHEETS.menu.keys[0]),
+    {
+      name: 'Menu',
+      key: cap(SHEETS.menu.keys[0]),
+      says: 'Sound, the camera, and every key and touch.',
+    },
     panel.menu.toggle,
     panel.menu,
   )
@@ -225,14 +259,14 @@ export let hud = (
   let fresh = false
 
   // A button for the thumbs, and on a desktop its key.
-  let pad = (a: Action, face: string, title: string) => {
+  let pad = (a: Action, face: string, t: Tip) => {
     let key = keysOf(a).map(cap)[0]
     let b = el(
       `Pad Pad-${a}`,
       face + (key ? `<kbd class=Key>${key}</kbd>` : ''),
       'button',
     )
-    b.title = key ? `${title} (${key})` : title
+    tip(b, { ...t, key })
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -241,24 +275,34 @@ export let hud = (
     pads.append(b)
     return b
   }
-  pad('strike', glyph('strike'), 'Strike')
-  // The abilities' slots, which bar.ts paints.
+  // The strike's and the abilities' tips are bar.ts's, which paints them.
+  pad('strike', glyph('strike'), { name: 'Strike' })
   let abilities = (['ability1', 'ability2', 'ability3'] as const).map((a) =>
     pad(
       a,
       '<span class=Pad_Icon></span><b class=Pad_Left></b><i class=Pad_Star>✦</i>',
-      'Ability',
+      { name: '' },
     )
   )
-  pad('dodge', glyph('dodge'), 'Dodge')
-  pad('jump', glyph('jump'), 'Jump')
+  pad('dodge', glyph('dodge'), {
+    name: 'Dodge',
+    says:
+      'Roll clear. A bite you roll through leaves the biter open to a great blow.',
+  })
+  pad('jump', glyph('jump'), { name: 'Jump' })
   let drinkPad = pad(
     'drink',
     '<span class=Pad_Icon></span><span class=Pad_N></span>',
-    'Drink a tonic',
+    { name: 'Drink a tonic' },
   )
-  let talkPad = pad('talk', glyph('talk'), 'Talk')
-  let gatherPad = pad('gather', '<span class=Pad_Icon></span>', 'Gather')
+  let drinkKey = cap(keysOf('drink')[0])
+  let talkPad = pad('talk', glyph('talk'), {
+    name: 'Talk',
+    says: 'Talk to whoever is beside you.',
+  })
+  let gatherPad = pad('gather', '<span class=Pad_Icon></span>', {
+    name: 'Gather',
+  })
   let gatherIcon = gatherPad.querySelector<HTMLElement>('.Pad_Icon')!
   let gatherKey = cap(keysOf('gather')[0])
   gatherPad.classList.add('Pad-none')
@@ -407,7 +451,15 @@ export let hud = (
       gatherPad.classList.toggle('Pad-none', !trade)
       if (!trade) return
       put('gather', gatherIcon, glyph(TRADES[trade].icon))
-      gatherPad.title = `${TRADES[trade].name} (${gatherKey})`
+      tip(gatherPad, {
+        name: TRADES[trade].name,
+        key: gatherKey,
+        says: n
+          ? `Gather from the ${n.lode.name.toLowerCase()}.`
+          : job?.bench
+          ? `Work the ${STATIONS[job.bench.craft].name.toLowerCase()}.`
+          : undefined,
+      })
       gatherPad.classList.toggle('Pad-off', !!n && (n.spent || !n.able))
       let k = job?.doing ? job.doing.k.toFixed(3) : '0'
       if (was.gatherK != k) {
@@ -422,7 +474,7 @@ export let hud = (
       )
       mic.classList.toggle('Orb-off', m == 'denied' || m == 'spent')
       mic.classList.toggle('Orb-on', m == 'on')
-      mic.title = `${MICS[m]} (${micKey})`
+      tip(mic, { name: 'Microphone', key: micKey, says: MICS[m] })
     },
     /** paint this frame, the camera looking `facing` degrees from north,
      * tracking the hero's `tasks` (journal.ts), the compass pointing to `goal`,
@@ -443,7 +495,12 @@ export let hud = (
         vitals,
         `<div class=Vitals_Top><b class=Vitals_Name>${esc(s.name)}</b>${
           s.points
-            ? `<span class="Badge Badge-points" title="Skill points to spend (K)">Level ${s.lvl} · ✦ ${s.points}</span>`
+            ? `<span class="Badge Badge-points"${
+              tipped({
+                name: 'Skill points to spend',
+                key: cap(SHEETS.skills.keys[0]),
+              })
+            }>Level ${s.lvl} · ✦ ${s.points}</span>`
             : `<span class=Badge>Level ${s.lvl}</span>`
         }</div>` +
           meter(hp / s.max, 'Bar-hp', `${hp} / ${s.max}`) +
@@ -475,9 +532,9 @@ export let hud = (
       put(
         'who',
         who,
-        `<span class=Who_Dot></span><span class=Who_N>${here} here</span><span class=Who_Clock title="${word}">${
-          glyph(sky)
-        }<span>${word}</span></span>`,
+        `<span class=Who_Dot></span><span class=Who_N>${here} here</span><span class=Who_Clock${
+          tipped({ name: word })
+        }>${glyph(sky)}<span>${word}</span></span>`,
       )
       if (was.rose != String(facing)) {
         was.rose = String(facing)
@@ -517,6 +574,14 @@ export let hud = (
         tonics ? String(tonics) : '',
       )
       drinkPad.classList.toggle('Pad-off', !tonics)
+      let first = ITEMS[mends[0]?.kind ?? '']
+      tip(drinkPad, {
+        name: 'Drink a tonic',
+        key: drinkKey,
+        says: first
+          ? `${first.name}: mends ${first.heals}. ${tonics} in your bag.`
+          : 'Nothing in your bag mends.',
+      })
       talkPad.classList.toggle('Pad-none', !f.talk)
       faint.hidden = !f.down
     },

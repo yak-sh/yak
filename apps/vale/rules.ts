@@ -59,6 +59,23 @@ export let maxHp = (lvl: number): number => 90 + lvl * 16
  */
 export let power = (lvl: number, dmg = 1): number => (9 + lvl * 3) * dmg
 
+/** How hard a hero's blow lands, before the dice: their level's power with
+ * the blade it is struck with (`dmg`, the first hand's unless said), and
+ * whatever their skills and gear add to it (`force`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(blowOf(1, { dmg: 2, force: 0.5 }), 36)
+ * // A second dagger's blow is as hard as its own blade.
+ * assertEquals(blowOf(1, { dmg: 2, force: 0.5 }, 1), 18)
+ * ```
+ */
+export let blowOf = (
+  lvl: number,
+  k: { dmg: number; force: number },
+  dmg = k.dmg,
+): number => power(lvl, dmg) * (1 + k.force)
+
 /** A blow's damage: `might`, give or take a fifth, and now and then a great
  * one, more often with `luck`; a `sure` blow is always great. `roll` is a
  * number in [0, 1).
