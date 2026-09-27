@@ -74,11 +74,10 @@
  * early development never reach a network. `.near` reads a stored vector
  * synchronously; searching new words embeds them asynchronously.
  *
- * As a plugin it is two exports and nothing else: `./rules` creates the vector
- * table and registers the `.near` compiler, `./service` keeps settling what the
- * queue holds, and the model, endpoint and key are the options named
- * beside the plugin in the config. It declares no component — no client ever
- * writes a vector.
+ * As a plugin, `./rules` creates the vector table, registers the `.near`
+ * compiler and answers phrase searches; `./service` settles the queue. The
+ * model, endpoint and key are named beside the plugin in the config. It
+ * declares no component — no client ever writes a vector.
  *
  * It assumes the storage layout @yaks/sql's SQLite dialect reads and
  * {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} creates: an `entity`

@@ -101,7 +101,7 @@ Deno.test('search excerpts strip raw controls and compact multiple kinds', () =>
   assertEquals(
     lines,
     'T-9 Fix the bar · task — [31m*bar* and *baz*\n' +
-      'C-10 · comment — Near this idea',
+      'C-10 · comment (meaning) — Near this idea',
   )
   // deno-lint-ignore no-control-regex -- the line separator is the sole control.
   assert(!/[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(lines))

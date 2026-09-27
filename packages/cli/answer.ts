@@ -79,9 +79,12 @@ let hitOf = (b: Bundle): Hit | null => {
 
 let excerpt = (text: string): string =>
   safe(
-    // deno-lint-ignore no-control-regex -- FTS marks matches with these bytes.
-    text.replace(/\x01([^\x02]*)\x02/g, (_match, word: string) => `*${word}*`),
-  ).replace(/\s+/g, ' ').trim()
+    text.replace(/\s+/g, ' ').replace(
+      // deno-lint-ignore no-control-regex -- FTS marks matches with these bytes.
+      /\x01([^\x02]*)\x02/g,
+      (_match, word: string) => `*${word}*`,
+    ),
+  ).trim()
 
 let hit = <Node>(
   b: Bundle,
@@ -99,6 +102,7 @@ let hit = <Node>(
     s.id(b),
     title ? ` ${title}` : '',
     ` · ${kind}`,
+    found.source == 'meaning' ? ' (meaning)' : '',
     snippet ? ` — ${snippet}` : '',
   )
 }

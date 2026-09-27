@@ -1177,10 +1177,11 @@ Deno.test('search joins word and meaning results, keeping the marked text', asyn
       shop,
       meaning: {
         rules: {
-          meaning: () => async () => [
-            { entity: 'b1', similarity: 0.9, snippet: 'a small traveller' },
-            { entity: 'b2', similarity: 0.8, snippet: 'bread over time' },
-          ],
+          meaning: () => () =>
+            Promise.resolve([
+              { entity: 'b1', similarity: 0.9, excerpt: 'a small traveller' },
+              { entity: 'b2', similarity: 0.8, excerpt: 'bread over time' },
+            ]),
         },
       },
     }),

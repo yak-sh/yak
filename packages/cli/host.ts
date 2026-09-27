@@ -302,7 +302,7 @@ export type RulesFacet = {
   meaning?: (
     host: Host,
     options: Options,
-  ) => (words: string, limit: number) => Promise<MeaningHit[]>
+  ) => (words: string, opts?: { limit?: number }) => Promise<MeaningHit[]>
   authenticate?: (host: Host, options: Options) => Authenticate
   /** the commits other hosts make to this store (@yaks/journal's feed) */
   feed?: (host: Host, options: Options) => Feed
@@ -312,11 +312,12 @@ export type RulesFacet = {
 export type MeaningHit = {
   entity: Eid
   similarity: number
-  snippet: string
+  excerpt: string
 }
 
 // Scores from FTS and a vector space are incomparable. Rank positions give
-// each source one vote; a hit in both gets both votes.
+// each source a vote; direct word matches get a small lead, and a hit in both
+// gets both votes.
 let merged = (words: Hit[], meaning: MeaningHit[], limit: number) => {
   let by = new Map<Eid, {
     entity: Eid
@@ -327,7 +328,7 @@ let merged = (words: Hit[], meaning: MeaningHit[], limit: number) => {
   words.forEach((h, i) =>
     by.set(h.entity, {
       entity: h.entity,
-      score: 1 / (60 + i + 1),
+      score: 1.1 / (60 + i + 1),
       snippet: h.snippet,
       source: 'text',
     })
@@ -345,7 +346,7 @@ let merged = (words: Hit[], meaning: MeaningHit[], limit: number) => {
         : {
           entity: h.entity,
           score: 1 / (60 + i + 1),
-          snippet: h.snippet,
+          snippet: h.excerpt,
           source: 'meaning',
         },
     )
@@ -995,7 +996,7 @@ export let compose = async (
         let count = Math.max(20, limit * 2)
         let [literal, similar] = await Promise.all([
           Promise.resolve(find(sql, text, words, { limit: count })),
-          meanings[0]?.(words, count) ?? Promise.resolve([]),
+          meanings[0]?.(words, { limit: count }) ?? Promise.resolve([]),
         ])
         let hits = merged(literal, similar, limit)
         let found = await host.graph.get(hits.map((h) => h.entity))
