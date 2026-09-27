@@ -624,7 +624,9 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
 // and all: a home's manifest is written back whole when a sibling grows it,
 // and read as types alone it would come back with every `search` erased.
 let vocabs = async (ctx: Ctx, space: Space, app: App) => {
-  let all = await ctx.dir.apps(space)
+  // A trashed app keeps its store for restoration, but it no longer homes
+  // component names for apps that are serving in the space.
+  let all = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
   if (!all.some((a) => a.eid == app.eid)) all = [...all, app]
   let read = await Promise.all(all.map(async (one) => {
     let r = await storeOf(ctx.env.STORE, storeName(space, one))('/vocab')

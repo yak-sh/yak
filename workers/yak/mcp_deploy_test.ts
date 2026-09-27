@@ -6,7 +6,63 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { connector, kernel, meta, seed, signIn } from './probe.ts'
+import {
+  connector,
+  kernel,
+  meta,
+  seed,
+  signIn,
+  txt,
+  vocabFile,
+} from './probe.ts'
+
+Deno.test('a trashed app releases its component to another app in the space', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'handoff32', apps: ['first'] }])
+    let agent = connector(k, cookie)
+    let space = 'handoff32'
+    let files = (app: string) =>
+      agent.tool('app_files', {
+        space,
+        app,
+        files: [
+          { path: 'index.html', content: '<h1>Positions</h1>' },
+          {
+            path: 'vocab.json',
+            content: vocabFile({ position: { name: txt } }),
+          },
+        ],
+      })
+
+    await files('first')
+    await agent.tool('app_deploy', { space, app: 'first' })
+    await agent.tool('app_delete', { space, app: 'first' })
+    await agent.tool('app_new', { space, slug: 'second', title: 'Second' })
+    await files('second')
+    await agent.tool('app_deploy', { space, app: 'second' })
+
+    let host = `${space}.yaks.app`
+    let page = await k.at(host, '/second/')
+    assertEquals(page.status, 200)
+    assertStringIncludes(await page.text(), '<h1>Positions</h1>')
+
+    let wrote = await k.at(host, '/second/api/apply', {
+      method: 'POST',
+      headers: { cookie },
+      body: JSON.stringify([{ position: { name: 'North' } }]),
+    })
+    assertEquals(wrote.status, 200, await wrote.text())
+    let read = await k.at(host, '/second/api/query?.position.name=North', {
+      headers: { cookie },
+    })
+    assertEquals(read.status, 200)
+    let rows = await read.json()
+    assertEquals(rows[0].position.name, 'North')
+  } finally {
+    await k.stop()
+  }
+})
 
 // The whole of T-32907 (C-32905 items 1 and 3): an app's own files never name
 // the app. Its pages say `./api/client.js` and `./style.css`, the kernel gives
