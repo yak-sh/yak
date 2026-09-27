@@ -246,6 +246,29 @@
       "readOnly": true,
       "openWorld": true
     },
+    "admin_upload": {
+      "tool": true,
+      "surfaces": ["cli"],
+      "noun": "admin",
+      "verb": "upload",
+      "title": "Upload a local file to an app's blob store",
+      "description": "Send one local file through an app's /api/blob door. It writes the content and attachment rows and returns the content-addressed URL. Name the account explicitly; its app role must allow writes. The file name defaults to the local basename and mime defaults to application/octet-stream.\n\n  yak admin upload yourname/vale /tmp/theme.mp3 --mime audio/mpeg --name mossvale-theme.mp3 --admin",
+      "input": {
+        "where": { "type": "string", "description": "space/app" },
+        "path": { "type": "string", "description": "local file path" },
+        "mime": { "type": "string", "description": "content type" },
+        "name": { "type": "string", "description": "attachment name" },
+        "as": { "type": "string", "description": "act as this account" },
+        "admin": {
+          "type": "boolean",
+          "description": "as the platform's admin"
+        },
+        "owner": { "type": "boolean", "description": "as Jeff" }
+      },
+      "required": ["where", "path"],
+      "options": { "positional": ["where", "path"] },
+      "openWorld": true
+    },
     "admin_client": {
       "tool": true,
       "surfaces": ["cli"],

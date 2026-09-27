@@ -483,6 +483,23 @@ export let storeQuery = async (
   return body
 }
 
+/** Put local bytes through an app's upload door, which writes their attachment. */
+export let storeUpload = (
+  session: string,
+  at: string,
+  bytes: Uint8Array<ArrayBuffer>,
+  mime: string,
+  name: string,
+): Promise<{ eid: string; url: string; mime: string; bytes: number }> =>
+  said(sent(storeUrl(at, '/blob'), session, {
+    method: 'POST',
+    headers: {
+      'content-type': mime,
+      'x-yak-name': encodeURIComponent(name),
+    },
+    body: bytes,
+  }))
+
 // Keep an OAuth client in the platform store, sealed (@yaks/connections
 // `registration`): its id and secret go to the platform's vault, and the store
 // holds the handle. The graph tier is the door, as for a query of it; it keeps

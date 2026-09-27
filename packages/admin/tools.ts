@@ -30,6 +30,7 @@
 // wait that can take twenty minutes.
 
 import { fileURLToPath } from 'node:url'
+import { basename } from 'node:path'
 import { argsOf, type Bundle, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import {
@@ -75,6 +76,7 @@ import {
   setTunnel,
   spendCode,
   storeQuery,
+  storeUpload,
   tunnelNow,
   unlink,
   zone,
@@ -448,6 +450,29 @@ export let runs = (
         (argsOf(call).filters ?? []) as string[],
       )
       return [said(call, json(rows))]
+    }),
+
+    admin_upload: verb(async (call, vault, keep) => {
+      let a = argsOf(call)
+      if (!a.admin && !a.owner && !a.as) {
+        throw new Refused('name the account with --admin, --owner or --as')
+      }
+      let where = String(a.where)
+      if (where.split('/').length != 2) {
+        throw new CallError('where', 'name an app as space/app')
+      }
+      let at = acting(vault, a, keep, host.state)
+      let path = String(a.path)
+      let name = word(a, 'name') ?? basename(path)
+      let mime = word(a, 'mime') ?? 'application/octet-stream'
+      let file = await storeUpload(
+        at.session,
+        where,
+        await Deno.readFile(path),
+        mime,
+        name,
+      )
+      return [said(call, `${file.url} — ${file.bytes} bytes, ${file.mime}`)]
     }),
 
     // The id and the secret are named by their op:// references and read

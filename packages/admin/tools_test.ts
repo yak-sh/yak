@@ -290,6 +290,48 @@ Deno.test('the platform store is queried through its graph-tier door', async () 
   )
 })
 
+Deno.test('upload sends local bytes through an app blob door as the named account', async () => {
+  let at = box()
+  let path = `${at.dir}/theme.mp3`
+  let bytes = new Uint8Array([0x49, 0x44, 0x33, 0, 1])
+  Deno.writeFileSync(path, bytes)
+  kept(at, 'ana@bot.yak.sh', 'ana.token')
+  try {
+    await assertRejects(
+      () => ask('admin_upload', { where: 'ana/vale', path }, { at }),
+      Refused,
+      '--as',
+    )
+    await answering((url, init) => {
+      assertEquals(url, 'https://ana.yaks.app/vale/api/blob')
+      assertEquals(init?.method, 'POST')
+      assertEquals(init?.headers, {
+        cookie: 'yak_session=ana.token',
+        'content-type': 'audio/mpeg',
+        'x-yak-name': 'Mossvale%20theme.mp3',
+      })
+      assertEquals(init?.body, bytes)
+      return Response.json({
+        eid: 'sha',
+        url: '/vale/api/blob/sha',
+        mime: 'audio/mpeg',
+        bytes: bytes.length,
+      })
+    }, async () => {
+      let answer = await ask('admin_upload', {
+        where: 'ana/vale',
+        path,
+        mime: 'audio/mpeg',
+        name: 'Mossvale theme.mp3',
+        as: 'ana',
+      }, { at })
+      assertEquals(body(answer), '/vale/api/blob/sha — 5 bytes, audio/mpeg')
+    })
+  } finally {
+    Deno.removeSync(at.dir, { recursive: true })
+  }
+})
+
 // A throwaway's code is a letter in this graph, and the session it buys is
 // answered sealed under the account, beside the words: the write that records
 // the call keeps the session, and nothing else does.
