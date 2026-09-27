@@ -92,6 +92,7 @@ export let SANDS: Record<string, Feature> = {
       { kind: 'jars', x: 6.5, z: -3.5, seed: 0 },
       { kind: 'jars', x: -11, z: -3, seed: 1 },
     ]),
+    dress: 'stone',
   },
   // Where the mere's shore was, a bank of dry mud above the pan.
   oldshore: {
@@ -127,6 +128,7 @@ export let SANDS: Record<string, Feature> = {
     ...village,
     like: 'village',
     builds: hamlet('tent', 'well'),
+    dress: 'stone',
   },
   // Golden dunes, a date palm here and there.
   golddunes: {

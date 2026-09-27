@@ -25,7 +25,9 @@
 //   tree or a toadstool in the way shows the hero through it (`see`). What
 //   the camera only looks down on, the ground before and below it, covers
 //   nothing and stays whole. It is a stipple, pixels left out in an even
-//   pattern, so nothing needs sorting.
+//   pattern, so nothing needs sorting. The roof and upper floors of a
+//   building the hero is in or behind thin away the same way, over a height
+//   within its box (`cut`).
 //
 //   No seams. A vertex is placed in the world before it is seen from the
 //   camera, never through the two at once, so where two chunks meet, the same
@@ -34,6 +36,9 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Packed } from './mesh.ts'
+
+/** How many boxes a see-through material fades at once. */
+export let CUTS = 3
 
 /** A geometry over what a mesher wrote, packed (mesh.ts `pack`): the arrays
  * become the geometry's own, uncopied. */
@@ -117,6 +122,8 @@ varying float vMaterial;
 uniform vec3 seeFrom;
 uniform vec3 seeFeet;
 uniform float seeTall;
+uniform vec4 cutLo[CUTS];
+uniform vec3 cutHi[CUTS];
 float edge(float flag, float d, float w) {
   return flag * (1. - smoothstep(0., w, d));
 }
@@ -124,8 +131,11 @@ float b2(vec2 p) {
   float x = mod(p.x, 2.), y = mod(p.y, 2.);
   return 2. * abs(x - y) + y;
 }
-// A 4 by 4 ordered dither: how far through the pattern this pixel is.
+// A 4 by 4 ordered dither: how far through the pattern this pixel is, from
+// 1/32 to 31/32. A pixel's coordinates are its middle, so they are floored
+// first, or some pixels would be past 1 and never left out.
 float bayer(vec2 p) {
+  p = floor(p);
   return (4. * b2(p) + b2(floor(p / 2.)) + .5) / 16.;
 }
 `
@@ -152,7 +162,14 @@ let SIGHT = /* glsl */ `
   float thin = along > 0. && along < sL - 1. ? body : 0.;
   float near = 1. - smoothstep(1.2, 2., length(vAt - seeFrom));
   thin = max(thin, near * smoothstep(seeFrom.y - 1., seeFrom.y - .5, vAt.y));
-  if (bayer(gl_FragCoord.xy) < thin * .8) discard;
+  float gone = thin * .8;
+  for (int i = 0; i < CUTS; i++) {
+    vec3 lo = cutLo[i].xyz;
+    if (all(greaterThanEqual(vAt, lo)) && all(lessThanEqual(vAt, cutHi[i]))) {
+      gone = max(gone, cutLo[i].w);
+    }
+  }
+  if (bayer(gl_FragCoord.xy) < gone) discard;
 #endif
 `
 
@@ -243,9 +260,11 @@ export let soft = (
     seeFrom: { value: new THREE.Vector3() },
     seeFeet: { value: new THREE.Vector3() },
     seeTall: { value: 1 },
+    cutLo: { value: Array.from({ length: CUTS }, () => new THREE.Vector4()) },
+    cutHi: { value: Array.from({ length: CUTS }, () => new THREE.Vector3()) },
   }
   m.userData.soft = uniforms
-  if (opts.see) m.defines = { SEE: '' }
+  m.defines = { CUTS, ...opts.see ? { SEE: '' } : {} }
   m.onBeforeCompile = (s) => {
     Object.assign(s.uniforms, uniforms)
     s.vertexShader = s.vertexShader
@@ -296,6 +315,21 @@ export let sight = (
   u.seeFrom.value.copy(from)
   u.seeFeet.value.copy(feet)
   u.seeTall.value = tall
+}
+
+/** The boxes a see-through material fades, `lo` to `hi` in metres, each by
+ * `fade` (0 not at all, 1 gone); the rest of its CUTS fade none. */
+export let cut = (
+  m: THREE.Material,
+  boxes: { lo: THREE.Vector3Tuple; hi: THREE.Vector3Tuple; fade: number }[],
+) => {
+  let u = m.userData.soft
+  if (!u) return
+  u.cutLo.value.forEach((lo: THREE.Vector4, i: number) => {
+    let b = boxes[i]
+    lo.set(b?.lo[0] ?? 0, b?.lo[1] ?? 0, b?.lo[2] ?? 0, b?.fade ?? 0)
+    u.cutHi.value[i].set(b?.hi[0] ?? -1, b?.hi[1] ?? -1, b?.hi[2] ?? -1)
+  })
 }
 
 /** How strongly a soft material glows its flash colour, 0 to 1. */

@@ -32,6 +32,7 @@ import { LEVELS } from './levels.ts'
 import { pack } from './mesh.ts'
 import type { Drop, Frame } from './play.ts'
 import { GRADES, type Rarity } from './rarity.ts'
+import { floorAt } from './sim.ts'
 import { geometry, soft } from './soft.ts'
 import { FLIGHT, LAND } from './strike.ts'
 import { groundAt, type Vale } from './terrain.ts'
@@ -543,7 +544,15 @@ export let cast = (
         // A villager faces the way they walk, and turns their head to look
         // at the hero they heed.
         let yaw = a.gaze?.body ?? g.walk ?? 0.6
-        glide(a, g.x, groundAt(v, g.x, g.z), g.z, yaw, dt, 3)
+        glide(
+          a,
+          g.x,
+          floorAt(v, g.x, g.z, groundAt(v, g.x, g.z)),
+          g.z,
+          yaw,
+          dt,
+          3,
+        )
         a.gaze = gaze(
           a.gaze ?? { body: yaw, eye: yaw, wait: 0 },
           { x: a.x, z: a.z, walk: g.walk, heed: g.heed },

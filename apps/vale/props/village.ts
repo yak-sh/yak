@@ -1,30 +1,26 @@
 // What a village builds, at a quarter of a ground voxel: cottages and a hall,
-// the well, the fire, the notice board and the lamps, and the forge, bench and
-// cauldron a hero makes things at (craft.ts); and the signpost at the head of
-// every road. A village's houses are built of what is to hand where
-// it stands: plaster in Mossvale, birch at Birchmere, turf-roofed logs in
-// Fernwood, whitewash and slate at Gullwick, driftwood at Driftwood Bay,
-// quarried stone at Stonestep.
+// the well, the fire, the notice board and the lamps, and the bench and
+// cauldron a hero makes things at in the open (craft.ts); and the signpost at
+// the head of every road. The smithy, which houses the forge, is a building a
+// hero walks into (buildings/smithy.ts). A village's houses are built of
+// what is to hand where it stands (buildings/dress.ts).
+import {
+  BIRCH,
+  DRIFT,
+  PLASTER,
+  STONE,
+  TURF,
+  WHITEWASH,
+} from '../buildings/dress.ts'
+import { type Dress, paint } from '../buildings/kit.ts'
 import { ball, box, key, metal, type Vox } from '../mesh.ts'
-import { rand } from '../rand.ts'
 import { FOUND, type Kind, type Model, TIMBER } from './kit.ts'
 
-let PLASTER = 0xefe3c8
-let ROOFS = [0xc2573e, 0x4f6f9e, 0x8a5a9e, 0x5c8f55]
-
-/** What a house is built of: the colour of its walls at each voxel, the
- * timber framing them, and its roofs, one picked by seed. */
-type Build = {
-  wall: (x: number, y: number, z: number, seed: number) => number
-  frame: number
-  roofs: number[]
-}
-
-let PLASTERED: Build = { wall: () => PLASTER, frame: TIMBER, roofs: ROOFS }
-
 let house =
-  ({ wall: at, frame, roofs }: Build) =>
+  ({ wall: stuff, timber: frame, roofs }: Dress) =>
   (seed: number, w: number, d: number, wall: number): Model => {
+    let at = (x: number, y: number, z: number, s: number) =>
+      paint(stuff, x, y, z, s)
     let v: Vox = new Map()
     let roofC = roofs[seed % roofs.length]
     let x0 = -w / 2, x1 = w / 2 - 1, z0 = -d / 2, z1 = d / 2 - 1
@@ -70,49 +66,9 @@ let house =
     return { vox: v, size: 0.25 }
   }
 
-// Birchmere's: walls of birch logs, white flecked black, roofs of moss.
-let BIRCH: Build = {
-  wall: (x, y, z, s) =>
-    rand(x + z, y, s) < 0.12 ? 0x3a3a36 : y & 1 ? 0xeeeae0 : 0xe0dcd0,
-  frame: 0xb8b4a8,
-  roofs: [0x5a7a4a, 0x4e6e42, 0x66864e],
-}
-// Fernwood's: walls of dark logs, roofs of turf.
-let TURF: Build = {
-  wall: (_x, y) => y & 1 ? 0x5a3e2a : 0x6a4a31,
-  frame: 0x3e2a1c,
-  roofs: [0x4f7f3a, 0x5a8a42, 0x46743a],
-}
-// Gullwick's: whitewashed stone, frames painted the blue of the boats, roofs
-// of slate.
-let WHITEWASH: Build = {
-  wall: (x, y, z) => (x + y + z) % 5 ? 0xf4f2ec : 0xe6e4dc,
-  frame: 0x3a5a7a,
-  roofs: [0x4a5058, 0x3e444c, 0x56606a],
-}
-// Driftwood Bay's: shacks of grey boards the sea brought in, roofs tarred
-// and patched.
-let DRIFT: Build = {
-  wall: (x, y, z, s) =>
-    rand(x + z, (y >> 2) + s, 3) < 0.15
-      ? 0x7a6a58
-      : (x + z) & 1
-      ? 0x9a9488
-      : 0x8a847a,
-  frame: 0x6a645a,
-  roofs: [0x2e2c2a, 0x3a3634, 0x34302c],
-}
-// Stonestep's: coursed blocks from the quarry, roofs of stone slab.
-let STONE: Build = {
-  wall: (x, y, z) =>
-    y % 3 == 0 ? 0xb8b098 : ((x + z) >> 1) + (y >> 1) & 1 ? 0xc8c0a8 : 0xd4ccb4,
-  frame: 0x9a9280,
-  roofs: [0x7a7a78, 0x8a8a86, 0x6e6e6c],
-}
-
-// A cottage built of `build`.
-let cot = (build: Build): Kind => ({
-  make: (s) => house(build)(s, 28, 22, 10),
+// A cottage built of a land's `dress`.
+let cot = (dress: Dress): Kind => ({
+  make: (s) => house(dress)(s, 28, 22, 10),
   foot: 4.5,
   span: [7, 5.5],
 })
@@ -167,29 +123,6 @@ let lamp = (): Model => {
   box(v, [0, 0, 0], [0, 10, 0], 0x4b3a2c)
   box(v, [0, 11, 0], [1, 11, 0], 0x4b3a2c)
   box(v, [1, 9, -1], [2, 10, 0], 0xffd37a)
-  return { vox: v, size: 0.25 }
-}
-
-// The smith's forge (craft.ts): a stone hearth of glowing coals under its
-// hood and chimney, and an anvil on a stump beside it, a hammer laid on it.
-let forge = (): Model => {
-  let v: Vox = new Map()
-  for (let y = 0; y <= 3; y++) {
-    box(v, [-7, y, -3], [-1, y, 3], y & 1 ? 0x8a887f : FOUND)
-  }
-  box(v, [-7, 4, 3], [-1, 10, 3], 0x7a7870)
-  box(v, [-7, 11, 0], [-1, 11, 3], 0x6e6c66)
-  box(v, [-5, 12, 1], [-3, 16, 3], 0x6e6c66)
-  box(v, [-6, 4, -2], [-2, 4, 2], 0x2a2220)
-  for (let [x, z] of [[-5, -1], [-4, 1], [-3, 0], [-5, 1], [-3, -2]]) {
-    v.set(key(x, 5, z), (x + z) & 1 ? 0xff7a2a : 0xffc050)
-  }
-  box(v, [2, 0, -1], [4, 3, 1], 0x5a3e2a)
-  box(v, [1, 4, -1], [5, 4, 1], metal(0x3a3a40))
-  box(v, [2, 5, -1], [4, 6, 1], metal(0x4a4a52))
-  box(v, [5, 6, 0], [6, 6, 0], metal(0x4a4a52))
-  box(v, [2, 7, 1], [5, 7, 1], TIMBER)
-  box(v, [2, 7, 0], [2, 8, 1], metal(0x5a5a62))
   return { vox: v, size: 0.25 }
 }
 
@@ -259,9 +192,9 @@ let signpost = (): Model => {
 }
 
 export let VILLAGE: Record<string, Kind> = {
-  cottage: cot(PLASTERED),
+  cottage: cot(PLASTER),
   hall: {
-    make: (s) => house(PLASTERED)(s, 36, 28, 12),
+    make: (s) => house(PLASTER)(s, 36, 28, 12),
     foot: 5.5,
     span: [9, 7],
   },
@@ -280,18 +213,17 @@ export let VILLAGE: Record<string, Kind> = {
     glow: { at: [0.5, 2.5, 0], size: 3.2 },
   },
   signpost: { make: signpost, girth: 0.3, foot: 1 },
-  forge: {
-    make: forge,
-    girth: 1.2,
-    row: 1,
-    foot: 2,
-    span: [3.6, 1.8],
-    glow: { at: [-1, 1.4, 0], size: 3, color: 0xff7a2a },
+  bench: {
+    make: bench,
+    girth: 1,
+    row: 1.2,
+    foot: 1.8,
     aside: true,
+    station: 'bench',
   },
-  bench: { make: bench, girth: 1, row: 1.2, foot: 1.8, aside: true },
   cauldron: {
     make: cauldron,
+    station: 'cauldron',
     girth: 1.3,
     foot: 1.4,
     glow: { at: [0, 1.3, 0], size: 2.4, color: 0x9fe0a0 },

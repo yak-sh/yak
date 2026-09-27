@@ -1,10 +1,14 @@
 // What every land's props are made with: a model and a kind of prop, and the
 // few shapes more than one land builds from (a canopy, a heap of boulders).
+import type { Raised } from '../buildings/kit.ts'
 import { ball, type Vec, type Vox } from '../mesh.ts'
 import { noise, stream } from '../rand.ts'
+import type { Craft } from '../trades.ts'
 
-/** A prop's voxels, and how big each is, in metres. */
-export type Model = { vox: Vox; size: number }
+/** A prop's voxels, how big each is, in metres, and where voxel (0, 0, 0)'s
+ * lowest corner is, from the prop's foot: by default so that the voxel sits
+ * over it. */
+export type Model = { vox: Vox; size: number; at?: Vec }
 
 /** A kind of prop: how to build one of its shapes from a seed, and how many
  * shapes it has. What a walker makes of it: `solid` all through, as wide and
@@ -18,9 +22,12 @@ export type Model = { vox: Vox; size: number }
  * metres from its foot (east, up, south), in a halo `size` metres across, of
  * lamplight or its own `color`. One that stands `aside` is built at the
  * nearest spot to where it was planned that is off the roads and lanes and
- * clear of other builds (terrain.ts). */
+ * clear of other builds (terrain.ts). A building is `raise`d (buildings.ts),
+ * and one that is a `station` is worked at (craft.ts). */
 export type Kind = {
   make: (seed: number) => Model
+  raise?: (seed: number) => Raised
+  station?: Craft
   shapes?: number
   solid?: boolean
   girth?: number

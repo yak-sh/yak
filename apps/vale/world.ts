@@ -1,19 +1,24 @@
 // A level as a three.js scene: the ground and everything standing on it in
 // chunks, thinning away where they come between the camera and the hero, the
-// water, the sky, the village fire and lamps, and the light that moves across
-// it all through the day. Built once per level; `tick` moves the sun, the
-// water and the flames, and streams the chunks: those within sight of the
-// focus are meshed off the page's thread (chunks.ts), nearest first and finer
-// the nearer (stream.ts), and those left behind are let go. A chunk's arrays
-// are let go too once the GPU has them, since nothing on the page reads them.
+// roofs and upper floors of the buildings they are in or behind fading, their
+// doors (doors.ts), the water, the sky, the village fire and lamps, and the
+// light that moves across it all through the day. Built once per level;
+// `tick` moves the sun, the water and the flames, and streams the chunks:
+// those within sight of the focus are meshed off the page's thread
+// (chunks.ts), nearest first and finer the nearer (stream.ts), and those left
+// behind are let go. A chunk's arrays are let go too once the GPU has them,
+// since nothing on the page reads them.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { airOf } from './air.ts'
 import type { Chunk } from './chunks.ts'
+import { doors } from './doors.ts'
 import { CHUNK, paletteOf } from './ground.ts'
+import type { Vec } from './mesh.ts'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
-import { geometry, sight, soft } from './soft.ts'
+import { type Building, cutaway } from './solid.ts'
+import { cut, CUTS, geometry, sight, soft } from './soft.ts'
 import { type Want, wanted } from './stream.ts'
 import { groundAt, SIZE, standAt, type Vale, WATER } from './terrain.ts'
 
@@ -32,8 +37,16 @@ export type World = {
   day: number
   tick: (t: number, dt: number) => void
   /** keep the camera's (`from`) sight of the hero clear: standing at
-   * `feet`, `tall` metres tall */
-  see: (from: THREE.Vector3, feet: THREE.Vector3, tall: number) => void
+   * `feet`, `tall` metres tall; and fade the roofs and upper floors over
+   * them, and between them and the camera */
+  see: (
+    from: THREE.Vector3,
+    feet: THREE.Vector3,
+    tall: number,
+    dt?: number,
+  ) => void
+  /** swing each door open while someone in `near` is near it */
+  swing: (near: Vec[], dt: number) => void
   /** once every chunk within FIRST of the focus is drawn, at any detail */
   near: () => Promise<void>
   /** how many chunks within sight are not yet drawn as finely as wanted */
@@ -374,21 +387,29 @@ export let world = (v: Vale, mesh: Mesher): World => {
     return m
   })
 
-  // What glows at dusk, the village's lamps and the like: a bright lantern
-  // in a round halo.
+  // What glows at dusk, the village's lamps, a forge's coals and the like: a
+  // bright lantern in a round halo.
   let halo = glowTexture()
   let lamps: {
     lantern: THREE.MeshBasicMaterial
     halo: THREE.SpriteMaterial
+    box: THREE.Mesh
+    sprite: THREE.Sprite
   }[] = []
-  for (let p of v.props) {
-    let lit = KINDS[p.kind].glow
-    if (!lit) continue
-    let [x, y, z] = [
-      p.x + lit.at[0],
-      standAt(v, p) + lit.at[1],
-      p.z + lit.at[2],
-    ]
+  let lights = [
+    ...v.props.flatMap((p) => {
+      let lit = KINDS[p.kind].glow
+      return lit
+        ? [{
+          ...lit,
+          at: [p.x + lit.at[0], standAt(v, p) + lit.at[1], p.z + lit.at[2]],
+        }]
+        : []
+    }),
+    ...v.buildings.flatMap((b) => b.glows),
+  ]
+  for (let lit of lights) {
+    let [x, y, z] = lit.at
     let lantern = new THREE.MeshBasicMaterial({
       color: lit.color ?? 0xffc860,
       transparent: true,
@@ -411,8 +432,13 @@ export let world = (v: Vale, mesh: Mesher): World => {
     sprite.position.set(x, y, z)
     sprite.scale.setScalar(lit.size)
     scene.add(box, sprite)
-    lamps.push({ lantern, halo: glow })
+    lamps.push({ lantern, halo: glow, box, sprite })
   }
+
+  // The buildings' doors, and how far each building's roof and upper floors
+  // have faded, from the height they fade over.
+  let hung = doors(scene, v, ground)
+  let fades = new Map<Building, { from: number; k: number }>()
 
   let drift = airOf(scene, own.air)
   let leans = new THREE.Color(own.sky ?? 0xffffff), lean = own.tint ?? 0
@@ -426,7 +452,32 @@ export let world = (v: Vale, mesh: Mesher): World => {
     day: 0.4,
     pending: 0,
     chunks: [0, 0, 0],
-    see: (from, feet, tall) => sight(ground, from, feet, tall),
+    see: (from, feet, tall, dt = 1 / 60) => {
+      sight(ground, from, feet, tall)
+      let want = cutaway(v, [feet.x, feet.y, feet.z], [from.x, from.y, from.z])
+      for (let c of want) {
+        let f = fades.get(c.b)
+        if (f) f.from = c.from
+        else fades.set(c.b, { from: c.from, k: 0 })
+      }
+      // A fifth of a second to go, and all the way, so nothing is left.
+      for (let [b, f] of fades) {
+        let on = want.some((c) => c.b == b)
+        f.k = Math.min(1, Math.max(0, f.k + (on ? dt : -dt) * 5))
+        if (!on && !f.k) fades.delete(b)
+      }
+      cut(
+        ground,
+        [...fades].sort((a, b) => b[1].k - a[1].k).slice(0, CUTS).map((
+          [b, f],
+        ) => ({
+          lo: [b.box[0], f.from, b.box[1]],
+          hi: [b.box[2], b.top + 1, b.box[3]],
+          fade: f.k,
+        })),
+      )
+    },
+    swing: (near, dt) => hung.swing(near, dt),
     near: () =>
       new Promise((done) => {
         waiting.push(done)
@@ -466,9 +517,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
       hemi.intensity = l.fill
       hemi.color.copy(l.top).lerp(new THREE.Color(0xffffff), 0.5)
       hemi.groundColor.copy(GRASS).lerp(DARK, skyMat.uniforms.night.value)
+      // Lamps unlit by day are left undrawn.
       for (let l of lamps) {
         l.lantern.opacity = 0.95 * skyMat.uniforms.night.value
         l.halo.opacity = 0.55 * skyMat.uniforms.night.value
+        l.box.visible = l.sprite.visible = l.halo.opacity > 0.005
       }
       skyMat.uniforms.top.value.copy(l.top)
       skyMat.uniforms.low.value.copy(l.low)

@@ -3,11 +3,14 @@
 // forward, or it is free and stays where it was turned; either way it swings
 // round behind the hero when asked (`snap`). It keeps its distance unless a
 // hill or a house is in the way, when it comes in at once, and it eases back
-// out after.
+// out after. While the hero is in a building it rises to look down into it
+// over the walls, the roof and the floors over them faded (solid.ts
+// `cutaway`), and that building's walls never pull it in.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Intent } from './input.ts'
 import { clamp } from './rand.ts'
+import { type Building, walled } from './solid.ts'
 import { inside, type Vale } from './terrain.ts'
 
 export type Cam = {
@@ -28,6 +31,8 @@ export type Cam = {
   snap: boolean
   /** seconds since the view was last turned by hand */
   idle: number
+  /** the least it looks down, raised while the hero is in a building */
+  lift: number
 }
 
 // How fast it swings behind the hero, snapping and following, and how long
@@ -35,6 +40,8 @@ export type Cam = {
 let SNAP = 12
 let FOLLOW = 2.5
 let WAIT = 1
+// How far it looks down, at least, into a building the hero is in.
+let INDOORS = 0.85
 
 /** Turn the camera for a frame: as the hands turned and pulled it, and round
  * behind a hero facing `yaw`, at once when snapping and gently while
@@ -50,7 +57,7 @@ let WAIT = 1
  * })
  * let cam = (follow: boolean) => ({
  *   yaw: 0, pitch: 0.4, dist: 9, reach: 9, x: 0, y: 0, z: 0, shake: 0,
- *   follow, snap: false, idle: 5,
+ *   follow, snap: false, idle: 5, lift: 0,
  * })
  * // A hero facing +x has the camera behind them at -x, which is yaw -π/2.
  * let run = (c: ReturnType<typeof cam>, i: ReturnType<typeof hands>) => {
@@ -103,24 +110,28 @@ export let bearing = (yaw: number) =>
   (Math.round(-yaw * 180 / Math.PI) % 360 + 360) % 360
 
 /** Put `camera` where the camera stands, looking at `target`: its distance
- * back, or nearer when the level is in the way, shaken by a blow. */
+ * back, or nearer when the level is in the way, shaken by a blow; looking
+ * down into `home`, the building the hero is in, if any. */
 export let aim = (
   cam: Cam,
   camera: THREE.Camera,
   target: THREE.Vector3,
   v: Vale,
   dt: number,
+  home: Building | null = null,
 ) => {
-  let cp = Math.cos(cam.pitch)
+  cam.lift += ((home ? INDOORS : 0) - cam.lift) * (1 - Math.exp(-dt * 3))
+  let pitch = Math.max(cam.pitch, cam.lift)
+  let cp = Math.cos(pitch)
   let dir = new THREE.Vector3(
     Math.sin(cam.yaw) * cp,
-    Math.sin(cam.pitch),
+    Math.sin(pitch),
     Math.cos(cam.yaw) * cp,
   )
   let clear = cam.dist
   for (let d = 1.2; d <= cam.dist; d += 0.4) {
     let p = target.clone().addScaledVector(dir, d)
-    if (inside(v, p.x, p.y, p.z)) {
+    if (inside(v, p.x, p.y, p.z) || walled(v, p.x, p.y, p.z, home)) {
       clear = Math.max(1.2, d - 0.6)
       break
     }

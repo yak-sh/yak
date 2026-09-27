@@ -39,6 +39,7 @@ import { HOME, LEVELS, type Spot } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { arrival, type Event, type Frame, game, type Vec3 } from './play.ts'
 import { formOf, SKILLS } from './skills.ts'
+import { within } from './solid.ts'
 import { sound } from './sound.ts'
 import { icon } from './sprites.ts'
 import { station } from './station.ts'
@@ -245,6 +246,7 @@ let cam: Cam = {
   follow: !freed,
   snap: false,
   idle: 0,
+  lift: 0,
 }
 let target = new THREE.Vector3()
 // Where the hero stands, as the camera follows them.
@@ -845,6 +847,16 @@ let loop = (t: number) => {
       cam.y += (f.body.y - cam.y) * (1 - Math.exp(-dt * 6))
       cam.z += (f.body.z - cam.z) * k
       target.set(cam.x, cam.y + stature(BUILD) * 0.8, cam.z)
+      // Doors open for whoever is near them.
+      w.swing([
+        [f.body.x, f.body.y, f.body.z],
+        ...f.others.map((
+          o,
+        ): [number, number, number] => [o.body.x, o.body.y, o.body.z]),
+        ...f.givers.map((
+          g,
+        ): [number, number, number] => [g.x, groundAt(v, g.x, g.z), g.z]),
+      ], dt)
       for (let e of f.events) react(e, target)
       for (let e of job.events) worked(e)
       if (i.talk && f.talk) talkTo()
@@ -938,10 +950,13 @@ let loop = (t: number) => {
       t: t / 1000,
     }, dt)
   }
-  aim(cam, camera, target, v, dt)
-  // What stands between the camera and the hero thins away (soft.ts).
+  // The building the hero is in, if any: the camera looks down into it, and
+  // what stands between the camera and the hero thins away, its roof and
+  // upper floors too (soft.ts).
   feet.set(cam.x, cam.y, cam.z)
-  w.see(camera.position, feet, stature(BUILD))
+  let home = within(v, feet.x, feet.y, feet.z)
+  aim(cam, camera, target, v, dt, home)
+  w.see(camera.position, feet, stature(BUILD), dt)
   bounty.see(camera.position, feet, stature(BUILD))
   sound.listen(camera, v, playing ? last : null, net.hero, dt)
   // Embers off the fire, and at night fireflies about the player.

@@ -58,7 +58,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
   for (let p of propsIn(v, ci, ck)) {
     let tiny = KINDS[p.kind].small
     if (tiny && !small) continue
-    place(tiny ? bits : solid, model(p.kind, p.seed), [
+    place(tiny ? bits : solid, model(p.kind, p.seed, p.turn), [
       p.x - ox,
       standAt(v, p),
       p.z - oz,

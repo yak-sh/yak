@@ -218,7 +218,17 @@ export let COAST: Record<string, Feature> = {
     builds: [{ kind: 'lighthouse', x: 0, z: 0, seed: 0 }],
   },
   // Gullwick's fishing village: whitewash and slate.
-  fishtown: { ...village, like: 'village', builds: hamlet('fisherhouse') },
+  fishtown: {
+    ...village,
+    like: 'village',
+    builds: hamlet('fisherhouse'),
+    dress: 'whitewash',
+  },
   // Driftwood Bay's shacks, built of what the sea brought in.
-  shacks: { ...village, like: 'village', builds: hamlet('shack') },
+  shacks: {
+    ...village,
+    like: 'village',
+    builds: hamlet('shack'),
+    dress: 'drift',
+  },
 }

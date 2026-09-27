@@ -9,7 +9,6 @@ import { bump, type Feature, hamlet, STATIONS, Top } from './kit.ts'
 /** A village's buildings, by where each stands from the village's middle. */
 let VILLAGE: Prop[] = [
   { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: 'cottage', x: -8, z: -8, seed: 11 },
   { kind: 'cottage', x: 9, z: -9, seed: 12 },
   { kind: 'hall', x: 9, z: 9.5, seed: 13 },
   { kind: 'cottage', x: -9, z: 9, seed: 14 },
@@ -205,11 +204,13 @@ export let VALE: Record<string, Feature> = {
     ...BASE.village,
     like: 'village',
     builds: hamlet('birchhouse'),
+    dress: 'birch',
   },
   // Fernwood's hamlet in its glade, of logs roofed with turf.
   fernhamlet: {
     ...BASE.village,
     like: 'village',
     builds: hamlet('turfhouse'),
+    dress: 'turf',
   },
 }

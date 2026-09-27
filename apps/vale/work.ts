@@ -354,11 +354,10 @@ export let working = (net: Net) => {
       let near = nodes
         .filter((n) => n.near <= GATHER[n.lode.trade].reach)
         .sort((a, b) => a.near - b.near)[0] ?? null
-      let bench = v.built.flatMap((p): Bench[] => {
-        if (!isStation(p.kind)) return []
-        let d = Math.hypot(p.x - f.body.x, p.z - f.body.z)
-        return d <= STATIONS[p.kind].reach
-          ? [{ craft: p.kind, at: [p.x, groundAt(v, p.x, p.z), p.z], near: d }]
+      let bench = v.stations.flatMap((s): Bench[] => {
+        let d = Math.hypot(s.x - f.body.x, s.z - f.body.z)
+        return d <= STATIONS[s.craft].reach && Math.abs(s.y - f.body.y) < 2
+          ? [{ craft: s.craft, at: [s.x, s.y, s.z], near: d }]
           : []
       }).sort((a, b) => a.near - b.near)[0] ?? null
 

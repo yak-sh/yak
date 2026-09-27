@@ -71,6 +71,7 @@ export let FIRE: Record<string, Feature> = {
     ...village,
     like: 'village',
     builds: hamlet('forgehouse', 'anvil'),
+    dress: 'stone',
   },
   // The volcano over Emberfall, lava running down its south flank.
   lavafall: {

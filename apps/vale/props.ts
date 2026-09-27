@@ -1,10 +1,12 @@
 // What stands on the ground: trees, rocks, flowers, what each land grows and
-// builds, the village, and the signpost at the head of each road. Each kind
-// is a row in its land's file under props/: a small voxel model built by hand
-// out of balls and boxes, and what a walker makes of it. A model is meshed
-// once per shape and copied wherever a level places one (terrain.ts `props`),
-// and measured, so what a walker bumps into or stands on is the size it is
-// drawn (`bulk`).
+// builds, the village, its buildings (buildings.ts), and the signpost at the
+// head of each road. Each kind is a row in its land's file under props/: a
+// small voxel model built by hand out of balls and boxes, and what a walker
+// makes of it. A model is meshed once per shape and turn and copied wherever
+// a level places one (terrain.ts `props`), and measured, so what a walker
+// bumps into or stands on is the size it is drawn (`bulk`).
+import { BUILDINGS } from './buildings.ts'
+import { type Raised, spun } from './buildings/kit.ts'
 import { blob, type Out, out, unkey } from './mesh.ts'
 import { COAST } from './props/coast.ts'
 import { DEEP } from './props/deep.ts'
@@ -30,19 +32,21 @@ export let KINDS: Record<string, Kind> = {
   ...DEEP,
   ...FROST,
   ...FIRE,
+  ...BUILDINGS,
 }
 
-// Which of its kind's shapes a prop is, as `kind:shape`, and the shape, built
-// once.
+// Which of its kind's shapes a prop is, as `kind:shape`, the seed that shape
+// is made from, and the shape, built once.
 let shapeOf = (kind: string, seed: number) => {
   let k = KINDS[kind]
   let n = k.shapes ? seed % k.shapes : seed
-  let id = `${kind}:${n}`
+  let id = `${kind}:${n}`, salt = n * 7919 + 17
   return {
     id,
+    salt,
     shape: () => {
       let got = made.get(id)
-      if (!got) made.set(id, got = k.make(n * 7919 + 17))
+      if (!got) made.set(id, got = k.make(salt))
       return got
     },
   }
@@ -51,15 +55,23 @@ let made = new Map<string, Model>()
 
 let meshed = new Map<string, Out>()
 
-/** A prop's triangles, placed with the middle of its base at the origin. */
-export let model = (kind: string, seed: number): Out => {
+/** A prop's triangles, placed with the middle of its base at the origin and
+ * turned `turn` quarter turns (a building faces its square). */
+export let model = (kind: string, seed: number, turn = 0): Out => {
   let { id, shape } = shapeOf(kind, seed)
-  let o = meshed.get(id)
+  let o = meshed.get(`${id}:${turn}`)
   if (o) return o
-  let { vox, size } = shape()
-  o = blob(out(), vox, size, [-size / 2, 0, -size / 2])
-  meshed.set(id, o)
+  let { vox, size, at = [-size / 2, 0, -size / 2] } = shape()
+  o = blob(out(), spun(vox, turn, 1 + (at[0] + at[2]) / size), size, at)
+  meshed.set(`${id}:${turn}`, o)
   return o
+}
+
+/** A building's shape, raised (buildings.ts), for a prop of its kind; or
+ * null for a prop that is not a building. */
+export let raisedOf = (kind: string, seed: number): Raised | null => {
+  let raise = KINDS[kind].raise
+  return raise ? raise(shapeOf(kind, seed).salt) : null
 }
 
 let measured = new Map<string, { r: number; tall: number }>()

@@ -50,7 +50,7 @@ export let STATIONS: Record<Craft, {
   },
 }
 
-/** Whether a prop of kind `kind` is a station (props/village.ts). */
+/** Whether `kind` names a station (craft.ts). */
 export let isStation = (kind: string): kind is Craft => kind in STATIONS
 
 // The tier of each thing a node gives: the least of the nodes that give it.

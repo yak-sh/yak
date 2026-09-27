@@ -19,10 +19,12 @@
 // hero arrives out to the middle of each side that leads somewhere, on a bed
 // of its own: level enough to walk, dry over water, and through the
 // mountains at the rim by a pass.
+import { dressed } from './buildings.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
 import { type Level, LEVELS, type Side, type Spot } from './levels.ts'
-import { bulk, KINDS } from './props.ts'
+import { bulk, KINDS, raisedOf } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
+import { type Building, placed, type Station } from './solid.ts'
 
 export type { Side, Spot }
 
@@ -54,12 +56,15 @@ let STEPS: Spot[] = Array.from({ length: 33 * 33 }, (_, j): Spot => [
 ]).sort((p, q) => norm(p[0], p[1]) - norm(q[0], q[1]))
 
 /** A prop: something standing on the ground that is part of the level's
- * shape (a tree, a rock, a flower, a house, a signpost), at (x, z) metres. */
+ * shape (a tree, a rock, a flower, a house, a signpost), at (x, z) metres,
+ * turned `turn` quarter turns (a building's front, its south, to the east
+ * for one). */
 export type Prop = {
   kind: string
   x: number
   z: number
   seed: number
+  turn?: number
 }
 
 /** Something a walker cannot pass: a circle at (x, z) of radius r, in metres,
@@ -82,6 +87,11 @@ export type Vale = {
    * stones), and the signpost at the head of each road */
   built: Prop[]
   walls: Wall[]
+  /** the buildings a walker goes into (solid.ts) */
+  buildings: Building[]
+  /** where heroes make things (craft.ts): the stations standing in the
+   * open, and the ones buildings house */
+  stations: Station[]
   /** each place's middle */
   places: Record<string, Spot>
   /** the village fire, when the level has a village */
@@ -547,18 +557,18 @@ let build = (lv: Level, V: number): Vale => {
   // meets, or its foot.
   let paved = (x: number, z: number) =>
     toRoad(ways, x, z) < ROAD || toLane(paths, x, z) < 0.85
-  let half = (kind: string): [number, number] => {
-    let { span, girth, row = 0, foot = 0 } = KINDS[kind]
+  let half = (p: Prop): [number, number] => {
+    let { girth, row = 0, foot = 0 } = KINDS[p.kind], span = spanOf(p)
     return span
       ? [span[0] / 2, span[1] / 2]
       : girth
       ? [row + girth / 2, girth / 2]
       : [foot, foot]
   }
-  let clear = (kind: string, x: number, z: number, road: boolean) => {
-    let [w, d] = half(kind)
+  let clear = (p: Prop, x: number, z: number, road: boolean) => {
+    let [w, d] = half(p)
     return built.every((q) => {
-      let [qw, qd] = half(q.kind)
+      let [qw, qd] = half(q)
       return Math.abs(x - q.x) >= w + qw + 1 || Math.abs(z - q.z) >= d + qd + 1
     }) &&
       (!road ||
@@ -571,13 +581,16 @@ let build = (lv: Level, V: number): Vale => {
     for (let road of KINDS[b.kind].aside ? [true, false] : []) {
       for (let [dx, dz] of STEPS) {
         let x = x0 + dx, z = z0 + dz
-        if (clear(b.kind, x, z, road)) return { ...b, x, z }
+        if (clear(b, x, z, road)) return { ...b, x, z }
       }
     }
     return { ...b, x: cx + b.x, z: cz + b.z }
   }
   for (let p of Object.values(lv.places)) {
-    for (let b of FEATURES[p.kind]?.builds ?? []) built.push(stand(b, p.at))
+    let f = FEATURES[p.kind]
+    for (let b of f?.builds ?? []) {
+      built.push(stand({ ...b, kind: dressed(b.kind, f.dress) }, p.at))
+    }
   }
   let out = ways.map(({ side, to, c }): Road => {
     let [x, z] = EDGE[side], len = Math.hypot(c.dx, c.dz)
@@ -587,6 +600,26 @@ let build = (lv: Level, V: number): Vale => {
     built.push({ kind: 'signpost', x: sign[0], z: sign[1], seed: 0 })
     return { side, to, x, z, door, sign }
   })
+
+  // Each building on the ground at its middle, and the ground it needs:
+  // under its walls no higher than its floor's foot, before each door level
+  // with it, and a path out from the door (`lay`).
+  let buildings = built.flatMap((p) => {
+    let b = building(p, h[at(Math.floor(p.x / V), Math.floor(p.z / V))] * V)
+    return b ? [b] : []
+  })
+  let col = (m: number) => Math.max(0, Math.min(n - 1, Math.floor(m / V)))
+  for (let b of buildings) {
+    let [i0, i1] = [col(b.box[0] - LAID), col(b.box[2] + LAID)]
+    let [k0, k1] = [col(b.box[1] - LAID), col(b.box[3] + LAID)]
+    for (let k = k0; k <= k1; k++) {
+      for (let i = i0; i <= i1; i++) {
+        let j = at(i, k), got = lay(b, mid(i), mid(k), h[j] * V)
+        h[j] = Math.round(got.h / V)
+        if (got.path) top[j] = Top.path
+      }
+    }
+  }
 
   let props: Prop[] = [...built]
   let taken = (x: number, z: number, lane: number, road: number) =>
@@ -657,6 +690,8 @@ let build = (lv: Level, V: number): Vale => {
     props,
     built,
     walls: [],
+    buildings,
+    stations: [],
     places: Object.fromEntries(
       Object.entries(lv.places).map(([name, p]) => [name, p.at]),
     ),
@@ -664,7 +699,69 @@ let build = (lv: Level, V: number): Vale => {
     roads: out,
   }
   v.walls = wallsOf(v)
+  v.stations = stationsOf(v)
   return v
+}
+
+// How far round a building's box the ground it needs is laid, in metres.
+let LAID = 5.5
+
+/** The ground a building needs at (x, z), where the ground is `h` metres
+ * high: under its walls no higher than its foot, so its floor is never
+ * buried; level with its foot a metre and a half out before each door; and
+ * a path from there four metres on. A rule of the point and the building, so
+ * wherever the ground is grown it is laid the same.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
+ * let b = v.buildings[0]
+ * assertEquals(lay(b, 63, 64, 7), { h: 5, path: false }) // inside
+ * assertEquals(lay(b, b.doors[0].hinge[0], 67.5, 4), { h: 5, path: false })
+ * assertEquals(lay(b, b.doors[0].hinge[0], 70, 4).path, true)
+ * assertEquals(lay(b, 50, 50, 4), { h: 4, path: false })
+ * ```
+ */
+export let lay = (b: Building, x: number, z: number, h: number) => {
+  let [w, n, e, s] = b.foot
+  if (x > w && x < e && z > n && z < s) {
+    return { h: Math.min(h, b.y), path: false }
+  }
+  for (let d of b.doors) {
+    let mx = d.hinge[0] + d.along[0] * d.wide / 2
+    let mz = d.hinge[2] + d.along[1] * d.wide / 2
+    let out = -((x - mx) * d.into[0] + (z - mz) * d.into[1])
+    let side = Math.abs((x - mx) * d.along[0] + (z - mz) * d.along[1])
+    if (out > 0 && out < 1.6 && side < d.wide / 2 + 0.75) {
+      return { h: b.y, path: false }
+    }
+    if (out >= 1.6 && out < 5.6 && side < 0.65) return { h, path: true }
+  }
+  return { h, path: false }
+}
+
+/** A building's prop placed on the ground at its middle, `base` metres high;
+ * null for any other prop. */
+export let building = (p: Prop, base: number): Building | null => {
+  let r = raisedOf(p.kind, p.seed)
+  return r && placed(p.kind, r, [p.x, base, p.z], p.turn ?? 0)
+}
+
+/** Where a level's stations stand: the ones in the open, and the ones its
+ * buildings house. */
+let stationsOf = (v: Vale): Station[] => [
+  ...v.built.flatMap((p): Station[] => {
+    let craft = KINDS[p.kind].station
+    return craft ? [{ craft, x: p.x, y: standAt(v, p), z: p.z }] : []
+  }),
+  ...v.buildings.flatMap((b) => b.stations),
+]
+
+/** The ground a structure stands on, metres east–west and north–south, as it
+ * stands turned. */
+export let spanOf = (p: Prop): [number, number] | undefined => {
+  let s = KINDS[p.kind].span
+  return s && (p.turn ?? 0) & 1 ? [s[1], s[0]] : s
 }
 
 // What a walker bumps into: what is solid, trunks and posts, the village's
@@ -703,7 +800,7 @@ export let flat = (
   voxel = VOXEL,
 ): Vale => {
   let n = Math.round(SIZE / voxel)
-  return {
+  let v: Vale = {
     level: LEVELS.mossvale,
     voxel,
     cols: n,
@@ -713,10 +810,17 @@ export let flat = (
     props,
     built: props,
     walls,
+    buildings: props.flatMap((p) => {
+      let b = building(p, high)
+      return b ? [b] : []
+    }),
+    stations: [],
     places: {},
     hearth: null,
     roads: [],
   }
+  v.stations = stationsOf(v)
+  return v
 }
 
 // A building's shell in metres: its width, its depth, and how tall it stands
@@ -761,7 +865,7 @@ export let foundation = (
   v: Vale,
   p: Prop,
 ): [[number, number, number], [number, number, number]] | null => {
-  let span = KINDS[p.kind].span
+  let span = spanOf(p)
   if (!span) return null
   let [w, d] = span
   let base = groundAt(v, p.x, p.z)

@@ -197,5 +197,10 @@ export let HILLS: Record<string, Feature> = {
     stones: ['columns', 'rock'],
   },
   // Stonestep's village, built of the quarry's stone.
-  stonetown: { ...village, like: 'village', builds: hamlet('stonehouse') },
+  stonetown: {
+    ...village,
+    like: 'village',
+    builds: hamlet('stonehouse'),
+    dress: 'stone',
+  },
 }

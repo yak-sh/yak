@@ -5,9 +5,12 @@
 //
 // The ground is a heightfield of voxels, whatever their size. A walker steps
 // up half a metre without a thought, needs a jump for more, and cannot pass a
-// wall (a trunk, a rock, a house), deep water, or the edge of the world.
+// wall (a trunk, a rock), deep water, or the edge of the world. A building is
+// solid as it is drawn (solid.ts): its walls stop a walker, its floors and
+// stairs carry it, and its doors open for it unless it is a creature.
 import { type Beast } from './beasts.ts'
 import { wander } from './rules.ts'
+import { hits, over, shut, standOn } from './solid.ts'
 import { groundAt, SIZE, type Vale, type Wall, WATER } from './terrain.ts'
 
 /** A mover as a frame steps it: where it is, how fast it rises, which way it
@@ -30,6 +33,8 @@ let STEP = 0.55
 let GRAVITY = 24
 let JUMP = 7.6
 let RADIUS = 0.34
+// How much headroom a walker needs, in metres.
+let HEAD = 1.75
 
 /** How far from a village's fire no creature comes. */
 export let SAFE = 15
@@ -57,7 +62,9 @@ export let wallsNear = (v: Vale, x: number, z: number): Wall[] => {
   return grid.get(Math.floor(x / CELL) * 1024 + Math.floor(z / CELL)) ?? []
 }
 
-/** Whether a walker whose feet are at `y` fits at (x, z).
+/** Whether a walker whose feet are at `y` fits at (x, z): nothing over a
+ * step above its feet and under its head is in the way, and, for one that
+ * `opens` none, no shut door.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -70,7 +77,14 @@ export let wallsNear = (v: Vale, x: number, z: number): Wall[] => {
  * assertEquals(fits(v, -1, 20, 5), false) // off the edge of the world
  * ```
  */
-export let fits = (v: Vale, x: number, z: number, y: number, r = RADIUS) => {
+export let fits = (
+  v: Vale,
+  x: number,
+  z: number,
+  y: number,
+  r = RADIUS,
+  opens = true,
+) => {
   if (x < 1 || z < 1 || x > SIZE - 1 || z > SIZE - 1) return false
   let g = groundAt(v, x, z)
   if (g > y + STEP || g < WATER - 0.7) return false
@@ -78,12 +92,13 @@ export let fits = (v: Vale, x: number, z: number, y: number, r = RADIUS) => {
     let dx = w.x - x, dz = w.z - z, reach = w.r + r
     if (dx * dx + dz * dz < reach * reach && w.top > y + STEP) return false
   }
-  return true
+  if (hits(v, x, z, y + STEP, y + HEAD, r)) return false
+  return opens || !shut(v, x, z, y + STEP, y + HEAD, r)
 }
 
 /** What a walker whose feet are at `y` stands on at (x, z): the ground, or
- * the top of a wall no more than a step above its feet, as it steps up onto
- * ground.
+ * the top of a wall or of a building's floor, stair or step no more than a
+ * step above its feet, as it steps up onto ground.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -103,7 +118,7 @@ export let floorAt = (v: Vale, x: number, z: number, y: number) => {
       g = w.top
     }
   }
-  return g
+  return Math.max(g, standOn(v, x, z, y + STEP, RADIUS * 0.6))
 }
 
 /** Turn from angle `a` toward `b` by at most `k`, the short way round. */
@@ -113,7 +128,8 @@ export let turn = (a: number, b: number, k: number) => {
 }
 
 /** One step of a walker: move as pushed, slide along what is in the way,
- * climb a voxel, jump, fall. `speed` is metres a second at a full push.
+ * climb a voxel, jump and bump its head, fall. `speed` is metres a second at
+ * a full push; one that `opens` doors goes through them.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -149,6 +165,7 @@ export let walk = (
   dt: number,
   speed: number,
   keepOut?: (x: number, z: number) => boolean,
+  opens = true,
 ): Body => {
   let air = b.gait == 'jump'
   let wading = groundAt(v, b.x, b.z) < WATER - 0.15
@@ -159,10 +176,10 @@ export let walk = (
   // stops it a body's width short rather than halfway in.
   let ok = (x: number, z: number) => {
     if (keepOut?.(x, z) && !keepOut(b.x, b.z)) return false
-    if (!fits(v, x, z, b.y)) return false
+    if (!fits(v, x, z, b.y, RADIUS, opens)) return false
     let mx = x - b.x, mz = z - b.z, m = Math.hypot(mx, mz)
     return !m ||
-      fits(v, x + (mx / m) * RADIUS, z + (mz / m) * RADIUS, b.y, 0.05)
+      fits(v, x + (mx / m) * RADIUS, z + (mz / m) * RADIUS, b.y, 0.05, opens)
   }
   let x = b.x, z = b.z
   if (len > 1e-5) {
@@ -183,6 +200,11 @@ export let walk = (
   if (air) {
     vy -= GRAVITY * dt
     y += vy * dt
+    let roof = over(v, x, z, b.y + STEP, RADIUS)
+    if (vy > 0 && y + HEAD > roof) {
+      y = Math.max(b.y, roof - HEAD)
+      vy = 0
+    }
     if (y <= g) {
       y = g
       vy = 0
@@ -284,7 +306,7 @@ export let prowl = (
   let push = d > stop
     ? { x: dx / d, z: dz / d, jump: false }
     : { x: 0, z: 0, jump: false }
-  let n = walk(v, b, push, dt, speed, (x, z) => inVillage(v, x, z))
+  let n = walk(v, b, push, dt, speed, (x, z) => inVillage(v, x, z), false)
   if (quarry && d <= stop) n.yaw = turn(b.yaw, Math.atan2(dx, dz), dt * 10)
   return n
 }

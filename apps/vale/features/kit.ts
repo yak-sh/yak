@@ -42,7 +42,8 @@ export let crest = (n: number) => 1 - Math.abs(2 * n - 1)
  * and what grows underfoot (`decor`: each kind with its chance in a
  * half-metre cell), on green ground only unless it lies `strewn` over sand
  * and stone as well (shells, weed at the tide). What it `builds` stands
- * around its middle, by where from it. Heights are in
+ * around its middle, by where from it, its buildings (buildings.ts) raised
+ * in its `dress` (buildings/dress.ts), plaster unless it says. Heights are in
  * metres. A kind of place one level has alone is `like` a kind more have
  * (a heather fell is a moor), so what lives in the one lives in the other. */
 export type Feature = {
@@ -59,6 +60,7 @@ export type Feature = {
   decor?: [string, number][]
   strewn?: boolean
   builds?: Prop[]
+  dress?: string
   like?: string
 }
 
@@ -72,15 +74,15 @@ export let ring = (kind: string, r: number, n: number, gone: number[] = []) =>
     seed: i,
   })).filter((_, i) => !gone.includes(i))
 
-/** Where a village makes things (craft.ts): a forge, a bench and a cauldron
- * round its square. */
+/** Where a village makes things (craft.ts): the smithy, which houses the
+ * forge, and a bench and a cauldron round its square. */
 export let STATIONS: Prop[] = [
-  { kind: 'forge', x: -6.5, z: -0.5, seed: 8 },
+  { kind: 'smithy', x: -9.5, z: -9.5, seed: 8 },
   { kind: 'bench', x: 0.5, z: -6.5, seed: 9 },
   { kind: 'cauldron', x: 6.5, z: 1.5, seed: 10 },
 ]
 
-/** A village's buildings round its fire: four `house`s, `middle` in its
+/** A village's buildings round its fire: three `house`s, `middle` in its
  * square (a well, or what stands for one), its notice board and four
  * `lamp`s, the stations, and `more`. */
 export let hamlet = (
@@ -90,7 +92,6 @@ export let hamlet = (
   lamp = 'lamp',
 ): Prop[] => [
   { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: house, x: -8, z: -8, seed: 0 },
   { kind: house, x: 9, z: -9, seed: 1 },
   { kind: house, x: 9, z: 9.5, seed: 2 },
   { kind: house, x: -9, z: 9, seed: 3 },

@@ -100,7 +100,7 @@ export let FROST: Record<string, Feature> = {
     grows: ['rimespruce'],
   },
   // The holt, inside its stockade.
-  holt: { ...village, like: 'village', builds: HOLT },
+  holt: { ...village, like: 'village', builds: HOLT, dress: 'turf' },
   // Frostpine's snow under close spruce.
   snowpines: {
     ...snowfield,

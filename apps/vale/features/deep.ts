@@ -51,6 +51,7 @@ export let DEEP: Record<string, Feature> = {
     ...village,
     like: 'village',
     builds: hamlet('shroomhouse', 'well', [], 'wisplamp'),
+    dress: 'stone',
   },
   // Gleamdeep's wood: toadstools with violet caps, amethyst underfoot.
   gleamwood: {
