@@ -2,6 +2,7 @@
 // private to this process; a completed grant lives in the connection's vault.
 
 import { identityEid } from '@yaks/graph'
+import { install, known } from '@yaks/connections'
 import { graphMCP } from './mcp_registry.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { REDIRECT, signins } from './signin.ts'
@@ -51,6 +52,12 @@ export let authorize = (h: Pick<Harness, 'g' | 'vault'>) => {
       return { message: 'Authorization cancelled' }
     }
     if (action == 'begin') {
+      // A CLI command may reach this graph before its integration-install
+      // effect runs. Apply the same seed change before asking for its link.
+      if (!await known(h.g.read, provider.integration)) {
+        let seed = await install(h.g.read)
+        if (seed.length) await h.g.apply(seed, { trusted: true })
+      }
       // A CLI sign-in can start before a model or session seeded this provider.
       if (provider.owner == OPENAI) {
         await h.g.apply([{

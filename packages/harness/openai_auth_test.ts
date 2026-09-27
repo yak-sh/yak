@@ -3,11 +3,13 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { identityEid } from '@yaks/graph'
+import { compose } from '@yaks/cli/host'
 import { CODEX, OPENAI } from '@yaks/openai'
 import { authorize } from './authorize.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { signins } from './signin.ts'
-import { harness } from './testing.ts'
+import { hosted } from './store.ts'
+import { at, harness } from './testing.ts'
 
 let token = (account: string) =>
   'header.' + btoa(JSON.stringify({
@@ -15,7 +17,8 @@ let token = (account: string) =>
   })).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') + '.sig'
 
 Deno.test('OpenAI authorization starts before a session or model exists', async () => {
-  let h = await harness()
+  let host = await compose(at(), ['graph'])
+  let h = hosted(host, () => host.close())
   let auth = authorize(h)
   try {
     let listed = await auth.run('list')
