@@ -97,11 +97,11 @@ let MICS: Record<Mic, string> = {
 
 /** The panels the glass holds, and the keys that open them. The hero's is
  * one panel of tabs, each opened by its own keys (character.ts, pack.ts,
- * board.ts, journal.ts), and by a tap on the hero's frame on themselves.
- * Crafting opens at a station (station.ts), the notices at a village's board
- * (notices.ts), and the deals beside a villager (dealbox.ts). The map and the
- * menu are one size whatever is done in them, so each is as tall as it is;
- * every other sheet keeps one height (ui/Panel.css). */
+ * board.ts, trades.ts, journal.ts), and by a tap on the hero's frame on
+ * themselves. Crafting opens at a station (station.ts), the notices at a
+ * village's board (notices.ts), and the deals beside a villager (dealbox.ts).
+ * The map and the menu are one size whatever is done in them, so each is as
+ * tall as it is; every other sheet keeps one height (ui/Panel.css). */
 export let SHEETS = {
   map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
   hero: {
@@ -110,6 +110,7 @@ export let SHEETS = {
       character: { title: 'Character', icon: 'user', keys: ['KeyH'] },
       bag: { title: 'Bag', icon: 'backpack', keys: ['KeyB', 'KeyI'] },
       skills: { title: 'Skills', icon: 'sparkles', keys: ['KeyK'] },
+      trades: { title: 'Trades', icon: 'hammer', keys: ['KeyP'] },
       journal: { title: 'Journal', icon: 'journal', keys: ['KeyL'] },
     },
   },

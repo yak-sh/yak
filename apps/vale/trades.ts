@@ -1,8 +1,11 @@
 // A hero's trades: the four they gather by (gather.ts) and the three they
 // make things by at a village's stations (craft.ts). Each grows by use, a
 // level at a time, and is counted again from the hero's own rows: what each
-// gathering and each making was worth to its trade.
-import type { Glyph } from './glyphs.ts'
+// gathering, making and upgrading was worth to its trade (work.ts). Their
+// panel's Trades tab lists them all, each with its level and the xp toward
+// the next (`ledger`).
+import { type Glyph, glyph } from './glyphs.ts'
+import type { Page } from './panel.ts'
 
 /** A trade a hero gathers by. */
 export type Gather = 'wood' | 'ore' | 'herb' | 'fish'
@@ -21,16 +24,13 @@ export let TRADES: Record<Trade, { name: string; icon: Glyph }> = {
   cauldron: { name: 'Brewing', icon: 'flask' },
 }
 
+/** The trades a hero gathers by, and those they make by, in the order a
+ * sheet lists them. */
+export let GATHERING: Gather[] = ['wood', 'ore', 'herb', 'fish']
+export let MAKING: Craft[] = ['forge', 'bench', 'cauldron']
+
 /** Every trade, in the order a sheet lists them. */
-export let ALL: Trade[] = [
-  'wood',
-  'ore',
-  'herb',
-  'fish',
-  'forge',
-  'bench',
-  'cauldron',
-]
+export let ALL: Trade[] = [...GATHERING, ...MAKING]
 
 /** The xp a level of a trade takes, counted from nothing.
  *
@@ -79,5 +79,39 @@ export let tradesOf = (works: [Trade, number][]): Trades => {
     forge: at('forge'),
     bench: at('bench'),
     cauldron: at('cauldron'),
+  }
+}
+
+/** The Trades tab, drawn into its tab (panel.ts): the gathering trades, then
+ * the making ones, each with its glyph, its level, and a bar of the xp
+ * toward the next, written again only when the count changed. */
+export let ledger = (tab: Page) => {
+  let was: Trades | null = null
+  let row = (t: Trade, { xp, lvl }: { xp: number; lvl: number }) => {
+    let from = tradeNeed(lvl), to = tradeNeed(lvl + 1)
+    return `<li class=Trades_Row><i>${glyph(TRADES[t].icon)}</i><b>${
+      TRADES[t].name
+    }</b><span class=Badge>Level ${lvl}</span><div class="Bar Bar-xp"><i style="--k:${
+      ((xp - from) / (to - from)).toFixed(3)
+    }"></i><span>${xp - from} / ${to - from} xp</span></div></li>`
+  }
+  let list = (head: string, ts: Trade[], mine: Trades) =>
+    `<h3 class=Pack_Head>${head}</h3><ul class=Trades_List>${
+      ts.map((t) => row(t, mine[t])).join('')
+    }</ul>`
+  return {
+    /** show the hero's trades, from what the stations read (work.ts), when
+     * the tab is open and they changed */
+    show: (mine: Trades) => {
+      if (!tab.open) {
+        was = null
+        return
+      }
+      if (mine == was) return
+      was = mine
+      tab.body.innerHTML = `<div class=Trades>${
+        list('Gathering', GATHERING, mine)
+      }${list('Making', MAKING, mine)}</div>`
+    },
   }
 }

@@ -60,7 +60,7 @@ import {
   vale,
   VOXEL,
 } from './terrain.ts'
-import { TRADES } from './trades.ts'
+import { ledger, TRADES } from './trades.ts'
 import { world } from './world.ts'
 import { village } from './village.ts'
 import { arriveOf } from './ways.ts'
@@ -150,6 +150,7 @@ let skills = board(h.panels.skills, {
   },
 })
 let log = journal(h.panels.journal, { pin: g.pin })
+let trades = ledger(h.panels.trades)
 // A quest taken from a notice board is pinned while it is on offer, so the
 // way to whoever gives it is tracked.
 let notes = noticeboard(h.panels.notices, {
@@ -854,6 +855,7 @@ let loop = (t: number) => {
       p.show(f)
       you.show(f.sheet, mine)
       skills.show(f)
+      trades.show(job.trades)
       // Walked off from the station its sheet is open at: it folds away.
       if (bench.at && job.bench?.craft != bench.at) bench.close()
       bench.show(f.sheet, job)

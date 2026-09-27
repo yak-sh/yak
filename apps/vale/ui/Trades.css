@@ -1,0 +1,50 @@
+/* The Trades tab (trades.ts `ledger`): the gathering trades, then the making
+   ones, each a row: its glyph, its name and its level over a bar of the xp
+   toward its next level (Bar.css). */
+.Trades {
+  display: grid;
+  align-content: start;
+  gap: var(--gap);
+}
+
+.Trades_List {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.Trades_Row {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+
+  & > i {
+    display: grid;
+    grid-row: span 2;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 50%;
+    background: var(--well);
+    color: var(--deep);
+  }
+
+  & .Glyph {
+    width: 1.3rem;
+    height: 1.3rem;
+  }
+
+  & > b {
+    overflow: hidden;
+    color: var(--ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  & > .Bar {
+    grid-column: 2 / -1;
+  }
+}
