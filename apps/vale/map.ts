@@ -14,7 +14,7 @@ import type { Frame } from './play.ts'
 import { clamp } from './rand.ts'
 import { originOf } from './regions.ts'
 import { tipped } from './tip.ts'
-import { roadsOf } from './ways.ts'
+import { arriveOf, roadsOf } from './ways.ts'
 import type { Seen } from './work.ts'
 
 // How far past the region's cell the map shows, in metres, and how many
@@ -46,10 +46,13 @@ export let exits = (id: string): { at: Spot; side: Side; to: string }[] => {
   let x1 = x0 + size, z1 = z0 + size
   return roadsOf(id).flatMap((r) => {
     let to = r.from == id ? r.to : r.from
-    let n = r.c.xs.length
-    for (let j = 0; j < n; j++) {
-      let i = r.from == id ? j : n - 1 - j
-      let x = r.c.xs[i], z = r.c.zs[i]
+    let path: Spot[] = [
+      arriveOf(r.from),
+      ...Array.from(r.c.xs, (x, i): Spot => [x, r.c.zs[i]]),
+      arriveOf(r.to),
+    ]
+    for (let j = 0; j < path.length; j++) {
+      let [x, z] = path[r.from == id ? j : path.length - 1 - j]
       if (x > x0 && x < x1 && z > z0 && z < z1) continue
       let side: Side = x <= x0
         ? 'west'

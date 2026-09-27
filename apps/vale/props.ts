@@ -36,6 +36,16 @@ export let KINDS: Record<string, Kind> = {
   ...BUILDINGS,
 }
 
+/** Half the ground a placed kind takes, after a quarter turn. */
+export let halfOf = (kind: string, turn = 0): [number, number] => {
+  let { span, girth, row = 0, foot = 0 } = KINDS[kind]
+  return span
+    ? turn & 1 ? [span[1] / 2, span[0] / 2] : [span[0] / 2, span[1] / 2]
+    : girth
+    ? [row + girth / 2, girth / 2]
+    : [foot, foot]
+}
+
 // Which of its kind's shapes a prop is, as `kind:shape`, the seed that shape
 // is made from, and the shape, built once.
 let shapeOf = (kind: string, seed: number) => {

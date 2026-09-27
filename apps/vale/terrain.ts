@@ -27,7 +27,7 @@
 import { dressed } from './buildings.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
 import { LEVELS, SIZE, type Spot } from './levels.ts'
-import { bulk, KINDS, raisedOf } from './props.ts'
+import { bulk, halfOf, KINDS, raisedOf } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 import {
   type Blend,
@@ -40,11 +40,13 @@ import {
   placesOf,
 } from './regions.ts'
 import { type Building, near, placed, type Station, within } from './solid.ts'
-import { type Street, streets } from './streets.ts'
+import { EDGE, type Street, streets } from './streets.ts'
 import {
   along,
   bedAt,
+  clearOf,
   EASE,
+  laneEntriesOf,
   lanesIn,
   near as close,
   off,
@@ -342,13 +344,11 @@ export let hearthOf = (id: string): Spot | null =>
   VILLAGES.find((v) => v.level == id)?.at ?? null
 
 // What each level builds, laid out the first time it is asked for: each
-// place's builds round its middle, a build that stands aside (props/kit.ts)
-// taking the nearest step from where it was planned (STEPS) where none of the
-// ground it takes is paved and a metre parts it from what was built before
-// it, failing that where a metre parts them; and the signpost beside each
-// road out. The ground a build takes is a box square to the axes, as
-// structures are built (`foundation`): its span, or the trunk or row a walker
-// meets, or its foot.
+// place's builds round its middle, with village plots and aside props taking
+// the nearest clear step from where planned (STEPS). Every plot leaves the
+// outer ways and earlier builds clear; a signpost stands by each road out.
+// The ground a build takes is an axis-aligned box: its turned span, trunk or
+// row, or foot.
 let raised = new Map<string, Prop[]>()
 let paths = new WeakMap<Vale, Map<string, Street>>()
 /** The ground a structure stands on, metres east–west and north–south, as it
@@ -358,12 +358,7 @@ export let spanOf = (p: Prop): [number, number] | undefined => {
   return s && (p.turn ?? 0) & 1 ? [s[1], s[0]] : s
 }
 let half = (p: Prop): [number, number] => {
-  let { girth, row = 0, foot = 0 } = KINDS[p.kind], span = spanOf(p)
-  return span
-    ? [span[0] / 2, span[1] / 2]
-    : girth
-    ? [row + girth / 2, girth / 2]
-    : [foot, foot]
+  return halfOf(p.kind, p.turn)
 }
 /** What a level builds, in world metres: what its places build round their
  * middles, and the signpost beside each road out. */
@@ -372,40 +367,43 @@ export let builtOf = (id: string): Prop[] => {
   if (got) return got
   let built: Prop[] = []
   let places = placesOf(id)
-  let paved = (x: number, z: number) =>
-    toRoad(roadsIn(x, z, x, z, ROAD), x, z, ROAD) < ROAD ||
-    toLane(lanesIn(x, z, x, z, 2), x, z) < 0.85
-  let clear = (p: Prop, x: number, z: number, road: boolean) => {
+  let clear = (p: Prop, x: number, z: number) => {
     let [w, d] = half(p)
     return built.every((q) => {
       let [qw, qd] = half(q)
-      let room = KINDS[p.kind].raise && KINDS[q.kind].raise ? 3 : 1
+      let room = KINDS[p.kind].raise || KINDS[q.kind].raise ? 4 : 1
       return Math.abs(x - q.x) >= w + qw + room ||
         Math.abs(z - q.z) >= d + qd + room
     }) &&
-      (!road ||
-        [-1, 0, 1].every((u) =>
-          [-1, 0, 1].every((t) => !paved(x + u * (w + 0.5), z + t * (d + 0.5)))
-        ))
+      roadsIn(x - w, z - d, x + w, z + d, ROAD + 1).every((r) =>
+        clearOf(r.c, x, z, w, d, ROAD)
+      ) &&
+      lanesIn(x - w, z - d, x + w, z + d, 2).every((c) =>
+        clearOf(c, x, z, w, d, 1.4)
+      )
   }
-  let stand = (b: Prop, [cx, cz]: Spot): Prop => {
+  let stand = (b: Prop, [cx, cz]: Spot, move: boolean): Prop => {
     let x0 = snap(cx + b.x), z0 = snap(cz + b.z)
-    for (let road of KINDS[b.kind].aside ? [true, false] : []) {
+    if (move) {
       for (let [dx, dz] of STEPS) {
         let x = x0 + dx, z = z0 + dz
-        if (clear(b, x, z, road)) return { ...b, x, z }
+        if (clear(b, x, z)) return { ...b, x, z }
       }
+      throw new Error(`No clear plot for ${b.kind} in ${id}`)
     }
     return { ...b, x: cx + b.x, z: cz + b.z }
   }
   for (let p of places) {
     for (let b of p.f.builds ?? []) {
-      built.push(stand({ ...b, kind: dressed(b.kind, p.f.dress) }, p.at))
+      let build = { ...b, kind: dressed(b.kind, p.f.dress) }
+      built.push(
+        stand(build, p.at, isA(p.kind, 'village') || !!KINDS[build.kind].aside),
+      )
     }
   }
   for (let r of roadsOf(id)) {
     let [x, z] = r.signs.find((s) => s.level == id)!.at
-    built.push(stand({ kind: 'signpost', x, z, seed: 0 }, [0, 0]))
+    built.push(stand({ kind: 'signpost', x, z, seed: 0 }, [0, 0], true))
   }
   raised.set(id, built)
   return built
@@ -451,7 +449,27 @@ export let streetsOf = (v: Vale, village: Village): Street => {
     let b = buildingOf(v, p)
     return b && dist(b.x, b.z, village.at) < 44 ? [b] : []
   })
-  got.set(village.level, path = streets(village.at, buildings, v.rise))
+  let props = builtOf(village.level).filter((p) =>
+    dist(p.x, p.z, village.at) < EDGE - 2
+  )
+  let entries = [
+    ...roadsOf(village.level).map((r): Spot =>
+      r.from == village.level
+        ? [r.c.xs[0], r.c.zs[0]]
+        : [r.c.xs.at(-1)!, r.c.zs.at(-1)!]
+    ),
+    ...laneEntriesOf(village.level),
+  ]
+  got.set(
+    village.level,
+    path = streets(
+      village.at,
+      buildings,
+      props,
+      entries,
+      v.rise,
+    ),
+  )
   return path
 }
 
@@ -473,12 +491,18 @@ let detailsOf = (v: Vale, village: Village): Prop[] => {
   let roads = roadsIn(cx - 42, cz - 42, cx + 42, cz + 42, ROAD + 4)
   let lanes = lanesIn(cx - 42, cz - 42, cx + 42, cz + 42, 4)
   let out: Prop[] = []
+  let offPath = (p: Prop) => {
+    let [w, d] = half(p)
+    return roads.every((r) => clearOf(r.c, p.x, p.z, w, d, ROAD)) &&
+      lanes.every((c) => clearOf(c, p.x, p.z, w, d, 1.4)) &&
+      [-1, 0, 1].every((i) =>
+        [-1, 0, 1].every((k) => !street.lay(p.x + i * w, p.z + k * d, 0))
+      )
+  }
   let clear = (p: Prop) => {
     let [w, d] = half(p)
-    let room = Math.max(w, d) + 0.5
     return v.rise(p.x, p.z) > SHORE + 0.3 &&
-      toRoad(roads, p.x, p.z) > ROAD + room &&
-      toLane(lanes, p.x, p.z) > 0.85 + room &&
+      offPath(p) &&
       !props.some((q) => {
         let [qw, qd] = half(q)
         return Math.abs(p.x - q.x) < w + qw + 1 &&
@@ -487,10 +511,7 @@ let detailsOf = (v: Vale, village: Village): Prop[] => {
         let [qw, qd] = half(q)
         return Math.abs(p.x - q.x) < w + qw + 1 &&
           Math.abs(p.z - q.z) < d + qd + 1
-      }) &&
-      [-1, 0, 1].every((i) =>
-        [-1, 0, 1].every((k) => !street.lay(p.x + i * w, p.z + k * d, 0))
-      )
+      })
   }
   let plots: [string, Spot[]][] = [
     ['garden', [
@@ -540,7 +561,7 @@ let detailsOf = (v: Vale, village: Village): Prop[] => {
     }
   }
   let wall = (b: Building, x: number, z: number, turn: number) => {
-    if (b.y - v.rise(x, z) < 0.6 || street.lay(x, z, 0)) return
+    if (b.y - v.rise(x, z) < 0.6) return
     let p: Prop = {
       kind: `retaining.${village.dress}`,
       x,
@@ -549,6 +570,7 @@ let detailsOf = (v: Vale, village: Village): Prop[] => {
       seed: out.length,
     }
     if (
+      offPath(p) &&
       !buildings.some((q) =>
         q != b &&
         x > q.foot[0] - 0.5 && x < q.foot[2] + 0.5 &&
@@ -593,8 +615,8 @@ let area = (v: Vale, x0: number, z0: number, x1: number, z1: number, m = 2) => {
     v.at[1] < z1 + 12
   )
   let streets = VILLAGES.filter((p) =>
-    p.at[0] > x0 - 46 && p.at[0] < x1 + 46 &&
-    p.at[1] > z0 - 46 && p.at[1] < z1 + 46
+    p.at[0] > x0 - EDGE && p.at[0] < x1 + EDGE &&
+    p.at[1] > z0 - EDGE && p.at[1] < z1 + EDGE
   ).map((p) => streetsOf(v, p))
   return {
     near,
@@ -835,12 +857,10 @@ export let lay = (
     }
     if (out >= 1.6 && out < 5.6 && side < 0.65) return { h, path: true }
   }
-  if (!street) {
-    let away = Math.hypot(Math.max(w - x, 0, x - e), Math.max(n - z, 0, z - s))
-    if (away < 1.2) return { h: b.y, path: false }
-    if (away < 3.2) {
-      return { h: lerp(h, b.y, smooth(3.2, 1.2, away)), path: false }
-    }
+  let away = Math.hypot(Math.max(w - x, 0, x - e), Math.max(n - z, 0, z - s))
+  if (away < 1.2) return { h: b.y, path: false }
+  if (!street && away < 3.2) {
+    return { h: lerp(h, b.y, smooth(3.2, 1.2, away)), path: false }
   }
   return { h, path: false }
 }
@@ -1141,7 +1161,7 @@ export let groundAt = (v: Vale, x: number, z: number): number => {
   let street = false
   if (v.world) {
     for (let s of VILLAGES) {
-      if (dist(mx, mz, s.at) >= 46) continue
+      if (dist(mx, mz, s.at) >= EDGE) continue
       let laid = streetsOf(v, s).lay(mx, mz, h)
       if (laid) h = laid.h, street = true
     }

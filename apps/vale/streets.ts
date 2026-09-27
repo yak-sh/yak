@@ -1,11 +1,13 @@
-// A village's square and the streets to its doors. The network is laid once
-// from the buildings as placed in the world, so a shifted plot still has a
-// path. Routes keep clear of footprints and join the nearest street already
-// laid. Each ground column asks this plan for its height and cover.
+// A village's square and the streets to its doors and outer ways. The
+// network is laid from the placed buildings and props, so a shifted plot
+// still has a path. Routes clear footprints and join the nearest street
+// already laid. Each ground column asks this plan for its height and cover.
 import type { Building } from './solid.ts'
 import type { Spot } from './levels.ts'
+import { halfOf, KINDS } from './props.ts'
+import type { Prop } from './terrain.ts'
 
-let EDGE = 46
+export let EDGE = 56
 let SIDE = EDGE * 2 + 1
 let count = SIDE * SIDE
 let NEXT = [1, -1, SIDE, -SIDE]
@@ -13,14 +15,23 @@ let index = (i: number, k: number) => i + EDGE + (k + EDGE) * SIDE
 let point = (j: number): Spot => [j % SIDE - EDGE, Math.floor(j / SIDE) - EDGE]
 let inside = (i: number, k: number) =>
   Math.abs(i) <= EDGE && Math.abs(k) <= EDGE
-let near = (x: number, z: number, b: Building, room = 0.7) =>
+let near = (x: number, z: number, b: Building, room = 1.6) =>
   x > b.foot[0] - room && x < b.foot[2] + room &&
   z > b.foot[1] - room && z < b.foot[3] + room
+let door = (x: number, z: number, b: Building) =>
+  b.doors.some((d) => {
+    let mx = d.hinge[0] + d.along[0] * d.wide / 2
+    let mz = d.hinge[2] + d.along[1] * d.wide / 2
+    let out = -((x - mx) * d.into[0] + (z - mz) * d.into[1])
+    let side = Math.abs((x - mx) * d.along[0] + (z - mz) * d.along[1])
+    return out > 0 && out <= 3.5 && side < d.wide / 2 + 0.6
+  })
 
 export type Street = {
   at: Spot
   cells: Map<number, number>
   doors: Spot[]
+  entries: Spot[]
   /** A path height and cover for a point, or none beyond the streets. */
   lay: (
     x: number,
@@ -29,89 +40,122 @@ export type Street = {
   ) => { h: number; path: boolean; step: boolean } | null
 }
 
-/** A connected street from a village's square to every placed door. */
+/** A connected street from a village's square to its doors and outer ways. */
 export let streets = (
   at: Spot,
   buildings: Building[],
+  props: Prop[],
+  entries: Spot[],
   rise: (x: number, z: number) => number,
 ): Street => {
   let blocked = new Uint8Array(count)
+  let fixed = props.filter((p) => !KINDS[p.kind].raise).map((p) => {
+    let [w, d] = halfOf(p.kind, p.turn)
+    return { x: p.x, z: p.z, w, d }
+  })
   for (let k = -EDGE; k <= EDGE; k++) {
     for (let i = -EDGE; i <= EDGE; i++) {
-      blocked[index(i, k)] = +buildings.some((b) =>
-        near(at[0] + i, at[1] + k, b)
+      let x = at[0] + i, z = at[1] + k
+      blocked[index(i, k)] = +(
+        buildings.some((b) => near(x, z, b) && !door(x, z, b)) ||
+        fixed.some((p) =>
+          Math.abs(x - p.x) < p.w + 1.6 &&
+          Math.abs(z - p.z) < p.d + 1.6
+        )
       )
+    }
+  }
+  for (let [x, z] of entries) {
+    let i = Math.round(x - at[0]), k = Math.round(z - at[1])
+    if (!inside(i, k) || blocked[index(i, k)]) {
+      throw new Error(`No clear village entry at ${x}, ${z}`)
     }
   }
   let cells = new Map<number, number>()
   let anchors = new Set<number>()
-  for (let k = -3; k <= 3; k++) {
-    for (let i = -3; i <= 3; i++) {
-      if (i * i + k * k > 9 || blocked[index(i, k)]) continue
-      let j = index(i, k)
+  let square = Array.from({ length: 13 * 13 }, (_, j) => {
+    let i = j % 13 - 6, k = Math.floor(j / 13) - 6
+    return [i, k] as Spot
+  }).filter(([i, k]) => i * i + k * k <= 36 && !blocked[index(i, k)])
+    .sort((a, b) => Math.hypot(...a) - Math.hypot(...b))
+  let root = square[0]
+  if (root) {
+    let queue = [index(...root)], seen = new Set(queue)
+    anchors.add(queue[0])
+    for (let j of queue) {
+      let [i, k] = point(j)
       cells.set(j, rise(at[0] + i, at[1] + k))
-      anchors.add(j)
+      for (let [di, dk] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        let a = i + di, b = k + dk, next = index(a, b)
+        if (a * a + b * b > 36 || seen.has(next) || blocked[next]) continue
+        seen.add(next), queue.push(next)
+      }
     }
   }
   let doors: Spot[] = []
-  for (
-    let b of [...buildings].sort((a, c) =>
+  let targets = [
+    ...entries.map((at) => ({ at, y: rise(...at), d: undefined })),
+    ...[...buildings].sort((a, c) =>
       Math.hypot(a.x - at[0], a.z - at[1]) -
       Math.hypot(c.x - at[0], c.z - at[1])
-    )
-  ) {
-    for (let d of b.doors) {
+    ).flatMap((b) =>
+      b.doors.map((d) => ({
+        at: [
+          d.hinge[0] + d.along[0] * d.wide / 2 - d.into[0] * 2.4,
+          d.hinge[2] + d.along[1] * d.wide / 2 - d.into[1] * 2.4,
+        ] as Spot,
+        y: b.y,
+        d,
+      }))
+    ),
+  ]
+  for (let target of targets) {
+    let [x, z] = target.at
+    let i = Math.round(x - at[0]), k = Math.round(z - at[1])
+    if (!inside(i, k)) continue
+    let start = index(i, k)
+    if (target.d) doors.push([x, z])
+    anchors.add(start)
+    let seen = new Uint8Array(count), prev = new Int32Array(count)
+    let queue = new Int32Array(count), head = 0, tail = 0
+    queue[tail++] = start, seen[start] = 1
+    let end = -1
+    while (head < tail) {
+      let j = queue[head++], [u, v] = point(j)
+      let held = cells.get(j)
+      if (held != null) {
+        end = j
+        break
+      }
+      for (let [di, dk] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+        let a = u + di, c = v + dk
+        if (!inside(a, c)) continue
+        let next = index(a, c)
+        if (seen[next] || blocked[next]) continue
+        seen[next] = 1, prev[next] = j
+        queue[tail++] = next
+      }
+    }
+    if (end < 0) throw new Error(`No street to ${x}, ${z}`)
+    let route: number[] = []
+    for (let j = end; j != start; j = prev[j]) route.push(j)
+    route.push(start)
+    let from = cells.get(end)!, length = route.length - 1
+    for (let n = 1; n <= length; n++) {
+      cells.set(route[n], from + (target.y - from) * n / length)
+    }
+    cells.set(start, target.y)
+    if (target.d) {
+      let d = target.d
       let mx = d.hinge[0] + d.along[0] * d.wide / 2
       let mz = d.hinge[2] + d.along[1] * d.wide / 2
-      let x = mx - d.into[0] * 2.4, z = mz - d.into[1] * 2.4
-      let i = Math.round(x - at[0]), k = Math.round(z - at[1])
-      if (!inside(i, k)) continue
-      let start = index(i, k)
-      doors.push([x, z])
-      anchors.add(start)
-      let seen = new Uint8Array(count), prev = new Int32Array(count)
-      let steps = new Uint16Array(count)
-      let queue = new Int32Array(count), head = 0, tail = 0
-      queue[tail++] = start, seen[start] = 1
-      let end = -1
-      while (head < tail) {
-        let j = queue[head++], [u, v] = point(j)
-        let held = cells.get(j)
-        if (held != null && Math.abs(b.y - held) <= steps[j] * 0.4) {
-          end = j
-          break
-        }
-        for (let [di, dk] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-          let a = u + di, c = v + dk
-          if (!inside(a, c)) continue
-          let next = index(a, c)
-          if (
-            seen[next] || blocked[next] && next != start ||
-            cells.has(next) &&
-              Math.abs(b.y - cells.get(next)!) > (steps[j] + 1) * 0.4
-          ) {
-            continue
-          }
-          seen[next] = 1, prev[next] = j, steps[next] = steps[j] + 1
-          queue[tail++] = next
-        }
-      }
-      if (end < 0) continue
-      let route: number[] = []
-      for (let j = end; j != start; j = prev[j]) route.push(j)
-      route.push(start)
-      let from = cells.get(end)!, length = route.length - 1
-      for (let n = 1; n <= length; n++) {
-        cells.set(route[n], from + (b.y - from) * n / length)
-      }
-      cells.set(start, b.y)
       for (let out of [0.8, 1.3, 1.8, 2.4]) {
         for (let side of [-1, -0.5, 0, 0.5, 1]) {
           let a = Math.round(mx - d.into[0] * out + d.along[0] * side - at[0])
           let c = Math.round(mz - d.into[1] * out + d.along[1] * side - at[1])
           if (!inside(a, c)) continue
           let j = index(a, c)
-          cells.set(j, b.y)
+          cells.set(j, target.y)
           anchors.add(j)
         }
       }
@@ -163,5 +207,5 @@ export let streets = (
       step: best < 0.9 && step,
     }
   }
-  return { at, cells, doors, lay }
+  return { at, cells, doors, entries, lay }
 }

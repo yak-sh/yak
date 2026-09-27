@@ -1,7 +1,7 @@
 // The ways across the world: the roads between levels next to each other, and
-// in each level the lanes from its village out to its places. A road runs from
-// where a hero arrives in one level to where they arrive in the other, and
-// wobbles as a trodden way does; its bed is the lie of the land along it
+// in each level the lanes from its village out to its places. Each outer way
+// meets the village streets, which wind among the placed buildings and props.
+// A road wobbles as a trodden way does; its bed is the lie of the land along it
 // (regions.ts), evened out, cut down where it would climb too steeply, and
 // never under water, so it is a causeway over a lake. A signpost stands
 // beside each end, naming where it leads. Pure numbers from the levels' rows,
@@ -28,6 +28,9 @@ let EVEN = 5
 // stands, in metres.
 let POST = 18
 let ASIDE = 2.75
+// A village's last stretch is laid with its plots and door streets, after
+// the buildings stand. The long road ends where that shared layout begins.
+export let VILLAGE_REACH = 48
 
 let norm = (x: number, z: number) => Math.sqrt(x * x + z * z)
 
@@ -69,10 +72,39 @@ export let course = (
   return { a, dx, dz, xs, zs, box }
 }
 
+let part = (c: Course, lo: number, hi = c.xs.length): Course => {
+  let xs = c.xs.slice(lo, hi), zs = c.zs.slice(lo, hi)
+  return {
+    a: [xs[0], zs[0]],
+    dx: xs.at(-1)! - xs[0],
+    dz: zs.at(-1)! - zs[0],
+    xs,
+    zs,
+    box: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)],
+  }
+}
+
 /** Whether (x, z) may lie within `r` metres of a course: it does not when it
  * lies further than that outside the box round the course's middle. */
 export let near = ({ box }: Course, x: number, z: number, r: number) =>
   x > box[0] - r && x < box[2] + r && z > box[1] - r && z < box[3] + r
+
+/** Whether a whole rectangular plot clears a path by `room` metres. */
+export let clearOf = (
+  c: Course,
+  x: number,
+  z: number,
+  w: number,
+  d: number,
+  room: number,
+) =>
+  !near(c, x, z, Math.max(w, d) + room) ||
+  !c.xs.some((a, i) =>
+    Math.hypot(
+      Math.max(0, Math.abs(a - x) - w),
+      Math.max(0, Math.abs(c.zs[i] - z) - d),
+    ) < room + 0.5
+  )
 
 /** How far along a course (x, z) lies, from 0 at its start to 1 at its
  * end. */
@@ -98,8 +130,8 @@ export let off = (c: Course, x: number, z: number, t: number) => {
  * lies, and where it stands, in world metres. */
 export type Sign = { level: string; to: string; side: Side; at: Spot }
 
-/** A road between two levels: its course, from the first's arrival to the
- * second's, the height of its bed every metre along it, and its two
+/** A road between two levels: its course between their village streets,
+ * the height of its bed every metre along it, and its two
  * signposts. */
 export type Road = {
   from: string
@@ -124,10 +156,16 @@ let snap = (x: number) => (Math.floor(x / 0.5) + 0.5) * 0.5
 
 // A road's signpost, `m` metres along it from the end at `t` (0 or 1),
 // standing aside to the right of a hero leaving by it.
-let post = (c: Course, t: number, level: string, to: string): Sign => {
+let post = (
+  c: Course,
+  t: number,
+  level: string,
+  to: string,
+  m = POST,
+): Sign => {
   let len = c.xs.length - 1
   let i = Math.round(
-    t ? len - Math.min(POST, len / 2) : Math.min(POST, len / 2),
+    t ? len - Math.min(m, len / 2) : Math.min(m, len / 2),
   )
   let j = Math.min(len, Math.max(0, i + (t ? -1 : 1)))
   let ux = c.xs[j] - c.xs[i], uz = c.zs[j] - c.zs[i]
@@ -144,7 +182,12 @@ let post = (c: Course, t: number, level: string, to: string): Sign => {
 // it, and a signpost at each end.
 let road = (from: string, to: string): Road => {
   let s = (LEVELS[from].seed + LEVELS[to].seed) * 101
-  let c = course(arriveOf(from), arriveOf(to), s)
+  let whole = course(arriveOf(from), arriveOf(to), s)
+  let village = (id: string) =>
+    isA(LEVELS[id].places[LEVELS[id].arrive].kind, 'village')
+  let lo = village(from) ? VILLAGE_REACH : 0
+  let hi = whole.xs.length - 1 - (village(to) ? VILLAGE_REACH : 0)
+  let c = part(whole, lo, hi + 1)
   let n = c.xs.length
   let raw = c.xs.map((x, i) => Math.max(DRY, lie(x, c.zs[i])))
   let bed = raw.map((_, i) => {
@@ -162,7 +205,10 @@ let road = (from: string, to: string): Road => {
     to,
     c,
     bed: bed.map((h) => Math.max(DRY, h)),
-    signs: [post(c, 0, from, to), post(c, 1, to, from)],
+    signs: [
+      post(c, 0, from, to, village(from) ? 4 : POST),
+      post(c, 1, to, from, village(to) ? 4 : POST),
+    ],
   }
 }
 
@@ -215,20 +261,33 @@ export let roadsOf = (id: string): Road[] =>
   ROADS().filter((r) => r.from == id || r.to == id)
 
 // Each level's lanes, from its village out to each of its places.
-let lanes = new Map<string, Course[]>()
-let lanesOf = (id: string): Course[] => {
-  let got = lanes.get(id)
+let paths = new Map<string, Course[]>()
+let villageLanes = (id: string): Course[] => {
+  let got = paths.get(id)
   if (got) return got
   let lv = LEVELS[id]
   let [ox, oz] = [lv.cell[0] * SIZE, lv.cell[1] * SIZE]
   let world = (at: Spot): Spot => [ox + at[0], oz + at[1]]
   let home = Object.values(lv.places).find((p) => isA(p.kind, 'village'))
   got = !home ? [] : Object.values(lv.places)
-    .filter((p) => norm(p.at[0] - home.at[0], p.at[1] - home.at[1]) >= 1)
+    .filter((p) => norm(p.at[0] - home.at[0], p.at[1] - home.at[1]) >= 12)
     .map((p) => course(world(home.at), world(p.at), lv.seed * 101))
-  lanes.set(id, got)
+  paths.set(id, got)
   return got
 }
+
+/** Where a village street joins each lane out to its other places. */
+export let laneEntriesOf = (id: string): Spot[] =>
+  villageLanes(id).flatMap((c) =>
+    c.xs.length > VILLAGE_REACH + 1
+      ? [[c.xs[VILLAGE_REACH], c.zs[VILLAGE_REACH]] as Spot]
+      : []
+  )
+
+let lanesOf = (id: string): Course[] =>
+  villageLanes(id).flatMap((c) =>
+    c.xs.length > VILLAGE_REACH + 1 ? [part(c, VILLAGE_REACH)] : []
+  )
 
 // The levels whose cells lie within a cell of the box.
 let levelsIn = (x0: number, z0: number, x1: number, z1: number) => {
