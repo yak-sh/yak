@@ -72,7 +72,7 @@ import {
 import { type Rarity, rarityOf } from './rarity.ts'
 import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
-import { aimOf, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
+import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
 import { plusOf } from './upgrade.ts'
 import { groundAt, type Vale } from './terrain.ts'
 
@@ -242,6 +242,9 @@ export type Frame = {
   talk: Giver | null
   /** the creature being fought, if one */
   foe: Mob | null
+  /** what my next blow or ability would take (strike.ts `aimOf`), which the
+   * mark shows */
+  aim: Mob | null
   /** by a village's fire, where its rack of plain arms stands */
   rack: boolean
   /** how far through a blow or an ability, 0 to 1, or -1 */
@@ -435,8 +438,10 @@ export let game = (
   let doing = ''
   let hand: Hand = 'main'
   let struck = true
-  // The creature my blow was aimed at as I swung.
+  // The creature my blow was aimed at as I swung, and what my next blow or
+  // ability would take, as last worked out.
   let aimed = ''
+  let aimWas = ''
   let askedAt = -1e9
   // The ability asked for, by its slot, and when.
   let asked = { slot: 0, at: -1e9 }
@@ -1181,6 +1186,21 @@ export let game = (
           Math.atan2(m.body.x - body.x, m.body.z - body.z),
           1.9,
         )
+      // What my next blow or ability would take, worked out once: the mark
+      // shows it, and whatever I do now is aimed at it. It looks as far as a
+      // blow reaches, or an ability on the bar that is ready or under way.
+      let under = now - swingAt < busy ? doing : ''
+      let aim = down ? null : aimOf(
+        mobs,
+        body,
+        k,
+        aimWas,
+        s.abilities.flatMap((id) => {
+          let a = formOf(id, s.learned)
+          return a && (id == under || (ready.get(id) ?? 0) <= now) ? [a] : []
+        }),
+      )
+      aimWas = aim?.eid ?? ''
       if (intent.strike) askedAt = now
       if (intent.ability) asked = { slot: intent.ability, at: now }
       if (
@@ -1190,12 +1210,10 @@ export let game = (
         let id = s.abilities[asked.slot - 1] ?? ''
         let a = formOf(id, s.learned)
         asked = { slot: 0, at: -1e9 }
-        let far = a?.dash ??
-          (a?.shape == 'one' || a?.shape == 'arc' ? a.far ?? 0 : 0)
-        let aim = a ? aimOf(mobs, body, k, fought.foe, far) : null
+        let target = a ? aimFor(aim, k, a) : null
         if (!a || (ready.get(id) ?? 0) > now) {
           // Nothing in that slot, or not ready: the bar shows which.
-        } else if (!aim && (a.shape == 'one' || a.shape == 'burst')) {
+        } else if (!target && aims(a)) {
           if (now - said > 2000) {
             said = now
             events.push({
@@ -1210,20 +1228,23 @@ export let game = (
           struck = false
           guardUntil = -1e9
           askedAt = -1e9
-          aimed = aim?.eid ?? ''
+          aimed = target?.eid ?? ''
           ready.set(id, now + a.cool)
           fought.swing++
           hand = handOf(k, fought.swing)
           fought.ability = id
           fought.abilities++
-          if (aim) face(aim)
-          if (aim && a.dash) {
-            let gap = BEASTS[aim.kind].size * 0.5 + 0.9
-            let ang = Math.atan2(aim.body.x - body.x, aim.body.z - body.z)
+          if (target) face(target)
+          if (target && a.dash) {
+            let gap = BEASTS[target.kind].size * 0.5 + 0.9
+            let ang = Math.atan2(
+              target.body.x - body.x,
+              target.body.z - body.z,
+            )
             if (a.behind) {
               // Behind it, facing it.
-              body.x = aim.body.x + Math.sin(ang) * gap
-              body.z = aim.body.z + Math.cos(ang) * gap
+              body.x = target.body.x + Math.sin(ang) * gap
+              body.z = target.body.z + Math.cos(ang) * gap
               body.y = groundAt(v, body.x, body.z)
               body.yaw = ang + Math.PI
             } else {
@@ -1231,7 +1252,7 @@ export let game = (
               dash = {
                 x: Math.sin(ang),
                 z: Math.cos(ang),
-                left: Math.max(0, aim.near - gap),
+                left: Math.max(0, target.near - gap),
               }
             }
           }
@@ -1266,16 +1287,16 @@ export let game = (
         guardUntil = -1e9
         fought.swing++
         hand = handOf(k, fought.swing)
-        let aim = aimOf(mobs, body, k, fought.foe)
-        aimed = aim?.eid ?? ''
-        if (aim) face(aim)
+        let target = aimFor(aim, k)
+        aimed = target?.eid ?? ''
+        if (target) face(target)
       }
       if (!struck && !dash && now - swingAt >= k.pace * LAND) {
         struck = true
         let a = formOf(doing, s.learned)
-        let aim = mobs.find((m) => m.eid == aimed) ?? null
+        let target = mobs.find((m) => m.eid == aimed) ?? null
         let taken = a
-          ? takenBy(a, mobs, body, k, aim)
+          ? takenBy(a, mobs, body, k, target)
           : [landOf(mobs, body, k, aimed)].flatMap((m) => m ? [m] : [])
         let sure = taken.length > 0 && now - riposte < RIPOSTE
         if (sure) riposte = -1e9
@@ -1546,6 +1567,7 @@ export let game = (
         givers,
         talk,
         foe,
+        aim,
         rack: !down && inVillage(v, body.x, body.z),
         swing: now - swingAt < busy ? (now - swingAt) / busy : -1,
         hand,

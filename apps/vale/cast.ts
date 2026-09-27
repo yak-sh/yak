@@ -3,7 +3,8 @@
 // over signposts, and under each creature on my trail a red ring round the
 // ground its bite takes. As a bite winds up, a red disc grows from its middle
 // and fills the ring the moment the bite lands. Red means a bite and nothing
-// else: the creature I have targeted wears a pale mark at its feet instead.
+// else: what my next blow or ability would take wears a pale mark at its feet
+// instead, in a fight or out of one.
 // Each hero is drawn in what they wear, and swings at their weapon's pace,
 // with a blade in each hand a hand at a time, posed as the ability they do
 // asks (`pose`); an arrow or a bolt flies from whoever looses it to what it
@@ -158,9 +159,10 @@ export let cast = (
     }
     return g
   }
-  // The creature I have targeted: four pale arcs round its feet, turning
-  // slowly, drawn over any red beneath them. A broken ring the colour of
-  // paper, so it reads as a selection and never as a second bite.
+  // What my next blow or ability would take (play.ts `aim`): four pale arcs
+  // round its feet, turning slowly, drawn over any red beneath them. A broken
+  // ring the colour of paper, so it reads as a selection and never as a
+  // second bite.
   let mark = new THREE.Group()
   let arc = new THREE.RingGeometry(0.84, 1, 12, 1, 0, Math.PI / 3)
   let pale = new THREE.MeshBasicMaterial({
@@ -517,15 +519,15 @@ export let cast = (
             w.fill.material.opacity = 0.12 + 0.5 * k
           }
         }
-        let foe = f.foe?.eid == m.eid
-        if (foe) {
+        let foe = f.foe?.eid == m.eid, aimed = f.aim?.eid == m.eid
+        if (aimed) {
           let r = 0.55 + b.size * 0.6
           mark.visible = true
           mark.position.set(a.x, highest(a.x, a.z, r) + 0.06, a.z)
           mark.rotation.z = t * 0.8
           mark.scale.setScalar(r)
         }
-        if (!m.down && (foe || m.near < 12 || m.hurt < 4000)) {
+        if (!m.down && (foe || aimed || m.near < 12 || m.hurt < 4000)) {
           plates.plate(
             m.eid,
             head(a, 0.15),

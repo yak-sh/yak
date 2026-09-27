@@ -1,10 +1,11 @@
-// How a blow finds its foe. A blow is aimed as it is asked for: the hero
-// turns toward the nearest creature before them, forgivingly, or, with a
-// weapon that shoots, toward the one they are fighting while it is in range.
-// It lands a moment into the swing (`LAND`) on the nearest creature then in
-// its reach and arc (gear.ts `Kit`); a shot is loosed then at the creature it
-// was aimed at, and lands when it gets there (`FLIGHT`). An ability is aimed
-// the same way, and takes what its shape covers (`takenBy`).
+// How a blow finds its foe. What my next blow or ability would take is worked
+// out once a frame (`aimOf`): the pale mark shows it, and whatever I do is
+// aimed at it while it is in that act's reach (`aimFor`), so the creature
+// marked is the one struck. The hero turns toward it as they do it. A blow
+// lands a moment into the swing (`LAND`), on what it was aimed at while that
+// is in its reach and arc, or else on the nearest that is (gear.ts `Kit`); a
+// shot is loosed then at the creature it was aimed at, and lands when it gets
+// there (`FLIGHT`). An ability takes what its shape covers (`takenBy`).
 import type { Ability } from './abilities.ts'
 import { BEASTS } from './beasts.ts'
 import type { Kit } from './gear.ts'
@@ -27,9 +28,12 @@ export let LAND = 0.33
 /** How fast a shot flies, in metres a second. */
 export let FLIGHT = { arrow: 30, bolt: 18 }
 
-// How far either side of ahead a blow is still aimed: the hero turns this far
-// to face it.
+// How far either side of ahead a creature can be aimed at: the hero turns
+// this far to face it.
 let TURN = 1.9
+// The creature aimed at keeps the mark until another is nearer than this
+// share of its distance, so two about as near do not trade it back and forth.
+let HOLD = 0.8
 // How far a sweep reaches with a weapon that shoots: the arm's length.
 let HAND = 1.4
 
@@ -38,12 +42,110 @@ let off = (me: Me, m: Mark) => {
   let a = Math.atan2(m.body.x - me.x, m.body.z - me.z)
   return Math.abs(Math.atan2(Math.sin(a - me.yaw), Math.cos(a - me.yaw)))
 }
-let nearest = (ms: Mark[]) =>
-  ms.reduce<Mark | null>((b, m) => !b || m.near < b.near ? m : b, null)
+let nearest = <M extends Mark>(ms: M[]) =>
+  ms.reduce<M | null>((b, m) => !b || m.near < b.near ? m : b, null)
+// How near a creature must be to be aimed at by an act that goes `far` past
+// the weapon's reach: forgivingly, for a blade, as the hero steps into it.
+let reach = (kit: Kit, far: number, m: Mark) =>
+  far + (kit.shot ? 0 : 0.7) + kit.reach + size(m)
 
-/** The creature a blow is aimed at as it is asked for, or none: for a weapon
- * that shoots, the one being fought, while in range. `far` reaches further,
- * for an ability that does.
+/** Whether an ability goes to one creature, and so needs one to aim at. */
+export let aims = (a: Ability): boolean =>
+  a.shape == 'one' || a.shape == 'burst'
+
+/** How far past the weapon's reach an ability goes to what it is aimed at:
+ * a dash's length, or its own `far` for `one` or an `arc`. A `burst`'s `far`
+ * is how wide it bursts, not how far it goes. */
+export let farOf = (a: Ability): number =>
+  a.dash ?? (a.shape == 'one' || a.shape == 'arc' ? a.far ?? 0 : 0)
+
+/** What my next blow or ability would take, or none, worked out once a
+ * frame for the mark and every act to share: of the creatures up and before
+ * me, those in the shortest reach that has any, of a blow's and of each
+ * ability in `acts` that goes to one creature (the ones ready, or under way),
+ * and of those the nearest. The one aimed at last (`held`) keeps it until
+ * another is a good deal nearer (`HOLD`).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { ABILITIES } from './abilities.ts'
+ * import { HANDLES } from './arms.ts'
+ * let at = (eid: string, x: number, z: number, kind = 'slime') =>
+ *   ({ eid, kind, down: false, near: Math.hypot(x, z), body: { x, z } })
+ * let kit = (family: string) => ({ ...HANDLES[family], family } as never)
+ * let aim = (
+ *   mobs: ReturnType<typeof at>[],
+ *   family: string,
+ *   held = '',
+ *   acts: string[] = [],
+ * ) =>
+ *   aimOf(
+ *     mobs,
+ *     { x: 0, z: 0, yaw: 0 },
+ *     kit(family),
+ *     held,
+ *     acts.map((id) => ABILITIES[id]),
+ *   )?.eid ?? null
+ * let mobs = [at('near', 0, 2), at('far', 0, 9), at('behind', 0, -1.5)]
+ * // The nearest before me in reach, never one behind; a bow reaches further.
+ * assertEquals(aim(mobs, 'sword'), 'near')
+ * assertEquals(aim(mobs.slice(1), 'sword'), null)
+ * assertEquals(aim(mobs.slice(1), 'bow'), 'far')
+ * // A ready lunge reaches one further off.
+ * assertEquals(aim([at('far', 0, 6)], 'sword', '', ['lunge']), 'far')
+ * // What a blow reaches comes first: an aurochs at hand, before a hen a
+ * // little nearer that only a lunge reaches.
+ * let herd = [at('hen', 0, 3.2, 'hen'), at('aurochs', 1, 3.7, 'aurochs')]
+ * assertEquals(aim(herd, 'sword', '', ['lunge']), 'aurochs')
+ * // The one aimed at holds until another is a good deal nearer.
+ * let two = [at('a', 0, 3), at('b', 1, 2.6)]
+ * assertEquals(aim(two, 'bow'), 'b')
+ * assertEquals(aim(two, 'bow', 'a'), 'a')
+ * assertEquals(aim([at('a', 0, 3), at('b', 0, 1.5)], 'bow', 'a'), 'b')
+ * ```
+ */
+export let aimOf = <M extends Mark>(
+  mobs: M[],
+  me: Me,
+  kit: Kit,
+  held = '',
+  acts: Ability[] = [],
+): M | null => {
+  let before = mobs.filter((m) => !m.down && off(me, m) <= TURN)
+  let fars = [0, ...acts.filter(aims).map(farOf)].sort((a, b) => a - b)
+  let far = fars.find((f) => before.some((m) => m.near <= reach(kit, f, m)))
+  if (far == null) return null
+  let can = before.filter((m) => m.near <= reach(kit, far, m))
+  let best = nearest(can)!
+  let was = can.find((m) => m.eid == held)
+  return was && best.near >= was.near * HOLD ? was : best
+}
+
+/** What an act takes of the creature aimed at (`aimOf`): it, while it is in
+ * the act's reach, a blow's or ability `a`'s, or else nothing.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { ABILITIES } from './abilities.ts'
+ * import { HANDLES } from './arms.ts'
+ * let kit = (family: string) => ({ ...HANDLES[family], family } as never)
+ * let m = { eid: 'm', kind: 'slime', down: false, near: 6, body: { x: 0, z: 6 } }
+ * assertEquals(aimFor(m, kit('sword')), null)
+ * assertEquals(aimFor(m, kit('sword'), ABILITIES.lunge), m)
+ * assertEquals(aimFor(m, kit('sword'), ABILITIES.cleave), null)
+ * assertEquals(aimFor(null, kit('sword'), ABILITIES.lunge), null)
+ * ```
+ */
+export let aimFor = <M extends Mark>(
+  aim: M | null,
+  kit: Kit,
+  a?: Ability,
+): M | null => aim && aim.near <= reach(kit, a ? farOf(a) : 0, aim) ? aim : null
+
+/** The creature a blow lands on, or none: the one it was aimed at while in
+ * its reach and arc, or else the nearest that is, or one close enough to
+ * touch; a shot flies at the one it was aimed at, while it is still up and
+ * about in range.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -51,50 +153,27 @@ let nearest = (ms: Mark[]) =>
  * let at = (eid: string, x: number, z: number) =>
  *   ({ eid, kind: 'slime', down: false, near: Math.hypot(x, z), body: { x, z } })
  * let me = { x: 0, z: 0, yaw: 0 }
- * let mobs = [at('near', 0, 2), at('far', 0, 9), at('behind', 0, -1.5)]
- * let kit = (family: string) => ({ ...HANDLES[family], family } as never)
- * assertEquals(aimOf(mobs, me, kit('sword'))?.eid, 'near')
- * assertEquals(aimOf(mobs, me, kit('bow'), 'far')?.eid, 'far')
- * assertEquals(aimOf(mobs.slice(1, 2), me, kit('sword')), null)
- * assertEquals(aimOf(mobs.slice(1, 2), me, kit('sword'), '', 6)?.eid, 'far')
+ * let sword = { ...HANDLES.sword, family: 'sword' } as never
+ * let mobs = [at('ahead', 0, 1.8), at('beside', 0.6, 1.2), at('far', 0, 4)]
+ * assertEquals(landOf(mobs, me, sword)?.eid, 'beside')
+ * assertEquals(landOf(mobs, me, sword, 'ahead')?.eid, 'ahead')
+ * assertEquals(landOf(mobs, me, sword, 'far')?.eid, 'beside')
  * ```
  */
-export let aimOf = <M extends Mark>(
-  mobs: M[],
-  me: Me,
-  kit: Kit,
-  foe = '',
-  far = 0,
-): M | null => {
-  let reach = (m: Mark) =>
-    far + (kit.shot ? kit.reach + size(m) : 0.7 + kit.reach + size(m))
-  let live = mobs.filter((m) =>
-    !m.down && m.near <= reach(m) && off(me, m) <= TURN
-  )
-  return (kit.shot && live.find((m) => m.eid == foe)) ||
-    nearest(live) as M | null
-}
-
-/** The creature a blow lands on, or none: the nearest in its reach and
- * arc, or one close enough to touch; a shot flies at the one it was aimed
- * at, while it is still up and about in range. */
 export let landOf = <M extends Mark>(
   mobs: M[],
   me: Me,
   kit: Kit,
   aimed = '',
 ): M | null => {
-  if (kit.shot) {
-    let m = mobs.find((m) => m.eid == aimed)
-    if (m && !m.down && m.near <= kit.reach + size(m) + 1) return m
-  }
   let reach = (m: Mark) =>
     kit.shot ? kit.reach + size(m) : kit.reach + size(m) * 0.5
-  return nearest(
-    mobs.filter((m) =>
-      !m.down && m.near <= reach(m) && (off(me, m) <= kit.arc || m.near <= 1)
-    ),
-  ) as M | null
+  let takes = (m: Mark) =>
+    !m.down && m.near <= reach(m) && (off(me, m) <= kit.arc || m.near <= 1)
+  let m = mobs.find((m) => m.eid == aimed)
+  let range = (m: Mark) => m.near <= kit.reach + size(m) + 1
+  if (m && !m.down && (kit.shot ? range(m) : takes(m))) return m
+  return nearest(mobs.filter(takes))
 }
 
 /** What an ability takes as it lands: for `one`, the creature it was aimed
