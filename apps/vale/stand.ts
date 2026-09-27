@@ -13,8 +13,15 @@
 // metre, so its planes fall in few places past the ground's grid and a free
 // step is always near.
 import { cuboids } from './boxes.ts'
-import { type Out, out, STEP, type Vec } from './mesh.ts'
-import { model } from './props.ts'
+import {
+  type Out,
+  out,
+  type Profile,
+  profileOf,
+  STEP,
+  type Vec,
+} from './mesh.ts'
+import { modelProfile } from './props.ts'
 import {
   foundation,
   type Prop,
@@ -166,9 +173,9 @@ export let spacer = (grid: number) => {
 
 /** A prop's visible faces and foundation, at its place before spacing. */
 export let propAt = (v: Vale, p: Prop): Thing => {
-  let own = partAt(
+  let own = partOf(
     [p.x, standAt(v, p), p.z],
-    model(p.kind, p.seed, p.turn),
+    modelProfile(p.kind, p.seed, p.turn),
     v.voxel,
   )
   let base = foundation(v, p)
@@ -202,29 +209,17 @@ export let propAt = (v: Vale, p: Prop): Thing => {
 export let thingAt = (at: Vec, models: Out[], grid: number): Thing =>
   models.map((o) => partAt(at, o, grid))
 
-let partAt = (at: Vec, o: Out, grid: number): Part => {
-  let lo: Vec = [Infinity, Infinity, Infinity]
-  let hi: Vec = [-Infinity, -Infinity, -Infinity]
-  let planes: [number[], number[], number[]] = [[], [], []]
-  for (let i = 0; i < o.pos.length; i++) {
-    let k = i % 3, m = o.pos[i] + at[k]
-    lo[k] = Math.min(lo[k], m)
-    hi[k] = Math.max(hi[k], m)
-  }
-  for (let q = 0; q < o.pos.length; q += 12) {
-    for (let k = 0; k < 3; k++) {
-      let m = o.pos[q + k]
-      if ([3, 6, 9].every((d) => Math.abs(o.pos[q + d + k] - m) < E)) {
-        planes[k].push(m + at[k])
-      }
-    }
-  }
+let partAt = (at: Vec, o: Out, grid: number): Part =>
+  partOf(at, profileOf(o), grid)
+
+let partOf = (at: Vec, p: Profile, grid: number): Part => {
+  let move = (v: Vec): Vec => [v[0] + at[0], v[1] + at[1], v[2] + at[2]]
   return {
-    room: [lo, hi],
+    room: [move(p.room[0]), move(p.room[1])],
     planes: [
-      past(planes[0], grid),
-      past(planes[1], grid),
-      past(planes[2], grid),
+      past(p.planes[0].map((x) => x + at[0]), grid),
+      past(p.planes[1].map((y) => y + at[1]), grid),
+      past(p.planes[2].map((z) => z + at[2]), grid),
     ],
   }
 }

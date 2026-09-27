@@ -5,7 +5,7 @@ import { groundChunk } from './ground.ts'
 import { fights, out, pack, place } from './mesh.ts'
 import { modelOf } from './nodes.ts'
 import { model } from './props.ts'
-import { among, off, step } from './stand.ts'
+import { among, off, propAt, step, thingAt } from './stand.ts'
 import { flat, standAt } from './terrain.ts'
 
 Deno.test('adjacent crowns and a gathering node do not fight the ground or each other', () => {
@@ -30,4 +30,23 @@ Deno.test('adjacent crowns and a gathering node do not fight the ground or each 
   let d = off(among(v)(at, [node]))
   place(o, node, [at[0] + d[0], at[1] + d[1], at[2] + d[2]])
   assertEquals(fights(pack(o)), [])
+})
+
+Deno.test('prop spacing profiles follow their drawn faces', () => {
+  for (
+    let [kind, seed, turn] of [
+      ['oak', 1, 0],
+      ['rock', 3, 1],
+      ['hall.plaster', 2, 0],
+      ['hall.plaster', 2, 3],
+    ] as const
+  ) {
+    let p = { kind, x: 64.25, z: 64.25, seed, turn }
+    let v = flat(5, [], [p])
+    let at: [number, number, number] = [p.x, standAt(v, p), p.z]
+    assertEquals(
+      propAt(v, p)[0],
+      thingAt(at, [model(p.kind, p.seed, p.turn)], v.voxel)[0],
+    )
+  }
 })

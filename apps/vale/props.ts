@@ -8,7 +8,7 @@
 import { BUILDINGS } from './buildings.ts'
 import { type Glow, type Raised, spin, spun } from './buildings/kit.ts'
 import { light } from './buildings/light.ts'
-import { blob, type Out, out, unkey } from './mesh.ts'
+import { blob, type Out, out, type Profile, profileOf, unkey } from './mesh.ts'
 import { COAST } from './props/coast.ts'
 import { DEEP } from './props/deep.ts'
 import { FIRE } from './props/fire.ts'
@@ -55,6 +55,7 @@ let shapeOf = (kind: string, seed: number) => {
 let made = new Map<string, Model>()
 
 let meshed = new Map<string, Out>()
+let profiled = new Map<string, Profile>()
 
 /** The same model wherever its kind, shape, turn and detail are drawn. */
 export let modelKey = (kind: string, seed: number, turn = 0, near = true) =>
@@ -62,18 +63,13 @@ export let modelKey = (kind: string, seed: number, turn = 0, near = true) =>
     KINDS[kind].raise ? `:${near}` : ''
   }`
 
-/** A prop's triangles, placed with the middle of its base at the origin and
- * turned `turn` quarter turns (a building faces its square). Buildings draw
- * their interiors only at the nearest detail. */
-export let model = (kind: string, seed: number, turn = 0, near = true): Out => {
+// Mesh once for drawing, or briefly to measure where its faces lie.
+let makeModel = (kind: string, seed: number, turn: number, near: boolean) => {
   let { shape } = shapeOf(kind, seed)
-  let look = modelKey(kind, seed, turn, near)
-  let o = meshed.get(look)
-  if (o) return o
   let { vox, size, at = [-size / 2, 0, -size / 2] } = shape()
   let raised = KINDS[kind].raise ? raisedOf(kind, seed) : null
   if (raised && !near) vox = raised.shell
-  o = blob(out(), spun(vox, turn, 1 + (at[0] + at[2]) / size), size, at)
+  let o = blob(out(), spun(vox, turn, 1 + (at[0] + at[2]) / size), size, at)
   if (raised?.glows.length) {
     let glows = raised.glows.map((g): Glow => {
       let [x, z] = spin(g.at[0], g.at[2], turn)
@@ -81,8 +77,33 @@ export let model = (kind: string, seed: number, turn = 0, near = true): Out => {
     })
     light(o, glows)
   }
-  meshed.set(look, o)
   return o
+}
+
+/** A prop's triangles, placed with the middle of its base at the origin and
+ * turned `turn` quarter turns (a building faces its square). Buildings draw
+ * their interiors only at the nearest detail. */
+export let model = (kind: string, seed: number, turn = 0, near = true): Out => {
+  let look = modelKey(kind, seed, turn, near)
+  let o = meshed.get(look)
+  if (!o) meshed.set(look, o = makeModel(kind, seed, turn, near))
+  return o
+}
+
+/** A model's face planes for spacing, without retaining its triangles. */
+export let modelProfile = (
+  kind: string,
+  seed: number,
+  turn = 0,
+  near = true,
+): Profile => {
+  let look = modelKey(kind, seed, turn, near)
+  let p = profiled.get(look)
+  if (!p) {
+    p = profileOf(meshed.get(look) ?? makeModel(kind, seed, turn, near))
+    profiled.set(look, p)
+  }
+  return p
 }
 
 /** A building's shape, raised (buildings.ts), for a prop of its kind; or

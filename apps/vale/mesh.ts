@@ -68,6 +68,39 @@ export let place = (into: Out, from: Out, at: Vec) => {
   for (let i of from.idx) into.idx.push(i + base)
 }
 
+/** The compact bounds and face planes of a mesh, before it is placed. */
+export type Profile = {
+  room: [Vec, Vec]
+  planes: [number[], number[], number[]]
+}
+
+export let profileOf = (o: Out): Profile => {
+  let lo: Vec = [Infinity, Infinity, Infinity]
+  let hi: Vec = [-Infinity, -Infinity, -Infinity]
+  let planes: [Set<number>, Set<number>, Set<number>] = [
+    new Set(),
+    new Set(),
+    new Set(),
+  ]
+  for (let i = 0; i < o.pos.length; i++) {
+    let k = i % 3, m = o.pos[i]
+    lo[k] = Math.min(lo[k], m)
+    hi[k] = Math.max(hi[k], m)
+  }
+  for (let q = 0; q < o.pos.length; q += 12) {
+    for (let k = 0; k < 3; k++) {
+      let m = o.pos[q + k]
+      if ([3, 6, 9].every((d) => Math.abs(o.pos[q + d + k] - m) < 1e-6)) {
+        planes[k].add(m)
+      }
+    }
+  }
+  return {
+    room: [lo, hi],
+    planes: [[...planes[0]], [...planes[1]], [...planes[2]]],
+  }
+}
+
 /** What a mesher wrote, in the typed arrays a GPU takes: what a worker hands
  * the page without a copy (grow.ts). */
 export type Packed = {
