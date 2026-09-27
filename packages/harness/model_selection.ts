@@ -44,6 +44,7 @@ export const selectedUsing = async (
   )
   if (rows.length) return rows[0].using as Comp
   const [owner] = await g.get([session])
+  if (owner?.using) return owner.using as Comp
   const from = (owner?.fork as Comp | undefined)?.from
   if (!from) return undefined
   const [anchor] = await g.get([String(from)])

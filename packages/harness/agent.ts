@@ -246,12 +246,12 @@ export let through = (session: Eid, by?: Eid) => ({
   via: session,
 })
 
-/** A new transcript, as one write: the session, the instruction files it
- * opens with snapshotted ahead of the first message, and that message, which
- * asks for a turn with `using`. Answers the session. */
+/** A new transcript, as one write: the session and its instruction files,
+ * followed by a message that asks for a turn when one was given. An empty
+ * session holds its model choice until that first message arrives. */
 export let begin = async (
   g: Graph,
-  prompt: string,
+  prompt: string | undefined,
   o: Opening & { using: Comp; by?: Eid },
 ): Promise<Eid> => {
   let session = crypto.randomUUID() as Eid
@@ -264,14 +264,17 @@ export let begin = async (
       entity: { eid: session },
       session: { id: session.slice(0, 8) },
       ...o.home ? { home: o.home } : {},
+      ...prompt ? {} : { using: o.using },
       $actor: through(session, o.by),
     },
-    {
-      entity: { eid: crypto.randomUUID() as Eid },
-      [ENTRY]: { session, seq: context.length + 1 },
-      [CONTENT]: { body: prompt },
-      using: o.using,
-    },
+    ...prompt
+      ? [{
+        entity: { eid: crypto.randomUUID() as Eid },
+        [ENTRY]: { session, seq: context.length + 1 },
+        [CONTENT]: { body: prompt },
+        using: o.using,
+      }]
+      : [],
   ])
   return session
 }
@@ -433,7 +436,8 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   // The request in force on a transcript: what a line said to it asks a turn
   // with, since a turn is asked for by a `using` on an entry.
   let asking = async (session: Eid) => {
-    let using = usingBefore(await transcript(h.g, session))
+    let using = usingBefore(await transcript(h.g, session)) ??
+      await selectedUsing(h.g, session)
     return using ? { using } : {}
   }
   // Whether a transcript has nothing more to do that this agent is doing or

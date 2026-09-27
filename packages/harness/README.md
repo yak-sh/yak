@@ -61,6 +61,7 @@ a list, in a config's order. Then:
 
 ```sh
 yak session new 'reply with the word pong'
+yak session new --tui
 yak session send <session> 'and again'
 yak session list
 yak session peek <session>
@@ -71,7 +72,8 @@ yak model list
 `session new` and `session send` write the input, wait while the transcript runs
 wherever the graph's effects are worked, and answer with the entry it settled
 on, so a command line prints the reply. With `--tui` the answer is held as the
-terminal app, selected on that session: `yak session new '…' --tui`, or
+terminal app, selected on that session: `yak session new '…' --tui`,
+`yak session new --tui` for an empty session ready for input, or
 `yak session list --tui` where the graph holds one session. The transcript
 scrolls and word-wraps beside the Sessions, Tasks, and Context usage panels.
 Enter starts a session (or sends to the selected one); Shift+Enter inserts a

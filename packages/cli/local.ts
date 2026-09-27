@@ -244,6 +244,12 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
     // identically. Nothing is converted here: a transport that wants them in
     // another form restates them on its own side (@yaks/mcp `core`).
     run: async (args: Record<string, unknown>): Promise<number> => {
+      // A tool that declares terminal behavior receives the global display
+      // choice through the same input it declares for every other argument.
+      let props = declared.inputSchema?.properties
+      if (props && typeof props == 'object' && 'tui' in props) {
+        args.tui = c.tui
+      }
       let host = await opened(
         c.config!,
         rolesOf(declared, !!said.vocab.comp(EFFECT)),

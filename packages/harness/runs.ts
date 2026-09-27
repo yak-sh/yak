@@ -28,6 +28,7 @@ import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
 import { instructionFiles } from '@yaks/context/host'
 import { statusOf, transcript, usingBefore } from '@yaks/session'
 import { ASTRA, begin, seed, through } from './agent.ts'
+import { selectedUsing } from './model_selection.ts'
 import { homeAt } from './workspace.ts'
 
 type Args = Record<string, unknown>
@@ -76,12 +77,16 @@ export let runs = (): Runs => ({
   session_list: (_, graph) => graph.read(parse('.session&*')),
   session_new: async (call, graph) => {
     let args = argsOf(call)
+    let prompt = word(args, 'prompt')
+    if (!prompt && args.tui !== true) {
+      throw new Refused('session new needs a prompt without --tui')
+    }
     let provider = word(args, 'provider') ?? 'openai'
     let model = word(args, 'model') ?? ASTRA
     await graph.apply(seed({ provider, model }), { trusted: true })
     let cwd = Deno.cwd()
     let effort = word(args, 'effort')
-    let s = await begin(graph, String(args.prompt ?? ''), {
+    let s = await begin(graph, prompt || undefined, {
       home: await homeAt(graph, cwd),
       files: await instructionFiles(cwd),
       by: caller(call),
@@ -91,14 +96,15 @@ export let runs = (): Runs => ({
         ...effort ? { effort } : {},
       },
     })
-    return await settled(graph, s)
+    return prompt ? await settled(graph, s) : await graph.get([s])
   },
   session_send: async (call, graph) => {
     let args = argsOf(call)
     // The session arrives as its eid: @yaks/tools resolved what was typed (an
     // eid, `S-81`, a run's own id) and refused one that names no session.
     let s = String(args.session)
-    let using = usingBefore(await transcript(graph, s))
+    let using = usingBefore(await transcript(graph, s)) ??
+      await selectedUsing(graph, s)
     await graph.apply([{
       entity: { eid: crypto.randomUUID() },
       entry: { session: s },

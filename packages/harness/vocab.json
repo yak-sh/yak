@@ -37,11 +37,15 @@
       "noun": "session",
       "verb": "new",
       "title": "Start a session here",
-      "description": "Start an agent work session on this machine with an instruction, and run it until it settles: the model has answered and asks for nothing more. The session runs here, with this machine's shell, checkouts and sign-ins. Returns the session; `yak session new … --tui` then holds it in the terminal as the harness, to keep working in.",
+      "description": "Start an agent work session on this machine with an instruction, and run it until it settles. With --tui, an instruction is optional: an empty session opens in the terminal, ready for a message.",
       "input": {
         "prompt": {
           "type": "string",
           "description": "what to do"
+        },
+        "tui": {
+          "type": "boolean",
+          "description": "open an empty session in the terminal"
         },
         "effort": {
           "type": "string",
@@ -60,10 +64,7 @@
         "positional": [
           "prompt"
         ]
-      },
-      "required": [
-        "prompt"
-      ]
+      }
     },
     "session_send": {
       "tool": true,

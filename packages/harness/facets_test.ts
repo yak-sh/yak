@@ -1,9 +1,12 @@
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { argsFor, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
 import { argsOf, type Bundle, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { connect } from '../mcp/testing.ts'
+import { transcript } from '@yaks/session'
+import { selectedUsing } from './model_selection.ts'
+import { runs } from './runs.ts'
 import { harness } from './testing.ts'
 
 let reads = { file: () => '', stdin: () => '' }
@@ -53,6 +56,30 @@ Deno.test('the harness composes as a plugin, and its words reach a command line 
       }),
     ))
     assertEquals(said.includes('one'), true)
+  } finally {
+    await h.close()
+  }
+})
+
+Deno.test('session new opens an empty TUI session and requires input otherwise', async () => {
+  let h = await harness()
+  let start = runs().session_new!
+  let call = (args: Record<string, unknown>): Bundle => ({
+    entity: { eid: crypto.randomUUID() },
+    call: { args },
+  })
+  try {
+    await assertRejects(
+      () => Promise.resolve(start(call({}), h.g)),
+      Error,
+      'needs a prompt',
+    )
+    assertEquals(await h.g.read('.session&*'), [])
+    let [session] = await start(call({ tui: true }), h.g)
+    assert(session.session)
+    let entries = await transcript(h.g, session.entity.eid)
+    assert(entries.every((e) => !!e.prompt))
+    assert((await selectedUsing(h.g, session.entity.eid))?.model)
   } finally {
     await h.close()
   }
