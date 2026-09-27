@@ -27,6 +27,24 @@ Deno.test('install() is idempotent', () => {
   assertEquals((s.read('.title~=hi') as Bundle[])[0].entity.eid, 'x')
 })
 
+Deno.test('an OR filtered by one or several entity ids keeps their matches', () => {
+  let s = storage(mem(), shop)
+  s.install()
+  s.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'a' }, doc: { title: 'a' } },
+      { entity: { eid: 'b' }, product: { price: 1 } },
+      { entity: { eid: 'c' }, doc: { title: 'a' } },
+      { entity: { eid: 'd' }, product: { price: 2 } },
+    ])
+  )
+  let query = '(.doc.title=a|.product.price=1)&.eid='
+  let ids = (q: string) =>
+    (s.read(q) as Bundle[]).map((b) => b.entity.eid).sort()
+  assertEquals(ids(query + 'b'), ['b'])
+  assertEquals(ids(query + 'a,b,d'), ['a', 'b'])
+})
+
 Deno.test('a second store over an installed file leaves its schema alone', () => {
   let d = mem()
   storage(d, shop).install()

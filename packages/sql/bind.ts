@@ -870,8 +870,8 @@ let conjuncts = (ctx: Ctx, cs: Clause[]): Cond[] => {
 let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
   let eid = cs.find((c): c is Pred =>
     c.kind == 'pred' && c.path.join('.') == 'eid' && c.op == '=' &&
-    c.value?.kind == 'scalar' && !!c.value.raw && !c.not && !c.where &&
-    !c.facet && !claims(ctx, 'pred')
+    c.value != null && !c.not && !c.where && !c.facet &&
+    !claims(ctx, 'pred')
   )
   return eid
     ? cs.map((c) =>
