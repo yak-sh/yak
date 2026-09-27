@@ -88,7 +88,7 @@ import { open } from '@yaks/sqlite/db'
 // the package that answers requests is a plugin a config lists, never a
 // dependency of this one.
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
-import { adopt, fields as searched, find, search } from '@yaks/fts'
+import { adopt, fields as searched, find, type Hit, search } from '@yaks/fts'
 import {
   type Effects,
   effects,
@@ -298,9 +298,61 @@ export type VocabFacet = {
 export type RulesFacet = {
   rules?: (host: Host, options: Options) => Plugin[]
   extend?: (host: Host, options: Options) => Extension[]
+  /** Search a phrase by meaning through this plugin's own index. */
+  meaning?: (
+    host: Host,
+    options: Options,
+  ) => (words: string, limit: number) => Promise<MeaningHit[]>
   authenticate?: (host: Host, options: Options) => Authenticate
   /** the commits other hosts make to this store (@yaks/journal's feed) */
   feed?: (host: Host, options: Options) => Feed
+}
+
+/** A result from a plugin's meaning index, with an excerpt of its source. */
+export type MeaningHit = {
+  entity: Eid
+  similarity: number
+  snippet: string
+}
+
+// Scores from FTS and a vector space are incomparable. Rank positions give
+// each source one vote; a hit in both gets both votes.
+let merged = (words: Hit[], meaning: MeaningHit[], limit: number) => {
+  let by = new Map<Eid, {
+    entity: Eid
+    score: number
+    snippet: string
+    source: 'text' | 'meaning' | 'both'
+  }>()
+  words.forEach((h, i) =>
+    by.set(h.entity, {
+      entity: h.entity,
+      score: 1 / (60 + i + 1),
+      snippet: h.snippet,
+      source: 'text',
+    })
+  )
+  meaning.forEach((h, i) => {
+    let had = by.get(h.entity)
+    by.set(
+      h.entity,
+      had
+        ? {
+          ...had,
+          score: had.score + 1 / (60 + i + 1),
+          source: 'both',
+        }
+        : {
+          entity: h.entity,
+          score: 1 / (60 + i + 1),
+          snippet: h.snippet,
+          source: 'meaning',
+        },
+    )
+  })
+  return [...by.values()]
+    .sort((a, b) => b.score - a.score || a.entity.localeCompare(b.entity))
+    .slice(0, limit)
 }
 
 /** A source of the commits this host's graph did not make itself — another
@@ -928,14 +980,45 @@ export let compose = async (
     // into line with what the vocabulary declares and rebuilds one that
     // drifted, and writes nothing on a start where nothing changed.
     if (text.length) adopt(sql, text, derived)
-    // Ranked results, for whoever asks for them. Which rows match is already
-    // answered by the extension above; this is the order they come back in.
+    // Each index owns its read. The search tool brings their ranked answers
+    // together, then reads only the entities that will be returned.
+    let meanings = ruled.flatMap(([r, options]) =>
+      r.meaning ? [r.meaning(host, options)] : []
+    )
+    if (meanings.length > 1) {
+      throw new Error('more than one meaning index answers search')
+    }
     ranked = text.length
       ? async (words, opts) => {
-        let hits = find(sql, text, words, { limit: opts?.limit })
+        let limit = Math.max(0, Math.min(100, Math.trunc(opts?.limit ?? 20)))
+        if (!limit) return []
+        let count = Math.max(20, limit * 2)
+        let [literal, similar] = await Promise.all([
+          Promise.resolve(find(sql, text, words, { limit: count })),
+          meanings[0]?.(words, count) ?? Promise.resolve([]),
+        ])
+        let hits = merged(literal, similar, limit)
         let found = await host.graph.get(hits.map((h) => h.entity))
         let at = new Map(found.map((b) => [b.entity.eid, b]))
-        return hits.map((h) => at.get(h.entity)).filter((b) => !!b)
+        return hits.flatMap((h) => {
+          let b = at.get(h.entity)
+          if (!b) return []
+          let title = Object.values(b).flatMap((c) =>
+            c && typeof c == 'object' && 'title' in c &&
+              typeof c.title == 'string'
+              ? [c.title]
+              : []
+          )[0] ?? ''
+          return [{
+            entity: b.entity,
+            hit: {
+              kind: vocab.kindOf(b) || 'entity',
+              title,
+              snippet: h.snippet,
+              source: h.source,
+            },
+          }]
+        })
       }
       : undefined
     // The generic tools belong to this graph, not to any transport: they are

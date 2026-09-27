@@ -125,7 +125,7 @@
       "tool": true,
       "verb": "search",
       "title": "Search text",
-      "description": "Full-text search over this store’s entities: the ones whose text matches, ranked best first, as bundles: JSON objects containing each record’s id and named groups of fields. Searches the text fields this server indexes. graph_query filters on known properties; this finds entities by what their text says Documentation: https://yaks.app/docs/querying.",
+      "description": "Search indexed text by words and, where an embedding index is configured, by meaning. Results are ranked compact bundles: entity gives the id; query-only hit gives the title, kind, excerpt and source (text, meaning or both). In a text excerpt, \\u0001 and \\u0002 mark the start and end of matched words. Use graph_show to read an entity whole. Documentation: https://yaks.app/docs/querying.",
       "input": {
         "words": {
           "type": "string",

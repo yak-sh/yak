@@ -81,10 +81,9 @@ export let loadTools = <R = Bundle[]>(
 }
 
 /**
- * Ranked full-text search, where the program that opened the graph has it.
- * Compose {@link https://jsr.io/@yaks/fts | @yaks/fts} into your storage and a
- * bare word in a query already filters inside `graph_query`; pass this as well
- * and ranked search gets a tool of its own.
+ * Ranked search, where the program that opened the graph has it. The result
+ * bundles carry a query-only `hit` with the title, kind, excerpt and source;
+ * the tool answers the same compact shape over words and meaning.
  */
 export type Search = (
   words: string,

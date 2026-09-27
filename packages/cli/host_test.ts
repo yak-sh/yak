@@ -1157,6 +1157,46 @@ Deno.test('a property that declares its words searched is indexed, and ranked', 
       reply.result.structuredContent.result.map((b) => b.entity.eid),
       ['b2'],
     )
+    let [hit] = reply.result.structuredContent.result as {
+      entity: { eid: string }
+      hit: { title: string; kind: string; snippet: string; source: string }
+    }[]
+    assertEquals(hit.hit.title, 'a history of bread')
+    assertEquals(hit.hit.kind, 'book')
+    assertEquals(hit.hit.source, 'text')
+    assert(hit.hit.snippet.includes('\x01bread\x02'))
+  } finally {
+    host.close()
+  }
+})
+
+Deno.test('search joins word and meaning results, keeping the marked text', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop', 'meaning'] },
+    only({
+      shop,
+      meaning: {
+        rules: {
+          meaning: () => async () => [
+            { entity: 'b1', similarity: 0.9, snippet: 'a small traveller' },
+            { entity: 'b2', similarity: 0.8, snippet: 'bread over time' },
+          ],
+        },
+      },
+    }),
+  )
+  try {
+    await host.graph.apply([
+      { entity: { eid: 'b1' }, book: { title: 'the hobbit' } },
+      { entity: { eid: 'b2' }, book: { title: 'a history of bread' } },
+    ])
+    let found = await host.search!('bread', { limit: 2 })
+    assertEquals(found.map((b) => b.entity.eid), ['b2', 'b1'])
+    assertEquals((found[0].hit as Comp).source, 'both')
+    assertEquals((found[1].hit as Comp).source, 'meaning')
+    assertEquals((found[1].hit as Comp).snippet, 'a small traveller')
+    assert(String((found[0].hit as Comp).snippet).includes('\x01bread\x02'))
+    assertEquals(Object.keys(found[0]).sort(), ['entity', 'hit'])
   } finally {
     host.close()
   }
