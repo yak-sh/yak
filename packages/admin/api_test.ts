@@ -8,12 +8,13 @@ import {
   assertThrows,
 } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
-import type { And } from '@yaks/query'
+import { type And, parse } from '@yaks/query'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail/vocab'
 import { CallError } from '@yaks/tools'
+import { lined } from '../../workers/yak/wire.ts'
 import {
   claimsOf,
   codeFor,
@@ -53,6 +54,25 @@ Deno.test('an app store answers under its space, the front page at the root', ()
       'not a space or space/app',
     )
     assertEquals(error.code, 'where')
+  }
+})
+
+Deno.test('admin query sends joined filters as the page reads them', async () => {
+  let old = globalThis.fetch
+  let lines: string[] = []
+  globalThis.fetch = ((input: string) => {
+    lines.push(lined(new URL(input).search.slice(1)))
+    return Promise.resolve(Response.json([]))
+  }) as typeof fetch
+  try {
+    let session = 'a1b2c3'
+    let at = 'yourname/vale'
+    let eid = '97d31ac6-ffce-46ef-b88f-f31868df02a6'
+    await storeQuery(session, at, [`.entry.session=${eid}&?content`])
+    await storeQuery(session, at, [`.entry.session=${eid}`, '?content'])
+    assertEquals(parse(lines[0]), parse(lines[1]))
+  } finally {
+    globalThis.fetch = old
   }
 })
 

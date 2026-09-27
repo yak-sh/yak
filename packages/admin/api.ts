@@ -405,8 +405,7 @@ let refusedResponse = (r: Response, body: unknown) =>
   }
 
 // The filter grammar over an app's store — the same line the page's own
-// client.js sends, each segment encoded whole the way client.ts queryArgs
-// does it.
+// client.js sends. `&` joins clauses even when both are in one CLI word.
 export let storeQuery = async (
   session: string,
   at: string,
@@ -426,9 +425,7 @@ export let storeQuery = async (
     }
     return answer.structuredContent.result
   }
-  let url = `${storeUrl(at, '/query')}?${
-    filters.map(encodeURIComponent).join('&')
-  }`
+  let url = `${storeUrl(at, '/query')}?${filters.join('&')}`
   let r = await sent(url, session)
   let body = await bodyOf(r)
   if (r.status >= 400 && r.status < 500) {
