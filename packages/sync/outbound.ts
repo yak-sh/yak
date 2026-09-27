@@ -53,9 +53,18 @@ export type PostOpts = {
   fetch: Fetch
   headers?: Record<string, string>
   report: Report
+  /** A server-authoritative write already split from browser-owned state. */
+  sent?: Bundle[]
   /** the write was held out of the local graph, not applied: a refusal has
    * nothing to revert */
   held?: boolean
+}
+
+export type PostResult = {
+  settled: boolean
+  applied?: Bundle[]
+  refused?: Refusal
+  error?: unknown
 }
 
 // The refusal body, however the server phrased it. An endpoint that responded
@@ -72,20 +81,18 @@ let refusalOf = async (res: Response): Promise<Refusal> => {
 }
 
 /**
- * Send one committed write to the server as `POST /apply` and reconcile the
- * response. Resolves when the exchange is over — the caller (the `effect`
- * hook) does not await it, so a local write stays as fast as the local store.
- * Resolves to true when the outcome is known (applied, refused, or nothing to
- * send), and to false when the request failed and the outcome is unknown; in
- * that case retention has to keep the optimistic bundles pinned.
+ * Send one write to the server and reconcile the response. The result carries
+ * the applied bundles for a caller that waited for the server to choose an eid.
+ * `settled` is false only when the request outcome is unknown; an optimistic
+ * caller then keeps its rows pinned.
  */
-export let post = async (
+export let exchange = async (
   batch: Bundle[],
   opts: PostOpts,
-): Promise<boolean> => {
+): Promise<PostResult> => {
   let { graph } = opts
-  let sent = outward(batch, graph.vocab)
-  if (!sent.length) return true // an entirely local write: nothing to send
+  let sent = opts.sent ?? outward(batch, graph.vocab)
+  if (!sent.length) return { settled: true }
   let res: Response
   try {
     res = await opts.fetch(
@@ -98,18 +105,21 @@ export let post = async (
   } catch (error) {
     // Undelivered is not refused: the write may have been applied.
     opts.report({ sent, error, reverted: false })
-    return false
+    return { settled: false, error }
   }
   if (!res.ok) {
     let refused = await refusalOf(res)
     let back = opts.held ? [] : inverse(batch)
     if (back.length) await replicate(graph, back)
     opts.report({ sent, refused, reverted: back.length > 0 })
-    return true
+    return { settled: true, refused }
   }
-  let applied = await res.json() as Bundle[]
-  if (Array.isArray(applied) && applied.length) {
-    await replicate(graph, applied)
-  }
-  return true
+  let applied = await res.json()
+  if (!Array.isArray(applied)) throw new Error('/apply returned no bundles')
+  if (applied.length) await replicate(graph, applied)
+  return { settled: true, applied }
 }
+
+/** Send an optimistic or held write and say whether its outcome is known. */
+export let post = async (batch: Bundle[], opts: PostOpts): Promise<boolean> =>
+  (await exchange(batch, opts)).settled

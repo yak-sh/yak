@@ -104,6 +104,14 @@ Components declared `sync: none` stay local; `sync: peers` components are
 relayed through the WebSocket. See [@yaks/sync](https://jsr.io/@yaks/sync) for
 transport and failure behavior.
 
+With a server connection, `mutate()` also accepts `alias: {name}` when the
+vocabulary declares `alias`. A name may belong to an entity absent from the
+page's cache, so this write waits for the server's resolved eid and then lands
+its returned bundles locally. Browser-owned fields in the same batch follow that
+eid and stay off the wire. The returned promise resolves to the applied bundles
+or rejects on refusal or transport failure. A local-only client needs the
+`@yaks/key` and `@yaks/alias` graph plugins to write names.
+
 ## Reactive queries
 
 A watch exposes `value` (the current bundle array), `ready`,

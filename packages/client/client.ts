@@ -20,12 +20,16 @@ import type {
   ReadOpts,
   StampPolicy,
 } from '@yaks/graph'
-import { graph, isPromise } from '@yaks/graph'
+import { admit, comps, dead, graph, isPromise, substitute } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
+import { syncOf } from '@yaks/vocab'
+import { nameOf } from '@yaks/alias'
 import { type Query, ram } from '@yaks/ram'
 import {
+  asking,
   type Connect,
   type Fetch,
+  outward,
   type Report,
   type Sync,
   sync,
@@ -157,6 +161,34 @@ export type ClientWatchOpts = WatchOpts & {
 // Building it is lazy — no database is opened until something is written — so
 // this costs nothing in a page that stores nothing.
 let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
+
+// A name may already belong to a row the page has never seen. The store must
+// resolve it before the page can put the write in its own graph. Browser-owned
+// components wait for that answer and then follow the resolved eid.
+let named = (vocab: Vocab, bundles: Bundle[]) => {
+  if (!vocab.comp('alias') || !bundles.some(nameOf)) return null
+  // The shorthand is consumed by the store's normalize hook. Admission still
+  // checks every other field before anything leaves this page.
+  admit(bundles.map((b) => nameOf(b) ? { ...b, alias: {} } : b), vocab)
+  let sent = bundles.flatMap((b) => {
+    let name = nameOf(b)
+    let out = outward([asking(b, null)], vocab)[0]
+    return out || name
+      ? [{
+        ...(out ?? { entity: b.entity, ...(b.$was ? { $was: b.$was } : {}) }),
+        ...(name ? { alias: { name } } : {}),
+      }]
+      : []
+  })
+  let local = bundles.flatMap((b) => {
+    if (dead(b)) return []
+    let own = Object.fromEntries(
+      comps(b).filter(([name]) => syncOf(vocab, name) != 'server'),
+    )
+    return Object.keys(own).length ? [{ entity: b.entity, ...own }] : []
+  })
+  return { sent, local }
+}
 
 /**
  * Assemble a client graph: a {@link https://jsr.io/@yaks/ram | @yaks/ram}
@@ -410,7 +442,21 @@ export let client = (
       cache.touch([eid])
       return store.tx((tx) => tx.get([eid]))[0]
     },
-    mutate: (bundles) => g.apply(bundles),
+    mutate: (bundles) => {
+      let claim = wire && named(vocab, bundles)
+      if (!wire || !claim) return g.apply(bundles)
+      return wire.submit(claim.sent).then(async (applied) => {
+        let at = new Map(
+          applied.flatMap((b) =>
+            typeof b.$alias == 'string'
+              ? [[b.$alias, b.entity.eid] as [Eid, Eid]]
+              : []
+          ),
+        )
+        let local = substitute(claim.local, vocab, at)
+        return [...applied, ...(local.length ? await g.apply(local) : [])]
+      })
+    },
     close: () => {
       closed = true
       for (let close of handles) close()

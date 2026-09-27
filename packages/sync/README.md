@@ -253,22 +253,26 @@ the supplied connection mechanism or the server's session handling.
 
 `sync(graph, options)` registers a plugin and returns a `Sync` object:
 
-| Member                         | Purpose                                                                     |
-| ------------------------------ | --------------------------------------------------------------------------- |
-| `plugin`                       | The registered graph plugin.                                                |
-| `subscribe(query, id?, opts?)` | Register a subscription and return its id.                                  |
-| `unsubscribe(id)`              | Remove a subscription.                                                      |
-| `refresh(id?)`                 | Request a fresh answer for one or all subscriptions.                        |
-| `ready(id)`                    | Check whether an answer has been applied on this connection.                |
-| `onReady(fn)`                  | Add a readiness listener and return its removal function.                   |
-| `open()`                       | Open the socket without adding a subscription.                              |
-| `connected()`                  | Check whether the socket is currently open.                                 |
-| `idle()`                       | Wait for the currently queued HTTP writes to settle, including failures.    |
-| `close()`                      | Close the socket, stop reconnecting, and clear subscriptions and listeners. |
+| Member                         | Purpose                                                                                             |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `plugin`                       | The registered graph plugin.                                                                        |
+| `subscribe(query, id?, opts?)` | Register a subscription and return its id.                                                          |
+| `unsubscribe(id)`              | Remove a subscription.                                                                              |
+| `refresh(id?)`                 | Request a fresh answer for one or all subscriptions.                                                |
+| `ready(id)`                    | Check whether an answer has been applied on this connection.                                        |
+| `onReady(fn)`                  | Add a readiness listener and return its removal function.                                           |
+| `open()`                       | Open the socket without adding a subscription.                                                      |
+| `connected()`                  | Check whether the socket is currently open.                                                         |
+| `submit(bundles)`              | Send an already filtered batch whose identity the server must resolve; apply and return its answer. |
+| `idle()`                       | Wait for the currently queued HTTP writes to settle, including failures.                            |
+| `close()`                      | Close the socket, stop reconnecting, and clear subscriptions and listeners.                         |
 
 `close()` does not abort queued HTTP writes or unregister the graph plugin.
-Finish pending work before discarding the graph. `idle()` does not imply that
-every write succeeded, and a browser unload does not guarantee time to await it.
+`submit()` shares the ordered HTTP queue with optimistic writes and rejects on
+refusal or transport failure. Its caller must remove browser-owned components
+before sending; `@yaks/client` does this for `alias{name}` writes. Finish
+pending work before discarding the graph. `idle()` does not imply that every
+write succeeded, and a browser unload does not guarantee time to await it.
 
 A `replica` option supplies `subscribe`, `unsubscribe`, `land`, and `protect`
 methods to manage retained entities, subscription ownership, and pending-write

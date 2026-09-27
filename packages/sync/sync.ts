@@ -24,7 +24,7 @@
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { dead, then } from '@yaks/graph'
 import { asking, clean, ECHO, echoed, SENT } from './mark.ts'
-import { type Fetch, post, type Report } from './outbound.ts'
+import { exchange, type Fetch, type Report } from './outbound.ts'
 import { relayed } from './tier.ts'
 import { pacer } from './pace.ts'
 import { type Mine, saying } from './saying.ts'
@@ -104,6 +104,9 @@ export type Sync = {
   /** be called when readiness changes (including on an empty first answer);
    * not called immediately. The returned function removes the listener. */
   onReady: (fn: (id: string, ready: boolean) => void) => () => void
+  /** Send an input batch whose identity the server must resolve before this
+   * graph can hold it. The caller has separated browser-owned components. */
+  submit: (sent: Bundle[]) => Promise<Bundle[]>
   /** resolves when every write in flight has been answered */
   idle: () => Promise<void>
   /** close the socket and stop reconnecting */
@@ -150,24 +153,52 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   }
   let said = saying()
 
+  let queue = <T>(run: () => Promise<T>): Promise<T> => {
+    let pending = sending.then(run)
+    sending = pending.then(() => {}, () => {})
+    return pending
+  }
+
   // Post one write on the chain. `held` means it was never applied locally, so
   // a refusal has nothing to revert and an unanswered request has nothing to
   // keep pinned.
   let send = (batch: Bundle[], held = false) => {
     let release = opts.replica?.protect(batch.map((b) => b.entity.eid))
-    sending = sending.then(() =>
-      post(batch, {
+    queue(() =>
+      exchange(batch, {
         graph,
         url: opts.url,
         fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
         headers: opts.headers,
         report,
         held,
-      }).then((settled) => {
-        if (settled || held) release?.()
+      }).then((result) => {
+        if (result.settled || held) release?.()
       })
     ).catch((error) => report({ sent: [], error, reverted: false }))
   }
+
+  let submit = (sent: Bundle[]): Promise<Bundle[]> =>
+    queue(async () => {
+      let result
+      try {
+        result = await exchange(sent, {
+          graph,
+          url: opts.url,
+          fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
+          headers: opts.headers,
+          report,
+          held: true,
+          sent,
+        })
+      } catch (error) {
+        report({ sent, error, reverted: false })
+        throw error
+      }
+      if (result.refused) throw new Error(result.refused.message)
+      if (result.error) throw result.error
+      return result.applied ?? []
+    })
 
   let plugin: Plugin = {
     name: '@yaks/sync',
@@ -320,6 +351,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       listeners.add(fn)
       return () => listeners.delete(fn)
     },
+    submit,
     idle: () => sending,
     close: () => {
       w.close()

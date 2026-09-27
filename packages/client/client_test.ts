@@ -2,10 +2,14 @@
 // The assembly: one call, and a graph that renders at once, agrees with the
 // server afterwards, and keeps what the server will never send back.
 
-import { assertEquals } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { aliasDoc, aliasEid, aliases } from '@yaks/alias'
+import { type Bundle, graph } from '@yaks/graph'
 import { ids } from '@yaks/id/rules'
+import { keyDoc, keyKeywords, keys } from '@yaks/key'
+import { ram } from '@yaks/ram'
 import { replicate } from '@yaks/sync'
+import { loadVocab } from '@yaks/vocab'
 import { box, boxClient, comp, COOK, server, titles } from './testing.ts'
 import { client } from './client.ts'
 import { stash } from './vault.ts'
@@ -24,6 +28,129 @@ Deno.test('a client with no server is a whole graph on its own', () => {
   assertEquals(titles(c.read('.course=dinner&?doc')), ['Dal'])
   assertEquals(c.wire, undefined)
   c.close()
+})
+
+Deno.test('a page writes a name already held outside its cache', async () => {
+  let vocab = loadVocab([keyDoc, aliasDoc, {
+    $defs: {
+      doc: {
+        component: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
+      draft: {
+        component: true,
+        type: 'object',
+        sync: 'none',
+        properties: { text: { type: 'string' } },
+      },
+      note: {
+        component: true,
+        type: 'object',
+        properties: { recipe: { type: 'string', ref: 'entity' } },
+      },
+    },
+  }], [keyKeywords])
+  let server = graph({
+    storage: ram(vocab),
+    vocab,
+    plugins: [keys(vocab), aliases()],
+  })
+  let first = await server.apply([{
+    entity: { eid: '$first' },
+    alias: { name: 'recipe:dal' },
+    doc: { title: 'Dal' },
+  }])
+  let eid = first.find((b) => b.$alias == '$first')!.entity.eid
+  let sent: Bundle[][] = []
+  let trouble: unknown[] = []
+  let offline = false
+  let c = client(vocab, [], {
+    url: 'http://box.test',
+    vault: false,
+    wireVault: false,
+    fetch: async (request) => {
+      if (offline) throw new Error('offline')
+      let batch = await request.json() as Bundle[]
+      sent.push(batch)
+      try {
+        return new Response(JSON.stringify(await server.apply(batch)))
+      } catch (error) {
+        return new Response(
+          JSON.stringify({
+            error: 'Refused',
+            message: String(error),
+          }),
+          { status: 400 },
+        )
+      }
+    },
+    report: (t) => trouble.push(t),
+  })
+  try {
+    assertThrows(
+      () =>
+        c.mutate([{
+          entity: { eid: '$typo' },
+          alias: { name: 'recipe:typo' },
+          doc: { titel: 'Typo' },
+        }]),
+      Error,
+      'unknown property: doc.titel',
+    )
+    assertEquals(sent.length, 0)
+
+    let out = await c.mutate([
+      {
+        entity: { eid: '$again' },
+        alias: { name: 'recipe:dal' },
+        doc: { title: 'Better dal' },
+        draft: { text: 'less salt' },
+      },
+      { entity: { eid: '$note' }, note: { recipe: '$again' } },
+    ])
+    assertEquals(out.find((b) => b.$alias == '$again')?.entity.eid, eid)
+    assertEquals(c.ent(eid)?.doc, { title: 'Better dal' })
+    assertEquals(c.ent(eid)?.draft, { text: 'less salt' })
+    assertEquals(c.ent(aliasEid('recipe:dal'))?.key, {
+      of: eid,
+      value: 'recipe:dal',
+    })
+    assertEquals(sent[0][0].alias, { name: 'recipe:dal' })
+    assertEquals(sent[0][0].draft, undefined)
+    assertEquals(sent[0][1].note, { recipe: '$again' })
+    assertEquals(c.read('.note')[0].note, { recipe: eid })
+    assertEquals(c.read('.doc').length, 1)
+
+    await assertRejects(
+      () =>
+        Promise.resolve(c.mutate([{
+          entity: { eid: 'someone-else' },
+          alias: { name: 'recipe:dal' },
+          doc: { title: 'Wrong row' },
+        }])),
+      Error,
+      'recipe:dal',
+    )
+    assertEquals(c.ent('someone-else'), undefined)
+    assertEquals(c.ent(eid)?.doc, { title: 'Better dal' })
+
+    offline = true
+    await assertRejects(
+      () =>
+        Promise.resolve(c.mutate([{
+          entity: { eid: '$offline' },
+          alias: { name: 'recipe:offline' },
+          doc: { title: 'Offline' },
+        }])),
+      Error,
+      'offline',
+    )
+    assertEquals(c.read('.doc').length, 1)
+    assertEquals(trouble.length, 2)
+  } finally {
+    c.close()
+  }
 })
 
 let note = { entity: { eid: 'n1' }, note: { stars: 5, recipe: 'r1' } }
