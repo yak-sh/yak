@@ -226,7 +226,12 @@ export let client = (provider: Provider, o: Options): Client => {
     },
 
     complete: async (pending, callback) => {
-      let q = new URL(callback).searchParams
+      let q: URLSearchParams
+      try {
+        q = new URL(callback).searchParams
+      } catch {
+        throw new OAuthError('callback', 'the return URL is invalid')
+      }
       if (!pending.verifier || pending.until <= now()) {
         throw new OAuthError(
           'expired',

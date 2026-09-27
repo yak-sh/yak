@@ -89,10 +89,11 @@ export let modelCatalog = async (
     await res.body?.cancel()
     return modelCatalog(await refresh(cred), fetcher)
   }
-  let body = await res.text()
   if (!res.ok) {
-    throw new Error(`${url.pathname} says ${res.status}: ${body.slice(0, 200)}`)
+    await res.body?.cancel()
+    throw new Error(`${url.pathname} says ${res.status}`)
   }
+  let body = await res.text()
   let listed = JSON.parse(body) as {
     data?: { id: string }[]
     models?: { slug: string }[]

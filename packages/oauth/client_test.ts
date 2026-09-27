@@ -183,6 +183,17 @@ Deno.test('complete: a mismatched, refused, doubled or late return makes no requ
   assertEquals(seen.length, 0)
 })
 
+Deno.test('complete: an invalid return never exposes its contents', async () => {
+  let { c } = setup()
+  let { attempt } = await c.begin()
+  let error = await assertRejects(
+    () => c.complete(attempt, 'private-code'),
+    OAuthError,
+  )
+  assertEquals(error.code, 'callback')
+  assertEquals(error.message.includes('private-code'), false)
+})
+
 Deno.test('complete: a token endpoint that redirects is refused, and the code goes nowhere else', async () => {
   let { c, held, seen } = setup(undefined, [[302, {}], [200, {
     access_token: 'A1',

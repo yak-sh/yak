@@ -1,6 +1,6 @@
 // The model command reads each provider's catalog through its public shape.
 
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { CODEX, OPENAI } from '@yaks/openai'
 import { modelCatalog } from './runs.ts'
 
@@ -60,4 +60,16 @@ Deno.test('Codex model catalog refreshes a rejected connection once', async () =
   assertEquals(names, ['gpt-6-astra'])
   assertEquals(tokens, ['Bearer stale', 'Bearer fresh'])
   assertEquals(refreshed, 1)
+})
+
+Deno.test('model catalog errors do not repeat a credential', async () => {
+  let error = await assertRejects(
+    () =>
+      modelCatalog(
+        { token: 'private-token', base: OPENAI },
+        () => Promise.resolve(new Response('private-token', { status: 403 })),
+      ),
+    Error,
+  )
+  assertEquals(error.message.includes('private-token'), false)
 })
