@@ -115,6 +115,20 @@ export let mirror = ([[x, y, z], size, ...rest]: Box): Box => [
 /** A box and its mirror, right and left. */
 export let both = (b: Box): Box[] => [b, mirror(b)]
 
+/** A box toppled forward, a quarter turn about x: what stood up runs toward
+ * +z, and what lay toward +z hangs below.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(topple([[0, 0, 0], [1, 2, 3], 7]), [[0, -3, 0], [1, 3, 2], 7])
+ * ```
+ */
+export let topple = ([[x, y, z], [w, h, d], ...rest]: Box): Box => [
+  [x, -z - d, y],
+  [w, d, h],
+  ...rest,
+]
+
 /** Boxes drawn for a part of one size, fit to a part `k` times it along
  * each axis, about the part's pivot.
  *

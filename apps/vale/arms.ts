@@ -143,15 +143,16 @@ type Paint = {
 // Each kind's look, upright from its foot: the same boxes a hero holds
 // (figures.ts), lying on the ground and in the bag. A weapon is sized for a
 // child's hand, as the vale's people are drawn (figures.ts `BUILDS`), and
-// swings its edge forward, toward −z; a box's fourth number is how round its
-// edges are, crisp for a blade.
+// swings its edge forward, toward −z: a blade and its guard run from −z to
+// +z, its flats to either side; a box's fourth number is how round its edges
+// are, crisp for a blade.
 let LOOKS: Record<string, (p: Paint) => Box[]> = {
   sword: (p) => [
     [[-0.04, 0, -0.04], [0.08, 0.05, 0.08], p.trim],
     [[-0.027, 0.05, -0.027], [0.054, 0.15, 0.054], p.wood],
-    [[-0.15, 0.2, -0.04], [0.3, 0.05, 0.08], p.trim],
-    [[-0.05, 0.25, -0.015], [0.1, 0.53, 0.03], p.metal, 0.012],
-    [[-0.03, 0.78, -0.013], [0.06, 0.08, 0.026], p.metal, 0.012],
+    [[-0.04, 0.2, -0.15], [0.08, 0.05, 0.3], p.trim],
+    [[-0.015, 0.25, -0.05], [0.03, 0.53, 0.1], p.metal, 0.012],
+    [[-0.013, 0.78, -0.03], [0.026, 0.08, 0.06], p.metal, 0.012],
   ],
   axe: (p) => [
     [[-0.033, 0, -0.033], [0.066, 0.8, 0.066], p.wood],
@@ -168,9 +169,9 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
   dagger: (p) => [
     [[-0.032, 0, -0.032], [0.064, 0.04, 0.064], p.trim],
     [[-0.023, 0.04, -0.023], [0.046, 0.11, 0.046], p.wood],
-    [[-0.11, 0.15, -0.03], [0.22, 0.045, 0.06], p.trim],
-    [[-0.04, 0.195, -0.013], [0.08, 0.24, 0.026], p.metal, 0.01],
-    [[-0.024, 0.435, -0.011], [0.048, 0.065, 0.022], p.metal, 0.01],
+    [[-0.03, 0.15, -0.11], [0.06, 0.045, 0.22], p.trim],
+    [[-0.013, 0.195, -0.04], [0.026, 0.24, 0.08], p.metal, 0.01],
+    [[-0.011, 0.435, -0.024], [0.022, 0.065, 0.048], p.metal, 0.01],
   ],
   bow: (p) => [
     [[-0.04, 0.38, -0.04], [0.08, 0.18, 0.08], p.trim],

@@ -46,6 +46,7 @@ import {
   partOf,
   shade,
   stride,
+  topple,
 } from './parts.ts'
 import { lerp } from './rand.ts'
 import { flash, soft } from './soft.ts'
@@ -98,14 +99,16 @@ export type Dress = Record<string, string | undefined>
 
 // Where a hand closes on each family of thing, in metres up its look from its
 // foot (arms.ts), and how it is held: hung from the hand, its foot toward the
-// elbow, for what is swung; stood upright on it for the rest, `out` before
-// the hand for what is held up before them.
-let HOLDS: Record<string, { at: number; hung?: true; out?: number }> = {
+// elbow, for what is swung; `across` the fist, square to the forearm as a
+// stick is held, its back away from the elbow; stood upright on it for the
+// rest, `out` before the hand for what is held up before them.
+type Hold = { at: number; hung?: true; across?: true; out?: number }
+let HOLDS: Record<string, Hold> = {
   sword: { at: 0.12, hung: true },
   axe: { at: 0.1, hung: true },
   hammer: { at: 0.1, hung: true },
   dagger: { at: 0.09, hung: true },
-  bow: { at: 0.45 },
+  bow: { at: 0.45, across: true },
   staff: { at: 0.4 },
   shield: { at: 0.29, out: 0.1 },
   torch: { at: 0.06 },
@@ -117,12 +120,15 @@ let HOLDS: Record<string, { at: number; hung?: true; out?: number }> = {
 let grip = (kind: string, k: number): Box[] => {
   let t = ITEMS[kind]
   let h = HOLDS[t?.family ?? ''] ?? { at: 0 }
-  return (t?.look ?? []).map(([[x, y, z], [w, tall, d], c, round = 0.02]) => [
+  let boxes: Box[] = (t?.look ?? []).map((
+    [[x, y, z], [w, tall, d], c, round = 0.02],
+  ) => [
     [x * k, (h.hung ? h.at - y - tall : y - h.at) * k, (z + (h.out ?? 0)) * k],
     [w * k, tall * k, d * k],
     c,
     round * k,
   ])
+  return h.across ? boxes.map(topple) : boxes
 }
 
 // The colour of the `i`th box of a kind's look: its tier's metal, leather or
@@ -332,11 +338,11 @@ export let person = (
   let fist: Vec = [0, palm / 2 - fore - 0.015, 0.03]
   let reach = b.hips + b.shoulder[1] - elbow + fist[1]
   let tip = stature(b) - reach + 0.17
-  // Held in the right hand: a blade angled out before them, or a staff or a
-  // bow upright; nothing, for a hero with nothing in hand. What goes with it
-  // is held in the left.
+  // Held in the right hand: a blade angled out before them, a bow across the
+  // fist, or a staff upright; nothing, for a hero with nothing in hand. What
+  // goes with it is held in the left.
   let family = dress ? ITEMS[worn('main')]?.family ?? 'fists' : 'sword'
-  let upright = staff || family == 'staff' || family == 'bow'
+  let grasp = staff ? undefined : HOLDS[family]
   let held = partOf(
     staff
       ? [
@@ -383,10 +389,11 @@ export let person = (
   torso.add(cape)
 
   // How the right hand rests: bent a little at the elbow, and what it holds
-  // turned upright, a staff or a bow, or out before them, a blade; the left
-  // holds its torch upright, and a second blade out before them too.
+  // out before them, a blade, square to the forearm, a bow, or turned
+  // upright, a staff; the left holds its torch upright, and a second blade
+  // out before them too.
   let rest = -0.5
-  let hold = upright ? -rest : -0.8
+  let hold = grasp?.hung ? -0.8 : grasp?.across ? 0 : -rest
   other.rotation.x = twin ? hold : side == 'torch' ? 0.3 : 0
   // A blow, `w` of the way through it, struck with `hand`: the weapon's own.
   let swing = (w: number, hand: Hand = 'main') => {
@@ -400,12 +407,12 @@ export let person = (
       fore.rotation.x = lerp(-1.3, -0.05, up)
       torso.rotation.y = k * lerp(0.25, -0.3, up)
     } else if (family == 'bow') {
-      // Drawn and held to the loose, a third of the way in, the bow upright
-      // before them and the string at the chin.
+      // Drawn and held to the loose, a third of the way in: the arm out
+      // straight before them stands the bow in its fist upright, and the
+      // string comes to the chin.
       let d = w < 0.33 ? ease(w / 0.33) : 1 - ease((w - 0.33) / 0.67) * 0.7
       armR.rotation.x = -1.5 * d
       foreR.rotation.x = rest * (1 - d)
-      held.rotation.x = hold + 1.5 * d
       armL.rotation.x = -1.35 * d
       armL.rotation.z = -0.5 * d
       foreL.rotation.x = -1.4 * d
