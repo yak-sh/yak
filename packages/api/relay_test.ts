@@ -244,6 +244,31 @@ Deno.test('a peer predicate admits late and moving rows, then lets them go', () 
   assertEquals(watcher.take().at(-1)?.gone, ['b1'])
 })
 
+Deno.test('sustained peer movement does not resend stored data to existing members', () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph)
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'near', '.book&.browsing.x<10')
+  watcher.take()
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 1 } }])
+  let joined = watcher.take()
+  assertEquals(joined.length, 1)
+  assertEquals(joined[0].bundles?.map((b) => b.entity.eid), ['b1'])
+  assertEquals(joined[0].relay?.[0].browsing, { x: 1 })
+
+  for (let x = 2; x < 102; x++) {
+    subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: x % 9 } }])
+    assertEquals(watcher.take(), [{
+      id: 'near',
+      relay: [{ entity: { eid: 'b1' }, browsing: { x: x % 9 } }],
+    }])
+  }
+  // A real durable change still sends the changed stored bundle.
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 13 } }])
+  assertEquals(watcher.take().at(-1)?.bundles?.[0].book, { price: 13 })
+})
+
 Deno.test('durable commits recheck a row beside its held peer value', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])

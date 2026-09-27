@@ -81,6 +81,38 @@ Deno.test('acknowledged subscriber holds one frame and sends latest relay next',
   assertEquals(socket.sent, [])
 })
 
+Deno.test('peer movement remains bounded behind an unacknowledged frame', () => {
+  let graph = shopGraph()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let socket = fake()
+  let q = queue(socket)
+  q.enable()
+  let subs = subscriptions(graph)
+  subs.open(q.send, 'near', '.book&.browsing.x<10')
+  let [snapshot] = socket.taken()
+  assert(typeof snapshot.ack == 'string')
+  q.ack(snapshot.ack)
+
+  let writer = () => {}
+  subs.relay(writer, [{ entity: { eid: 'b1' }, browsing: { x: 1 } }])
+  let [joined] = socket.taken()
+  assertEquals(joined.bundles?.map((b) => b.entity.eid), ['b1'])
+  assert(typeof joined.ack == 'string')
+  for (let x = 2; x <= 201; x++) {
+    subs.relay(writer, [{ entity: { eid: 'b1' }, browsing: { x: x % 9 } }])
+  }
+  assertEquals(socket.sent, [])
+  q.ack(joined.ack)
+  let [newest] = socket.taken()
+  assertEquals(newest.relay, [
+    { entity: { eid: 'b1' }, browsing: { x: 201 % 9 } },
+  ])
+  assertEquals(newest.bundles, undefined)
+  assert(typeof newest.ack == 'string')
+  q.ack(newest.ack)
+  assertEquals(socket.sent, [])
+})
+
 Deno.test('a subscriber opts into acknowledgements through the socket', () => {
   let graph = shopGraph()
   let socket = fake()

@@ -504,6 +504,7 @@ export let subscriptions = (graph: Graph, opts: {
     now: Bundle[],
     touched: Eid[],
     routing: ReturnType<typeof net<Sub>>,
+    joinsOnly = false,
   ): Map<Sub, Moved> => {
     let out = new Map<Sub, Moved>()
     let of = (s: Sub) => {
@@ -521,9 +522,15 @@ export let subscriptions = (graph: Graph, opts: {
         of(s).gone.push(eid)
       }
       for (let s of into) {
-        if (!s.members.has(eid)) of(s).joined.push(eid)
+        let joined = !s.members.has(eid)
+        if (joined) of(s).joined.push(eid)
         s.members.add(eid)
-        of(s).bundles.push(only(s.want ?? null)(stored(b)))
+        // Peer relays change routing but not stored data. Existing members
+        // already heard the patch from cast(); only new members need a
+        // full stored bundle and the held relay from hail().
+        if (joined || !joinsOnly) {
+          of(s).bundles.push(only(s.want ?? null)(stored(b)))
+        }
       }
     }
     // An entity storage no longer holds at all has left every set too.
@@ -612,6 +619,7 @@ export let subscriptions = (graph: Graph, opts: {
         overlay(rows, peers.values((eid) => touched.includes(eid))),
         touched,
         peerNet,
+        true,
       )
       return then(
         over(
