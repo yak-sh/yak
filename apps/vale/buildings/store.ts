@@ -1,5 +1,6 @@
 // The general store keeps goods in bins and on the walls. Its keeper sleeps
 // in the small loft over the shop.
+import { facade } from './facade.ts'
 import type { Plan } from './kit.ts'
 import {
   barrel,
@@ -52,4 +53,14 @@ export let STORE: Plan = {
       ],
     },
   ],
+  more: (k) =>
+    facade(k, {
+      mark: {
+        at: 3.5,
+        icon: ['XXXXX', 'X...X', 'X.X.X', 'X...X', 'XXXXX'],
+        ink: 0xf2d395,
+        board: 0x31586a,
+      },
+      awning: { at: -1.5, wide: 3.5, colors: [0x346d7b, 0xe8d4ac] },
+    }),
 }

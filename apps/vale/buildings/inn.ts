@@ -1,5 +1,6 @@
 // The inn opens onto the square. Its common room has a serving counter,
 // tables and a barrel by the wall; beds upstairs look out over the street.
+import { facade } from './facade.ts'
 import type { Plan } from './kit.ts'
 import {
   barrel,
@@ -59,6 +60,15 @@ export let INN: Plan = {
     },
   ],
   more: (k) => {
+    facade(k, {
+      mark: {
+        at: 4.5,
+        icon: ['.XXX.', 'XX..X', 'XX..X', 'XX..X', '.XXX.'],
+        ink: 0xf3d79a,
+        board: 0x68382d,
+      },
+      awning: { at: -2.5, wide: 3.5, colors: [0x9e3f36, 0xe8c593] },
+    })
     k.place(barrel, [-4.5, 5.5])
     k.place(barrel, [-3.75, 5.5])
   },

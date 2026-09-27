@@ -1,5 +1,6 @@
 // The apothecary: a pot under its chimney, herbs and jars round the walls,
 // and the village's Brewing station within reach of the entrance.
+import { facade } from './facade.ts'
 import type { Plan } from './kit.ts'
 import { barrel, cauldron, chest, lamp, shelf, table } from './pieces.ts'
 
@@ -27,4 +28,14 @@ export let APOTHECARY: Plan = {
       { piece: lamp, on: 'north', at: 2 },
     ],
   }],
+  more: (k) =>
+    facade(k, {
+      mark: {
+        at: 2.75,
+        icon: ['..X..', '..X..', '.XXX.', '.XXX.', '..X..'],
+        ink: 0xc8e4a1,
+        board: 0x3b5a49,
+      },
+      awning: { at: 0, wide: 2.25, colors: [0x527f56, 0xb4b478] },
+    }),
 }

@@ -1,5 +1,6 @@
 // The tailor's shop: a loom by the light, a cutting table, bolts and a
 // fitting rug. The loom becomes the Tailoring station with T-40826.
+import { facade } from './facade.ts'
 import type { Plan } from './kit.ts'
 import { chest, lamp, loom, rug, shelf, table } from './pieces.ts'
 
@@ -24,4 +25,14 @@ export let TAILOR: Plan = {
       { piece: lamp, on: 'north', at: 2.5 },
     ],
   }],
+  more: (k) =>
+    facade(k, {
+      mark: {
+        at: -3.25,
+        icon: ['X...X', '.X.X.', '..X..', '.X.X.', 'X...X'],
+        ink: 0xf4dcae,
+        board: 0x634a7d,
+      },
+      awning: { at: 1.5, wide: 2.5, colors: [0x94619f, 0xe5d6c1] },
+    }),
 }

@@ -1,5 +1,6 @@
 // A broad civic room, with the council table visible from the double doors,
 // banners behind it, and a bench for visitors beside the entry.
+import { banners, facade } from './facade.ts'
 import type { Plan } from './kit.ts'
 import {
   banner,
@@ -41,4 +42,16 @@ export let HALL: Plan = {
       { piece: lamp, on: 'south', at: 5 },
     ],
   }],
+  more: (k) => {
+    facade(k, {
+      mark: {
+        at: 0,
+        height: 10,
+        icon: ['X...X', 'XX.XX', 'XXXXX', '.XXX.', '..X..'],
+        ink: 0xefcb70,
+        board: 0x3c536b,
+      },
+    })
+    banners(k, [-2.75, 2.75], 0x8e4142)
+  },
 }

@@ -1,5 +1,6 @@
 // Stables keep a clear aisle from the broad doors to the feed along the
 // north wall. The barn has room for hay and stores at its edges.
+import { facade } from './facade.ts'
 import type { Plan } from './kit.ts'
 import { barrel, haybale, lamp, manger, trough } from './pieces.ts'
 
@@ -24,6 +25,17 @@ export let STABLE: Plan = {
       { piece: lamp, on: 'south', at: 3.5 },
     ],
   }],
+  more: (k) =>
+    facade(k, {
+      mark: {
+        at: 4,
+        height: 8,
+        icon: ['X...X', 'X...X', '.X.X.', '.XXX.', '..X..'],
+        ink: 0xe2c180,
+        board: 0x4d3b2c,
+      },
+      awning: { at: 0, wide: 3.5, height: 13, colors: [0x74543a, 0x9e794d] },
+    }),
 }
 
 export let BARN: Plan = {
@@ -50,4 +62,15 @@ export let BARN: Plan = {
       { piece: lamp, on: 'south', at: 4 },
     ],
   }],
+  more: (k) =>
+    facade(k, {
+      mark: {
+        at: 4.5,
+        height: 9,
+        icon: ['..X..', '.XXX.', 'XXXXX', '..X..', '.X.X.'],
+        ink: 0xe7bd63,
+        board: 0x684934,
+      },
+      awning: { at: 0, wide: 4, height: 15, colors: [0x715232, 0x987043] },
+    }),
 }
