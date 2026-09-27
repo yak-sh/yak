@@ -74,7 +74,7 @@ let INDOORS = 0.85
  *   move, jump: false, strike: false, ability: 0, dodge: false, talk: false,
  *   gather: false, drink: false, bag: false, snap: false, follow: false,
  *   map: false, mic: false,
- *   orbit: [0, 0] as [number, number], zoom: 0, ...more,
+ *   orbit: [0, 0] as [number, number], look: false, zoom: 0, ...more,
  * })
  * let cam = (follow: boolean) => ({
  *   yaw: 0, pitch: 0.4, dist: 9, reach: 9, x: 0, y: 0, z: 0, shake: 0,
@@ -89,6 +89,7 @@ let INDOORS = 0.85
  * assertEquals(run(cam(false), hands([0, 1])), 0) // free: stays put
  * assert(run(cam(true), hands([0, 1])) < -0.5) // following: comes round
  * assertEquals(run(cam(true), hands([1, 0])), 0) // not while going sideways
+ * assertEquals(run(cam(true), hands([0, 1], { look: true })), 0)
  * ```
  */
 export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
@@ -99,7 +100,7 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
   cam.idle = dx || dy ? 0 : cam.idle + dt
   if (i.follow) cam.follow = !cam.follow
   if (i.snap || (i.follow && cam.follow)) cam.snap = true
-  if (!cam.idle) cam.snap = false
+  if (!cam.idle || i.look) cam.snap = false
   let off = Math.atan2(
     Math.sin(yaw + Math.PI - cam.yaw),
     Math.cos(yaw + Math.PI - cam.yaw),
@@ -112,7 +113,7 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
   }
   let k = cam.snap
     ? SNAP
-    : cam.follow && cam.idle > WAIT
+    : cam.follow && !i.look && cam.idle > WAIT
     ? FOLLOW * Math.max(0, i.move[1])
     : 0
   cam.yaw += off * (1 - Math.exp(-dt * k))

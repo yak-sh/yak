@@ -903,6 +903,7 @@ export let game = (
             dt,
             SPEED * (1 + s.kit.speed),
             intent.jump,
+            intent.look,
           )
         }
       }

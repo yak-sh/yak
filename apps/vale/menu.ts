@@ -19,6 +19,8 @@ export type Settings = {
   }
   follows: () => boolean
   follow: () => void
+  swapped: () => boolean
+  swap: () => void
 }
 
 // Each key and what it does, the actions' keys read from input.ts.
@@ -40,20 +42,22 @@ let DOES: [Action, string][] = [
 let kbd = (keys: string[]) =>
   keys.map((k) => `<kbd class=Key>${k}</kbd>`).join(' ')
 
-let KEYS = [
-  [kbd(['W', 'A', 'S', 'D']), 'Move'],
-  [`drag`, 'Look around'],
-  [`wheel`, 'Nearer or further'],
-  ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
-  [kbd(['Enter']), 'Chat'],
-  ...Object.values(SHEETS).flatMap((s) =>
-    'keys' in s
-      ? [[kbd(s.keys.map(cap)), s.title]]
-      : 'tabs' in s
-      ? Object.values(s.tabs).map((t) => [kbd(t.keys.map(cap)), t.title])
-      : []
-  ),
-].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
+let keys = (swapped: boolean) =>
+  [
+    [kbd(['W', 'A', 'S', 'D']), 'Move'],
+    [swapped ? 'right drag' : 'left drag', 'Steer the camera while moving'],
+    [swapped ? 'left drag' : 'right drag', 'Look without turning your hero'],
+    [`wheel`, 'Nearer or further'],
+    ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
+    [kbd(['Enter']), 'Chat'],
+    ...Object.values(SHEETS).flatMap((s) =>
+      'keys' in s
+        ? [[kbd(s.keys.map(cap)), s.title]]
+        : 'tabs' in s
+        ? Object.values(s.tabs).map((t) => [kbd(t.keys.map(cap)), t.title])
+        : []
+    ),
+  ].map(([k, what]) => `<dt>${k}</dt><dd>${what}</dd>`).join('')
 
 let TOUCH = [
   ['Left thumb', 'Move, wherever it lands'],
@@ -71,7 +75,10 @@ export let menu = (panel: Panel, o: Settings) => {
     if (act == 'sound') o.mute()
     if (act == 'music') o.music.toggle()
     if (act == 'follow') o.follow()
-    if (act == 'sound' || act == 'music' || act == 'follow') was = ''
+    if (act == 'swap') o.swap()
+    if (act == 'sound' || act == 'music' || act == 'follow' || act == 'swap') {
+      was = ''
+    }
   })
   panel.body.addEventListener('input', (e) => {
     if (
@@ -90,9 +97,9 @@ export let menu = (panel: Panel, o: Settings) => {
     /** show what is set, when the menu is open and it changed */
     show: () => {
       if (!panel.open) return
-      let sound = !o.muted(), follows = o.follows()
+      let sound = !o.muted(), follows = o.follows(), swapped = o.swapped()
       let playing = !o.music.muted
-      let key = `${sound} ${playing} ${follows}`
+      let key = `${sound} ${playing} ${follows} ${swapped}`
       if (key == was) return
       was = key
       let volume = Math.round(o.music.level * 100)
@@ -121,8 +128,18 @@ export let menu = (panel: Panel, o: Settings) => {
             ? 'The camera follows you'
             : 'The camera stays where you turn it',
         ) +
+        toggle(
+          'swap',
+          swapped,
+          glyph('video'),
+          swapped
+            ? 'Right drag steers; left drag looks'
+            : 'Left drag steers; right drag looks',
+        ) +
         `<h3 class=Menu_Head>Touch</h3><dl class="Menu_Keys Menu_Keys-touch">${TOUCH}</dl>` +
-        `<h3 class=Menu_Head>Keys</h3><dl class="Menu_Keys Menu_Keys-keys">${KEYS}</dl>` +
+        `<h3 class=Menu_Head>Keys</h3><dl class="Menu_Keys Menu_Keys-keys">${
+          keys(swapped)
+        }</dl>` +
         `</div>`
       panel.body.innerHTML = html
     },

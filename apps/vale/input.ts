@@ -23,6 +23,8 @@ export type Intent = {
   mic: boolean
   /** how far the view was turned since the last read: yaw, pitch */
   orbit: [number, number]
+  /** a look drag holds the hero's heading while the camera turns */
+  look: boolean
   /** how far it was pulled in or out */
   zoom: number
 }
@@ -94,13 +96,20 @@ export let listen = (
   let held = new Set<string>()
   let pressed = new Set<Action>()
   let orbit: [number, number] = [0, 0]
+  let looked = false
   let zoom = 0
+  let swapped = false
+  try {
+    swapped = localStorage.getItem('mossvale.drag.swap') == '1'
+  } catch { /* this page keeps its setting */ }
+  let isLook = (button: number, type: string) =>
+    type != 'touch' && button == (swapped ? 0 : 2)
   let stick:
     | { id: number; x: number; y: number; dx: number; dy: number }
     | null = null
   let drags = new Map<
     number,
-    { x: number; y: number; far: number; button: number }
+    { x: number; y: number; far: number; button: number; type: string }
   >()
 
   let base = document.createElement('div')
@@ -142,6 +151,7 @@ export let listen = (
       y: e.clientY,
       far: 0,
       button: e.button,
+      type: e.pointerType,
     })
   })
   stage.addEventListener('pointermove', (e) => {
@@ -164,6 +174,7 @@ export let listen = (
     let k = e.pointerType == 'touch' ? 0.009 : 0.006
     orbit[0] -= mx * k
     orbit[1] += my * k
+    if (isLook(d.button, d.type)) looked = true
   })
   let up = (e: PointerEvent) => {
     if (stick?.id == e.pointerId) {
@@ -191,6 +202,13 @@ export let listen = (
   return {
     /** press an action from a button on the screen */
     press: (a: Action) => pressed.add(a),
+    swapped: () => swapped,
+    swap: () => {
+      swapped = !swapped
+      try {
+        localStorage.setItem('mossvale.drag.swap', swapped ? '1' : '0')
+      } catch { /* this page keeps its setting */ }
+    },
     read: (): Intent => {
       let x = 0, y = 0
       if (!busy()) {
@@ -216,10 +234,13 @@ export let listen = (
         follow: pressed.has('follow'),
         mic: pressed.has('mic'),
         orbit: [orbit[0], orbit[1]],
+        look: looked ||
+          [...drags.values()].some((d) => isLook(d.button, d.type)),
         zoom,
       }
       pressed.clear()
       orbit = [0, 0]
+      looked = false
       zoom = 0
       return out
     },

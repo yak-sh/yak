@@ -237,6 +237,8 @@ let settings = menu(h.panels.menu, {
   music: sound.music,
   follows: () => cam.follow,
   follow: () => hands.press('follow'),
+  swapped: hands.swapped,
+  swap: hands.swap,
 })
 
 // Who is playing: one of your heroes, or a new one made at the gate.
