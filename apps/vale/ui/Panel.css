@@ -53,7 +53,7 @@
   display: flex;
   align-items: center;
   gap: var(--gap);
-  padding: 0.55rem 0.6rem 0.45rem 1rem;
+  padding: 0.55rem 0.6rem 0.1rem 1rem;
 }
 
 .Panel_Title {
@@ -79,13 +79,20 @@
 }
 
 /* Where a scrollbar takes room, its room is kept whether or not the body is
-   long enough for one, so the sheet's width never changes with it. */
+   long enough for one, so the sheet's width never changes with it; what the
+   body holds is never wider than what is left beside it, so nothing scrolls
+   sideways. A scroll box clips at its padding, so every edge keeps room for
+   the ring round a thing picked or focused (Pack.css `Pack_Tile-on`). */
 .Panel_Body {
   min-height: 0;
-  padding: 0 1rem 1rem;
+  padding: 0.35rem 1rem 1rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+
+  & > * {
+    max-width: 100%;
+  }
 }
 
 @media (orientation: portrait) and (pointer: coarse) {
