@@ -864,6 +864,30 @@ let conjuncts = (ctx: Ctx, cs: Clause[]): Cond[] => {
   return [shape, ...rest.map((x) => clause(ctx, x))]
 }
 
+// An OR's indexed arms are selected before the outer WHERE is applied. Carry
+// an exact entity address into each arm so a scoped query seeks that entity
+// instead of running every arm over the whole graph first.
+let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
+  let eid = cs.find((c): c is Pred =>
+    c.kind == 'pred' && c.path.join('.') == 'eid' && c.op == '=' &&
+    c.value?.kind == 'scalar' && !!c.value.raw && !c.not && !c.where &&
+    !c.facet && !claims(ctx, 'pred')
+  )
+  return eid
+    ? cs.map((c) =>
+      c.kind == 'or'
+        ? {
+          ...c,
+          clauses: c.clauses.map((alt): And => ({
+            kind: 'and',
+            clauses: [eid, alt],
+          })),
+        }
+        : c
+    )
+    : cs
+}
+
 // One filter clause compiled to a condition. Directives are removed before this
 // runs.
 let clause = (ctx: Ctx, c: Clause): Cond => {
@@ -1025,7 +1049,10 @@ export let bound = (
     }
   }
   let filters = cs.filter((c) => !DIRECTIVES.has(c.kind) || claims(ctx, c.kind))
-  let where = and(...conjuncts(ctx, filters), cond(ctx.d.live()))
+  let where = and(
+    ...conjuncts(ctx, addressed(ctx, filters)),
+    cond(ctx.d.live()),
+  )
 
   let count = find<Count>(cs, 'count')
   let distinct = find<Distinct>(cs, 'distinct')

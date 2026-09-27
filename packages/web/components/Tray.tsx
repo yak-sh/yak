@@ -18,7 +18,7 @@ import { usePinTargets } from './subscriptions.ts'
 import { Icon } from './icons.tsx'
 import { shelfHost, shelfOpen, shelve } from './shelf.ts'
 import { useQueryEids } from './useQuery.ts'
-import { traySessionQuery } from '../tray_query.ts'
+import { trayActiveQuery, trayRecentQuery } from '../tray_query.ts'
 
 // The Tray is bottom-right screen chrome: live-session attention plus a
 // per-client Shelf. A shelved entity is a normal Card while open and one icon
@@ -80,7 +80,9 @@ export let traySessions = (rows: [string, Ent][]) =>
   rows.toSorted(([, a], [, b]) => started(b) - started(a))
 
 let useLive = () => {
-  let ids = useQueryEids(traySessionQuery, true)
+  let active = useQueryEids(trayActiveQuery, true)
+  let recent = useQueryEids(trayRecentQuery, true)
+  let ids = [...new Set([...active, ...recent])]
   return traySessions(ids.flatMap((eid) => {
     let e = ent(eid)
     return e.session && shown(eid, e) ? [[eid, e] as [string, Ent]] : []
@@ -136,8 +138,8 @@ let drop = (e: DragEvent) => {
 // long as it is on screen: the strip's dots ride a projection carrying only the
 // columns a dot decides by (live.ts sessionDots), and a rendered ROW needs more
 // — the identity, model and effort SessionRow shows. So the panel holds the
-// fuller projection of the SAME query, which is a different sub (projection is
-// part of sub identity, D-22567 §3), and gives it back when it closes. A
+// fuller projection of the selected eids, which is a different sub, and gives
+// it back when it closes. A
 // collapsed tray — the default — never asks for those columns at all.
 let LiveRows = ({ ls }: { ls: [string, Ent][] }) => {
   useQueryEids(

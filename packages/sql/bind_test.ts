@@ -407,6 +407,15 @@ Deno.test('an OR compiles as a union of indexed selections of spine ids', () => 
   assertEquals(either.params, ['a', 1])
 })
 
+Deno.test('an addressed OR seeks the entity in each arm', () => {
+  let q = compile(parse('(.doc.title=a|.task.priority=1)&.eid=abc'), v)
+  let seeks = q.sql.match(
+    /"entity"\."eid" in \(select value from json_each\(\?\)\)/g,
+  )
+  assertEquals(seeks?.length, 3) // both arms, then the outer selection
+  assertEquals(q.params, ['["abc"]', 'a', '["abc"]', 1, '["abc"]'])
+})
+
 Deno.test('a wide OR is cut into compounds workerd will take', () => {
   // Six alternatives is a sixth term, which workerd refuses (compound.ts) —
   // the tray's own or is seven. Each group stays one indexed `in`.
