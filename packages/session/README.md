@@ -60,7 +60,11 @@ await appendEntry(g, 'session', 'Build completed', {
 to the input that began the turn they cut into, so a long transcript costs a
 turn no more than a short one. A line is what a model is sent (an input, a
 reply, a call, a result); the asks and errors kept beside them are not lines,
-and neither are the typed questions other turns asked or their answers.
+and neither are the typed questions other turns asked or their answers. Without
+an explicit window, a long native transcript is summarized into a checkpoint
+before it fills the model's input budget. The next turn reads that summary and
+the entries after its boundary. A provider anchor before the checkpoint is not
+reused.
 
 A fork has `fork{from}` on its session entity. Its logical transcript contains
 the parent transcript through the referenced entry, followed by its own entries.
@@ -275,12 +279,14 @@ too, so the two never collide. Each entry is dated when the harness wrote it.
 last `full` milliseconds is read as it grows, at full depth, and an older one is
 read in lazily, one per pass, its prose alone. It skips a managed run, whose
 transcript asks a provider for it (`using{provider}`), and subagents'
-transcripts.
+transcripts. A Claude Code compaction summary becomes a checkpoint in the
+transcript; a native continuation starts there.
 
 Once an hour the duty finds the imported sessions whose newest entry is older
 than `full` (`stale()`), from any importer, and strips each to its prose
 (`strip()`, a small batch between looks): calls, results, thoughts, notices and
-a turn's ending go; what a person typed and what the model said stay.
+a turn's ending go; what a person typed and what the model said stay. Compaction
+summaries stay too, so an older transcript can still resume.
 
 | Option        | Default              | Meaning                                 |
 | ------------- | -------------------- | --------------------------------------- |

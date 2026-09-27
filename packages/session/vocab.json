@@ -81,6 +81,10 @@
           "type": "string",
           "ref": "entry",
           "death": "keep"
+        },
+        "seq": {
+          "type": "integer",
+          "description": "position of the last summarized entry, kept if that imported entry is later trimmed"
         }
       },
       "description": "everything through this entry is settled: a compaction boundary"

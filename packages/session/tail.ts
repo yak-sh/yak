@@ -111,10 +111,13 @@ export let callOf = (session: Eid, id: string): Eid =>
  * ```
  */
 export let prose = (c: Comps): boolean =>
-  !!c.content && Object.keys(c).every((k) => k == 'content' || k == 'output')
+  !!c.content && Object.keys(c).every((k) =>
+    k == 'content' || k == 'output' ||
+    (!!c.checkpoint && (k == 'checkpoint' || k == 'notice'))
+  )
 
 // What a person typed: prose with no output beside it.
-let typed = (c: Comps) => prose(c) && !c.output
+let typed = (c: Comps) => prose(c) && !c.output && !c.checkpoint
 
 // Two patches to one entity, as one.
 let merge = (a: Bundle, b: Bundle): Bundle => {

@@ -198,7 +198,9 @@ export let claude: Reader = (e) => {
   if (e.isSidechain) return nothing
   let at = str(e.timestamp) || undefined
   let a = obj(e.attachment)
-  let entries: Comps[] = e.type == 'assistant'
+  let entries: Comps[] = e.type == 'user' && e.isCompactSummary
+    ? said(text(obj(e.message).content), { checkpoint: {}, notice: {} })
+    : e.type == 'assistant'
     ? blocks(e).flatMap(assistant)
     : e.type == 'user'
     ? blocks(e).flatMap((b) => user(b, human(e)))

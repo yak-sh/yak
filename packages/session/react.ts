@@ -68,6 +68,7 @@ import {
   type TranscriptStatus,
   usingBefore,
 } from './status.ts'
+import { context, prefix } from './compact.ts'
 
 /** The caller, supplied by react rather than by model arguments, and a
  * signal that aborts when the process running the transcript is leaving: a
@@ -108,6 +109,8 @@ export type Deps = {
   streaming?: boolean
   /** Minimum interval between durable stream checkpoints; zero disables. */
   checkpointMs?: number
+  /** Approximate input-token budget before a transcript is compacted. */
+  contextTokens?: number
   model: Model
   /** Choose the provider that serves the model, and what it calls the model. */
   resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Served>
@@ -189,8 +192,9 @@ export let project = (
   for (let b of entries) {
     let kind = kindOf(b)
     let c = comp(b, CALL)
-    if (b.prompt) out.push({ kind: 'instruction', text: textOf(b) })
-    else if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
+    if (b.prompt || b.checkpoint) {
+      out.push({ kind: 'instruction', text: textOf(b) })
+    } else if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
     else if (kind == 'output') out.push({ kind: 'assistant', text: textOf(b) })
     else if (kind == 'call' && c?.source != anchor) {
       out.push({
@@ -479,7 +483,10 @@ export let react = async (
       !b.attempt || (b.attempt as Comp).state == 'completed'
     ),
   )
-  const sameModel = asked && comp(asked, ASK)?.to === modelEid &&
+  let checkpoint = entries.filter((b) => b.checkpoint).at(-1)
+  const sameModel = asked &&
+    (!checkpoint || seqOf(asked) > seqOf(checkpoint)) &&
+    comp(asked, ASK)?.to === modelEid &&
     comp(asked, 'using')?.provider === using?.provider
   let anchorId = providerModel.anchor && asked && sameModel
     ? providerModel.anchor(asked)
@@ -487,7 +494,7 @@ export let react = async (
   let boundary = asked &&
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
   let asking = askingOf(entries)
-  let said = lines(entries, asking)
+  let said = lines(context(entries), asking)
   let window = anchorId
     ? said.filter((b) =>
       seqOf(b) > seqOf(asked!) ||
@@ -538,6 +545,73 @@ export let react = async (
       parameters,
     })),
     anchor: anchorId,
+  }
+  // A provider anchor can hide a large retained history. Measure the visible
+  // transcript as well, and write one summary checkpoint before asking again.
+  // The next pass sees that summary plus the unsummarized suffix.
+  let budget = Math.max(1, deps.contextTokens ?? 32_000) * 4
+  if (
+    using?.window == null && String(req.instructions ?? '').length < budget &&
+    JSON.stringify(project(said, toolEntities)).length +
+          String(req.instructions ?? '').length > budget
+  ) {
+    let historyResults = deps.resultText
+      ? new Map(
+        await Promise.all(
+          said.filter((b) => b.result).map(async (b) =>
+            [b.entity.eid, await deps.resultText!(b)] as const
+          ),
+        ),
+      )
+      : undefined
+    if (
+      JSON.stringify(project(said, toolEntities, undefined, historyResults))
+            .length + String(req.instructions ?? '').length > budget
+    ) {
+      let chunk = prefix(said, budget)
+      let through = chunk.at(-1)
+      if (!through) return nothing
+      try {
+        let compacted = await providerModel({
+          model: spelled,
+          effort: req.effort,
+          instructions: [
+            req.instructions,
+            'Summarize this transcript for its next model turn. Preserve the ' +
+            'current goal, decisions, exact identifiers, open work, and recent ' +
+            'user instructions. Do not answer the user. Return only the summary.',
+          ].filter(Boolean).join('\n\n'),
+          items: [{
+            kind: 'user',
+            text: JSON.stringify(
+              project(chunk, toolEntities, undefined, historyResults),
+            ),
+          }],
+          tools: [],
+          tokens: 4096,
+          signal: deps.signal,
+        })
+        let summary = compacted.items.filter((i) => i.kind == 'assistant')
+          .map((i) => i.text).join('\n').trim()
+        if (!summary) throw new ModelError('compaction', 'Empty summary')
+        return append([
+          line(
+            {
+              checkpoint: { through: through.entity.eid, seq: seqOf(through) },
+              notice: {},
+            },
+            summary,
+          ),
+        ])
+      } catch (e) {
+        if (!(e instanceof ModelError)) deps.report?.(e, session, 'compaction')
+        return append([
+          e instanceof ModelError
+            ? line({ [ERROR]: { code: e.code } }, e.message)
+            : line({ [EXCEPTION]: {} }, String(e)),
+        ])
+      }
+    }
   }
   let ask = line({
     [ASK]: { to: modelEid, through: newest.entity.eid },

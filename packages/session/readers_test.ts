@@ -53,6 +53,11 @@ Deno.test('claude: who said it — a person, the harness, or the model', () => {
     ],
     // A subagent's side conversation is not this session's.
     [{ ...say('hi', human), isSidechain: true }, []],
+    [say('what was settled', { isCompactSummary: true }), [{
+      content: { body: 'what was settled' },
+      checkpoint: {},
+      notice: {},
+    }]],
     [{ type: 'attachment', attachment: { type: 'date' } }, []],
   ]
   for (let [e, want] of cases) assertEquals(entries(claude, e), want)

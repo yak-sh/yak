@@ -145,8 +145,27 @@ export let runs = (host?: Host): Runs => ({
     // The session arrives as its eid: @yaks/tools resolved what was typed (an
     // eid, `S-81`, a run's own id) and refused one that names no session.
     let s = String(args.session)
-    let using = usingBefore(await transcript(graph, s)) ??
+    let prior = usingBefore(await transcript(graph, s)) ??
       await selectedUsing(graph, s)
+    let provider = word(args, 'provider')
+    let model = word(args, 'model')
+    let using = prior
+    if (provider || model || !prior?.model) {
+      let [p, m] = await graph.get([
+        String(prior?.provider ?? ''),
+        String(prior?.model ?? ''),
+      ])
+      provider ??= model
+        ? 'openai'
+        : String((p?.provider as Comp | undefined)?.name ?? 'openai')
+      model ??= String((m?.model as Comp | undefined)?.name ?? ASTRA)
+      await graph.apply(seed({ provider, model }), { trusted: true })
+      using = {
+        ...prior,
+        provider: identityEid(PROVIDER, [provider]),
+        model: identityEid(MODEL, [model]),
+      }
+    }
     await graph.apply([{
       entity: { eid: crypto.randomUUID() },
       entry: { session: s },

@@ -314,6 +314,92 @@ Deno.test('a provider that keeps nothing replays the whole transcript', async ()
   assertEquals(ask.fake, undefined)
 })
 
+Deno.test('an imported compaction resumes from its summary and later entries', async () => {
+  let g = world()
+  await g.apply([
+    {
+      entity: { eid: 'old' },
+      entry: { session: ids.s },
+      content: { body: 'obsolete detail' },
+    },
+    {
+      entity: { eid: 'summary' },
+      entry: { session: ids.s },
+      content: { body: 'The plan is to keep the bridge.' },
+      checkpoint: {},
+    },
+    {
+      entity: { eid: 'after' },
+      entry: { session: ids.s },
+      content: { body: 'The bridge must be blue.' },
+    },
+    {
+      entity: { eid: 'continue' },
+      entry: { session: ids.s },
+      content: { body: 'What is the plan and color?' },
+      using: { provider: ids.p, model: ids.m },
+    },
+  ])
+  let { model, asked } = scripted([says('r1', 'Keep the blue bridge.')])
+  assertEquals(await rest(g, ids.s, { model, tools: [] }), 'settled')
+  assertEquals(asked[0].items, [
+    { kind: 'instruction', text: 'The plan is to keep the bridge.' },
+    { kind: 'user', text: 'The bridge must be blue.' },
+    { kind: 'user', text: 'What is the plan and color?' },
+  ])
+})
+
+Deno.test('a long native transcript writes a checkpoint before continuing', async () => {
+  let g = world()
+  await g.apply([{
+    entity: { eid: 'later' },
+    entry: { session: ids.s },
+    content: { body: 'Remember the blue bridge.' },
+  }])
+  let { model, asked } = scripted([
+    says('summary', 'Keep the blue bridge.'),
+    says('reply', 'Remembered.'),
+  ], false)
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      contextTokens: 20,
+    }),
+    'settled',
+  )
+  let entries = await transcript(g, ids.s)
+  let mark = entries.find((b) => b.checkpoint)!
+  assertEquals((mark.checkpoint as Comp).through, 'later')
+  assertEquals((mark.checkpoint as Comp).seq, 2)
+  assertEquals(asked.length, 2)
+  assertEquals(asked[1].items, [{
+    kind: 'instruction',
+    text: 'Keep the blue bridge.',
+  }])
+  await g.apply([
+    { entity: { eid: 'later' }, $delete: true },
+    {
+      entity: { eid: 'again' },
+      entry: { session: ids.s },
+      content: { body: 'Say it again.' },
+      using: { provider: ids.p, model: ids.m },
+    },
+  ])
+  let resumed = scripted([says('next', 'Remembered.')], false)
+  assertEquals(
+    await rest(g, ids.s, {
+      model: resumed.model,
+      tools: [],
+    }),
+    'settled',
+  )
+  assertEquals(resumed.asked[0].items[0], {
+    kind: 'instruction',
+    text: 'Keep the blue bridge.',
+  })
+})
+
 Deno.test('errors retry to the bound, then the transcript is failed', async () => {
   let g = world()
   let { model, asked } = scripted([])

@@ -160,6 +160,32 @@ Deno.test('prose alone: what was typed and what the model said', () =>
     assertEquals(await told(g, ids.run1), ['content', 'content+output'])
   }))
 
+Deno.test('a compacted summary survives a prose-only import', () =>
+  file(async (g, log, path) => {
+    log(
+      typed('old instruction'),
+      { type: 'system', subtype: 'compact_boundary' },
+      {
+        type: 'user',
+        isCompactSummary: true,
+        message: { content: 'Keep the bridge.' },
+      },
+      typed('Make it blue'),
+    )
+    await pull(g, await tail(g, path, { session: ids.run1 }), claude, {
+      prose: true,
+      person: ids.ada,
+    })
+    let rows = await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)
+    assertEquals(rows.map((b) => c(b, 'content')?.body), [
+      'old instruction',
+      'Keep the bridge.',
+      'Make it blue',
+    ])
+    assertEquals(c(rows[1], 'checkpoint'), {})
+    assertEquals(c(rows[1], 'created')?.by, undefined)
+  }))
+
 Deno.test('two logs of one session each keep their own entries and their own place', () =>
   file(async (g, log, path) => {
     log(typed('one'), typed('two'))
