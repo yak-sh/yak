@@ -60,14 +60,20 @@ Deno.test('backlinks change only when a referrer changes', () => {
   g.apply([{ entity: { eid: 'a1' }, doc: { title: 'Author' } }])
   let subs = subscriptions(g)
   let { to, take } = ear()
-  subs.open(to, 'back', '.refs=a1&*')
+  subs.open(to, 'back', '.refs=a1&?book')
   assertEquals(take().map(ids), [[]])
 
   g.apply([{ entity: { eid: 'other' }, doc: { title: 'Elsewhere' } }])
   assertEquals(take(), [])
 
-  g.apply([{ entity: { eid: 'b1' }, book: { author: 'a1' } }])
-  assertEquals(take().map(ids), [['b1']])
+  g.apply([{
+    entity: { eid: 'b1' },
+    book: { author: 'a1' },
+    doc: { body: 'A large body stays out of the backlink frame.' },
+  }])
+  let [joined] = take()
+  assertEquals(ids(joined), ['b1'])
+  assertEquals(joined.bundles?.[0].doc, undefined)
   g.apply([{ entity: { eid: 'b1' }, book: { author: null } }])
   assertEquals(take().map((f) => f.gone), [['b1']])
 })

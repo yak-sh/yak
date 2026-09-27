@@ -171,9 +171,10 @@ export let useCommitsOn: (target: string) => Ent[] = vocab.comp('commit')
 
 // `via` — WHICH column points here — reads off each referrer's own row signal
 // (linksVia), so a retarget wakes the face without a membership change.
-let backlinkFields = refCols.map(([comp, prop]) => `${comp}.${prop}`).join(',')
+let backlinkComps = [...new Set(refCols.map(([comp]) => comp))]
+  .map((comp) => `&?${comp}`).join('')
 export let useBacklinks = (target: string): Backlink[] =>
-  useQueryEids(`.refs=${target}&.fields=${backlinkFields}`)
+  useQueryEids(`.refs=${target}${backlinkComps}`)
     .flatMap((from) => linksVia(from, target))
 
 // EID-keyed lookups belong to the mounted view, never an unheld render read.
