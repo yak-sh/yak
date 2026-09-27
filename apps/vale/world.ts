@@ -44,6 +44,8 @@ export type Mesher = (ci: number, ck: number, lod: number) => Promise<Chunk>
 
 export type World = {
   scene: THREE.Scene
+  /** the level's haze: nothing past its far edge is seen */
+  fog: THREE.Fog
   sun: THREE.DirectionalLight
   /** what the shadows follow */
   focus: THREE.Vector3
@@ -513,6 +515,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let focus = new THREE.Vector3(64, 6, 64)
   let w: World = {
     scene,
+    fog,
     sun,
     focus,
     fire,

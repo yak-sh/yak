@@ -17,7 +17,7 @@ import { ABILITIES, type Ability } from './abilities.ts'
 import { bar } from './bar.ts'
 import { board } from './board.ts'
 import { BEASTS } from './beasts.ts'
-import { aim, bearing, type Cam, steer } from './cam.ts'
+import { aim, bearing, type Cam, depth, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
 import { dealbox } from './dealbox.ts'
@@ -93,7 +93,8 @@ renderer.setSize(innerWidth, innerHeight, false)
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-let camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 500)
+// Its depth fits each level's fog as the level is shown (cam.ts `depth`).
+let camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight)
 let fit = () => {
   renderer.setSize(innerWidth, innerHeight, false)
   camera.aspect = innerWidth / innerHeight
@@ -183,9 +184,11 @@ let w = world(
   v,
   (ci, ck, lod) => meshed(VOX * COARSER[lod], ci, ck, lod == 0),
 )
+depth(camera, w.fog)
 // Where the hearth is by which the page first looks, and a new hero first
 // stands: home's fire.
 let hearth = (): Spot => hearthOf(HOME) ?? arriveOf(HOME)
+>>>>>>> de99b0e3 (Mossvale: the camera's depth fits what it can see, from 0.5 m, as near as the hero ever comes at the camera's closest, out to the far edge of the level's fog, where it was 0.1 m to 500 m (cam.ts `depth`). The depth buffer now parts two surfaces five times closer together at any distance: at 100 m, a millimetre, so faces a step apart stay apart out to the fog (T-40879))
 {
   let [x, z] = hearth()
   w.focus.set(x, groundAt(v, x, z), z)
@@ -197,6 +200,8 @@ let glow = bits(w.scene, false, 300)
 let bounty = nodes(w.scene, marks, glow, phone)
 let pins = papers(w.scene, v, marks, phone)
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
+
+>>>>>>> de99b0e3 (Mossvale: the camera's depth fits what it can see, from 0.5 m, as near as the hero ever comes at the camera's closest, out to the far edge of the level's fog, where it was 0.1 m to 500 m (cam.ts `depth`). The depth buffer now parts two surfaces five times closer together at any distance: at 100 m, a millimetre, so faces a step apart stay apart out to the fog (T-40879))
 
 // The camera (cam.ts), following the hero unless this viewer set it free.
 let freed = false

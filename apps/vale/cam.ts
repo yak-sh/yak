@@ -5,7 +5,9 @@
 // hill or a house is in the way, when it comes in at once, and it eases back
 // out after. While the hero is in a building it rises to look down into it
 // over the walls, the roof and the floors over them faded (solid.ts
-// `cutaway`), and that building's walls never pull it in.
+// `cutaway`), and that building's walls never pull it in. It sees from a
+// little way before it out to where the fog hides everything, and no further
+// (`depth`).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Intent } from './input.ts'
@@ -33,6 +35,24 @@ export type Cam = {
   idle: number
   /** the least it looks down, raised while the hero is in a building */
   lift: number
+}
+
+/** How near the camera comes to the hero, in metres, when the level is in
+ * the way. */
+export let CLOSEST = 1.2
+
+/** How near the camera sees, in metres: as far out as the hero's nearest side
+ * ever comes, at its closest, so the depth buffer is as fine as it can be
+ * (mesh.ts `STEP`). Nearer than that, a wall the camera backs against is
+ * seen through anyway (soft.ts `see`). */
+export let NEAR = 0.5
+
+/** Fit `camera`'s depth to what it can see: from NEAR out to the far edge of
+ * the level's fog, past which nothing shows. */
+export let depth = (camera: THREE.PerspectiveCamera, fog: THREE.Fog) => {
+  camera.near = NEAR
+  camera.far = fog.far
+  camera.updateProjectionMatrix()
 }
 
 // How fast it swings behind the hero, snapping and following, and how long
@@ -129,10 +149,10 @@ export let aim = (
     Math.cos(cam.yaw) * cp,
   )
   let clear = cam.dist
-  for (let d = 1.2; d <= cam.dist; d += 0.4) {
+  for (let d = CLOSEST; d <= cam.dist; d += 0.4) {
     let p = target.clone().addScaledVector(dir, d)
     if (inside(v, p.x, p.y, p.z) || walled(v, p.x, p.y, p.z, home)) {
-      clear = Math.max(1.2, d - 0.6)
+      clear = Math.max(CLOSEST, d - 0.6)
       break
     }
   }
