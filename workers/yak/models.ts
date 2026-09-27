@@ -28,7 +28,7 @@ import { worded } from '@yaks/tools'
 import { edits, mode, writes } from '@yaks/member'
 import { ModelError } from '@yaks/model'
 import type { VocabDoc } from '@yaks/vocab'
-import { workersAi } from '@yaks/workers-ai'
+import { said, workersAi } from '@yaks/workers-ai'
 import { appStore, type Directory } from './directory.ts'
 import { filled, schemaOf } from './lib/tools.ts'
 import { metered } from './meter.ts'
@@ -283,7 +283,8 @@ let posted = (body: string): { model: string; input: object } | null => {
 
 /**
  * `./api/ai/run`: one call to a model, answered with what the model said, as
- * Workers AI says it — what a page or the app's own worker asks when it wants
+ * Workers AI says it, out of any envelope AI Gateway put it in (@yaks/workers-ai
+ * `said`) — what a page or the app's own worker asks when it wants
  * an answer back rather than a transcript (the worker's `ai` binding posts
  * here, dispatch.ts `shim`). Asked by whoever may ask the app's models for a
  * turn: its members, or, where its manifest says `"models": "open"`, anyone
@@ -323,7 +324,7 @@ let run: Answer = async (
   }
   try {
     return Response.json(
-      await metered(env, payer(app.eid)).run(asked.model, asked.input),
+      said(await metered(env, payer(app.eid)).run(asked.model, asked.input)),
     )
   } catch (e) {
     if (e instanceof ModelError) {

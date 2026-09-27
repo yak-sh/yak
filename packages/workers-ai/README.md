@@ -35,8 +35,10 @@ sent as `max_tokens`; without it the model's own default applies, and so does
 
 Models in the catalog answer one of two shapes, and both are read: the binding's
 own (`response`, and a flat `tool_calls` of `{name, arguments}`) or OpenAI's
-chat completion (`choices[0].message`). A call that arrives without an id is
-given one derived from the reply's, so a result can always name its call.
+chat completion (`choices[0].message`). A third-party model such as Jev answers
+inside AI Gateway's envelope, `{state, result, gatewayMetadata}`, and `said()`
+takes its `result` out before anything is read. A call that arrives without an
+id is given one derived from the reply's, so a result can always name its call.
 `usage.prompt_tokens`, `completion_tokens`, `total_tokens` and `cached_tokens`
 become the reply's usage; a count the model leaves out stays unknown.
 
@@ -51,8 +53,10 @@ A request carrying `questions` goes to a structured model such as Jev
 (`typesafe/jev`) as `run(model, {state, questions})`: the chat messages above
 are the state, and the questions are sent as they were asked. The reply has no
 items; its `answers` are the model's, by question name, each keeping `type`,
-`noul`, `choice`, `score`, `confidence` and `probabilities`. A model whose
-answer carries no `answers` refuses with `ModelError` coded `questions`.
+`noul`, `choice`, `score`, `confidence` and `probabilities`. A chat model asked
+questions refuses them at the binding. A reply that carries no `answers` is one
+this package cannot read, and throws a plain `Error`: a defect to report, not a
+refusal to expect.
 
 The whole reply arrives at once, so `onText` is called once with all of its
 text. `signal` is checked before the call and after it; the binding call itself

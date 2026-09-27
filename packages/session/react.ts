@@ -15,8 +15,9 @@ import { argsOf, transient } from '@yaks/graph'
 // A fork's transcript is the parent's entries up to the anchor plus its own.
 // When the model can continue from a kept reply (`model.anchor` returns one for
 // the newest ask), the model is asked with that anchor plus only what followed;
-// otherwise the whole transcript is sent every time, or its newest entries
-// where the turn's `using.window` bounds them. That one rule is what
+// otherwise the conversation is sent every time (`lines`: never the asks,
+// errors, or other turns' typed questions and answers kept beside it), or its
+// newest lines where the turn's `using.window` bounds them. That one rule is what
 // makes a fork's first ask cheap where the provider allows it: the anchor is
 // the parent's last reply, and only the fork's new input is sent. What the
 // provider keeps about an ask is its own component on the ask entry
@@ -206,10 +207,26 @@ export let project = (
   return out
 }
 
-/** The newest `n` entries of a transcript, reaching back to the input that
+/**
+ * The lines of a transcript a turn reads: what a model is sent (inputs,
+ * replies, calls and their results), without the record kept beside them
+ * (asks, errors), and without the typed questions other turns asked or the
+ * answers they got. Those are rows for whoever asked (a page acts on them),
+ * not lines of the conversation, so a wake that asks every few minutes never
+ * crowds out what was said. `asking` is the entry whose questions this turn
+ * asks: it reads that one.
+ */
+export let lines = (entries: Bundle[], asking?: Bundle): Bundle[] =>
+  entries.filter((b) =>
+    b == asking ||
+    !(QUESTIONS in b || ANSWER in b) &&
+      ['input', 'output', 'call', 'result'].includes(kindOf(b) ?? '')
+  )
+
+/** The newest `n` lines of a transcript, reaching back to the input that
  * began the turn they cut into, so no call or result is sent without its
- * pair: what a turn sends when its `using.window` is `n`. The whole
- * transcript when `n` is not a count. */
+ * pair: what a turn sends when its `using.window` is `n`. All of them when
+ * `n` is not a count. */
 export let recent = (entries: Bundle[], n?: unknown): Bundle[] => {
   let size = Math.floor(Number(n))
   if (!(size >= 1)) return entries
@@ -218,11 +235,12 @@ export let recent = (entries: Bundle[], n?: unknown): Bundle[] => {
   return entries.slice(from)
 }
 
-/** The typed questions a turn asks: those on the newest entry since the
- * transcript's last ask that asks for anything, questions or a model, so a
- * retry after an error asks them again, and neither a later turn nor a later
- * line choosing a model of its own does: the questions were that model's. */
-let questionsOf = (entries: Bundle[]): Questions | undefined => {
+/** The entry whose typed questions a turn asks: the newest since the
+ * transcript's last ask that asks for anything, questions or a model, when it
+ * carries questions. So a retry after an error asks them again, and neither a
+ * later turn nor a later line choosing a model of its own does: the questions
+ * were that model's. */
+let askingOf = (entries: Bundle[]): Bundle | undefined => {
   let last = newestAsk(entries)
   let since = last ? seqOf(last) : 0
   let asking = entries.filter((b) =>
@@ -230,7 +248,7 @@ let questionsOf = (entries: Bundle[]): Questions | undefined => {
   ).at(-1)
   let asked = asking && comp(asking, QUESTIONS)?.asked
   return asked && typeof asked == 'object' && !Array.isArray(asked)
-    ? asked as Questions
+    ? asking
     : undefined
 }
 
@@ -437,15 +455,17 @@ export let react = async (
     : undefined
   let boundary = asked &&
     entries.find((b) => b.entity.eid == comp(asked!, ASK)?.through)
+  let asking = askingOf(entries)
+  let said = lines(entries, asking)
   let window = anchorId
-    ? entries.filter((b) =>
+    ? said.filter((b) =>
       seqOf(b) > seqOf(asked!) ||
       // An input committed while this ask was in flight was not sent to the
       // provider, even though its sequence precedes the recorded ask result.
       (boundary && seqOf(b) > seqOf(boundary) && kindOf(b) == 'input' &&
         !b.notice)
     )
-    : recent(entries, using?.window)
+    : recent(said, using?.window)
   let effort = using?.effort ?? served?.effort
   const results = deps.resultText
     ? new Map(
@@ -456,7 +476,7 @@ export let react = async (
       ),
     )
     : undefined
-  let questions = questionsOf(entries)
+  let questions = asking && comp(asking, QUESTIONS)!.asked as Questions
   let req: Request = {
     signal: deps.signal,
     model: spelled,
@@ -640,8 +660,9 @@ export let react = async (
       ))
     }
   }
-  // One entry per answer, said as a line too, so a later chat turn reads what
-  // was decided and a query can match `.answer.question=plan`.
+  // One entry per answer, said as a line too, so a person reading the
+  // transcript sees what was decided and a query can match
+  // `.answer.question=plan`. No later turn reads it (`lines`).
   for (let [question, a] of Object.entries(reply.answers ?? {})) {
     let { type: _, ...answer } = a
     added.push(line({

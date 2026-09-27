@@ -167,10 +167,15 @@ Deno.test('typed questions go as state and come back answered by name', async ()
     confidence: 0.82,
     probabilities: { forge: 0.82, well: 0.18 },
   }
+  // A third-party model answers inside AI Gateway's envelope.
   let { asked, model } = binding({
-    model: 'jev-1.13.0',
-    answers: { plan, greet: { type: 'noul', noul: 0 } },
-    usage: { input_tokens: 380, output_tokens: 45 },
+    state: 'Completed',
+    result: {
+      model: 'jev-1.13.0',
+      answers: { plan, greet: { type: 'noul', noul: 0 } },
+      usage: { input_tokens: 380, output_tokens: 45 },
+    },
+    gatewayMetadata: { keySource: 'Unified' },
   })
   let reply = await model(ask([{ kind: 'user', text: 'a stranger arrives' }], {
     instructions: 'you are the smith',
@@ -188,11 +193,11 @@ Deno.test('typed questions go as state and come back answered by name', async ()
   assertEquals(reply.usage, { input_tokens: 380, output_tokens: 45 })
 })
 
-Deno.test('a model that answers no questions refuses them', async () => {
+Deno.test('a reply to typed questions with no answers is a defect', async () => {
   let { model } = binding({ response: 'the forge, I think' })
   let questions = { plan: { type: 'noul' as const, instructions: '?' } }
-  let e = await assertRejects(() => model(ask([], { questions })), ModelError)
-  assertEquals(e.code, 'questions')
+  let e = await assertRejects(() => model(ask([], { questions })))
+  assertEquals(e instanceof ModelError, false)
 })
 
 Deno.test("a binding's own ModelError is passed on as it is", async () => {

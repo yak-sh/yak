@@ -22,8 +22,8 @@
  * A request asking typed questions goes to a structured model such as Jev
  * (`typesafe/jev`) as `{state, questions}`: the same messages are the state,
  * and the questions travel as they were asked. Its answers come back by
- * question, and a model that answered none refuses with a `ModelError` coded
- * `questions`.
+ * question; a reply with none is a defect, since a model that takes no
+ * questions refuses them at the binding.
  *
  * @module
  */
@@ -69,6 +69,29 @@ let at = (v: unknown, ...path: (string | number)[]): unknown =>
 let str = (v: unknown) => typeof v == 'string' ? v : ''
 
 let count = (v: unknown) => typeof v == 'number' && v >= 0 ? v : undefined
+
+/**
+ * What a model said, out of the envelope AI Gateway puts a third-party
+ * model's answer in (`{state, result, gatewayMetadata}`); a model Workers AI
+ * runs itself answers bare.
+ *
+ * ```ts
+ * import { said } from '@yaks/workers-ai'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let answer = { answers: {}, usage: { input_tokens: 373, output_tokens: 38 } }
+ * assertEquals(said({
+ *   state: 'Completed',
+ *   result: answer,
+ *   gatewayMetadata: { keySource: 'Unified' },
+ * }), answer)
+ * assertEquals(said({ response: 'hi' }), { response: 'hi' })
+ * ```
+ */
+export let said = (answer: unknown): unknown =>
+  at(answer, 'gatewayMetadata') && at(answer, 'result')
+    ? at(answer, 'result')
+    : answer
 
 // A request as chat messages. A call joins the assistant turn it follows,
 // since a chat model reads its tool calls as part of what it said, and a
@@ -143,7 +166,7 @@ let calls = (raw: unknown, reply: string): Item[] =>
  * ```
  */
 export let usageOf = (answer: unknown): Usage => {
-  let raw = at(answer, 'usage')
+  let raw = at(said(answer), 'usage')
   let counts: [keyof Usage, number | undefined][] = [
     [
       'input_tokens',
@@ -184,12 +207,17 @@ let answer = (raw: unknown): Answer => {
   )
 }
 
-// The answers off a structured model's reply, by question. A reply without
-// them came from a model that answers no questions.
+// The answers off a structured model's reply, by question. A model that takes
+// no questions refuses the request at the binding, so a reply without them is
+// one this package cannot read: a defect, never a refusal to expect.
 let answers = (out: unknown, model: string): Record<string, Answer> => {
   let raw = at(out, 'answers')
   if (!raw || typeof raw != 'object' || Array.isArray(raw)) {
-    throw new ModelError('questions', `${model} answers no typed questions`)
+    throw new Error(
+      `${model} answered typed questions with no answers to read: ${
+        JSON.stringify(out).slice(0, 200)
+      }`,
+    )
   }
   return Object.fromEntries(
     Object.entries(raw).map(([name, a]) => [name, answer(a)]),
@@ -240,9 +268,11 @@ export let failure = (e: unknown): unknown =>
  */
 export let workersAi = (ai: Binding): Model => async (req) => {
   req.signal?.throwIfAborted()
-  let out = await ai.run(req.model, input(req)).catch((e) => {
-    throw failure(e)
-  })
+  let out = said(
+    await ai.run(req.model, input(req)).catch((e) => {
+      throw failure(e)
+    }),
+  )
   req.signal?.throwIfAborted()
   let id = str(at(out, 'id')) || crypto.randomUUID()
   let u = usageOf(out)
@@ -258,8 +288,8 @@ export let workersAi = (ai: Binding): Model => async (req) => {
   }
   // Some models in the catalog answer the binding's own shape and some
   // answer OpenAI's; both are read, so a change of model is a change of id.
-  let said = at(out, 'choices', 0, 'message')
-  let text = String(at(out, 'response') ?? at(said, 'content') ?? '')
+  let chat = at(out, 'choices', 0, 'message')
+  let text = String(at(out, 'response') ?? at(chat, 'content') ?? '')
   if (text) req.onText?.({ index: 0, text })
   let words: Item[] = text ? [{ kind: 'assistant', text }] : []
   return {
@@ -267,7 +297,7 @@ export let workersAi = (ai: Binding): Model => async (req) => {
     model: req.model,
     items: [
       ...words,
-      ...calls(at(out, 'tool_calls') ?? at(said, 'tool_calls'), id),
+      ...calls(at(out, 'tool_calls') ?? at(chat, 'tool_calls'), id),
     ],
     ...counted,
   }

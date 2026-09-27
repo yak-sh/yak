@@ -49,7 +49,7 @@ entry without one is part of the transcript the next turn reads, and asks for
 nothing.
 
 Two more keep a turn cheap. `using.window` is how many of the transcript's
-newest entries the model reads, reaching back to the line that began the turn it
+newest lines the model reads, reaching back to the line that began the turn it
 cuts into; without it every turn reads the whole transcript, so a conversation
 that goes on for weeks costs more with every line. `using.effort` is how hard
 the model thinks before it answers: GLM Flash takes `low`, `high` or `max` (its
@@ -110,7 +110,9 @@ ordered criteria (`answer.score`). The page reads the newest one with
 `.entry.session=<smith>&.answer.question=plan&.order=-entry.seq&.limit=1`.
 
 A model that answers no typed questions refuses them rather than guessing:
-questions are Jev's.
+questions are Jev's. The answers are for the page: no later turn reads them, or
+the questions another turn asked, so a transcript a page asks about every few
+minutes keeps its window for what was said.
 
 ## One call, answered at once
 

@@ -11,6 +11,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import {
+  type Item,
   type Model,
   modelDoc,
   ModelError,
@@ -473,14 +474,12 @@ Deno.test('typed questions are asked once and answered one entry each', async ()
     ],
     [{ question: 'greet', noul: 0.81 }, 'greet: 0.81'],
   ])
-  // the next turn is a chat that reads what was decided
+  // the next turn is a chat, which reads the conversation and not the
+  // answers kept beside it
   await appendEntry(g, ids.s, 'what did you decide?')
   await rest(g, ids.s, { model, tools: [], mint })
   assertEquals(asked[1].questions, undefined)
-  assertEquals(
-    asked[1].items.filter((i) => i.kind == 'assistant').map((i) => i.text),
-    ['plan: forge, 0.82', 'greet: 0.81'],
-  )
+  assertEquals(asked[1].items, [{ kind: 'user', text: 'what did you decide?' }])
 })
 
 Deno.test('questions are not asked of a model a later line chose', async () => {
@@ -546,4 +545,47 @@ Deno.test('a window sends the newest entries, from the input that began their tu
     'user',
   ])
   assertEquals(await say('e4', 'last', 1), ['user'])
+})
+
+Deno.test("a window counts the conversation, never a wake's typed questions", async () => {
+  let g = world()
+  let decided: Reply = {
+    id: 'q',
+    model: 'fake-1',
+    items: [],
+    answers: { go: { type: 'choice', choice: 'home', confidence: 0.6 } },
+  }
+  let { model, asked } = scripted(
+    [says('r1', 'hello'), decided, decided, decided, says('r2', 'well')],
+    false,
+  )
+  let deps = { model, tools: [], mint }
+  await rest(g, ids.s, deps)
+  let say = async (eid: string, body: string, more: object = {}) => {
+    await g.apply([{
+      entity: { eid },
+      entry: { session: ids.s },
+      content: { body },
+      using: { provider: ids.p, model: ids.m, window: 3 },
+      ...more,
+    }])
+    await rest(g, ids.s, deps)
+    return asked.at(-1)!.items
+  }
+  let go = { asked: { go: { type: 'choice', instructions: 'Where?' } } }
+  for (let eid of ['w1', 'w2']) {
+    await say(eid, 'A while passes.', { questions: go })
+  }
+  let conversation: Item[] = [
+    { kind: 'user', text: 'echo hi, then say done' },
+    { kind: 'assistant', text: 'hello' },
+  ]
+  assertEquals(await say('w3', 'A while passes.', { questions: go }), [
+    ...conversation,
+    { kind: 'user', text: 'A while passes.' },
+  ])
+  assertEquals(await say('e2', 'and now?'), [
+    ...conversation,
+    { kind: 'user', text: 'and now?' },
+  ])
 })

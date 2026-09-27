@@ -56,9 +56,11 @@ await appendEntry(g, 'session', 'Build completed', {
 ```
 
 `using.instructions` are the system instructions a turn is asked with, and
-`using.window` bounds what it sends: the newest that many entries, reaching back
+`using.window` bounds what it sends: the newest that many lines, reaching back
 to the input that began the turn they cut into, so a long transcript costs a
-turn no more than a short one.
+turn no more than a short one. A line is what a model is sent (an input, a
+reply, a call, a result); the asks and errors kept beside them are not lines,
+and neither are the typed questions other turns asked or their answers.
 
 A fork has `fork{from}` on its session entity. Its logical transcript contains
 the parent transcript through the referenced entry, followed by its own entries.
@@ -164,9 +166,11 @@ An entry wearing `questions{asked}` (typed questions in Jev's terms, by name;
 `Request.questions`, and writes each of the reply's answers as its own entry,
 `answer{question, noul, choice, score, confidence, probabilities}` with
 `output{source}` naming the ask and a line saying it (`plan: forge, 0.82`), so a
-later chat turn reads what was decided and a query can match
+person reading the transcript sees what was decided and a query can match
 `.answer.question=plan&.answer.choice=forge`. A retry after an error asks them
-again; a later turn does not.
+again; a later turn does not, and reads neither them nor their answers: they are
+rows for whoever asked, so a wake asking every few minutes never crowds the
+conversation out of a window.
 
 A streamed request is withdrawn by an entry carrying `cancel{target}` that names
 its in-flight attempt: the run holding the transcript aborts it and records the
