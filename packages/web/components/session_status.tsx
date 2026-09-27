@@ -6,6 +6,7 @@ import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
 import { Dot } from './Dot.tsx'
 import { useRows } from './subscriptions.ts'
+import { usePage } from './useQuery.ts'
 
 let entryRow = (e: Ent): EntryRow | undefined => {
   if (!e.entry?.seq) return undefined
@@ -26,8 +27,14 @@ let entryRow = (e: Ent): EntryRow | undefined => {
 
 export type EntryReadState =
   | { status: 'loading' }
-  | { status: 'ready'; log: GraphLog }
-  | { status: 'failed'; reason: string; reference: string }
+  | {
+    status: 'ready'
+    log: GraphLog
+    more: boolean
+    pending: boolean
+    fault?: { reason: string; reference: string; sub: string }
+  }
+  | { status: 'failed'; reason: string; reference: string; sub: string }
 
 // A transcript names its model on each ask and its tool on each call; those
 // entities are held so the log can say them in words.
@@ -43,19 +50,45 @@ let nameOf = (eid: string) => {
 export let useEntryLog = (
   eid: string,
   enabled = true,
+  limit?: number,
 ): EntryReadState => {
-  useLayoutEffect(() => enabled ? entrySub(eid) : undefined, [eid, enabled])
-  let state = subscriptionState(`entries:${eid}`)
-  let rows = enabled && state.status == 'ready'
-    ? [...state.eids].flatMap((id) => {
+  useLayoutEffect(
+    () => enabled && limit == null ? entrySub(eid) : undefined,
+    [eid, enabled, limit == null],
+  )
+  let base = `.entry.session=${eid}&.order=-entry.seq`
+  let page = usePage(
+    base,
+    `${base}&.limit=${limit ?? 0}`,
+    enabled && limit != null,
+  )
+  let sub = limit == null ? `entries:${eid}` : page.subscription?.sub ?? ''
+  let state = limit == null ? subscriptionState(sub) : page.subscription?.state
+  let ids = limit == null
+    ? state?.status == 'ready' ? [...state.eids] : []
+    : page.eids
+  let rows = enabled
+    ? ids.flatMap((id) => {
       let row = entryRow(ent(id))
       return row ? [row] : []
     })
     : []
   useRows(named(rows))
   if (!enabled) return { status: 'loading' }
-  if (state.status != 'ready') return state
-  return { status: 'ready', log: graphLog(rows, nameOf) }
+  if (!state || state.status == 'loading' && !ids.length) {
+    return { status: 'loading' }
+  }
+  let fault = state.status == 'failed'
+    ? { reason: state.reason, reference: state.reference, sub }
+    : undefined
+  if (fault && !ids.length) return { status: 'failed', ...fault }
+  return {
+    status: 'ready',
+    log: graphLog(rows, nameOf),
+    more: limit != null && (state.status != 'ready' || ids.length >= limit),
+    pending: state.status == 'loading',
+    ...(fault ? { fault } : {}),
+  }
 }
 
 // The dot's word, read O(1) — it never scans the log. The host derives a
@@ -70,13 +103,12 @@ export let SessionDot = ({ e }: { e: Ent }) => (
   <Dot status={graphStanding(e)} />
 )
 
-// The Session VIEW still loads the full log — it renders the transcript — but
-// its STATUS reads the same O(1) session.status as the dot, which the host
-// derives with @yaks/session's statusOf, the rule the log reads too.
-export let useSessionStanding = (e: Ent) => {
+// The Session view pages the transcript from its tail; its status still reads
+// the same O(1) session.status as the dot, derived by the host.
+export let useSessionStanding = (e: Ent, limit?: number) => {
   // Every substrate reads its transcript from the same entry-partition
   // subscription (T-16824): a process-backed run's JSONL is ingested into these
   // entries, so there is one live read path, not a per-substrate branch.
-  let entries = useEntryLog(e.eid)
+  let entries = useEntryLog(e.eid, true, limit)
   return { entries, status: graphStanding(e) }
 }

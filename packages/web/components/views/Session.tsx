@@ -14,7 +14,14 @@ import {
   kilo,
   type LogRow,
 } from '../../types.ts'
-import { ent, findEid, jobOf, mutate, retryEntrySub, uuid } from '../../live.ts'
+import {
+  ent,
+  findEid,
+  jobOf,
+  mutate,
+  retrySubscription,
+  uuid,
+} from '../../live.ts'
 import { graphLog } from '../../entry_log.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { linkProps } from '../nav.tsx'
@@ -439,12 +446,9 @@ let scrollerOf = (n: HTMLElement | null) => {
   return null
 }
 
-// The transcript is windowed from its tail: a long log renders only its last
-// WINDOW rows — the newest lines are the news — and grows older as the reader
-// nears the top, so opening a thousand-line session pays for a screenful, not
-// the whole file (rendering every row was ~4.6s of vnode work). Growth is
-// anchored by distance-from-bottom, an invariant across a prepend, so older
-// rows never jump the view.
+// The transcript loads from its tail in pages. This window caps rendering
+// while a page is held, and grows as the reader asks for older entries.
+// Distance from the bottom anchors the view across a prepend.
 //
 // Follow the tail: while the reader sits at the scroller's end, each new log
 // row pins it there again and the window slides (bounded); scroll up and it
@@ -462,29 +466,38 @@ let useTranscript = (
   tail: string | number,
   enabled: boolean,
   session: string,
+  more: boolean,
+  pending: boolean,
+  loaded: number,
+  load: () => void,
 ) => {
   let frame = useRef<HTMLDivElement>(null)
   let stuck = useRef(true)
   let [shown, setShown] = useState(WINDOW)
   let anchor = useRef<number | null>(null)
   let start = enabled ? Math.max(0, total - shown) : 0
+  let page = useRef({ start, more, pending, load })
+  page.current = { start, more, pending, load }
   // A new session starts back at its own tail.
   useEffect(() => setShown(WINDOW), [session])
 
   // Reveal older rows, holding the reader's place: distance from the bottom is
   // invariant across a prepend, so restoring it after the grow keeps the view.
   let older = () => {
-    if (anchor.current != null) return
+    let { start, more, pending, load } = page.current
+    if (anchor.current != null || pending) return
+    if (!start && !more) return
     let s = scrollerOf(frame.current)
     anchor.current = s ? s.scrollHeight - s.scrollTop : 0
     setShown((n) => n + WINDOW)
+    if (!start) load()
   }
   useLayoutEffect(() => {
-    if (anchor.current == null) return
+    if (anchor.current == null || pending) return
     let s = scrollerOf(frame.current)
     if (s) s.scrollTop = s.scrollHeight - anchor.current
     anchor.current = null
-  }, [shown])
+  }, [shown, loaded, pending])
 
   // One scroll listener samples stickiness and auto-grows near the top.
   let startRef = useRef(start)
@@ -495,7 +508,9 @@ let useTranscript = (
     let sample = () => {
       // within a scrollbar-rounding of the end still counts as AT it
       stuck.current = s.scrollTop + s.clientHeight >= s.scrollHeight - 4
-      if (startRef.current > 0 && s.scrollTop < 400) older()
+      if ((startRef.current > 0 || page.current.more) && s.scrollTop < 400) {
+        older()
+      }
     }
     s.addEventListener('scroll', sample)
     return () => s.removeEventListener('scroll', sample)
@@ -505,12 +520,13 @@ let useTranscript = (
   // delta so `start` holds and no top row unmounts (in a layout effect, so the
   // corrected window is committed before paint — no flash). While stuck, let it
   // slide; the pin below keeps the bottom in view.
-  let seen = useRef(total)
+  let seen = useRef({ total, tail })
   useLayoutEffect(() => {
-    let d = total - seen.current
-    seen.current = total
-    if (d > 0 && !stuck.current) setShown((n) => n + d)
-  }, [total])
+    let d = total - seen.current.total
+    let newTail = tail != seen.current.tail
+    seen.current = { total, tail }
+    if (d > 0 && newTail && !stuck.current) setShown((n) => n + d)
+  }, [total, tail])
 
   // Pin the bottom while stuck (the tail moved).
   useLayoutEffect(() => {
@@ -525,11 +541,15 @@ let useTranscript = (
 export let Session = ({ e }: { e: Ent }) => {
   let s = e.session!
   let repo = useRepoUrl(e)
+  let web = typeof document != 'undefined' &&
+    typeof document.querySelector == 'function'
+  let [take, setTake] = useState(WINDOW)
+  useEffect(() => setTake(WINDOW), [e.eid])
   // One predicate for every surface (types.ts): a session we spawned says
   // it's going in its status, one that only announced itself is going while
   // its door is open. `standing` is that answer as a word, so an external
   // run's pip and label read `running` instead of a blank lifecycle.
-  let state = useSessionStanding(e)
+  let state = useSessionStanding(e, web ? take : undefined)
   // One held reverse list at the transcript root. Per-entry result lookups
   // stay local: the entry partition above supplies every call/result row,
   // including results whose call is outside the rendered window (T-37033).
@@ -543,11 +563,9 @@ export let Session = ({ e }: { e: Ent }) => {
   let live = awake(e)
   let status = state.status
   let fault = e.exception?.message ?? e.failed?.message
-  // One read path (T-16824): the transcript is the session's entry partition
-  // for every substrate — the subscription useSessionStanding opened, live
-  // through the graph, never a /logs file-poll. The fallback log is only for
-  // internal derivations while the explicit read state paints below; it is
-  // never presented as an authoritative empty transcript.
+  // Every substrate reads graph entries. The web asks for a bounded tail;
+  // the TUI keeps its own scrollback. The fallback log is only for internal
+  // derivations while the explicit read state paints below.
   let log = ready ?? graphLog([])
   // Context: derived from the transcript's usage entries.
   let context = log.context ??
@@ -576,12 +594,12 @@ export let Session = ({ e }: { e: Ent }) => {
   let { frame, start, older } = useTranscript(
     thread.length,
     `${log.entries.at(-1)?.seq ?? 0}`,
-    // Window on a real element tree (browser + linkedom mounts); render the
-    // whole log in the TUI, whose fake document has no querySelector and owns
-    // its own scrollback.
-    typeof document != 'undefined' &&
-      typeof document.querySelector == 'function',
+    web,
     e.eid,
+    entries.status == 'ready' && entries.more,
+    entries.status == 'ready' && entries.pending,
+    log.entries.length,
+    () => setTake((n) => n + WINDOW),
   )
   let windowed = start > 0 ? thread.slice(start) : thread
   let unsent = cs.filter((c) => !heard(c))
@@ -640,15 +658,23 @@ export let Session = ({ e }: { e: Ent }) => {
           {entries.status == 'loading' && (
             <EntryState>Loading entries for {idOf(e)}…</EntryState>
           )}
-          {entries.status == 'failed' && (
+          {(entries.status == 'failed' ||
+            entries.status == 'ready' && entries.fault) && (
             <EntryState>
-              Entries could not be loaded: {entries.reason}{' '}
-              [{entries.reference}]{' '}
+              Entries could not be loaded: {entries.status == 'failed'
+                ? entries.reason
+                : entries.fault!.reason} [{entries.status == 'failed'
+                ? entries.reference
+                : entries.fault!.reference}]{' '}
               <Retry
                 type='button'
                 onClick={() => {
                   setRetried(true)
-                  retryEntrySub(e.eid)
+                  retrySubscription(
+                    entries.status == 'failed'
+                      ? entries.sub
+                      : entries.fault!.sub,
+                  )
                 }}
               >
                 {retried ? 'retry again' : 'retry'}
@@ -661,9 +687,13 @@ export let Session = ({ e }: { e: Ent }) => {
               {live ? 'No entries yet' : 'No entries recorded'}
             </EntryState>
           )}
-          {start > 0 && (
+          {(start > 0 || entries.status == 'ready' && entries.more) && (
             <Earlier type='button' onClick={older}>
-              ↑ {start} earlier {start == 1 ? 'line' : 'lines'}
+              {entries.status == 'ready' && entries.pending
+                ? 'Loading earlier entries…'
+                : start > 0
+                ? `↑ ${start} earlier ${start == 1 ? 'line' : 'lines'}`
+                : '↑ Earlier entries'}
             </Earlier>
           )}
           {windowed.map((x) =>

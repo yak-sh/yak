@@ -1,5 +1,5 @@
 // A session row keeps the actor it works for visible in every shared list.
-import '../../testing.ts'
+import { tick } from '../../testing.ts'
 import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
@@ -8,11 +8,14 @@ import {
   cache,
   deps,
   ent,
+  findEid,
   landSub,
+  querySubscription,
   repoUrl,
   resetSignals,
   useRoute,
 } from '../../live.ts'
+import { parseQuery, resolveRefs } from '../../query.ts'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
@@ -29,6 +32,11 @@ import {
   SessionTime,
   threadMentions,
 } from './Session.tsx'
+
+let entryPage = (eid: string, limit = 200) => {
+  let q = `.entry.session=${eid}&.order=-entry.seq&.limit=${limit}`
+  return querySubscription(resolveRefs(parseQuery(q), findEid), q)!.sub
+}
 
 Deno.test('session list Tile omits its chip and falls back to its actor', () => {
   cache.value = {
@@ -580,7 +588,7 @@ Deno.test('Session explains loading, ready-empty, rows, and read failure', async
     mounted = mount(<Session e={e} />)
     assertEquals(state(mounted), 'Loading entries for S-7101…')
 
-    landSub({ sub: `entries:${e.eid}`, changes: [], replace: true })
+    landSub({ sub: entryPage(e.eid), changes: [], replace: true })
     await Promise.resolve()
     assertEquals(state(mounted), 'No entries yet')
 
@@ -594,7 +602,7 @@ Deno.test('Session explains loading, ready-empty, rows, and read failure', async
       ...comps.map(([name, comp]) => ({ eid, name, comp })),
     ]
     landSub({
-      sub: `entries:${e.eid}`,
+      sub: entryPage(e.eid),
       replace: true,
       changes: [
         ...line('said', 1, [['content', { body: 'what a person said' }]]),
@@ -619,7 +627,7 @@ Deno.test('Session explains loading, ready-empty, rows, and read failure', async
     mounted = undefined
 
     e = session('session-ended-copy', 7103, 'settled')
-    landSub({ sub: `entries:${e.eid}`, changes: [], replace: true })
+    landSub({ sub: entryPage(e.eid), changes: [], replace: true })
     mounted = mount(<Session e={e} />)
     assertEquals(state(mounted), 'No entries recorded')
     mounted.free()
@@ -627,7 +635,7 @@ Deno.test('Session explains loading, ready-empty, rows, and read failure', async
 
     e = session('session-failed-copy', 7104, 'settled')
     landSub({
-      sub: `entries:${e.eid}`,
+      sub: entryPage(e.eid),
       changes: [],
       replace: true,
       error: 'source unreadable',
@@ -635,11 +643,68 @@ Deno.test('Session explains loading, ready-empty, rows, and read failure', async
     mounted = mount(<Session e={e} />)
     assertEquals(
       state(mounted),
-      `Entries could not be loaded: source unreadable [entries:${e.eid}] retry`,
+      `Entries could not be loaded: source unreadable [${
+        entryPage(e.eid)
+      }] retry`,
     )
   } finally {
     mounted?.free()
     useRoute(priorRoute)
+    cache.value = {}
+    resetSignals()
+  }
+})
+
+Deno.test('Session paints the newest page and loads earlier entries on demand', async () => {
+  let off = useRoute(() => {})
+  let eid = 'long-session'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 7110 },
+      session: { eid, id: eid, status: 'settled' },
+    },
+  }
+  resetSignals()
+  let mounted = mount(<Session e={ent(eid)} />)
+  let change = (seq: number) => [
+    { eid: `entry-${seq}`, name: 'entry', comp: { session: eid, seq } },
+    { eid: `entry-${seq}`, name: 'content', comp: { body: `line ${seq}` } },
+    { eid: `entry-${seq}`, name: 'output', comp: { source: 'ask' } },
+  ]
+  let lines = () =>
+    [...mounted.root.querySelectorAll('.Entry-agent')].map(
+      (x) => x.textContent.trim(),
+    )
+  try {
+    landSub({
+      sub: entryPage(eid),
+      replace: true,
+      changes: Array.from({ length: 200 }, (_, n) => n + 2).flatMap(change),
+    })
+    await tick()
+    assertEquals(lines().includes('line 201'), true)
+    assertEquals(lines().includes('line 1'), false)
+    let earlier = mounted.root.querySelector('.Session_Earlier') as HTMLElement
+    assertEquals(earlier?.textContent, '↑ Earlier entries')
+    earlier.click()
+    await tick()
+    assertEquals(
+      mounted.root.querySelector('.Session_Earlier')?.textContent,
+      'Loading earlier entries…',
+    )
+
+    landSub({
+      sub: entryPage(eid, 400),
+      replace: true,
+      changes: Array.from({ length: 201 }, (_, n) => n + 1).flatMap(change),
+    })
+    await tick()
+    assertEquals(lines().includes('line 1'), true)
+    assertEquals(lines().includes('line 201'), true)
+    assertEquals(mounted.root.querySelector('.Session_Earlier'), null)
+  } finally {
+    mounted.free()
+    useRoute(off)
     cache.value = {}
     resetSignals()
   }

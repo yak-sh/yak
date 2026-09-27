@@ -186,10 +186,9 @@ export let graphLog = (
   }
 }
 
-// Bound a rendered log's ENTRIES to an output page. graphLog must see the WHOLE
-// partition to resolve call↔result, so a page bounds only what a reader
-// returns, never what it reads: `tail` takes the last N rendered rows, else
-// `after` is a seq cursor and `limit` a cap.
+// Bound rendered entries for callers that already hold a log. A paged reader
+// may pass graphLog one page; a result whose call is on an older page then
+// keeps the generic tool label until that page is loaded.
 export let pageEntries = (
   entries: GraphLogEntry[],
   p: { after?: number; tail?: number; limit?: number },
