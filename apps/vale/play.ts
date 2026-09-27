@@ -68,6 +68,7 @@ import {
   worth,
   xpOf,
 } from './rules.ts'
+import { type Rarity, rarityOf } from './rarity.ts'
 import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimOf, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
@@ -90,7 +91,15 @@ export type Event =
   | { type: 'dodge'; at: Vec3 }
   | { type: 'hurt'; dmg: number; at: Vec3 }
   | { type: 'fall'; eid: string; beast: string; at: Vec3 }
-  | { type: 'loot'; item: string; n: number; at: Vec3 }
+  /** a thing picked up: its kind, how many, and a piece's row and rarity */
+  | {
+    type: 'loot'
+    item: string
+    n: number
+    at: Vec3
+    piece: string
+    rarity?: Rarity
+  }
   | { type: 'xp'; n: number; at: Vec3 }
   | { type: 'level'; lvl: number }
   | { type: 'heal'; n: number; at: Vec3 }
@@ -184,6 +193,8 @@ export type Drop = {
   eid: string
   kind: string
   n: number
+  /** a piece of gear's rarity, to show it lying there */
+  rarity?: Rarity
   x: number
   y: number
   z: number
@@ -264,6 +275,8 @@ let RIPOSTE = 1200
 // land this far apart; and a bleed or a burn lands this many times, a second
 // apart. A boss is held a third as long.
 let WARD = 8000
+// How long a legendary's rally takes to come back, in ms.
+let RALLY = 60_000
 let HITS = 130
 let BLEEDS = 4
 let BOSS_HELD = 1 / 3
@@ -423,6 +436,8 @@ export let game = (
   let ready = new Map<string, number>()
   let guardUntil = -1e9
   let ward = { left: 0, of: 1, until: -1e9 }
+  // When a legendary's rally can ward me again (rarity.ts).
+  let rallies = -1e9
   // A lunge under way: which way, and how far it has still to go.
   let dash: { x: number; z: number; left: number } | null = null
   let said = -1e9
@@ -488,7 +503,12 @@ export let game = (
     let spent = new Set(used.map((b) => str(comp(b, 'used').item)))
     let bag = items.filter((b) => !spent.has(b.entity.eid)).map((b): Held => {
       let i = comp(b, 'item')
-      return { eid: b.entity.eid, kind: str(i.kind), n: num(i.n, 1) }
+      return {
+        eid: b.entity.eid,
+        kind: str(i.kind),
+        n: num(i.n, 1),
+        rarity: rarityOf(i.rarity),
+      }
     })
     let entries = journal.map((b) => {
       let j = comp(b, 'journal')
@@ -540,9 +560,18 @@ export let game = (
     return by
   }
 
-  let keepItem = (me: string, kind: string, n: number, now: number) => {
+  let keepItem = (
+    me: string,
+    kind: string,
+    n: number,
+    now: number,
+    rarity?: Rarity,
+  ) => {
     let eid = crypto.randomUUID()
-    net.keep({ entity: { eid }, item: { kind, n, owner: me, at: now } })
+    net.keep({
+      entity: { eid },
+      item: { kind, n, owner: me, at: now, ...rarity && { rarity } },
+    })
     return eid
   }
 
@@ -967,6 +996,11 @@ export let game = (
             if (rolling) {
               riposte = now
               events.push({ type: 'dodge', at: at(body, 2) })
+              let n = Math.min(s.max - hp, s.max * (s.kit.powers.dodge ?? 0))
+              if (n >= 1) {
+                hp += Math.round(n)
+                events.push({ type: 'heal', n: Math.round(n), at: at(body, 2) })
+              }
             } else if (now < guardUntil) {
               riposte = now
               events.push({ type: 'block', at: at(body, 2) })
@@ -985,6 +1019,24 @@ export let game = (
                 hp -= dmg
                 hurtAt = now
                 events.push({ type: 'hurt', dmg, at: at(body, 2) })
+                // A legendary bites back, and one wards me when I am low.
+                let { thorns = 0, rally = 0 } = s.kit.powers
+                let back = Math.round(dmg * thorns)
+                if (back) {
+                  blows.push({
+                    eid,
+                    lands: now,
+                    dmg: back,
+                    great: false,
+                    held: 0,
+                  })
+                }
+                if (rally && hp > 0 && hp < s.max / 3 && now > rallies) {
+                  rallies = now + RALLY
+                  let n = Math.round(s.max * rally)
+                  ward = { left: n, of: n, until: now + WARD }
+                  events.push({ type: 'ward', n, at: at(body, 2.3) })
+                }
               }
             }
           }
@@ -1039,12 +1091,18 @@ export let game = (
           n: worth(beast.xp, beast.lvl, s.lvl),
           at: at(m.body, beast.size + 1),
         })
-        lootOf(m.kind, m.eid, when, me, s.kit.family).forEach((l, i) => {
+        let find = s.kit.powers.find ?? 0
+        lootOf(m.kind, m.eid, when, me, s.kit.family, find).forEach((l, i) => {
           let a = (i / 3) * Math.PI * 2 + Math.random()
           let x = m.body.x + Math.cos(a) * 0.9, z = m.body.z + Math.sin(a) * 0.9
           change.push({
             entity: { eid: crypto.randomUUID() },
-            drop: { kind: l.kind, n: l.n, at: now },
+            drop: {
+              kind: l.kind,
+              n: l.n,
+              at: now,
+              ...l.rarity && { rarity: l.rarity },
+            },
             position: { level: lv, x, y: groundAt(v, x, z), z },
           })
         })
@@ -1058,6 +1116,7 @@ export let game = (
         let d = fought.dealt.find((d) => d.foe == m.eid && d.life == life)
         if (!d) fought.dealt.push(d = { foe: m.eid, life, dmg: 0, held: 0 })
         d.dmg += dmg
+        if (!down) hp = Math.min(s.max, hp + dmg * (s.kit.powers.leech ?? 0))
         m.hp = hpOf(m.eid, beast.hp, life, dealing())
         hitAt.set(m.eid, now)
         m.hurt = 0
@@ -1224,7 +1283,7 @@ export let game = (
         let might = power(s.lvl, !a && hand == 'off' ? k.twin : k.dmg) *
           (1 + k.force)
         for (let [j, m] of taken.entries()) {
-          let hits = a?.hits ?? 1
+          let hits = (a?.hits ?? 1) + +(Math.random() < (k.powers.echo ?? 0))
           for (let i = 0; i < hits; i++) {
             let last = i == hits - 1
             let { dmg, great } = blow(
@@ -1238,10 +1297,13 @@ export let game = (
               lands: now + ms + i * HITS,
               dmg,
               great,
-              held: i ? 0 : a?.held ?? 0,
+              held: i
+                ? 0
+                : Math.max(a?.held ?? 0, great ? k.powers.hold ?? 0 : 0),
             })
           }
-          let bleed = Math.round((might * (a?.bleed ?? 0)) / BLEEDS)
+          let burns = (a?.bleed ?? 0) + (k.powers.burn ?? 0)
+          let bleed = Math.round((might * burns) / BLEEDS)
           for (let i = 1; bleed && i <= BLEEDS; i++) {
             blows.push({
               eid: m.eid,
@@ -1319,6 +1381,7 @@ export let game = (
           eid: b.entity.eid,
           kind: str(d.kind),
           n: num(d.n, 1),
+          rarity: d.rarity == null ? undefined : rarityOf(d.rarity),
           x: p.x,
           y: p.y,
           z: p.z,
@@ -1329,12 +1392,13 @@ export let game = (
         if (now - drop.at > DROP_LIFE) change.push(gone)
         else if (!down && dd < PICK && now - drop.at > 350) {
           change.push(gone)
-          keepItem(me, drop.kind, drop.n, now)
           events.push({
             type: 'loot',
             item: drop.kind,
             n: drop.n,
             at: at(drop, 0.6),
+            piece: keepItem(me, drop.kind, drop.n, now, drop.rarity),
+            rarity: drop.rarity,
           })
         } else {
           if (!down && dd < PULL && now - drop.at > 350) {

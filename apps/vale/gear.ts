@@ -14,6 +14,7 @@
 // Once chosen, a slot holds what was chosen.
 import { ARMS, HANDLES, type Slot, SLOTS } from './arms.ts'
 import { ITEMS } from './items.ts'
+import { piece, POWERS, type Powers, RARITIES } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { type Learned, SKILLS } from './skills.ts'
 
@@ -181,16 +182,19 @@ export type Kit = {
   speed: number
   force: number
   luck: number
+  /** what the legendaries worn do (rarity.ts) */
+  powers: Powers
 }
 
 // Two blades strike this much of one's pace apart, a hand at a time.
 let TWIN = 0.8
 
-/** A hero's kit.
+/** A hero's kit: each piece worn as it rolled (rarity.ts).
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
+ * import type { Rarity } from './rarity.ts'
  * import { blow } from './rules.ts'
  * let kit = (...kinds: string[]) =>
  *   kitOf(Object.fromEntries(
@@ -228,11 +232,16 @@ let TWIN = 0.8
  *   assert(rate(twin) < 1.5 * rate(guard))
  *   assert(guard.reach > twin.reach && guard.armour > twin.armour)
  * }
+ * // A finer piece does more, and a legendary brings its power.
+ * let axe = (rarity: Rarity) =>
+ *   kitOf({ main: { eid: 'x', kind: 'axe2', n: 1, rarity } })
+ * assertEquals(axe('epic').dmg > axe('common').dmg, true)
+ * assertEquals(Object.keys(axe('legendary').powers).length, 1)
  * ```
  */
 export let kitOf = (worn: Worn): Kit => {
-  let main = worn.main ? ITEMS[worn.main.kind] : undefined
-  let off = worn.off ? ITEMS[worn.off.kind] : undefined
+  let main = worn.main ? piece(worn.main) : undefined
+  let off = worn.off ? piece(worn.off) : undefined
   let family = main?.family && HANDLES[main.family] ? main.family : 'fists'
   let h = HANDLES[family]
   let twin = off?.slot == 'main' ? off.dmg ?? 0 : 0
@@ -240,7 +249,7 @@ export let kitOf = (worn: Worn): Kit => {
     family,
     dmg: main?.dmg ?? h.dmg,
     twin,
-    pace: twin ? Math.round(h.pace * TWIN) : h.pace,
+    pace: h.pace,
     reach: h.reach,
     arc: h.arc,
     hands: h.hands,
@@ -250,15 +259,23 @@ export let kitOf = (worn: Worn): Kit => {
     speed: 0,
     force: 0,
     luck: h.luck ?? 0,
+    powers: {},
   }
+  let haste = 0
   for (let w of Object.values(worn)) {
-    let t = ITEMS[w.kind]
-    kit.armour += t?.armour ?? 0
-    kit.hp += t?.hp ?? 0
-    kit.speed += t?.speed ?? 0
-    kit.force += t?.force ?? 0
-    kit.luck += t?.luck ?? 0
+    let t = piece(w)
+    kit.armour += t.armour ?? 0
+    kit.hp += t.hp ?? 0
+    kit.speed += t.speed ?? 0
+    kit.force += t.force ?? 0
+    kit.luck += t.luck ?? 0
+    haste += t.haste ?? 0
+    for (let p of POWERS) {
+      let n = t.legend?.powers[p]
+      if (n) kit.powers[p] = (kit.powers[p] ?? 0) + n
+    }
   }
+  kit.pace = Math.round(h.pace * (twin ? TWIN : 1) * (1 - haste))
   for (let k of ['speed', 'force', 'luck'] as const) {
     kit[k] = Math.round(kit[k] * 100) / 100
   }
@@ -286,10 +303,10 @@ export let handOf = (kit: Kit, n: number): Hand =>
   kit.twin && n % 2 == 0 ? 'off' : 'main'
 
 /** How good a thing is to wear, to choose the best of several. */
-let rank = (kind: string) => {
-  let t = ITEMS[kind]
-  return (t?.tier ?? 0) * 1000 + (t?.dmg ?? 0) * 100 + (t?.armour ?? 0) * 10 +
-    (t?.hp ?? 0) / 10
+let rank = (h: Held) => {
+  let t = piece(h)
+  return (t.tier ?? 0) * 1000 + RARITIES.indexOf(t.rarity) * 150 +
+    (t.dmg ?? 0) * 100 + (t.armour ?? 0) * 10 + (t.hp ?? 0) / 10
 }
 
 /** What to put on in each slot the hero never chose for: the best they
@@ -320,7 +337,7 @@ export let firsts = (rows: Equip[], bag: Held[]) => {
   for (let s of SLOTS) {
     if (chosen.has(s)) continue
     let best = bag.filter((h) => ITEMS[h.kind]?.slot == s)
-      .sort((a, b) => rank(b.kind) - rank(a.kind))[0]
+      .sort((a, b) => rank(b) - rank(a))[0]
     if (!best) continue
     if (s == 'off') {
       let hand = out.find((o) => o.slot == 'main')

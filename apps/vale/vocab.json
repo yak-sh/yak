@@ -171,7 +171,12 @@
           "index": true,
           "description": "The player."
         },
-        "at": { "type": "number" }
+        "at": { "type": "number" },
+        "rarity": {
+          "type": "string",
+          "enum": ["common", "uncommon", "rare", "epic", "legendary"],
+          "description": "How fine a piece of gear is (rarity.ts); a row with none is common. What the piece rolled comes from its eid."
+        }
       }
     },
     "gathered": {
@@ -321,7 +326,12 @@
       "properties": {
         "kind": { "type": "string" },
         "n": { "type": "integer" },
-        "at": { "type": "number" }
+        "at": { "type": "number" },
+        "rarity": {
+          "type": "string",
+          "enum": ["common", "uncommon", "rare", "epic", "legendary"],
+          "description": "How fine a piece of gear is, kept on the item it becomes."
+        }
       }
     },
     "villager": {

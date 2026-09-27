@@ -31,6 +31,8 @@ export type Thing = {
   hp?: number
   /** how much faster its wearer runs, as a share */
   speed?: number
+  /** how much sooner each blow comes, as a share */
+  haste?: number
   /** how much harder every blow lands, as a share */
   force?: number
   /** how much likelier a great blow is */

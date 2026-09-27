@@ -18,8 +18,10 @@ import {
   LODES,
   nodesOf,
 } from './gather.ts'
+import { ITEMS } from './items.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
 import type { Frame, Vec3 } from './play.ts'
+import { made, type Rarity } from './rarity.ts'
 import { fallOf } from './rules.ts'
 import { groundAt, type Vale, WATER } from './terrain.ts'
 import {
@@ -64,6 +66,9 @@ export type Work =
     trade: Trade
     xp: number
     at: Vec3
+    /** a piece made: its item row, and how fine it came out */
+    piece?: string
+    rarity?: Rarity
   }
   | { type: 'station'; craft: Craft }
   | { type: 'trade'; trade: Trade; lvl: number }
@@ -193,23 +198,35 @@ export let working = (net: Net) => {
 
   // A thing made, from what the bag holds now: the item, wearing the row
   // that says how, what it took spent, and what was left of a stack taken
-  // whole given back.
+  // whole given back. A piece of gear comes out finer the further the
+  // hero's trade is past what the recipe asks (rarity.ts).
   let make = (
     key: string,
     me: string,
     now: number,
     at: Vec3,
     f: Frame,
+    lvl: number,
   ): Work => {
     let r = RECIPES[key]
     let took = plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))
     if (!took) {
       return { type: 'say', text: 'You no longer have all it asks.' }
     }
+    let piece = crypto.randomUUID()
+    let rarity = ITEMS[r.makes]?.slot
+      ? made(Math.random(), lvl, least(r.tier))
+      : undefined
     net.keep(
       {
-        entity: { eid: crypto.randomUUID() },
-        item: { kind: r.makes, n: 1, owner: me, at: now },
+        entity: { eid: piece },
+        item: {
+          kind: r.makes,
+          n: 1,
+          owner: me,
+          at: now,
+          ...rarity && { rarity },
+        },
         crafted: { recipe: key, at: now },
       },
       ...took.spend.map((eid) => ({
@@ -229,6 +246,8 @@ export let working = (net: Net) => {
       trade: r.at,
       xp: madeXp(r.tier),
       at,
+      piece,
+      rarity,
     }
   }
 
@@ -380,7 +399,9 @@ export let working = (net: Net) => {
         if (now >= job.until) {
           job = null
           if (n) events.push(gather(n, me, now, mine))
-          else if (recipe) events.push(make(recipe, me, now, at, f))
+          else if (recipe) {
+            events.push(make(recipe, me, now, at, f, mine[trade].lvl))
+          }
         } else {
           doing = {
             trade,

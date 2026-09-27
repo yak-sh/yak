@@ -7,6 +7,7 @@ import { spoil, tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import type { Quest } from './quests.ts'
 import { hashOf, noise, stream } from './rand.ts'
+import { dropped, type Rarity } from './rarity.ts'
 
 /** The xp a level of experience takes, counted from nothing. A creature's
  * xp grows about as its level does, and each level takes more of them than
@@ -199,17 +200,25 @@ export let heldOf = (
 // boss always does.
 export let SPOILS = 0.08
 
+/** A thing a fall leaves: its kind, how many, and a piece's rarity. */
+export type Found = { kind: string; n: number; rarity?: Rarity }
+
 /** What a fall leaves one player to pick up: the same for every page that
  * asks, and different for every player. Now and then, a piece of gear, most
- * often a weapon of the `family` they hold.
+ * often a weapon of the `family` they hold, of a rarity likelier fine the
+ * higher the creature's level, finer from a boss, and finer with a `find`
+ * (rarity.ts).
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
  * assertEquals(lootOf('boar', 'c1', 5, 'p1'), lootOf('boar', 'c1', 5, 'p1'))
- * // The Cinder Wyrm always leaves gear of the last tier.
- * let wyrm = lootOf('cinderwyrm', 'c2', 5, 'p1').map((l) => ITEMS[l.kind])
- * assert(wyrm.some((t) => t.slot && t.tier == 5))
+ * // The Cinder Wyrm always leaves a piece of the last tier, never plain.
+ * for (let fell = 0; fell < 20; fell++) {
+ *   let [gear] = lootOf('cinderwyrm', 'c2', fell, 'p1').filter((l) => l.rarity)
+ *   assertEquals(ITEMS[gear.kind].tier, 5)
+ *   assert(gear.rarity != 'common')
+ * }
  * ```
  */
 export let lootOf = (
@@ -218,10 +227,11 @@ export let lootOf = (
   fell: number,
   player: string,
   family = '',
-): { kind: string; n: number }[] => {
+  find = 0,
+): Found[] => {
   let r = stream(hashOf(`${creature}:${fell}:${player}`))
   let beast = BEASTS[kind]
-  let found = (beast?.loot ?? []).flatMap(([item, chance]) =>
+  let found = (beast?.loot ?? []).flatMap(([item, chance]): Found[] =>
     r() < chance
       ? [{
         kind: item,
@@ -230,7 +240,9 @@ export let lootOf = (
       : []
   )
   if (beast && r() < (beast.boss ? 1 : SPOILS)) {
-    found.push({ kind: spoil(tierOf(beast.lvl), r, family), n: 1 })
+    let kind = spoil(tierOf(beast.lvl), r, family)
+    let rarity = dropped(r(), beast.lvl, beast.boss, find)
+    found.push({ kind, n: 1, rarity })
   }
   return found
 }
@@ -250,7 +262,9 @@ export let wander = (
 }
 
 export type Entry = { quest: string; step: string; at: number }
-export type Held = { eid: string; kind: string; n: number }
+/** An item row in the bag: its kind, how many, and for a piece of gear, how
+ * fine it is (rarity.ts). */
+export type Held = { eid: string; kind: string; n: number; rarity?: Rarity }
 
 /** Where one player stands with a quest: done, taken (with how far along),
  * open to take once the quest it comes after is done, or not yet; and, while

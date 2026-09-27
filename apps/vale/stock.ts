@@ -24,6 +24,7 @@ import { ITEMS } from './items.ts'
 import { HOPS, LEVELS } from './levels.ts'
 import type { Giver } from './quests.ts'
 import { hashOf, stream } from './rand.ts'
+import { RARITIES } from './rarity.ts'
 import { type Held, SPOILS, worth } from './rules.ts'
 
 let MIN = 60_000
@@ -554,8 +555,9 @@ export let steps = (
 
 /**
  * What in a bag pays the things a deal asks for: the rows to spend, the
- * ones a hero is not wearing first, and what comes back from the last heap
- * broken into. Nothing when the bag does not hold it all.
+ * ones a hero is not wearing first and the humblest pieces of those, and
+ * what comes back from the last heap broken into. Nothing when the bag does
+ * not hold it all.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -569,6 +571,13 @@ export let steps = (
  *   spend: ['c1', 'c2', 's2'],
  *   back: [{ kind: 'coin', n: 6 }],
  * })
+ * // An epic is the last thing handed over.
+ * let fine = [{ eid: 'e', kind: 'ring1', n: 1, rarity: 'epic' as const }, {
+ *   eid: 'p',
+ *   kind: 'ring1',
+ *   n: 1,
+ * }]
+ * assertEquals(pay(fine, goods('1 ring1')!)?.spend, ['p'])
  * assertEquals(pay(bag, goods('20 coin')!), null)
  * ```
  */
@@ -581,8 +590,9 @@ export let pay = (
   for (let { kind, n } of take) {
     if (BEASTS[kind]) continue
     let left = n
+    let fine = (h: Held) => RARITIES.indexOf(h.rarity ?? 'common')
     let rows = bag.filter((b) => b.kind == kind)
-      .sort((a, b) => +worn.has(a.eid) - +worn.has(b.eid))
+      .sort((a, b) => +worn.has(a.eid) - +worn.has(b.eid) || fine(a) - fine(b))
     for (let b of rows) {
       if (left <= 0) break
       spend.push(b.eid)
