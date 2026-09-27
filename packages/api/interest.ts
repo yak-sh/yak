@@ -77,6 +77,8 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
         path(c.path, false, into)
       } else if (c.kind == 'fields') {
         for (let f of c.fields) path(f.path, false, into)
+      } else if (c.kind == 'refs' && c.op == '=' && c.value) {
+        for (let [comp] of v.refProps()) into.add(comp)
       } else if (
         c.kind == 'count' || c.kind == 'limit' ||
         c.kind == 'after'

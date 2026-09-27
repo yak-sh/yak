@@ -55,6 +55,23 @@ Deno.test('a commit pushes what the query selects, and nothing else', () => {
   assertEquals(take(), [])
 })
 
+Deno.test('backlinks change only when a referrer changes', () => {
+  let g = shop()
+  g.apply([{ entity: { eid: 'a1' }, doc: { title: 'Author' } }])
+  let subs = subscriptions(g)
+  let { to, take } = ear()
+  subs.open(to, 'back', '.refs=a1&*')
+  assertEquals(take().map(ids), [[]])
+
+  g.apply([{ entity: { eid: 'other' }, doc: { title: 'Elsewhere' } }])
+  assertEquals(take(), [])
+
+  g.apply([{ entity: { eid: 'b1' }, book: { author: 'a1' } }])
+  assertEquals(take().map(ids), [['b1']])
+  g.apply([{ entity: { eid: 'b1' }, book: { author: null } }])
+  assertEquals(take().map((f) => f.gone), [['b1']])
+})
+
 Deno.test('an aggregate is answered with its value, and again when it moves', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { status: 'shelved' } }])

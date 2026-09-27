@@ -455,21 +455,11 @@ export let subscriptions = (graph: Graph, opts: {
     let reads = new Map<string, Bundle[] | Promise<Bundle[]>>()
     let load = (q: string) => {
       let got = reads.get(q)
-      if (!got) {
-        let start = performance.now()
-        got = graph.read(q, { durable: true })
-        let ms = performance.now() - start
-        if (ms > 50) console.error('T-41513 read', ms, q)
-        reads.set(q, got)
-      }
+      if (!got) reads.set(q, got = graph.read(q, { durable: true }))
       return got
     }
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
-    let start = performance.now()
-    let got = graph.get(touched)
-    let ms = performance.now() - start
-    if (ms > 50) console.error('T-41513 get', ms, touched.length)
-    return then(got, (now) => {
+    return then(graph.get(touched), (now) => {
       let touch = touches(applied, now)
       let routing = new Map([
         ...route(now, touched, durableNet),

@@ -23,12 +23,7 @@ import { Dot } from '../Dot.tsx'
 import { Note } from '../Comments.tsx'
 import { Entity, resolve } from '../Entity.tsx'
 import { mdMentions, type Mention } from '../../md.ts'
-import {
-  useBacklinks,
-  useCommentsOn,
-  useQueryResult,
-  useReferences,
-} from '../useQuery.ts'
+import { useCommentsOn, useQueryResult, useReferences } from '../useQuery.ts'
 import { UrlVal } from '../editors.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { SessionDot, useSessionStanding } from '../session_status.tsx'
@@ -551,10 +546,6 @@ export let Session = ({ e }: { e: Ent }) => {
   // its door is open. `standing` is that answer as a word, so an external
   // run's pip and label read `running` instead of a blank lifecycle.
   let state = useSessionStanding(e, web ? take : undefined)
-  // One held reverse list at the transcript root. Per-entry result lookups
-  // stay local: the entry partition above supplies every call/result row,
-  // including results whose call is outside the rendered window (T-37033).
-  useBacklinks(e.eid)
   let entries = state.entries
   let ready = entries.status == 'ready' ? entries.log : undefined
   let [retried, setRetried] = useState(false)
