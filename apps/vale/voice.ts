@@ -2,6 +2,7 @@
 // its last 10, and clearer in front of its speaker than behind them. Asked
 // for within earshot and let go past 34 m, so a voice at the edge does not
 // flap. The call and the microphone are voicebox.ts's.
+import { FALLOFF, type Falloff } from './ears.ts'
 import type { Body } from './sim.ts'
 
 /** Where a voice is heard out to, and where it is let go. */
@@ -9,6 +10,15 @@ export let EAR = 30
 export let FAR = 34
 // Where a voice starts to fade.
 let FADE = 20
+
+/** How the engine fades a voice, under `loud`: whole out to 3 m, and halving
+ * with each doubling of the distance beyond, as sound does in the open. Talk
+ * is at full voice at talking distance, however gently the vale's other
+ * sounds are heard up close (ears.ts `FALLOFF`). */
+export let TALK = {
+  pan: { ...FALLOFF.pan, refDistance: 3, rolloffFactor: 1 },
+  near: 1,
+} satisfies Falloff
 
 /**
  * How loud a voice from `them` is to `me`, before the engine's own falloff:

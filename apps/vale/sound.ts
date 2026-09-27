@@ -15,7 +15,15 @@
 // require, and silent for good once muted.
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
-import { type Ear, ear, FALLOFF, hear, NEAR, QUIET } from './ears.ts'
+import {
+  type Ear,
+  ear,
+  FALLOFF,
+  type Falloff,
+  hear,
+  NEAR,
+  QUIET,
+} from './ears.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
@@ -30,11 +38,12 @@ export type From = string | Vec3 | null
  * what this returns. */
 export type Keep = (ctx: AudioContext, into: AudioNode) => () => void
 
-// A panner where something is, while it sounds: `until` it has sounded its
-// last; `fixed` at a point, or following what its id names; `end` stops the
-// sound kept there.
+// A panner where something is, while it sounds, and `into` it, the loudness
+// its falloff has up close: `until` it has sounded its last; `fixed` at a
+// point, or following what its id names; `end` stops the sound kept there.
 type Source = {
   pan: PannerNode
+  into: AudioNode
   until: number
   fixed: boolean
   end?: () => void
@@ -43,8 +52,8 @@ type Source = {
 // How long a source is kept after its last sound: HRTF rings a moment.
 let TAIL = 0.5
 // How loud each sound a level keeps making is at its source, and how it
-// falls away (ears.ts): the fire as every sound does, and water fast, so it
-// is heard at its edge and not across the level.
+// falls away (ears.ts): the fire as the vale's sounds do, and water fast, so
+// it is heard at its edge and not across the level.
 let LOOP = {
   fire: { loud: 0.45, falloff: FALLOFF },
   water: { loud: 0.12, falloff: NEAR },
@@ -137,12 +146,13 @@ let panner = (
   id: string,
   at: Vec3,
   fixed: boolean,
-  falloff: PannerOptions = FALLOFF,
+  falloff: Falloff = FALLOFF,
 ) => {
-  let pan = new PannerNode(ctx!, falloff)
+  let pan = new PannerNode(ctx!, falloff.pan)
+  let into = new GainNode(ctx!, { gain: falloff.near })
   move(pan, at)
-  pan.connect(out!)
-  let s: Source = { pan, until: 0, fixed }
+  into.connect(pan).connect(out!)
+  let s: Source = { pan, into, until: 0, fixed }
   sources.set(id, s)
   return s
 }
@@ -157,7 +167,7 @@ let make = (from: From, v: Voice) => {
   if (!at || (ears && hear(ears, at).gain * v.loud < QUIET)) return
   let s = sources.get(id) ?? panner(id, at, typeof from != 'string')
   s.until = Math.max(s.until, ctx.currentTime + v.dur + TAIL)
-  v.play(s.pan)
+  v.play(s.into)
 }
 
 // A kept sound ends: it fades, and its source goes once it has.
@@ -170,12 +180,12 @@ let end = (s: Source) => {
 /** Keep a sound going at `id`, where the frames put it, falling away as
  * `falloff` says, until it is let go by what this returns, or what it is at
  * is gone. */
-let keep = (id: string, sound: Keep, falloff: PannerOptions = FALLOFF) => {
+let keep = (id: string, sound: Keep, falloff: Falloff = FALLOFF) => {
   let at = spots.get(id)
   if (!ctx || !at) return () => {}
   let s = sources.get(id) ?? panner(id, at, false, falloff)
   if (s.end) end(s)
-  let stop = sound(ctx, s.pan)
+  let stop = sound(ctx, s.into)
   s.end = stop
   s.until = Infinity
   return () => {

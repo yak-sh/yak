@@ -2,9 +2,9 @@
 // looks, so the screen's right is theirs and a sound is as near as it is to
 // the hero. With no hero, at the gate, they stand where the camera is. Web
 // Audio pans and fades every sound in the vale by itself (sound.ts gives each
-// source a PannerNode with `FALLOFF`); `hear` is the same sum done by hand, so
-// the page knows a sound too far off to hear before it makes one, and a test
-// can say where a sound is heard.
+// source a PannerNode as its `Falloff` says, `FALLOFF` for most); `hear` is
+// the same sum done by hand, so the page knows a sound too far off to hear
+// before it makes one, and a test can say where a sound is heard.
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
 import type { Vec3 } from './play.ts'
@@ -13,29 +13,42 @@ import type { Vec3 } from './play.ts'
  * what Web Audio's `AudioListener` is told each frame. */
 export type Ear = { at: Vec3; forward: Vec3; up: Vec3 }
 
-/** How every source is heard. HRTF places a sound all round the head, above
- * and behind as well as left and right. Out to `refDistance` a sound is at
- * its own loudness: the hero's own, the creature they fight, the fire they
- * stand by. Beyond, it halves with each doubling of the distance, as sound
- * does in the open. */
-export let FALLOFF = {
-  panningModel: 'HRTF',
-  distanceModel: 'inverse',
-  refDistance: 3,
-  rolloffFactor: 1,
-} satisfies PannerOptions
+/** How a source is heard: `pan` places it round the head and fades it with
+ * distance (Web Audio's PannerNode), and out to the panner's `refDistance` it
+ * is at `near` of its own loudness. */
+export type Falloff = { pan: PannerOptions; near: number }
 
-/** How water is heard: at its own loudness out to `refDistance`, as every
- * source is, but beyond that falling away with the square of the distance,
- * so a lake is heard at its edge and gone some twenty metres off. */
+/** How the vale's sounds are heard. HRTF places a sound all round the head,
+ * above and behind as well as left and right. Out to `refDistance` a sound is
+ * at `near` of its own loudness: the hero's own, the creature they fight, the
+ * fire they stand by, none of them loud. Beyond, it falls away more gently
+ * than sound in the open, a little less than halving with each doubling of
+ * the distance, so it carries a good way. */
+export let FALLOFF = {
+  pan: {
+    panningModel: 'HRTF',
+    distanceModel: 'inverse',
+    refDistance: 5,
+    rolloffFactor: 0.6,
+  },
+  near: 0.6,
+} satisfies Falloff
+
+/** How water is heard: at its own loudness out to `refDistance`, but beyond
+ * that falling away with the square of the distance, so a lake is heard at
+ * its edge and gone some twenty metres off. */
 export let NEAR = {
-  ...FALLOFF,
-  distanceModel: 'exponential',
-  rolloffFactor: 2,
-} satisfies PannerOptions
+  pan: {
+    ...FALLOFF.pan,
+    distanceModel: 'exponential',
+    refDistance: 3,
+    rolloffFactor: 2,
+  },
+  near: 1,
+} satisfies Falloff
 
 /** Below this loudness at the ears a sound is not made at all: a footstep
- * dies away within some 25 m, a blow carries across a level. */
+ * dies away within some 40 m, a blow carries across a level. */
 export let QUIET = 0.004
 
 let sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -65,8 +78,8 @@ export let ear = (eye: THREE.Object3D, at?: Vec3): Ear => {
 
 /** What the ears make of a sound at `at`: how far to their right it is, from
  * -1 hard left to 1 hard right; how far ahead, from -1 behind to 1 before
- * them; and how loud, 1 at `refDistance` or nearer. Right is forward × up,
- * as Web Audio has it.
+ * them; and how loud, as `FALLOFF` hears it: `near` at `refDistance` or
+ * nearer. Right is forward × up, as Web Audio has it.
  *
  * ```ts
  * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
@@ -92,11 +105,11 @@ export let ear = (eye: THREE.Object3D, at?: Vec3): Ear => {
  * // On along the camera's view is ahead of the hero; the camera is behind.
  * assertAlmostEquals(from(ahead, 5).ahead, 1, 1e-9)
  * assert(hear(e, [26, 10, 28]).ahead < -0.8)
- * // Beside the hero a sound is at its own loudness; further off it fades,
- * // halving as the distance doubles.
- * assertEquals(from(right, 2).gain, 1)
+ * // Beside the hero a sound is as loud as it is up close; further off it
+ * // fades.
+ * assertEquals(from(right, 2).gain, FALLOFF.near)
  * assert(from(right, 12).gain < from(right, 8).gain)
- * assertAlmostEquals(from(ahead, 80).gain / from(ahead, 40).gain, 0.5, 1e-9)
+ * assert(from(ahead, 80).gain < from(ahead, 40).gain)
  * // With no hero, the ears are where the camera is.
  * assertEquals(ear(eye).at, [26, 10, 28])
  * ```
@@ -104,10 +117,10 @@ export let ear = (eye: THREE.Object3D, at?: Vec3): Ear => {
 export let hear = (e: Ear, at: Vec3) => {
   let to = sub(at, e.at)
   let d = Math.hypot(...to)
-  let r = FALLOFF.refDistance
+  let { pan: { refDistance: r, rolloffFactor: k }, near } = FALLOFF
   return {
     side: d ? dot(to, norm(cross(e.forward, e.up))) / d : 0,
     ahead: d ? dot(to, e.forward) / d : 0,
-    gain: r / (r + FALLOFF.rolloffFactor * (Math.max(d, r) - r)),
+    gain: near * r / (r + k * (Math.max(d, r) - r)),
   }
 }

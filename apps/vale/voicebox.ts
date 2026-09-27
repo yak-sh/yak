@@ -17,7 +17,7 @@ import { comp, type Net, str } from './net.ts'
 import type { Frame } from './play.ts'
 import type { Body } from './sim.ts'
 import { sound } from './sound.ts'
-import { loud, near } from './voice.ts'
+import { loud, near, TALK } from './voice.ts'
 
 // How long a voice that could not be had waits before it is asked again.
 let AGAIN = 5000
@@ -142,7 +142,7 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
         setTimeout(() => src.disconnect(), 500)
         if (v.gain == gain) v.gain = null
       }
-    })
+    }, TALK)
   }
 
   return {
