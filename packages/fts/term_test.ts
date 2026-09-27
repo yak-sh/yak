@@ -19,6 +19,12 @@ Deno.test('match syntax a person typed is text, not grammar', () => {
   assertEquals(match('dragon OR NEAR(x)'), '"dragon"* "OR"* "NEAR(x)"*')
 })
 
+Deno.test('a one-letter word matches exactly unless explicitly starred', () => {
+  assertEquals(term('a'), '"a"')
+  assertEquals(term('a*'), '"a"*')
+  assertEquals(match('a dragon'), '"a" "dragon"*')
+})
+
 Deno.test('a trailing star is the one piece of grammar a person can reach', () => {
   assertEquals(term('drag*'), '"drag"*')
   assertEquals(term('drag**'), '"drag"*')
@@ -52,7 +58,7 @@ Deno.test('a quoted run stays one phrase, beside the loose words', () => {
 Deno.test('excerpt retains useful terms without discarding search words', () => {
   assertEquals(
     match('a burglar with a dragon'),
-    '"a"* "burglar"* "with"* "a"* "dragon"*',
+    '"a" "burglar"* "with"* "a" "dragon"*',
   )
   assertEquals(excerpt('a burglar with a dragon'), '"burglar"* "dragon"*')
   assertEquals(excerpt('a with'), term('a'))

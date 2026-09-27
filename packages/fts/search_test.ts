@@ -7,7 +7,7 @@ import { fields } from './fields.ts'
 import { search } from './compile.ts'
 import { find, hits } from './search.ts'
 import { CLOSE, OPEN } from './term.ts'
-import { shelf, shop } from './testing.ts'
+import { entity, shelf, shop } from './testing.ts'
 
 let text = fields(shop)
 
@@ -73,6 +73,19 @@ Deno.test('a word reaches the longer word it starts', () => {
     find(shelf(), text, 'burgl').map((h) => h.entity),
     ['book-1'],
   )
+})
+
+Deno.test('a one-letter word matches exactly unless explicitly starred', () => {
+  let db = shelf()
+  entity(db, 5, 'book-5')
+  db.query(insert('book', {
+    entity: 5,
+    title: 'Amethyst',
+    blurb: 'Azure air',
+    price: 5,
+  }))
+  assert(!find(db, text, 'a').some((h) => h.entity == 'book-5'))
+  assert(find(db, text, 'a*').some((h) => h.entity == 'book-5'))
 })
 
 Deno.test('distinctive words of a search are marked in the snippet', () => {

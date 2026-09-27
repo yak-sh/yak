@@ -29,7 +29,8 @@ export let OPEN = '\x01'
 export let CLOSE = '\x02'
 
 // One typed word, or one quoted run, as a safe FTS5 term: every character in it
-// literal. A single word matches as a prefix; a run of words becomes a phrase,
+// literal. A single word matches as a prefix except a one-letter word:
+// expanding `a*` scans an enormous share of an index. A run becomes a phrase,
 // matched exactly, and a trailing `*` makes its final word a prefix match.
 // Returns '' for text containing no word — a caller must read that as "matches
 // nothing", never as "matches everything".
@@ -37,7 +38,9 @@ export let term = (text: string): string => {
   let star = /\*+$/.test(text)
   let phrase = text.replace(/\*+$/, '').replaceAll('"', '').trim()
   if (!phrase) return ''
-  return `"${phrase}"${star || !/\s/.test(phrase) ? '*' : ''}`
+  return `"${phrase}"${
+    star || (!/\s/.test(phrase) && phrase.length > 1) ? '*' : ''
+  }`
 }
 
 // A quoted run is one token; everything else splits on whitespace. An unclosed
