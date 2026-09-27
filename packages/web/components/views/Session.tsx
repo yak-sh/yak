@@ -1,4 +1,4 @@
-import { useReference, useRepoUrl } from '../subscriptions.ts'
+import { useModel, useReference, useRepoUrl } from '../subscriptions.ts'
 import {
   useEffect,
   useLayoutEffect,
@@ -719,8 +719,8 @@ export let Session = ({ e }: { e: Ent }) => {
 // held query, so a list never loads every session's transcript.
 let RowLine = block('div', 'SessionRow', {
   Head: 'div',
-  Id: 'span',
   Title: 'span',
+  Meta: 'span',
   Brief: 'span',
 })
 
@@ -737,6 +737,13 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   ).eids[0]
   let ask = excerpt(first && ent(first).content?.body)
   let brief = excerpt(e.brief?.text)
+  let latest = useQueryResult(
+    `.entry.session=${e.eid}&.order=-entry.seq&.limit=1&.fields=entry.seq,created.at`,
+    true,
+    true,
+  ).eids[0]
+  let last = latest ? ent(latest) : undefined
+  let model = useModel(e).name
   let title = excerpt(face.value?.doc?.title) || ask || brief || 'Session'
   let detail = face.value?.doc?.title ? brief || ask : ask && brief
   return (
@@ -744,10 +751,20 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
       <RowLine.Head {...tileLink(e, onOpen)}>
         {slot(slots, 'before')}
         <SessionDot e={e} />
-        <RowLine.Id>{idOf(e)}</RowLine.Id>
         <RowLine.Title {...tileTitle(slots, title)} />
         {slot(slots, 'after')}
-        <Stamp at={e.created?.at} />
+        {(last?.entry?.seq != null || model || last?.created?.at) && (
+          <RowLine.Meta>
+            {last?.entry?.seq != null && <>#{last.entry.seq}</>}
+            {model && <>{last?.entry?.seq != null && ' · '}{model}</>}
+            {last?.created?.at && (
+              <>
+                {(last?.entry?.seq != null || model) && ' · '}
+                <Stamp at={last.created.at} label='active' />
+              </>
+            )}
+          </RowLine.Meta>
+        )}
       </RowLine.Head>
       {slot(slots, 'body')}
       {detail && <RowLine.Brief>{detail}</RowLine.Brief>}

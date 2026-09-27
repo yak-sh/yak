@@ -8,17 +8,22 @@ import {
   sessionDetail,
   shelfFor,
 } from '../live.ts'
-import { awake, type Ent } from '../types.ts'
+import type { Ent } from '../types.ts'
+import { leaseEid } from '../../effects/lease.ts'
 import { block } from './ui.tsx'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { SessionDot } from './session_status.tsx'
 import { Card, icons } from './Card.tsx'
-import { usePinTargets } from './subscriptions.ts'
+import { useEntity, usePinTargets } from './subscriptions.ts'
 import { Icon } from './icons.tsx'
 import { shelfHost, shelfOpen, shelve } from './shelf.ts'
 import { useQueryEids } from './useQuery.ts'
-import { trayActiveQuery, trayRecentQuery } from '../tray_query.ts'
+import {
+  trayActiveQuery,
+  trayProcessQuery,
+  trayRecentQuery,
+} from '../tray_query.ts'
 
 // The Tray is bottom-right screen chrome: live-session attention plus a
 // per-client Shelf. A shelved entity is a normal Card while open and one icon
@@ -65,30 +70,89 @@ let dismiss = (eid: string) => {
   localStorage.setItem('tasks-tray-seen', JSON.stringify(seen.value))
 }
 
-// Worth a slot: somebody is home (awake — the operator's own terminal
-// counts, which is the point of asking the door and never the origin), or
-// it moved recently and nobody has dismissed it. Graph-native sessions rest
-// between turns without a process status, so their start is activity too.
-let shown = (eid: string, e: Ent) =>
-  awake(e) ||
-  (trayRecent(e) && !seen.value.includes(eid))
+// A transcript's status is history, not evidence that its runner is alive.
+// A lease is a separate entity; its deadline also has to be checked locally,
+// since expiration need not produce a graph write.
+type RunnerLease = { holder?: string; until?: string }
+let leases = signal<Record<string, RunnerLease>>({})
+
+export let trayLive = (e: Ent, lease?: RunnerLease, now = Date.now()) =>
+  (!!lease?.holder && !!lease.until && Date.parse(lease.until) > now) ||
+  (!!e.process?.pid && !e.exit)
+
+// Each candidate owns a narrow subscription, rather than subscribing to all
+// leases (or calling a hook in a variable-length loop).
+let LeaseWatch = ({ eid }: { eid: string }) => {
+  let lease = useEntity(
+    leaseEid(`@yaks/session/run/${eid}`),
+    'lease.holder,lease.until',
+  )?.value?.lease
+  let holder = lease?.holder
+  let until = lease?.until
+  // Do not keep a former candidate's lease in the tray after its watcher goes.
+  useEffect(() => () => {
+    if (eid in leases.value) {
+      let next = { ...leases.value }
+      delete next[eid]
+      leases.value = next
+    }
+  }, [eid])
+  useEffect(() => {
+    if (holder && until) {
+      leases.value = { ...leases.value, [eid]: { holder, until } }
+    } else if (eid in leases.value) {
+      let next = { ...leases.value }
+      delete next[eid]
+      leases.value = next
+    }
+    let delay = until ? Date.parse(until) - Date.now() : NaN
+    let timer = Number.isFinite(delay) && delay > 0
+      ? setTimeout(() => {
+        if (leases.value[eid]?.until == until) {
+          let next = { ...leases.value }
+          delete next[eid]
+          leases.value = next
+        }
+      }, Math.min(delay, 2147483647))
+      : undefined
+    return () => clearTimeout(timer)
+  }, [eid, holder, until])
+  return null
+}
+
+export let trayShown = (
+  eid: string,
+  e: Ent,
+  lease = leases.value[eid],
+  now = Date.now(),
+) =>
+  trayLive(e, lease, now) || (trayRecent(e, now) && !seen.value.includes(eid))
 
 // Live sessions first, then recent sessions, each newest first.
 let started = (e: Ent) => Date.parse(e.created?.at ?? '') || 0
 
-export let traySessions = (rows: [string, Ent][]) =>
-  rows.toSorted(([, a], [, b]) =>
-    Number(awake(b)) - Number(awake(a)) || started(b) - started(a)
+export let traySessions = (
+  rows: [string, Ent][],
+  current: Record<string, RunnerLease> = leases.value,
+  now = Date.now(),
+) =>
+  rows.toSorted(([aid, a], [bid, b]) =>
+    Number(trayLive(b, current[bid], now)) -
+      Number(trayLive(a, current[aid], now)) || started(b) - started(a)
   )
 
 let useLive = () => {
   let active = useQueryEids(trayActiveQuery, true)
+  let process = useQueryEids(trayProcessQuery, true)
   let recent = useQueryEids(trayRecentQuery, true)
-  let ids = [...new Set([...active, ...recent])]
-  return traySessions(ids.flatMap((eid) => {
-    let e = ent(eid)
-    return e.session && shown(eid, e) ? [[eid, e] as [string, Ent]] : []
-  }))
+  let ids = [...new Set([...active, ...process, ...recent])]
+  return {
+    ids,
+    rows: traySessions(ids.flatMap((eid) => {
+      let e = ent(eid)
+      return e.session && trayShown(eid, e) ? [[eid, e] as [string, Ent]] : []
+    })),
+  }
 }
 
 let Frame = block('div', 'Tray', {
@@ -158,7 +222,7 @@ let SessionGroup = (
         onDragStart={(e: DragEvent) => dragData(e, eid, 'Session')}
       >
         <Entity eid={eid} view='Tray.List.Tile' />
-        {!awake(s) && (
+        {!trayLive(s, leases.value[eid]) && (
           <X
             type='button'
             aria-label='dismiss'
@@ -182,8 +246,8 @@ export let SessionRows = ({ ls }: { ls: [string, Ent][] }) => {
       '&.edges[worked]&.edges.peers=doc.title,task.status',
     true,
   )
-  let live = ls.filter(([, s]) => awake(s))
-  let recent = ls.filter(([, s]) => !awake(s))
+  let live = ls.filter(([eid, s]) => trayLive(s, leases.value[eid]))
+  let recent = ls.filter(([eid, s]) => !trayLive(s, leases.value[eid]))
   return (
     <>
       {live.length > 0 && <SessionGroup label='live' ls={live} />}
@@ -209,7 +273,7 @@ export let Tray = () => {
     }
   }, [])
 
-  let ls = useLive()
+  let { ids, rows: ls } = useLive()
   let shelf = shelfFor(clientId())
   let ps = shelf ? pinned(shelf).toSorted((a, b) => b.z - a.z) : []
   // Shelved cards are painted as chips, not Cards, so the tray holds their
@@ -228,6 +292,7 @@ export let Tray = () => {
           />
         </Pop>
       )}
+      {ids.map((eid) => <LeaseWatch key={eid} eid={eid} />)}
       <Strip>
         <Live
           type='button'

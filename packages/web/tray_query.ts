@@ -24,10 +24,14 @@ export let dotFields: Field[] = [
   return { comp, prop, wake: true }
 })
 
-// The strip includes active sessions of any age and recent sessions. Keep the
+// The strip includes status candidates of any age and recent sessions. The
+// status selects candidates only: the tray determines live from runner leases
+// or an unexited process, never from this transcript status. Keep the
 // two selections separate: an OR materializes both arms before the
 // outer query, then evaluates status again for their combined projection.
 let fields = '&.fields=' +
   dotFields.map((f) => `${f.comp}.${f.prop}`).join(',')
 export let trayActiveQuery = '.session.status=pending,running' + fields
+// A process-backed runner may remain live even when transcript status is settled.
+export let trayProcessQuery = '.session&.process.pid' + fields
 export let trayRecentQuery = '.session&.created.at>=6-hours-ago' + fields

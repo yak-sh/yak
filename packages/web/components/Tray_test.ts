@@ -9,9 +9,11 @@ import { mount } from './mount.ts'
 import {
   SessionRows,
   trayKey,
+  trayLive,
   trayOpen,
   trayRecent,
   traySessions,
+  trayShown,
 } from './Tray.tsx'
 import { graphStanding } from './session_status.tsx'
 
@@ -50,6 +52,23 @@ Deno.test('the tray keeps a newly started session visible', () => {
   assertEquals(trayRecent(run(), now), false)
 })
 
+Deno.test('old pending work is hidden without a runner; recent idle work remains visible', () => {
+  let now = Date.parse('2026-09-27T12:00:00Z')
+  let old = run(
+    { session: { eid: 'session', id: 'run', status: 'pending' } },
+    '2026-08-16T12:00:00Z',
+  )
+  let recent = run({
+    session: { eid: 'session', id: 'run', status: 'pending' },
+  }, '2026-09-27T11:00:00Z')
+  let current = { holder: 'runner', until: '2026-09-27T12:01:00Z' }
+  let expired = { holder: 'runner', until: '2026-09-27T11:59:00Z' }
+  assertEquals(trayShown('old', old, undefined, now), false)
+  assertEquals(trayShown('recent', recent, undefined, now), true)
+  assertEquals(trayShown('old', old, current, now), true)
+  assertEquals(trayShown('old', old, expired, now), false)
+})
+
 Deno.test('tray sessions put live work first, then recent work', () => {
   assertEquals(
     traySessions([
@@ -59,7 +78,10 @@ Deno.test('tray sessions put live work first, then recent work', () => {
       [
         'live',
         run(
-          { session: { eid: 'live', id: 'live', status: 'running' } },
+          {
+            session: { eid: 'live', id: 'live', status: 'settled' },
+            process: { eid: 'live', pid: 123 },
+          },
           '2026-08-12T09:00:00Z',
         ),
       ],
@@ -68,11 +90,50 @@ Deno.test('tray sessions put live work first, then recent work', () => {
   )
 })
 
+Deno.test('tray live classification uses a current lease or unexited process, never status', () => {
+  let now = Date.parse('2026-08-12T12:00:00Z')
+  let running = run({
+    session: { eid: 'session', id: 'run', status: 'running' },
+  })
+  let settled = run({
+    session: { eid: 'session', id: 'run', status: 'settled' },
+  })
+  assertEquals(trayLive(running, undefined, now), false)
+  assertEquals(
+    trayLive(settled, { holder: 'runner', until: '2026-08-12T12:01:00Z' }, now),
+    true,
+  )
+  assertEquals(
+    trayLive(running, { holder: 'runner', until: '2026-08-12T11:59:00Z' }, now),
+    false,
+  )
+  assertEquals(
+    trayLive(running, { until: '2026-08-12T12:01:00Z' }, now),
+    false,
+  )
+  assertEquals(
+    trayLive(run({ process: { eid: 'session', pid: 123 } }), undefined, now),
+    true,
+  )
+  assertEquals(
+    trayLive(
+      run({
+        process: { eid: 'session', pid: 123 },
+        exit: { eid: 'session', code: 0 },
+      }),
+      undefined,
+      now,
+    ),
+    false,
+  )
+})
+
 Deno.test('the tray shows live and recent sessions in separate sections', () => {
   cache.value = {
     live: {
       entity: { eid: 'live', num: 1 },
-      session: { eid: 'live', id: 'live', status: 'running' },
+      session: { eid: 'live', id: 'live', status: 'settled' },
+      process: { eid: 'live', pid: 123 },
       brief: { eid: 'live', text: 'Active work' },
     },
     done: {

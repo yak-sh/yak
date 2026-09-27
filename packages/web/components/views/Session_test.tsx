@@ -1,4 +1,4 @@
-// A session row names the work rather than the actor or model.
+// A session row names the work and shows its latest activity and model.
 import { tick } from '../../testing.ts'
 import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
@@ -38,7 +38,7 @@ let entryPage = (eid: string, limit = 200) => {
   return querySubscription(resolveRefs(parseQuery(q), findEid), q)!.sub
 }
 
-Deno.test('session list Tile names its brief and id', () => {
+Deno.test('session list Tile names its brief without exposing IDs', () => {
   cache.value = {
     actor: {
       entity: { eid: 'actor', num: 1 },
@@ -59,8 +59,8 @@ Deno.test('session list Tile names its brief and id', () => {
       'Ship the update',
     )
     assertEquals(
-      mounted.root.querySelector('.SessionRow_Id')?.textContent,
-      'S-2',
+      mounted.root.querySelector('.SessionRow_Id'),
+      null,
     )
     assertEquals(mounted.root.querySelector('.Id'), null)
   } finally {
@@ -489,7 +489,7 @@ Deno.test('SessionRow loads its task title when no peer delivered it', async () 
   }
 })
 
-Deno.test('session Tile names its work and brief without model metadata', () => {
+Deno.test('session Tile names its work, model, and last activity without IDs', () => {
   let prior = globalThis.fetch
   let fetched = 0
   globalThis.fetch = (() => {
@@ -497,6 +497,7 @@ Deno.test('session Tile names its work and brief without model metadata', () => 
     throw new Error('session Tile must not fetch')
   }) as typeof fetch
   let model = identityEid('model', ['gpt-5.6-sol'])
+  let lastAt = '2026-08-15T11:00:00-04:00'
   cache.value = {
     persona: {
       entity: { eid: 'persona', num: 1 },
@@ -513,6 +514,11 @@ Deno.test('session Tile names its work and brief without model metadata', () => 
       using: { eid: 'session', model, effort: 'high' },
       brief: { eid: 'session', text: 'Finished the first part' },
       created: { eid: 'session', at: '2026-08-15T09:00:00-04:00' },
+    },
+    'last-entry': {
+      entity: { eid: 'last-entry', num: 6 },
+      entry: { eid: 'last-entry', session: 'session', seq: 42 },
+      created: { eid: 'last-entry', at: lastAt },
     },
     one: {
       entity: { eid: 'one', num: 3 },
@@ -541,12 +547,34 @@ Deno.test('session Tile names its work and brief without model metadata', () => 
       [...head.children].map((x) => x.className.split(' ')[0]),
       [
         'Dot',
-        'SessionRow_Id',
         'SessionRow_Title',
-        'Stamp',
+        'SessionRow_Meta',
       ],
     )
     assertEquals(head.querySelector('.Id'), null)
+    assertEquals(head.querySelector('.SessionRow_Id'), null)
+    assertEquals(root.textContent?.includes('session-id'), false)
+    assertEquals(root.textContent?.includes('S-2'), false)
+    assertEquals(
+      head.querySelector('.SessionRow_Meta')?.textContent?.includes('#42'),
+      true,
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Meta')?.textContent?.includes(
+        'gpt-5.6-sol',
+      ),
+      true,
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Meta')?.textContent?.includes('active '),
+      true,
+    )
+    assertEquals(
+      head.querySelector('.SessionRow_Meta [data-tip]')?.getAttribute(
+        'data-tip',
+      ),
+      new Date(lastAt).toLocaleString(),
+    )
     assertEquals(
       head.querySelector('.SessionRow_Title')?.textContent,
       'Second task',
