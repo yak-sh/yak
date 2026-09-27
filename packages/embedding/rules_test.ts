@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, scan, tally } from '@yaks/sql'
-import { extend, rules } from './rules.ts'
+import { extend, meaning, rules } from './rules.ts'
 import { TABLE } from './ddl.ts'
 import { mem, shop, stocked } from './testing.ts'
 
@@ -71,4 +71,13 @@ Deno.test('the mark starts dirty: an index never built is owed one', () => {
   let sql = mem()
   rules({ sql })
   assert(scan(sql, `${TABLE}_index`)[0].dirty)
+})
+
+Deno.test('a phrase search sees an embedder that arrives after composition', async () => {
+  let db = await stocked()
+  let options: { embedder?: { via: 'hash' } } = {}
+  let find = meaning({ sql: db, vocab: shop }, options)
+  assertEquals(await find('dragon'), [])
+  options.embedder = { via: 'hash' }
+  assert((await find('dragon')).length > 0)
 })

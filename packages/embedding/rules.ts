@@ -18,11 +18,14 @@
 // index's check (./tools.ts), which is a tool and not a component.
 
 import type { Plugin } from '@yaks/graph'
-import type { Extension } from '@yaks/sql'
+import type { Derived, Extension } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
 import type { Driver } from '@yaks/sql'
 import { schema } from './ddl.ts'
-import { embedderOf, type Options } from './options.ts'
+import { resolved } from './fields.ts'
+import { embedderOf, type Options, ready } from './options.ts'
+import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 
 /** The vector table and its dirty flag, in the server's own database. It
  * contributes no rule to `apply()`: nothing a client writes is a vector, and
@@ -54,5 +57,25 @@ export let extend = (
       limit: options.neighbours,
       floor: options.floor,
     })]
+    : []
+}
+
+/** A phrase search over this graph's vectors. Resolve options on every call:
+ * the service may have started embedding after a key arrived, without a new
+ * host or a new search function. */
+export let meaning = (
+  host: { sql: Driver; vocab: Vocab; derived?: Derived },
+  options: Options = {},
+): (words: string, opts?: MeaningOpts) => Promise<Hit[]> =>
+async (words, opts) => {
+  let now = ready(host.vocab, options)
+  return now.embedder
+    ? await search(
+      host.sql,
+      resolved(now.text, host.derived),
+      now.embedder,
+      words,
+      { ...opts, floor: opts?.floor ?? options.floor },
+    )
     : []
 }

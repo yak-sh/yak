@@ -27,7 +27,14 @@ import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
-import { fields, hashEmbedder, schema, semantic, sweep } from '@yaks/embedding'
+import {
+  fields,
+  hashEmbedder,
+  meaning,
+  schema,
+  semantic,
+  sweep,
+} from '@yaks/embedding'
 
 let title = { type: 'string', search: true }
 let book = { component: true, properties: { title, price: { type: 'number' } } }
@@ -49,11 +56,24 @@ let near = semantic(db, embedder)
 let store = storage(db, vocab, { extend: [near] })
 let rows = store.read('.near=book-1&.order=similar .book.price<20')
 let ranked = near.rank(rows) // adds rank: { score } to matching bundles
+let hits = await meaning(
+  db,
+  text,
+  embedder,
+  'a story about an unexpected journey',
+)
+// each hit has { entity, similarity, excerpt }
 ```
 
 `hashEmbedder()` is deterministic and needs no network. It measures hashed word
 counts, not semantic meaning; use a model-backed embedder for semantic search.
 Call `sweep()` after text changes or schedule it through the plugin below.
+
+`meaning()` embeds new search words and ranks the stored vectors. Each excerpt
+comes from the configured text that made the vector, including resolved text for
+a property stored by address. An excerpt has no match markers: a semantic hit
+need not contain any search word. It returns at most 20 hits by default;
+`limit`, `floor` and an optional candidate `screen` can narrow them.
 
 ## As a plugin
 
@@ -84,11 +104,13 @@ The plugin configuration selects a model, endpoint, credentials and text fields:
 ```
 
 `@yaks/embedding/rules` creates the vector tables through the host's SQL driver.
-Its `extend()` export registers the `.near` compiler. `@yaks/embedding/service`
-is the plugin's service, held by one process per graph: it sweeps the queue,
-takes the next batch at once while work is left, and looks again after `after`
-once the queue is empty. The graph write does not await embedding. The service
-stops when its signal aborts, and a pass the host ended leaves its work queued.
+Its `extend()` export registers the `.near` compiler; its `meaning()` factory
+resolves the current embedder on each search, so a key arriving later is used
+without rebuilding the host. `@yaks/embedding/service` is the plugin's service,
+held by one process per graph: it sweeps the queue, takes the next batch at once
+while work is left, and looks again after `after` once the queue is empty. The
+graph write does not await embedding. The service stops when its signal aborts,
+and a pass the host ended leaves its work queued.
 
 Options:
 
@@ -266,15 +288,15 @@ exact scans are configured.
 
 The root exports field selection, `Embedder`, `hashEmbedder`, `remote`, vector
 math/packing helpers, schema and dirty-state helpers, sweep operations,
-`vectorOf`, `nearest`, `semantic` and supporting types such as `Rank`. The
-`Driver` it runs on is `@yaks/sql`'s.
+`vectorOf`, `nearest`, `meaning`, `semantic` and supporting types such as
+`Rank`. The `Driver` it runs on is `@yaks/sql`'s.
 
-| Sub-module export         | Purpose                                                                                   |
-| ------------------------- | ----------------------------------------------------------------------------------------- |
-| `@yaks/embedding/vocab`   | `embeddingDoc` and `docs`, declaring `vector_check`                                       |
-| `@yaks/embedding/rules`   | `rules(host)` creates SQL objects; `extend(host, options)` creates the compiler extension |
-| `@yaks/embedding/service` | `service(host, options, signal)` sweeps the queue until the signal aborts                 |
-| `@yaks/embedding/tools`   | `runs(host, options)` implements `vector_check`; exports the options type                 |
+| Sub-module export         | Purpose                                                                                                                            |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/embedding/vocab`   | `embeddingDoc` and `docs`, declaring `vector_check`                                                                                |
+| `@yaks/embedding/rules`   | `rules(host)` creates SQL objects; `extend(host, options)` creates the compiler extension; `meaning(host, options)` searches words |
+| `@yaks/embedding/service` | `service(host, options, signal)` sweeps the queue until the signal aborts                                                          |
+| `@yaks/embedding/tools`   | `runs(host, options)` implements `vector_check`; exports the options type                                                          |
 
 ## Compatibility
 

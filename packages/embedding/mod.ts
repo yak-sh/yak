@@ -14,7 +14,7 @@
  * An entity gets one vector, made from all of its text fields joined together —
  * a vector is a point in a space of meanings, and an entity is one thing.
  *
- * Five small pieces, each usable alone:
+ * Six small pieces, each usable alone:
  *
  * - {@link fields} reads the embedded properties off a
  *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema;
@@ -25,6 +25,8 @@
  *   reading what moved from a queue the database's own triggers keep
  *   ({@link watch});
  * - {@link nearest} ranks the stored vectors against a query vector;
+ * - {@link meaning} embeds a new phrase and returns nearby entities with
+ *   excerpts from the text that made their vectors;
  * - {@link semantic} — the {@link https://jsr.io/@yaks/sql | @yaks/sql}
  *   extension — compiles `.near=<entity>` and `.order=similar` into that
  *   ranking, so a neighbourhood combines with ordinary filters in one query.
@@ -69,8 +71,8 @@
  *
  * The embedder is injected — {@link hashEmbedder} is the deterministic,
  * offline one shipped here and {@link remote} is one over HTTP, so tests and
- * early development never reach a network. Everything a query touches is
- * synchronous; only the sweep, which may be calling a hosted model, is not.
+ * early development never reach a network. `.near` reads a stored vector
+ * synchronously; searching new words embeds them asynchronously.
  *
  * As a plugin it is two exports and nothing else: `./rules` creates the vector
  * table and registers the `.near` compiler, `./service` keeps settling what the
@@ -94,5 +96,6 @@ export * from './ddl.ts'
 export * from './sweep.ts'
 export * from './owed.ts'
 export * from './near.ts'
+export * from './search.ts'
 export * from './mark.ts'
 export * from './compile.ts'
