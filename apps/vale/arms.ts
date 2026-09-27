@@ -193,10 +193,12 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
     [[-0.085, 1.3, -0.085], [0.17, 0.17, 0.17], p.trim],
   ],
   shield: (p) => [
-    [[-0.25, 0, -0.03], [0.5, 0.58, 0.06], p.wood, 0.03],
+    [[-0.25, 0.14, -0.03], [0.5, 0.44, 0.06], p.wood, 0.03],
+    [[-0.18, 0.05, -0.03], [0.36, 0.09, 0.06], p.wood, 0.03],
+    [[-0.09, 0, -0.03], [0.18, 0.05, 0.06], p.wood, 0.03],
     [[-0.265, 0.54, -0.04], [0.53, 0.06, 0.08], p.metal],
-    [[-0.265, 0.26, -0.04], [0.53, 0.06, 0.08], p.metal],
-    [[-0.08, 0.21, 0.03], [0.16, 0.16, 0.05], p.metal],
+    [[-0.03, 0.02, -0.035], [0.06, 0.56, 0.07], p.metal],
+    [[-0.08, 0.24, 0.03], [0.16, 0.16, 0.05], p.metal],
   ],
   tome: (p) => [
     [[-0.16, 0, -0.12], [0.32, 0.07, 0.24], p.leather],
@@ -289,12 +291,12 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
       [[x - 0.045, 0.02, -0.105], [0.09, 0.06, 0.03], p.cloth],
     ]),
   ring: (p) => [
-    [[-0.06, 0, -0.015], [0.12, 0.03, 0.03], p.metal],
-    [[-0.045, 0.175, -0.025], [0.09, 0.025, 0.05], p.trim],
-    [[-0.09, 0.03, -0.015], [0.03, 0.12, 0.03], p.metal],
-    [[0.06, 0.03, -0.015], [0.03, 0.12, 0.03], p.metal],
-    [[-0.06, 0.15, -0.015], [0.12, 0.03, 0.03], p.metal],
-    [[-0.035, 0.195, -0.035], [0.07, 0.06, 0.07], p.gem],
+    [[-0.07, 0, -0.015], [0.14, 0.03, 0.03], p.metal],
+    [[-0.04, 0.155, -0.025], [0.08, 0.025, 0.05], p.trim],
+    [[-0.1, 0.03, -0.015], [0.03, 0.1, 0.03], p.metal],
+    [[0.07, 0.03, -0.015], [0.03, 0.1, 0.03], p.metal],
+    [[-0.07, 0.13, -0.015], [0.14, 0.03, 0.03], p.metal],
+    [[-0.03, 0.175, -0.03], [0.06, 0.05, 0.06], p.gem],
   ],
 }
 
@@ -373,19 +375,34 @@ let HEALTH = {
 
 let cap = (s: string) => s[0].toUpperCase() + s.slice(1)
 
+// A tier's colours.
+let paint = (t: number): Paint => ({
+  metal: C.metal[t - 1],
+  wood: C.wood[t - 1],
+  leather: C.leather[t - 1],
+  cloth: C.cloth[t - 1],
+  trim: C.trim[t - 1],
+  gem: C.gem[t - 1],
+})
+
 // Every kind, for each tier.
 let tiers = (make: (t: number, p: Paint) => [string, Thing][]) =>
-  Object.fromEntries([1, 2, 3, 4, 5].flatMap((t) => {
-    let i = t - 1
-    return make(t, {
-      metal: C.metal[i],
-      wood: C.wood[i],
-      leather: C.leather[i],
-      cloth: C.cloth[i],
-      trim: C.trim[i],
-      gem: C.gem[i],
-    })
-  }))
+  Object.fromEntries([1, 2, 3, 4, 5].flatMap((t) => make(t, paint(t))))
+
+/** The look of a kind of tier `t` in some colours of its own, for a gift
+ * made after it (items.ts), and how its picture sees it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let gold = forged('sword', 1, { trim: 0xffd040 })
+ * assertEquals(gold.look.length, ARMS.sword1.look.length)
+ * assertEquals(gold.look.some((b) => b[2] == 0xffd040), true)
+ * ```
+ */
+export let forged = (kind: string, t: number, p: Partial<Paint>) => ({
+  look: LOOKS[kind]({ ...paint(t), ...p }),
+  view: VIEWS[kind],
+})
 
 let MADE: Record<string, string[]> = {
   sword: METAL,

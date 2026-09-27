@@ -3,37 +3,70 @@
 // of four shapes in its own colours: a log, a lump of ore, a sprig, a fish.
 // Iron ore and the mushroom cap were creature drops before there was
 // gathering, and stay in items.ts.
-import type { Box, Thing } from './items.ts'
+import type { Box, Thing, View } from './items.ts'
+import { metal } from './mesh.ts'
 
-// A log on its side, its cut ends showing the wood.
-let log = (bark: number, wood: number): Box[] => [
-  [[-0.22, 0, -0.08], [0.44, 0.16, 0.16], bark],
-  [[0.22, 0.02, -0.06], [0.02, 0.12, 0.12], wood],
-  [[-0.24, 0.02, -0.06], [0.02, 0.12, 0.12], wood],
-]
-// A lump of stone flecked with what is in it.
-let lump = (stone: number, fleck: number): Box[] => [
-  [[-0.12, 0, -0.1], [0.24, 0.14, 0.2], stone],
-  [[-0.06, 0.1, -0.04], [0.08, 0.07, 0.08], fleck],
-  [[0.05, 0.04, 0.07], [0.06, 0.06, 0.05], fleck],
-]
-// A sprig: a stem, a leaf either side, and its flower or berries.
-let sprig = (leaf: number, bloom: number): Box[] => [
-  [[-0.02, 0, -0.02], [0.04, 0.24, 0.04], leaf],
-  [[-0.11, 0.08, -0.03], [0.22, 0.05, 0.06], leaf],
-  [[-0.07, 0.22, -0.07], [0.14, 0.09, 0.14], bloom],
-]
-// A fish on its side, its tail up.
-let fish = (back: number, belly: number): Box[] => [
-  [[-0.06, 0, -0.17], [0.12, 0.08, 0.28], back],
-  [[-0.05, 0.08, -0.14], [0.1, 0.03, 0.2], belly],
-  [[-0.08, 0, 0.11], [0.16, 0.12, 0.05], back],
-]
+// A look and how its picture sees it.
+type Made = { look: Box[]; view: View }
 
-let row = (name: string, look: Box[]): Thing => ({
-  name,
-  look,
+// A log on its side, its cut end toward you showing its rings, a stub of a
+// branch on top.
+let log = (bark: number, wood: number): Made => ({
+  view: 'front',
+  look: [
+    [[-0.1, 0.03, -0.2], [0.2, 0.14, 0.4], bark],
+    [[-0.07, 0, -0.2], [0.14, 0.2, 0.4], bark],
+    [[-0.08, 0.04, 0.2], [0.16, 0.12, 0.01], wood],
+    [[-0.05, 0.015, 0.2], [0.1, 0.17, 0.006], wood],
+    [[-0.04, 0.06, 0.21], [0.08, 0.08, 0.01], bark],
+    [[-0.015, 0.085, 0.22], [0.03, 0.03, 0.01], wood],
+    [[-0.025, 0.19, -0.12], [0.05, 0.06, 0.05], bark],
+  ],
 })
+/** A craggy rock with the metal in it glinting from its faces: every ore,
+ * iron ore in items.ts too. */
+export let lump = (stone: number, fleck: number): Made => ({
+  view: 'corner',
+  look: [
+    [[-0.13, 0, -0.1], [0.26, 0.12, 0.2], stone],
+    [[-0.08, 0.1, -0.08], [0.15, 0.08, 0.14], stone],
+    [[0.04, 0.02, -0.14], [0.08, 0.08, 0.06], stone],
+    [[-0.05, 0.16, -0.03], [0.06, 0.05, 0.06], metal(fleck)],
+    [[0.03, 0.04, 0.08], [0.06, 0.05, 0.04], metal(fleck)],
+    [[0.11, 0.06, -0.06], [0.04, 0.04, 0.05], metal(fleck)],
+    [[-0.11, 0.05, 0.08], [0.04, 0.04, 0.04], metal(fleck)],
+  ],
+})
+// A sprig: a stem, a leaf either side, and its flower or berries on top.
+let sprig = (leaf: number, bloom: number): Made => ({
+  view: 'front',
+  look: [
+    [[-0.015, 0, -0.015], [0.03, 0.24, 0.03], leaf],
+    [[-0.11, 0.06, -0.025], [0.1, 0.035, 0.05], leaf],
+    [[-0.11, 0.095, -0.025], [0.035, 0.04, 0.05], leaf],
+    [[0.015, 0.12, -0.025], [0.1, 0.035, 0.05], leaf],
+    [[0.08, 0.155, -0.025], [0.035, 0.04, 0.05], leaf],
+    [[-0.07, 0.24, -0.04], [0.14, 0.06, 0.08], bloom],
+    [[-0.035, 0.2, -0.04], [0.07, 0.14, 0.08], bloom],
+  ],
+})
+// A fish, its head toward +z: a body over a pale belly, a forked tail, a fin
+// on its back and an eye.
+let fish = (back: number, belly: number): Made => ({
+  view: 'side',
+  look: [
+    [[-0.04, 0.05, -0.12], [0.08, 0.09, 0.22], back],
+    [[-0.035, 0.02, -0.1], [0.07, 0.04, 0.18], belly],
+    [[-0.03, 0.04, 0.1], [0.06, 0.08, 0.05], back],
+    [[-0.02, 0.06, -0.17], [0.04, 0.05, 0.06], back],
+    [[-0.012, 0.1, -0.25], [0.024, 0.07, 0.09], back],
+    [[-0.012, 0, -0.25], [0.024, 0.07, 0.09], back],
+    [[-0.01, 0.14, -0.07], [0.02, 0.04, 0.1], back],
+    [[0.04, 0.09, 0.07], [0.01, 0.03, 0.03], 0x1a1410],
+  ],
+})
+
+let row = (name: string, made: Made): Thing => ({ name, ...made })
 
 export let MATERIALS: Record<string, Thing> = {
   // Logs.
