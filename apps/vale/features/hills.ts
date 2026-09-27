@@ -6,7 +6,15 @@
 // old king's hall; Giantsteps' stair of basalt and its columns.
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
-import { bump, crest, type Feature, hamlet, ring, Top, wide } from './kit.ts'
+import {
+  bump,
+  crest,
+  type Feature,
+  ring,
+  Top,
+  village as makeVillage,
+  wide,
+} from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { crags, woods, village } = VALE
@@ -200,7 +208,7 @@ export let HILLS: Record<string, Feature> = {
   stonetown: {
     ...village,
     like: 'village',
-    builds: hamlet('stonehouse'),
+    builds: makeVillage(),
     dress: 'stone',
   },
 }

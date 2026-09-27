@@ -27,7 +27,7 @@ export let MILL: Plan = {
   more: (k) => {
     // Two timber rims, spokes and buckets form the wheel; an axle joins it
     // to the mill's east wall. Its bottom dips into the water beside it.
-    let y = k.floors[0] + 6
+    let y = k.floors[0] + 3
     for (let d of [-2, -4]) {
       for (let z = -6; z <= 6; z++) {
         for (let h = -6; h <= 6; h++) {

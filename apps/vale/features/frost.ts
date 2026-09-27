@@ -5,20 +5,29 @@
 // ice; Whitepeak's peak, cornices and high snow.
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
-import { bump, type Feature, hamlet, ring, Top, wide } from './kit.ts'
+import {
+  bump,
+  type Feature,
+  ring,
+  Top,
+  village as makeVillage,
+  wide,
+} from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village, pinewood, lake } = VALE
 
-/** Rimeholt's holt: longhouses round the fire, woodpiles, and a stockade
- * round it all, open where its roads and lanes run. */
-let HOLT: Prop[] = hamlet('longhouse', 'well', [
+/** Rimeholt's holt: a longhouse, woodpiles, and a stockade round the
+ * furnished village, open where its roads and lanes run. */
+let gaps = [
+  ...[94, 95, 0, 1, 2, 9, 10, 11, 12, 22, 23, 24, 25, 26],
+  ...[57, 58, 59, 60, 70, 71, 72, 73, 74, 84, 85, 86, 87],
+]
+let HOLT: Prop[] = makeVillage('well', [
+  { kind: 'longhouse', x: -30, z: 0, seed: 2 },
   { kind: 'woodpile', x: -4, z: -12, seed: 0 },
   { kind: 'woodpile', x: 14, z: 3, seed: 1 },
-  ...ring('stake', 17, 96, [
-    ...[94, 95, 0, 1, 2, 9, 10, 11, 12, 22, 23, 24, 25, 26],
-    ...[57, 58, 59, 60, 70, 71, 72, 73, 74, 84, 85, 86, 87],
-  ]),
+  ...ring('stake', 42, 192, gaps.flatMap((i) => [2 * i, 2 * i + 1])),
 ])
 
 // Rolling snow, snow-laden spruce.

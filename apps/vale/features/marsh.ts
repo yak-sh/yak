@@ -7,7 +7,7 @@ import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
 import { DEEP } from './deep.ts'
 import { HILLS } from './hills.ts'
-import { bump, type Feature, Top, wide } from './kit.ts'
+import { bump, type Feature, Top, village as makeVillage, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village, woods } = VALE
@@ -33,21 +33,13 @@ let marsh: Feature = {
   decor: [['reed', 0.07], ['tuft', 0.04], ['mushroom', 0.004]],
 }
 
-/** Reedmarsh's village: huts on stilts round the fire, boardwalks between. */
-let STILTS: Prop[] = [
-  { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: 'stilthut', x: -8, z: -8, seed: 11 },
-  { kind: 'stilthut', x: 9, z: -9, seed: 12 },
-  { kind: 'stilthut', x: 9, z: 9.5, seed: 13 },
-  { kind: 'stilthut', x: -9, z: 9, seed: 14 },
+/** Reedmarsh's village keeps its boardwalks and a hut on stilts beside its
+ * furnished timber buildings. */
+let STILTS: Prop[] = makeVillage('well', [
+  { kind: 'stilthut', x: -30, z: 0, seed: 11 },
   { kind: 'boardwalk', x: 0.5, z: -10, seed: 0 },
   { kind: 'boardwalk', x: 13, z: 0.5, seed: 1 },
-  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
-  { kind: 'lamp', x: -4, z: -4, seed: 4 },
-  { kind: 'lamp', x: 4.5, z: 4.5, seed: 5 },
-  { kind: 'lamp', x: -5, z: 5.5, seed: 6 },
-  { kind: 'lamp', x: 5.5, z: -5, seed: 7 },
-]
+])
 
 /** The Sunken Kirk: the walls of its nave, roofless, the bell tower at its
  * east end, and graves in the grass round it, south of where the roads
@@ -93,6 +85,7 @@ export let MARSH: Record<string, Feature> = {
     like: 'village',
     shape: (h, d) => lerp(h, 5.3, smooth(14, 7.5, d)),
     builds: STILTS,
+    dress: 'birch',
   },
   // Mirewood's mire: black water under swamp cypresses hung with moss,
   // bramble thick with berries, and the old cypress.

@@ -58,7 +58,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
   for (let p of small ? [...props, ...decor(patch)] : props) {
     let tiny = KINDS[p.kind].small
     if (tiny && !small) continue
-    let y = standAt(v, p), mesh = model(p.kind, p.seed, p.turn)
+    let y = standAt(v, p), mesh = model(p.kind, p.seed, p.turn, small)
     let n = tiny
       ? smallSpace!(thingAt([p.x, y, p.z], [mesh], v.voxel))
       : step(v, p)

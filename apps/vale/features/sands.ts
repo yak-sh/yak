@@ -6,7 +6,15 @@
 import { fbm, lerp, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
 import { HILLS } from './hills.ts'
-import { bump, crest, type Feature, hamlet, ring, Top, wide } from './kit.ts'
+import {
+  bump,
+  crest,
+  type Feature,
+  ring,
+  Top,
+  village as makeVillage,
+  wide,
+} from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village } = VALE
@@ -88,9 +96,10 @@ export let SANDS: Record<string, Feature> = {
   welltown: {
     ...village,
     like: 'village',
-    builds: hamlet('adobe', 'windpump', [
+    builds: makeVillage('windpump', [
       { kind: 'jars', x: 6.5, z: -3.5, seed: 0 },
       { kind: 'jars', x: -11, z: -3, seed: 1 },
+      { kind: 'adobe', x: -30, z: 0, seed: 2 },
     ]),
     dress: 'stone',
   },
@@ -127,7 +136,7 @@ export let SANDS: Record<string, Feature> = {
   caravan: {
     ...village,
     like: 'village',
-    builds: hamlet('tent', 'well'),
+    builds: makeVillage('well', [{ kind: 'tent', x: -30, z: 0, seed: 2 }]),
     dress: 'stone',
   },
   // Golden dunes, a date palm here and there.

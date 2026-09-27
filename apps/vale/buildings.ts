@@ -4,13 +4,34 @@
 // (features/kit.ts `dress`). To add a kind of building, write its plan in a
 // file of its own under buildings/ and name it in PLANS.
 import { DRESSES } from './buildings/dress.ts'
+import { BARN, STABLE } from './buildings/farm.ts'
+import { APOTHECARY } from './buildings/apothecary.ts'
+import { CARPENTRY } from './buildings/carpentry.ts'
+import { HALL } from './buildings/hall.ts'
+import { COTTAGE, FARMHOUSE, HOUSE } from './buildings/homes.ts'
+import { INN } from './buildings/inn.ts'
 import { type Plan, raise, type Raised } from './buildings/kit.ts'
+import { MILL } from './buildings/mill.ts'
 import { SMITHY } from './buildings/smithy.ts'
+import { STORE } from './buildings/store.ts'
+import { TAILOR } from './buildings/tailor.ts'
 import type { Kind } from './props/kit.ts'
 
 /** Every kind of building, by its name. */
 export let PLANS: Record<string, Plan> = {
   smithy: SMITHY,
+  cottage: COTTAGE,
+  house: HOUSE,
+  farmhouse: FARMHOUSE,
+  carpentry: CARPENTRY,
+  apothecary: APOTHECARY,
+  tailor: TAILOR,
+  inn: INN,
+  store: STORE,
+  hall: HALL,
+  mill: MILL,
+  stable: STABLE,
+  barn: BARN,
 }
 
 /** The kind of prop a plan is in a dress; any other kind as it is.
@@ -48,6 +69,7 @@ export let BUILDINGS: Record<string, Kind> = Object.fromEntries(
         shapes: LOOKS,
         span: [w, d],
         foot: Math.hypot(w, d) / 2,
+        aside: true,
       }]
     })
   ),

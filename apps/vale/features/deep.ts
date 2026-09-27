@@ -3,7 +3,14 @@
 // Gleamdeep's violet caps, its amethyst and the great geode; Shardvault's
 // pale caps, its shards and its vault.
 import { fbm } from '../rand.ts'
-import { bump, type Feature, hamlet, ring, Top, wide } from './kit.ts'
+import {
+  bump,
+  type Feature,
+  ring,
+  Top,
+  village as makeVillage,
+  wide,
+} from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village } = VALE
@@ -50,7 +57,9 @@ export let DEEP: Record<string, Feature> = {
   capvillage: {
     ...village,
     like: 'village',
-    builds: hamlet('shroomhouse', 'well', [], 'wisplamp'),
+    builds: makeVillage('well', [
+      { kind: 'shroomhouse', x: -30, z: 0, seed: 1 },
+    ], 'wisplamp'),
     dress: 'stone',
   },
   // Gleamdeep's wood: toadstools with violet caps, amethyst underfoot.

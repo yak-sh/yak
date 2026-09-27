@@ -263,7 +263,7 @@ export let FROST: Record<string, Kind> = {
   iceblocks: { make: iceblocks, shapes: 3, solid: true },
   longhouse: { make: longhouse, shapes: 2, foot: 5, span: [4.5, 7] },
   stake: { make: stake, shapes: 3, girth: 0.5 },
-  woodpile: { make: woodpile, shapes: 3, foot: 1.5 },
+  woodpile: { make: woodpile, shapes: 3, foot: 1.5, aside: true },
   stump: { make: stump, shapes: 4, girth: 0.5 },
   frozenfall: { make: frozenfall, foot: 8 },
   flagcairn: { make: flagcairn, girth: 1.5, foot: 3 },

@@ -1,77 +1,7 @@
-// What a village builds, at a quarter of a ground voxel: cottages and a hall,
-// the well, the fire, the notice board and the lamps, and the bench and
-// cauldron a hero makes things at in the open (craft.ts); and the signpost at
-// the head of every road. The smithy, which houses the forge, is a building a
-// hero walks into (buildings/smithy.ts). A village's houses are built of
-// what is to hand where it stands (buildings/dress.ts).
-import {
-  BIRCH,
-  DRIFT,
-  PLASTER,
-  STONE,
-  TURF,
-  WHITEWASH,
-} from '../buildings/dress.ts'
-import { type Dress, paint } from '../buildings/kit.ts'
-import { ball, box, key, metal, type Vox } from '../mesh.ts'
+// The village's well, fire, notice board, lamps and road signs. Homes and
+// workplaces are buildings (buildings.ts), in each land's materials.
+import { ball, box, key, type Vox } from '../mesh.ts'
 import { FOUND, type Kind, type Model, TIMBER } from './kit.ts'
-
-let house =
-  ({ wall: stuff, timber: frame, roofs }: Dress) =>
-  (seed: number, w: number, d: number, wall: number): Model => {
-    let at = (x: number, y: number, z: number, s: number) =>
-      paint(stuff, x, y, z, s)
-    let v: Vox = new Map()
-    let roofC = roofs[seed % roofs.length]
-    let x0 = -w / 2, x1 = w / 2 - 1, z0 = -d / 2, z1 = d / 2 - 1
-    // Stone footing, then walls framed at their corners and eaves.
-    box(v, [x0, 0, z0], [x1, 1, z1], FOUND)
-    for (let y = 2; y < wall; y++) {
-      for (let x = x0; x <= x1; x++) {
-        for (let z of [z0, z1]) v.set(key(x, y, z), at(x, y, z, seed))
-      }
-      for (let z = z0; z <= z1; z++) {
-        for (let x of [x0, x1]) v.set(key(x, y, z), at(x, y, z, seed))
-      }
-    }
-    for (let [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1]]) {
-      box(v, [x, 2, z], [x, wall - 1, z], frame)
-    }
-    box(v, [x0, wall - 1, z0], [x1, wall - 1, z0], frame)
-    box(v, [x0, wall - 1, z1], [x1, wall - 1, z1], frame)
-    // A door on the south side, and windows either side of it and round the
-    // back.
-    box(v, [-2, 2, z1], [1, 8, z1], 0x7b5334)
-    v.set(key(1, 5, z1 + 1), 0xe5c05a)
-    for (let x of [x0 + 3, x1 - 5]) {
-      box(v, [x, 5, z1], [x + 2, 7, z1], 0x3b5578)
-      box(v, [x, 4, z1 + 1], [x + 2, 4, z1 + 1], frame)
-      box(v, [x, 5, z0], [x + 2, 7, z0], 0x3b5578)
-    }
-    // A gabled roof, stepping in a voxel for every voxel it climbs.
-    let half = Math.ceil(d / 2) + 1
-    for (let l = 0; l <= half; l++) {
-      for (let x = x0 - 1; x <= x1 + 1; x++) {
-        let c = l % 3 == 0 ? roofC - 0x101010 : roofC
-        v.set(key(x, wall + l, z0 - 1 + l), c)
-        v.set(key(x, wall + l, z1 + 1 - l), c)
-      }
-      for (let z = z0 - 1 + l + 1; z <= z1 + 1 - l - 1; z++) {
-        for (let x of [x0, x1]) {
-          v.set(key(x, wall + l, z), at(x, wall + l, z, seed))
-        }
-      }
-    }
-    box(v, [x1 - 4, wall + 2, z0 + 3], [x1 - 3, wall + half + 2, z0 + 4], FOUND)
-    return { vox: v, size: 0.25 }
-  }
-
-// A cottage built of a land's `dress`.
-let cot = (dress: Dress): Kind => ({
-  make: (s) => house(dress)(s, 28, 22, 10),
-  foot: 4.5,
-  span: [7, 5.5],
-})
 
 let well = (): Model => {
   let v: Vox = new Map()
@@ -127,53 +57,6 @@ let lamp = (): Model => {
   return { vox: v, size: 0.25 }
 }
 
-// The joiner's bench: a board on four legs with a shelf under it, a vice at
-// one end, a plank being planed, and a saw beside it.
-let bench = (): Model => {
-  let v: Vox = new Map()
-  for (let x of [-5, 5]) {
-    for (let z of [-2, 2]) box(v, [x, 0, z], [x, 3, z], 0x7a5236)
-  }
-  box(v, [-5, 1, -2], [5, 1, 2], 0x8a6240)
-  box(v, [-6, 4, -2], [6, 4, 2], 0xb08a5a)
-  box(v, [5, 5, -1], [6, 6, 1], metal(0x4a4a52))
-  box(v, [-4, 5, -1], [2, 5, 0], 0xe8c890)
-  v.set(key(-1, 6, 0), 0x6e4a31)
-  box(v, [-2, 6, -1], [0, 6, -1], metal(0x9aa2aa))
-  box(v, [3, 5, 1], [4, 5, 2], metal(0xc8ccd0))
-  v.set(key(4, 5, 2), 0x6e4a31)
-  for (let [x, z] of [[-3, 3], [0, 3], [2, -3], [-6, 3]]) {
-    v.set(key(x, 0, z), 0xe8d0a0)
-  }
-  return { vox: v, size: 0.25 }
-}
-
-// The cauldron: a black pot on a ring of stones, a fire under it, and a green
-// brew in it.
-let cauldron = (): Model => {
-  let v: Vox = new Map()
-  for (let a = 0; a < 10; a++) {
-    let t = (a / 10) * Math.PI * 2
-    let x = Math.round(Math.cos(t) * 3.5), z = Math.round(Math.sin(t) * 3.5)
-    v.set(key(x, 0, z), a % 3 ? 0x8f8d85 : 0x7a7870)
-  }
-  box(v, [-2, 0, 0], [2, 0, 0], 0x6e4a31)
-  v.set(key(0, 0, 1), 0xff7a2a)
-  v.set(key(1, 0, -1), 0xffc050)
-  ball(
-    v,
-    [0, 2, 0],
-    2.6,
-    (x, y, z) =>
-      y < 1
-        ? null
-        : y == 4
-        ? x * x + z * z < 3 ? (x + z) & 1 ? 0x7ae09a : 0x5ac07a : 0x5a5862
-        : 0x44424a,
-  )
-  return { vox: v, size: 0.25 }
-}
-
 // A fingerpost at the head of a road: a timber post on a cairn of stones,
 // its arms pointing every way, and a lantern hung from it.
 let signpost = (): Model => {
@@ -193,17 +76,6 @@ let signpost = (): Model => {
 }
 
 export let VILLAGE: Record<string, Kind> = {
-  cottage: cot(PLASTER),
-  hall: {
-    make: (s) => house(PLASTER)(s, 36, 28, 12),
-    foot: 5.5,
-    span: [9, 7],
-  },
-  birchhouse: cot(BIRCH),
-  turfhouse: cot(TURF),
-  fisherhouse: cot(WHITEWASH),
-  shack: cot(DRIFT),
-  stonehouse: cot(STONE),
   well: { make: well, girth: 1.2, foot: 1.2, span: [2.2, 2.2] },
   fire: { make: fire, girth: 1.2, foot: 1.5, span: [2.6, 2.6] },
   board: { make: board, girth: 0.35, foot: 0.8, span: [2.2, 0.5] },
@@ -211,23 +83,8 @@ export let VILLAGE: Record<string, Kind> = {
     make: lamp,
     girth: 0.35,
     foot: 0.3,
+    aside: true,
     glow: { at: [0.5, 2.5, 0], size: 3.2 },
   },
-  signpost: { make: signpost, girth: 0.3, foot: 1 },
-  bench: {
-    make: bench,
-    girth: 1,
-    row: 1.2,
-    foot: 1.8,
-    aside: true,
-    station: 'bench',
-  },
-  cauldron: {
-    make: cauldron,
-    station: 'cauldron',
-    girth: 1.3,
-    foot: 1.4,
-    glow: { at: [0, 1.3, 0], size: 2.4, color: 0x9fe0a0 },
-    aside: true,
-  },
+  signpost: { make: signpost, girth: 0.3, foot: 1, aside: true },
 }

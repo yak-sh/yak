@@ -116,6 +116,8 @@ export type Glow = { at: Vec; size: number; color?: number; fire?: boolean }
  * used, lit and worked; and its footprint, metres. */
 export type Raised = {
   vox: Vox
+  /** Walls, roof and outside detail, drawn until the room is near. */
+  shell: Vox
   size: number
   at: Vec
   doors: Door[]
@@ -217,6 +219,8 @@ export let raise = (plan: Plan, dress: Dress, seed: number): Raised => {
   }
   let eaves = floors[floors.length - 1]
   let vox: Vox = new Map()
+  let shell: Vox | null = null
+  let outer = true
   // What each voxel is part of, and where someone stands to use what, which
   // two uses may share but nothing may stand in.
   let own = new Map<number, string>()
@@ -227,7 +231,9 @@ export let raise = (plan: Plan, dress: Dress, seed: number): Raised => {
     paint(p, x, y, z, seed)
   let put = (x: number, y: number, z: number, p: Paint, who = 'wall') => {
     let k = key(x, y, z)
-    vox.set(k, color(p, x, y, z))
+    let c = color(p, x, y, z)
+    vox.set(k, c)
+    if (outer) shell?.set(k, c)
     own.set(k, who)
   }
   let box = (a: Vec, b: Vec, p: Paint, who?: string) => {
@@ -242,6 +248,7 @@ export let raise = (plan: Plan, dress: Dress, seed: number): Raised => {
   let clear = (x: number, y: number, z: number, who: string) => {
     let k = key(x, y, z)
     vox.delete(k)
+    if (outer) shell?.delete(k)
     own.set(k, who)
   }
   let fail = (what: string, into: string) => {
@@ -601,6 +608,9 @@ export let raise = (plan: Plan, dress: Dress, seed: number): Raised => {
     }
   }
 
+  // The far shape keeps the building and its outside details. The interior
+  // is drawn when its chunk reaches the nearest detail ring.
+  shell = new Map(vox)
   // What furnishes each storey, then whatever only this plan has.
   let place = (p: Place, f: number, outside: boolean) => {
     let face = 'on' in p ? opposite(p.on) : p.face ?? 'south'
@@ -625,6 +635,7 @@ export let raise = (plan: Plan, dress: Dress, seed: number): Raised => {
       dz = Math.round(p.at[1] / S - (lo[2] + hi[2] + 1) / 2)
     }
     let name = `the ${p.piece.name}`
+    outer = outside
     for (let [k, c] of v) {
       let [x, y, z] = unkey(k)
       x += dx, y += f, z += dz
@@ -634,6 +645,7 @@ export let raise = (plan: Plan, dress: Dress, seed: number): Raised => {
       if (was && !(was == 'floor' && y == f - 1)) fail(name, was)
       put(x, y, z, c, name)
     }
+    outer = true
     let turn = turnOf(face)
     let to = (x: number, y: number, z: number): Vec => {
       let [a, b] = spinCell(x, z, turn)
@@ -683,6 +695,7 @@ export let raise = (plan: Plan, dress: Dress, seed: number): Raised => {
 
   return {
     vox,
+    shell,
     size: S,
     at: [0, 0, 0],
     doors,

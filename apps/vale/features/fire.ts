@@ -6,7 +6,7 @@
 import { fbm, smooth } from '../rand.ts'
 import type { Prop } from '../terrain.ts'
 import { HILLS } from './hills.ts'
-import { bump, type Feature, hamlet, Top, wide } from './kit.ts'
+import { bump, type Feature, Top, village as makeVillage, wide } from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { village } = VALE
@@ -70,7 +70,9 @@ export let FIRE: Record<string, Feature> = {
   forgetown: {
     ...village,
     like: 'village',
-    builds: hamlet('forgehouse', 'anvil'),
+    builds: makeVillage('anvil', [
+      { kind: 'forgehouse', x: -30, z: 0, seed: 2 },
+    ]),
     dress: 'stone',
   },
   // The volcano over Emberfall, lava running down its south flank.

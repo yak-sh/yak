@@ -5,12 +5,25 @@
 // from outside its door, up every flight, to everywhere something in it is
 // used.
 import { assert, assertEquals } from '@std/assert'
-import { BUILDINGS, dressed, PLANS } from './buildings.ts'
+import { BUILDINGS } from './buildings.ts'
 import type { Use } from './buildings/kit.ts'
+import { isA } from './features.ts'
+import { LEVELS } from './levels.ts'
 import type { Vec } from './mesh.ts'
+import { KINDS, model } from './props.ts'
+import { placesOf } from './regions.ts'
 import { type Body, fits, floorAt, walk } from './sim.ts'
 import { type Building, within } from './solid.ts'
-import { flat, type Vale } from './terrain.ts'
+import {
+  builtOf,
+  flat,
+  type Prop,
+  spanOf,
+  stationsNear,
+  type Vale,
+  vale,
+  WATER,
+} from './terrain.ts'
 
 let town = (kind = 'smithy.plaster', turn = 0) =>
   flat(5, [], [{ kind, x: 64, z: 64, seed: 0, turn }])
@@ -107,13 +120,10 @@ let reach = (v: Vale, from: Vec) => {
     )
 }
 
-// Every plan in every dress, and turned every way in one.
-let ALL: [string, number][] = [
-  ...Object.keys(BUILDINGS).map((k): [string, number] => [k, 0]),
-  ...Object.keys(PLANS).flatMap((p) =>
-    [1, 2, 3].map((t): [string, number] => [dressed(p), t])
-  ),
-]
+// Every plan in every dress, turned each way.
+let ALL: [string, number][] = Object.keys(BUILDINGS).flatMap((kind) =>
+  [0, 1, 2, 3].map((turn): [string, number] => [kind, turn])
+)
 
 Deno.test('every building can be walked into, up, and to all it has', () => {
   for (let [kind, turn] of ALL) {
@@ -123,4 +133,76 @@ Deno.test('every building can be walked into, up, and to all it has', () => {
       assert(got(u.at), `${kind} turned ${turn}: where to ${u.for} at ${u.at}`)
     }
   }
+})
+
+let villages = Object.keys(LEVELS).flatMap((id) =>
+  placesOf(id).filter((p) => isA(p.kind, 'village')).map((p) => ({
+    id,
+    at: p.at,
+  }))
+)
+
+let size = (p: Prop): [number, number] => {
+  let k = KINDS[p.kind], s = spanOf(p)
+  return s
+    ? [s[0] / 2, s[1] / 2]
+    : k.girth
+    ? [(k.row ?? 0) + k.girth / 2, k.girth / 2]
+    : [k.foot ?? 0, k.foot ?? 0]
+}
+
+Deno.test('village buildings leave clear plots for one another and landmarks', () => {
+  for (let { id } of villages) {
+    let props = builtOf(id)
+    for (let b of props.filter((p) => KINDS[p.kind].raise)) {
+      let [w, d] = size(b)
+      for (let p of props) {
+        if (p == b) continue
+        let [pw, pd] = size(p)
+        assert(
+          Math.abs(b.x - p.x) >= w + pw ||
+            Math.abs(b.z - p.z) >= d + pd,
+          `${id}: ${b.kind} and ${p.kind} overlap`,
+        )
+      }
+    }
+  }
+})
+
+Deno.test('village crafting stations are inside their workshops', () => {
+  let v = vale()
+  for (let { id, at: [x, z] } of villages) {
+    let stations = stationsNear(v, x, z, 35)
+    assertEquals(
+      stations.map((s) => s.craft).sort(),
+      ['bench', 'cauldron', 'forge'],
+      id,
+    )
+    for (let s of stations) {
+      let housed = v.buildings(s.x, s.z, 0).some((b) =>
+        b.stations.some((inside) =>
+          inside.craft == s.craft && inside.x == s.x && inside.z == s.z
+        )
+      )
+      assert(housed, `${id}: ${s.craft} stands outdoors`)
+    }
+  }
+})
+
+Deno.test('the mill stands only beside water', () => {
+  let v = vale()
+  let mills = Object.keys(LEVELS).flatMap((id) =>
+    builtOf(id).filter((p) => p.kind.startsWith('mill.'))
+  )
+  assertEquals(mills.length, 1)
+  let [mill] = mills
+  assert(v.rise(mill.x + 5, mill.z) < WATER)
+  assert(v.rise(mill.x - 5, mill.z) > WATER)
+})
+
+Deno.test('distant buildings draw their shell; other props share a mesh', () => {
+  let near = model('smithy.plaster', 0)
+  let far = model('smithy.plaster', 0, 0, false)
+  assert(far.idx.length < near.idx.length)
+  assertEquals(model('well', 0), model('well', 0, 0, false))
 })

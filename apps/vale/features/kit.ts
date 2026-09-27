@@ -74,27 +74,37 @@ export let ring = (kind: string, r: number, n: number, gone: number[] = []) =>
     seed: i,
   })).filter((_, i) => !gone.includes(i))
 
-/** Where a village makes things (craft.ts): the smithy, which houses the
- * forge, and a bench and a cauldron round its square. */
+/** The smithy shared by a small hamlet and a larger village. */
 export let STATIONS: Prop[] = [
   { kind: 'smithy', x: -9.5, z: -9.5, seed: 8 },
-  { kind: 'bench', x: 0.5, z: -6.5, seed: 9 },
-  { kind: 'cauldron', x: 6.5, z: 1.5, seed: 10 },
+]
+
+/** Workshops and gathering places around the village's outer plots. Every
+ * workstation stands inside its building. The mill belongs by water. */
+export let COMMUNITY: Prop[] = [
+  { kind: 'carpentry', x: -8, z: -20, seed: 9 },
+  { kind: 'apothecary', x: 21, z: -9, seed: 10, turn: 3 },
+  { kind: 'tailor', x: -20, z: 2, seed: 11, turn: 1 },
+  { kind: 'inn', x: -6, z: 22, seed: 12, turn: 2 },
+  { kind: 'store', x: 21, z: 1, seed: 13, turn: 3 },
+  { kind: 'hall', x: 9, z: 22, seed: 14, turn: 2 },
+  { kind: 'stable', x: 5, z: -22, seed: 15 },
+  { kind: 'barn', x: 21, z: -21, seed: 16 },
 ]
 
 /** A village's buildings round its fire: three `house`s, `middle` in its
  * square (a well, or what stands for one), its notice board and four
  * `lamp`s, the stations, and `more`. */
 export let hamlet = (
-  house: string,
+  house: string | [string, string, string],
   middle = 'well',
   more: Prop[] = [],
   lamp = 'lamp',
 ): Prop[] => [
   { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: house, x: 9, z: -9, seed: 1 },
-  { kind: house, x: 9, z: 9.5, seed: 2 },
-  { kind: house, x: -9, z: 9, seed: 3 },
+  { kind: typeof house == 'string' ? house : house[0], x: 9, z: -9, seed: 1 },
+  { kind: typeof house == 'string' ? house : house[1], x: 9, z: 9.5, seed: 2 },
+  { kind: typeof house == 'string' ? house : house[2], x: -9, z: 9, seed: 3 },
   { kind: middle, x: 4, z: -2, seed: 2 },
   { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
   { kind: lamp, x: -4, z: -4, seed: 4 },
@@ -103,4 +113,14 @@ export let hamlet = (
   { kind: lamp, x: 5.5, z: -5, seed: 7 },
   ...STATIONS,
   ...more,
+]
+
+/** A village with homes of several sizes, shops, workplaces and a hall. */
+export let village = (
+  middle = 'well',
+  more: Prop[] = [],
+  lamp = 'lamp',
+): Prop[] => [
+  ...hamlet(['cottage', 'house', 'farmhouse'], middle, more, lamp),
+  ...COMMUNITY,
 ]

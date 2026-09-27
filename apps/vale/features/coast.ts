@@ -5,7 +5,14 @@
 // light on its head.
 import { fbm, lerp, smooth } from '../rand.ts'
 import { HILLS } from './hills.ts'
-import { bump, crest, type Feature, hamlet, Top, wide } from './kit.ts'
+import {
+  bump,
+  crest,
+  type Feature,
+  Top,
+  village as makeVillage,
+  wide,
+} from './kit.ts'
 import { VALE } from './vale.ts'
 
 let { crags, meadow, woods, village } = VALE
@@ -221,14 +228,14 @@ export let COAST: Record<string, Feature> = {
   fishtown: {
     ...village,
     like: 'village',
-    builds: hamlet('fisherhouse'),
+    builds: makeVillage(),
     dress: 'whitewash',
   },
   // Driftwood Bay's shacks, built of what the sea brought in.
   shacks: {
     ...village,
     like: 'village',
-    builds: hamlet('shack'),
+    builds: makeVillage(),
     dress: 'drift',
   },
 }

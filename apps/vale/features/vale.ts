@@ -3,23 +3,7 @@
 // Clovermead's clover, Fernwood's ferns and its turf-roofed hamlet,
 // Elderglade's elders, Greypine's grey pines, Wolfden's hollow and dens.
 import { fbm, lerp, smooth } from '../rand.ts'
-import type { Prop } from '../terrain.ts'
-import { bump, type Feature, hamlet, STATIONS, Top } from './kit.ts'
-
-/** A village's buildings, by where each stands from the village's middle. */
-let VILLAGE: Prop[] = [
-  { kind: 'fire', x: 0, z: 0, seed: 1 },
-  { kind: 'cottage', x: 9, z: -9, seed: 12 },
-  { kind: 'hall', x: 9, z: 9.5, seed: 13 },
-  { kind: 'cottage', x: -9, z: 9, seed: 14 },
-  { kind: 'well', x: 4, z: -2, seed: 2 },
-  { kind: 'board', x: -3.5, z: 2.5, seed: 3 },
-  { kind: 'lamp', x: -4, z: -4, seed: 4 },
-  { kind: 'lamp', x: 4.5, z: 4.5, seed: 5 },
-  { kind: 'lamp', x: -5, z: 5.5, seed: 6 },
-  { kind: 'lamp', x: 5.5, z: -5, seed: 7 },
-  ...STATIONS,
-]
+import { bump, type Feature, Top, village } from './kit.ts'
 
 let BASE: Record<string, Feature> = {
   crags: {
@@ -59,7 +43,7 @@ let BASE: Record<string, Feature> = {
     hold: (d) => bump(d, 13),
     last: true,
     trees: -0.3,
-    builds: VILLAGE,
+    builds: village(),
   },
   // Open grass thick with flowers, the hills smoothed low.
   meadow: {
@@ -146,7 +130,11 @@ export let VALE: Record<string, Feature> = {
     trees: 0.15,
     grows: ['birch'],
     decor: [['reed', 0.08]],
-    builds: [{ kind: 'jetty', x: 0, z: 18, seed: 0 }],
+    builds: [
+      { kind: 'jetty', x: 0, z: 18, seed: 0 },
+      { kind: 'mill', x: -14, z: 0, seed: 1 },
+    ],
+    dress: 'birch',
   },
   // Clover meadows, hives, and a windmill turning over them.
   clover: {
@@ -203,14 +191,14 @@ export let VALE: Record<string, Feature> = {
   mereside: {
     ...BASE.village,
     like: 'village',
-    builds: hamlet('birchhouse'),
+    builds: village(),
     dress: 'birch',
   },
   // Fernwood's hamlet in its glade, of logs roofed with turf.
   fernhamlet: {
     ...BASE.village,
     like: 'village',
-    builds: hamlet('turfhouse'),
+    builds: village(),
     dress: 'turf',
   },
 }

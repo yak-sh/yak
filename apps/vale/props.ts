@@ -57,14 +57,17 @@ let made = new Map<string, Model>()
 let meshed = new Map<string, Out>()
 
 /** A prop's triangles, placed with the middle of its base at the origin and
- * turned `turn` quarter turns (a building faces its square). */
-export let model = (kind: string, seed: number, turn = 0): Out => {
+ * turned `turn` quarter turns (a building faces its square). Buildings draw
+ * their interiors only at the nearest detail. */
+export let model = (kind: string, seed: number, turn = 0, near = true): Out => {
   let { id, shape } = shapeOf(kind, seed)
-  let o = meshed.get(`${id}:${turn}`)
+  let look = `${id}:${turn}${KINDS[kind].raise ? `:${near}` : ''}`
+  let o = meshed.get(look)
   if (o) return o
   let { vox, size, at = [-size / 2, 0, -size / 2] } = shape()
+  let raised = KINDS[kind].raise ? raisedOf(kind, seed) : null
+  if (raised && !near) vox = raised.shell
   o = blob(out(), spun(vox, turn, 1 + (at[0] + at[2]) / size), size, at)
-  let raised = raisedOf(kind, seed)
   if (raised?.glows.length) {
     let glows = raised.glows.map((g): Glow => {
       let [x, z] = spin(g.at[0], g.at[2], turn)
@@ -72,7 +75,7 @@ export let model = (kind: string, seed: number, turn = 0): Out => {
     })
     light(o, glows)
   }
-  meshed.set(`${id}:${turn}`, o)
+  meshed.set(look, o)
   return o
 }
 

@@ -39,7 +39,7 @@ import {
   placesIn,
   placesOf,
 } from './regions.ts'
-import { type Building, near, placed, type Station } from './solid.ts'
+import { type Building, near, placed, type Station, within } from './solid.ts'
 import {
   along,
   bedAt,
@@ -347,6 +347,12 @@ export let hearthOf = (id: string): Spot | null =>
 // structures are built (`foundation`): its span, or the trunk or row a walker
 // meets, or its foot.
 let raised = new Map<string, Prop[]>()
+/** The ground a structure stands on, metres east–west and north–south, as it
+ * stands turned. */
+export let spanOf = (p: Prop): [number, number] | undefined => {
+  let s = KINDS[p.kind].span
+  return s && (p.turn ?? 0) & 1 ? [s[1], s[0]] : s
+}
 let half = (p: Prop): [number, number] => {
   let { girth, row = 0, foot = 0 } = KINDS[p.kind], span = spanOf(p)
   return span
@@ -393,16 +399,28 @@ export let builtOf = (id: string): Prop[] => {
   }
   for (let r of roadsOf(id)) {
     let [x, z] = r.signs.find((s) => s.level == id)!.at
-    built.push({ kind: 'signpost', x, z, seed: 0 })
+    built.push(stand({ kind: 'signpost', x, z, seed: 0 }, [0, 0]))
   }
   raised.set(id, built)
   return built
 }
 
-// How far from its place's middle a build may stand, in metres: a chunk
-// finds what is built in it among the levels whose cells lie within this of
-// it.
-let BUILT = 40
+// How far a build can reach from its place's middle, including its span and
+// the farthest clear plot an aside build may take. A chunk uses this bound to
+// find builds beyond a level's cell edge.
+let SHIFT = Math.max(...STEPS.flatMap(([x, z]) => [Math.abs(x), Math.abs(z)]))
+let BUILT = Math.ceil(
+  Math.max(
+    ...Object.values(FEATURES).flatMap((f) =>
+      (f.builds ?? []).map((b) => {
+        let p = { ...b, kind: dressed(b.kind, f.dress) }
+        let [w, d] = half(p)
+        return Math.max(Math.abs(b.x) + w, Math.abs(b.z) + d) +
+          (KINDS[p.kind].aside ? SHIFT : 0)
+      })
+    ),
+  ),
+)
 
 /** What is built within the box from (x0, z0) to (x1, z1), in metres. */
 export let builtIn = (x0: number, z0: number, x1: number, z1: number): Prop[] =>
@@ -741,17 +759,8 @@ export let stationsNear = (
   ),
 ]
 
-/** The ground a structure stands on, metres east–west and north–south, as it
- * stands turned. */
-export let spanOf = (p: Prop): [number, number] | undefined => {
-  let s = KINDS[p.kind].span
-  return s && (p.turn ?? 0) & 1 ? [s[1], s[0]] : s
-}
-
-// What a walker bumps into in a chunk: what is solid, trunks and posts, and
-// the walls of a building (props.ts `KINDS`), a row of circles along each
-// wall, so its door is a gap; from what stands in the chunk and round it, as
-// far as it reaches in.
+// What a walker bumps into in a chunk: solid props, trunks and posts. A
+// building's voxels answer beside these in solid.ts.
 let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
   let x0 = ci * CHUNK, z0 = ck * CHUNK, x1 = x0 + CHUNK, z1 = z0 + CHUNK
   let walls: Wall[] = []
@@ -775,9 +784,6 @@ let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
           for (let dx = -row; dx <= row + 1e-9; dx += kind.girth) {
             add({ x: p.x + dx, z: p.z, r: kind.girth, top: y + tall })
           }
-        }
-        if (SHELL[p.kind]) {
-          for (let [x, z] of footprint(p)) add({ x, z, r: 0.45, top: y + 5 })
         }
       }
     }
@@ -997,28 +1003,6 @@ export let propsNear = (v: Vale, x: number, z: number, r: number): Prop[] => {
   return out
 }
 
-// A building's shell in metres: its width, its depth, and how tall it stands
-// to the ridge of its roof.
-let SHELL: Record<string, [number, number, number]> = {
-  cottage: [7, 5.5, 6],
-  hall: [9, 7, 7],
-}
-
-/** The points along a building's walls a walker cannot pass, in metres: the
- * rectangle its shell stands on, less the door on its south side. */
-export let footprint = (p: Prop): Spot[] => {
-  let [w, d] = SHELL[p.kind] ?? SHELL.cottage
-  let out: Spot[] = []
-  for (let t = -w / 2; t <= w / 2; t += 0.6) {
-    out.push([p.x + t, p.z - d / 2])
-    if (Math.abs(t) > 0.8) out.push([p.x + t, p.z + d / 2])
-  }
-  for (let t = -d / 2; t <= d / 2; t += 0.6) {
-    out.push([p.x - w / 2, p.z + t], [p.x + w / 2, p.z + t])
-  }
-  return out
-}
-
 /** A structure's foundation: stone from the lowest ground under it up to the
  * ground it stands on, as `[min, size]` in metres; `null` for a prop that is
  * not a structure, or where the ground under it is level.
@@ -1074,21 +1058,13 @@ export let standAt = (v: Vale, p: Prop): number => {
  * // Flat ground 5 m up, under a hall.
  * let hall = { kind: 'hall', x: 30, z: 30, seed: 0 }
  * let v = flat(5, [], [hall])
+ * let b = v.buildings(30, 30, 0)[0]
  * assertEquals(inside(v, 10, 4, 10), true) // underground
- * assertEquals(inside(v, 30, 7, 30), true) // in the hall
- * assertEquals(inside(v, 30, 13, 30), false) // above its roof
+ * assertEquals(inside(v, 30, b.floors[0] + 1, 30), true)
+ * assertEquals(inside(v, 30, b.top + 1, 30), false)
  * ```
  */
 export let inside = (v: Vale, x: number, y: number, z: number): boolean => {
   if (y < floorUnder(v, x, y, z) + 0.3) return true
-  for (let p of propsNear(v, x, z, 8)) {
-    let shell = SHELL[p.kind]
-    if (!shell) continue
-    let [w, d, h] = shell
-    if (
-      Math.abs(x - p.x) < w / 2 + 0.5 && Math.abs(z - p.z) < d / 2 + 0.8 &&
-      y < groundAt(v, p.x, p.z) + h
-    ) return true
-  }
-  return false
+  return !!within(v, x, y, z)
 }
