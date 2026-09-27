@@ -1,12 +1,26 @@
 /* The hero's vitals: their name and level over their health and the xp to
-   the next level, each with its numbers. */
+   the next level, each with its numbers. It is a button, which opens the
+   hero's panel on themselves (the Character tab), so it stands on a lip. */
 .Vitals {
+  position: relative;
   display: grid;
   gap: 0.25rem;
   padding: 0.4rem 0.6rem 0.5rem;
+  border: 0;
   border-radius: var(--radius);
   background: var(--glass);
-  box-shadow: var(--flat);
+  box-shadow: 0 3px 0 var(--lip), 0 6px 16px rgba(20, 30, 15, 0.14);
+  font: inherit;
+  text-align: start;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+
+  &:active {
+    translate: 0 2px;
+    box-shadow: 0 1px 0 var(--lip);
+  }
 }
 
 .Vitals_Top {

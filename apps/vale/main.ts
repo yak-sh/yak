@@ -31,6 +31,9 @@ import { meshed } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
+import { character } from './character.ts'
+import { anyLook, anyName, fields, picks } from './make.ts'
+import { portrait } from './portrait.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
 import { type Board, noticeboard, notices } from './notices.ts'
@@ -39,7 +42,7 @@ import { ITEMS } from './items.ts'
 import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { HOME, LEVELS, type Spot } from './levels.ts'
-import { comp, connect, type Hero, type Me, str } from './net.ts'
+import { connect, type Hero, type Me } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { recall, type Seen, sighting } from './seen.ts'
 import { formOf, SKILLS } from './skills.ts'
@@ -63,38 +66,6 @@ import { village } from './village.ts'
 import { arriveOf } from './ways.ts'
 import { type Job, type Work, working } from './work.ts'
 
-let TINTS = [
-  '#c9503f',
-  '#e08a3c',
-  '#e7c14e',
-  '#5f9f4a',
-  '#3f86b8',
-  '#7a5cb8',
-  '#d46a9a',
-  '#4a5a6a',
-]
-let HAIRS = [
-  '#3b2a20',
-  '#6b4428',
-  '#b8742f',
-  '#e2c16b',
-  '#d9d4c8',
-  '#2c2f3a',
-  '#a2462f',
-]
-let SKINS = ['#f3cfb3', '#e7b996', '#c98f68', '#9a6444', '#6b432c']
-let NAMES = [
-  'Bramble',
-  'Wren',
-  'Tansy',
-  'Rook',
-  'Fennel',
-  'Pip',
-  'Juniper',
-  'Sorrel',
-  'Quill',
-  'Hazel',
-]
 // The voxel edge the ground is grown at, in metres: `?voxel=0.125` grows it
 // finer, to compare. Any edge that divides a chunk's side will do.
 let asked = Number(new URLSearchParams(location.search).get('voxel'))
@@ -104,7 +75,6 @@ let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(CHUNK / asked)
 // The ground the page walks on, as the workers grow it and the page keeps it.
 let v = vale(VOX)
 
-let pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 let canvas = document.querySelector<HTMLCanvasElement>('.Stage')!
@@ -155,6 +125,14 @@ let marks = overlay(h.layer, camera, h.under)
 let chat = chatbox(glass, h.orbs.chat, net, marks, folk)
 let m = map(h.panels.map)
 let p = pack(h.panels.bag, { wear: g.wear, take: g.take })
+let you = character(h.panels.character, {
+  restyle: (l) => {
+    net.restyle(l)
+    h.toast('Your new look is kept.')
+  },
+  typing: (on) => typing = on,
+  paint: portrait(renderer, BUILD),
+})
 let bench = station(h.panels.craft, {
   make: toil.make,
   upgrade: toil.upgrade,
@@ -252,10 +230,14 @@ let settings = menu(h.panels.menu, {
 })
 
 // Who is playing: one of your heroes, or a new one made at the gate.
-let look = { name: '', tint: pick(TINTS), hair: pick(HAIRS), skin: pick(SKINS) }
+let look = anyLook()
 let playing = false
 let preview: Figure | null = null
+let posed = ''
 let dress = () => {
+  let colours = [look.tint, look.hair, look.skin].join()
+  if (preview && posed == colours) return
+  posed = colours
   if (preview) w.scene.remove(preview.root)
   preview = hero(BUILD, look)
   let [hx, hz] = hearth()
@@ -285,15 +267,6 @@ let begin = (eid: string, stored: Seen | null = null) => {
   canvas.focus()
 }
 
-let swatches = (key: 'tint' | 'hair' | 'skin', colors: string[]) =>
-  `<div class=Make_Row data-k=${key}>${
-    colors.map((c) =>
-      `<button type=button class="Swatch${
-        c == look[key] ? ' Swatch-on' : ''
-      }" style="--c:${c}" data-c="${c}" aria-label="${c}"></button>`
-    ).join('')
-  }</div>`
-
 let TITLE = '<h1 class=Gate_Title>Mossvale</h1>'
 let NOTE =
   '<p class=Gate_Note>Slimes in the meadow, boars in Whisperwood, walking stones in Craghollow, and something old on Thornback Ridge.</p>'
@@ -301,18 +274,11 @@ let NOTE =
 // Make a hero. A guest is offered the sign-in that keeps heroes; one who may
 // not write here is sent to it.
 let make = (who: Me, back: (() => void) | null) => {
-  look.name ||= pick(NAMES)
+  look.name ||= anyName()
   let guest = !who.person && who.signIn
   gateCard.innerHTML = `${TITLE}
     <p class=Gate_Lede>A little vale of moss and stone. Whoever else is here walks it with you.</p>
-    <form class=Make>
-      <label class=Make_Name>Your name
-        <input name=name maxlength=18 autocomplete=off value="${
-    esc(look.name)
-  }" required></label>
-      <span class=Make_Label>Tunic</span>${swatches('tint', TINTS)}
-      <span class=Make_Label>Hair</span>${swatches('hair', HAIRS)}
-      <span class=Make_Label>Skin</span>${swatches('skin', SKINS)}
+    <form class=Make>${fields(look)}
       ${
     who.writes
       ? '<button class="Btn Btn-go Btn-big">Enter the vale</button>'
@@ -330,28 +296,14 @@ let make = (who: Me, back: (() => void) | null) => {
       : NOTE
   }`
   let form = gateCard.querySelector<HTMLFormElement>('.Make')!
-  let name = form.querySelector<HTMLInputElement>('input')!
-  name.addEventListener('focus', () => typing = true)
-  name.addEventListener('blur', () => typing = false)
-  form.querySelectorAll<HTMLElement>('.Make_Row').forEach((row) =>
-    row.addEventListener('click', (e) => {
-      let b = e.target
-      if (!(b instanceof HTMLElement) || !b.dataset.c) return
-      let k = row.dataset.k
-      if (k == 'tint' || k == 'hair' || k == 'skin') look[k] = b.dataset.c
-      row.querySelectorAll('.Swatch').forEach((s) =>
-        s.classList.toggle('Swatch-on', s == b)
-      )
-      dress()
-    })
-  )
+  picks(form, look, dress, (on) => typing = on)
   form.querySelector('[data-do=back]')?.addEventListener(
     'click',
     () => back?.(),
   )
   form.addEventListener('submit', (e) => {
     e.preventDefault()
-    look.name = name.value.trim().slice(0, 18) || pick(NAMES)
+    look.name ||= anyName()
     typing = false
     begin(net.create(look))
     h.toast(`Welcome to Mossvale, ${look.name}.`, 'Toast-big')
@@ -792,12 +744,8 @@ let loop = (t: number) => {
     let f = g.frame(v, i, cam.yaw, dt)
     last = f
     if (f) {
-      let player = comp(net.client.ent(net.hero), 'player')
-      let dressed = {
-        tint: str(player.tint, look.tint),
-        hair: str(player.hair, look.hair),
-        skin: str(player.skin, look.skin),
-      }
+      let mine = net.who(net.hero) ?? look
+      let dressed = { tint: mine.tint, hair: mine.hair, skin: mine.skin }
       job = toil.tick(
         v,
         f,
@@ -904,6 +852,7 @@ let loop = (t: number) => {
       h.work(f.talk ? null : job)
       m.show(f, job.nodes, way.marks)
       p.show(f)
+      you.show(f.sheet, mine)
       skills.show(f)
       // Walked off from the station its sheet is open at: it folds away.
       if (bench.at && job.bench?.craft != bench.at) bench.close()

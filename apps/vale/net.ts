@@ -15,6 +15,7 @@
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
 import { type Client, client, type Watch } from '@yaks/client'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
 import words from './vocab.json' with { type: 'json' }
 
@@ -41,16 +42,10 @@ export type Me = {
   signIn: string | null
 }
 
-/** One of a person's heroes, as the gate lists them, and where they were
- * last seen (seen.ts). */
-export type Hero = {
-  eid: string
-  name: string
-  tint: string
-  hair: string
-  skin: string
-  seen: Seen | null
-}
+/** A hero as the vale shows them: how they look now, and where they were
+ * last seen (seen.ts), as the gate lists a person's heroes and the world and
+ * the chat show anyone's. */
+export type Hero = Look & { eid: string; seen: Seen | null }
 
 // The words the store speaks, as it serves them (./api/vocab.json): this app's
 // own and every word the platform gives it, the byline `created` among them,
@@ -71,17 +66,21 @@ let spoken = async (): Promise<VocabDoc[]> => {
 
 export let vocab = loadVocab(await spoken())
 
-/** One of a person's heroes, off the row the store holds for it. */
-let heroOf = (b: Bundle): Hero => {
-  let p = comp(b, 'player')
-  return {
-    eid: b.entity.eid,
-    name: str(p.name, 'Wanderer'),
-    tint: str(p.tint, '#c95f4a'),
-    hair: str(p.hair, '#5a3a26'),
-    skin: str(p.skin, '#e7b996'),
-    seen: seenOf(b),
+/** A hero, off their row and their newest look row, if they kept one. */
+let heroOf = (b: Bundle, look?: Bundle): Hero => ({
+  eid: b.entity.eid,
+  ...lookOf(comp(b, 'player'), comp(look, 'look')),
+  seen: seenOf(b),
+})
+
+// Each hero's newest look row, by hero.
+let newest = (rows: Bundle[]) => {
+  let by = new Map<string, Bundle>()
+  for (let b of rows) {
+    let l = comp(b, 'look'), p = str(l.player), had = by.get(p)
+    if (!had || num(l.at) >= num(comp(had, 'look').at)) by.set(p, b)
   }
+  return by
 }
 
 // How long the gate waits for the store to answer before it lists what it
@@ -166,6 +165,7 @@ export let connect = (base: URL) => {
     creatures: c.watch('.creature'),
     falls: c.watch('.slain&.order=-slain.at&.limit=400'),
     gathered: c.watch('.gathered&.order=-gathered.at&.limit=400'),
+    looks: c.watch('.look'),
   }
   let own: Record<string, Watch> = {}
   let follow = (eid: string) => {
@@ -184,6 +184,15 @@ export let connect = (base: URL) => {
   }
 
   let none: Bundle[] = []
+
+  // Each hero's newest look row, mine still waiting among them, worked out
+  // again only when the rows changed.
+  let looks = { rows: none, by: new Map<string, Bundle>() }
+  let lookFor = (eid: string) => {
+    let rows = join('looks', watches.looks.value, 'look')
+    if (looks.rows != rows) looks = { rows, by: newest(rows) }
+    return looks.by.get(eid)
+  }
 
   let net = {
     client: c,
@@ -215,14 +224,24 @@ export let connect = (base: URL) => {
         let settle = () => {
           off()
           clearTimeout(late)
-          let found = w.value.map(heroOf)
+          let found = w.value.map((b) => heroOf(b, lookFor(b.entity.eid)))
           w.close()
           done(found)
         }
         let late = setTimeout(settle, PATIENCE)
-        if (w.ready) return settle()
-        off = w.subscribe(() => w.ready && settle())
+        let both = () => w.ready && watches.looks.ready
+        if (both()) return settle()
+        let offs = [w, watches.looks].map((x) =>
+          x.subscribe(() => both() && settle())
+        )
+        off = () => offs.forEach((o) => o())
       }),
+    /** a hero as they look now, or null while the store holds no row of
+     * theirs */
+    who: (eid: string): Hero | null => {
+      let b = c.ent(eid)
+      return b?.player ? heroOf(b, lookFor(eid)) : null
+    },
     /** my rows of one kind: what the store holds, and what is waiting */
     mine: (name: string): Bundle[] =>
       join(name, own[name]?.value ?? none, name),
@@ -246,14 +265,22 @@ export let connect = (base: URL) => {
       if (bundles.length) c.mutate(bundles)
     },
     /** make a hero and play it in this tab */
-    create: (
-      look: { name: string; tint: string; hair: string; skin: string },
-    ) => {
+    create: (look: Look) => {
       let eid = crypto.randomUUID()
       net.choose(eid)
       waiting = [...waiting, { entity: { eid }, player: look }]
       flush()
       return eid
+    },
+    /** change how the hero this tab plays looks: a row of its own, sent
+     * now, since a visitor may only add rows */
+    restyle: (look: Look) => {
+      if (!hero) return
+      waiting = [...waiting, {
+        entity: { eid: crypto.randomUUID() },
+        look: { player: hero, ...lookOf(look), at: now() },
+      }]
+      flush()
     },
     /** who is looking, and the store's clock against ours */
     me: async (): Promise<Me> => {

@@ -102,9 +102,8 @@ export let village = (net: Net, deal: Deals) => {
     return net.falls().flatMap((b) => {
       let s = comp(b, 'slain')
       if (!here.has(str(s.creature))) return []
-      let who = comp(net.client.ent(str(s.by)), 'player')
       return [{
-        by: str(who.name, 'a hero'),
+        by: net.who(str(s.by))?.name ?? 'a hero',
         kind: str(s.kind),
         at: num(s.at),
       }]

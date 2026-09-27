@@ -185,8 +185,7 @@ export let deals = (net: Net) => {
     let hero = net.hero
     return hero && me?.person && owner(hero) == me.person ? hero : null
   }
-  let nameOf = (hero: string) =>
-    str(comp(net.client.ent(hero), 'player').name, 'them')
+  let nameOf = (hero: string) => net.who(hero)?.name ?? 'them'
 
   // The creatures the hero felled, as a deed counts them.
   let kills = () =>

@@ -1,6 +1,6 @@
 // The hero's pack, drawn into their panel's Bag tab: what they wear in each
-// slot, how they fight in it and the abilities it gives them, everything else
-// they carry, and by a village's fire, the rack of plain arms anyone may take
+// slot (how they fight in it is the Character tab's), everything else they
+// carry, and by a village's fire, the rack of plain arms anyone may take
 // to try. Each piece of gear is its own, framed and named in its rarity's
 // colour (rarity.ts); everything else is a stack of its kind. A piece's tip
 // sets it beside what is worn in its place (compare.ts `versus`). Tap a thing
@@ -9,17 +9,15 @@
 // it from the rack; a second dagger, for a hero who knows how, shows what it
 // would change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
-import { ABILITIES, type Doer, does, GIVES, OFF } from './abilities.ts'
+import { type Doer, does, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS } from './arms.ts'
 import {
   bare,
   diff,
   doer,
   into,
-  LINES,
   numbers,
   rolled,
-  said,
   solo,
   sortLine,
   trying,
@@ -247,7 +245,6 @@ export let pack = (panel: Page, acts: Acts) => {
   }
 
   let draw = (s: Sheet, f: Frame) => {
-    let n = numbers(s, s.worn)
     let worn = SLOTS.map((slot) => {
       let h = s.worn[slot], t = h && piece(h)
       let on = picked?.from == 'worn' && picked.key == slot
@@ -261,17 +258,6 @@ export let pack = (panel: Page, acts: Acts) => {
         esc(t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'))
       }</span>${pips(t)}</button>`
     }).join('')
-    let stats =
-      LINES.filter((l) => (l.k != 'speed' && l.k != 'twin') || n[l.k]).map((
-        l,
-      ) => `<span class=Pack_Num>${said(l, n[l.k])}</span>`).join('') +
-      s.abilities.map((id, i) =>
-        ABILITIES[id]
-          ? `<span class=Pack_Num><kbd class=Key>${i + 1}</kbd> ${
-            glyphText(ABILITIES[id].icon)
-          } ${esc(ABILITIES[id].name)}</span>`
-          : ''
-      ).join('')
     let bag = carried(s).map(({ h, n }) =>
       tile(
         `bag:${h.eid}`,
@@ -295,7 +281,6 @@ export let pack = (panel: Page, acts: Acts) => {
       : ''
     box.innerHTML = `<div class=Pack>` +
       `<div class=Pack_Worn>${worn}</div>` +
-      `<div class=Pack_Nums>${stats}</div>` +
       `<h3 class=Pack_Head>In your bag</h3>` +
       `<div class=Pack_Grid>${
         bag || '<span class=Pack_Hint>Your bag is empty.</span>'

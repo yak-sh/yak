@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done, and where they were last seen, is kept in this app's store (player, seen, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done, and where they were last seen, is kept in this app's store (player, look, seen, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "models": "open",
   "$defs": {
     "player": {
       "component": true,
       "type": "object",
-      "description": "A hero: the name over their head, and the colours they wear. A hero belongs to the person who made it, as the row's created stamp says, so they find it again on any device; a hero made while signed out lasts as long as its tab. Everything they have done is in rows of its own (slain, item, used, equip, journal), so a visitor who can only add rows still keeps it.",
+      "description": "A hero: the name over their head, and the colours they wear, as they were made. A hero belongs to the person who made it, as the row's created stamp says, so they find it again on any device; a hero made while signed out lasts as long as its tab. Everything they have done is in rows of its own (slain, item, used, equip, journal, look), so a visitor who can only add rows still keeps it.",
       "properties": {
         "name": {
           "type": "string",
@@ -26,6 +26,31 @@
           "type": "string",
           "description": "Their skin's colour, as #rrggbb."
         }
+      }
+    },
+    "look": {
+      "component": true,
+      "type": "object",
+      "description": "A hero changing their name or colours, from their panel's Character tab. The newest row for a player is how they look now, over the player row they were made with.",
+      "properties": {
+        "player": { "type": "string", "index": true },
+        "name": {
+          "type": "string",
+          "description": "The name over their head."
+        },
+        "tint": {
+          "type": "string",
+          "description": "Their tunic's colour, as #rrggbb."
+        },
+        "hair": {
+          "type": "string",
+          "description": "Their hair's colour, as #rrggbb."
+        },
+        "skin": {
+          "type": "string",
+          "description": "Their skin's colour, as #rrggbb."
+        },
+        "at": { "type": "number" }
       }
     },
     "creature": {

@@ -1,0 +1,49 @@
+/* The Character tab (character.ts): the hero's likeness beside their name,
+   their level and the xp to the next, and the numbers they fight by (Pack.css
+   `Pack_Nums`); under them, their look to change (Make.css). The likeness is
+   drawn at the size it shows (portrait.ts), on the well's colour. */
+.Character {
+  display: grid;
+  align-content: start;
+  gap: var(--gap);
+}
+
+.Character_Top {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.8rem;
+}
+
+.Character_Face {
+  width: 6.5rem;
+  height: 8rem;
+  border-radius: var(--radius);
+  background: var(--well);
+}
+
+.Character_Who {
+  display: grid;
+  align-content: start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.Character_Name {
+  overflow: hidden;
+  font-size: 1.3rem;
+  color: var(--deep);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.Character_Level {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+
+  & small {
+    font-size: 0.8rem;
+    color: var(--faint);
+  }
+}

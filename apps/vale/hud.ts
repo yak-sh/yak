@@ -96,17 +96,18 @@ let MICS: Record<Mic, string> = {
 }
 
 /** The panels the glass holds, and the keys that open them. The hero's is
- * one panel of tabs, each opened by its own keys (pack.ts, board.ts,
- * journal.ts). Crafting opens at a station (station.ts), the notices at a
- * village's board (notices.ts), and the deals beside a villager
- * (dealbox.ts). The map and the menu are one size whatever is done in them,
- * so each is as tall as it is; every other sheet keeps one height
- * (ui/Panel.css). */
+ * one panel of tabs, each opened by its own keys (character.ts, pack.ts,
+ * board.ts, journal.ts), and by a tap on the hero's frame on themselves.
+ * Crafting opens at a station (station.ts), the notices at a village's board
+ * (notices.ts), and the deals beside a villager (dealbox.ts). The map and the
+ * menu are one size whatever is done in them, so each is as tall as it is;
+ * every other sheet keeps one height (ui/Panel.css). */
 export let SHEETS = {
   map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
   hero: {
     title: 'Your hero',
     tabs: {
+      character: { title: 'Character', icon: 'user', keys: ['KeyH'] },
       bag: { title: 'Bag', icon: 'backpack', keys: ['KeyB', 'KeyI'] },
       skills: { title: 'Skills', icon: 'sparkles', keys: ['KeyK'] },
       journal: { title: 'Journal', icon: 'journal', keys: ['KeyL'] },
@@ -129,7 +130,7 @@ export let hud = (
   busy: () => boolean,
 ) => {
   let layer = el('Hud_Layer')
-  let vitals = el('Vitals')
+  let vitals = el('Vitals', '', 'button')
   let quest = el('Track', '', 'button')
   let foe = el('Foe')
   foe.hidden = true
@@ -181,6 +182,13 @@ export let hud = (
     deal: shelf.add('deal', SHEETS.deal),
   }
   rose.addEventListener('click', panel.map.toggle)
+  // The hero's frame opens their panel on themselves.
+  vitals.addEventListener('click', panel.character.toggle)
+  tip(vitals, {
+    name: 'You',
+    key: cap(TABS.character.keys[0]),
+    says: 'How you look, and how you fight.',
+  })
   quest.addEventListener('click', panel.journal.toggle)
   tip(quest, {
     name: 'Your journal',
@@ -531,7 +539,7 @@ export let hud = (
             (s.xp - from) / Math.max(1, to - from),
             'Bar-xp',
             `${s.xp - from} / ${to - from} xp`,
-          ),
+          ) + `<kbd class=Key>${cap(TABS.character.keys[0])}</kbd>`,
       )
       put('quest', quest, tracking(tasks, f))
       let m = f.foe

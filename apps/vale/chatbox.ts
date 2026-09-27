@@ -30,7 +30,7 @@ import {
   writer,
 } from './chat.ts'
 import type { overlay } from './fx.ts'
-import { comp, type Me, type Net, str } from './net.ts'
+import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 import type { Village } from './village.ts'
 
@@ -205,12 +205,12 @@ export let chatbox = (
   let drawn = ''
   let draw = (shown: Line[], mine: Set<string>, now: number) => {
     let rows = shown.map((l) => {
-      let p = comp(net.client.ent(l.player), 'player')
+      let p = net.who(l.player)
       let v = folk.who(l.player)
       return {
         eid: l.eid,
-        name: v?.name ?? str(p.name, 'Wanderer'),
-        tint: v?.tint ?? str(p.tint, '#dff5c8'),
+        name: v?.name ?? p?.name ?? 'Wanderer',
+        tint: v?.tint ?? p?.tint ?? '#dff5c8',
         text: l.text,
         wait: mine.has(l.eid),
         at: l.at,

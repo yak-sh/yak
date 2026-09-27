@@ -559,7 +559,7 @@ export let game = (
     let used = net.mine('used'), journal = net.mine('journal')
     let equip = net.mine('equip'), upgraded = net.mine('upgraded')
     let learning = net.mine('learned'), respecs = net.mine('respec')
-    let name = str(comp(c.ent(net.hero ?? ''), 'player').name, 'Wanderer')
+    let name = net.who(net.hero ?? '')?.name ?? 'Wanderer'
     let key = [
       slain,
       items,
@@ -902,7 +902,8 @@ export let game = (
         let p = where(e)
         if (!p || dist(p, body) > SIGHT) continue
         let m = motion(e)
-        let pl = comp(e, 'player')
+        let pl = net.who(eid)
+        if (!pl) continue
         let f = fight(e)
         let t = vitals(e) ?? { hp: 1, max: 1, lvl: 1 }
         if (m.gait != 'roll') rolls.delete(eid)
@@ -910,12 +911,8 @@ export let game = (
         let rolled = rolls.has(eid) ? (now - rolls.get(eid)!) / ROLL : -1
         others.push({
           eid,
-          name: str(pl.name, 'Wanderer'),
-          look: {
-            tint: str(pl.tint, '#c95f4a'),
-            hair: str(pl.hair, '#5a3a26'),
-            skin: str(pl.skin, '#e7b996'),
-          },
+          name: pl.name,
+          look: { tint: pl.tint, hair: pl.hair, skin: pl.skin },
           body: bodyOf(p, m),
           vitals: t,
           gear: Object.fromEntries(
