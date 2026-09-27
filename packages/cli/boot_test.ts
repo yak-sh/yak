@@ -85,7 +85,9 @@ Deno.test(
       // there is a process to sign with (host.ts `writer`).
       assertEquals(applied[0].created.by, host.me)
 
-      let found = await fetch(`${at}/query?q=.session`).then((r) => r.json())
+      let found = await fetch(`${at}/query?q=.session.id=one`).then((r) =>
+        r.json()
+      )
       assertEquals(found[0].entity.eid, 'boot-session')
       // A status the store computes rather than keeps, answered over HTTP.
       assertEquals(found[0].session.status, 'empty')

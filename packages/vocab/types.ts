@@ -161,6 +161,8 @@ export type VocabDoc = {
   $id?: string
   $vocabulary?: Record<string, boolean>
   title?: string
+  /** instructions this vocabulary contributes to an agent's MCP handshake */
+  instructions?: string
   /** the package that declares these components — written by the host that
    * loads the document (@yaks/cli `compose`), so a reader can say where each
    * component comes from */

@@ -2,13 +2,11 @@
 // handler, so the same server runs on Deno, on Node, and in a Cloudflare
 // Worker.
 //
-// It is stateless. One JSON-RPC request in, one JSON reply out, with no MCP
-// session to strand: a restart loses nothing, and two isolates answering the
-// same client need to agree about nothing. That costs the server→client half
-// of the protocol — there is no SSE stream here, so a `GET` is answered 405,
-// which is what the MCP spec says a server without a stream should answer —
-// and it buys a handler that mounts beside @yaks/api's HTTP routes with no
-// runtime-specific code between them.
+// One JSON-RPC request in, one JSON reply out. When a caller supplies a
+// session graph, the MCP session id names a persisted transcript; a restart
+// preserves it, and two isolates share its identity. There is no SSE stream
+// here, so a `GET` is answered 405, as MCP specifies for a server without a
+// stream. The handler mounts beside @yaks/api's routes without runtime code.
 //
 // The route is not decided here either. This handler answers every HTTP
 // request it is given, so the calling program mounts it on whatever path it
@@ -29,13 +27,18 @@ import {
   JSONRPCRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
-import { namedTool } from '@yaks/graph'
+import { type Actor, type Bundle, type Graph, namedTool } from '@yaks/graph'
+import { SESSION, sessionFor, speaking } from '@yaks/session'
 import { runner } from '@yaks/tools'
 import { listing, logged, type Options, server } from './server.ts'
 
 /** How the HTTP handler is built: everything {@link Options} takes except the
  * actor, which is decided per HTTP request. */
 export type MountOptions = Omit<Options, 'actor'> & {
+  /** the graph that owns MCP connection transcripts. Without one, the
+   * calling application owns its own Mcp-Session-Id and this transport does
+   * not create graph sessions. */
+  sessions?: Graph
   /** who is calling — what it returns signs every write the call makes
    * (default: nobody). Throwing `Unauthorized` refuses the request with a
    * 401. */
@@ -46,6 +49,44 @@ export type MountOptions = Omit<Options, 'actor'> & {
 
 let refused = (message: string, code: number) =>
   json({ error: code == 405 ? 'NotAllowed' : 'Refused', message }, code)
+
+let ID = 'mcp-session-id'
+let VIA = 'x-via'
+
+// The header is an opaque connection id, not a graph address. A process can
+// restart between requests: the graph, rather than this handler, remembers it.
+let connected = async (
+  graph: Graph,
+  id: string | null,
+  actor: Actor | null,
+): Promise<{ session: Bundle; id: string } | undefined> => {
+  if (id != null) {
+    if (!id) return undefined
+    let session = await sessionFor(graph, id)
+    let named = session?.[SESSION]
+    if (
+      !session || !named || typeof named != 'object' || !('id' in named) ||
+      named.id != id
+    ) return undefined
+    return { session, id }
+  }
+  let fresh = crypto.randomUUID()
+  let owner = actor?.by && actor.by != actor.via
+    ? (await graph.get([actor.by]))[0]?.entity.eid
+    : undefined
+  let [session] = await graph.apply([{
+    entity: { eid: crypto.randomUUID() },
+    [SESSION]: {
+      id: fresh,
+      // A person authenticated by the host remains the actor. The host's
+      // process fallback speaks only for itself and is not this connection.
+      // session.actor is a reference, so an external identity stays on this
+      // request's attribution without making session creation fail.
+      ...(owner ? { actor: owner } : {}),
+    },
+  }])
+  return { session, id: fresh }
+}
 
 // One JSON-RPC request, answered by an MCP server object of its own. The
 // linked pair is the SDK's own in-process transport, so the protocol is
@@ -83,6 +124,9 @@ let ask = async (
  * ```
  */
 export let mcp = (opts: MountOptions): Handler => {
+  if (opts.sessions && !opts.sessions.vocab.comp(SESSION)) {
+    throw new Error('the MCP session graph has no session vocabulary')
+  }
   let ms = opts.timeout ?? 60_000
   // One runner for the whole handler, not one per HTTP request: the `tool`
   // rows a call references are written once for the process, and a call still
@@ -116,12 +160,32 @@ export let mcp = (opts: MountOptions): Handler => {
           ? new Response(null, { status: 202 })
           : refused('not a JSON-RPC request', 400)
       }
-      let built = server({ ...opts, actor, runner: runs })
+      let via = request.headers.get(VIA)
+      let conn = via || !opts.sessions
+        ? undefined
+        : await connected(opts.sessions, request.headers.get(ID), actor)
+      if (
+        !via && opts.sessions && request.headers.has(ID) &&
+        !conn
+      ) {
+        return refused('unknown MCP session', 404)
+      }
+      let caller = conn ? speaking(conn.session) : actor
+      if (conn && actor?.by && actor.by != actor.via) {
+        caller = { by: actor.by, via: conn.session.entity.eid }
+      }
+      let built = server({
+        ...opts,
+        actor: caller,
+        runner: runs,
+      })
       // Whatever else the calling program serves — resources, prompts — is
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
       await opts.extend?.(built)
-      return json(await ask(built, rpc.data, ms))
+      let answer = json(await ask(built, rpc.data, ms))
+      if (conn) answer.headers.set(ID, conn.id)
+      return answer
     } catch (err) {
       return refuse(err, request)
     }

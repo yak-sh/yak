@@ -3,6 +3,7 @@
     "https://yak.sh/vocab/core": true
   },
   "title": "graph",
+  "instructions": "This server stores entities as bundles of components. Use graph_schema to see the available components and their properties; use graph_query or graph_show to read them, and graph_apply to write changes.",
   "$defs": {
     "graph_apply": {
       "tool": true,

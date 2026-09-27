@@ -29,6 +29,10 @@
     "title": {
       "type": "string"
     },
+    "instructions": {
+      "type": "string",
+      "description": "Instructions this vocabulary contributes to an agent's MCP initialize response"
+    },
     "package": {
       "type": "string",
       "description": "the package that declares these components, written by the host that loads the document"

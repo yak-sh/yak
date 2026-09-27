@@ -4,12 +4,34 @@
 // own words.
 
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
+import { graphDoc } from '@yaks/graph/vocab'
 import { Unauthorized } from '@yaks/api'
+import { ram } from '@yaks/ram'
+import { sessionDoc } from '@yaks/session'
+import { authenticate as sessionAuth } from '@yaks/session/rules'
+import { loadVocab } from '@yaks/vocab'
 import { mcp } from './mount.ts'
-import { comp, shopGraph } from './testing.ts'
+import { routes } from './routes.ts'
+import { comp, shop, shopGraph } from './testing.ts'
 
 let ada = { by: 'm1' }
+
+let sessionGraph = () => {
+  let vocab = loadVocab([...shop.docs, sessionDoc, {
+    $defs: {
+      created: {
+        component: true,
+        extends: true,
+        type: 'object',
+        properties: {
+          via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
+        },
+      },
+    },
+  }])
+  return graph({ storage: ram(vocab, { number: true }), vocab })
+}
 
 let post = (body: unknown) =>
   new Request('http://shop.test/mcp', {
@@ -124,4 +146,133 @@ Deno.test('a notification is answered with nothing at all', async () => {
     post({ jsonrpc: '2.0', method: 'notifications/initialized' }),
   )
   assertEquals(r.status, 202)
+})
+
+Deno.test('a caller-owned MCP session does not write into the tool graph', async () => {
+  let g = sessionGraph()
+  let door = mcp({ graph: g })
+  let listed = await door(rpc('tools/list'))
+  assertEquals(listed.status, 200)
+  assertEquals(listed.headers.get('mcp-session-id'), null)
+  assertEquals(await g.read('.session'), [])
+})
+
+Deno.test('an MCP connection writes through its own graph session', async () => {
+  let g = sessionGraph()
+  let door = mcp({ graph: g, sessions: g })
+  let first = await door(rpc('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'shop', version: '0' },
+  }))
+  let id = first.headers.get('mcp-session-id')
+  assert(id)
+  let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  assertEquals(comp(session, 'session').id, id)
+
+  let apply = () =>
+    call('graph_apply', {
+      change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+    })
+  let resumed = mcp({ graph: g, sessions: g })
+  let wrote = await resumed(
+    new Request(apply(), {
+      headers: { 'mcp-session-id': id },
+    }),
+  )
+  assertEquals(wrote.status, 200)
+  assertEquals(wrote.headers.get('mcp-session-id'), id)
+  let made = comp((await g.get(['b1']))[0], 'created')
+  assertEquals(made.by, session.entity.eid)
+  assertEquals(made.via, session.entity.eid)
+  assertEquals(
+    (await g.read('.session&*')).map((b) => b.entity.eid),
+    [session.entity.eid],
+  )
+  let unknown = await door(
+    new Request(apply(), {
+      headers: { 'mcp-session-id': crypto.randomUUID() },
+    }),
+  )
+  assertEquals(unknown.status, 404)
+})
+
+Deno.test('authentication keeps its actor while the MCP session names the run', async () => {
+  let g = sessionGraph()
+  await g.apply([{ entity: { eid: 'm1' }, doc: { title: 'A member' } }])
+  let door = mcp({ graph: g, sessions: g, authenticate: () => ({ by: 'm1' }) })
+  let first = await door(rpc('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'shop', version: '0' },
+  }))
+  let id = first.headers.get('mcp-session-id')
+  assert(id)
+  let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  assertEquals(comp(session, 'session').actor, 'm1')
+  await door(
+    new Request(
+      call('graph_apply', {
+        change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+      }),
+      { headers: { 'mcp-session-id': id } },
+    ),
+  )
+  let made = comp((await g.get(['b1']))[0], 'created')
+  assertEquals(made.by, 'm1')
+  assertEquals(made.via, session.entity.eid)
+})
+
+Deno.test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
+  let g = sessionGraph()
+  await g.apply([
+    { entity: { eid: 'm1' }, doc: { title: 'A member' } },
+    { entity: { eid: 's1' }, session: { id: 'harness-run', actor: 'm1' } },
+  ])
+  let door = mcp({
+    graph: g,
+    sessions: g,
+    authenticate: sessionAuth({ graph: g }),
+  })
+  let change = (eid: string) =>
+    call('graph_apply', {
+      change: [{ entity: { eid }, book: { price: 12 } }],
+    })
+
+  let harness = await door(
+    new Request(change('b1'), {
+      headers: { 'x-via': 'harness-run' },
+    }),
+  )
+  assertEquals(harness.headers.get('mcp-session-id'), null)
+  assertEquals(comp((await g.get(['b1']))[0], 'created').by, 'm1')
+  assertEquals(comp((await g.get(['b1']))[0], 'created').via, 's1')
+  assertEquals((await g.read('.session')).length, 1)
+
+  let cli = await door(change('b2'))
+  let id = cli.headers.get('mcp-session-id')
+  assert(id)
+  let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
+  let made = comp((await g.get(['b2']))[0], 'created')
+  assertEquals(made.by, session.entity.eid)
+  assertEquals(made.via, session.entity.eid)
+})
+
+Deno.test('initialize carries instructions from the loaded vocabularies', async () => {
+  let vocab = loadVocab([
+    { ...shop.docs[0], instructions: 'Read the shelf.' },
+    { ...shop.docs[1], instructions: 'Keep each sale.' },
+  ])
+  let g = graph({ storage: ram(vocab), vocab })
+  let door = routes({ config: {}, graph: g, who: () => null, tools: [] })[0]
+    .handle
+  let hello = await (await door(rpc('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'shop', version: '0' },
+  }))).json()
+  assertEquals(
+    hello.result.instructions,
+    `${graphDoc.instructions}\n\nRead the shelf.\n\nKeep each sale.`,
+  )
 })

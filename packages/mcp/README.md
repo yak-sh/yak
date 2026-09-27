@@ -100,8 +100,24 @@ reads and writes still use `graph`. The calls graph needs the `toolsDoc`
 vocabulary and writable storage.
 
 The HTTP handler shares one runner across requests and constructs an MCP server
-with the authenticated actor for each request. HTTP protocol state is not
-retained between requests.
+with the authenticated actor for each request. Pass `sessions: graph` when that
+graph owns connection transcripts and declares the session vocabulary. A request
+without `x-via` then gets an `Mcp-Session-Id` response header; the caller sends
+it on later requests, and the graph preserves attribution across restarts. A
+caller supplying `x-via` continues to speak for the session it named. The
+`@yaks/mcp/routes` host route supplies its graph when that host loaded the
+session vocabulary.
+
+A calling application that owns its own MCP session protocol can leave
+`sessions` unset. The yaks.app connector does this today: it uses
+`Mcp-Session-Id` for streams and cached tool rosters, while its tools span app
+stores and no graph owns a connector transcript. The mount leaves that
+application's header and storage alone.
+
+The route composes the generic graph vocabulary's top-level `instructions` with
+each loaded vocabulary document's instructions in document order and sends them
+in the MCP `initialize` response. Other plugins can add instructions beside
+their own component declarations.
 
 ## Exports
 

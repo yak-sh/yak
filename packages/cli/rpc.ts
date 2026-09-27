@@ -3,8 +3,8 @@
 // `tools/call` — is smaller than the SDK that would answer them, and adds no
 // dependency to somebody's `deno install`.
 //
-// One POST is one JSON-RPC request. The MCP server this talks to is stateless
-// (@yaks/mcp `mount.ts`): a request in, a response out, nothing left open. So
+// One POST is one JSON-RPC request. The MCP server answers one at a time
+// (@yaks/mcp `mount.ts`), and a graph can keep the connection's identity. So
 // `initialize` is sent only when listing tools — where the protocol version is
 // negotiated and cached beside the tool list (store.ts) — and a tool call made
 // from a cached list costs a single round trip, which is what makes the CLI

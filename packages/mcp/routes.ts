@@ -16,6 +16,8 @@
 
 import type { Graph, NamedTool } from '@yaks/graph'
 import { generic } from '@yaks/graph/tools'
+import { graphDoc } from '@yaks/graph/vocab'
+import { SESSION } from '@yaks/session'
 import type { Authenticate, Route } from '@yaks/api'
 import { mcp } from './mount.ts'
 import type { Search } from './tools.ts'
@@ -39,10 +41,15 @@ export let routes = (host: Hosting): Route[] => {
   let tier = new Set(generic)
   let handle = mcp({
     graph: host.graph,
+    sessions: host.graph.vocab.comp(SESSION) ? host.graph : undefined,
     authenticate: host.who,
     tools: host.tools.filter((t) => !tier.has(t.name)),
     search: host.search,
     name: host.config.name ?? 'yak',
+    instructions: [graphDoc, ...host.graph.vocab.docs].map((doc) =>
+      doc.instructions?.trim()
+    )
+      .filter((line): line is string => !!line).join('\n\n'),
   })
   return [{ method: '*', path: PATH, handle }]
 }
