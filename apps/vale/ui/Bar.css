@@ -1,7 +1,10 @@
-/* A meter: filled `--k` of the way in `--fill`, its numbers over it. */
+/* A meter: filled `--k` of the way in `--fill`, its numbers over it in
+   `--label`, a size that reads at a glance. */
 .Bar {
   --fill: var(--hp);
-  --tall: 1rem;
+  --tall: 1.15rem;
+  --label: #fff;
+  --label-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
   position: relative;
   height: var(--tall);
   overflow: hidden;
@@ -23,17 +26,20 @@
     position: relative;
     display: block;
     font-size: calc(var(--tall) * 0.7);
-    font-weight: 600;
+    font-weight: 700;
     line-height: var(--tall);
     text-align: center;
-    color: #fff;
-    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+    color: var(--label);
+    text-shadow: var(--label-shadow);
   }
 }
 
+/* The xp's pale blue, and the track beside it, carry ink better than white. */
 .Bar-xp {
   --fill: var(--xp);
-  --tall: 0.75rem;
+  --tall: 1.1rem;
+  --label: var(--ink);
+  --label-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .Bar-foe {
