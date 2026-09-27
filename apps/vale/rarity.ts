@@ -393,22 +393,35 @@ let roll = (eid: string, kind: string, rarity: Rarity): Piece => {
 export let UP = 0.1
 
 // A piece upgraded `plus` times: every number of it, and each bonus it
-// rolled, a tenth finer for each, and its name counting them.
+// rolled, a tenth finer for each, and its name counting them. A number a
+// tenth of which rounds away would stall, so the piece's largest whole
+// number, or with none its largest share, rises at least a point a step (one,
+// or one in a hundred), and no step leaves the piece as it was.
 let hone = (p: Piece, plus: number): Piece => {
   if (!plus || !p.slot) return p
   let k = 1 + UP * plus
+  let finer = (s: Stat, n: number) =>
+    BONUSES[s].whole ? Math.round(n * k) : two(n * k)
+  let top =
+    STATS.filter((s) => p[s]).sort((a, b) =>
+      Number(!!BONUSES[b].whole) - Number(!!BONUSES[a].whole) ||
+      (p[b] ?? 0) - (p[a] ?? 0)
+    )[0]
+  let point = (s: Stat) => BONUSES[s].whole ? 1 : 0.01
   let q: Piece = {
     ...p,
     plus,
     name: `+${plus} ${p.name}`,
-    bonuses: p.bonuses.map((
-      [s, n],
-    ) => [s, BONUSES[s].whole ? Math.round(n * k) : two(n * k)]),
+    bonuses: p.bonuses.map(([s, n]) => [s, finer(s, n)]),
   }
   if (p.dmg) q.dmg = two(p.dmg * k)
   for (let s of STATS) {
     let n = p[s]
-    if (n) q[s] = BONUSES[s].whole ? Math.round(n * k) : two(n * k)
+    if (n) {
+      q[s] = s == top
+        ? Math.max(finer(s, n), two(n + point(s) * plus))
+        : finer(s, n)
+    }
   }
   return q
 }
@@ -443,6 +456,21 @@ let rolled = new Map<string, Piece>()
  * let up = piece({ eid: 'e1', kind: 'sword3', rarity: 'epic', plus: 2 })
  * assertEquals(up.name, `+2 ${p('epic').name}`)
  * assert(up.dmg! > p('epic').dmg! && up.bonuses[0][1] >= p('epic').bonuses[0][1])
+ * // Every step changes what the piece shows: a number too small for a
+ * // tenth of it to show rises a point.
+ * let robe = (plus: number) => piece({ eid: 'e1', kind: 'robe3', plus }).hp
+ * assertEquals([0, 1, 2, 3, 4, 5].map(robe), [6, 7, 8, 9, 10, 11])
+ * let shown = (p: Piece) => STATS.map((s) => BONUSES[s].shows(p[s] ?? 0))
+ * for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
+ *   for (let rarity of RARITIES) {
+ *     let at = (plus: number) => piece({ eid: 'e3', kind, rarity, plus })
+ *     for (let n = 1; n <= 5; n++) {
+ *       let [a, b] = [at(n - 1), at(n)]
+ *       let moved = shown(a).some((x, i) => x != shown(b)[i])
+ *       assert(a.dmg != b.dmg || moved, `${kind} ${rarity} +${n}`)
+ *     }
+ *   }
+ * }
  * ```
  */
 export let piece = (
