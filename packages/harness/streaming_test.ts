@@ -4,6 +4,7 @@ import { tally } from '@yaks/sql'
 import { type Comp, transient } from '@yaks/graph'
 import { ModelError } from '@yaks/model'
 import { statusOf } from '@yaks/session'
+import { until } from '../process/testing.ts'
 import { at, harness, repo, worker } from './testing.ts'
 
 Deno.test('streaming records ask before dispatch, projects text without durable token writes, and finalizes same entry', async () => {
@@ -117,34 +118,24 @@ Deno.test('a real worker transfers transient text before model completion', asyn
     worker: worker(),
     config: at(),
     streaming: true,
-    fake: { delayMs: 300, deltas: 30 },
+    fake: { held: true, deltas: 30 },
   })
   try {
     const id = await a.agent.start('stream')
     await a.agent.transcript(id)
-    let partial = false
-    const check = async () => {
+    await until(async () => {
       const rows = await a.agent.transcript(id)
-      if (
+      return (
         rows.some((b) => (b.attempt as Comp)?.state == 'inflight') &&
         rows.some((b) => (b.content as Comp)?.body == 'x'.repeat(30))
-      ) partial = true
-    }
-    const off = a.subscribe(() => {
-      void check()
-    })
-    await check()
-    for (let end = Date.now() + 5000;;) {
-      const current = await a.agent.transcript(id)
-      if (current.some((b) => (b.attempt as Comp)?.state == 'completed')) break
-      if (Date.now() > end) throw new Error('worker stream timed out')
-      await new Promise((r) => setTimeout(r, 5))
-    }
-    off()
+      )
+    }, 'the in-flight text projection')
+    await a.testing!.release()
+    await a.idle(id)
     const rows = await a.agent.transcript(id)
-    assert(partial, 'replicated an in-flight text projection')
     assertEquals((rows.find((b) => b.ask)!.attempt as Comp).state, 'completed')
   } finally {
+    await a.testing!.release()
     await a.close()
   }
 })

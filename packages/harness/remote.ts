@@ -42,7 +42,11 @@ export let remote = async (
      * over from a backend that died (ms) */
     hold?: number
     instructions?: string
-    fake?: boolean | 'stuck' | 'held' | { delayMs: number; deltas?: number }
+    fake?: boolean | 'stuck' | 'held' | {
+      delayMs?: number
+      deltas?: number
+      held?: boolean
+    }
     /** where settings such as `HARNESS_STREAM` are read (default this
      * process's environment); resolved here, never cloned to the worker */
     env?: (name: string) => string | undefined
