@@ -625,6 +625,7 @@ let talkTo = () => {
       greets: giver.greets,
       name: giver.name,
       hears: !!folk.near(),
+      looks: folk.looks(giver.id),
     },
     () => {
       if (!next) return

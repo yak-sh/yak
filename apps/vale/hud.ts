@@ -64,6 +64,8 @@ export type Talk = {
   name: string
   /** they hear what is said beside them, and answer (village.ts) */
   hears?: boolean
+  /** how their feeling shows, as in "looks tired" (villagers.ts) */
+  looks?: string | null
 }
 
 /** The time of day, as the glass shows it. */
@@ -375,9 +377,9 @@ export let hud = (
         }</p><p class=Talk_Reward>${t.have} / ${q.count} so far.</p>`
       }
       if (t.hears) {
-        html += `<p class=Talk_Hint>Say something, and ${
-          esc(t.name)
-        } will answer.</p>`
+        html += `<p class=Talk_Hint>${
+          t.looks ? `${esc(t.name)} ${esc(t.looks)}. ` : ''
+        }Say something, and ${esc(t.name)} will answer.</p>`
       }
       talk.innerHTML = `<div class=Talk_Who>${
         esc(t.name)

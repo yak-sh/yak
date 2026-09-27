@@ -1,11 +1,11 @@
 // The villagers as this page holds them (villagers.ts says what they are):
 // the store's row for each one in the level the hero is in, added the first
-// time a hero comes; what they said back and where they chose to go, off
-// their transcripts; the line a hero says beside one, which asks them to
-// answer, told what they hold and what deals stand between them and the hero
-// (deals.ts); the news of a quest handed in; and
-// the mark on the hero that keeps a level's villagers awake while somebody
-// plays in it.
+// time a hero comes; what they said back, where they chose to go and how they
+// feel, off their transcripts; the line a hero says beside one, which asks
+// them to answer, told what they hold, what deals stand between them and the
+// hero (deals.ts), how they feel and where the land's people went lately; the
+// news of a quest handed in; and the mark on the hero that keeps a level's
+// villagers awake while somebody plays in it.
 //
 // A guest reads what villagers say and is not heard by them: only a person
 // signed in speaks (chat.ts), and only their hero's row is theirs to mark.
@@ -23,7 +23,9 @@ import {
   CHAT,
   deeds,
   eidOf,
+  goings,
   hears,
+  looks,
   persona,
   said,
   where,
@@ -176,6 +178,8 @@ export let village = (net: Net, deal: Deals) => {
         quests: f.sheet.quests.filter((q) => q.quest.giver == g.id),
         deeds: deeds(falls(f), net.now() - LATELY),
         here: f.others.map((o) => o.name),
+        mood: told().moods.get(g.id),
+        goings: goings(g, told().plans, net.now() - LATELY),
       })
       return {
         entry: { session: eidOf(g.id) },
@@ -191,6 +195,11 @@ export let village = (net: Net, deal: Deals) => {
     /** what the level's villagers said, oldest first, as lines over their
      * heads */
     lines: (): Line[] => told().lines,
+    /** how a villager's feeling shows, when they have decided one */
+    looks: (id: string): string | null => {
+      let mood = told().moods.get(id)
+      return mood ? looks(mood) : null
+    },
     /** a villager's name and colour, for the chat's log */
     who: (id: string) => {
       let g = byId.get(id)
