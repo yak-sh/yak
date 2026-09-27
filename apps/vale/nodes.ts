@@ -509,8 +509,9 @@ export let nodes = (
         drawn.delete(eid)
       }
     },
-    /** keep the line from the camera to the hero clear */
-    see: (from: THREE.Vector3, to: THREE.Vector3) => sight(mat, from, to),
+    /** keep the camera's sight of the hero clear (world.ts `see`) */
+    see: (from: THREE.Vector3, feet: THREE.Vector3, tall: number) =>
+      sight(mat, from, feet, tall),
     /** let the GPU go of what the nodes drew */
     dispose: () => {
       for (let d of drawn.values()) {

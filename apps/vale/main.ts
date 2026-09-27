@@ -247,6 +247,8 @@ let cam: Cam = {
   idle: 0,
 }
 let target = new THREE.Vector3()
+// Where the hero stands, as the camera follows them.
+let feet = new THREE.Vector3()
 
 // The microphone (voicebox.ts): off until the player turns it on, from the
 // tray's button, whose tap the browser may ask the player about.
@@ -937,8 +939,10 @@ let loop = (t: number) => {
     }, dt)
   }
   aim(cam, camera, target, v, dt)
-  w.see(camera.position, target)
-  bounty.see(camera.position, target)
+  // What stands between the camera and the hero thins away (soft.ts).
+  feet.set(cam.x, cam.y, cam.z)
+  w.see(camera.position, feet, stature(BUILD))
+  bounty.see(camera.position, feet, stature(BUILD))
   sound.listen(camera, v, playing ? last : null, net.hero, dt)
   // Embers off the fire, and at night fireflies about the player.
   if (v.hearth && Math.random() < 0.5) {

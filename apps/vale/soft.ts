@@ -20,10 +20,12 @@
 //
 //   A flash. A creature or a player glows for a moment when struck.
 //
-//   A line of sight. The ground and what stands on it thin away where they come
-//   between the camera and the hero, and right around the camera, so a tree
-//   or a toadstool in the way shows the hero through it (`see`). It is a
-//   stipple, pixels left out in an even pattern, so nothing needs sorting.
+//   A line of sight. The ground and what stands on it thin away where, as the
+//   camera sees them, they cover the hero, and right around the camera, so a
+//   tree or a toadstool in the way shows the hero through it (`see`). What
+//   the camera only looks down on, the ground before and below it, covers
+//   nothing and stays whole. It is a stipple, pixels left out in an even
+//   pattern, so nothing needs sorting.
 //
 //   No seams. A vertex is placed in the world before it is seen from the
 //   camera, never through the two at once, so where two chunks meet, the same
@@ -113,7 +115,8 @@ varying vec3 vCell;
 varying vec3 vAt;
 varying float vMaterial;
 uniform vec3 seeFrom;
-uniform vec3 seeTo;
+uniform vec3 seeFeet;
+uniform float seeTall;
 float edge(float flag, float d, float w) {
   return flag * (1. - smoothstep(0., w, d));
 }
@@ -127,18 +130,28 @@ float bayer(vec2 p) {
 }
 `
 
-// What is left out: within 1.5 m of the line from the camera to the hero,
-// stopping a metre short of them, and within 2 m of the camera.
+// What is left out: a pixel more than a metre before the hero whose ray from
+// the camera goes on to meet the hero's body, feet to head and a little
+// either side, where it crosses the upright plane through their middle; and
+// what is within 2 m of the camera, but not the ground a metre and more
+// below it.
 let SIGHT = /* glsl */ `
 #ifdef SEE
-  vec3 sl = seeTo - seeFrom;
+  float h = seeTall * .5;
+  vec3 sl = seeFeet + vec3(0., h, 0.) - seeFrom;
   float sL = max(length(sl), 1e-3);
-  float along = dot(vAt - seeFrom, sl) / sL;
-  float off = length(vAt - seeFrom - sl * (along / sL));
-  float thin = along > 0. && along < sL - 1.
-    ? 1. - smoothstep(.9, 1.5, off)
-    : 0.;
-  thin = max(thin, 1. - smoothstep(1.2, 2., length(vAt - seeFrom)));
+  vec3 ahead = sl / sL;
+  float along = dot(vAt - seeFrom, ahead);
+  vec3 across = normalize(cross(ahead, vec3(0., 1., 0.)));
+  vec3 upward = cross(across, ahead);
+  vec3 met = (vAt - seeFrom) * (sL / max(along, 1e-3)) - sl;
+  float side = abs(dot(met, across));
+  float up = dot(met, upward);
+  float body = (1. - smoothstep(.55, .9, side)) *
+    smoothstep(-h - .35, -h - .1, up) * (1. - smoothstep(h + .1, h + .4, up));
+  float thin = along > 0. && along < sL - 1. ? body : 0.;
+  float near = 1. - smoothstep(1.2, 2., length(vAt - seeFrom));
+  thin = max(thin, near * smoothstep(seeFrom.y - 1., seeFrom.y - .5, vAt.y));
   if (bayer(gl_FragCoord.xy) < thin * .8) discard;
 #endif
 `
@@ -228,7 +241,8 @@ export let soft = (
     flash: { value: new THREE.Color(1, 0.35, 0.3) },
     flashing: { value: 0 },
     seeFrom: { value: new THREE.Vector3() },
-    seeTo: { value: new THREE.Vector3() },
+    seeFeet: { value: new THREE.Vector3() },
+    seeTall: { value: 1 },
   }
   m.userData.soft = uniforms
   if (opts.see) m.defines = { SEE: '' }
@@ -269,17 +283,19 @@ export let soft = (
   return m
 }
 
-/** The line of sight a see-through material keeps clear: from the camera to
- * the hero. */
+/** The sight a see-through material keeps clear: from the camera (`from`)
+ * of the hero standing at `feet`, `tall` metres tall. */
 export let sight = (
   m: THREE.Material,
   from: THREE.Vector3,
-  to: THREE.Vector3,
+  feet: THREE.Vector3,
+  tall: number,
 ) => {
   let u = m.userData.soft
   if (!u) return
   u.seeFrom.value.copy(from)
-  u.seeTo.value.copy(to)
+  u.seeFeet.value.copy(feet)
+  u.seeTall.value = tall
 }
 
 /** How strongly a soft material glows its flash colour, 0 to 1. */

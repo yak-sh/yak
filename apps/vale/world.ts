@@ -31,8 +31,9 @@ export type World = {
   /** 0 at midnight, 0.5 at noon */
   day: number
   tick: (t: number, dt: number) => void
-  /** keep the line from the camera (`from`) to the hero (`to`) clear */
-  see: (from: THREE.Vector3, to: THREE.Vector3) => void
+  /** keep the camera's (`from`) sight of the hero clear: standing at
+   * `feet`, `tall` metres tall */
+  see: (from: THREE.Vector3, feet: THREE.Vector3, tall: number) => void
   /** once every chunk within FIRST of the focus is drawn, at any detail */
   near: () => Promise<void>
   /** how many chunks within sight are not yet drawn as finely as wanted */
@@ -425,7 +426,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     day: 0.4,
     pending: 0,
     chunks: [0, 0, 0],
-    see: (from, to) => sight(ground, from, to),
+    see: (from, feet, tall) => sight(ground, from, feet, tall),
     near: () =>
       new Promise((done) => {
         waiting.push(done)
