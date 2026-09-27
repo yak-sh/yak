@@ -1,7 +1,5 @@
-/* The chat (chatbox.ts): the last lines said in this level, each fading a
-   while after it was said and all shown while the box is open, and the line
-   being written. The newest lines stay in sight when there is room for only a
-   few. */
+/* The chat (chatbox.ts): recent lines fade when closed; every observed line
+   remains in the scrollable log while open. */
 .Chat {
   --tint: #dff5c8;
   display: flex;
@@ -27,6 +25,13 @@
   font-size: 0.9rem;
   color: #fff;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+
+  .Chat-open & {
+    justify-content: flex-start;
+    overflow-y: auto;
+    pointer-events: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 .Chat_Line {

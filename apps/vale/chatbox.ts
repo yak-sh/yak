@@ -24,6 +24,7 @@ import {
   EARSHOT,
   earshot,
   heard,
+  history,
   type Line,
   lineOf,
   MAX,
@@ -34,8 +35,7 @@ import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 import type { Village } from './village.ts'
 
-// Lines in the log, and lines the store is asked for before the rule.
-let SHOWN = 6
+// Lines the store is asked for at once. Observed lines are retained while open.
 let ASKED = 40
 
 // How long a line waits after the last one went, in ms: longer than net.ts's
@@ -50,8 +50,8 @@ let ASKING = 6000
 
 // How long a line stays in the log once said, and then how long it takes to
 // fade, in ms. The fade is chat.css's, run by the compositor.
-let STAY = 9000
-let FADE = 3000
+let STAY = 20000
+let FADE = 4000
 
 // A line of mine, and the rest of its row when it is said to a villager.
 type Said = Line & { level: string; to: Record<string, unknown> | null }
@@ -97,6 +97,7 @@ export let chatbox = (
   // What the store holds: the lines said in this level, newest first, and
   // who made each hero, which the rule asks.
   let level = ''
+  let past: Line[] = []
   let lines: Watch | null = null
   let makers = new Map<string, string>()
   let asking = new Set<string>()
@@ -111,6 +112,7 @@ export let chatbox = (
   let follow = (id: string) => {
     lines?.close()
     level = id
+    past = []
     lines = watch(
       `.chat.level=${
         JSON.stringify(id)
@@ -185,7 +187,15 @@ export let chatbox = (
   input.addEventListener('keydown', (e) => {
     if (e.key == 'Escape') hide()
   })
-  input.addEventListener('blur', hide)
+  // Scrolling the log can blur the input; it must not fold the conversation.
+  addEventListener('pointerdown', (e) => {
+    if (
+      open && !box.contains(e.target as Node) &&
+      !opener.contains(e.target as Node)
+    ) {
+      hide()
+    }
+  })
   // The opener keeps the line's focus, so a second tap folds it away.
   opener.addEventListener('pointerdown', (e) => e.preventDefault())
   opener.addEventListener('click', () => open ? hide() : show())
@@ -211,6 +221,7 @@ export let chatbox = (
   // way through its arrival and its fade, however late it is drawn; the open
   // box shows every line whole.
   let drawn = ''
+  let wasOpen = false
   let draw = (shown: Line[], mine: Set<string>, now: number) => {
     let rows = shown.map((l) => {
       let p = net.who(l.player)
@@ -228,6 +239,10 @@ export let chatbox = (
     let key = JSON.stringify([open, rows])
     if (key == drawn) return
     drawn = key
+    let atBottom = !wasOpen ||
+      log.scrollHeight - log.scrollTop - log.clientHeight < 24
+    let position = log.scrollTop
+    wasOpen = open
     log.replaceChildren(...rows.map((r) => {
       let li = el('li', `Chat_Line${r.wait ? ' Chat_Line-wait' : ''}`)
       if (!open) {
@@ -241,6 +256,10 @@ export let chatbox = (
       li.append(name, document.createTextNode(r.text))
       return li
     }))
+    if (open) {
+      if (atBottom) log.scrollTop = log.scrollHeight
+      else log.scrollTop = position
+    }
   }
 
   // A bubble's words, made once, so its fade starts from when it was said
@@ -288,17 +307,17 @@ export let chatbox = (
       )
       waiting = waiting.filter((l) => !there.has(l.eid) && now - l.at < LOST)
       let mine = [...waiting, ...outbox].filter((l) => l.level == level)
-      let shown = [
-        ...[
+      past = history(
+        past,
+        [
           ...heard(held.flatMap((b) => lineOf(b) ?? []), owner),
           ...folk.lines(),
-        ]
-          .sort((a, b) => a.at - b.at),
-        ...mine,
-      ]
-      let recent = shown.slice(-SHOWN)
+        ],
+        open ? Infinity : ASKED,
+      )
+      let shown = history(past, mine, Infinity)
       draw(
-        open ? recent : recent.filter((l) => now < fades(l) + FADE),
+        open ? shown : shown.slice(-6).filter((l) => now < fades(l) + FADE),
         new Set(mine.map((l) => l.eid)),
         now,
       )
