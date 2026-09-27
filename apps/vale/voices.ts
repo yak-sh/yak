@@ -1,8 +1,8 @@
 // How each sound in the vale is made: on the spot with Web Audio, so there is
 // nothing to load. A thump for a blow, a swish for a miss, a chime for a
-// find, the strokes of work at a node, a footstep, a creature's cry, and the
-// fire and water a level keeps making. A voice plays into whatever node it is given; sound.ts says where
-// that is.
+// find, the strokes of work at a node, a footstep, a creature's cry, the
+// fire and water a level keeps making, and a marsh's frogs. A voice plays
+// into whatever node it is given; sound.ts says where that is.
 
 /** A sound: how long it lasts in seconds, how loud it is at its source, and
  * how it is made into `o`. */
@@ -289,59 +289,205 @@ let CRIES: Record<string, (k: number, low: number) => Voice> = {
 export let cry = (plan: string, size: number, loud: boolean) =>
   (CRIES[plan] ?? CRIES._)(loud ? 1 : 0.55, 1 / Math.sqrt(size))
 
-// A buffer `secs` long that loops without a seam: filled a little long, and
-// its end faded into its start.
+// A buffer `secs` long that loops without a seam, made into `d` by `fill`
+// at `rate` samples a second: what it adds past the end comes round to the
+// start (`add`), and its noise is filtered the whole way round (`round`).
 let seamless = (
   c: BaseAudioContext,
   secs: number,
   fill: (d: Float32Array, rate: number) => void,
+  rate = c.sampleRate,
 ) => {
-  let rate = c.sampleRate, n = Math.floor(secs * rate), x = rate >> 2
-  let d = new Float32Array(n + x)
+  let d = new Float32Array(Math.floor(secs * rate))
   fill(d, rate)
-  for (let i = 0; i < x; i++) d[i] = d[i] * (i / x) + d[n + i] * (1 - i / x)
-  let b = c.createBuffer(1, n, rate)
-  b.copyToChannel(d.subarray(0, n), 0)
+  let b = c.createBuffer(1, d.length, rate)
+  b.copyToChannel(d, 0)
   return b
+}
+
+// `f` of each of `len` samples, added into the loop `d` from sample `at`, and
+// round past its end to its start.
+let add = (
+  d: Float32Array,
+  at: number,
+  len: number,
+  f: (j: number) => number,
+) => {
+  let n = d.length, from = Math.floor(at)
+  for (let j = 0; j < len; j++) d[(from + j) % n] += f(j)
+}
+
+// Noise through the filter `f`, added all the way round the loop `d`. The
+// filter first hears the noise the loop ends with, so it comes into the
+// start as it leaves the end.
+let round = (d: Float32Array, rate: number, f: (x: number) => number) => {
+  let tail = Array.from({ length: Math.floor(rate / 10) }, white)
+  tail.forEach((x) => f(x))
+  let from = d.length - tail.length
+  for (let i = 0; i < d.length; i++) {
+    d[i] += f(i < from ? white() : tail[i - from])
+  }
+}
+
+// A band that rings, a sample at a time: `x` through a band round `f` Hz, `q`
+// sharp, which may move from one sample to the next (a state-variable
+// filter, twice over, so what is far from `f` falls away fast); a sound at
+// `f` comes through as loud as it went in.
+let band = (rate: number) => {
+  let a = 0, b = 0, c = 0, e = 0
+  return (x: number, f: number, q: number) => {
+    let k = 2 * Math.PI * f / rate
+    a += k * b
+    b += k * (x - a - b / q)
+    c += k * e
+    e += k * (b / q - c - e / q)
+    return e / q
+  }
+}
+
+// A wait for something that comes when it will, `mean` seconds on average.
+let gap = (mean: number) => -Math.log(1 - Math.random()) * mean
+
+// A bubble into `d` at sample `at`: a tone of `f` Hz ringing away over
+// `ring` seconds, and rising by `up` of itself each `ring` as it goes.
+let bubble = (
+  d: Float32Array,
+  rate: number,
+  at: number,
+  f: number,
+  ring: number,
+  up: number,
+  amp: number,
+) => {
+  let n = ring * rate, fade = Math.exp(-1 / n)
+  let w = 2 * Math.PI * f / rate, p = 0
+  add(d, at, n * 5, (j) => {
+    p += w * (1 + up * j / n)
+    return Math.sin(p) * (amp *= fade) * Math.min(1, j / 32)
+  })
+}
+
+// A lap at the shore into `d` at sample `at`, `amp` loud: a soft slap of
+// water, noise through a band that swells in quickly, then the wash running
+// back, lower and longer, gurgling a few bubbles as it goes.
+let lap = (d: Float32Array, rate: number, at: number, amp: number) => {
+  let f = 650 + Math.random() * 650, q = 1 + Math.random()
+  let rise = rate * (0.008 + Math.random() * 0.02)
+  let slap = rate * (0.02 + Math.random() * 0.03)
+  let wash = rate * (0.07 + Math.random() * 0.12)
+  let back = 0.2 + Math.random() * 0.3, pass = band(rate)
+  let a = (1 - back) * amp * 5, b = back * amp * 5
+  let fa = Math.exp(-1 / slap), fb = Math.exp(-1 / wash)
+  add(d, at, rise + wash * 3.5, (j) => {
+    if (j < rise) return pass(white() * (a + b) * (j / rise) ** 2, f, q)
+    return pass(
+      white() * ((a *= fa) + (b *= fb)),
+      f / (1 + (j - rise) / wash),
+      q,
+    )
+  })
+  for (let i = Math.floor(Math.random() * 5); i > 0; i--) {
+    let f = 500 + Math.random() * 1300, ring = 0.006 + Math.random() * 0.018
+    let when = at + rise + slap + Math.random() * wash * 1.5
+    bubble(d, rate, when, f, ring, 0.4, amp * (0.05 + Math.random() * 0.15))
+  }
+}
+
+// Laps into `d` one after another, `mean` seconds apart on average and
+// never nearer than `least`; mostly small, now and then one up to `amp`.
+let laps = (
+  d: Float32Array,
+  rate: number,
+  least: number,
+  mean: number,
+  amp: number,
+) => {
+  for (let t = gap(mean); t < d.length / rate; t += least + gap(mean)) {
+    lap(d, rate, t * rate, amp * (0.25 + Math.random() ** 2 * 0.75))
+  }
 }
 
 /** A fire, to loop: a low roar, and pops and snaps. */
 export let fire = (c: BaseAudioContext) =>
   seamless(c, 4, (d, rate) => {
     let low = 0
-    for (let i = 0; i < d.length; i++) {
-      low += (white() - low) * 0.03
-      d[i] = low
-    }
+    round(d, rate, (x) => low += (x - low) * 0.03)
     for (let k = 0; k < 70; k++) {
-      let at = Math.floor(Math.random() * (d.length - rate / 8))
-      let len = rate * (0.001 + Math.random() * 0.012)
+      let len = rate * (0.001 + Math.random() * 0.012),
+        fade = Math.exp(-1 / len)
       let amp = 0.12 + Math.random() ** 4 * 0.8
-      for (let j = 0; j < len * 5; j++) {
-        d[at + j] += white() * amp * Math.exp(-j / len)
-      }
+      add(d, Math.random() * d.length, len * 5, () => white() * (amp *= fade))
     }
   })
 
-/** Water lapping at a shore, to loop: a low wash that swells and falls, and
- * a drip now and then. */
+// Water holds little above a few thousand hertz, so it is made at half the
+// context's rate: half the work and half the memory, played at the context's
+// own rate all the same.
+let wet = (c: BaseAudioContext) => c.sampleRate / 2
+
+/** Still water at its shore, to loop: small soft laps that come when they
+ * will, each a slap and a wash back with a bubble or two in it. Little low
+ * in it, and no swell. */
 export let water = (c: BaseAudioContext) =>
-  seamless(c, 8, (d, rate) => {
-    let b = 0
-    for (let i = 0; i < d.length; i++) {
-      let t = i / rate
-      b = (b + 0.02 * white()) / 1.02
-      d[i] = b * 3 *
-        (0.6 + 0.25 * Math.sin(t * Math.PI / 2) +
-          0.15 * Math.sin(t * Math.PI * 1.25 + 1))
-    }
-    for (let k = 0; k < 10; k++) {
-      let at = Math.floor(Math.random() * (d.length - rate / 4))
-      let f = 500 + Math.random() * 900
-      for (let j = 0; j < rate / 8; j++) {
-        let t = j / rate
-        d[at + j] += Math.sin(Math.PI * 2 * f * t * (1 + t * 8)) * 0.1 *
-          Math.exp(-t * 40)
+  seamless(c, 12, (d, rate) => laps(d, rate, 0.15, 0.45, 1), wet(c))
+
+/** A marsh, to loop: its still water lapping, softer and seldom, gas
+ * bubbling up through the mud a few blubs at a time, and a plop now and
+ * then. Its frogs are `croak`. */
+export let marsh = (c: BaseAudioContext) =>
+  seamless(c, 14, (d, rate) => {
+    let secs = d.length / rate
+    laps(d, rate, 0.3, 1.1, 0.6)
+    for (let t = gap(1.5); t < secs; t += 0.6 + gap(2)) {
+      let f = 170 + Math.random() * 230
+      for (let i = 2 + Math.random() * 4, s = t; i >= 1; i--) {
+        let ring = 0.025 + Math.random() * 0.02
+        bubble(d, rate, s * rate, vary(f), ring, 0.5, 0.2)
+        s += 0.06 + Math.random() * 0.2
       }
     }
+    for (let t = gap(2.5); t < secs; t += 1 + gap(2.5)) {
+      let amp = 0.15, fade = Math.exp(-1 / (0.004 * rate))
+      add(d, t * rate, 0.02 * rate, () => white() * (amp *= fade))
+      bubble(d, rate, t * rate, 350 + Math.random() * 450, 0.035, 1.5, 0.35)
+    }
+  }, wet(c))
+
+// A buzz: pulses `rate` times a second through the ring of a throat at
+// `ring` Hz, from `delay` on, swelling in, held, and let go `dur` seconds
+// after it began.
+let buzz = (
+  o: AudioNode,
+  rate: number,
+  ring: number,
+  dur: number,
+  gain: number,
+  delay: number,
+) => {
+  let c = o.context, at = c.currentTime + delay
+  let s = new OscillatorNode(c, { type: 'sawtooth', frequency: rate })
+  let f = new BiquadFilterNode(c, { type: 'bandpass', frequency: ring, Q: 6 })
+  let g = c.createGain()
+  g.gain.setValueAtTime(0.0001, at)
+  g.gain.exponentialRampToValueAtTime(gain, at + dur / 4)
+  g.gain.setValueAtTime(gain, at + dur * 0.6)
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+  s.connect(f).connect(g).connect(o)
+  s.start(at)
+  s.stop(at + dur + 0.02)
+}
+
+/** A frog in a marsh: two or three croaks, each a rasp of pulses through
+ * the ring of its throat, the last a little lower; now and then a smaller
+ * frog, higher and quicker. */
+export let croak = () => {
+  let small = Math.random() < 0.3
+  let ring = vary(small ? 1300 : 650), rate = vary(small ? 70 : 45)
+  let n = 2 + Math.floor(Math.random() * 2), dur = small ? 0.09 : 0.16
+  return voice(n * (dur + 0.08) + 0.1, 0.08, (o) => {
+    for (let i = 0; i < n; i++) {
+      let low = i == n - 1 ? 0.9 : 1
+      buzz(o, rate * low, ring * low, dur, 0.5, i * (dur + 0.08))
+    }
   })
+}

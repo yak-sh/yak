@@ -6,16 +6,16 @@
 // source follows them from frame to frame; at a point, for a find or the work
 // at a node; or nowhere, straight to the ears, for what is only the player's
 // own news: the arpeggio of a level and the chime of a quest. The hearth
-// crackles and the lakes lap as sounds the level keeps making (`keep`). A
-// voice from another player will be one more kept sound: a
-// MediaStreamAudioSourceNode made from their stream and kept at their hero's
-// eid follows them as their footsteps do.
+// crackles and the water laps as sounds the level keeps making (`keep`), and
+// a marsh's frogs call now and then. A voice from another player will be one
+// more kept sound: a MediaStreamAudioSourceNode made from their stream and
+// kept at their hero's eid follows them as their footsteps do.
 //
 // Silent until the player first touches a key or the screen, as browsers
 // require, and silent for good once muted.
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
-import { type Ear, ear, FALLOFF, hear, QUIET } from './ears.ts'
+import { type Ear, ear, FALLOFF, hear, NEAR, QUIET } from './ears.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
@@ -42,8 +42,17 @@ type Source = {
 
 // How long a source is kept after its last sound: HRTF rings a moment.
 let TAIL = 0.5
-// How loud each sound a level keeps making is at its source.
-let LOOP = { fire: 0.45, water: 0.35 }
+// How loud each sound a level keeps making is at its source, and how it
+// falls away (ears.ts): the fire as every sound does, and water fast, so it
+// is heard at its edge and not across the level.
+let LOOP = {
+  fire: { loud: 0.45, falloff: FALLOFF },
+  water: { loud: 0.12, falloff: NEAR },
+  marsh: { loud: 0.15, falloff: NEAR },
+}
+// A frog calls from a marsh about `every` so many seconds, from somewhere
+// `within` so many metres of the water nearest the ears.
+let FROG = { every: 7, within: 5 }
 
 let ctx: AudioContext | null = null
 // The last stop before the speakers: every source plays into it.
@@ -79,7 +88,11 @@ let wake = () => {
     limit.connect(ctx.destination)
     out = limit
     speakers = ctx.destination
-    loops = { fire: voices.fire(ctx), water: voices.water(ctx) }
+    loops = {
+      fire: voices.fire(ctx),
+      water: voices.water(ctx),
+      marsh: voices.marsh(ctx),
+    }
   } catch {
     ctx = null
   }
@@ -120,8 +133,13 @@ let listenAt = (l: AudioListener, e: Ear) => {
   ], [...e.at, ...e.forward, ...e.up])
 }
 
-let panner = (id: string, at: Vec3, fixed: boolean) => {
-  let pan = new PannerNode(ctx!, FALLOFF)
+let panner = (
+  id: string,
+  at: Vec3,
+  fixed: boolean,
+  falloff: PannerOptions = FALLOFF,
+) => {
+  let pan = new PannerNode(ctx!, falloff)
   move(pan, at)
   pan.connect(out!)
   let s: Source = { pan, until: 0, fixed }
@@ -149,12 +167,13 @@ let end = (s: Source) => {
   s.until = ctx!.currentTime + 1 + TAIL
 }
 
-/** Keep a sound going at `id`, where the frames put it, until it is let go
- * by what this returns, or what it is at is gone. */
-let keep = (id: string, sound: Keep) => {
+/** Keep a sound going at `id`, where the frames put it, falling away as
+ * `falloff` says, until it is let go by what this returns, or what it is at
+ * is gone. */
+let keep = (id: string, sound: Keep, falloff: PannerOptions = FALLOFF) => {
   let at = spots.get(id)
   if (!ctx || !at) return () => {}
-  let s = sources.get(id) ?? panner(id, at, false)
+  let s = sources.get(id) ?? panner(id, at, false, falloff)
   if (s.end) end(s)
   let stop = sound(ctx, s.pan)
   s.end = stop
@@ -170,7 +189,7 @@ let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
   let s = new AudioBufferSourceNode(c, { buffer: b, loop: true })
   let g = c.createGain()
   g.gain.setValueAtTime(0, c.currentTime)
-  g.gain.linearRampToValueAtTime(LOOP[kind], c.currentTime + 1.5)
+  g.gain.linearRampToValueAtTime(LOOP[kind].loud, c.currentTime + 1.5)
   s.connect(g).connect(into)
   s.start(c.currentTime, Math.random() * b.duration)
   return () => {
@@ -249,7 +268,14 @@ export let sound = {
       }
     }
     for (let a of around) {
-      if (!sources.get(a.id)?.end) keep(a.id, loop(a.kind))
+      if (!sources.get(a.id)?.end) {
+        keep(a.id, loop(a.kind), LOOP[a.kind].falloff)
+      }
+    }
+    let bog = around.find((a) => a.kind == 'marsh')
+    if (bog && Math.random() < dt / FROG.every) {
+      let [x, y, z] = bog.at, off = () => (Math.random() * 2 - 1) * FROG.within
+      make([x + off(), y, z + off()], voices.croak())
     }
     if (f && me) heard(f, me, dt).forEach(noisy)
   },

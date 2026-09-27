@@ -3,8 +3,9 @@
 // the other players, and the creatures' cries, a growl as each bite winds up
 // and a call now and then while they wander. And where each thing that makes
 // a sound stands: the heroes and creatures by their eids, the hearth, and the
-// water of each lake. sound.ts makes the sounds.
+// water nearest the ears. sound.ts makes the sounds.
 import { BEASTS } from './beasts.ts'
+import { isA } from './features.ts'
 import type { Spot } from './levels.ts'
 import type { Mob, Other, Vec3 } from './play.ts'
 import type { Body } from './sim.ts'
@@ -45,6 +46,24 @@ let LEAP = 4
 // How high above its feet a hero is heard, in metres; a creature is heard
 // from half its size up.
 let HERO = 0.8
+// How far from the ears water is looked for, in metres: further off it is
+// not heard (ears.ts `NEAR`).
+let REACH = 24
+// Every step from the ears water is looked for at, a metre apart out to
+// REACH, nearest first.
+let AROUND = Array.from({ length: (2 * REACH + 1) ** 2 }, (_, j): Spot => [
+  j % (2 * REACH + 1) - REACH,
+  Math.floor(j / (2 * REACH + 1)) - REACH,
+]).filter(([x, z]) => Math.hypot(x, z) <= REACH)
+  .sort(([a, b], [c, d]) => Math.hypot(a, b) - Math.hypot(c, d))
+// What a level's water sounds like, by the first of these kinds of place it
+// has: a marsh's own, else still water where it has a lake or a pool. The
+// sea is still to be given a voice.
+let WATERS: [string, 'water' | 'marsh'][] = [
+  ['marsh', 'marsh'],
+  ['lake', 'water'],
+  ['oasis', 'water'],
+]
 
 /** A listener to the frames: each call hears one, and says what was heard
  * since the last.
@@ -137,41 +156,59 @@ export let where = (f: Scene, me: string) => {
   return at
 }
 
-/** Where a lake is heard from by ears at `ear`: the nearest of its water to
- * them, out from its middle toward them.
+/** Where the water nearest ears at `ear` is heard from: the nearest of it
+ * within REACH of them, or none.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { flat, WATER } from './terrain.ts'
- * // Dry ground, and a pool 8 m across round (60, 60).
- * let v = flat(6)
+ * // Dry ground, and a pool 8 m round (60, 60).
+ * let v = flat(6, [], [], 1)
  * for (let i = 0; i < v.cols; i++) {
  *   for (let k = 0; k < v.cols; k++) {
- *     let d = Math.hypot((i + 0.5) * v.voxel - 60, (k + 0.5) * v.voxel - 60)
- *     if (d < 8) v.h[i + k * v.cols] = 12
+ *     if (Math.hypot(i + 0.5 - 60, k + 0.5 - 60) < 8) v.h[i + k * v.cols] = 3
  *   }
  * }
  * // Heard from the east, it is at its east shore.
- * assertEquals(shore(v, [60, 60], [100, 12, 60]), [67.5, WATER, 60])
+ * assertEquals(shore(v, [70, 12, 60]), [67, WATER, 60])
  * // Standing in it, it is all round.
- * assertEquals(shore(v, [60, 60], [62, 12, 60]), [62, WATER, 60])
+ * assertEquals(shore(v, [62, 12, 60]), [62, WATER, 60])
+ * // Further off, it is not heard.
+ * assertEquals(shore(v, [100, 12, 60]), null)
  * ```
  */
-export let shore = (v: Vale, [x, z]: Spot, ear: Vec3): Vec3 => {
-  let d = Math.hypot(ear[0] - x, ear[2] - z)
-  let [dx, dz] = d ? [(ear[0] - x) / d, (ear[2] - z) / d] : [0, 0]
-  let r = 0
-  for (let s = 0.5; s <= d; s += 0.5) {
-    if (groundAt(v, x + dx * s, z + dz * s) >= WATER) break
-    r = s
+export let shore = (v: Vale, [x, , z]: Vec3): Vec3 | null => {
+  for (let [i, k] of AROUND) {
+    if (groundAt(v, x + i, z + k) < WATER) return [x + i, WATER, z + k]
   }
-  return [x + dx * r, WATER, z + dz * r]
+  return null
 }
 
 /** The sounds a level keeps making, by an id of their own, and where each is
- * heard from by ears at `ear`: the fire in its hearth, and each lake. */
+ * heard from by ears at `ear`: the fire in its hearth, and the water nearest
+ * them, a marsh's or still water's by the kinds of place the level has.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { LEVELS } from './levels.ts'
+ * import { flat } from './terrain.ts'
+ * // A pool 8 m round (60, 60), in the vale and in a marsh.
+ * let v = flat(6, [], [], 1)
+ * for (let i = 0; i < v.cols; i++) {
+ *   for (let k = 0; k < v.cols; k++) {
+ *     if (Math.hypot(i + 0.5 - 60, k + 0.5 - 60) < 8) v.h[i + k * v.cols] = 3
+ *   }
+ * }
+ * let heard = (level: string, x: number) =>
+ *   ambience({ ...v, level: LEVELS[level] }, [x, 12, 60]).map((a) => a.kind)
+ * assertEquals(heard('mossvale', 70), ['water'])
+ * assertEquals(heard('reedmarsh', 70), ['marsh'])
+ * // Far from it, it is not heard.
+ * assertEquals(heard('mossvale', 100), [])
+ * ```
+ */
 export let ambience = (v: Vale, ear: Vec3) => {
-  let out: { id: string; kind: 'fire' | 'water'; at: Vec3 }[] = []
+  let out: { id: string; kind: 'fire' | 'water' | 'marsh'; at: Vec3 }[] = []
   if (v.hearth) {
     let [x, z] = v.hearth
     out.push({
@@ -180,9 +217,9 @@ export let ambience = (v: Vale, ear: Vec3) => {
       at: [x, groundAt(v, x, z) + 0.5, z],
     })
   }
-  for (let [name, p] of Object.entries(v.level.places)) {
-    if (p.kind != 'lake') continue
-    out.push({ id: `lake:${name}`, kind: 'water', at: shore(v, p.at, ear) })
-  }
+  let places = Object.values(v.level.places)
+  let kind = WATERS.find(([k]) => places.some((p) => isA(p.kind, k)))?.[1]
+  let at = kind && shore(v, ear)
+  if (kind && at) out.push({ id: kind, kind, at })
   return out
 }

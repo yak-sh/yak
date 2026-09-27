@@ -25,6 +25,15 @@ export let FALLOFF = {
   rolloffFactor: 1,
 } satisfies PannerOptions
 
+/** How water is heard: at its own loudness out to `refDistance`, as every
+ * source is, but beyond that falling away with the square of the distance,
+ * so a lake is heard at its edge and gone some twenty metres off. */
+export let NEAR = {
+  ...FALLOFF,
+  distanceModel: 'exponential',
+  rolloffFactor: 2,
+} satisfies PannerOptions
+
 /** Below this loudness at the ears a sound is not made at all: a footstep
  * dies away within some 25 m, a blow carries across a level. */
 export let QUIET = 0.004
