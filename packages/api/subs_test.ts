@@ -162,6 +162,39 @@ Deno.test('a windowed query re-reads its whole answer', () => {
   assertEquals(moved.gone, ['b1'])
 })
 
+Deno.test('a windowed query ignores writes outside its fixed owner', () => {
+  let g = shop()
+  g.apply([
+    { entity: { eid: 'b1' }, book: { price: 12 } },
+    { entity: { eid: 'b2' }, book: { price: 15 } },
+    { entity: { eid: 'r1' }, review: { book: 'b1', stars: 3 } },
+    { entity: { eid: 'r2' }, review: { book: 'b2', stars: 4 } },
+  ])
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(String(q)), g.read(q, o)),
+  }
+  let subs = subscriptions(spy)
+  let { to, take } = ear()
+  let query = '.review.book=b1&.order=-review.stars&.limit=1'
+  subs.open(to, 'reviews', query)
+  assertEquals(ids(take()[0]), ['r1'])
+  reads.length = 0
+
+  g.apply([{ entity: { eid: 'r2' }, review: { stars: 5 } }])
+  assertEquals(reads, [])
+  assertEquals(take(), [])
+
+  g.apply([{ entity: { eid: 'r2' }, review: { book: 'b1' } }])
+  assertEquals(ids(take()[0]), ['r2'])
+
+  g.apply([{ entity: { eid: 'r2' }, review: { book: 'b2' } }])
+  let [left] = take()
+  assertEquals(ids(left), ['r1'])
+  assertEquals(left.gone, ['r2'])
+})
+
 // The shop again, where a book also counts its reviews: a computed property
 // whose value lives on other entities, and says so with `reads`.
 let rated = (reads = ['review']): Graph => {

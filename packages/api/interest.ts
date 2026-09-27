@@ -12,6 +12,8 @@
 //   far   components read on other entities whose owner cannot be located.
 //   via   components whose reference names the entity with the computed value.
 //         An entry changing `session.status`, for example, names its session.
+//   fixed exact reference values every member has, which exclude unrelated
+//         writes from a window's whole-answer refresh.
 //
 // `null` is a query this cannot place — a text term, a neighbour, a walk, a
 // computed property that declares no `reads` — and every commit reaches it.
@@ -25,6 +27,7 @@ export type Interest = {
   near: Set<string>
   far: Set<string>
   via: Map<string, string>
+  fixed: { comp: string; prop: string; value: string }[]
   whole: boolean
 }
 
@@ -92,7 +95,20 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
         ? [v.aim(c.path[0], true)[0].comp]
         : []
     )
-    return { own, near, far, via, whole }
+    // An exact reference at the top level of an AND belongs to every
+    // member. It can rule out a changed nonmember before a window re-reads.
+    let fixed = ast.clauses.flatMap((c) => {
+      if (
+        c.kind != 'pred' || c.path.length != 2 || c.op != '=' ||
+        c.value?.kind != 'scalar' || !c.value.raw ||
+        v.assoc(c.path[0])
+      ) return []
+      let [hop, ...more] = v.aim(c.path.join('.'))
+      return !more.length && v.prop(hop.comp, hop.prop)?.category == 'ref'
+        ? [{ ...hop, value: c.value.raw }]
+        : []
+    })
+    return { own, near, far, via, fixed, whole }
   } catch {
     return null
   }

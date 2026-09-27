@@ -203,7 +203,14 @@ let affected = (sub: Sub, touch: Touch): Set<Eid> | null | undefined => {
     if ([...i.far].some((c) => t.named.has(c) || t.worn!.has(c))) {
       return null
     }
-    if (sub.members.has(eid) || cares(i, t.named, t.worn)) ids.add(eid)
+    if (
+      sub.members.has(eid) ||
+      (cares(i, t.named, t.worn) &&
+        i.fixed.every(({ comp, prop, value }) =>
+          (t.bundle?.[comp] as Record<string, unknown> | undefined)
+            ?.[prop] === value
+        ))
+    ) ids.add(eid)
     for (let [comp, prop] of i.via) {
       if (!t.named.has(comp) && !t.worn.has(comp)) continue
       let owner = (t.bundle?.[comp] as Record<string, unknown> | undefined)
