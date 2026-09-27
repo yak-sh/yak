@@ -20,6 +20,7 @@ import { mem } from '../sqlite/testing.ts'
 import { effectDoc, effects } from '@yaks/effects'
 import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { taskDoc } from '@yaks/task/vocab'
+import { processDoc } from '@yaks/process'
 import { type Model, modelDoc, type Request } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
@@ -36,7 +37,14 @@ let worker: VocabDoc = {
     worker: { component: true, type: 'object', properties: {} },
   },
 }
-let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, effectDoc, worker])
+let vocab = loadVocab([
+  sessionDoc,
+  toolsDoc,
+  modelDoc,
+  effectDoc,
+  processDoc,
+  worker,
+])
 
 let P = identityEid('provider', ['fake'])
 let CLI = identityEid('provider', ['claude'])
@@ -372,6 +380,21 @@ Deno.test('a transcript ending releases its claims through the effects pool', as
     entry: { session: 's1' },
     stop: {},
   }])
+  await p.fx.idle()
+  assertEquals((await p.g.get(['work']))[0].claim, undefined)
+})
+
+Deno.test('a managed transcript keeps its claim until its process exits', async () => {
+  let p = proc(store(), 'w1', fake().model)
+  await p.fx.work(p.g)
+  await p.g.apply([
+    { entity: { eid: 's1' }, session: {}, process: { pid: 123 } },
+    { entity: { eid: 'work' }, claim: { session: 's1' } },
+    { entity: { eid: 'end' }, entry: { session: 's1' }, stop: {} },
+  ])
+  await p.fx.idle()
+  assertEquals(((await p.g.get(['work']))[0].claim as Comp)?.session, 's1')
+  await p.g.apply([{ entity: { eid: 's1' }, exit: { code: 143 } }])
   await p.fx.idle()
   assertEquals((await p.g.get(['work']))[0].claim, undefined)
 })

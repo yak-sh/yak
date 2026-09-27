@@ -358,7 +358,7 @@
     "stop": {
       "component": true,
       "type": "object",
-      "description": "a marker in the transcript: the runner does nothing after it",
+      "description": "on an entry, a marker ending the transcript; on a managed session, a request to stop its process",
       "properties": {}
     },
     "using": {
@@ -604,7 +604,7 @@
     },
     "session_release": {
       "effect": true,
-      "created": ["stop", "error", "exception"],
+      "created": ["stop", "error", "exception", "exit"],
       "sweep": ".claim",
       "description": "release claims held by a transcript that stopped or failed; a worker also finds claims left by runs that ended while no worker was serving effects"
     }

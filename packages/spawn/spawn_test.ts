@@ -224,6 +224,23 @@ Deno.test('a stop on the session reaches the agent', async () => {
   }
 })
 
+Deno.test('a stop committed with a request prevents its launch', async () => {
+  let g = tracked()
+  let where = dir()
+  watching(g, { dir: where, poll: 20 })
+  try {
+    await g.g.apply([
+      ...asking('S1', 'E1', 'linger here'),
+      { entity: { eid: 'S1' }, stop: {} },
+    ])
+    await g.fx.idle()
+    let [row] = await g.g.get(['S1'])
+    assertEquals(comp(row, 'process'), undefined)
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})
+
 Deno.test('a command passing through adopts no run', async () => {
   // Its tails would outlive the lease it gives back on the way out, so it
   // does not so much as look.

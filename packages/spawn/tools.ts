@@ -1,12 +1,12 @@
-// The implementations of the three tools declared with `tool: true` in
-// ./vocab.json, exported as `@yaks/spawn/tools`: hand an agent a task, wait for
-// it to finish, and read what it has said so far.
+// The implementations of the tools declared with `tool: true` in
+// ./vocab.json, exported as `@yaks/spawn/tools`: hand an agent a task, stop it,
+// wait for it to finish, and read what it has said so far.
 //
-// Spawn writes to the graph itself. Every other tool here returns rows and lets
-// the tool runner commit them, but the child process does not exist until the
+// Spawn and stop write to the graph themselves. Wait and peek return rows for
+// the tool runner to commit, but the child process does not exist until the
 // transaction has committed, because ./effects.ts runs after the commit. So a
 // tool that only returned the rows could not then watch what it started. This
-// one calls `graph.apply()` itself, signed as whoever asked, and returns the
+// spawn call uses `graph.apply()`, signed as whoever asked, and returns the
 // session's id — or, with `wait`, how the run ended. @yaks/process's `shell`
 // tool works the same way, for the same reason.
 //
@@ -232,6 +232,25 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
         call,
         await watched(graph, row.entity.eid, patience(args.timeout)),
       )]
+    },
+
+    session_stop: async (call, graph): Promise<Bundle[]> => {
+      let row = await sessionAt(call, graph)
+      let name = human(graph.vocab)(row)
+      if (row.stop) return [said(call, `${name} already asked to stop`)]
+      if (!row[PROCESS]) {
+        let entries = await entriesOf(graph, row.entity.eid)
+        let using = entries.find((b) => b.using)
+        let provider = await one(graph, str(comp(using, 'using')?.provider))
+        if (comp(provider, 'provider')?.transport != 'process') {
+          throw new CallError('session', `not a managed session: ${name}`)
+        }
+      }
+      await graph.apply(signed([{
+        entity: row.entity,
+        stop: {},
+      }], who(call)))
+      return [said(call, `${name} asked to stop`)]
     },
 
     session_peek: async (call, graph): Promise<Bundle[]> => {

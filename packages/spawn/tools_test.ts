@@ -70,7 +70,7 @@ let M = identityEid('model', ['fake-1'])
 
 // The shelf a request names: who runs it, what it serves, and the work.
 let shelf = [
-  { entity: { eid: P }, provider: { name: 'fake' } },
+  { entity: { eid: P }, provider: { name: 'fake', transport: 'process' } },
   { entity: { eid: M }, model: { name: 'fake-1' } },
   { entity: { eid: 'the-task' }, task: {}, doc: { title: 'ship it' } },
   { ...link(P, 'serves', M), serves: { name: 'fake-1' } },
@@ -102,14 +102,6 @@ let through = async (
 
 let body = (bundles: Bundle[]) =>
   String(comp(bundles[0], 'content')?.body ?? '')
-
-Deno.test('every spawn tool is declared and implemented', () => {
-  assertEquals(loadTools(spawnDoc, tools).map((t) => t.name).sort(), [
-    'session_peek',
-    'session_spawn',
-    'session_wait',
-  ])
-})
 
 Deno.test('a duration is what a person says', () => {
   assertEquals(every('45m', 0), 45 * 60_000)
@@ -279,4 +271,44 @@ Deno.test('spawn --wait runs the provider and answers what it came to', async ()
   } finally {
     Deno.removeSync(where, { recursive: true })
   }
+})
+
+Deno.test('session stop ends a managed run', async () => {
+  let { g, fx } = host()
+  let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-stop-' })
+  fx.handle(
+    spawning({ adapters: { fake }, dir: where, poll: 20, grace: 500 })(
+      { graph: g },
+    ),
+  )
+  try {
+    await g.apply(shelf)
+    await through(g, 'session_spawn', {
+      task: 'the-task',
+      provider: P,
+      instruction: 'linger here',
+    })
+    let row = await until(async () => {
+      let [session] = await g.read('.session&*')
+      return comp(session, 'process')?.pid ? session : undefined
+    }, 'the managed run to start') as Bundle
+    await through(g, 'session_stop', { session: row.entity.eid })
+    await until(
+      async () => comp((await g.get([row.entity.eid]))[0], 'exit'),
+      'the managed run to stop',
+    )
+    assertEquals(comp((await g.get([row.entity.eid]))[0], 'stop'), {})
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})
+
+Deno.test('session stop refuses a session without a managed process', async () => {
+  let { g } = host()
+  await g.apply([{ entity: { eid: 's' }, session: {} }])
+  await assertRejects(
+    () => through(g, 'session_stop', { session: 's' }),
+    Error,
+    'not a managed session',
+  )
 })

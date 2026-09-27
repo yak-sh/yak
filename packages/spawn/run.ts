@@ -317,6 +317,7 @@ export let start = async (
   session: string,
   o: Opts = {},
 ): Promise<Run | null> => {
+  if ((await one(g, session))?.stop) return null
   let job = await asked(g, session)
   if (!job) return null
   let adapter = (o.adapters ?? known)[job.provider]
@@ -334,6 +335,9 @@ export let start = async (
     eid: session, // one entity: the transcript is the thing running
     stream: false, // the lines are entries, not anonymous output
   })
+  // A stop can land while the wrapper starts, before its process row exists.
+  // The stop effect had no pid then; now that launch has stamped one, answer it.
+  if ((await one(g, session))?.stop) down(g, session, o).catch(told(o))
   follow(g, session, answering(adapter.read, job.ask), o).catch(told(o))
   return run
 }

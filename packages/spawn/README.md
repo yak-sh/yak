@@ -92,22 +92,25 @@ read `AGENTS.md` whole, since by default it reads only the first 32 KiB.
 
 ## CLI and tool use
 
-<a id="the-three-tools"></a>
+<a id="the-session-tools"></a>
 
 ```sh
 yak session spawn T-37667 --provider claude --model opus --effort high --wait
+yak session stop S-4211
 yak session wait S-4211 --timeout 45m
 yak session peek S-4211 -n 20
 ```
 
-The MCP names are `session_spawn`, `session_wait`, and `session_peek`. `spawn`
-creates the session, first entry, and claim on the task. It calls
-`graph.apply()` itself because the post-commit effect must start the process
-before `--wait` can monitor it. `wait` polls the graph. A session with a
+The MCP names are `session_spawn`, `session_stop`, `session_wait`, and
+`session_peek`. `spawn` creates the session, first entry, and claim on the task.
+It calls `graph.apply()` itself because the post-commit effect must start the
+process before `--wait` can monitor it. `wait` polls the graph. A session with a
 `process` ends when that process exits, even if its transcript already has a
 `stop`; a session without a process ends when its transcript reaches `stopped`
 or `failed`. It reports the brief and exit code, and reaching its timeout leaves
-the run active. `peek` renders recent entries from the graph.
+the run active. `stop` writes the stop request on the session entity; the
+process receives SIGTERM, then SIGKILL if it stays up. `peek` renders recent
+entries from the graph.
 
 ## Configuration
 

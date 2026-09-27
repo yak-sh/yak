@@ -385,8 +385,12 @@ export let answer = async (
 // that another writer handed to a different session after this read.
 let release = async (g: Graph, e: Event): Promise<void> => {
   let b = await one(g, e.entity.eid)
-  let session = comp(b, 'entry')?.session ?? comp(b, CLAIM)?.session
+  let session = b?.session
+    ? b.entity.eid
+    : comp(b, 'entry')?.session ?? comp(b, CLAIM)?.session
   if (typeof session != 'string') return
+  let row = await one(g, session)
+  if (row?.process && !row.exit) return
   let status = statusOf(await transcript(g, session))
   if (status != 'stopped' && status != 'failed') return
   for (let held of await g.read(`.${CLAIM}.session=${session}&*`)) {

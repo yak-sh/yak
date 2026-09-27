@@ -54,6 +54,25 @@
         }
       }
     },
+    "session_stop": {
+      "tool": true,
+      "noun": "session",
+      "verb": "stop",
+      "title": "Stop a managed session",
+      "description": "Ask a managed session's process to stop. Writes stop on the session itself, so its process receives SIGTERM and then SIGKILL if needed. The process exit is recorded separately; use session wait to see when it has ended. Returns text in content.body.",
+      "input": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "description": "the managed session to stop; pass its id or registered name"
+        }
+      },
+      "required": ["session"],
+      "options": {
+        "positional": ["session"]
+      },
+      "idempotent": true
+    },
     "session_wait": {
       "tool": true,
       "noun": "session",
