@@ -55,6 +55,8 @@ type Hit = {
   title?: string
   snippet: string
   source: 'text' | 'meaning' | 'both'
+  session?: string
+  speaker?: 'input' | 'output'
 }
 
 let hitOf = (b: Bundle): Hit | null => {
@@ -74,6 +76,12 @@ let hitOf = (b: Bundle): Hit | null => {
       : h.source == 'meaning'
       ? 'meaning'
       : 'both',
+    session: typeof h.session == 'string' ? h.session : undefined,
+    speaker: h.speaker == 'input'
+      ? 'input'
+      : h.speaker == 'output'
+      ? 'output'
+      : undefined,
   }
 }
 
@@ -102,6 +110,9 @@ let hit = <Node>(
     s.id(b),
     title ? ` ${title}` : '',
     ` · ${kind}`,
+    found.session && found.speaker
+      ? ` ${found.speaker} in session ${short(found.session)}`
+      : '',
     found.source == 'meaning' ? ' (meaning)' : '',
     snippet ? ` — ${snippet}` : '',
   )

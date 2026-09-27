@@ -83,6 +83,27 @@ Deno.test('search hits show kind, title and marked excerpt even for one hit', as
   assertEquals(lines, [line])
 })
 
+Deno.test('a transcript search hit names its speaker and session', () => {
+  let entry = {
+    entity: { eid: '33333333-3333-4333-8333-333333333333' },
+    hit: {
+      kind: 'entry',
+      snippet: '\x01agreed\x02',
+      source: 'text',
+      session: '44444444-4444-4444-8444-444444444444',
+      speaker: 'input',
+    },
+  }
+  assertEquals(
+    said(entry),
+    '#3333333333 · entry input in session #4444444444 — *agreed*',
+  )
+  assertEquals(
+    said({ ...entry, hit: { ...entry.hit, speaker: 'output' } }),
+    '#3333333333 · entry output in session #4444444444 — *agreed*',
+  )
+})
+
 Deno.test('search excerpts strip raw controls and compact multiple kinds', () => {
   let a = {
     entity: t9.entity,

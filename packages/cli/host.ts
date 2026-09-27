@@ -1017,6 +1017,13 @@ export let compose = async (
               title,
               snippet: h.snippet,
               source: h.source,
+              ...(b.entry && typeof b.entry == 'object' &&
+                  'session' in b.entry && typeof b.entry.session == 'string'
+                ? {
+                  session: b.entry.session,
+                  speaker: b.output ? 'output' : 'input',
+                }
+                : {}),
             },
           }]
         })
