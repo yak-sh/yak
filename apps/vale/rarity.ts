@@ -163,13 +163,15 @@ export type Stat = 'force' | 'luck' | 'hp' | 'armour' | 'speed' | 'haste'
 export let STATS: Stat[] = ['force', 'luck', 'hp', 'armour', 'speed', 'haste']
 
 /** Each bonus a piece may roll: which slots it rolls on, the most it adds to
- * an uncommon piece of tier `t`, how it reads and with which glyph, and the
- * words a piece's name takes from it, before and after. */
+ * an uncommon piece of tier `t`, how its number is written and the word it
+ * is a number of, with which glyph, and the words a piece's name takes from
+ * it, before and after. */
 export let BONUSES: Record<Stat, {
   on: Slot[]
   most: (t: number) => number
   whole?: boolean
-  says: (n: number) => string
+  shows: (n: number) => string
+  word: string
   icon: Glyph
   before: string
   after: string
@@ -177,7 +179,8 @@ export let BONUSES: Record<Stat, {
   force: {
     on: ['main', 'off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 0.02 + 0.01 * t,
-    says: (n) => `+${Math.round(n * 100)}% harder blows`,
+    shows: (n) => `+${Math.round(n * 100)}%`,
+    word: 'harder blows',
     icon: 'blow',
     before: 'Fierce',
     after: 'of Might',
@@ -185,7 +188,8 @@ export let BONUSES: Record<Stat, {
   luck: {
     on: ['main', 'off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 0.015 + 0.005 * t,
-    says: (n) => `+${Math.round(n * 100)}% great blows`,
+    shows: (n) => `+${Math.round(n * 100)}%`,
+    word: 'great blows',
     icon: 'luck',
     before: 'Lucky',
     after: 'of Fortune',
@@ -194,7 +198,8 @@ export let BONUSES: Record<Stat, {
     on: ['main', 'off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 4 + 4 * t,
     whole: true,
-    says: (n) => `+${n} health`,
+    shows: (n) => `+${n}`,
+    word: 'health',
     icon: 'health',
     before: 'Stout',
     after: 'of Vigour',
@@ -203,7 +208,8 @@ export let BONUSES: Record<Stat, {
     on: ['off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 1 + 0.6 * t,
     whole: true,
-    says: (n) => `+${n} armour`,
+    shows: (n) => `+${n}`,
+    word: 'armour',
     icon: 'armour',
     before: 'Sturdy',
     after: 'of Warding',
@@ -211,7 +217,8 @@ export let BONUSES: Record<Stat, {
   speed: {
     on: ['body', 'feet', 'trinket'],
     most: (t) => 0.02 + 0.006 * t,
-    says: (n) => `+${Math.round(n * 100)}% speed`,
+    shows: (n) => `+${Math.round(n * 100)}%`,
+    word: 'speed',
     icon: 'speed',
     before: 'Fleet',
     after: 'of the Hare',
@@ -219,7 +226,8 @@ export let BONUSES: Record<Stat, {
   haste: {
     on: ['main', 'off', 'trinket'],
     most: (t) => 0.02 + 0.008 * t,
-    says: (n) => `+${Math.round(n * 100)}% quicker blows`,
+    shows: (n) => `+${Math.round(n * 100)}%`,
+    word: 'quicker blows',
     icon: 'pace',
     before: 'Quick',
     after: 'of Haste',

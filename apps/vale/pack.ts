@@ -19,6 +19,7 @@ import {
   LINES,
   numbers,
   rolled,
+  said,
   solo,
   sortLine,
   trying,
@@ -260,12 +261,10 @@ export let pack = (panel: Page, acts: Acts) => {
         esc(t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'))
       }</span>${pips(t)}</button>`
     }).join('')
-    let stats = LINES.filter(([k]) => (k != 'speed' && k != 'twin') || n[k])
-      .map((
-        [k, mark, say],
-      ) => `<span class=Pack_Num>${glyphText(mark)} ${say(n[k])}</span>`).join(
-        '',
-      ) +
+    let stats =
+      LINES.filter((l) => (l.k != 'speed' && l.k != 'twin') || n[l.k]).map((
+        l,
+      ) => `<span class=Pack_Num>${said(l, n[l.k])}</span>`).join('') +
       s.abilities.map((id, i) =>
         ABILITIES[id]
           ? `<span class=Pack_Num><kbd class=Key>${i + 1}</kbd> ${

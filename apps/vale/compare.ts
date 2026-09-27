@@ -3,17 +3,18 @@
 // ability would be done with (`doer`), what they would wear with a piece put
 // on or a slot taken off (`trying`, `bare`), the difference between two of
 // those, line by line in green or red (`diff`), what a piece rolled, in its
-// rarity's colour (`rolled`), and a piece beside another, each with what it
-// rolled and every number that would change, marked (`versus`). The pack's
-// card, the compare tip over the bag, and a station's upgrades all say it
-// this way.
+// rarity's colour (`rolled`), a piece beside another, each with what it
+// rolled and every number that would change, marked (`versus`), and what a
+// step makes of a piece, its own numbers and the hero's, from what they are
+// to what they would be (`step`). The pack's card, the compare tip over the
+// bag, and a station's upgrades all say it this way.
 import type { Doer } from './abilities.ts'
 import { type Slot, sortOf } from './arms.ts'
 import { hands, kitOf, twins, type Worn } from './gear.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Sheet } from './play.ts'
-import { BONUSES, GRADES, type Piece, tint } from './rarity.ts'
+import { BONUSES, GRADES, type Piece, STATS, tint } from './rarity.ts'
 import { blowOf, type Held, maxHp } from './rules.ts'
 import { skilled } from './skills.ts'
 
@@ -50,17 +51,55 @@ export let numbers = (s: Hero, worn: Worn) => {
 }
 export type Numbers = ReturnType<typeof numbers>
 
-/** Each number, its glyph, how it reads, and whether more is better. */
-export let LINES: [keyof Numbers, Glyph, (n: number) => string, boolean][] = [
-  ['blow', 'blow', (n) => `${n} a blow`, true],
-  ['twin', 'blow', (n) => `${n} with the other hand`, true],
-  ['pace', 'pace', (n) => `every ${n.toFixed(2)} s`, false],
-  ['reach', 'reach', (n) => `reach ${n} m`, true],
-  ['armour', 'armour', (n) => `armour ${n}`, true],
-  ['hp', 'health', (n) => `health ${n}`, true],
-  ['speed', 'speed', (n) => `speed +${n}%`, true],
-  ['luck', 'luck', (n) => `great blows ${n}%`, true],
+/** A number a sheet shows: its glyph, how it reads around its value, how
+ * the value is written, and whether more is better. */
+export type Line = {
+  k: keyof Numbers
+  glyph: Glyph
+  says: (x: string) => string
+  shows?: (n: number) => string
+  more: boolean
+}
+
+/** Each number a sheet shows. */
+export let LINES: Line[] = [
+  { k: 'blow', glyph: 'blow', says: (x) => `${x} a blow`, more: true },
+  {
+    k: 'twin',
+    glyph: 'blow',
+    says: (x) => `${x} with the other hand`,
+    more: true,
+  },
+  {
+    k: 'pace',
+    glyph: 'pace',
+    says: (x) => `every ${x} s`,
+    shows: (n) => n.toFixed(2),
+    more: false,
+  },
+  { k: 'reach', glyph: 'reach', says: (x) => `reach ${x} m`, more: true },
+  { k: 'armour', glyph: 'armour', says: (x) => `armour ${x}`, more: true },
+  { k: 'hp', glyph: 'health', says: (x) => `health ${x}`, more: true },
+  { k: 'speed', glyph: 'speed', says: (x) => `speed +${x}%`, more: true },
+  { k: 'luck', glyph: 'luck', says: (x) => `great blows ${x}%`, more: true },
 ]
+
+/** A number, read in its line, with its glyph.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let pace = LINES.find((l) => l.k == 'pace')!
+ * assertEquals(said(pace, 0.5).endsWith('every 0.50 s'), true)
+ * ```
+ */
+export let said = (l: Line, n: number | string): string =>
+  `${glyphText(l.glyph)} ${
+    l.says(typeof n == 'number' ? (l.shows ?? String)(n) : n)
+  }`
+
+// Green where going from `a` to `b` is better, red where it is worse.
+let better = (more: boolean, a: number, b: number) =>
+  (more ? b > a : b < a) ? 'Pack_Up' : 'Pack_Down'
 
 /** What the hero would wear with `h` put on in `slot`, its own unless said
  * (gear.ts `hands`): a weapon for both hands empties the other, a thing for
@@ -80,25 +119,45 @@ export let into = (s: Sheet, kind: string): Slot | undefined =>
 
 // A line's number in `b`, and how far it moved from `a`, in green where that
 // is better and red where it is worse.
-let line = (
-  [k, mark, say, more]: (typeof LINES)[number],
-  a: Numbers,
-  b: Numbers,
-) => {
-  let d = Math.round((b[k] - a[k]) * 100) / 100
-  let shown = k == 'pace' ? `${Math.abs(d).toFixed(2)} s` : Math.abs(d)
+let line = (l: Line, a: Numbers, b: Numbers) => {
+  let d = Math.round((b[l.k] - a[l.k]) * 100) / 100
+  let shown = l.k == 'pace' ? `${Math.abs(d).toFixed(2)} s` : Math.abs(d)
   let by = d == 0
     ? ''
-    : ` <em class="${(more ? d > 0 : d < 0) ? 'Pack_Up' : 'Pack_Down'}">${
+    : ` <em class="${better(l.more, a[l.k], b[l.k])}">${
       d > 0 ? '+' : '−'
     }${shown}</em>`
-  return `<span class=Pack_Num>${glyphText(mark)} ${say(b[k])}${by}</span>`
+  return `<span class=Pack_Num>${said(l, b[l.k])}${by}</span>`
 }
 
 /** Each line where `b` differs from `a`: `b`'s number, and by how much, in
  * green where it is better and red where it is worse. */
 export let diff = (a: Numbers, b: Numbers): string =>
-  LINES.filter(([k]) => a[k] != b[k]).map((l) => line(l, a, b)).join('')
+  LINES.filter((l) => a[l.k] != b[l.k]).map((l) => line(l, a, b)).join('')
+
+// A number from what it is to what it would be, the new one in green where
+// that is better and red where it is worse.
+let arrow = (x: string, y: string, more: boolean, a: number, b: number) =>
+  `${x} → <em class="${better(more, a, b)}">${y}</em>`
+
+/** Each line where `b` differs from `a`: from `a`'s number to `b`'s. */
+export let moved = (a: Numbers, b: Numbers): string =>
+  LINES.filter((l) => a[l.k] != b[l.k]).map((l) => {
+    let show = l.shows ?? String
+    return `<span class=Pack_Num>${
+      said(l, arrow(show(a[l.k]), show(b[l.k]), l.more, a[l.k], b[l.k]))
+    }</span>`
+  }).join('')
+
+/** Each of a piece's own numbers that differs in `b`: from what it is in
+ * `a` to what it is in `b`. */
+export let grown = (a: Piece, b: Piece): string =>
+  STATS.filter((st) => (a[st] ?? 0) != (b[st] ?? 0)).map((st) => {
+    let { shows, word, icon } = BONUSES[st], x = a[st] ?? 0, y = b[st] ?? 0
+    return `<span class=Pack_Num>${glyphText(icon)} ${word} ${
+      arrow(shows(x), shows(y), true, x, y)
+    }</span>`
+  }).join('')
 
 /** What sort of thing a piece of gear is: its rarity when finer than common,
  * its sort, and its tier. */
@@ -111,8 +170,8 @@ export let sortLine = (t: Piece): string =>
 export let rolled = (p: Piece): string =>
   p.bonuses.map(([stat, n]) =>
     `<span class=Pack_Num>${glyphText(BONUSES[stat].icon)} ${
-      BONUSES[stat].says(n)
-    }</span>`
+      BONUSES[stat].shows(n)
+    } ${BONUSES[stat].word}</span>`
   ).join('') +
   (p.legend
     ? `<span class=Pack_Legend>${glyphText(p.legend.icon)} ${
@@ -161,9 +220,39 @@ export let solo = (label: string, p: Piece): string =>
  */
 export let versus = (s: Hero, then: Side, now: Side): string => {
   let a = numbers(s, now.worn), b = numbers(s, then.worn)
-  let lines = LINES.filter(([k]) => a[k] != b[k])
+  let lines = LINES.filter((l) => a[l.k] != b[l.k])
   return `<div class=Compare>${side(then)}${side(now)}${
     lines.map((l) => line(l, a, b) + line(l, a, a)).join('') ||
     `<small class=Compare_Same>Nothing would change.</small>`
+  }</div>`
+}
+
+/** What a step makes of a piece (`now` to `then`), as a card: the piece as
+ * it would be, each of its own numbers from what it is to what it would be,
+ * and each of the hero's the same, worn.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { piece } from './rarity.ts'
+ * let hero = { lvl: 3, learned: [] }
+ * let at = (plus: number) => {
+ *   let h = { eid: 'a', kind: 'cuirass3', n: 1, rarity: 'legendary' as const, plus }
+ *   return { label: `At +${plus}`, p: piece(h), worn: { body: h } }
+ * }
+ * let card = step(hero, at(0), at(1))
+ * assertEquals(/health \+\d+ → /.test(card), true)
+ * assertEquals(card.includes('Nothing would change'), false)
+ * assertEquals(step(hero, at(1), at(1)).includes('Nothing would change'), true)
+ * ```
+ */
+export let step = (s: Hero, now: Side, then: Side): string => {
+  let own = now.p && then.p ? grown(now.p, then.p) : ''
+  let yours = moved(numbers(s, now.worn), numbers(s, then.worn))
+  return `<div class="Compare Compare-one">${side(then)}${
+    own ? `<small class=Compare_Label>The piece</small>${own}` : ''
+  }${
+    yours
+      ? `<small class=Compare_Label>You</small>${yours}`
+      : `<small class=Compare_Same>Nothing would change.</small>`
   }</div>`
 }

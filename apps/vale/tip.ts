@@ -10,7 +10,9 @@
 // more to show than words has a card, which whoever drew it draws in the tip
 // in place of them when the tip shows (`cards`): a piece of gear, beside what
 // is worn. It is asked for then, so a sheet of many things draws none until
-// one is looked at.
+// one is looked at. A sheet drawn again while a tip waits to show (a station
+// filling its button as the hero works) puts a new thing where the old one
+// was, and the tip shows over that.
 
 /** What a tip says: its name, the key that does the same, a note in small
  * (an ability's cooldown), and what it does. */
@@ -182,6 +184,10 @@ export let tips = (glass: HTMLElement) => {
   }
   let tipOf = (t: EventTarget | null) =>
     t instanceof Element ? t.closest('[data-tip]') : null
+  // The thing `t` was, at the point the pointer came to it: itself, or what
+  // was drawn there in its place.
+  let still = (t: Element, x: number, y: number) =>
+    t.isConnected ? t : tipOf(document.elementFromPoint(x, y))
 
   // A mouse: a tip after it rests on a thing, at once if one already shows.
   glass.addEventListener('pointerover', (e) => {
@@ -189,8 +195,14 @@ export let tips = (glass: HTMLElement) => {
     let t = tipOf(e.target)
     if (t == on) return
     if (!t) return hide()
+    let x = e.clientX, y = e.clientY
     if (on) show(t)
-    else later(REST, () => show(t))
+    else {
+      later(REST, () => {
+        let now = still(t, x, y)
+        if (now) show(now)
+      })
+    }
   })
   glass.addEventListener('pointerout', (e) => {
     if (e.pointerType != 'touch' && !tipOf(e.relatedTarget)) hide()
@@ -206,9 +218,10 @@ export let tips = (glass: HTMLElement) => {
     held = t ? { t, x: e.clientX, y: e.clientY, shown: false } : null
     if (t) {
       later(HOLD, () => {
-        if (held?.t == t) {
-          held.shown = true
-          show(t)
+        let now = held?.t == t && still(t, held.x, held.y)
+        if (held && now) {
+          held = { ...held, t: now, shown: true }
+          show(now)
         }
       })
     }
