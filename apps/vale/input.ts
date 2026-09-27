@@ -100,7 +100,7 @@ export let listen = (
     | null = null
   let drags = new Map<
     number,
-    { x: number; y: number; far: number; button: number; mouse: boolean }
+    { x: number; y: number; far: number; button: number }
   >()
 
   let base = document.createElement('div')
@@ -137,13 +137,11 @@ export let listen = (
       knob.style.transform = ''
       return
     }
-    if (e.pointerType == 'mouse') void stage.requestPointerLock()
     drags.set(e.pointerId, {
       x: e.clientX,
       y: e.clientY,
       far: 0,
       button: e.button,
-      mouse: e.pointerType == 'mouse',
     })
   })
   stage.addEventListener('pointermove', (e) => {
@@ -158,9 +156,8 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     if (!d) return
-    let locked = document.pointerLockElement == stage
-    let mx = locked ? e.movementX : e.clientX - d.x
-    let my = locked ? e.movementY : e.clientY - d.y
+    let mx = e.clientX - d.x
+    let my = e.clientY - d.y
     d.far += Math.hypot(mx, my)
     d.x = e.clientX
     d.y = e.clientY
@@ -176,7 +173,6 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     drags.delete(e.pointerId)
-    if (d && document.pointerLockElement == stage) document.exitPointerLock()
     // A click that did not drag is a blow, or a dodge from the right
     // button; a tap on the right of a phone is a blow too, where the thumb
     // already is.
@@ -185,13 +181,6 @@ export let listen = (
       if (d.button == 2) pressed.add('dodge')
     }
   }
-  document.addEventListener('pointerlockchange', () => {
-    if (
-      document.pointerLockElement == stage && ![...drags.values()].some(
-        (d) => d.mouse,
-      )
-    ) document.exitPointerLock()
-  })
   stage.addEventListener('pointerup', up)
   stage.addEventListener('pointercancel', up)
   stage.addEventListener('wheel', (e) => {
