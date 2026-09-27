@@ -10,7 +10,7 @@
 // while sending its own initial result.
 
 import { fault, refusal } from './refuse.ts'
-import { isPromise } from '@yaks/graph'
+import { coalesced, isPromise } from '@yaks/graph'
 import type { Frame, Sink, Subs } from './subs.ts'
 
 /** The part of a WebSocket this package uses: the standard `WebSocket`
@@ -18,6 +18,8 @@ import type { Frame, Sink, Subs } from './subs.ts'
 export type Socket = {
   /** `0` connecting, `1` open — frames sent before it opens are queued */
   readyState: number
+  /** bytes waiting inside the WebSocket transport */
+  bufferedAmount?: number
   /** send one frame, already serialized */
   send(data: string): void
   /** listen for `open`, `message` and `close` */
@@ -39,21 +41,77 @@ export type Upgrade = (
 ) => { socket: Socket; response: Response }
 
 let OPEN = 1
+let BUFFER = 8 * 1024
+
+/** A replaceable frame queue for a socket, including hibernatable sockets
+ * whose incoming messages are delivered by a Durable Object method. */
+export let queue = (
+  socket: Pick<Socket, 'send' | 'bufferedAmount'>,
+  timer: (fn: () => void, ms: number) => void = (fn, ms) => {
+    setTimeout(fn, ms)
+  },
+  ready: () => boolean = () => true,
+): { send: Sink; flush: () => void; close: () => void } => {
+  let waiting: Frame[] = []
+  let draining = false
+  let closed = false
+  let schedule = () => {
+    if (draining || closed) return
+    draining = true
+    timer(() => {
+      draining = false
+      flush()
+    }, 16)
+  }
+  let flush = () => {
+    if (!ready() || closed) return
+    while (waiting.length && (socket.bufferedAmount ?? 0) < BUFFER) {
+      socket.send(JSON.stringify(waiting.shift()))
+    }
+    if (waiting.length) schedule()
+  }
+  let send: Sink = (frame) => {
+    if (closed) return
+    // A relay is a patch. Only merge it with another relay of this
+    // subscription before the next membership or durable-data frame.
+    if (
+      frame.relay && Object.keys(frame).every((k) => k == 'id' || k == 'relay')
+    ) {
+      for (let i = waiting.length - 1; i >= 0; i--) {
+        let was = waiting[i]
+        if (
+          !was.relay || Object.keys(was).some((k) => k != 'id' && k != 'relay')
+        ) break
+        if (was.id == frame.id) {
+          was.relay = coalesced([...was.relay, ...frame.relay])
+          flush()
+          return
+        }
+      }
+    }
+    waiting.push(frame)
+    flush()
+  }
+  return {
+    send,
+    flush,
+    close: () => {
+      closed = true
+      waiting = []
+    },
+  }
+}
 
 /** A {@link Sink} that writes frames to a socket, queueing them until it
  * opens. */
-export let sink = (socket: Socket): Sink => {
-  let waiting: Frame[] = []
-  let flush = () => {
-    let held = waiting
-    waiting = []
-    for (let f of held) socket.send(JSON.stringify(f))
-  }
-  socket.addEventListener('open', flush)
-  return (frame) => {
-    waiting.push(frame)
-    if (socket.readyState == OPEN) flush()
-  }
+export let sink = (
+  socket: Socket,
+  timer?: (fn: () => void, ms: number) => void,
+): Sink => {
+  let q = queue(socket, timer, () => socket.readyState == OPEN)
+  socket.addEventListener('open', q.flush)
+  socket.addEventListener('close', q.close)
+  return q.send
 }
 
 /**

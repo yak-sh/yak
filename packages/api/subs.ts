@@ -30,6 +30,7 @@
 import type { Bundle, Eid, Graph } from '@yaks/graph'
 import {
   admit,
+  coalesced,
   composed,
   isPromise,
   over,
@@ -262,6 +263,7 @@ export let subscriptions = (graph: Graph, opts: {
     }
     return out
   }
+  let relays = new Map<Sink, { bundles: Bundle[]; done: Promise<void> }>()
   // A subscription let go of, by its sink closing it or by a new one under
   // its id: the network lets go of it too.
   let forget = (sub: Sub | undefined) => {
@@ -677,23 +679,32 @@ export let subscriptions = (graph: Graph, opts: {
         if (off.length) return peerChange(off)
       }),
     commit,
-    relay: (sink, bundles) =>
-      ordered(() => {
-        // Admitted like any other write — an unknown property is refused, a
-        // server-owned or computed one is dropped, every value is checked
-        // against the vocabulary — and then stripped of the `$` keys a stored
-        // write carries. A relayed value has no precondition to check, no
-        // cascading delete to perform, and no actor to sign it with: the
-        // connection it arrived on was authenticated at the upgrade, and
-        // nothing here is stored for anyone to read back later.
-        let bare = admit(bundles, graph.vocab).map((b) => {
-          let out: Bundle = { entity: { eid: b.entity.eid } }
-          for (let [name, patch] of comps(b)) out[name] = patch
-          return out
-        })
-        let out = peers.write(sink, bare)
+    relay: (sink, bundles) => {
+      // Admit before queueing, so even a patch superseded while waiting still
+      // gets the same refusal as one sent without a backlog.
+      let bare = admit(bundles, graph.vocab).map((b) => {
+        let out: Bundle = { entity: { eid: b.entity.eid } }
+        for (let [name, patch] of comps(b)) out[name] = patch
+        return out
+      })
+      let waiting = relays.get(sink)
+      if (waiting) {
+        waiting.bundles = coalesced([...waiting.bundles, ...bare])
+        return waiting.done
+      }
+      let run = (batch: Bundle[]) => {
+        let out = peers.write(sink, batch)
         return peerChange(out, sink)
-      }),
+      }
+      if (!pendingWork) return ordered(() => run(bare))
+      let next = { bundles: bare, done: Promise.resolve() }
+      relays.set(sink, next)
+      next.done = ordered(() => {
+        relays.delete(sink)
+        return run(next.bundles)
+      }) as Promise<void>
+      return next.done
+    },
     relaying: (sink) => peers.holds(sink),
     relayed: (sink, keys) => peers.adopt(sink, keys),
   }

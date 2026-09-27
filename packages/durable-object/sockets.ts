@@ -21,6 +21,7 @@
 import {
   type Ask,
   json,
+  queue,
   receive,
   refusal,
   type Sink,
@@ -35,6 +36,8 @@ import {
 export type Wire = {
   /** send one frame, already serialized */
   send(data: string): void
+  /** bytes waiting inside the socket transport */
+  bufferedAmount?: number
   /** hold a value on the socket itself — it survives hibernation (2KB cap) */
   serializeAttachment(value: unknown): void
   /** read that value back, `null` when nothing was held */
@@ -155,22 +158,24 @@ let asked = (data: unknown): { id: string; ask?: Ask } | null => {
  * lifetime is this socket's — see @yaks/api's `receive`.
  */
 export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
-  let sinks = new Map<Wire, Sink>()
+  let sinks = new Map<Wire, ReturnType<typeof queue>>()
 
   // The sink for a socket, created once. A socket this object has not seen
   // before may still be one it inherited, so its stored subscriptions are
   // re-opened here — the client is sent its current results, which is the
   // resync.
   let sink = (ws: Wire): Sink => {
-    let to = sinks.get(ws)
+    let to = sinks.get(ws)?.send
     if (to) return to
-    let fresh: Sink = (frame) => ws.send(JSON.stringify(frame))
+    let fresh = queue(ws)
     sinks.set(ws, fresh)
     // The relay keys first: whatever else this socket did, the registry has to
     // know what it is saying before a close can stop saying it.
-    subs.relayed(fresh, relayOf(ws))
-    for (let [id, ask] of Object.entries(asksOf(ws))) subs.open(fresh, id, ask)
-    return fresh
+    subs.relayed(fresh.send, relayOf(ws))
+    for (let [id, ask] of Object.entries(asksOf(ws))) {
+      subs.open(fresh.send, id, ask)
+    }
+    return fresh.send
   }
 
   return {
@@ -221,7 +226,10 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
 
     close: (ws) => {
       let to = sinks.get(ws)
-      if (to) subs.drop(to)
+      if (to) {
+        to.close()
+        subs.drop(to.send)
+      }
       sinks.delete(ws)
     },
 

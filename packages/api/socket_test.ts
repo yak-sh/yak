@@ -5,13 +5,55 @@
 import { assert, assertEquals } from '@std/assert'
 import { fake, req, shopGraph } from './testing.ts'
 import { api } from './route.ts'
-import { attach } from './socket.ts'
+import { attach, sink } from './socket.ts'
 import { subscriptions } from './subs.ts'
 
 let ids = (frames: { bundles?: { entity: { eid: string } }[] }[]) =>
   frames.flatMap((f) => (f.bundles ?? []).map((b) => b.entity.eid))
 
 let ws = () => req('/ws', { headers: { upgrade: 'websocket' } })
+
+Deno.test('subscriber queue folds relay patches without crossing a data frame', () => {
+  let socket = fake()
+  let due: (() => void)[] = []
+  let to = sink(socket, (fn) => {
+    due.push(fn)
+  })
+  socket.bufferedAmount = 8192
+  to({ id: 's', relay: [{ entity: { eid: 'a' }, browsing: { x: 1 } }] })
+  to({ id: 's', relay: [{ entity: { eid: 'a' }, browsing: { y: 2 } }] })
+  to({ id: 's', relay: [{ entity: { eid: 'b' }, browsing: { x: 3 } }] })
+  to({ id: 's', bundles: [{ entity: { eid: 'a' }, book: { price: 4 } }] })
+  to({ id: 's', relay: [{ entity: { eid: 'a' }, browsing: null }] })
+  to({ id: 's', relay: [{ entity: { eid: 'a' }, browsing: { x: 5 } }] })
+  assertEquals(socket.sent, [])
+  assertEquals(due.length, 1)
+
+  socket.bufferedAmount = 0
+  due.shift()!()
+  assertEquals(socket.taken(), [
+    {
+      id: 's',
+      relay: [
+        { entity: { eid: 'a' }, browsing: { x: 1, y: 2 } },
+        { entity: { eid: 'b' }, browsing: { x: 3 } },
+      ],
+    },
+    {
+      id: 's',
+      bundles: [
+        { entity: { eid: 'a' }, book: { price: 4 } },
+      ],
+    },
+    {
+      id: 's',
+      relay: [
+        { entity: { eid: 'a' }, browsing: null },
+        { entity: { eid: 'a' }, browsing: { x: 5 } },
+      ],
+    },
+  ])
+})
 
 Deno.test('a socket subscribes, hears its set, and hears every change', () => {
   let graph = shopGraph()

@@ -339,6 +339,10 @@ Deno.test('async peer reads keep successive membership moves in order', async ()
   }])
   let second = subs.relay(writer.to, [{
     entity: { eid: 'b1' },
+    browsing: { x: 3 },
+  }])
+  let last = subs.relay(writer.to, [{
+    entity: { eid: 'b1' },
     browsing: { x: 12 },
   }])
   release.shift()!()
@@ -346,6 +350,7 @@ Deno.test('async peer reads keep successive membership moves in order', async ()
   await Promise.resolve()
   release.shift()!()
   await second
+  await last
   let heard = watcher.take()
   assertEquals(
     heard.map((f) => f.gone?.length ? f.gone : f.relay?.[0].browsing),

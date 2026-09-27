@@ -79,7 +79,14 @@ export {
   type Subs,
   subscriptions,
 } from './subs.ts'
-export { attach, receive, sink, type Socket, type Upgrade } from './socket.ts'
+export {
+  attach,
+  queue,
+  receive,
+  sink,
+  type Socket,
+  type Upgrade,
+} from './socket.ts'
 export { timed } from './timing.ts'
 export {
   type Addr,

@@ -16,7 +16,7 @@
 // this side is saying are said again first, since the server held them under
 // the connection that closed.
 
-import type { Bundle, Eid } from '@yaks/graph'
+import { type Bundle, coalesced, type Eid } from '@yaks/graph'
 import type { Coverage } from './coverage.ts'
 
 /** The part of a WebSocket this package uses. The standard `WebSocket`
@@ -24,6 +24,8 @@ import type { Coverage } from './coverage.ts'
 export type Socket = {
   /** `0` connecting, `1` open, `2` closing, `3` closed */
   readyState: number
+  /** bytes already handed to the transport but not yet sent */
+  bufferedAmount?: number
   /** send one frame, already serialized */
   send(data: string): void
   /** close the connection */
@@ -149,6 +151,7 @@ let wsUrl = (url: string): string =>
   `${url.replace(/^http/, 'ws').replace(/\/$/, '')}/ws`
 
 let OPEN = 1
+let BUFFER = 8 * 1024
 
 let global = (): Connect | undefined => {
   let W = (globalThis as { WebSocket?: new (url: string) => Socket }).WebSocket
@@ -174,9 +177,33 @@ export let wire = (opts: WireOpts): Wire => {
   let retrying = false // the one timer — never a second
   let closed = false
   let n = 0
+  let waiting: Bundle[] = []
+  let draining = false
 
   let send = (msg: unknown) => {
     if (socket && socket.readyState == OPEN) socket.send(JSON.stringify(msg))
+  }
+  let flush = () => {
+    if (!waiting.length) return
+    if (!socket || socket.readyState != OPEN) {
+      waiting = []
+      return
+    }
+    if ((socket.bufferedAmount ?? 0) >= BUFFER) {
+      schedule()
+      return
+    }
+    let bundles = waiting
+    waiting = []
+    send({ relay: bundles })
+  }
+  let schedule = () => {
+    if (draining) return
+    draining = true
+    timer(() => {
+      draining = false
+      flush()
+    }, 16)
   }
 
   // A frame, with the reopen bookkeeping done: a reset frame reports whatever
@@ -218,6 +245,7 @@ export let wire = (opts: WireOpts): Wire => {
     socket = s
     s.addEventListener('open', () => {
       if (socket != s || closed) return
+      waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
       // Said before anything is asked, so no answer hands back an older copy.
       let said = opts.again?.() ?? []
@@ -239,6 +267,7 @@ export let wire = (opts: WireOpts): Wire => {
     s.addEventListener('close', () => {
       if (socket != s) return
       socket = null
+      waiting = []
       for (let id of asks.keys()) opts.pending?.(id)
       retry()
     })
@@ -264,11 +293,14 @@ export let wire = (opts: WireOpts): Wire => {
       send({ unsubscribe: id })
     },
     relay: (bundles) => {
-      if (bundles.length) send({ relay: bundles })
+      if (!bundles.length || !socket || socket.readyState != OPEN) return
+      waiting = coalesced([...waiting, ...bundles])
+      flush()
     },
     connected: () => socket?.readyState == OPEN,
     close: () => {
       closed = true
+      waiting = []
       let s = socket
       socket = null
       for (let id of asks.keys()) opts.pending?.(id)
