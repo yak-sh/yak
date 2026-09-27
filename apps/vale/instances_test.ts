@@ -11,7 +11,9 @@ Deno.test('building template is shared between chunks and disposed after both le
   let calls = 0
   let shared = instances(scene, material, () => {
     calls++
-    return Promise.resolve(pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])))
+    return Promise.resolve(
+      pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])),
+    )
   })
   let placed = (x: number) => [{
     kind: 'smithy.plaster',
