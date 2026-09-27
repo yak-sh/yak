@@ -87,9 +87,7 @@ export let station = (panel: Panel, acts: Acts) => {
     names = names && `<small>${esc(names)}</small>`
     return `<span class="Craft_Need${got < n ? ' Craft_Need-short' : ''}"><i>${
       pic || '•'
-    }</i><b>${esc(stuffName(what))}</b><em>${
-      Math.min(got, n)
-    } / ${n}</em>${names}</span>`
+    }</i><b>${esc(stuffName(what))}</b><em>${got} / ${n}</em>${names}</span>`
   }
 
   // The pieces the hero wears and carries that a station upgrades: what is
