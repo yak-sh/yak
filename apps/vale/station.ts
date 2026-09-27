@@ -3,7 +3,8 @@
 // of it the bag holds, and the button that makes it, filling while the hero
 // works. Tap a thing to see what it asks. Beside the tiers, the pieces the
 // hero carries that the station upgrades (upgrade.ts): what the next step
-// asks, and what it would change. It opens when the hero works the
+// asks, and what it would change, and each piece's tip sets it beside its
+// next step (compare.ts `versus`). It opens when the hero works the
 // station (E, G, or the button), and folds away as any panel does, or when the
 // hero walks off. It is written again only when what it shows changed.
 import {
@@ -19,15 +20,15 @@ import {
   stuffName,
 } from './craft.ts'
 import { SLOTS, sortOf } from './arms.ts'
-import { diff, numbers, trying } from './compare.ts'
+import { diff, numbers, sortLine, trying, versus } from './compare.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
-import { GRADES, piece, RARITIES, tint } from './rarity.ts'
+import { piece, RARITIES, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { icon } from './sprites.ts'
 import type { Sheet } from './play.ts'
-import { tipped } from './tip.ts'
+import { cards, tipped } from './tip.ts'
 import { type Craft, least, tradeNeed, TRADES, type Trades } from './trades.ts'
 import { madeBy, MOST, upgradeOf } from './upgrade.ts'
 import type { Job } from './work.ts'
@@ -47,6 +48,7 @@ export let station = (panel: Panel, acts: Acts) => {
   // Upgrading rather than making; what is picked is then a piece's row.
   let up = false
   let picked: string | null = null
+  let sheet: Sheet | null = null
   let was: unknown[] = []
   box.addEventListener('click', (e) => {
     let t = e.target instanceof Element ? e.target : null
@@ -105,21 +107,46 @@ export let station = (panel: Panel, acts: Acts) => {
     return [...worn, ...rest].filter((h) => madeBy(h.kind)?.at == c)
   }
 
+  // What the hero would wear with `h` as `x`: where it is worn, or where it
+  // would go.
+  let wearing = (s: Sheet, h: Held, x: Held) => {
+    let slot = SLOTS.find((sl) => s.worn[sl]?.eid == h.eid)
+    return trying(slot ? s.worn : trying(s.worn, h), x, slot)
+  }
+
+  // A piece a step finer.
+  let next = (h: Held) => ({ ...h, plus: (h.plus ?? 0) + 1 })
+
+  // A piece's tip on the upgrade tab: its next step beside it as it is, both
+  // worn; its words past its last step.
+  cards(box, (e) => {
+    let h = up
+      ? sheet?.bag.find((h) => h.eid == e.getAttribute('data-pick'))
+      : null
+    return sheet && h && upgradeOf(h.kind, h.plus ?? 0)
+      ? versus(
+        sheet,
+        {
+          label: `At +${next(h).plus}`,
+          p: piece(next(h)),
+          worn: wearing(sheet, h, next(h)),
+        },
+        { label: 'Now', p: piece(h), worn: wearing(sheet, h, h) },
+      )
+      : undefined
+  })
+
   // A piece picked to upgrade: what it is, what the next step asks, and what
   // it would change, worn.
   let upgrading = (s: Sheet, trades: Trades, job: Job) => {
-    let slot = SLOTS.find((sl) => s.worn[sl]?.eid == picked)
-    let h: Held | undefined = slot
-      ? s.worn[slot]
-      : s.bag.find((h) => h.eid == picked)
+    let h = s.bag.find((h) => h.eid == picked)
     if (!h) {
       return `<p class=Pack_Hint>Tap something you carry to upgrade it.</p>`
     }
     let t = piece(h), plus = h.plus ?? 0
     let r = upgradeOf(h.kind, plus)
     let bag = spare(s.bag, Object.values(s.worn))
-    let fine = t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `
-    let what = `${fine}${sortOf(t)} · tier ${t.tier} · +${plus} of ${MOST}`
+    let what = `${sortLine(t)} · +${plus} of ${MOST}`
     let working = job.doing?.piece == h.eid ? job.doing : null
     let trade = r && TRADES[r.at]
     let button = !r || !trade
@@ -133,11 +160,8 @@ export let station = (panel: Panel, acts: Acts) => {
       : `<button class="Btn Btn-go" data-do=upgrade${
         plan(r, bag) ? '' : ' disabled'
       }>Upgrade to +${plus + 1}</button>`
-    // Worn as it is, and worn a step finer: where it is worn, or where it
-    // would go.
-    let as = (x: Held) => trying(slot ? s.worn : trying(s.worn, h), x, slot)
     let gain = r
-      ? diff(numbers(s, as(h)), numbers(s, as({ ...h, plus: plus + 1 })))
+      ? diff(numbers(s, wearing(s, h, h)), numbers(s, wearing(s, h, next(h))))
       : ''
     return `<div class=Pack_Card><i class="Pack_Big ${tint(t.rarity)}">${
       icon(h.kind) || '•'
@@ -264,6 +288,7 @@ export let station = (panel: Panel, acts: Acts) => {
     close: panel.close,
     /** show this frame, when the sheet is open and what it shows changed */
     show: (s: Sheet, job: Job) => {
+      sheet = s
       if (!panel.open || !at) return
       let k = job.doing?.recipe ? job.doing.k.toFixed(2) : ''
       let key = [s, job.trades, k, at, tier, up, picked]

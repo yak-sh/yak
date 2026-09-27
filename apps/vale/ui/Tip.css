@@ -1,7 +1,8 @@
 /* A tip (tip.ts): what a thing does, on a card beside it, over everything on
    the glass: its name and key, a note in small (an ability's cooldown), and
    what it does. It lies flat, and takes no pointer, so it never stands in
-   the way of what is under it. tip.ts places it, by `translate`. */
+   the way of what is under it. tip.ts places it, by `translate`. A tip
+   drawing a card (a piece beside what is worn, Compare.css) is wider. */
 .Tip {
   position: fixed;
   top: 0;
@@ -24,6 +25,11 @@
   &[hidden] {
     display: none;
   }
+}
+
+.Tip-card {
+  max-width: min(30rem, 100vw - 2 * var(--edge));
+  padding: 0.55rem 0.7rem 0.6rem;
 }
 
 @keyframes tip-in {

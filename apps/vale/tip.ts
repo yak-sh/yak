@@ -6,7 +6,11 @@
 // screen reader too. One tip shows at a time, over everything on the glass,
 // beside its thing on the side with room (`place`), and is written again if
 // its thing's tip changes while it shows (an ability's, as skills are
-// learned). A long press that showed a tip is not also a tap.
+// learned). A long press that showed a tip is not also a tap. A thing with
+// more to show than words has a card, which whoever drew it draws in the tip
+// in place of them when the tip shows (`cards`): a piece of gear, beside what
+// is worn. It is asked for then, so a sheet of many things draws none until
+// one is looked at.
 
 /** What a tip says: its name, the key that does the same, a note in small
  * (an ability's cooldown), and what it does. */
@@ -51,6 +55,26 @@ export let tip = (e: HTMLElement, t: Tip) => {
       : e.hasAttribute(a) && e.removeAttribute(a)
   for (let [k, a] of ATTRS) set(a, t[k])
   set('aria-label', heard(t))
+}
+
+/** Draw the cards of the things in `box`: as a tip is about to show over
+ * one, `card` gives what the tip shows in place of its words, or nothing to
+ * keep them. A screen reader still hears the words. */
+export let cards = (
+  box: HTMLElement,
+  card: (e: Element) => string | undefined,
+) =>
+  box.addEventListener('tipcard', (ev) => {
+    if (ev instanceof CustomEvent && ev.target instanceof Element) {
+      ev.detail.card = card(ev.target)
+    }
+  })
+
+// What the things around `e` would have its tip show in place of its words.
+let cardOf = (e: Element): string | undefined => {
+  let detail: { card?: string } = {}
+  e.dispatchEvent(new CustomEvent('tipcard', { bubbles: true, detail }))
+  return detail.card
 }
 
 let read = (e: Element): Tip => ({
@@ -112,11 +136,14 @@ export let tips = (glass: HTMLElement) => {
 
   let draw = (e: Element) => {
     let t = read(e)
-    box.innerHTML = `<div class=Tip_Head><b>${esc(t.name)}</b>${
-      t.key ? `<kbd class=Key>${esc(t.key)}</kbd>` : ''
-    }</div>${t.note ? `<small class=Tip_Note>${esc(t.note)}</small>` : ''}${
-      t.says ? `<p class=Tip_Says>${esc(t.says)}</p>` : ''
-    }`
+    let card = cardOf(e)
+    box.classList.toggle('Tip-card', !!card)
+    box.innerHTML = card ??
+      `<div class=Tip_Head><b>${esc(t.name)}</b>${
+        t.key ? `<kbd class=Key>${esc(t.key)}</kbd>` : ''
+      }</div>${t.note ? `<small class=Tip_Note>${esc(t.note)}</small>` : ''}${
+        t.says ? `<p class=Tip_Says>${esc(t.says)}</p>` : ''
+      }`
     let s = getComputedStyle(glass)
     let px = (v: string) => parseFloat(v) || 0
     let room = {

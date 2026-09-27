@@ -2,14 +2,15 @@
 // slot, how they fight in it and the abilities it gives them, everything else
 // they carry, and by a village's fire, the rack of plain arms anyone may take
 // to try. Each piece of gear is its own, framed and named in its rarity's
-// colour (rarity.ts); everything else is a stack of its kind. Tap a thing to
-// see, at the sheet's foot, what it is, what it rolled, the abilities it
+// colour (rarity.ts); everything else is a stack of its kind. A piece's tip
+// sets it beside what is worn in its place (compare.ts `versus`). Tap a thing
+// to see, at the sheet's foot, what it is, what it rolled, the abilities it
 // gives, and what wearing it would change, then wear it, take it off, or take
 // it from the rack; a second dagger, for a hero who knows how, shows what it
 // would change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
 import { ABILITIES, type Doer, does, GIVES, OFF } from './abilities.ts'
-import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
+import { HANDLES, type Slot, SLOT_NAMES, SLOTS } from './arms.ts'
 import {
   bare,
   diff,
@@ -18,18 +19,21 @@ import {
   LINES,
   numbers,
   rolled,
+  solo,
+  sortLine,
   trying,
+  versus,
 } from './compare.ts'
 import { RACK } from './gear.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
-import { GRADES, type Piece, piece, RARITIES, tint } from './rarity.ts'
+import { piece, RARITIES, tint } from './rarity.ts'
 import { icon } from './sprites.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
 import { type Held, need } from './rules.ts'
 import { formOf } from './skills.ts'
-import { tipped } from './tip.ts'
+import { cards, tipped } from './tip.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -63,18 +67,45 @@ let gives = (t: Thing, slot: Slot | undefined, learned: string[], d: Doer) => {
 let pips = (t?: Thing) =>
   t?.tier ? `<i class=Pack_Tier>${'•'.repeat(t.tier)}</i>` : ''
 
-// What sort of thing a piece of gear is: its rarity when finer than common,
-// its sort, and its tier.
-let sortLine = (t: Piece) =>
-  `${t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `}${sortOf(t)}${
-    t.tier ? ` · tier ${t.tier}` : ''
-  }`
+// Where a thing picked is: a slot worn, a row in the bag, or a kind on the
+// rack.
+type From = 'worn' | 'bag' | 'rack'
+
+// The thing picked from `from` by `key`, if it is there.
+let heldAt = (s: Sheet, from: From, key: string): Held | undefined => {
+  let slot = SLOTS.find((sl) => sl == key)
+  return from == 'worn'
+    ? slot && s.worn[slot]
+    : from == 'bag'
+    ? s.bag.find((h) => h.eid == key)
+    : { eid: key, kind: key, n: 1 }
+}
+
+// What a piece's tip shows: worn, the piece; else, the piece beside what is
+// worn in its place. Nothing for what is not worn.
+let against = (s: Sheet, from: From, key: string) => {
+  let h = heldAt(s, from, key)
+  let slot = h && into(s, h.kind), w = slot && s.worn[slot]
+  return !h || !slot
+    ? undefined
+    : from == 'worn'
+    ? solo('Worn', piece(h))
+    : versus(
+      s,
+      {
+        label: from == 'rack' ? 'By the fire' : 'In your bag',
+        p: piece(h),
+        worn: trying(s.worn, h, slot),
+      },
+      { label: 'Worn', p: w ? piece(w) : undefined, worn: s.worn },
+    )
+}
 
 /** The pack, drawn into its panel (panel.ts). */
 export let pack = (panel: Panel, acts: Acts) => {
   let box = panel.body
-  // What is picked: a slot worn, a row in the bag, or a kind on the rack.
-  let picked: { from: 'worn' | 'bag' | 'rack'; key: string } | null = null
+  // What is picked.
+  let picked: { from: From; key: string } | null = null
   let sheet: Sheet | null = null
   let was: unknown[] = []
   box.addEventListener('click', (e) => {
@@ -83,7 +114,7 @@ export let pack = (panel: Panel, acts: Acts) => {
     let pick = t?.closest<HTMLElement>('[data-pick]')?.dataset.pick
     let act = t?.closest<HTMLElement>('[data-do]')?.dataset.do
     if (pick) {
-      let [from, key] = pick.split(':') as ['worn' | 'bag' | 'rack', string]
+      let [from, key] = pick.split(':') as [From, string]
       picked = picked?.from == from && picked.key == key ? null : { from, key }
     } else if (act && s && picked) {
       let { from, key } = picked
@@ -100,6 +131,12 @@ export let pack = (panel: Panel, acts: Acts) => {
       }
     }
     was = []
+  })
+  cards(box, (e) => {
+    let [from, key] = e.getAttribute('data-pick')?.split(':') ?? []
+    return sheet && (from == 'worn' || from == 'bag' || from == 'rack')
+      ? against(sheet, from, key)
+      : undefined
   })
 
   // What the hero carries beyond what they wear: each piece of gear on its
@@ -126,7 +163,13 @@ export let pack = (panel: Panel, acts: Acts) => {
     ]
   }
 
-  let tile = (pick: string, h: Held, n = 1, on = false, had = false) => {
+  let tile = (
+    pick: string,
+    h: Held,
+    n = 1,
+    on = false,
+    had = false,
+  ) => {
     let p = piece(h)
     return `<button class="Pack_Tile ${tint(p.rarity)}${
       on ? ' Pack_Tile-on' : ''
@@ -143,11 +186,7 @@ export let pack = (panel: Panel, acts: Acts) => {
       return `<p class=Pack_Hint>Tap something to see what it is.</p>`
     }
     let { from, key } = picked
-    let h = from == 'worn'
-      ? s.worn[key as Slot]
-      : from == 'bag'
-      ? s.bag.find((h) => h.eid == key)
-      : { eid: key, kind: key, n: 1 }
+    let h = heldAt(s, from, key)
     let t = h && ITEMS[h.kind] && piece(h)
     if (!h || !t) return `<p class=Pack_Hint>Nothing worn there.</p>`
     let kind = h.kind
@@ -213,9 +252,11 @@ export let pack = (panel: Panel, acts: Acts) => {
       let on = picked?.from == 'worn' && picked.key == slot
       return `<button class="Pack_Slot ${tint(t?.rarity)}${
         on ? ' Pack_Tile-on' : ''
-      }${t ? '' : ' Pack_Slot-empty'}" data-pick="worn:${slot}"><small>${
-        SLOT_NAMES[slot]
-      }</small><i>${h ? icon(h.kind) : '·'}</i><span class=Rarity>${
+      }${t ? '' : ' Pack_Slot-empty'}" data-pick="worn:${slot}"${
+        t ? tipped({ name: t.name, note: sortLine(t) }) : ''
+      }><small>${SLOT_NAMES[slot]}</small><i>${
+        h ? icon(h.kind) : '·'
+      }</i><span class=Rarity>${
         esc(t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'))
       }</span>${pips(t)}</button>`
     }).join('')
@@ -233,7 +274,12 @@ export let pack = (panel: Panel, acts: Acts) => {
           : ''
       ).join('')
     let bag = carried(s).map(({ h, n }) =>
-      tile(`bag:${h.eid}`, h, n, picked?.from == 'bag' && picked.key == h.eid)
+      tile(
+        `bag:${h.eid}`,
+        h,
+        n,
+        picked?.from == 'bag' && picked.key == h.eid,
+      )
     ).join('')
     let rack = f.rack
       ? `<h3 class=Pack_Head>By the fire: plain arms for anyone to try</h3><div class=Pack_Grid>${

@@ -1,0 +1,56 @@
+/* A piece beside another (compare.ts `versus`), on a card in a tip: what
+   would be on the left, what is on the right, each named in its rarity's
+   colour with what it rolled, and under them, row by row, the hero's numbers
+   that would change, the left's marked by how much. A piece on its own
+   (`solo`) is one column. */
+.Compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+
+  & > :nth-child(even) {
+    padding-left: 0.6rem;
+    border-left: 1px solid color-mix(in srgb, var(--rim) 55%, transparent);
+  }
+
+  & .Pack_Num {
+    white-space: normal;
+  }
+}
+
+.Compare-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.Compare_Side {
+  display: grid;
+  align-content: start;
+  gap: 0.1rem;
+  padding-bottom: 0.35rem;
+
+  & > b {
+    font-size: 0.95rem;
+    line-height: 1.2;
+  }
+
+  & > small {
+    color: var(--muted);
+  }
+
+  & .Pack_Rolled {
+    margin-top: 0.15rem;
+    font-size: 0.8rem;
+  }
+}
+
+.Compare_Label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.Compare_Same {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
