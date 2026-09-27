@@ -267,7 +267,8 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
         [
           `${human(graph.vocab)(row)} — ${statusOf(entries)}`,
           ...shown.map((b) =>
-            render(views, b, 'Line', graph.vocab, {}, 'plain').trim()
+            render(views, b, 'Line', graph.vocab, { full: true }, 'plain')
+              .trim()
           ),
         ].join('\n'),
       )]

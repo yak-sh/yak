@@ -243,6 +243,29 @@ Deno.test('a peek shows the last lines, and refuses what is not a session', asyn
   )
 })
 
+Deno.test('a peek keeps the entire last multiline output within its entry limit', async () => {
+  let { g } = host()
+  let final =
+    'A final report longer than seventy characters is still entirely readable.\nSecond line of the report\nThird line'
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    {
+      entity: { eid: 'e1' },
+      entry: { session: 's' },
+      content: { body: 'earlier' },
+    },
+    {
+      entity: { eid: 'e2' },
+      entry: { session: 's' },
+      content: { body: final },
+      output: { source: 's' },
+    },
+  ])
+  let seen = body(await through(g, 'session_peek', { session: 's', lines: 1 }))
+  assertStringIncludes(seen, final)
+  assert(!seen.includes('earlier'))
+})
+
 Deno.test('a wait answers "still running" rather than killing anything', async () => {
   let { g } = host()
   await g.apply([
