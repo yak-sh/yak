@@ -9,8 +9,9 @@
 //         named none, can neither join the set nor leave it.
 //   near  the components the query reads on each entity itself, which stand
 //         in for `own` when there is no presence test to narrow it.
-//   far   components read on other entities: a hop past the first, a reverse
-//         association, and what a computed property `reads` (@yaks/vocab).
+//   far   components read on other entities whose owner cannot be located.
+//   via   components whose reference names the entity with the computed value.
+//         An entry changing `session.status`, for example, names its session.
 //
 // `null` is a query this cannot place — a text term, a neighbour, a walk, a
 // computed property that declares no `reads` — and every commit reaches it.
@@ -19,10 +20,16 @@ import { type And, bare, type Clause } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 
 /** The components one subscription's answer is read from. */
-export type Interest = { own: string[]; near: Set<string>; far: Set<string> }
+export type Interest = {
+  own: string[]
+  near: Set<string>
+  far: Set<string>
+  via: Map<string, string>
+  whole: boolean
+}
 
 // Clauses that shape or bound the answer without reading any component.
-let QUIET = new Set(['every', 'count', 'limit', 'after', 'never'])
+let QUIET = new Set(['every', 'never'])
 
 class Opaque extends Error {}
 
@@ -30,6 +37,8 @@ class Opaque extends Error {}
 export let interest = (ast: And, v: Vocab): Interest | null => {
   let near = new Set<string>()
   let far = new Set<string>()
+  let via = new Map<string, string>()
+  let whole = false
   let path = (p: string[], facet: boolean, into: Set<string>) => {
     let assoc = v.assoc(p[0])
     let hops = assoc
@@ -40,7 +49,15 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
       let d = v.prop(h.comp, h.prop)
       if (!d?.computed) return
       if (!d.reads) throw new Opaque()
-      for (let r of d.reads) far.add(r)
+      for (let r of d.reads) {
+        let [comp, prop, extra] = r.split('.')
+        if (
+          !i && !assoc && prop && !extra &&
+          v.prop(comp, prop)?.ref == h.comp &&
+          (!via.has(comp) || via.get(comp) == prop)
+        ) via.set(comp, prop)
+        else far.add(comp)
+      }
     })
   }
   let walk = (cs: Clause[], into: Set<string>) => {
@@ -50,11 +67,18 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
         path(c.path, bare(c), into)
         if (c.where) walk([c.where], far)
       } else if (c.kind == 'order') {
+        whole = true
         path(c.value.replace(/^-/, '').split('.'), false, into)
       } else if (c.kind == 'tally' || c.kind == 'distinct') {
+        whole = true
         path(c.path, false, into)
       } else if (c.kind == 'fields') {
         for (let f of c.fields) path(f.path, false, into)
+      } else if (
+        c.kind == 'count' || c.kind == 'limit' ||
+        c.kind == 'after'
+      ) {
+        whole = true
       } else if (!QUIET.has(c.kind)) throw new Opaque()
     }
   }
@@ -68,7 +92,7 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
         ? [v.aim(c.path[0], true)[0].comp]
         : []
     )
-    return { own, near, far }
+    return { own, near, far, via, whole }
   } catch {
     return null
   }

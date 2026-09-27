@@ -164,7 +164,7 @@ Deno.test('a windowed query re-reads its whole answer', () => {
 
 // The shop again, where a book also counts its reviews: a computed property
 // whose value lives on other entities, and says so with `reads`.
-let rated = (): Graph => {
+let rated = (reads = ['review']): Graph => {
   let vocab = loadVocab([...shopVocab.docs, {
     $defs: {
       book: {
@@ -172,7 +172,7 @@ let rated = (): Graph => {
         extends: true,
         type: 'object',
         properties: {
-          reviewed: { type: 'number', computed: true, reads: ['review'] },
+          reviewed: { type: 'number', computed: true, reads },
         },
       },
     },
@@ -197,6 +197,48 @@ let rated = (): Graph => {
   store.install()
   return graph({ storage: store, vocab })
 }
+
+Deno.test('a referenced computed dependency refreshes only its owner', () => {
+  let g = rated(['review.book'])
+  g.apply([
+    { entity: { eid: 'b1' }, book: { price: 12 } },
+    { entity: { eid: 'b2' }, book: { price: 15 } },
+  ])
+  let reads: unknown[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(q), g.read(q, o)),
+  }
+  let subs = subscriptions(spy)
+  let one = ear()
+  let two = ear()
+  let query = '.book&.book.reviewed>=0&.fields=book.reviewed'
+  subs.open(one.to, 'books', query)
+  subs.open(two.to, 'books', query)
+  one.take()
+  two.take()
+  reads.length = 0
+
+  g.apply([{ entity: { eid: 'r1' }, review: { book: 'b1', stars: 5 } }])
+  assertEquals(reads.length, 1)
+  assertEquals(reads[0], query + '&.eid=b1')
+  assertEquals(one.take().map(ids), [['b1']])
+  assertEquals(two.take().map(ids), [['b1']])
+
+  reads.length = 0
+  g.apply([{ entity: { eid: 'r1' }, review: { stars: 4 } }])
+  assertEquals(reads.length, 1)
+  assertEquals(one.take().map(ids), [['b1']])
+  assertEquals(two.take().map(ids), [['b1']])
+
+  // A removed reference has no owner to read after the commit. Its old owner
+  // still loses a review, so the complete answer must be checked.
+  reads.length = 0
+  g.apply([{ entity: { eid: 'r1' }, $delete: true }])
+  assertEquals(reads, [query])
+  assertEquals(one.take().map(ids), [['b1', 'b2']])
+  assertEquals(two.take().map(ids), [['b1', 'b2']])
+})
 
 Deno.test('a refresh follows its query onto the entities it reads', () => {
   let g = rated()

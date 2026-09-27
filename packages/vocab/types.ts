@@ -71,8 +71,9 @@ export type Prop = {
   /** derived, never stored: no column holds it and nobody writes it, but a
    * reader still sees it (a query-only rank, an aggregate, a derived status) */
   computed: boolean
-  /** on a computed property, the components on other entities its value is
-   * read from (`[]` for its own entity alone); absent, it may read anything */
+  /** On a computed property: other components it reads. A `comp.ref` names
+   * the reference back to this property’s entity, so subscribers can refresh
+   * that entity alone. `[]` means its own entity; absent means anything. */
   reads?: string[]
   /** this property is what the entity's own id is derived from — see the
    * `identity` keyword and `Vocab.identity` */

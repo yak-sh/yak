@@ -82,6 +82,10 @@ component table needs on top:
 | `durable`   | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
 | `pace`      | comp  | how often a writer's value is taken: relayed, or stored (`1s`)          |
 
+A computed property's `reads` can name `comp.ref` when that reference points
+back to the entity carrying the computed value. Subscriptions then refresh that
+entity when the referenced component changes.
+
 Storage adapters interpret the loaded metadata: `type: integer` stores with
 integer affinity where a plain `number` uses SQLite REAL affinity, `enum`
 becomes a CHECK on the column, `required` becomes NOT NULL, and `default` fills

@@ -330,7 +330,7 @@
           ],
           "computed": true,
           "reads": [
-            "entry"
+            "entry.session"
           ],
           "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do"
         }

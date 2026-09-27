@@ -18,9 +18,9 @@
 //                changed, not how many subscriptions are open.
 //   Refresh      the query follows a reference, counts, orders or limits, so
 //                its result can change when an entity the query never named
-//                does. These run the query again and compare it against the
-//                membership set — but only after a commit that touched a
-//                member or a component the query reads (./interest.ts).
+//                does. A dependency with a reference back to the answer
+//                refreshes that entity alone. An unlocated dependency or a
+//                window refreshes the whole query (./interest.ts).
 //
 // The membership Set is what makes "this entity no longer matches" as cheap
 // as "this entity now matches": a client cannot work out that something left
@@ -144,31 +144,71 @@ type Moved = { bundles: Bundle[]; joined: Eid[]; gone: Eid[] }
 
 // What one commit did to each entity it touched: the components its patches
 // named, and the ones it wears now, or `null` once it is deleted.
-type Touch = Map<Eid, { named: Set<string>; worn: Set<string> | null }>
+type Touch = Map<Eid, {
+  named: Set<string>
+  props: Set<string>
+  worn: Set<string> | null
+  bundle?: Bundle
+  born: boolean
+}>
 
 let touches = (applied: Bundle[], now: Bundle[]): Touch => {
   let out: Touch = new Map()
   for (let b of now) {
-    out.set(b.entity.eid, { named: new Set(), worn: new Set(Object.keys(b)) })
+    out.set(b.entity.eid, {
+      named: new Set(),
+      props: new Set(),
+      worn: new Set(Object.keys(b)),
+      bundle: b,
+      born: false,
+    })
   }
   for (let b of applied) {
-    let t = out.get(b.entity.eid) ?? { named: new Set(), worn: null }
+    let t = out.get(b.entity.eid) ?? {
+      named: new Set<string>(),
+      props: new Set<string>(),
+      worn: null,
+      born: false,
+    }
     out.set(b.entity.eid, t)
     if (b.$delete) t.worn = null
+    if (b.created) t.born = true
     for (let k of Object.keys(b)) {
-      if (k != 'entity' && k[0] != '$') t.named.add(k)
+      if (k == 'entity' || k[0] == '$') continue
+      t.named.add(k)
+      let patch = b[k]
+      if (patch && typeof patch == 'object') {
+        for (let prop of Object.keys(patch)) t.props.add(k + '.' + prop)
+      }
     }
   }
   return out
 }
 
-// Whether a commit can have moved a refresh or an aggregate: it touched a
-// member, deleted something, or touched what the query reads.
-let moved = (sub: Sub, touch: Touch) =>
-  !sub.reads ||
-  [...touch].some(([eid, t]) =>
-    sub.members.has(eid) || !t.worn || cares(sub.reads!, t.named, t.worn)
-  )
+// The answer's entities a write can have moved. `null` means that the query
+// must run whole: a far dependency has no owner, or a reference moved/deleted
+// and the old owner cannot be read after the commit.
+let affected = (sub: Sub, touch: Touch): Set<Eid> | null | undefined => {
+  let i = sub.reads
+  if (!i) return null
+  let ids = new Set<Eid>()
+  for (let [eid, t] of touch) {
+    if (!t.worn) return null
+    if ([...i.far].some((c) => t.named.has(c) || t.worn!.has(c))) {
+      return null
+    }
+    if (sub.members.has(eid) || cares(i, t.named, t.worn)) ids.add(eid)
+    for (let [comp, prop] of i.via) {
+      if (!t.named.has(comp) && !t.worn.has(comp)) continue
+      let owner = (t.bundle?.[comp] as Record<string, unknown> | undefined)
+        ?.[prop]
+      if (typeof owner != 'string') return null
+      if (t.props.has(comp + '.' + prop) && !t.born) return null
+      ids.add(owner)
+    }
+  }
+  return ids.size ? i.whole ? null : ids : undefined
+}
 
 /**
  * A subscription registry over a graph. It registers an `effect` hook on that
@@ -321,20 +361,31 @@ export let subscriptions = (graph: Graph, opts: {
     return now.length ? { relay: now } : {}
   }
 
-  // One query subscription the network does not hold, against the entities a
-  // transaction changed: an aggregate answers again, and anything else is a
-  // question about the whole set, so it runs its query again.
-  let push = (sub: Sub, touched: Eid[]) => {
+  // A refresh runs against the affected entities where it can locate them.
+  // A limit, order or unlocated dependency still needs the whole answer.
+  let push = (
+    sub: Sub,
+    load: (q: string) => Bundle[] | Promise<Bundle[]>,
+    scope?: Set<Eid>,
+  ) => {
     if (sub.agg) return tell(sub)
-    return then(graph.read(sub.query, { durable: true }), (set) => {
+    let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
+    return then(load(query), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
-      let gone = [...sub.members].filter((e) => !ids.has(e))
+      let gone = [...sub.members].filter((e) =>
+        (!scope || scope.has(e)) && !ids.has(e)
+      )
       // An entity can join without being touched: a hop or a computed
       // property moved it from the far side.
       let joined = [...ids].filter((e) => !sub.members.has(e))
-      sub.members = ids
+      if (scope) {
+        for (let e of gone) sub.members.delete(e)
+        for (let e of ids) sub.members.add(e)
+      } else sub.members = ids
+      if (sub.routed) routed.add(sub, sub.query, sub.members)
       rememberFields(sub, set)
-      if (gone.length || joined.length || touched.some((e) => ids.has(e))) {
+      for (let e of gone) sub.fields.delete(e)
+      if (set.length || gone.length) {
         sub.sink({ id: sub.id, bundles: set, gone, ...hail(sub, joined) })
       }
     })
@@ -355,6 +406,12 @@ export let subscriptions = (graph: Graph, opts: {
     }
     let queries = subs.filter((s) => !s.raw)
     if (!queries.length) return
+    let reads = new Map<string, Bundle[] | Promise<Bundle[]>>()
+    let load = (q: string) => {
+      let got = reads.get(q)
+      if (!got) reads.set(q, got = graph.read(q, { durable: true }))
+      return got
+    }
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
     return then(graph.get(touched), (now) => {
       let touch = touches(applied, now)
@@ -363,7 +420,7 @@ export let subscriptions = (graph: Graph, opts: {
         over(queries, (s) =>
           attempt(s, () => {
             if (opts.invalidate?.(s.query, applied)) {
-              return then(graph.read(s.query, { durable: true }), (set) => {
+              return then(load(s.query), (set) => {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
                 let joined = [...ids].filter((id) => !s.members.has(id))
@@ -373,9 +430,12 @@ export let subscriptions = (graph: Graph, opts: {
                 s.sink({ id: s.id, bundles: set, gone, ...hail(s, joined) })
               })
             }
-            if (s.routed) return send(s, routing.get(s))
-            if (!moved(s, touch)) return
-            return push(s, touched)
+            if (s.routed && !s.reads?.via.size) {
+              return send(s, routing.get(s))
+            }
+            let scope = affected(s, touch)
+            if (scope === undefined) return
+            return push(s, load, scope ?? undefined)
           })),
         () => undefined,
       )
