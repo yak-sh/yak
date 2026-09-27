@@ -33,7 +33,15 @@
 
 import type { Event, Handlers } from '@yaks/effects'
 import { HOLD, holding } from '@yaks/effects'
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Eid,
+  type Graph,
+  Stale,
+  token,
+} from '@yaks/graph'
+import { effectsIn } from '@yaks/vocab'
 import { active, admitNext, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
@@ -372,6 +380,28 @@ export let answer = async (
   if (await answering(g, session, r)) await settle(g, session, r)
 }
 
+// A terminal entry, or a claim found by a worker's sweep, identifies the
+// transcript whose locks may be due for release. The guard protects a claim
+// that another writer handed to a different session after this read.
+let release = async (g: Graph, e: Event): Promise<void> => {
+  let b = await one(g, e.entity.eid)
+  let session = comp(b, 'entry')?.session ?? comp(b, CLAIM)?.session
+  if (typeof session != 'string') return
+  let status = statusOf(await transcript(g, session))
+  if (status != 'stopped' && status != 'failed') return
+  for (let held of await g.read(`.${CLAIM}.session=${session}&*`)) {
+    try {
+      await g.apply([{
+        entity: held.entity,
+        [CLAIM]: null,
+        $was: { [CLAIM]: { session: token(session) } },
+      }], { trusted: true })
+    } catch (err) {
+      if (!(err instanceof Stale)) throw err
+    }
+  }
+}
+
 /**
  * The code behind `session_run`, for a host's `./effects` facet: every
  * transcript a commit asked for a turn, run here by {@link settle} where this
@@ -387,4 +417,7 @@ export let running = (g: Graph, r: Runner): Handlers => ({
   session_run: async (e) => {
     for (let session of await about(g, e)) await answer(g, session, r)
   },
+  ...effectsIn(g.vocab.docs).some((e) => e.name == 'session_release')
+    ? { session_release: (e: Event) => release(g, e) }
+    : {},
 })

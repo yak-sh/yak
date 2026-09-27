@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { deliverChild, sessionTools, textOf, transcript } from '@yaks/session'
+import { until } from '../../bin/testing.ts'
 import { harnessTools } from './tools.ts'
 import { local } from './local.ts'
 import { harness, repo, working } from './testing.ts'
@@ -228,11 +229,11 @@ for (let finish of ['complete', 'unlink']) {
         ? [{ entity: { eid: 'dep' }, completed: {} }]
         : [{ entity: { eid: 'edge' }, tombstone: {} }] as Bundle[],
     )
-    await h.fx.idle()
-    let receipt = (await transcript(h.g, 'p')).find((b) =>
-      b.entity.eid == `delivery:${child}:task:work:done`
+    let receipt = await until(async () =>
+      (await transcript(h.g, 'p')).find((b) =>
+        b.entity.eid == `delivery:${child}:task:work:done`
+      )
     )
-    assert(receipt)
     assert(textOf(receipt).endsWith('\nFinished my part'))
     assertEquals(errors, [])
     await d.stop()

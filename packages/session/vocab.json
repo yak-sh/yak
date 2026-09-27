@@ -601,6 +601,12 @@
       "removed": ["contains", "requires"],
       "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active,queued",
       "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency"
+    },
+    "session_release": {
+      "effect": true,
+      "created": ["stop", "error", "exception"],
+      "sweep": ".claim",
+      "description": "release claims held by a transcript that stopped or failed; a worker also finds claims left by runs that ended while no worker was serving effects"
     }
   }
 }

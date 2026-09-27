@@ -357,3 +357,56 @@ Deno.test('a worker coming up runs what a restart left owed', async () => {
   assertEquals(asked.length, 1)
   assertEquals(statusOf(await transcript(p.g, 's1')), 'settled')
 })
+
+Deno.test('a transcript ending releases its claims through the effects pool', async () => {
+  let s = store()
+  let p = proc(s, 'w1', fake().model)
+  await p.fx.work(p.g)
+  await p.g.apply([
+    { entity: { eid: 's1' }, session: { id: 's1' } },
+    { entity: { eid: 'work' }, claim: { session: 's1' } },
+  ])
+  assertEquals(((await p.g.get(['work']))[0].claim as Comp)?.session, 's1')
+  await p.g.apply([{
+    entity: { eid: 'end' },
+    entry: { session: 's1' },
+    stop: {},
+  }])
+  await p.fx.idle()
+  assertEquals((await p.g.get(['work']))[0].claim, undefined)
+})
+
+Deno.test('retryable errors keep a claim until the transcript fails', async () => {
+  let s = store()
+  let p = proc(s, 'w1', fake().model)
+  await p.fx.work(p.g)
+  await p.g.apply([
+    { entity: { eid: 's1' }, session: { id: 's1' } },
+    { entity: { eid: 'work' }, claim: { session: 's1' } },
+  ])
+  for (let i of [1, 2, 3]) {
+    await p.g.apply([{
+      entity: { eid: `error-${i}` },
+      entry: { session: 's1' },
+      error: {},
+    }])
+    await p.fx.idle()
+    assertEquals((await p.g.get(['work']))[0].claim != null, i < 3)
+  }
+})
+
+Deno.test('a worker reclaims claims left by already ended transcripts', async () => {
+  let s = store()
+  await graph({ storage: s, vocab }).apply([
+    { entity: { eid: 's1' }, session: { id: 's1' } },
+    { entity: { eid: 'work' }, claim: { session: 's1' } },
+    { entity: { eid: 'end' }, entry: { session: 's1' }, stop: {} },
+    { entity: { eid: 's2' }, session: { id: 's2' } },
+    { entity: { eid: 'active' }, claim: { session: 's2' } },
+  ])
+  let p = proc(s, 'w1', fake().model)
+  await p.fx.work(p.g)
+  await p.fx.idle()
+  assertEquals((await p.g.get(['work']))[0].claim, undefined)
+  assertEquals(((await p.g.get(['active']))[0].claim as Comp)?.session, 's2')
+})
