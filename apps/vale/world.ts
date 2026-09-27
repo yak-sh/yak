@@ -1,6 +1,6 @@
-// The world as a three.js scene: the ground and everything standing on it in
-// chunks, thinning away where they come between the camera and the hero, the
-// roofs and upper floors of the buildings they are in or behind fading, their
+// The world as a three.js scene: ground and props in streamed chunks, shared
+// building shapes instanced across them, thinning away where they come
+// between the camera and the hero, the roofs and upper floors fading, their
 // doors (doors.ts), the water, the sky, the nearest village's fire, the
 // lamps, and the light that moves across it all through the day, all in the
 // look of the region the focus is in, blended with the next near a border.
@@ -19,8 +19,9 @@ import type { Chunk } from './chunks.ts'
 import { doors } from './doors.ts'
 import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
+import { instances } from './instances.ts'
 import { LEVELS, type Spot } from './levels.ts'
-import type { Vec } from './mesh.ts'
+import type { Packed, Vec } from './mesh.ts'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { blend } from './regions.ts'
@@ -40,7 +41,15 @@ import {
 
 /** How the page meshes chunk (ci, ck) at a detail (stream.ts), off its
  * thread. */
-export type Mesher = (ci: number, ck: number, lod: number) => Promise<Chunk>
+export type Mesher = {
+  chunk: (ci: number, ck: number, lod: number) => Promise<Chunk>
+  template: (
+    kind: string,
+    seed: number,
+    turn: number,
+    near: boolean,
+  ) => Promise<Packed>
+}
 
 export type World = {
   scene: THREE.Scene
@@ -90,6 +99,9 @@ let HEARTH = 90
 // Once the GPU has an array, the page lets it go.
 let release = (a: THREE.BufferAttribute) =>
   a.onUpload(() => a.array = a.array.slice(0, 0))
+
+let bytes = (p: Packed) =>
+  Object.values(p).reduce((n, a) => n + a.byteLength, 0)
 
 /** How long a day lasts, in seconds. */
 export let DAY = 20 * 60
@@ -231,6 +243,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // finest detail and only near the player; and what glows in it at dusk.
   // Past the fog, nothing is drawn.
   let ground = soft({ speckle: 0.1, see: true })
+  let buildings = instances(scene, ground, mesh.template)
   type Lamp = {
     lantern: THREE.MeshBasicMaterial
     halo: THREE.SpriteMaterial
@@ -254,8 +267,10 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let waiting: (() => void)[] = []
   let gone = false
   let key = (ci: number, ck: number) => `${ci} ${ck}`
+
   let meshOf = (p: Chunk['solid'], ci: number, ck: number) => {
     let g = geometry(p)
+    g.userData.bytes = bytes(p)
     for (let a of Object.values(g.attributes)) {
       if (a instanceof THREE.BufferAttribute) release(a)
     }
@@ -332,6 +347,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
       scene.remove(m)
       m.geometry.dispose()
     }
+    buildings.drop(k)
     drawn.delete(k)
     if (keeps) return
     for (let l of d.lamps) {
@@ -341,33 +357,41 @@ export let world = (v: Vale, mesh: Mesher): World => {
     }
     d.doors.drop()
   }
-  let put = (c: Chunk, lod: number) => {
+  let put = async (c: Chunk, lod: number) => {
     let k = key(c.ci, c.ck)
-    if (c.patch.voxel == v.voxel) adopt(v, c.patch)
-    // What was drawn in the chunk at another detail keeps its lamps and
-    // doors.
-    let was = drawn.get(k)
-    let lamps = was?.lamps, hung = was?.doors
-    let glows = was?.glows ?? glowsOf(c.ci, c.ck)
-    drop(k, true)
-    let solid = meshOf(c.solid, c.ci, c.ck)
-    solid.castShadow = true
-    solid.receiveShadow = true
-    let small = c.small && meshOf(c.small, c.ci, c.ck)
-    if (small) small.receiveShadow = true
-    scene.add(solid)
-    if (small) scene.add(small)
-    let x = (c.ci + 0.5) * CHUNK, z = (c.ck + 0.5) * CHUNK
-    drawn.set(k, {
-      lod,
-      solid,
-      small,
-      lamps: lamps ?? lampsOf(glows),
-      glows,
-      doors: hung ?? doorsOf(c.ci, c.ck),
-      x,
-      z,
-    })
+    let prepared = buildings.prepare(c.buildings, lod == 0)
+    try {
+      await prepared.ready
+      if (gone || wants.get(k)?.lod != lod) return
+      if (c.patch.voxel == v.voxel) adopt(v, c.patch)
+      // What was drawn in the chunk at another detail keeps its lamps and
+      // doors.
+      let was = drawn.get(k)
+      let lamps = was?.lamps, hung = was?.doors
+      let glows = was?.glows ?? glowsOf(c.ci, c.ck)
+      drop(k, true)
+      prepared.draw(k)
+      let solid = meshOf(c.solid, c.ci, c.ck)
+      solid.castShadow = true
+      solid.receiveShadow = true
+      let small = c.small && meshOf(c.small, c.ci, c.ck)
+      if (small) small.receiveShadow = true
+      scene.add(solid)
+      if (small) scene.add(small)
+      let x = (c.ci + 0.5) * CHUNK, z = (c.ck + 0.5) * CHUNK
+      drawn.set(k, {
+        lod,
+        solid,
+        small,
+        lamps: lamps ?? lampsOf(glows),
+        glows,
+        doors: hung ?? doorsOf(c.ci, c.ck),
+        x,
+        z,
+      })
+    } finally {
+      prepared.release()
+    }
   }
   // Every chunk wanted near the focus is drawn, at any detail.
   let close = () => [...wants].every(([k, c]) => c.d >= FIRST || drawn.has(k))
@@ -394,10 +418,9 @@ export let world = (v: Vale, mesh: Mesher): World => {
       pending++
       if (asked.has(k) || asked.size >= ASKED) continue
       asked.add(k)
-      mesh(ci, ck, lod).then((c) => {
+      mesh.chunk(ci, ck, lod).then(async (c) => {
+        if (!gone && wants.get(k)?.lod == lod) await put(c, lod)
         asked.delete(k)
-        if (gone) return
-        if (wants.get(k)?.lod == lod) put(c, lod)
         stream()
       }).catch((e) => {
         asked.delete(k)
@@ -557,12 +580,22 @@ export let world = (v: Vale, mesh: Mesher): World => {
         stream()
       }),
     dispose: () => {
+      if (gone) return
       gone = true
+      buildings.dispose()
+      let geometries = new Set<THREE.BufferGeometry>()
+      let materials = new Set<THREE.Material>()
       scene.traverse((o) => {
         if (!(o instanceof THREE.Mesh || o instanceof THREE.Sprite)) return
-        o.geometry.dispose()
-        for (let m of [o.material].flat()) m.dispose()
+        if (o instanceof THREE.InstancedMesh) o.dispose()
+        geometries.add(o.geometry)
+        for (let m of [o.material].flat()) materials.add(m)
       })
+      geometries.add(lampBox)
+      materials.add(ground)
+      for (let g of geometries) g.dispose()
+      for (let m of materials) m.dispose()
+      halo.dispose()
     },
     tick: (t, dt) => {
       let air = looks()

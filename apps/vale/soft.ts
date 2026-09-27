@@ -75,7 +75,11 @@ varying float vWarmth;
 `
 
 let VERTEX = /* glsl */ `
-vAt = (modelMatrix * vec4(transformed, 1.)).xyz;
+vec4 worldAt = vec4(transformed, 1.);
+#ifdef USE_INSTANCING
+  worldAt = instanceMatrix * worldAt;
+#endif
+vAt = (modelMatrix * worldAt).xyz;
 vFace = edge.xy;
 vMaterial = edge.w;
 vWarmth = floor(edge.z / 16.) / 15.;

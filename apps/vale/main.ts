@@ -27,7 +27,7 @@ import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
-import { meshed } from './grown.ts'
+import { meshed, template } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
@@ -182,7 +182,10 @@ let dealt = dealbox(h.panels.deal, (a, v) => {
 // the detail asked (stream.ts `COARSER`).
 let w = world(
   v,
-  (ci, ck, lod) => meshed(VOX * COARSER[lod], ci, ck, lod == 0),
+  {
+    chunk: (ci, ck, lod) => meshed(VOX * COARSER[lod], ci, ck, lod == 0),
+    template,
+  },
 )
 depth(camera, w.fog)
 // Where the hearth is by which the page first looks, and a new hero first

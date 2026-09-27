@@ -7,7 +7,8 @@
 // starts it.
 import { chart } from './chart.ts'
 import { type Chunk, chunk } from './chunks.ts'
-import { buffers } from './mesh.ts'
+import { buffers, pack, type Packed } from './mesh.ts'
+import { model } from './props.ts'
 import { vale } from './terrain.ts'
 
 /** What the page asks of a worker: one chunk, grown at a voxel edge, with
@@ -17,6 +18,7 @@ import { vale } from './terrain.ts'
 export type Ask =
   | { voxel: number; ci: number; ck: number; small: boolean }
   | { chart: [number, number, number]; m: number }
+  | { template: [string, number, number, boolean] }
 
 /** What a worker answers: the number of the ask, and the chunk or the chart
  * it asked for. */
@@ -24,10 +26,16 @@ export type Answer = {
   n: number
   drawn?: Chunk
   px?: Uint8ClampedArray<ArrayBuffer>
+  template?: Packed
 }
 
 addEventListener('message', (e: MessageEvent<Ask & { n: number }>) => {
   let a = e.data
+  if ('template' in a) {
+    let template = pack(model(...a.template))
+    let answer: Answer = { n: a.n, template }
+    return postMessage(answer, { transfer: buffers(template) })
+  }
   if ('chart' in a) {
     let px = chart(...a.chart, a.m)
     let answer: Answer = { n: a.n, px }

@@ -1,13 +1,11 @@
-// What a chunk of the world draws, meshed and packed: the ground and what
-// stands on it, with a foundation of stone under each structure, and apart
-// from those the flowers and grass, which the page draws only near the
-// player. All of it about the chunk's north-west corner, where the page
-// stands the chunk. No three.js and no page: a worker runs it (grow.ts), a
-// chunk at a time as the page asks (stream.ts), and the page turns each packed
-// chunk into meshes (world.ts), and keeps the ground it was grown from.
+// What a chunk of the world draws: the ground and non-building props are
+// meshed and packed, with a foundation of stone under each structure. Its
+// buildings are placements of shared shapes (world.ts). Flowers and grass
+// are drawn only near the player. A worker runs this without three.js, and
+// the page turns each packed chunk into meshes and keeps its ground.
 import { groundChunk } from './ground.ts'
 import { cuboids } from './boxes.ts'
-import { out, pack, type Packed, place } from './mesh.ts'
+import { out, pack, type Packed, place, type Vec } from './mesh.ts'
 import { KINDS, model } from './props.ts'
 import { off, propAt, spacer, step, thingAt } from './stand.ts'
 import {
@@ -28,6 +26,7 @@ export type Chunk = {
   ck: number
   solid: Packed
   small: Packed | null
+  buildings: { kind: string; seed: number; turn: number; at: Vec }[]
   patch: Patch
 }
 
@@ -53,22 +52,33 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
   adopt(v, patch)
   let solid = groundChunk(patch, out())
   let bits = out()
+  let buildings: Chunk['buildings'] = []
   let props = v.plant(ci, ck)
   let smallSpace = small ? spacer(v.voxel) : null
   for (let p of small ? [...props, ...decor(patch)] : props) {
-    let tiny = KINDS[p.kind].small
+    let kind = KINDS[p.kind], tiny = kind.small
     if (tiny && !small) continue
-    let y = standAt(v, p), mesh = model(p.kind, p.seed, p.turn, small)
+    let y = standAt(v, p)
+    let mesh = tiny ? model(p.kind, p.seed, p.turn, small) : null
     let n = tiny
-      ? smallSpace!(thingAt([p.x, y, p.z], [mesh], v.voxel))
+      ? smallSpace!(thingAt([p.x, y, p.z], [mesh!], v.voxel))
       : step(v, p)
     if (!tiny) smallSpace?.add(propAt(v, p), n)
     let [dx, dy, dz] = off(n)
-    place(tiny ? bits : solid, mesh, [
-      p.x - ox + dx,
-      y + dy,
-      p.z - oz + dz,
-    ])
+    if (kind.raise) {
+      buildings.push({
+        kind: p.kind,
+        seed: p.seed,
+        turn: p.turn ?? 0,
+        at: [p.x + dx, y + dy, p.z + dz],
+      })
+    } else {
+      place(tiny ? bits : solid, mesh ?? model(p.kind, p.seed, p.turn, small), [
+        p.x - ox + dx,
+        y + dy,
+        p.z - oz + dz,
+      ])
+    }
     let base = foundation(v, p)
     if (base) {
       let [[x, y, z], size] = base
@@ -85,6 +95,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     ck,
     solid: pack(solid),
     small: bits.idx.length ? pack(bits) : null,
+    buildings,
     patch,
   }
 }

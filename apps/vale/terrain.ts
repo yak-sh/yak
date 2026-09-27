@@ -1056,7 +1056,7 @@ export let standAt = (v: Vale, p: Prop): number => {
  * ```ts
  * import { assertEquals } from '@std/assert'
  * // Flat ground 5 m up, under a hall.
- * let hall = { kind: 'hall', x: 30, z: 30, seed: 0 }
+ * let hall = { kind: 'hall.plaster', x: 30, z: 30, seed: 0 }
  * let v = flat(5, [], [hall])
  * let b = v.buildings(30, 30, 0)[0]
  * assertEquals(inside(v, 10, 4, 10), true) // underground

@@ -7,6 +7,8 @@
 import { chart } from './chart.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
+import { pack, type Packed } from './mesh.ts'
+import { model } from './props.ts'
 import { vale } from './terrain.ts'
 
 // How many workers mesh at once: a core each, less the page's own, up to four.
@@ -82,6 +84,22 @@ export let meshed = async (
   } catch (e) {
     broke(e)
     return chunk(vale(voxel), ci, ck, small)
+  }
+}
+
+/** A model meshed off the page, sent once for each visible shape. */
+export let template = async (
+  kind: string,
+  seed: number,
+  turn: number,
+  near: boolean,
+): Promise<Packed> => {
+  try {
+    let a = await ask({ template: [kind, seed, turn, near] })
+    return a.template ?? pack(model(kind, seed, turn, near))
+  } catch (e) {
+    broke(e)
+    return pack(model(kind, seed, turn, near))
   }
 }
 

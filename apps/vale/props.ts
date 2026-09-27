@@ -56,12 +56,18 @@ let made = new Map<string, Model>()
 
 let meshed = new Map<string, Out>()
 
+/** The same model wherever its kind, shape, turn and detail are drawn. */
+export let modelKey = (kind: string, seed: number, turn = 0, near = true) =>
+  `${shapeOf(kind, seed).id}:${((turn % 4) + 4) % 4}${
+    KINDS[kind].raise ? `:${near}` : ''
+  }`
+
 /** A prop's triangles, placed with the middle of its base at the origin and
  * turned `turn` quarter turns (a building faces its square). Buildings draw
  * their interiors only at the nearest detail. */
 export let model = (kind: string, seed: number, turn = 0, near = true): Out => {
-  let { id, shape } = shapeOf(kind, seed)
-  let look = `${id}:${turn}${KINDS[kind].raise ? `:${near}` : ''}`
+  let { shape } = shapeOf(kind, seed)
+  let look = modelKey(kind, seed, turn, near)
   let o = meshed.get(look)
   if (o) return o
   let { vox, size, at = [-size / 2, 0, -size / 2] } = shape()
