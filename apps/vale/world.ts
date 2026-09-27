@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import { airOf } from './air.ts'
 import type { Glow } from './buildings/kit.ts'
 import type { Chunk } from './chunks.ts'
-import { doors } from './doors.ts'
+import { doors, type Hung } from './doors.ts'
 import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
 import { instances } from './instances.ts'
@@ -244,6 +244,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // Past the fog, nothing is drawn.
   let ground = soft({ speckle: 0.1, see: true })
   let buildings = instances(scene, ground, mesh.template)
+  let hanging = doors(scene, ground)
   type Lamp = {
     lantern: THREE.MeshBasicMaterial
     halo: THREE.SpriteMaterial
@@ -256,7 +257,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     small: THREE.Mesh | null
     lamps: Lamp[]
     glows: Glow[]
-    doors: ReturnType<typeof doors>
+    doors: Hung
     /** its middle */
     x: number
     z: number
@@ -331,11 +332,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let lampBox = new THREE.BoxGeometry(1, 1, 1)
   // The doors of the buildings standing in a chunk.
   let doorsOf = (ci: number, ck: number) =>
-    doors(
-      scene,
-      v.plant(ci, ck).flatMap((p) => buildingOf(v, p) ?? []),
-      ground,
-    )
+    hanging.hang(v.plant(ci, ck).flatMap((p) => buildingOf(v, p) ?? []))
 
   // Let a chunk go, and its lamps and doors unless it `keeps` them for the
   // same chunk drawn at another detail.
@@ -582,6 +579,8 @@ export let world = (v: Vale, mesh: Mesher): World => {
     dispose: () => {
       if (gone) return
       gone = true
+      for (let k of drawn.keys()) drop(k)
+      hanging.dispose()
       buildings.dispose()
       let geometries = new Set<THREE.BufferGeometry>()
       let materials = new Set<THREE.Material>()

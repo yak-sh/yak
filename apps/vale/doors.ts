@@ -40,21 +40,6 @@ let leaf = (w: number, h: number, color: number, face: number): Vox => {
   return v
 }
 
-let made = new Map<string, THREE.BufferGeometry>()
-let shape = (d: Door, face: number) => {
-  let w = Math.round(d.wide / E), h = Math.round(d.tall / E)
-  let id = `${w} ${h} ${d.color} ${face}`
-  let g = made.get(id)
-  if (!g) {
-    let at: Vec = [0, 0, -E / 2]
-    made.set(
-      id,
-      g = geometry(pack(blob(out(), leaf(w, h, d.color, face), E, at))),
-    )
-  }
-  return g
-}
-
 // Which way a leaf's +x runs when it has swung `k` of the way open.
 let yawOf = (d: Door, k: number) => {
   let a = k * SWING
@@ -63,38 +48,68 @@ let yawOf = (d: Door, k: number) => {
   return Math.atan2(-z, x)
 }
 
-/** The doors of `buildings`, hung in `scene` in `material`. */
-export let doors = (
-  scene: THREE.Scene,
-  buildings: Building[],
-  material: THREE.Material,
-) => {
-  let hung = buildings.flatMap((b) => b.doors).map((d) => {
-    // A leaf's +z, shut, faces (−along.z, along.x): its outside when that is
-    // away from where it swings.
-    let face = d.into[0] * -d.along[1] + d.into[1] * d.along[0] < 0 ? 1 : -1
-    let mesh = new THREE.Mesh(shape(d, face), material)
-    mesh.position.set(...d.hinge)
-    mesh.rotation.y = yawOf(d, 0)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    scene.add(mesh)
-    return { d, mesh, open: 0 }
-  })
-  return {
-    /** Swing each door toward open while someone in `near` is near it. */
-    swing: (near: Vec[], dt: number) => {
-      let k = 1 - Math.exp(-dt * 9)
-      for (let h of hung) {
-        let to = near.some(([x, y, z]) => opensFor(h.d, x, y, z)) ? 1 : 0
-        if (Math.abs(to - h.open) < 1e-3) continue
-        h.open += (to - h.open) * k
-        h.mesh.rotation.y = yawOf(h.d, h.open)
-      }
-    },
-    /** take the doors down; their shapes are kept for the next hung */
-    drop: () => {
-      for (let h of hung) scene.remove(h.mesh)
-    },
+/** One world's door shapes and the leaves hung from them. */
+export let doors = (scene: THREE.Scene, material: THREE.Material) => {
+  let made = new Map<string, THREE.BufferGeometry>()
+  let hanging = new Set<THREE.Mesh>()
+  let gone = false
+  let shape = (d: Door, face: number) => {
+    let w = Math.round(d.wide / E), h = Math.round(d.tall / E)
+    let id = `${w} ${h} ${d.color} ${face}`
+    let g = made.get(id)
+    if (!g) {
+      let at: Vec = [0, 0, -E / 2]
+      made.set(
+        id,
+        g = geometry(pack(blob(out(), leaf(w, h, d.color, face), E, at))),
+      )
+    }
+    return g
   }
+  let hang = (buildings: Building[]) => {
+    if (gone) throw new Error('doors: disposed')
+    let hung = buildings.flatMap((b) => b.doors).map((d) => {
+      // A leaf's +z, shut, faces (−along.z, along.x): its outside when that is
+      // away from where it swings.
+      let face = d.into[0] * -d.along[1] + d.into[1] * d.along[0] < 0 ? 1 : -1
+      let mesh = new THREE.Mesh(shape(d, face), material)
+      mesh.position.set(...d.hinge)
+      mesh.rotation.y = yawOf(d, 0)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      scene.add(mesh)
+      hanging.add(mesh)
+      return { d, mesh, open: 0 }
+    })
+    return {
+      /** Swing each door toward open while someone in `near` is near it. */
+      swing: (near: Vec[], dt: number) => {
+        let k = 1 - Math.exp(-dt * 9)
+        for (let h of hung) {
+          let to = near.some(([x, y, z]) => opensFor(h.d, x, y, z)) ? 1 : 0
+          if (Math.abs(to - h.open) < 1e-3) continue
+          h.open += (to - h.open) * k
+          h.mesh.rotation.y = yawOf(h.d, h.open)
+        }
+      },
+      /** Take leaves down; keep their shape for the next chunk. */
+      drop: () => {
+        for (let h of hung) {
+          scene.remove(h.mesh)
+          hanging.delete(h.mesh)
+        }
+      },
+    }
+  }
+  let dispose = () => {
+    if (gone) return
+    gone = true
+    for (let mesh of hanging) scene.remove(mesh)
+    hanging.clear()
+    for (let g of made.values()) g.dispose()
+    made.clear()
+  }
+  return { hang, dispose }
 }
+
+export type Hung = ReturnType<ReturnType<typeof doors>['hang']>
