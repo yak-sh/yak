@@ -100,6 +100,13 @@ Deno.test('an interrupted shell call recovers its process without running twice'
       await resumed.recover!({ command }, ctx),
       `process ${id} exited 0\ndone`,
     )
+    assertEquals(
+      await resumed.recover!({ command }, {
+        ...ctx,
+        call: { entity: { eid: crypto.randomUUID() } },
+      }),
+      'Shell execution has no process receipt; inspect before retrying.',
+    )
     assertEquals(await Deno.readTextFile(`${dir}/started`), 'once\n')
     assertEquals((await g.read('.process&*')).length, 1)
   } finally {

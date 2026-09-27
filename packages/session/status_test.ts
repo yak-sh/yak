@@ -140,6 +140,24 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
   ['a stop', [input(1), entry(2, { stop: {} })], 'stopped'],
   ['an exception', [input(1), entry(2, { exception: {} })], 'failed'],
+  ['an abandoned call can recover after an exception', [
+    input(1),
+    entry(2, { ask: { to: M } }),
+    entry(3, {
+      call: { to: T, id: 'c1', source: 'e2' },
+      execution: { state: 'running' },
+    }),
+    entry(4, { exception: {} }),
+  ], 'running'],
+  ['an exception on a held call remains failed', [
+    input(1),
+    entry(2, { ask: { to: M } }),
+    entry(3, {
+      call: { to: T, id: 'c1', source: 'e2' },
+      execution: { state: 'running', by: S },
+    }),
+    entry(4, { exception: {} }),
+  ], 'failed'],
   ['one error', [input(1), entry(2, { error: { code: 'x' } })], 'pending'],
   ['three errors', [
     input(1),

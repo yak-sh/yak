@@ -52,6 +52,7 @@ import {
   fn,
   gt,
   iff,
+  isNull,
   join,
   lit,
   not,
@@ -152,6 +153,14 @@ export let openCalls = (entries: Bundle[]): Bundle[] => {
   return all.filter((b) => kindOf(b) == 'call' && !answered.has(b.entity.eid))
 }
 
+// An anonymous claim belongs to the process that made it. If that process
+// vanished before answering, the session runner recovers it without replay.
+let abandoned = (entries: Bundle[]): boolean =>
+  openCalls(entries).some((b) => {
+    let execution = b.execution as Comp | undefined
+    return execution?.state == 'running' && execution.by == null
+  })
+
 /** A transcript the runner answers: one that asked it, by a request or a turn
  * it took. */
 export let served = (entries: Bundle[]): boolean =>
@@ -173,6 +182,7 @@ export let statusOf = (entries: Bundle[]): TranscriptStatus => {
   if (!newest) return 'empty'
   let kind = kindOf(newest)
   if (kind == 'stop') return 'stopped'
+  if (abandoned(all)) return 'running'
   if (kind == 'exception') return 'failed'
   if (all.some((b) => (b.attempt as Comp | undefined)?.state == 'inflight')) {
     return 'running'
@@ -306,6 +316,27 @@ export let sessionStatus = {
         }))),
       ),
     }))
+    let abandoned = exists(select({
+      cols: [lit(1)],
+      from: table(CALL, 'c'),
+      joins: [
+        join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
+        join(
+          table('execution', 'x'),
+          eq(col('entity', 'x'), col('entity', 'c')),
+        ),
+      ],
+      where: and(
+        mine('e'),
+        eq(col('state', 'x'), lit('running')),
+        isNull(col('by', 'x')),
+        not(exists(select({
+          cols: [lit(1)],
+          from: table(RESULT, 'r'),
+          where: eq(col('call', 'r'), col('entity', 'c')),
+        }))),
+      ),
+    }))
     // The newest ask.
     let ask = sub(select({
       cols: [col('entity', 'e')],
@@ -390,6 +421,7 @@ export let sessionStatus = {
         cols: [when(
           [
             [wears(STOP_ENTRY), lit('stopped')],
+            [abandoned, lit('running')],
             [wears(EXCEPTION), lit('failed')],
             [inflight, lit('running')],
             [queued, lit('queued')],

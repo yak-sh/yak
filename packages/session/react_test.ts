@@ -204,6 +204,60 @@ Deno.test('an interrupted tool call gets a result and the model continues withou
   )
 })
 
+Deno.test('a legacy unfinished-call exception recovers without replay', async () => {
+  let g = world()
+  await g.apply([{
+    entity: { eid: 'old-ask' },
+    entry: { session: ids.s },
+    ask: { to: ids.m, through: 'e1' },
+  }, {
+    entity: { eid: 'old-call' },
+    entry: { session: ids.s },
+    call: { to: ids.t, id: 'tool-1', args: { text: 'hi' }, source: 'old-ask' },
+    execution: { state: 'running' },
+  }, {
+    entity: { eid: 'old-exception' },
+    entry: { session: ids.s },
+    content: {
+      body: 'Unfinished tool execution; inspect before retrying: old-call',
+    },
+    exception: {},
+  }], { trusted: true })
+  let runs = 0
+  let recovers = 0
+  let { model, asked } = scripted([says('next', 'done')])
+  let status = await rest(g, ids.s, {
+    model,
+    tools: [{
+      ...echo,
+      run: () => {
+        runs++
+        return 'repeated'
+      },
+      recover: () => {
+        recovers++
+        return 'Shell execution has no process receipt; inspect before retrying.'
+      },
+    }],
+    mint,
+  })
+  let entries = await transcript(g, ids.s)
+  assertEquals(status, 'settled')
+  assertEquals({ runs, recovers }, { runs: 0, recovers: 1 })
+  assertEquals(entries.filter((b) => b.result).length, 1)
+  assertEquals(
+    (entries.find((b) => b.entity.eid == 'old-call')!.execution as Comp).state,
+    'done',
+  )
+  assertEquals(asked.length, 1)
+  assertEquals(
+    asked[0].items.some((i) =>
+      i.kind == 'result' && i.output.includes('no process receipt')
+    ),
+    true,
+  )
+})
+
 Deno.test('a stop is obeyed: nothing is asked or run after it', async () => {
   let g = world()
   let { model, asked } = scripted([calls(['c1', 'hi'])])
