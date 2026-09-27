@@ -14,7 +14,7 @@
 // step is always near.
 import { cuboids } from './boxes.ts'
 import { type Out, out, STEP, type Vec } from './mesh.ts'
-import { bulk, KINDS, model } from './props.ts'
+import { model } from './props.ts'
 import {
   foundation,
   type Prop,
@@ -46,6 +46,10 @@ let E = 1e-6
 
 // How much a plane on the ground's counts for, against one on a neighbour's.
 let GROUND = 1e6
+
+// All current props fit inside this radius. A larger new prop fails where
+// it is meshed until the search radius is raised with it.
+let REACH = 20
 
 let mod = (x: number, m: number) => ((x % m) + m) % m
 
@@ -168,10 +172,16 @@ export let propAt = (v: Vale, p: Prop): Thing => {
     v.voxel,
   )
   let base = foundation(v, p)
-  if (!base) return [own]
-  let [lo, span] = base
-  let o = cuboids(out(), [[lo, span, 0x8e8b82]], 0.25, 0.04)
-  return [own, partAt([0, 0, 0], o, v.voxel)]
+  let t = [own]
+  if (base) {
+    let [lo, span] = base
+    let o = cuboids(out(), [[lo, span, 0x8e8b82]], 0.25, 0.04)
+    t.push(partAt([0, 0, 0], o, v.voxel))
+  }
+  if (radius(t, p.x, p.z) > REACH) {
+    throw new Error(`${p.kind} reaches past the prop search radius`)
+  }
+  return t
 }
 
 /** Models placed at `at` as a spacer sees them, a part each, over ground
@@ -219,13 +229,16 @@ let partAt = (at: Vec, o: Out, grid: number): Part => {
   }
 }
 
-// The widest kind's model, measured across every declared shape. A prop
-// cannot touch one farther away than twice this radius.
-let REACH = Math.max(
-  ...Object.entries(KINDS).flatMap(([kind, k]) =>
-    Array.from({ length: k.shapes ?? 1 }, (_, i) => bulk(kind, i).r)
-  ),
-) + 1
+let radius = (t: Thing, x: number, z: number) =>
+  Math.max(
+    ...t.map(({ room: [lo, hi] }) =>
+      Math.hypot(
+        Math.max(Math.abs(lo[0] - x), Math.abs(hi[0] - x)),
+        Math.max(Math.abs(lo[2] - z), Math.abs(hi[2] - z)),
+      )
+    ),
+    0,
+  )
 
 let id = (p: Prop) => `${p.x}:${p.z}:${p.kind}:${p.seed}:${p.turn ?? 0}`
 let stood = new WeakMap<Vale, Map<string, number>>()
@@ -254,12 +267,7 @@ export let step = (v: Vale, p: Prop): number => {
     let a = queue.pop()!, ak = id(a)
     let t = parts.get(ak)
     if (!t) parts.set(ak, t = propAt(v, a))
-    let r = Math.max(...t.map(({ room: [lo, hi] }) =>
-      Math.hypot(
-        Math.max(Math.abs(lo[0] - a.x), Math.abs(hi[0] - a.x)),
-        Math.max(Math.abs(lo[2] - a.z), Math.abs(hi[2] - a.z)),
-      )
-    ))
+    let r = radius(t, a.x, a.z)
     for (let b of propsNear(v, a.x, a.z, REACH + r)) {
       let bk = id(b)
       if (group.has(bk)) continue
@@ -283,15 +291,7 @@ export let among = (v: Vale) => {
   return (at: Vec, models: Out[]): number => {
     let t = thingAt(at, models.filter((o) => o.pos.length), v.voxel)
     if (!t.length) return 0
-    let r = REACH + Math.max(
-      ...t.map(({ room: [lo, hi] }) =>
-        Math.hypot(
-          Math.max(Math.abs(lo[0] - at[0]), Math.abs(hi[0] - at[0])),
-          Math.max(Math.abs(lo[2] - at[2]), Math.abs(hi[2] - at[2])),
-        )
-      ),
-      0,
-    )
+    let r = REACH + radius(t, at[0], at[2])
     for (let p of propsNear(v, at[0], at[2], r)) {
       let key = id(p)
       if (seen.has(key)) continue
