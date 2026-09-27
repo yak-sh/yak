@@ -61,5 +61,16 @@ export let open = (path: string): Opened => {
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
   }
-  return { ...d, close: () => db.close() }
+  return {
+    ...d,
+    extension: (file: string) => {
+      db.enableLoadExtension = true
+      try {
+        db.loadExtension(file)
+      } finally {
+        db.enableLoadExtension = false
+      }
+    },
+    close: () => db.close(),
+  }
 }

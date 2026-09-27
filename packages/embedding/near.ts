@@ -1,11 +1,8 @@
 // The search itself: a vector in, the nearest entities out.
 //
-// The ranking is an exact scan — every stored vector in the model's space is
-// read, scored by cosine, and sorted. Exact means no recall to tune and no
-// index to keep true, and at a few tens of thousands of vectors it costs a few
-// milliseconds. A corpus past that wants an approximate index, and this is the
-// one function to replace: {@link Rank} is its shape, and the query extension
-// takes one, so an ANN swaps in without touching anything else here.
+// The ranking is exact: the native sqlite-vector scan where installed, or
+// every candidate read and compared by cosine in TypeScript. An approximate
+// ranker can replace this through Rank without changing the query extension.
 //
 // A {@link Screen} is the other half of "nearest": nearest among what. The
 // eight nearest entities of any kind are the wrong eight for `.near=X&.memory`
@@ -35,6 +32,7 @@ import {
   val,
 } from '@yaks/sql'
 import { TABLE } from './ddl.ts'
+import { native } from './native.ts'
 import { cosine, unpack } from './vector.ts'
 
 /**
@@ -151,6 +149,8 @@ let replace = (heap: Hit[], hit: Hit) => {
   heap[i] = hit
 }
 
+let engines = new WeakMap<Driver, ReturnType<typeof native>>()
+
 /** The entities nearest a query vector, most similar first. */
 export let nearest = (
   db: Driver,
@@ -160,6 +160,19 @@ export let nearest = (
   let limit = opts.limit ?? 8
   if (limit <= 0) return []
   let floor = opts.floor ?? 0
+  // A model-scoped native scan is exact when this connection supports it.
+  // The SQL-ranked path remains the answer for a screened query.
+  if (!opts.within && !engines.get(db)) {
+    let loaded = native(db)
+    if (loaded) engines.set(db, loaded)
+  }
+  let fast = !opts.within && engines.get(db)?.(
+    query,
+    opts.model,
+    limit,
+    opts.without,
+  )
+  if (fast) return fast.filter((r) => r.similarity >= floor)
   let heap: Hit[] = []
   let without = opts.without && db.query(select({
     cols: [col('id')],

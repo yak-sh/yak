@@ -238,11 +238,22 @@ results before reusing the same extension for another query.
 
 ## The ranking
 
-`nearest()` computes exact cosine similarity in TypeScript, then sorts
-candidates. It excludes deleted entities immediately, even before pruning. Its
-work grows with the number and dimensions of candidate vectors; no approximate
-index is included. Supply `semantic(db, space, { rank })` with a `Rank`
-implementation to use an application-managed index.
+`nearest()` computes exact cosine similarity. On a local SQLite connection with
+sqlite-vector installed, an unfiltered single-model query uses its native
+`vector_full_scan`; other queries scan in TypeScript so `.near` still filters
+_before_ selecting the nearest neighbours. Both exclude tombstoned entities
+immediately. No approximate index is included.
+
+To enable the native scan on an existing file, back it up first, then explicitly
+call `installNative(db)` once on a writable `@yaks/sqlite` connection. Loading
+sqlite-vector creates its `_sqliteai_vector` metadata table. Searches never
+install it automatically on a database that lacks that table. The dependency's
+platform binaries are in the root import map; other SQL drivers use the
+TypeScript scan. No vector migration or rebuild is needed. A native exact scan
+still reads the whole corpus; at ~123k 384-dimensional vectors, a measured local
+warm scan takes ~180 ms (2026-09-27, scratch copy). This does not remove CLI
+startup or embedding time. Supply `semantic(db, space, { rank })` with a `Rank`
+implementation to use an application-managed approximate index.
 
 ## Storage
 

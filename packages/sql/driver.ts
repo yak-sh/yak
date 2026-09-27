@@ -13,6 +13,8 @@ import { as, col, count, type Expr, select, type Stmt, table } from './ast.ts'
 export type Row = Record<string, unknown>
 
 export type Driver = {
+  /** Load a native SQL extension when this engine supports one. */
+  extension?: (path: string) => void
   /** run a statement and return every row */
   query: (s: Stmt) => Row[]
   /** run a write and return how many rows it changed, triggers aside;
