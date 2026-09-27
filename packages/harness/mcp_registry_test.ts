@@ -23,6 +23,7 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
         name: 'Website',
         url: `http://127.0.0.1:${server.addr.port}/mcp`,
       },
+      alias: { name: 'website' },
     }])
     const [original] = await registry.tools()
     assertEquals(
@@ -33,6 +34,10 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
       }, 'publish_mockup'),
     )
     assert(original.description.includes('Website'))
+    assertEquals(
+      (await registry.control('cancel', 'website')).message,
+      'Authorization cancelled.',
+    )
     await h.g.apply([{
       entity: { eid: '0c300000-0000-4000-8000-000000000001' },
       mcp_server: { name: 'Renamed' },

@@ -79,7 +79,7 @@ Deno.test('connection authorization is a CLI command without a stored call', asy
         out: (line) => out.push(line),
       })
       assertEquals(code, 0)
-      assert(out.pop()?.includes('openai'))
+      assert(out.pop()?.includes('OpenAI'))
     }
     let host = await opened(path, ['graph'], false)
     assertEquals(await host.graph.read('.call&*'), [])

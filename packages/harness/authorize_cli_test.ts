@@ -2,6 +2,7 @@
 // to private input and the authorization controller.
 
 import { assertEquals, assertRejects } from '@std/assert'
+import { OAuthError } from '@yaks/oauth'
 import {
   type Authorization,
   authorizeCLI,
@@ -14,7 +15,7 @@ Deno.test('connection authorize lists targets without starting a sign-in', async
     run: (action) => {
       calls.push(action)
       return Promise.resolve({
-        servers: ['site [site]', 'openai'],
+        servers: ['site [site]', 'OpenAI'],
       })
     },
     close: () => {
@@ -22,7 +23,7 @@ Deno.test('connection authorize lists targets without starting a sign-in', async
       return Promise.resolve()
     },
   }
-  assertEquals(await authorizeCLI(auth), 'site [site]\nopenai')
+  assertEquals(await authorizeCLI(auth), 'site [site]\nOpenAI')
   assertEquals(calls, ['list', 'close'])
 })
 
@@ -105,4 +106,35 @@ Deno.test('connection authorize closes an unfinished attempt', async () => {
     'cancelled',
   )
   assertEquals(closed, true)
+})
+
+Deno.test('a refused return URL can be pasted again into the same attempt', async () => {
+  let calls: string[] = []
+  let shown: string[] = []
+  let pastes = ['invalid', 'http://localhost/callback?state=ok']
+  let auth: Authorization = {
+    run: (action, _name, callback) => {
+      calls.push(action)
+      if (action == 'begin') {
+        return Promise.resolve({ url: 'https://issuer.test' })
+      }
+      if (callback == 'invalid') {
+        throw new OAuthError('callback', 'the return URL is invalid')
+      }
+      return Promise.resolve({ message: 'Connected.' })
+    },
+    close: () => {
+      calls.push('close')
+      return Promise.resolve()
+    },
+  }
+  assertEquals(
+    await authorizeCLI(auth, 'site', {
+      say: (line) => shown.push(line),
+      hidden: () => Promise.resolve(pastes.shift() ?? ''),
+    }),
+    'Connected.',
+  )
+  assertEquals(calls, ['begin', 'complete', 'complete', 'close'])
+  assertEquals(shown.filter((line) => line.includes('Paste')).length, 2)
 })

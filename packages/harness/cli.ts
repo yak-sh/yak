@@ -10,13 +10,13 @@ let authorizeCommand: CliCommand = {
   name: 'connection_authorize',
   noun: 'connection',
   verb: 'authorize',
-  description: 'List model providers and MCP servers, or sign in to one. ' +
-    'Paste the complete return URL into hidden terminal input.',
+  description: 'List connections or sign in by title or alias. ' +
+    'Paste the complete return URL into masked terminal input.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
     properties: {
-      name: { type: 'string', description: 'provider or MCP server name' },
+      name: { type: 'string', description: 'connection title or alias' },
     },
   },
   options: { positional: ['name'] },

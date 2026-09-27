@@ -55,10 +55,10 @@ input.
 List `@yaks/harness` among a `yak` config's plugins, beside the packages whose
 words it runs over: `@yaks/session`, `@yaks/tools`, `@yaks/context`,
 `@yaks/model` and its providers (`@yaks/openai`, `@yaks/openrouter`),
-`@yaks/blob`, `@yaks/process`, `@yaks/secrets`, `@yaks/connections`,
-`@yaks/mcp-client`, `@yaks/git`, `@yaks/effects`, and the work (`@yaks/doc`,
-`@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in `testing.ts` is such
-a list, in a config's order. Then:
+`@yaks/blob`, `@yaks/process`, `@yaks/secrets`, `@yaks/key`, `@yaks/alias`,
+`@yaks/connections`, `@yaks/mcp-client`, `@yaks/git`, `@yaks/effects`, and the
+work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in
+`testing.ts` is such a list, in a config's order. Then:
 
 ```sh
 yak session new 'reply with the word pong'
@@ -99,7 +99,7 @@ invoking `DENO_DIR` before moving it.
 
 The model is `gpt-6-astra` unless `--model` names another, reached with
 `$OPENAI_API_KEY` or the OpenAI connection. `yak auth` lists model providers and
-MCP servers; pass one of those names to sign in. It prints an authorization link
+MCP servers; pass a title or alias to sign in. It prints an authorization link
 and reads the complete return URL with terminal echo disabled. The return URL is
 never a command argument or transcript entry. `yak model list` lists names from
 the OpenAI endpoint reached by that credential.
@@ -922,12 +922,13 @@ behavior.
 
 Add an `mcp_server` entity as above, then press **Esc**, **A** in the TUI or run
 `yak auth` to list it and sign in on the command line. In the TUI, choose a
-server with j/k and Enter. On the command line, pass its listed name to
-`yak auth`. Open the displayed authorization link in your browser. After
-approval, copy the complete return URL from the address bar and paste it into
-the authorization panel or command prompt. The return URL is hidden and never
-sent to the model or a transcript. Esc cancels in the TUI; Ctrl+C cancels the
-command prompt.
+server with j/k and Enter. On the command line, pass its listed title or graph
+alias to `yak auth`. `yak connection authorize` uses the same path. Open the
+displayed authorization link in your browser. After approval, copy the complete
+return URL from the address bar and paste it into the authorization panel or
+command prompt. The return URL is masked and never sent to the model or a
+transcript. A refused paste can be retried while the attempt is open. Esc
+cancels in the TUI; Ctrl+C cancels the command prompt.
 
 The default callback is `http://localhost:8765/oauth/callback`. No listener is
 started, so a browser connection error at that address is expected; copy the
@@ -977,7 +978,7 @@ of the model, and its `name` is what OpenRouter calls the model — what every
 request it serves asks for.
 
 Choose a model identifier available to your OpenRouter account. Then press
-**Esc, A**, select **openrouter**, open the authorization URL, and paste the
+**Esc, A**, select **OpenRouter**, open the authorization URL, and paste the
 full return URL into the private authorization input. No callback listener runs:
 a browser connection-error page is expected; copy its address bar. The API key
 is kept as a connection the provider owns ([@yaks/connections](../connections)):

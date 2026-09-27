@@ -2,6 +2,7 @@
 // read with terminal echo off, never passed as a tool argument or graph data.
 
 import { Refused } from '@yaks/graph'
+import { OAuthError } from '@yaks/oauth'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 
 export type Authorization = {
@@ -115,11 +116,21 @@ export let authorizeCLI = async (
     let begun = await auth.run('begin', name)
     if (!begun.url) throw new Error('Authorization returned no link')
     io.say(`Open ${begun.url}`)
-    io.say('Paste the complete return URL and press Enter (input hidden):')
-    let callback = await io.hidden()
-    if (!callback) throw new Refused('Authorization cancelled')
-    let reply = await auth.run('complete', name, callback)
-    return reply.message ?? 'Connected.'
+    for (;;) {
+      io.say('Paste the complete return URL and press Enter (input hidden):')
+      let callback = await io.hidden()
+      if (!callback) throw new Refused('Authorization cancelled')
+      try {
+        let reply = await auth.run('complete', name, callback)
+        return reply.message ?? 'Connected.'
+      } catch (error) {
+        if (
+          !(error instanceof OAuthError) ||
+          !['callback', 'state', 'issuer', 'code'].includes(error.code)
+        ) throw error
+        io.say(`${error.message}. Try the paste again.`)
+      }
+    }
   } finally {
     await auth.close()
   }

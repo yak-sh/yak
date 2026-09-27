@@ -13,13 +13,15 @@ let OPENAI = identityEid('provider', ['openai'])
 let OPENROUTER = identityEid('provider', ['openrouter'])
 let PROVIDERS = [
   {
-    label: 'openai',
+    label: 'OpenAI',
+    alias: 'openai',
     owner: OPENAI,
     integration: 'openai',
     redirect: 'http://127.0.0.1:1455/auth/callback',
   },
   {
-    label: 'openrouter',
+    label: 'OpenRouter',
+    alias: 'openrouter',
     owner: OPENROUTER,
     integration: 'openrouter',
     redirect: REDIRECT,
@@ -57,7 +59,7 @@ export let authorize = (h: Pick<Harness, 'g' | 'vault'>): Authorization => {
         ],
       }
     }
-    let provider = PROVIDERS.find((p) => p.label == name)
+    let provider = PROVIDERS.find((p) => p.label == name || p.alias == name)
     if (!provider) return mcp.control(action, name, callback)
     if (action == 'cancel') {
       signin.cancel(provider.owner)
@@ -79,12 +81,12 @@ export let authorize = (h: Pick<Harness, 'g' | 'vault'>): Authorization => {
         if (seed.length) await h.g.apply(seed, { trusted: true })
       }
       // A CLI sign-in can start before a model or session seeded this provider.
-      if (provider.owner == OPENAI) {
-        await h.g.apply([{
-          entity: { eid: OPENAI },
-          provider: { name: 'openai' },
-        }])
-      }
+      await h.g.apply([{
+        entity: { eid: provider.owner },
+        provider: { name: provider.alias },
+        doc: { title: provider.label },
+        alias: { name: provider.alias },
+      }])
       return signin.begin(
         provider.owner,
         provider.integration,

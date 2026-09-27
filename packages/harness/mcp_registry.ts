@@ -141,9 +141,10 @@ export const graphMCP = (h: Pick<Harness, 'g' | 'vault'>, signin: SignIns) => {
             : {}),
         }
       }
+      const alias = (await g.address([name])).get(name)
       const found =
         [...live].find(([id, item]) =>
-          name === id || name === `${item.label} [${id}]`
+          name === id || alias === id || name === `${item.label} [${id}]`
         ) ??
           [...live].filter(([, item]) => item.label === name).filter((
             _,

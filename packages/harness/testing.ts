@@ -28,6 +28,8 @@ import { type Harness, hosted } from './store.ts'
 export let PLUGINS: string[] = [
   '@yaks/kernel',
   '@yaks/id',
+  '@yaks/key',
+  '@yaks/alias',
   '@yaks/secrets',
   '@yaks/edge',
   '@yaks/blob',

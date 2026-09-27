@@ -22,7 +22,7 @@ Deno.test('OpenAI authorization starts before a session or model exists', async 
   let auth = authorize(h)
   try {
     let listed = await auth.run('list')
-    assert(listed.servers?.includes('openai'))
+    assert(listed.servers?.includes('OpenAI'))
     let begun = await auth.run('begin', 'openai')
     let url = new URL(begun.url!)
     assertEquals(url.origin, 'https://auth.openai.com')
@@ -43,6 +43,18 @@ Deno.test('OpenAI authorization starts before a session or model exists', async 
     assertEquals(url.searchParams.get('state')?.length != 0, true)
     let owner = identityEid('provider', ['openai'])
     assertEquals((await h.g.read(`.eid=${owner}&.provider`)).length, 1)
+    assertEquals((await h.g.address(['openai'])).get('openai'), owner)
+    assertEquals((await h.g.read(`.eid=${owner}&.doc.title=OpenAI`)).length, 1)
+    await assertRejects(
+      () => auth.run('complete', 'openai', 'invalid'),
+      Error,
+      'the return URL is invalid',
+    )
+    await assertRejects(
+      () => auth.run('complete', 'openai', 'invalid'),
+      Error,
+      'the return URL is invalid',
+    )
   } finally {
     await auth.close()
     await h.close()

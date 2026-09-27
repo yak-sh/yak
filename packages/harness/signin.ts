@@ -68,7 +68,6 @@ export const signins = (h: Pick<Harness, 'g' | 'vault'>): SignIns => {
     },
     complete: async (owner: Eid, integration: string, callback: string) => {
       const was = pending.get(owner)
-      pending.delete(owner)
       const eid = await held(owner, integration)
       if (!was || !eid) {
         throw new Error('Authorization expired or not started; begin again')
@@ -77,6 +76,7 @@ export const signins = (h: Pick<Harness, 'g' | 'vault'>): SignIns => {
         attempt: was.attempt,
         callback: callback.trim(),
       })
+      pending.delete(owner)
     },
     cancel: (owner?: Eid) => owner ? pending.delete(owner) : pending.clear(),
   }
