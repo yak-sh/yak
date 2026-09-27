@@ -67,6 +67,9 @@ export type Act = {
   hurt: number
   /** how far through a roll, 0 to 1, or -1 for none */
   roll: number
+  /** how far the head is turned from the body to look at someone, in
+   * radians */
+  look?: number
   down: boolean
   /** seconds, for idling */
   t: number
@@ -487,7 +490,11 @@ export let person = (
       body.position.y = Math.abs(c) * 0.05 * amp
       torso.rotation.set(amp * 0.08, 0, 0)
       torso.scale.y = 1 + Math.sin(a.t * 2.2) * 0.012
-      head.rotation.set(-amp * 0.06, Math.sin(a.t * 0.7) * 0.15 * (1 - amp), 0)
+      head.rotation.set(
+        -amp * 0.06,
+        Math.sin(a.t * 0.7) * 0.15 * (1 - amp) + (a.look ?? 0),
+        0,
+      )
       cape.rotation.x = 0.08 + amp * 0.7 + Math.sin(a.t * 5) * 0.04
       if (a.air) {
         legL[0].rotation.x = -0.8

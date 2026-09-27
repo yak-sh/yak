@@ -31,6 +31,7 @@
 import { ABILITIES, abilitiesOf } from './abilities.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
+import { heed } from './gaze.ts'
 import {
   firsts,
   type Hand,
@@ -218,6 +219,11 @@ export type Giver = {
   next: Standing | null
   mark: '' | '!' | '?'
   near: number
+  /** the way they walk, or null while they stand */
+  walk: number | null
+  /** the hero they look at, the nearest from any page, and whether near
+   * enough to talk (gaze.ts) */
+  heed: { x: number; z: number; talk: boolean } | null
 }
 
 export type Frame = {
@@ -1443,7 +1449,11 @@ export let game = (
       // The people of this level who give quests.
       let givers: Giver[] = GIVERS.filter((g) => g.level == lv).map((g) => {
         let [px, pz] = v.places[g.place] ?? [64, 64]
-        let [x, z] = stand(g.id, [px + g.offset[0], pz + g.offset[1]], now)
+        let home: [number, number] = [px + g.offset[0], pz + g.offset[1]]
+        let [x, z] = stand(g.id, home, now)
+        // Where they stood a moment ago says the way they walk.
+        let [wx, wz] = stand(g.id, home, now - 250)
+        let h = heed(x, z, spots.values())
         let theirs = s.quests.filter((q) => q.quest.giver == g.id)
         let next = theirs.find((q) => q.state == 'taken') ??
           theirs.find((q) => q.state == 'open') ?? null
@@ -1465,6 +1475,10 @@ export let game = (
           next,
           mark,
           near: Math.hypot(x - body.x, z - body.z),
+          walk: Math.hypot(x - wx, z - wz) > 0.02
+            ? Math.atan2(x - wx, z - wz)
+            : null,
+          heed: h && { x: h.x, z: h.z, talk: h.near < TALK },
         }
       })
       let talk = down ? null : givers
