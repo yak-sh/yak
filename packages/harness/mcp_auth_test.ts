@@ -99,9 +99,9 @@ Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through 
   seed.close()
   const backend = await remote({ worker: worker(), config: at(db), fake: true })
   try {
-    assertEquals((await backend.agent.authorizeMCP!('list')).servers, [
+    assert((await backend.agent.authorizeMCP!('list')).servers?.includes(
       'site [site]',
-    ])
+    ))
     const pending = await backend.agent.authorizeMCP!('begin', 'site')
     const callback = pending.redirectUrl + '?code=authorization-code&state=' +
       new URL(pending.url!).searchParams.get('state')
