@@ -10,11 +10,11 @@ export let MARSH: Record<string, Row> = {
     cell: [1, 0],
     arrive: 'stilts',
     places: {
-      marsh: { kind: 'reedbed', at: [60, 64] },
-      meadow: { kind: 'meadow', at: [40, 36] },
-      pool: { kind: 'lake', at: [36, 90] },
-      woods: { kind: 'woods', at: [96, 90] },
-      stilts: { kind: 'stilts', at: [70, 56] },
+      marsh: { kind: 'reedbed', at: [124, 128] },
+      meadow: { kind: 'meadow', at: [104, 100] },
+      pool: { kind: 'lake', at: [100, 154] },
+      woods: { kind: 'woods', at: [160, 154] },
+      stilts: { kind: 'stilts', at: [134, 120] },
     },
     roads: {
       south: 'mirewood',
@@ -34,10 +34,10 @@ export let MARSH: Record<string, Row> = {
     cell: [1, 1],
     arrive: 'marsh',
     places: {
-      marsh: { kind: 'mire', at: [60, 64] },
-      woods: { kind: 'drownedwood', at: [92, 40] },
-      west: { kind: 'drownedwood', at: [36, 36] },
-      pool: { kind: 'lake', at: [88, 92] },
+      marsh: { kind: 'mire', at: [124, 128] },
+      woods: { kind: 'drownedwood', at: [156, 104] },
+      west: { kind: 'drownedwood', at: [100, 100] },
+      pool: { kind: 'lake', at: [152, 156] },
     },
     roads: {
       north: 'reedmarsh',
@@ -58,10 +58,10 @@ export let MARSH: Record<string, Row> = {
     cell: [1, 2],
     arrive: 'marsh',
     places: {
-      marsh: { kind: 'fen', at: [64, 64] },
-      ruins: { kind: 'dig', at: [44, 44] },
-      pool: { kind: 'lake', at: [92, 86] },
-      moor: { kind: 'turfmoor', at: [94, 38] },
+      marsh: { kind: 'fen', at: [128, 128] },
+      ruins: { kind: 'dig', at: [108, 108] },
+      pool: { kind: 'lake', at: [156, 150] },
+      moor: { kind: 'turfmoor', at: [158, 102] },
     },
     roads: {
       north: 'mirewood',
@@ -87,11 +87,11 @@ export let MARSH: Record<string, Row> = {
     cell: [1, 3],
     arrive: 'kirk',
     places: {
-      marsh: { kind: 'marsh', at: [64, 66] },
-      kirk: { kind: 'kirk', at: [60, 48] },
-      chapel: { kind: 'churchyard', at: [90, 88] },
-      pool: { kind: 'lake', at: [36, 86] },
-      mere: { kind: 'lake', at: [34, 40] },
+      marsh: { kind: 'marsh', at: [128, 130] },
+      kirk: { kind: 'kirk', at: [124, 112] },
+      chapel: { kind: 'churchyard', at: [154, 152] },
+      pool: { kind: 'lake', at: [100, 150] },
+      mere: { kind: 'lake', at: [98, 104] },
     },
     roads: {
       north: 'fenhollow',
@@ -117,10 +117,10 @@ export let MARSH: Record<string, Row> = {
     cell: [-3, -1],
     arrive: 'marsh',
     places: {
-      marsh: { kind: 'bog', at: [64, 64] },
-      pool: { kind: 'lake', at: [40, 92] },
-      mere: { kind: 'lake', at: [34, 38] },
-      toadstools: { kind: 'shroomwood', at: [94, 40] },
+      marsh: { kind: 'bog', at: [128, 128] },
+      pool: { kind: 'lake', at: [104, 156] },
+      mere: { kind: 'lake', at: [98, 102] },
+      toadstools: { kind: 'shroomwood', at: [158, 104] },
     },
     roads: {
       east: 'sporefen',
@@ -140,10 +140,10 @@ export let MARSH: Record<string, Row> = {
     cell: [-2, -1],
     arrive: 'toadstools',
     places: {
-      marsh: { kind: 'sporemarsh', at: [60, 80] },
-      toadstools: { kind: 'sporewood', at: [64, 56] },
-      east: { kind: 'sporewood', at: [96, 36] },
-      pool: { kind: 'lake', at: [30, 40] },
+      marsh: { kind: 'sporemarsh', at: [124, 144] },
+      toadstools: { kind: 'sporewood', at: [128, 120] },
+      east: { kind: 'sporewood', at: [160, 100] },
+      pool: { kind: 'lake', at: [94, 104] },
     },
     roads: {
       north: 'glowcap',

@@ -9,10 +9,10 @@ export let DEEP: Record<string, Row> = {
     cell: [-1, -2],
     arrive: 'hollow',
     places: {
-      toadstools: { kind: 'glowcaps', at: [64, 64] },
-      pool: { kind: 'lake', at: [92, 40] },
-      mere: { kind: 'lake', at: [36, 90] },
-      hollow: { kind: 'capvillage', at: [56, 70] },
+      toadstools: { kind: 'glowcaps', at: [128, 128] },
+      pool: { kind: 'lake', at: [156, 104] },
+      mere: { kind: 'lake', at: [100, 154] },
+      hollow: { kind: 'capvillage', at: [120, 134] },
     },
     roads: {
       east: 'elderglade',
@@ -43,10 +43,10 @@ export let DEEP: Record<string, Row> = {
     cell: [-2, -2],
     arrive: 'toadstools',
     places: {
-      toadstools: { kind: 'gleamwood', at: [64, 64] },
-      gleam: { kind: 'gleam', at: [44, 44] },
-      deep: { kind: 'amethyst', at: [90, 86] },
-      pool: { kind: 'lake', at: [92, 36] },
+      toadstools: { kind: 'gleamwood', at: [128, 128] },
+      gleam: { kind: 'gleam', at: [108, 108] },
+      deep: { kind: 'amethyst', at: [154, 150] },
+      pool: { kind: 'lake', at: [156, 100] },
     },
     roads: {
       north: 'shardvault',
@@ -74,11 +74,11 @@ export let DEEP: Record<string, Row> = {
     cell: [-2, -3],
     arrive: 'vault',
     places: {
-      toadstools: { kind: 'palecaps', at: [64, 70] },
-      vault: { kind: 'vault', at: [64, 60] },
-      west: { kind: 'shards', at: [38, 40] },
-      east: { kind: 'shards', at: [92, 88] },
-      north: { kind: 'shards', at: [96, 36] },
+      toadstools: { kind: 'palecaps', at: [128, 134] },
+      vault: { kind: 'vault', at: [128, 124] },
+      west: { kind: 'shards', at: [102, 104] },
+      east: { kind: 'shards', at: [156, 152] },
+      north: { kind: 'shards', at: [160, 100] },
     },
     roads: {
       south: 'gleamdeep',

@@ -31,7 +31,7 @@ import { VALE } from './levels/vale.ts'
 export type Spot = [number, number]
 
 /** A level's side, and its cell's, in metres. */
-export let SIZE = 128
+export let SIZE = 256
 
 export type Place = { kind: string; at: Spot }
 

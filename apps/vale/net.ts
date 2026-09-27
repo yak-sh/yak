@@ -17,6 +17,7 @@ import { type Client, client, type Watch } from '@yaks/client'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
+import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
 import words from './vocab.json' with { type: 'json' }
@@ -163,7 +164,7 @@ export let connect = (base: URL) => {
   let lookQuery = ''
   let lookWatch: Watch | null = null
   let lookBy = new Map<string, Bundle>()
-  let area = areaOf(64, 64, REACH)
+  let area = areaOf(SIZE / 2, SIZE / 2, REACH)
   let near = c.watch(area.query)
   let pending: { area: typeof area; watch: Watch; off: () => void } | null =
     null

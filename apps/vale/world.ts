@@ -20,7 +20,7 @@ import { doors, type Hung } from './doors.ts'
 import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
 import { instances } from './instances.ts'
-import { LEVELS, type Spot } from './levels.ts'
+import { LEVELS, SIZE, type Spot } from './levels.ts'
 import type { Packed, Vec } from './mesh.ts'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
@@ -530,7 +530,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     return b.t > 0.5 ? la.air : lb.air
   }
 
-  let focus = new THREE.Vector3(64, 6, 64)
+  let focus = new THREE.Vector3(SIZE / 2, 6, SIZE / 2)
   let w: World = {
     scene,
     fog,

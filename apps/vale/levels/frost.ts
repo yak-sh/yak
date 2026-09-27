@@ -10,10 +10,10 @@ export let FROST: Record<string, Row> = {
     cell: [3, -1],
     arrive: 'snow',
     places: {
-      snow: { kind: 'snowmoor', at: [64, 64] },
-      pines: { kind: 'stuntpines', at: [40, 40] },
-      tarn: { kind: 'tarn', at: [92, 86] },
-      glacier: { kind: 'icecut', at: [96, 36] },
+      snow: { kind: 'snowmoor', at: [128, 128] },
+      pines: { kind: 'stuntpines', at: [104, 104] },
+      tarn: { kind: 'tarn', at: [156, 150] },
+      glacier: { kind: 'icecut', at: [160, 100] },
     },
     roads: {
       south: 'rimeholt',
@@ -40,11 +40,11 @@ export let FROST: Record<string, Row> = {
     cell: [3, 0],
     arrive: 'holt',
     places: {
-      snow: { kind: 'rimewood', at: [64, 64] },
-      tarn: { kind: 'tarn', at: [36, 40] },
-      pines: { kind: 'rimewood', at: [96, 90] },
-      glacier: { kind: 'glacier', at: [96, 34] },
-      holt: { kind: 'holt', at: [62, 62] },
+      snow: { kind: 'rimewood', at: [128, 128] },
+      tarn: { kind: 'tarn', at: [100, 104] },
+      pines: { kind: 'rimewood', at: [160, 154] },
+      glacier: { kind: 'glacier', at: [160, 98] },
+      holt: { kind: 'holt', at: [126, 126] },
     },
     roads: {
       north: 'frostmoor',
@@ -64,10 +64,10 @@ export let FROST: Record<string, Row> = {
     cell: [4, 0],
     arrive: 'snow',
     places: {
-      snow: { kind: 'snowpines', at: [64, 64] },
-      pines: { kind: 'deeppines', at: [60, 38] },
-      east: { kind: 'loggers', at: [92, 84] },
-      tarn: { kind: 'tarn', at: [36, 86] },
+      snow: { kind: 'snowpines', at: [128, 128] },
+      pines: { kind: 'deeppines', at: [124, 102] },
+      east: { kind: 'loggers', at: [156, 148] },
+      tarn: { kind: 'tarn', at: [100, 150] },
     },
     roads: {
       west: 'rimeholt',
@@ -87,11 +87,11 @@ export let FROST: Record<string, Row> = {
     cell: [3, 1],
     arrive: 'snow',
     places: {
-      snow: { kind: 'icefield', at: [64, 64] },
-      glacier: { kind: 'icefall', at: [82, 36] },
-      west: { kind: 'crevasses', at: [36, 44] },
-      south: { kind: 'crevasses', at: [36, 92] },
-      tarn: { kind: 'tarn', at: [94, 90] },
+      snow: { kind: 'icefield', at: [128, 128] },
+      glacier: { kind: 'icefall', at: [146, 100] },
+      west: { kind: 'crevasses', at: [100, 108] },
+      south: { kind: 'crevasses', at: [100, 156] },
+      tarn: { kind: 'tarn', at: [158, 154] },
     },
     roads: {
       north: 'rimeholt',
@@ -116,10 +116,10 @@ export let FROST: Record<string, Row> = {
     cell: [4, 1],
     arrive: 'snow',
     places: {
-      snow: { kind: 'highsnow', at: [64, 72] },
-      glacier: { kind: 'peak', at: [64, 50] },
-      west: { kind: 'cornice', at: [34, 38] },
-      east: { kind: 'cornice', at: [96, 94] },
+      snow: { kind: 'highsnow', at: [128, 136] },
+      glacier: { kind: 'peak', at: [128, 114] },
+      west: { kind: 'cornice', at: [98, 102] },
+      east: { kind: 'cornice', at: [160, 158] },
     },
     roads: {
       west: 'icefall',

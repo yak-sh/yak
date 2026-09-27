@@ -96,6 +96,7 @@ export let SANDS: Record<string, Feature> = {
   welltown: {
     ...village,
     like: 'village',
+    shape: (h, d) => lerp(h, 6.5, smooth(34, 7.5, d)),
     builds: makeVillage('windpump', [
       { kind: 'jars', x: 6.5, z: -3.5, seed: 0 },
       { kind: 'jars', x: -11, z: -3, seed: 1 },

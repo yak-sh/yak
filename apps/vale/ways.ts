@@ -233,8 +233,8 @@ export let bedAt = ({ bed }: Road, t: number) => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * // Mossvale's road west, to Birchmere, runs past its village.
- * let [road] = roadsIn(20, 60, 30, 70, 10).filter((r) => r.to == 'mossvale')
+ * // Mossvale's road west, to Birchmere, meets its village streets.
+ * let [road] = roadsIn(65, 120, 90, 140, 10).filter((r) => r.to == 'mossvale')
  * assertEquals(road.from, 'birchmere')
  * assertEquals(road.signs[1].side, 'west')
  * ```

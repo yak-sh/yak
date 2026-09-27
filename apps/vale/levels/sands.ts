@@ -10,10 +10,10 @@ export let SANDS: Record<string, Row> = {
     cell: [-3, 1],
     arrive: 'well',
     places: {
-      dunes: { kind: 'dustpan', at: [64, 64] },
-      mesa: { kind: 'oldshore', at: [96, 36] },
-      oasis: { kind: 'lastpool', at: [90, 88] },
-      well: { kind: 'welltown', at: [58, 62] },
+      dunes: { kind: 'dustpan', at: [128, 128] },
+      mesa: { kind: 'oldshore', at: [160, 100] },
+      oasis: { kind: 'lastpool', at: [154, 152] },
+      well: { kind: 'welltown', at: [122, 126] },
     },
     roads: {
       north: 'driftwood',
@@ -42,10 +42,10 @@ export let SANDS: Record<string, Row> = {
     cell: [-4, 1],
     arrive: 'camp',
     places: {
-      dunes: { kind: 'golddunes', at: [64, 64] },
-      oasis: { kind: 'palmgrove', at: [50, 52] },
-      mesa: { kind: 'mesa', at: [96, 96] },
-      camp: { kind: 'caravan', at: [72, 72] },
+      dunes: { kind: 'golddunes', at: [128, 128] },
+      oasis: { kind: 'palmgrove', at: [114, 116] },
+      mesa: { kind: 'mesa', at: [160, 160] },
+      camp: { kind: 'caravan', at: [136, 136] },
     },
     roads: {
       east: 'dustmere',
@@ -70,10 +70,10 @@ export let SANDS: Record<string, Row> = {
     cell: [-3, 2],
     arrive: 'dunes',
     places: {
-      dunes: { kind: 'greatdunes', at: [64, 64] },
-      east: { kind: 'bonedunes', at: [94, 40] },
-      buried: { kind: 'buried', at: [40, 40] },
-      mesa: { kind: 'scar', at: [86, 90] },
+      dunes: { kind: 'greatdunes', at: [128, 128] },
+      east: { kind: 'bonedunes', at: [158, 104] },
+      buried: { kind: 'buried', at: [104, 104] },
+      mesa: { kind: 'scar', at: [150, 154] },
     },
     roads: {
       north: 'dustmere',
@@ -99,11 +99,11 @@ export let SANDS: Record<string, Row> = {
     cell: [-4, 2],
     arrive: 'mesa',
     places: {
-      dunes: { kind: 'dunes', at: [64, 100] },
-      mesa: { kind: 'redrock', at: [64, 64] },
-      west: { kind: 'buttes', at: [36, 36] },
-      east: { kind: 'buttes', at: [94, 92] },
-      oasis: { kind: 'spring', at: [90, 40] },
+      dunes: { kind: 'dunes', at: [128, 164] },
+      mesa: { kind: 'redrock', at: [128, 128] },
+      west: { kind: 'buttes', at: [100, 100] },
+      east: { kind: 'buttes', at: [158, 156] },
+      oasis: { kind: 'spring', at: [154, 104] },
     },
     roads: {
       north: 'palmwell',
@@ -133,10 +133,10 @@ export let SANDS: Record<string, Row> = {
     cell: [-5, 2],
     arrive: 'tombs',
     places: {
-      dunes: { kind: 'tombdunes', at: [64, 64] },
-      tombs: { kind: 'necropolis', at: [64, 48] },
-      sunken: { kind: 'sunkentomb', at: [38, 86] },
-      mesa: { kind: 'tombcliffs', at: [96, 92] },
+      dunes: { kind: 'tombdunes', at: [128, 128] },
+      tombs: { kind: 'necropolis', at: [128, 112] },
+      sunken: { kind: 'sunkentomb', at: [102, 150] },
+      mesa: { kind: 'tombcliffs', at: [160, 156] },
     },
     roads: {
       east: 'redmesa',

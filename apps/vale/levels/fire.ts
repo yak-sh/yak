@@ -10,10 +10,10 @@ export let FIRE: Record<string, Row> = {
     cell: [-3, 3],
     arrive: 'forge',
     places: {
-      ash: { kind: 'emberash', at: [64, 64] },
-      volcano: { kind: 'lavafall', at: [96, 34] },
-      moor: { kind: 'cinderheath', at: [30, 40] },
-      forge: { kind: 'forgetown', at: [58, 70] },
+      ash: { kind: 'emberash', at: [128, 128] },
+      volcano: { kind: 'lavafall', at: [160, 98] },
+      moor: { kind: 'cinderheath', at: [94, 104] },
+      forge: { kind: 'forgetown', at: [122, 134] },
     },
     roads: {
       east: 'giantsteps',
@@ -42,9 +42,9 @@ export let FIRE: Record<string, Row> = {
     cell: [-4, 3],
     arrive: 'ash',
     places: {
-      ash: { kind: 'cinderflats', at: [64, 64] },
-      volcano: { kind: 'volcano', at: [38, 38] },
-      cone: { kind: 'vents', at: [96, 92] },
+      ash: { kind: 'cinderflats', at: [128, 128] },
+      volcano: { kind: 'volcano', at: [102, 102] },
+      cone: { kind: 'vents', at: [160, 156] },
     },
     roads: {
       north: 'tombsands',
@@ -73,10 +73,10 @@ export let FIRE: Record<string, Row> = {
     cell: [-4, 4],
     arrive: 'keep',
     places: {
-      ash: { kind: 'ashfield', at: [64, 64] },
-      keep: { kind: 'keep', at: [64, 54] },
-      gate: { kind: 'ashgate', at: [90, 88] },
-      volcano: { kind: 'coldcone', at: [36, 90] },
+      ash: { kind: 'ashfield', at: [128, 128] },
+      keep: { kind: 'keep', at: [128, 118] },
+      gate: { kind: 'ashgate', at: [154, 152] },
+      volcano: { kind: 'coldcone', at: [100, 154] },
     },
     roads: {
       north: 'cinderreach',
@@ -100,9 +100,9 @@ export let FIRE: Record<string, Row> = {
     cell: [-5, 3],
     arrive: 'ash',
     places: {
-      ash: { kind: 'scorch', at: [64, 70] },
-      maw: { kind: 'maw', at: [64, 50] },
-      cone: { kind: 'spatter', at: [30, 88] },
+      ash: { kind: 'scorch', at: [128, 134] },
+      maw: { kind: 'maw', at: [128, 114] },
+      cone: { kind: 'spatter', at: [94, 152] },
     },
     roads: {
       east: 'cinderreach',

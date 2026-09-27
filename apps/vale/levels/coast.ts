@@ -10,10 +10,10 @@ export let COAST: Record<string, Row> = {
     cell: [-2, 0],
     arrive: 'harbour',
     places: {
-      coast: { kind: 'bay', at: [66, 14] },
-      meadow: { kind: 'farmland', at: [36, 40] },
-      woods: { kind: 'woods', at: [36, 92] },
-      harbour: { kind: 'fishtown', at: [60, 62] },
+      coast: { kind: 'bay', at: [130, 78] },
+      meadow: { kind: 'farmland', at: [100, 104] },
+      woods: { kind: 'woods', at: [100, 156] },
+      harbour: { kind: 'fishtown', at: [124, 126] },
     },
     roads: {
       east: 'birchmere',
@@ -38,10 +38,10 @@ export let COAST: Record<string, Row> = {
     cell: [-3, 0],
     arrive: 'wharf',
     places: {
-      coast: { kind: 'strand', at: [20, 64] },
-      woods: { kind: 'shorewood', at: [92, 38] },
-      meadow: { kind: 'marram', at: [92, 92] },
-      wharf: { kind: 'shacks', at: [68, 66] },
+      coast: { kind: 'strand', at: [84, 128] },
+      woods: { kind: 'shorewood', at: [156, 102] },
+      meadow: { kind: 'marram', at: [156, 156] },
+      wharf: { kind: 'shacks', at: [132, 130] },
     },
     roads: {
       east: 'gullwick',
@@ -68,10 +68,10 @@ export let COAST: Record<string, Row> = {
     cell: [-2, 1],
     arrive: 'moor',
     places: {
-      coast: { kind: 'tideline', at: [108, 76] },
-      moor: { kind: 'saltflat', at: [62, 56] },
-      crags: { kind: 'bluffs', at: [30, 50] },
-      head: { kind: 'bluffs', at: [98, 44] },
+      coast: { kind: 'tideline', at: [172, 140] },
+      moor: { kind: 'saltflat', at: [126, 120] },
+      crags: { kind: 'bluffs', at: [94, 114] },
+      head: { kind: 'bluffs', at: [162, 108] },
     },
     roads: {
       north: 'gullwick',
@@ -100,9 +100,9 @@ export let COAST: Record<string, Row> = {
     cell: [-2, 2],
     arrive: 'isles',
     places: {
-      isles: { kind: 'shellisles', at: [64, 64] },
-      coast: { kind: 'shellbeach', at: [100, 96] },
-      meadow: { kind: 'thrift', at: [36, 40] },
+      isles: { kind: 'shellisles', at: [128, 128] },
+      coast: { kind: 'shellbeach', at: [164, 160] },
+      meadow: { kind: 'thrift', at: [100, 104] },
     },
     roads: {
       north: 'saltreach',
@@ -126,10 +126,10 @@ export let COAST: Record<string, Row> = {
     cell: [-1, 2],
     arrive: 'moor',
     places: {
-      coast: { kind: 'surf', at: [64, 18] },
-      moor: { kind: 'windmoor', at: [64, 60] },
-      crags: { kind: 'headland', at: [38, 84] },
-      head: { kind: 'beacon', at: [100, 30] },
+      coast: { kind: 'surf', at: [128, 82] },
+      moor: { kind: 'windmoor', at: [128, 124] },
+      crags: { kind: 'headland', at: [102, 148] },
+      head: { kind: 'beacon', at: [164, 94] },
     },
     roads: {
       west: 'shellstrand',

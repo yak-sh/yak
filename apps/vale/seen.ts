@@ -13,7 +13,7 @@
 // awake), and as the page is hidden. Where a hero is this moment, ten times a
 // second, is `position`, which nobody keeps.
 import { writer } from './chat.ts'
-import { LEVELS } from './levels.ts'
+import { LEVELS, SIZE } from './levels.ts'
 import type { Bundle, Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 
@@ -99,11 +99,30 @@ let rowOf = (hero: string, s: Seen): Bundle => ({
 })
 
 // The tab's copy: the last row it wrote, for whichever hero it plays.
-let KEY = 'mossvale.seen'
+let KEY = 'mossvale.seen.256'
+let OLD_KEY = 'mossvale.seen'
+let moved = (b: Bundle): Bundle | undefined => {
+  let s = seenOf(b)
+  if (!s) return
+  let [i, k] = LEVELS[s.level].cell, step = SIZE - 128
+  return rowOf(b.entity.eid, {
+    ...s,
+    x: s.x + i * step + step / 2,
+    z: s.z + k * step + step / 2,
+  })
+}
 let tab = {
   get: (): Bundle | undefined => {
     try {
-      return JSON.parse(sessionStorage.getItem(KEY) ?? 'null') ?? undefined
+      let row = JSON.parse(sessionStorage.getItem(KEY) ?? 'null')
+      if (row) return row
+      let old = JSON.parse(sessionStorage.getItem(OLD_KEY) ?? 'null')
+      let next = old && moved(old)
+      if (next) {
+        sessionStorage.setItem(KEY, JSON.stringify(next))
+        sessionStorage.removeItem(OLD_KEY)
+      }
+      return next ?? undefined
     } catch {
       return undefined
     }

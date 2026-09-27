@@ -5,8 +5,9 @@ import * as THREE from 'three'
 import { assert, assertEquals } from '@std/assert'
 import { cuboids } from './boxes.ts'
 import type { Chunk } from './chunks.ts'
+import { SIZE } from './levels.ts'
 import { out, pack, type Packed } from './mesh.ts'
-import { flat } from './terrain.ts'
+import { chunkOf, flat } from './terrain.ts'
 import { world } from './world.ts'
 
 let canvas = () => ({
@@ -29,11 +30,12 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     let calls = 0
     let reveal: (p: Packed) => void = () => {}
     let held = new Promise<Packed>((done) => reveal = done)
-    let placed: Chunk['buildings'] = [64, 68].map((x) => ({
+    let mid = SIZE / 2
+    let placed: Chunk['buildings'] = [mid, mid + 4].map((x) => ({
       kind: 'smithy.plaster',
       seed: 0,
       turn: 0,
-      at: [x, 5, 64],
+      at: [x, 5, mid],
     }))
     let w = world(v, {
       chunk: (ci, ck): Promise<Chunk> =>
@@ -42,7 +44,7 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
           ck,
           solid: empty,
           small: null,
-          buildings: ci == 4 && ck == 4 ? placed : [],
+          buildings: ci == chunkOf(mid) && ck == chunkOf(mid) ? placed : [],
           patch: {
             ci,
             ck,
@@ -76,9 +78,9 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     assert(buildingMesh)
     let at = new THREE.Matrix4()
     buildingMesh.getMatrixAt(0, at)
-    assertEquals(at.elements[12], 64)
+    assertEquals(at.elements[12], mid)
     buildingMesh.getMatrixAt(1, at)
-    assertEquals(at.elements[12], 68)
+    assertEquals(at.elements[12], mid + 4)
     let shown = buildingMesh.geometry
     let disposed = 0
     shown.addEventListener('dispose', () => disposed++)

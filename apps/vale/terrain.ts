@@ -296,7 +296,7 @@ let rising = (near: Placed[], roads: Road[]) => (x: number, z: number) => {
  * ```ts
  * import { assertEquals } from '@std/assert'
  * // A village's ground is flattened round its fire.
- * assertEquals(Math.round(rise(64, 64) * 10) / 10, 6.5)
+ * assertEquals(Math.round(rise(128, 128) * 10) / 10, 6.5)
  * ```
  */
 export let rise = (x: number, z: number): number =>

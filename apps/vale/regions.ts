@@ -74,7 +74,7 @@ let reachOf = (kind: string): [number, number] => {
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(originOf('mossvale'), [0, 0])
- * assertEquals(originOf('birchmere'), [-128, 0])
+ * assertEquals(originOf('birchmere'), [-256, 0])
  * ```
  */
 export let originOf = (id: string): Spot => {
@@ -117,7 +117,7 @@ export let placesOf = (id: string): Placed[] =>
  * import { assertEquals } from '@std/assert'
  * import { LEVELS } from './levels.ts'
  * let [x, z] = LEVELS.birchmere.places.mere.at
- * assertEquals(spotOf('birchmere', 'mere'), [x - 128, z])
+ * assertEquals(spotOf('birchmere', 'mere'), [x - 256, z])
  * ```
  */
 export let spotOf = (id: string, place: string): Spot | undefined => {
@@ -242,9 +242,9 @@ export type Blend = { a: string; b: string; t: number }
  * import { assert, assertEquals } from '@std/assert'
  * import { LEVELS } from './levels.ts'
  * // A level's places lie in its region, its village well inside it.
- * assertEquals(blend(64, 64).a, 'mossvale')
- * assertEquals(blend(-64, 64).a, 'birchmere')
- * assertEquals(blend(64, 64).t, 1)
+ * assertEquals(blend(128, 128).a, 'mossvale')
+ * assertEquals(blend(-128, 128).a, 'birchmere')
+ * assertEquals(blend(128, 128).t, 1)
  * // Far out past every level, still a level's.
  * assert(LEVELS[blend(5000, 64).a])
  * ```
@@ -276,8 +276,8 @@ export let blend = (x: number, z: number): Blend => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals(levelsNear(64, 64, 10), ['mossvale'])
- * assertEquals(levelsNear(4, 64, 10), ['mossvale', 'birchmere'])
+ * assertEquals(levelsNear(128, 128, 10), ['mossvale'])
+ * assertEquals(levelsNear(4, 128, 10), ['mossvale', 'birchmere'])
  * ```
  */
 export let levelsNear = (x: number, z: number, r: number): string[] => {
