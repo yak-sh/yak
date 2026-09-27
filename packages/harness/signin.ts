@@ -19,9 +19,23 @@ import type { Harness } from './store.ts'
  * the address the browser shows. */
 export const REDIRECT = 'http://localhost:8765/oauth/callback'
 
-export type SignIns = ReturnType<typeof signins>
+export type SignIns = {
+  key: (owner: Eid, integration: string) => Promise<string | undefined>
+  refresh: (
+    owner: Eid,
+    integration: string,
+    stale: string,
+  ) => Promise<string | undefined>
+  begin: (
+    owner: Eid,
+    integration: string,
+    redirect?: string,
+  ) => Promise<{ url: string; redirectUrl: string }>
+  complete: (owner: Eid, integration: string, callback: string) => Promise<void>
+  cancel: (owner?: Eid) => void
+}
 
-export const signins = (h: Pick<Harness, 'g' | 'vault'>) => {
+export const signins = (h: Pick<Harness, 'g' | 'vault'>): SignIns => {
   const ctx = (redirect: string): Ctx => ({
     graph: h.g,
     vault: h.vault,

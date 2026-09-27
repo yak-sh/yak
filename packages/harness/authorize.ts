@@ -5,7 +5,7 @@ import { identityEid } from '@yaks/graph'
 import { install, known } from '@yaks/connections'
 import { graphMCP } from './mcp_registry.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
-import { REDIRECT, signins } from './signin.ts'
+import { REDIRECT, type SignIns, signins } from './signin.ts'
 import type { Harness } from './store.ts'
 
 let OPENAI = identityEid('provider', ['openai'])
@@ -25,7 +25,18 @@ let PROVIDERS = [
   },
 ]
 
-export let authorize = (h: Pick<Harness, 'g' | 'vault'>) => {
+export type Authorization = {
+  run: (
+    action: MCPAuthAction,
+    name?: string,
+    callback?: string,
+  ) => Promise<MCPAuthReply>
+  signin: SignIns
+  mcp: ReturnType<typeof graphMCP>
+  close: () => Promise<void>
+}
+
+export let authorize = (h: Pick<Harness, 'g' | 'vault'>): Authorization => {
   let signin = signins(h)
   let mcp = graphMCP(h, signin)
   let run = async (

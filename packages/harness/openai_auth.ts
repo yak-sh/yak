@@ -14,11 +14,16 @@ import { type SignIns, signins } from './signin.ts'
 
 let OPENAI = identityEid('provider', ['openai'])
 
+export type OpenAIAuth = {
+  credential: () => Promise<Credential>
+  refresh: (stale: TransportCredential) => Promise<Credential>
+}
+
 export let openaiCredential = (
   h: Pick<Harness, 'g' | 'vault'>,
   env: (name: string) => string | undefined = Deno.env.get,
   signin: SignIns = signins(h),
-) => {
+): OpenAIAuth => {
   let credential = async (): Promise<Credential> => {
     let key = fromEnv(env)
     if (key) return key
