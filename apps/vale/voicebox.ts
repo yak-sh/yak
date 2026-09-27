@@ -224,6 +224,10 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
           )
         }
       }
+      sound.music.duck(
+        mic == 'on' ||
+          [...held.values()].some((v) => (v.gain?.gain.value ?? 0) > 0.02),
+      )
     },
   }
 }

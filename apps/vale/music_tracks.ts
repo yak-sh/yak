@@ -1,0 +1,44 @@
+// Songs are blobs in the vale's store, named by the SHA-256 of their bytes.
+// The first ten lands follow levels.ts's order.
+export let TRACKS: Record<string, [string, string]> = {
+  mossvale: [
+    'e73989cde1db424e2e2ed5f0529a72ec92b6d3837f86e824d2d66af84ea6ee04',
+    '85a75548be424c333d7e3dc3652b7d52d9ce1bdd82021319d99348912068e67b',
+  ],
+  birchmere: [
+    '38ac8ceaca5f9389197805066bbbdd11ff6e16c6b8c44088fc48a600acf6a3f4',
+    '71fb3e60601a7ffc9ff665b022b681e7272a275d1f98d0bfe8f8905923bf18de',
+  ],
+  clovermead: [
+    '39fffb3a64c942ad520960c445eaff5c8604be30d61404965db4f146593538b0',
+    'd88ae4e82da9ef1940ce0120709131ce55b0b908695e4e3c0fbfb862552c5a17',
+  ],
+  fernwood: [
+    'd070a16e37dab9b8c15374f19a135e47ce910d6a316f322bfbfac50aaa394fa0',
+    '9911469601e701833471c5bb9f380927298b03844a0c0dcde1013b56ba0c5281',
+  ],
+  elderglade: [
+    'd527b9f4e37177936e99f7ce6b0f840c6497b7f612c332e318c8c65b74a5ed25',
+    'af269ee640c039c7cd511f612783f705b3faca5b9abef5b35a631cc446af83e3',
+  ],
+  greypine: [
+    '456874056ea035c91aeedb7f854237eefd258e12845201cfd4846bdd4ccb95e2',
+    'e9157265d8cbed3a12f288e3a5b564025903c641f107a6ac3fb3d725e11597f4',
+  ],
+  wolfden: [
+    '8c1de14d060da5a43ec16c47d3e84611854dc13a515c51f5cffbd1c0d23da682',
+    '730344e877013531e0dbe6129e3e71d2626a8ac459c67488b7420c2bd4df182e',
+  ],
+  gullwick: [
+    '448b0f08a8950158099fb604b33c900dbb1fb229bde86551386371877d0c46cf',
+    'da1b4302f25862b6431a331a105c8e5db3436f398b0130b283d2d00a33c21581',
+  ],
+  driftwood: [
+    '9bf27d478b6853fe17db733065ea8a2be32722f7055879fd062275ccc1e18b1a',
+    'b735761395b56ecbbf5ff87e71b308e11426add5e5c023558996e3de81ca84b2',
+  ],
+  saltreach: [
+    '95676f1da604d4159aa5eaaface72b667d64cf855d9c889a22acc4de4f368c3c',
+    '5d736443654bc188b6a7c7edbe15308f874b07419901ff1673250bd2107d49f8',
+  ],
+}

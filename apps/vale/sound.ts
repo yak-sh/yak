@@ -105,7 +105,7 @@ let wake = () => {
       surf: voices.surf(ctx),
       marsh: voices.marsh(ctx),
     }
-    void music.start(ctx, out).catch(console.error)
+    music.start(ctx, out)
   } catch {
     ctx = null
   }
