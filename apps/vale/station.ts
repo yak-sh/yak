@@ -211,11 +211,13 @@ export let station = (panel: Panel, acts: Acts) => {
         : '')
     let tiles = up
       ? upgrades.map((h) => {
-        let t = piece(h)
+        // Dimmed past its last step, or while its next asks more of the
+        // trade than the hero has.
+        let t = piece(h), r = upgradeOf(h.kind, h.plus ?? 0)
         return `<button class="Pack_Tile ${tint(t.rarity)}${
           picked == h.eid ? ' Pack_Tile-on' : ''
         }${
-          upgradeOf(h.kind, h.plus ?? 0) ? '' : ' Pack_Tile-had'
+          r && able(r, mine.lvl) ? '' : ' Pack_Tile-had'
         }" data-pick="${h.eid}"${tipped({ name: t.name })}><i>${
           icon(h.kind) || '•'
         }</i>${h.plus ? `<b>+${h.plus}</b>` : ''}</button>`
