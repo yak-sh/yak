@@ -31,6 +31,21 @@ import {
 } from '@yaks/graph'
 import { SESSION } from './comp.ts'
 
+/** A command speaks for its own transcript, never its launcher's. Clearing
+ * the other harness IDs also matters when `yak` chooses the first one it sees. */
+export let sessionEnv = (
+  session: string,
+  env: Record<string, string>,
+): Record<string, string> => {
+  let {
+    CLAUDE_CODE_SESSION_ID: _claude,
+    CODEX_THREAD_ID: _codex,
+    TASKS_SESSION: _tasks,
+    ...rest
+  } = env
+  return { ...rest, TASKS_SESSION: session }
+}
+
 /**
  * The transcripts these ids are the runner's own ids of (`session.id`), each
  * to its eid: the key only a session has, which is how an id meant to name a

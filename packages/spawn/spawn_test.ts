@@ -16,7 +16,8 @@ import { launch, processDoc, processes, store } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
-import { checkoutOf, down, speaking } from './run.ts'
+import { checkoutOf, down } from './run.ts'
+import { sessionEnv } from '@yaks/session'
 import { asking, fake, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
 
@@ -188,7 +189,7 @@ Deno.test('a run works in a checkout of its own, taken back when it ends', async
 })
 
 Deno.test('a run speaks as its own session, never its launcher’s', () => {
-  let env = speaking('S1', {
+  let env = sessionEnv('S1', {
     PATH: '/bin',
     CLAUDE_CODE_SESSION_ID: 'launcher',
     CODEX_THREAD_ID: 'launcher-thread',

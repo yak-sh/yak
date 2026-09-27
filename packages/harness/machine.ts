@@ -22,7 +22,12 @@ export type Proc = { pid?: number; exit?: { code: number | null } }
 /** What a host lends the machine tools. */
 export type Machine = {
   /** starts a command line, run by bash, and answers its id */
-  start(command: string, cwd?: string, call?: string): Promise<string>
+  start(
+    command: string,
+    cwd?: string,
+    call?: string,
+    session?: string,
+  ): Promise<string>
   /** the process a durable call started, where this machine can recover one */
   receipt?: (call: string) => Promise<string | undefined>
   /** the process by that id, or null when the machine has none */
@@ -208,6 +213,7 @@ export let machineTools = (m: Machine, o: MachineOpts = {}): Tool[] => {
         String(args.command ?? ''),
         cwd,
         ctx?.call.entity.eid,
+        ctx?.session,
       )
       let p = await settle(id, end - Date.now()) ?? {}
       return shellResult(id, p, ms)

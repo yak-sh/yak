@@ -37,7 +37,7 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
-import { type Reader, SESSION } from '@yaks/session'
+import { type Reader, SESSION, sessionEnv } from '@yaks/session'
 import { pull, type Tail, tail } from '@yaks/session/tail'
 import {
   EXIT,
@@ -279,23 +279,6 @@ let given = async (
   return owes.text
 }
 
-/** The environment a run speaks in: the one it was given, with the session
- * that launched it taken out and this run's own named. A variable naming the
- * launcher's session would sign the run's writes as the launcher's (@yaks/cli
- * `via`); a harness that sets its own for its children still does. */
-export let speaking = (
-  session: string,
-  env: Record<string, string>,
-): Record<string, string> => {
-  let {
-    CLAUDE_CODE_SESSION_ID: _claude,
-    CODEX_THREAD_ID: _codex,
-    TASKS_SESSION: _tasks,
-    ...rest
-  } = env
-  return { ...rest, TASKS_SESSION: session }
-}
-
 /**
  * Start a session's provider, with the persona its checkout is owed, and read
  * its output back into the transcript.
@@ -329,7 +312,7 @@ export let start = async (
     command: argv[0],
     args: argv.slice(1),
     cwd,
-    env: speaking(session, o.env ?? Deno.env.toObject()),
+    env: sessionEnv(session, o.env ?? Deno.env.toObject()),
   }, {
     ...o,
     eid: session, // one entity: the transcript is the thing running

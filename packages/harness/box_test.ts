@@ -136,6 +136,33 @@ Deno.test('shell uses bash and inherits the harness environment', async () => {
   assertEquals(said, `process ${eidIn(said)} exited 0\n${Deno.env.get('PATH')}`)
 })
 
+Deno.test('a session shell speaks as its transcript, not its launcher', async () => {
+  let g = tracked()
+  let o = opts()
+  let env = {
+    PATH: Deno.env.get('PATH') ?? '',
+    CLAUDE_CODE_SESSION_ID: 'launcher',
+    CODEX_THREAD_ID: 'launcher-thread',
+    TASKS_SESSION: 'launcher-task',
+  }
+  let shell = machineTools(boxMachine(g, o, () => env))
+    .find((t) => t.name == 'shell')!
+  let ctx = {
+    session: 'native-session',
+    call: { entity: { eid: crypto.randomUUID() } },
+    entries: [],
+  }
+  try {
+    let said = await shell.run({
+      command:
+        'printf "%s|%s|%s" "$TASKS_SESSION" "$CLAUDE_CODE_SESSION_ID" "$CODEX_THREAD_ID"',
+    }, ctx)
+    assertEquals(said, `process ${eidIn(said)} exited 0\nnative-session||`)
+  } finally {
+    await Deno.remove(o.dir!, { recursive: true })
+  }
+})
+
 Deno.test('write makes the directory it needs, and read gives the text back', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yaks-machine-' })
   let { read, write } = named(tracked(), dir)

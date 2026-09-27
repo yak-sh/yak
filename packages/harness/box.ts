@@ -11,7 +11,7 @@
 
 import { dirname } from '@std/path'
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
-import { CONTENT, OUTPUT } from '@yaks/session'
+import { CONTENT, OUTPUT, sessionEnv } from '@yaks/session'
 import {
   EXIT,
   type Exit,
@@ -37,7 +37,11 @@ let signal = (pid: number, sig: Deno.Signal) => {
  * This box as a machine: commands run by bash with the harness's environment,
  * each one a process entity in `g`, and files on this filesystem.
  */
-export let boxMachine = (g: Graph, o: Opts = {}): Machine => {
+export let boxMachine = (
+  g: Graph,
+  o: Opts = {},
+  env: () => Record<string, string> = Deno.env.toObject,
+): Machine => {
   // A tool call is interactive, so its process is polled on a short interval:
   // lines arrive and the exit code is written within it, not a second later.
   let opts: Opts = { ...o, poll: o.poll ?? 100 }
@@ -55,7 +59,7 @@ export let boxMachine = (g: Graph, o: Opts = {}): Machine => {
   }
   return {
     poll: opts.poll,
-    start: async (command, cwd, call) => {
+    start: async (command, cwd, call, session) => {
       let eid = call ? processFor(call) : undefined
       if (eid) {
         let [prior] = await g.get([eid])
@@ -67,7 +71,7 @@ export let boxMachine = (g: Graph, o: Opts = {}): Machine => {
       return (await launch(processes, {
         command: 'bash',
         args: ['-c', command],
-        env: Deno.env.toObject(),
+        env: session ? sessionEnv(session, env()) : env(),
         cwd,
       }, { ...opts, ...eid ? { eid } : {} })).eid
     },
