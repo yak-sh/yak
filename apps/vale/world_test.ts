@@ -3,8 +3,9 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { assert, assertEquals } from '@std/assert'
+import { cuboids } from './boxes.ts'
 import type { Chunk } from './chunks.ts'
-import { cuboid, out, pack, type Packed } from './mesh.ts'
+import { out, pack, type Packed } from './mesh.ts'
 import { flat } from './terrain.ts'
 import { world } from './world.ts'
 
@@ -66,7 +67,7 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     for (let i = 0; i < 20 && !calls; i++) await Promise.resolve()
     assertEquals(calls, 1)
     assertEquals(done, false)
-    reveal(pack(cuboid(out(), [0, 0, 0], [1, 1, 1], 0x807060)))
+    reveal(pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])))
     await near
     let meshes = w.scene.children.filter((o): o is THREE.InstancedMesh =>
       o instanceof THREE.InstancedMesh

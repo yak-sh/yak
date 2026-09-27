@@ -2,15 +2,16 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { assertEquals } from '@std/assert'
+import { cuboids } from './boxes.ts'
 import { instances } from './instances.ts'
-import { cuboid, out, pack } from './mesh.ts'
+import { out, pack } from './mesh.ts'
 
 Deno.test('building template is shared between chunks and disposed after both leave', async () => {
   let scene = new THREE.Scene(), material = new THREE.MeshBasicMaterial()
   let calls = 0
   let shared = instances(scene, material, () => {
     calls++
-    return Promise.resolve(pack(cuboid(out(), [0, 0, 0], [1, 1, 1], 0x807060)))
+    return Promise.resolve(pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])))
   })
   let placed = (x: number) => [{
     kind: 'smithy.plaster',
