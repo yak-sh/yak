@@ -219,6 +219,27 @@ Deno.test('token: a fresh token needs no request; a stale one refreshes once, ke
   assertEquals(await setup().c.token(), undefined)
 })
 
+Deno.test('a provider may exchange a code as form and refresh as JSON', async () => {
+  let { c, seen } = setup(undefined, [
+    [200, { access_token: 'A1', refresh_token: 'R1' }],
+    [200, { access_token: 'A2', refresh_token: 'R2' }],
+  ], { ...PROVIDER, client: { id: 'public' }, refreshEncoding: 'json' })
+  let { attempt } = await c.begin()
+  await c.complete(attempt, `${REDIRECT}?code=C&state=${attempt.state}`)
+  assertEquals(
+    seen[0].headers['content-type'],
+    'application/x-www-form-urlencoded',
+  )
+  assertEquals(seen[0].body.get('client_id'), 'public')
+  assertEquals(await c.refresh('A1'), 'A2')
+  assertEquals(seen[1].headers['content-type'], 'application/json')
+  assertEquals(JSON.parse(seen[1].text), {
+    grant_type: 'refresh_token',
+    refresh_token: 'R1',
+    client_id: 'public',
+  })
+})
+
 Deno.test('refresh: after a refusal, unless another caller already replaced the token', async () => {
   let { c, seen } = setup(
     { access_token: 'A1', refresh_token: 'R1' },

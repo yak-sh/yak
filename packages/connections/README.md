@@ -14,7 +14,7 @@ swaps sentinels on the way out with them.
 ## Stored data
 
 - `integration{name, title, tagline, site, logo, authorize, token, scopes,
-  params, auth, hosts, signature, testing, built}`
+  params, auth, refreshEncoding, client, clientId, hosts, signature, testing, built}`
   is an outside service. `name` is its identity, so one name is one integration.
   `title`, `tagline`, `site` and `logo` are how a page shows it: what a person
   calls it, one line saying what it is, its address on the web, and its mark as
@@ -58,7 +58,9 @@ and `calendar.calendarlist.readonly` unless an app needs narrower, asks Google
 for offline access so the grant can be refreshed, and sends its token to
 `www.googleapis.com` alone. It is `testing: true` while Google's app is in
 testing mode, where only the people Google lists may sign in, so yaks.app offers
-it only on a connections page opened with `?enable=google-calendar`.
+it only on a connections page opened with `?enable=google-calendar`. `openai` is
+built for the native harness's ChatGPT sign-in; it uses a public OAuth client,
+asks for a refreshable grant, and sends its bearer to `chatgpt.com`.
 
 An integration reached by OAuth signs in as the client it names
 (`client: 'google'`), registered once with the service and shared by every
@@ -69,7 +71,8 @@ holds its handle and the vault its id and secret, and `clientOf` reads it back
 at sign-in. A custom integration never signs in as a client a built one names,
 whose secret would go to the custom one's token endpoint. `connectable` says
 whether an integration can be connected there at all, and the page offers only
-those.
+those. A built integration with a public OAuth client carries its `clientId`
+directly as data; there is no secret to register or reveal.
 
 ## Verbs
 

@@ -56,6 +56,11 @@
           "enum": ["basic", "post"],
           "description": "how the client authenticates at the token endpoint (default basic)"
         },
+        "refreshEncoding": {
+          "type": "string",
+          "enum": ["form", "json"],
+          "description": "how the token endpoint receives refresh grants (default form)"
+        },
         "answers": {
           "type": "string",
           "enum": ["tokens", "key"],
@@ -72,6 +77,10 @@
         "client": {
           "type": "string",
           "description": "the OAuth client it signs in as, by name: kept once as the secret `oauth_client <name>`, and shared by every integration naming it. Only a built integration signs in as a client a built one names"
+        },
+        "clientId": {
+          "type": "string",
+          "description": "a public OAuth client's id, shipped with a built integration"
         },
         "hosts": {
           "type": "array",

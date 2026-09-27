@@ -9,9 +9,9 @@ import type { SignIns } from './signin.ts'
 export const mcpTools = (
   h: Pick<Harness, 'g' | 'vault' | 'artifacts'>,
   signin: SignIns,
+  connections = graphMCP(h, signin),
 ) => {
   const g = h.g
-  const connections = graphMCP(h, signin)
   const store = artifactStore(h.artifacts)
   const render = async (
     value: unknown,

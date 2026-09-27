@@ -9,6 +9,7 @@ import {
   credential,
   type Ctx,
   need,
+  refresh,
 } from '@yaks/connections'
 import type { Comp, Eid } from '@yaks/graph'
 import type { Attempt } from '@yaks/oauth'
@@ -37,6 +38,11 @@ export const signins = (h: Pick<Harness, 'g' | 'vault'>) => {
     key: async (owner: Eid, integration: string) => {
       const eid = await held(owner, integration)
       return eid ? await credential(ctx(REDIRECT), eid) : undefined
+    },
+    /** Rotate a rejected bearer unless another caller already replaced it. */
+    refresh: async (owner: Eid, integration: string, stale: string) => {
+      const eid = await held(owner, integration)
+      return eid ? await refresh(ctx(REDIRECT), eid, stale) : undefined
     },
     begin: async (owner: Eid, integration: string, redirect = REDIRECT) => {
       const eid = await held(owner, integration) ??

@@ -78,7 +78,8 @@ let next = await calendar.refresh(token!)
   grant at once never both spend the refresh token.
 - A confidential client authenticates at the token endpoint with HTTP Basic, or
   in the form body with `auth: 'post'`. A client with no secret sends its id in
-  the body.
+  the body. Exchanges use form encoding; `refreshEncoding: 'json'` sends only
+  refresh grants as JSON for a provider that requires it.
 - A provider with `answers: 'key'` runs OpenRouter's PKCE exchange instead: the
   link carries `callback_url` and the challenge, the exchange posts JSON and
   answers `{key}`, and the key is kept as an access token that never expires. It

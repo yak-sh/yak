@@ -23,6 +23,7 @@ import {
 } from '@yaks/graph'
 import type { Scheme } from '@yaks/hook'
 import googleCalendar from './google-calendar.json' with { type: 'json' }
+import openai from './openai.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
 
 export let INTEGRATION = 'integration'
@@ -48,6 +49,8 @@ export type Integration = {
   params?: Record<string, string>
   /** how the client authenticates at the token endpoint (@yaks/oauth) */
   auth?: 'basic' | 'post'
+  /** how refresh grants are sent when a provider requires JSON */
+  refreshEncoding?: 'form' | 'json'
   /** what the exchange answers: tokens, or a key, as OpenRouter's does */
   answers?: 'tokens' | 'key'
   /** the resource a grant is for (RFC 8707), as an MCP server asks */
@@ -57,6 +60,8 @@ export type Integration = {
   /** the OAuth client it signs in as, by name (./clients.ts): one registration
    * several integrations can share */
   client?: string
+  /** a public OAuth client's id; no secret or registration is needed */
+  clientId?: string
   /** the API hosts its credential may be sent to, and no others */
   hosts: string[]
   /** how the service signs the webhooks it sends */
@@ -76,6 +81,7 @@ export type Read = (query: Query) => Bundle[] | Promise<Bundle[]>
 // is.
 let SEEDS: Integration[] = [
   googleCalendar,
+  { ...openai, refreshEncoding: 'json' },
   { ...openrouter, answers: 'key' },
 ]
 
@@ -86,7 +92,7 @@ export let keyed = (i: Integration): boolean => !i.token
  * that answers a key to any caller (OpenRouter), or through the OAuth client
  * it names, once that client is kept (./clients.ts). */
 export let connectable = (i: Integration, client?: unknown): boolean =>
-  keyed(i) || i.answers == 'key' || !!client
+  keyed(i) || i.answers == 'key' || !!i.clientId || !!client
 
 /** An integration's entity: derived from its name, so one name is one
  * integration. */

@@ -2,10 +2,9 @@
 // the items a stream becomes, how a refusal and a dead stream read, and where
 // a credential comes from.
 
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { ModelError, type Request } from '@yaks/model'
-import { body, fromCodex, fromEnv, items, responses } from './mod.ts'
-import { codexPaths, credential, source } from './credential.ts'
+import { body, fromChatGPT, fromEnv, items, responses } from './mod.ts'
 
 let req: Request = {
   model: 'm',
@@ -202,52 +201,22 @@ Deno.test('a refusal, a failed stream and no credential are errors', async () =>
   assertEquals([e.code, idle.asked], ['questions', []])
 })
 
-Deno.test('a credential comes from the environment or a Codex auth.json', async () => {
+Deno.test('an API key and a ChatGPT bearer identify their own endpoint', () => {
   let env = (vars: Record<string, string>) => (n: string) => vars[n]
   assertEquals(fromEnv(env({ OPENAI_API_KEY: 'k' })), {
     token: 'k',
     base: 'https://api.openai.com/v1',
   })
   assertEquals(fromEnv(env({})), undefined)
-  assertEquals(
-    fromCodex(JSON.stringify({
-      tokens: { access_token: 'a', account_id: 'acct', refresh_token: 'r' },
-    })),
-    {
-      token: 'a',
-      account: 'acct',
-      base: 'https://chatgpt.com/backend-api/codex',
-    },
-  )
-  assertEquals(fromCodex(JSON.stringify({ OPENAI_API_KEY: 'k' }))?.token, 'k')
-  assertEquals(fromCodex('{}'), undefined)
-  assertEquals(fromCodex('not json'), undefined)
-  assertEquals(codexPaths(env({ HOME: '/h', CODEX_HOME: '/c' })), [
-    '/c/auth.json',
-    '/h/.codex/auth.json',
-  ])
-
-  // A task-local copy cannot shadow the file the Codex CLI rotates.
-  let files: Record<string, string> = {
-    '/h/.local/state/tasks/codex/auth.json': JSON.stringify({
-      tokens: { access_token: 'stale', account_id: 'acct' },
-    }),
-    '/h/.codex/auth.json': JSON.stringify({
-      tokens: { access_token: 'a', account_id: 'acct' },
-    }),
-  }
-  let read = (p: string) =>
-    p in files ? Promise.resolve(files[p]) : Promise.reject(new Error('ENOENT'))
-  assertEquals((await credential(env({ HOME: '/h' }), read)()).token, 'a')
-  assertEquals(
-    (await source(env({ HOME: '/h' }), read)).path,
-    '/h/.codex/auth.json',
-  )
-  assertEquals(
-    (await credential(env({ HOME: '/h', OPENAI_API_KEY: 'k' }), read)()).token,
-    'k',
-  )
-  await assertRejects(() => credential(env({}), read)(), Error, 'no credential')
+  let token = 'header.' + btoa(JSON.stringify({
+    'https://api.openai.com/auth': { chatgpt_account_id: 'acct' },
+  })).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') + '.sig'
+  assertEquals(fromChatGPT(token), {
+    token,
+    account: 'acct',
+    base: 'https://chatgpt.com/backend-api/codex',
+  })
+  assertThrows(() => fromChatGPT('bad.token'), Error, 'no account')
 })
 
 Deno.test('the Model shares refresh, redacted frame hooks, store, and anchor policy', async () => {

@@ -169,10 +169,10 @@ export let items = (done: Frame[]): Item[] => {
  * A {@link Model} over the Responses API.
  *
  * ```ts
- * import { credential, responses } from '@yaks/openai'
+ * import { responses } from '@yaks/openai'
  *
  * let model = responses({
- *   credential: credential(Deno.env.get, Deno.readTextFile),
+ *   credential: () => ({ token: 'key', base: 'https://api.openai.com/v1' }),
  * })
  * ```
  *

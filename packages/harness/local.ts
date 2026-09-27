@@ -3,7 +3,7 @@
 // The shell runs here (@yaks/process), a child assigned a
 // task gets its own checkout under the worktree root, a new session snapshots
 // the AGENTS.md files above its directory, pictures live in the image
-// directory, MCP servers and the OpenRouter sign-in are the person's own, and a
+// directory, MCP servers and model-provider sign-ins are the person's own, and a
 // defect is an `exception` entity. What a box lends is `here()`: the harness
 // on its own lends it to its agent, and a `yak` host listing the harness lends
 // it to the runner its effects are worked with (./effects.ts). Every `~/.yak`
@@ -20,8 +20,8 @@ import { instructionFiles } from '@yaks/context/host'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
-import { signins } from './signin.ts'
-import { codex } from './codex.ts'
+import { authorize } from './authorize.ts'
+import { openaiCredential } from './openai_auth.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
 import { streamingEnabled } from './streaming.ts'
@@ -86,9 +86,6 @@ export type Opts = ChildLimits & NotHarness & {
   worktrees?: string
 }
 
-/** OpenRouter, the model provider, signed in through a connection its
- * provider entity owns. */
-const OPENROUTER_AUTH = 'OpenRouter (model provider)'
 const OPENROUTER = identityEid('provider', ['openrouter'])
 const refuse = (message: string): never => {
   throw new Error(message)
@@ -112,7 +109,7 @@ export type Here = {
   /** the agent's options; their `release` lets go of what was opened for
    * them, and leaves the graph open */
   lent: AgentOpts<Harness>
-  /** a person authorizing a sign-in: an MCP server, or OpenRouter */
+  /** a person authorizing a sign-in: an MCP server or model provider */
   authorize: (
     action: MCPAuthAction,
     name?: string,
@@ -134,15 +131,16 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     diagnostics().report(error, where)
   let cwd = opts.cwd ?? Deno.cwd()
   let root = opts.worktrees ?? worktrees(env)
-  let auth = codex(env, (p) => Deno.readTextFile(p))
+  let auth = authorize(h)
+  let openaiAuth = openaiCredential(h, env, auth.signin)
   let model = opts.model ??
     responses({
-      ...auth,
+      ...openaiAuth,
+      redact: true,
       images: configuredImages(h.artifacts, opts.images),
       web: opts.web ?? env('HARNESS_WEB') != '0',
     })
-  const signin = signins(h)
-  const mcp = mcpTools(h, signin)
+  const mcp = mcpTools(h, auth.signin, auth.mcp)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
   // A child's own checkout is garbage the moment its session is over: no
@@ -166,7 +164,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       openai: model,
       openrouter: openrouter({
         key: async () =>
-          await signin.key(OPENROUTER, 'openrouter') ?? refuse(
+          await auth.signin.key(OPENROUTER, 'openrouter') ?? refuse(
             'OpenRouter is not connected. Press Esc then A to authorize OpenRouter.',
           ),
       }),
@@ -196,36 +194,12 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       )
     },
     release: async () => {
-      signin.cancel()
-      await mcp.close()
+      await auth.close()
       await diagnostics().drain()
       detach()
     },
   }
-  let authorize = async (
-    action: MCPAuthAction,
-    name?: string,
-    callback?: string,
-  ): Promise<MCPAuthReply> => {
-    if (name === OPENROUTER_AUTH) {
-      if (action === 'begin') return signin.begin(OPENROUTER, 'openrouter')
-      if (action === 'cancel') signin.cancel(OPENROUTER)
-      if (action === 'complete') {
-        await signin.complete(OPENROUTER, 'openrouter', callback ?? '')
-      }
-      return {
-        message: action === 'complete'
-          ? 'OpenRouter connected. Select an OpenRouter model explicitly to use it.'
-          : 'Authorization cancelled',
-      }
-    }
-    const reply = await mcp.authorize(action, name, callback)
-    if (
-      action === 'list' && (await h.g.read(`.eid=${OPENROUTER}`)).length
-    ) reply.servers = [...reply.servers ?? [], OPENROUTER_AUTH]
-    return reply
-  }
-  return { lent, authorize, anchor: model.anchor, report }
+  return { lent, authorize: auth.run, anchor: model.anchor, report }
 }
 
 /**

@@ -172,6 +172,7 @@ Deno.test(
     assertEquals((await installed(g.read)).map((i) => i.name).sort(), [
       'calendar',
       'google-calendar',
+      'openai',
       'openrouter',
       'texts',
     ])

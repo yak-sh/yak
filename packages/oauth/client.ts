@@ -29,6 +29,8 @@ export type Provider = {
    * Basic, which every server must accept (RFC 6749 §2.3.1), or in the form
    * body. A client with no secret sends its id in the body either way. */
   auth?: 'basic' | 'post'
+  /** A provider may require JSON for refresh while codes exchange as form. */
+  refreshEncoding?: 'form' | 'json'
   /** What the exchange answers: tokens, or an API key, as OpenRouter's PKCE
    * does. A key is kept as an access token that never expires, and its flow
    * carries no state: PKCE already binds the code to this attempt (RFC 9700
@@ -121,6 +123,7 @@ export let client = (provider: Provider, o: Options): Client => {
   let exchange = async (
     fields: Record<string, string>,
     was: Tokens = {},
+    encoding: 'form' | 'json' = 'form',
   ): Promise<Tokens> => {
     let id = provider.client?.id
     let secret = provider.client?.secret
@@ -137,18 +140,25 @@ export let client = (provider: Provider, o: Options): Client => {
       redirect: 'manual',
       signal: AbortSignal.timeout(30_000),
       headers: {
-        'content-type': key
+        'content-type': key || encoding == 'json'
           ? 'application/json'
           : 'application/x-www-form-urlencoded',
         accept: 'application/json',
         ...(pair ? { authorization: `Basic ${btoa(pair)}` } : {}),
       },
-      body: key ? JSON.stringify(fields) : form({
-        ...fields,
-        resource: provider.resource,
-        client_id: basic ? undefined : id,
-        client_secret: basic ? undefined : secret,
-      }),
+      body: key ? JSON.stringify(fields) : encoding == 'json'
+        ? JSON.stringify({
+          ...fields,
+          resource: provider.resource,
+          client_id: basic ? undefined : id,
+          client_secret: basic ? undefined : secret,
+        })
+        : form({
+          ...fields,
+          resource: provider.resource,
+          client_id: basic ? undefined : id,
+          client_secret: basic ? undefined : secret,
+        }),
     })
     let said: unknown = await res.json().catch(() => ({}))
     let body = (said && typeof said == 'object' ? said : {}) as Record<
@@ -187,6 +197,7 @@ export let client = (provider: Provider, o: Options): Client => {
       let got = await exchange(
         { grant_type: 'refresh_token', refresh_token: record.refresh_token },
         record,
+        provider.refreshEncoding,
       )
       Object.assign(record, NONE, got)
       return record.access_token

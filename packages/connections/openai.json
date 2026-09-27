@@ -1,0 +1,24 @@
+{
+  "name": "openai",
+  "title": "OpenAI",
+  "tagline": "OpenAI models through your ChatGPT account.",
+  "site": "https://chatgpt.com",
+  "authorize": "https://auth.openai.com/oauth/authorize",
+  "token": "https://auth.openai.com/oauth/token",
+  "scopes": [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    "api.connectors.read",
+    "api.connectors.invoke"
+  ],
+  "params": {
+    "id_token_add_organizations": "true",
+    "codex_cli_simplified_flow": "true",
+    "originator": "yaks_harness"
+  },
+  "refreshEncoding": "json",
+  "clientId": "app_EMoamEEZ73f0CkXaXp7hrann",
+  "hosts": ["chatgpt.com"]
+}

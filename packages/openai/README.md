@@ -12,9 +12,9 @@ application.
 - `responses(options)` returns a provider-neutral `Model` from `@yaks/model`.
 - `transport(options)` returns the lower-level Responses client, with `run()`
   and `reach()` methods. `frames(stream)` decodes server-sent events (SSE).
-- `credential`, `source`, `fromEnv`, `fromCodex`, and `codexPaths` read or
-  locate credentials through application-supplied environment and file
-  functions. `OPENAI` and `CODEX` identify the two default endpoints.
+- `fromEnv` reads an API key from an application-supplied environment function;
+  `fromChatGPT` takes an OAuth bearer and derives its account. `OPENAI` and
+  `CODEX` identify the two default endpoints.
 - `input`, `body`, and `items` convert between model requests/replies and
   Responses API data. `ResponseError` describes transport failures; exported
   types describe options, credentials, events, results, usage, and images.
@@ -30,10 +30,10 @@ deno add jsr:@yaks/openai
 ## Use
 
 ```ts ignore
-import { credential, responses } from '@yaks/openai'
+import { fromEnv, responses } from '@yaks/openai'
 
 let model = responses({
-  credential: credential(Deno.env.get, Deno.readTextFile),
+  credential: () => fromEnv(Deno.env.get)!,
   web: false, // Enable provider-hosted search when the application needs it.
 })
 let reply = await model({
@@ -44,13 +44,10 @@ let reply = await model({
 console.log(reply.items)
 ```
 
-`credential` checks `OPENAI_API_KEY` first. It then checks `auth.json` in
-`TASKS_CODEX_HOME`, `CODEX_HOME`, and `~/.codex`, in that order, skipping absent
-roots and unreadable or unusable files. Task-local copies of `auth.json` are not
-used, since Codex rotates credentials in its own file. API keys use the public
-API; Codex OAuth tokens use the Codex backend with their account ID. The
-application supplies file and environment access, so the client itself needs
-only web-standard APIs.
+An application owns credential storage and refresh. API keys use the public API.
+A ChatGPT OAuth grant can use the Codex backend: `fromChatGPT` derives the
+account from its access token, and the application passes a refresh function to
+`responses`. The native harness keeps its grant in a graph connection.
 
 Every HTTP request streams and is read to the end. The returned reply contains
 completed model items. Supply `request.onText` to receive text deltas while the
@@ -76,11 +73,11 @@ needs encrypted reasoning replay, usage, rate limits, unknown provider events,
 or the details of a partial failure can use that same HTTP transport directly:
 
 ```ts ignore
-import { credential, transport } from '@yaks/openai'
+import { fromEnv, transport } from '@yaks/openai'
 
 let client = transport({
   credentials: {
-    get: credential(Deno.env.get, Deno.readTextFile),
+    get: () => fromEnv(Deno.env.get)!,
     // refresh: renewBearer, // invoked at most once after a 401 per run
   },
   stallMs: 60_000,

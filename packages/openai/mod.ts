@@ -1,16 +1,15 @@
 /**
  * @yaks/openai implements {@link https://jsr.io/@yaks/model | @yaks/model}'s
  * `Model` interface over OpenAI's Responses API: one streamed exchange over
- * `fetch`, a bearer token from the environment or from the Codex CLI's sign-in,
- * and the two endpoints those tokens reach. It stores nothing and starts no
- * process; a server that wants a model calls {@link responses} and gets back a
- * `Model`.
+ * `fetch`, a bearer an application supplies, and the endpoint it reaches. It
+ * stores nothing and starts no process; a server that wants a model calls
+ * {@link responses} and gets back a `Model`.
  *
  * ```ts ignore
- * import { credential, responses } from '@yaks/openai'
+ * import { fromEnv, responses } from '@yaks/openai'
  *
  * let model = responses({
- *   credential: credential(Deno.env.get, Deno.readTextFile),
+ *   credential: () => fromEnv(Deno.env.get)!,
  * })
  * let reply = await model({
  *   model: 'gpt-6-astra',
@@ -24,13 +23,10 @@
 
 export {
   CODEX,
-  codexPaths,
   type Credential,
-  credential,
-  fromCodex,
+  fromChatGPT,
   fromEnv,
   OPENAI,
-  source,
 } from './credential.ts'
 export {
   body,
