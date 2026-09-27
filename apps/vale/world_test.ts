@@ -2,7 +2,7 @@
 // the shape go when no other chunk is drawing it.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import type { Chunk } from './chunks.ts'
 import { cuboid, out, pack, type Packed } from './mesh.ts'
 import { flat } from './terrain.ts'
@@ -71,9 +71,14 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     let meshes = w.scene.children.filter((o): o is THREE.InstancedMesh =>
       o instanceof THREE.InstancedMesh
     )
-    assertEquals(meshes.length, 1)
-    assertEquals(meshes[0].count, 2)
-    let shown = meshes[0].geometry
+    let buildingMesh = meshes.find((m) => m.count == 2)
+    assert(buildingMesh)
+    let at = new THREE.Matrix4()
+    buildingMesh.getMatrixAt(0, at)
+    assertEquals(at.elements[12], 64)
+    buildingMesh.getMatrixAt(1, at)
+    assertEquals(at.elements[12], 68)
+    let shown = buildingMesh.geometry
     let disposed = 0
     shown.addEventListener('dispose', () => disposed++)
     w.focus.set(1000, 5, 1000)
