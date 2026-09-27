@@ -20,6 +20,9 @@ let WATER = 0x3d6f8f
 let LEATHER = 0x7a4a2a
 let BRASS = metal(0xd8b04a)
 let LAMP = 0xffd37a
+let HAY = 0xc7a65b
+let GRAIN = 0xe4c878
+let CLOTH = 0xa84c43
 
 let vox = (): Vox => new Map()
 let set = (v: Vox, x: number, y: number, z: number, c: number) =>
@@ -158,6 +161,83 @@ export let smithbench: Piece = {
     box(v, [-1, 3, 0], [0, 3, 0], 0x8a8a92)
     set(v, -2, 3, 1, d.timber)
     set(v, -3, 3, 1, IRON)
+    return v
+  },
+}
+
+/** A joiner's bench with a vice, plane, saw and a board held for shaping. */
+export let joinerbench: Piece = {
+  name: 'joiner bench',
+  station: 'bench',
+  use: { at: [0, 3], for: 'work' },
+  make: (d) => {
+    let v = vox()
+    for (let x of [-3, 2]) {
+      for (let z of [-1, 1]) box(v, [x, 0, z], [x, 1, z], d.timber)
+    }
+    box(v, [-3, 2, -1], [2, 2, 1], shade(d.timber, 1.15))
+    box(v, [-2, 3, -1], [1, 3, -1], shade(d.timber, 0.85))
+    box(v, [-3, 3, 1], [-3, 4, 1], IRON)
+    set(v, -2, 3, 1, IRON)
+    box(v, [0, 3, 1], [1, 3, 1], STEEL)
+    set(v, 2, 3, 0, d.timber)
+    set(v, 2, 3, 1, STEEL)
+    return v
+  },
+}
+
+/** A brewing cauldron on a stone hearth, with a ladle at its rim. */
+export let cauldron: Piece = {
+  name: 'cauldron',
+  station: 'cauldron',
+  use: { at: [0, 3], for: 'work' },
+  glow: { at: [-0.5, 0.5, -0.5], size: 1.2, color: 0xff8b48, fire: true },
+  make: (d, s) => {
+    let v = vox()
+    for (let x = -2; x <= 1; x++) {
+      for (let z = -2; z <= 1; z++) {
+        set(v, x, 0, z, paint(d.stone, x, 0, z, s))
+      }
+    }
+    for (let x = -2; x <= 1; x++) {
+      for (let z = -2; z <= 1; z++) {
+        let rim = x == -2 || x == 1 || z == -2 || z == 1
+        if (rim) {
+          for (let y of [1, 2]) set(v, x, y, z, IRON)
+        } else {
+          set(v, x, 1, z, EMBER[(x + z + 30) % 3])
+          set(v, x, 2, z, WATER)
+        }
+      }
+    }
+    box(v, [-2, 3, -2], [1, 3, -2], IRON)
+    box(v, [-2, 3, 1], [1, 3, 1], IRON)
+    box(v, [-2, 3, -1], [-2, 3, 0], IRON)
+    box(v, [1, 3, -1], [1, 3, 0], IRON)
+    set(v, 1, 4, 1, d.timber)
+    set(v, 0, 3, 0, BRASS)
+    return v
+  },
+}
+
+/** The tailor's upright loom, its coloured warp, shuttle and foot treadles. */
+export let loom: Piece = {
+  name: 'loom',
+  use: { at: [0, 3], for: 'work' },
+  make: (d) => {
+    let v = vox()
+    for (let x of [-3, 2]) box(v, [x, 0, -1], [x, 7, -1], d.timber)
+    for (let y of [1, 7]) box(v, [-3, y, -1], [2, y, -1], d.timber)
+    for (let x = -2; x <= 1; x++) {
+      for (let y = 2; y <= 6; y++) {
+        set(v, x, y, -1, (x & 1) ? CLOTH : 0xe6d3a7)
+      }
+    }
+    box(v, [-3, 3, 0], [2, 3, 0], shade(d.timber, 0.8))
+    box(v, [-1, 0, 1], [-1, 1, 1], d.timber)
+    box(v, [1, 0, 1], [1, 1, 1], d.timber)
+    box(v, [-1, 2, 1], [1, 2, 1], CLOTH)
+    set(v, 0, 3, 1, d.timber)
     return v
   },
 }
@@ -303,6 +383,199 @@ export let grindstone: Piece = {
     }
     set(v, 1, 2, 0, IRON)
     set(v, 2, 2, 0, d.timber)
+    return v
+  },
+}
+
+/** A room's stone hearth, with a timber mantel and a small fire. */
+export let hearth: Piece = {
+  name: 'hearth',
+  use: { at: [0, 2], for: 'warm' },
+  glow: { at: [-0.5, 1.5, 0], size: 2, color: 0xff9a4a, fire: true },
+  make: (d, s) => {
+    let v = vox()
+    for (let x = -3; x <= 2; x++) {
+      for (let z = -1; z <= 0; z++) {
+        set(v, x, 0, z, paint(d.stone, x, 0, z, s))
+      }
+      for (let y = 1; y <= 3; y++) {
+        if (x < -1 || x > 0 || y == 3) {
+          set(v, x, y, -1, paint(d.stone, x, y, -1, s))
+        }
+      }
+    }
+    box(v, [-3, 4, -1], [2, 4, 0], d.timber)
+    for (let x of [-1, 0]) set(v, x, 1, 0, EMBER[x + 1])
+    return v
+  },
+}
+
+/** The innkeeper's counter, with a tap and a row of pewter cups. */
+export let bar: Piece = {
+  name: 'bar',
+  use: { at: [0, 3], for: 'serve' },
+  make: (d) => {
+    let v = vox()
+    box(v, [-4, 0, -1], [3, 2, 0], shade(d.timber, 0.85))
+    box(v, [-4, 3, -1], [3, 3, 1], shade(d.timber, 1.15))
+    for (let x of [-2, 0, 2]) set(v, x, 4, 0, STEEL)
+    box(v, [-3, 4, -1], [-3, 6, -1], BRASS)
+    box(v, [-3, 6, -1], [-2, 6, -1], BRASS)
+    set(v, -2, 5, -1, BRASS)
+    return v
+  },
+}
+
+/** A merchant's counter with scales and small wares. */
+export let counter: Piece = {
+  name: 'counter',
+  use: { at: [0, 3], for: 'trade' },
+  make: (d) => {
+    let v = vox()
+    box(v, [-3, 0, -1], [2, 2, 0], d.timber)
+    box(v, [-3, 3, -1], [2, 3, 1], shade(d.timber, 1.2))
+    box(v, [-2, 4, 0], [0, 4, 0], BRASS)
+    set(v, -1, 5, 0, BRASS)
+    set(v, -2, 4, 1, GRAIN)
+    set(v, 0, 4, 1, 0x698657)
+    set(v, 2, 4, 0, CLOTH)
+    return v
+  },
+}
+
+/** A store's shelves, stacked with crates, cloth and jars. */
+export let goods: Piece = {
+  name: 'goods shelves',
+  make: (d) => {
+    let v = vox()
+    for (let x of [-3, 2]) box(v, [x, 0, 0], [x, 8, 0], d.timber)
+    for (let y of [1, 4, 7]) box(v, [-3, y, 0], [2, y, 1], d.timber)
+    box(v, [-2, 2, 0], [-1, 3, 1], shade(d.timber, 0.8))
+    box(v, [0, 2, 0], [1, 3, 1], CLOTH)
+    for (let x of [-2, 0, 2]) set(v, x, 5, 1, x ? 0xb87949 : WATER)
+    box(v, [-2, 8, 0], [1, 8, 0], GRAIN)
+    return v
+  },
+}
+
+/** The village hall's long council table, with a charter and candles. */
+export let council: Piece = {
+  name: 'council table',
+  use: { at: [0, 3], for: 'meet' },
+  make: (d) => {
+    let v = vox()
+    for (let x of [-5, 4]) {
+      for (let z of [-1, 1]) box(v, [x, 0, z], [x, 1, z], d.timber)
+    }
+    box(v, [-5, 2, -1], [4, 2, 1], shade(d.timber, 1.15))
+    box(v, [-1, 3, 0], [1, 3, 0], 0xe6dcc2)
+    for (let x of [-4, 3]) {
+      set(v, x, 3, 0, BRASS)
+      set(v, x, 4, 0, LAMP)
+    }
+    return v
+  },
+}
+
+/** A woven hall banner suspended from a timber rail. */
+export let banner: Piece = {
+  name: 'banner',
+  make: (d) => {
+    let v = vox()
+    box(v, [-3, 9, 0], [2, 9, 0], d.timber)
+    for (let x = -2; x <= 1; x++) {
+      for (let y = 4; y <= 8; y++) {
+        set(v, x, y, 0, x == -2 || x == 1 || y == 8 ? GRAIN : CLOTH)
+      }
+    }
+    set(v, -1, 5, 1, GRAIN)
+    set(v, 0, 6, 1, GRAIN)
+    return v
+  },
+}
+
+/** A raised feed manger with hay behind its slatted front. */
+export let manger: Piece = {
+  name: 'manger',
+  make: (d) => {
+    let v = vox()
+    for (let x of [-3, 2]) box(v, [x, 0, 0], [x, 3, 2], d.timber)
+    box(v, [-3, 1, 0], [2, 1, 2], d.timber)
+    box(v, [-3, 3, 0], [2, 3, 0], d.timber)
+    box(v, [-3, 3, 2], [2, 3, 2], d.timber)
+    for (let x = -2; x <= 1; x++) {
+      set(v, x, 2, 1, (x & 1) ? HAY : GRAIN)
+      if (!(x & 1)) set(v, x, 2, 2, shade(d.timber, 0.8))
+    }
+    return v
+  },
+}
+
+/** A tied bale, with straw showing through its crossed bindings. */
+export let haybale: Piece = {
+  name: 'hay bale',
+  make: () => {
+    let v = vox()
+    box(v, [-2, 0, -1], [1, 2, 1], HAY)
+    for (let x of [-1, 1]) box(v, [x, 0, 1], [x, 2, 1], 0x866943)
+    for (let z of [-1, 0]) set(v, 0, 2, z, GRAIN)
+    return v
+  },
+}
+
+/** A stable's long water trough, held by two feet. */
+export let trough: Piece = {
+  name: 'trough',
+  make: (d) => {
+    let v = vox()
+    for (let x of [-3, 2]) {
+      for (let z of [-1, 1]) box(v, [x, 0, z], [x, 2, z], d.timber)
+    }
+    box(v, [-3, 1, -1], [2, 1, 1], shade(d.timber, 0.8))
+    for (let x = -2; x <= 1; x++) {
+      set(v, x, 2, -1, d.timber)
+      set(v, x, 2, 0, WATER)
+      set(v, x, 2, 1, d.timber)
+    }
+    return v
+  },
+}
+
+/** The mill's paired stones, grain hopper and turning handle. */
+export let millstone: Piece = {
+  name: 'millstone',
+  use: { at: [0, 4], for: 'work' },
+  make: (d, s) => {
+    let v = vox()
+    for (let y of [0, 1, 2]) {
+      for (let x = -2; x <= 1; x++) {
+        for (let z = -2; z <= 1; z++) {
+          if ((x == -2 || x == 1) && (z == -2 || z == 1)) continue
+          let stone = paint(d.stone, x, y, z, s)
+          set(v, x, y, z, y == 1 ? shade(stone, 0.8) : stone)
+        }
+      }
+    }
+    for (let x of [-2, 1]) box(v, [x, 3, -1], [x, 5, 0], d.timber)
+    box(v, [-2, 5, -1], [1, 5, 0], d.timber)
+    box(v, [-1, 4, -1], [0, 4, 0], GRAIN)
+    set(v, 1, 3, 1, IRON)
+    set(v, 2, 3, 1, d.timber)
+    return v
+  },
+}
+
+/** Flour sacks piled beside the millstone. */
+export let sacks: Piece = {
+  name: 'flour sacks',
+  make: () => {
+    let v = vox()
+    for (let x of [-3, 0]) {
+      box(v, [x, 0, -1], [x + 2, 1, 1], 0xd9c9a5)
+      box(v, [x + 1, 2, 0], [x + 1, 2, 0], 0x92734b)
+    }
+    box(v, [-1, 2, -1], [1, 3, 0], 0xe5d8ba)
+    set(v, 0, 3, 0, 0x92734b)
     return v
   },
 }
