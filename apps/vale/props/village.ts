@@ -107,13 +107,14 @@ let fire = (): Model => {
   return { vox: v, size: 0.25 }
 }
 
+// The notice board: a plank between two posts under a little roof. It is
+// drawn bare, and a paper is pinned on its south face for each notice it
+// holds (papers.ts).
 let board = (): Model => {
   let v: Vox = new Map()
   box(v, [-3, 0, 0], [-3, 9, 0], TIMBER)
   box(v, [3, 0, 0], [3, 9, 0], TIMBER)
   box(v, [-4, 4, 0], [4, 9, 0], 0x8a6240)
-  box(v, [-3, 6, 1], [-1, 8, 1], 0xf4ecd6)
-  box(v, [1, 5, 1], [2, 7, 1], 0xf4ecd6)
   box(v, [-4, 10, -1], [4, 10, 1], 0xc2573e)
   return { vox: v, size: 0.25 }
 }

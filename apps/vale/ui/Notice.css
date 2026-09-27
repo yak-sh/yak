@@ -1,0 +1,81 @@
+/* The notice board's sheet (notices.ts): each notice a paper pinned up and
+   tilted a hair, its title over who asks and where they stand, what they
+   said, and what it gives beside the button that takes it. Each is as wide
+   as the panel's room lets it be, whatever it says. */
+.Notices {
+  display: grid;
+  gap: 0.8rem;
+  width: min(30rem, 100cqw - 2rem);
+  margin: 0 auto;
+  padding: 0.5rem 0 0.8rem;
+}
+
+.Notices_None {
+  margin: 0;
+  color: var(--muted);
+}
+
+.Notice {
+  --tilt: -0.6deg;
+  --pin: #c2573e; /* the pin's red, as on the board */
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.9rem 0.9rem 0.7rem;
+  border-radius: 3px;
+  background: var(--well);
+  box-shadow: var(--flat);
+  rotate: var(--tilt);
+
+  &:nth-child(even) {
+    --tilt: 0.5deg;
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0.3rem;
+    left: calc(50% - 0.28rem);
+    width: 0.56rem;
+    height: 0.56rem;
+    border-radius: var(--round);
+    background: var(--pin);
+  }
+
+  & p {
+    margin: 0;
+  }
+}
+
+.Notice_Title {
+  color: var(--deep);
+  text-wrap: balance;
+}
+
+.Notice_From {
+  font-size: 0.78rem;
+  color: var(--faint);
+}
+
+.Notice_Says {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.Notice_Foot {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  margin-top: 0.2rem;
+
+  & .Btn-go {
+    margin: 0 0 0 auto;
+  }
+}
+
+.Notice_Gives {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--amber);
+}

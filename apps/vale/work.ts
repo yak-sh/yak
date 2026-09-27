@@ -1,8 +1,9 @@
 // A hero's work: at the nodes round them (gather.ts), and at a
 // village's stations, making things (craft.ts) or upgrading them
-// (upgrade.ts). This reads where the hero stands and what
-// they asked for: which node or station is near enough to work, the work
-// under way, and what it yields. When a node's work is done it writes the
+// (upgrade.ts); and, with the same hands, reading a village's notice board
+// (notices.ts). This reads where the hero stands and what they asked for:
+// which node, station or board is near enough to work, the work under way,
+// and what it yields. When a node's work is done it writes the
 // item it gave, wearing the `gathered` row that spends the node for everyone
 // until it grows back; when a thing is made, the item made, wearing its
 // `crafted` row, with `used` rows for what it took, in one write; when a piece
@@ -22,6 +23,7 @@ import {
 } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
+import { type Board, boardsNear, READ } from './notices.ts'
 import type { Frame, Vec3 } from './play.ts'
 import { made, type Rarity } from './rarity.ts'
 import { upgradeOf, upgradeWorth, upgradeXp } from './upgrade.ts'
@@ -54,11 +56,15 @@ export type Seen = {
 /** A station near enough to work: which, where, and how far off. */
 export type Bench = { craft: Craft; at: Vec3; near: number }
 
+/** A notice board near enough to read, and how far off. */
+export type Reading = Board & { near: number }
+
 /** What happened at the work this frame, for the eyes and ears: a stroke
  * landing (a chop, a clink, a rustle, a splash, a hammer on the anvil), with
  * the colour of what it throws up; a thing gathered or made, and what it was
- * worth to its trade; a station worked, to open its sheet; a trade grown a
- * level; or something to tell the player. */
+ * worth to its trade; a station worked, to open its sheet; a board worked,
+ * to open its notices; a trade grown a level; or something to tell the
+ * player. */
 export type Work =
   | { type: 'stroke'; eid: string; trade: Trade; at: Vec3; chip: number }
   | {
@@ -85,18 +91,20 @@ export type Work =
     at: Vec3
   }
   | { type: 'station'; craft: Craft }
+  | { type: 'board' }
   | { type: 'trade'; trade: Trade; lvl: number }
   | { type: 'say'; text: string }
 
-/** The work as this frame has it: the level's nodes, the node and the station
- * near enough to work, the work under way (at a node, or on a recipe) and how
- * far through, 0 to 1, with how far through the stroke it is (the hero's
- * swing, or -1 while a line waits in the water), the hero's trades, and what
- * happened. */
+/** The work as this frame has it: the level's nodes, the node, the station
+ * and the board near enough to work, the work under way (at a node, or on a
+ * recipe) and how far through, 0 to 1, with how far through the stroke it is
+ * (the hero's swing, or -1 while a line waits in the water), the hero's
+ * trades, and what happened. */
 export type Job = {
   nodes: Seen[]
   near: Seen | null
   bench: Bench | null
+  board: Reading | null
   doing: {
     trade: Trade
     at: Vec3
@@ -375,6 +383,15 @@ export let working = (net: Net) => {
             : []
         },
       ).sort((a, b) => a.near - b.near)[0] ?? null
+      let board = boardsNear(v, f.body.x, f.body.z, READ).flatMap(
+        (b): Reading[] =>
+          Math.abs(b.at[1] - f.body.y) < 2
+            ? [{
+              ...b,
+              near: Math.hypot(b.at[0] - f.body.x, b.at[2] - f.body.z),
+            }]
+            : [],
+      ).sort((a, b) => a.near - b.near)[0] ?? null
 
       // Work stops when the hero does something else, or the node is gone.
       if (job) {
@@ -394,10 +411,13 @@ export let working = (net: Net) => {
       }
 
       // Asked to work: the nearest node, if it is whole and the hero's trade
-      // reaches it; else the station there, whose sheet opens.
+      // reaches it; else the station there, whose sheet opens, or the board,
+      // whose notices do.
       if (want && !job && !f.down && me) {
         if (!near && bench) {
           events.push({ type: 'station', craft: bench.craft })
+        } else if (!near && board) {
+          events.push({ type: 'board' })
         } else if (!near) {
           events.push({ type: 'say', text: 'Nothing to gather here.' })
         } else if (near.spent) {
@@ -502,7 +522,7 @@ export let working = (net: Net) => {
           }
         }
       }
-      return { nodes, near, bench, doing, trades: mine, events }
+      return { nodes, near, bench, board, doing, trades: mine, events }
     },
   }
 }

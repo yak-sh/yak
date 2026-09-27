@@ -27,7 +27,8 @@
 // tonic. With a mouse they line up along the bottom with their keys.
 // `Pad-none` hides a pad, `Pad-off` dims it, `--k` from 0 to 1 rings it with
 // progress, and `--cd` sweeps a cooldown over it. Talking and gathering (or
-// working a station) share one slot, and only one of them shows at a time.
+// working a station, or reading a board) share one slot, and only one of them
+// shows at a time.
 //
 // Every button says what it does in its tip (tip.ts), shown while a mouse
 // rests on it or a thumb holds it: its name, its key, and a line of what it
@@ -96,9 +97,10 @@ let MICS: Record<Mic, string> = {
 
 /** The panels the glass holds, and the keys that open them. The hero's is
  * one panel of tabs, each opened by its own keys (pack.ts, board.ts,
- * journal.ts). Crafting opens at a station (station.ts), and the deals beside
- * a villager (dealbox.ts). The map and the menu are one size whatever is done
- * in them, so each is as tall as it is; every other sheet keeps one height
+ * journal.ts). Crafting opens at a station (station.ts), the notices at a
+ * village's board (notices.ts), and the deals beside a villager
+ * (dealbox.ts). The map and the menu are one size whatever is done in them,
+ * so each is as tall as it is; every other sheet keeps one height
  * (ui/Panel.css). */
 export let SHEETS = {
   map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
@@ -112,6 +114,7 @@ export let SHEETS = {
   },
   menu: { title: 'Menu', keys: ['Escape'], tall: 'auto' },
   craft: { title: 'Crafting' },
+  notices: { title: 'Notice board' },
   deal: { title: 'Deals' },
 } satisfies Record<string, Spec & { tabs?: Record<string, TabSpec> }>
 
@@ -174,6 +177,7 @@ export let hud = (
     ...shelf.book('hero', SHEETS.hero),
     menu: shelf.add('menu', SHEETS.menu),
     craft: shelf.add('craft', SHEETS.craft),
+    notices: shelf.add('notices', SHEETS.notices),
     deal: shelf.add('deal', SHEETS.deal),
   }
   rose.addEventListener('click', panel.map.toggle)
@@ -354,14 +358,14 @@ export let hud = (
     while (toasts.children.length > 3) toasts.firstElementChild?.remove()
   }
 
-  // The quests tracked (journal.ts): each pinned one under way, its title
-  // over the step it is on. With none pinned, how many are under way; with
-  // none under way, who has one on offer, the nearest first.
+  // The quests tracked (journal.ts): each pinned one, its title over the
+  // step it is on. With none pinned, how many are under way; with none under
+  // way, who has one on offer, the nearest first.
   let line = (title: string, says: string) =>
     `<span class=Track_Quest><b>${title}</b><span>${says}</span></span>`
   let tracking = (tasks: Task[], f: Frame) => {
     let on = tasks.filter((t) => t.state == 'taken')
-    let pinned = on.filter((t) => t.pinned).slice(0, 3)
+    let pinned = tasks.filter((t) => t.pinned).slice(0, 3)
     if (pinned.length) {
       return pinned.map((t) => {
         let s = next(t)
@@ -452,23 +456,33 @@ export let hud = (
     },
     /** the gather button, for this frame's work: its trade's icon while a node
      * or a station is near enough to work, dim while a node cannot be, and
-     * ringed with how far the work has come; none while someone is near
-     * enough to talk to */
+     * ringed with how far the work has come, or the board's while one is near
+     * enough to read; none while someone is near enough to talk to */
     work: (job: Job | null) => {
       let n = job?.doing?.node ?? job?.near
       let trade = job?.doing?.trade ?? n?.lode.trade ?? job?.bench?.craft
-      gatherPad.classList.toggle('Pad-none', !trade)
-      if (!trade) return
-      put('gather', gatherIcon, glyph(TRADES[trade].icon))
-      tip(gatherPad, {
-        name: TRADES[trade].name,
-        key: gatherKey,
-        says: n
-          ? `Gather from the ${n.lode.name.toLowerCase()}.`
-          : job?.bench
-          ? `Work the ${STATIONS[job.bench.craft].name.toLowerCase()}.`
-          : undefined,
-      })
+      let board = !trade && !!job?.board
+      gatherPad.classList.toggle('Pad-none', !trade && !board)
+      if (!trade && !board) return
+      put('gather', gatherIcon, glyph(trade ? TRADES[trade].icon : 'notices'))
+      tip(
+        gatherPad,
+        trade
+          ? {
+            name: TRADES[trade].name,
+            key: gatherKey,
+            says: n
+              ? `Gather from the ${n.lode.name.toLowerCase()}.`
+              : job?.bench
+              ? `Work the ${STATIONS[job.bench.craft].name.toLowerCase()}.`
+              : undefined,
+          }
+          : {
+            name: 'Notice board',
+            key: gatherKey,
+            says: 'Read the jobs pinned on it.',
+          },
+      )
       gatherPad.classList.toggle('Pad-off', !!n && (n.spent || !n.able))
       let k = job?.doing ? job.doing.k.toFixed(3) : '0'
       if (was.gatherK != k) {

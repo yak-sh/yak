@@ -290,13 +290,25 @@ export type Held = {
 }
 
 /** Where one player stands with a quest: done, taken (with how far along),
- * open to take once the quest it comes after is done, or not yet; and, while
- * taken, whether it is pinned, which it is until the player unpins it. */
+ * open to take once the quest it comes after is done, or not yet; and
+ * whether it is pinned: while taken, until the player unpins it, and while
+ * on offer, once they pin it from a notice board (notices.ts). */
 export type Standing = {
   quest: Quest
   state: 'done' | 'taken' | 'open' | 'locked'
   have: number
   pinned: boolean
+}
+
+// The latest word, pinned or unpinned, on each quest and deal in a journal,
+// whatever order its rows come in.
+let wordsOf = (journal: Entry[]): Map<string, Entry> => {
+  let last = new Map<string, Entry>()
+  for (let e of journal) {
+    let was = last.get(e.quest)
+    if (/pinned$/.test(e.step) && (!was || was.at <= e.at)) last.set(e.quest, e)
+  }
+  return last
 }
 
 /** The quests and deals a player has unpinned, by id: each whose latest
@@ -313,16 +325,11 @@ export type Standing = {
  * )
  * ```
  */
-export let unpinnedOf = (journal: Entry[]): Set<string> => {
-  let last = new Map<string, Entry>()
-  for (let e of journal) {
-    let was = last.get(e.quest)
-    if (/pinned$/.test(e.step) && (!was || was.at <= e.at)) last.set(e.quest, e)
-  }
-  return new Set(
-    [...last.values()].filter((e) => e.step == 'unpinned').map((e) => e.quest),
+export let unpinnedOf = (journal: Entry[]): Set<string> =>
+  new Set(
+    [...wordsOf(journal).values()].filter((e) => e.step == 'unpinned')
+      .map((e) => e.quest),
   )
-}
 
 /** Where one player stands with each quest, in the order given.
  *
@@ -348,6 +355,11 @@ export let unpinnedOf = (journal: Entry[]): Set<string> => {
  * let took = { quest: 'c', step: 'taken', at: 1 }
  * assertEquals(pins([took]), ['c'])
  * assertEquals(pins([took, { quest: 'c', step: 'unpinned', at: 2 }]), [])
+ * // on offer, pinned only once pinned from a board; a word before it was
+ * // taken says nothing of it taken
+ * let board = { quest: 'c', step: 'pinned', at: 0 }
+ * assertEquals(pins([board]), ['c'])
+ * assertEquals(pins([{ ...board, step: 'unpinned' }, { ...took, at: 2 }]), ['c'])
  * ```
  */
 export let questsOf = (
@@ -358,7 +370,7 @@ export let questsOf = (
 ): Standing[] => {
   let taken = new Map<string, number>()
   let done = new Set<string>()
-  let off = unpinnedOf(journal)
+  let words = wordsOf(journal)
   for (let e of journal) {
     if (e.step == 'taken') taken.set(e.quest, e.at)
     if (e.step == 'done') done.add(e.quest)
@@ -375,11 +387,14 @@ export let questsOf = (
     let have = q.goal == 'slay'
       ? kills.filter((k) => k.kind == q.target && k.at >= since).length
       : bag.filter((b) => b.kind == q.target).reduce((n, b) => n + b.n, 0)
+    let word = words.get(q.id)
     return {
       quest: q,
       state,
       have: Math.min(have, q.count),
-      pinned: state == 'taken' && !off.has(q.id),
+      pinned: state == 'taken'
+        ? !(word?.step == 'unpinned' && word.at >= since)
+        : state == 'open' && word?.step == 'pinned',
     }
   })
 }

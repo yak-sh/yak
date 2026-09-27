@@ -3,13 +3,14 @@
 // (grown.ts) while it opens the store and asks who you are and which of your
 // heroes to play, and then runs the frame: the player's hands (input.ts), a step of the
 // game on the graph (play.ts), the work at the nodes and the stations
-// (work.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the
-// glass (hud.ts, and its action bar, bar.ts), what was said (chatbox.ts) and
-// the panels over it (map.ts, pack.ts, board.ts, journal.ts, station.ts,
-// menu.ts, and the deals with a villager, dealbox.ts). The world is one
-// ground of many regions, and the page draws the chunks within sight of the
-// hero (world.ts), grown and meshed in the workers as they come near. A
-// hero comes back where they were last seen (seen.ts).
+// (work.ts), the stage (cast.ts, nodes.ts, papers.ts), the bits and numbers
+// (fx.ts), the glass (hud.ts, and its action bar, bar.ts), what was said
+// (chatbox.ts) and the panels over it (map.ts, pack.ts, board.ts,
+// journal.ts, station.ts, notices.ts, menu.ts, and the deals with a
+// villager, dealbox.ts). The world is one ground of many regions, and the
+// page draws the chunks within sight of the hero (world.ts), grown and
+// meshed in the workers as they come near. A hero comes back where they were
+// last seen (seen.ts).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability } from './abilities.ts'
@@ -32,6 +33,8 @@ import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
+import { type Board, noticeboard, notices } from './notices.ts'
+import { papers } from './papers.ts'
 import { ITEMS } from './items.ts'
 import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
@@ -169,6 +172,15 @@ let skills = board(h.panels.skills, {
   },
 })
 let log = journal(h.panels.journal, { pin: g.pin })
+// A quest taken from a notice board is pinned while it is on offer, so the
+// way to whoever gives it is tracked.
+let notes = noticeboard(h.panels.notices, {
+  take: (n) => {
+    g.pin(n.id, true)
+    h.toast(`Tracked: ${n.title}. Find ${n.from}.`, 'Toast-big')
+    sound.quest()
+  },
+})
 // What the hero chose about a deal with a villager.
 let dealt = dealbox(h.panels.deal, (a, v) => {
   if (a == 'refuse') return deal.refuse(v.giver.id, v.eid)
@@ -201,6 +213,7 @@ let stage = cast(w.scene, v, marks, BUILD)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
 let bounty = nodes(w.scene, marks, glow, phone)
+let pins = papers(w.scene, v, marks, phone)
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
 
 // The camera (cam.ts), following the hero unless this viewer set it free.
@@ -630,7 +643,8 @@ let worked = (e: Work) => {
   } else if (e.type == 'station') {
     if (bench.at == e.craft) bench.close()
     else if (job) bench.open(e.craft, job.trades)
-  } else if (e.type == 'got') {
+  } else if (e.type == 'board') notes.toggle()
+  else if (e.type == 'got') {
     got(
       { eid: e.piece ?? '', kind: e.item, n: e.n, rarity: e.rarity },
       target.clone().setY(target.y + 1),
@@ -854,11 +868,12 @@ let loop = (t: number) => {
       let here = 1 + f.others.length
       // The hero's quests and deals, and where the ones tracked go next.
       let tasks = tasksOf(f.sheet, views)
+      let givers = Object.fromEntries(
+        f.givers.map((n): [string, Spot] => [n.id, [n.x, n.z]]),
+      )
       let way = guide(
         tasks,
-        Object.fromEntries(
-          f.givers.map((n): [string, Spot] => [n.id, [n.x, n.z]]),
-        ),
+        givers,
         [f.body.x, f.body.z],
       )
       h.show(f, here, clockOf(w.day), bearing(cam.yaw), tasks, way.aim)
@@ -893,6 +908,13 @@ let loop = (t: number) => {
       // Walked off from the station its sheet is open at: it folds away.
       if (bench.at && job.bench?.craft != bench.at) bench.close()
       bench.show(f.sheet, job)
+      // And so does a board's. What each board in sight holds for the hero:
+      // the one they stand at, to read, and a paper for each notice.
+      if (notes.open && !job.board) notes.close()
+      let read = (b: Board) =>
+        notices(f.sheet.quests, b.level, givers, [b.at[0], b.at[2]])
+      notes.show(job.board ? read(job.board) : [])
+      pins.tick([f.body.x, f.body.z], (b) => read(b).length, job)
       settings.show()
       w.focus.set(f.body.x, f.body.y, f.body.z)
     }
@@ -927,6 +949,7 @@ let loop = (t: number) => {
   aim(cam, camera, target, v, dt, home)
   w.see(camera.position, feet, stature(BUILD), dt)
   bounty.see(camera.position, feet, stature(BUILD))
+  pins.see(camera.position, feet, stature(BUILD))
   sound.listen(camera, v, playing ? last : null, net.hero, dt)
   // Embers off the fire near, and at night fireflies about the player.
   let fire = hearthNear(target.x, target.z, 60)
@@ -990,6 +1013,7 @@ Object.assign(globalThis, {
     get job() {
       return job
     },
+    notices: notes,
     get vale() {
       return v
     },

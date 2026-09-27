@@ -4,9 +4,10 @@
 // villager's deal (deals.ts); both are a task here, a list of steps, so the
 // journal, the tracker on the glass (hud.ts), the map (map.ts) and the
 // compass show them the same way. A task under way is pinned until the hero
-// unpins it; the glass tracks the pinned ones, the map rings where each goes
-// next, and the compass points to the first. L or the tray's scroll opens it,
-// and so does a tap on the tracker.
+// unpins it, and a quest on offer is pinned once taken from a notice board
+// (notices.ts); the glass tracks the pinned ones, the map rings where each
+// goes next, and the compass points to the first. L or the tray's scroll
+// opens it, and so does a tap on the tracker.
 import { BEASTS } from './beasts.ts'
 import type { View } from './deals.ts'
 import { type Glyph, glyph } from './glyphs.ts'
@@ -231,7 +232,9 @@ export let goal = (t: Task, at: Record<string, Spot>): Spot[] => {
 export type Mark = { at: Spot; title: string }
 
 /** Where the tasks tracked go next (see `goal`): every spot, for the map,
- * and for the compass the one nearest `me` of the first task's.
+ * and for the compass the one nearest `me` of the first task's. A task is
+ * tracked while it is pinned: under way, or on offer and pinned from a notice
+ * board (notices.ts), when it goes to whoever offers it.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -243,6 +246,9 @@ export type Mark = { at: Spot; title: string }
  * assertEquals(way.marks, [{ at: [10, 20], title: q.title }])
  * let off = guide([{ ...t, pinned: false }], {}, [0, 0])
  * assertEquals(off, { marks: [], aim: null })
+ * // a quest on offer, pinned from a board: to whoever offers it
+ * let offer = quest({ quest: q, state: 'open', have: 0, pinned: true })
+ * assertEquals(guide([offer], { [q.giver]: [3, 4] }, [0, 0]).aim, [3, 4])
  * ```
  */
 export let guide = (
@@ -250,7 +256,7 @@ export let guide = (
   at: Record<string, Spot>,
   [x, z]: Spot,
 ): { marks: Mark[]; aim: Spot | null } => {
-  let spots = tasks.filter((t) => t.state == 'taken' && t.pinned)
+  let spots = tasks.filter((t) => t.pinned)
     .map((t) => ({ t, at: goal(t, at) }))
   let far = ([sx, sz]: Spot) => Math.hypot(sx - x, sz - z)
   return {
@@ -326,9 +332,11 @@ export let journal = (panel: Page, acts: Acts) => {
     /** show the journal, when it is open and what it shows changed */
     show: (tasks: Task[], here: string) => {
       if (!panel.open) return
-      let taken = tasks.filter((t) => t.state == 'taken')
+      // A quest on offer pinned from a notice board is on its way: to
+      // whoever offers it.
+      let taken = tasks.filter((t) => t.state == 'taken' || t.pinned)
         .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-      let open = tasks.filter((t) => t.state == 'open')
+      let open = tasks.filter((t) => t.state == 'open' && !t.pinned)
       let done = tasks.filter((t) => t.state == 'done')
       let offer = (t: Task) =>
         `<li class=Journal_Offer><b>${esc(t.title)}</b><span>${
