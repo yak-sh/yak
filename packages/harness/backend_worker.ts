@@ -196,12 +196,16 @@ let serve = (port: MessagePort) => {
         return await a.image(String(args[0]))
       case 'models':
         return a.models(args[0] == null ? undefined : String(args[0]))
+      case 'personas':
+        return a.personas()
       case 'selectModel':
         return a.selectModel(String(args[0]), String(args[1]))
       case 'start':
         return a.start(
           String(args[0]),
-          args[1] as { effort?: string; model?: string } | undefined,
+          args[1] as
+            | { effort?: string; model?: string; persona?: string }
+            | undefined,
         )
       case 'send':
         return a.send(String(args[0]), String(args[1]))

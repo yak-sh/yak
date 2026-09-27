@@ -25,6 +25,7 @@ export type UIAgent =
     Pick<
       Local,
       | 'models'
+      | 'personas'
       | 'selectModel'
       | 'archive'
       | 'authorizeMCP'

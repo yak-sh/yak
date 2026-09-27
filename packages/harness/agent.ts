@@ -173,6 +173,8 @@ export type Agent<H extends Host = Host> = {
     prompt: string,
     o?: { effort?: string; model?: Eid; persona?: Eid; by?: Eid },
   ) => Promise<Eid>
+  /** personas this graph offers for a new session */
+  personas: () => Promise<Bundle[]>
   /** the configured models, and what this session asks for next */
   models: (session?: Eid) => Promise<ModelSelection>
   /** record a passive model choice; the next request honours it */
@@ -456,6 +458,12 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     names,
     model: using.model,
     admitted,
+    personas: async () =>
+      (await h.g.read('.persona')).sort((a, b) =>
+        String((a.doc as Comp | undefined)?.title ?? '').localeCompare(
+          String((b.doc as Comp | undefined)?.title ?? ''),
+        )
+      ),
     models: (session) => modelSelection(h.g, session, using),
     selectModel: async (session, model) => {
       const [owner] = await h.g.get([session])

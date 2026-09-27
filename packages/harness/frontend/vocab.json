@@ -81,6 +81,15 @@
         },
         "modelFeedback": {
           "type": "string"
+        },
+        "personas": {
+          "type": "boolean"
+        },
+        "personaIndex": {
+          "type": "number"
+        },
+        "personaFeedback": {
+          "type": "string"
         }
       }
     },
@@ -123,6 +132,12 @@
           "type": "string"
         },
         "modelChoices": {
+          "type": "string"
+        },
+        "newPersona": {
+          "type": "string"
+        },
+        "personaChoices": {
           "type": "string"
         }
       }

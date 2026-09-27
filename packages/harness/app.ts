@@ -1,4 +1,5 @@
 import { ModelPanel } from './ModelPanel.ts'
+import { PersonaPanel } from './PersonaPanel.ts'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { ShuttingDown } from './shutdown.ts'
 import { RuntimePanel } from './RuntimePanel.ts'
@@ -485,6 +486,9 @@ export let App = (
         model: (ui.client.ent('view')!.frontend as Comp).newModel as
           | string
           | undefined,
+        persona: (ui.client.ent('view')!.frontend as Comp).newPersona as
+          | string
+          | undefined,
       })
     pending.set(key, write)
     void write.then((id) => {
@@ -570,6 +574,7 @@ export let App = (
     h(EntryDetail, { ui, agent: a }),
     h(Keyboard, { ui, action }),
     h(ModelPanel, { ui, agent: a, session: selection.id }),
+    h(PersonaPanel, { ui, agent: a, session: selection.id }),
     h(RuntimePanel, { ui, agent: a, session: selection.id, subscribe }),
     h(MCPAuthPanel, { ui, agent: a }),
     h(Feedback, { ui }),

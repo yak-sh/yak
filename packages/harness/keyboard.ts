@@ -104,6 +104,7 @@ export const shortcuts = [
   ['? / Esc', 'show / dismiss help'],
   ['A', 'authorize a connection (private return-URL input)'],
   ['m', 'choose model (provider follows the model)'],
+  ['P', 'choose persona for a new session'],
   ['r', 'runtime panel: j/k select, x interrupt/cancel queued, c continue'],
   ['Ctrl+U', 'INSERT / VISUAL: cut entire draft'],
   ['Alt+p', 'insert saved local yank into draft'],
@@ -258,7 +259,24 @@ export let Keyboard = ({ ui, action }: {
         return true
       }
       if (text == 'm') {
-        ui.keys({ models: true, modelIndex: 0, modelFeedback: '' })
+        ui.keys({
+          models: true,
+          personas: false,
+          modelIndex: 0,
+          modelFeedback: '',
+        })
+        return true
+      }
+      if (
+        text == 'P' &&
+        (ui.client.ent('view')!.frontend as Comp).selected == null
+      ) {
+        ui.keys({
+          personas: true,
+          models: false,
+          personaIndex: 0,
+          personaFeedback: '',
+        })
         return true
       }
       if (text == 'r') {

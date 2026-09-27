@@ -86,7 +86,8 @@ In NORMAL mode, `b` opens a 20-row session browser, `>` and `<` change pages,
 and Ctrl+N / Ctrl+P or Alt+Down / Alt+Up select roots on the visible page.
 Ctrl+O selects a new session, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter
 needs a terminal supporting kitty keyboard sequences (Alt+Enter also inserts a
-newline).
+newline). On a new session, NORMAL `P` chooses a persona from the graph for that
+session.
 
 `$HARNESS_HOME` moves harness state without changing `HOME`: checkouts for
 children assigned tasks go under `$HARNESS_HOME/worktrees` and drafts under

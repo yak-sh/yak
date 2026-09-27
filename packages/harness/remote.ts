@@ -331,6 +331,7 @@ export let remote = async (
       await request('start', [text, options]) as string,
     models: async (session) =>
       await request('models', [session]) as ModelSelection,
+    personas: async () => await request('personas') as Bundle[],
     selectModel: async (session, model) => {
       await request('selectModel', [session, model])
     },
