@@ -8,8 +8,8 @@
 import { groundChunk } from './ground.ts'
 import { cuboids } from './boxes.ts'
 import { out, pack, type Packed, place } from './mesh.ts'
->>>>>>> 7e18319f (Mossvale: a model built of boxes never draws two faces in one plane. Its boxes are one solid (boxes.ts): each is worn over those before it, a side within a step (5 mm, mesh.ts STEP) of an earlier box's same side standing a step outside it, or flush where both are the same stuff; and a face is drawn only where it shows, cut where another box lies against it or over it. A figure's parts are worn over the parts before them that stand square to them as it is built (parts.ts knit), so a thigh no longer flickers against a flank. Figures, a thing's look, logs and stumps and a foundation all go through it; mesh.ts `fights` finds any two faces the depth buffer cannot tell apart, and tests over every creature, every hero's dress, every look and every prop find none (T-40879))
 import { KINDS, model } from './props.ts'
+import { off, propAt, spacer, step, thingAt } from './stand.ts'
 import {
   adopt,
   CHUNK,
@@ -54,18 +54,30 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
   let solid = groundChunk(patch, out())
   let bits = out()
   let props = v.plant(ci, ck)
+  let smallSpace = small ? spacer(v.voxel) : null
   for (let p of small ? [...props, ...decor(patch)] : props) {
     let tiny = KINDS[p.kind].small
     if (tiny && !small) continue
-    place(tiny ? bits : solid, model(p.kind, p.seed, p.turn), [
-      p.x - ox,
-      standAt(v, p),
-      p.z - oz,
+    let y = standAt(v, p), mesh = model(p.kind, p.seed, p.turn)
+    let n = tiny
+      ? smallSpace!(thingAt([p.x, y, p.z], [mesh], v.voxel))
+      : step(v, p)
+    if (!tiny) smallSpace?.add(propAt(v, p), n)
+    let [dx, dy, dz] = off(n)
+    place(tiny ? bits : solid, mesh, [
+      p.x - ox + dx,
+      y + dy,
+      p.z - oz + dz,
     ])
     let base = foundation(v, p)
     if (base) {
       let [[x, y, z], size] = base
-      cuboids(solid, [[[x - ox, y, z - oz], size, FOUND]], 0.25, 0.04)
+      cuboids(
+        solid,
+        [[[x - ox + dx, y + dy, z - oz + dz], size, FOUND]],
+        0.25,
+        0.04,
+      )
     }
   }
   return {

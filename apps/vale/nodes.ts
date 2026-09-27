@@ -34,6 +34,8 @@ import type { Vec3 } from './play.ts'
 import { model } from './props.ts'
 import { hashOf, noise, rand, stream } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
+import { among, off } from './stand.ts'
+import type { Vale } from './terrain.ts'
 import { least, TRADES } from './trades.ts'
 import type { Job, Seen } from './work.ts'
 
@@ -255,6 +257,7 @@ type Drawn = {
  * phone's player has a button to work a node, and is not told of a key. */
 export let nodes = (
   scene: THREE.Scene,
+  v: Vale,
   plates: ReturnType<typeof overlay>,
   glow: ReturnType<typeof bits>,
   phone: boolean,
@@ -273,6 +276,18 @@ export let nodes = (
     return g
   }
   let drawn = new Map<string, Drawn>()
+  let next = among(v), stood = new Map<string, number>()
+  let stepOf = (n: Seen) => {
+    let got = stood.get(n.eid)
+    if (got != null) return got
+    let shape = hashOf(n.eid) % SHAPES
+    got = next(n.at, [
+      modelOf(n.lode.look, true, shape),
+      modelOf(n.lode.look, false, shape),
+    ])
+    stood.set(n.eid, got)
+    return got
+  }
   // Felled trees falling, and things flying to the hero.
   let falling: { obj: THREE.Object3D; t: number; axis: THREE.Vector3 }[] = []
   let flying: { obj: THREE.Mesh; from: THREE.Vector3; t: number }[] = []
@@ -384,7 +399,8 @@ export let nodes = (
         let d = drawn.get(n.eid)
         if (!d) {
           let group = new THREE.Group()
-          group.position.set(...n.at)
+          let [dx, dy, dz] = off(stepOf(n))
+          group.position.set(n.at[0] + dx, n.at[1] + dy, n.at[2] + dz)
           scene.add(group)
           d = {
             group,

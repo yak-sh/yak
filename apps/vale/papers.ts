@@ -8,7 +8,8 @@
 import * as THREE from 'three'
 import type { overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
-import { cuboid, type Out, out, pack } from './mesh.ts'
+import { type Box, cuboids } from './boxes.ts'
+import { type Out, out, pack } from './mesh.ts'
 import { type Board, boardsNear } from './notices.ts'
 import { geometry, sight, soft } from './soft.ts'
 import type { Spot, Vale } from './terrain.ts'
@@ -48,28 +49,25 @@ let SEEN = 60
 export let pinnedOn = (n: number): Out => {
   let o = out()
   SPOTS.slice(0, n).forEach(([x, y, w, h], i) => {
-    // Each a hair in front of the one before, so none shows through another.
+    // Each paper is one solid, with its ink and pin worn over its front.
     let z = FACE + i * 0.004
-    cuboid(o, [x, y, z], [w, h, 0.015], PAPER[i], 0.05, 0.004)
-    for (let l = 0; l < 3; l++) {
-      let long = w - 0.14 - (l == 2 ? w / 3 : 0)
-      cuboid(
-        o,
+    let lines = Array.from({ length: 3 }, (_, l) =>
+      [
         [x + 0.07, y + h - 0.17 - l * 0.11, z + 0.015],
-        [long, 0.025, 0.004],
+        [w - 0.14 - (l == 2 ? w / 3 : 0), 0.025, 0.004],
         INK,
-        0.05,
         0,
-      )
-    }
-    cuboid(
-      o,
-      [x + w / 2 - 0.03, y + h - 0.09, z + 0.015],
-      [0.06, 0.06, 0.04],
-      PIN,
-      0.03,
-      0.01,
-    )
+      ] as Box)
+    cuboids(o, [
+      [[x, y, z], [w, h, 0.015], PAPER[i], 0.004],
+      ...lines,
+      [
+        [x + w / 2 - 0.03, y + h - 0.09, z + 0.015],
+        [0.06, 0.06, 0.04],
+        PIN,
+        0.01,
+      ],
+    ], 0.05)
   })
   return o
 }

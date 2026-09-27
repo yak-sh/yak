@@ -17,20 +17,31 @@ export let LIFT = 0.05
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { flat } from './terrain.ts'
- * let v = flat(5)
+ * let v = flat((x) => x >= 50.5 && x < 51.5 ? 6 : 5)
  * assertEquals(laid(v, 50, 50), 5 + LIFT)
  * // A step up a metre off, under the ring: it lies over the step.
- * v.h[Math.floor(51 / v.voxel) + Math.floor(50 / v.voxel) * v.cols] =
- *   6 / v.voxel
  * assertEquals(laid(v, 50, 50, 1), 6 + LIFT)
+ * // A high column between the ring's sample points still lifts the disc.
+ * let between = flat((x, z) => x >= 50.5 && x < 50.75 &&
+ *   z >= 50.25 && z < 50.5 ? 8 : 5)
+ * assertEquals(laid(between, 50, 50, 1), 8 + LIFT)
  * assertEquals(laid(v, 50, 50, 0, 7), 7 + LIFT)
  * ```
  */
 export let laid = (v: Vale, x: number, z: number, r = 0, floor = -Infinity) => {
   let y = Math.max(floor, groundAt(v, x, z))
-  for (let i = 0; r && i < 16; i++) {
-    let a = ((i % 8) / 4) * Math.PI, d = i < 8 ? r : r / 2
-    y = Math.max(y, groundAt(v, x + Math.cos(a) * d, z + Math.sin(a) * d))
+  let g = v.voxel
+  for (let iz = Math.floor((z - r) / g); iz <= Math.floor((z + r) / g); iz++) {
+    for (
+      let ix = Math.floor((x - r) / g);
+      ix <= Math.floor((x + r) / g);
+      ix++
+    ) {
+      let dx = Math.max(ix * g - x, 0, x - (ix + 1) * g)
+      let dz = Math.max(iz * g - z, 0, z - (iz + 1) * g)
+      if (dx * dx + dz * dz > r * r) continue
+      y = Math.max(y, groundAt(v, (ix + 0.5) * g, (iz + 0.5) * g))
+    }
   }
   return y + LIFT
 }

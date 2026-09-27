@@ -176,7 +176,6 @@ export let cast = (
   // round its feet, turning slowly, drawn over any red beneath them (laid.ts).
   // A broken ring the colour of paper, so it reads as a selection and never
   // as a second bite.
->>>>>>> ed5868f8 (Mossvale: everything laid over the ground goes through one helper (laid.ts): the arcs round a targeted creature, the ring of ground its bite takes and the disc filling it, the glow under loot and the ripples over a shoal each lie one lift above the highest ground they cover, or the floor they mark, where each picked a small offset of its own. Overlays laid on each other are ordered by render order, never nudged up: the fill over the ring, the arcs over both (T-40879))
   let mark = new THREE.Group()
   let arc = new THREE.RingGeometry(0.84, 1, 12, 1, 0, Math.PI / 3)
   let pale = new THREE.MeshBasicMaterial({

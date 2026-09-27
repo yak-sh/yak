@@ -6,7 +6,7 @@ import { assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { HANDLES, WEIGHTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { beast, BUILDS, type Figure, hero, person } from './figures.ts'
+import { beast, BUILD, CHILD, type Figure, hero, person } from './figures.ts'
 import { fights, type Out, out, pack, place } from './mesh.ts'
 
 let parts = (f: Figure) => {
@@ -88,7 +88,7 @@ Deno.test('no creature fights itself', () => {
 Deno.test('no hero fights what they wear, grown or a child', () => {
   let offs = ['shield1', 'torch1', 'tome1', 'dagger1']
   let made: Record<string, () => Figure> = {}
-  for (let [build, b] of Object.entries(BUILDS)) {
+  for (let [build, b] of Object.entries({ grown: BUILD, child: CHILD })) {
     for (let [weight, w] of Object.entries(WEIGHTS)) {
       for (let [i, family] of Object.keys(HANDLES).entries()) {
         let dress = {

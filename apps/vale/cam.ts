@@ -50,6 +50,7 @@ export let NEAR = 0.5
 /** Fit `camera`'s depth to what it can see: from NEAR out to the far edge of
  * the level's fog, past which nothing shows. */
 export let depth = (camera: THREE.PerspectiveCamera, fog: THREE.Fog) => {
+  if (camera.near == NEAR && camera.far == fog.far) return
   camera.near = NEAR
   camera.far = fog.far
   camera.updateProjectionMatrix()
