@@ -15,6 +15,7 @@ import { cap } from './panel.ts'
 import type { Frame } from './play.ts'
 import { blowOf } from './rules.ts'
 import { formOf, SKILLS } from './skills.ts'
+import { icon } from './sprites.ts'
 import { type Tip, tip } from './tip.ts'
 
 // Each slot's action, and the key it shows.
@@ -26,6 +27,7 @@ let keyOf = (i: number) => cap(keysOf(ACTS[i])[0])
 type Slot = {
   id: string
   icon: Glyph | ''
+  weapon?: string
   tip: Tip
   cd: number
   s: number
@@ -39,6 +41,7 @@ let slotOf = (f: Frame, i: number): Slot => {
     return {
       id: '',
       icon: '',
+      weapon: f.sheet.worn.main?.kind ?? '',
       tip: {
         name: 'Strike',
         key: keyOf(i),
@@ -79,9 +82,8 @@ let slotOf = (f: Frame, i: number): Slot => {
   }
 }
 
-/** Paint the bar on `pads`: the strike's, then the three abilities'. The
- * strike keeps its own icon; an ability's goes in its `.Pad_Icon`, and its
- * seconds left in its `.Pad_Left`. */
+/** Paint the bar on `pads`: the strike shows the worn weapon, then the three
+ * abilities show their glyphs. Their seconds left go in `.Pad_Left`. */
 export let bar = (pads: HTMLElement[]) => {
   let slots = pads.map((b) => ({
     b,
@@ -100,7 +102,11 @@ export let bar = (pads: HTMLElement[]) => {
         let key = JSON.stringify([s, doing])
         if (key == sl.was) continue
         sl.was = key
-        if (sl.icon) sl.icon.innerHTML = s.icon ? glyph(s.icon) : ''
+        if (sl.icon) {
+          sl.icon.innerHTML = i
+            ? s.icon ? glyph(s.icon) : ''
+            : icon(s.weapon ?? '') || glyph('handFist')
+        }
         tip(sl.b, s.tip)
         sl.b.style.setProperty('--cd', String(s.cd))
         if (sl.left) sl.left.textContent = s.s ? String(s.s) : ''

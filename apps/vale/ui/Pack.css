@@ -23,7 +23,7 @@
 .Pack_Tile {
   --frame: var(--rarity, transparent);
   position: relative;
-  border: 0;
+  border: 2px solid var(--rim);
   border-radius: 12px;
   background: color-mix(in srgb, var(--frame) 14%, var(--well));
   box-shadow:
@@ -76,18 +76,20 @@
   }
 }
 
-.Pack_Tile-on {
-  --frame: var(--rarity, var(--gold));
-  background: #fff3c4;
-  outline: 2px solid var(--gold);
-  outline-offset: 2px;
-}
-
 .Pack_Slot.Rarity-legendary,
 .Pack_Tile.Rarity-legendary {
   box-shadow:
     inset 0 0 0 2px var(--frame),
     0 0 10px color-mix(in srgb, var(--legendary) 60%, transparent);
+}
+
+.Pack_Slot.Pack_Tile-on,
+.Pack_Tile.Pack_Tile-on {
+  --frame: var(--rarity, var(--gold));
+  border: 3px solid var(--deep);
+  background: #fff3c4;
+  box-shadow: inset 0 0 0 2px var(--gold),
+    inset 0 -3px 0 color-mix(in srgb, var(--rim) 70%, transparent);
 }
 
 /* A thing's tier, as pips: in one colour, so that colour is rarity's. */
@@ -130,9 +132,7 @@
   color: #c0442a;
 }
 
-/* The card is the sheet's foot: as wide as the sheet and down to its edge,
-   over the body's padding (Panel.css), so what scrolls under it never shows
-   below or beside it. */
+/* The card is the sheet's foot: its border closes the bag above it. */
 .Pack_Pick {
   position: sticky;
   bottom: -1rem;
@@ -141,9 +141,10 @@
   gap: 0.35rem;
   min-height: 3.2rem;
   margin: auto -1rem -1rem;
-  padding: 0.55rem 1.55rem 1rem;
-  background: color-mix(in srgb, var(--well) 45%, var(--paper));
-  box-shadow: 0 -1px 0 var(--line);
+  padding: 0.65rem 1.55rem 1rem;
+  border-top: 3px solid var(--rim);
+  background: var(--well);
+  box-shadow: inset 0 2px 0 var(--paper);
 }
 
 .Pack_Card {

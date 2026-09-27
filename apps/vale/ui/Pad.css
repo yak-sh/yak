@@ -15,7 +15,7 @@
   width: var(--size);
   height: var(--size);
   padding: 0;
-  border: 0;
+  border: 2px solid var(--edge-lip);
   border-radius: 50%;
   background: var(--face);
   color: var(--tint);
@@ -81,6 +81,11 @@
   --face: var(--ember);
   --tint: #fff;
   --edge-lip: var(--char);
+
+  & .Sprite {
+    width: calc(var(--size) * 0.68);
+    height: calc(var(--size) * 0.68);
+  }
 }
 
 .Pad-off {

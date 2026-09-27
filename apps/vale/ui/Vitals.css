@@ -6,10 +6,10 @@
   display: grid;
   gap: 0.25rem;
   padding: 0.4rem 0.6rem 0.5rem;
-  border: 0;
+  border: 2px solid var(--rim);
   border-radius: var(--radius);
   background: var(--glass);
-  box-shadow: 0 3px 0 var(--lip), 0 6px 16px rgba(20, 30, 15, 0.14);
+  box-shadow: 0 3px 0 var(--lip), 0 7px 16px rgba(20, 30, 15, 0.2);
   font: inherit;
   text-align: start;
   color: inherit;

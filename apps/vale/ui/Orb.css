@@ -13,7 +13,7 @@
   width: var(--size);
   height: var(--size);
   padding: 0;
-  border: 0;
+  border: 2px solid var(--rim);
   border-radius: 50%;
   background: var(--face);
   color: var(--tint);
@@ -42,6 +42,7 @@
 .Orb-on {
   --face: var(--deep);
   --tint: var(--paper);
+  border-color: var(--deep);
 }
 
 .Orb-off {

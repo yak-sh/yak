@@ -11,10 +11,9 @@
    `SHEETS`), and is as tall as its body.
 
    A panel with tabs (panel.ts `book`) wears them in its head in place of a
-   title, the one showing filled, each dotted while something new waits
-   behind it. It keeps one width whichever shows, and what each shows is as
-   wide as the sheet. Where the sheet is narrower than its tabs, each tab but
-   the one showing is only its glyph. */
+   title. The selected tab joins the sheet body; a dot marks unseen things.
+   It keeps one width whichever shows. Narrow sheets show only the glyph on
+   tabs other than the one showing. */
 .Panel {
   --tall: 40rem;
   position: absolute;
@@ -42,9 +41,11 @@
   height: var(--tall);
   max-height: 100%;
   overflow: hidden;
+  border: 3px solid var(--deep);
   border-radius: var(--radius-big);
   background: var(--paper);
-  box-shadow: 0 12px 30px rgba(20, 30, 15, 0.3);
+  box-shadow: 0 6px 0 rgba(20, 30, 15, 0.45),
+    0 18px 32px rgba(20, 30, 15, 0.32);
   animation: panel-in 0.18s ease-out;
 }
 
@@ -59,7 +60,10 @@
   display: flex;
   align-items: center;
   gap: var(--gap);
-  padding: 0.55rem 0.6rem 0.1rem 1rem;
+  min-height: 3.25rem;
+  padding: 0.35rem 0.6rem 0.35rem 1rem;
+  border-bottom: 2px solid var(--rim);
+  background: var(--well);
 }
 
 .Panel_Title {
@@ -88,6 +92,12 @@
   width: min(40rem, 100%);
 }
 
+.Panel-tabs .Panel_Head {
+  align-items: end;
+  gap: 0.35rem;
+  padding: 0.4rem 0.6rem 0 0.6rem;
+}
+
 .Panel-tabs .Panel_Body > * {
   width: auto;
 }
@@ -95,28 +105,26 @@
 .Panel_Tabs {
   display: flex;
   flex: 1;
-  flex-wrap: wrap;
-  gap: 0.3rem;
+  align-items: end;
+  gap: 0.2rem;
   min-width: 0;
 }
 
 .Panel_Tab {
-  --face: var(--well);
-  --tint: var(--muted);
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  height: 2.1rem;
-  padding: 0 0.65rem;
-  border: 0;
-  border-radius: var(--round);
-  background: var(--face);
-  box-shadow: 0 2px 0 var(--lip);
+  height: 2.45rem;
+  margin-bottom: -2px;
+  padding: 0 0.6rem;
+  border: 2px solid var(--rim);
+  border-radius: 8px 8px 0 0;
+  background: color-mix(in srgb, var(--rim) 36%, var(--well));
   font: inherit;
   font-size: 0.85rem;
   font-weight: 700;
-  color: var(--tint);
+  color: var(--muted);
   white-space: nowrap;
   cursor: pointer;
   touch-action: manipulation;
@@ -127,14 +135,20 @@
   }
 
   &[aria-selected='true'] {
-    --face: var(--deep);
-    --tint: var(--paper);
+    border-color: var(--rim);
+    border-bottom-color: var(--paper);
+    background: var(--paper);
+    color: var(--deep);
   }
 
-  &:active {
-    translate: 0 2px;
-    box-shadow: none;
+  &:hover:not([aria-selected='true']) {
+    background: var(--paper);
   }
+}
+
+.Panel-tabs .Panel_Close {
+  align-self: center;
+  margin-bottom: 0.2rem;
 }
 
 .Panel_Tab-new::after {
@@ -150,19 +164,17 @@
 }
 
 @container panel (width < 42rem) {
-  .Panel_Tab:not([aria-selected='true']) > span {
+  .Panel_Tab:not([aria-selected='true']) > :is(span, kbd) {
     display: none;
   }
 }
 
 /* Where a scrollbar takes room, its room is kept whether or not the body is
    long enough for one, so the sheet's width never changes with it; what the
-   body holds is never wider than what is left beside it, so nothing scrolls
-   sideways. A scroll box clips at its padding, so every edge keeps room for
-   the ring round a thing picked or focused (Pack.css `Pack_Tile-on`). */
+   body holds is never wider than what is left beside it. */
 .Panel_Body {
   min-height: 0;
-  padding: 0.35rem 1rem 1rem;
+  padding: 0.75rem 1rem 1rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;

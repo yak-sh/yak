@@ -30,13 +30,12 @@
   --shade: rgba(28, 36, 26, 0.55);
   --scrim: rgba(20, 30, 15, 0.38);
 
-  /* A card on the glass: paper you can nearly see through, lying flat, its
-     edge a hairline and a soft shadow under it. What can be pressed stands
-     on a `--lip` instead (Btn, Orb, Pad, Track), and sinks when pressed. */
-  --glass: color-mix(in srgb, var(--paper) 93%, transparent);
+  /* A card on the glass: a solid paper face and a defined rim. What can be
+     pressed stands on a `--lip` instead (Btn, Orb, Pad, Track). */
+  --glass: color-mix(in srgb, var(--paper) 98%, transparent);
   --lip: color-mix(in srgb, var(--rim) 75%, transparent);
-  --flat: 0 0 0 1px color-mix(in srgb, var(--rim) 55%, transparent),
-    0 6px 18px rgba(20, 30, 15, 0.14);
+  --flat: 0 0 0 2px var(--rim), 0 4px 0 var(--lip),
+    0 8px 16px rgba(20, 30, 15, 0.2);
   --text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), 0 0 4px rgba(0, 0, 0, 0.3);
 
   --radius: 14px;

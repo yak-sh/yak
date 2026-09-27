@@ -298,7 +298,7 @@ export let hud = (
     return b
   }
   // The strike's and the abilities' tips are bar.ts's, which paints them.
-  pad('strike', glyph('strike'), { name: 'Strike' })
+  pad('strike', '<span class=Pad_Icon></span>', { name: 'Strike' })
   let abilities = (['ability1', 'ability2', 'ability3'] as const).map((a) =>
     pad(
       a,
