@@ -81,6 +81,15 @@ An adapter contains a provider command line and the `@yaks/session` reader that
 says what each output line means. Providers and the models they serve remain
 graph entities, so adding a model does not require a package release.
 
+An adapter also names the instruction file its provider reads at the root of its
+checkout (`CLAUDE.md`, `AGENTS.md`). Before launching, `start` reads that file
+in the run's checkout and asks `@yaks/persona`'s `owed` what the run is still
+owed of the persona its repository carries. A persona the file does not already
+say goes to the provider through its own flag (claude's
+`--append-system-prompt`, codex's `developer_instructions`), and is snapshotted
+into the transcript as a `prompt` entry (`@yaks/context`). Codex is also told to
+read `AGENTS.md` whole, since by default it reads only the first 32 KiB.
+
 ## CLI and tool use
 
 <a id="the-three-tools"></a>

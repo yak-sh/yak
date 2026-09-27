@@ -27,7 +27,7 @@ import { streamingEnabled } from './streaming.ts'
 import { imageContext, registered } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
-import { homeAt, workspace } from './workspace.ts'
+import { homeAt, owing, workspace } from './workspace.ts'
 import { dbPath, worktrees } from './paths.ts'
 import { collecting, going, homes, sweep } from './worktrees.ts'
 import { transcriptViews } from './transcript.ts'
@@ -174,10 +174,11 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       harnessTools(h.g, { ...opts, worktrees: root, artifacts: h.artifacts }),
     remote: mcp.snapshot,
     streaming: streamingEnabled(opts, env),
-    opening: async () => ({
-      home: await homeAt(h.g, cwd),
-      files: await instructionFiles(cwd),
-    }),
+    opening: async () => {
+      let home = await homeAt(h.g, cwd)
+      let files = await instructionFiles(cwd)
+      return { home, files: [...files, ...await owing(h.g, home, files)] }
+    },
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),
     report,

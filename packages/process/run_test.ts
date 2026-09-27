@@ -55,6 +55,20 @@ for (let os of launchers) {
     )
   })
 
+  Deno.test(`${os}: a document of an argument reaches the program whole, not the row`, async () => {
+    let g = tracked()
+    let long = 'x'.repeat(100_000)
+    let run = await launch(store(g), {
+      command: 'sh',
+      args: ['-c', 'printf %s "$1" | wc -c', 'sh', long],
+    }, { dir: dir(), poll: 5, os })
+    assertEquals(await run.done, 0)
+    let [said] = await g.read(`.output.source=${run.eid}&*`)
+    assertEquals(String(comp(said, 'content')?.body).trim(), '100000')
+    let row = (await g.read(`.${PROCESS}&*`))[0]
+    assert(String(comp(row, PROCESS)?.command).length < long.length)
+  })
+
   Deno.test(`${os}: a finished run's running time stops at its end`, async () => {
     let run = await launch(store(tracked()), {
       command: 'sleep',

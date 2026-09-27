@@ -7,6 +7,11 @@
 // Every provider prints one JSON object per event, so ./run.ts never learns a
 // vendor's format: @yaks/session's importer asks the reader what a line means
 // and appends whatever comes back.
+//
+// A run carries its persona (@yaks/persona) through its provider's own
+// instruction flag, beside the instruction file the provider reads in its
+// checkout. Each adapter names that file, so ./run.ts can tell whether the
+// file already says the persona, and gives the persona only when it does not.
 
 import { type Reader, readers } from '@yaks/session'
 
@@ -21,6 +26,9 @@ export type Job = {
   effort?: string
   /** what it was asked to do */
   instruction: string
+  /** the persona it runs with, where its checkout's instruction file does not
+   * already say it (@yaks/persona `owed`) */
+  persona?: string
 }
 
 /** A provider that is run as a command. */
@@ -29,6 +37,8 @@ export type Adapter = {
   argv: (job: Job) => string[]
   /** what each line of its output means (@yaks/session) */
   read: Reader
+  /** the instruction file its provider reads at the root of its checkout */
+  file?: string
 }
 
 /** `claude -p --output-format stream-json`. */
@@ -42,6 +52,7 @@ export let claude: Adapter = {
     'stream-json',
     '--verbose', // stream-json in print mode requires it
     ...(j.model ? ['--model', j.model] : []),
+    ...(j.persona ? ['--append-system-prompt', j.persona] : []),
     '--permission-mode',
     'bypassPermissions', // it owns its worktree; nobody is at the prompt
     // -- ends the options: the instruction is a positional, so content that
@@ -50,7 +61,18 @@ export let claude: Adapter = {
     j.instruction,
   ],
   read: readers.claude,
+  file: 'CLAUDE.md',
 }
+
+// A TOML basic string, which is how `codex -c` reads a value: JSON's string
+// escapes are TOML's, save that TOML also refuses a raw DEL.
+let toml = (s: string): string =>
+  JSON.stringify(s).replaceAll('\x7f', '\\u007f')
+
+// Codex reads the first 32 KiB of AGENTS.md unless told otherwise, and a
+// persona runs past that. Read it whole, as claude reads CLAUDE.md: no
+// instruction file a person keeps comes near a mebibyte.
+let WHOLE = 1 << 20
 
 /** `codex exec --json`. */
 export let codex: Adapter = {
@@ -63,10 +85,14 @@ export let codex: Adapter = {
     '--dangerously-bypass-approvals-and-sandbox',
     ...(j.model ? ['-m', j.model] : []),
     ...(j.effort ? ['-c', `model_reasoning_effort=${j.effort}`] : []),
+    '-c',
+    `project_doc_max_bytes=${WHOLE}`,
+    ...(j.persona ? ['-c', `developer_instructions=${toml(j.persona)}`] : []),
     '--',
     j.instruction,
   ],
   read: readers.codex,
+  file: 'AGENTS.md',
 }
 
 /**

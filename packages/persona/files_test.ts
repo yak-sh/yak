@@ -4,32 +4,8 @@
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { memo, sync } from '@yaks/mirror'
-import { link, memory, voiced, world } from './testing.ts'
+import { fleet } from './testing.ts'
 import { personaFiles, personaMirror } from './files.ts'
-
-// A project checked out at `root`, whose common persona n1 carries m1, and a
-// specialist n2 named `coder` that carries m1 and m2.
-let fleet = (root: string): Graph => {
-  let g = world()
-  g.apply([
-    { entity: { eid: 'p1' }, project: {}, repo: { repository: 'r1' } },
-    { entity: { eid: 'w1' }, worktree: { repository: 'r1', path: root } },
-    {
-      entity: { eid: 'w2' },
-      worktree: { repository: 'r1', path: `${root}/agent`, managed: true },
-    },
-    { ...voiced('n1', 'common', 'for everyone'), persona: { home: 'p1' } },
-    { ...voiced('n2', 'Coder', 'for code'), persona: { home: 'p1' } },
-    { entity: { eid: 'k1' }, key: { of: 'n2', value: 'coder' }, alias: {} },
-    memory('m1', 'one', 'first'),
-    memory('m2', 'two', 'second'),
-    link('p1', 'contains', 'n1'),
-    link('n1', 'contains', 'm1'),
-    link('n2', 'contains', 'm1'),
-    link('n2', 'contains', 'm2'),
-  ])
-  return g
-}
 
 let then = (g: Graph, ...batch: Bundle[]): Graph => (g.apply(batch), g)
 

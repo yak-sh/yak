@@ -21,6 +21,14 @@
 //    and no `launch` property: the transaction that writes that entry is the
 //    request, and ./effects.ts is what answers it.
 //
+// A run starts with its persona. The persona its checkout's repository carries
+// (@yaks/persona `owed`) goes to the provider through its own instruction flag,
+// unless the instruction file the provider reads there already says it: a
+// run's own worktree has the repository's AGENTS.md link but not the ignored
+// directory it points into. What it was given is snapshotted into its
+// transcript as an instruction entry (@yaks/context), the same record a
+// session the harness opens carries.
+//
 // Killing a run means writing a `stop` component on the session's own entity,
 // next to its `process` — the same component @yaks/process reads next to a
 // `service` row. A `stop` on an entry means something else: the end of a
@@ -43,6 +51,8 @@ import {
   watch,
 } from '@yaks/process'
 import { createWorktree, discover, reclaim } from '@yaks/git/host'
+import { owed } from '@yaks/persona'
+import { promptEntry, snapshot } from '@yaks/context'
 import { type Adapter, adapters as known, type Job } from './adapters.ts'
 
 /** How a spawn runs, all optional. */
@@ -240,6 +250,35 @@ let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
   return String(comp(tree, 'worktree')?.path)
 }
 
+// A file's text, or nothing where there is none: a link that dangles is no
+// file.
+let text = (path: string): Promise<string | undefined> =>
+  Deno.readTextFile(path).catch((e) => {
+    if (e instanceof Deno.errors.NotFound) return undefined
+    throw e
+  })
+
+// The persona a run in `checkout` is given beside the file its provider reads
+// there, snapshotted into its transcript where the graph keeps instruction
+// snapshots.
+let given = async (
+  g: Graph,
+  session: string,
+  checkout: string,
+  adapter: Adapter,
+): Promise<string | undefined> => {
+  let found = adapter.file ? await text(`${checkout}/${adapter.file}`) : null
+  let owes = await owed(g, checkout, found == null ? [] : [found])
+  if (!owes) return undefined
+  if (g.vocab.comp('prompt')) {
+    let s = await snapshot(owes.text, owes.source)
+    await g.apply([
+      promptEntry(session, undefined, s.body, s.source, 'shared', s.revision),
+    ])
+  }
+  return owes.text
+}
+
 /** The environment a run speaks in: the one it was given, with the session
  * that launched it taken out and this run's own named. A variable naming the
  * launcher's session would sign the run's writes as the launcher's (@yaks/cli
@@ -258,7 +297,8 @@ export let speaking = (
 }
 
 /**
- * Start a session's provider and read its output back into the transcript.
+ * Start a session's provider, with the persona its checkout is owed, and read
+ * its output back into the transcript.
  *
  * ```ts
  * import { start } from '@yaks/spawn'
@@ -281,11 +321,13 @@ export let start = async (
   if (!job) return null
   let adapter = (o.adapters ?? known)[job.provider]
   if (!adapter) return null
-  let argv = adapter.argv(job)
+  let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
+  let persona = await given(g, session, cwd ?? Deno.cwd(), adapter)
+  let argv = adapter.argv({ ...job, persona })
   let run = await launch(store(g), {
     command: argv[0],
     args: argv.slice(1),
-    cwd: o.worktrees ? await cut(g, session, o) : o.cwd,
+    cwd,
     env: speaking(session, o.env ?? Deno.env.toObject()),
   }, {
     ...o,

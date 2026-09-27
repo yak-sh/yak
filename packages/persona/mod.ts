@@ -22,7 +22,10 @@
  * ```
  *
  * It returns text. Where that text goes — a file, a repo, the system prompt
- * of a spawned agent — is the caller's decision. One caller ships beside it
+ * of a spawned agent — is the caller's decision. {@link owed} is what a
+ * harness asks before it starts an agent: the persona the agent's checkout
+ * carries, unless an instruction file its provider reads there already says
+ * it. One caller ships beside it
  * and stays out of this entry point, because it writes files: each project's
  * personas in its checkout, `persona_sync` in `./tools` and kept current by
  * `./effects`.
@@ -33,3 +36,4 @@
 export { PERSON, PERSONA, personaDoc, ROLE } from './comp.ts'
 export { NAMED, voice, type Worn } from './voice.ts'
 export { CARRIES, READS, wear } from './worn.ts'
+export { type Owed, owed } from './owed.ts'

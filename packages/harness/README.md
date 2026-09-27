@@ -411,10 +411,12 @@ the conversation.
 Root sessions snapshot global `~/.agents/AGENTS.md` then ancestor `AGENTS.md`
 files from filesystem root to cwd. Missing files are ignored, other read errors
 prevent session creation. Each file's canonical path and content SHA-256 are
-recorded. No mtime sorting or retrospective reload occurs. Existing
-`opts.instructions` and `using.instructions` remain the legacy base instruction
-channel; delegated `instructions` now append local guidance rather than
-replacing that base.
+recorded. The persona the session's checkout carries (`@yaks/persona` `owed`)
+follows them as one more snapshot, recorded under its id, unless one of those
+files already is that persona's generated file. No mtime sorting or
+retrospective reload occurs. Existing `opts.instructions` and
+`using.instructions` remain the legacy base instruction channel; delegated
+`instructions` now append local guidance rather than replacing that base.
 
 Fresh children copy shared prompt snapshots from their parent. Forks copy no
 files: their exact inherited prefix is followed by a local fork-execution note,

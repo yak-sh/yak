@@ -255,6 +255,15 @@ let platforms: Record<string, Platform> = {
   }),
 }
 
+// The command line as a row records it, for a person reading which program
+// this is. A word longer than a paragraph (a document passed as an argument,
+// such as the persona an agent runs with) is cut short there, so the row stays
+// small enough to send every page that lists the run; the program itself is
+// given every byte.
+let WORD = 1024
+let line = (argv: string[]): string =>
+  argv.map((a) => a.length > WORD ? `${a.slice(0, WORD)}…` : a).join(' ')
+
 let platformOf = (o: Opts): Platform => {
   let os = o.os ?? Deno.build.os
   let platform = platforms[os]
@@ -580,7 +589,7 @@ export let launch = async (
   }
   await store.apply([{
     entity: { eid },
-    [PROCESS]: { pid: pid || null, command: argv.join(' '), cwd },
+    [PROCESS]: { pid: pid || null, command: line(argv), cwd },
     // A row we were handed may still carry the last attempt's exit code. One
     // transaction, so no reader ever sees the new pid beside it.
     ...(o.eid ? { [EXIT]: null } : {}),

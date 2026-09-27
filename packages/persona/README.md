@@ -131,11 +131,33 @@ It is off by default because the paths come from the graph, not the database: a
 host opened on a copy of a graph would write into the checkouts the original
 names.
 
+## What an agent is owed
+
+The persona files reach only the checkout a person keeps. An agent's own
+worktree of the same repository has the repository's `AGENTS.md` link but not
+the ignored `.tasks` directory it points into. So a harness starting an agent
+asks what it is owed:
+
+```ts ignore
+import { owed } from '@yaks/persona'
+
+let owes = await owed(graph, checkout, [agentsMdText])
+// owes: { source: 'N-4053', text: '# N-4053 …' } | undefined
+```
+
+`owed(graph, path, files)` finds the project whose repository has a checkout at
+`path`, and returns its common persona (`source` is its id, `text` is `voice`'s
+rendering), unless one of `files` (the text of each instruction file the agent's
+provider reads there) is exactly that persona's file: the same banner and the
+same text the persona files would write now. A stale file, or another
+repository's, leaves the persona owed. The harness gives it through the
+provider's own instruction mechanism and the provider still reads its files.
+
 ## Exports
 
 | subpath     | what it provides                                                          |
 | ----------- | ------------------------------------------------------------------------- |
-| `.`         | `wear`, `voice`, the component names, and the vocabulary document         |
+| `.`         | `wear`, `voice`, `owed`, the component names, and the vocabulary document |
 | `./vocab`   | the component declarations alone                                          |
 | `./tools`   | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes |
 | `./effects` | `effects(host, {files})` — keeps the persona files current                |

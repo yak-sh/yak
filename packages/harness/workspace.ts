@@ -3,6 +3,8 @@
  * under are the host's to say (./local.ts). */
 import { checkoutAt, createWorktree, discover, restore } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Snapshot, snapshot } from '@yaks/context'
+import { owed } from '@yaks/persona'
 import type { ChildLimits } from '@yaks/session'
 import { cutFor } from './worktrees.ts'
 
@@ -20,6 +22,21 @@ let treeAt = async (g: Graph, eid: string): Promise<string> => {
 export let homeAt = async (g: Graph, cwd: string): Promise<Comp> => {
   let tree = await checkoutAt(g, cwd)
   return { ...(tree ? { worktree: tree.entity.eid } : {}), cwd }
+}
+/** What a session opening at `home` is owed beside the instruction files it
+ * found there: the persona its checkout carries (@yaks/persona `owed`), as one
+ * more snapshot, or nothing where one of those files already says it. */
+export let owing = async (
+  g: Graph,
+  home: Comp,
+  files: Snapshot[],
+): Promise<Snapshot[]> => {
+  let [tree] = home.worktree ? await g.get([String(home.worktree)]) : []
+  let path = (tree?.worktree as Comp | undefined)?.path
+  let owes = path == null
+    ? undefined
+    : await owed(g, String(path), files.map((f) => f.body))
+  return owes ? [await snapshot(owes.text, owes.source)] : []
 }
 export let sessionCwd = async (g: Graph, session: string, fallback: string) => {
   let owner = await row(g, session)

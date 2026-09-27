@@ -104,4 +104,29 @@ export let voiced = (eid: string, title: string, body: string): Bundle =>
 export let memory = (eid: string, title: string, body: string): Bundle =>
   says(eid, title, body, { memory: {} })
 
+/** A project checked out at `root`, and by an agent at `<root>/agent`, whose
+ * common persona n1 carries m1, and a specialist n2 named `coder` that carries
+ * m1 and m2. */
+export let fleet = (root: string): Graph => {
+  let g = world()
+  g.apply([
+    { entity: { eid: 'p1' }, project: {}, repo: { repository: 'r1' } },
+    { entity: { eid: 'w1' }, worktree: { repository: 'r1', path: root } },
+    {
+      entity: { eid: 'w2' },
+      worktree: { repository: 'r1', path: `${root}/agent`, managed: true },
+    },
+    { ...voiced('n1', 'common', 'for everyone'), persona: { home: 'p1' } },
+    { ...voiced('n2', 'Coder', 'for code'), persona: { home: 'p1' } },
+    { entity: { eid: 'k1' }, key: { of: 'n2', value: 'coder' }, alias: {} },
+    memory('m1', 'one', 'first'),
+    memory('m2', 'two', 'second'),
+    link('p1', 'contains', 'n1'),
+    link('n1', 'contains', 'm1'),
+    link('n2', 'contains', 'm1'),
+    link('n2', 'contains', 'm2'),
+  ])
+  return g
+}
+
 export { link }

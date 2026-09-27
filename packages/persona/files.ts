@@ -9,7 +9,9 @@
 // agent file has to open with (without `name` and `description` first, claude
 // reports the agent as not found). A specialist is read beside AGENTS.md, so
 // what the common persona already says is left out of it rather than said
-// twice.
+// twice. Which persona is a project's common one, and the text of its file,
+// are ./owed.ts's, the same answers a harness asks for an agent's own
+// checkout.
 //
 // A write-only @yaks/mirror binding: the graph owns these files. A hand edit
 // is put back, and one made while the graph also moved is a conflict, left as
@@ -25,13 +27,12 @@
 import { type Binding, memo, present as exists } from '@yaks/mirror'
 import { and, eq, type Input, list, present } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { relations } from '@yaks/edge'
 import { DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
-import { safe } from '@yaks/text'
 import { PERSONA } from './comp.ts'
 import { voice, type Worn } from './voice.ts'
-import { CARRIES, wear } from './worn.ts'
+import { wear } from './worn.ts'
+import { banner, commons, projection } from './owed.ts'
 
 /** One file the graph says a checkout holds. */
 export type File = { path: string; text: string }
@@ -68,20 +69,6 @@ let checkouts = async (g: Graph): Promise<Map<Eid, string>> => {
   }
   return out
 }
-
-// The pairs one relation links, from any of `from` to any of `to`, each as
-// `from|to`.
-let linked = async (
-  g: Graph,
-  tag: string | undefined,
-  from: Eid[],
-  to: Eid[],
-): Promise<Set<string>> =>
-  new Set(
-    !tag || !from.length || !to.length ? [] : (await g.storage.read(
-      and(eq('edge.from', value(from)), eq('edge.to', value(to)), present(tag)),
-    )).map((b) => `${comp(b, 'edge').from}|${comp(b, 'edge').to}`),
-  )
 
 // The name a persona registers under as a Claude agent: its alias
 // (@yaks/alias keeps one as a `key`), reduced to claude's charset, or its
@@ -142,32 +129,21 @@ export let personaFiles = async (g: Graph): Promise<Files> => {
     return w
   }
   let personas = await g.storage.read(and(present(PERSONA)))
-  let common = await linked(
-    g,
-    relations(g.vocab)[CARRIES],
-    [...homes.keys()],
-    personas.map(eidOf),
-  )
+  let bases = await commons(g, [...homes.keys()])
   let named = await names(g, personas.map(eidOf))
-  let head = (p: Bundle): string => {
-    let title = safe(str(comp(p, DOC)[TITLE]))
-    return `<!-- GENERATED from ${id(p)} (${title}) — edit it in the graph, ` +
-      'never here: the next sync overwrites hand edits. -->'
-  }
+  let head = banner(g.vocab)
+  let common = projection(g.vocab)
   for (let [project, root] of homes) {
     let dir = `${root}/.tasks`
-    let base = personas.find((p) =>
-      comp(p, PERSONA).home == project && common.has(`${project}|${eidOf(p)}`)
-    )
+    let base = bases.get(project)
     let everyone = base && await worn(eidOf(base))
-    if (base && everyone) {
-      files.push({
-        path: `${dir}/AGENTS.md`,
-        text: `${head(base)}\n\n${render(everyone)}`,
-      })
+    if (everyone) {
+      files.push({ path: `${dir}/AGENTS.md`, text: common(everyone) })
     }
     for (let p of personas) {
-      if (comp(p, PERSONA).home != project || p == base) continue
+      if (comp(p, PERSONA).home != project || eidOf(p) == base?.entity.eid) {
+        continue
+      }
       let w = await worn(eidOf(p))
       if (!w) continue
       let name = slug(named.get(eidOf(p)) ?? id(p))
