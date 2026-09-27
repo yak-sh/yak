@@ -99,7 +99,7 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
     home: {
       type: 'string',
       description:
-        'Absolute path to an existing Git checkout to use as agent home. Mutually exclusive with worktree.',
+        'Absolute path to an existing Git checkout to use as agent home, or as the source of a new worktree.',
     },
     cwd: {
       type: 'string',
@@ -108,9 +108,6 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
     },
   },
   prepareChild: async ({ parent, args }) => {
-    if (args.home != null && args.worktree != null) {
-      throw new Error('choose home or worktree, not both')
-    }
     let inherited = (await row(g, parent))?.home as Comp | undefined ??
       await homeAt(g, cwd)
     let home: Comp = { ...inherited }
@@ -136,8 +133,8 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
         request.base != null && typeof request.base != 'string' ||
         request.branch != null && typeof request.branch != 'string'
       ) throw new Error('base and branch must be strings')
-      let source = inherited.worktree
-        ? await treeAt(g, String(inherited.worktree))
+      let source = home.worktree
+        ? await treeAt(g, String(home.worktree))
         : await sessionCwd(g, parent, cwd)
       let tree = await createWorktree(g, source, {
         path: request.path,

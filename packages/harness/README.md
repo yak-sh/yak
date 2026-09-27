@@ -384,11 +384,12 @@ Legacy sessions attach lazily on their first shell call. Ordinary children
 inherit home without making a checkout.
 
 `spawn` and `fork` accept `worktree: {path, base?, branch?}` to create a
-checkout, or `home: <absolute-checkout-path>` to attach an existing one. These
-are mutually exclusive. `cwd` can override the command directory independently.
-The child and its initial input are recorded as queued before preparation. The
-scheduler prepares the checkout before executing the child. The generic session
-package only exposes a host preparation hook; it knows no Git.
+checkout, or `home: <absolute-checkout-path>` to attach an existing one. When
+both are given, `home` is the source checkout and the new worktree becomes the
+child's home. `cwd` can override the command directory independently. The child
+and its initial input are recorded as queued before preparation. The scheduler
+prepares the checkout before executing the child. The generic session package
+only exposes a host preparation hook; it knows no Git.
 
 A new worktree defaults to detached committed HEAD, not the parent's dirty
 files. Its root becomes the default cwd unless explicitly overridden. Shell

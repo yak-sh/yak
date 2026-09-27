@@ -291,6 +291,44 @@ Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults 
   }
 })
 
+Deno.test('spawn creates a worktree from an explicit home', async () => {
+  let f = await fixture()
+  let source = await scratchRepo()
+  let d = run(f)
+  try {
+    await Deno.writeTextFile(source.repo + '/file', 'other repository')
+    await git(source.repo, 'commit', '-am', 'other')
+    await f.h.g.apply([{
+      entity: { eid: 'parent' },
+      session: {},
+      home: await homeAt(f.h.g, f.repo),
+    }, {
+      entity: { eid: 'spawn-other' },
+      call: {},
+      entry: { session: 'parent', seq: 1 },
+    }])
+    let spawn = harnessTools(f.h.g, { cwd: f.repo })
+      .find((t) => t.name == 'spawn')!
+    let path = source.root + '/child'
+    let child = await spawn.run({
+      prompt: 'work',
+      home: source.repo,
+      worktree: { path, branch: 'feature' },
+    }, {
+      session: 'parent',
+      call: { entity: { eid: 'spawn-other' } },
+      entries: [],
+    })
+    await f.h.fx.idle()
+    assertEquals(await sessionCwd(f.h.g, String(child), '/wrong'), path)
+    assertEquals(await Deno.readTextFile(path + '/file'), 'other repository')
+  } finally {
+    await d.stop()
+    await source.free()
+    await f.free()
+  }
+})
+
 Deno.test('root sessions discover and share the existing default worktree', async () => {
   let f = await fixture()
   let a = local({
