@@ -15,6 +15,8 @@
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
 import { type Client, client, type Watch } from '@yaks/client'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { areaOf, REACH } from './area.ts'
+import { writer } from './chat.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
 import words from './vocab.json' with { type: 'json' }
@@ -158,17 +160,63 @@ export let connect = (base: URL) => {
     return out
   }
 
-  let watches: Record<string, Watch> = {
-    players: c.watch(
-      '.player&?position&?motion&?vitals&?fight&?gear&?rtc',
-    ),
-    creatures: c.watch('.creature'),
-    falls: c.watch('.slain&.order=-slain.at&.limit=400'),
-    gathered: c.watch('.gathered&.order=-gathered.at&.limit=400'),
-    looks: c.watch('.look'),
+  let lookQuery = ''
+  let lookWatch: Watch | null = null
+  let lookBy = new Map<string, Bundle>()
+  let area = areaOf(64, 64, REACH)
+  let near = c.watch(area.query)
+  let pending: { area: typeof area; watch: Watch; off: () => void } | null =
+    null
+  let follow = (x: number, z: number) => {
+    let next = areaOf(x, z, REACH)
+    if (next.key == (pending?.area.key ?? area.key)) {
+      syncLooks()
+      return
+    }
+    pending?.off()
+    pending?.watch.close()
+    pending = null
+    if (next.key == area.key) {
+      syncLooks()
+      return
+    }
+    let watch = c.watch(next.query)
+    let swap = () => {
+      if (!watch.ready || pending?.watch != watch) return
+      pending.off()
+      near.close()
+      near = watch
+      area = next
+      pending = null
+      syncLooks()
+    }
+    pending = { area: next, watch, off: watch.subscribe(swap) }
+    swap()
+  }
+  let selected = new Map<string, { held: Bundle[]; rows: Bundle[] }>()
+  let rows = (name: string): Bundle[] => {
+    let held = near.value, was = selected.get(name)
+    if (was?.held == held) return was.rows
+    let found = held.filter((b) => b[name])
+    selected.set(name, { held, rows: found })
+    return found
+  }
+  let syncLooks = () => {
+    let ids = [
+      ...new Set([
+        ...rows('player').map((b) => b.entity.eid),
+        ...(hero ? [hero] : []),
+      ]),
+    ].sort()
+    let query = ids.length ? `.look.player=${ids.join(',')}&*` : ''
+    if (query == lookQuery) return
+    lookWatch?.close()
+    lookQuery = query
+    lookWatch = query ? c.watch(query) : null
   }
   let own: Record<string, Watch> = {}
-  let follow = (eid: string) => {
+  let chosen: Watch | null = null
+  let followHero = (eid: string) => {
     for (let w of Object.values(own)) w.close()
     let q = JSON.stringify(eid)
     own = {
@@ -185,19 +233,64 @@ export let connect = (base: URL) => {
 
   let none: Bundle[] = []
 
-  // Each hero's newest look row, mine still waiting among them, worked out
-  // again only when the rows changed.
-  let looks = { rows: none, by: new Map<string, Bundle>() }
+  // One indexed watch holds the looks of this hero and nearby heroes. Its
+  // answer is cached across area changes so a new watch need not flash the
+  // creation colours while it loads.
   let lookFor = (eid: string) => {
-    let rows = join('looks', watches.looks.value, 'look')
-    if (looks.rows != rows) looks = { rows, by: newest(rows) }
-    return looks.by.get(eid)
+    syncLooks()
+    let current = newest(join('looks', lookWatch?.value ?? none, 'look'))
+    for (let [id, b] of current) lookBy.set(id, b)
+    return lookBy.get(eid)
+  }
+
+  // A one-time read uses the app's query door. It does not add a subscription
+  // to the page's hibernating socket while the gate or a distant name loads.
+  let once = async (query: string): Promise<Bundle[]> => {
+    let url = new URL('query', base)
+    url.search = query.split('&').map(encodeURIComponent).join('&')
+    try {
+      let r = await fetch(url, { signal: AbortSignal.timeout(PATIENCE) })
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+      let rows: unknown = await r.json()
+      return Array.isArray(rows) ? rows as Bundle[] : []
+    } catch (e) {
+      console.warn('mossvale store:', e)
+      return []
+    }
+  }
+
+  let glimpsed = new Map<string, Hero | null>()
+  let asking = new Map<string, Promise<{ hero: Hero | null; by: string }>>()
+  let about = (eid: string): Promise<{ hero: Hero | null; by: string }> => {
+    let pending = asking.get(eid)
+    if (pending) return pending
+    let read = async () => {
+      let b = c.ent(eid)
+      if (!b?.player || !b.created) {
+        b = (await once(`.eid=${JSON.stringify(eid)}&.player&?created&*`))[0] ??
+          b
+      }
+      let looks = await once(`.look.player=${JSON.stringify(eid)}&*`)
+      let look = newest(looks).get(eid)
+      if (look) lookBy.set(eid, look)
+      let found = b?.player ? heroOf(b, look ?? lookBy.get(eid)) : null
+      glimpsed.set(eid, found)
+      return { hero: found, by: writer(b) }
+    }
+    let result = read()
+    asking.set(eid, result)
+    return result
   }
 
   let net = {
     client: c,
-    watches,
     now,
+    /** Keep the world rows and moving players near this point. */
+    follow,
+    /** The area watch has answered before a page adds missing creatures. */
+    nearReady: () => !pending && near.ready,
+    players: () => rows('player'),
+    creatures: () => rows('creature'),
     /** the eid of the hero this tab plays, once there is one */
     get hero() {
       return hero
@@ -208,40 +301,40 @@ export let connect = (base: URL) => {
     choose: (eid: string) => {
       hero = eid
       tab.set(eid)
-      follow(eid)
+      chosen?.close()
+      chosen = c.watch(`.eid=${JSON.stringify(eid)}&?created&*`)
+      followHero(eid)
+      syncLooks()
     },
     /** the heroes a person made, once the store has answered */
-    heroes: (person: string): Promise<Hero[]> =>
-      new Promise((done) => {
-        let w: Watch
-        try {
-          w = c.watch(`.player&.created.by=${JSON.stringify(person)}&?seen`)
-        } catch (e) {
-          console.warn('mossvale store:', e)
-          return done([])
-        }
-        let off = () => {}
-        let settle = () => {
-          off()
-          clearTimeout(late)
-          let found = w.value.map((b) => heroOf(b, lookFor(b.entity.eid)))
-          w.close()
-          done(found)
-        }
-        let late = setTimeout(settle, PATIENCE)
-        let both = () => w.ready && watches.looks.ready
-        if (both()) return settle()
-        let offs = [w, watches.looks].map((x) =>
-          x.subscribe(() => both() && settle())
-        )
-        off = () => offs.forEach((o) => o())
-      }),
+    heroes: async (person: string): Promise<Hero[]> => {
+      let players = await once(
+        `.player&.created.by=${JSON.stringify(person)}&*`,
+      )
+      let ids = players.map((b) => b.entity.eid)
+      let looks: Bundle[] = []
+      // Each temporary query fits beside the page's other subscriptions.
+      for (let i = 0; i < ids.length; i += 20) {
+        looks.push(...await once(`.look.player=${ids.slice(i, i + 20)}`))
+      }
+      let by = newest(looks)
+      for (let [id, b] of by) lookBy.set(id, b)
+      return players.map((b) => heroOf(b, by.get(b.entity.eid)))
+    },
     /** a hero as they look now, or null while the store holds no row of
      * theirs */
     who: (eid: string): Hero | null => {
       let b = c.ent(eid)
-      return b?.player ? heroOf(b, lookFor(eid)) : null
+      if (b?.player) return heroOf(b, lookFor(eid))
+      if (eid && !asking.has(eid)) void about(eid)
+      return glimpsed.get(eid) ?? null
     },
+    /** One named hero beyond the page's area, including their newest look
+     * and the person who made them. */
+    about,
+    /** Whether the hero this tab remembers is still in the store. */
+    known: async (eid: string): Promise<boolean> =>
+      (await once(`.eid=${JSON.stringify(eid)}&.player`)).length > 0,
     /** my rows of one kind: what the store holds, and what is waiting */
     mine: (name: string): Bundle[] =>
       join(name, own[name]?.value ?? none, name),
@@ -249,10 +342,9 @@ export let connect = (base: URL) => {
     settled: (): boolean =>
       Object.values(own).length > 0 && Object.values(own).every((w) => w.ready),
     /** the falls everyone has written, and mine still waiting */
-    falls: (): Bundle[] => join('falls', watches.falls.value, 'slain'),
+    falls: (): Bundle[] => join('falls', rows('slain'), 'slain'),
     /** the nodes everyone has gathered, and mine still waiting */
-    gathered: (): Bundle[] =>
-      join('gathered', watches.gathered.value, 'gathered'),
+    gathered: (): Bundle[] => join('gathered', rows('gathered'), 'gathered'),
     keep,
     /** send what is waiting, if the pace allows */
     tick: () => {

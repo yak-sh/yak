@@ -92,6 +92,7 @@ import {
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
 import { regionOf, spotOf } from './regions.ts'
+import { placeOf } from './area.ts'
 import { plusOf } from './upgrade.ts'
 import { groundAt, hearthNear, hearthOf, type Vale } from './terrain.ts'
 import { arriveOf } from './ways.ts'
@@ -179,6 +180,7 @@ export type Vitals = { hp: number; max: number; lvl: number }
 export type Mob = {
   eid: string
   kind: string
+  home: [number, number]
   body: Body
   hp: number
   most: number
@@ -696,9 +698,8 @@ export let game = (
   // The store's row for each creature near, added the first time a page
   // meets it: what its position and falls attach to.
   let anchor = (homes: Home[]) => {
-    let creatures = net.watches.creatures
-    if (!creatures.ready) return
-    let held = new Set(creatures.value.map((b) => b.entity.eid))
+    if (!net.nearReady()) return
+    let held = new Set(net.creatures().map((b) => b.entity.eid))
     let missing = homes.filter((h) => !held.has(h.eid) && !anchored.has(h.eid))
     for (let h of missing) anchored.add(h.eid)
     if (missing.length) {
@@ -706,6 +707,7 @@ export let game = (
         ...missing.map((h) => ({
           entity: { eid: h.eid },
           creature: { kind: h.kind },
+          place: placeOf(...h.home),
         })),
       )
     }
@@ -895,6 +897,8 @@ export let game = (
       }
       let rolling = body.gait == 'roll'
 
+      net.follow(body.x, body.z)
+
       // The others within sight, as relayed.
       let others: Other[] = []
       let theirs: Dealing[] = []
@@ -903,7 +907,7 @@ export let game = (
         { x: number; z: number; prey: boolean; awake: boolean }
       >()
       spots.set(me, { x: body.x, z: body.z, prey: !down, awake: true })
-      for (let b of net.watches.players.value) {
+      for (let b of net.players()) {
         let eid = b.entity.eid
         if (eid == me) continue
         let e = c.ent(eid)
@@ -1146,6 +1150,7 @@ export let game = (
         mobs.push({
           eid,
           kind: h.kind,
+          home: h.home,
           body: mb,
           hp: hpNow,
           most: beast.hp,
@@ -1175,6 +1180,7 @@ export let game = (
             at: when,
             xp: beast.xp,
           },
+          place: placeOf(...m.home),
         })
         events.push({
           type: 'fall',

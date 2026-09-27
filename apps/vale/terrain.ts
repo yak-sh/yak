@@ -143,7 +143,7 @@ export type Vale = {
 export let chunkOf = (m: number): number => Math.floor(m / CHUNK)
 // A chunk as one number, to key it by: one of its own while it lies within
 // 2^24 chunks of the origin either way.
-let key = (ci: number, ck: number) =>
+export let chunkKey = (ci: number, ck: number) =>
   (ci + 0x1000000) * 0x2000000 + ck + 0x1000000
 
 // A cache of the last `most` things asked for, most recent last. What a
@@ -153,7 +153,7 @@ let kept = <T>(most: number, make: (ci: number, ck: number) => T) => {
   let got = new Map<number, T>()
   let last = NaN, was: T
   return (ci: number, ck: number): T => {
-    let k = key(ci, ck)
+    let k = chunkKey(ci, ck)
     if (k === last) return was
     let v = got.get(k)
     if (v === undefined) v = make(ci, ck)
@@ -845,7 +845,7 @@ let PATCHES = 200
 /** Keep a chunk's ground grown elsewhere (a worker) in a vale, which then
  * reads it rather than growing it. */
 export let adopt = (v: Vale, p: Patch) => {
-  let k = key(p.ci, p.ck)
+  let k = chunkKey(p.ci, p.ck)
   v.patches.delete(k)
   v.patches.set(k, p)
   if (v.patches.size > PATCHES) v.patches.delete(v.patches.keys().next().value!)
@@ -853,7 +853,7 @@ export let adopt = (v: Vale, p: Patch) => {
 
 /** Chunk (ci, ck)'s ground in a vale: as kept, or grown now and kept. */
 export let patchOf = (v: Vale, ci: number, ck: number): Patch => {
-  let p = v.patches.get(key(ci, ck))
+  let p = v.patches.get(chunkKey(ci, ck))
   if (!p) adopt(v, p = v.grow(ci, ck))
   return p
 }
@@ -922,7 +922,7 @@ export let flat = (
 // kept, or the smooth ground rounded there.
 let column = (v: Vale, x: number, z: number) => {
   let V = v.voxel, ci = chunkOf(x), ck = chunkOf(z)
-  let p = v.patches.get(key(ci, ck))
+  let p = v.patches.get(chunkKey(ci, ck))
   if (!p) return null
   let C = p.n - 2
   let i = Math.floor(x / V) - ci * C + 1, k = Math.floor(z / V) - ck * C + 1

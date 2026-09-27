@@ -11,6 +11,7 @@
 // to its trade. The work stops when the hero walks off, strikes, rolls, jumps
 // or faints, or someone else gathers the node first.
 import { isStation, madeXp, plan, RECIPES, spare, STATIONS } from './craft.ts'
+import { placeOf, REACH } from './area.ts'
 import {
   chipOf,
   effort,
@@ -138,7 +139,7 @@ let CAST = 520
 let STRAY = 0.5
 // How far round the hero the nodes are seen, on the stage and the map, in
 // metres.
-let SEEN = 120
+let SEEN = REACH
 
 let secs = (ms: number) => {
   let s = Math.ceil(ms / 1000)
@@ -241,6 +242,7 @@ export let working = (net: Net) => {
       entity: { eid: crypto.randomUUID() },
       item: { kind: n.lode.gives, n: count, owner: me, at: now },
       gathered: { node: n.eid, kind: n.kind, at: now },
+      place: placeOf(n.at[0], n.at[2]),
     })
     return {
       type: 'got',

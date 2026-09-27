@@ -132,11 +132,7 @@ let same = (a: Seen, b: Seen) =>
 export let sighting = (net: Net) => {
   let me: Me | null = null
   // Who made each hero, which says whose hero is theirs to write on.
-  try {
-    net.client.watch('.player&?created')
-  } catch (e) {
-    console.warn('mossvale seen:', e)
-  }
+  // net.choose watches that hero's row, including its created stamp.
   // What was last written for which hero, and where the last frame had them.
   let wrote: { hero: string; seen: Seen } | null = null
   let last: Seen | null = null

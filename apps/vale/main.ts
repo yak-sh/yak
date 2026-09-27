@@ -1027,11 +1027,6 @@ chat.me(me)
 folk.me(me)
 seen.me(me)
 deal.me(me)
-let ready = async (watch: { ready: boolean }) => {
-  for (let i = 0; i < 40 && !watch.ready; i++) {
-    await new Promise((r) => setTimeout(r, 100))
-  }
-}
 if (!me.reads) {
   gateCard.innerHTML = `${TITLE}<p class=Gate_Lede>This vale is private.</p>${
     me.signIn
@@ -1048,12 +1043,8 @@ if (!me.reads) {
   else make(me, null)
 } else {
   // Signed out: the hero this tab has been playing, or a new one.
-  let players = net.watches.players
-  await ready(players)
   let played = net.played()
-  if (
-    played && me.writes && players.value.some((b) => b.entity.eid == played)
-  ) {
+  if (played && me.writes && await net.known(played)) {
     begin(played)
   } else make(me, null)
 }

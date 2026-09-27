@@ -98,7 +98,8 @@ export let chatbox = (
   // who made each hero, which the rule asks.
   let level = ''
   let lines: Watch | null = null
-  let makers: Watch | null = null
+  let makers = new Map<string, string>()
+  let asking = new Set<string>()
   let watch = (q: string): Watch | null => {
     try {
       return net.client.watch(q)
@@ -115,9 +116,16 @@ export let chatbox = (
         JSON.stringify(id)
       }&?doc&?created&.order=-created.at&.limit=${ASKED}`,
     )
-    makers ??= watch('.player&?created')
   }
-  let owner = (hero: string) => writer(net.client.ent(hero)) || null
+  let owner = (hero: string) =>
+    makers.get(hero) || writer(net.client.ent(hero)) || null
+  let askMaker = (hero: string) => {
+    if (makers.has(hero) || asking.has(hero) || asking.size >= 2) return
+    asking.add(hero)
+    void net.about(hero).then(({ by }) => makers.set(hero, by)).finally(
+      () => asking.delete(hero),
+    )
+  }
 
   // My lines: those still to go, one each `GAP`, and those gone that the
   // store has not answered with yet.
@@ -269,6 +277,10 @@ export let chatbox = (
       send()
       let now = net.now()
       let held = lines?.value ?? []
+      for (let b of held) {
+        let l = lineOf(b)
+        if (l) askMaker(l.player)
+      }
       // A line of mine is in the page's graph the moment it goes, but it is
       // not the store's until the store has stamped who wrote it.
       let there = new Set(

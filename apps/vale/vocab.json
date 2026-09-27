@@ -53,10 +53,21 @@
         "at": { "type": "number" }
       }
     },
+    "place": {
+      "component": true,
+      "type": "object",
+      "description": "The region and chunk a stored world row belongs to. A creature's home, a fall and a gathering each wear it; a page watches only the places near its hero. Chunk is the numeric key of ci and ck (area.ts).",
+      "properties": {
+        "level": { "type": "string", "index": true },
+        "chunk": { "type": "number", "index": true },
+        "ci": { "type": "integer", "index": true },
+        "ck": { "type": "integer", "index": true }
+      }
+    },
     "creature": {
       "component": true,
       "type": "object",
-      "description": "A creature, as the store knows it: which kind. Where it lives comes from its level, and how hurt it is from the players' fights; the row is what its position and its falls attach to, and a page adds it the first time it meets the creature.",
+      "description": "A creature, as the store knows it: which kind. Its place is its home in the world; the row is what its relayed position and its falls attach to, and a page adds it the first time it meets the creature.",
       "properties": {
         "kind": {
           "type": "string",
@@ -70,11 +81,11 @@
       "sync": "peers",
       "durable": "connection",
       "pace": "100ms",
-      "description": "Where something is this moment: its level, and where in it, in metres. Relayed to everyone in the level and kept by nobody, so it goes when the connection that wrote it does. A creature that is only wandering has none: its wandering says where it is.",
+      "description": "Where something is this moment: its region and world coordinates, in metres. Relayed to nearby pages and kept by nobody, so it goes when the connection that wrote it does. A creature that is only wandering has none: its wandering says where it is.",
       "properties": {
         "level": {
           "type": "string",
-          "description": "Which level, by the app's list of levels."
+          "description": "Which region contains these world coordinates."
         },
         "x": { "type": "number" },
         "y": { "type": "number" },
@@ -403,7 +414,7 @@
         },
         "x": {
           "type": "number",
-          "description": "Where in the level, in metres."
+          "description": "Where in the world, in metres."
         },
         "z": { "type": "number" },
         "yaw": {

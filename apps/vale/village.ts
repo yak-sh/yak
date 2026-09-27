@@ -56,15 +56,17 @@ export let village = (net: Net, deal: Deals) => {
       return null
     }
   }
-  let rows = watch('.villager')
+  let rows: Watch | null = null
   let think = watch('.tool.name=think')
 
   // What the level's villagers said back and chose, newest first.
   let level = ''
   let heard: Watch | null = null
   let follow = (lv: string) => {
+    rows?.close()
     heard?.close()
     level = lv
+    rows = watch(`.villager.level=${JSON.stringify(lv)}&*`)
     let eids = GIVERS.filter((g) => g.level == lv).map((g) => eidOf(g.id))
     heard = eids.length
       ? watch(
