@@ -120,11 +120,12 @@ Deno.test('session new accepts a graph persona and snapshots its instructions', 
     entity: { eid: persona },
     doc: { title: 'Operator', body: 'Guide this work.' },
     persona: {},
+    alias: { name: 'operator-persona' },
   }])
   try {
     let [session] = await runs().session_new!({
       entity: { eid: crypto.randomUUID() },
-      call: { args: { tui: true, persona } },
+      call: { args: { tui: true, persona: 'operator-persona' } },
     }, h.g)
     assertEquals((session.session as Record<string, unknown>).persona, persona)
     let entries = await transcript(h.g, session.entity.eid)
