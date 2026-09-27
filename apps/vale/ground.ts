@@ -4,7 +4,10 @@
 // merge into larger quads; the soft material still draws each voxel, because
 // it tints them by their cell (soft.ts), so a merge costs nothing you can see.
 // A chunk is a square of ground a fixed number of metres across, however many
-// columns that is at the vale's voxel size.
+// columns that is at the vale's voxel size, meshed about its own north-west
+// corner, so its numbers stay small however far out it lies. Its edges hang a
+// skirt a few metres down, layered as a wall is, so a neighbour drawn at a
+// coarser voxel (stream.ts) never shows a crack between them.
 import { Top } from './features.ts'
 import type { Level } from './levels.ts'
 import { type Out, quad, rgb, type Vec } from './mesh.ts'
@@ -68,6 +71,12 @@ let ROCK: Record<number, number> = {
 let STONE = 0x8a8983
 // A face no corner of which is shaded.
 let OPEN: [number, number, number, number] = [3, 3, 3, 3]
+// How far a chunk's skirt hangs below the lower of its edge and the ground
+// beyond, in metres: past the most two details of one hill part by; and how
+// far under that ground it starts.
+let SKIRT = 3
+let TUCK = 0.02
+let UP = [0, 1, 0, 0]
 
 /** A level's colours: what its look says each top is, the band under it a
  * shade darker, the rock under stone a shade darker again, and its water,
@@ -114,7 +123,8 @@ let drift = (hex: number, hue: number): Vec => {
   return [r * (1 - d * 0.6), g * (1 + d * 0.25), b * (1 - d)]
 }
 
-/** Write chunk (ci, ck)'s ground into `o`. */
+/** Write chunk (ci, ck)'s ground into `o`, about the chunk's north-west
+ * corner. */
 export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
   let V = v.voxel, N = v.cols, C = Math.round(CHUNK / V)
   let { tops, band: BANDS, rock } = paletteOf(v.level)
@@ -128,7 +138,9 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
   let earth = Math.max(band + 1, Math.round(2 / V))
 
   // Tops. A column is merged with its neighbours when nothing about it needs
-  // a corner of its own: no edge to round, no shade in a corner.
+  // a corner of its own: no edge to round, no shade in a corner, and it is not
+  // on the chunk's edge, where every corner meets the neighbour's, so no crack
+  // opens between the two.
   let merge = new Int32Array(C * C).fill(-1)
   let single: [number, number][] = []
   for (let dk = 0; dk < C; dk++) {
@@ -139,8 +151,10 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
       let shaded = H(i - 1, k) > h || H(i + 1, k) > h || H(i, k - 1) > h ||
         H(i, k + 1) > h || H(i - 1, k - 1) > h || H(i + 1, k - 1) > h ||
         H(i - 1, k + 1) > h || H(i + 1, k + 1) > h
-      if (open && !shaded) merge[di + dk * C] = h * 32 + v.top[at(i, k)]
-      else single.push([i, k])
+      let edge = !di || !dk || di == C - 1 || dk == C - 1
+      if (open && !shaded && !edge) {
+        merge[di + dk * C] = h * 32 + v.top[at(i, k)]
+      } else single.push([i, k])
     }
   }
   let colour = (i: number, k: number) =>
@@ -175,7 +189,7 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
       ]
       quad(
         o,
-        [i * V, h * V, k * V],
+        [di * V, h * V, dk * V],
         1,
         w * V,
         d * V,
@@ -205,7 +219,7 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
     ]
     quad(
       o,
-      [i * V, h * V, k * V],
+      [(i - i0) * V, h * V, (k - k0) * V],
       1,
       V,
       V,
@@ -218,66 +232,107 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
     )
   }
 
-  // Sides: what a column shows above each lower neighbour, one quad per layer.
+  // Sides: what a column shows above each lower neighbour, one quad per layer:
+  // its face on axis `axis` (0 or 2) looking `sign` way, at (x, z) in the
+  // chunk, from `from` up to `to` voxels, darker at its foot, and rounded
+  // along its top and where the ground past a corner is lower still.
   let SIDES: [number, number, number, number][] = [
     [-1, 0, 0, -1],
     [1, 0, 0, 1],
     [0, -1, 2, -1],
     [0, 1, 2, 1],
   ]
+  let side = (
+    i: number,
+    k: number,
+    [x, z, axis, sign]: [number, number, number, number],
+    from: number,
+    to: number,
+  ) => {
+    let h = H(i, k), t = v.top[at(i, k)], hue = v.hue[at(i, k)]
+    let layers: [number, number, number][] = [
+      [h - band, h, BANDS[t]],
+      [h - earth, h - band, EARTH[t]],
+      [-Infinity, h - earth, rock(t)],
+    ]
+    // The two columns beside this face, along it: a corner is rounded where
+    // the one past it is lower still.
+    let [ai, ak] = axis == 0 ? [0, 1] : [1, 0]
+    for (let [y0, y1, hex] of layers) {
+      let lo = Math.max(y0, from), hi = Math.min(y1, to)
+      if (hi <= lo) continue
+      let c = drift(hex, hue)
+      // Darker toward the foot of a wall, where the lower ground meets it.
+      let foot = lo == from ? 0.72 : 1
+      let cs = [
+        ...c.map((x) => x * foot),
+        ...c.map((x) => x * foot),
+        ...c,
+        ...c,
+      ]
+      let rim: [number, number, number, number] = [
+        H(i - ai, k - ak) <= lo ? 1 : 0,
+        H(i + ai, k + ak) <= lo ? 1 : 0,
+        0,
+        hi == h ? 1 : 0,
+      ]
+      // Axis x faces run along z then y; axis z faces along x then y.
+      quad(
+        o,
+        [x * V, lo * V, z * V],
+        axis,
+        V,
+        (hi - lo) * V,
+        sign,
+        cs,
+        rim,
+        round,
+        OPEN,
+        V,
+      )
+    }
+  }
+  // On the chunk's edge, the skirt: one quad from just under the lower of
+  // the column and the ground past it, so it never shows along the ground's
+  // own edge, down past where a coarser neighbour's ground could lie. It is
+  // coloured and lit as the column's top, so what shows of it through a crack
+  // is the ground.
+  let skirt = (
+    i: number,
+    k: number,
+    [x, z, axis, sign]: [number, number, number, number],
+    lo: number,
+  ) => {
+    let c = colour(i, k)
+    quad(
+      o,
+      [x * V, lo * V - SKIRT, z * V],
+      axis,
+      V,
+      SKIRT - TUCK,
+      sign,
+      [...c, ...c, ...c, ...c],
+      [0, 0, 0, 0],
+      round,
+      OPEN,
+      V,
+    )
+    o.nrm.splice(-16, 16, ...UP, ...UP, ...UP, ...UP)
+  }
   for (let dk = 0; dk < C; dk++) {
     for (let di = 0; di < C; di++) {
-      let i = i0 + di, k = k0 + dk, h = H(i, k), t = v.top[at(i, k)]
+      let i = i0 + di, k = k0 + dk, h = H(i, k)
       for (let [si, sk, axis, sign] of SIDES) {
         let nh = H(i + si, k + sk)
-        if (nh >= h) continue
-        let hue = v.hue[at(i, k)]
-        let layers: [number, number, number][] = [
-          [h - band, h, BANDS[t]],
-          [h - earth, h - band, EARTH[t]],
-          [-999, h - earth, rock(t)],
+        let face: [number, number, number, number] = [
+          axis == 0 && sign > 0 ? di + 1 : di,
+          axis == 2 && sign > 0 ? dk + 1 : dk,
+          axis,
+          sign,
         ]
-        // The two columns beside this face, along it: a corner is rounded
-        // where the one past it is lower still.
-        let [ai, ak] = axis == 0 ? [0, 1] : [1, 0]
-        for (let [y0, y1, hex] of layers) {
-          let lo = Math.max(y0, nh), hi = y1
-          if (hi <= lo) continue
-          let c = drift(hex, hue)
-          let base = [c[0], c[1], c[2]]
-          // Darker toward the foot of a wall, where the lower ground meets it.
-          let foot = lo == nh ? 0.72 : 1
-          let cs = [
-            ...base.map((x) => x * foot),
-            ...base.map((x) => x * foot),
-            ...base,
-            ...base,
-          ]
-          let before = H(i - ai, k - ak) <= lo ? 1 : 0
-          let after = H(i + ai, k + ak) <= lo ? 1 : 0
-          let x = axis == 0 ? (sign > 0 ? i + 1 : i) : i
-          let z = axis == 2 ? (sign > 0 ? k + 1 : k) : k
-          // Axis x faces run along z then y; axis z faces along x then y.
-          let du = V, dv = (hi - lo) * V
-          let rim: [number, number, number, number] = [
-            before,
-            after,
-            0,
-            hi == h ? 1 : 0,
-          ]
-          quad(
-            o,
-            [x * V, lo * V, z * V],
-            axis,
-            du,
-            dv,
-            sign,
-            cs,
-            rim,
-            round,
-            OPEN,
-            V,
-          )
+        if (nh < h) side(i, k, face, nh, h)
+        if (di + si < 0 || di + si >= C || dk + sk < 0 || dk + sk >= C) {
+          skirt(i, k, face, Math.min(h, nh))
         }
       }
     }

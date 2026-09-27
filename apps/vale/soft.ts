@@ -24,6 +24,11 @@
 //   between the camera and the hero, and right around the camera, so a tree
 //   or a toadstool in the way shows the hero through it (`see`). It is a
 //   stipple, pixels left out in an even pattern, so nothing needs sorting.
+//
+//   No seams. A vertex is placed in the world before it is seen from the
+//   camera, never through the two at once, so where two chunks meet, the same
+//   point in each lands on the same pixel: a chunk stands at whole metres and
+//   its corners at whole voxels, which float32 adds exactly.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Packed } from './mesh.ts'
@@ -83,6 +88,16 @@ vec3 tv = an.y > .5 ? vec3(0., 0., 1.) : vec3(0., 1., 0.);
 vTu = normalize(normalMatrix * tu);
 vTv = normalize(normalMatrix * tv);
 vCell = (position - normal * (bw.z * .5)) / bw.z;
+`
+
+// three's project_vertex, but for the world before the view.
+let PROJECT = /* glsl */ `
+vec4 mvPosition = vec4(transformed, 1.);
+#ifdef USE_INSTANCING
+  mvPosition = instanceMatrix * mvPosition;
+#endif
+mvPosition = viewMatrix * (modelMatrix * mvPosition);
+gl_Position = projectionMatrix * mvPosition;
 `
 
 let FRAGMENT_PARS = /* glsl */ `
@@ -222,6 +237,7 @@ export let soft = (
     s.vertexShader = s.vertexShader
       .replace('#include <common>', `#include <common>\n${VERTEX_PARS}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${VERTEX}`)
+      .replace('#include <project_vertex>', PROJECT)
       .replace(
         '#include <color_vertex>',
         '#include <color_vertex>\nvColor.rgb = unsrgb(vColor.rgb);',

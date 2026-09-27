@@ -1,8 +1,11 @@
 // A level as a three.js scene: the ground and everything standing on it in
-// chunks, meshed off the page's thread (chunks.ts) and thinning away where
-// they come between the camera and the hero, the water, the sky, the village
-// fire and lamps, and the light that moves across it all through the day.
-// Built once per level; `tick` moves the sun, the water and the flames.
+// chunks, thinning away where they come between the camera and the hero, the
+// water, the sky, the village fire and lamps, and the light that moves across
+// it all through the day. Built once per level; `tick` moves the sun, the
+// water and the flames, and streams the chunks: those within sight of the
+// focus are meshed off the page's thread (chunks.ts), nearest first and finer
+// the nearer (stream.ts), and those left behind are let go. A chunk's arrays
+// are let go too once the GPU has them, since nothing on the page reads them.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { airOf } from './air.ts'
@@ -11,7 +14,12 @@ import { CHUNK, paletteOf } from './ground.ts'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
+import { type Want, wanted } from './stream.ts'
 import { groundAt, SIZE, standAt, type Vale, WATER } from './terrain.ts'
+
+/** How the page meshes chunk (ci, ck) at a detail (stream.ts), off its
+ * thread. */
+export type Mesher = (ci: number, ck: number, lod: number) => Promise<Chunk>
 
 export type World = {
   scene: THREE.Scene
@@ -25,12 +33,29 @@ export type World = {
   tick: (t: number, dt: number) => void
   /** keep the line from the camera (`from`) to the hero (`to`) clear */
   see: (from: THREE.Vector3, to: THREE.Vector3) => void
+  /** once every chunk within FIRST of the focus is drawn, at any detail */
+  near: () => Promise<void>
+  /** how many chunks within sight are not yet drawn as finely as wanted */
+  pending: number
+  /** how many chunks are drawn at each detail */
+  chunks: number[]
   /** let the GPU go of everything this level drew */
   dispose: () => void
 }
 
 // How near a chunk's middle must be for its flowers and grass to be drawn.
 let NEAR = 52
+// How many chunks are asked for at once: enough to keep every worker busy,
+// few enough that the nearest are always asked next.
+let ASKED = 8
+// How near the focus, in metres, every chunk is drawn before the page shows
+// it: the ground a hero stands on and the next few steps round them. The rest
+// streams in while they look.
+let FIRST = 24
+
+// Once the GPU has an array, the page lets it go.
+let release = (a: THREE.BufferAttribute) =>
+  a.onUpload(() => a.array = a.array.slice(0, 0))
 
 /** How long a day lasts, in seconds. */
 export let DAY = 20 * 60
@@ -157,8 +182,9 @@ void main() {
   #include <fog_vertex>
 }`
 
-/** Build the vale's scene over its chunks, meshed (chunks.ts). */
-export let world = (v: Vale, drawn: Chunk[]): World => {
+/** Build the vale's scene, its chunks meshed by `mesh` as the focus comes
+ * near them. */
+export let world = (v: Vale, mesh: Mesher): World => {
   let scene = new THREE.Scene()
   let size = SIZE
   // The level's own look: its haze, its water, the colour its sky leans to,
@@ -168,26 +194,99 @@ export let world = (v: Vale, drawn: Chunk[]): World => {
   let fog = new THREE.Fog(0xcfe6f2, 40 / haze, 110 / haze)
   scene.fog = fog
 
+  // Each chunk drawn is two meshes: the ground and what stands on it, which
+  // cast shadows, and the flowers and grass, which are drawn only at the
+  // finest detail and only near the player. Past the fog, nothing is drawn.
   let ground = soft({ speckle: 0.1, see: true })
-  // Each chunk is two meshes: the ground and what stands on it, which cast
-  // shadows, and the flowers and grass, which are only drawn near the player.
-  let decor: { mesh: THREE.Mesh; x: number; z: number }[] = []
-  for (let { ci, ck, solid, small } of drawn) {
-    let mesh = new THREE.Mesh(geometry(solid), ground)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    mesh.matrixAutoUpdate = false
-    scene.add(mesh)
-    if (!small) continue
-    let bits = new THREE.Mesh(geometry(small), ground)
-    bits.receiveShadow = true
-    bits.matrixAutoUpdate = false
-    scene.add(bits)
-    decor.push({
-      mesh: bits,
-      x: (ci + 0.5) * CHUNK,
-      z: (ck + 0.5) * CHUNK,
-    })
+  type Drawn = {
+    lod: number
+    solid: THREE.Mesh
+    small: THREE.Mesh | null
+    /** its middle */
+    x: number
+    z: number
+  }
+  let drawn = new Map<string, Drawn>()
+  let asked = new Set<string>()
+  let wants = new Map<string, Want>()
+  let waiting: (() => void)[] = []
+  let gone = false
+  let key = (ci: number, ck: number) => `${ci} ${ck}`
+  let meshOf = (p: Chunk['solid'], ci: number, ck: number) => {
+    let g = geometry(p)
+    for (let a of Object.values(g.attributes)) {
+      if (a instanceof THREE.BufferAttribute) release(a)
+    }
+    if (g.index) release(g.index)
+    let m = new THREE.Mesh(g, ground)
+    m.position.set(ci * CHUNK, 0, ck * CHUNK)
+    m.matrixAutoUpdate = false
+    m.updateMatrix()
+    return m
+  }
+  let drop = (k: string) => {
+    let d = drawn.get(k)
+    if (!d) return
+    for (let m of [d.solid, d.small]) {
+      if (!m) continue
+      scene.remove(m)
+      m.geometry.dispose()
+    }
+    drawn.delete(k)
+  }
+  let put = (c: Chunk, lod: number) => {
+    let k = key(c.ci, c.ck)
+    drop(k)
+    let solid = meshOf(c.solid, c.ci, c.ck)
+    solid.castShadow = true
+    solid.receiveShadow = true
+    let small = c.small && meshOf(c.small, c.ci, c.ck)
+    if (small) small.receiveShadow = true
+    scene.add(solid)
+    if (small) scene.add(small)
+    let x = (c.ci + 0.5) * CHUNK, z = (c.ck + 0.5) * CHUNK
+    drawn.set(k, { lod, solid, small, x, z })
+  }
+  // Every chunk wanted near the focus is drawn, at any detail.
+  let close = () => [...wants].every(([k, c]) => c.d >= FIRST || drawn.has(k))
+  let settle = () => {
+    if (!waiting.length || !close()) return
+    for (let done of waiting.splice(0)) done()
+  }
+  // Ask for the chunks wanted, nearest first, and let go of the ones left
+  // behind.
+  let stream = () => {
+    if (gone) return
+    let list = wanted(
+      focus.x,
+      focus.z,
+      fog.far,
+      (ci, ck) => drawn.get(key(ci, ck))?.lod,
+      SIZE / CHUNK,
+    )
+    wants = new Map(list.map((c) => [key(c.ci, c.ck), c]))
+    for (let k of drawn.keys()) if (!wants.has(k)) drop(k)
+    let pending = 0
+    for (let { ci, ck, lod } of list) {
+      let k = key(ci, ck)
+      if (drawn.get(k)?.lod == lod) continue
+      pending++
+      if (asked.has(k) || asked.size >= ASKED) continue
+      asked.add(k)
+      mesh(ci, ck, lod).then((c) => {
+        asked.delete(k)
+        if (gone) return
+        if (wants.get(k)?.lod == lod) put(c, lod)
+        stream()
+      }).catch((e) => {
+        asked.delete(k)
+        reportError(e)
+      })
+    }
+    w.pending = pending
+    w.chunks = [0, 0, 0]
+    for (let d of drawn.values()) w.chunks[d.lod]++
+    settle()
   }
 
   // The lake: one plane at the water line, drawn over the ground beneath it.
@@ -324,14 +423,24 @@ export let world = (v: Vale, drawn: Chunk[]): World => {
     focus,
     fire,
     day: 0.4,
+    pending: 0,
+    chunks: [0, 0, 0],
     see: (from, to) => sight(ground, from, to),
-    dispose: () =>
+    near: () =>
+      new Promise((done) => {
+        waiting.push(done)
+        stream()
+      }),
+    dispose: () => {
+      gone = true
       scene.traverse((o) => {
         if (!(o instanceof THREE.Mesh || o instanceof THREE.Sprite)) return
         o.geometry.dispose()
         for (let m of [o.material].flat()) m.dispose()
-      }),
+      })
+    },
     tick: (t, dt) => {
+      stream()
       let d = ((t / DAY) + 0.36) % 1
       w.day = d
       let l = look(d)
@@ -380,8 +489,10 @@ export let world = (v: Vale, drawn: Chunk[]): World => {
         m.rotation.y = t * (0.8 + i * 0.5) + i
       })
       sky.position.copy(focus)
-      for (let d of decor) {
-        d.mesh.visible = Math.hypot(d.x - focus.x, d.z - focus.z) < NEAR
+      for (let d of drawn.values()) {
+        if (d.small) {
+          d.small.visible = Math.hypot(d.x - focus.x, d.z - focus.z) < NEAR
+        }
       }
     },
   }

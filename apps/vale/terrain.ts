@@ -446,14 +446,22 @@ export let trodden = (lv: Level) => {
 }
 
 /** A level's ground, grown at a voxel edge of `voxel` metres, which must
- * divide SIZE. Deterministic, and cached: call it as often as you like. */
+ * divide SIZE. Deterministic, and cached: call it as often as you like. The
+ * cache keeps the last few asked for (KEPT), two levels at three details,
+ * so a page that walks the world does not keep every level it passed. */
 export let vale = (id: string, voxel = VOXEL): Vale => {
   let key = `${id}@${voxel}`
-  let v = grown.get(key)
-  if (!v) grown.set(key, v = build(LEVELS[id] ?? LEVELS.mossvale, voxel))
+  let v = grown.get(key) ?? build(LEVELS[id] ?? LEVELS.mossvale, voxel)
+  grown.delete(key)
+  grown.set(key, v)
+  for (let old of grown.keys()) {
+    if (grown.size <= KEPT) break
+    grown.delete(old)
+  }
   return v
 }
 let grown = new Map<string, Vale>()
+let KEPT = 6
 
 let build = (lv: Level, V: number): Vale => {
   let s = lv.seed * 101
