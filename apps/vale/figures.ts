@@ -15,13 +15,15 @@
 // what they wear: their weapon in the right hand, what goes with it in the
 // left, and their armour over their tunic, each drawn from the item's own
 // look (items.ts). How they swing is their weapon's: up and over for a blade,
-// a stab for a dagger, a draw and a loose for a bow, a thrust for a staff. An
-// ability may pose them its own way (abilities.ts `Pose`): a turn all the way
-// round, the other hand raised before them, or both hands up.
+// a stab for a dagger, from each hand in turn with one in each, a draw and a
+// loose for a bow, a thrust for a staff. An ability may pose them its own way
+// (abilities.ts `Pose`): a turn all the way round, the other hand raised
+// before them, both hands up, or both blades across the foe.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Pose } from './abilities.ts'
 import { BEASTS, type Look, type Plans } from './beasts.ts'
+import type { Hand } from './gear.ts'
 import { ITEMS } from './items.ts'
 import { biped } from './bodies/biped.ts'
 import { bird } from './bodies/bird.ts'
@@ -58,6 +60,9 @@ export type Act = {
   swing: number
   /** how a hero's blow is posed, when not their weapon's own */
   pose?: Pose
+  /** the hand a hero's blow is struck with: the other, every other blow,
+   * for one with a blade in each (gear.ts `handOf`) */
+  hand?: Hand
   /** how freshly struck, 1 just now to 0 */
   hurt: number
   /** how far through a roll, 0 to 1, or -1 for none */
@@ -337,8 +342,10 @@ export let person = (
     )
   foreR.add(held)
   let off = worn('off'), side = ITEMS[off]?.family
+  // A blade in the left hand too is held as the right holds its own.
+  let twin = ITEMS[off]?.slot == 'main'
   let other = partOf(
-    side == 'shield'
+    twin ? grip(off, 'hung') : side == 'shield'
       ? grip(off, 0.23).map((
         [[x, y, z], size, c],
       ) => [[x, y, z + 0.1], size, c])
@@ -380,19 +387,21 @@ export let person = (
 
   // How the right hand rests: bent a little at the elbow, and what it holds
   // turned upright, a staff or a bow, or out before them, a blade; the left
-  // holds its torch upright.
+  // holds its torch upright, and a second blade out before them too.
   let rest = -0.5
   let hold = upright ? -rest : -0.6
-  other.rotation.x = side == 'torch' ? 0.3 : 0
-  // A blow, `w` of the way through it: the weapon's own.
-  let swing = (w: number) => {
+  other.rotation.x = twin ? hold : side == 'torch' ? 0.3 : 0
+  // A blow, `w` of the way through it, struck with `hand`: the weapon's own.
+  let swing = (w: number, hand: Hand = 'main') => {
     let up = lunge(w, 0.35)
     if (family == 'dagger' || family == 'fists') {
-      // A stab: the arm drives straight out and back.
+      // A stab: the arm drives straight out and back, the body turning
+      // behind it, the left arm's the mirror of the right's.
       up = lunge(w, 0.3)
-      armR.rotation.x = lerp(0.3, -1.5, up)
-      foreR.rotation.x = lerp(-1.3, -0.05, up)
-      torso.rotation.y = lerp(0.25, -0.3, up)
+      let [arm, fore, k] = hand == 'off' ? [armL, foreL, -1] : [armR, foreR, 1]
+      arm.rotation.x = lerp(0.3, -1.5, up)
+      fore.rotation.x = lerp(-1.3, -0.05, up)
+      torso.rotation.y = k * lerp(0.25, -0.3, up)
     } else if (family == 'bow') {
       // Drawn and held to the loose, a third of the way in, the bow upright
       // before them and the string at the chin.
@@ -421,7 +430,8 @@ export let person = (
     }
   }
   // An ability's own poses, `w` of the way through: arms out for a turn all
-  // the way round, the other hand raised before them, both hands up.
+  // the way round, the other hand raised before them, both hands up, both
+  // arms swept in across each other.
   let POSES: Partial<Record<Pose, (w: number) => void>> = {
     spin: (w) => {
       body.rotation.y = ease(w) * Math.PI * 2
@@ -444,6 +454,17 @@ export let person = (
       armR.rotation.z = 0.3 * k
       foreL.rotation.x = foreR.rotation.x = -0.3 * k
       head.rotation.x = -0.3 * k
+    },
+    cross: (w) => {
+      let up = lunge(w, 0.3)
+      for (
+        let [arm, fore, k] of [[armL, foreL, -1], [armR, foreR, 1]] as const
+      ) {
+        arm.rotation.x = lerp(0.2, -1.4, up)
+        arm.rotation.z = k * lerp(0.5, -0.4, up)
+        fore.rotation.x = lerp(-1.4, -0.1, up)
+      }
+      torso.rotation.x = 0.12 * up
     },
   }
   let phase = 0
@@ -493,7 +514,8 @@ export let person = (
         toward(head, 0.3, k)
       }
       body.rotation.y = 0
-      if (a.swing >= 0) (POSES[a.pose ?? 'swing'] ?? swing)(a.swing)
+      let pose = POSES[a.pose ?? 'swing']
+      if (a.swing >= 0) pose ? pose(a.swing) : swing(a.swing, a.hand)
       if (a.down) {
         body.rotation.x = -Math.PI / 2 + 0.1
         body.position.y = 0.22

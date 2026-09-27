@@ -2,9 +2,10 @@
 // rows of skills, a deeper one needing the one above it. A hero has a point
 // for every level and spends it on a skill: a passive, which makes them
 // better with what they carry (a family of weapon harder or quicker, more
-// health, armour, speed, great blows), or a stronger form of one of their
-// abilities (abilities.ts). There is no class: a point goes anywhere on the
-// board, and what a hero is comes from what they carry and what they chose.
+// health, armour, speed, great blows), a stronger form of one of their
+// abilities (abilities.ts), or a second blade in the other hand (`hand`,
+// gear.ts). There is no class: a point goes anywhere on the board, and what
+// a hero is comes from what they carry and what they chose.
 //
 // Learning writes a `learned` row, and a `respec` row, written by a village
 // fire, forgets everything learned before it. What a hero knows is worked
@@ -61,6 +62,9 @@ export type Skill = {
   /** the ability it makes stronger, and how */
   ability?: string
   form?: Partial<Ability>
+  /** the family of weapon it lets the other hand hold too, beside one of its
+   * own in the first (gear.ts) */
+  hand?: string
 }
 
 let HEAVY = ['hammer', 'axe']
@@ -258,6 +262,16 @@ export let SKILLS: Record<string, Skill> = {
     ability: 'shadowstep',
     form: { dmg: 1.6, cool: 7000 },
   },
+  twin: {
+    name: 'Twin daggers',
+    icon: 'blow',
+    says:
+      'Hold a second dagger in your other hand: blows come quicker, a hand at a time.',
+    discipline: 'finesse',
+    row: 4,
+    after: 'cuts',
+    hand: 'dagger',
+  },
   pinpoint: {
     name: 'Pinpoint',
     icon: 'locateFixed',
@@ -360,6 +374,9 @@ export let SKILLS: Record<string, Skill> = {
 /** How many points a hero of level `lvl` has: one for every level. */
 export let pointsOf = (lvl: number): number => lvl
 
+/** A skill a hero knows, and when they learned it. */
+export type Learned = { skill: string; at: number }
+
 /** What a hero knows, in the order they learned it: every `learned` row since
  * their last `respec`, in the order written, each counting only if the
  * skill is on the board, not already known, its `after` is known, and a
@@ -368,29 +385,34 @@ export let pointsOf = (lvl: number): number => lvl
  * ```ts
  * import { assertEquals } from '@std/assert'
  * let rows = (...skills: string[]) => skills.map((skill, at) => ({ skill, at }))
- * assertEquals(learnedOf(rows('brawn', 'hide'), [], 5), ['brawn', 'hide'])
+ * let known = (...args: Parameters<typeof learnedOf>) =>
+ *   learnedOf(...args).map((l) => l.skill)
+ * assertEquals(known(rows('brawn', 'hide'), [], 5), ['brawn', 'hide'])
  * // Not before what it needs, not twice, not past the points.
- * assertEquals(learnedOf(rows('hide', 'brawn', 'brawn'), [], 5), ['brawn'])
- * assertEquals(learnedOf(rows('brawn', 'fleet', 'focus'), [], 2), ['brawn', 'fleet'])
+ * assertEquals(known(rows('hide', 'brawn', 'brawn'), [], 5), ['brawn'])
+ * assertEquals(known(rows('brawn', 'fleet', 'focus'), [], 2), ['brawn', 'fleet'])
  * // A respec forgets what came before it.
- * assertEquals(learnedOf(rows('brawn', 'fleet', 'focus'), [1.5], 5), ['focus'])
+ * assertEquals(learnedOf(rows('brawn', 'fleet', 'focus'), [1.5], 5), [
+ *   { skill: 'focus', at: 2 },
+ * ])
  * ```
  */
 export let learnedOf = (
-  rows: { skill: string; at: number }[],
+  rows: Learned[],
   respecs: number[],
   lvl: number,
-): string[] => {
+): Learned[] => {
   let since = Math.max(-Infinity, ...respecs)
-  let known: string[] = []
+  let known: Learned[] = []
   let ordered = rows.filter((r) => r.at > since).sort((a, b) =>
     a.at - b.at || (a.skill < b.skill ? -1 : 1)
   )
-  for (let { skill } of ordered) {
-    let s = SKILLS[skill]
-    if (!s || known.includes(skill) || known.length >= pointsOf(lvl)) continue
-    if (s.after && !known.includes(s.after)) continue
-    known.push(skill)
+  for (let r of ordered) {
+    let s = SKILLS[r.skill],
+      has = (id: string) => known.some((k) => k.skill == id)
+    if (!s || has(r.skill) || known.length >= pointsOf(lvl)) continue
+    if (s.after && !has(s.after)) continue
+    known.push({ skill: r.skill, at: r.at })
   }
   return known
 }

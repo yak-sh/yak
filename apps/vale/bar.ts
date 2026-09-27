@@ -33,7 +33,9 @@ let slotOf = (f: Frame, i: number): Slot => {
     return {
       id: '',
       icon: '',
-      says: `${h.name}: strike (F or click)`,
+      says: k.twin
+        ? `Two ${h.name.toLowerCase()}s: strike, a hand at a time (F or click)`
+        : `${h.name}: strike (F or click)`,
       cd: 0,
       s: 0,
       strong: false,

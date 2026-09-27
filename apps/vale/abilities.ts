@@ -1,7 +1,8 @@
 // What a hero can do beyond a plain blow. Each family of weapon gives two
 // abilities and what is held in the other hand one more, so a hero's
 // abilities are what they carry: sword and shield cleave, lunge and block;
-// staff and tome blaze, ward and mend. An ability is a row: the shape of
+// staff and tome blaze, ward and mend; a dagger in each hand flurry,
+// shadowstep and crosscut. An ability is a row: the shape of
 // what it takes, how hard it lands, what else it does, and how soon it can
 // be done again. strike.ts finds what an ability takes; play.ts does it, on
 // the hero's own page, the way it does a blow.
@@ -17,8 +18,9 @@ import type { Worn } from './gear.ts'
 export type Shape = 'one' | 'arc' | 'ring' | 'burst' | 'self'
 
 /** How a hero moves as they do it: their weapon's own blow, a turn all the
- * way round, the other hand raised, or both hands up. */
-export type Pose = 'swing' | 'spin' | 'guard' | 'cast'
+ * way round, the other hand raised, both hands up, or both blades across the
+ * foe at once. */
+export type Pose = 'swing' | 'spin' | 'guard' | 'cast' | 'cross'
 
 export type Ability = {
   name: string
@@ -151,6 +153,20 @@ export let ABILITIES: Record<string, Ability> = {
     time: 600,
     cool: 6000,
   },
+  crosscut: {
+    name: 'Crosscut',
+    icon: 'scissors',
+    says:
+      'Both daggers across the foe at once: two cuts, and it bleeds for 4 s.',
+    shape: 'one',
+    pose: 'cross',
+    dmg: 0.9,
+    hits: 2,
+    bleed: 1.2,
+    time: 450,
+    cool: 8000,
+    tint: 0xd8483a,
+  },
   shadowstep: {
     name: 'Shadowstep',
     icon: 'mask',
@@ -243,8 +259,7 @@ export let ABILITIES: Record<string, Ability> = {
   },
 }
 
-/** What each family of weapon gives, and each thing held in the other hand.
- * Bare hands give one. */
+/** What each family of weapon gives in the hand. Bare hands give one. */
 export let GIVES: Record<string, string[]> = {
   fists: ['haymaker'],
   sword: ['cleave', 'lunge'],
@@ -253,9 +268,15 @@ export let GIVES: Record<string, string[]> = {
   dagger: ['flurry', 'shadowstep'],
   bow: ['volley', 'pin'],
   staff: ['blaze', 'ward'],
-  shield: ['block'],
-  tome: ['mend'],
-  torch: ['scorch'],
+}
+
+/** What each thing held in the other hand gives: a shield, a tome, a torch,
+ * or a second dagger beside the first (skills.ts `hand`). */
+export let OFF: Record<string, string> = {
+  shield: 'block',
+  tome: 'mend',
+  torch: 'scorch',
+  dagger: 'crosscut',
 }
 
 /** The abilities what a hero wears gives them, on the bar's three slots: the
@@ -273,10 +294,18 @@ export let GIVES: Record<string, string[]> = {
  * assertEquals(worn('tome1'), ['haymaker', '', 'mend'])
  * // A quest's blade gives what its family gives.
  * assertEquals(worn('blade5'), ['blaze', 'ward', ''])
+ * // A dagger in each hand: the second gives its own.
+ * assertEquals(
+ *   abilitiesOf({
+ *     main: { eid: 'a', kind: 'dagger2', n: 1 },
+ *     off: { eid: 'b', kind: 'dagger1', n: 1 },
+ *   }),
+ *   ['flurry', 'shadowstep', 'crosscut'],
+ * )
  * ```
  */
 export let abilitiesOf = (worn: Worn): string[] => {
   let main = ITEMS[worn.main?.kind ?? '']?.family ?? ''
   let [a = '', b = ''] = GIVES[main] ?? GIVES.fists
-  return [a, b, GIVES[ITEMS[worn.off?.kind ?? '']?.family ?? '']?.[0] ?? '']
+  return [a, b, OFF[ITEMS[worn.off?.kind ?? '']?.family ?? ''] ?? '']
 }

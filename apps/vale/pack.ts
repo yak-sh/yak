@@ -3,11 +3,12 @@
 // they carry, and by a village's fire, the rack of plain arms anyone may take
 // to try. Tap a thing to see what it is, the abilities it gives, and what
 // wearing it would change, then wear it, take it off, or take it from the
-// rack. B or the tray's bag opens it. It is written again only when what it
-// shows changed.
-import { ABILITIES, GIVES } from './abilities.ts'
+// rack; a second dagger, for a hero who knows how, shows what it would change
+// in the other hand. B or the tray's bag opens it. It is written again only
+// when what it shows changed.
+import { ABILITIES, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, sortOf } from './arms.ts'
-import { kitOf, RACK, type Worn } from './gear.ts'
+import { hands, kitOf, RACK, twins, type Worn } from './gear.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
 import { icon } from './sprites.ts'
@@ -27,8 +28,10 @@ export type Acts = {
 // numbers a sheet shows.
 let numbers = ({ lvl, learned }: Sheet, worn: Worn) => {
   let k = skilled(kitOf(worn), learned, maxHp(lvl))
+  let blow = (dmg: number) => Math.round(power(lvl, dmg) * (1 + k.force))
   return {
-    blow: Math.round(power(lvl, k.dmg) * (1 + k.force)),
+    blow: blow(k.dmg),
+    twin: k.twin ? blow(k.twin) : 0,
     pace: k.pace / 1000,
     reach: k.reach,
     armour: k.armour,
@@ -42,6 +45,7 @@ type Numbers = ReturnType<typeof numbers>
 // Each number, how it reads, and whether more is better.
 let LINES: [keyof Numbers, Glyph, (n: number) => string, boolean][] = [
   ['blow', 'blow', (n) => `${n} a blow`, true],
+  ['twin', 'blow', (n) => `${n} with the other hand`, true],
   ['pace', 'pace', (n) => `every ${n.toFixed(2)} s`, false],
   ['reach', 'reach', (n) => `reach ${n} m`, true],
   ['armour', 'armour', (n) => `armour ${n}`, true],
@@ -50,29 +54,34 @@ let LINES: [keyof Numbers, Glyph, (n: number) => string, boolean][] = [
   ['luck', 'luck', (n) => `great blows ${n}%`, true],
 ]
 
-// What the hero would wear with `kind` put on in its slot: a weapon for both
-// hands empties the other, and a thing for the other hand drops one.
-let trying = (worn: Worn, kind: string): Worn => {
-  let t = ITEMS[kind]
-  if (!t?.slot) return worn
-  let next: Worn = { ...worn, [t.slot]: { eid: '?', kind, n: 1 } }
-  let main = ITEMS[next.main?.kind ?? '']
-  if (t.slot == 'main' && HANDLES[t.family ?? '']?.hands == 2) delete next.off
-  if (t.slot == 'off' && HANDLES[main?.family ?? '']?.hands == 2) {
-    delete next.main
-  }
-  return next
-}
+// What the hero would wear with `kind` put on in `slot`, its own unless said
+// (gear.ts `hands`): a weapon for both hands empties the other, a thing for
+// the other hand drops one, and a new weapon drops a second blade that is no
+// longer its twin.
+let trying = (worn: Worn, kind: string, slot = ITEMS[kind]?.slot): Worn =>
+  slot
+    ? hands(
+      { ...worn, [slot]: { eid: '?', kind, n: 1 } },
+      slot == 'off' ? 'off' : 'main',
+    )
+    : worn
 
 // What the hero would wear with a slot taken off.
 let bare = (worn: Worn, slot: string): Worn =>
   Object.fromEntries(Object.entries(worn).filter(([s]) => s != slot))
 
-// The abilities a weapon or a thing for the other hand gives, and what each
-// does.
-let gives = (t: Thing) => {
-  let ids = t.slot == 'main' || t.slot == 'off'
-    ? (GIVES[t.family ?? ''] ?? []).slice(0, t.slot == 'main' ? 2 : 1)
+// Where a thing taken up goes: a second blade the hero knows how to hold in
+// the other hand goes there (gear.ts `twins`), anything else in its slot.
+let into = (s: Sheet, kind: string): Slot | undefined =>
+  twins(kind, s.worn, s.learned) ? 'off' : ITEMS[kind]?.slot
+
+// The abilities a weapon or a thing for the other hand gives, held in `slot`,
+// and what each does.
+let gives = (t: Thing, slot = t.slot) => {
+  let ids = slot == 'main'
+    ? GIVES[t.family ?? ''] ?? []
+    : slot == 'off'
+    ? [OFF[t.family ?? '']].filter((id) => id)
     : []
   return ids.map((id) => {
     let a = ABILITIES[id]
@@ -108,17 +117,17 @@ export let pack = (panel: Panel, acts: Acts) => {
     } else if (act && s && picked) {
       let { from, key } = picked
       if (act == 'off') acts.wear(key as Slot)
-      if (act == 'wear') {
+      if (act == 'wear' || act == 'twin') {
         let h = s.bag.find((h) =>
           h.kind == key && !Object.values(s.worn).some((w) => w?.eid == h.eid)
         )
-        let slot = ITEMS[key]?.slot
+        let slot = act == 'twin' ? 'off' : ITEMS[key]?.slot
         if (h && slot) acts.wear(slot, h.eid)
         picked = slot ? { from: 'worn', key: slot } : null
       }
       if (act == 'take' && from == 'rack') {
         acts.take(key)
-        picked = { from: 'worn', key: ITEMS[key]?.slot ?? '' }
+        picked = { from: 'worn', key: into(s, key) ?? '' }
       }
     }
     was = []
@@ -157,14 +166,15 @@ export let pack = (panel: Panel, acts: Acts) => {
     let kind = from == 'worn' ? s.worn[key as Slot]?.kind ?? '' : key
     let t = ITEMS[kind]
     if (!t) return `<p class=Pack_Hint>Nothing worn there.</p>`
+    let slot = from == 'worn' ? key as Slot : into(s, kind)
     let now = numbers(s, s.worn)
     let then = from == 'worn'
       ? numbers(s, bare(s.worn, key))
-      : numbers(s, trying(s.worn, kind))
+      : numbers(s, trying(s.worn, kind, slot))
     let sort = sortOf(t)
-    let hands = HANDLES[t.family ?? '']?.hands == 2 ? ' · both hands' : ''
+    let both = HANDLES[t.family ?? '']?.hands == 2 ? ' · both hands' : ''
     let what = t.slot
-      ? `${sort}${t.tier ? ` · tier ${t.tier}` : ''}${hands}`
+      ? `${sort}${t.tier ? ` · tier ${t.tier}` : ''}${both}`
       : t.heals
       ? `Drink it to mend ${t.heals} (Q)`
       : 'Carried'
@@ -183,7 +193,9 @@ export let pack = (panel: Panel, acts: Acts) => {
         }">${sign}${shown}</em></span>`
       }).join('')
       : ''
-    let held = s.bag.some((h) => h.kind == kind)
+    // The rack gives one of each, and a second of a blade for the other hand.
+    let held = s.bag.filter((h) => h.kind == kind).length >=
+      (slot == t.slot ? 1 : 2)
     let act = from == 'worn'
       ? `<button class="Btn Btn-small" data-do=off>Take it off</button>`
       : from == 'rack'
@@ -192,12 +204,14 @@ export let pack = (panel: Panel, acts: Acts) => {
           ? `<span class=Pack_Hint>You have one.</span>`
           : `<button class="Btn Btn-go Btn-small" data-do=take>Take it</button>`
         : ''
+      : slot == 'off' && t.slot == 'main'
+      ? `<button class="Btn Btn-small" data-do=wear>Hold it</button><button class="Btn Btn-go Btn-small" data-do=twin>Other hand</button>`
       : t.slot
       ? `<button class="Btn Btn-go Btn-small" data-do=wear>${
         t.slot == 'main' || t.slot == 'off' ? 'Hold it' : 'Wear it'
       }</button>`
       : ''
-    let can = gives(t)
+    let can = gives(t, slot)
     return `<div class=Pack_Card><i class=Pack_Big>${icon(kind)}</i><div><b>${
       esc(t.name)
     }</b><span>${esc(what)}</span></div>${act}</div>${
@@ -218,11 +232,12 @@ export let pack = (panel: Panel, acts: Acts) => {
         esc(t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'))
       }</span>${pips(t)}</button>`
     }).join('')
-    let stats = LINES.filter(([k]) => k != 'speed' || n.speed).map((
-      [k, mark, say],
-    ) => `<span class=Pack_Num>${glyphText(mark)} ${say(n[k])}</span>`).join(
-      '',
-    ) +
+    let stats = LINES.filter(([k]) => (k != 'speed' && k != 'twin') || n[k])
+      .map((
+        [k, mark, say],
+      ) => `<span class=Pack_Num>${glyphText(mark)} ${say(n[k])}</span>`).join(
+        '',
+      ) +
       s.abilities.map((id, i) =>
         ABILITIES[id]
           ? `<span class=Pack_Num><kbd class=Key>${i + 1}</kbd> ${

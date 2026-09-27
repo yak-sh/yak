@@ -5,15 +5,15 @@
 // and fills the ring the moment the bite lands. Red means a bite and nothing
 // else: the creature I have targeted wears a pale mark at its feet instead.
 // Each hero is drawn in what they wear, and swings at their weapon's pace,
-// posed as the ability they do asks (`pose`); an arrow or a bolt flies from
-// whoever looses it to what it was loosed at.
+// with a blade in each hand a hand at a time, posed as the ability they do
+// asks (`pose`); an arrow or a bolt flies from whoever looses it to what it
+// was loosed at.
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES } from './abilities.ts'
-import { HANDLES } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import {
   type Act,
@@ -25,6 +25,7 @@ import {
   person,
 } from './figures.ts'
 import type { overlay } from './fx.ts'
+import { type Hand, handOf, kitOf } from './gear.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
 import { cuboid, out, pack } from './mesh.ts'
@@ -48,6 +49,8 @@ type Actor = {
   tumble: number
   swingAt: number
   swings: number
+  /** the hand their last blow was struck with */
+  hand: Hand
   /** the ability they are doing, and since when */
   doing: { id: string; at: number } | null
   hp: number
@@ -58,8 +61,14 @@ type Actor = {
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
-// How a weapon of a kind handles, for a hero wearing it.
-let handle = (kind = '') => HANDLES[ITEMS[kind]?.family ?? ''] ?? HANDLES.fists
+// How a hero in `gear` (the kind in each slot, as they say) strikes: at what
+// pace, loosing what, with a blade in one hand or in each.
+let kitIn = (gear: Record<string, string>) =>
+  kitOf(Object.fromEntries(
+    Object.entries(gear).filter(([, kind]) => kind).map((
+      [slot, kind],
+    ) => [slot, { eid: slot, kind, n: 1 }]),
+  ))
 
 let bar = (k: number, cls = '') =>
   `<span class="Plate_Bar ${cls}"><i style="--k:${
@@ -212,6 +221,7 @@ export let cast = (
         tumble: 0,
         swingAt: -1e9,
         swings: -1,
+        hand: 'main',
         doing: null,
         hp: -1,
         hurtAt: -1e9,
@@ -322,6 +332,7 @@ export let cast = (
           roll: f.roll,
           swing: f.swing >= 0 ? f.swing : f.guard ? 0.5 : work?.swing ?? -1,
           pose: f.swing < 0 && f.guard ? 'guard' : ABILITIES[f.doing]?.pose,
+          hand: f.swing >= 0 ? f.hand : 'main',
           hurt: Math.max(0, 1 - (now - mine.hurtAt) / 250),
           down: f.down,
         },
@@ -339,15 +350,16 @@ export let cast = (
         )
         glide(a, b.x, b.y, b.z, b.yaw, dt, 9)
         tumble(a, o.roll)
-        let h = handle(o.gear.main)
+        let k = kitIn(o.gear)
         if (a.swings >= 0 && o.swing > a.swings) {
           a.swingAt = now
-          if (h.shot && o.foe) {
+          a.hand = handOf(k, o.swing)
+          if (k.shot && o.foe) {
             loosing.push({
               eid: o.eid,
               foe: o.foe,
-              at: now + h.pace * LAND,
-              kind: h.shot,
+              at: now + k.pace * LAND,
+              kind: k.shot,
             })
           }
         }
@@ -356,7 +368,7 @@ export let cast = (
         a.hp = o.vitals.hp
         // An ability takes its own time, and is posed its own way.
         let d = a.doing, ab = d ? ABILITIES[d.id] : undefined
-        let took = ab?.guard ?? ab?.time ?? h.pace
+        let took = ab?.guard ?? ab?.time ?? k.pace
         let since = now - (d && ab ? d.at : a.swingAt)
         if (d && since >= took) a.doing = null
         play(
@@ -366,6 +378,7 @@ export let cast = (
             roll: o.roll,
             swing: since < took ? since / took : -1,
             pose: ab?.pose,
+            hand: a.hand,
             hurt: Math.max(0, 1 - (now - a.hurtAt) / 250),
             down: b.gait == 'down',
           },

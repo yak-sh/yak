@@ -31,7 +31,17 @@
 import { ABILITIES, abilitiesOf } from './abilities.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { firsts, type Kit, kitOf, RACK, type Worn, wornOf } from './gear.ts'
+import {
+  firsts,
+  type Hand,
+  handOf,
+  type Kit,
+  kitOf,
+  RACK,
+  twins,
+  type Worn,
+  wornOf,
+} from './gear.ts'
 import { homesOf } from './homes.ts'
 import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
@@ -215,6 +225,8 @@ export type Frame = {
   rack: boolean
   /** how far through a blow or an ability, 0 to 1, or -1 */
   swing: number
+  /** the hand it is struck with (gear.ts `handOf`) */
+  hand: Hand
   /** the ability being done, or empty */
   doing: string
   /** how long until each ability on the bar can be done again, in ms */
@@ -397,9 +409,10 @@ export let game = (
   let drops = c.watch('.drop', { remote: false })
   let swingAt = -1e9
   // How long the blow or ability begun at `swingAt` keeps the weapon busy,
-  // and the ability, if it is one.
+  // the ability, if it is one, and the hand it is struck with.
   let busy = 0
   let doing = ''
+  let hand: Hand = 'main'
   let struck = true
   // The creature my blow was aimed at as I swung.
   let aimed = ''
@@ -487,8 +500,7 @@ export let game = (
     })
     let xp = xpOf(kills, QUESTS, entries)
     let lvl = levelOf(xp)
-    let worn = wornOf(rows, bag)
-    let learned = learnedOf(
+    let known = learnedOf(
       learning.map((b) => {
         let l = comp(b, 'learned')
         return { skill: str(l.skill), at: num(l.at) }
@@ -496,6 +508,8 @@ export let game = (
       respecs.map((b) => num(comp(b, 'respec').at)),
       lvl,
     )
+    let learned = known.map((k) => k.skill)
+    let worn = wornOf(rows, bag, known)
     let kit = skilled(kitOf(worn), learned, maxHp(lvl))
     sheet = {
       name,
@@ -580,9 +594,11 @@ export let game = (
     wear: (slot: Slot, item = '') => {
       if (net.hero) wear(net.hero, slot, item)
     },
-    /** take a plain thing from the rack by a village's fire, and wear it */
+    /** take a plain thing from the rack by a village's fire, and wear it: a
+     * second blade in the other hand, for a hero who knows how */
     take: (kind: string) => {
-      let me = net.hero, slot = ITEMS[kind]?.slot
+      let me = net.hero, s = sheet
+      let slot = s && twins(kind, s.worn, s.learned) ? 'off' : ITEMS[kind]?.slot
       if (!me || !slot || !RACK.includes(kind)) return
       wear(me, slot, keepItem(me, kind, 1, net.now()))
     },
@@ -1067,9 +1083,10 @@ export let game = (
 
       // My weapon, when it is free and I am not rolling: an ability asked
       // for, when it is ready, or else a blow. I turn toward what it is aimed
-      // at, and a moment in, it lands, or its shot is loosed.
+      // at, and a moment in, it lands, or its shot is loosed. With a blade in
+      // each hand, blows come a hand at a time (gear.ts `handOf`), each as
+      // hard as its own blade; an ability lands as hard as the first's.
       let k = s.kit
-      let might = power(s.lvl, k.dmg) * (1 + k.force)
       let face = (m: Mob) =>
         body.yaw = turn(
           body.yaw,
@@ -1108,6 +1125,7 @@ export let game = (
           aimed = aim?.eid ?? ''
           ready.set(id, now + a.cool)
           fought.swing++
+          hand = handOf(k, fought.swing)
           fought.ability = id
           fought.abilities++
           if (aim) face(aim)
@@ -1159,6 +1177,7 @@ export let game = (
         struck = false
         guardUntil = -1e9
         fought.swing++
+        hand = handOf(k, fought.swing)
         let aim = aimOf(mobs, body, k, fought.foe)
         aimed = aim?.eid ?? ''
         if (aim) face(aim)
@@ -1202,6 +1221,8 @@ export let game = (
           events.push({ type: 'burst', id: doing, at: to, r: a.far ?? 0, ms })
         }
         if (!taken.length && a?.shape != 'self') events.push({ type: 'whiff' })
+        let might = power(s.lvl, !a && hand == 'off' ? k.twin : k.dmg) *
+          (1 + k.force)
         for (let [j, m] of taken.entries()) {
           let hits = a?.hits ?? 1
           for (let i = 0; i < hits; i++) {
@@ -1422,6 +1443,7 @@ export let game = (
         foe,
         rack: !down && inVillage(v, body.x, body.z),
         swing: now - swingAt < busy ? (now - swingAt) / busy : -1,
+        hand,
         doing: now - swingAt < busy ? doing : '',
         cool: Object.fromEntries(
           s.abilities.filter((id) => id).map((id) => [

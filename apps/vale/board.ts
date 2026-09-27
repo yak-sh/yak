@@ -4,7 +4,7 @@
 // one to see what it does and learn it. By a village's fire, every skill can
 // be forgotten, free, to spend the points again. K or the tray's sparkles
 // opens it. It is written again only when what it shows changed.
-import { ABILITIES } from './abilities.ts'
+import { ABILITIES, OFF } from './abilities.ts'
 import { glyph, glyphText } from './glyphs.ts'
 import type { Panel } from './panel.ts'
 import type { Frame, Sheet } from './play.ts'
@@ -68,8 +68,11 @@ export let board = (panel: Panel, acts: Learning) => {
       return `<p class=Pack_Hint>Tap a skill to see what it does. Deeper ones need the one above them first.</p>`
     }
     let a = k.ability ? ABILITIES[k.ability] : undefined
+    let second = k.hand ? ABILITIES[OFF[k.hand]] : undefined
     let what = a
       ? `${glyphText(a.icon)} ${esc(a.name)}, made stronger`
+      : second
+      ? `The second gives ${glyphText(second.icon)} ${esc(second.name)}`
       : 'Always on'
     let need = k.after && !s.learned.includes(k.after)
       ? `<span class=Pack_Hint>Needs ${esc(SKILLS[k.after].name)} first.</span>`
