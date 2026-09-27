@@ -16,7 +16,7 @@ import { launch, processDoc, processes, store } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
-import { checkoutOf, down } from './run.ts'
+import { checkoutOf, down, start } from './run.ts'
 import { sessionEnv } from '@yaks/session'
 import { asking, fake, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
@@ -66,6 +66,44 @@ Deno.test('the request starts the provider, and what it printed is the transcrip
     // to call its thread by that same name.
     assertEquals(comp(row, 'session')?.id, 'S1')
     assertEquals(comp(row, 'exit')?.code, 0)
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})
+
+Deno.test('the chosen persona reaches a managed provider', async () => {
+  let { g } = tracked()
+  let where = dir()
+  let persona = crypto.randomUUID()
+  let given: string | undefined
+  try {
+    await g.apply([
+      ...asking('S1', 'E1', 'do the thing'),
+      {
+        entity: { eid: persona },
+        doc: { title: 'Operator', body: 'Keep the graph true.' },
+        persona: {},
+      },
+      { entity: { eid: 'S1' }, session: { persona } },
+    ])
+    await start(g, 'S1', {
+      cwd: where,
+      dir: where,
+      adapters: {
+        fake: {
+          ...fake,
+          argv: (job) => {
+            given = job.persona
+            return fake.argv(job)
+          },
+        },
+      },
+    })
+    assert(given?.includes('Keep the graph true.'))
+    await until(
+      async () => comp((await g.get(['S1']))[0], 'exit'),
+      'the managed provider to exit',
+    )
   } finally {
     Deno.removeSync(where, { recursive: true })
   }
