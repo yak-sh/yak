@@ -155,7 +155,10 @@ export let overlay = (
   let place = (el: HTMLElement, p: THREE.Vector3, w = 0, h = 0) => {
     let s = screen(p)
     let shown = !!s && !under(s[0] - w / 2, s[1] - h, w, h)
-    el.hidden = !shown
+    // Keep plates laid out while occluded: a display:none plate measures 0x0
+    // in ResizeObserver, so its next frame tests a different overlap and
+    // alternates between hidden and shown at the edge of the glass.
+    el.style.visibility = shown ? '' : 'hidden'
     if (s && shown) {
       el.style.transform = `translate(${s[0].toFixed(1)}px, ${
         s[1].toFixed(1)
