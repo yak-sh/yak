@@ -20,6 +20,7 @@ import {
   type Act,
   beast,
   type Build,
+  CHILD,
   type Dress,
   type Figure,
   hero,
@@ -542,7 +543,10 @@ export let cast = (
       // The people who give quests, with a mark over their heads when they
       // have something for me.
       for (let g of f.givers) {
-        let a = actor(g.id, () => person(build, g.look, g.staff))
+        let a = actor(
+          g.id,
+          () => person(g.build == 'child' ? CHILD : build, g.look, g.staff),
+        )
         // A villager faces the way they walk, and turns their head to look
         // at the hero they heed.
         let yaw = a.gaze?.body ?? g.walk ?? 0.6

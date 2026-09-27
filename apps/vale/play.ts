@@ -225,6 +225,7 @@ export type Giver = {
   z: number
   greets: string
   look: { tint: string; hair: string; skin: string }
+  build?: 'child'
   staff: boolean
   next: Standing | null
   mark: '' | '!' | '?'
@@ -1561,6 +1562,7 @@ export let game = (
           z,
           greets: g.greets,
           look: g.look,
+          build: g.build,
           staff: !!g.staff,
           next,
           mark,

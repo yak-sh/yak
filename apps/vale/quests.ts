@@ -43,6 +43,8 @@ export type Giver = {
   /** what they say when there is nothing to ask */
   greets: string
   look: { tint: string; hair: string; skin: string }
+  /** a child is smaller than the vale's grown people */
+  build?: 'child'
   /** leans on a staff */
   staff?: boolean
 }

@@ -24,6 +24,7 @@ export let givers: Giver[] = [
     offset: [1, 5],
     greets: 'When I’m big I’m going to have a sword just like yours.',
     look: { tint: '#d9824a', hair: '#6b3f22', skin: '#f0c4a0' },
+    build: 'child',
   },
   {
     id: 'alder',

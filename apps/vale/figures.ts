@@ -210,6 +210,20 @@ export let BUILD: Build = {
   head: [0.44, 0.4, 0.4],
 }
 
+/** The smaller build of a child in the vale. */
+export let CHILD: Build = {
+  hips: 0.32,
+  leg: 0.15,
+  stance: 0.085,
+  boot: [0.16, 0.22],
+  torso: [0.37, 0.35, 0.26],
+  shoulder: [0.26, 0.29],
+  arm: 0.35,
+  sleeve: 0.12,
+  hand: 0.14,
+  head: [0.4, 0.35, 0.36],
+}
+
 /** How tall someone of a build stands, ground to crown. */
 export let stature = (b: Build) => b.hips + b.torso[1] + b.head[1]
 
