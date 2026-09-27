@@ -64,6 +64,8 @@ import { type Relay, relay as relaying, type Timer } from './relay.ts'
  * subscription could not be opened.
  */
 export type Frame = {
+  /** the token a socket subscriber echoes after applying this frame */
+  ack?: string
   transient?: TransientFrame[]
   transientReset?: Eid[]
   /** the subscription this frame answers */

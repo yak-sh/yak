@@ -122,8 +122,8 @@ Deno.test('server watches dedupe and dispose independently from locally evaluate
   let local = c.watch('.doc')
   sockets[0].emit('open')
   assertEquals(sockets[0].sent, [
-    { subscribe: '.doc', id: 's1' },
-    { subscribe: '.doc', id: 's2' },
+    { subscribe: '.doc', id: 's1', acks: true },
+    { subscribe: '.doc', id: 's2', acks: true },
   ])
   let heard = 0
   let same = () => heard++

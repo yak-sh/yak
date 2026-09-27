@@ -81,7 +81,7 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 // A socket's subscriptions, stored on the socket. The runtime caps an
 // attachment at 2KB, and the application may be storing fields of its own
 // there, so the subscriptions live under one key and the rest is left alone.
-type Held = { subs?: Record<string, Ask>; relay?: string[] }
+type Held = { subs?: Record<string, Ask>; relay?: string[]; acks?: boolean }
 let CAP = 2048
 // A `sync: peers` value is held in memory, and this object's memory does not
 // survive hibernation. What survives is the attachment, so the KEYS go there:
@@ -102,9 +102,13 @@ let asksOf = (ws: Wire): Record<string, Ask> => {
 // `false` means they would not fit — the runtime would drop the whole
 // attachment at the next hibernation, so the subscription is rejected now
 // rather than disappearing silently later.
-let hold = (ws: Wire, subs: Record<string, Ask>): boolean => {
+let hold = (ws: Wire, subs: Record<string, Ask>, acks = false): boolean => {
   let held = ws.deserializeAttachment()
-  let next = { ...(held && typeof held == 'object' ? held : {}), subs }
+  let next = {
+    ...(held && typeof held == 'object' ? held : {}),
+    subs,
+    ...(acks ? { acks: true } : {}),
+  }
   if (JSON.stringify(next).length > CAP) return false
   ws.serializeAttachment(next)
   return true
@@ -129,11 +133,18 @@ let remember = (ws: Wire, keys: string[]) => {
 // What a frame subscribed to, read alongside @yaks/api's own dispatch so that
 // the attachment stays current. Anything malformed is not a subscription —
 // `receive` rejects it.
-let asked = (data: unknown): { id: string; ask?: Ask } | null => {
+let asked = (
+  data: unknown,
+): { id: string; ask?: Ask; acks?: boolean; ack?: string } | null => {
   try {
     let msg = JSON.parse(String(data))
+    if (typeof msg?.ack == 'string') return { id: '', ack: msg.ack }
     if (typeof msg?.subscribe == 'string' || msg?.subscribe === true) {
-      return { id: msg?.id == null ? '' : String(msg.id), ask: msg.subscribe }
+      return {
+        id: msg?.id == null ? '' : String(msg.id),
+        ask: msg.subscribe,
+        acks: msg.acks === true,
+      }
     }
     if (msg?.unsubscribe != null) return { id: String(msg.unsubscribe) }
     return null
@@ -169,6 +180,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     if (to) return to
     let fresh = queue(ws)
     sinks.set(ws, fresh)
+    if ((ws.deserializeAttachment() as Held | null)?.acks) fresh.enable()
     // The relay keys first: whatever else this socket did, the registry has to
     // know what it is saying before a close can stop saying it.
     subs.relayed(fresh.send, relayOf(ws))
@@ -204,6 +216,9 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     message: (ws, data) => {
       let to = sink(ws)
       let ask = asked(data)
+      let sender = sinks.get(ws)!
+      if (ask?.ack) return sender.ack(ask.ack)
+      if (ask?.acks) sender.enable()
       let was = subs.relaying(to).join('\n')
       receive(subs, to, data)
       // Only when it moved: a frame that relays nothing should not rewrite an
@@ -214,7 +229,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       let subscriptions = asksOf(ws)
       if (ask.ask === undefined) delete subscriptions[ask.id]
       else subscriptions[ask.id] = ask.ask
-      if (hold(ws, subscriptions)) return
+      if (hold(ws, subscriptions, ask.acks)) return
       subs.close(to, ask.id)
       to({
         id: ask.id,

@@ -3,7 +3,7 @@
 
 import { assertEquals } from '@std/assert'
 import { pair } from './testing.ts'
-import { wire } from './socket.ts'
+import { type Frame, wire } from './socket.ts'
 
 Deno.test('waiting relay patches replace older motion and preserve clears', () => {
   let socket = pair().client
@@ -36,6 +36,60 @@ Deno.test('waiting relay patches replace older motion and preserve clears', () =
       { entity: { eid: 'a' }, pointing: { x: 5 } },
       { entity: { eid: 'b' }, motion: { yaw: 4 } },
     ],
+  }])
+  w.close()
+})
+
+Deno.test('a subscriber acknowledges only after landing a frame', async () => {
+  let socket = pair().client
+  let done: () => void = () => {}
+  let settled = new Promise<void>((resolve) => done = resolve)
+  let w = wire({
+    url: 'http://box.test',
+    connect: () => socket,
+    land: () => settled,
+    report: (err) => {
+      throw err
+    },
+  })
+  w.subscribe(true, 's')
+  socket.emit('open')
+  assertEquals(socket.sent, [{ subscribe: true, id: 's', acks: true }])
+  socket.emit('message', JSON.stringify({ id: 's', bundles: [], ack: 'token' }))
+  assertEquals(socket.sent.length, 1)
+  done()
+  await settled
+  await Promise.resolve()
+  assertEquals(socket.sent.at(-1), { ack: 'token' })
+  w.close()
+})
+
+Deno.test('a server without acknowledgements can send consecutive frames', () => {
+  let sockets = pair()
+  let seen: Frame[] = []
+  let w = wire({
+    url: 'http://box.test',
+    connect: () => sockets.client,
+    land: (frame) => {
+      seen.push(frame)
+    },
+    report: (err) => {
+      throw err
+    },
+  })
+  w.subscribe('.recipe', 's')
+  sockets.client.emit('open')
+  sockets.server.send(JSON.stringify({ id: 's', bundles: [] }))
+  sockets.server.send(JSON.stringify({
+    id: 's',
+    bundles: [{ entity: { eid: 'r1' }, recipe: {} }],
+  }))
+  assertEquals(seen.length, 2)
+  assertEquals(seen[1].bundles?.[0].entity.eid, 'r1')
+  assertEquals(sockets.client.sent, [{
+    subscribe: '.recipe',
+    id: 's',
+    acks: true,
   }])
   w.close()
 })

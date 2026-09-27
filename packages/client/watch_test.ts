@@ -8,6 +8,9 @@ import { type Bundle, transient } from '@yaks/graph'
 import { boxClient, server, titles } from './testing.ts'
 import type { Hold, Make } from './watch.ts'
 
+let subscribes = (sent: unknown[] | undefined): unknown[] | undefined =>
+  sent?.filter((m) => !!m && typeof m == 'object' && 'subscribe' in m)
+
 let dal = (eid = 'r1', serves = 4): Bundle => ({
   entity: { eid },
   doc: { title: 'Dal' },
@@ -145,8 +148,8 @@ Deno.test('a closed watch drops the server subscription', async () => {
   let dinners = c.watch('.course=dinner')
   await c.idle()
 
-  assertEquals(c.socket()?.sent, [
-    { subscribe: '.course=dinner', id: 's1' },
+  assertEquals(subscribes(c.socket()?.sent), [
+    { subscribe: '.course=dinner', id: 's1', acks: true },
   ])
   dinners.close()
   assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's1' })
@@ -246,18 +249,23 @@ Deno.test('remote watches share one sub until the last independent close', async
   assertEquals(a.ready, true)
   assertEquals(b.ready, true)
   assertEquals(heard, [true]) // an empty answer is still an answer
-  assertEquals(c.socket()?.sent, [{ subscribe: '.course=dinner', id: 's1' }])
+  assertEquals(subscribes(c.socket()?.sent), [{
+    subscribe: '.course=dinner',
+    id: 's1',
+    acks: true,
+  }])
   a.close()
   a.close()
-  assertEquals(c.socket()?.sent.length, 1)
+  assertEquals(subscribes(c.socket()?.sent)?.length, 1)
   b.close()
   assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's1' })
   assertEquals(c.watches.size(), 0)
   let again = c.watch('.course=dinner')
   await c.idle()
-  assertEquals(c.socket()?.sent.at(-1), {
+  assertEquals(subscribes(c.socket()?.sent)?.at(-1), {
     subscribe: '.course=dinner',
     id: 's2',
+    acks: true,
   })
   assertEquals(again.ready, true)
   c.close()
@@ -273,7 +281,7 @@ Deno.test('different options and query text never collapse into one watch', asyn
   c.watch('.course=dinner')
   assertEquals(c.watches.size(), 5)
   await c.idle()
-  assertEquals(c.socket()?.sent.length, 4)
+  assertEquals(subscribes(c.socket()?.sent)?.length, 4)
   c.close()
   assertEquals(c.watches.size(), 0)
 })

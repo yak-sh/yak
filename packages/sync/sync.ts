@@ -299,11 +299,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           }
         },
       )
-      if (out instanceof Promise) {
-        out.catch((error: unknown) =>
-          report({ sent: [], error, reverted: false })
-        )
-      }
+      return out
     },
     report: (error) => report({ sent: [], error, reverted: false }),
   })

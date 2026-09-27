@@ -52,6 +52,8 @@ export type Ask = string | true
 /** One push from the server: the entities now in the set, the ones that left
  * it, or the refusal that closed the subscription. */
 export type Frame = {
+  /** an opted-in subscriber echoes this after applying the frame */
+  ack?: string
   transient?: import('@yaks/graph').TransientFrame[]
   transientReset?: string[]
   /** the subscription this frame answers */
@@ -108,7 +110,7 @@ export type WireOpts = {
   /** the longest reconnect delay in ms (default: 30_000) */
   most?: number
   /** each frame, once the reset bookkeeping has been done for it */
-  land: (frame: Frame) => void
+  land: (frame: Frame) => unknown | Promise<unknown>
   /** a subscription needs a fresh answer: opened, re-pointed or disconnected */
   pending?: (id: string) => void
   /** the `sync: peers` values this side is saying, said again on every
@@ -209,7 +211,7 @@ export let wire = (opts: WireOpts): Wire => {
   // A frame, with the reopen bookkeeping done: a reset frame reports whatever
   // the client was holding and did not hear about again as gone, and every
   // frame keeps the membership set current so the next reset can do the same.
-  let landed = (frame: Frame) => {
+  let landed = (frame: Frame): unknown | Promise<unknown> => {
     // An unsubscribe can race a frame already in transit. It must not refill
     // the cache or recreate membership bookkeeping after its last owner left.
     if (!asks.has(frame.id)) return
@@ -225,7 +227,7 @@ export let wire = (opts: WireOpts): Wire => {
     }
     for (let eid of arrived) held.add(eid)
     for (let eid of gone) held.delete(eid)
-    opts.land({ ...frame, gone })
+    return opts.land({ ...frame, gone })
   }
 
   let retry = () => {
@@ -252,15 +254,30 @@ export let wire = (opts: WireOpts): Wire => {
       if (said.length) s.send(JSON.stringify({ relay: said }))
       for (let [id, query] of asks) {
         resetting.add(id) // its answer will be the whole set, as it now stands
-        s.send(JSON.stringify({ subscribe: query, id }))
+        s.send(JSON.stringify({ subscribe: query, id, acks: true }))
       }
     })
     s.addEventListener('message', (e) => {
       if (socket != s || closed) return
+      let frame: Frame | undefined
+      let ack = (frame: Frame) => {
+        if (frame.ack && socket == s && s.readyState == OPEN) {
+          s.send(JSON.stringify({ ack: frame.ack }))
+        }
+      }
       try {
-        landed(JSON.parse(String(e.data)) as Frame)
+        let received = JSON.parse(String(e.data)) as Frame
+        frame = received
+        let out = landed(received)
+        if (out instanceof Promise) {
+          out.then(() => ack(received), (err) => {
+            opts.report(err)
+            ack(received)
+          })
+        } else ack(received)
       } catch (err) {
         opts.report(err)
+        if (frame) ack(frame)
       }
     })
     s.addEventListener('error', (e) => opts.report(e))
@@ -283,7 +300,7 @@ export let wire = (opts: WireOpts): Wire => {
       resetting.add(key)
       opts.pending?.(key)
       open()
-      send({ subscribe: query, id: key })
+      send({ subscribe: query, id: key, acks: true })
       return key
     },
     unsubscribe: (id) => {

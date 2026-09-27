@@ -5,7 +5,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { fake, req, shopGraph } from './testing.ts'
 import { api } from './route.ts'
-import { attach, sink } from './socket.ts'
+import { attach, queue, sink } from './socket.ts'
 import { subscriptions } from './subs.ts'
 
 let ids = (frames: { bundles?: { entity: { eid: string } }[] }[]) =>
@@ -53,6 +53,48 @@ Deno.test('subscriber queue folds relay patches without crossing a data frame', 
       ],
     },
   ])
+})
+
+Deno.test('acknowledged subscriber holds one frame and sends latest relay next', () => {
+  let socket = fake()
+  let q = queue(socket)
+  q.enable()
+  q.send({ id: 's', relay: [{ entity: { eid: 'a' }, pointing: { x: 1 } }] })
+  let [first] = socket.taken()
+  assert(typeof first.ack == 'string')
+  q.send({ id: 's', relay: [{ entity: { eid: 'a' }, pointing: { x: 2 } }] })
+  q.send({ id: 's', relay: [{ entity: { eid: 'b' }, pointing: { x: 3 } }] })
+  q.send({ id: 's', relay: [{ entity: { eid: 'a' }, pointing: null }] })
+  q.send({ id: 's', relay: [{ entity: { eid: 'a' }, pointing: { x: 4 } }] })
+  assertEquals(socket.sent, [])
+  q.ack('old-token')
+  assertEquals(socket.sent, [])
+  q.ack(first.ack)
+  let [second] = socket.taken()
+  assert(typeof second.ack == 'string' && second.ack != first.ack)
+  assertEquals(second.relay, [
+    { entity: { eid: 'a' }, pointing: null },
+    { entity: { eid: 'a' }, pointing: { x: 4 } },
+    { entity: { eid: 'b' }, pointing: { x: 3 } },
+  ])
+  q.ack(first.ack)
+  assertEquals(socket.sent, [])
+})
+
+Deno.test('a subscriber opts into acknowledgements through the socket', () => {
+  let graph = shopGraph()
+  let socket = fake()
+  attach(subscriptions(graph), socket)
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: '.price<20', id: 's', acks: true }),
+  )
+  let [first] = socket.taken()
+  assert(typeof first.ack == 'string')
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 1 } }])
+  assertEquals(socket.sent, [])
+  socket.emit('message', JSON.stringify({ ack: first.ack }))
+  assertEquals(ids(socket.taken()), ['b1'])
 })
 
 Deno.test('a socket subscribes, hears its set, and hears every change', () => {

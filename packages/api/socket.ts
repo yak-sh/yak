@@ -51,10 +51,18 @@ export let queue = (
     setTimeout(fn, ms)
   },
   ready: () => boolean = () => true,
-): { send: Sink; flush: () => void; close: () => void } => {
+): {
+  send: Sink
+  flush: () => void
+  close: () => void
+  enable: () => void
+  ack: (token: string) => void
+} => {
   let waiting: Frame[] = []
   let draining = false
   let closed = false
+  let enabled = false
+  let owed: string | undefined
   let schedule = () => {
     if (draining || closed) return
     draining = true
@@ -64,11 +72,17 @@ export let queue = (
     }, 16)
   }
   let flush = () => {
-    if (!ready() || closed) return
+    if (!ready() || closed || owed) return
     while (waiting.length && (socket.bufferedAmount ?? 0) < BUFFER) {
-      socket.send(JSON.stringify(waiting.shift()))
+      let frame = waiting.shift()!
+      if (enabled) {
+        owed = crypto.randomUUID()
+        socket.send(JSON.stringify({ ...frame, ack: owed }))
+        break
+      }
+      socket.send(JSON.stringify(frame))
     }
-    if (waiting.length) schedule()
+    if (waiting.length && !owed) schedule()
   }
   let send: Sink = (frame) => {
     if (closed) return
@@ -95,9 +109,19 @@ export let queue = (
   return {
     send,
     flush,
+    enable: () => {
+      enabled = true
+      flush()
+    },
+    ack: (token) => {
+      if (token != owed) return
+      owed = undefined
+      flush()
+    },
     close: () => {
       closed = true
       waiting = []
+      owed = undefined
     },
   }
 }
@@ -161,9 +185,23 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
  * go to, which is also the key its subscriptions are held under.
  */
 export let attach = (subs: Subs, socket: Socket): Sink => {
-  let to = sink(socket)
-  socket.addEventListener('message', (e) => receive(subs, to, e.data))
+  let q = queue(socket, undefined, () => socket.readyState == OPEN)
+  let to = q.send
+  socket.addEventListener('open', q.flush)
+  socket.addEventListener('message', (e) => {
+    let msg: Record<string, unknown> | undefined
+    try {
+      msg = JSON.parse(String(e.data))
+    } catch { /* receive refuses it */ }
+    if (typeof msg?.ack == 'string') return q.ack(msg.ack)
+    if (
+      msg?.acks === true &&
+      (typeof msg.subscribe == 'string' || msg.subscribe === true)
+    ) q.enable()
+    receive(subs, to, e.data)
+  })
   socket.addEventListener('close', () => {
+    q.close()
     let out = subs.drop(to)
     if (isPromise(out)) out.catch((err) => fault(err, 'socket close'))
   })

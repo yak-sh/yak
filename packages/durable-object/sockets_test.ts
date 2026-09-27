@@ -88,6 +88,40 @@ Deno.test('a woken object serves the socket it inherited', () => {
   assertEquals((ws.sent.at(-1)!.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
+Deno.test('acknowledgement survives hibernation and gates later pushes', () => {
+  let storage = store()
+  let ctx = hibernation()
+  let [, first] = instance(storage, ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  first.message(
+    ws,
+    JSON.stringify({
+      subscribe: '.kind=product',
+      id: 'p',
+      acks: true,
+    }),
+  )
+  let initial = ws.sent.at(-1)!
+  assert(typeof initial.ack == 'string')
+  assertEquals(ws.deserializeAttachment(), {
+    subs: { p: '.kind=product' },
+    acks: true,
+  })
+
+  let [g, woken] = instance(storage, ctx)
+  ws.sent.length = 0
+  woken.wake()
+  let resync = ws.sent.at(-1)!
+  assert(typeof resync.ack == 'string')
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  assertEquals(ws.sent.length, 1)
+  woken.message(ws, JSON.stringify({ ack: initial.ack }))
+  assertEquals(ws.sent.length, 1)
+  woken.message(ws, JSON.stringify({ ack: resync.ack }))
+  assertEquals((ws.sent.at(-1)!.bundles as Bundle[])[0].entity.eid, 'p1')
+})
+
 Deno.test('unsubscribing forgets it here and on the socket', () => {
   let ctx = hibernation()
   let [g, live] = instance(store(), ctx)

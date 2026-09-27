@@ -119,6 +119,36 @@ Deno.test('a page watches its store and hears what others write', async () => {
   }
 })
 
+Deno.test('a workerd socket waits for the page to acknowledge its frame', async () => {
+  let k = workerd()
+  let p = await page(k)
+  let socket = new WebSocket(`${p.wire.replace(/^http/, 'ws')}/ws`)
+  let frames: { ack?: string; bundles?: Row[] }[] = []
+  socket.addEventListener('message', (e) => frames.push(JSON.parse(e.data)))
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener('open', () => resolve(), { once: true })
+      socket.addEventListener('error', reject, { once: true })
+    })
+    socket.send(JSON.stringify({ subscribe: '.doc', id: 's', acks: true }))
+    await until(() => frames.length == 1, { timeout: 15_000 })
+    let token = frames[0].ack
+    assertEquals(typeof token, 'string')
+
+    await p.store.apply({ doc: { title: 'After snapshot' } })
+    assertEquals(frames.length, 1)
+    socket.send(JSON.stringify({ ack: 'stale-token' }))
+    assertEquals(frames.length, 1)
+    socket.send(JSON.stringify({ ack: token }))
+    await until(() => frames.length == 2, { timeout: 15_000 })
+    assertEquals(frames[1].bundles?.[0].doc.title, 'After snapshot')
+  } finally {
+    socket.close()
+    await p.stop()
+    await k.stop()
+  }
+})
+
 // A page that keeps a copy of its store (@yaks/client) speaks the words the
 // store serves, and lands the rows a socket sends in them: `created.by` is who
 // made a row, so a page finds a person's rows by asking for the ones they made.
