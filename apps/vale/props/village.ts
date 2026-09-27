@@ -5,7 +5,7 @@
 // it stands: plaster in Mossvale, birch at Birchmere, turf-roofed logs in
 // Fernwood, whitewash and slate at Gullwick, driftwood at Driftwood Bay,
 // quarried stone at Stonestep.
-import { ball, box, key, type Vox } from '../mesh.ts'
+import { ball, box, key, metal, type Vox } from '../mesh.ts'
 import { rand } from '../rand.ts'
 import { FOUND, type Kind, type Model, TIMBER } from './kit.ts'
 
@@ -185,11 +185,11 @@ let forge = (): Model => {
     v.set(key(x, 5, z), (x + z) & 1 ? 0xff7a2a : 0xffc050)
   }
   box(v, [2, 0, -1], [4, 3, 1], 0x5a3e2a)
-  box(v, [1, 4, -1], [5, 4, 1], 0x3a3a40)
-  box(v, [2, 5, -1], [4, 6, 1], 0x4a4a52)
-  box(v, [5, 6, 0], [6, 6, 0], 0x4a4a52)
+  box(v, [1, 4, -1], [5, 4, 1], metal(0x3a3a40))
+  box(v, [2, 5, -1], [4, 6, 1], metal(0x4a4a52))
+  box(v, [5, 6, 0], [6, 6, 0], metal(0x4a4a52))
   box(v, [2, 7, 1], [5, 7, 1], TIMBER)
-  box(v, [2, 7, 0], [2, 8, 1], 0x5a5a62)
+  box(v, [2, 7, 0], [2, 8, 1], metal(0x5a5a62))
   return { vox: v, size: 0.25 }
 }
 
@@ -202,11 +202,11 @@ let bench = (): Model => {
   }
   box(v, [-5, 1, -2], [5, 1, 2], 0x8a6240)
   box(v, [-6, 4, -2], [6, 4, 2], 0xb08a5a)
-  box(v, [5, 5, -1], [6, 6, 1], 0x4a4a52)
+  box(v, [5, 5, -1], [6, 6, 1], metal(0x4a4a52))
   box(v, [-4, 5, -1], [2, 5, 0], 0xe8c890)
   v.set(key(-1, 6, 0), 0x6e4a31)
-  box(v, [-2, 6, -1], [0, 6, -1], 0x9aa2aa)
-  box(v, [3, 5, 1], [4, 5, 2], 0xc8ccd0)
+  box(v, [-2, 6, -1], [0, 6, -1], metal(0x9aa2aa))
+  box(v, [3, 5, 1], [4, 5, 2], metal(0xc8ccd0))
   v.set(key(4, 5, 2), 0x6e4a31)
   for (let [x, z] of [[-3, 3], [0, 3], [2, -3], [-6, 3]]) {
     v.set(key(x, 0, z), 0xe8d0a0)

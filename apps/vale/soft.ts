@@ -9,6 +9,15 @@
 //   Voxels on merged faces. A pixel is tinted by the voxel cell it falls in,
 //   so a large flat quad of ground still shows its voxels.
 //
+//   Metal. A face made of metal (mesh.ts `METAL`) shows less of its own
+//   colour lit and more of what it mirrors: the sky above its horizon and the
+//   ground below it, as the scene's hemisphere light colours them, whiter
+//   toward a grazing edge; and each light that reaches it, the sun and the
+//   fire, is a tight bright highlight on it that slides as it turns. Both
+//   take the metal's own colour, so a tinted metal shines its tint, and both
+//   follow the day's light as world.ts moves it. A few sums a pixel, and none
+//   for anything matte.
+//
 //   A flash. A creature or a player glows for a moment when struck.
 //
 //   A line of sight. The ground and what stands on it thin away where they come
@@ -49,11 +58,13 @@ varying vec3 vTu;
 varying vec3 vTv;
 varying vec3 vCell;
 varying vec3 vAt;
+varying float vMaterial;
 `
 
 let VERTEX = /* glsl */ `
 vAt = (modelMatrix * vec4(transformed, 1.)).xyz;
 vFace = edge.xy;
+vMaterial = edge.w;
 vRim = mod(floor(edge.z / vec4(1., 2., 4., 8.)), 2.);
 vBw = bw.xy;
 // The face's own axes, from its normal as it was meshed, turned as the mesh
@@ -85,6 +96,7 @@ varying vec3 vTu;
 varying vec3 vTv;
 varying vec3 vCell;
 varying vec3 vAt;
+varying float vMaterial;
 uniform vec3 seeFrom;
 uniform vec3 seeTo;
 float edge(float flag, float d, float w) {
@@ -131,6 +143,53 @@ diffuseColor.rgb = mix(diffuseColor.rgb, flash, flashing);
 
 let NORMAL = /* glsl */ `
 normal = normalize(normal + (vTu * (r1 - r0) + vTv * (r3 - r2)) * .95);
+`
+
+// Each light as Lambert has it, and on metal its highlight too: a tight core
+// going white in a wider glow of the metal's colour.
+let LIGHT = /* glsl */ `
+bool metal() { return vMaterial > .5 && vMaterial < 1.5; }
+void RE_Direct_Soft(
+  const in IncidentLight light,
+  const in vec3 at,
+  const in vec3 n,
+  const in vec3 view,
+  const in vec3 coat,
+  const in LambertMaterial material,
+  inout ReflectedLight reflected
+) {
+  RE_Direct_Lambert(light, at, n, view, coat, material, reflected);
+  if (!metal()) return;
+  float nh = saturate(dot(n, normalize(light.direction + view)));
+  float nl = saturate(dot(n, light.direction));
+  vec3 glint = mix(material.diffuseColor, vec3(1.), .6) * pow(nh, 90.) * 4.
+    + material.diffuseColor * pow(nh, 12.) * .5;
+  reflected.directSpecular += light.color * nl * glint;
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Soft
+`
+
+// What metal mirrors, and its highlights, over a little of its own light: the
+// sky down to a crisp horizon, paler low and deeper overhead, and the ground
+// dark and grey under it.
+let MIRROR = /* glsl */ `
+if (metal()) {
+  vec3 seen = reflect(-geometryViewDir, geometryNormal);
+  float grazing = pow(1. - saturate(dot(geometryNormal, geometryViewDir)), 4.);
+  vec3 around = vec3(0.);
+  #if NUM_HEMI_LIGHTS > 0
+    HemisphereLight hemi = hemisphereLights[0];
+    float up = dot(seen, hemi.direction);
+    vec3 low = hemi.skyColor * 1.1, high = hemi.skyColor * hemi.skyColor;
+    vec3 earth = hemi.groundColor;
+    earth = mix(vec3(dot(earth, vec3(.3, .6, .1))), earth, .4) * .5;
+    around = mix(earth, mix(low, high, saturate(up)), smoothstep(-.03, .03, up));
+  #endif
+  outgoingLight = outgoingLight * .35
+    + around * mix(diffuseColor.rgb, vec3(1.), grazing) * .7
+    + reflectedLight.directSpecular;
+}
 `
 
 /** A soft material: `speckle` is how much each voxel's shade wobbles, and a
@@ -180,6 +239,14 @@ export let soft = (
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>\n${NORMAL}`,
+      )
+      .replace(
+        '#include <lights_lambert_pars_fragment>',
+        `#include <lights_lambert_pars_fragment>\n${LIGHT}`,
+      )
+      .replace(
+        '#include <envmap_fragment>',
+        `#include <envmap_fragment>\n${MIRROR}`,
       )
   }
   m.customProgramCacheKey = () => opts.see ? 'soft-see' : 'soft'

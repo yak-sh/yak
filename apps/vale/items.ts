@@ -6,10 +6,11 @@
 // gathers is a row of materials.ts, both listed here too.
 import { ARMS, type Slot, wield } from './arms.ts'
 import { MATERIALS } from './materials.ts'
+import { cuboid, type Out, out, type Vec } from './mesh.ts'
 
-type Vec = [number, number, number]
-/** One box of a model: its low corner, its size, and its colour. */
-export type Box = [Vec, Vec, number]
+/** One box of a model: its low corner, its size, its colour, and how wide
+ * the rounding of its edges is, when not a small thing's usual. */
+export type Box = [Vec, Vec, number, number?]
 
 export type Thing = {
   name: string
@@ -397,4 +398,36 @@ export let ITEMS: Record<string, Thing> = {
   },
   ...ARMS,
   ...MATERIALS,
+}
+
+/** A look as triangles to draw (mesh.ts), in voxels 5 cm across, each box as
+ * soft at its edges as a small thing is unless it says: what lies on the
+ * ground (cast.ts) and what flies to a hero (nodes.ts). */
+export let meshed = (look: Box[]): Out => {
+  let o = out()
+  for (let [min, size, hex, round = 0.02] of look) {
+    cuboid(o, min, size, hex, 0.05, round)
+  }
+  return o
+}
+
+/** How much larger than itself a thing lying on the ground is drawn: a small
+ * thing, a coin or a jelly, grown so it is seen from where the camera looks,
+ * and arms at their own size, the size they are in a hero's hand.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(onGround(ITEMS.jelly.look) > 1, true)
+ * assertEquals([onGround(ITEMS.sword1.look), onGround(ITEMS.staff3.look)], [
+ *   1,
+ *   1,
+ * ])
+ * ```
+ */
+export let onGround = (look: Box[]) => {
+  let span = [0, 1, 2].map((a) =>
+    Math.max(...look.map(([min, size]) => min[a] + size[a])) -
+    Math.min(...look.map(([min]) => min[a]))
+  )
+  return Math.min(1.6, Math.max(1, 0.5 / Math.max(...span)))
 }

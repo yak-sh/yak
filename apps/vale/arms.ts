@@ -4,8 +4,9 @@
 // level does (`tierOf`): copper and ash about Mossvale, cinder and emberwood
 // out by the Maw. What a kind does comes from what it is (`HANDLES` for a
 // weapon, `WEIGHTS` for armour) scaled by its tier, and how it looks from a
-// few boxes in its tier's colours. items.ts lists them beside everything
-// else a hero carries; gear.ts says what a hero wears of them.
+// few boxes in its tier's colours, its metal shining (mesh.ts `metal`).
+// items.ts lists them beside everything else a hero carries; gear.ts says
+// what a hero wears of them.
 //
 // There is no class to pick. A weapon's family says how it handles: a sword
 // is quick and even, an axe sweeps wide, a hammer is slow and heavy in both
@@ -14,6 +15,7 @@
 // most of a bite and adds the most health, leather less but runs faster, and
 // cloth least but every blow lands harder.
 import type { Box, Thing } from './items.ts'
+import { metal } from './mesh.ts'
 
 export type Slot = 'main' | 'off' | 'head' | 'body' | 'feet' | 'trinket'
 
@@ -120,7 +122,7 @@ let LEATHER = ['Hide', 'Boarhide', 'Wolfhide', 'Drakehide', 'Wyrmhide']
 let CLOTH = ['Linen', 'Wool', 'Silk', 'Moonsilk', 'Emberweave']
 let LORE = ['Worn', 'Wise', 'Deep', 'Starlit', 'Burning']
 let C = {
-  metal: [0xc8804a, 0x9aa2aa, 0xdfe6ee, 0x9ad8ff, 0xff7a2a],
+  metal: [0xc8804a, 0x9aa2aa, 0xdfe6ee, 0x9ad8ff, 0xff7a2a].map(metal),
   wood: [0x9a7a52, 0x7a4a2a, 0x4a3a30, 0xcfe0e8, 0x3a2020],
   leather: [0xb8906a, 0x8a5a3a, 0x6a6a70, 0x3a6a5a, 0x7a2a20],
   cloth: [0xe8e0cc, 0x5a7ab8, 0xf4f2ec, 0x8a7ad8, 0xe8622a],
@@ -138,54 +140,67 @@ type Paint = {
   trim: number
 }
 
-// Each kind's look, lying on the ground, upright from its grip: the same
-// boxes a hero holds (figures.ts).
+// Each kind's look, upright from its foot: the same boxes a hero holds
+// (figures.ts), lying on the ground and in the bag. A weapon is sized for a
+// child's hand, as the vale's people are drawn (figures.ts `BUILDS`), and
+// swings its edge forward, toward −z; a box's fourth number is how round its
+// edges are, crisp for a blade.
 let LOOKS: Record<string, (p: Paint) => Box[]> = {
   sword: (p) => [
-    [[-0.025, 0, -0.025], [0.05, 0.12, 0.05], p.wood],
-    [[-0.1, 0.12, -0.03], [0.2, 0.04, 0.06], p.trim],
-    [[-0.03, 0.16, -0.01], [0.06, 0.42, 0.02], p.metal],
+    [[-0.04, 0, -0.04], [0.08, 0.05, 0.08], p.trim],
+    [[-0.027, 0.05, -0.027], [0.054, 0.15, 0.054], p.wood],
+    [[-0.15, 0.2, -0.04], [0.3, 0.05, 0.08], p.trim],
+    [[-0.05, 0.25, -0.015], [0.1, 0.53, 0.03], p.metal, 0.012],
+    [[-0.03, 0.78, -0.013], [0.06, 0.08, 0.026], p.metal, 0.012],
   ],
   axe: (p) => [
-    [[-0.025, 0, -0.025], [0.05, 0.56, 0.05], p.wood],
-    [[0.02, 0.36, -0.02], [0.17, 0.18, 0.04], p.metal],
+    [[-0.033, 0, -0.033], [0.066, 0.8, 0.066], p.wood],
+    [[-0.03, 0.52, -0.2], [0.06, 0.22, 0.17], p.metal],
+    [[-0.02, 0.46, -0.27], [0.04, 0.34, 0.07], p.metal, 0.012],
+    [[-0.035, 0.57, 0.03], [0.07, 0.12, 0.08], p.metal],
   ],
   hammer: (p) => [
-    [[-0.03, 0, -0.03], [0.06, 0.62, 0.06], p.wood],
-    [[-0.14, 0.54, -0.09], [0.28, 0.16, 0.18], p.metal],
+    [[-0.036, 0, -0.036], [0.072, 0.86, 0.072], p.wood],
+    [[-0.1, 0.7, -0.19], [0.2, 0.22, 0.38], p.metal],
+    [[-0.115, 0.685, -0.23], [0.23, 0.25, 0.06], p.metal],
+    [[-0.115, 0.685, 0.17], [0.23, 0.25, 0.06], p.metal],
   ],
   dagger: (p) => [
-    [[-0.02, 0, -0.02], [0.04, 0.08, 0.04], p.wood],
-    [[-0.06, 0.08, -0.02], [0.12, 0.03, 0.04], p.trim],
-    [[-0.02, 0.11, -0.008], [0.04, 0.2, 0.016], p.metal],
+    [[-0.032, 0, -0.032], [0.064, 0.04, 0.064], p.trim],
+    [[-0.023, 0.04, -0.023], [0.046, 0.11, 0.046], p.wood],
+    [[-0.11, 0.15, -0.03], [0.22, 0.045, 0.06], p.trim],
+    [[-0.04, 0.195, -0.013], [0.08, 0.24, 0.026], p.metal, 0.01],
+    [[-0.024, 0.435, -0.011], [0.048, 0.065, 0.022], p.metal, 0.01],
   ],
   bow: (p) => [
-    [[-0.035, 0.34, -0.035], [0.07, 0.16, 0.07], p.trim],
-    [[-0.03, 0.5, -0.07], [0.06, 0.2, 0.06], p.wood],
-    [[-0.03, 0.68, -0.16], [0.06, 0.18, 0.06], p.wood],
-    [[-0.03, 0.14, -0.07], [0.06, 0.2, 0.06], p.wood],
-    [[-0.03, 0, -0.16], [0.06, 0.18, 0.06], p.wood],
-    [[-0.008, 0.03, -0.17], [0.016, 0.78, 0.016], 0xf4f2ec],
+    [[-0.04, 0.38, -0.04], [0.08, 0.18, 0.08], p.trim],
+    [[-0.035, 0.56, -0.1], [0.07, 0.24, 0.07], p.wood],
+    [[-0.035, 0.78, -0.2], [0.07, 0.26, 0.07], p.wood],
+    [[-0.035, 0.18, -0.1], [0.07, 0.22, 0.07], p.wood],
+    [[-0.035, 0, -0.2], [0.07, 0.2, 0.07], p.wood],
+    [[-0.01, 0.03, -0.215], [0.02, 0.98, 0.02], 0xf4f2ec],
   ],
   staff: (p) => [
-    [[-0.03, 0, -0.03], [0.06, 1.0, 0.06], p.wood],
-    [[-0.07, 1.0, -0.07], [0.14, 0.14, 0.14], p.trim],
+    [[-0.037, 0, -0.037], [0.074, 1.3, 0.074], p.wood],
+    [[-0.055, 1.24, -0.055], [0.11, 0.06, 0.11], p.trim],
+    [[-0.085, 1.3, -0.085], [0.17, 0.17, 0.17], p.trim],
   ],
   shield: (p) => [
-    [[-0.2, 0, -0.03], [0.4, 0.46, 0.06], p.wood],
-    [[-0.22, 0.2, -0.04], [0.44, 0.06, 0.08], p.metal],
-    [[-0.06, 0.17, 0.03], [0.12, 0.12, 0.04], p.metal],
+    [[-0.25, 0, -0.03], [0.5, 0.58, 0.06], p.wood, 0.03],
+    [[-0.265, 0.54, -0.04], [0.53, 0.06, 0.08], p.metal],
+    [[-0.265, 0.26, -0.04], [0.53, 0.06, 0.08], p.metal],
+    [[-0.08, 0.21, 0.03], [0.16, 0.16, 0.05], p.metal],
   ],
   tome: (p) => [
-    [[-0.14, 0, -0.1], [0.28, 0.06, 0.2], p.leather],
-    [[-0.13, 0.06, -0.09], [0.26, 0.04, 0.18], 0xf4ecd8],
-    [[-0.03, 0.1, -0.1], [0.06, 0.01, 0.2], p.trim],
+    [[-0.16, 0, -0.12], [0.32, 0.07, 0.24], p.leather],
+    [[-0.15, 0.07, -0.11], [0.3, 0.045, 0.22], 0xf4ecd8],
+    [[-0.035, 0.115, -0.12], [0.07, 0.012, 0.24], p.trim],
   ],
   torch: (p) => [
-    [[-0.025, 0, -0.025], [0.05, 0.36, 0.05], p.wood],
-    [[-0.045, 0.32, -0.045], [0.09, 0.08, 0.09], p.cloth],
-    [[-0.05, 0.4, -0.05], [0.1, 0.1, 0.1], 0xff8a1a],
-    [[-0.03, 0.5, -0.03], [0.06, 0.08, 0.06], 0xffe060],
+    [[-0.03, 0, -0.03], [0.06, 0.48, 0.06], p.wood],
+    [[-0.055, 0.42, -0.055], [0.11, 0.1, 0.11], p.cloth],
+    [[-0.065, 0.52, -0.065], [0.13, 0.13, 0.13], 0xff8a1a],
+    [[-0.04, 0.65, -0.04], [0.08, 0.1, 0.08], 0xffe060],
   ],
   helm: (p) => [
     [[-0.14, 0, -0.14], [0.28, 0.2, 0.28], p.metal],

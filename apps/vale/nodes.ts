@@ -16,7 +16,7 @@ import type { bits, overlay } from './fx.ts'
 import { STATIONS } from './craft.ts'
 import { chipOf, GATHER, type Look } from './gather.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
-import { ITEMS } from './items.ts'
+import { ITEMS, meshed } from './items.ts'
 import {
   ball,
   blob,
@@ -273,13 +273,7 @@ export let nodes = (
   // What an item looks like, as loot does (cast.ts).
   let thing = (kind: string) =>
     new THREE.Mesh(
-      geo(`item:${kind}`, () => {
-        let o = out()
-        for (let [min, size, hex] of ITEMS[kind]?.look ?? []) {
-          cuboid(o, min, size, hex, 0.05, 0.02)
-        }
-        return o
-      }),
+      geo(`item:${kind}`, () => meshed(ITEMS[kind]?.look ?? [])),
       mat,
     )
 

@@ -9,7 +9,8 @@
 // A vertex is written as narrow as the GPU will take it, 36 bytes, since a
 // level is millions of them and a phone holds them all: every attribute is 4
 // bytes a vertex or a multiple, the one stride Metal (Safari's WebGL) takes
-// without converting.
+// without converting. What a face is made of, matte or metal, rides in the
+// last byte of its `edge`, so saying it costs no byte more (`METAL`).
 //
 // `blob` meshes a small voxel model: a tree, a rock, a house. Faces alike in
 // colour, rounding and shade merge into larger quads; the shader still tints
@@ -20,9 +21,10 @@ export type Vec = [number, number, number]
 
 /** The triangles being written, a vertex at a time: where it is (3 numbers,
  * metres); which way its face looks (4: the normal and a 0); its colour (4:
- * sRGB bytes and 255); where on its face it sits and which of the face's edges
- * are rounded (4: u and v, 0 or 1, the edge flags as bits, and a 0); and the
- * rounding's widths across the face and the voxel edge (3). */
+ * sRGB bytes and 255); where on its face it sits, which of the face's edges
+ * are rounded and what it is made of (4: u and v, 0 or 1, the edge flags as
+ * bits, and its material); and the rounding's widths across the face and the
+ * voxel edge (3). */
 export type Out = {
   pos: number[]
   nrm: number[]
@@ -98,6 +100,31 @@ export let pack = (o: Out): Packed => ({
 export let buffers = (p: Packed): ArrayBuffer[] =>
   [p.pos, p.nrm, p.col, p.edge, p.bw, p.idx].map((a) => a.buffer)
 
+/** What a face is made of, besides its colour: matte, the soft look of
+ * everything in the vale, or metal, which mirrors the sky and catches the sun
+ * (soft.ts). A colour carries its material in the byte above its 24 bits of
+ * sRGB, so a model says what each box or voxel is made of where it says its
+ * colour; the byte has room for more materials than these. */
+export let MATTE = 0
+export let METAL = 1
+
+/** A colour, in metal.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals([materialOf(metal(0x9aa2aa)), materialOf(0x9aa2aa)], [
+ *   METAL,
+ *   MATTE,
+ * ])
+ * // the colour itself is the same
+ * assertEquals(rgb(metal(0x9aa2aa)), rgb(0x9aa2aa))
+ * ```
+ */
+export let metal = (hex: number) => hex % 0x1000000 + METAL * 0x1000000
+
+/** What a colour is made of: `MATTE` or `METAL`. */
+export let materialOf = (hex: number) => Math.floor(hex / 0x1000000)
+
 /** A face's two in-plane axes, by the axis its normal lies on: x → (z, y),
  * y → (x, z), z → (x, y). soft.ts derives the same pair from the normal. */
 export let axes = (axis: number): [number, number] =>
@@ -128,9 +155,9 @@ let WINDING = [0, 1, 2].map((axis) => {
  * axes (in metres), `sign` which way along `axis` it faces. `c` holds a colour
  * per corner (r, g, b, in corner order: at, +u, +u+v, +v). `rim` flags its
  * edges (−u, +u, −v, +v) for rounding, `round` is the rounding's width in
- * metres, `ao` darkens the corners (0 dark to 3 open), and `cell` is the edge
- * of the voxels it is made of. The diagonal is flipped where that keeps the
- * darkening smooth.
+ * metres, `ao` darkens the corners (0 dark to 3 open), `cell` is the edge of
+ * the voxels it is made of, and `material` what they are made of (`METAL`).
+ * The diagonal is flipped where that keeps the darkening smooth.
  */
 export let quad = (
   o: Out,
@@ -144,6 +171,7 @@ export let quad = (
   round: number,
   ao: [number, number, number, number] = [3, 3, 3, 3],
   cell = 0.5,
+  material = MATTE,
 ) => {
   let [ua, va] = axes(axis)
   let base = o.pos.length / 3
@@ -168,7 +196,7 @@ export let quad = (
       srgb(c[i * 3 + 2] * shade),
       255,
     )
-    o.edge.push(cu, cv, flags, 0)
+    o.edge.push(cu, cv, flags, material)
     o.bw.push(bu, bv, cell)
   }
   let flip = ao[0] + ao[2] < ao[1] + ao[3]
@@ -202,8 +230,16 @@ export let rgb = (hex: number): Vec => [
 ]
 
 /** A box, soft on every edge: `min` its lowest corner and `size` its extent,
- * in metres, drawn as if built of voxels `cell` across. The part a figure is
- * made of (figures.ts). */
+ * in metres, drawn as if built of voxels `cell` across, of whatever its colour
+ * says it is made of. The part a figure is made of (figures.ts).
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let blade = cuboid(out(), [0, 0, 0], [1, 1, 1], metal(0xdfe6ee))
+ * // each vertex's edge ends in what it is made of
+ * assertEquals(blade.edge[3], METAL)
+ * ```
+ */
 export let cuboid = (
   o: Out,
   min: Vec,
@@ -231,13 +267,15 @@ export let cuboid = (
         round,
         undefined,
         cell,
+        materialOf(hex),
       )
     }
   }
   return o
 }
 
-/** A small voxel model: voxel coordinates, packed, to a colour. */
+/** A small voxel model: voxel coordinates, packed, to a colour, and what the
+ * voxel is made of (`metal`). */
 export type Vox = Map<number, number>
 
 let B = 512
@@ -420,6 +458,7 @@ export let blob = (
           size * round,
           [r.ao & 3, (r.ao >> 2) & 3, (r.ao >> 4) & 3, (r.ao >> 6) & 3],
           size,
+          materialOf(r.color),
         )
       }
     }

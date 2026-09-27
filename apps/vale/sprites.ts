@@ -1,17 +1,18 @@
 // Each thing a hero carries, drawn as a small picture from its own boxes
 // (items.ts `look`), as the world draws it: seen from above and in front, its
-// top lit, its sides in shade, and a dark line round it. A long thing, a
-// sword or a staff, lies corner to corner. Each is drawn the first time it is
+// top lit, its sides in shade, metal shining across each face, and a dark
+// line round it. A long thing, a sword or a staff, lies corner to corner. Each is drawn the first time it is
 // asked for and kept, so the pack, the crafting and the toasts show what the
 // hero holds.
 import { type Box, ITEMS } from './items.ts'
+import { materialOf, METAL } from './mesh.ts'
 
 type P = [number, number]
 type Vec = [number, number, number]
 
-/** One face of a box as the picture shows it: its corners, in pixels, and
- * its colour. */
-export type Face = { at: P[]; rgb: number }
+/** One face of a box as the picture shows it: its corners, in pixels, its
+ * colour, and whether it is metal, drawn bright to dark across it. */
+export type Face = { at: P[]; rgb: number; metal: boolean }
 
 // How much light each face a picture shows gets: the top, the side to the
 // left, the side to the right.
@@ -34,6 +35,7 @@ let sides = ([[x, y, z], [w, h, d], rgb]: Box): Face[] => {
   let face = (k: number, ...at: Vec[]) => ({
     at: at.map(flat),
     rgb: shade(rgb, k),
+    metal: materialOf(rgb) == METAL,
   })
   return [
     face(LEFT, [x, y, Z], [X, y, Z], [X, Y, Z], [x, Y, Z]),
@@ -51,6 +53,7 @@ let far = ([[x, y, z], [w, h, d]]: Box) => x + w / 2 + y + h / 2 + z + d / 2
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { metal } from './mesh.ts'
  * let cube = faces([[[0, 0, 0], [1, 1, 1], 0x808080]], 64, 4)
  * // its left side, its right side and its top, the top lightest
  * assertEquals(cube.map((f) => f.rgb), [0x666666, 0x4f4f4f, 0x8a8a8a])
@@ -60,6 +63,9 @@ let far = ([[x, y, z], [w, h, d]]: Box) => x + w / 2 + y + h / 2 + z + d / 2
  * let pole = faces([[[0, 0, 0], [0.1, 2, 0.1], 0x808080]], 64, 4)
  * let foot = pole[0].at[0]
  * assertEquals(foot[0] < 32 && foot[1] > 32, true)
+ * // a blade's faces are metal, and shine
+ * let blade = faces([[[0, 0, 0], [0.1, 1, 0.02], metal(0xdfe6ee)]], 64, 4)
+ * assertEquals(blade.map((f) => f.metal), [true, true, true])
  * ```
  */
 export let faces = (look: Box[], size: number, pad: number): Face[] => {
@@ -120,11 +126,20 @@ export let sprite = (kind: string): string => {
       g.fill()
       g.stroke()
     }
-    // The faces, each edged in its own colour so no seam shows between.
+    // The faces, each edged in its own colour so no seam shows between; a
+    // metal one bright at one corner and dark at the far one.
     g.lineWidth = 0.8
     for (let f of fs) {
       path(f)
-      g.fillStyle = g.strokeStyle = hex(f.rgb)
+      let [[x0, y0], , [x1, y1]] = f.at
+      let paint: string | CanvasGradient = hex(f.rgb)
+      if (f.metal) {
+        paint = g.createLinearGradient(x0, y0, x1, y1)
+        paint.addColorStop(0, hex(shade(f.rgb, 1.35)))
+        paint.addColorStop(0.45, hex(f.rgb))
+        paint.addColorStop(1, hex(shade(f.rgb, 0.7)))
+      }
+      g.fillStyle = g.strokeStyle = paint
       g.fill()
       g.stroke()
     }

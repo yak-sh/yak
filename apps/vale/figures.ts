@@ -96,17 +96,34 @@ let toward = (o: THREE.Object3D, x: number, k: number) =>
 /** What a hero wears: the kind of item in each slot (play.ts `gear`). */
 export type Dress = Record<string, string | undefined>
 
-// A thing held, from its look (items.ts), which stands upright on its grip:
-// hung from the hand for what is swung, or stood on the hand, `at` metres up
-// it, for what is held upright.
-let grip = (kind: string, at: number | 'hung'): Box[] =>
-  (ITEMS[kind]?.look ?? []).map(([[x, y, z], [w, h, d], c]) =>
-    at == 'hung' ? [[x, 0.07 - y - h, z], [w, h, d], c] : [[x, y - at, z], [
-      w,
-      h,
-      d,
-    ], c]
-  )
+// Where a hand closes on each family of thing, in metres up its look from its
+// foot (arms.ts), and how it is held: hung from the hand, its foot toward the
+// elbow, for what is swung; stood upright on it for the rest, `out` before
+// the hand for what is held up before them.
+let HOLDS: Record<string, { at: number; hung?: true; out?: number }> = {
+  sword: { at: 0.12, hung: true },
+  axe: { at: 0.1, hung: true },
+  hammer: { at: 0.1, hung: true },
+  dagger: { at: 0.09, hung: true },
+  bow: { at: 0.45 },
+  staff: { at: 0.4 },
+  shield: { at: 0.29, out: 0.1 },
+  torch: { at: 0.06 },
+  tome: { at: 0.03, out: 0.08 },
+}
+
+// A thing held, from its look (items.ts), in the hand's space, `k` times the
+// size it is in a child's hand.
+let grip = (kind: string, k: number): Box[] => {
+  let t = ITEMS[kind]
+  let h = HOLDS[t?.family ?? ''] ?? { at: 0 }
+  return (t?.look ?? []).map(([[x, y, z], [w, tall, d], c, round = 0.02]) => [
+    [x * k, (h.hung ? h.at - y - tall : y - h.at) * k, (z + (h.out ?? 0)) * k],
+    [w * k, tall * k, d * k],
+    c,
+    round * k,
+  ])
+}
 
 // The colour of the `i`th box of a kind's look: its tier's metal, leather or
 // cloth.
@@ -173,6 +190,8 @@ export type Build = {
   hand: number
   /** the head's width, height and depth */
   head: Vec
+  /** how much larger than in a child's hand what they hold is drawn */
+  held: number
 }
 
 /** How the people of the vale are built: like children, the way they are in
@@ -190,6 +209,7 @@ export let BUILDS: Record<string, Build> = {
     sleeve: 0.14,
     hand: 0.17,
     head: [0.44, 0.4, 0.4],
+    held: 1,
   },
   grown: {
     hips: 0.8,
@@ -202,6 +222,7 @@ export let BUILDS: Record<string, Build> = {
     sleeve: 0.18,
     hand: 0.16,
     head: [0.38, 0.38, 0.36],
+    held: 1.2,
   },
 }
 
@@ -316,52 +337,25 @@ export let person = (
   // is held in the left.
   let family = dress ? ITEMS[worn('main')]?.family ?? 'fists' : 'sword'
   let upright = staff || family == 'staff' || family == 'bow'
-  let held = !dress
-    ? partOf(
-      staff
-        ? [
-          [
-            [-0.035, -reach, -0.035],
-            [0.07, reach + tip, 0.07],
-            0x6a4a30,
-          ],
-          [[-0.07, tip, -0.07], [0.14, 0.12, 0.14], 0x8fd46a],
-        ]
-        : [
-          [[-0.025, -0.07, -0.025], [0.05, 0.14, 0.05], 0x6a4a30],
-          [[-0.1, -0.11, -0.035], [0.2, 0.04, 0.07], 0xe2b64c],
-          [[-0.03, -0.5, -0.01], [0.06, 0.4, 0.02], 0xdfe6ee],
+  let held = partOf(
+    staff
+      ? [
+        [
+          [-0.035, -reach, -0.035],
+          [0.07, reach + tip, 0.07],
+          0x6a4a30,
         ],
-      fist,
-      0.05,
-    )
-    : partOf(
-      grip(
-        worn('main'),
-        family == 'staff' ? 0.4 : family == 'bow' ? 0.42 : 'hung',
-      ),
-      fist,
-      0.05,
-    )
+        [[-0.07, tip, -0.07], [0.14, 0.12, 0.14], 0x8fd46a],
+      ]
+      : grip(dress ? worn('main') : 'sword2', b.held),
+    fist,
+    0.05,
+  )
   foreR.add(held)
   let off = worn('off'), side = ITEMS[off]?.family
   // A blade in the left hand too is held as the right holds its own.
   let twin = ITEMS[off]?.slot == 'main'
-  let other = partOf(
-    twin ? grip(off, 'hung') : side == 'shield'
-      ? grip(off, 0.23).map((
-        [[x, y, z], size, c],
-      ) => [[x, y, z + 0.1], size, c])
-      : side == 'torch'
-      ? grip(off, 0.06)
-      : side == 'tome'
-      ? grip(off, 0.03).map((
-        [[x, y, z], size, c],
-      ) => [[x, y, z + 0.08], size, c])
-      : [],
-    fist,
-    0.05,
-  )
+  let other = partOf(grip(off, b.held), fist, 0.05)
   foreL.add(other)
   let head = partOf(
     fit([
@@ -392,7 +386,7 @@ export let person = (
   // turned upright, a staff or a bow, or out before them, a blade; the left
   // holds its torch upright, and a second blade out before them too.
   let rest = -0.5
-  let hold = upright ? -rest : -0.6
+  let hold = upright ? -rest : -0.8
   other.rotation.x = twin ? hold : side == 'torch' ? 0.3 : 0
   // A blow, `w` of the way through it, struck with `hand`: the weapon's own.
   let swing = (w: number, hand: Hand = 'main') => {

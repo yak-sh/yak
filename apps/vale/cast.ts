@@ -27,9 +27,9 @@ import {
 import type { overlay } from './fx.ts'
 import { type Gaze, gaze, neck } from './gaze.ts'
 import { type Hand, handOf, kitOf } from './gear.ts'
-import { ITEMS } from './items.ts'
+import { ITEMS, meshed, onGround } from './items.ts'
 import { LEVELS } from './levels.ts'
-import { cuboid, out, pack } from './mesh.ts'
+import { pack } from './mesh.ts'
 import type { Drop, Frame } from './play.ts'
 import { GRADES, type Rarity } from './rarity.ts'
 import { geometry, soft } from './soft.ts'
@@ -583,16 +583,14 @@ export let cast = (
         lying.add(d.eid)
         let mesh = loot.get(d.eid)
         if (!mesh) {
+          let look = (ITEMS[d.kind] ?? ITEMS.coin).look
           let g = lootGeo.get(d.kind)
           if (!g) {
-            let o = out()
-            for (let [min, size, hex] of (ITEMS[d.kind] ?? ITEMS.coin).look) {
-              cuboid(o, min, size, hex, 0.05, 0.02)
-            }
-            g = geometry(pack(o))
+            g = geometry(pack(meshed(look)))
             lootGeo.set(d.kind, g)
           }
           mesh = new THREE.Mesh(g, lootMat)
+          mesh.scale.setScalar(onGround(look))
           mesh.castShadow = true
           scene.add(mesh)
           loot.set(d.eid, mesh)
@@ -600,7 +598,6 @@ export let cast = (
         let bob = Math.sin(t * 3 + d.at) * 0.08
         mesh.position.set(d.x, d.y + 0.25 + bob, d.z)
         mesh.rotation.y = t * 1.8 + d.at
-        mesh.scale.setScalar(1.6)
         let g = lit(d)
         g?.position.set(d.x, d.y, d.z)
         g?.scale.set(1 + Math.sin(t * 4 + d.at) * 0.15, 1, 1)
