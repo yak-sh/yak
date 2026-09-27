@@ -286,8 +286,9 @@ let begin = async (eid: string, stored: Seen | null = null) => {
     glass.hidden = false
     canvas.focus()
   } catch (e) {
-    starting = false
     reportError(e)
+  } finally {
+    starting = false
   }
 }
 
@@ -733,7 +734,7 @@ let EASE = [
 ]
 let paced = { t: 0, n: 0, eased: 0 }
 let keepUp = (spent: number) => {
-  if (starting || playing) return
+  if (starting || !playing) return
   paced.t += spent
   paced.n++
   if (paced.t < 3) return
