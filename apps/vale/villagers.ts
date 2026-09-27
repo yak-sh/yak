@@ -22,6 +22,7 @@ import { ITEMS } from './items.ts'
 import { LEVELS, type Spot } from './levels.ts'
 import { type Giver, GIVERS, type Quest } from './quests.ts'
 import { hashOf, stream, uuidOf } from './rand.ts'
+import { originOf, spotOf } from './regions.ts'
 import {
   type Goods,
   most,
@@ -53,9 +54,9 @@ let STAY = 15 * 60_000
 /** A villager's row, by their giver id: the same on every page. */
 export let eidOf = (id: string): string => uuidOf(`villager/${id}`)
 
-/** Where a villager stands when they are at home. */
+/** Where a villager stands when they are at home, in world metres. */
 export let homeOf = (g: Giver): Spot => {
-  let [x, z] = LEVELS[g.level]?.places[g.place]?.at ?? [64, 64]
+  let [x, z] = spotOf(g.level, g.place) ?? originOf(g.level)
   return [x + g.offset[0], z + g.offset[1]]
 }
 

@@ -1,4 +1,4 @@
-// What drifts in a level's air (levels.ts `look.air`): snow, rain, ash, embers
+// What drifts in a region's air (levels.ts `look.air`): snow, rain, ash, embers
 // rising, sparks, spores, wisps, fireflies, midges, petals, reed down, dust,
 // heat off the sand, glints of salt, the shimmer off crystal. Each kind of air
 // is a row: what colour its bits are and whether they glow, how many a
@@ -202,33 +202,43 @@ export let AIRS: Record<string, Air> = {
   }),
 }
 
-/** A level's air over `scene`, if it has one: `tick` sends what drifts round
- * `at`. */
-export let airOf = (scene: THREE.Scene, name?: string) => {
-  let a = name ? AIRS[name] : undefined
-  if (!a) return { tick: (_at: THREE.Vector3, _dt: number) => {} }
-  let pool = bits(scene, !a.glow, Math.ceil(a.rate * a.life * 1.2))
+/** The air over `scene`: `tick` sends what drifts in the air named, if
+ * any, round `at`, and lets what drifts in any other it sent settle, so a
+ * hero walking from one region to the next sees the one air give way to the
+ * other. */
+export let airOf = (scene: THREE.Scene) => {
+  let blowing = new Map<
+    string,
+    { pool: ReturnType<typeof bits>; owed: number }
+  >()
   let p = new THREE.Vector3()
-  let owed = 0
   return {
-    tick: (at: THREE.Vector3, dt: number) => {
-      owed += a.rate * Math.min(dt, 0.1)
-      for (; owed >= 1; owed--) {
-        let r = a.spread * Math.sqrt(Math.random()), t = Math.random() * 7
-        p.set(
-          at.x + Math.cos(t) * r,
-          at.y + a.low + Math.random() * (a.high - a.low),
-          at.z + Math.sin(t) * r,
-        )
-        pool.emit(p, a.color, 1, {
-          speed: a.speed,
-          up: a.up,
-          fall: a.fall,
-          life: a.life,
-          size: a.size,
-        })
+    tick: (at: THREE.Vector3, dt: number, name?: string) => {
+      let a = name ? AIRS[name] : undefined
+      if (a && name && !blowing.has(name)) {
+        let pool = bits(scene, !a.glow, Math.ceil(a.rate * a.life * 1.2))
+        blowing.set(name, { pool, owed: 0 })
       }
-      pool.tick(dt)
+      for (let [n, b] of blowing) {
+        let air = AIRS[n]
+        if (n == name) b.owed += air.rate * Math.min(dt, 0.1)
+        for (; b.owed >= 1; b.owed--) {
+          let r = air.spread * Math.sqrt(Math.random()), t = Math.random() * 7
+          p.set(
+            at.x + Math.cos(t) * r,
+            at.y + air.low + Math.random() * (air.high - air.low),
+            at.z + Math.sin(t) * r,
+          )
+          b.pool.emit(p, air.color, 1, {
+            speed: air.speed,
+            up: air.up,
+            fall: air.fall,
+            life: air.life,
+            size: air.size,
+          })
+        }
+        b.pool.tick(dt)
+      }
     },
   }
 }

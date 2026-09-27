@@ -1,4 +1,4 @@
-/* The map (map.ts): the level's chart, as big as the panel has room for, and
+/* The map (map.ts): the region's chart, as big as the panel has room for, and
    who is where over it. A road's label sits inside the edge it leaves by. */
 .Map {
   position: relative;

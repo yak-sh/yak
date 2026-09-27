@@ -38,6 +38,7 @@ import { floorAt } from './sim.ts'
 import { geometry, soft } from './soft.ts'
 import { FLIGHT, LAND } from './strike.ts'
 import { groundAt, type Vale } from './terrain.ts'
+import { signsNear } from './ways.ts'
 
 type Look = { tint: string; hair: string; skin: string }
 
@@ -578,12 +579,12 @@ export let cast = (
         )
       }
 
-      // Each road's signpost, named for the way it goes and where it leads.
-      for (let r of v.roads) {
-        let [x, z] = r.sign
-        if (Math.hypot(x - f.body.x, z - f.body.z) > 30) continue
+      // Each signpost near, named for the way its road goes and where it
+      // leads.
+      for (let r of signsNear(f.body.x, f.body.z, 30)) {
+        let [x, z] = r.at
         plates.plate(
-          `road:${r.side}`,
+          `road:${r.level}:${r.to}`,
           at.set(x, groundAt(v, x, z) + 3.4, z),
           `${r.side[0].toUpperCase() + r.side.slice(1)} road to <b>${
             esc(LEVELS[r.to]?.name ?? r.to)

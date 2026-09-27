@@ -4,7 +4,7 @@
 // hero shows every quarter metre and the hills at the edge of the fog every
 // metre. Chunks further off than sight are let go. Plain numbers, so the page
 // asks it every frame (world.ts).
-import { CHUNK } from './ground.ts'
+import { CHUNK } from './terrain.ts'
 
 /** How near a chunk's nearest point must be, in metres, to be drawn at each
  * detail: the finest within the first ring, the next within the second, and

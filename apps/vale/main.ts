@@ -1,15 +1,14 @@
 // Mossvale, a little voxel RPG that whoever is here plays together. This is
-// the page: it grows the level the hero is in off its own thread (grown.ts)
-// while it opens the store and asks who you are and which of your heroes to
-// play, and then runs the frame: the player's hands (input.ts), a step of the
+// the page: it grows the ground round home's fire off its own thread
+// (grown.ts) while it opens the store and asks who you are and which of your
+// heroes to play, and then runs the frame: the player's hands (input.ts), a step of the
 // game on the graph (play.ts), the work at the nodes and the stations
 // (work.ts), the stage (cast.ts, nodes.ts), the bits and numbers (fx.ts), the
 // glass (hud.ts, and its action bar, bar.ts), what was said (chatbox.ts) and
 // the panels over it (map.ts, pack.ts, board.ts, journal.ts, station.ts,
-// menu.ts, and the deals with a villager, dealbox.ts). The world draws the
-// chunks within sight of the hero (world.ts), meshed in the workers as they
-// come near. When the hero walks off the end of a road, the page grows the
-// level beyond, draws the chunks where they come in, and carries on there. A
+// menu.ts, and the deals with a villager, dealbox.ts). The world is one
+// ground of many regions, and the page draws the chunks within sight of the
+// hero (world.ts), grown and meshed in the workers as they come near. A
 // hero comes back where they were last seen (seen.ts).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
@@ -27,7 +26,7 @@ import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
-import { ahead, grown, meshed } from './grown.ts'
+import { meshed } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
@@ -39,7 +38,7 @@ import type { Held } from './rules.ts'
 import { HOME, LEVELS, type Spot } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
-import { lastLevel, recall, type Seen, sighting } from './seen.ts'
+import { recall, type Seen, sighting } from './seen.ts'
 import { formOf, SKILLS } from './skills.ts'
 import { within } from './solid.ts'
 import { sound } from './sound.ts'
@@ -47,10 +46,18 @@ import { icon } from './sprites.ts'
 import { station } from './station.ts'
 import { voices } from './voicebox.ts'
 import { COARSER } from './stream.ts'
-import { groundAt, SIZE, type Vale, VOXEL } from './terrain.ts'
+import {
+  CHUNK,
+  groundAt,
+  hearthNear,
+  hearthOf,
+  vale,
+  VOXEL,
+} from './terrain.ts'
 import { TRADES } from './trades.ts'
 import { world } from './world.ts'
 import { village } from './village.ts'
+import { arriveOf } from './ways.ts'
 import { type Job, type Work, working } from './work.ts'
 
 let TINTS = [
@@ -85,18 +92,14 @@ let NAMES = [
   'Quill',
   'Hazel',
 ]
-// The voxel edge the vale is grown at, in metres: `?voxel=0.25` grows it
-// finer, to compare. Any edge that divides the vale's side will do.
+// The voxel edge the ground is grown at, in metres: `?voxel=0.125` grows it
+// finer, to compare. Any edge that divides a chunk's side will do.
 let asked = Number(new URLSearchParams(location.search).get('voxel'))
-let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(SIZE / asked)
+let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(CHUNK / asked)
   ? asked
   : VOXEL
-// The first level starts growing before anything else, in every worker, since
-// it takes longest: the one this tab's hero was last seen in, or Mossvale. It
-// is let go once drawn, so a level the hero has left is not kept.
-let START = lastLevel() ?? HOME
-ahead(START, VOX)
-let first: Promise<Vale> | null = grown(START, VOX)
+// The ground the page walks on, as the workers grow it and the page keeps it.
+let v = vale(VOX)
 
 let pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -180,22 +183,17 @@ let dealt = dealbox(h.panels.deal, (a, v) => {
   sound.quest()
 })
 
-// The level on show, and what is drawn of it: its chunks meshed in the
-// workers at the detail asked (stream.ts `COARSER`), and all of it grown
-// again when the hero goes off the end of a road, while the frame waits
-// (`away`).
-let shown = (v: Vale) => ({
+// What is drawn of the world: its chunks grown and meshed in the workers at
+// the detail asked (stream.ts `COARSER`).
+let w = world(
   v,
-  w: world(
-    v,
-    (ci, ck, lod) => meshed(v.level.id, VOX * COARSER[lod], ci, ck, lod == 0),
-  ),
-})
-let { v, w } = shown(await first)
-first = null
-// Where the page first looks, and a hero first stands: by the fire.
+  (ci, ck, lod) => meshed(VOX * COARSER[lod], ci, ck, lod == 0),
+)
+// Where the hearth is by which the page first looks, and a new hero first
+// stands: home's fire.
+let hearth = (): Spot => hearthOf(HOME) ?? arriveOf(HOME)
 {
-  let [x, z] = v.hearth ?? v.places[v.level.arrive] ?? [64, 64]
+  let [x, z] = hearth()
   w.focus.set(x, groundAt(v, x, z), z)
   await w.near()
 }
@@ -203,32 +201,7 @@ let stage = cast(w.scene, v, marks, BUILD)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
 let bounty = nodes(w.scene, marks, glow, phone)
-let smallShadows = phone
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
-let away = false
-// How near a road's end, in metres, the level beyond starts growing: some
-// seconds' run from it.
-let AHEAD = 24
-let grow = async (id: string) => {
-  away = true
-  let next = shown(await grown(id, VOX))
-  let at = g.landing(next.v)
-  next.w.focus.set(at.x, at.y, at.z)
-  await next.w.near()
-  bounty.dispose()
-  w.dispose()
-  ;({ v, w } = next)
-  away = false
-  if (smallShadows) w.sun.shadow.mapSize.set(1024, 1024)
-  if (!renderer.shadowMap.enabled) w.sun.castShadow = false
-  stage = cast(w.scene, v, marks, BUILD)
-  dust = bits(w.scene, true, 400)
-  glow = bits(w.scene, false, 300)
-  bounty = nodes(w.scene, marks, glow, phone)
-  // Arriving: the camera starts behind the hero, wherever they came in.
-  cam.x = NaN
-  cam.snap = true
-}
 
 // The camera (cam.ts), following the hero unless this viewer set it free.
 let freed = false
@@ -265,10 +238,6 @@ let settings = menu(h.panels.menu, {
   follow: () => hands.press('follow'),
 })
 
-// Where the hearth is, or the middle of a level without one: where the gate's
-// camera looks, and embers rise.
-let hearth = () => v.hearth ?? v.places[v.level.arrive] ?? [64, 64]
-
 // Who is playing: one of your heroes, or a new one made at the gate.
 let look = { name: '', tint: pick(TINTS), hair: pick(HAIRS), skin: pick(SKINS) }
 let playing = false
@@ -289,8 +258,6 @@ let begin = (eid: string, stored: Seen | null = null) => {
   net.choose(eid)
   let back = recall(eid, stored)
   if (back) g.resume(back)
-  let lv = back?.level ?? HOME
-  if (lv != v.level.id) grow(lv)
   if (preview) w.scene.remove(preview.root)
   preview = null
   playing = true
@@ -757,7 +724,6 @@ let EASE = [
   () => renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25)),
   () => renderer.setPixelRatio(1),
   () => {
-    smallShadows = true
     w.sun.shadow.mapSize.set(1024, 1024)
     w.sun.shadow.map?.dispose()
     w.sun.shadow.map = null
@@ -790,8 +756,7 @@ let loop = (t: number) => {
   then = t
   let now = net.now()
   w.tick(now / 1000, dt)
-  // While the level beyond a road grows, the one left behind stands still.
-  if (playing && net.hero && !away) {
+  if (playing && net.hero) {
     let i = hands.read()
     if (i.mic) void voice.toggle()
     if (h.talking) {
@@ -812,12 +777,7 @@ let loop = (t: number) => {
     }
     let f = g.frame(v, i, cam.yaw, dt)
     last = f
-    if (f && f.level != v.level.id) {
-      // Off the end of a road: the level beyond grows, and the next frame
-      // plays there.
-      for (let e of f.events) react(e, target)
-      grow(f.level)
-    } else if (f) {
+    if (f) {
       let player = comp(net.client.ent(net.hero), 'player')
       let dressed = {
         tint: str(player.tint, look.tint),
@@ -896,11 +856,9 @@ let loop = (t: number) => {
       let tasks = tasksOf(f.sheet, views)
       let way = guide(
         tasks,
-        f.level,
         Object.fromEntries(
           f.givers.map((n): [string, Spot] => [n.id, [n.x, n.z]]),
         ),
-        v.roads,
         [f.body.x, f.body.z],
       )
       h.show(f, here, clockOf(w.day), bearing(cam.yaw), tasks, way.aim)
@@ -929,7 +887,7 @@ let loop = (t: number) => {
         return false
       })
       h.work(f.talk ? null : job)
-      m.show(f, v, job.nodes, way.marks)
+      m.show(f, job.nodes, way.marks)
       p.show(f)
       skills.show(f)
       // Walked off from the station its sheet is open at: it folds away.
@@ -937,13 +895,8 @@ let loop = (t: number) => {
       bench.show(f.sheet, job)
       settings.show()
       w.focus.set(f.body.x, f.body.y, f.body.z)
-      // Near a road's end, the level beyond starts growing.
-      let road = v.roads.find((r) =>
-        Math.hypot(r.x - f.body.x, r.z - f.body.z) < AHEAD
-      )
-      if (road) ahead(road.to, VOX)
     }
-  } else if (!away) {
+  } else {
     // At the gate: the camera drifts around the fire, and the new hero stands
     // by it in the colours being chosen.
     let a = t / 9000
@@ -975,9 +928,10 @@ let loop = (t: number) => {
   w.see(camera.position, feet, stature(BUILD), dt)
   bounty.see(camera.position, feet, stature(BUILD))
   sound.listen(camera, v, playing ? last : null, net.hero, dt)
-  // Embers off the fire, and at night fireflies about the player.
-  if (v.hearth && Math.random() < 0.5) {
-    let [hx, hz] = v.hearth
+  // Embers off the fire near, and at night fireflies about the player.
+  let fire = hearthNear(target.x, target.z, 60)
+  if (fire && Math.random() < 0.5) {
+    let [hx, hz] = fire
     glow.emit(
       new THREE.Vector3(
         hx + (Math.random() - 0.5) * 0.8,

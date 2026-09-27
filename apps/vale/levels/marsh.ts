@@ -7,6 +7,7 @@ export let MARSH: Record<string, Row> = {
   reedmarsh: {
     name: 'Reedmarsh',
     seed: 29,
+    cell: [1, 0],
     arrive: 'stilts',
     places: {
       marsh: { kind: 'reedbed', at: [60, 64] },
@@ -30,6 +31,7 @@ export let MARSH: Record<string, Row> = {
   mirewood: {
     name: 'Mirewood',
     seed: 31,
+    cell: [1, 1],
     arrive: 'marsh',
     places: {
       marsh: { kind: 'mire', at: [60, 64] },
@@ -53,6 +55,7 @@ export let MARSH: Record<string, Row> = {
   fenhollow: {
     name: 'Fenhollow',
     seed: 37,
+    cell: [1, 2],
     arrive: 'marsh',
     places: {
       marsh: { kind: 'fen', at: [64, 64] },
@@ -81,6 +84,7 @@ export let MARSH: Record<string, Row> = {
   sunkenkirk: {
     name: 'Sunken Kirk',
     seed: 41,
+    cell: [1, 3],
     arrive: 'kirk',
     places: {
       marsh: { kind: 'marsh', at: [64, 66] },
@@ -91,7 +95,6 @@ export let MARSH: Record<string, Row> = {
     },
     roads: {
       north: 'fenhollow',
-      east: 'bogheart',
       west: 'oldwall',
     },
     look: {
@@ -111,6 +114,7 @@ export let MARSH: Record<string, Row> = {
   bogheart: {
     name: 'Bogheart',
     seed: 43,
+    cell: [-3, -1],
     arrive: 'marsh',
     places: {
       marsh: { kind: 'bog', at: [64, 64] },
@@ -120,7 +124,6 @@ export let MARSH: Record<string, Row> = {
     },
     roads: {
       east: 'sporefen',
-      west: 'sunkenkirk',
     },
     look: {
       ground: { grass: 0x7a8a3a, lush: 0x5a7a2a, dry: 0x8a7a4a, mud: 0x3a2e22 },
@@ -134,6 +137,7 @@ export let MARSH: Record<string, Row> = {
   sporefen: {
     name: 'Sporefen',
     seed: 101,
+    cell: [-2, -1],
     arrive: 'toadstools',
     places: {
       marsh: { kind: 'sporemarsh', at: [60, 80] },

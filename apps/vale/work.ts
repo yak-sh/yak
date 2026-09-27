@@ -1,4 +1,4 @@
-// A hero's work: at the nodes of the level they are in (gather.ts), and at a
+// A hero's work: at the nodes round them (gather.ts), and at a
 // village's stations, making things (craft.ts) or upgrading them
 // (upgrade.ts). This reads where the hero stands and what
 // they asked for: which node or station is near enough to work, the work
@@ -18,7 +18,7 @@ import {
   haulOf,
   type Lode,
   LODES,
-  nodesOf,
+  nodesNear,
 } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
@@ -26,7 +26,7 @@ import type { Frame, Vec3 } from './play.ts'
 import { made, type Rarity } from './rarity.ts'
 import { upgradeOf, upgradeWorth, upgradeXp } from './upgrade.ts'
 import { fallOf } from './rules.ts'
-import { groundAt, type Vale, WATER } from './terrain.ts'
+import { groundAt, stationsNear, type Vale, WATER } from './terrain.ts'
 import {
   ALL,
   type Craft,
@@ -127,6 +127,9 @@ let LANDS = 0.33
 let CAST = 520
 // A hero this far from where the work began, in metres, has walked off.
 let STRAY = 0.5
+// How far round the hero the nodes are seen, on the stage and the map, in
+// metres.
+let SEEN = 120
 
 let secs = (ms: number) => {
   let s = Math.ceil(ms / 1000)
@@ -345,7 +348,7 @@ export let working = (net: Net) => {
       }
       was = mine
       let rows = gatherings()
-      let nodes = nodesOf(v).map((n): Seen => {
+      let nodes = nodesNear(f.body.x, f.body.z, SEEN).map((n): Seen => {
         let lode = LODES[n.lode]
         let respawn = GATHER[lode.trade].respawn * 1000
         let fall = fallOf(rows.get(n.eid) ?? [], respawn / 1000, now)
@@ -364,12 +367,14 @@ export let working = (net: Net) => {
       let near = nodes
         .filter((n) => n.near <= GATHER[n.lode.trade].reach)
         .sort((a, b) => a.near - b.near)[0] ?? null
-      let bench = v.stations.flatMap((s): Bench[] => {
-        let d = Math.hypot(s.x - f.body.x, s.z - f.body.z)
-        return d <= STATIONS[s.craft].reach && Math.abs(s.y - f.body.y) < 2
-          ? [{ craft: s.craft, at: [s.x, s.y, s.z], near: d }]
-          : []
-      }).sort((a, b) => a.near - b.near)[0] ?? null
+      let bench = stationsNear(v, f.body.x, f.body.z, 12).flatMap(
+        (s): Bench[] => {
+          let d = Math.hypot(s.x - f.body.x, s.z - f.body.z)
+          return d <= STATIONS[s.craft].reach && Math.abs(s.y - f.body.y) < 2
+            ? [{ craft: s.craft, at: [s.x, s.y, s.z], near: d }]
+            : []
+        },
+      ).sort((a, b) => a.near - b.near)[0] ?? null
 
       // Work stops when the hero does something else, or the node is gone.
       if (job) {
@@ -377,7 +382,7 @@ export let working = (net: Net) => {
         let n = job.recipe ? null : nodes.find((n) => n.eid == eid)
         let strayed = Math.hypot(f.body.x - job.x, f.body.z - job.z) > STRAY
         let gone = !job.recipe && !n
-        if (gone || stop || f.down || strayed || f.level != v.level.id) {
+        if (gone || stop || f.down || strayed) {
           job = null
         } else if (n?.spent) {
           job = null

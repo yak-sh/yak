@@ -7,6 +7,7 @@ export let COAST: Record<string, Row> = {
   gullwick: {
     name: 'Gullwick',
     seed: 47,
+    cell: [-2, 0],
     arrive: 'harbour',
     places: {
       coast: { kind: 'bay', at: [66, 14] },
@@ -34,6 +35,7 @@ export let COAST: Record<string, Row> = {
   driftwood: {
     name: 'Driftwood Bay',
     seed: 61,
+    cell: [-3, 0],
     arrive: 'wharf',
     places: {
       coast: { kind: 'strand', at: [20, 64] },
@@ -63,6 +65,7 @@ export let COAST: Record<string, Row> = {
   saltreach: {
     name: 'Saltreach',
     seed: 53,
+    cell: [-2, 1],
     arrive: 'moor',
     places: {
       coast: { kind: 'tideline', at: [108, 76] },
@@ -94,6 +97,7 @@ export let COAST: Record<string, Row> = {
   shellstrand: {
     name: 'Shellstrand',
     seed: 59,
+    cell: [-2, 2],
     arrive: 'isles',
     places: {
       isles: { kind: 'shellisles', at: [64, 64] },
@@ -119,6 +123,7 @@ export let COAST: Record<string, Row> = {
   stormhead: {
     name: 'Stormhead',
     seed: 67,
+    cell: [-1, 2],
     arrive: 'moor',
     places: {
       coast: { kind: 'surf', at: [64, 18] },

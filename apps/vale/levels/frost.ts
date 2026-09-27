@@ -7,6 +7,7 @@ export let FROST: Record<string, Row> = {
   frostmoor: {
     name: 'Frostmoor',
     seed: 139,
+    cell: [3, -1],
     arrive: 'snow',
     places: {
       snow: { kind: 'snowmoor', at: [64, 64] },
@@ -36,6 +37,7 @@ export let FROST: Record<string, Row> = {
   rimeholt: {
     name: 'Rimeholt',
     seed: 149,
+    cell: [3, 0],
     arrive: 'holt',
     places: {
       snow: { kind: 'rimewood', at: [64, 64] },
@@ -59,6 +61,7 @@ export let FROST: Record<string, Row> = {
   frostpine: {
     name: 'Frostpine',
     seed: 151,
+    cell: [4, 0],
     arrive: 'snow',
     places: {
       snow: { kind: 'snowpines', at: [64, 64] },
@@ -81,6 +84,7 @@ export let FROST: Record<string, Row> = {
   icefall: {
     name: 'Icefall',
     seed: 157,
+    cell: [3, 1],
     arrive: 'snow',
     places: {
       snow: { kind: 'icefield', at: [64, 64] },
@@ -92,7 +96,6 @@ export let FROST: Record<string, Row> = {
     roads: {
       north: 'rimeholt',
       east: 'whitepeak',
-      west: 'shardvault',
     },
     wild: 'icefield',
     look: {
@@ -110,6 +113,7 @@ export let FROST: Record<string, Row> = {
   whitepeak: {
     name: 'Whitepeak',
     seed: 163,
+    cell: [4, 1],
     arrive: 'snow',
     places: {
       snow: { kind: 'highsnow', at: [64, 72] },

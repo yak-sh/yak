@@ -51,13 +51,13 @@ let ahead = (u: Use, m: number): [number, number] => [
 ]
 
 Deno.test('a wall stops a walker', () => {
-  let v = town(), b = v.buildings[0], [, n] = b.foot
+  let v = town(), b = v.buildings(64, 64, 0)[0], [, n] = b.foot
   let got = go(v, [b.x - 1.5, 5, n - 3], [b.x - 1.5, b.z])
   assert(got.z < n && got.z > n - 1, `stopped at ${got.z}`)
 })
 
 Deno.test('a door lets in whoever opens doors, and no creature', () => {
-  let v = town(), b = v.buildings[0], door = use(b, 'door')
+  let v = town(), b = v.buildings(64, 64, 0)[0], door = use(b, 'door')
   let hero = go(v, door.at, ahead(door, 3))
   assertEquals(within(v, hero.x, hero.y, hero.z), b)
   assertEquals(hero.y, b.floors[0])
@@ -66,13 +66,13 @@ Deno.test('a door lets in whoever opens doors, and no creature', () => {
 })
 
 Deno.test('stairs carry a walker to the floor above', () => {
-  let v = town(), b = v.buildings[0], up = use(b, 'up')
+  let v = town(), b = v.buildings(64, 64, 0)[0], up = use(b, 'up')
   let [x, z] = ahead(up, b.floors[1] - b.floors[0] + 1)
   assertEquals(go(v, up.at, [x, z]).y, b.floors[1])
 })
 
 Deno.test('a walker stands on the floor above the room below', () => {
-  let v = town(), b = v.buildings[0], down = use(b, 'down')
+  let v = town(), b = v.buildings(64, 64, 0)[0], down = use(b, 'down')
   let [x, , z] = down.at
   assertEquals(floorAt(v, x, z, b.floors[1]), b.floors[1])
   assertEquals(floorAt(v, x, z, b.floors[0]), b.floors[0])
@@ -86,7 +86,7 @@ let reach = (v: Vale, from: Vec) => {
   let key = (x: number, y: number, z: number) =>
     `${Math.round(x * 4)} ${Math.round(y * 4)} ${Math.round(z * 4)}`
   let seen = new Set([key(...from)]), todo: Vec[] = [from]
-  let [w, n, e, s] = v.buildings[0].box
+  let [w, n, e, s] = v.buildings(64, 64, 0)[0].box
   while (todo.length) {
     let [x, y, z] = todo.pop()!
     for (let [dx, dz] of [[0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]]) {
@@ -117,7 +117,7 @@ let ALL: [string, number][] = [
 
 Deno.test('every building can be walked into, up, and to all it has', () => {
   for (let [kind, turn] of ALL) {
-    let v = town(kind, turn), b = v.buildings[0]
+    let v = town(kind, turn), b = v.buildings(64, 64, 0)[0]
     let got = reach(v, use(b, 'door').at)
     for (let u of b.uses) {
       assert(got(u.at), `${kind} turned ${turn}: where to ${u.for} at ${u.at}`)

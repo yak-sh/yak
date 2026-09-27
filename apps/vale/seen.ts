@@ -1,14 +1,14 @@
-// Where a hero was last seen (`seen` in vocab.json): the level, the spot and
-// which way they faced. The next load brings them back there, and the
-// villagers of that level stay awake while somebody plays in it (villagers.ts
-// `born`).
+// Where a hero was last seen (`seen` in vocab.json): the region, the spot in
+// the world and which way they faced. The next load brings them back there,
+// and the villagers of that region stay awake while somebody plays in it
+// (villagers.ts `born`).
 //
 // The store keeps it on the hero's row, for a hero its person made, so they
 // come back to it on any device. A guest owns no row to write it on (a writer
 // signed out only adds rows), so their tab keeps it (sessionStorage), as the
 // tab keeps which hero it plays (net.ts). The tab keeps it for every hero, and
 // the newer of the two counts, so a reload comes back to the very spot. It is
-// written rarely: on arriving in a level, every half minute while the hero
+// written rarely: on coming into a region, every half minute while the hero
 // moves about, every two minutes while they stand (which keeps the villagers
 // awake), and as the page is hidden. Where a hero is this moment, ten times a
 // second, is `position`, which nobody keeps.
@@ -17,8 +17,8 @@ import { LEVELS } from './levels.ts'
 import type { Bundle, Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 
-/** Where a hero was last seen: the level, where in it in metres, which way
- * they faced in radians, and when, in ms. */
+/** Where a hero was last seen: the region, where in the world in metres,
+ * which way they faced in radians, and when, in ms. */
 export type Seen = {
   level: string
   x: number
@@ -35,7 +35,7 @@ let STILL = 2 * 60_000
 let MOVED = 1
 
 /** Whether where a hero is now is worth writing, after what was last
- * written: on arriving in a level, once they have moved about a while, and
+ * written: on coming into a region, once they have moved about a while, and
  * now and then while they stand.
  *
  * ```ts
@@ -114,9 +114,6 @@ let tab = {
     } catch { /* a tab that cannot keep it comes back where the store says */ }
   },
 }
-
-/** The level this tab's hero was last seen in, if it remembers one. */
-export let lastLevel = (): string | null => seenOf(tab.get())?.level ?? null
 
 /** Where `hero` was last seen: the newer of what this tab and the store
  * (`stored`) say. */

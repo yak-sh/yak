@@ -330,7 +330,7 @@ export let quests: Quest[] = [
     gift: 'draught',
     title: 'The bell rings',
     body:
-      'The bell rang, and the briar in the reeds drew back. But the mire lanterns gather to it like moths. Snuff four. Then take the road on to Bogheart: Granny Rush says the briar has a root there.',
+      'The bell rang, and the briar in the reeds drew back. But the mire lanterns gather to it like moths. Snuff four. Then go on to Bogheart, far off past Sporefen: Granny Rush says the briar has a root there.',
   },
   // Granny Rush, at the heart of the bog.
   {

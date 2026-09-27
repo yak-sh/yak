@@ -13,18 +13,11 @@
 // its node's trade, and a node of a higher tier asks a trade that high before
 // it can be worked.
 import { isA } from './features.ts'
-import { HOPS } from './levels.ts'
+import { HOPS, LEVELS } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
-import { wallsNear } from './sim.ts'
-import {
-  rise,
-  SHORE,
-  SIZE,
-  steep,
-  trodden,
-  type Vale,
-  WATER,
-} from './terrain.ts'
+import { nearby, originOf, regionOf } from './regions.ts'
+import { rise, SHORE, steep, vale, wallsNear, WATER } from './terrain.ts'
+import { trodden } from './ways.ts'
 import { type Gather, least } from './trades.ts'
 
 /** How each gathering trade works a node: what working one is called, how
@@ -440,67 +433,66 @@ export let LODES: Record<string, Lode> = {
 /** A node where it stands: its eid, its kind, and where, in metres. */
 export type Node = { eid: string; lode: string; x: number; z: number }
 
-// How far from a village's middle, and from where a road comes in, no node
-// grows, in metres.
+// How far from a village's middle no node grows, in metres.
 let HOMELY = 16
-let DOOR = 8
 // The directions a shoal looks for a bank to be fished from.
 let ROUND = Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2)
 
-let placed = new WeakMap<Vale, Node[]>()
+let placed = new Map<string, Node[]>()
 
 /** Every node a level grows, and where: for each kind that suits the level,
  * round each place of a kind it grows near, as many as its trade grows, on
  * ground they can stand on (a shoal on deep water a hero can reach from the
- * bank), nearer that place than any place of another kind, clear of trunks,
- * rocks, roads and lanes, the village and each other. Picked on the level's
- * smooth ground, and each named by where it stands.
+ * bank) in the level's region, nearer that place than any place of another
+ * kind, clear of trunks, rocks, roads and lanes, the village and each other.
+ * Picked on the smooth ground, and each named by where it stands.
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
- * import { vale } from './terrain.ts'
- * // The same nodes, by the same names, on a page growing any voxel size.
- * let at = (voxel: number) =>
- *   nodesOf(vale('mossvale', voxel)).map((n) => `${n.lode} ${n.eid}`)
- * assert(at(4).length > 0)
- * assertEquals(at(4), at(1))
+ * let nodes = nodesOf('mossvale')
+ * assert(nodes.length > 0)
+ * // The same nodes, by the same names, however often asked.
+ * assertEquals(nodesOf('mossvale'), nodes)
  * ```
  */
-export let nodesOf = (v: Vale): Node[] => {
-  let got = placed.get(v)
+export let nodesOf = (id: string): Node[] => {
+  let got = placed.get(id)
   if (got) return got
-  let lv = v.level, hops = HOPS[lv.id] ?? 0
-  let height = rise(lv)
-  let worn = trodden(lv)
-  let places = Object.entries(lv.places)
-  let homes = places.filter(([, p]) => isA(p.kind, 'village'))
+  let lv = LEVELS[id], hops = HOPS[id] ?? 0, v = vale()
+  let [ox, oz] = originOf(id)
+  let places = Object.entries(lv.places).map(([name, p]) => ({
+    name,
+    kind: p.kind,
+    at: [ox + p.at[0], oz + p.at[1]],
+  }))
+  let homes = places.filter((p) => isA(p.kind, 'village'))
   let out: Node[] = []
   let dry = (x: number, z: number) => {
-    let h = height(x, z)
-    return h > SHORE + 0.2 && h < 18 && steep(height, x, z) < 1 &&
-      !worn(x, z) &&
+    let h = rise(x, z)
+    return h > SHORE + 0.2 && h < 18 && steep(rise, x, z) < 1 &&
+      !trodden(x, z) &&
       !wallsNear(v, x, z).some((w) => Math.hypot(w.x - x, w.z - z) < w.r + 1.2)
   }
   // Deep enough that nobody stands in it, with a bank or shallows within
   // reach.
   let wet = (x: number, z: number) =>
-    height(x, z) < WATER - 0.9 &&
+    rise(x, z) < WATER - 0.9 &&
     ROUND.some((a) =>
-      height(x + Math.cos(a) * 2.6, z + Math.sin(a) * 2.6) > WATER - 0.5
+      rise(x + Math.cos(a) * 2.6, z + Math.sin(a) * 2.6) > WATER - 0.5
     )
   for (let [kind, lode] of Object.entries(LODES)) {
     if (hops < lode.hops[0] || hops > lode.hops[1]) continue
     let t = GATHER[lode.trade]
     let fits = lode.trade == 'fish' ? wet : dry
-    for (let [name, place] of places) {
+    for (let place of places) {
       if (!lode.near.some((near) => isA(place.kind, near))) continue
-      let key = `${lv.id}/${kind}/${name}`
+      let key = `${id}/${kind}/${place.name}`
       let salt = hashOf(key)
       let [px, pz] = place.at
       let own = (x: number, z: number) => {
         let d = Math.hypot(x - px, z - pz)
         return d <= t.within &&
-          places.every(([, p]) =>
+          places.every((p) =>
             p.kind == place.kind || Math.hypot(x - p.at[0], z - p.at[1]) > d
           )
       }
@@ -508,15 +500,9 @@ export let nodesOf = (v: Vale): Node[] => {
       for (let tries = 0; n < t.count && tries < 3000; tries++) {
         let x = px + (rand(tries, salt, 1) * 2 - 1) * t.within
         let z = pz + (rand(tries, salt, 2) * 2 - 1) * t.within
-        if (x < 6 || z < 6 || x > SIZE - 6 || z > SIZE - 6) continue
-        if (!own(x, z)) continue
+        if (!own(x, z) || regionOf(x, z) != id) continue
         if (
-          homes.some(([, h]) => Math.hypot(x - h.at[0], z - h.at[1]) < HOMELY)
-        ) {
-          continue
-        }
-        if (
-          v.roads.some((r) => Math.hypot(x - r.door[0], z - r.door[1]) < DOOR)
+          homes.some((h) => Math.hypot(x - h.at[0], z - h.at[1]) < HOMELY)
         ) {
           continue
         }
@@ -533,9 +519,20 @@ export let nodesOf = (v: Vale): Node[] => {
       }
     }
   }
-  placed.set(v, out)
+  placed.set(id, out)
   return out
 }
+
+// How far past its level's cell a node may grow, in metres: as far as a
+// region reaches past its cell.
+let PAST = 48
+
+let near = nearby(nodesOf)
+
+/** The nodes within `r` metres of (x, z), as far as they are found yet: the
+ * levels near are looked at one a call, nearest first. */
+export let nodesNear = (x: number, z: number, r: number): Node[] =>
+  near(x, z, r + PAST).filter((n) => Math.hypot(n.x - x, n.z - z) < r)
 
 /** What working a node of `tier` is worth to its trade. */
 export let gatherXp = (tier: number): number => 5 * tier

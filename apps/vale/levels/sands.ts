@@ -7,6 +7,7 @@ export let SANDS: Record<string, Row> = {
   dustmere: {
     name: 'Dustmere',
     seed: 109,
+    cell: [-3, 1],
     arrive: 'well',
     places: {
       dunes: { kind: 'dustpan', at: [64, 64] },
@@ -38,6 +39,7 @@ export let SANDS: Record<string, Row> = {
   palmwell: {
     name: 'Palmwell',
     seed: 113,
+    cell: [-4, 1],
     arrive: 'camp',
     places: {
       dunes: { kind: 'golddunes', at: [64, 64] },
@@ -65,6 +67,7 @@ export let SANDS: Record<string, Row> = {
   sunscar: {
     name: 'Sunscar Dunes',
     seed: 127,
+    cell: [-3, 2],
     arrive: 'dunes',
     places: {
       dunes: { kind: 'greatdunes', at: [64, 64] },
@@ -93,6 +96,7 @@ export let SANDS: Record<string, Row> = {
   redmesa: {
     name: 'Redmesa',
     seed: 131,
+    cell: [-4, 2],
     arrive: 'mesa',
     places: {
       dunes: { kind: 'dunes', at: [64, 100] },
@@ -126,6 +130,7 @@ export let SANDS: Record<string, Row> = {
   tombsands: {
     name: 'Tombsands',
     seed: 137,
+    cell: [-5, 2],
     arrive: 'tombs',
     places: {
       dunes: { kind: 'tombdunes', at: [64, 64] },

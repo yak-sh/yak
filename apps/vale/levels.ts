@@ -1,17 +1,19 @@
-// The levels: each a place of its own, grown from its seed and its places by
-// terrain.ts, so every page grows the same one and none of it is stored. A
-// place is a kind of ground (features.ts: a village, woods, a marsh,
-// dunes, a volcano, ruins, …) at a point; the creatures that live around each
-// kind come from beasts.ts, the people who stand at them from quests.ts. A
-// kind that spreads over a whole level (a marsh, a moor, dunes, snow, ash)
-// sets its mood, and the smaller places stand in it.
+// The levels: the lands of one world, each grown from its seed and its places
+// by terrain.ts, so every page grows the same one and none of it is stored.
+// Each lies in a cell of its own on a lattice of squares SIZE metres on a side
+// (regions.ts), Mossvale's at the origin, and holds the ground nearer its
+// places than any other level's: a region with a border as ragged as the
+// ground's (regions.ts). A place is a kind of ground (features.ts: a village,
+// woods, a marsh, dunes, a volcano, ruins, …) at a point; the creatures that
+// live around each kind come from beasts.ts, the people who stand at them
+// from quests.ts. A kind that spreads over a whole level (a marsh, a moor,
+// dunes, snow, ash) sets its mood, and the smaller places stand in it.
 //
-// Roads join levels. Each runs from where a hero arrives out to the middle of
-// one side of the level, and walking off the end of it comes in on the road
-// back, at the middle of the opposite side of the level beyond: the east road
-// leads to a level whose west road leads back. Every level is reached from
-// Mossvale, and the further from it, the wilder. A new level is a row in its
-// land's file under levels/.
+// Roads join levels next to each other: each runs from where a hero arrives in
+// the one to where they arrive in the other, and a level's road on a side
+// leads to the level in the cell that way. Every level is reached from
+// Mossvale, and the further from it by road, the wilder. A new level is a row
+// in its land's file under levels/.
 import type { Top } from './features.ts'
 import { COAST } from './levels/coast.ts'
 import { DEEP } from './levels/deep.ts'
@@ -22,9 +24,14 @@ import { MARSH } from './levels/marsh.ts'
 import { SANDS } from './levels/sands.ts'
 import { VALE } from './levels/vale.ts'
 
-/** A point on a level's ground, in metres `[east, south]` from its
- * north-west corner; a level is 128 m on a side (terrain.ts `SIZE`). */
+/** A point on the ground, in metres `[east, south]`: in a level's row, from
+ * the north-west corner of its cell, which is SIZE metres on a side;
+ * anywhere else, from the world's origin, the north-west corner of
+ * Mossvale's. */
 export type Spot = [number, number]
+
+/** A level's side, and its cell's, in metres. */
+export let SIZE = 128
 
 export type Place = { kind: string; at: Spot }
 
@@ -44,6 +51,8 @@ export type Level = {
   name: string
   /** what the noise is salted with; 0 grows Mossvale as it always was */
   seed: number
+  /** its cell on the lattice, `[east, south]` in cells from Mossvale's */
+  cell: [number, number]
   /** where a new hero first stands, and where the roads start: one of the
    * places */
   arrive: string
@@ -86,8 +95,9 @@ let ROWS: Record<string, Row> = {
 }
 
 /** Every level, by its id. Every road has a road back on the side across,
- * every level is reached from Mossvale, and every place, and each level's
- * wild, is a kind of ground terrain.ts grows.
+ * and leads to a level in the next cell that way, a step aside at most;
+ * every level has a cell of its own and is reached from Mossvale; and every
+ * place, and each level's wild, is a kind of ground terrain.ts grows.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -98,6 +108,16 @@ let ROWS: Record<string, Row> = {
  *   roads(lv).filter(([side, to]) => LEVELS[to]?.roads[ACROSS[side]] != lv.id)
  * )
  * assertEquals(oneWay, [])
+ * let STEP = { north: [0, -1], east: [1, 0], south: [0, 1], west: [-1, 0] }
+ * let astray = lvs.flatMap((lv) =>
+ *   roads(lv).filter(([side, to]) => {
+ *     let [dx, dz] = [0, 1].map((a) => LEVELS[to].cell[a] - lv.cell[a])
+ *     let [sx, sz] = STEP[side]
+ *     return sx ? dx != sx || Math.abs(dz) > 1 : dz != sz || Math.abs(dx) > 1
+ *   })
+ * )
+ * assertEquals(astray, [])
+ * assertEquals(new Set(lvs.map((lv) => `${lv.cell}`)).size, lvs.length)
  * assertEquals(Object.keys(HOPS).length, lvs.length)
  * let unknown = lvs.flatMap((lv) =>
  *   Object.values(lv.places).filter((p) => !FEATURES[p.kind])

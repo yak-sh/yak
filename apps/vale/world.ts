@@ -1,26 +1,40 @@
-// A level as a three.js scene: the ground and everything standing on it in
+// The world as a three.js scene: the ground and everything standing on it in
 // chunks, thinning away where they come between the camera and the hero, the
 // roofs and upper floors of the buildings they are in or behind fading, their
-// doors (doors.ts), the water, the sky, the village fire and lamps, and the
-// light that moves across it all through the day. Built once per level;
+// doors (doors.ts), the water, the sky, the nearest village's fire, the
+// lamps, and the light that moves across it all through the day, all in the
+// look of the region the focus is in, blended with the next near a border.
 // `tick` moves the sun, the water and the flames, and streams the chunks:
-// those within sight of the focus are meshed off the page's thread
+// those within sight of the focus are grown and meshed off the page's thread
 // (chunks.ts), nearest first and finer the nearer (stream.ts), and those left
-// behind are let go. A chunk's arrays are let go too once the GPU has them,
-// since nothing on the page reads them.
+// behind are let go, with the lamps and doors of what stands in them. A
+// chunk's arrays are let go too once the GPU has them, since nothing on the
+// page reads them; the ground a finest chunk was grown from is kept in the
+// page's vale, where its walkers read it.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { airOf } from './air.ts'
 import type { Chunk } from './chunks.ts'
 import { doors } from './doors.ts'
-import { CHUNK, paletteOf } from './ground.ts'
+import { paletteOf } from './ground.ts'
+import { LEVELS, type Spot } from './levels.ts'
 import type { Vec } from './mesh.ts'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
+import { blend } from './regions.ts'
 import { type Building, cutaway } from './solid.ts'
 import { cut, CUTS, geometry, sight, soft } from './soft.ts'
 import { type Want, wanted } from './stream.ts'
-import { groundAt, SIZE, standAt, type Vale, WATER } from './terrain.ts'
+import {
+  adopt,
+  buildingOf,
+  CHUNK,
+  groundAt,
+  hearthNear,
+  standAt,
+  type Vale,
+  WATER,
+} from './terrain.ts'
 
 /** How the page meshes chunk (ci, ck) at a detail (stream.ts), off its
  * thread. */
@@ -53,7 +67,7 @@ export type World = {
   pending: number
   /** how many chunks are drawn at each detail */
   chunks: number[]
-  /** let the GPU go of everything this level drew */
+  /** let the GPU go of everything the world drew */
   dispose: () => void
 }
 
@@ -66,6 +80,8 @@ let ASKED = 8
 // it: the ground a hero stands on and the next few steps round them. The rest
 // streams in while they look.
 let FIRST = 24
+// How near the focus a village's fire burns, in metres.
+let HEARTH = 90
 
 // Once the GPU has an array, the page lets it go.
 let release = (a: THREE.BufferAttribute) =>
@@ -196,26 +212,33 @@ void main() {
   #include <fog_vertex>
 }`
 
-/** Build the vale's scene, its chunks meshed by `mesh` as the focus comes
- * near them. */
+/** Build the world's scene, its chunks meshed by `mesh` as the focus comes
+ * near them; the ground they were grown from kept in `v`, the page's own. */
 export let world = (v: Vale, mesh: Mesher): World => {
   let scene = new THREE.Scene()
-  let size = SIZE
-  // The level's own look: its haze, its water, the colour its sky leans to,
-  // and what drifts in its air.
-  let own = v.level.look ?? {}
-  let haze = own.haze ?? 1
-  let fog = new THREE.Fog(0xcfe6f2, 40 / haze, 110 / haze)
+  // The look of the region the focus is in, blended with the next near a
+  // border (`looks`): its haze, its water, the colour its sky leans to, and
+  // what drifts in its air.
+  let fog = new THREE.Fog(0xcfe6f2, 40, 110)
   scene.fog = fog
 
   // Each chunk drawn is two meshes: the ground and what stands on it, which
   // cast shadows, and the flowers and grass, which are drawn only at the
-  // finest detail and only near the player. Past the fog, nothing is drawn.
+  // finest detail and only near the player; and what glows in it at dusk.
+  // Past the fog, nothing is drawn.
   let ground = soft({ speckle: 0.1, see: true })
+  type Lamp = {
+    lantern: THREE.MeshBasicMaterial
+    halo: THREE.SpriteMaterial
+    box: THREE.Mesh
+    sprite: THREE.Sprite
+  }
   type Drawn = {
     lod: number
     solid: THREE.Mesh
     small: THREE.Mesh | null
+    lamps: Lamp[]
+    doors: ReturnType<typeof doors>
     /** its middle */
     x: number
     z: number
@@ -238,7 +261,61 @@ export let world = (v: Vale, mesh: Mesher): World => {
     m.updateMatrix()
     return m
   }
-  let drop = (k: string) => {
+
+  // What glows at dusk in a chunk, the village's lamps, a forge's coals and
+  // the like: a bright lantern in a round halo.
+  let halo = glowTexture()
+  let lampsOf = (ci: number, ck: number): Lamp[] =>
+    v.plant(ci, ck).flatMap((p) => {
+      let lit = KINDS[p.kind].glow
+      return [
+        ...lit
+          ? [{
+            ...lit,
+            at: [p.x + lit.at[0], standAt(v, p) + lit.at[1], p.z + lit.at[2]],
+          }]
+          : [],
+        ...buildingOf(v, p)?.glows ?? [],
+      ]
+    }).map((lit) => {
+      let [x, y, z] = lit.at
+      let lantern = new THREE.MeshBasicMaterial({
+        color: lit.color ?? 0xffc860,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+      let side = lit.size * 0.175
+      let box = new THREE.Mesh(lampBox, lantern)
+      box.scale.setScalar(side)
+      box.position.set(x, y, z)
+      let glow = new THREE.SpriteMaterial({
+        map: halo,
+        color: lit.color ?? 0xffb84a,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+      let sprite = new THREE.Sprite(glow)
+      sprite.position.set(x, y, z)
+      sprite.scale.setScalar(lit.size)
+      scene.add(box, sprite)
+      return { lantern, halo: glow, box, sprite }
+    })
+  let lampBox = new THREE.BoxGeometry(1, 1, 1)
+  // The doors of the buildings standing in a chunk.
+  let doorsOf = (ci: number, ck: number) =>
+    doors(
+      scene,
+      v.plant(ci, ck).flatMap((p) => buildingOf(v, p) ?? []),
+      ground,
+    )
+
+  // Let a chunk go, and its lamps and doors unless it `keeps` them for the
+  // same chunk drawn at another detail.
+  let drop = (k: string, keeps = false) => {
     let d = drawn.get(k)
     if (!d) return
     for (let m of [d.solid, d.small]) {
@@ -247,10 +324,22 @@ export let world = (v: Vale, mesh: Mesher): World => {
       m.geometry.dispose()
     }
     drawn.delete(k)
+    if (keeps) return
+    for (let l of d.lamps) {
+      scene.remove(l.box, l.sprite)
+      l.lantern.dispose()
+      l.halo.dispose()
+    }
+    d.doors.drop()
   }
   let put = (c: Chunk, lod: number) => {
     let k = key(c.ci, c.ck)
-    drop(k)
+    if (c.patch.voxel == v.voxel) adopt(v, c.patch)
+    // What was drawn in the chunk at another detail keeps its lamps and
+    // doors.
+    let was = drawn.get(k)
+    let lamps = was?.lamps, hung = was?.doors
+    drop(k, true)
     let solid = meshOf(c.solid, c.ci, c.ck)
     solid.castShadow = true
     solid.receiveShadow = true
@@ -259,7 +348,15 @@ export let world = (v: Vale, mesh: Mesher): World => {
     scene.add(solid)
     if (small) scene.add(small)
     let x = (c.ci + 0.5) * CHUNK, z = (c.ck + 0.5) * CHUNK
-    drawn.set(k, { lod, solid, small, x, z })
+    drawn.set(k, {
+      lod,
+      solid,
+      small,
+      lamps: lamps ?? lampsOf(c.ci, c.ck),
+      doors: hung ?? doorsOf(c.ci, c.ck),
+      x,
+      z,
+    })
   }
   // Every chunk wanted near the focus is drawn, at any detail.
   let close = () => [...wants].every(([k, c]) => c.d >= FIRST || drawn.has(k))
@@ -276,7 +373,6 @@ export let world = (v: Vale, mesh: Mesher): World => {
       focus.z,
       fog.far,
       (ci, ck) => drawn.get(key(ci, ck))?.lod,
-      SIZE / CHUNK,
     )
     wants = new Map(list.map((c) => [key(c.ci, c.ck), c]))
     for (let k of drawn.keys()) if (!wants.has(k)) drop(k)
@@ -303,8 +399,8 @@ export let world = (v: Vale, mesh: Mesher): World => {
     settle()
   }
 
-  // The lake: one plane at the water line, drawn over the ground beneath it.
-  let wet = paletteOf(v.level).water
+  // The water: one plane at the water line under the focus, out past the
+  // fog, drawn over the ground beneath it.
   let waterMat = new THREE.ShaderMaterial({
     vertexShader: WATER_VERTEX,
     fragmentShader: WATER_FRAGMENT,
@@ -314,17 +410,16 @@ export let world = (v: Vale, mesh: Mesher): World => {
       THREE.UniformsLib.fog,
       {
         time: { value: 0 },
-        deep: { value: new THREE.Color(wet[0]) },
-        shallow: { value: new THREE.Color(wet[1]) },
-        sheen: { value: new THREE.Color(wet[2]) },
+        deep: { value: new THREE.Color() },
+        shallow: { value: new THREE.Color() },
+        sheen: { value: new THREE.Color() },
         sunDir: { value: new THREE.Vector3(0, 1, 0) },
         sunColor: { value: new THREE.Color(1, 1, 1) },
       },
     ]),
   })
-  let water = new THREE.Mesh(new THREE.PlaneGeometry(size, size), waterMat)
+  let water = new THREE.Mesh(new THREE.PlaneGeometry(512, 512), waterMat)
   water.rotation.x = -Math.PI / 2
-  water.position.set(size / 2, WATER, size / 2)
   scene.add(water)
 
   // The sky: a dome that follows the camera, with the sun and, at night, stars.
@@ -360,17 +455,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
   cam.far = 160
   scene.add(sun, sun.target)
 
-  // The village fire, if the level has a village: its light, and flames of
+  // The fire of the village nearest the focus: its light, and flames of
   // glowing boxes that lick and turn.
-  let [fx, fz] = v.hearth ?? [0, 0]
-  let floor = groundAt(v, fx, fz)
   let fire = new THREE.PointLight(0xffa04a, 0, 18, 1.6)
-  fire.position.set(fx, floor + 1.1, fz)
-  if (v.hearth) scene.add(fire)
-  let flames = (v.hearth ? [0xff6a24, 0xff9a30, 0xffd25a] : []).map((
-    color,
-    i,
-  ) => {
+  scene.add(fire)
+  let flames = [0xff6a24, 0xff9a30, 0xffd25a].map((color, i) => {
     let m = new THREE.Mesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshBasicMaterial({
@@ -382,68 +471,49 @@ export let world = (v: Vale, mesh: Mesher): World => {
       }),
     )
     m.userData.size = 0.62 - i * 0.16
-    m.position.set(fx, floor + 0.3 + i * 0.22, fz)
     scene.add(m)
     return m
   })
 
-  // What glows at dusk, the village's lamps, a forge's coals and the like: a
-  // bright lantern in a round halo.
-  let halo = glowTexture()
-  let lamps: {
-    lantern: THREE.MeshBasicMaterial
-    halo: THREE.SpriteMaterial
-    box: THREE.Mesh
-    sprite: THREE.Sprite
-  }[] = []
-  let lights = [
-    ...v.props.flatMap((p) => {
-      let lit = KINDS[p.kind].glow
-      return lit
-        ? [{
-          ...lit,
-          at: [p.x + lit.at[0], standAt(v, p) + lit.at[1], p.z + lit.at[2]],
-        }]
-        : []
-    }),
-    ...v.buildings.flatMap((b) => b.glows),
-  ]
-  for (let lit of lights) {
-    let [x, y, z] = lit.at
-    let lantern = new THREE.MeshBasicMaterial({
-      color: lit.color ?? 0xffc860,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    })
-    let side = lit.size * 0.175
-    let box = new THREE.Mesh(new THREE.BoxGeometry(side, side, side), lantern)
-    box.position.set(x, y, z)
-    let glow = new THREE.SpriteMaterial({
-      map: halo,
-      color: lit.color ?? 0xffb84a,
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    })
-    let sprite = new THREE.Sprite(glow)
-    sprite.position.set(x, y, z)
-    sprite.scale.setScalar(lit.size)
-    scene.add(box, sprite)
-    lamps.push({ lantern, halo: glow, box, sprite })
+  let hearth: Spot | null = null
+  let floor = 0
+  // The fire moves to the nearest village's hearth as the focus comes near
+  // it, and is not drawn with none near.
+  let kindle = () => {
+    let h = hearthNear(focus.x, focus.z, HEARTH)
+    if (h?.[0] == hearth?.[0] && h?.[1] == hearth?.[1]) return
+    hearth = h
+    fire.visible = !!h
+    for (let m of flames) m.visible = !!h
+    if (!h) return
+    floor = groundAt(v, h[0], h[1])
+    fire.position.set(h[0], floor + 1.1, h[1])
+    for (let m of flames) m.position.set(h[0], floor, h[1])
   }
 
-  // The buildings' doors, and how far each building's roof and upper floors
-  // have faded, from the height they fade over.
-  let hung = doors(scene, v, ground)
+  let drift = airOf(scene)
+  // How far each building's roof and upper floors have faded, from the
+  // height they fade over.
   let fades = new Map<Building, { from: number; k: number }>()
+  let leans = new THREE.Color(0xffffff), lean = 0
+  // The look at the focus: each of the two regions' own, blended.
+  let looks = () => {
+    let b = blend(focus.x, focus.z)
+    let la = LEVELS[b.a]?.look ?? {}, lb = LEVELS[b.b]?.look ?? la
+    let haze = lerp(lb.haze ?? 1, la.haze ?? 1, b.t)
+    fog.near = 40 / haze
+    fog.far = 110 / haze
+    leans.set(lb.sky ?? 0xffffff).lerp(new THREE.Color(la.sky ?? 0xffffff), b.t)
+    lean = lerp(lb.tint ?? 0, la.tint ?? 0, b.t)
+    let wa = paletteOf(LEVELS[b.a] ?? LEVELS.mossvale).water
+    let wb = paletteOf(LEVELS[b.b] ?? LEVELS.mossvale).water
+    ;(['deep', 'shallow', 'sheen'] as const).forEach((u, i) =>
+      waterMat.uniforms[u].value.set(wb[i]).lerp(new THREE.Color(wa[i]), b.t)
+    )
+    return b.t > 0.5 ? la.air : lb.air
+  }
 
-  let drift = airOf(scene, own.air)
-  let leans = new THREE.Color(own.sky ?? 0xffffff), lean = own.tint ?? 0
-
-  let focus = new THREE.Vector3(size / 2, 6, size / 2)
+  let focus = new THREE.Vector3(64, 6, 64)
   let w: World = {
     scene,
     sun,
@@ -477,9 +547,12 @@ export let world = (v: Vale, mesh: Mesher): World => {
         })),
       )
     },
-    swing: (near, dt) => hung.swing(near, dt),
+    swing: (near, dt) => {
+      for (let d of drawn.values()) d.doors.swing(near, dt)
+    },
     near: () =>
       new Promise((done) => {
+        looks()
         waiting.push(done)
         stream()
       }),
@@ -492,14 +565,16 @@ export let world = (v: Vale, mesh: Mesher): World => {
       })
     },
     tick: (t, dt) => {
+      let air = looks()
       stream()
+      kindle()
       let d = ((t / DAY) + 0.36) % 1
       w.day = d
       let l = look(d)
       l.top.lerp(leans, lean)
       l.low.lerp(leans, lean)
       l.sun.lerp(leans, lean / 2)
-      drift.tick(focus, dt)
+      drift.tick(focus, dt, air)
       // The sun climbs in the east and sets in the west; at night the moon
       // takes its place, lower and bluer.
       let up = d > 0.25 && d < 0.75
@@ -518,10 +593,12 @@ export let world = (v: Vale, mesh: Mesher): World => {
       hemi.color.copy(l.top).lerp(new THREE.Color(0xffffff), 0.5)
       hemi.groundColor.copy(GRASS).lerp(DARK, skyMat.uniforms.night.value)
       // Lamps unlit by day are left undrawn.
-      for (let l of lamps) {
-        l.lantern.opacity = 0.95 * skyMat.uniforms.night.value
-        l.halo.opacity = 0.55 * skyMat.uniforms.night.value
-        l.box.visible = l.sprite.visible = l.halo.opacity > 0.005
+      for (let c of drawn.values()) {
+        for (let l of c.lamps) {
+          l.lantern.opacity = 0.95 * skyMat.uniforms.night.value
+          l.halo.opacity = 0.55 * skyMat.uniforms.night.value
+          l.box.visible = l.sprite.visible = l.halo.opacity > 0.005
+        }
       }
       skyMat.uniforms.top.value.copy(l.top)
       skyMat.uniforms.low.value.copy(l.low)
@@ -530,6 +607,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
       skyMat.uniforms.night.value = smooth(0.24, 0.18, d) +
         smooth(0.76, 0.82, d)
       fog.color.copy(l.low)
+      water.position.set(
+        Math.round(focus.x / CHUNK) * CHUNK,
+        WATER,
+        Math.round(focus.z / CHUNK) * CHUNK,
+      )
       waterMat.uniforms.time.value = t
       waterMat.uniforms.sunDir.value.copy(dir)
       waterMat.uniforms.sunColor.value.copy(l.sun).multiplyScalar(l.lux / 2.7)

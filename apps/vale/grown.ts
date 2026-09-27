@@ -1,15 +1,13 @@
-// Levels grown for the page, off its thread, while the page keeps painting
-// and talking to the store: one worker (grow.ts) grows the level's shape for
-// the page, and every worker meshes the chunks the page asks for, one per core
-// the page can spare, each ask going to the worker with the fewest waiting.
-// Each worker grows the level itself before it meshes a chunk of it, the same
-// on every one. The shape of a level the hero may walk into next can be grown
-// ahead in all of them (`ahead`), so walking in waits only for the meshing.
-// Where the workers cannot start or fail, the page grows and meshes itself,
+// The world grown for the page, off its thread, while the page keeps painting
+// and talking to the store: every worker (grow.ts) grows and meshes the chunks
+// the page asks for, one per core the page can spare, each ask going to the
+// worker with the fewest waiting, and paints the map's chart when asked.
+// Where the workers cannot start or fail, the page grows and paints itself,
 // and the reason is reported.
+import { chart } from './chart.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
-import { type Vale, vale } from './terrain.ts'
+import { vale } from './terrain.ts'
 
 // How many workers mesh at once: a core each, less the page's own, up to four.
 let HANDS = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1))
@@ -60,67 +58,46 @@ let hands = () =>
     return hand
   })
 
-// One ask of worker `to`, or of the one with the fewest waiting.
-let ask = (a: Ask, to?: number): Promise<Answer> =>
+// One ask of the worker with the fewest waiting.
+let ask = (a: Ask): Promise<Answer> =>
   new Promise((done, fail) => {
-    let hs = hands()
-    let hand = to != null
-      ? hs[to]
-      : hs.reduce((best, h) => h.load < best.load ? h : best)
+    let hand = hands().reduce((best, h) => h.load < best.load ? h : best)
     let n = count++
     asks.set(n, { done, fail })
     hand.load++
     hand.w.postMessage({ ...a, n })
   })
 
-// Each level's shape, grown or growing, until the page grows a level.
-let shapes = new Map<string, Promise<Vale>>()
-let shape = (id: string, voxel: number) => {
-  let key = `${id}@${voxel}`
-  let s = shapes.get(key)
-  if (s) return s
-  s = ask({ shape: id, voxel }, 0).then((a) => a.v ?? vale(id, voxel))
-  shapes.set(key, s)
-  s.catch(() => shapes.delete(key))
-  return s
-}
-
-/** Start growing the shape of level `id` in every worker, where the hero may
- * walk next. */
-export let ahead = (id: string, voxel: number) => {
-  shape(id, voxel).catch(broke)
-  for (let to = 1; to < hands().length; to++) {
-    ask({ shape: id, voxel, keep: true }, to).catch(broke)
-  }
-}
-
-/** Level `id`'s shape, grown at voxel edge `voxel`. */
-export let grown = async (id: string, voxel: number): Promise<Vale> => {
-  try {
-    return await shape(id, voxel)
-  } catch (e) {
-    broke(e)
-    return vale(id, voxel)
-  } finally {
-    // What was grown ahead of this level is not ahead of the next.
-    shapes.clear()
-  }
-}
-
-/** Chunk (ci, ck) of level `id` grown at voxel edge `voxel`, meshed, with its
+/** Chunk (ci, ck) of the world grown at voxel edge `voxel`, meshed, with its
  * small things when `small` asks for them. */
 export let meshed = async (
-  id: string,
   voxel: number,
   ci: number,
   ck: number,
   small: boolean,
 ): Promise<Chunk> => {
   try {
-    let a = await ask({ mesh: id, voxel, ci, ck, small })
-    return a.drawn ?? chunk(vale(id, voxel), ci, ck, small)
+    let a = await ask({ voxel, ci, ck, small })
+    return a.drawn ?? chunk(vale(voxel), ci, ck, small)
   } catch (e) {
     broke(e)
-    return chunk(vale(id, voxel), ci, ck, small)
+    return chunk(vale(voxel), ci, ck, small)
+  }
+}
+
+/** The world's chart over the square `size` metres on a side from (x, z), a
+ * pixel every `m` metres (chart.ts). */
+export let charted = async (
+  x: number,
+  z: number,
+  size: number,
+  m: number,
+): Promise<Uint8ClampedArray<ArrayBuffer>> => {
+  try {
+    let a = await ask({ chart: [x, z, size], m })
+    return a.px ?? chart(x, z, size, m)
+  } catch (e) {
+    broke(e)
+    return chart(x, z, size, m)
   }
 }

@@ -7,6 +7,7 @@ export let HILLS: Record<string, Row> = {
   stonestep: {
     name: 'Stonestep',
     seed: 71,
+    cell: [0, 1],
     arrive: 'steps',
     places: {
       moor: { kind: 'watchmoor', at: [84, 40] },
@@ -34,6 +35,7 @@ export let HILLS: Record<string, Row> = {
   heatherfell: {
     name: 'Heatherfell',
     seed: 73,
+    cell: [0, 2],
     arrive: 'moor',
     places: {
       moor: { kind: 'moor', at: [64, 64] },
@@ -54,6 +56,7 @@ export let HILLS: Record<string, Row> = {
   oldwall: {
     name: 'Oldwall',
     seed: 79,
+    cell: [0, 3],
     arrive: 'ruins',
     places: {
       moor: { kind: 'bracken', at: [50, 78] },
@@ -82,6 +85,7 @@ export let HILLS: Record<string, Row> = {
   kingsbarrow: {
     name: 'Kingsbarrow',
     seed: 83,
+    cell: [-1, 3],
     arrive: 'moor',
     places: {
       moor: { kind: 'barrowmoor', at: [64, 64] },
@@ -109,6 +113,7 @@ export let HILLS: Record<string, Row> = {
   giantsteps: {
     name: 'Giantsteps',
     seed: 89,
+    cell: [-2, 3],
     arrive: 'moor',
     places: {
       moor: { kind: 'stonefield', at: [64, 64] },

@@ -6,6 +6,7 @@ export let VALE: Record<string, Row> = {
   mossvale: {
     name: 'Mossvale',
     seed: 0,
+    cell: [0, 0],
     arrive: 'plaza',
     places: {
       crags: { kind: 'crags', at: [30, 98] },
@@ -25,6 +26,7 @@ export let VALE: Record<string, Row> = {
   birchmere: {
     name: 'Birchmere',
     seed: 7,
+    cell: [-1, 0],
     arrive: 'green',
     places: {
       mere: { kind: 'mere', at: [48, 75] },
@@ -48,6 +50,7 @@ export let VALE: Record<string, Row> = {
   clovermead: {
     name: 'Clovermead',
     seed: 11,
+    cell: [-1, -1],
     arrive: 'meadow',
     places: {
       meadow: { kind: 'clover', at: [60, 62] },
@@ -69,6 +72,7 @@ export let VALE: Record<string, Row> = {
   fernwood: {
     name: 'Fernwood',
     seed: 13,
+    cell: [0, -1],
     arrive: 'glade',
     places: {
       woods: { kind: 'fernwood', at: [40, 36] },
@@ -93,6 +97,7 @@ export let VALE: Record<string, Row> = {
   elderglade: {
     name: 'Elderglade',
     seed: 17,
+    cell: [0, -2],
     arrive: 'heart',
     places: {
       heart: { kind: 'eldergrove', at: [64, 62] },
@@ -115,6 +120,7 @@ export let VALE: Record<string, Row> = {
   greypine: {
     name: 'Greypine',
     seed: 19,
+    cell: [1, -1],
     arrive: 'pines',
     places: {
       pines: { kind: 'greypines', at: [60, 58] },
@@ -137,6 +143,7 @@ export let VALE: Record<string, Row> = {
   wolfden: {
     name: 'Wolfden',
     seed: 23,
+    cell: [2, -1],
     arrive: 'pines',
     places: {
       pines: { kind: 'hollow', at: [50, 50] },

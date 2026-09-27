@@ -3,18 +3,16 @@
 // band, then earth, then stone). Flat, open tops of one height and one kind
 // merge into larger quads; the soft material still draws each voxel, because
 // it tints them by their cell (soft.ts), so a merge costs nothing you can see.
-// A chunk is a square of ground a fixed number of metres across, however many
-// columns that is at the vale's voxel size, meshed about its own north-west
-// corner, so its numbers stay small however far out it lies. Its edges hang a
-// skirt a few metres down, layered as a wall is, so a neighbour drawn at a
-// coarser voxel (stream.ts) never shows a crack between them.
+// A chunk is meshed from its patch (terrain.ts), the ground grown alone with a
+// column more all round it, about the chunk's own north-west corner, so its
+// numbers stay small however far out it lies. Each column is coloured as its
+// region's look says, blended with the next region's near a border. Its edges
+// hang a skirt a few metres down, so a neighbour drawn at a coarser voxel
+// (stream.ts) never shows a crack between them.
 import { Top } from './features.ts'
-import type { Level } from './levels.ts'
+import { type Level, LEVELS } from './levels.ts'
 import { type Out, quad, rgb, type Vec } from './mesh.ts'
-import { type Vale } from './terrain.ts'
-
-/** A chunk's side, in metres. */
-export let CHUNK = 16
+import type { Patch } from './terrain.ts'
 
 let TOPS: Record<number, number> = {
   [Top.grass]: 0x8cc85c,
@@ -117,21 +115,38 @@ export let paletteOf = (lv: Level): Palette => {
 let painted = new WeakMap<Level, Palette>()
 
 // A colour, drifted by the column's hue: lusher or drier by a little.
-let drift = (hex: number, hue: number): Vec => {
-  let [r, g, b] = rgb(hex)
+let drift = ([r, g, b]: Vec, hue: number): Vec => {
   let d = (hue - 0.5) * 0.22
   return [r * (1 - d * 0.6), g * (1 + d * 0.25), b * (1 - d)]
 }
 
-/** Write chunk (ci, ck)'s ground into `o`, about the chunk's north-west
+/** Write a patch's chunk of ground into `o`, about the chunk's north-west
  * corner. */
-export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
-  let V = v.voxel, N = v.cols, C = Math.round(CHUNK / V)
-  let { tops, band: BANDS, rock } = paletteOf(v.level)
-  let at = (i: number, k: number) =>
-    Math.max(0, Math.min(N - 1, i)) + Math.max(0, Math.min(N - 1, k)) * N
-  let H = (i: number, k: number) => v.h[at(i, k)]
-  let i0 = ci * C, k0 = ck * C
+export let groundChunk = (p: Patch, o: Out) => {
+  let V = p.voxel, N = p.n, C = N - 2
+  let pals = p.regions.map((id) => paletteOf(LEVELS[id] ?? LEVELS.mossvale))
+  // Column (i, k) of the chunk, from -1 to C, as its patch has it.
+  let H = (i: number, k: number) => p.layers[0][i + 1 + (k + 1) * N]
+  // A colour of a column's region's look, `of` its palette, blended with the
+  // next region's by how much the column is its own.
+  let tint = (
+    i: number,
+    k: number,
+    of: (pal: Palette, t: number) => number,
+  ) => {
+    let j = i + k * C, t = p.top[j]
+    let a = rgb(of(pals[p.region[j]], t))
+    let s = 0.5 + p.share[j] / 510
+    if (s < 1) {
+      let b = rgb(of(pals[p.other[j]], t))
+      a = [
+        a[0] * s + b[0] * (1 - s),
+        a[1] * s + b[1] * (1 - s),
+        a[2] * s + b[2] * (1 - s),
+      ]
+    }
+    return drift(a, p.hue[j])
+  }
   let round = V * 0.16
   // How deep the green band and the earth under it run, in voxels.
   let band = Math.max(1, Math.round(0.5 / V))
@@ -140,25 +155,24 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
   // Tops. A column is merged with its neighbours when nothing about it needs
   // a corner of its own: no edge to round, no shade in a corner, and it is not
   // on the chunk's edge, where every corner meets the neighbour's, so no crack
-  // opens between the two.
+  // opens between the two; and when it is all its own region's.
   let merge = new Int32Array(C * C).fill(-1)
   let single: [number, number][] = []
-  for (let dk = 0; dk < C; dk++) {
-    for (let di = 0; di < C; di++) {
-      let i = i0 + di, k = k0 + dk, h = H(i, k)
+  for (let k = 0; k < C; k++) {
+    for (let i = 0; i < C; i++) {
+      let h = H(i, k), j = i + k * C
       let open = H(i - 1, k) >= h && H(i + 1, k) >= h && H(i, k - 1) >= h &&
         H(i, k + 1) >= h
       let shaded = H(i - 1, k) > h || H(i + 1, k) > h || H(i, k - 1) > h ||
         H(i, k + 1) > h || H(i - 1, k - 1) > h || H(i + 1, k - 1) > h ||
         H(i - 1, k + 1) > h || H(i + 1, k + 1) > h
-      let edge = !di || !dk || di == C - 1 || dk == C - 1
-      if (open && !shaded && !edge) {
-        merge[di + dk * C] = h * 32 + v.top[at(i, k)]
+      let edge = !i || !k || i == C - 1 || k == C - 1
+      if (open && !shaded && !edge && p.share[j] == 255) {
+        merge[j] = (h * 32 + p.top[j]) * 256 + p.region[j]
       } else single.push([i, k])
     }
   }
-  let colour = (i: number, k: number) =>
-    drift(tops[v.top[at(i, k)]], v.hue[at(i, k)])
+  let colour = (i: number, k: number) => tint(i, k, (pal, t) => pal.tops[t])
   let done = new Uint8Array(C * C)
   for (let dk = 0; dk < C; dk++) {
     for (let di = 0; di < C; di++) {
@@ -180,12 +194,12 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
       for (let z = 0; z < d; z++) {
         for (let x = 0; x < w; x++) done[di + x + (dk + z) * C] = 1
       }
-      let i = i0 + di, k = k0 + dk, h = H(i, k)
+      let h = H(di, dk)
       let c = [
-        ...colour(i, k),
-        ...colour(i + w - 1, k),
-        ...colour(i + w - 1, k + d - 1),
-        ...colour(i, k + d - 1),
+        ...colour(di, dk),
+        ...colour(di + w - 1, dk),
+        ...colour(di + w - 1, dk + d - 1),
+        ...colour(di, dk + d - 1),
       ]
       quad(
         o,
@@ -219,7 +233,7 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
     ]
     quad(
       o,
-      [(i - i0) * V, h * V, (k - k0) * V],
+      [i * V, h * V, k * V],
       1,
       V,
       V,
@@ -249,19 +263,18 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
     from: number,
     to: number,
   ) => {
-    let h = H(i, k), t = v.top[at(i, k)], hue = v.hue[at(i, k)]
-    let layers: [number, number, number][] = [
-      [h - band, h, BANDS[t]],
-      [h - earth, h - band, EARTH[t]],
-      [-Infinity, h - earth, rock(t)],
+    let h = H(i, k)
+    let layers: [number, number, Vec][] = [
+      [h - band, h, tint(i, k, (pal, t) => pal.band[t])],
+      [h - earth, h - band, tint(i, k, (_, t) => EARTH[t])],
+      [-Infinity, h - earth, tint(i, k, (pal, t) => pal.rock(t))],
     ]
     // The two columns beside this face, along it: a corner is rounded where
     // the one past it is lower still.
     let [ai, ak] = axis == 0 ? [0, 1] : [1, 0]
-    for (let [y0, y1, hex] of layers) {
+    for (let [y0, y1, c] of layers) {
       let lo = Math.max(y0, from), hi = Math.min(y1, to)
       if (hi <= lo) continue
-      let c = drift(hex, hue)
       // Darker toward the foot of a wall, where the lower ground meets it.
       let foot = lo == from ? 0.72 : 1
       let cs = [
@@ -319,19 +332,19 @@ export let groundChunk = (v: Vale, ci: number, ck: number, o: Out) => {
     )
     o.nrm.splice(-16, 16, ...UP, ...UP, ...UP, ...UP)
   }
-  for (let dk = 0; dk < C; dk++) {
-    for (let di = 0; di < C; di++) {
-      let i = i0 + di, k = k0 + dk, h = H(i, k)
+  for (let k = 0; k < C; k++) {
+    for (let i = 0; i < C; i++) {
+      let h = H(i, k)
       for (let [si, sk, axis, sign] of SIDES) {
         let nh = H(i + si, k + sk)
         let face: [number, number, number, number] = [
-          axis == 0 && sign > 0 ? di + 1 : di,
-          axis == 2 && sign > 0 ? dk + 1 : dk,
+          axis == 0 && sign > 0 ? i + 1 : i,
+          axis == 2 && sign > 0 ? k + 1 : k,
           axis,
           sign,
         ]
         if (nh < h) side(i, k, face, nh, h)
-        if (di + si < 0 || di + si >= C || dk + sk < 0 || dk + sk >= C) {
+        if (i + si < 0 || i + si >= C || k + sk < 0 || k + sk >= C) {
           skirt(i, k, face, Math.min(h, nh))
         }
       }

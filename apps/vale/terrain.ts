@@ -1,49 +1,80 @@
-// A level's ground: its shape, what grows where, and where things are. Pure
-// numbers from rand.ts salted with the level's seed, so every page grows the
-// same level and none of it is stored. What lives in the store is what moves
-// or changes: players, creatures, what they carry and what they have done.
+// The world's ground: its shape, what grows where, and where things are. Pure
+// numbers from rand.ts, the levels' rows as regions.ts lays them out and the
+// ways between them (ways.ts), so every page grows the same world and none of
+// it is stored. What lives in the store is what moves or changes: players,
+// creatures, what they carry and what they have done.
 //
-// Everything here is in metres. A level is SIZE metres on a side, closed in
-// by mountains. Its ground is a smooth height (`rise`), which a vale rounds to
-// voxels of whatever size it is grown at, so a finer voxel draws the same
-// hills in smaller steps. Where things stand (trees, rocks, buildings, the
+// Everything here is in metres, from the world's origin. The ground is a
+// smooth height (`rise`): the lie of the land as the places shape it
+// (regions.ts), with the roads' beds laid in. A chunk of it is grown alone
+// (`patch`), rounded to voxels of whatever size is asked, so a finer voxel
+// draws the same hills in smaller steps, and grown beside its neighbours it
+// is the same chunk. Where things stand (trees, rocks, buildings, the
 // creatures' homes) is decided on the smooth height and a half-metre grid,
 // never on the voxels, so it is the same at every voxel size.
 //
-// A level's places (levels.ts) shape it, each by its kind (features.ts): woods
-// roll, crags heap up, a lake sinks, dunes crest, a village flattens the
-// ground around it and builds itself there. Each kind also says what the
-// ground is topped with where it holds, and what grows and stands there; the
-// level's wild says so where none of them holds.
-// Paths run from the village out to every place. A road runs from where a
-// hero arrives out to the middle of each side that leads somewhere, on a bed
-// of its own: level enough to walk, dry over water, and through the
-// mountains at the rim by a pass.
+// A chunk's ground is a stack of height maps, its layers: the surface, then
+// each cave's ceiling and its floor in turn, deeper, each below the one above;
+// rock between a ceiling and the floor over it. Only the surface grows yet,
+// but what reads the ground (`floorUnder`, `roofOver`) reads the stack.
+//
+// Each place's kind (features.ts) says what the ground is topped with where
+// it holds, and what grows and stands there; the region's wild says so where
+// none of them holds, and near a border the two regions' wilds mix. What each
+// place builds stands round its middle, laid out once for its level. A
+// building among it is raised on the ground at its middle, as rounded to
+// voxels, and lays the ground round it as it needs (`lay`).
 import { dressed } from './buildings.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
-import { type Level, LEVELS, type Side, type Spot } from './levels.ts'
+import { LEVELS, SIZE, type Spot } from './levels.ts'
 import { bulk, KINDS, raisedOf } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
-import { type Building, placed, type Station } from './solid.ts'
+import {
+  type Blend,
+  blend,
+  lie,
+  pick,
+  type Placed,
+  placesAt,
+  placesIn,
+  placesOf,
+} from './regions.ts'
+import { type Building, near, placed, type Station } from './solid.ts'
+import {
+  along,
+  bedAt,
+  EASE,
+  lanesIn,
+  near as close,
+  off,
+  ROAD,
+  type Road,
+  roadsIn,
+  roadsOf,
+  SHORE,
+  toLane,
+  toRoad,
+  worn,
+} from './ways.ts'
 
-export type { Side, Spot }
+export { SHORE, SIZE, type Spot }
 
-/** A level's side, in metres. */
-export let SIZE = 128
-/** The voxel edge a vale is grown at unless asked for another, in metres. */
+/** The voxel edge the ground is grown at unless asked for another, in
+ * metres. */
 export let VOXEL = 0.25
-/** Ground at or under this height, in metres, is shore: sand, never dry. */
-export let SHORE = 5
 /** The water's surface, in metres. */
 export let WATER = 4.8
+/** A chunk's side, in metres: the ground is grown and drawn a chunk at a
+ * time. */
+export let CHUNK = 16
+/** A height map's value where the layer is not: no cave there. */
+export let NONE = -32768
 
-// The middle of a level, in metres.
-let MID = SIZE / 2
 // What stands on the ground stands on a grid this fine, in metres.
 let GRID = 0.5
 
 // How long (x, z) is. Not Math.hypot, which takes several times as long, and
-// a level measures a distance for every column several times over.
+// the ground measures a distance for every column several times over.
 let norm = (x: number, z: number) => Math.sqrt(x * x + z * z)
 let dist = (x: number, z: number, [a, b]: Spot) => norm(x - a, z - b)
 let snap = (x: number) => (Math.floor(x / GRID) + 0.5) * GRID
@@ -55,7 +86,7 @@ let STEPS: Spot[] = Array.from({ length: 33 * 33 }, (_, j): Spot => [
   (Math.floor(j / 33) - 16) * GRID,
 ]).sort((p, q) => norm(p[0], p[1]) - norm(q[0], q[1]))
 
-/** A prop: something standing on the ground that is part of the level's
+/** A prop: something standing on the ground that is part of the world's
  * shape (a tree, a rock, a flower, a house, a signpost), at (x, z) metres,
  * turned `turn` quarter turns (a building's front, its south, to the east
  * for one). */
@@ -71,113 +102,98 @@ export type Prop = {
  * up to height `top`. */
 export type Wall = { x: number; z: number; r: number; top: number }
 
-export type Vale = {
-  level: Level
-  /** the edge of the voxels it is grown at, in metres */
+/** A chunk's ground as grown at one voxel size. Its layers are `n` columns
+ * on a side, the chunk's own and one more all round, from the column
+ * north-west of its corner (index i + k × n), in voxels: the surface, then
+ * each cave's ceiling and floor in turn (NONE where a cave is not). The rest
+ * is of the chunk's own columns only (index i + k × (n − 2)): what tops each,
+ * its hue (how green, lush or dry: a gentle colour drift), the region it lies
+ * in and the one it blends with, as indexes into `regions`, and how much it is
+ * the first's, from 0 for half to 255 for all. */
+export type Patch = {
+  ci: number
+  ck: number
   voxel: number
-  /** columns along each side */
-  cols: number
-  /** the ground's height at each column, in voxels (index i + k × cols) */
-  h: Int16Array
+  n: number
+  layers: Int16Array[]
   top: Uint8Array
-  /** how green, lush or dry each column is: a gentle colour drift */
   hue: Float32Array
-  props: Prop[]
-  /** the props that are built: what places build (a village, ruins, standing
-   * stones), and the signpost at the head of each road */
-  built: Prop[]
-  walls: Wall[]
-  /** the buildings a walker goes into (solid.ts) */
-  buildings: Building[]
-  /** where heroes make things (craft.ts): the stations standing in the
-   * open, and the ones buildings house */
-  stations: Station[]
-  /** each place's middle */
-  places: Record<string, Spot>
-  /** the village fire, when the level has a village */
-  hearth: Spot | null
-  roads: Road[]
+  region: Uint8Array
+  other: Uint8Array
+  share: Uint8Array
+  regions: string[]
 }
 
-/** A road out of a level: the side it leaves by and the level it leads to;
- * where it meets the edge, in metres; where a hero coming in by it stands;
- * and its signpost. */
-export type Road = {
-  side: Side
-  to: string
-  x: number
-  z: number
-  door: Spot
-  sign: Spot
+/** The world's ground as a page or a worker grows it, at one voxel size: how
+ * high the smooth ground is anywhere, how a chunk's ground grows, what stands
+ * in it and what a walker bumps into there; and the chunks' ground grown so
+ * far or handed in (`adopt`), kept for the chunks asked about last. */
+export type Vale = {
+  voxel: number
+  rise: (x: number, z: number) => number
+  grow: (ci: number, ck: number) => Patch
+  plant: (ci: number, ck: number) => Prop[]
+  bump: (ci: number, ck: number) => Wall[]
+  /** the buildings whose ground comes within `r` metres of (x, z) */
+  buildings: (x: number, z: number, r: number) => Building[]
+  patches: Map<number, Patch>
 }
 
-/** Where each side's road meets the edge of a level, in metres. */
-export let EDGE: Record<Side, Spot> = {
-  north: [MID, 0],
-  east: [SIZE, MID],
-  south: [MID, SIZE],
-  west: [0, MID],
-}
-// How far in from the edge a road runs straight; how far in along it a hero
-// coming in stands, beside its signpost; in metres.
-let STRAIGHT = 16
-let DOOR = 9
-// A road's half-width, and how far round it its bed eases into the ground,
-// in metres.
-let ROAD = 1.5
-let EASE = 3.5
-// How far round a lane, as a share of its width there, and round a road, in
-// metres, nothing grows or stands.
-let LANE = 1.3
-let CLEAR = ROAD + 1.5
-// How far from a road the mountains at the rim stand back, rising from the
-// first to the second, in metres, so a road leaves by a pass.
-let PASS: [number, number] = [4, 13]
-// The lowest a road's bed runs, in metres: dry, a causeway over water.
-let DRY = SHORE + 0.3
-// How steep a road's bed may run, in metres a metre, and how far either way
-// along it its bed is evened out, in metres.
-let GRADE = 0.45
-let EVEN = 5
-// How far round where a hero comes in no tree or rock grows, in metres.
-let GLADE = 9
+/** Which chunk a point lies in. */
+export let chunkOf = (m: number): number => Math.floor(m / CHUNK)
+// A chunk as one number, to key it by: one of its own while it lies within
+// 2^24 chunks of the origin either way.
+let key = (ci: number, ck: number) =>
+  (ci + 0x1000000) * 0x2000000 + ck + 0x1000000
 
-// How strongly a point belongs to each of a level's kinds of place (the
+// A cache of the last `most` things asked for, most recent last. What a
+// walker asks it asks again and again of the one chunk it is in, so the last
+// thing asked for is answered first, before the map is touched.
+let kept = <T>(most: number, make: (ci: number, ck: number) => T) => {
+  let got = new Map<number, T>()
+  let last = NaN, was: T
+  return (ci: number, ck: number): T => {
+    let k = key(ci, ck)
+    if (k === last) return was
+    let v = got.get(k)
+    if (v === undefined) v = make(ci, ck)
+    else got.delete(k)
+    got.set(k, v)
+    if (got.size > most) got.delete(got.keys().next().value!)
+    last = k
+    return was = v
+  }
+}
+
+// How strongly a point belongs to each kind of place holding it (the
 // strongest of its places of that kind, and how far that one's middle is),
-// and to the mountains at the rim; and the kind of place its wild is, where
-// none of them holds (levels.ts `wild`). A level's `holder` reads every point
-// into the one Hold it keeps, so growing a level makes nothing new per column.
+// and the kind of place its wild is, where none of them holds (levels.ts
+// `wild`). A holder reads every point into the one Hold it keeps, so growing
+// the ground makes nothing new per column.
 type Hold = {
-  rim: number
   wild?: Feature
   fs: Feature[]
-  k: Float64Array
-  far: Float64Array
+  k: number[]
+  far: number[]
 }
-let holder = (lv: Level) => {
-  let places = Object.values(lv.places).filter((p) => FEATURES[p.kind])
-  let kinds = [...new Set(places.map((p) => p.kind))]
-  let fs = kinds.map((k) => FEATURES[k])
-  let own = places.map((p) => kinds.indexOf(p.kind))
-  let holds = places.map((p) => FEATURES[p.kind].hold)
-  let ats = places.map((p) => p.at)
-  let w: Hold = {
-    rim: 0,
-    wild: lv.wild ? FEATURES[lv.wild] : undefined,
-    fs,
-    k: new Float64Array(fs.length),
-    far: new Float64Array(fs.length),
-  }
-  return (x: number, z: number): Hold => {
-    w.k.fill(-1)
-    for (let j = 0; j < ats.length; j++) {
-      let d = dist(x, z, ats[j]), k = holds[j](d), i = own[j]
-      if (k > w.k[i]) {
+let holder = () => {
+  let w: Hold = { fs: [], k: [], far: [] }
+  return (near: Placed[], x: number, z: number, wild?: string): Hold => {
+    w.fs.length = w.k.length = w.far.length = 0
+    w.wild = wild ? FEATURES[wild] : undefined
+    for (let p of near) {
+      let d = dist(x, z, p.at)
+      if (d >= p.holds) continue
+      let k = p.f.hold(d), i = w.fs.indexOf(p.f)
+      if (i < 0) {
+        w.fs.push(p.f)
+        w.k.push(k)
+        w.far.push(d)
+      } else if (k > w.k[i]) {
         w.k[i] = k
         w.far[i] = d
       }
     }
-    w.rim = smooth(0.72, 0.9, norm(x - MID, z - MID) / MID)
     return w
   }
 }
@@ -209,21 +225,15 @@ let coverOf = (w: Hold, n: number, x: number, z: number) => {
   }
 }
 
-// What tops a point: what the kinds holding it cover it with; else on the
-// mountains at the rim, dry ground; else what the wild covers, or grass.
+// What tops a point: what the kinds holding it cover it with; else what the
+// wild covers, or grass.
 let cover = (w: Hold, n: number, x: number, z: number) =>
-  coverOf(w, n, x, z) ??
-    (w.rim > 0.45 ? Top.dry : w.wild?.cover?.(n, Infinity, x, z) ?? Top.grass)
+  coverOf(w, n, x, z) ?? w.wild?.cover?.(n, Infinity, x, z) ?? Top.grass
 
-// Of the kinds that say `what` grows, the one holding a point strongest, and
-// more than the rim does, else the wild's; `h` picks among what it grows.
-let pickOf = (
-  w: Hold,
-  what: 'grows' | 'stones',
-  h: number,
-  rest: string,
-) => {
-  let i = lead(w, Math.max(0.35, w.rim), (f) => f[what])
+// Of the kinds that say `what` grows, the one holding a point strongest,
+// else the wild's; `h` picks among what it grows.
+let pickOf = (w: Hold, what: 'grows' | 'stones', h: number, rest: string) => {
+  let i = lead(w, 0.35, (f) => f[what])
   let xs = w.fs[i]?.[what] ?? w.wild?.[what]
   return xs ? xs[h % xs.length] : rest
 }
@@ -234,6 +244,10 @@ let weigh = (w: Hold, by: (f: Feature) => number | undefined) => {
   for (let i = 0; i < w.fs.length; i++) sum += (by(w.fs[i]) ?? 0) * w.k[i]
   return sum
 }
+
+// The wild of a point's region, of the two it blends with the one `roll`
+// picks.
+let wildOf = (b: Blend, roll: number) => LEVELS[pick(b, roll)]?.wild
 
 // What grows underfoot where no place says: flowers and grass on green
 // ground. Nothing does on these tops unless a place asks for it.
@@ -260,139 +274,29 @@ let BARE = new Set([
   Top.clay,
 ])
 
-/** A level's ground: its height at (x, z), in metres, before a vale rounds
- * it to its voxels. */
-export let rise = (lv: Level) => {
-  let s = lv.seed * 101
-  let ways = waysOf(lv)
-  let land = landOf(lv)
-  return (x: number, z: number): number => {
-    // A road further off than its pass changes nothing here, nor do the
-    // mountains inside where they start to rise.
-    let h = land(x, z), open = 0
-    for (let { c, bed } of ways) {
-      if (!near(c, x, z, PASS[1])) continue
-      let t = along(c, x, z), d = off(c, x, z, t)
-      h = lerp(h, bedAt(bed, t), 1 - smooth(ROAD, ROAD + EASE, d))
-      open = Math.max(open, 1 - smooth(PASS[0], PASS[1], d))
-    }
-    let r = norm(x - MID, z - MID) / MID
-    if (r > 0.78) {
-      h += smooth(0.78, 1.0, r) * (1 - open) *
-        (12 + fbm(x / 4.5, z / 4.5, 9 + s) * 9)
-    }
-    return clamp(h, 0.5, 30)
+// The ground's smooth height where the places `near` and the `roads` may
+// reach: the lie of the land, eased into each road's bed.
+let rising = (near: Placed[], roads: Road[]) => (x: number, z: number) => {
+  let h = lie(x, z, near)
+  for (let r of roads) {
+    if (!close(r.c, x, z, ROAD + EASE)) continue
+    let t = along(r.c, x, z), d = off(r.c, x, z, t)
+    h = lerp(h, bedAt(r, t), 1 - smooth(ROAD, ROAD + EASE, d))
   }
+  return clamp(h, 0.5, 30)
 }
 
-// A level's land as its places shape it, before its roads are laid and the
-// mountains at its rim raised.
-let landOf = (lv: Level) => {
-  let s = lv.seed * 101
-  let places = Object.values(lv.places).filter((p) => FEATURES[p.kind])
-  let order = [
-    ...places.filter((p) => !FEATURES[p.kind].last),
-    ...places.filter((p) => FEATURES[p.kind].last),
-  ]
-  let shapes = order.map((p) => FEATURES[p.kind].shape)
-  let ats = order.map((p) => p.at)
-  return (x: number, z: number): number => {
-    let h = 6.5 + (fbm(x / 22, z / 22, 1 + s) - 0.5) * 4.5
-    for (let i = 0; i < shapes.length; i++) {
-      h = shapes[i](h, dist(x, z, ats[i]), x, z, s)
-    }
-    return h
-  }
-}
-
-// A way from `a` to `b` that wobbles as a trodden one does, by up to `wob`
-// metres, but for its last `straight` metres; its middle sampled every metre.
-type Course = {
-  a: Spot
-  dx: number
-  dz: number
-  xs: Float64Array
-  zs: Float64Array
-  box: [number, number, number, number]
-}
-let course = (a: Spot, b: Spot, s: number, wob = 7, straight = 0): Course => {
-  let dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz) || 1
-  let n = Math.ceil(len) + 1
-  let bend = Math.max(0.01, 1 - straight / len)
-  let xs = new Float64Array(n), zs = new Float64Array(n)
-  for (let i = 0; i < n; i++) {
-    let t = i / (n - 1)
-    let w = (fbm(t * 6, a[0] + b[0], 21 + s, 2) - 0.5) * wob *
-      Math.sin(Math.PI * Math.min(1, t / bend))
-    xs[i] = a[0] + dx * t - (dz / len) * w
-    zs[i] = a[1] + dz * t + (dx / len) * w
-  }
-  let box: Course['box'] = [
-    Math.min(...xs),
-    Math.min(...zs),
-    Math.max(...xs),
-    Math.max(...zs),
-  ]
-  return { a, dx, dz, xs, zs, box }
-}
-// Whether (x, z) may lie within `r` metres of a course: it does not when it
-// lies further than that outside the box round the course's middle.
-let near = ({ box }: Course, x: number, z: number, r: number) =>
-  x > box[0] - r && x < box[2] + r && z > box[1] - r && z < box[3] + r
-// How far along a course (x, z) lies, from 0 at its start to 1 at its end;
-// and how far it is from the course's middle there, in metres.
-let along = (c: Course, x: number, z: number) =>
-  clamp(
-    ((x - c.a[0]) * c.dx + (z - c.a[1]) * c.dz) / (c.dx * c.dx + c.dz * c.dz),
-    0,
-    1,
-  )
-let off = (c: Course, x: number, z: number, t: number) => {
-  let f = t * (c.xs.length - 1)
-  let i = Math.min(c.xs.length - 2, Math.floor(f)), u = f - i
-  return norm(
-    x - (c.xs[i] + (c.xs[i + 1] - c.xs[i]) * u),
-    z - (c.zs[i] + (c.zs[i + 1] - c.zs[i]) * u),
-  )
-}
-
-// A level's roads, each a course from where a hero arrives out to the middle
-// of its side, and the height of its bed every metre along it: the land
-// evened out, cut down where it would climb too steeply, and never under
-// water.
-type Way = { side: Side; to: string; c: Course; bed: Float64Array }
-let waysOf = (lv: Level): Way[] => {
-  let got = laid.get(lv)
-  if (got) return got
-  let s = lv.seed * 101
-  let from = lv.places[lv.arrive].at
-  let land = landOf(lv)
-  let sides = Object.entries(lv.roads) as [Side, string][]
-  let ways = sides.map(([side, to]): Way => {
-    let c = course(from, EDGE[side], s, 7, STRAIGHT)
-    let n = c.xs.length
-    let raw = c.xs.map((x, i) => Math.max(DRY, land(x, c.zs[i])))
-    let bed = raw.map((_, i) => {
-      let lo = Math.max(0, i - EVEN), hi = Math.min(n - 1, i + EVEN)
-      let sum = 0
-      for (let j = lo; j <= hi; j++) sum += raw[j]
-      return sum / (hi - lo + 1)
-    })
-    for (let i = 1; i < n; i++) bed[i] = Math.min(bed[i], bed[i - 1] + GRADE)
-    for (let i = n - 2; i >= 0; i--) {
-      bed[i] = Math.min(bed[i], bed[i + 1] + GRADE)
-    }
-    return { side, to, c, bed: bed.map((h) => Math.max(DRY, h)) }
-  })
-  laid.set(lv, ways)
-  return ways
-}
-let laid = new WeakMap<Level, Way[]>()
-let bedAt = (bed: Float64Array, t: number) => {
-  let f = t * (bed.length - 1)
-  let i = Math.min(bed.length - 2, Math.floor(f))
-  return lerp(bed[i], bed[i + 1], f - i)
-}
+/** The ground's smooth height at (x, z), in metres, before it is rounded to
+ * voxels.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * // A village's ground is flattened round its fire.
+ * assertEquals(Math.round(rise(64, 64) * 10) / 10, 6.5)
+ * ```
+ */
+export let rise = (x: number, z: number): number =>
+  rising(placesAt(x, z), roadsIn(x, z, x, z, ROAD + EASE))(x, z)
 
 /** How steep a height is at (x, z): the most it rises or falls in a metre
  * toward any side. */
@@ -410,161 +314,57 @@ export let steep = (
   ) / d
 }
 
-// The lanes that run from the village out to each place.
-let lanesOf = (lv: Level): Course[] => {
-  let home = Object.values(lv.places).find((p) => isA(p.kind, 'village'))
-  if (!home) return []
-  return Object.values(lv.places)
-    .filter((p) => dist(p.at[0], p.at[1], home.at) >= 1)
-    .map((p) => course(home.at, p.at, lv.seed * 101))
+/** A place that is a village, where it lies in the world. */
+export type Village = { level: string; name: string; at: Spot }
+
+let VILLAGES: Village[] = Object.keys(LEVELS).flatMap((id) =>
+  placesOf(id).filter((p) => isA(p.kind, 'village')).map((p) => ({
+    level: id,
+    name: p.name,
+    at: p.at,
+  }))
+)
+
+/** The villages within `r` metres of (x, z), nearest first. */
+export let villagesNear = (x: number, z: number, r: number): Village[] =>
+  VILLAGES.filter((v) => dist(x, z, v.at) < r)
+    .sort((a, b) => dist(x, z, a.at) - dist(x, z, b.at))
+
+/** The fire of the village nearest (x, z), within `r` metres; or null. */
+export let hearthNear = (x: number, z: number, r = Infinity): Spot | null =>
+  villagesNear(x, z, r)[0]?.at ?? null
+
+/** Where a level's village fire is, if it has a village. */
+export let hearthOf = (id: string): Spot | null =>
+  VILLAGES.find((v) => v.level == id)?.at ?? null
+
+// What each level builds, laid out the first time it is asked for: each
+// place's builds round its middle, a build that stands aside (props/kit.ts)
+// taking the nearest step from where it was planned (STEPS) where none of the
+// ground it takes is paved and a metre parts it from what was built before
+// it, failing that where a metre parts them; and the signpost beside each
+// road out. The ground a build takes is a box square to the axes, as
+// structures are built (`foundation`): its span, or the trunk or row a walker
+// meets, or its foot.
+let raised = new Map<string, Prop[]>()
+let half = (p: Prop): [number, number] => {
+  let { girth, row = 0, foot = 0 } = KINDS[p.kind], span = spanOf(p)
+  return span
+    ? [span[0] / 2, span[1] / 2]
+    : girth
+    ? [row + girth / 2, girth / 2]
+    : [foot, foot]
 }
-
-// How far a point is from the nearest lane, as a share of the lane's width
-// there: a lane widens as it goes, to 1.6 times as wide. Only a lane it may
-// lie within LANE of is measured; further off, how far does not matter.
-let toLane = (lanes: Course[], x: number, z: number) => {
-  let best = Infinity
-  for (let c of lanes) {
-    if (!near(c, x, z, LANE * 1.6)) continue
-    let t = along(c, x, z)
-    best = Math.min(best, off(c, x, z, t) / (0.6 + t))
-  }
-  return best
-}
-
-// How far a point is from the middle of the nearest road, in metres. Only a
-// road it may lie within CLEAR of is measured.
-let toRoad = (ways: Way[], x: number, z: number) => {
-  let best = Infinity
-  for (let { c } of ways) {
-    if (near(c, x, z, CLEAR)) {
-      best = Math.min(best, off(c, x, z, along(c, x, z)))
-    }
-  }
-  return best
-}
-
-// Whether a point this far from the nearest lane, in lane widths, and road,
-// in metres, is on or beside one, where nothing grows.
-let worn = (lane: number, road: number) => lane < LANE || road < CLEAR
-
-/** Whether a point of a level, in metres, is on or beside one of its roads or
- * lanes, where nothing grows. */
-export let trodden = (lv: Level) => {
-  let lanes = lanesOf(lv), ways = waysOf(lv)
-  return (x: number, z: number) => worn(toLane(lanes, x, z), toRoad(ways, x, z))
-}
-
-/** A level's ground, grown at a voxel edge of `voxel` metres, which must
- * divide SIZE. Deterministic, and cached: call it as often as you like. The
- * cache keeps the last few asked for (KEPT), two levels at three details,
- * so a page that walks the world does not keep every level it passed. */
-export let vale = (id: string, voxel = VOXEL): Vale => {
-  let key = `${id}@${voxel}`
-  let v = grown.get(key) ?? build(LEVELS[id] ?? LEVELS.mossvale, voxel)
-  grown.delete(key)
-  grown.set(key, v)
-  for (let old of grown.keys()) {
-    if (grown.size <= KEPT) break
-    grown.delete(old)
-  }
-  return v
-}
-let grown = new Map<string, Vale>()
-let KEPT = 6
-
-let build = (lv: Level, V: number): Vale => {
-  let s = lv.seed * 101
-  let n = Math.round(SIZE / V)
-  let at = (i: number, k: number) => i + k * n
-  let mid = (i: number) => (i + 0.5) * V
-  let height = rise(lv)
-  let paths = lanesOf(lv)
-  let ways = waysOf(lv)
-  let h = new Int16Array(n * n)
-  let hue = new Float32Array(n * n)
-  let lanes = new Float32Array(n * n)
-  let roads = new Float32Array(n * n)
-  for (let k = 0; k < n; k++) {
-    for (let i = 0; i < n; i++) {
-      let x = mid(i), z = mid(k)
-      h[at(i, k)] = Math.round(height(x, z) / V)
-      hue[at(i, k)] = fbm(x / 11, z / 11, 31 + s, 3)
-      lanes[at(i, k)] = toLane(paths, x, z)
-      roads[at(i, k)] = toRoad(ways, x, z)
-    }
-  }
-  let get = (i: number, k: number) =>
-    h[at(Math.max(0, Math.min(n - 1, i)), Math.max(0, Math.min(n - 1, k)))]
-  // The most a column steps up or down to a neighbour, in voxels: how steep
-  // it is, in metres a metre.
-  let slope = (i: number, k: number) => {
-    let c = get(i, k)
-    return Math.max(
-      Math.abs(get(i + 1, k) - c),
-      Math.abs(get(i - 1, k) - c),
-      Math.abs(get(i, k + 1) - c),
-      Math.abs(get(i, k - 1) - c),
-    )
-  }
-  // What each column is topped with: snow up high, stone where it is steep,
-  // sand at the water, a path where a road or a lane runs, and elsewhere
-  // whatever the places holding it cover it with, strongest first (`cover`).
-  let hold = holder(lv)
-  let top = new Uint8Array(n * n)
-  for (let k = 0; k < n; k++) {
-    for (let i = 0; i < n; i++) {
-      let x = mid(i), z = mid(k)
-      let c = h[at(i, k)] * V, w = hold(x, z)
-      let most = w.fs[lead(w, 0.42)]
-      top[at(i, k)] = c >= 19
-        ? Top.snow
-        : slope(i, k) >= 3
-        ? most?.cliff ?? Top.stone
-        : c <= SHORE
-        ? most?.shore ?? Top.sand
-        : roads[at(i, k)] < ROAD || lanes[at(i, k)] < 0.85 && w.rim < 0.4
-        ? Top.path
-        : cover(w, fbm(x / 3, z / 3, 11 + s, 2), x, z)
-    }
-  }
-
-  // Each village paved where people gather; what each place builds round its
-  // middle; and each road's signpost, where a hero coming in by it stands.
-  let villages = Object.values(lv.places).filter((p) => isA(p.kind, 'village'))
+/** What a level builds, in world metres: what its places build round their
+ * middles, and the signpost beside each road out. */
+export let builtOf = (id: string): Prop[] => {
+  let got = raised.get(id)
+  if (got) return got
   let built: Prop[] = []
-  // The first and last column less than `r` metres either side of `c`.
-  let span = (c: number, r: number): [number, number] => [
-    Math.max(0, Math.floor((c - r) / V)),
-    Math.min(n - 1, Math.floor((c + r) / V)),
-  ]
-  for (let vil of villages) {
-    // Paved at most 4.75 + 0.75 metres out.
-    let [i0, i1] = span(vil.at[0], 5.5), [k0, k1] = span(vil.at[1], 5.5)
-    for (let k = k0; k <= k1; k++) {
-      for (let i = i0; i <= i1; i++) {
-        let x = mid(i), z = mid(k)
-        let ragged = rand(Math.floor(x / GRID), Math.floor(z / GRID), 5 + s)
-        if (dist(x, z, vil.at) < 4.75 + ragged * 0.75) top[at(i, k)] = Top.path
-      }
-    }
-  }
-  // A build that stands aside (props/kit.ts) takes the nearest step from
-  // where it was planned (STEPS) where none of the ground it takes is paved and
-  // a metre parts it from what was built before it; failing that, where a
-  // metre parts them. The ground a build takes is a box square to the axes, as
-  // structures are built (foundation): its span, or the trunk or row a walker
-  // meets, or its foot.
+  let places = placesOf(id)
   let paved = (x: number, z: number) =>
-    toRoad(ways, x, z) < ROAD || toLane(paths, x, z) < 0.85
-  let half = (p: Prop): [number, number] => {
-    let { girth, row = 0, foot = 0 } = KINDS[p.kind], span = spanOf(p)
-    return span
-      ? [span[0] / 2, span[1] / 2]
-      : girth
-      ? [row + girth / 2, girth / 2]
-      : [foot, foot]
-  }
+    toRoad(roadsIn(x, z, x, z, ROAD), x, z, ROAD) < ROAD ||
+    toLane(lanesIn(x, z, x, z, 2), x, z) < 0.85
   let clear = (p: Prop, x: number, z: number, road: boolean) => {
     let [w, d] = half(p)
     return built.every((q) => {
@@ -586,121 +386,212 @@ let build = (lv: Level, V: number): Vale => {
     }
     return { ...b, x: cx + b.x, z: cz + b.z }
   }
-  for (let p of Object.values(lv.places)) {
-    let f = FEATURES[p.kind]
-    for (let b of f?.builds ?? []) {
-      built.push(stand({ ...b, kind: dressed(b.kind, f.dress) }, p.at))
+  for (let p of places) {
+    for (let b of p.f.builds ?? []) {
+      built.push(stand({ ...b, kind: dressed(b.kind, p.f.dress) }, p.at))
     }
   }
-  let out = ways.map(({ side, to, c }): Road => {
-    let [x, z] = EDGE[side], len = Math.hypot(c.dx, c.dz)
-    let [ux, uz] = [-c.dx / len, -c.dz / len]
-    let door: Spot = [x + ux * DOOR, z + uz * DOOR]
-    let sign: Spot = [snap(door[0] - uz * 2.75), snap(door[1] + ux * 2.75)]
-    built.push({ kind: 'signpost', x: sign[0], z: sign[1], seed: 0 })
-    return { side, to, x, z, door, sign }
-  })
-
-  // Each building on the ground at its middle, and the ground it needs:
-  // under its walls no higher than its floor's foot, before each door level
-  // with it, and a path out from the door (`lay`).
-  let buildings = built.flatMap((p) => {
-    let b = building(p, h[at(Math.floor(p.x / V), Math.floor(p.z / V))] * V)
-    return b ? [b] : []
-  })
-  let col = (m: number) => Math.max(0, Math.min(n - 1, Math.floor(m / V)))
-  for (let b of buildings) {
-    let [i0, i1] = [col(b.box[0] - LAID), col(b.box[2] + LAID)]
-    let [k0, k1] = [col(b.box[1] - LAID), col(b.box[3] + LAID)]
-    for (let k = k0; k <= k1; k++) {
-      for (let i = i0; i <= i1; i++) {
-        let j = at(i, k), got = lay(b, mid(i), mid(k), h[j] * V)
-        h[j] = Math.round(got.h / V)
-        if (got.path) top[j] = Top.path
-      }
-    }
+  for (let r of roadsOf(id)) {
+    let [x, z] = r.signs.find((s) => s.level == id)!.at
+    built.push({ kind: 'signpost', x, z, seed: 0 })
   }
+  raised.set(id, built)
+  return built
+}
 
-  let props: Prop[] = [...built]
-  let taken = (x: number, z: number, lane: number, road: number) =>
-    built.some((p) => dist(x, z, [p.x, p.z]) < (KINDS[p.kind].foot ?? 0) + 1) ||
-    villages.some((p) => dist(x, z, p.at) < 6) || worn(lane, road)
+// How far from its place's middle a build may stand, in metres: a chunk
+// finds what is built in it among the levels whose cells lie within this of
+// it.
+let BUILT = 40
 
-  // Trees and rocks, one chance per cell of a jittered grid, decided on the
-  // smooth ground so they stand in the same places at every voxel size; none
-  // in the glade where a hero comes in by a road, so they see where they
-  // are.
-  let CELL = 3
-  for (let ck = 0; ck < SIZE / CELL; ck++) {
-    for (let ci = 0; ci < SIZE / CELL; ci++) {
-      let x = snap(ci * CELL + rand(ci, ck, 1 + s) * (CELL - GRID))
-      let z = snap(ck * CELL + rand(ci, ck, 2 + s) * (CELL - GRID))
-      if (x < 1 || z < 1 || x > SIZE - 1.5 || z > SIZE - 1.5) continue
-      let y = height(x, z)
-      if (y <= SHORE || y >= 18 || steep(height, x, z) >= 2) continue
-      if (taken(x, z, toLane(paths, x, z), toRoad(ways, x, z))) continue
-      if (out.some((r) => dist(x, z, r.door) < GLADE)) continue
-      let w = hold(x, z)
-      let tree = 0.04 + w.rim * 0.3 + weigh(w, (f) => f.trees)
-      let rock = 0.03 + w.rim * 0.12 + weigh(w, (f) => f.rocks)
-      let roll = rand(ci, ck, 3 + s), pick = hash(ci, ck, 6 + s)
+/** What is built within the box from (x0, z0) to (x1, z1), in metres. */
+export let builtIn = (x0: number, z0: number, x1: number, z1: number): Prop[] =>
+  Object.values(LEVELS).filter(({ cell: [gx, gz] }) =>
+    gx * SIZE < x1 + BUILT && (gx + 1) * SIZE > x0 - BUILT &&
+    gz * SIZE < z1 + BUILT && (gz + 1) * SIZE > z0 - BUILT
+  ).flatMap((lv) =>
+    builtOf(lv.id).filter((p) => p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1)
+  )
+
+/** What is built within `r` metres of (x, z). */
+export let builtNear = (x: number, z: number, r: number): Prop[] =>
+  builtIn(x - r, z - r, x + r, z + r).filter((p) => dist(x, z, [p.x, p.z]) < r)
+
+// The smooth height of the ground across a box, and the lists of what may
+// reach it, found once for all of its points: `m` metres round the box are
+// counted in, for what looks beside a point.
+let area = (x0: number, z0: number, x1: number, z1: number, m = 2) => {
+  let near = placesIn(x0 - m, z0 - m, x1 + m, z1 + m)
+  let roads = roadsIn(x0 - m, z0 - m, x1 + m, z1 + m, ROAD + EASE + 1.5)
+  let lanes = lanesIn(x0 - m, z0 - m, x1 + m, z1 + m, 3)
+  let built = builtIn(x0 - 12, z0 - 12, x1 + 12, z1 + 12)
+  let villages = VILLAGES.filter((v) =>
+    v.at[0] > x0 - 12 && v.at[0] < x1 + 12 && v.at[1] > z0 - 12 &&
+    v.at[1] < z1 + 12
+  )
+  return { near, roads, lanes, built, villages, height: rising(near, roads) }
+}
+
+// Whether a point, this far from the nearest lane and road, is taken: by
+// what is built, a village's square, or a way.
+let takenIn = (a: ReturnType<typeof area>) =>
+(
+  x: number,
+  z: number,
+  lane = toLane(a.lanes, x, z),
+  road = toRoad(a.roads, x, z),
+) =>
+  a.built.some((p) => dist(x, z, [p.x, p.z]) < (KINDS[p.kind].foot ?? 0) + 1) ||
+  a.villages.some((v) => dist(x, z, v.at) < 6) || worn(lane, road)
+
+// Trees and rocks, one chance per cell of a jittered grid, decided on the
+// smooth ground so they stand in the same places at every voxel size.
+let CELL = 3
+let hold = holder()
+let planted = kept(400, (ci: number, ck: number): Prop[] => {
+  let x0 = ci * CHUNK, z0 = ck * CHUNK, x1 = x0 + CHUNK, z1 = z0 + CHUNK
+  let a = area(x0, z0, x1, z1)
+  let taken = takenIn(a)
+  let props = a.built.filter((p) =>
+    p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1
+  )
+  for (let gk = Math.floor(z0 / CELL); gk * CELL < z1; gk++) {
+    for (let gi = Math.floor(x0 / CELL); gi * CELL < x1; gi++) {
+      let x = snap(gi * CELL + rand(gi, gk, 1) * (CELL - GRID))
+      let z = snap(gk * CELL + rand(gi, gk, 2) * (CELL - GRID))
+      if (x < x0 || x >= x1 || z < z0 || z >= z1) continue
+      let y = a.height(x, z)
+      if (y <= SHORE || y >= 18 || steep(a.height, x, z) >= 2) continue
+      if (taken(x, z)) continue
+      let w = hold(a.near, x, z, wildOf(blend(x, z), rand(gi, gk, 7)))
+      let tree = 0.04 + weigh(w, (f) => f.trees)
+      let rock = 0.03 + weigh(w, (f) => f.rocks)
+      let roll = rand(gi, gk, 3), h = hash(gi, gk, 6)
       let grow = roll < tree
       let kind = grow
-        ? pickOf(w, 'grows', pick, w.rim > 0.3 ? 'pine' : 'oak')
+        ? pickOf(w, 'grows', h, 'oak')
         : roll < tree + rock
-        ? pickOf(w, 'stones', pick, 'rock')
+        ? pickOf(w, 'stones', h, 'rock')
         : undefined
-      let seed = hash(ci, ck, (grow ? 4 : 5) + s)
-      if (kind) props.push({ kind, x, z, seed })
+      if (kind) props.push({ kind, x, z, seed: hash(gi, gk, grow ? 4 : 5) })
     }
   }
+  return props
+})
 
-  // Flowers, grass, reeds and the like, one chance per cell of the grid:
-  // what the strongest place holding it says, else the wild's, else on green
-  // ground flowers and grass; on sand and stone only what a place strews.
-  let cells = SIZE / GRID
-  for (let ck = 1; ck < cells - 1; ck++) {
-    for (let ci = 1; ci < cells - 1; ci++) {
-      let x = (ci + 0.5) * GRID, z = (ck + 0.5) * GRID
-      let roll = rand(ci, ck, 9 + s)
+/** What stands in chunk (ci, ck) of the world: what is built there, and its
+ * trees and rocks; not what grows underfoot (`decor`). The same at every
+ * voxel size. */
+export let propsIn = (ci: number, ck: number): Prop[] => planted(ci, ck)
+
+/** What grows underfoot in a patch's chunk (flowers, grass, reeds and the
+ * like), one chance per cell of the grid: what the strongest place holding
+ * it says, else the wild's, else on green ground flowers and grass; on sand
+ * and stone only what a place strews. */
+export let decor = (p: Patch): Prop[] => {
+  let V = p.voxel, C = p.n - 2
+  let x0 = p.ci * CHUNK, z0 = p.ck * CHUNK
+  let a = area(x0, z0, x0 + CHUNK, z0 + CHUNK)
+  let taken = takenIn(a)
+  let out: Prop[] = []
+  let cells = CHUNK / GRID
+  for (let dk = 0; dk < cells; dk++) {
+    for (let di = 0; di < cells; di++) {
+      let gi = p.ci * cells + di, gk = p.ck * cells + dk
+      let x = (gi + 0.5) * GRID, z = (gk + 0.5) * GRID
+      let roll = rand(gi, gk, 9)
       if (roll >= LUSH) continue
-      let j = at(Math.floor(x / V), Math.floor(z / V))
-      let t = top[j]
-      if (t == Top.path || taken(x, z, lanes[j], roads[j])) continue
-      let w = hold(x, z), f = w.fs[lead(w, 0.42, (f) => f.decor)]
+      let t = p.top[Math.floor((x - x0) / V) + Math.floor((z - z0) / V) * C]
+      if (t == Top.path || taken(x, z)) continue
+      let w = hold(a.near, x, z, wildOf(blend(x, z), rand(gi, gk, 8)))
+      let f = w.fs[lead(w, 0.42, (f) => f.decor)]
       if (BARE.has(t) && !f?.strewn) continue
       let list = f?.decor ?? w.wild?.decor ?? (GREEN.has(t) ? DECOR : [])
       let sum = 0
       for (let [kind, chance] of list) {
         if (roll < (sum += chance)) {
-          props.push({ kind, x, z, seed: hash(ci, ck, 10 + s) })
+          out.push({ kind, x, z, seed: hash(gi, gk, 10) })
           break
         }
       }
     }
   }
+  return out
+}
 
-  let v: Vale = {
-    level: lv,
+// Chunk (ci, ck)'s ground, grown alone at the vale's voxel edge V. What tops
+// each column: snow up high, stone where it is steep, sand at the water, a
+// path where a road or a lane runs or a village gathers, and elsewhere
+// whatever the places holding it cover it with, strongest first (`cover`);
+// and then the ground the buildings need is laid.
+let growing = (v: Vale) => (ci: number, ck: number): Patch => {
+  let V = v.voxel, C = Math.round(CHUNK / V), n = C + 2
+  let x0 = ci * CHUNK, z0 = ck * CHUNK
+  let a = area(x0, z0, x0 + CHUNK, z0 + CHUNK)
+  let mid = (j: number) => (j + 0.5) * V
+  let i0 = ci * C - 1, k0 = ck * C - 1
+  let h = new Int16Array(n * n)
+  for (let k = 0; k < n; k++) {
+    for (let i = 0; i < n; i++) {
+      h[i + k * n] = Math.round(a.height(mid(i0 + i), mid(k0 + k)) / V)
+    }
+  }
+  let get = (i: number, k: number) => h[i + k * n]
+  let top = new Uint8Array(C * C), hue = new Float32Array(C * C)
+  let region = new Uint8Array(C * C), other = new Uint8Array(C * C)
+  let share = new Uint8Array(C * C), regions: string[] = []
+  let index = (id: string) => {
+    let j = regions.indexOf(id)
+    return j < 0 ? regions.push(id) - 1 : j
+  }
+  for (let dk = 0; dk < C; dk++) {
+    for (let di = 0; di < C; di++) {
+      let i = di + 1, k = dk + 1, j = di + dk * C
+      let x = mid(i0 + i), z = mid(k0 + k)
+      let c = get(i, k)
+      let slope = Math.max(
+        Math.abs(get(i + 1, k) - c),
+        Math.abs(get(i - 1, k) - c),
+        Math.abs(get(i, k + 1) - c),
+        Math.abs(get(i, k - 1) - c),
+      )
+      let b = blend(x, z)
+      region[j] = index(b.a)
+      other[j] = index(b.b || b.a)
+      share[j] = Math.round((b.t - 0.5) * 510)
+      hue[j] = fbm(x / 11, z / 11, 31, 3)
+      let gi = Math.floor(x / GRID), gk = Math.floor(z / GRID)
+      let w = hold(a.near, x, z, wildOf(b, rand(gi, gk, 8)))
+      let most = w.fs[lead(w, 0.42)]
+      let paved = a.villages.some((v) =>
+        dist(x, z, v.at) <
+          4.75 + rand(gi, gk, 5 + LEVELS[v.level].seed * 101) * 0.75
+      )
+      top[j] = c * V >= 19
+        ? Top.snow
+        : slope >= 3
+        ? most?.cliff ?? Top.stone
+        : c * V <= SHORE
+        ? most?.shore ?? Top.sand
+        : paved || toRoad(a.roads, x, z) < ROAD || toLane(a.lanes, x, z) < 0.85
+        ? Top.path
+        : cover(w, fbm(x / 3, z / 3, 11, 2), x, z)
+    }
+  }
+  layIn(v, ci, ck, h, top)
+  return {
+    ci,
+    ck,
     voxel: V,
-    cols: n,
-    h,
+    n,
+    layers: [h],
     top,
     hue,
-    props,
-    built,
-    walls: [],
-    buildings,
-    stations: [],
-    places: Object.fromEntries(
-      Object.entries(lv.places).map(([name, p]) => [name, p.at]),
-    ),
-    hearth: villages[0]?.at ?? null,
-    roads: out,
+    region,
+    other,
+    share,
+    regions,
   }
-  v.walls = wallsOf(v)
-  v.stations = stationsOf(v)
-  return v
 }
 
 // How far round a building's box the ground it needs is laid, in metres.
@@ -715,7 +606,7 @@ let LAID = 5.5
  * ```ts
  * import { assertEquals } from '@std/assert'
  * let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
- * let b = v.buildings[0]
+ * let b = v.buildings(64, 64, 0)[0]
  * assertEquals(lay(b, 63, 64, 7), { h: 5, path: false }) // inside
  * assertEquals(lay(b, b.doors[0].hinge[0], 67.5, 4), { h: 5, path: false })
  * assertEquals(lay(b, b.doors[0].hinge[0], 70, 4).path, true)
@@ -740,21 +631,114 @@ export let lay = (b: Building, x: number, z: number, h: number) => {
   return { h, path: false }
 }
 
-/** A building's prop placed on the ground at its middle, `base` metres high;
- * null for any other prop. */
-export let building = (p: Prop, base: number): Building | null => {
+// Each vale's buildings, raised the first time each is asked for.
+let raising = new WeakMap<Vale, WeakMap<Prop, Building | null>>()
+
+/** The building prop `p` is in vale `v`, raised on the ground at its middle
+ * as rounded to the vale's voxels; null for any other prop. */
+export let buildingOf = (v: Vale, p: Prop): Building | null => {
+  if (!KINDS[p.kind].raise) return null
+  let got = raising.get(v)
+  if (!got) raising.set(v, got = new WeakMap())
+  let b = got.get(p)
+  if (b !== undefined) return b
+  let V = v.voxel, mid = (m: number) => (Math.floor(m / V) + 0.5) * V
+  let base = Math.round(v.rise(mid(p.x), mid(p.z)) / V) * V
   let r = raisedOf(p.kind, p.seed)
-  return r && placed(p.kind, r, [p.x, base, p.z], p.turn ?? 0)
+  b = r && placed(p.kind, r, [p.x, base, p.z], p.turn ?? 0)
+  got.set(p, b)
+  return b
 }
 
-/** Where a level's stations stand: the ones in the open, and the ones its
- * buildings house. */
-let stationsOf = (v: Vale): Station[] => [
-  ...v.built.flatMap((p): Station[] => {
+// The ground the buildings need (`lay`), laid into chunk (ci, ck)'s surface
+// `h` (its columns and one more all round, in voxels), and a path in `top`
+// (its own columns) where one leads from a door.
+let layIn = (
+  v: Vale,
+  ci: number,
+  ck: number,
+  h: Int16Array,
+  top: Uint8Array,
+) => {
+  let V = v.voxel, C = Math.round(CHUNK / V), n = C + 2
+  let i0 = ci * C - 1, k0 = ck * C - 1
+  let mid = (j: number) => (j + 0.5) * V
+  let col = (m: number, o: number) =>
+    Math.max(0, Math.min(n - 1, Math.floor(m / V) - o))
+  let cx = (ci + 0.5) * CHUNK, cz = (ck + 0.5) * CHUNK
+  for (let b of v.buildings(cx, cz, CHUNK / 2 + V + LAID)) {
+    for (let k = col(b.box[1] - LAID, k0); k <= col(b.box[3] + LAID, k0); k++) {
+      for (
+        let i = col(b.box[0] - LAID, i0);
+        i <= col(b.box[2] + LAID, i0);
+        i++
+      ) {
+        let j = i + k * n, got = lay(b, mid(i0 + i), mid(k0 + k), h[j] * V)
+        h[j] = Math.round(got.h / V)
+        let own = i > 0 && i <= C && k > 0 && k <= C
+        if (got.path && own) top[i - 1 + (k - 1) * C] = Top.path
+      }
+    }
+  }
+}
+
+// The buildings of a vale whose ground comes within r of (x, z): of those
+// whose ground reaches each cell of the lattice (levels.ts `SIZE`) that the
+// square round (x, z) covers, found among what is `built` within a chunk of
+// the cell, as nothing built reaches further from its middle (`bumping`). A
+// walker asks of the one cell it is in, again and again.
+let housing = (
+  v: Vale,
+  built: (x0: number, z0: number, x1: number, z1: number) => Prop[],
+) => {
+  let reaching = kept(64, (gi: number, gk: number): Building[] => {
+    let x0 = gi * SIZE, z0 = gk * SIZE, x1 = x0 + SIZE, z1 = z0 + SIZE
+    return built(x0 - CHUNK, z0 - CHUNK, x1 + CHUNK, z1 + CHUNK).flatMap(
+      (p) => {
+        let b = buildingOf(v, p)
+        if (!b) return []
+        let [w, n, e, s] = b.box
+        return w <= x1 && e >= x0 && n <= z1 && s >= z0 ? [b] : []
+      },
+    )
+  })
+  let cell = (m: number) => Math.floor(m / SIZE)
+  return (x: number, z: number, r: number): Building[] => {
+    let out: Building[] = []
+    for (let gk = cell(z - r); gk <= cell(z + r); gk++) {
+      for (let gi = cell(x - r); gi <= cell(x + r); gi++) {
+        for (let b of reaching(gi, gk)) {
+          if (near(b, x, z, r) && !out.includes(b)) out.push(b)
+        }
+      }
+    }
+    return out
+  }
+}
+
+/** Where heroes make things within `r` metres of (x, z) (craft.ts): the
+ * stations standing in the open, and the ones buildings house.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
+ * assertEquals(stationsNear(v, 64, 64, 12).map((s) => s.craft), ['forge'])
+ * assertEquals(stationsNear(v, 90, 64, 12), [])
+ * ```
+ */
+export let stationsNear = (
+  v: Vale,
+  x: number,
+  z: number,
+  r: number,
+): Station[] => [
+  ...propsNear(v, x, z, r).flatMap((p): Station[] => {
     let craft = KINDS[p.kind].station
     return craft ? [{ craft, x: p.x, y: standAt(v, p), z: p.z }] : []
   }),
-  ...v.buildings.flatMap((b) => b.stations),
+  ...v.buildings(x, z, r).flatMap((b) =>
+    b.stations.filter((s) => dist(x, z, [s.x, s.z]) < r)
+  ),
 ]
 
 /** The ground a structure stands on, metres east–west and north–south, as it
@@ -764,63 +748,253 @@ export let spanOf = (p: Prop): [number, number] | undefined => {
   return s && (p.turn ?? 0) & 1 ? [s[1], s[0]] : s
 }
 
-// What a walker bumps into: what is solid, trunks and posts, the village's
-// buildings and a ruin's walls (props.ts `KINDS`). A building is a row of
-// circles along each wall, so its door is a gap.
-let wallsOf = (v: Vale): Wall[] => {
+// What a walker bumps into in a chunk: what is solid, trunks and posts, and
+// the walls of a building (props.ts `KINDS`), a row of circles along each
+// wall, so its door is a gap; from what stands in the chunk and round it, as
+// far as it reaches in.
+let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
+  let x0 = ci * CHUNK, z0 = ck * CHUNK, x1 = x0 + CHUNK, z1 = z0 + CHUNK
   let walls: Wall[] = []
-  for (let p of v.props) {
-    let y = standAt(v, p), k = KINDS[p.kind]
-    if (k.solid) {
-      let { r, tall } = bulk(p.kind, p.seed)
-      walls.push({ x: p.x, z: p.z, r, top: y + tall })
-    } else if (k.girth) {
-      // A trunk or a post is too tall to jump; a row as tall as it is drawn.
-      let tall = k.row ? bulk(p.kind, p.seed).tall : 3
-      let row = k.row ?? 0
-      for (let dx = -row; dx <= row + 1e-9; dx += k.girth) {
-        walls.push({ x: p.x + dx, z: p.z, r: k.girth, top: y + tall })
-      }
-    }
-    if (SHELL[p.kind]) {
-      for (let [x, z] of footprint(p)) {
-        walls.push({ x, z, r: 0.45, top: y + 5 })
+  let add = (w: Wall) => {
+    let dx = Math.max(x0 - w.x, 0, w.x - x1)
+    let dz = Math.max(z0 - w.z, 0, w.z - z1)
+    if (norm(dx, dz) < w.r + 1) walls.push(w)
+  }
+  for (let k = ck - 1; k <= ck + 1; k++) {
+    for (let i = ci - 1; i <= ci + 1; i++) {
+      for (let p of v.plant(i, k)) {
+        let y = standAt(v, p), kind = KINDS[p.kind]
+        if (kind.solid) {
+          let { r, tall } = bulk(p.kind, p.seed)
+          add({ x: p.x, z: p.z, r, top: y + tall })
+        } else if (kind.girth) {
+          // A trunk or a post is too tall to jump; a row as tall as it is
+          // drawn.
+          let tall = kind.row ? bulk(p.kind, p.seed).tall : 3
+          let row = kind.row ?? 0
+          for (let dx = -row; dx <= row + 1e-9; dx += kind.girth) {
+            add({ x: p.x + dx, z: p.z, r: kind.girth, top: y + tall })
+          }
+        }
+        if (SHELL[p.kind]) {
+          for (let [x, z] of footprint(p)) add({ x, z, r: 0.45, top: y + 5 })
+        }
       }
     }
   }
   return walls
 }
 
-/** A level of flat ground `high` metres up, holding nothing but `walls` and
- * `props`: somewhere to try a rule with nothing else in the way. */
+// The world's ground at each voxel size asked for, made once.
+let vales = new Map<number, Vale>()
+
+/** The world's ground grown at a voxel edge of `voxel` metres, which must
+ * divide CHUNK. Deterministic: every page and worker grows the same.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { regionOf } from './regions.ts'
+ * // A chunk grown alone meets its neighbour at their seam: the column past
+ * // its east edge is its neighbour's first, and its last is the column
+ * // before the neighbour's.
+ * let v = vale(1), a = v.grow(-2, 3), n = a.n
+ * let b = v.grow(-1, 3)
+ * let seam = (p: typeof a, i: number) =>
+ *   Array.from({ length: n }, (_, k) => p.layers[0][i + k * n])
+ * assertEquals(seam(a, n - 1), seam(b, 1))
+ * assertEquals(seam(a, n - 2), seam(b, 0))
+ * // Each column is in the region that holds its middle, at every voxel
+ * // size: here, where Mossvale meets Birchmere.
+ * for (let p of [a, vale(0.5).grow(-2, 3)]) {
+ *   let C = p.n - 2, V = p.voxel
+ *   let at = (j: number) =>
+ *     regionOf(-32 + (j % C + 0.5) * V, 48 + (Math.floor(j / C) + 0.5) * V)
+ *   assertEquals([...p.region].filter((r, j) => p.regions[r] != at(j)), [])
+ *   let ids = new Set([...p.region].map((r) => p.regions[r]))
+ *   assertEquals([...ids].sort(), ['birchmere', 'mossvale'])
+ * }
+ * ```
+ */
+export let vale = (voxel = VOXEL): Vale => {
+  let got = vales.get(voxel)
+  if (got) return got
+  let v: Vale = {
+    voxel,
+    rise,
+    grow: (ci, ck) => grow(ci, ck),
+    plant: propsIn,
+    bump: (ci, ck) => bumps(ci, ck),
+    buildings: (x, z, r) => houses(x, z, r),
+    patches: new Map(),
+  }
+  let grow = growing(v), bumps = kept(200, bumping(v))
+  let houses = housing(v, builtIn)
+  vales.set(voxel, v)
+  return v
+}
+
+// How many chunks' ground a vale keeps.
+let PATCHES = 200
+
+/** Keep a chunk's ground grown elsewhere (a worker) in a vale, which then
+ * reads it rather than growing it. */
+export let adopt = (v: Vale, p: Patch) => {
+  let k = key(p.ci, p.ck)
+  v.patches.delete(k)
+  v.patches.set(k, p)
+  if (v.patches.size > PATCHES) v.patches.delete(v.patches.keys().next().value!)
+}
+
+/** Chunk (ci, ck)'s ground in a vale: as kept, or grown now and kept. */
+export let patchOf = (v: Vale, ci: number, ck: number): Patch => {
+  let p = v.patches.get(key(ci, ck))
+  if (!p) adopt(v, p = v.grow(ci, ck))
+  return p
+}
+
+/** Ground `high` metres up, or as high as `high` says at each point, holding
+ * nothing but `walls` and `props`: somewhere to try a rule with nothing else
+ * in the way. */
 export let flat = (
-  high: number,
+  high: number | ((x: number, z: number) => number),
   walls: Wall[] = [],
   props: Prop[] = [],
   voxel = VOXEL,
 ): Vale => {
-  let n = Math.round(SIZE / voxel)
+  let rise = typeof high == 'number' ? () => high : high
+  let within =
+    <T extends { x: number; z: number }>(xs: T[], r: number) =>
+    (ci: number, ck: number) =>
+      xs.filter((p) =>
+        p.x >= ci * CHUNK - r && p.x < (ci + 1) * CHUNK + r &&
+        p.z >= ck * CHUNK - r && p.z < (ck + 1) * CHUNK + r
+      )
   let v: Vale = {
-    level: LEVELS.mossvale,
     voxel,
-    cols: n,
-    h: new Int16Array(n * n).fill(Math.round(high / voxel)),
-    top: new Uint8Array(n * n),
-    hue: new Float32Array(n * n),
-    props,
-    built: props,
-    walls,
-    buildings: props.flatMap((p) => {
-      let b = building(p, high)
-      return b ? [b] : []
-    }),
-    stations: [],
-    places: {},
-    hearth: null,
-    roads: [],
+    rise,
+    grow: (ci, ck) => {
+      let C = Math.round(CHUNK / voxel), n = C + 2
+      let h = new Int16Array(n * n)
+      for (let k = 0; k < n; k++) {
+        for (let i = 0; i < n; i++) {
+          h[i + k * n] = Math.round(
+            rise((ci * C + i - 0.5) * voxel, (ck * C + k - 0.5) * voxel) /
+              voxel,
+          )
+        }
+      }
+      let top = new Uint8Array(C * C)
+      layIn(v, ci, ck, h, top)
+      return {
+        ci,
+        ck,
+        voxel,
+        n,
+        layers: [h],
+        top,
+        hue: new Float32Array(C * C),
+        region: new Uint8Array(C * C),
+        other: new Uint8Array(C * C),
+        share: new Uint8Array(C * C).fill(255),
+        regions: ['mossvale'],
+      }
+    },
+    plant: within(props, 0),
+    bump: within(walls, 8),
+    buildings: (x, z, r) => houses(x, z, r),
+    patches: new Map(),
   }
-  v.stations = stationsOf(v)
+  let houses = housing(
+    v,
+    (x0, z0, x1, z1) =>
+      props.filter((p) => p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1),
+  )
   return v
+}
+
+// The column (x, z) lies in, as a voxel index, and its layers: from a patch
+// kept, or the smooth ground rounded there.
+let column = (v: Vale, x: number, z: number) => {
+  let V = v.voxel, ci = chunkOf(x), ck = chunkOf(z)
+  let p = v.patches.get(key(ci, ck))
+  if (!p) return null
+  let C = p.n - 2
+  let i = Math.floor(x / V) - ci * C + 1, k = Math.floor(z / V) - ck * C + 1
+  return { p, j: i + k * p.n }
+}
+
+/** The ground's surface in metres under (x, z): the top of its first
+ * layer. */
+export let groundAt = (v: Vale, x: number, z: number): number => {
+  let c = column(v, x, z), V = v.voxel
+  if (c) return c.p.layers[0][c.j] * V
+  let mx = (Math.floor(x / V) + 0.5) * V, mz = (Math.floor(z / V) + 0.5) * V
+  let h = Math.round(v.rise(mx, mz) / V) * V
+  for (let b of v.buildings(mx, mz, LAID)) {
+    h = Math.round(lay(b, mx, mz, h).h / V) * V
+  }
+  return h
+}
+
+// The layers at a column, deepest last, in metres; NONE where a cave is not.
+let layersAt = (v: Vale, x: number, z: number): number[] => {
+  let c = column(v, x, z)
+  return c
+    ? c.p.layers.map((l) => l[c.j] == NONE ? NONE : l[c.j] * v.voxel)
+    : [groundAt(v, x, z)]
+}
+
+// The open space a point at height y is in: the floor it stands over and
+// the roof over it (Infinity under the sky). A point in rock is in the space
+// over it.
+let spaceOf = (v: Vale, x: number, y: number, z: number): [number, number] => {
+  let ls = layersAt(v, x, z)
+  let roof = Infinity
+  for (let i = 0; i < ls.length; i += 2) {
+    let floor = ls[i]
+    if (floor == NONE) break
+    if (y >= floor || i + 2 >= ls.length || ls[i + 1] == NONE) {
+      return [floor, roof]
+    }
+    // Under the ceiling of the cave below? Then in it, or in its rock.
+    if (y >= ls[i + 1]) return [floor, roof]
+    roof = ls[i + 1]
+  }
+  return [ls[0], Infinity]
+}
+
+/** The floor under a point at height `y` over (x, z), in metres: the ground
+ * of the open space it is in, the surface or a cave's floor.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let v = flat(5)
+ * assertEquals([floorUnder(v, 3, 9, 3), roofOver(v, 3, 9, 3)], [5, Infinity])
+ * ```
+ */
+export let floorUnder = (v: Vale, x: number, y: number, z: number): number =>
+  spaceOf(v, x, y, z)[0]
+
+/** The roof over a point at height `y` over (x, z), in metres: the ceiling
+ * of the cave it is in, or Infinity under the sky. */
+export let roofOver = (v: Vale, x: number, y: number, z: number): number =>
+  spaceOf(v, x, y, z)[1]
+
+/** What a walker bumps into near (x, z). */
+export let wallsNear = (v: Vale, x: number, z: number): Wall[] =>
+  v.bump(chunkOf(x), chunkOf(z))
+
+/** What stands within `r` metres of (x, z). */
+export let propsNear = (v: Vale, x: number, z: number, r: number): Prop[] => {
+  let out: Prop[] = []
+  for (let ck = chunkOf(z - r); ck <= chunkOf(z + r); ck++) {
+    for (let ci = chunkOf(x - r); ci <= chunkOf(x + r); ci++) {
+      for (let p of v.plant(ci, ck)) {
+        if (dist(x, z, [p.x, p.z]) < r) out.push(p)
+      }
+    }
+  }
+  return out
 }
 
 // A building's shell in metres: its width, its depth, and how tall it stands
@@ -851,12 +1025,10 @@ export let footprint = (p: Prop): Spot[] => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let v = flat(5)
  * let well = { kind: 'well', x: 50.25, z: 50.25, seed: 0 }
- * assertEquals(foundation(v, well), null)
+ * assertEquals(foundation(flat(5), well), null)
  * // The ground falls away to 3.5 m on its west side.
- * v.h[Math.floor(49.75 / v.voxel) + Math.floor(50.25 / v.voxel) * v.cols] =
- *   3.5 / v.voxel
+ * let v = flat((x) => x < 50 && x > 49.5 ? 3.5 : 5)
  * assertEquals(foundation(v, well)?.[0][1], 3.5)
  * assertEquals(foundation(v, well)?.[1][1], 1.48)
  * ```
@@ -878,13 +1050,6 @@ export let foundation = (
   }
   if (low >= base) return null
   return [[p.x - w / 2, low, p.z - d / 2], [w, base - low - 0.02, d]]
-}
-
-/** The ground's height in metres under (x, z). */
-export let groundAt = (v: Vale, x: number, z: number): number => {
-  let i = Math.floor(x / v.voxel), k = Math.floor(z / v.voxel)
-  if (i < 0 || k < 0 || i >= v.cols || k >= v.cols) return 30
-  return v.h[i + k * v.cols] * v.voxel
 }
 
 /** Where a prop stands, in metres: a structure on the ground at its middle
@@ -915,8 +1080,8 @@ export let standAt = (v: Vale, p: Prop): number => {
  * ```
  */
 export let inside = (v: Vale, x: number, y: number, z: number): boolean => {
-  if (y < groundAt(v, x, z) + 0.3) return true
-  for (let p of v.built) {
+  if (y < floorUnder(v, x, y, z) + 0.3) return true
+  for (let p of propsNear(v, x, z, 8)) {
     let shell = SHELL[p.kind]
     if (!shell) continue
     let [w, d, h] = shell

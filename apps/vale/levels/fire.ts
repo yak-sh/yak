@@ -7,6 +7,7 @@ export let FIRE: Record<string, Row> = {
   emberfall: {
     name: 'Emberfall',
     seed: 167,
+    cell: [-3, 3],
     arrive: 'forge',
     places: {
       ash: { kind: 'emberash', at: [64, 64] },
@@ -38,6 +39,7 @@ export let FIRE: Record<string, Row> = {
   cinderreach: {
     name: 'Cinderreach',
     seed: 173,
+    cell: [-4, 3],
     arrive: 'ash',
     places: {
       ash: { kind: 'cinderflats', at: [64, 64] },
@@ -68,6 +70,7 @@ export let FIRE: Record<string, Row> = {
   ashkeep: {
     name: 'Ashkeep',
     seed: 179,
+    cell: [-4, 4],
     arrive: 'keep',
     places: {
       ash: { kind: 'ashfield', at: [64, 64] },
@@ -94,6 +97,7 @@ export let FIRE: Record<string, Row> = {
   maw: {
     name: 'The Maw',
     seed: 181,
+    cell: [-5, 3],
     arrive: 'ash',
     places: {
       ash: { kind: 'scorch', at: [64, 70] },

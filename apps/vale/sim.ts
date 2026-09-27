@@ -1,17 +1,26 @@
-// How things move in a level: a walker's step over the voxel ground, and
+// How things move in the world: a walker's step over the voxel ground, and
 // where a creature heads next. Plain functions over plain values; the page
 // keeps each mover's values in its graph (`position` and `motion`) and calls
 // these once a frame.
 //
-// The ground is a heightfield of voxels, whatever their size. A walker steps
-// up half a metre without a thought, needs a jump for more, and cannot pass a
-// wall (a trunk, a rock), deep water, or the edge of the world. A building is
+// The ground is a stack of heightfields of voxels, whatever their size: the
+// surface, and under it any caves (terrain.ts). A walker steps up half a
+// metre without a thought, needs a jump for more, and cannot pass a wall (a
+// trunk, a rock), deep water, or a cave's roof too low for it. A building is
 // solid as it is drawn (solid.ts): its walls stop a walker, its floors and
 // stairs carry it, and its doors open for it unless it is a creature.
 import { type Beast } from './beasts.ts'
 import { wander } from './rules.ts'
 import { hits, over, shut, standOn } from './solid.ts'
-import { groundAt, SIZE, type Vale, type Wall, WATER } from './terrain.ts'
+import {
+  floorUnder,
+  groundAt,
+  hearthNear,
+  roofOver,
+  type Vale,
+  wallsNear,
+  WATER,
+} from './terrain.ts'
 
 /** A mover as a frame steps it: where it is, how fast it rises, which way it
  * faces, how fast it went, and its gait. */
@@ -33,34 +42,12 @@ let STEP = 0.55
 let GRAVITY = 24
 let JUMP = 7.6
 let RADIUS = 0.34
-// How much headroom a walker needs, in metres.
-let HEAD = 1.75
 
 /** How far from a village's fire no creature comes. */
 export let SAFE = 15
 
-// The walls near a point, from a grid of 4 m cells built once per level.
-let CELL = 4
-let grids = new WeakMap<Vale, Map<number, Wall[]>>()
-export let wallsNear = (v: Vale, x: number, z: number): Wall[] => {
-  let grid = grids.get(v)
-  if (!grid) {
-    grid = new Map()
-    for (let w of v.walls) {
-      let r = Math.ceil((w.r + 1) / CELL)
-      let ci = Math.floor(w.x / CELL), ck = Math.floor(w.z / CELL)
-      for (let dk = -r; dk <= r; dk++) {
-        for (let di = -r; di <= r; di++) {
-          let key = (ci + di) * 1024 + ck + dk
-          if (!grid.has(key)) grid.set(key, [])
-          grid.get(key)!.push(w)
-        }
-      }
-    }
-    grids.set(v, grid)
-  }
-  return grid.get(Math.floor(x / CELL) * 1024 + Math.floor(z / CELL)) ?? []
-}
+// How much room a walker needs over its feet, in metres.
+let HEAD = 1.75
 
 /** Whether a walker whose feet are at `y` fits at (x, z): nothing over a
  * step above its feet and under its head is in the way, and, for one that
@@ -74,7 +61,6 @@ export let wallsNear = (v: Vale, x: number, z: number): Wall[] => {
  * assertEquals(fits(v, 20, 20, 5), true)
  * assertEquals(fits(v, 10.3, 10, 5), false) // in the trunk
  * assertEquals(fits(v, 20, 20, 4), false) // ground over a step above its feet
- * assertEquals(fits(v, -1, 20, 5), false) // off the edge of the world
  * ```
  */
 export let fits = (
@@ -85,9 +71,9 @@ export let fits = (
   r = RADIUS,
   opens = true,
 ) => {
-  if (x < 1 || z < 1 || x > SIZE - 1 || z > SIZE - 1) return false
-  let g = groundAt(v, x, z)
-  if (g > y + STEP || g < WATER - 0.7) return false
+  let g = floorUnder(v, x, y + STEP, z), roof = roofOver(v, x, y + STEP, z)
+  if (g > y + STEP || roof < y + HEAD) return false
+  if (roof == Infinity && g < WATER - 0.7) return false
   for (let w of wallsNear(v, x, z)) {
     let dx = w.x - x, dz = w.z - z, reach = w.r + r
     if (dx * dx + dz * dz < reach * reach && w.top > y + STEP) return false
@@ -111,7 +97,7 @@ export let fits = (
  * ```
  */
 export let floorAt = (v: Vale, x: number, z: number, y: number) => {
-  let g = groundAt(v, x, z)
+  let g = floorUnder(v, x, y + STEP, z)
   for (let w of wallsNear(v, x, z)) {
     let dx = w.x - x, dz = w.z - z, reach = w.r + RADIUS
     if (w.top > g && w.top <= y + STEP && dx * dx + dz * dz < reach * reach) {
@@ -151,10 +137,7 @@ export let turn = (a: number, b: number, k: number) => {
  *   return [c.x > 22, c.y]
  * }
  * assertEquals(run(flat(5, [{ x: 22.5, z: 20, r: 0.8, top: 6 }])), [true, 6])
- * let ledge = flat(5), V = ledge.voxel, n = ledge.cols
- * for (let i = Math.round(21.5 / V); i < n; i++) {
- *   ledge.h[i + Math.floor(20 / V) * n] = Math.round(6 / V)
- * }
+ * let ledge = flat((x, z) => x > 21.5 && z > 20 && z < 20.25 ? 6 : 5)
  * assertEquals(run(ledge), [true, 6])
  * ```
  */
@@ -200,7 +183,10 @@ export let walk = (
   if (air) {
     vy -= GRAVITY * dt
     y += vy * dt
-    let roof = over(v, x, z, b.y + STEP, RADIUS)
+    let roof = Math.min(
+      over(v, x, z, b.y + STEP, RADIUS),
+      roofOver(v, x, b.y + STEP, z),
+    )
     if (vy > 0 && y + HEAD > roof) {
       y = Math.max(b.y, roof - HEAD)
       vy = 0
@@ -275,8 +261,7 @@ export let rest = (
 
 /** Whether (x, z) is within reach of a village's fire, where no creature
  * comes. */
-export let inVillage = (v: Vale, x: number, z: number) =>
-  !!v.hearth && Math.hypot(x - v.hearth[0], z - v.hearth[1]) < SAFE
+export let inVillage = (x: number, z: number) => !!hearthNear(x, z, SAFE)
 
 /** A creature's next step: toward its quarry when it has one, stopping at
  * the edge of its reach, and otherwise back to its wandering. It never comes
@@ -306,7 +291,7 @@ export let prowl = (
   let push = d > stop
     ? { x: dx / d, z: dz / d, jump: false }
     : { x: 0, z: 0, jump: false }
-  let n = walk(v, b, push, dt, speed, (x, z) => inVillage(v, x, z), false)
+  let n = walk(v, b, push, dt, speed, inVillage, false)
   if (quarry && d <= stop) n.yaw = turn(b.yaw, Math.atan2(dx, dz), dt * 10)
   return n
 }

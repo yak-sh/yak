@@ -6,6 +6,7 @@ export let DEEP: Record<string, Row> = {
   glowcap: {
     name: 'Glowcap Hollow',
     seed: 97,
+    cell: [-1, -2],
     arrive: 'hollow',
     places: {
       toadstools: { kind: 'glowcaps', at: [64, 64] },
@@ -39,6 +40,7 @@ export let DEEP: Record<string, Row> = {
   gleamdeep: {
     name: 'Gleamdeep',
     seed: 103,
+    cell: [-2, -2],
     arrive: 'toadstools',
     places: {
       toadstools: { kind: 'gleamwood', at: [64, 64] },
@@ -69,6 +71,7 @@ export let DEEP: Record<string, Row> = {
   shardvault: {
     name: 'Shardvault',
     seed: 107,
+    cell: [-2, -3],
     arrive: 'vault',
     places: {
       toadstools: { kind: 'palecaps', at: [64, 70] },
@@ -78,7 +81,6 @@ export let DEEP: Record<string, Row> = {
       north: { kind: 'shards', at: [96, 36] },
     },
     roads: {
-      east: 'icefall',
       south: 'gleamdeep',
     },
     wild: 'shards',

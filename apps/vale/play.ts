@@ -43,9 +43,10 @@ import {
   type Worn,
   wornOf,
 } from './gear.ts'
-import { homesOf } from './homes.ts'
+import { type Home, homesNear } from './homes.ts'
 import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
+import { HOME, LEVELS, type Spot } from './levels.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
 import { GIVERS, type Quest, QUESTS } from './quests.ts'
 import {
@@ -83,8 +84,10 @@ import {
 } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
+import { regionOf, spotOf } from './regions.ts'
 import { plusOf } from './upgrade.ts'
-import { groundAt, type Vale } from './terrain.ts'
+import { groundAt, hearthNear, hearthOf, type Vale } from './terrain.ts'
+import { arriveOf } from './ways.ts'
 
 export type Vec3 = [number, number, number]
 
@@ -188,7 +191,7 @@ export type Mob = {
   held: boolean
 }
 
-/** Another player in this level, as this frame sees them. */
+/** Another player within sight, as this frame sees them. */
 export type Other = {
   eid: string
   name: string
@@ -238,8 +241,7 @@ export type Giver = {
 }
 
 export type Frame = {
-  /** the level the hero is in, or on the frame they walk off a road's end, the
-   * level beyond */
+  /** the level whose region the hero is in */
   level: string
   body: Body
   vitals: Vitals
@@ -315,13 +317,13 @@ let DROP_LIFE = 120_000
 let TALK = 3.6
 // How near its home a player must be for a creature to be moved at all.
 let ACTIVE = 45
+// How far off the others, the creatures and the people who give quests are
+// seen, in metres: as far as the fog shows much of them.
+let SIGHT = 90
 // A page that plays says where its hero is at least this often, in ms, and
 // one that has said nothing for this long sleeps.
 let BEAT = 1000
 let ASLEEP = 3500
-// How near the end of a road, where it meets the level's edge, a walker must
-// come to walk on along it into the level beyond.
-let OFF = 2.2
 
 let round = (v: number, k = 1000) => Math.round(v * k) / k
 let dist = (a: { x: number; z: number }, b: { x: number; z: number }) =>
@@ -399,35 +401,29 @@ let placed = (level: string, b: Body, now: number) => ({
 let same = (a: Record<string, unknown>, b: Record<string, unknown>) =>
   Object.keys(a).every((k) => a[k] === b[k])
 
-/** Where a hero stands on arriving in a level: on the road back to where
- * they came from, facing in, or by the village fire, or at the level's
- * arrival place.
+/** Where a hero stands by a village's fire: the one nearest `near`, or
+ * home's for a hero who has stood nowhere yet.
  *
  * ```ts
- * import { assertEquals } from '@std/assert'
- * import { vale } from './terrain.ts'
- * // Mossvale's west road leads to Birchmere, and comes in by its east road,
- * // facing west.
- * assertEquals(vale('mossvale', 4).roads.find((r) => r.side == 'west')?.to, 'birchmere')
- * let v = vale('birchmere', 4), b = arrival(v, 'mossvale')
- * let east = v.roads.find((r) => r.side == 'east')!
- * assertEquals([east.to, Math.round(b.x), Math.round(Math.sin(b.yaw))], ['mossvale', 119, -1])
+ * import { assert } from '@std/assert'
+ * import { flat, hearthOf } from './terrain.ts'
+ * let v = flat(5)
+ * let by = (b: { x: number; z: number }, [x, z]: number[]) =>
+ *   Math.hypot(b.x - x, b.z - z) < 6
+ * assert(by(arrival(v), hearthOf('mossvale')!))
+ * assert(by(arrival(v, [-60, 70]), hearthOf('birchmere')!))
  * ```
  */
-export let arrival = (v: Vale, from?: string): Body => {
-  let back = v.roads.find((r) => r.to == from)
-  let [x, z] = back ? back.door : v.hearth
-    ? [
-      v.hearth[0] - 1.5 + Math.random() * 3,
-      v.hearth[1] + 3.5 + Math.random() * 1.5,
-    ]
-    : v.places[v.level.arrive] ?? [64, 64]
+export let arrival = (v: Vale, near?: Spot): Body => {
+  let [hx, hz] = (near && hearthNear(...near)) ?? hearthOf(HOME) ??
+    arriveOf(HOME)
+  let x = hx - 1.5 + Math.random() * 3, z = hz + 3.5 + Math.random() * 1.5
   return {
     x,
     y: groundAt(v, x, z),
     z,
     vy: 0,
-    yaw: back ? Math.atan2(x - back.x, z - back.z) : Math.PI,
+    yaw: Math.PI,
     speed: 0,
     gait: 'idle',
   }
@@ -437,10 +433,9 @@ export let arrival = (v: Vale, from?: string): Body => {
 // height.
 let CLIMB = 1.2
 
-/** Where a hero stands back where they were last seen (seen.ts), in the
- * level they were seen in: the same spot, facing the same way, on the ground
- * or on the rock they had climbed; or null, where they no longer fit, in a
- * wall, deep in water or off the land.
+/** Where a hero stands back where they were last seen (seen.ts): the same
+ * spot, facing the same way, on the ground or on the rock they had climbed;
+ * or null, where they no longer fit, in a wall or deep in water.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -457,7 +452,6 @@ let CLIMB = 1.2
  * assertEquals(at(30, 40), [30, 5, 40, 1])
  * assertEquals(at(20, 20), [20, 6, 20, 1]) // up on the rock
  * assertEquals(at(10, 10), null) // in the trunk
- * assertEquals(at(-3, 30), null) // off the land
  * ```
  */
 export let resumed = (
@@ -470,9 +464,9 @@ export let resumed = (
     : null
 }
 
-/** The game over one store. Each frame is played in the level the hero is
- * in. `stand` says where a giver is at a moment, given where their home is:
- * the villagers walk (village.ts). */
+/** The game over one store. Each frame is played round where the hero is.
+ * `stand` says where a giver is at a moment, given where their home is: the
+ * villagers walk (village.ts). */
 export let game = (
   net: Net,
   stand = (_id: string, home: [number, number], _now: number) => home,
@@ -522,17 +516,20 @@ export let game = (
   let wasDown = new Set<string>()
   let last = new Map<string, Body>()
   let anchored = new Set<string>()
-  // The level the hero last walked off by a road, until a frame plays in the
-  // level beyond.
-  let arriving: string | null = null
+  // The region the hero was in last frame, to tell when they cross into
+  // another.
+  let was = ''
   // Where the hero was last seen before this page, until a frame plays.
   let lastSeen: Seen | null = null
-  // Where the hero stands on the first frame played in `v`: back where they
-  // were last seen, when that was here and they still fit there, or where
-  // `arrival` puts them.
-  let landing = (v: Vale): Body =>
-    (lastSeen?.level == v.level.id ? resumed(v, lastSeen) : null) ??
-      arrival(v, arriving ?? undefined)
+  // Where the hero stands on the first frame: back where they were last
+  // seen, when that spot lies in the region it names and they still fit
+  // there, or else by the fire of that region, or of home.
+  let landing = (v: Vale): Body => {
+    let s = lastSeen
+    if (!s) return arrival(v)
+    return (regionOf(s.x, s.z) == s.level ? resumed(v, s) : null) ??
+      arrival(v, hearthOf(s.level) ?? arriveOf(s.level))
+  }
 
   // Where a mover this page moves is (its hero, the creatures it owns),
   // written when it differs from what the graph holds.
@@ -683,15 +680,13 @@ export let game = (
       used: { item: eid, by: me, at: now },
     })
 
-  // The store's row for each creature this level grows, added the first time
-  // a page meets it: what its position and falls attach to.
-  let anchor = (v: Vale) => {
+  // The store's row for each creature near, added the first time a page
+  // meets it: what its position and falls attach to.
+  let anchor = (homes: Home[]) => {
     let creatures = net.watches.creatures
     if (!creatures.ready) return
     let held = new Set(creatures.value.map((b) => b.entity.eid))
-    let missing = homesOf(v).filter((h) =>
-      !held.has(h.eid) && !anchored.has(h.eid)
-    )
+    let missing = homes.filter((h) => !held.has(h.eid) && !anchored.has(h.eid))
     for (let h of missing) anchored.add(h.eid)
     if (missing.length) {
       net.keep(
@@ -705,12 +700,10 @@ export let game = (
 
   return {
     /** bring the hero back where they were last seen, on the first frame
-     * played in that level */
+     * played */
     resume: (s: Seen) => {
       lastSeen = s
     },
-    /** where the hero stands on the first frame played in `v` */
-    landing,
     /** put on a thing I carry, in its slot; with no item, take it off */
     wear: (slot: Slot, item = '') => {
       if (net.hero) wear(net.hero, slot, item)
@@ -797,7 +790,6 @@ export let game = (
     ): Frame | null => {
       let me = net.hero
       if (!me) return null
-      let lv = v.level.id
       let now = net.now()
       let events: Event[] = []
       let change: Bundle[] = []
@@ -808,14 +800,12 @@ export let game = (
         b.y + up,
         b.z,
       ]
-      anchor(v)
 
-      // Me, as the graph has me: a hero with no place here (just come by a
-      // road, back after a reload) stands where they land.
+      // Me, as the graph has me: a hero with no place (new, or back after a
+      // reload) stands where they land.
       let pos = where(row)
-      let here = pos?.level == lv ? bodyOf(pos, motion(row)) : null
+      let here = pos ? bodyOf(pos, motion(row)) : null
       let body = here ? { ...here } : landing(v)
-      arriving = null
       lastSeen = null
       let down = here?.gait == 'down'
       if (down) body.gait = 'idle'
@@ -832,7 +822,7 @@ export let game = (
       // The hero: up again at the fire after fainting, or moving as asked.
       if (down) {
         if (now - downAt > DOWN) {
-          body = arrival(v)
+          body = arrival(v, [body.x, body.z])
           hp = s.max
           down = false
           events.push({ type: 'rise' })
@@ -890,7 +880,7 @@ export let game = (
       }
       let rolling = body.gait == 'roll'
 
-      // The others in this level, as relayed.
+      // The others within sight, as relayed.
       let others: Other[] = []
       let theirs: Dealing[] = []
       let spots = new Map<
@@ -903,7 +893,7 @@ export let game = (
         if (eid == me) continue
         let e = c.ent(eid)
         let p = where(e)
-        if (!p || p.level != lv) continue
+        if (!p || dist(p, body) > SIGHT) continue
         let m = motion(e)
         let pl = comp(e, 'player')
         let f = fight(e)
@@ -955,9 +945,11 @@ export let game = (
       ]
       let all = dealing()
 
-      // The creatures.
+      // The creatures living within sight.
+      let homes = homesNear(body.x, body.z, SIGHT)
+      anchor(homes)
       let mobs: Mob[] = []
-      for (let h of homesOf(v)) {
+      for (let h of homes) {
         let beast = BEASTS[h.kind]
         if (!beast) continue
         let eid = h.eid
@@ -978,7 +970,7 @@ export let game = (
         let p = where(e)
         let hu = hunt(e)
         let held = p && bodyOf(p, motion(e))
-        let moving = p?.level == lv && !up
+        let moving = !!p && !up
         // Where it is: where I have it, or where it is said to be, or where
         // it lay down, or where its wandering has it.
         let mb = held && moving
@@ -1018,7 +1010,7 @@ export let game = (
           else if (beast.aggro) {
             let best = beast.aggro * (hu.player ? 1.8 : 1)
             for (let [w, sp] of spots) {
-              if (!sp.prey || inVillage(v, sp.x, sp.z)) continue
+              if (!sp.prey || inVillage(sp.x, sp.z)) continue
               if (dist(sp, home) > h.roam + LEASH) continue
               let d = dist(sp, mb)
               if (d < best) [best, quarry] = [d, w]
@@ -1046,7 +1038,7 @@ export let game = (
               knocked = true
             }
           }
-          if (stuck && !moving) say(eid, lv, mb, change)
+          if (stuck && !moving) say(eid, h.level, mb, change)
           if (!stuck && (quarry || moving || knocked)) {
             let next = prowl(v, mb, beast, h.home, h.roam, h.seed, now, dt, qs)
             let back = rest(v, h.home, h.roam, h.seed, now)
@@ -1055,7 +1047,7 @@ export let game = (
               mb = back
             } else {
               mb = next
-              say(eid, lv, mb, change)
+              say(eid, h.level, mb, change)
             }
           }
           // Near enough to bite: it winds up, and says when the bite lands.
@@ -1196,7 +1188,7 @@ export let game = (
               at: now,
               ...l.rarity && { rarity: l.rarity },
             },
-            position: { level: lv, x, y: groundAt(v, x, z), z },
+            position: { level: regionOf(x, z), x, y: groundAt(v, x, z), z },
           })
           if (l.rarity && l.rarity != 'common') {
             events.push({
@@ -1498,7 +1490,7 @@ export let game = (
       for (let b of drops.value) {
         let e = c.ent(b.entity.eid)
         let d = comp(e, 'drop'), p = where(e)
-        if (d.kind == null || !p || p.level != lv) continue
+        if (d.kind == null || !p || dist(p, body) > SIGHT) continue
         let drop: Drop = {
           eid: b.entity.eid,
           kind: str(d.kind),
@@ -1530,17 +1522,26 @@ export let game = (
             drop.y = Math.max(groundAt(v, drop.x, drop.z), drop.y)
             change.push({
               entity: { eid: drop.eid },
-              position: { level: lv, x: drop.x, y: drop.y, z: drop.z },
+              position: {
+                level: regionOf(drop.x, drop.z),
+                x: drop.x,
+                y: drop.y,
+                z: drop.z,
+              },
             })
           }
           lying.push(drop)
         }
       }
 
-      // The people of this level who give quests.
-      let givers: Giver[] = GIVERS.filter((g) => g.level == lv).map((g) => {
-        let [px, pz] = v.places[g.place] ?? [64, 64]
+      // The people within sight who give quests.
+      let givers: Giver[] = GIVERS.flatMap((g) => {
+        let [px, pz] = spotOf(g.level, g.place) ?? [Infinity, Infinity]
         let home: [number, number] = [px + g.offset[0], pz + g.offset[1]]
+        return Math.hypot(home[0] - body.x, home[1] - body.z) < SIGHT
+          ? [{ g, home }]
+          : []
+      }).map(({ g, home }) => {
         let [x, z] = stand(g.id, home, now)
         // Where they stood a moment ago says the way they walk.
         let [wx, wz] = stand(g.id, home, now - 250)
@@ -1577,16 +1578,12 @@ export let game = (
         .filter((g) => g.near < TALK)
         .sort((a, b) => a.near - b.near)[0] ?? null
 
-      // Off the end of a road: on to the level beyond. The page grows it, and
-      // the first frame played there stands the hero on the road back
-      // (`arriving`); until then the others see the hero at this road's end.
-      let level = lv
-      let road = v.roads.find((r) => dist(r, body) < OFF)
-      if (road && !down) {
-        level = road.to
-        arriving = lv
-        events.push({ type: 'travel', to: road.to })
+      // Into another region: its name, as the hero comes into it.
+      let level = regionOf(body.x, body.z)
+      if (was && level != was && LEVELS[level]) {
+        events.push({ type: 'travel', to: level })
       }
+      was = level
 
       // What I wear: the first I carry for each slot I never chose for, and
       // for the others, the kind in each.
@@ -1610,7 +1607,7 @@ export let game = (
       }
 
       // What I am, for the others.
-      say(me, lv, { ...body, gait: down ? 'down' : body.gait }, change)
+      say(me, level, { ...body, gait: down ? 'down' : body.gait }, change)
       let vitalsNow = {
         hp: Math.max(0, Math.round(hp)),
         max: s.max,
@@ -1642,7 +1639,7 @@ export let game = (
         talk,
         foe,
         aim,
-        rack: !down && inVillage(v, body.x, body.z),
+        rack: !down && inVillage(body.x, body.z),
         swing: now - swingAt < busy ? (now - swingAt) / busy : -1,
         hand,
         doing: now - swingAt < busy ? doing : '',

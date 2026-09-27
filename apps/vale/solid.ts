@@ -4,9 +4,9 @@
 // is asked of one building and a point: what of it stands in a walker's way
 // (`blocks`), what they stand on in it (`floorIn`), what is over their head
 // (`ceilingIn`), whether they are in it (`holds`), whether the camera may
-// stand there (`walls`), and what of it fades (`cutOf`). A level answers
-// with the buildings near the point (`hits`, `standOn`, `over`, `within`,
-// `walled`, `cutaway`).
+// stand there (`walls`), and what of it fades (`cutOf`). The world answers
+// with the buildings near the point (terrain.ts `Vale.buildings`): `hits`,
+// `standOn`, `over`, `within`, `walled` and `cutaway`.
 //
 // A door is not in the voxels: it swings open for whoever comes near it, so a
 // walker that opens doors (a hero, a villager) is never stopped by one, and
@@ -79,11 +79,11 @@ export let solidOf = (vox: Vox): Solid => {
 /** A station a hero works at, where it stands, in metres. */
 export type Station = { craft: Craft; x: number; y: number; z: number }
 
-/** A building as a level placed it: its kind, where its foot's middle stands
+/** A building as the world placed it: its kind, where its foot's middle stands
  * and its quarter turns, its voxels' edge, its solid shape, the ground its
  * walls stand on and everything it takes (west, north, east, south, in
  * metres), each storey's floor and then its eaves, its top, and its doors,
- * uses, lights and stations, all in the level's metres. */
+ * uses, lights and stations, all in the world's metres. */
 export type Building = {
   kind: string
   x: number
@@ -189,14 +189,11 @@ let reach = (
   return false
 }
 
-let near = (b: Building, x: number, z: number, r: number) =>
+/** Whether anything a building takes comes within `r` of (x, z), to a
+ * side or a corner of the square round it: the one test of which buildings
+ * a question of a point is asked of. */
+export let near = (b: Building, x: number, z: number, r: number): boolean =>
   x > b.box[0] - r && x < b.box[2] + r && z > b.box[1] - r && z < b.box[3] + r
-
-// Each question below is asked of one building and a point. What a level
-// answers is the answer of the buildings near that point, and this is the
-// one place that says which those are.
-let around = (v: Vale, x: number, z: number, r: number) =>
-  v.buildings.filter((b) => near(b, x, z, r))
 
 /** Whether anything of building `b` within `r` metres of (x, z) is solid
  * anywhere from height `lo` up to `hi`. */
@@ -338,7 +335,7 @@ export let hits = (
   lo: number,
   hi: number,
   r: number,
-): boolean => around(v, x, z, r).some((b) => blocks(b, x, z, lo, hi, r))
+): boolean => v.buildings(x, z, r).some((b) => blocks(b, x, z, lo, hi, r))
 
 /** The highest top of a building's voxels within `r` of (x, z) at or under
  * height `y`, or −Infinity. */
@@ -349,7 +346,10 @@ export let standOn = (
   y: number,
   r: number,
 ): number =>
-  Math.max(-Infinity, ...around(v, x, z, r).map((b) => floorIn(b, x, z, y, r)))
+  Math.max(
+    -Infinity,
+    ...v.buildings(x, z, r).map((b) => floorIn(b, x, z, y, r)),
+  )
 
 /** The lowest underside of a building's voxels within `r` of (x, z) over
  * height `y`, or Infinity. */
@@ -360,7 +360,10 @@ export let over = (
   y: number,
   r: number,
 ): number =>
-  Math.min(Infinity, ...around(v, x, z, r).map((b) => ceilingIn(b, x, z, y, r)))
+  Math.min(
+    Infinity,
+    ...v.buildings(x, z, r).map((b) => ceilingIn(b, x, z, y, r)),
+  )
 
 /** Whether a shut door stands within `r` of (x, z), anywhere from `lo` up
  * to `hi`. */
@@ -371,11 +374,11 @@ export let shut = (
   lo: number,
   hi: number,
   r: number,
-): boolean => around(v, x, z, r).some((b) => shutIn(b, x, z, lo, hi, r))
+): boolean => v.buildings(x, z, r).some((b) => shutIn(b, x, z, lo, hi, r))
 
 /** The building whose walls someone at (x, y, z) stands within, if any. */
 export let within = (v: Vale, x: number, y: number, z: number) =>
-  around(v, x, z, 0).find((b) => holds(b, x, y, z)) ?? null
+  v.buildings(x, z, 0).find((b) => holds(b, x, y, z)) ?? null
 
 /** Whether a building other than `home` (the one the hero is in, which the
  * camera sees into) stands solid at (x, y, z), under its first ceiling. */
@@ -385,7 +388,7 @@ export let walled = (
   y: number,
   z: number,
   home: Building | null,
-): boolean => around(v, x, z, 0).some((b) => b != home && walls(b, x, y, z))
+): boolean => v.buildings(x, z, 0).some((b) => b != home && walls(b, x, y, z))
 
 /** What of which buildings fades for a hero whose feet are at `feet`, seen
  * from `eye` (`cutOf`), of the buildings near the line between them.
@@ -394,7 +397,7 @@ export let walled = (
  * import { assertEquals } from '@std/assert'
  * import { flat } from './terrain.ts'
  * let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
- * let b = v.buildings[0]
+ * let b = v.buildings(64, 64, 0)[0]
  * // Inside on the ground floor: everything over its ceiling fades.
  * let cut = cutaway(v, [64, b.floors[0], 64], [64, 12, 76])
  * assertEquals(cut.map((c) => c.from), [b.floors[1] - 0.25])
@@ -409,7 +412,7 @@ export let walled = (
 export let cutaway = (v: Vale, feet: Vec, eye: Vec): Cut[] => {
   let mx = (feet[0] + eye[0]) / 2, mz = (feet[2] + eye[2]) / 2
   let r = Math.hypot(feet[0] - eye[0], feet[2] - eye[2]) / 2
-  return around(v, mx, mz, r).flatMap((b) => cutOf(b, feet, eye) ?? [])
+  return v.buildings(mx, mz, r).flatMap((b) => cutOf(b, feet, eye) ?? [])
 }
 
 // Whether the segment from `a` to `c` passes through a building's box, from

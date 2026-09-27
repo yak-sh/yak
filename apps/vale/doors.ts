@@ -1,4 +1,5 @@
-// The doors of a level's buildings, drawn. Each leaf hangs at its hinge
+// The doors of the world's buildings, drawn with the chunk each building
+// stands in (world.ts), and taken down with it. Each leaf hangs at its hinge
 // (buildings/kit.ts `Door`) and swings in while anyone is near it, the hero,
 // the others or a villager, and back when they have gone: the same rule on
 // every page, and the one a walker meets (solid.ts `opensFor`). A leaf is
@@ -9,9 +10,8 @@ import * as THREE from 'three'
 import type { Door } from './buildings/kit.ts'
 import { shade } from './buildings/kit.ts'
 import { blob, box, key, metal, out, pack, type Vec, type Vox } from './mesh.ts'
-import { opensFor } from './solid.ts'
+import { type Building, opensFor } from './solid.ts'
 import { geometry } from './soft.ts'
-import type { Vale } from './terrain.ts'
 
 // A leaf's voxel edge, in metres, and how far it swings, in radians.
 let E = 0.125
@@ -63,9 +63,13 @@ let yawOf = (d: Door, k: number) => {
   return Math.atan2(-z, x)
 }
 
-/** The doors of `v`'s buildings, hung in `scene` in `material`. */
-export let doors = (scene: THREE.Scene, v: Vale, material: THREE.Material) => {
-  let hung = v.buildings.flatMap((b) => b.doors).map((d) => {
+/** The doors of `buildings`, hung in `scene` in `material`. */
+export let doors = (
+  scene: THREE.Scene,
+  buildings: Building[],
+  material: THREE.Material,
+) => {
+  let hung = buildings.flatMap((b) => b.doors).map((d) => {
     // A leaf's +z, shut, faces (−along.z, along.x): its outside when that is
     // away from where it swings.
     let face = d.into[0] * -d.along[1] + d.into[1] * d.along[0] < 0 ? 1 : -1
@@ -87,6 +91,10 @@ export let doors = (scene: THREE.Scene, v: Vale, material: THREE.Material) => {
         h.open += (to - h.open) * k
         h.mesh.rotation.y = yawOf(h.d, h.open)
       }
+    },
+    /** take the doors down; their shapes are kept for the next hung */
+    drop: () => {
+      for (let h of hung) scene.remove(h.mesh)
     },
   }
 }

@@ -12,13 +12,15 @@ import type { View } from './deals.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
-import { ACROSS, LEVELS, type Side, type Spot } from './levels.ts'
+import { LEVELS, type Spot } from './levels.ts'
 import type { Page } from './panel.ts'
 import type { Sheet } from './play.ts'
 import { GIVERS } from './quests.ts'
+import { originOf } from './regions.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
 import { tipped } from './tip.ts'
+import { homeOf } from './villagers.ts'
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -175,32 +177,6 @@ export let told = (t: Step, here: string): string =>
 /** The first step of a task not yet done, if one. */
 export let next = (t: Task): Step | undefined => t.steps.find((s) => !s.done)
 
-/** The side of level `from` whose road is the first on the way to level
- * `to`; none when it is `from` itself or no road leads there.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * assertEquals(road('mossvale', 'mossvale'), null)
- * assertEquals(road('mossvale', 'birchmere'), 'west')
- * assertEquals(road('birchmere', 'mossvale'), 'east')
- * ```
- */
-export let road = (from: string, to: string): Side | null => {
-  if (from == to || !LEVELS[to]) return null
-  let first = new Map<string, Side>()
-  let queue = [from]
-  for (let id of queue) {
-    for (let side of Object.values(ACROSS)) {
-      let lv = LEVELS[id]?.roads[side]
-      if (!lv || lv == from || first.has(lv)) continue
-      first.set(lv, id == from ? side : first.get(id)!)
-      if (lv == to) return first.get(lv)!
-      queue.push(lv)
-    }
-  }
-  return null
-}
-
 // The places in a level where a kind is found: the dens of a creature to
 // fell, or of the creatures that drop a thing to find. They never move, so
 // each is looked for once.
@@ -211,77 +187,71 @@ let haunts = (level: string, kind: string, fell: boolean): Spot[] => {
   if (spots) return spots
   let holds = (k: string) =>
     fell ? k == kind : BEASTS[k]?.loot.some(([i]) => i == kind)
+  let [ox, oz] = originOf(level)
   spots = [
     ...new Map(
       dens(LEVELS[level]).filter((d) => holds(d.kind)).map((
         d,
-      ) => [d.name, d.place.at]),
+      ): [string, Spot] => [d.name, [ox + d.place.at[0], oz + d.place.at[1]]]),
     ).values(),
   ]
   found.set(key, spots)
   return spots
 }
 
-/** Where a task goes next, on the level `here`: whoever to go to, where what
- * it asks for is found, or, when that is on another level, the end of the
- * road toward it. `at` is where each giver on `here` stands now, by id, and
- * `roads` where each of its roads ends.
+/** Where a task goes next, in world metres: whoever to go to, where they
+ * stand now (`at`, by id, for the ones in sight) or else at home, or where
+ * what it asks for is found.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { QUESTS } from './quests.ts'
+ * import { GIVERS, QUESTS } from './quests.ts'
+ * import { homeOf } from './villagers.ts'
  * let q = QUESTS[0]
  * let t = quest({ quest: q, state: 'taken', have: q.count, pinned: true })
  * // done with what it asks: back to whoever asked, wherever they stand
- * assertEquals(goal(t, 'mossvale', { [q.giver]: [10, 20] }, []), [[10, 20]])
- * // from the next level over, the road home
- * let east = { side: 'east' as const, x: 120, z: 64 }
- * assertEquals(goal(t, 'birchmere', {}, [east]), [[120, 64]])
+ * assertEquals(goal(t, { [q.giver]: [10, 20] }), [[10, 20]])
+ * // out of sight, at home
+ * let g = GIVERS.find((g) => g.id == q.giver)!
+ * assertEquals(goal(t, {}), [homeOf(g)])
  * ```
  */
-export let goal = (
-  t: Task,
-  here: string,
-  at: Record<string, Spot>,
-  roads: { side: Side; x: number; z: number }[],
-): Spot[] => {
+export let goal = (t: Task, at: Record<string, Spot>): Spot[] => {
   let s = next(t)
   if (!s) return []
-  if (s.level != here) {
-    let side = road(here, s.level)
-    return roads.filter((r) => r.side == side).map((r) => [r.x, r.z])
+  if (s.giver) {
+    let g = giverOf(s.giver)
+    let there = at[s.giver] ?? (g && homeOf(g))
+    return there ? [there] : []
   }
-  if (s.giver) return at[s.giver] ? [at[s.giver]] : []
-  return s.kind ? haunts(here, s.kind, !!s.fell) : []
+  return s.kind ? haunts(s.level, s.kind, !!s.fell) : []
 }
 
 /** A spot on the map a task tracked goes to next, and the task's title. */
 export type Mark = { at: Spot; title: string }
 
-/** Where the tasks tracked go next on level `here` (see `goal`): every spot,
- * for the map, and for the compass the one nearest `me` of the first task's.
+/** Where the tasks tracked go next (see `goal`): every spot, for the map,
+ * and for the compass the one nearest `me` of the first task's.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { QUESTS } from './quests.ts'
  * let q = QUESTS[0]
  * let t = quest({ quest: q, state: 'taken', have: q.count, pinned: true })
- * let way = guide([t], 'mossvale', { [q.giver]: [10, 20] }, [], [0, 0])
+ * let way = guide([t], { [q.giver]: [10, 20] }, [0, 0])
  * assertEquals(way.aim, [10, 20])
  * assertEquals(way.marks, [{ at: [10, 20], title: q.title }])
- * let off = guide([{ ...t, pinned: false }], 'mossvale', {}, [], [0, 0])
+ * let off = guide([{ ...t, pinned: false }], {}, [0, 0])
  * assertEquals(off, { marks: [], aim: null })
  * ```
  */
 export let guide = (
   tasks: Task[],
-  here: string,
   at: Record<string, Spot>,
-  roads: { side: Side; x: number; z: number }[],
   [x, z]: Spot,
 ): { marks: Mark[]; aim: Spot | null } => {
   let spots = tasks.filter((t) => t.state == 'taken' && t.pinned)
-    .map((t) => ({ t, at: goal(t, here, at, roads) }))
+    .map((t) => ({ t, at: goal(t, at) }))
   let far = ([sx, sz]: Spot) => Math.hypot(sx - x, sz - z)
   return {
     marks: spots.flatMap(({ t, at }) =>

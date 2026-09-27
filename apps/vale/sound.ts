@@ -242,7 +242,7 @@ export let sound = {
   },
   /** Each frame: the ears go to the hero `me` of the frame `f`, or to the
    * camera when there is none, and turn the way the camera looks; every
-   * source goes where what it follows now is, the level keeps up its own
+   * source goes where what it follows now is, the world near keeps up its own
    * sounds, and what the hero hears of the frame is made. */
   listen: (
     camera: THREE.Camera,
