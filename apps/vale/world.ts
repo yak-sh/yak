@@ -27,6 +27,7 @@ import { lerp, smooth } from './rand.ts'
 import { blend } from './regions.ts'
 import { type Building, cutaway } from './solid.ts'
 import { cut, CUTS, geometry, night, sight, soft } from './soft.ts'
+import { day } from './day.ts'
 import { type Want, wanted } from './stream.ts'
 import {
   adopt,
@@ -102,9 +103,6 @@ let release = (a: THREE.BufferAttribute) =>
 
 let bytes = (p: Packed) =>
   Object.values(p).reduce((n, a) => n + a.byteLength, 0)
-
-/** How long a day lasts, in seconds. */
-export let DAY = 20 * 60
 
 // The light through the day: sky overhead, the horizon and fog, the sun's
 // colour and strength, and the fill from the sky.
@@ -600,7 +598,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
       let air = looks()
       stream()
       kindle()
-      let d = ((t / DAY) + 0.36) % 1
+      let d = day(t)
       w.day = d
       let l = look(d)
       l.top.lerp(leans, lean)

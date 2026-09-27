@@ -22,7 +22,7 @@ export let MOST = 5
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(madeBy('sword2')?.at, 'forge')
- * assertEquals(madeBy('robe2')?.at, 'bench')
+ * assertEquals(madeBy('robe2')?.at, 'loom')
  * assertEquals(madeBy('blade4')?.makes, 'axe3')
  * assertEquals(madeBy('tonic')?.at, 'cauldron')
  * ```

@@ -183,6 +183,10 @@ export let stroke: Record<string, Voice> = {
     tone(o, vary(380), 0.1, 'sine', 0.04, 640, 0.14)
     hiss(o, 0.3, 900, 0.03, 0.6)
   }),
+  loom: voice(0.35, 0.07, (o) => {
+    tone(o, vary(210), 0.12, 'triangle', 0.04, 170)
+    hiss(o, 0.14, 2100, 0.03, 0.5)
+  }),
 }
 
 /** Work done, by its trade: a tree crashing down, a seam crumbling, a clump
@@ -219,6 +223,10 @@ export let done: Record<string, Voice> = {
     for (let [i, f] of [523, 784, 1047].entries()) {
       tone(o, f, 0.3, 'sine', 0.04, f, 0.12 + i * 0.08)
     }
+  }),
+  loom: voice(0.55, 0.08, (o) => {
+    tone(o, 330, 0.17, 'triangle', 0.05, 440)
+    tone(o, 660, 0.22, 'sine', 0.04, 880, 0.14)
   }),
 }
 

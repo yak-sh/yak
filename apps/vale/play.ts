@@ -232,6 +232,7 @@ export type Giver = {
   id: string
   name: string
   x: number
+  y: number
   z: number
   greets: string
   look: { tint: string; hair: string; skin: string }
@@ -476,7 +477,12 @@ export let resumed = (
  * villagers walk (village.ts). */
 export let game = (
   net: Net,
-  stand = (_id: string, home: [number, number], _now: number) => home,
+  stand = (
+    _id: string,
+    home: [number, number],
+    _now: number,
+    v: Vale,
+  ): [number, number, number] => [home[0], groundAt(v, ...home), home[1]],
 ) => {
   let c = net.client
   let drops = c.watch('.drop', { remote: false })
@@ -1554,14 +1560,12 @@ export let game = (
       // The people within sight who give quests.
       let givers: Giver[] = GIVERS.flatMap((g) => {
         let [px, pz] = spotOf(g.level, g.place) ?? [Infinity, Infinity]
+        if (Math.hypot(px - body.x, pz - body.z) > SIGHT + 45) return []
         let home: [number, number] = [px + g.offset[0], pz + g.offset[1]]
-        return Math.hypot(home[0] - body.x, home[1] - body.z) < SIGHT
-          ? [{ g, home }]
-          : []
-      }).map(({ g, home }) => {
-        let [x, z] = stand(g.id, home, now)
+        let [x, y, z] = stand(g.id, home, now, v)
+        if (Math.hypot(x - body.x, z - body.z) >= SIGHT) return []
         // Where they stood a moment ago says the way they walk.
-        let [wx, wz] = stand(g.id, home, now - 250)
+        let [wx, , wz] = stand(g.id, home, now - 250, v)
         let h = heed(x, z, spots.values())
         let theirs = s.quests.filter((q) => q.quest.giver == g.id)
         let next = theirs.find((q) => q.state == 'taken') ??
@@ -1573,10 +1577,11 @@ export let game = (
           : next.have >= next.quest.count
           ? '?'
           : ''
-        return {
+        return [{
           id: g.id,
           name: g.name,
           x,
+          y,
           z,
           greets: g.greets,
           look: g.look,
@@ -1589,7 +1594,7 @@ export let game = (
             ? Math.atan2(x - wx, z - wz)
             : null,
           heed: h && { x: h.x, z: h.z, talk: h.near < TALK },
-        }
+        }]
       })
       let talk = down ? null : givers
         .filter((g) => g.near < TALK)

@@ -1,4 +1,4 @@
-// A hero's trades: the four they gather by (gather.ts) and the three they
+// A hero's trades: the four they gather by (gather.ts) and the four they
 // make things by at a village's stations (craft.ts). Each grows by use, a
 // level at a time, and is counted again from the hero's own rows: what each
 // gathering, making and upgrading was worth to its trade (work.ts). Their
@@ -10,7 +10,7 @@ import type { Page } from './panel.ts'
 /** A trade a hero gathers by. */
 export type Gather = 'wood' | 'ore' | 'herb' | 'fish'
 /** A trade a hero makes things by, named for the station it is worked at. */
-export type Craft = 'forge' | 'bench' | 'cauldron'
+export type Craft = 'forge' | 'bench' | 'cauldron' | 'loom'
 export type Trade = Gather | Craft
 
 /** Each trade's name and glyph, the gathering ones first. */
@@ -22,12 +22,13 @@ export let TRADES: Record<Trade, { name: string; icon: Glyph }> = {
   forge: { name: 'Smithing', icon: 'anvil' },
   bench: { name: 'Woodworking', icon: 'hammer' },
   cauldron: { name: 'Brewing', icon: 'flask' },
+  loom: { name: 'Tailoring', icon: 'scissors' },
 }
 
 /** The trades a hero gathers by, and those they make by, in the order a
  * sheet lists them. */
 export let GATHERING: Gather[] = ['wood', 'ore', 'herb', 'fish']
-export let MAKING: Craft[] = ['forge', 'bench', 'cauldron']
+export let MAKING: Craft[] = ['forge', 'bench', 'cauldron', 'loom']
 
 /** Every trade, in the order a sheet lists them. */
 export let ALL: Trade[] = [...GATHERING, ...MAKING]
@@ -79,6 +80,7 @@ export let tradesOf = (works: [Trade, number][]): Trades => {
     forge: at('forge'),
     bench: at('bench'),
     cauldron: at('cauldron'),
+    loom: at('loom'),
   }
 }
 

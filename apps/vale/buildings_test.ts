@@ -175,7 +175,7 @@ Deno.test('village crafting stations are inside their workshops', () => {
     let stations = stationsNear(v, x, z, 35)
     assertEquals(
       stations.map((s) => s.craft).sort(),
-      ['bench', 'cauldron', 'forge'],
+      ['bench', 'cauldron', 'forge', 'loom'],
       id,
     )
     for (let s of stations) {

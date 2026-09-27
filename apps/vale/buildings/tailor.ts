@@ -1,5 +1,5 @@
 // The tailor's shop: a loom by the light, a cutting table, bolts and a
-// fitting rug. The loom becomes the Tailoring station with T-40826.
+// fitting rug. The loom is the Tailoring station.
 import { facade } from './facade.ts'
 import type { Plan } from './kit.ts'
 import { chest, lamp, loom, rug, shelf, table } from './pieces.ts'

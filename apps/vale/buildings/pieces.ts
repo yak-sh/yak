@@ -224,6 +224,7 @@ export let cauldron: Piece = {
 export let loom: Piece = {
   name: 'loom',
   use: { at: [0, 3], for: 'work' },
+  station: 'loom',
   make: (d) => {
     let v = vox()
     for (let x of [-3, 2]) box(v, [x, 0, -1], [x, 7, -1], d.timber)

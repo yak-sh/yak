@@ -16,6 +16,8 @@ import type { Deals } from './deals.ts'
 import { type Bundle, comp, type Me, type Net, num, str } from './net.ts'
 import type { Frame } from './play.ts'
 import type { Spot } from './levels.ts'
+import type { Vec } from './mesh.ts'
+import type { Vale } from './terrain.ts'
 import { GIVERS } from './quests.ts'
 import { wares } from './stock.ts'
 import {
@@ -188,9 +190,13 @@ export let village = (net: Net, deal: Deals) => {
       return g ? { name: g.name, tint: g.look.tint } : null
     },
     /** where a villager stands at `now`, given where their home is */
-    at: (id: string, home: Spot, now: number): Spot => {
+    at: (id: string, home: Spot, now: number, v: Vale): Vec => {
       let g = byId.get(id)
-      return g ? where(g, told().plans.get(id) ?? [], now) : home
+      return g ? where(g, v, told().plans.get(id) ?? [], now) : [
+        home[0],
+        0,
+        home[1],
+      ]
     },
   }
 }

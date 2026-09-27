@@ -18,11 +18,17 @@
 // their land, so a vale nobody plays asks no model at all.
 import type { Line } from './chat.ts'
 import { BEASTS } from './beasts.ts'
+import { DAY, day } from './day.ts'
 import { ITEMS } from './items.ts'
+import { type Life, lifeOf } from './lives.ts'
 import { LEVELS, type Spot } from './levels.ts'
+import type { Vec } from './mesh.ts'
 import { type Giver, GIVERS, type Quest } from './quests.ts'
 import { hashOf, stream, uuidOf } from './rand.ts'
 import { originOf, spotOf } from './regions.ts'
+import { fits } from './sim.ts'
+import { groundAt, type Vale } from './terrain.ts'
+import { walk } from './walk.ts'
 import {
   type Goods,
   most,
@@ -48,8 +54,8 @@ export let EVERY = '5m'
 /** How fast a villager walks, in metres a second. */
 let SPEED = 1.2
 
-/** How long a villager stays where they went before they walk home, in ms. */
-let STAY = 15 * 60_000
+/** How long a villager follows one choice before their daily rhythm returns. */
+let STAY = 4 * 60_000
 
 /** A villager's row, by their giver id: the same on every page. */
 export let eidOf = (id: string): string => uuidOf(`villager/${id}`)
@@ -352,7 +358,7 @@ export let deeds = (falls: Fall[], since: number, most = 4): string[] => {
 }
 
 /** Where a villager goes for a while, as Jev chose it. */
-export type Go = 'home' | 'about' | 'visit'
+export type Go = 'home' | 'work' | 'inn' | 'about' | 'visit'
 
 /** A choice of where to go, and when it was made, in ms. */
 export type Plan = { go: Go; at: number }
@@ -388,7 +394,7 @@ let part = (v: unknown): Record<string, unknown> =>
 
 let whenOf = (b: Row) => Date.parse(String(part(b.created).at ?? '')) || 0
 
-let GOES: Go[] = ['home', 'about', 'visit']
+let GOES: Go[] = ['home', 'work', 'inn', 'about', 'visit']
 let FEELS: Mood[] = ['glad', 'busy', 'weary', 'worried']
 
 // Where an answer sends a villager: a draw from the odds Jev gave, seeded by
@@ -458,11 +464,6 @@ export let answered = (
   return { lines, plans, moods }
 }
 
-let lerp = (a: Spot, b: Spot, k: number): Spot => [
-  a[0] + (b[0] - a[0]) * k,
-  a[1] + (b[1] - a[1]) * k,
-]
-
 /** The neighbour whose door a villager goes to when they visit: the nearest.
  * A villager who lives alone has none, and strolls instead. */
 export let nextDoor = (g: Giver): Giver | undefined => {
@@ -474,19 +475,63 @@ export let nextDoor = (g: Giver): Giver | undefined => {
   return neighbours(g).sort((a, b) => far(a) - far(b))[0]
 }
 
-// Where a plan puts a villager at `t`: at home, strolling a slow ring round
-// it, or beside their next-door neighbour's door.
-let spot = (g: Giver, go: Go, t: number): Spot => {
-  let home = homeOf(g)
-  let door = go == 'visit' ? nextDoor(g) : undefined
-  if (go == 'about' || (go == 'visit' && !door)) {
-    let a = t / 9000 + g.id.length
-    return [home[0] + 2.5 * Math.cos(a), home[1] + 2.5 * Math.sin(a)]
+// Where a villager goes: a work position, a bed, the inn's table, a walk
+// round their square, or a neighbour's home. Unbuilt story places keep the
+// original standing point.
+let spot = (g: Giver, life: Life, go: Go, v: Vale): Vec => {
+  if (go == 'work') return life.work ?? life.home
+  if (go == 'home') return life.home
+  if (go == 'inn') return life.inn ?? life.home
+  if (go == 'visit') {
+    let n = nextDoor(g)
+    if (n) return lifeOf(n, v).home
   }
-  if (!door) return home
-  let near = homeOf(door)
-  let d = Math.hypot(home[0] - near[0], home[1] - near[1]) || 1
-  return lerp(near, home, 1.6 / d)
+  let [cx, cz] = spotOf(g.level, g.place) ?? homeOf(g)
+  for (let n = 0; n < 12; n++) {
+    let a = g.id.length * 2.4 + n * 2.4
+    let x = cx + (3 + Math.floor(n / 6) * 2) * Math.cos(a)
+    let z = cz + (3 + Math.floor(n / 6) * 2) * Math.sin(a)
+    let y = groundAt(v, x, z)
+    if (fits(v, x, z, y)) return [x, y, z]
+  }
+  return life.home
+}
+
+let dist = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+let along = (path: Vec[], metres: number): Vec => {
+  for (let i = 1; i < path.length; i++) {
+    let span = dist(path[i - 1], path[i])
+    if (metres < span && span) {
+      let k = metres / span, a = path[i - 1], b = path[i]
+      return [
+        a[0] + (b[0] - a[0]) * k,
+        a[1] + (b[1] - a[1]) * k,
+        a[2] + (b[2] - a[2]) * k,
+      ]
+    }
+    metres -= span
+  }
+  return path.at(-1)!
+}
+
+// The light and the people share one twenty-minute day. Work fills the day;
+// a visit to the inn follows, then home for the night.
+let rhythm = (life: Life, now: number): Plan & { was: Go } => {
+  let d = day(now / 1000), dayMs = DAY * 1000
+  let work: Go = life.work ? 'work' : 'about'
+  let inn: Go = life.inn ? 'inn' : 'home'
+  if (d >= 0.18 && d < 0.78) {
+    return { go: work, was: 'home', at: now - (d - 0.18) * dayMs }
+  }
+  if (d >= 0.78 && d < 0.9) {
+    return { go: inn, was: work, at: now - (d - 0.78) * dayMs }
+  }
+  return {
+    go: 'home',
+    was: inn,
+    at: now - (d >= 0.9 ? d - 0.9 : d + 0.1) * dayMs,
+  }
 }
 
 /** Where a villager and the others of their land went lately, as they are
@@ -528,6 +573,10 @@ export let goings = (
       ? `${n.name} came to your door, to talk over the news`
       : door
       ? `${n.name} went to ${door.name}'s door, to talk over the news`
+      : go == 'work'
+      ? `${n.name} went to work`
+      : go == 'inn'
+      ? `${n.name} went to the inn`
       : `${n.name} went out strolling`
   }
   let mine = latest(g)
@@ -537,6 +586,10 @@ export let goings = (
       ? null
       : door
       ? `You went to ${door.name}'s door, to talk over the news.`
+      : mine == 'work'
+      ? 'You went to your work.'
+      : mine == 'inn'
+      ? 'You went to the inn.'
       : 'You went out for a stroll about your land.',
     others: neighbours(g).flatMap((n) => {
       let go = latest(n)
@@ -546,31 +599,30 @@ export let goings = (
 }
 
 /**
- * Where a villager stands at `now`: walking from where their last plan left
- * them to where their newest one sends them, and home again once they have
- * stayed a while. With no plan, at home: that is their routine.
+ * Where a villager stands at `now`: between the places their day and Jev's
+ * latest choice send them, through their doors and the village square.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { GIVERS } from './quests.ts'
+ * import { lifeOf } from './lives.ts'
+ * import { vale } from './terrain.ts'
  * let wren = GIVERS.find((g) => g.id == 'wren')!
- * assertEquals(where(wren, [], 0), homeOf(wren))
- * let visit = [{ go: 'visit' as const, at: 0 }]
- * assertEquals(where(wren, visit, 0), homeOf(wren))
- * assertEquals(where(wren, visit, 60 * 60_000), homeOf(wren))
+ * let v = vale()
+ * assertEquals(where(wren, v, [], 900_000), lifeOf(wren, v).home)
+ * assertEquals(where(wren, v, [], 300_000), lifeOf(wren, v).work)
  * ```
  */
-export let where = (g: Giver, plans: Plan[], now: number): Spot => {
+export let where = (g: Giver, v: Vale, plans: Plan[], now: number): Vec => {
+  let life = lifeOf(g, v)
   let is = plans.at(-1)
-  if (!is) return spot(g, 'home', now)
-  let steps = is.go != 'home' && now - is.at > STAY
-    ? [is, { go: 'home' as Go, at: is.at + STAY }]
-    : [plans.at(-2), is]
-  let [was, next] = steps
-  let from = spot(g, was?.go ?? 'home', next!.at)
-  let to = spot(g, next!.go, now)
-  let d = Math.hypot(to[0] - from[0], to[1] - from[1])
-  return d
-    ? lerp(from, to, Math.min(1, (now - next!.at) / 1000 * SPEED / d))
-    : to
+  let latest = is && now - is.at < STAY
+    ? { ...is, was: plans.at(-2)?.go ?? rhythm(life, is.at).go }
+    : is && now - is.at < STAY + 60_000
+    ? { ...rhythm(life, now), was: is.go, at: is.at + STAY }
+    : rhythm(life, now)
+  let from = spot(g, life, latest.was, v)
+  let to = spot(g, life, latest.go, v)
+  if (dist(from, to) < 0.1) return to
+  return along(walk(v, from, to), Math.max(0, now - latest.at) / 1000 * SPEED)
 }

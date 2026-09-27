@@ -1,7 +1,7 @@
 // Crafting: what a hero makes at a village's stations, from what they gathered
 // (gather.ts) and what creatures left them (beasts.ts). A forge makes blades,
-// plate and rings, a bench bows, staves, shields, leather and cloth, and a
-// cauldron brews tonics, each station a trade of its own (trades.ts). A
+// plate and rings, a bench bows, staves and shields, a loom cloth and leather
+// armour, and a cauldron brews tonics, each its own trade (trades.ts). A
 // recipe asks for so much of a kind of stuff: metal, wood, herbs and fish
 // come in tiers, as the nodes that give them do, and a tier's recipe takes
 // stuff of its tier or better; hides, cloth and gems are what creatures
@@ -48,6 +48,13 @@ export let STATIONS: Record<Craft, {
     doing: 'Brewing',
     reach: 2.6,
     chip: 0x9fe0a0,
+  },
+  loom: {
+    name: 'Loom',
+    verb: 'Sew',
+    doing: 'Sewing',
+    reach: 2.6,
+    chip: 0xe0a0bd,
   },
 }
 
@@ -126,12 +133,12 @@ let SORTS: Record<string, [Craft, [string, number][]]> = {
   shield: ['bench', [['wood', 3], ['metal', 1]]],
   tome: ['bench', [['hides', 2], ['herbs', 2]]],
   torch: ['bench', [['wood', 2], ['herbs', 1]]],
-  cowl: ['bench', [['hides', 2], ['herbs', 1]]],
-  jerkin: ['bench', [['hides', 4], ['herbs', 1]]],
-  boots: ['bench', [['hides', 2], ['herbs', 1]]],
-  hood: ['bench', [['cloth', 2], ['herbs', 1]]],
-  robe: ['bench', [['cloth', 4], ['herbs', 1]]],
-  sandals: ['bench', [['cloth', 1], ['hides', 1], ['herbs', 1]]],
+  cowl: ['loom', [['hides', 2], ['herbs', 1]]],
+  jerkin: ['loom', [['hides', 4], ['herbs', 1]]],
+  boots: ['loom', [['hides', 2], ['herbs', 1]]],
+  hood: ['loom', [['cloth', 2], ['herbs', 1]]],
+  robe: ['loom', [['cloth', 4], ['herbs', 1]]],
+  sandals: ['loom', [['cloth', 1], ['hides', 1], ['herbs', 1]]],
 }
 
 // What the cauldron brews.

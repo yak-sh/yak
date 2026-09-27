@@ -523,7 +523,9 @@
               "type": "choice",
               "instructions": "Where do you spend the next while?",
               "criteria": {
-                "home": "at home, where heroes know to find you",
+                "home": "at home, resting or eating with your family",
+                "work": "at your workbench or shop, doing your trade",
+                "inn": "at the inn, eating and hearing the day's news",
                 "about": "strolling about your part of the land",
                 "visit": "at a neighbour's door, talking over the news"
               }

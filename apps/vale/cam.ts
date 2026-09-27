@@ -13,7 +13,7 @@ import * as THREE from 'three'
 import type { Intent } from './input.ts'
 import { clamp } from './rand.ts'
 import { type Building, walled } from './solid.ts'
-import { inside, type Vale } from './terrain.ts'
+import { floorUnder, type Vale } from './terrain.ts'
 
 export type Cam = {
   /** which way it looks from, round the hero: 0 looks from +z */
@@ -132,7 +132,24 @@ export let bearing = (yaw: number) =>
 
 /** Put `camera` where the camera stands, looking at `target`: its distance
  * back, or nearer when the level is in the way, shaken by a blow; looking
- * down into `home`, the building the hero is in, if any. */
+ * down into `home`, the building the hero is in, if any.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * import * as THREE from 'three'
+ * import { flat } from './terrain.ts'
+ * let v = flat(5, [], [{ kind: 'hall.plaster', x: 30, z: 30, seed: 0 }])
+ * let home = v.buildings(30, 30, 0)[0]
+ * let cam = {
+ *   yaw: 0, pitch: 1.1, dist: 9, reach: 9, x: 30, y: 7, z: 30,
+ *   shake: 0, follow: false, snap: false, idle: 0, lift: 0,
+ * }
+ * let camera = new THREE.PerspectiveCamera()
+ * aim(cam, camera, new THREE.Vector3(30, home.floors[0] + 1.5, 30),
+ *   v, 1, home)
+ * assert(cam.reach > 1.2)
+ * ```
+ */
 export let aim = (
   cam: Cam,
   camera: THREE.Camera,
@@ -152,7 +169,10 @@ export let aim = (
   let clear = cam.dist
   for (let d = CLOSEST; d <= cam.dist; d += 0.4) {
     let p = target.clone().addScaledVector(dir, d)
-    if (inside(v, p.x, p.y, p.z) || walled(v, p.x, p.y, p.z, home)) {
+    if (
+      p.y < floorUnder(v, p.x, p.y, p.z) + 0.3 ||
+      walled(v, p.x, p.y, p.z, home)
+    ) {
       clear = Math.max(CLOSEST, d - 0.6)
       break
     }

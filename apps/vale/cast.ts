@@ -570,7 +570,7 @@ export let cast = (
         glide(
           a,
           g.x,
-          floorAt(v, g.x, g.z, groundAt(v, g.x, g.z)),
+          floorAt(v, g.x, g.z, g.y),
           g.z,
           yaw,
           dt,

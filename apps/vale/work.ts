@@ -130,6 +130,7 @@ let STROKE: Record<Trade, number> = {
   forge: 480,
   bench: 620,
   cauldron: 760,
+  loom: 650,
 }
 let LANDS = 0.33
 let CAST = 520

@@ -40,6 +40,8 @@ export type Giver = {
   place: string
   /** where they stand from that place, in metres east and south */
   offset: [number, number]
+  /** the work a building houses (buildings/kit.ts Plan.works) */
+  work?: string
   /** what they say when there is nothing to ask */
   greets: string
   look: { tint: string; hair: string; skin: string }
