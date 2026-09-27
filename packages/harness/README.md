@@ -62,6 +62,7 @@ work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in
 
 ```sh
 yak session new 'reply with the word pong'
+yak session new 'inspect the task graph' --persona N-4568
 yak session new --tui
 yak session send <session> 'and again'
 yak session send <session> 'continue here' --provider openai --model gpt-6-sol
@@ -88,6 +89,8 @@ Ctrl+O selects a new session, PgUp / PgDn scroll, and Ctrl+C quits. Shift+Enter
 needs a terminal supporting kitty keyboard sequences (Alt+Enter also inserts a
 newline). On a new session, NORMAL `P` chooses a persona from the graph for that
 session.
+`--persona` accepts a persona id or registered name; the session keeps that
+choice and snapshots its instructions before its first message.
 
 `$HARNESS_HOME` moves harness state without changing `HOME`: checkouts for
 children assigned tasks go under `$HARNESS_HOME/worktrees` and drafts under

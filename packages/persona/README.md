@@ -152,6 +152,8 @@ provider reads there) is exactly that persona's file: the same banner and the
 same text the persona files would write now. A stale file, or another
 repository's, leaves the persona owed. The harness gives it through the
 provider's own instruction mechanism and the provider still reads its files.
+Pass a fourth argument, a persona id or registered name, to choose that persona
+instead of the checkout's common one. An unknown persona is refused.
 
 ## Exports
 

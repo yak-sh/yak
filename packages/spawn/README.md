@@ -96,6 +96,7 @@ read `AGENTS.md` whole, since by default it reads only the first 32 KiB.
 
 ```sh
 yak session spawn T-37667 --provider claude --model opus --effort high --wait
+yak session spawn T-37667 --provider claude --persona N-4568
 yak session stop S-4211
 yak session wait S-4211 --timeout 45m
 yak session peek S-4211 -n 20
