@@ -264,22 +264,24 @@ export let pred = (field: string, o: Op, value: Value | null): Pred => ({
 })
 
 /**
- * Is this a bare component form — one segment, present (`.canvas`) or absent
- * (`!canvas`)? Either names a component, so an evaluator resolves it to that
- * component even where a property of the same name would otherwise win the
+ * Is this a bare component form — one segment, present (`.canvas`), absent
+ * (`!canvas`), or requested (`?canvas`)? Each names a component, so an
+ * evaluator resolves it to that component even where a property would win the
  * bare form (@yaks/vocab's `aim(path, facet)`).
  *
  * ```ts
- * import { absent, bare, eq, present } from '@yaks/query'
+ * import { absent, bare, eq, present, want } from '@yaks/query'
  *
  * bare(present('canvas')) // true
  * bare(absent('canvas')) // true
+ * bare(want('canvas')) // true
  * bare(eq('canvas', 'x')) // false
  * ```
  */
 export let bare = (p: Pred): boolean =>
   p.path.length == 1 &&
   (p.op == '!' && !p.value ||
+    p.op == '?' && !p.value ||
     p.op == '=' && p.value?.kind == 'scalar' && p.value.raw == '')
 
 export let and = (...clauses: Clause[]): And => ({ kind: 'and', clauses })

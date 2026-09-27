@@ -40,6 +40,31 @@ Deno.test('a projected read fetches only the components it returns', () => {
   assert(seen.some((sql) => sql.includes('from "doc"')))
 })
 
+Deno.test('an optional component keeps its name beside a property with that name', () => {
+  let g = shopGraph()
+  g.apply([
+    {
+      entity: { eid: 'r1' },
+      doc: { body: 'large body' },
+      review: { product: 'p1', stars: 5 },
+      product: { price: 12 },
+    },
+    { entity: { eid: 'r2' }, review: { product: 'p1', stars: 4 } },
+  ])
+  let found = g.read('.review&?product') as Bundle[]
+  assertEquals(found.map((b) => b.entity.eid).sort(), ['r1', 'r2'])
+  assertEquals(
+    (found.find((b) => b.entity.eid == 'r1')?.product as Record<
+      string,
+      unknown
+    >)
+      .price,
+    12,
+  )
+  assertEquals(found.find((b) => b.entity.eid == 'r2')?.product, undefined)
+  assertEquals(found[0].doc, undefined)
+})
+
 Deno.test('apply lands a batch and stamps it, synchronously', () => {
   let g = shopGraph()
   let out = sync(g.apply(

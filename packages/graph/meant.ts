@@ -36,10 +36,10 @@ import {
 import { Ambiguous, type Vocab } from '@yaks/vocab'
 import type { Query } from './storage.ts'
 
-/** Whether a predicate's single segment is the "component is present" form —
- * the one place a lone name means a component rather than a property. */
+/** A bare component names its facet, even when a property has that name. */
 let facet = (c: Clause & { kind: 'pred' }): boolean =>
-  !!c.facet || (c.op == '!' && c.path.length == 1 && !c.value)
+  !!c.facet ||
+  (c.path.length == 1 && !c.value && (c.op == '!' || c.op == '?'))
 
 /** The component a path names outright, or nothing. A qualified path names it
  * in its first segment; a presence test names it in its only segment. */
@@ -141,7 +141,7 @@ let read = (v: Vocab, c: Clause, within: Set<string>): Clause => {
     return clauses == c.clauses ? c : { ...c, clauses }
   }
   if (c.kind == 'pred') {
-    let path = resolve(v, c.path, within)
+    let path = facet(c) ? c.path : resolve(v, c.path, within)
     let where = c.where ? read(v, c.where, within) : undefined
     if (path == c.path && where == c.where) return c
     return { ...c, path, ...(where ? { where } : {}) }
