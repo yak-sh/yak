@@ -33,6 +33,12 @@
     stroke-width: 2.4;
   }
 
+  & .Sprite {
+    width: calc(var(--size) * 0.52);
+    height: calc(var(--size) * 0.52);
+    vertical-align: middle;
+  }
+
   &:active {
     translate: 0 3px;
     box-shadow: 0 1px 0 var(--edge-lip);
@@ -160,15 +166,19 @@
   }
 }
 
-/* On a desktop the buttons are a bar, smaller, their keys under them and the
-   count at the other corner. */
-@media (pointer: fine) {
+/* With a mouse the buttons are a bar (Hud.css), smaller, their keys at
+   their corners and the count at the other. The bar holds eight at most,
+   strike a sixth bigger than the rest, with the gaps between them and the
+   last key's overhang; where it is narrower than they need, they shrink to
+   fit it. */
+@media not (pointer: coarse) {
   .Pad {
-    --size: 2.9rem;
+    --fit: calc((100cqi - 7 * var(--gap) - 0.25rem) / 8.17);
+    --size: min(2.9rem, var(--fit));
   }
 
   .Pad-strike {
-    --size: 3.4rem;
+    --size: min(3.4rem, var(--fit) * 1.17);
   }
 
   .Pad_N {

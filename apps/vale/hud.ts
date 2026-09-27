@@ -19,10 +19,10 @@
 // scrolling, safe areas) is ui/Panel.css's and is never restyled per panel.
 //
 // How a button for the thumbs plugs in. `pad(action, face, title)` adds one,
-// pressing its action (input.ts). On a phone each sits in its own slot of the
+// pressing its action (input.ts). Touched, each sits in its own slot of the
 // ring around strike (ui/Hud.css, `.Hud_Pads`): the abilities (bar.ts) with
 // the first two beside strike and the third further out, dodge, jump and the
-// tonic. On a desktop they line up along the bottom with their keys.
+// tonic. With a mouse they line up along the bottom with their keys.
 // `Pad-none` hides a pad, `Pad-off` dims it, `--k` from 0 to 1 rings it with
 // progress, and `--cd` sweeps a cooldown over it. Talking and gathering (or
 // working a station) share one slot, and only one of them shows at a time.
@@ -175,7 +175,7 @@ export let hud = (
     says: 'Every quest and deal you have, and how far each has come.',
   })
 
-  // A round button in the tray, and on a desktop its key; one that opens a
+  // A round button in the tray, and with a keyboard its key; one that opens a
   // panel is marked while it is open.
   let marked: [HTMLElement, Panel][] = []
   let tray = (
@@ -258,7 +258,7 @@ export let hud = (
   // Arms or armour found since the pack was last open.
   let fresh = false
 
-  // A button for the thumbs, and on a desktop its key.
+  // A button for the thumbs, and with a keyboard its key.
   let pad = (a: Action, face: string, t: Tip) => {
     let key = keysOf(a).map(cap)[0]
     let b = el(
