@@ -99,7 +99,7 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
     home: {
       type: 'string',
       description:
-        'Attach to an existing worktree entity as agent home, without creating a checkout. Mutually exclusive with worktree.',
+        'Absolute path to an existing Git checkout to use as agent home. Mutually exclusive with worktree.',
     },
     cwd: {
       type: 'string',
@@ -115,8 +115,13 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
       await homeAt(g, cwd)
     let home: Comp = { ...inherited }
     if (args.home != null) {
-      let observed = await discover(g, await treeAt(g, String(args.home)))
-      if (observed.entity.eid != args.home) {
+      if (typeof args.home != 'string' || !args.home.startsWith('/')) {
+        throw new Error('home must be an absolute Git checkout path')
+      }
+      let path = await Deno.realPath(args.home)
+      let observed = await checkoutAt(g, path)
+      if (!observed) throw new Error('home is not a Git checkout: ' + path)
+      if ((observed.worktree as Comp).path != path) {
         throw new Error('home checkout identity changed')
       }
       home = { worktree: observed.entity.eid }

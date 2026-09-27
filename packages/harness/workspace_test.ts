@@ -161,8 +161,12 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
     let attach = await prepare({
       parent: 'parent',
       child: 'three',
-      args: { home: (prepared.home as Comp).worktree, cwd: f.repo },
+      args: { home: f.dir + '/two', cwd: f.repo },
     })
+    assertEquals(
+      (attach.home as Comp).worktree,
+      (prepared.home as Comp).worktree,
+    )
     assertEquals((attach.home as Comp).cwd, f.repo)
     assertEquals((await f.h.g.read('.worktree&*')).length, 2)
     await assertRejects(() =>
@@ -174,6 +178,54 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
     )
     assertEquals(await f.h.g.read('.session.id=bad&*'), [])
     assertEquals(await checkoutAt(f.h.g, f.dir), undefined)
+  } finally {
+    await f.free()
+  }
+})
+
+Deno.test('home attaches an existing checkout by path and rejects other paths', async () => {
+  let f = await fixture()
+  try {
+    await f.h.g.apply([{
+      entity: { eid: 'parent' },
+      session: {},
+      home: await homeAt(f.h.g, f.repo),
+    }])
+    let path = f.dir + '/existing'
+    await git(f.repo, 'worktree', 'add', '-q', '-b', 'existing', path)
+    let prepare = workspace(f.h.g, f.repo, f.dir + '/worktrees').prepareChild!
+    let attach = await prepare({
+      parent: 'parent',
+      child: 'child',
+      args: { home: path },
+    })
+    let [tree] = await f.h.g.get([String((attach.home as Comp).worktree)])
+    assertEquals((tree.worktree as Comp).path, path)
+    assertEquals((tree.worktree as Comp).managed, false)
+    assertEquals((await f.h.g.read('.worktree&*')).length, 2)
+
+    await assertRejects(
+      () =>
+        prepare({ parent: 'parent', child: 'bad', args: { home: 'existing' } }),
+      Error,
+      'home must be an absolute Git checkout path',
+    )
+    await assertRejects(
+      () => prepare({ parent: 'parent', child: 'bad', args: { home: f.dir } }),
+      Error,
+      'home is not a Git checkout',
+    )
+    await Deno.mkdir(path + '/sub')
+    await assertRejects(
+      () =>
+        prepare({
+          parent: 'parent',
+          child: 'bad',
+          args: { home: path + '/sub' },
+        }),
+      Error,
+      'home checkout identity changed',
+    )
   } finally {
     await f.free()
   }
