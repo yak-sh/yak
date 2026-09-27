@@ -45,3 +45,30 @@ Deno.test('with no filter, every route and door answers as before', async () => 
   assertEquals(await status(h, '/query?q=.price'), 200)
   assertEquals(await status(h, '/nowhere'), 404)
 })
+
+Deno.test('an HTTP route answers while the graph reader is busy', async () => {
+  let graph = shopGraph()
+  let slow = Promise.withResolvers<Awaited<ReturnType<typeof graph.read>>>()
+  let called = false
+  let h = handler({
+    graph,
+    reader: {
+      ...graph,
+      read: () => {
+        called = true
+        return slow.promise
+      },
+    },
+    who: () => null,
+    routes: [{
+      method: 'GET',
+      path: '/hello',
+      handle: () => new Response('hi'),
+    }],
+  })
+  let waiting = h(req('/query?q=.book'))
+  assertEquals(await (await h(req('/hello'))).text(), 'hi')
+  assertEquals(called, true)
+  slow.resolve([])
+  assertEquals(await (await waiting).json(), [])
+})

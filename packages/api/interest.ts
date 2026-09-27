@@ -55,6 +55,9 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
       for (let r of d.reads) {
         let [comp, prop, extra] = r.split('.')
         if (
+          !i && !assoc && comp == h.comp
+        ) into.add(comp)
+        else if (
           !i && !assoc && prop && !extra &&
           v.prop(comp, prop)?.ref == h.comp &&
           (!via.has(comp) || via.get(comp) == prop)

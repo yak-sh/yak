@@ -300,44 +300,45 @@ export let sessionStatus = {
         where: eq(col('state', 'a'), lit('inflight')),
       }),
     )
-    // A call no result answers — the openCalls rule above, expressed in SQL.
-    // Per session, so reading one costs its own entries, never every call.
-    let open = exists(select({
-      cols: [lit(1)],
-      from: table(CALL, 'c'),
-      joins: [
-        join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
-      ],
-      where: and(
-        mine('e'),
-        not(exists(select({
+    // One pass over calls answers every session in a status query.
+    let open = among(
+      owner,
+      select({
+        cols: [col('session', 'e')],
+        from: table(CALL, 'c'),
+        joins: [
+          join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
+        ],
+        where: not(exists(select({
           cols: [lit(1)],
           from: table(RESULT, 'r'),
           where: eq(col('call', 'r'), col('entity', 'c')),
         }))),
-      ),
-    }))
-    let abandoned = exists(select({
-      cols: [lit(1)],
-      from: table(CALL, 'c'),
-      joins: [
-        join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
-        join(
-          table('execution', 'x'),
-          eq(col('entity', 'x'), col('entity', 'c')),
+      }),
+    )
+    let abandoned = among(
+      owner,
+      select({
+        cols: [col('session', 'e')],
+        from: table(CALL, 'c'),
+        joins: [
+          join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
+          join(
+            table('execution', 'x'),
+            eq(col('entity', 'x'), col('entity', 'c')),
+          ),
+        ],
+        where: and(
+          eq(col('state', 'x'), lit('running')),
+          isNull(col('by', 'x')),
+          not(exists(select({
+            cols: [lit(1)],
+            from: table(RESULT, 'r'),
+            where: eq(col('call', 'r'), col('entity', 'c')),
+          }))),
         ),
-      ],
-      where: and(
-        mine('e'),
-        eq(col('state', 'x'), lit('running')),
-        isNull(col('by', 'x')),
-        not(exists(select({
-          cols: [lit(1)],
-          from: table(RESULT, 'r'),
-          where: eq(col('call', 'r'), col('entity', 'c')),
-        }))),
-      ),
-    }))
+      }),
+    )
     // The newest ask.
     let ask = sub(select({
       cols: [col('entity', 'e')],

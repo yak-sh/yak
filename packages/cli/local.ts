@@ -41,12 +41,14 @@ import { VIA } from './rpc.ts'
 import type { Command, Ctx } from './run.ts'
 import {
   compose,
+  dbOf,
   type Declared,
   facet,
   type Role,
   type Served,
   words,
 } from './host.ts'
+import { readThread } from './read_thread.ts'
 import { type Aside, thread } from './thread.ts'
 
 // One graph per config path and set of roles, for the life of the process:
@@ -130,10 +132,33 @@ let open = async (
   duties: boolean,
 ): Promise<Served> => {
   let config = read(path)
-  if (!duties) return compose({ ...config, duties: false }, roles)
+  let reader = roles.includes('web') && dbOf(config) != ':memory:'
+    ? readThread(path)
+    : undefined
+  let withReader = (host: Served): Served => {
+    let close = host.close
+    host.close = async (code) => {
+      try {
+        await close(code)
+      } finally {
+        await reader?.close()
+      }
+    }
+    return host
+  }
+  if (!duties) {
+    return withReader(
+      await compose({ ...config, duties: false }, roles, facet, {
+        reader,
+      }),
+    )
+  }
   let aside = thread()
   asides.add(aside)
-  let host = await compose(config, roles, facet, { thread: aside })
+  let host = await compose(config, roles, facet, {
+    thread: aside,
+    reader,
+  })
   try {
     let duties = dutiesOf(host.vocab, config, roles)
     aside.plan({ config: path, roles: duties })
@@ -147,10 +172,11 @@ let open = async (
     if (idle.length) aside.start(idle)
   } catch (error) {
     await host.close()
+    await reader?.close()
     throw error
   }
   void host.duties(AbortSignal.abort())
-  return host
+  return withReader(host)
 }
 
 /** The graph a config names, open for the roles a command's own thread serves,

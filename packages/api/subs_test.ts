@@ -290,6 +290,56 @@ Deno.test('a referenced computed dependency refreshes only its owner', () => {
   assertEquals(two.take().map(ids), [['b1', 'b2']])
 })
 
+Deno.test('a computed property reading its own row refreshes that row', () => {
+  let vocab = loadVocab([...shopVocab.docs, {
+    $defs: {
+      book: {
+        component: true,
+        extends: true,
+        type: 'object',
+        properties: {
+          kind: { type: 'string', computed: true, reads: ['book.status'] },
+        },
+      },
+    },
+  }])
+  let store = storage(open(':memory:'), vocab, {
+    derived: {
+      'book.kind': {
+        tag: 'text',
+        deps: ['book'],
+        expr: () => col('status', 'book'),
+      },
+    },
+  })
+  store.install()
+  let g = graph({ storage: store, vocab })
+  g.apply([
+    { entity: { eid: 'b1' }, book: { status: 'shelved' } },
+    { entity: { eid: 'b2' }, book: { status: 'shelved' } },
+  ])
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(String(q)), g.read(q, o)),
+  }
+  let subs = subscriptions(spy)
+  let { to, take } = ear()
+  let q = '.book&(.book.kind=shelved|.book.price>100)&.fields=book.kind'
+  subs.open(to, 'shelved', q)
+  assertEquals(ids(take()[0]), ['b1', 'b2'])
+  reads.length = 0
+
+  g.apply([{ entity: { eid: 'b1' }, book: { status: 'sold' } }])
+  assertEquals(reads, [q + '&.eid=b1'])
+  assertEquals(take()[0].gone, ['b1'])
+
+  reads.length = 0
+  g.apply([{ entity: { eid: 'b2' }, book: { price: 10 } }])
+  assertEquals(reads, [q + '&.eid=b2'])
+  assertEquals(ids(take()[0]), ['b2'])
+})
+
 Deno.test('a refresh follows its query onto the entities it reads', () => {
   let g = rated()
   g.apply([

@@ -32,6 +32,7 @@ import { subscriptions } from './subs.ts'
  * well as this graph's own. */
 export type Hosting = {
   graph: Graph
+  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
   who: Authenticate
   routes: Route[]
   filters?: Filter[]
@@ -56,13 +57,14 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
  */
 export let handler = (host: Hosting): Handler => {
   let routes = host.routes
+  let graph = host.reader ? { ...host.graph, ...host.reader } : host.graph
   // One registry, fed twice: its own graph's `effect` phase for what this host
   // commits, and the host's feed for what every other process or thread
   // commits to the same store — a `yak` command beside `yak serve`, the effect
   // pool's thread — which that phase never runs for.
-  let subs = subscriptions(host.graph)
+  let subs = subscriptions(graph)
   host.feed?.((applied) => subs.commit(applied))
-  let door = api({ graph: host.graph, authenticate: host.who, subs })
+  let door = api({ graph, authenticate: host.who, subs })
   let answer: Handler = (request) => {
     let path = new URL(request.url).pathname
     let route = routes.filter((r) => routed(r, request.method, path))

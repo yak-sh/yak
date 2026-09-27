@@ -148,6 +148,8 @@ export type Host = {
    * text — so a plugin reading SQL directly reads what the store reads */
   derived: Derived
   graph: Graph
+  /** A web role can answer graph reads beside its HTTP thread. */
+  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
   /** the post-commit registry: what a commit owes, written down by every
    * process (@yaks/effects), and the observers a plugin registers while one of
    * its tools runs */
@@ -525,6 +527,10 @@ export type Thread = {
 export type ComposeOpts = {
   /** the thread running the duties this host hands off */
   thread?: Thread
+  /** the graph read door a web role uses while its own graph handles writes */
+  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
+  /** a reader beside a host records no process of its own */
+  process?: boolean
 }
 
 /** The database a config names. `DB_PATH` is the other way to give it, for a
@@ -831,6 +837,7 @@ export let compose = async (
       blobs: sqliteBlobs(sql),
       state: stateDir(),
       derived,
+      reader: opts.reader,
       me: selfEid(),
       who: (request) => authenticate(request),
       feed: (each) => {
@@ -1166,7 +1173,7 @@ export let compose = async (
     // to it and `created.by` is a reference: a process attributing writes to an
     // entity nothing created would store a dangling id on its very first
     // write.
-    if (self) await g.apply([started()])
+    if (self && opts.process !== false) await g.apply([started()])
     return {
       ...host,
       graph: g,
@@ -1207,7 +1214,7 @@ export let compose = async (
             code == null ? '' : ` with code ${code}`
           } before the tool returned`,
         ).catch((e) => console.error('interrupting its calls failed —', e))
-        if (!self) return shut()
+        if (!self || opts.process === false) return shut()
         try {
           await g!.apply([...await released(g!, selfEid()), ended(code)])
         } catch { /* the file is going either way */ }
