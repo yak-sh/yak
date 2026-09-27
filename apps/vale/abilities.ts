@@ -13,8 +13,9 @@
 // everything about it; `self` takes nothing, and does its work on the hero.
 //
 // What an ability says it does is written from its row as the hero does it
-// (`does`): the numbers a skill changed, and the damage and health their own
-// blow and health make, so it never says what it no longer does.
+// (`does`): the numbers a skill changed, the damage and health their own blow
+// and health make, and what a skill added to it, so it never says what it no
+// longer does.
 import type { Glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Worn } from './gear.ts'
@@ -66,6 +67,8 @@ export type Ability = {
   time?: number
   /** ms before it can be done again */
   cool: number
+  /** a killing blow with it makes it ready again at once */
+  renew?: boolean
   /** the colour of its dust and light, when not the dust's own */
   tint?: number
 }
@@ -126,11 +129,11 @@ let words = (a: Ability, { blow, max }: Doer): Words => ({
   hits: String(a.hits ?? 1),
 })
 
-/** What `a` does, done by `d`, with its numbers: pass the ability as their
- * skills make it (skills.ts `formOf`).
+/** What `a` does, done by `d`, with its numbers, and what else a skill made
+ * it do: pass the ability as their skills make it (skills.ts `formOf`).
  *
  * ```ts
- * import { assertEquals } from '@std/assert'
+ * import { assertEquals, assertMatch, assertNotMatch } from '@std/assert'
  * import { formOf } from './skills.ts'
  * let d = { blow: 20, max: 120 }
  * assertEquals(does(ABILITIES.mend, d), 'Read a word of healing: 36 health back.')
@@ -146,9 +149,14 @@ let words = (a: Ability, { blow, max }: Doer): Words => ({
  *   does(formOf('crush', ['earthbreaker'])!, d),
  *   'One enormous overhead blow for 64 damage, and the foe is senseless for 1.5 s.',
  * )
+ * // Relentless readies a Lunge that kills, and Lunge says so.
+ * assertNotMatch(does(ABILITIES.lunge, d), /kill/)
+ * assertMatch(does(formOf('lunge', ['relentless'])!, d), /killing blow/)
  * ```
  */
-export let does = (a: Ability, d: Doer): string => a.says(words(a, d))
+export let does = (a: Ability, d: Doer): string =>
+  a.says(words(a, d)) +
+  (a.renew ? ' Ready again at once after a killing blow.' : '')
 
 /** Every ability, by id. */
 export let ABILITIES: Record<string, Ability> = {

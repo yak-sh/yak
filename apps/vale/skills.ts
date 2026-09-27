@@ -282,6 +282,16 @@ export let SKILLS: Record<string, Skill> = {
     ability: 'pin',
     form: { held: 4500, dmg: 1.5, cool: 7000 },
   },
+  relentless: {
+    name: 'Relentless',
+    icon: 'refresh',
+    says: 'A Lunge that kills is ready again at once.',
+    discipline: 'finesse',
+    row: 5,
+    after: 'charge',
+    ability: 'lunge',
+    form: { renew: true },
+  },
 
   focus: {
     name: 'Focus',

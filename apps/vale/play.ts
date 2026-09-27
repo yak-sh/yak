@@ -665,13 +665,15 @@ export let game = (
     })
 
   // Blows on their way: a shot in flight, the next stab of a flurry, a
-  // bleed. Each lands on its creature when it is due, and may hold it.
+  // bleed. Each lands on its creature when it is due, and may hold it; one
+  // an ability strikes says which (`by`), for what a killing blow does.
   let blows: {
     eid: string
     lands: number
     dmg: number
     great: boolean
     held: number
+    by?: string
   }[] = []
 
   let spend = (me: string, eid: string, now: number) =>
@@ -1412,6 +1414,7 @@ export let game = (
               held: i
                 ? 0
                 : Math.max(a?.held ?? 0, great ? k.powers.hold ?? 0 : 0),
+              by: doing,
             })
           }
           let burns = (a?.bleed ?? 0) + (k.powers.burn ?? 0)
@@ -1427,11 +1430,17 @@ export let game = (
           }
         }
       }
-      // Blows arriving.
+      // Blows arriving. An ability whose blow fells what it struck is ready
+      // again at once, if a skill made it so (`renew`).
       blows = blows.filter((b) => {
         if (b.lands > now) return true
         let m = mobs.find((m) => m.eid == b.eid)
-        if (m && !m.down) land(m, b.dmg, b.great, b.held)
+        if (m && !m.down) {
+          land(m, b.dmg, b.great, b.held)
+          if (m.down && b.by && formOf(b.by, s.learned)?.renew) {
+            ready.set(b.by, now)
+          }
+        }
         return false
       })
 
