@@ -3,6 +3,8 @@
 // (`read`) and gets one answer: which way to move, relative to the camera,
 // what was pressed since the last frame, and how far the view was dragged.
 
+import { pointer } from './pointer.ts'
+
 export type Intent = {
   /** right and forward, relative to the camera, at most 1 long */
   move: [number, number]
@@ -111,6 +113,7 @@ export let listen = (
     number,
     { x: number; y: number; far: number; button: number; type: string }
   >()
+  let cursor = pointer(stage, glass)
 
   let base = document.createElement('div')
   base.className = 'Stick'
@@ -138,7 +141,7 @@ export let listen = (
 
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
-    stage.setPointerCapture(e.pointerId)
+    if (e.pointerType == 'touch') stage.setPointerCapture(e.pointerId)
     if (e.pointerType == 'touch' && !stick && e.clientX < innerWidth * 0.45) {
       stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
       base.classList.remove('Stick-rest')
@@ -166,8 +169,8 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     if (!d) return
-    let mx = e.clientX - d.x
-    let my = e.clientY - d.y
+    let mx = cursor.locked() ? e.movementX : e.clientX - d.x
+    let my = cursor.locked() ? e.movementY : e.clientY - d.y
     d.far += Math.hypot(mx, my)
     d.x = e.clientX
     d.y = e.clientY
@@ -194,6 +197,10 @@ export let listen = (
   }
   stage.addEventListener('pointerup', up)
   stage.addEventListener('pointercancel', up)
+  document.addEventListener('pointerlockchange', () => {
+    if (cursor.locked()) return
+    for (let [id, d] of drags) if (d.type != 'touch') drags.delete(id)
+  })
   stage.addEventListener('wheel', (e) => {
     e.preventDefault()
     zoom += Math.sign(e.deltaY)
