@@ -165,7 +165,7 @@ let spending = (
   })),
 ]
 
-let short: Work = { type: 'say', text: 'You no longer have all it asks.' }
+let short: Work = { type: 'say', text: 'You no longer have all it needs.' }
 
 /** A hero's work over one store. */
 export let working = (net: Net) => {
@@ -406,7 +406,7 @@ export let working = (net: Net) => {
           let t = TRADES[near.lode.trade]
           events.push({
             type: 'say',
-            text: `${near.lode.name} asks ${t.name} ${
+            text: `${near.lode.name} requires ${t.name} ${
               least(near.lode.tier)
             }. Yours is ${mine[near.lode.trade].lvl}.`,
           })
@@ -437,10 +437,10 @@ export let working = (net: Net) => {
         if (mine[r.at].lvl < least(r.tier)) {
           events.push({
             type: 'say',
-            text: `That asks ${TRADES[r.at].name} ${least(r.tier)}.`,
+            text: `That requires ${TRADES[r.at].name} ${least(r.tier)}.`,
           })
         } else if (!plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))) {
-          events.push({ type: 'say', text: 'You have not got all it asks.' })
+          events.push({ type: 'say', text: 'You have not got all it needs.' })
         } else {
           job = {
             trade: r.at,

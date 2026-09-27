@@ -152,7 +152,7 @@ export let station = (panel: Panel, acts: Acts) => {
     let button = !r || !trade
       ? `<span class=Pack_Hint>As fine as it gets.</span>`
       : !able(r, trades[r.at].lvl)
-      ? `<span class=Pack_Hint>Asks ${trade.name} ${least(r.tier)}</span>`
+      ? `<span class=Pack_Hint>Requires ${trade.name} ${least(r.tier)}</span>`
       : working
       ? `<button class="Btn Btn-go Craft_Go" style="--k:${
         working.k.toFixed(3)
@@ -182,7 +182,7 @@ export let station = (panel: Panel, acts: Acts) => {
 
   let card = (s: Sheet, trades: Trades, job: Job) => {
     let r = picked ? RECIPES[picked] : null
-    if (!r) return `<p class=Pack_Hint>Tap something to see what it asks.</p>`
+    if (!r) return `<p class=Pack_Hint>Tap something to see what it needs.</p>`
     let t = ITEMS[r.makes]
     let bag = spare(s.bag, Object.values(s.worn))
     let trade = TRADES[r.at]
@@ -195,7 +195,7 @@ export let station = (panel: Panel, acts: Acts) => {
       ? `Drink it to mend ${t.heals} (Q)`
       : `${sortOf(t)} · tier ${r.tier}`
     let button = !able(r, trades[r.at].lvl)
-      ? `<span class=Pack_Hint>Asks ${trade.name} ${least(r.tier)}</span>`
+      ? `<span class=Pack_Hint>Requires ${trade.name} ${least(r.tier)}</span>`
       : making
       ? `<button class="Btn Btn-go Craft_Go" style="--k:${
         making.k.toFixed(3)
