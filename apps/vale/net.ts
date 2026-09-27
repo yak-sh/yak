@@ -15,6 +15,7 @@
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
 import { type Client, client, type Watch } from '@yaks/client'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { type Seen, seenOf } from './seen.ts'
 import words from './vocab.json' with { type: 'json' }
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
@@ -40,13 +41,15 @@ export type Me = {
   signIn: string | null
 }
 
-/** One of a person's heroes, as the gate lists them. */
+/** One of a person's heroes, as the gate lists them, and where they were
+ * last seen (seen.ts). */
 export type Hero = {
   eid: string
   name: string
   tint: string
   hair: string
   skin: string
+  seen: Seen | null
 }
 
 // The words the store speaks, as it serves them (./api/vocab.json): this app's
@@ -77,6 +80,7 @@ let heroOf = (b: Bundle): Hero => {
     tint: str(p.tint, '#c95f4a'),
     hair: str(p.hair, '#5a3a26'),
     skin: str(p.skin, '#e7b996'),
+    seen: seenOf(b),
   }
 }
 
@@ -202,7 +206,7 @@ export let connect = (base: URL) => {
       new Promise((done) => {
         let w: Watch
         try {
-          w = c.watch(`.player&.created.by=${JSON.stringify(person)}`)
+          w = c.watch(`.player&.created.by=${JSON.stringify(person)}&?seen`)
         } catch (e) {
           console.warn('mossvale store:', e)
           return done([])

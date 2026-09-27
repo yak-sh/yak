@@ -3,14 +3,14 @@
 // time a hero comes; what they said back, where they chose to go and how they
 // feel, off their transcripts; the line a hero says beside one, which asks
 // them to answer, told what they hold, what deals stand between them and the
-// hero (deals.ts), how they feel and where the land's people went lately; the
-// news of a quest handed in; and the mark on the hero that keeps a level's
-// villagers awake while somebody plays in it.
+// hero (deals.ts), how they feel and where the land's people went lately; and
+// the news of a quest handed in. What keeps a level's villagers awake while
+// somebody plays in it is where the hero was last seen (seen.ts).
 //
 // A guest reads what villagers say and is not heard by them: only a person
-// signed in speaks (chat.ts), and only their hero's row is theirs to mark.
+// signed in speaks (chat.ts).
 import type { Watch } from '@yaks/client'
-import { type Line, writer } from './chat.ts'
+import type { Line } from './chat.ts'
 import type { Deals } from './deals.ts'
 import { type Bundle, comp, type Me, type Net, num, str } from './net.ts'
 import type { Frame } from './play.ts'
@@ -31,10 +31,6 @@ import {
   where,
   WINDOW,
 } from './villagers.ts'
-
-// How often a page says its hero is still in the level, in ms: well inside
-// the five minutes that keep the villagers there awake.
-let PRESENT = 2 * 60_000
 
 // How far back the deeds a villager has heard of go, in ms.
 let LATELY = 60 * 60_000
@@ -59,8 +55,6 @@ export let village = (net: Net, deal: Deals) => {
   }
   let rows = watch('.villager')
   let think = watch('.tool.name=think')
-  // Who made each hero, which says whose hero is theirs to mark.
-  watch('.player&?created')
 
   // What the level's villagers said back and chose, newest first.
   let level = ''
@@ -99,7 +93,6 @@ export let village = (net: Net, deal: Deals) => {
   let me: Me | null = null
   let last: Frame | null = null
   let asked = new Set<string>()
-  let marked = { level: '', at: -Infinity }
   let held = (id: string) =>
     !!rows?.value.some((b) => b.entity.eid == eidOf(id))
 
@@ -119,28 +112,16 @@ export let village = (net: Net, deal: Deals) => {
   }
 
   return {
-    /** who is looking: a person signed in is heard and marks their hero */
+    /** who is looking: a person signed in is heard */
     me: (who: Me) => {
       me = who
     },
-    /** this frame: follow the hero's level, say they are here, and add the
-     * rows of its villagers the store does not hold yet */
+    /** this frame: follow the hero's level, and add the rows of its
+     * villagers the store does not hold yet */
     tick: (f: Frame) => {
       last = f
       if (f.level != level) follow(f.level)
-      let hero = net.hero
-      if (!hero || !me?.writes) return
-      let now = Date.now()
-      // Only a hero its person made is theirs to mark: a refused mark would
-      // take the rows it went with down with it.
-      let theirs = !!me.person && writer(net.client.ent(hero)) == me.person
-      if (theirs && (marked.level != f.level || now - marked.at > PRESENT)) {
-        marked = { level: f.level, at: now }
-        net.keep({
-          entity: { eid: hero },
-          seen: { level: f.level, at: new Date(net.now()).toISOString() },
-        })
-      }
+      if (!net.hero || !me?.writes) return
       let tool = think?.value[0]?.entity.eid
       if (!tool || !rows?.ready) return
       let missing = GIVERS.filter((g) =>

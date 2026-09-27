@@ -70,7 +70,17 @@ import {
   xpOf,
 } from './rules.ts'
 import { type Rarity, rarityOf } from './rarity.ts'
-import { type Body, inVillage, prowl, rest, turn, walk } from './sim.ts'
+import type { Seen } from './seen.ts'
+import {
+  type Body,
+  fits,
+  floorAt,
+  inVillage,
+  prowl,
+  rest,
+  turn,
+  walk,
+} from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
 import { plusOf } from './upgrade.ts'
@@ -422,6 +432,43 @@ export let arrival = (v: Vale, from?: string): Body => {
   }
 }
 
+// How far above the ground a hero may have climbed, in metres: a jump's
+// height.
+let CLIMB = 1.2
+
+/** Where a hero stands back where they were last seen (seen.ts), in the
+ * level they were seen in: the same spot, facing the same way, on the ground
+ * or on the rock they had climbed; or null, where they no longer fit, in a
+ * wall, deep in water or off the land.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { flat } from './terrain.ts'
+ * // Flat ground 5 m up, a trunk at (10, 10), a rock a metre tall at (20, 20).
+ * let v = flat(5, [
+ *   { x: 10, z: 10, r: 0.5, top: 9 },
+ *   { x: 20, z: 20, r: 1, top: 6 },
+ * ])
+ * let at = (x: number, z: number) => {
+ *   let b = resumed(v, { x, z, yaw: 1 })
+ *   return b && [b.x, b.y, b.z, b.yaw]
+ * }
+ * assertEquals(at(30, 40), [30, 5, 40, 1])
+ * assertEquals(at(20, 20), [20, 6, 20, 1]) // up on the rock
+ * assertEquals(at(10, 10), null) // in the trunk
+ * assertEquals(at(-3, 30), null) // off the land
+ * ```
+ */
+export let resumed = (
+  v: Vale,
+  s: { x: number; z: number; yaw: number },
+): Body | null => {
+  let y = floorAt(v, s.x, s.z, groundAt(v, s.x, s.z) + CLIMB)
+  return fits(v, s.x, s.z, y)
+    ? { x: s.x, y, z: s.z, vy: 0, yaw: s.yaw, speed: 0, gait: 'idle' }
+    : null
+}
+
 /** The game over one store. Each frame is played in the level the hero is
  * in. `stand` says where a giver is at a moment, given where their home is:
  * the villagers walk (village.ts). */
@@ -477,6 +524,14 @@ export let game = (
   // The level the hero last walked off by a road, until a frame plays in the
   // level beyond.
   let arriving: string | null = null
+  // Where the hero was last seen before this page, until a frame plays.
+  let lastSeen: Seen | null = null
+  // Where the hero stands on the first frame played in `v`: back where they
+  // were last seen, when that was here and they still fit there, or where
+  // `arrival` puts them.
+  let landing = (v: Vale): Body =>
+    (lastSeen?.level == v.level.id ? resumed(v, lastSeen) : null) ??
+      arrival(v, arriving ?? undefined)
 
   // Where a mover this page moves is (its hero, the creatures it owns),
   // written when it differs from what the graph holds.
@@ -646,6 +701,13 @@ export let game = (
   }
 
   return {
+    /** bring the hero back where they were last seen, on the first frame
+     * played in that level */
+    resume: (s: Seen) => {
+      lastSeen = s
+    },
+    /** where the hero stands on the first frame played in `v` */
+    landing,
     /** put on a thing I carry, in its slot; with no item, take it off */
     wear: (slot: Slot, item = '') => {
       if (net.hero) wear(net.hero, slot, item)
@@ -746,11 +808,12 @@ export let game = (
       anchor(v)
 
       // Me, as the graph has me: a hero with no place here (just come by a
-      // road, back after a reload) stands at the level's arrival.
+      // road, back after a reload) stands where they land.
       let pos = where(row)
       let here = pos?.level == lv ? bodyOf(pos, motion(row)) : null
-      let body = here ? { ...here } : arrival(v, arriving ?? undefined)
+      let body = here ? { ...here } : landing(v)
       arriving = null
+      lastSeen = null
       let down = here?.gait == 'down'
       if (down) body.gait = 'idle'
       let vit = vitals(row)

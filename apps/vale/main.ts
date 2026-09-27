@@ -9,7 +9,8 @@
 // menu.ts, and the deals with a villager, dealbox.ts). The world draws the
 // chunks within sight of the hero (world.ts), meshed in the workers as they
 // come near. When the hero walks off the end of a road, the page grows the
-// level beyond, draws the chunks where they come in, and carries on there.
+// level beyond, draws the chunks where they come in, and carries on there. A
+// hero comes back where they were last seen (seen.ts).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability } from './abilities.ts'
@@ -37,7 +38,8 @@ import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { HOME, LEVELS, type Spot } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
-import { arrival, type Event, type Frame, game, type Vec3 } from './play.ts'
+import { type Event, type Frame, game, type Vec3 } from './play.ts'
+import { lastLevel, recall, type Seen, sighting } from './seen.ts'
 import { formOf, SKILLS } from './skills.ts'
 import { within } from './solid.ts'
 import { sound } from './sound.ts'
@@ -93,10 +95,11 @@ let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(SIZE / asked)
 let built = new URLSearchParams(location.search).get('build') ?? ''
 let BUILD = Object.hasOwn(BUILDS, built) ? BUILDS[built] : BUILDS.child
 // The first level starts growing before anything else, in every worker, since
-// it takes longest. It is let go once drawn, so a level the hero has left is
-// not kept.
-ahead(HOME, VOX)
-let first: Promise<Vale> | null = grown(HOME, VOX)
+// it takes longest: the one this tab's hero was last seen in, or Mossvale. It
+// is let go once drawn, so a level the hero has left is not kept.
+let START = lastLevel() ?? HOME
+ahead(START, VOX)
+let first: Promise<Vale> | null = grown(START, VOX)
 
 let pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)]
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -130,6 +133,7 @@ addEventListener('resize', fit)
 let net = connect(new URL('api/', document.baseURI))
 let deal = deals(net)
 let folk = village(net, deal)
+let seen = sighting(net)
 let g = game(net, folk.at)
 let toil = working(net)
 // Who you are and your heroes, asked while the level grows.
@@ -208,10 +212,10 @@ let away = false
 // How near a road's end, in metres, the level beyond starts growing: some
 // seconds' run from it.
 let AHEAD = 24
-let grow = async (id: string, from: string) => {
+let grow = async (id: string) => {
   away = true
   let next = shown(await grown(id, VOX))
-  let at = arrival(next.v, from)
+  let at = g.landing(next.v)
   next.w.focus.set(at.x, at.y, at.z)
   await next.w.near()
   bounty.dispose()
@@ -282,14 +286,23 @@ let dress = () => {
   w.scene.add(preview.root)
 }
 
-let begin = (eid: string) => {
+// Play a hero: back where they were last seen, by this tab or the store
+// (`stored`), or a new one at Mossvale's fire.
+let begin = (eid: string, stored: Seen | null = null) => {
   net.choose(eid)
+  let back = recall(eid, stored)
+  if (back) g.resume(back)
+  let lv = back?.level ?? HOME
+  if (lv != v.level.id) grow(lv)
   if (preview) w.scene.remove(preview.root)
   preview = null
   playing = true
   cam.yaw = 0
   cam.pitch = innerWidth < innerHeight ? 0.6 : 0.42
   cam.dist = phone ? 11 : 9.5
+  // The camera starts behind the hero, wherever they stand.
+  cam.x = NaN
+  cam.snap = true
   gate.remove()
   glass.hidden = false
   canvas.focus()
@@ -390,7 +403,7 @@ let choose = (who: Me, heroes: Hero[]) => {
     b.addEventListener('click', () => {
       let o = heroes.find((x) => x.eid == b.dataset.eid)
       if (!o) return
-      begin(o.eid)
+      begin(o.eid, o.seen)
       h.toast(`Welcome back, ${o.name}.`, 'Toast-big')
     })
   )
@@ -806,7 +819,7 @@ let loop = (t: number) => {
       // Off the end of a road: the level beyond grows, and the next frame
       // plays there.
       for (let e of f.events) react(e, target)
-      grow(f.level, v.level.id)
+      grow(f.level)
     } else if (f) {
       let player = comp(net.client.ent(net.hero), 'player')
       let dressed = {
@@ -830,6 +843,7 @@ let loop = (t: number) => {
       )
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)
       folk.tick(f)
+      seen.tick(f)
       // An offer from the villager the hero is beside opens the deals.
       let talk = f.talk
       for (let n of deal.tick(f.level)) {
@@ -1045,6 +1059,7 @@ if (busy) busy.textContent = 'Finding the others…'
 let { me, heroes } = await asking
 chat.me(me)
 folk.me(me)
+seen.me(me)
 deal.me(me)
 let ready = async (watch: { ready: boolean }) => {
   for (let i = 0; i < 40 && !watch.ready; i++) {
@@ -1061,7 +1076,8 @@ if (!me.reads) {
   // Signed in: your heroes, wherever you made them.
   look.name = me.name?.split(/\s/)[0] ?? ''
   let played = net.played()
-  if (played && heroes.some((o) => o.eid == played)) begin(played)
+  let o = heroes.find((o) => o.eid == played)
+  if (o) begin(o.eid, o.seen)
   else if (heroes.length) choose(me, heroes)
   else make(me, null)
 } else {
