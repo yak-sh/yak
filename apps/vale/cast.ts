@@ -30,6 +30,7 @@ import type { overlay } from './fx.ts'
 import { type Gaze, gaze, neck } from './gaze.ts'
 import { type Hand, handOf, kitOf } from './gear.ts'
 import { ITEMS, meshed, onGround } from './items.ts'
+import { laid } from './laid.ts'
 import { LEVELS } from './levels.ts'
 import { pack } from './mesh.ts'
 import type { Drop, Frame } from './play.ts'
@@ -112,9 +113,12 @@ let fade = (
   return g
 }
 
+// How far across the glow under a piece of loot is, in metres.
+let GLOW = 0.8
+
 // The light a piece finer than common gives off where it lies, in its
 // rarity's colour: a bright beam in a fainter one, and a glow on the ground
-// under it.
+// under it (laid.ts).
 let beamOf = (r: Rarity, glow: THREE.Material) => {
   let tall = BEAMS[r] ?? 0, rgb = GRADES[r].light
   let beam = (top: number, foot: number, most: number) => {
@@ -122,10 +126,13 @@ let beamOf = (r: Rarity, glow: THREE.Material) => {
     b.translate(0, tall / 2, 0)
     return fade(b, rgb, (_, y) => most * (1 - y / tall) ** 1.4)
   }
-  let disc = new THREE.CircleGeometry(0.8, 24)
+  let disc = new THREE.CircleGeometry(GLOW, 24)
   disc.rotateX(-Math.PI / 2)
-  disc.translate(0, 0.04, 0)
-  let glowing = fade(disc, rgb, (x, _, z) => 0.8 * (1 - Math.hypot(x, z) / 0.8))
+  let glowing = fade(
+    disc,
+    rgb,
+    (x, _, z) => 0.8 * (1 - Math.hypot(x, z) / GLOW),
+  )
   let g = new THREE.Group()
   for (let shape of [beam(0.05, 0.12, 0.95), beam(0.16, 0.4, 0.35), glowing]) {
     let m = new THREE.Mesh(shape, glow)
@@ -166,9 +173,10 @@ export let cast = (
     return g
   }
   // What my next blow or ability would take (play.ts `aim`): four pale arcs
-  // round its feet, turning slowly, drawn over any red beneath them. A broken
-  // ring the colour of paper, so it reads as a selection and never as a
-  // second bite.
+  // round its feet, turning slowly, drawn over any red beneath them (laid.ts).
+  // A broken ring the colour of paper, so it reads as a selection and never
+  // as a second bite.
+>>>>>>> ed5868f8 (Mossvale: everything laid over the ground goes through one helper (laid.ts): the arcs round a targeted creature, the ring of ground its bite takes and the disc filling it, the glow under loot and the ripples over a shoal each lie one lift above the highest ground they cover, or the floor they mark, where each picked a small offset of its own. Overlays laid on each other are ordered by render order, never nudged up: the fill over the ring, the arcs over both (T-40879))
   let mark = new THREE.Group()
   let arc = new THREE.RingGeometry(0.84, 1, 12, 1, 0, Math.PI / 3)
   let pale = new THREE.MeshBasicMaterial({
@@ -180,14 +188,15 @@ export let cast = (
   for (let i = 0; i < 4; i++) {
     let m = new THREE.Mesh(arc, pale)
     m.rotation.z = (i * Math.PI) / 2
-    m.renderOrder = 1
+    m.renderOrder = 2
     mark.add(m)
   }
   mark.rotation.x = -Math.PI / 2
   mark.visible = false
   scene.add(mark)
   // A creature on my trail: the ground its bite takes (`zone`, a thin ring
-  // whose outer edge is its reach) and the bite winding up (`fill`, a disc).
+  // whose outer edge is its reach) and the bite winding up (`fill`, a disc
+  // drawn over the ring).
   let red = (opacity: number) =>
     new THREE.MeshBasicMaterial({
       color: 0xff3b2f,
@@ -198,29 +207,24 @@ export let cast = (
   let thin = new THREE.RingGeometry(0.9, 1, 56)
   let disc = new THREE.CircleGeometry(1, 56)
   let edge = red(0.75)
-  let laid = <M extends THREE.Material>(g: THREE.BufferGeometry, m: M) => {
+  let lay = <M extends THREE.Material>(
+    g: THREE.BufferGeometry,
+    m: M,
+    order: number,
+  ) => {
     let r = new THREE.Mesh(g, m)
     r.rotation.x = -Math.PI / 2
+    r.renderOrder = order
     r.visible = false
     scene.add(r)
     return r
   }
-  let pair = () => ({ zone: laid(thin, edge), fill: laid(disc, red(0)) })
+  let pair = () => ({ zone: lay(thin, edge, 0), fill: lay(disc, red(0), 1) })
   let warns = new Map<string, ReturnType<typeof pair>>()
   let warn = (eid: string) => {
     let w = warns.get(eid) ?? pair()
     warns.set(eid, w)
     return w
-  }
-  // The highest ground within `r` of (x, z): where a ring laid over it shows
-  // whole, on a slope as on the flat.
-  let highest = (x: number, z: number, r: number) => {
-    let y = groundAt(v, x, z)
-    for (let i = 0; i < 16; i++) {
-      let a = ((i % 8) / 4) * Math.PI, d = i < 8 ? r : r / 2
-      y = Math.max(y, groundAt(v, x + Math.cos(a) * d, z + Math.sin(a) * d))
-    }
-    return y
   }
   let at = new THREE.Vector3()
 
@@ -522,14 +526,14 @@ export let cast = (
         // grows from faint and small to fill the ring as the bite lands (0.4
         // of the way through), and holds there a moment after.
         if (m.aim && !m.down) {
-          let w = warn(m.eid), y = highest(a.x, a.z, m.reach) + 0.08
+          let w = warn(m.eid), y = laid(v, a.x, a.z, m.reach)
           w.zone.visible = true
           w.zone.position.set(a.x, y, a.z)
           w.zone.scale.setScalar(m.reach)
           if (m.bite >= 0 && m.bite < 0.46) {
             let k = Math.min(1, m.bite / 0.4)
             w.fill.visible = true
-            w.fill.position.set(a.x, y + 0.01, a.z)
+            w.fill.position.set(a.x, y, a.z)
             w.fill.scale.setScalar(Math.max(0.01, m.reach * k))
             w.fill.material.opacity = 0.12 + 0.5 * k
           }
@@ -538,7 +542,7 @@ export let cast = (
         if (aimed) {
           let r = 0.55 + b.size * 0.6
           mark.visible = true
-          mark.position.set(a.x, highest(a.x, a.z, r) + 0.06, a.z)
+          mark.position.set(a.x, laid(v, a.x, a.z, r), a.z)
           mark.rotation.z = t * 0.8
           mark.scale.setScalar(r)
         }
@@ -628,7 +632,7 @@ export let cast = (
         mesh.position.set(d.x, d.y + 0.25 + bob, d.z)
         mesh.rotation.y = t * 1.8 + d.at
         let g = lit(d)
-        g?.position.set(d.x, d.y, d.z)
+        g?.position.set(d.x, laid(v, d.x, d.z, GLOW, d.y), d.z)
         g?.scale.set(1 + Math.sin(t * 4 + d.at) * 0.15, 1, 1)
       }
       glowing.opacity = 0.75 + Math.sin(t * 3) * 0.2

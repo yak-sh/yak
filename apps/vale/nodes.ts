@@ -17,6 +17,7 @@ import { STATIONS } from './craft.ts'
 import { chipOf, GATHER, type Look } from './gather.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, meshed } from './items.ts'
+import { LIFT } from './laid.ts'
 import { type Box, cuboids } from './boxes.ts'
 import {
   ball,
@@ -293,7 +294,7 @@ export let nodes = (
       let rings = [0, 1].map(() => {
         let ring = new THREE.Mesh(ringGeo, water.clone())
         ring.rotation.x = -Math.PI / 2
-        ring.position.y = 0.03
+        ring.position.y = LIFT
         obj.add(ring)
         return ring
       })
