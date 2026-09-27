@@ -73,24 +73,22 @@ Deno.test('session row names the first ask and keeps the brief beneath it', asyn
       session: { eid: 'asking', id: 'opaque-run-id' },
       brief: { eid: 'asking', text: 'Found the cause' },
     },
+    internal: {
+      entity: { eid: 'internal', num: 3 },
+      entry: { eid: 'internal', session: 'asking', seq: 1 },
+      content: { eid: 'internal', body: 'Harness instructions' },
+      prompt: { eid: 'internal' },
+    },
+    ask: {
+      entity: { eid: 'ask', num: 4 },
+      entry: { eid: 'ask', session: 'asking', seq: 2 },
+      content: { eid: 'ask', body: 'Fix the tray\nplease' },
+    },
   }
   let mounted = mount(h(resolve(ent('asking'), 'Tray.List.Tile').Render, {
     e: ent('asking'),
   }))
   try {
-    let line = '.entry.session=asking&.content&!output&!notice&' +
-      '.order=entry.seq&.limit=1&.fields=content.body'
-    let sub = querySubscription(parseQuery(line), line)!.sub
-    landSub({
-      sub,
-      replace: true,
-      fields: [{ comp: 'content', prop: 'body', wake: true }],
-      changes: [
-        { eid: 'ask', name: 'entity', comp: { num: 3 } },
-        { eid: 'ask', name: 'entry', comp: { session: 'asking', seq: 1 } },
-        { eid: 'ask', name: 'content', comp: { body: 'Fix the tray\nplease' } },
-      ],
-    })
     await tick()
     assertEquals(
       mounted.root.querySelector('.SessionRow_Title')?.textContent,

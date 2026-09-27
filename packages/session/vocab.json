@@ -319,7 +319,7 @@
         },
         "ended": {
           "type": "boolean",
-          "description": "the outside harness ended this session; cleared if that harness resumes it"
+          "description": "the caller observed the outside harness end this session; equivalent to a stop entry and cleared if that harness resumes it"
         },
         "standing": {
           "type": "string",

@@ -734,7 +734,7 @@ export let SessionRow = ({ e, slots, onOpen }: TileProps) => {
   let task = e.refs.find((r) => r.type == 'worked')?.child
   let face = useReference(task)
   let first = useQueryResult(
-    `.entry.session=${e.eid}&.content&!output&!notice&` +
+    `.entry.session=${e.eid}&.content&!output&!notice&!prompt&` +
       '.order=entry.seq&.limit=1&.fields=content.body',
     true,
     true,
