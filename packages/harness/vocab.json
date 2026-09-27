@@ -113,7 +113,7 @@
       "noun": "model",
       "verb": "list",
       "title": "List the models this machine can reach",
-      "description": "Say which OpenAI credential this machine would send (OPENAI_API_KEY, else a Codex sign-in) and list the models its endpoint offers. The credential itself is never shown.",
+      "description": "List the models offered by this harness's OpenAI credential (OPENAI_API_KEY, else the OpenAI connection). The credential itself is never shown.",
       "input": {},
       "readOnly": true
     }

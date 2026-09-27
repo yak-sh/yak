@@ -5,7 +5,8 @@
  * tools it declares (`@yaks/mail/vocab`), what a write means (`/rules`), the
  * functions behind its tools (`/tools`), what runs after a commit
  * (`/effects`), the work it keeps doing while a process is up (`/service`), the
- * HTTP it adds (`/routes`), and how its entities are drawn (`/views`, `/tui`).
+ * HTTP it adds (`/routes`), its terminal controls (`/cli`), and how its
+ * entities are drawn (`/views`, `/tui`).
  * It never says where any of that runs. A process serves roles, and imports
  * only the facets of the roles it serves:
  *
@@ -102,6 +103,7 @@ import { type Config, given, type Options, subpath, used } from './config.ts'
 import { stateDir } from './store.ts'
 import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
+import type { Command, Ctx } from './run.ts'
 
 export {
   type Config,
@@ -250,7 +252,10 @@ export let ROLES = {
 export type Role = string
 
 /** Every subpath a role imports. */
-export type FacetName = typeof ROLES[keyof typeof ROLES][number] | 'service'
+export type FacetName =
+  | typeof ROLES[keyof typeof ROLES][number]
+  | 'service'
+  | 'cli'
 
 /** Every role a config's graph has: the three every graph has, and one per
  * plugin for its service (a plugin with none brings nothing to it). */
@@ -316,6 +321,20 @@ export type Feed = (
  * code. What a tool function is handed per call — the graph, the caller, the
  * arguments — still arrives on the tool context. */
 export type ToolsFacet = { runs?: (host: Host, options: Options) => Runs }
+
+/** A plugin's command-line control. It opens the graph but is not a persisted
+ * tool call: a password prompt or OAuth attempt cannot be replayed by a
+ * server after the terminal process exits. */
+export type CliCommand = Omit<Command, 'run'> & {
+  run: (
+    args: Record<string, unknown>,
+    host: Host,
+    context: Ctx,
+  ) => number | Promise<number>
+}
+
+/** `<plugin>/cli` — commands for the person at this terminal, not graph tools. */
+export type CliFacet = { commands?: CliCommand[] }
 
 /** `<plugin>/effects` — the code behind effects the composed vocabulary
  * declares (`effect: true`), keyed by the name each is declared under. A mail
@@ -390,6 +409,7 @@ export type ServiceFacet = {
 /** What each subpath a role imports is expected to export. Every field is
  * optional: a plugin exports what it has, and the host uses what it finds. */
 export type Facets = {
+  cli: CliFacet
   vocab: VocabFacet
   rules: RulesFacet
   tools: ToolsFacet

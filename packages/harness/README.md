@@ -48,6 +48,7 @@ input.
 | `@yaks/harness/tui`   | `views`: a lone session or entry, drawn as the terminal app                      |
 | `@yaks/harness/vocab` | `docs`, the harness's own words                                                  |
 | `@yaks/harness/tools` | `runs(host)`, the functions behind the tools `vocab.json` declares               |
+| `@yaks/harness/cli`   | `commands`, terminal controls such as `connection authorize`                     |
 
 ## Use
 
@@ -67,6 +68,8 @@ yak session list
 yak session peek <session>
 yak task list
 yak model list
+yak connection authorize
+yak connection authorize 'OpenAI (model provider)'
 ```
 
 `session new` and `session send` write the input, wait while the transcript runs
@@ -93,7 +96,12 @@ so Deno reuses its module cache. If a probe must move `HOME`, export the
 invoking `DENO_DIR` before moving it.
 
 The model is `gpt-6-astra` unless `--model` names another, reached with
-`$OPENAI_API_KEY` or the Codex CLI's sign-in (@yaks/openai).
+`$OPENAI_API_KEY` or the OpenAI connection. `yak connection authorize` lists
+model providers and MCP servers; pass one of those names to sign in. It prints
+an authorization link and reads the complete return URL with terminal echo
+disabled. The return URL is never a command argument or transcript entry.
+`yak model list` lists names from the OpenAI endpoint reached by that
+credential.
 
 ```ts
 import { compose } from '@yaks/cli/host'
@@ -816,21 +824,22 @@ server with `graph_apply` (or ask an agent to add it):
 ]
 ```
 
-Press **Esc**, **A** to authorize the server. Server rows persist across
-restarts; configuration changes take effect on the next model request, without
-restarting. The panel identifies each server by display name and EID and reports
-invalid definitions. Query `.mcp_server` to list them. Set `mcp_server.enabled`
-to `false` to disable a server, patch its URL or options to edit it, or remove
-its `mcp_server` component to remove it. The `$server` alias in the write above
-asks the graph to generate a UUID; use the returned EID for later edits. The
-server name supplies a readable tool namespace: `yaks.app` exposes `app_list` as
-`yaks_app__app_list`. Renaming changes future exposed names, not the server
-entity or its OAuth credentials. Distinct configuration revisions have derived
-UUID tool entities, so changing an endpoint cannot retarget already-issued calls
-even when their exposed names are identical. Names that normalize to the same
-namespace are rejected. Remote names are passed unchanged to `tools/call`; names
-that cannot fit the provider's 64-character alphanumeric/underscore/hyphen
-format are reported rather than hashed.
+Press **Esc**, **A** to authorize the server, or run
+`yak connection authorize <server>` on the command line. Server rows persist
+across restarts; configuration changes take effect on the next model request,
+without restarting. The panel identifies each server by display name and EID and
+reports invalid definitions. Query `.mcp_server` to list them. Set
+`mcp_server.enabled` to `false` to disable a server, patch its URL or options to
+edit it, or remove its `mcp_server` component to remove it. The `$server` alias
+in the write above asks the graph to generate a UUID; use the returned EID for
+later edits. The server name supplies a readable tool namespace: `yaks.app`
+exposes `app_list` as `yaks_app__app_list`. Renaming changes future exposed
+names, not the server entity or its OAuth credentials. Distinct configuration
+revisions have derived UUID tool entities, so changing an endpoint cannot
+retarget already-issued calls even when their exposed names are identical. Names
+that normalize to the same namespace are rejected. Remote names are passed
+unchanged to `tools/call`; names that cannot fit the provider's 64-character
+alphanumeric/underscore/hyphen format are reported rather than hashed.
 
 Optional fields are `allow` (a JSON-encoded array of exact remote tool names),
 and `redirect_url`, `client_id`, `client_metadata_url`, `scope` for OAuth
@@ -906,12 +915,14 @@ behavior.
 
 ### Sign in to an MCP server
 
-Add an `mcp_server` entity as above, then press **Esc**, **A** in the TUI.
-Choose a server with j/k and Enter. Open the displayed authorization link in
+Add an `mcp_server` entity as above, then press **Esc**, **A** in the TUI or run
+`yak connection authorize` to list it and sign in on the command line. In the
+TUI, choose a server with j/k and Enter. On the command line, pass its listed
+name to `yak connection authorize`. Open the displayed authorization link in
 your browser. After approval, copy the complete return URL from the address bar
-and paste it into the authorization panel; press Enter. The return URL is hidden
-and never sent to the model, a transcript, or draft recovery storage. Esc
-cancels.
+and paste it into the authorization panel or command prompt. The return URL is
+hidden and never sent to the model or a transcript. Esc cancels in the TUI;
+Ctrl+C cancels the command prompt.
 
 The default callback is `http://localhost:8765/oauth/callback`. No listener is
 started, so a browser connection error at that address is expected; copy the
@@ -987,10 +998,10 @@ parent's provider stays while it serves that model; otherwise the one provider
 this harness can reach that serves it answers, and a model two reachable
 providers serve needs the provider named in `using`. The command
 `harness new --provider openrouter --model vendor/model 'message'` creates a new
-session under that provider; authorize beforehand in the TUI. Embedding
-applications can use `local({provider: 'openrouter', name: 'vendor/model'})`;
-configuration is recorded in the graph. Tests can inject
-`providers: {openrouter: fakeModel}`.
+session under that provider; authorize beforehand in the TUI or with
+`yak connection authorize 'OpenRouter (model provider)'`. Embedding applications
+can use `local({provider: 'openrouter', name: 'vendor/model'})`; configuration
+is recorded in the graph. Tests can inject `providers: {openrouter: fakeModel}`.
 
 OpenRouter Responses is stateless: full applicable context is sent on every
 request, including forks. Provider/model switches don't reuse another model's

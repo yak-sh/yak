@@ -24,8 +24,8 @@ Its arguments and help come from the tool's input schema, so a new tool does not
 require a new CLI release.
 
 `yak` provides five commands itself: `help`, `init`, `login`, `logout`, and
-`apply`. Its other commands come from either a graph opened in the current
-process or an MCP server queried at run time. `yak serve` is one of those tools
+`apply`. Its other commands come from a configured plugin, a graph opened in the
+current process, or an MCP server queried at run time. `yak serve` is a tool
 rather than a command of this package: [@yaks/api](../api/README.md) declares
 and implements it, so a config listing that package is a config whose graph can
 be served.
@@ -53,13 +53,15 @@ serves:
 | `effects`       | `./effects`                     | claims and runs what commits owe, in a pool    |
 | a plugin's name | that plugin's `./service`       | keeps that plugin's timer or poll running      |
 
-The `yak` command serves commands and rendering itself. Listing its commands
-reads only the plugins' `./vocab`, where the tools are declared, so the usage
-page opens nothing. Running one opens the graph for that command's roles: the
-graph and the roles the tool declares (`serve` declares `web`). The duty roles,
-the effect pool and each plugin's service, run beside it in a thread of the same
-process where no live process serves them (see Duties). The rendering role
-imports `./views`, and `./tui` under `--tui`.
+The `yak` command serves commands and rendering itself. It reads the plugins'
+`./vocab` for tools and optional `./cli` facets for terminal controls, so the
+usage page opens no graph. A `./cli` command runs directly in the terminal
+process and is not a stored tool call: input such as an OAuth return URL cannot
+be replayed by another process. Running one opens the graph for that command's
+roles: the graph and the roles it declares (`serve` declares `web`). The duty
+roles, the effect pool and each plugin's service, run beside it in a thread of
+the same process where no live process serves them (see Duties). The rendering
+role imports `./views`, and `./tui` under `--tui`.
 
 ## Where a command runs
 
@@ -97,8 +99,9 @@ shown the same way too: through the views of the packages that declared the
 components, where this machine has them. A remote server's vocabulary, and the
 package behind each component, come from its `graph_schema`, asked once and
 cached beside its tool list; a reply that carries no entities prints as its
-text. CLI-only commands such as `help`, `init`, `login`, `logout`, and `apply`
-use their own command implementations.
+text. Terminal controls from a plugin's `./cli` facet, such as the harness's
+`connection authorize`, run in that terminal process and use their own command
+implementations, as do `help`, `init`, `login`, `logout`, and `apply`.
 
 ## The config
 
@@ -211,6 +214,7 @@ contributes nothing to that process.
 | `./vocab`   | `graph`    | `docs?`, `keywords?`, and `derived?` declarations                                       |
 | `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, and at most one `authenticate?` |
 | `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                           |
+| `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                |
 | `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                  |
 | `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`            |
 | `./service` | its plugin | `service?: (host, options, signal)` for a duty                                          |

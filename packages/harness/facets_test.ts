@@ -1,13 +1,18 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { argsFor, commandFor, unique } from '@yaks/cli'
+import { argsFor, cli, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
+import {
+  close as closeCli,
+  commands as localCommands,
+  opened,
+} from '../cli/local.ts'
 import { argsOf, type Bundle, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { connect } from '../mcp/testing.ts'
 import { transcript } from '@yaks/session'
 import { selectedUsing } from './model_selection.ts'
 import { runs } from './runs.ts'
-import { harness } from './testing.ts'
+import { at, harness } from './testing.ts'
 
 let reads = { file: () => '', stdin: () => '' }
 
@@ -58,6 +63,27 @@ Deno.test('the harness composes as a plugin, and its words reach a command line 
     assertEquals(said.includes('one'), true)
   } finally {
     await h.close()
+  }
+})
+
+Deno.test('connection authorization is a CLI command without a stored call', async () => {
+  let dir = await Deno.makeTempDir()
+  let path = dir + '/yak.json'
+  let out: string[] = []
+  await Deno.writeTextFile(path, JSON.stringify(at(':memory:')))
+  try {
+    let code = await cli([], {
+      argv: ['--config', path, '--no-duties', 'connection', 'authorize'],
+      more: localCommands,
+      out: (line) => out.push(line),
+    })
+    assertEquals(code, 0)
+    assert(out.join('\n').includes('OpenAI (model provider)'))
+    let host = await opened(path, ['graph'], false)
+    assertEquals(await host.graph.read('.call&*'), [])
+  } finally {
+    await closeCli()
+    await Deno.remove(dir, { recursive: true })
   }
 })
 

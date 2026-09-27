@@ -9,8 +9,8 @@
 // worked (./effects.ts): a box's `yak serve`, or the command's own duty thread
 // when nothing else holds that role. Drawing the reply is the caller's: a line
 // on a command line, the harness itself under `--tui` (./view.ts).
-// `model_list` says which OpenAI credential this machine would send and what
-// its endpoint lists. A tool answers, it does not write to a terminal.
+// `model_list` lists the OpenAI endpoint's catalog through the credential the
+// harness uses. A tool answers, it does not write to a terminal.
 
 import {
   argsOf,
@@ -22,13 +22,16 @@ import {
   Refused,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
+import type { Host } from '@yaks/cli/host'
 import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
-import { codexPaths, fromCodex, fromEnv } from '@yaks/openai'
+import { CODEX, type Credential, type TransportCredential } from '@yaks/openai'
 import { instructionFiles } from '@yaks/context/host'
 import { statusOf, transcript, usingBefore } from '@yaks/session'
 import { ASTRA, begin, seed, through } from './agent.ts'
 import { selectedUsing } from './model_selection.ts'
+import { openaiCredential } from './openai_auth.ts'
+import { hosted } from './store.ts'
 import { homeAt } from './workspace.ts'
 
 type Args = Record<string, unknown>
@@ -61,19 +64,57 @@ let text = (call: Bundle, body: string): Bundle => ({
   output: { source: call.entity.eid },
 })
 
-/** The OpenAI credential this machine would send, and where it was found. The
- * token itself never leaves this function's caller. */
-let found = async () => {
-  let key = fromEnv(Deno.env.get)
-  if (key) return { at: 'OPENAI_API_KEY', cred: key }
-  for (let path of codexPaths(Deno.env.get)) {
-    let cred = await Deno.readTextFile(path).then(fromCodex, () => undefined)
-    if (cred) return { at: path, cred }
+// This is the Codex catalog protocol level the harness understands. The
+// backend filters its models by client_version: the package release number
+// would return an empty catalog even when the account can use those models.
+export let CODEX_CLIENT_VERSION = '0.157.1'
+
+/** Model names from the endpoint this credential serves. */
+export let modelCatalog = async (
+  cred: Credential,
+  fetcher: typeof fetch = fetch,
+  refresh?: (stale: TransportCredential) => Promise<Credential>,
+): Promise<string[]> => {
+  let url = new URL(cred.base.replace(/\/$/, '') + '/models')
+  if (cred.base == CODEX) {
+    url.searchParams.set('client_version', CODEX_CLIENT_VERSION)
   }
+  let res = await fetcher(url, {
+    headers: {
+      authorization: `Bearer ${cred.token}`,
+      ...(cred.account ? { 'chatgpt-account-id': cred.account } : {}),
+    },
+  })
+  if (res.status == 401 && cred.base == CODEX && refresh) {
+    await res.body?.cancel()
+    return modelCatalog(await refresh(cred), fetcher)
+  }
+  let body = await res.text()
+  if (!res.ok) {
+    throw new Error(`${url.pathname} says ${res.status}: ${body.slice(0, 200)}`)
+  }
+  let listed = JSON.parse(body) as {
+    data?: { id: string }[]
+    models?: { slug: string }[]
+  }
+  if (cred.base == CODEX) {
+    if (!Array.isArray(listed.models)) throw new Error('Invalid model catalog')
+    let names = listed.models.map((m) => m.slug)
+    if (names.some((name) => typeof name != 'string')) {
+      throw new Error('Invalid model catalog')
+    }
+    return names
+  }
+  if (!Array.isArray(listed.data)) throw new Error('Invalid model catalog')
+  let names = listed.data.map((m) => m.id)
+  if (names.some((name) => typeof name != 'string')) {
+    throw new Error('Invalid model catalog')
+  }
+  return names
 }
 
 /** The functions behind the tools the harness declares (./vocab.json). */
-export let runs = (): Runs => ({
+export let runs = (host?: Host): Runs => ({
   session_list: (_, graph) => graph.read(parse('.session&*')),
   session_new: async (call, graph) => {
     let args = argsOf(call)
@@ -115,31 +156,16 @@ export let runs = (): Runs => ({
     return await settled(graph, s)
   },
   model_list: async (call) => {
-    let got = await found()
-    if (!got) {
-      // Missing is the caller's to fix, so it is their no, not our fault.
-      throw new Refused('no credential: set OPENAI_API_KEY or sign in to Codex')
-    }
-    let head = `credential from ${got.at} → ${got.cred.base}`
-    let res = await fetch(`${got.cred.base}/models`, {
-      headers: {
-        authorization: `Bearer ${got.cred.token}`,
-        ...got.cred.account ? { 'chatgpt-account-id': got.cred.account } : {},
-      },
-    })
-    let body = await res.text()
-    if (!res.ok) {
-      return [text(
-        call,
-        `${head}\n${got.cred.base}/models says ${res.status}: ` +
-          `${body.slice(0, 200)}\nthe backend may not list models; ` +
-          'ask for one by name with --model',
-      )]
-    }
-    let listed = JSON.parse(body) as { data?: { id: string }[] }
+    if (!host) throw new Error('model list needs a host')
+    let auth = openaiCredential(hosted(host))
+    let cred = await auth.credential()
+    let names = await modelCatalog(cred, fetch, auth.refresh)
     return [text(
       call,
-      [head, ...(listed.data ?? []).map((m) => `  ${m.id}`)].join('\n'),
+      [
+        `models from ${cred.base}`,
+        ...names.map((name) => `  ${name}`),
+      ].join('\n'),
     )]
   },
 })

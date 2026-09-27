@@ -8,6 +8,7 @@
     "./vocab": "./vocab.ts",
     "./machine": "./machine.ts",
     "./tools": "./runs.ts",
+    "./cli": "./cli.ts",
     "./effects": "./effects.ts",
     "./authorize": "./authorize.ts",
     "./openai_auth": "./openai_auth.ts"

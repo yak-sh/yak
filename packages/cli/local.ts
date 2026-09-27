@@ -236,7 +236,12 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
   let plugins = () => (config.plugins ?? []).map(used)
   let views: ReturnType<typeof registry> | undefined
   let drawn = () => views ??= registry(plugins())
-  return said.tools().filter(offered('cli')).map((declared) => ({
+  let direct = (await Promise.all(
+    plugins().map(async (plugin) =>
+      (await facet(plugin, 'cli'))?.commands ?? []
+    ),
+  )).flat()
+  let tools = said.tools().filter(offered('cli')).map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same
     // document `tools/list` sends — so a command typed against a local graph
@@ -289,4 +294,16 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       return faulted(landed) ? 1 : 0
     },
   }))
+  let controls: Command[] = direct.map(({ run, ...declared }) => ({
+    ...declared,
+    run: async (args, context) => {
+      let host = await opened(
+        context.config!,
+        rolesOf(declared, !!said.vocab.comp(EFFECT)),
+        context.duties,
+      )
+      return await run(args, host, context)
+    },
+  }))
+  return [...controls, ...tools]
 }

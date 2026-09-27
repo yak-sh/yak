@@ -1,7 +1,7 @@
 // The `yak` command. It has five subcommands of its own — `help`, `init`,
-// `login`, `logout`, `apply` — and every other subcommand is a tool: one of the tools
-// of the graph this command opens (local.ts), or one an MCP server lists
-// (platform.ts), with the apps' own commands (commands.ts) beside them. Either
+// `login`, `logout`, `apply` — and other subcommands are graph tools (local.ts),
+// an MCP server's tools (platform.ts), plugin terminal controls, or an app's
+// own commands (commands.ts). Either
 // list costs something to gather, so run.ts asks for it only when the five
 // built-in subcommands did not match.
 //
