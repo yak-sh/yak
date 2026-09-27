@@ -18,18 +18,14 @@ export type Ear = { at: Vec3; forward: Vec3; up: Vec3 }
  * is at `near` of its own loudness. */
 export type Falloff = { pan: PannerOptions; near: number }
 
-/** How the vale's sounds are heard. HRTF places a sound all round the head,
- * above and behind as well as left and right. Out to `refDistance` a sound is
- * at `near` of its own loudness: the hero's own, the creature they fight, the
- * fire they stand by, none of them loud. Beyond, it falls away more gently
- * than sound in the open, a little less than halving with each doubling of
- * the distance, so it carries a good way. */
+/** How the vale's sounds are heard. Inside 5 m they peak at 0.6;
+ * beyond 5 m this is the old 3 m inverse curve (3 / distance). */
 export let FALLOFF = {
   pan: {
     panningModel: 'HRTF',
     distanceModel: 'inverse',
     refDistance: 5,
-    rolloffFactor: 0.6,
+    rolloffFactor: 1,
   },
   near: 0.6,
 } satisfies Falloff
@@ -48,7 +44,7 @@ export let NEAR = {
 } satisfies Falloff
 
 /** Below this loudness at the ears a sound is not made at all: a footstep
- * dies away within some 40 m, a blow carries across a level. */
+ * dies away within some 25 m, a blow carries across a level. */
 export let QUIET = 0.004
 
 let sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
@@ -109,7 +105,9 @@ export let ear = (eye: THREE.Object3D, at?: Vec3): Ear => {
  * // fades.
  * assertEquals(from(right, 2).gain, FALLOFF.near)
  * assert(from(right, 12).gain < from(right, 8).gain)
- * assert(from(ahead, 80).gain < from(ahead, 40).gain)
+ * assertAlmostEquals(from(right, 5).gain, 3 / 5, 1e-9)
+ * assertAlmostEquals(from(right, 8).gain, 3 / 8, 1e-9)
+ * assertAlmostEquals(from(ahead, 40).gain, 3 / 40, 1e-9)
  * // With no hero, the ears are where the camera is.
  * assertEquals(ear(eye).at, [26, 10, 28])
  * ```
