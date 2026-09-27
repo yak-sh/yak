@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { argsOf, type Bundle, type Comp, detached } from '@yaks/graph'
-import { toolEid } from '@yaks/tools'
+import { answerOf, toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
@@ -702,6 +702,34 @@ Deno.test('the door calls the tool, and the call is the transcript', async () =>
     assertEquals((book.created as Comp).by, me)
   } finally {
     host.close()
+  }
+})
+
+Deno.test('a plugin attaches reply bundles through the host runner', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'] },
+    only({
+      shop: {
+        ...shop,
+        rules: {
+          reply: () => () =>
+            Promise.resolve([{
+              entity: { eid: 'owed' },
+              content: { body: 'new mail' },
+            }]),
+        },
+      },
+    }),
+  )
+  try {
+    await host.runner.ensure(['book_list'])
+    let landed = await host.runner.call({
+      entity: { eid: '$call' },
+      call: { to: toolEid('book_list'), args: {} },
+    })
+    assertEquals(answerOf(landed).map((b) => b.entity.eid), ['owed'])
+  } finally {
+    await host.close()
   }
 })
 

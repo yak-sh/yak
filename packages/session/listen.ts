@@ -19,6 +19,8 @@ import {
   type Eid,
   type Graph,
   signed,
+  Stale,
+  token,
 } from '@yaks/graph'
 import { human } from '@yaks/id'
 import {
@@ -110,14 +112,11 @@ let pause = (ms: number, stop?: AbortSignal) =>
     })
   })
 
-/** One pass: read what is addressed to the session, say each item, mark each
- * said. Returns how many were said. */
-export let hear = async (
-  graph: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,
-  actor: Actor | null,
+/** What this session has yet to hear, as the item and its readable line. */
+export let pending = async (
+  graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
-  out: (line: string) => void,
-): Promise<number> => {
+): Promise<{ item: Bundle; line: string }[]> => {
   let vocab = graph.vocab
   let seen = new Set<string>()
   let items: Bundle[] = []
@@ -128,7 +127,7 @@ export let hear = async (
       items.push(b)
     }
   }
-  if (!items.length) return 0
+  if (!items.length) return []
   let pointed = [
     ...new Set(
       items.flatMap((b) => [
@@ -143,14 +142,47 @@ export let hear = async (
     names.set(b.entity.eid, human(vocab)(b))
   }
   let named = (eid: string) => names.get(eid) ?? eid
-  for (let b of items) out(said(vocab, b, named))
-  await graph.apply(
-    signed(
-      items.map((b) => ({ entity: { eid: b.entity.eid }, [NOTIFIED]: {} })),
-      actor,
-    ),
-  )
-  return items.length
+  return items.map((item) => ({ item, line: said(vocab, item, named) }))
+}
+
+/** Mark an item only if nobody has delivered it meanwhile. The optional
+ * entry makes a native session's input and the mark one committed change. */
+export let deliver = async (
+  graph: Pick<Graph, 'apply'>,
+  actor: Actor | null,
+  item: Bundle,
+  entry?: Bundle,
+): Promise<boolean> => {
+  try {
+    await graph.apply(signed([
+      ...entry ? [entry] : [],
+      {
+        entity: { eid: item.entity.eid },
+        [NOTIFIED]: {},
+        $was: { [NOTIFIED]: { at: token(null) } },
+      },
+    ], actor))
+    return true
+  } catch (error) {
+    if (error instanceof Stale) return false
+    throw error
+  }
+}
+
+/** One pass: say what is addressed to the session and mark each line said. */
+export let hear = async (
+  graph: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,
+  actor: Actor | null,
+  session: Eid,
+  out: (line: string) => void,
+): Promise<number> => {
+  let count = 0
+  for (let { item, line } of await pending(graph, session)) {
+    out(line)
+    if (!await deliver(graph, actor, item)) continue
+    count++
+  }
+  return count
 }
 
 /** Say everything addressed to the session as it arrives, until `stop`

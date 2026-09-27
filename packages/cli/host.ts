@@ -297,6 +297,11 @@ export type VocabFacet = {
  * reference, do not call it. At most one plugin may export it. */
 export type RulesFacet = {
   rules?: (host: Host, options: Options) => Plugin[]
+  /** Bundles owed to a caller beside the answer to a direct tool call. */
+  reply?: (
+    host: Host,
+    options: Options,
+  ) => (call: Bundle, answer: Bundle[]) => Promise<Bundle[]>
   extend?: (host: Host, options: Options) => Extension[]
   /** Search a phrase by meaning through this plugin's own index. */
   meaning?: (
@@ -1047,6 +1052,9 @@ export let compose = async (
         })
       ),
     ]
+    let replies = ruled.flatMap(([r, options]) =>
+      r.reply ? [r.reply(host, options)] : []
+    )
     // The one tool runner over this graph. A caller runs a tool and the runner
     // records the request and the result as it goes; what the two effects
     // @yaks/tools declares add, in a process serving `effects`, is the calls
@@ -1070,6 +1078,12 @@ export let compose = async (
       // the machine that received it.
       process: started()[PROCESS] as Comp,
       report: (err) => console.error('tool failed —', err),
+      ...replies.length
+        ? {
+          reply: async (call: Bundle, answer: Bundle[]) =>
+            (await Promise.all(replies.map((r) => r(call, answer)))).flat(),
+        }
+        : {},
     })
     if (effecting) {
       let due: Handlers[string] = (e) => run.due(e.entity.eid)

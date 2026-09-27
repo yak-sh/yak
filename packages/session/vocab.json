@@ -605,7 +605,7 @@
     },
     "session_run": {
       "effect": true,
-      "created": ["using", "stop", "completed", "cancelled"],
+      "created": ["using", "attention", "stop", "completed", "cancelled"],
       "changed": ["dispatch.state"],
       "removed": ["contains", "requires"],
       "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active,queued",

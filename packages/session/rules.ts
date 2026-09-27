@@ -19,12 +19,17 @@
 // process itself (@yaks/cli `writer`), so a write is attributed either way.
 
 import type { Authenticate } from '@yaks/api'
-import type { Actor, Graph, Plugin } from '@yaks/graph'
+import type { Actor, Bundle, Graph, Plugin } from '@yaks/graph'
+import { reply as owed } from './bus.ts'
 import { sessions } from './plugin.ts'
 import { sessionFor, speaking } from './who.ts'
 
 /** Transcripts, leases and the audit of a bounced claim. */
 export let rules = (): Plugin[] => [sessions()]
+
+/** What a direct tool call owes the session speaking through it. */
+export let reply = (host: Host) => (call: Bundle): Promise<Bundle[]> =>
+  owed(host.graph, call)
 
 /** The request header a caller names its run in. */
 export let VIA = 'x-via'

@@ -1,6 +1,7 @@
 // The duty a host runs at `@yaks/session/service` for as long as it is up:
 // every session a harness ran on this machine, read into the graph from the
-// transcript file the harness keeps (./tail.ts).
+// transcript file the harness keeps (./tail.ts), and pending addressed items
+// delivered to native sessions (./bus.ts).
 //
 // The duty opens by freeing the locks whose holder is gone (./reap.ts). Start-up
 // is the one moment that answer is fresh, and holding the duty is what makes
@@ -33,6 +34,7 @@
 // the model said stay, and so does everything nobody imported.
 
 import type { Eid, Graph } from '@yaks/graph'
+import { feed } from './bus.ts'
 import { SESSION } from './comp.ts'
 import { claude } from './readers.ts'
 import { reapLeases } from './reap.ts'
@@ -239,7 +241,7 @@ export let service = async (
 ): Promise<void> => {
   await reapLeases(host.graph.storage)
   let dir = options.transcripts ?? claudeProjects()
-  if (signal.aborted || !dir) return
+  if (signal.aborted) return
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
   let seen: Seen = { tails: new Map(), done: new Set() }
@@ -247,11 +249,14 @@ export let service = async (
   let due = 0
   while (!signal.aborted) {
     try {
-      await look(host.graph, dir, seen, {
-        ...(person ? { person: person as Eid } : {}),
-        full: options.full,
-        signal,
-      })
+      await feed(host.graph)
+      if (dir) {
+        await look(host.graph, dir, seen, {
+          ...(person ? { person: person as Eid } : {}),
+          full: options.full,
+          signal,
+        })
+      }
       if (!owed.length && Date.now() >= due) {
         owed = await stale(host.graph, { full: options.full })
         due = Date.now() + HOUR

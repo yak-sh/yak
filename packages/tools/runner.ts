@@ -166,6 +166,9 @@ export type Opts = {
    * for a tool that acts on the machine rather than the graph. The caller
    * supplies it; this package touches no runtime API and never looks it up. */
   process?: Comp
+  /** Extra bundles a direct caller is owed beside a tool's answer. A plugin
+   * may supply them without the tool or its transport knowing about them. */
+  reply?: (call: Bundle, answer: Bundle[]) => Promise<Bundle[]>
 }
 
 /** A live runner: the rules a sweep queries, and the functions a caller
@@ -301,14 +304,27 @@ export let worded = (answer: Bundle[], most = WORDS): string => {
     .filter((body): body is string => typeof body == 'string')
   let hits = answer.map(hitLine).filter((s): s is string => s != null)
   let searched = hits.length > 0 && hits.length == answer.length
-  let { text, left } = said.length
+  let mixed = said.length > 0 && said.length < answer.length
+  let { text, left } = mixed
+    ? spent(
+      answer,
+      (b) =>
+        typeof (b.content as Comp | undefined)?.body == 'string'
+          ? String((b.content as Comp).body)
+          : hitLine(b) ?? inset(b),
+      '\n',
+      most,
+    )
+    : said.length
     ? spent(said, (s) => s, '\n', most)
     : searched
     ? spent(hits, (s) => s, '\n', most)
     : spent(answer, inset, ',\n', most)
   let open = said.length || searched ? '' : '[\n'
   return left
-    ? `${open}${text}\n… ${left} of ${said.length || answer.length} ` +
+    ? `${open}${text}\n… ${left} of ${
+      mixed ? answer.length : said.length || answer.length
+    } ` +
       `not said: an answer is worded in ${most} characters`
     : said.length
     ? text
@@ -517,7 +533,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         throw error
       }
       let [stored] = await g.get([id])
-      return execute(stored, tool)
+      return execute(stored, tool, true)
     })
   }
 
@@ -603,7 +619,11 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   ]
 
   // Running a claimed call: the tool, its answer, and the record of both.
-  let execute = async (call: Bundle, tool: NamedTool): Promise<Bundle[]> => {
+  let execute = async (
+    call: Bundle,
+    tool: NamedTool,
+    direct = false,
+  ): Promise<Bundle[]> => {
     let id = call.entity.eid
     let c = call.call as Comp
     let started = now()
@@ -645,6 +665,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       ])
       return keeps ? landed : [...made, ...landed]
     }
+    let answered: Bundle[]
     try {
       let args = await resolved(tool, validated(tool, parsed(c.args)), host)
       let actor = who(call)
@@ -660,20 +681,28 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // every phase and rolls it back, so the answer is the batch as a kept
       // write would have returned it, or the refusal it would have met.
       if (!tool.readOnly && args.check === true) {
-        return await land(
+        answered = await land(
           await host.apply(made, { check: true }),
           'done',
           false,
         )
+      } else {
+        answered = await land(made, 'done')
       }
-      return await land(made, 'done')
     } catch (error) {
       // This catches both the tool's own throw and a rejection of what it
       // returned: a transaction the graph refuses is this call's failure,
       // rather than a call left claimed with nothing recorded about it.
-      return await land(await faulted(error), 'failed')
+      answered = await land(await faulted(error), 'failed')
     } finally {
       held.delete(id)
+    }
+    if (!direct || !opts.reply) return answered
+    try {
+      return [...answered, ...await opts.reply(call, answerOf(answered))]
+    } catch (error) {
+      await opts.report?.(error, call, tool.name)
+      return answered
     }
   }
 

@@ -16,6 +16,7 @@ import { effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
+  answerOf,
   callDoc,
   CallError,
   faulted,
@@ -105,6 +106,58 @@ Deno.test('a call is the transcript: the ask, the answer, the result beside it',
   // The result is the rule's own entity, so answering again is the same one.
   let again = await r.run((await g.read('.call&*'))[0].entity.eid)
   assertEquals(again.find((b) => b.result)!.entity.eid, result.entity.eid)
+})
+
+Deno.test('a direct tool reply carries what its caller is owed beside its data', async () => {
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab) })
+  let data: Tool = {
+    ...echo,
+    run: () => [{ entity: { eid: 'datum' }, person: {} }],
+  }
+  let replies = 0
+  let r = runner(g, {
+    tools: [data],
+    reply: () => (replies++,
+      Promise.resolve([{
+        entity: { eid: 'notice' },
+        content: { body: 'new mail' },
+      }])),
+  })
+  await r.ensure()
+  let landed = await r.call(called('example_echo', { value: 'hi' }))
+  let answer = answerOf(landed)
+  assertEquals(answer.map((b) => b.entity.eid), ['datum', 'notice'])
+  let said = worded(answer)
+  assertEquals(said.includes('datum'), true)
+  assertEquals(said.includes('new mail'), true)
+  assertEquals((await g.get(['notice'])).length, 0)
+  let [call] = await g.read('.call&*')
+  await r.run(call.entity.eid)
+  assertEquals(replies, 1)
+})
+
+Deno.test('a refused tool still carries what its caller is owed', async () => {
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab) })
+  let refused: Tool = {
+    ...echo,
+    run: () => {
+      throw new CallError('refused', 'try again')
+    },
+  }
+  let r = runner(g, {
+    tools: [refused],
+    reply: () =>
+      Promise.resolve([{
+        entity: { eid: 'notice' },
+        content: { body: 'new mail' },
+      }]),
+  })
+  await r.ensure()
+  let landed = await r.call(called('example_echo', { value: 'hi' }))
+  assertEquals(faulted(landed), true)
+  assertEquals(worded(answerOf(landed)).includes('new mail'), true)
 })
 
 Deno.test('a runner writes only the tool rows the graph lacks or holds otherwise', async () => {
