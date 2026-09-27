@@ -19,8 +19,17 @@
   font-size: 1.15rem;
 }
 
+/* A thing found, in its rarity's colour (Rarity.css) if finer than common. */
 .Toast-loot {
-  --tint: #8a5a10;
+  --tint: var(--rarity, #8a5a10);
+}
+
+/* A legendary found: bigger, and glowing a while. */
+.Toast-legend {
+  font-size: 1.2rem;
+  box-shadow: var(--lift), 0 0 0 2px var(--legendary),
+    0 0 24px color-mix(in srgb, var(--legendary) 70%, transparent);
+  animation: toast-in 0.25s ease-out, toast-glow 0.9s ease-in-out 3 alternate;
 }
 
 .Toast-out {
@@ -32,5 +41,12 @@
   from {
     opacity: 0;
     transform: translateY(0.6rem) scale(0.96);
+  }
+}
+
+@keyframes toast-glow {
+  to {
+    box-shadow: var(--lift), 0 0 0 3px var(--legendary),
+      0 0 40px var(--legendary);
   }
 }

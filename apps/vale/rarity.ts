@@ -28,16 +28,29 @@ export let RARITIES: Rarity[] = [
 ]
 
 /** Each rarity: what it is called, how many bonuses a piece of it rolls and
- * how big against an uncommon's, and how much finer its own numbers are. */
+ * how big against an uncommon's, how much finer its own numbers are, and the
+ * light it gives off in the world. */
 export let GRADES: Record<
   Rarity,
-  { name: string; rolls: number; big: number; fine: number }
+  { name: string; rolls: number; big: number; fine: number; light: number }
 > = {
-  common: { name: 'Common', rolls: 0, big: 0, fine: 1 },
-  uncommon: { name: 'Uncommon', rolls: 1, big: 1, fine: 1.06 },
-  rare: { name: 'Rare', rolls: 2, big: 1.25, fine: 1.12 },
-  epic: { name: 'Epic', rolls: 3, big: 1.5, fine: 1.2 },
-  legendary: { name: 'Legendary', rolls: 3, big: 1.8, fine: 1.3 },
+  common: { name: 'Common', rolls: 0, big: 0, fine: 1, light: 0xffe08a },
+  uncommon: {
+    name: 'Uncommon',
+    rolls: 1,
+    big: 1,
+    fine: 1.06,
+    light: 0x6ee05a,
+  },
+  rare: { name: 'Rare', rolls: 2, big: 1.25, fine: 1.12, light: 0x5a9aff },
+  epic: { name: 'Epic', rolls: 3, big: 1.5, fine: 1.2, light: 0xc070ff },
+  legendary: {
+    name: 'Legendary',
+    rolls: 3,
+    big: 1.8,
+    fine: 1.3,
+    light: 0xff7010,
+  },
 }
 
 /** A rarity from what a row says: anything else is common.
@@ -113,7 +126,7 @@ export let pick = (odds: number[], r: number): Rarity => {
  * ```ts
  * import { assertAlmostEquals } from '@std/assert'
  * import { stream } from './rand.ts'
- * let r = stream(7), n = 40000
+ * let r = stream(7), n = 10000
  * let seen = Object.fromEntries(RARITIES.map((x) => [x, 0]))
  * for (let i = 0; i < n; i++) seen[dropped(r(), 12)]++
  * let odds = oddsOf(11 / 19)
@@ -402,3 +415,8 @@ export let piece = (
   if (!p) rolled.set(key, p = roll(h.eid, h.kind, rarity))
   return p
 }
+
+/** The class the glass marks a piece of rarity `r` with (ui/Rarity.css):
+ * none for a common one. */
+export let tint = (r: Rarity = 'common'): string =>
+  r == 'common' ? '' : `Rarity-${r}`

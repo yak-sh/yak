@@ -29,7 +29,8 @@ import { type Hand, handOf, kitOf } from './gear.ts'
 import { ITEMS } from './items.ts'
 import { LEVELS } from './levels.ts'
 import { cuboid, out, pack } from './mesh.ts'
-import type { Frame } from './play.ts'
+import type { Drop, Frame } from './play.ts'
+import { GRADES, type Rarity } from './rarity.ts'
 import { geometry, soft } from './soft.ts'
 import { FLIGHT, LAND } from './strike.ts'
 import { groundAt, type Vale } from './terrain.ts'
@@ -75,6 +76,54 @@ let bar = (k: number, cls = '') =>
     Math.max(0, Math.min(1, k)).toFixed(3)
   }"></i></span>`
 
+// How tall the beam over a piece lying on the ground stands, by its rarity:
+// a legendary's is seen from across the land.
+let BEAMS: Partial<Record<Rarity, number>> = {
+  uncommon: 1.4,
+  rare: 3,
+  epic: 6,
+  legendary: 18,
+}
+
+// A shape in `rgb`, seen through as much as `k` says at each corner: a beam
+// fading up from its foot, a glow fading out from its middle.
+let fade = (
+  g: THREE.BufferGeometry,
+  rgb: number,
+  k: (x: number, y: number, z: number) => number,
+) => {
+  let c = new THREE.Color(rgb), p = g.getAttribute('position')
+  let cs = new Float32Array(p.count * 4)
+  for (let i = 0; i < p.count; i++) {
+    cs.set([c.r, c.g, c.b, k(p.getX(i), p.getY(i), p.getZ(i))], i * 4)
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(cs, 4))
+  return g
+}
+
+// The light a piece finer than common gives off where it lies, in its
+// rarity's colour: a bright beam in a fainter one, and a glow on the ground
+// under it.
+let beamOf = (r: Rarity, glow: THREE.Material) => {
+  let tall = BEAMS[r] ?? 0, rgb = GRADES[r].light
+  let beam = (top: number, foot: number, most: number) => {
+    let b = new THREE.CylinderGeometry(top, foot, tall, 12, 8, true)
+    b.translate(0, tall / 2, 0)
+    return fade(b, rgb, (_, y) => most * (1 - y / tall) ** 1.4)
+  }
+  let disc = new THREE.CircleGeometry(0.8, 24)
+  disc.rotateX(-Math.PI / 2)
+  disc.translate(0, 0.04, 0)
+  let glowing = fade(disc, rgb, (x, _, z) => 0.8 * (1 - Math.hypot(x, z) / 0.8))
+  let g = new THREE.Group()
+  for (let shape of [beam(0.05, 0.12, 0.95), beam(0.16, 0.4, 0.35), glowing]) {
+    let m = new THREE.Mesh(shape, glow)
+    m.renderOrder = 2
+    g.add(m)
+  }
+  return g
+}
+
 /** The stage over one level's scene, its people built `build`. */
 export let cast = (
   scene: THREE.Scene,
@@ -86,6 +135,25 @@ export let cast = (
   let lootMat = soft({ speckle: 0.05 })
   let lootGeo = new Map<string, THREE.BufferGeometry>()
   let loot = new Map<string, THREE.Mesh>()
+  let glowing = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    toneMapped: false,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: false,
+  })
+  let lights = new Map<string, THREE.Group>()
+  // The light over a piece lying there, made the first time it is drawn.
+  let lit = (d: Drop) => {
+    let g = lights.get(d.eid)
+    if (!g && d.rarity && BEAMS[d.rarity]) {
+      g = beamOf(d.rarity, glowing)
+      lights.set(d.eid, g)
+      scene.add(g)
+    }
+    return g
+  }
   // The creature I have targeted: four pale arcs round its feet, turning
   // slowly, drawn over any red beneath them. A broken ring the colour of
   // paper, so it reads as a selection and never as a second bite.
@@ -530,11 +598,23 @@ export let cast = (
         mesh.position.set(d.x, d.y + 0.25 + bob, d.z)
         mesh.rotation.y = t * 1.8 + d.at
         mesh.scale.setScalar(1.6)
+        let g = lit(d)
+        g?.position.set(d.x, d.y, d.z)
+        g?.scale.set(1 + Math.sin(t * 4 + d.at) * 0.15, 1, 1)
       }
+      glowing.opacity = 0.75 + Math.sin(t * 3) * 0.2
       for (let [eid, mesh] of loot) {
         if (lying.has(eid)) continue
         scene.remove(mesh)
         loot.delete(eid)
+      }
+      for (let [eid, g] of lights) {
+        if (lying.has(eid)) continue
+        scene.remove(g)
+        for (let m of g.children) {
+          if (m instanceof THREE.Mesh) m.geometry.dispose()
+        }
+        lights.delete(eid)
       }
 
       // The others' shots, loosed at what they fight.

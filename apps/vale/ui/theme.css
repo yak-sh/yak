@@ -20,6 +20,12 @@
   --amber: #9a6a1c;
   --hp: #e0573f;
   --xp: #7fc6f2;
+  /* How fine a piece of gear is (Rarity.css), green, blue, purple and
+     orange, the way every loot goblin reads them. */
+  --uncommon: #2f9a2a;
+  --rare: #2a6fd6;
+  --epic: #9a3fd6;
+  --legendary: #d9670f;
   --shade: rgba(28, 36, 26, 0.55);
   --scrim: rgba(20, 30, 15, 0.38);
 

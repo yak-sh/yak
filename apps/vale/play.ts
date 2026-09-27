@@ -100,6 +100,8 @@ export type Event =
     piece: string
     rarity?: Rarity
   }
+  /** a piece finer than common falls to the ground, at `at` */
+  | { type: 'spoil'; rarity: Rarity; at: Vec3 }
   | { type: 'xp'; n: number; at: Vec3 }
   | { type: 'level'; lvl: number }
   | { type: 'heal'; n: number; at: Vec3 }
@@ -107,7 +109,8 @@ export type Event =
   | { type: 'rise' }
   | { type: 'travel'; to: string }
   | { type: 'say'; text: string }
-  | { type: 'wear'; item: string }
+  /** a thing put on for a slot never chosen for: its kind, row and rarity */
+  | { type: 'wear'; item: string; piece: string; rarity?: Rarity }
   /** someone did an ability: `at` their feet, facing `yaw` */
   | { type: 'ability'; id: string; by: string; at: Vec3; yaw: number }
   /** an ability of mine lands over `r` metres about `at`, in `ms` */
@@ -1105,6 +1108,13 @@ export let game = (
             },
             position: { level: lv, x, y: groundAt(v, x, z), z },
           })
+          if (l.rarity && l.rarity != 'common') {
+            events.push({
+              type: 'spoil',
+              rarity: l.rarity,
+              at: [x, groundAt(v, x, z), z],
+            })
+          }
         })
       }
 
@@ -1462,8 +1472,13 @@ export let game = (
       if (net.settled()) {
         for (let f of s.firsts) {
           wear(me, f.slot, f.item)
-          let kind = s.bag.find((h) => h.eid == f.item)?.kind ?? ''
-          events.push({ type: 'wear', item: kind })
+          let h = s.bag.find((h) => h.eid == f.item)
+          events.push({
+            type: 'wear',
+            item: h?.kind ?? '',
+            piece: f.item,
+            rarity: h?.rarity,
+          })
         }
       }
       let gearNow = Object.fromEntries(

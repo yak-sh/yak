@@ -1,0 +1,23 @@
+/* How fine a piece of gear is (rarity.ts): a modifier points --rarity at its
+   colour, for whatever frames or lights the piece, and a name set in it is
+   .Rarity. A common piece wears no modifier, and nothing frames it. */
+.Rarity {
+  font-weight: 700;
+  color: var(--rarity, inherit);
+}
+
+.Rarity-uncommon {
+  --rarity: var(--uncommon);
+}
+
+.Rarity-rare {
+  --rarity: var(--rare);
+}
+
+.Rarity-epic {
+  --rarity: var(--epic);
+}
+
+.Rarity-legendary {
+  --rarity: var(--legendary);
+}

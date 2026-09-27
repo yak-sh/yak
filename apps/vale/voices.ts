@@ -124,6 +124,33 @@ export let quest = voice(
     ),
 )
 
+/** A fine piece of gear falling to the ground, by its rarity (rarity.ts): a
+ * rare one chimes, an epic one rings a run of bells, and a legendary one
+ * lands with a boom under a rising run and a long bell over it. */
+export let spoils: Record<string, Voice> = {
+  rare: voice(0.5, 0.08, (o) => {
+    tone(o, 1175, 0.35, 'sine', 0.07)
+    tone(o, 1568, 0.4, 'sine', 0.06, 1568, 0.08)
+  }),
+  epic: voice(
+    0.8,
+    0.1,
+    (o) =>
+      [784, 988, 1175, 1568].forEach((f, i) =>
+        tone(o, f, 0.45, 'triangle', 0.07, f, i * 0.07)
+      ),
+  ),
+  legendary: voice(1.8, 0.14, (o) => {
+    tone(o, 150, 0.9, 'sine', 0.16, 50)
+    hiss(o, 0.6, 700, 0.08, 0.7)
+    ;[523, 659, 784, 1047, 1319, 1568].forEach((f, i) =>
+      tone(o, f, 0.6, 'triangle', 0.08, f, 0.1 + i * 0.08)
+    )
+    tone(o, 2093, 1.3, 'sine', 0.06, 2093, 0.6)
+    tone(o, 3136, 1.1, 'sine', 0.03, 3136, 0.62)
+  }),
+}
+
 /** A stroke of work, by its trade (trades.ts): an axe biting wood, a pick
  * ringing on stone, leaves pulled, a float plopping; a hammer on the anvil, a
  * plane over a board, a ladle in the cauldron. */

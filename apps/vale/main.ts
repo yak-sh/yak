@@ -32,6 +32,8 @@ import { pack } from './pack.ts'
 import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
 import { ITEMS } from './items.ts'
+import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
+import type { Held } from './rules.ts'
 import { HOME, LEVELS, type Spot } from './levels.ts'
 import { comp, connect, type Hero, type Me, str } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
@@ -437,6 +439,58 @@ let ring = (at: THREE.Vector3, r: number, tint: number) => {
 // Abilities of mine landing over a place, once their shots get there.
 let bursts: { at: THREE.Vector3; r: number; tint: number; when: number }[] = []
 
+// A thing come into the bag, found or made: its toast, named and coloured as
+// it rolled (rarity.ts), and the finer it is, the bigger the moment.
+let got = (held: Held, at: THREE.Vector3) => {
+  let t = piece(held), r = t.rarity
+  let legend = r == 'legendary'
+  h.toast(
+    `${legend ? 'Legendary! ' : ''}${t.name}${held.n > 1 ? ` ×${held.n}` : ''}`,
+    `Toast-loot ${tint(r)}${legend ? ' Toast-legend' : ''}`,
+    icon(held.kind),
+  )
+  glow.emit(at, GRADES[r].light, legend ? 40 : 8, {
+    speed: legend ? 3 : 1.5,
+    up: legend ? 4 : 2,
+    life: legend ? 1.2 : 0.6,
+    size: legend ? 0.1 : 0.07,
+    fall: 2,
+  })
+  if (r == 'epic' || legend) sound.spoil(null, 'epic')
+  else sound.pick([at.x, at.y, at.z])
+}
+
+// A piece finer than common falling to the ground: it lights up and rings
+// out, and a legendary shakes the ground, bursts, and says so.
+let spoiled = (r: Rarity, at: THREE.Vector3) => {
+  sound.spoil([at.x, at.y, at.z], r)
+  if (RARITIES.indexOf(r) < RARITIES.indexOf('epic')) return
+  let legend = r == 'legendary'
+  glow.emit(at.clone().setY(at.y + 0.5), GRADES[r].light, legend ? 60 : 24, {
+    speed: legend ? 5 : 3,
+    up: legend ? 6 : 3,
+    life: legend ? 1.6 : 1,
+    size: legend ? 0.14 : 0.09,
+    fall: 2,
+  })
+  if (legend) {
+    for (let y = 0; y < 8; y += 0.5) {
+      glow.emit(at.clone().setY(at.y + y), GRADES[r].light, 2, {
+        speed: 0.3,
+        up: 1.5,
+        life: 1.8,
+        size: 0.12,
+        fall: -1,
+      })
+    }
+    cam.shake = Math.max(cam.shake, 0.3)
+    h.toast(
+      `Something ${GRADES[r].name.toLowerCase()} fell!`,
+      `Toast-loot ${tint(r)} Toast-legend`,
+    )
+  }
+}
+
 let react = (e: Event, heroAt: THREE.Vector3) => {
   let p = (a: [number, number, number]) => new THREE.Vector3(...a)
   let float = (text: string, at: THREE.Vector3, kind: Kind) =>
@@ -484,21 +538,9 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     sound.fall(e.eid)
   } else if (e.type == 'xp') float(`+${e.n} xp`, p(e.at), 'xp')
   else if (e.type == 'loot') {
-    let t = ITEMS[e.item]
-    h.toast(
-      `${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
-      'Toast-loot',
-      icon(e.item),
-    )
-    glow.emit(p(e.at), 0xffe08a, 8, {
-      speed: 1.5,
-      up: 2,
-      life: 0.6,
-      size: 0.07,
-      fall: 2,
-    })
-    sound.pick(e.at)
-  } else if (e.type == 'level') {
+    got({ eid: e.piece, kind: e.item, n: e.n, rarity: e.rarity }, p(e.at))
+  } else if (e.type == 'spoil') spoiled(e.rarity, p(e.at))
+  else if (e.type == 'level') {
     h.toast(`Level ${e.lvl}! You feel stronger.`, 'Toast-big')
     glow.emit(heroAt, 0xffd45a, 40, {
       speed: 3,
@@ -528,8 +570,10 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     let t = ITEMS[e.item]
     if (t) {
       h.toast(
-        `${t.slot == 'main' || t.slot == 'off' ? 'In hand' : 'On'}: ${t.name}`,
-        'Toast-loot',
+        `${t.slot == 'main' || t.slot == 'off' ? 'In hand' : 'On'}: ${
+          piece({ eid: e.piece, kind: e.item, rarity: e.rarity }).name
+        }`,
+        `Toast-loot ${tint(e.rarity)}`,
         icon(e.item),
       )
     }
@@ -582,11 +626,9 @@ let worked = (e: Work) => {
     if (bench.at == e.craft) bench.close()
     else if (job) bench.open(e.craft, job.trades)
   } else if (e.type == 'got') {
-    let t = ITEMS[e.item]
-    h.toast(
-      `${t?.name ?? e.item}${e.n > 1 ? ` ×${e.n}` : ''}`,
-      'Toast-loot',
-      icon(e.item),
+    got(
+      { eid: e.piece ?? '', kind: e.item, n: e.n, rarity: e.rarity },
+      target.clone().setY(target.y + 1),
     )
     marks.float(
       `+${e.xp} ${TRADES[e.trade].name}`,
@@ -594,7 +636,6 @@ let worked = (e: Work) => {
       'xp',
     )
     sound.done(e.at, e.trade)
-    sound.pick(net.hero)
   } else if (e.type == 'trade') {
     let t = TRADES[e.trade]
     h.toast(`${t.name} ${e.lvl}!`, 'Toast-big', glyphText(t.icon))
@@ -928,6 +969,8 @@ Object.assign(globalThis, {
     camera,
     cam,
     sound,
+    /** show and sound what happened, as if a frame said so */
+    react: (e: Event) => react(e, target),
   },
 })
 

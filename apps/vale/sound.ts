@@ -274,4 +274,8 @@ export let sound = {
   /** A quest taken or handed in, or a new land reached: the player's own
    * news, straight to the ears. */
   quest: () => make(null, voices.quest),
+  /** A fine piece of gear falling, or coming into the bag, by its rarity:
+   * nothing more than a find for an uncommon one. */
+  spoil: (from: From, rarity: string) =>
+    make(from, voices.spoils[rarity] ?? voices.pick),
 }

@@ -1,6 +1,7 @@
 /* The pack (pack.ts): what is worn, six slots in a grid; the numbers they
-   make; the thing picked, and what it would change; then the bag, and by a
-   fire the rack. */
+   make; the thing picked, what it rolled, and what it would change; then the
+   bag, and by a fire the rack. A piece finer than common is framed and
+   tinted in its rarity's colour (Rarity.css), and a legendary glows. */
 .Pack {
   display: grid;
   gap: var(--gap);
@@ -15,11 +16,14 @@
 
 .Pack_Slot,
 .Pack_Tile {
+  --frame: var(--rarity, transparent);
   position: relative;
   border: 0;
   border-radius: 12px;
-  background: var(--well);
-  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--rim) 50%, transparent);
+  background: color-mix(in srgb, var(--frame) 14%, var(--well));
+  box-shadow:
+    inset 0 0 0 2px var(--frame),
+    inset 0 -3px 0 color-mix(in srgb, var(--rim) 50%, transparent);
   font: inherit;
   color: var(--ink);
   cursor: pointer;
@@ -68,10 +72,20 @@
 }
 
 .Pack_Tile-on {
+  --frame: var(--rarity, var(--gold));
   background: #fff3c4;
-  box-shadow: inset 0 0 0 2px var(--gold);
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
+.Pack_Slot.Rarity-legendary,
+.Pack_Tile.Rarity-legendary {
+  box-shadow:
+    inset 0 0 0 2px var(--frame),
+    0 0 10px color-mix(in srgb, var(--legendary) 60%, transparent);
+}
+
+/* A thing's tier, as pips: in one colour, so that colour is rarity's. */
 .Pack_Tier {
   position: absolute;
   top: 0.15rem;
@@ -80,27 +94,7 @@
   font-style: normal;
   line-height: 1;
   letter-spacing: -0.05em;
-  color: var(--tier);
-}
-
-.Pack_Tier-1 {
-  --tier: #c8804a;
-}
-
-.Pack_Tier-2 {
-  --tier: #7a8490;
-}
-
-.Pack_Tier-3 {
-  --tier: #4a9a3a;
-}
-
-.Pack_Tier-4 {
-  --tier: #3a8ad8;
-}
-
-.Pack_Tier-5 {
-  --tier: #e0602a;
+  color: var(--amber);
 }
 
 .Pack_Nums {
@@ -162,8 +156,11 @@
 }
 
 .Pack_Big {
+  border-radius: 10px;
   font-size: 2rem;
   font-style: normal;
+  box-shadow: 0 0 0 2px var(--rarity, transparent);
+  background: color-mix(in srgb, var(--rarity, transparent) 14%, transparent);
 
   & .Sprite {
     width: 2.8rem;
@@ -207,6 +204,21 @@
 
 .Pack_Tile-had {
   opacity: 0.45;
+}
+
+/* What a finer piece rolled, in its rarity's colour, and a legendary's
+   power. */
+.Pack_Rolled {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.Pack_Legend {
+  flex-basis: 100%;
+  font-style: italic;
+  color: var(--legendary);
 }
 
 /* The abilities a thing picked gives, each with what it does. */
