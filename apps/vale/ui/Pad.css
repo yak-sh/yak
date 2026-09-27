@@ -96,18 +96,6 @@
   box-shadow: inset 0 0 0 3px var(--ember), 0 4px 0 var(--edge-lip);
 }
 
-/* Ready again. */
-.Pad-ready {
-  animation: pad-ready 0.5s ease-out;
-}
-
-@keyframes pad-ready {
-  30% {
-    scale: 1.12;
-    background: #fff4c8;
-  }
-}
-
 /* An ability a skill made stronger (skills.ts): a star at its shoulder. */
 .Pad_Star {
   position: absolute;

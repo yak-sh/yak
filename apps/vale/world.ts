@@ -478,7 +478,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     let h = hearthNear(focus.x, focus.z, HEARTH)
     if (h?.[0] == hearth?.[0] && h?.[1] == hearth?.[1]) return
     hearth = h
-    fire.visible = !!h
+    // A visible light keeps every material's shader signature stable.
     if (!h) return
     floor = groundAt(v, h[0], h[1])
     fire.position.set(h[0], floor + 1.1, h[1])
@@ -628,8 +628,10 @@ export let world = (v: Vale, mesh: Mesher): World => {
       waterMat.uniforms.time.value = t
       waterMat.uniforms.sunDir.value.copy(dir)
       waterMat.uniforms.sunColor.value.copy(l.sun).multiplyScalar(l.lux / 2.7)
-      fire.intensity = 14 + 26 * skyMat.uniforms.night.value +
-        Math.sin(t * 9) * 2 + Math.sin(t * 23) * 1.2
+      fire.intensity = hearth
+        ? 14 + 26 * skyMat.uniforms.night.value +
+          Math.sin(t * 9) * 2 + Math.sin(t * 23) * 1.2
+        : 0
       let fires: Fire[] = []
       if (hearth) {
         fires.push({

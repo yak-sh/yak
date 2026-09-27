@@ -32,6 +32,10 @@ export let flames = (scene: THREE.Scene) => {
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     scene.add(mesh)
   }
+  // Prepare the instanced-color shader at the gate, before any fire is near.
+  fit(1)
+  mesh!.visible = false
+  mesh!.count = 0
   let matrix = new THREE.Matrix4(), at = new THREE.Vector3()
   let turn = new THREE.Quaternion(), size = new THREE.Vector3()
   return (t: number, focus: THREE.Vector3, fires: Fire[]) => {

@@ -34,6 +34,8 @@ export let bits = (scene: THREE.Scene, lit: boolean, most = 500) => {
     most,
   )
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+  // The first emitted bit must not change this mesh's shader variant.
+  mesh.setColorAt(0, new THREE.Color(0xffffff))
   mesh.frustumCulled = false
   mesh.count = 0
   mesh.castShadow = false
@@ -122,18 +124,25 @@ export let overlay = (
 ) => {
   let at = new THREE.Vector3()
   let floats: { el: HTMLElement; p: THREE.Vector3; born: number }[] = []
-  // Each plate's size is read once it shows, after what it holds changed.
-  let plates = new Map<
-    string,
-    {
-      el: HTMLElement
-      body: HTMLElement
-      html: string
-      seen: boolean
-      w: number
-      h: number
+  // Sizes arrive after layout, so drawing a plate never asks for layout.
+  type Plate = {
+    el: HTMLElement
+    body: HTMLElement
+    html: string
+    seen: boolean
+    w: number
+    h: number
+  }
+  let plates = new Map<string, Plate>()
+  let byBody = new WeakMap<Element, Plate>()
+  let sized = new ResizeObserver((entries) => {
+    for (let entry of entries) {
+      let pl = byBody.get(entry.target)
+      if (!pl) continue
+      pl.w = entry.borderBoxSize[0]?.inlineSize ?? entry.contentRect.width
+      pl.h = entry.borderBoxSize[0]?.blockSize ?? entry.contentRect.height
     }
-  >()
+  })
   let screen = (p: THREE.Vector3): [number, number] | null => {
     at.copy(p).project(camera)
     if (at.z > 1 || at.x < -1.2 || at.x > 1.2 || at.y < -1.2 || at.y > 1.2) {
@@ -178,15 +187,12 @@ export let overlay = (
         layer.append(el)
         pl = { el, body, html: '', seen: true, w: 0, h: 0 }
         plates.set(key, pl)
+        byBody.set(body, pl)
+        sized.observe(body)
       }
       if (pl.html != html) {
         pl.body.innerHTML = html
         pl.html = html
-        pl.w = pl.h = 0
-      }
-      if (!pl.w && !pl.el.hidden) {
-        pl.w = pl.body.offsetWidth
-        pl.h = pl.body.offsetHeight
       }
       pl.seen = true
       place(pl.el, p, pl.w, pl.h)
@@ -206,6 +212,7 @@ export let overlay = (
       })
       for (let [key, pl] of plates) {
         if (!pl.seen) {
+          sized.unobserve(pl.body)
           pl.el.remove()
           plates.delete(key)
         }

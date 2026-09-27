@@ -235,7 +235,12 @@ let settings = menu(h.panels.menu, {
 
 // Who is playing: one of your heroes, or a new one made at the gate.
 let look = anyLook()
+let lookOf = (eid: string) => {
+  let mine = net.who(eid) ?? look
+  return { tint: mine.tint, hair: mine.hair, skin: mine.skin }
+}
 let playing = false
+let starting = false
 let preview: Figure | null = null
 let posed = ''
 let dress = () => {
@@ -253,22 +258,31 @@ let dress = () => {
 
 // Play a hero: back where they were last seen, by this tab or the store
 // (`stored`), or a new one at Mossvale's fire.
-let begin = (eid: string, stored: Seen | null = null) => {
-  net.choose(eid)
-  let back = recall(eid, stored)
-  if (back) g.resume(back)
-  if (preview) w.scene.remove(preview.root)
-  preview = null
-  playing = true
-  cam.yaw = 0
-  cam.pitch = innerWidth < innerHeight ? 0.6 : 0.42
-  cam.dist = phone ? 11 : 9.5
-  // The camera starts behind the hero, wherever they stand.
-  cam.x = NaN
-  cam.snap = true
-  gate.remove()
-  glass.hidden = false
-  canvas.focus()
+let begin = async (eid: string, stored: Seen | null = null) => {
+  if (starting) return
+  starting = true
+  try {
+    net.choose(eid)
+    let back = recall(eid, stored)
+    if (back) g.resume(back)
+    stage.prepare(eid, lookOf(eid), g.sheet())
+    await renderer.compileAsync(w.scene, camera)
+    if (preview) w.scene.remove(preview.root)
+    preview = null
+    playing = true
+    cam.yaw = 0
+    cam.pitch = innerWidth < innerHeight ? 0.6 : 0.42
+    cam.dist = phone ? 11 : 9.5
+    // The camera starts behind the hero, wherever they stand.
+    cam.x = NaN
+    cam.snap = true
+    gate.remove()
+    glass.hidden = false
+    canvas.focus()
+  } catch (e) {
+    starting = false
+    reportError(e)
+  }
 }
 
 let TITLE = '<h1 class=Gate_Title>Mossvale</h1>'
@@ -703,18 +717,22 @@ let EASE = [
     renderer.shadowMap.enabled = false
     w.sun.castShadow = false
     w.scene.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.material.needsUpdate = true
+      if (o instanceof THREE.Mesh) {
+        for (let m of Array.isArray(o.material) ? o.material : [o.material]) {
+          m.needsUpdate = true
+        }
+      }
     })
   },
 ]
 let paced = { t: 0, n: 0, eased: 0 }
 let keepUp = (spent: number) => {
+  if (starting || playing) return
   paced.t += spent
   paced.n++
   if (paced.t < 3) return
   if (paced.t / paced.n > 1 / 45 && paced.eased < EASE.length) {
     EASE[paced.eased++]()
-    fit()
   }
   paced.t = paced.n = 0
 }
@@ -749,7 +767,7 @@ let loop = (t: number) => {
     last = f
     if (f) {
       let mine = net.who(net.hero) ?? look
-      let dressed = { tint: mine.tint, hair: mine.hair, skin: mine.skin }
+      let dressed = lookOf(net.hero)
       job = toil.tick(
         v,
         f,

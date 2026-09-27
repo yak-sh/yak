@@ -41,6 +41,10 @@ import { groundAt, type Vale } from './terrain.ts'
 import { signsNear } from './ways.ts'
 
 type Look = { tint: string; hair: string; skin: string }
+let dressOf = (s: Frame['sheet']): Dress =>
+  Object.fromEntries(
+    Object.entries(s.worn).map(([slot, h]) => [slot, h?.kind]),
+  )
 
 type Actor = {
   fig: Figure
@@ -371,6 +375,16 @@ export let cast = (
   let head = (a: Actor, up = 0) => at.set(a.x, a.y + a.fig.height + up, a.z)
 
   return {
+    /** Put the hero's materials in the scene before its first frame. */
+    prepare: (eid: string, look: Look, sheet: Frame['sheet']) => {
+      let dress = dressOf(sheet)
+      let a = actor(
+        eid,
+        () => hero(build, look, dress),
+        JSON.stringify([look, dress]),
+      )
+      a.fig.root.visible = false
+    },
     /** Put this frame on stage. While the hero works a node (work.ts), they
      * face it, and `work.swing` is how far through a stroke they are. */
     tick: (
@@ -385,14 +399,13 @@ export let cast = (
       for (let a of actors.values()) a.seen = false
 
       // Me, in what I wear, facing the node I work at.
-      let dress: Dress = Object.fromEntries(
-        Object.entries(f.sheet.worn).map(([slot, h]) => [slot, h?.kind]),
-      )
+      let dress = dressOf(f.sheet)
       let mine = actor(
         me,
         () => hero(build, look, dress),
         JSON.stringify([look, dress]),
       )
+      mine.fig.root.visible = true
       let facing = work
         ? Math.atan2(work.x - f.body.x, work.z - f.body.z)
         : f.body.yaw

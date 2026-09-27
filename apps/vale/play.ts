@@ -706,6 +706,8 @@ export let game = (
   }
 
   return {
+    /** the hero's current sheet, for the stage before its first frame */
+    sheet: sheetOf,
     /** bring the hero back where they were last seen, on the first frame
      * played */
     resume: (s: Seen) => {

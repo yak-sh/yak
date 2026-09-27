@@ -334,16 +334,15 @@ export let hud = (
   // between two. Where each lies is read again only after one of them, or
   // the glass, changed size.
   let panes = [vitals, quest, foe, who, rose, trayBox, talk, ...pads.children]
-  let rects: DOMRect[] | null = null
+  let rects: DOMRect[] = []
   let gap = 0
-  let moved = new ResizeObserver(() => rects = null)
+  let moved = new ResizeObserver(() => {
+    rects = panes.map((e) => e.getBoundingClientRect())
+      .filter((r) => r.width > 0)
+    gap = parseFloat(getComputedStyle(root).rowGap) || 0
+  })
   for (let e of [root, ...panes]) moved.observe(e)
   let under: Under = (x, y, w, h) => {
-    if (!rects) {
-      rects = panes.map((e) => e.getBoundingClientRect())
-        .filter((r) => r.width > 0)
-      gap = parseFloat(getComputedStyle(root).rowGap) || 0
-    }
     return rects.some((r) =>
       x < r.right + gap && x + w > r.left - gap &&
       y < r.bottom + gap && y + h > r.top - gap

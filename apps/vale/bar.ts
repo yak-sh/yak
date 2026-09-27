@@ -109,9 +109,11 @@ export let bar = (pads: HTMLElement[]) => {
         sl.b.classList.toggle('Pad-strong', s.strong)
         // Ready again: a flash.
         if (sl.cd > 0 && !s.cd && s.id == sl.id) {
-          sl.b.classList.remove('Pad-ready')
-          void sl.b.offsetWidth
-          sl.b.classList.add('Pad-ready')
+          sl.b.animate([
+            { scale: '1' },
+            { scale: '1.12', backgroundColor: '#fff4c8', offset: 0.3 },
+            { scale: '1' },
+          ], { duration: 500, easing: 'ease-out' })
         }
         sl.id = s.id
         sl.cd = s.cd
