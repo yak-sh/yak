@@ -778,7 +778,7 @@ let loop = (t: number) => {
       job = toil.tick(
         v,
         f,
-        i.gather || (i.talk && !f.talk),
+        i.gather || (i.talk && (!f.talk || !!job?.bench)),
         i.strike || i.dodge || i.jump || i.ability > 0,
       )
       let d = job.doing
@@ -826,7 +826,7 @@ let loop = (t: number) => {
       ], dt)
       for (let e of f.events) react(e, target)
       for (let e of job.events) worked(e)
-      if (i.talk && f.talk) talkTo()
+      if (i.talk && f.talk && !job.bench) talkTo()
       if (h.talking && !f.talk) h.talk(null, () => {}, () => {})
       if (f.body.gait == 'run' && Math.random() < 0.35) {
         dust.emit(
@@ -878,7 +878,7 @@ let loop = (t: number) => {
         cam.shake = Math.max(cam.shake, 0.1)
         return false
       })
-      h.work(f.talk ? null : job)
+      h.work(job)
       m.show(f, job.nodes, way.marks)
       p.show(f)
       you.show(f.sheet, mine)

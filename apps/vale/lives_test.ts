@@ -5,6 +5,7 @@ import { lifeOf } from './lives.ts'
 import { GIVERS } from './quests.ts'
 import { fits } from './sim.ts'
 import { stationsNear, vale } from './terrain.ts'
+import { STATIONS } from './craft.ts'
 import { walk } from './walk.ts'
 
 Deno.test('the tailor works beside the loom and can walk there from home', () => {
@@ -19,4 +20,27 @@ Deno.test('the tailor works beside the loom and can walk there from home', () =>
   assertEquals(path[0], life.home)
   assertEquals(path.at(-1), loom)
   for (let [x, y, z] of path) assert(fits(v, x, z, y))
+})
+
+Deno.test('smith and tailor work to the side while the station stays open', () => {
+  let v = vale()
+  for (let [id, craft] of [['rowan', 'forge'], ['elsie', 'loom']] as const) {
+    let g = GIVERS.find((g) => g.id == id)!
+    let life = lifeOf(g, v), work = life.work!
+    let station = stationsNear(v, work[0], work[2], 3)
+      .find((s) => s.craft == craft)!
+    let use = v.buildings(station.x, station.z, 4)
+      .flatMap((b) => b.uses)
+      .find((u) =>
+        u.for == 'work' &&
+        Math.hypot(u.at[0] - station.x, u.at[2] - station.z) < 2
+      )!
+    assert(fits(v, ...work))
+    assert(Math.hypot(work[0] - use.at[0], work[2] - use.at[2]) > 1)
+    assert(
+      Math.hypot(work[0] - station.x, work[2] - station.z) <
+        STATIONS[craft].reach,
+    )
+    assert(walk(v, life.home, work).length > 2)
+  }
 })

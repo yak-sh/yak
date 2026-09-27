@@ -325,6 +325,7 @@ export let hud = (
   let gatherPad = pad('gather', '<span class=Pad_Icon></span>', {
     name: 'Gather',
   })
+  let nearBench = false
   let gatherIcon = gatherPad.querySelector<HTMLElement>('.Pad_Icon')!
   let gatherKey = cap(keysOf('gather')[0])
   gatherPad.classList.add('Pad-none')
@@ -467,6 +468,7 @@ export let hud = (
      * ringed with how far the work has come, or the board's while one is near
      * enough to read; none while someone is near enough to talk to */
     work: (job: Job | null) => {
+      nearBench = !!job?.bench
       let n = job?.doing?.node ?? job?.near
       let trade = job?.doing?.trade ?? n?.lode.trade ?? job?.bench?.craft
       let board = !trade && !!job?.board
@@ -620,7 +622,7 @@ export let hud = (
           ? `${first.name}: mends ${first.heals}. ${tonics} in your bag.`
           : 'Nothing in your bag mends.',
       })
-      talkPad.classList.toggle('Pad-none', !f.talk)
+      talkPad.classList.toggle('Pad-none', !f.talk || !!nearBench)
       faint.hidden = !f.down
     },
   }
