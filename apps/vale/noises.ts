@@ -60,7 +60,8 @@ let AROUND = Array.from({ length: (2 * REACH + 1) ** 2 }, (_, j): Spot => [
 // What a level's water sounds like, by the first of these kinds of place it
 // has: a marsh's own, else still water where it has a lake or a pool. The
 // sea is still to be given a voice.
-let WATERS: [string, 'water' | 'marsh'][] = [
+let WATERS: [string, 'water' | 'marsh' | 'surf'][] = [
+  ['coast', 'surf'],
   ['marsh', 'marsh'],
   ['lake', 'water'],
   ['oasis', 'water'],
@@ -185,8 +186,8 @@ let HEARD = 90
 
 /** The sounds the world keeps making, by an id of their own, and where each
  * is heard from by ears at `ear`: the nearest village's fire, and the water
- * nearest them, a marsh's or still water's by the kinds of place the region
- * they are in has.
+ * nearest them, a marsh's, still water's or ocean's by the kinds of place
+ * the region they are in has.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -201,12 +202,17 @@ let HEARD = 90
  * }
  * assertEquals(heard('mossvale', 10), ['water'])
  * assertEquals(heard('reedmarsh', 10), ['marsh'])
+ * assertEquals(heard('stormhead', 10), ['surf'])
  * // Far from it, it is not heard.
  * assertEquals(heard('mossvale', 40), [])
  * ```
  */
 export let ambience = (v: Vale, ear: Vec3) => {
-  let out: { id: string; kind: 'fire' | 'water' | 'marsh'; at: Vec3 }[] = []
+  let out: {
+    id: string
+    kind: 'fire' | 'water' | 'marsh' | 'surf'
+    at: Vec3
+  }[] = []
   let fire = hearthNear(ear[0], ear[2], HEARD)
   if (fire) {
     let [x, z] = fire

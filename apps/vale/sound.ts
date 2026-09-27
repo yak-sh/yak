@@ -57,6 +57,7 @@ let TAIL = 0.5
 let LOOP = {
   fire: { loud: 0.45, falloff: FALLOFF },
   water: { loud: 0.12, falloff: NEAR },
+  surf: { loud: 0.12, falloff: NEAR },
   marsh: { loud: 0.15, falloff: NEAR },
 }
 // A frog calls from a marsh about `every` so many seconds, from somewhere
@@ -100,6 +101,7 @@ let wake = () => {
     loops = {
       fire: voices.fire(ctx),
       water: voices.water(ctx),
+      surf: voices.surf(ctx),
       marsh: voices.marsh(ctx),
     }
   } catch {

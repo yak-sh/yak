@@ -411,6 +411,28 @@ export let fire = (c: BaseAudioContext) =>
 // own rate all the same.
 let wet = (c: BaseAudioContext) => c.sampleRate / 2
 
+/** The ocean at its shore: the old swelling wash and scattered sprays. */
+export let surf = (c: BaseAudioContext) =>
+  seamless(c, 8, (d, rate) => {
+    let b = 0
+    for (let i = 0; i < d.length; i++) {
+      let t = i / rate
+      b = (b + 0.02 * white()) / 1.02
+      d[i] = b * 3 *
+        (0.6 + 0.25 * Math.sin(t * Math.PI / 2) +
+          0.15 * Math.sin(t * Math.PI * 1.25 + 1))
+    }
+    for (let k = 0; k < 10; k++) {
+      let at = Math.floor(Math.random() * (d.length - rate / 4))
+      let f = 500 + Math.random() * 900
+      for (let j = 0; j < rate / 8; j++) {
+        let t = j / rate
+        d[at + j] += Math.sin(Math.PI * 2 * f * t * (1 + t * 8)) * 0.1 *
+          Math.exp(-t * 40)
+      }
+    }
+  })
+
 /** Still water at its shore, to loop: small soft laps that come when they
  * will, each a slap and a wash back with a bubble or two in it. Little low
  * in it, and no swell. */
