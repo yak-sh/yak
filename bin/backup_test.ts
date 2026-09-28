@@ -155,6 +155,35 @@ Deno.test(
   },
 )
 
+Deno.test('the restore proof compares against snapshot row counts', async () => {
+  let f = await fixture()
+  try {
+    f.db.query({
+      t: 'create table',
+      name: 'echo',
+      cols: [{ name: 'id', type: 'integer' }],
+    })
+    // The original entity predates this trigger; replaying its INSERT adds a
+    // row to echo that the checked snapshot did not contain.
+    f.db.query({
+      t: 'create trigger',
+      name: 'echo_entity',
+      timing: 'after',
+      event: 'insert',
+      on: 'entity',
+      body: [insert('echo', { id: 1 })],
+    })
+    let out = await f.backup()
+    assert(!out.success)
+    assert(
+      decode(out.stderr).includes('round-trip lost rows in echo (0 → 1)'),
+      decode(out.stderr),
+    )
+  } finally {
+    await f.close()
+  }
+})
+
 Deno.test(
   'a backup timing out on the lock cannot remove the active verifier database',
   async () => {

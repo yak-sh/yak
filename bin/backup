@@ -246,6 +246,19 @@ shard_data() {
 shard_data graph "not ($journal)"
 shard_data journal "$journal"
 
+# Keep the source counts before releasing the snapshot. The restore probe can
+# then use its space instead of growing beside it. Counts and the commit's
+# entity total come from the checked snapshot, never from the restored dump.
+n=$(sq "$snapshot" 'select count(*) from entity')
+sq "$snapshot" "select name from sqlite_master
+    where type = 'table' and name not like 'sqlite_%' and not ($derived)
+    order by name" > "$work/tables"
+while IFS= read -r t; do
+  a=$(sq "$snapshot" "select count(*) from \"$t\"")
+  printf '%s\t%s\n' "$a" "$t"
+done < "$work/tables" > "$work/counts"
+rm "$snapshot"
+
 # The gate: the dump must restore to the same graph it came from — and it must do
 # so FROM THE SHARDS, so a bad split is caught here, not at restore. Comparing row
 # counts per table catches a truncated write, a quoting bug, a table silently
@@ -256,16 +269,13 @@ cat "$work/schema.sql" "$work"/graph.sql.part.* "$work"/journal.sql.part.* |
   echo "backup: dump did not load back" >&2
   exit 1
 }
-for t in $(sq "$snapshot" "select name from sqlite_master
-    where type = 'table' and name not like 'sqlite_%' and not ($derived)
-    order by name"); do
-  a=$(sq "$snapshot" "select count(*) from \"$t\"")
+while read -r a t; do
   b=$(sq "$probe" "select count(*) from \"$t\"")
   [ "$a" = "$b" ] || {
     echo "backup: round-trip lost rows in $t ($a → $b)" >&2
     exit 1
   }
-done
+done < "$work/counts"
 # schema whole; graph/journal live only as parts now — drop any monolithic files a
 # previous (pre-shard) run left tracked, so `git add -A` records the switch.
 rm -f snap/graph.sql.part.* snap/journal.sql.part.*
@@ -312,7 +322,6 @@ if git diff --cached --quiet; then
   exit 0
 fi
 
-n=$(sq "$snapshot" 'select count(*) from entity')
 git -c user.name=backup -c user.email=backup@yak.sh \
   commit -qm "backup: $(date -u +%Y-%m-%dT%H:%M:%SZ) — $n entities"
 
