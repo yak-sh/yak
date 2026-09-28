@@ -102,6 +102,7 @@ import {
   type DurableSql,
   type DurableStorage,
   type Hibernation,
+  profile,
   type Sockets,
   sockets,
   storage,
@@ -545,6 +546,7 @@ export class Store {
   #graph!: Graph
   // The object's SQLite, as the driver every statement here runs through.
   #sql!: Driver
+  #profile: ReturnType<typeof profile> | null = null
   #live!: Sockets
   #route!: Handler
   #auth!: Authenticate
@@ -674,6 +676,15 @@ export class Store {
     // object is an app, and wakes with the core plus whatever its `vocab.json`
     // declared.
     let name = this.#get('name') ?? ''
+    if (name == 'yourname/vale' && !this.#profile) {
+      this.#profile = profile((summary) =>
+        console.log(
+          'yak store rows',
+          JSON.stringify({ store: name, ...summary }),
+        )
+      )
+    }
+    let observe = this.#profile?.observe
     let meta = name == PLATFORM_STORE
     // Neither of the platform's own two stores is an app, which is what the
     // app-shaped extras below are for: `task.status` is an expression over
@@ -683,7 +694,7 @@ export class Store {
       name,
       this.#get('vocab'),
     )
-    let drive = this.#sql = driver(ctx.storage)
+    let drive = this.#sql = driver(ctx.storage, observe)
     let bytes = sqliteBlobs(drive)
     let store = storage(ctx.storage, vocab, {
       // A number is @yaks/id's, and only the platform's own stores loaded it
@@ -700,7 +711,7 @@ export class Store {
       // receives the same resolution, keeping hashes out of the index
       // (T-33978).
       derived,
-    })
+    }, observe)
     // The schema this object stands at is one word (`shapeOf`): a wake under
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
@@ -1431,6 +1442,7 @@ export class Store {
     try {
       return await this.#tick(now)
     } finally {
+      this.#profile?.flush()
       leave()
     }
   }
@@ -1470,6 +1482,7 @@ export class Store {
       }
       await this.#tick(Date.now())
     } finally {
+      this.#profile?.flush()
       leave()
     }
   }
@@ -1638,6 +1651,7 @@ export class Store {
           )
         }
       } finally {
+        this.#profile?.flush()
         leave()
       }
     }
@@ -2363,7 +2377,11 @@ export class Store {
     // is nothing to serve it: hang up, and the page opens a socket onto
     // whatever answers next.
     if (this.#unbuilt) return void this.#hangUp(ws)
-    this.#live.message(ws, data)
+    try {
+      this.#live.message(ws, data)
+    } finally {
+      this.#profile?.flush()
+    }
   }
 
   /** That client went away. */

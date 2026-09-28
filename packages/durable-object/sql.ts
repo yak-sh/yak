@@ -16,7 +16,14 @@
 //   refused as statements; `transactionSync` is the transaction, and it nests.
 //   That is what `Driver.tx` exists for.
 
-import { type Driver, type Param, render, type Row, type Stmt } from '@yaks/sql'
+import {
+  type Driver,
+  type Param,
+  render,
+  type Row,
+  shape,
+  type Stmt,
+} from '@yaks/sql'
 
 /** A value the engine will bind: everything else is converted first. */
 export type SqlValue = ArrayBuffer | string | number | null
@@ -45,7 +52,18 @@ export let reserved = (name: string): boolean =>
 export type SqlCursor<T> = Iterable<T> & {
   /** every remaining row, read at once */
   toArray(): T[]
+  /** The runtime's metered rows, available after the cursor is drained. */
+  rowsRead?: number
+  rowsWritten?: number
 }
+
+export type Sample = {
+  shape: string
+  rowsRead: number
+  rowsWritten: number
+}
+
+export type Observe = (sample: Sample) => void
 
 /**
  * The synchronous SQLite handle of a Durable Object — the shape of
@@ -108,11 +126,32 @@ let unbind = (row: Row): Row => {
  * // let store = storage(ctx.storage, vocab) // …which is this, bound
  * ```
  */
-export let driver = (durable: DurableStorage): Driver => {
+export let driver = (durable: DurableStorage, observe?: Observe): Driver => {
+  let reported = false
   // The cursor is lazy: draining it is what runs the statement.
   let query = (s: Stmt): Row[] => {
-    let { sql, params } = render(s)
-    return durable.sql.exec(sql, ...params.map(bind)).toArray().map(unbind)
+    let rendered = render(s)
+    let { sql, params } = rendered
+    let cursor = durable.sql.exec(sql, ...params.map(bind))
+    let rows = cursor.toArray().map(unbind)
+    if (observe && cursor.rowsRead != null && cursor.rowsWritten != null) {
+      try {
+        observe({
+          shape: shape(rendered),
+          rowsRead: cursor.rowsRead,
+          rowsWritten: cursor.rowsWritten,
+        })
+      } catch (e) {
+        // A broken observer cannot change a store answer, but its defect must
+        // still be visible. Each driver reports it at most once.
+        if (!reported) console.error('row profile observer failed', e)
+        reported = true
+      }
+    } else if (observe && !reported) {
+      console.error('row profile cursor counters unavailable')
+      reported = true
+    }
+    return rows
   }
   query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   return { query, tx: (body) => durable.transactionSync(body) }

@@ -415,6 +415,42 @@ export let render = (node: Stmt | Expr): Raw => {
   return raw(sql, c.params)
 }
 
+/** The statement's SQL shape, without values. Bound parameters were never in
+ * the SQL text; literals are masked here too, including those inside a
+ * fragment lowered by this package. Identifiers stay visible for diagnosis. */
+export let shape = (rendered: Raw): string => {
+  let sql = rendered.sql
+  let out = ''
+  for (let i = 0; i < sql.length;) {
+    let ch = sql[i]
+    if (ch == "'") {
+      out += '?'
+      i++
+      while (i < sql.length) {
+        if (sql[i++] != "'") continue
+        if (sql[i] == "'") i++
+        else break
+      }
+    } else if (ch == '"') {
+      let start = i++
+      while (i < sql.length) {
+        if (sql[i++] != '"') continue
+        if (sql[i] == '"') i++
+        else break
+      }
+      out += sql.slice(start, i)
+    } else if (/[0-9]/.test(ch)) {
+      out += '?'
+      do i++
+      while (i < sql.length && /[0-9.eE+-]/.test(sql[i]))
+    } else {
+      out += ch
+      i++
+    }
+  }
+  return out
+}
+
 /** An expression written with every value as a literal, parenthesized where an
  * operator around it would take it apart: what an ORDER BY term or a derived
  * read is spliced into the binder's text as. */

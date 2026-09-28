@@ -27,6 +27,12 @@ over that driver creates the schema, reads components, and applies row changes.
 synchronous; graph plugins can make an operation asynchronous, but code
 executing inside `transactionSync` must remain synchronous.
 
+Pass an optional observer to `driver(ctx.storage, observe)` or as the fourth
+argument to `storage(ctx.storage, vocab, base, observe)` to receive each drained
+cursor's `rowsRead` and `rowsWritten` with a value-free SQL shape.
+`profile(emit)` collects these samples in memory and emits a bounded summary at
+most once per minute when its host calls `flush()`.
+
 `sockets(subs, ctx)` connects hibernatable WebSockets to
 [@yaks/api](../api/README.md) subscriptions. The API registry re-evaluates saved
 queries after committed changes; this adapter accepts sockets, dispatches
@@ -195,7 +201,8 @@ The package has one import path, `@yaks/durable-object`:
 | Export                                                  | Purpose                                            |
 | ------------------------------------------------------- | -------------------------------------------------- |
 | `storage(ctx.storage, vocab, base?)`                    | Creates an `@yaks/sqlite` `Store`                  |
-| `driver(ctx.storage)`                                   | Creates the underlying synchronous SQLite `Driver` |
+| `driver(ctx.storage, observe?)`                         | Creates the underlying synchronous SQLite `Driver` |
+| `profile(emit)`                                         | Aggregates cursor costs into bounded summaries     |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`   |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                   |
 | `DurableStorage`, `DurableSql`, `SqlCursor`, `SqlValue` | Structural storage types                           |

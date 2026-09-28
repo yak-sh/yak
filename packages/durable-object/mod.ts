@@ -48,12 +48,15 @@ export {
   driver,
   type DurableSql,
   type DurableStorage,
+  type Observe,
   prohibited,
   reserved,
+  type Sample,
   type SqlCursor,
   type SqlValue,
 } from './sql.ts'
 export { storage, type Store } from './store.ts'
+export { profile, type Summary } from './profile.ts'
 export {
   type Hibernation,
   type Sockets,
