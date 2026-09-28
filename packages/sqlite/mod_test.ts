@@ -4,10 +4,77 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { col, type Driver, isNull, render, select, table } from '@yaks/sql'
+import {
+  bind,
+  col,
+  type Driver,
+  isNull,
+  render,
+  select,
+  table,
+} from '@yaks/sql'
+import { parse } from '@yaks/query'
 import { objects, storage, type Store } from './mod.ts'
 import { open } from './db.ts'
 import { mem, shop, spy } from './testing.ts'
+
+Deno.test('indexed text predicates seek their component rows', () => {
+  let vocab = loadVocab({
+    $defs: {
+      seen: {
+        component: true,
+        type: 'object',
+        properties: {
+          level: { type: 'string', index: true },
+          at: { type: 'string', format: 'date-time' },
+          value: { type: 'string', format: 'json' },
+        },
+      },
+    },
+  })
+  let driver = mem()
+  let s = storage(driver, vocab)
+  s.install()
+  s.tx((tx) =>
+    tx.patch([
+      {
+        entity: { eid: 'here' },
+        seen: {
+          level: 'mossvale',
+          at: '2026-09-28T12:00:00.000Z',
+          value: '1',
+        },
+      },
+      {
+        entity: { eid: 'away' },
+        seen: {
+          level: 'elsewhere',
+          at: '2026-09-28T12:00:00.000Z',
+          value: '2',
+        },
+      },
+      {
+        entity: { eid: 'old' },
+        seen: {
+          level: 'mossvale',
+          at: '2026-09-28T11:00:00.000Z',
+          value: '3',
+        },
+      },
+      { entity: { eid: 'bare' } },
+    ])
+  )
+  let query = '.seen.level=mossvale&.seen.at>=5-minutes-ago'
+  let opts = { now: Date.parse('2026-09-28T12:02:00.000Z') }
+  assertEquals(s.rows(query, opts), [{ eid: 'here' }])
+  assertEquals(s.rows('.seen.value=1'), [{ eid: 'here' }])
+  let plan = driver.query({
+    t: 'explain query plan',
+    of: bind(parse(query), vocab, opts),
+  }).map((r) => String(r.detail)).join('\n')
+  assert(plan.includes('SEARCH seen USING INDEX seen_level'), plan)
+  assert(!plan.includes('SCAN entity'), plan)
+})
 
 Deno.test('ddl() lists the statements install() runs', () => {
   let s = storage(mem(), shop)

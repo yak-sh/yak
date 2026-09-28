@@ -64,9 +64,25 @@ export type Dialect = {
   // Value lowerings. Each returns a fragment, or null when it cannot be
   // expressed with exactly the semantics the JavaScript matcher has (the caller
   // then declines the whole compilation — exact or nothing).
-  eq: (colExpr: string, value: string, tag: Tag) => Frag | null
-  ne: (colExpr: string, value: string, tag: Tag) => Frag | null
-  cmp: (colExpr: string, op: string, value: string, tag: Tag) => Frag | null
+  eq: (
+    colExpr: string,
+    value: string,
+    tag: Tag,
+    textAffinity?: boolean,
+  ) => Frag | null
+  ne: (
+    colExpr: string,
+    value: string,
+    tag: Tag,
+    textAffinity?: boolean,
+  ) => Frag | null
+  cmp: (
+    colExpr: string,
+    op: string,
+    value: string,
+    tag: Tag,
+    textAffinity?: boolean,
+  ) => Frag | null
   contains: (colExpr: string, value: string) => Frag | null
   time: (colExpr: string, op: string, value: string, now: number) => Frag | null
   refEq: (colExpr: string, eids: string[], negate: boolean) => Frag
@@ -126,6 +142,9 @@ export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
 }
 
 let asText = (c: string) => `cast(${c} as text)`
+// A stored TEXT column already compares as text. Casting it hides its index
+// from SQLite; expressions without column affinity still need the cast.
+let textOf = (c: string, textAffinity = false) => textAffinity ? c : asText(c)
 let numeric = (s: string) => /^-?\d+(\.\d+)?$/.test(s)
 let NUMERIC_TAGS: Tag[] = ['number', 'priority', 'bool']
 
@@ -167,6 +186,7 @@ let cmp = (
   op: string,
   value: string,
   tag: Tag,
+  textAffinity = false,
 ): Frag | null => {
   if (NUMERIC_TAGS.includes(tag)) {
     let n = held(value, tag)
@@ -177,22 +197,30 @@ let cmp = (
   }
   return numeric(value)
     ? null
-    : { sql: `${asText(c)} ${op} ?`, params: [value] }
+    : { sql: `${textOf(c, textAffinity)} ${op} ?`, params: [value] }
 }
 
 // eq: '' means absent or empty; 'x..y' / 'x...y' is a range; 'a,b' is any-of;
 // anything else is an equality test. On a numeric column the operand must
 // survive a round trip through JavaScript number formatting, or the only
 // correct compilation is a constant false.
-let eq = (c: string, value: string, tag: Tag): Frag | null => {
+let eq = (
+  c: string,
+  value: string,
+  tag: Tag,
+  textAffinity = false,
+): Frag | null => {
   if (value == '') {
-    return { sql: `(${c} is null or ${asText(c)} = '')`, params: [] }
+    return {
+      sql: `(${c} is null or ${textOf(c, textAffinity)} = '')`,
+      params: [],
+    }
   }
   let r = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
   if (r) {
     let [, lo, excl, hi] = r
-    let bound = cmp(c, '>=', lo, tag)
-    let upper = cmp(c, excl ? '<' : '<=', hi, tag)
+    let bound = cmp(c, '>=', lo, tag, textAffinity)
+    let upper = cmp(c, excl ? '<' : '<=', hi, tag, textAffinity)
     if (!bound || !upper) return null
     return {
       sql: `(${c} is not null and ${bound.sql} and ${upper.sql})`,
@@ -200,7 +228,7 @@ let eq = (c: string, value: string, tag: Tag): Frag | null => {
     }
   }
   if (value.includes(',')) {
-    let parts = value.split(',').map((p) => eq(c, p, tag))
+    let parts = value.split(',').map((p) => eq(c, p, tag, textAffinity))
     let frags = parts.filter((p) => p != null)
     return frags.length == parts.length ? anyOf(frags) : null
   }
@@ -210,14 +238,19 @@ let eq = (c: string, value: string, tag: Tag): Frag | null => {
       ? { sql: `${c} = ?`, params: [Number(n)] }
       : { sql: '0', params: [] }
   }
-  return { sql: `${asText(c)} = ?`, params: [value] }
+  return { sql: `${textOf(c, textAffinity)} = ?`, params: [value] }
 }
 
 // != is `not eq`, and eq(null, …) is false — but SQL's `not (null = ?)` is
 // NULL, which drops the rows whose component is absent. coalesce brings them
 // back.
-let ne = (c: string, value: string, tag: Tag): Frag | null => {
-  let inner = eq(c, value, tag)
+let ne = (
+  c: string,
+  value: string,
+  tag: Tag,
+  textAffinity = false,
+): Frag | null => {
+  let inner = eq(c, value, tag, textAffinity)
   return inner &&
     { sql: `(coalesce(${inner.sql}, 0) = 0)`, params: inner.params }
 }

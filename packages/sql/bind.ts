@@ -254,7 +254,7 @@ let guarded = (dc: DerivedProp, present: string, expr: string): string =>
 // and also the component table's own owner column, so the component is present
 // exactly when that column is non-null. Returns null, declining, for a computed
 // property with no registered expression.
-type Read = { expr: string; tag: Tag } | null
+type Read = { expr: string; tag: Tag; textAffinity?: boolean } | null
 let readProp = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   let key = `${comp}.${prop}`
   let dc = ctx.derived[key]
@@ -272,6 +272,7 @@ let readProp = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   return {
     expr,
     tag: comp == 'entity' ? 'text' : prop == 'eid' ? 'eid' : tagOf(def!),
+    textAffinity: def?.affinity == 'text' && def.category != 'ref',
   }
 }
 
@@ -296,6 +297,7 @@ let lowerScalar = (
   op: string,
   value: string,
   tag: Tag,
+  textAffinity = false,
 ): Frag | null => {
   let d = ctx.d
   if (op == EXISTS) return { sql: `${c} is not null`, params: [] }
@@ -303,11 +305,11 @@ let lowerScalar = (
     let t = d.time(c, op, value, ctx.now)
     if (t) return t
   }
-  if (op == '') return d.eq(c, value, tag)
-  if (op == '!') return d.ne(c, value, tag)
+  if (op == '') return d.eq(c, value, tag, textAffinity)
+  if (op == '!') return d.ne(c, value, tag, textAffinity)
   if (op == '~') return d.contains(c, value)
   if (['<', '<=', '>', '>='].includes(op)) {
-    let inner = d.cmp(c, op, value, tag)
+    let inner = d.cmp(c, op, value, tag, textAffinity)
     return inner &&
       { sql: `(${c} is not null and ${inner.sql})`, params: inner.params }
   }
@@ -397,7 +399,14 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   }
   let frag = refs
     ? ctx.d.refEq(ctx.d.refCol!(hop.comp, hop.prop), value.split(','), false)
-    : lowerScalar(ctx, read.expr, op, flat(p.value), read.tag)
+    : lowerScalar(
+      ctx,
+      read.expr,
+      op,
+      flat(p.value),
+      read.tag,
+      read.textAffinity,
+    )
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
