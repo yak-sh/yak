@@ -139,18 +139,22 @@ export type Slain = {
  *   fell: 40000,
  * })
  * assertEquals(fallOf([], 20, 0), { down: false, fell: 0 })
+ * assertEquals(fallOf([{ at: 1000 }], () => 30, 30000).down, true)
+ * assertEquals(fallOf([{ at: 1000 }], () => 30, 31000).down, false)
  * ```
  */
 export let fallOf = (
   rows: { at: number }[],
-  respawn: number,
+  respawn: number | ((at: number) => number),
   now: number,
 ): { down: boolean; fell: number } => {
+  let back = (at: number) =>
+    at + (typeof respawn == 'number' ? respawn : respawn(at)) * 1000
   let fell = 0
   for (let r of [...rows].sort((a, b) => a.at - b.at)) {
-    if (!fell || r.at >= fell + respawn * 1000) fell = r.at
+    if (!fell || r.at >= back(fell)) fell = r.at
   }
-  return { down: !!fell && now < fell + respawn * 1000, fell }
+  return { down: !!fell && now < back(fell), fell }
 }
 
 /** What one player has dealt one creature in one of its lives, and until

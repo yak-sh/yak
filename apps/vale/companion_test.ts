@@ -11,7 +11,7 @@ import {
   routeTo,
   treesOf,
 } from './companion.ts'
-import { effort, GATHER, LODES, naturalEid } from './gather.ts'
+import { effort, LODES, naturalEid, respawnOf } from './gather.ts'
 import type { Natural } from './nature.ts'
 import { type Bundle, comp } from './net.ts'
 import { flat, type Prop, withoutSpent } from './terrain.ts'
@@ -111,8 +111,15 @@ Deno.test('companion work gathers by the hero’s ordinary rules', () => {
     )!.spent
   assertEquals(spent(), true)
   assertEquals(fits(walking, 5, 5, 5), true)
-  f.now += GATHER.wood.respawn * 1000
+  let at = Number(comp(rows[0], 'gathered').at)
+  let back = at + respawnOf(as.target, 'wood', at) * 1000
+  f.now = back - 1
+  assertEquals(spent(), true)
+  assertEquals(treesOf(3, 5, natural, rows, f.now), [])
+  assertEquals(fits(walking, 5, 5, 5), true)
+  f.now = back
   assertEquals(spent(), false)
+  assertEquals(treesOf(3, 5, natural, rows, f.now).length, 1)
   assertEquals(fits(walking, 5, 5, 5), false)
 })
 

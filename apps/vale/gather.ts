@@ -10,6 +10,7 @@
 import { isA } from './features.ts'
 import { HOPS, LEVELS } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
+import { fallOf } from './rules.ts'
 import { type Natural, NATURE } from './nature.ts'
 import { nearby, originOf, regionOf } from './regions.ts'
 import {
@@ -28,7 +29,8 @@ import { pick, type Rarity } from './rarity.ts'
 /** How each gathering trade works a node: what working one is called, how
  * near a hero must stand to work it, in metres, and how long the work takes
  * against a tree's; and for placed herbs and shoals, how many around each
- * place, within how many metres, and how far apart. Respawn is in seconds. */
+ * place, within how many metres, and how far apart. Respawn is the minimum
+ * time in seconds; each gathering adds up to another 30 minutes. */
 export let GATHER: Record<Gather, {
   verb: string
   reach: number
@@ -63,7 +65,7 @@ export let GATHER: Record<Gather, {
     count: 2,
     within: 26,
     apart: 6,
-    respawn: 100,
+    respawn: 1800,
   },
   fish: {
     verb: 'Fish',
@@ -72,9 +74,22 @@ export let GATHER: Record<Gather, {
     count: 2,
     within: 26,
     apart: 8,
-    respawn: 75,
+    respawn: 1800,
   },
 }
+
+/** Seconds before this node grows back from one gathering. The node id and
+ * gathering time are shared, so every page and companion sees the same life. */
+export let respawnOf = (eid: string, trade: Gather, at: number): number =>
+  GATHER[trade].respawn + Math.floor(rand(hashOf(`${eid}/${at}`)) * 1800)
+
+/** The current life of a gathered node, shared by player work and companions. */
+export let nodeLife = (
+  rows: { at: number }[],
+  eid: string,
+  trade: Gather,
+  now: number,
+) => fallOf(rows, (at) => respawnOf(eid, trade, at), now)
 
 /** How a node is drawn (nodes.ts): a tree is a prop of that kind (props.ts)
  * with logs cut at its foot, felled to a stump of its bark and wood; a seam is

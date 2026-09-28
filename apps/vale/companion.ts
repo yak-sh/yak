@@ -1,11 +1,10 @@
 // The companion's shared choices and walk, plus the page's view of its
 // persisted state. The scheduled app worker owns every world-changing tick.
 import { writer } from './chat.ts'
-import { GATHER, LODES, naturalEid } from './gather.ts'
+import { GATHER, LODES, naturalEid, nodeLife } from './gather.ts'
 import { type Natural, NATURE } from './nature.ts'
 import { comp, num, str } from './bundle.ts'
 import type { Bundle, Net } from './net.ts'
-import { fallOf } from './rules.ts'
 import { fits, floorAt } from './sim.ts'
 import type { Vale } from './terrain.ts'
 import { walk } from './walk.ts'
@@ -58,7 +57,7 @@ export let treesOf = (
     let kind = NATURE[prop.kind], eid = naturalEid(prop)
     return prop.natural && LODES[kind]?.trade == 'wood' &&
         Math.hypot(prop.x - x, prop.z - z) < 32 &&
-        !fallOf(by.get(eid) ?? [], GATHER.wood.respawn, now).down
+        !nodeLife(by.get(eid) ?? [], eid, 'wood', now).down
       ? [{ eid, kind, x: prop.x, z: prop.z }]
       : []
   }).sort((a, b) =>

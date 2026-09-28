@@ -7,10 +7,11 @@ import {
   gatherXp,
   haulOf,
   LODES,
+  nodeLife,
   nodeRarity,
   nodesNear,
+  respawnOf,
 } from './gather.ts'
-import { fallOf } from './rules.ts'
 import { natureMesh } from './nature_mesh.ts'
 import type { Natural } from './nature.ts'
 import { propsIn } from './terrain.ts'
@@ -28,14 +29,30 @@ Deno.test('a natural prop is the same gatherable node on every read', () => {
 })
 
 Deno.test('a harvested tree stays spent for everyone until its next life', () => {
-  let at = 1000, rows = [{ at }]
-  let life = (now: number) => fallOf(rows, GATHER.wood.respawn, now)
+  let at = 1000, eid = 'tree', rows = [{ at }]
+  let life = (now: number) => nodeLife(rows, eid, 'wood', now)
+  let back = at + respawnOf(eid, 'wood', at) * 1000
   assertEquals(life(at + 1).down, true)
-  assertEquals(life(at + 59 * 60 * 1000).down, true)
-  assertEquals(life(at + 60 * 60 * 1000).down, false)
-  rows.push({ at: at + 60 * 60 * 1000 })
-  assertEquals(life(at + 60 * 60 * 1000 + 1).down, true)
+  assertEquals(life(back - 1).down, true)
+  assertEquals(life(back).down, false)
+  rows.push({ at: back })
+  assertEquals(life(back + 1).down, true)
+  assertEquals(life(back + 1).fell, back)
   assertEquals(nodeRarity('tree', at), nodeRarity('tree', at))
+})
+
+Deno.test('node respawns are shared, varied, and never short', () => {
+  for (let trade of ['wood', 'ore', 'herb', 'fish'] as const) {
+    let times = Array.from(
+      { length: 24 },
+      (_, n) => respawnOf(`node-${n % 8}`, trade, 1000 + n * 1000),
+    )
+    assert(times.every((t) => t >= GATHER[trade].respawn))
+    assert(times.every((t) => t < GATHER[trade].respawn + 1800))
+    assert(times.every((t) => t >= 1800))
+    assert(new Set(times).size > 1)
+    assertEquals(respawnOf('node', trade, 1000), respawnOf('node', trade, 1000))
+  }
 })
 
 Deno.test('skill slows hard gathering and rarity raises its rewards', () => {

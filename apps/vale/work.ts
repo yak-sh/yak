@@ -21,6 +21,7 @@ import {
   type Lode,
   LODES,
   naturalEid,
+  nodeLife,
   nodeRarity,
   nodesNear,
 } from './gather.ts'
@@ -32,7 +33,6 @@ import { type Board, boardsNear, READ } from './notices.ts'
 import type { Frame, Vec3 } from './play.ts'
 import { itemLevel, made, type Rarity, UP, upgradeGain } from './rarity.ts'
 import { upgradeOf, upgradeWorth, upgradeXp } from './upgrade.ts'
-import { fallOf } from './rules.ts'
 import {
   groundAt,
   type Prop,
@@ -52,7 +52,7 @@ import {
 } from './trades.ts'
 
 /** A node as this frame sees it: which, where it stands on the ground or the
- * water, whether it is spent and for how many ms more, how far from the hero
+ * water, whether it is spent, how far from the hero
  * it is, middle to middle, and its rarity for this life. */
 export type Seen = {
   eid: string
@@ -61,7 +61,6 @@ export type Seen = {
   at: Vec3
   life: number
   spent: boolean
-  back: number
   near: number
   rarity: Rarity
   prop?: Prop
@@ -163,13 +162,6 @@ let STRAY = 0.5
 // metres.
 let SEEN = REACH
 
-let secs = (ms: number) => {
-  let s = Math.ceil(ms / 1000)
-  return s < 60
-    ? `${s}s`
-    : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
 // How long making a thing of `tier` takes, in ms.
 let making = (tier: number) => 1400 + 300 * tier
 
@@ -265,7 +257,7 @@ export let working = (
     eid: string,
     trade: Gather,
     now: number,
-  ) => fallOf(rows.get(eid) ?? [], GATHER[trade].respawn, now)
+  ) => nodeLife(rows.get(eid) ?? [], eid, trade, now)
 
   // A node's work done: the item it gave, wearing the row that spends it.
   let gather = (
@@ -427,7 +419,6 @@ export let working = (
       let nodes = nodesNear(f.body.x, f.body.z, SEEN, natural, as?.target).map(
         (n): Seen => {
           let lode = LODES[n.lode]
-          let respawn = GATHER[lode.trade].respawn * 1000
           let fall = life(rows, n.eid, lode.trade, now)
           let y = lode.trade == 'fish'
             ? WATER
@@ -439,7 +430,6 @@ export let working = (
             at: [n.x, y, n.z],
             life: fall.fell,
             spent: fall.down,
-            back: fall.down ? fall.fell + respawn - now : 0,
             near: Math.hypot(n.x - f.body.x, n.z - f.body.z),
             rarity: nodeRarity(n.eid, fall.fell),
             prop: n.prop,
@@ -498,9 +488,7 @@ export let working = (
         } else if (near.spent) {
           events.push({
             type: 'say',
-            text: `${near.lode.name}: spent. It grows back in ${
-              secs(near.back)
-            }.`,
+            text: `${near.lode.name}: spent.`,
           })
         } else {
           job = {

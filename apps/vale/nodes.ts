@@ -230,13 +230,6 @@ export let modelOf = (look: Look, whole: boolean, shape: number): Out => {
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
-let secs = (ms: number) => {
-  let s = Math.ceil(ms / 1000)
-  return s < 60
-    ? `${s}s`
-    : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
 // A node's model, whole or spent; a whole shoal is its rings and its fish.
 type Body = {
   obj: THREE.Object3D
@@ -366,9 +359,7 @@ export let nodes = (
     }`
     let html = doing
       ? `<span>${name}</span>${bar(doing.k)}`
-      : n.spent
-      ? `<span>${name} <em>back in ${secs(n.back)}</em></span>`
-      : job.near?.eid == n.eid
+      : !n.spent && job.near?.eid == n.eid
       ? `<span>${name} ${hint(t.icon, GATHER[n.lode.trade].verb)}</span>`
       : `<span>${name}</span>`
     let [x, y, z] = n.at
