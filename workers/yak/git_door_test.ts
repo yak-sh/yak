@@ -130,8 +130,9 @@ let serving = (env: Env) =>
 
 Deno.test('git clones an app at <app>.git, and its history is its deploys', async () => {
   let { env } = platform(SECRET)
-  let { app } = await standing(env, 'public')
+  let { dir: listing, space, app } = await standing(env, 'public')
   await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  app = (await listing.app(space, 'recipes'))!
   await deploy(env, app, 2, {
     'index.html': '<h1>hello</h1>\n',
     'lib/app.js': 'export let go = () => 1\n',
