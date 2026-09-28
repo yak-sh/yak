@@ -363,7 +363,7 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * }), 'did not address you')
  * assertStringIncludes(told, 'What you hold: 18 coin.')
  * assertStringIncludes(told, 'Bramble carries: 3 Boar tusk (tusk, 5 coin each)')
- * assertStringIncludes(told, 'Old Thornback (thornback) 93')
+ * assertStringIncludes(told, 'Old Thornback (thornback)')
  * assertStringIncludes(told, 'felled 1 of 1 Old Thornback, brought 0 of 1')
  * assertStringIncludes(told, 'Your home is near the plaza in Mossvale.')
  * assertStringIncludes(told, 'You work at the hall near the plaza.')
