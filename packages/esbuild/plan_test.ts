@@ -128,6 +128,28 @@ Deno.test('a page script compiles when it is TypeScript or imports a declared pa
   ])
 })
 
+Deno.test('a deploy reads shared modules once across its entries', async () => {
+  let files = {
+    'worker.js': "import { n } from './shared.ts'\nexport default { n }",
+    'index.html': PAGE('main.ts'),
+    'main.ts': "import { n } from './shared.ts'\nexport { n }",
+    'shared.ts': 'export let n: number = 1',
+  }
+  let reads = new Map<string, number>()
+  let input = app(files, 'worker.js')
+  let got = await plan({
+    ...input,
+    read: (path) => {
+      reads.set(path, (reads.get(path) ?? 0) + 1)
+      return input.read(path)
+    },
+  })
+  assertEquals(reads.get('shared.ts'), 1)
+  assertEquals(got?.ask.files['shared.ts'], files['shared.ts'])
+  assertEquals(got?.ask.pages, ['main.ts'])
+  assertEquals(got?.ask.worker?.entry, 'worker.js')
+})
+
 Deno.test('a module worker a page script starts compiles as an entry of its own', async () => {
   let MAP =
     `<script type=importmap>{"imports": {"lit": "https://esm.sh/lit"}}` +

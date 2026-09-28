@@ -181,8 +181,19 @@ export let plan = async (app: App): Promise<Plan | null> => {
     return null
   }
   let has = new Set(app.paths)
+  // The worker and each page walk their own graph, often through the same
+  // modules. Keep one reading of each file for this deploy.
+  let reads = new Map<string, ReturnType<Read>>()
+  let readApp: Read = (path) => {
+    if (!has.has(path)) return Promise.resolve(null)
+    let pending = reads.get(path)
+    if (pending) return pending
+    pending = app.read(path)
+    reads.set(path, pending)
+    return pending
+  }
   let text = async (path: string) => {
-    let bytes = has.has(path) ? await app.read(path) : null
+    let bytes = await readApp(path)
     return bytes && decode(bytes)
   }
   let pkg = await text('package.json')
@@ -194,9 +205,6 @@ export let plan = async (app: App): Promise<Plan | null> => {
       if (COMPILED.test(path)) files[path] = decode(bytes)
     }
   }
-  let readApp: Read = (path) =>
-    has.has(path) ? app.read(path) : Promise.resolve(null)
-
   let worker: Ask['worker']
   if (app.main && has.has(app.main)) {
     let { files: reached, named: specs } = await sources(readApp, app.main)
