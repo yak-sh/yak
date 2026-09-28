@@ -248,8 +248,9 @@ export let llms = (
   [
     '# yaks.app',
     '',
-    '> Build a yaks app by asking Claude or ChatGPT. A recipe box, a sign-up sheet,',
-    '> a trip planner — your assistant builds it, and yaks.app keeps it online.',
+    '> Build, host and share web apps.',
+    '> Tell Claude or ChatGPT what you need. Your assistant builds the app, and',
+    '> yaks.app keeps it online.',
     `> Your app lives at ${
       spaceHost(env, 'yourname')
     }, saves your data, and works in a browser.`,

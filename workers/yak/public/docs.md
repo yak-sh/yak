@@ -7,7 +7,8 @@ A yaks app is an `index.html` and whatever files sit beside it, served live at
 `<space>.yaks.app/<app>/`. There is no build step and no framework: what you
 write is what the browser gets, except TypeScript and npm imports, which
 `app_deploy` compiles. Every app comes with its own store, a graph of entities,
-and a small client for reading and writing it from the page.
+and a small client for reading and writing it from the page. Apps in the same
+space can work with one entity across those stores.
 
 Make one with `app_new`, write files with `app_files` (the whole set in one
 call, as `files: [{path, content}, ...]`), then `app_deploy`, and give the
@@ -83,11 +84,11 @@ why there is no cron trigger to configure.
 
 ## An entity spans apps
 
-An eid means the same entity everywhere. Two of the person's apps can each keep
-their own component on one entity, with no copy and no sync between them: a
-reading list keeps the `book`, a lending app keeps the `loan`. A component lives
-with the app that declares it, and `graph_query` with no app named reads every
-app the person has at once.
+An eid means the same entity everywhere. Apps in one space can each add their
+own component to it, or one app can use a component another app declares. Each
+component has one home, so a page or command reads and writes it there without
+copying rows between apps. Each app's access still decides who can read or write
+its part. `graph_query` with no app named reads every app the person can reach.
 
 Deeper: <https://yaks.app/docs/entities.md> — which app a component lives in,
 and a two-app pair end to end.

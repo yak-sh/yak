@@ -39,11 +39,12 @@ each app. An app with no traffic uses no compute.
      pinned at the app's birth (directory.ts storeName) so a rename never moves
      the data. -->
 
-Each app has its own SQLite database inside a Cloudflare Durable Object. App
-databases are not shared.
+Each app has its own SQLite database inside a Cloudflare Durable Object. Apps in
+the same space can work with one entity across their separate databases: each
+component is read or written in the app that holds it.
 
-The platform restricts each app to its own database when it handles a request.
-Your signed-in assistant can access your apps on your behalf.
+The platform checks access to each app when it handles a request. Your signed-in
+assistant can access your apps on your behalf.
 
 <!-- apps.ts blobKey: `${space}/${app}/blobs/${sha}` in the BLOBS R2 bucket,
      content-addressed, so the same photo twice is one object. -->
