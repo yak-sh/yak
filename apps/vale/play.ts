@@ -142,6 +142,7 @@ export type Event =
   | {
     type: 'shot'
     kind: 'arrow' | 'bolt'
+    flame?: boolean
     from: Vec3
     to: Vec3
     /** how long it flies, in ms */
@@ -1487,6 +1488,7 @@ export let game = (
           events.push({
             type: 'shot',
             kind: flies,
+            flame: doing == 'blaze',
             from: at(body),
             to: [to[0] + Math.cos(t) * r, to[1], to[2] + Math.sin(t) * r],
             ms: ms * (1 + i * 0.07),

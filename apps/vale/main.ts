@@ -212,10 +212,10 @@ let hearth = (): Spot => hearthOf(HOME) ?? arriveOf(HOME)
   w.focus.set(x, groundAt(v, x, z), z)
   await w.near()
 }
-let stage = cast(w.scene, v, marks, BUILD)
-let helperView = companionView(w.scene, glass)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
+let stage = cast(w.scene, v, marks, BUILD, glow)
+let helperView = companionView(w.scene, glass)
 let bounty = nodes(w.scene, v, marks, glow, phone)
 let pins = papers(w.scene, v, marks, phone)
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
@@ -399,7 +399,7 @@ let clockOf = (d: number): Clock =>
 // An ability's shape drawn in dust and light where it is done: a sweep
 // before the hero, a ring about them, a flare for what they do to
 // themselves, a puff where a dash sets off.
-let flourish = (a: Ability, at: THREE.Vector3, yaw: number) => {
+let flourish = (id: string, a: Ability, at: THREE.Vector3, yaw: number) => {
   let spot = (ang: number, r: number) =>
     new THREE.Vector3(
       at.x + Math.sin(ang) * r,
@@ -407,9 +407,11 @@ let flourish = (a: Ability, at: THREE.Vector3, yaw: number) => {
       at.z + Math.cos(ang) * r,
     )
   let tint = a.tint ?? 0xf4ecd8
+  let fire = id == 'blaze' || id == 'scorch'
+  let sparks = fire ? glow : dust
   if (a.shape == 'arc') {
     for (let i = -4; i <= 4; i++) {
-      dust.emit(
+      sparks.emit(
         spot(yaw + (i / 4) * (a.arc ?? 1.2), 1.6 + (a.far ?? 0)),
         tint,
         2,
@@ -417,10 +419,21 @@ let flourish = (a: Ability, at: THREE.Vector3, yaw: number) => {
           speed: 1.2,
           up: 1,
           life: 0.4,
-          size: 0.1,
+          size: fire ? 0.16 : 0.1,
+          flame: fire,
+          halo: fire,
         },
       )
     }
+  }
+  if (id == 'blaze') {
+    glow.emit(at.clone().setY(at.y + 1.4), tint, 12, {
+      speed: 0.7,
+      up: 2,
+      life: 0.45,
+      size: 0.13,
+      flame: true,
+    })
   }
   if (a.shape == 'ring') ring(at, a.far ?? 2, tint)
   if (a.shape == 'self') {
@@ -430,6 +443,7 @@ let flourish = (a: Ability, at: THREE.Vector3, yaw: number) => {
       life: 0.8,
       size: 0.08,
       fall: -0.5,
+      halo: true,
     })
   }
   if (a.dash) {
@@ -458,7 +472,13 @@ let ring = (at: THREE.Vector3, r: number, tint: number) => {
   }
 }
 // Abilities of mine landing over a place, once their shots get there.
-let bursts: { at: THREE.Vector3; r: number; tint: number; when: number }[] = []
+let bursts: {
+  at: THREE.Vector3
+  r: number
+  tint: number
+  when: number
+  fire: boolean
+}[] = []
 
 // A thing come into the bag, found or made: its toast, named and coloured as
 // it rolled (rarity.ts), and the finer it is, the bigger the moment.
@@ -528,6 +548,16 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
         up: 3,
       },
     )
+    if (ITEMS[last?.sheet.worn.main?.kind ?? '']?.family == 'sword') {
+      glow.emit(m ?? p(e.at), 0xffd040, e.great ? 16 : 9, {
+        speed: 3.5,
+        up: 1.2,
+        life: 0.3,
+        size: 0.065,
+        fall: 6,
+        halo: true,
+      })
+    }
     sound.hit(e.eid, e.great)
     cam.shake = Math.max(cam.shake, e.great ? 0.22 : 0.08)
   } else if (e.type == 'struck') {
@@ -599,7 +629,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       )
     }
   } else if (e.type == 'shot') {
-    stage.fly(e.kind, e.from, e.to, e.ms)
+    stage.fly(e.kind, e.from, e.to, e.ms, e.flame)
     sound.whiff(net.hero)
   } else if (e.type == 'ability') {
     // Mine as my skills make it; the others' as the row has it.
@@ -609,7 +639,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     if (!mine) stage.doing(e.by, e.id)
     let foot = p(e.at)
     float(a.name, foot.clone().setY(foot.y + 2.5), 'ability')
-    flourish(a, foot, e.yaw)
+    flourish(e.id, a, foot, e.yaw)
     if (a.shape == 'self') sound.heal(e.by)
     else if (e.id == 'blaze' || e.id == 'scorch') sound.fire(e.by)
     else sound.whiff(e.by)
@@ -619,6 +649,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
       r: e.r,
       tint: ABILITIES[e.id]?.tint ?? 0xf4ecd8,
       when: performance.now() + e.ms,
+      fire: e.id == 'blaze',
     })
   } else if (e.type == 'held') float('Held!', p(e.at), 'dodge')
   else if (e.type == 'block') {
@@ -951,8 +982,34 @@ let loop = (t: number) => {
       let t = performance.now()
       bursts = bursts.filter((b) => {
         if (b.when > t) return true
-        ring(b.at, b.r, b.tint)
-        glow.emit(b.at, b.tint, 16, { speed: 3, up: 2, life: 0.5, size: 0.08 })
+        if (b.fire) {
+          for (let i = 0; i < 12; i++) {
+            let a = i * Math.PI / 6
+            glow.emit(
+              new THREE.Vector3(
+                b.at.x + Math.cos(a) * b.r * 0.6,
+                b.at.y,
+                b.at.z + Math.sin(a) * b.r * 0.6,
+              ),
+              b.tint,
+              2,
+              {
+                speed: 0.7,
+                up: 2.8,
+                life: 0.7,
+                size: 0.17,
+                flame: true,
+              },
+            )
+          }
+        } else ring(b.at, b.r, b.tint)
+        glow.emit(b.at, b.tint, 12, {
+          speed: 3,
+          up: 2,
+          life: 0.5,
+          size: 0.09,
+          halo: true,
+        })
         cam.shake = Math.max(cam.shake, 0.1)
         return false
       })
@@ -1069,7 +1126,7 @@ let loop = (t: number) => {
     )
   }
   dust.tick(dt)
-  glow.tick(dt)
+  glow.tick(dt, camera)
   marks.tick()
   renderer.render(w.scene, camera)
 }

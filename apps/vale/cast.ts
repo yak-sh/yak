@@ -27,7 +27,8 @@ import {
   hero,
   person,
 } from './figures.ts'
-import type { overlay } from './fx.ts'
+import type { bits, overlay } from './fx.ts'
+import { halo } from './halo.ts'
 import { focus, type Gaze, gaze, neck } from './gaze.ts'
 import { type Hand, handOf, kitOf } from './gear.ts'
 import { ITEMS, meshed, onGround } from './items.ts'
@@ -169,6 +170,7 @@ export let cast = (
   v: Vale,
   plates: ReturnType<typeof overlay>,
   build: Build,
+  glow: ReturnType<typeof bits>,
 ) => {
   let actors = new Map<string, Actor>()
   let lootMat = soft({ speckle: 0.05 })
@@ -253,24 +255,47 @@ export let cast = (
   // along a shallow arc.
   let shaft = new THREE.BoxGeometry(0.04, 0.04, 0.55)
   let mote = new THREE.BoxGeometry(0.2, 0.2, 0.2)
+  let tongue = new THREE.ConeGeometry(0.15, 0.46, 5)
   let wood = new THREE.MeshLambertMaterial({ color: 0xe8dcc0 })
   let light = new THREE.MeshBasicMaterial({ color: 0xbfe8ff })
+  let ember = new THREE.MeshBasicMaterial({ color: 0xff9b35 })
+  let shine = halo()
+  let auraMat = (color: number) =>
+    new THREE.SpriteMaterial({
+      map: shine,
+      color,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false,
+    })
+  let iceHalo = auraMat(0x8fdcff), fireHalo = auraMat(0xff8a32)
   let flying: {
-    mesh: THREE.Mesh
+    mesh: THREE.Object3D
     from: THREE.Vector3
     to: THREE.Vector3
     born: number
     ms: number
+    flame: boolean
+    trail: number
   }[] = []
   let fly = (
     kind: 'arrow' | 'bolt',
     from: THREE.Vector3,
     to: THREE.Vector3,
     ms: number,
+    flame = false,
   ) => {
-    let mesh = kind == 'arrow'
-      ? new THREE.Mesh(shaft, wood)
-      : new THREE.Mesh(mote, light)
+    let mesh = new THREE.Group()
+    if (kind == 'arrow') mesh.add(new THREE.Mesh(shaft, wood))
+    else {
+      mesh.add(new THREE.Mesh(flame ? tongue : mote, flame ? ember : light))
+      let aura = new THREE.Sprite(flame ? fireHalo : iceHalo)
+      aura.scale.setScalar(flame ? 1.1 : 0.9)
+      mesh.add(aura)
+    }
+    if (flying.length == 20) scene.remove(flying.shift()!.mesh)
     scene.add(mesh)
     flying.push({
       mesh,
@@ -278,6 +303,8 @@ export let cast = (
       to,
       born: performance.now(),
       ms: Math.max(60, ms),
+      flame,
+      trail: 0,
     })
   }
   let soar = (now: number) => {
@@ -285,13 +312,36 @@ export let cast = (
       let k = (now - f.born) / f.ms
       if (k >= 1) {
         scene.remove(f.mesh)
+        if (f.mesh.children.length > 1) {
+          glow.emit(f.to, f.flame ? 0xff9b35 : 0x9fd8ff, 8, {
+            speed: f.flame ? 0.8 : 2,
+            up: f.flame ? 2 : 1,
+            life: 0.4,
+            size: f.flame ? 0.12 : 0.07,
+            flame: f.flame,
+            halo: true,
+          })
+        }
         return false
       }
       let p = f.from.clone().lerp(f.to, k)
       p.y += Math.sin(k * Math.PI) * f.from.distanceTo(f.to) * 0.06
       f.mesh.position.copy(p)
-      f.mesh.lookAt(f.to)
-      f.mesh.rotation.z += now * 0.02
+      if (f.mesh.children.length == 1) f.mesh.lookAt(f.to)
+      else {
+        f.mesh.rotation.z = f.flame ? Math.sin(now * 0.014) * 0.25 : now * 0.002
+        if (now - f.trail > 70) {
+          glow.emit(p, f.flame ? 0xff9b35 : 0x9fd8ff, 2, {
+            speed: 0.3,
+            up: f.flame ? 1.2 : 0.2,
+            life: 0.35,
+            size: 0.055,
+            flame: f.flame,
+            halo: true,
+          })
+          f.trail = now
+        }
+      }
       return true
     })
   }
@@ -706,7 +756,15 @@ export let cast = (
       from: [number, number, number],
       to: [number, number, number],
       ms: number,
-    ) => fly(kind, new THREE.Vector3(...from), new THREE.Vector3(...to), ms),
+      flame = false,
+    ) =>
+      fly(
+        kind,
+        new THREE.Vector3(...from),
+        new THREE.Vector3(...to),
+        ms,
+        flame,
+      ),
     /** where someone's head is, for what floats up from them */
     headOf: (eid: string): THREE.Vector3 | null => {
       let a = actors.get(eid)

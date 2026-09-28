@@ -5,6 +5,7 @@
 // page's DOM and are placed over the scene every frame.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { halo } from './halo.ts'
 
 type Bit = {
   p: THREE.Vector3
@@ -14,6 +15,8 @@ type Bit = {
   size: number
   fall: number
   color: THREE.Color
+  halo: boolean
+  flame: boolean
 }
 
 /** A pool of little cubes: `lit` ones are shaded like the world, the others
@@ -40,11 +43,44 @@ export let bits = (scene: THREE.Scene, lit: boolean, most = 500) => {
   mesh.count = 0
   mesh.castShadow = false
   scene.add(mesh)
+  let flames = lit ? null : new THREE.InstancedMesh(
+    new THREE.ConeGeometry(0.5, 1, 5),
+    material,
+    Math.min(most, 80),
+  )
+  if (flames) {
+    flames.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    flames.setColorAt(0, new THREE.Color(0xffffff))
+    flames.frustumCulled = false
+    flames.count = 0
+    scene.add(flames)
+  }
+  let halos = lit ? null : new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshBasicMaterial({
+      map: halo(),
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    }),
+    Math.min(most, 64),
+  )
+  if (halos) {
+    halos.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    halos.setColorAt(0, new THREE.Color(0xffffff))
+    halos.frustumCulled = false
+    halos.count = 0
+    scene.add(halos)
+  }
   let live: Bit[] = []
   let m = new THREE.Matrix4()
   let q = new THREE.Quaternion()
   let s = new THREE.Vector3()
   let spin = new THREE.Euler()
+  let tint = new THREE.Color()
   return {
     /** `n` bits from `at`, flung up to `speed` metres a second */
     emit: (
@@ -57,45 +93,105 @@ export let bits = (scene: THREE.Scene, lit: boolean, most = 500) => {
         life?: number
         size?: number
         fall?: number
+        halo?: boolean
+        flame?: boolean
       } = {},
     ) => {
       let c = new THREE.Color(color)
       for (let i = 0; i < n; i++) {
         if (live.length >= most) live.shift()
         let a = Math.random() * Math.PI * 2,
-          sp = (o.speed ?? 3) * (0.4 + Math.random() * 0.6)
+          sp = (o.speed ?? 3) * (0.4 + Math.random() * 0.6),
+          flame = !!o.flame
+        let p = at.clone()
+        if (flame) {
+          p.add(
+            new THREE.Vector3(
+              Math.cos(a) * Math.random() * 0.18,
+              0,
+              Math.sin(a) * Math.random() * 0.18,
+            ),
+          )
+        }
         live.push({
-          p: at.clone(),
+          p,
           v: new THREE.Vector3(
-            Math.cos(a) * sp,
-            (o.up ?? 3) * (0.5 + Math.random()),
-            Math.sin(a) * sp,
+            Math.cos(a) * sp * (flame ? 0.15 : 1),
+            (o.up ?? 3) *
+              (flame ? 0.8 + Math.random() * 0.6 : 0.5 + Math.random()),
+            Math.sin(a) * sp * (flame ? 0.15 : 1),
           ),
           born: performance.now(),
           life: (o.life ?? 0.7) * (0.7 + Math.random() * 0.6),
           size: (o.size ?? 0.12) * (0.7 + Math.random() * 0.6),
-          fall: o.fall ?? 12,
-          color: c.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.12),
+          fall: o.fall ?? (flame ? -0.4 : 12),
+          color: flame
+            ? new THREE.Color(
+              i % 3 == 0 ? 0xffe28a : i % 3 == 1 ? 0xffa334 : 0xff5525,
+            )
+            : c.clone().offsetHSL(0, 0, (Math.random() - 0.5) * 0.12),
+          halo: !!o.halo || (flame && i % 3 == 0),
+          flame,
         })
       }
     },
-    tick: (dt: number) => {
+    tick: (dt: number, camera?: THREE.Camera) => {
       let t = performance.now()
       live = live.filter((b) => (t - b.born) / 1000 < b.life)
-      live.forEach((b, i) => {
+      let cubes = 0, tongues = 0
+      for (let i = live.length - 1; i >= 0; i--) {
+        let b = live[i]
         b.v.y -= b.fall * dt
         b.p.addScaledVector(b.v, dt)
         let k = 1 - (t - b.born) / 1000 / b.life
-        spin.set(b.born % 7 + t * 0.003, b.born % 5 + t * 0.002, 0)
+        spin.set(
+          b.flame ? 0 : b.born % 7 + t * 0.003,
+          b.flame ? 0 : b.born % 5 + t * 0.002,
+          b.flame ? Math.sin(t * 0.012 + b.born) * 0.2 : 0,
+        )
         q.setFromEuler(spin)
-        s.setScalar(b.size * Math.min(1, k * 2.5))
+        let fade = Math.min(1, k * 2.5)
+        s.setScalar(b.size * fade)
+        if (b.flame) s.y *= 2.8
         m.compose(b.p, q, s)
-        mesh.setMatrixAt(i, m)
-        mesh.setColorAt(i, b.color)
-      })
-      mesh.count = live.length
+        if (b.flame) {
+          if (flames && tongues < flames.instanceMatrix.count) {
+            flames.setMatrixAt(tongues, m)
+            flames.setColorAt(tongues++, b.color)
+          }
+        } else {
+          mesh.setMatrixAt(cubes, m)
+          mesh.setColorAt(cubes++, b.color)
+        }
+      }
+      mesh.count = cubes
       mesh.instanceMatrix.needsUpdate = true
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      if (flames) {
+        flames.count = tongues
+        flames.instanceMatrix.needsUpdate = true
+        if (flames.instanceColor) flames.instanceColor.needsUpdate = true
+      }
+      if (halos) {
+        let shown = 0
+        q.copy(camera?.quaternion ?? mesh.quaternion)
+        for (
+          let i = live.length - 1;
+          i >= 0 && shown < halos.instanceMatrix.count;
+          i--
+        ) {
+          let b = live[i]
+          if (!b.halo) continue
+          let k = 1 - (t - b.born) / 1000 / b.life
+          s.setScalar(b.size * (b.flame ? 5 : 4) * Math.min(1, k * 2.5))
+          m.compose(b.p, q, s)
+          halos.setMatrixAt(shown, m)
+          halos.setColorAt(shown++, tint.copy(b.color).multiplyScalar(k))
+        }
+        halos.count = shown
+        halos.instanceMatrix.needsUpdate = true
+        if (halos.instanceColor) halos.instanceColor.needsUpdate = true
+      }
     },
   }
 }
