@@ -40,12 +40,14 @@ export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/
 # BOUNDED, or it is not a backup but an outage. At 3.3 GB one run took over an
 # hour, the cron stacked the next on top, the dump and its verify copy filled
 # the disk, and the server died under the I/O. So the whole run re-execs itself
-# under a hard timeout (15 min; TERM, then KILL 30s later), and every temp file
-# it makes belongs to that run. Interrupted SQLite files stay together in
-# their private directory; a later run never replaces their main file while
+# under a hard timeout (30 min; TERM, then KILL 30s later). The restore proof
+# alone needs about 13 min for 177 SQL shards at the measured 14 shards/min;
+# snapshot, dump, commit and push need time too. Every temp file belongs to
+# that run. Interrupted SQLite files stay together in their private directory;
+# a later run never replaces their main file while
 # an old subprocess or recovery journal may still need it.
 if [ -z "${YAK_BACKUP_BOUND:-}" ]; then
-  YAK_BACKUP_BOUND=1 exec timeout -k 30 "${YAK_BACKUP_TIMEOUT:-900}" "$0" "$@"
+  YAK_BACKUP_BOUND=1 exec timeout -k 30 "${YAK_BACKUP_TIMEOUT:-1800}" "$0" "$@"
 fi
 
 data="${YAK_DATA:-$HOME/.yak}"
@@ -389,7 +391,7 @@ echo "backup: committed $n entities"
 # No `git gc` here. A backup is snapshot, dump, restore-proof, commit, push —
 # packing is repo maintenance, and on this history (5+ GB) a full gc runs past
 # any sane backup timeout: measured, the commit and push finished in under 3
-# minutes and gc then ran 12 more before the 15-minute bound killed it. Pack
+# minutes and gc then ran 12 more before the old 15-minute bound killed it. Pack
 # from the separate weekly cron line (`git -C ~/.yak gc`), never in-line.
 # A gc killed mid-pack leaves a tmp_pack_* the size of the repo that git never
 # reclaims on its own; drop any older than two hours (a live gc is younger).
