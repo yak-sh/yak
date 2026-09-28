@@ -219,6 +219,7 @@ import {
   install,
   rebuild,
   recut,
+  requestIds,
   respelled,
   shed,
   unholed,
@@ -754,6 +755,7 @@ export class Store {
       // index is then rebuilt off the content it mirrors. Nothing to do the
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
+      requestIds(drive)
       for (let stmt of blobSchema()) drive.query(stmt)
       let unfit = install(drive, vocab, blobRead(vocab))
       for (let e of unfit) defect(e, { request: 'schema fit', store: name })

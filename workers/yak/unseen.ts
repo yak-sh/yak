@@ -146,7 +146,7 @@ export let exceptionOf = (broke: {
 }) => ({
   at: new Date().toISOString(),
   request: broke.request,
-  requestId: broke.requestId ?? null,
+  request_id: broke.requestId ?? null,
   version: broke.version ?? null,
   message: broke.message,
   stack: broke.stack ?? '',

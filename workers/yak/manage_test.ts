@@ -78,6 +78,8 @@ Deno.test('the dashboard is at the apex, whatever serves the space', async () =>
       '<!doctype html><h1>My manage app</h1>',
     ))
       .body?.cancel()
+    await agent.tool('app_deploy', { space: slug, app: 'site' })
+    await agent.tool('app_deploy', { space: slug, app: 'manage' })
 
     // The space's own address is its apps', all of it.
     let at = (path: string) =>

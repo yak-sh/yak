@@ -148,6 +148,7 @@ Deno.test('a space moves, and the subdomain it leaves points at it', async () =>
     let agent = connector(k, them.cookie)
     let box = client(k, 'ada46.yaks.app', 'cookbook', them.cookie)
     await box.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
+    await agent.tool('app_deploy', { space: 'ada46', app: 'cookbook' })
     let cake = crypto.randomUUID()
     await box.applied([{ entity: { eid: cake }, doc: { title: 'Lemon cake' } }])
     // A domain somebody else owns, aimed at the space by its eid.

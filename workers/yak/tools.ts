@@ -644,11 +644,11 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
 // Each answer is the document that store keeps (vocab.ts `meant`), keywords
 // and all: a home's manifest is written back whole when a sibling grows it,
 // and read as types alone it would come back with every `search` erased.
-let vocabs = async (ctx: Ctx, space: Space, app: App) => {
+let vocabs = async (ctx: Ctx, space: Space, app?: App) => {
   // A trashed app keeps its store for restoration, but it no longer homes
   // component names for apps that are serving in the space.
   let all = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
-  if (!all.some((a) => a.eid == app.eid)) all = [...all, app]
+  if (app && !all.some((a) => a.eid == app.eid)) all = [...all, app]
   let read = await Promise.all(all.map(async (one) => {
     let r = await appStore(ctx.env.STORE, space, one)('/vocab')
     if (!r.ok) {
@@ -671,19 +671,19 @@ let vocabs = async (ctx: Ctx, space: Space, app: App) => {
 // it is no home, so the space's own apps never write their rows into a store
 // whose code is a stranger's. Sandboxing it, or letting it out, moves its
 // words at its next release.
-let homesIn = async (ctx: Ctx, space: Space, app: App) => {
+let homesIn = async (ctx: Ctx, space: Space, slug: string, app?: App) => {
   let said = await vocabs(ctx, space, app)
-  let ours = said.get(app.slug)?.$defs ?? {}
+  let ours = said.get(slug)?.$defs ?? {}
   let homes: Homes = {}
-  if (sandboxed(app)) return { said, homes }
+  if (app && sandboxed(app)) return { said, homes }
   let walled = new Set(
     (await ctx.dir.apps(space)).filter(sandboxed).map((a) => a.slug),
   )
-  for (let [slug, doc] of said) {
-    if (slug == app.slug || walled.has(slug)) continue
+  for (let [at, doc] of said) {
+    if (at == slug || walled.has(at)) continue
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
       if (name in homes || name in ours) continue
-      homes[name] = { at: slug, props: schema.properties ?? {} }
+      homes[name] = { at, props: schema.properties ?? {} }
     }
   }
   return { said, homes }
@@ -807,7 +807,7 @@ let fits = async (
   source: string,
   file: string,
 ) => {
-  let { said, homes } = await homesIn(ctx, space, app)
+  let { said, homes } = await homesIn(ctx, space, app.slug, app)
   let split = homed(
     unsaid(appDoc(source, file), said.get(app.slug), file),
     homes,
@@ -901,7 +901,7 @@ let published = async (
   // One word, one home: a word another app in the space already declares is
   // that app's, so this release records a use of it instead of planting a
   // second table, and any property it adds grows the HOME's.
-  let { said, homes } = await homesIn(ctx, space, app)
+  let { said, homes } = await homesIn(ctx, space, app.slug, app)
   manifest = unsaid(
     appDoc(source ?? {}, vocabFile),
     said.get(app.slug),
@@ -4301,7 +4301,8 @@ let OURS: Row[] = [
         offer.app,
       )
       if (said.source != null) {
-        unsaid(appDoc(said.source, said.file), {}, said.file)
+        let { homes } = await homesIn(ctx, space, s)
+        homed(unsaid(appDoc(said.source, said.file), {}, said.file), homes)
       }
       // The app row, born the way app_new writes one — its own eid, so its own
       // handle and its own store — plus the pin that says where the code came

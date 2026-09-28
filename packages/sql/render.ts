@@ -357,7 +357,9 @@ let stmt = (s: Stmt, c: Ctx): string => {
           ? `add column ${column(s.add, lit(c))}`
           : 'drop' in s
           ? `drop column ${q(s.drop)}`
-          : `rename to ${q(s.rename)}`)
+          : typeof s.rename == 'string'
+          ? `rename to ${q(s.rename)}`
+          : `rename column ${q(s.rename.column)} to ${q(s.rename.to)}`)
     case 'drop':
       return `drop ${s.kind} ${s.ifExists ? 'if exists ' : ''}${q(s.name)}`
     case 'pragma':

@@ -46,6 +46,10 @@ Deno.test('a hostname finds its app, and only one app', async () => {
     )
     await owner.put('/menu.html', '<!doctype html><h1>The menu</h1>')
     await owner.put('/photo.png', 'not really a png')
+    await connector(k, cookie).tool('app_deploy', {
+      space: 'jeff9',
+      app: 'recipes',
+    })
 
     // The domain, written where the directory lives.
     let dir = meta(k)
@@ -100,6 +104,10 @@ Deno.test('a hostname finds its app, and only one app', async () => {
       ['/.well-known/apple-app-site-association', '{}'],
     ]
     for (let [path, said] of mine) await owner.put(path, said)
+    await connector(k, cookie).tool('app_deploy', {
+      space: 'jeff9',
+      app: 'recipes',
+    })
     for (let [path, said] of mine) {
       let r = await k.at('herbusiness101.com', path)
       assertEquals(r.status, 200, `${path} never reached the app`)
@@ -189,6 +197,8 @@ Deno.test('a domain on the space opens the space, apps and all', async () => {
     await front.put('/about.html', '<!doctype html><h1>Who we are</h1>')
     let box = client(k, 'jeff10.yaks.app', 'recipes', cookie)
     await box.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
+    await agent.tool('app_deploy', { space: 'jeff10', app: 'site' })
+    await agent.tool('app_deploy', { space: 'jeff10', app: 'recipes' })
 
     let dir = meta(k)
     await dir.apply([{

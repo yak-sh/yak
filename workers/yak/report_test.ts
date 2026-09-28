@@ -37,6 +37,7 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
       '<!doctype html><html><head><title>R</title>' +
         '</head><body><script>boom()</script></body></html>',
     )
+    await agent.tool('app_deploy', app)
     let page = await k.at('jeff59.yaks.app', '/recipes/')
     let html = await page.text()
     assertEquals(
@@ -58,6 +59,7 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
 
     // A page with no head and no body still gets it.
     await files.put('/bare.html', '<!doctype html><h1>bare</h1>')
+    await agent.tool('app_deploy', app)
     assertMatch(
       await (await k.at('jeff59.yaks.app', '/recipes/bare.html')).text(),
       /<h1>bare<\/h1>[\s\S]*report\.js/,
@@ -94,13 +96,16 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
     // something else.
     let list = await agent.answer('app_files', { ...app, op: 'list' })
     let told = list.text
-    assertMatch(told, /exception recipes: page \/recipes\/ — boom is not a/)
     assertMatch(
       told,
-      /exception recipes: csp-violation \/recipes\/ — script-src https:\/\/evil/,
+      /exception recipes v\d+: page \/recipes\/ — boom is not a/,
+    )
+    assertMatch(
+      told,
+      /exception recipes v\d+: csp-violation \/recipes\/ — script-src https:\/\/evil/,
     )
     assertEquals(
-      told.split(' exception recipes: ').length - 1,
+      told.match(/ exception recipes v\d+: /g)?.length ?? 0,
       2,
       'two, and only two',
     )
@@ -294,6 +299,7 @@ Deno.test('a page that dies on its first import says so', async () => {
         '<h1>Weather</h1><script type="module" src="app.js"></script>' +
         '</body></html>',
     )
+    await agent.tool('app_deploy', app)
     let page = await k.at('jeff62.yaks.app', '/weather/')
     assertMatch(await page.text(), /<script src="\/weather\/api\/report\.js">/)
     assertEquals((await k.at('jeff62.yaks.app', '/weather/app.js')).status, 404)
@@ -512,7 +518,7 @@ Deno.test("the platform's own break is ours, not the app's", async () => {
     assertEquals(ours.length, 1, `one break of ours: ${said}`)
     assertStringIncludes(said, 'GET acme64.yaks.app/shop/%E0%A4%A')
     assertEquals(
-      (ours[0].exception as { requestId: string }).requestId,
+      (ours[0].exception as { request_id: string }).request_id,
       requestId,
     )
     // No version: the code that broke is the platform's, and the meta store

@@ -117,7 +117,7 @@
           "stamped": true,
           "description": "what was being served when it threw"
         },
-        "requestId": {
+        "request_id": {
           "type": "string",
           "stamped": true,
           "description": "the id returned to the caller and tagged in Sentry"

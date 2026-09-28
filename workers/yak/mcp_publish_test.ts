@@ -689,6 +689,7 @@ Deno.test(
         title: 'Recipes',
       })
       await write('index.html', '<h1>Recipes</h1>')
+      await write('vocab.json', vocabFile({ recipe: { serves: num } }))
       await his.tool('app_deploy', { space: mine, app: 'recipes' })
       await his.tool('app_publish', {
         space: mine,
@@ -696,21 +697,30 @@ Deno.test(
         name: 'recipe-manifest',
         about: 'A recipe box',
       })
-      // A manifest nothing can accept — a word the platform already says.
-      // The refusal lands before the app row, so the space is as it was.
-      await write(
-        'vocab.json',
-        JSON.stringify({ $defs: { doc: { properties: { serves: num } } } }),
-      )
       let pantry = `pantry-${crypto.randomUUID().slice(0, 8)}`
       await his.tool('space_new', { slug: pantry, title: 'Pantry' })
+      await his.tool('app_new', {
+        space: pantry,
+        slug: 'shelf',
+        title: 'Shelf',
+      })
+      await his.tool('app_files', {
+        space: pantry,
+        app: 'shelf',
+        op: 'write',
+        path: 'vocab.json',
+        content: vocabFile({ recipe: { serves: txt } }),
+      })
+      await his.tool('app_deploy', { space: pantry, app: 'shelf' })
+      // A published manifest may be valid where it was made but conflict
+      // with a word homed in the space taking it. Refuse before making a copy.
       assertStringIncludes(
         (await assertRejects(
           () =>
             his.tool('app_install', { space: pantry, name: 'recipe-manifest' }),
           Error,
         )).message,
-        'the platform already says',
+        'recipe.serves is number here and text in shelf',
       )
       assertEquals(
         (await his.tool('app_list', { space: pantry })).includes('recipes'),

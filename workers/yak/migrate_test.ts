@@ -126,6 +126,51 @@ let run = (ctx: State, ...statements: Stmt[]) => {
   for (let s of statements) d.query(s)
 }
 
+Deno.test('a Store keeps exception request ids across the rename', async () => {
+  for (let partial of [false, true]) {
+    let ctx = state()
+    let before = newer(ctx, PLATFORM_STORE)
+    assertEquals(
+      (await before.apply([{
+        entity: { eid: ONE },
+        exception: { request_id: 'report-1' },
+      }])).status,
+      200,
+    )
+    if (partial) {
+      run(
+        ctx,
+        { t: 'alter table', table: 'exception', add: { name: 'requestId' } },
+        {
+          t: 'update',
+          table: 'exception',
+          set: { request_id: lit(null), requestId: lit('report-1') },
+        },
+      )
+    } else {
+      run(ctx, {
+        t: 'alter table',
+        table: 'exception',
+        rename: { column: 'request_id', to: 'requestId' },
+      })
+    }
+    keep(ctx, 'schema', 'older schema')
+    let [row] = await newer(ctx, PLATFORM_STORE).query('.exception')
+    assertEquals(
+      (row.exception as { request_id: string }).request_id,
+      'report-1',
+    )
+    let cols = db(ctx).query({
+      t: 'pragma',
+      name: 'table_info',
+      arg: 'exception',
+    })
+      .map((r) => r.name)
+    assertEquals(cols.includes('request_id'), true)
+    assertEquals(cols.includes('requestId'), false)
+  }
+})
+
 // ---- what the object remembers ---------------------------------------------
 
 // A store that last accepted the short type map remembers it that way. The

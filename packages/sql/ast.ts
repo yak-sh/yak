@@ -293,10 +293,14 @@ export type CreateTrigger = {
   body: Write[]
 }
 
-/** `alter table`: add a column, drop one, or rename the table. */
+/** `alter table`: add or drop a column, or rename a table or column. */
 export type Alter =
   & { t: 'alter table'; table: string }
-  & ({ add: Column } | { drop: string } | { rename: string })
+  & (
+    | { add: Column }
+    | { drop: string }
+    | { rename: string | { column: string; to: string } }
+  )
 
 export type Drop = {
   t: 'drop'
