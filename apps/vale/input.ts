@@ -6,8 +6,8 @@
 export type Intent = {
   /** right and forward axes, at most 1 long */
   move: [number, number]
-  /** horizontal turn and forward/back, in hero space */
-  steer?: [number, number]
+  /** turn in radians/second and forward/back, in hero space */
+  steer?: { turn: number; forward: number }
   jump: boolean
   strike: boolean
   /** the ability asked for, by its slot on the bar, 1 to 3, or 0 */
@@ -85,8 +85,12 @@ let AXES: Record<string, [number, number]> = {
   ArrowRight: [1, 0],
 }
 
+let TOUCH_TURN = 3
+let KEY_TURN = 6
+
 /** A/D and the arrow keys either strafe or steer the hero. Touch always
- * steers. The two axes are normalised together so diagonals are no faster.
+ * steers at its familiar rate; keys turn faster. The two axes are normalised
+ * together so diagonals are no faster.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -94,10 +98,10 @@ let AXES: Record<string, [number, number]> = {
  *   move: [-1, 0], steer: undefined,
  * })
  * assertEquals(movement(['KeyA'], false), {
- *   move: [-1, 0], steer: [-1, 0],
+ *   move: [-1, 0], steer: { turn: -6, forward: 0 },
  * })
  * assertEquals(movement([], true, [1, 0]), {
- *   move: [1, 0], steer: [1, 0],
+ *   move: [1, 0], steer: { turn: 3, forward: 0 },
  * })
  * ```
  */
@@ -116,7 +120,11 @@ export let movement = (
   if (len > 1) [x, y] = [x / len, y / len]
   return {
     move: [x, y],
-    steer: stick ?? (!strafe ? [x, y] : undefined),
+    steer: stick
+      ? { turn: stick[0] * TOUCH_TURN, forward: stick[1] }
+      : !strafe
+      ? { turn: x * KEY_TURN, forward: y }
+      : undefined,
   }
 }
 

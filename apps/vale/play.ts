@@ -849,8 +849,8 @@ export let game = (
         let [mx, my] = intent.move
         let push = intent.steer
           ? {
-            x: Math.sin(body.yaw) * intent.steer[1],
-            z: Math.cos(body.yaw) * intent.steer[1],
+            x: Math.sin(body.yaw) * intent.steer.forward,
+            z: Math.cos(body.yaw) * intent.steer.forward,
             jump: intent.jump,
           }
           : {
