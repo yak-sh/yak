@@ -46,14 +46,9 @@ body {
   color: #fff3db;
 }
 .BookPreview_Portrait {
-  display: grid;
-  place-items: center;
   width: 3.4rem;
   height: 3.4rem;
   border: 1px solid #9c8f70;
-  background: linear-gradient(145deg, #845d36, #344f32);
-  color: #e6d3a1;
-  font-size: 1.8rem;
 }
 .BookPreview_HeroBody {
   display: grid;
