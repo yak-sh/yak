@@ -237,19 +237,54 @@ let loose: Find = async (read, path) => {
 }
 
 let walk = (find: Find): Walk => async (read, entry) => {
+  type Node = {
+    at: string
+    bytes: Uint8Array<ArrayBuffer>
+    lex: Lexed | null
+  }
+  let load = async (path: string): Promise<Node | null> => {
+    let hit = await find(read, path)
+    if (!hit) return null
+    let [at, bytes] = hit
+    return {
+      at,
+      bytes,
+      lex: script(at) ? await lexed(at, new TextDecoder().decode(bytes)) : null,
+    }
+  }
+  let pending = [entry]
+  let queued = new Set(pending)
+  let loaded = new Map<string, PromiseSettledResult<Node | null>>()
+  while (pending.length) {
+    let batch = pending.splice(0, 16)
+    let results = await Promise.allSettled(batch.map(load))
+    for (let [i, result] of results.entries()) {
+      let path = batch[i]
+      loaded.set(path, result)
+      if (result.status != 'fulfilled' || !result.value?.lex) continue
+      let { at, lex } = result.value
+      for (let spec of lex.specifiers.filter(relative)) {
+        let next = resolved(at, spec)
+        if (queued.has(next)) continue
+        queued.add(next)
+        pending.push(next)
+      }
+    }
+  }
   let files = new Map<string, Uint8Array<ArrayBuffer>>()
   let named: string[] = []
   let started: [string, string][] = []
   let seen = new Set<string>()
-  let visit = async (path: string) => {
+  let visit = async (path: string): Promise<void> => {
     if (seen.has(path)) return
     seen.add(path)
-    let hit = await find(read, path)
-    if (!hit || files.has(hit[0])) return
-    let [at, bytes] = hit
+    let result = loaded.get(path)
+    if (result?.status == 'rejected') throw result.reason
+    let hit = result?.value
+    if (!hit || files.has(hit.at)) return
+    let { at, bytes, lex } = hit
     files.set(at, bytes)
-    if (!script(at)) return
-    let lex = await lexed(at, new TextDecoder().decode(bytes))
+    if (!lex) return
     for (let spec of lex.specifiers) {
       if (relative(spec)) await visit(resolved(at, spec))
       else if (!named.includes(spec)) named.push(spec)

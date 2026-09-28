@@ -30,6 +30,33 @@ let PAGE = (src: string) =>
   `<!doctype html><script type="module" src="${src}"></script>`
 let THREE = JSON.stringify({ dependencies: { three: '^0.180.0' } })
 
+Deno.test('a module graph reads siblings together and keeps import order', async () => {
+  let files: Record<string, string> = {
+    'main.ts': "import './a.ts'\nimport './b.ts'",
+    'a.ts': "import './shared.ts'\nimport 'alpha'",
+    'b.ts': "import './shared.ts'\nimport 'beta'",
+    'shared.ts': "import 'gamma'",
+  }
+  let active = 0
+  let peak = 0
+  let read = async (path: string) => {
+    active++
+    peak = Math.max(peak, active)
+    await new Promise<void>((done) => queueMicrotask(done))
+    active--
+    return path in files ? bytes(files[path]) : null
+  }
+  let found = await sources(read, 'main.ts')
+  assertEquals(peak > 1, true)
+  assertEquals([...found.files.keys()], [
+    'main.ts',
+    'a.ts',
+    'shared.ts',
+    'b.ts',
+  ])
+  assertEquals(found.named, ['gamma', 'alpha', 'beta'])
+})
+
 Deno.test('an app of plain modules compiles nothing', async () => {
   assertEquals(
     await planned({
