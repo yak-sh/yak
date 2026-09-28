@@ -57,7 +57,7 @@ Deno.test('a short command answers inline, with its output and its code', async 
 Deno.test('a command tail returns logical lines from packed output', async () => {
   let g = tracked()
   let said = await named(g).shell.run({
-    command: `perl -e 'print "x" x 70000; print "\\n\\nlast"'`,
+    command: `printf 'x%.0s' {1..70000}; printf '\\n\\nlast'`,
   })
   let [head, long, blank, last] = said.split('\n')
   assertMatch(head, /^process \S+ exited 0$/)
