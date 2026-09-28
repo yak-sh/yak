@@ -53,6 +53,19 @@
       },
       "description": "a comment on any entity; the doc component beside it holds the text"
     },
+    "cites": {
+      "component": true,
+      "type": "object",
+      "edge": true,
+      "reversed": "cited by",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "description": "the cited entity's content hash when this citation was verified"
+        }
+      },
+      "description": "this entity cites that one; its hash says whether the cited content still holds"
+    },
     "created": {
       "component": true,
       "type": "object",

@@ -2,19 +2,25 @@
 // is a function from its call to bundles: nothing here opens a store, and what
 // the answer lands as is the runner's, tested where the runner is.
 //
-// The cases that need Git each build a repository. The rest reach no
-// subprocess at all: a citation nobody has
-// checked, and a citation of an entity with no journal to read, are both
-// answered before Git is asked anything.
+// The cases that need Git each build a repository. A graph entity's content
+// is checked without a checkout or subprocess.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
+import { docDoc } from '@yaks/doc'
+import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { content, kernelDoc } from '@yaks/kernel'
+import { keyDoc, keyKeywords } from '@yaks/key'
+import { loadVocab } from '@yaks/vocab'
 import { gitDoc } from './comp.ts'
-import { git as vocab } from './testing.ts'
 import { runs } from './tools.ts'
 
 let tools = runs()
+let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, keyDoc, gitDoc], [
+  edgeKeywords,
+  keyKeywords,
+])
 
 // A call made from `cwd` (none, where it is empty), and a graph over a fixed
 // set of bundles: `read` answers the citations among them, and `get` answers
@@ -79,15 +85,28 @@ Deno.test('a citation nobody has checked is a warning naming the place it points
   assertEquals((answer[0].error as Bundle)?.code, 'warn')
 })
 
-Deno.test('a citation of an entity with no journal to read says so rather than passing', async () => {
+Deno.test('a citation of an entity reports changed content without a checkout', async () => {
+  let hash = content(vocab)(doc('design-1', 9))
   let bundles = [
     doc('doc-1', 1),
-    doc('design-1', 9),
-    cite('doc-1', 'design-1', { verified: { at: '2026-09-22T00:00:00Z' } }),
+    { ...doc('design-1', 9), doc: { title: 'changed' } },
+    cite('doc-1', 'design-1', {
+      verified: { at: '2026-09-22T00:00:00Z' },
+      cites: { hash },
+    }),
   ]
-  let said = body(await tools.cites_check!(...asked({}, bundles)))
-  assert(said.includes('no answer'), said)
-  assert(said.includes('journal'), said)
+  let answer = await tools.cites_check!(...asked({}, bundles, ''))
+  assert(body(answer).includes('cited content changed'), body(answer))
+  assertEquals((answer[0].error as Bundle)?.code, 'fail')
+})
+
+Deno.test('a citation of a removed entity is a failed check', async () => {
+  let answer = await tools.cites_check!(...asked({}, [
+    doc('doc-1', 1),
+    cite('doc-1', 'gone', { verified: {}, cites: { hash: 'old' } }),
+  ], ''))
+  assert(body(answer).includes('cited entity is gone'), body(answer))
+  assertEquals((answer[0].error as Bundle)?.code, 'fail')
 })
 
 Deno.test('a line range reads as a range, and a citation with no place named is the whole file', async () => {
@@ -145,11 +164,36 @@ Deno.test('verify refuses an id that cites nothing, before it asks git anything'
   )
 })
 
-Deno.test('neither tool runs where the graph stands in no checkout', async () => {
+Deno.test('a graph citation verifies without a checkout', async () => {
+  let bundles = [doc('doc-1', 1), doc('design-1', 9), cite('doc-1', 'design-1')]
+  let [written] = await tools.cites_verify!(
+    ...asked({ cite: 'cite-doc-1-design-1' }, bundles, ''),
+  )
+  assertEquals(written.cites, {
+    hash: content(vocab)(doc('design-1', 9)),
+  })
+  assertEquals(written.verified, {})
+  let checked = bundles.map((b) =>
+    b.entity.eid == written.entity.eid ? { ...b, ...written } : b
+  )
+  let answer = await tools.cites_check!(...asked({}, checked, ''))
+  assert(body(answer).includes('nothing to report'), body(answer))
+})
+
+Deno.test('verify refuses a symbol whose file is missing', async () => {
+  let bundles = [doc('doc-1', 1), {
+    entity: { eid: 'sym-1' },
+    symbol: { module: 'gone', name: 'open' },
+  }, cite('doc-1', 'sym-1')]
   await assertRejects(
-    () => Promise.resolve(tools.cites_check!(...asked({}, [], ''))),
+    () =>
+      Promise.resolve(
+        tools.cites_verify!(
+          ...asked({ cite: 'cite-doc-1-sym-1' }, bundles, ''),
+        ),
+      ),
     Error,
-    'nowhere in particular',
+    'has no file to check',
   )
 })
 

@@ -139,7 +139,8 @@ where `B` is a `file` entity for a place in code, a [@yaks/code](../code)
 `symbol` for a definition, and any entity at all otherwise.
 
 ```
-cites                      @yaks/edge relation: A refers to a place in B
+cites{hash?}               @yaks/kernel relation: A refers to B; a graph
+                           target's verified content hash
 revision{commit}           the commit it was last checked against
 lines{start, end}          the line range it names, when it names one
 quote{text}                what the citing side quoted
@@ -152,11 +153,12 @@ is cited by pointing at its `symbol` entity, which survives the file moving
 around it. Writing the same citation twice writes one entity, because an edge's
 id is derived from `from | cites | to` ([@yaks/edge](../edge)).
 
-Whether a citation is still current is never stored: it is derived from Git, by
-asking which commits after `revision.commit` touched the place the citation
-names. `verified` is the one thing that is stored, and only the act of checking
-writes it — editing either end of a citation leaves the mark where it was, so a
-typo fixed in a document cannot pass for a citation somebody checked.
+For a file or symbol, currentness is derived from Git by asking which commits
+after `revision.commit` touched the place the citation names. For any other
+entity, [@yaks/kernel](../kernel) compares its content with the hash recorded
+when the citation was verified. Server stamps do not affect that hash. Editing
+the cited content leaves the old mark and hash in place, so the citation reads
+moved until checked again.
 
 `@yaks/git/cites` derives that answer: `status(cite, file, { cwd })` reads the
 checkout at `cwd` and says one of
@@ -175,11 +177,9 @@ commit elsewhere in the same file is not reported. The commit is checked with
 `cat-file` first: one this checkout does not have — rebased away, or from
 another clone — reads `unknown`, never `current`.
 
-A citation of an entity rather than a file asks the same question of the
-journal: what changed about that entity after `verified.at`. That is the
-`changed` seam in `Ops`, which a host fills from [@yaks/journal](../journal)'s
-`entries`; without one, a citation of an entity reads `unknown` rather than
-guessing.
+A citation of an entity uses the kernel's `status(cite, target, vocab)` and
+needs no checkout or journal. An older verified edge without a content hash
+reads `unknown` until it is verified again.
 
 ## Checking and verifying citations
 
@@ -201,10 +201,10 @@ answer for are `warn`, and a run with nothing to report still answers. It
 enforces nothing: a document whose code moved is work somebody has to do, not a
 transaction to reject.
 
-`verify` writes `verified{}` and `revision{commit}` for the commit the checkout
-is on, in one transaction, as the caller. The mark is written empty because
-`at`, `by` and `via` are the graph's to stamp — so a citation records who
-checked it and when, and nothing else writes that.
+`verify` writes `verified{}` and, for a file or symbol, `revision{commit}` for
+the commit the checkout is on. For another entity it records `cites.hash` from
+the cited content. The mark is written empty because `at`, `by` and `via` are
+the graph's to stamp.
 
 Load the components beside the two packages whose mechanisms they use:
 
@@ -214,9 +214,13 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
+import { kernelDoc } from '@yaks/kernel'
 import { gitDoc } from '@yaks/git'
 
-let vocab = loadVocab([edgeDoc, keyDoc, gitDoc], [edgeKeywords, keyKeywords])
+let vocab = loadVocab([kernelDoc, edgeDoc, keyDoc, gitDoc], [
+  edgeKeywords,
+  keyKeywords,
+])
 let storage = ram(vocab)
 let g = graph({ storage, vocab, plugins: [edges(vocab), keys(vocab)] })
 ```

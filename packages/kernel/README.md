@@ -36,9 +36,8 @@ ordinary JSON. The package also implements a comment-creation tool.
   properties that @yaks/graph stamps rather than a caller. `by` is the entity
   that wrote it and `via` is what it was written through (a session, a client).
   `verified` says somebody checked the entity against what it claims and found
-  it holds; it is generic, so anything checkable carries it — a citation
-  ([@yaks/git](../git)) is one thing that does — and only the act of checking
-  writes it, never an edit to the entity.
+  it holds; a `cites` edge is one thing that carries it. Only the act of
+  checking writes it, never an edit to the entity.
 - the marks recording what was decided about something — `proposed`, `decided`
   (with a verdict of `approved` or `declined`), `quarantined` (an annotation for
   applications to exclude a readable record from guidance), and `redaction`,
@@ -47,13 +46,20 @@ ordinary JSON. The package also implements a comment-creation tool.
 - the things that attach to an entity — `comment{target}`, which points a remark
   at any entity at all (the text itself is the `doc{body}` on the same entity),
   `image{w, h}` and `favorite`.
-- eight relation tags: `about`, `delegates`, `reads`, `references`,
+- nine relation tags: `about`, `cites`, `delegates`, `reads`, `references`,
   `supersedes`, `supervises`, `wants` and `worked`. A link between two entities
   is itself an entity, carrying `edge{from, to}` plus one of these tags to say
   what the link means; see [@yaks/edge](../edge), which reads the `edge` keyword
   each of them declares. Other packages declare their own — `contains` and
   `requires` are [@yaks/task](../task)'s, `satisfies` is
   [@yaks/goal](../goal)'s.
+
+A `cites` edge keeps the cited entity's content hash in `cites.hash` when it is
+verified. `content(vocab)` hashes only client-written properties, so server
+stamps do not move it. `status(cite, target, vocab)` answers current, moved,
+unverified or unknown without a journal. `verify(cite, target, vocab)` returns
+the patch that records the hash and `verified` mark. [@yaks/git](../git) answers
+file and symbol citations from the commit and place they name.
 
 It also declares one tool, `comment_new`, implemented in `tools.ts`: it writes a
 new entity carrying `doc{body}` and `comment{target}`.
@@ -97,7 +103,8 @@ makes it one, and the core meta-model already has a keyword for that:
 `deno.json` names three, and a program imports only the ones it needs:
 
 - `@yaks/kernel` — `kernelDoc`, the `spineDoc` and `marksDoc` subsets,
-  `kernelKeywords` and `KERNEL_URI`. It does not re-export the tool factory.
+  `kernelKeywords`, `KERNEL_URI`, and the citation content, status and verify
+  functions. It does not re-export the tool factory.
 - `@yaks/kernel/vocab` — the vocabulary documents and keywords, and nothing
   else. It reaches no storage, no SQL and no runtime API, so a browser tab can
   load it on its own.

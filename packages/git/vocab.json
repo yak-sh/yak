@@ -237,14 +237,6 @@
       },
       "description": "a file in a repository, as an entity, so anything in the graph can refer to one; its entity id is derived from the path and the repository"
     },
-    "cites": {
-      "component": true,
-      "type": "object",
-      "edge": true,
-      "reversed": "cited by",
-      "properties": {},
-      "description": "edge tag: this entity refers to a place in that one, and can fall out of date when that place changes"
-    },
     "revision": {
       "component": true,
       "type": "object",
@@ -290,7 +282,7 @@
       "noun": "cites",
       "verb": "check",
       "title": "Check citations",
-      "description": "Report the citations that moved or were never checked. A citation is a link marked `cites`: one record refers to a place in another — a file in this checkout, named by a definition or a line range, or any other record. Whether it still holds is derived, never stored: for a file, which commits after its `revision.commit` touched that place; for a record, what changed about it after `verified.at`. One line per citation, with its state and what moved under it. A citation nobody has checked is reported as unverified, and one nothing could establish an answer for is reported as unknown rather than passing quietly. Scope it with `of` (only the citations one record makes) or `path` (only citations of one file). Reads the checkout this call runs in. Returns a report in content.body, with warning or failure findings when present; it writes nothing and enforces nothing.",
+      "description": "Report citations that moved or were never checked. A `cites` edge can point to a file or symbol in this checkout, or any other graph entity. For a file, Git answers which commits after `revision.commit` touched the named place. For another entity, its current content hash is compared with `cites.hash`, recorded when verified; this needs no journal or checkout. A citation nobody checked is unverified, and one without enough evidence is unknown. Scope with `of` (only citations one entity makes) or `path` (only citations of one file). Returns a report in content.body with warning or failure findings. It writes nothing and enforces nothing.",
       "input": {
         "of": {
           "type": "string",
@@ -314,7 +306,7 @@
       "noun": "cites",
       "verb": "verify",
       "title": "Verify a citation",
-      "description": "Record that a citation was checked and holds: write the `verified` mark and move its `revision` to the commit this checkout is on, in one transaction, as the caller. Takes the citation link itself, or a record, meaning every citation that record makes. Nothing else writes the mark, so editing either end of a citation leaves it where it was and the citation goes on reading unverified until somebody looks. Returns the citations as written.",
+      "description": "Record that a citation was checked and holds. For a file or symbol, write the `verified` mark and move its `revision` to this checkout's commit. For another entity, write the mark and its current content hash in `cites.hash`, without needing a checkout. Takes the citation edge itself, or an entity, meaning every citation it makes. Returns the citations as written.",
       "input": {
         "cite": {
           "type": "string",

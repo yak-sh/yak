@@ -5,8 +5,9 @@
  * an entity (`comment`, `image`, `favorite`), and the tags that give an edge
  * its meaning (`about`, `reads`, `references`, `supersedes`, …).
  *
- * It ships no code beyond a vocabulary document and the three keywords that
- * describe what the core meta-model does not (see {@link kernelKeywords}). The
+ * It ships the vocabulary, three keywords that describe what the core
+ * meta-model does not (see {@link kernelKeywords}), and the pure content hash
+ * and freshness answer for citations. The
  * `entity` row is the identity row every entity has; what is KEPT beside the
  * eid is each plugin's own — the archetype is @yaks/archetype's word and the
  * number a human id is built from is @yaks/id's.
@@ -19,3 +20,4 @@
  */
 export { KERNEL_URI, kernelKeywords } from './keywords.ts'
 export { kernelDoc, marksDoc, spineDoc } from './vocab.ts'
+export * from './cites.ts'

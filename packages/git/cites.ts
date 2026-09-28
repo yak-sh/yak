@@ -18,22 +18,20 @@
 // read as unknown rather than current: a citation that reads fresh on an
 // answer nothing could establish is worse than one that admits it cannot tell.
 //
-// For a citation of an entity rather than a file, the journal is the same
-// question asked of the graph: what changed about B after `verified.at`. This
-// module does not read the journal itself — a host that has one fills the
-// `changed` seam (@yaks/journal `entries`), and one that does not gets
-// `unknown`.
+// For an entity rather than a file, @yaks/kernel compares the content hash
+// kept when the citation was verified with the entity's content now.
 //
 // Nothing here writes: `cites verify` (./tools.ts) is the only thing that
 // writes the mark. It runs `git` as a subprocess, so like ./host.ts and
 // ./land.ts it stays out of ./mod.ts, which type-checks with only the web
 // platform in scope.
 
-import type { Bundle, Comp, Eid } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { CITES, type Status, status as entityStatus } from '@yaks/kernel'
+import type { Vocab } from '@yaks/vocab'
 import { type Run, run as git } from './land.ts'
 
-/** The relation tag on a citation: this entity refers to a place in that one. */
-export let CITES = 'cites'
+export { CITES }
 
 /** The component naming a file in a repository. (./tree.ts `FILE` is a tree
  * entry's mode, a different thing, which is why these names live here.) */
@@ -57,32 +55,16 @@ export let QUOTE = 'quote'
 export let VERIFIED = 'verified'
 
 /**
- * Where a citation stands. `changes` names what moved under it — the commits
- * that touched the cited place, or the transactions that changed the cited
- * entity — so a reader can go look at them.
+ * Where a citation stands. For a file, `changes` names the commits that
+ * touched the cited place.
  */
-export type Status =
-  | { state: 'current' }
-  | { state: 'moved'; changes: string[] }
-  | { state: 'unverified' }
-  | { state: 'unknown'; why: string }
+export type { Status }
 
-/**
- * What changed about a cited entity after a moment, as lines a reader can act
- * on. A host fills this from @yaks/journal; without it a citation of an entity
- * reads unknown, because nothing else in a graph records what moved.
- */
-export type Changed = (
-  target: Eid,
-  after: string,
-) => string[] | Promise<string[]>
-
-/** What deriving a status takes: the checkout to ask, how to run git (a test
- * answers without a repository), and the journal seam for entity targets. */
+/** The checkout for files, and the vocabulary for graph entities. */
 export type Ops = {
-  cwd: string
+  cwd?: string
   run?: Run
-  changed?: Changed
+  vocab: Vocab
 }
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
@@ -129,7 +111,16 @@ export let status = async (
   let mark = comp(cite, VERIFIED)
   if (!mark) return { state: 'unverified' }
   let path = text(comp(file, FILE)?.path)
-  if (!path) return await moved(to, text(mark.at), ops)
+  if (!path && comp(to, SYMBOL)) {
+    return { state: 'unknown', why: 'the cited symbol has no file to check' }
+  }
+  if (!path) return entityStatus(cite, to, ops.vocab)
+  if (!ops.cwd) {
+    return {
+      state: 'unknown',
+      why: 'this citation names a file, and no checkout was given',
+    }
+  }
 
   let commit = text(comp(cite, REVISION)?.commit)
   if (!commit) {
@@ -168,22 +159,5 @@ export let status = async (
   )
   if (!log.ok) return { state: 'unknown', why: why(log.err, 'git log failed') }
   let changes = lines(log.out)
-  return changes.length ? { state: 'moved', changes } : { state: 'current' }
-}
-
-// A citation of an entity: the journal, asked what moved after the mark.
-let moved = async (
-  to: Bundle,
-  at: string,
-  ops: Ops,
-): Promise<Status> => {
-  if (!ops.changed) {
-    return {
-      state: 'unknown',
-      why: 'this citation names an entity, and no journal was given to read',
-    }
-  }
-  if (!at) return { state: 'unknown', why: 'verified with no time' }
-  let changes = await ops.changed(to.entity.eid, at)
   return changes.length ? { state: 'moved', changes } : { state: 'current' }
 }

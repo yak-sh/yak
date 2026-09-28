@@ -8,7 +8,7 @@
 //   compat                  an @yaks/key kind: the same object's SHA-256 id
 //   ref{app, name, commit}  where one branch of one repository points
 //   file{path, repository}  a file in a repository, as an entity
-//   cites                   an @yaks/edge relation: a citation of a place
+//   cites                   @yaks/kernel's relation: a citation of a place
 //   revision{commit}        the commit a citation was last checked against
 //   lines{start, end}       the line range a citation names
 //   quote{text}             what the citing side quoted
@@ -39,16 +39,17 @@
 // and its objects in a store of their own, loads one document in each.
 //
 // A citation is an edge, and each fact about it is a component of its own on
-// that edge: `cites` says the link is a citation, `revision{commit}` says which
+// that edge: @yaks/kernel's `cites` says the link is a citation,
+// `revision{commit}` says which
 // commit it was last checked against, `lines{start, end}` narrows it to one
 // place in the cited file, and `quote{text}` keeps what was quoted. They are
 // separate because they are independent: a citation may name a line range or
 // not, and the commit moves under both. A definition is not a property here: it
 // is a @yaks/code `symbol` entity, and a citation of one points at it. Whether
-// a citation is still current is never stored — it is re-derived from Git, or
-// from the journal for a citation of an entity (./cites.ts) — and the one thing
-// that is stored is the kernel's `verified{at, by, via}` mark, written by the
-// act of checking. The cited file is an entity of its own, `file{path,
+// a citation is still current is derived from Git for a file, and from the
+// kernel's content hash for any other entity (./cites.ts). A verified citation
+// also carries the kernel's `verified{at, by, via}` mark, written by the act
+// of checking. The cited file is an entity of its own, `file{path,
 // repository}`, so a citation is an ordinary link between two entities rather
 // than a path property somewhere.
 //

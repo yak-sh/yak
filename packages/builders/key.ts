@@ -14,15 +14,8 @@
 // presence is the fact, so it counts. The vocabulary says which is which, so
 // this file names no component.
 
-import { type Bundle, type Comp, comps, type Eid, sha256 } from '@yaks/graph'
-import type { Vocab } from '@yaks/vocab'
-
-// A component's writable properties, in a fixed order, holding a value.
-let written = (c: Comp, props: string[]): Comp => {
-  let out: Comp = {}
-  for (let p of props.toSorted()) if (c[p] != null) out[p] = c[p]
-  return out
-}
+import { type Eid, sha256 } from '@yaks/graph'
+import { content } from '@yaks/kernel'
 
 /**
  * The content hash of an entity: SHA-256 over its client-written properties, in a
@@ -34,17 +27,7 @@ let written = (c: Comp, props: string[]): Comp => {
  * // let hash = content(vocab)(await g.get(eid))
  * ```
  */
-export let content = (vocab: Vocab) => (b: Bundle): string => {
-  let kept: [string, Comp][] = []
-  for (let [name, c] of comps(b)) {
-    let info = vocab.comp(name)
-    if (!c || !info?.wire) continue
-    if (!info.writable.length && info.stamped.length) continue
-    kept.push([name, written(c, info.writable)])
-  }
-  kept.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
-  return sha256(JSON.stringify(kept))
-}
+export { content }
 
 /** An input as a key reads it: its id, and the hash of its content. */
 export type Input = [eid: Eid, hash: string]
