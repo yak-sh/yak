@@ -22,6 +22,15 @@
       "description": "A hero belonging to the person who made it, as the row's created stamp says. Their appearance lives in look rows; everything else they earn lives in rows of its own.",
       "properties": {}
     },
+    "invulnerable": {
+      "component": true,
+      "type": "object",
+      "floor": "owner",
+      "description": "Whether this hero ignores damage. Only the app owner may change it.",
+      "properties": {
+        "on": { "type": "boolean" }
+      }
+    },
     "look": {
       "component": true,
       "type": "object",
@@ -628,6 +637,19 @@
         "since": { "type": "number" },
         "status": { "type": "string" },
         "speed": { "type": "number" }
+      }
+    },
+    "health_mode": {
+      "tool": true,
+      "description": "Turn damage on or off for a Mossvale hero. Only the app owner may change a hero's health mode. Pass on: true to prevent damage, or false to restore ordinary combat.",
+      "input": {
+        "player": { "type": "string", "description": "The hero's eid." },
+        "on": { "type": "boolean" }
+      },
+      "required": ["player", "on"],
+      "apply": {
+        "entity": { "eid": "$player" },
+        "invulnerable": { "on": "$on" }
       }
     },
     "gather_wood": {
