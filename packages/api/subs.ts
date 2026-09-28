@@ -168,6 +168,38 @@ type Touch = Map<Eid, {
   born: boolean
 }>
 
+// A write matters when it changes what the query tests or sends. A whole-row
+// projection also observes every component of an entity already in its set.
+let notices = (sub: Sub, b: Bundle): boolean => {
+  if (sub.peer || !sub.reads || b.$delete) return true
+  if (sub.want === null && sub.members.has(b.entity.eid)) return true
+  let i = sub.reads
+  if (
+    b.created &&
+    (i.near.has('entity') || (!i.near.size && !i.own.length))
+  ) return true
+  return Object.keys(b).some((c) =>
+    c != 'entity' &&
+    (i.near.has(c) || i.far.has(c) || i.via.has(c))
+  )
+}
+
+// `get` is only for deciding changed entities' membership and filling their
+// frames. Read the union of what open queries test and project, unless one
+// query needs the entire row or a peer cache must retain it.
+let components = (subs: Sub[]): string[] | undefined => {
+  let names = new Set<string>()
+  for (let s of subs) {
+    if (s.peer || !s.reads || s.want === null) return undefined
+    for (let c of s.reads.near) names.add(c)
+    for (let c of s.reads.far) names.add(c)
+    for (let c of s.reads.via.keys()) names.add(c)
+    for (let c of s.want ?? []) names.add(c)
+  }
+  names.delete('entity')
+  return [...names]
+}
+
 let touches = (applied: Bundle[], now: Bundle[]): Touch => {
   let out: Touch = new Map()
   for (let b of now) {
@@ -204,12 +236,18 @@ let touches = (applied: Bundle[], now: Bundle[]): Touch => {
 // The answer's entities a write can have moved. `null` means that the query
 // must run whole: a far dependency has no owner, or a reference moved/deleted
 // and the old owner cannot be read after the commit.
-let affected = (sub: Sub, touch: Touch): Set<Eid> | null | undefined => {
+let affected = (
+  sub: Sub,
+  touch: Touch,
+  relevant: Set<Eid>,
+): Set<Eid> | null | undefined => {
   let i = sub.reads
   if (!i) return null
   let ids = new Set<Eid>()
   for (let [eid, t] of touch) {
+    if (!relevant.has(eid)) continue
     if (!t.worn) return null
+    if (t.born && !i.own.length && !i.near.size) return null
     if ([...i.far].some((c) => t.named.has(c) || t.worn!.has(c))) {
       return null
     }
@@ -464,15 +502,35 @@ export let subscriptions = (graph: Graph, opts: {
     }
     let queries = subs.filter((s) => !s.raw)
     for (let s of queries) if (s.peer) s.candidates = undefined
-    let touched = [...new Set(applied.map((b) => b.entity.eid))]
-    if (!queries.length && !touched.some((eid) => peerRows.has(eid))) return
+    let invalidated = new Set(
+      queries.filter((s) => opts.invalidate?.(s.query, applied)),
+    )
+    let noticedBy = new Map(queries.map((s) => [
+      s,
+      new Set(applied.filter((b) => notices(s, b)).map((b) => b.entity.eid)),
+    ]))
+    let relevant = new Set(
+      queries.filter((s) => invalidated.has(s) || noticedBy.get(s)!.size),
+    )
+    let touched = [
+      ...new Set(
+        applied.filter((b) =>
+          peerRows.has(b.entity.eid) || invalidated.size ||
+          [...noticedBy.values()].some((ids) => ids.has(b.entity.eid))
+        ).map((b) => b.entity.eid),
+      ),
+    ]
+    if (!relevant.size && !touched.length) return
     let reads = new Map<string, Bundle[] | Promise<Bundle[]>>()
     let load = (q: string) => {
       let got = reads.get(q)
       if (!got) reads.set(q, got = graph.read(q, { durable: true }))
       return got
     }
-    return then(graph.get(touched), (now) => {
+    let names = touched.some((eid) => peerRows.has(eid))
+      ? undefined
+      : components(queries)
+    return then(graph.get(touched, names), (now) => {
       let changed = new Map(now.map((b) => [b.entity.eid, b]))
       for (let eid of touched) {
         if (peerRows.has(eid)) peerRows.set(eid, changed.get(eid) ?? null)
@@ -490,7 +548,8 @@ export let subscriptions = (graph: Graph, opts: {
       return then(
         over(queries, (s) =>
           attempt(s, () => {
-            if (opts.invalidate?.(s.query, applied)) {
+            if (!relevant.has(s)) return
+            if (invalidated.has(s)) {
               return then(s.peer ? read(s) : load(s.query), (set) => {
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
@@ -502,9 +561,17 @@ export let subscriptions = (graph: Graph, opts: {
               })
             }
             if (s.routed && !s.reads?.via.size) {
-              return send(s, routing.get(s))
+              let moved = routing.get(s)
+              if (moved) {
+                let joined = new Set(moved.joined)
+                moved.bundles = moved.bundles.filter((b) =>
+                  joined.has(b.entity.eid) ||
+                  noticedBy.get(s)!.has(b.entity.eid)
+                )
+              }
+              return send(s, moved)
             }
-            let scope = affected(s, touch)
+            let scope = affected(s, touch, noticedBy.get(s)!)
             if (scope === undefined) return
             return push(s, scope ?? undefined, load)
           })),

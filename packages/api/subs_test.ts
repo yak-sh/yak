@@ -99,6 +99,16 @@ Deno.test('an aggregate is answered with its value, and again when it moves', ()
   assertEquals(take(), [])
 })
 
+Deno.test('a count without a component filter follows births and deaths', () => {
+  let graph = shop(), subs = subscriptions(graph), e = ear()
+  subs.open(e.to, 'all', '.count')
+  assertEquals(e.take(), [{ id: 'all', count: 0 }])
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  assertEquals(e.take(), [{ id: 'all', count: 1 }])
+  graph.apply([{ entity: { eid: 'b1' }, $delete: true }])
+  assertEquals(e.take(), [{ id: 'all', count: 0 }])
+})
+
 // `*` asks which components an answer carries, not which entities belong, so a
 // line wearing it subscribes exactly as the line without it does — incremental,
 // judged per bundle. Read as a text term instead, it matched nothing and the
@@ -390,6 +400,46 @@ Deno.test('a commit that touches nothing a query reads does not run it', () => {
 
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   assertEquals(take().map((f) => f.id), ['newest', 'n'])
+})
+
+Deno.test('an unrelated change to a member does not read or repeat its answer', () => {
+  let g = shop()
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    get: (
+      eids,
+      names,
+    ) => (reads.push(`get ${eids.join(',')} ${names?.join(',') ?? '*'}`),
+      g.get(eids, names)),
+    read: (q, opts) => (reads.push(`read ${q}`), g.read(q, opts)),
+  }
+  let subs = subscriptions(spy)
+  let e = ear()
+  subs.open(e.to, 'routed', '.book&.book.price<20')
+  subs.open(e.to, 'window', '.book&.book.price<20&.limit=1')
+  e.take()
+  reads = []
+
+  g.apply([{ entity: { eid: 'b1' }, doc: { title: 'A title' } }])
+  assertEquals(reads, [])
+  assertEquals(e.take(), [])
+
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 13 } }])
+  assertEquals(reads, [
+    'get b1 book',
+    'read .book&.book.price<20&.limit=1',
+  ])
+  assertEquals(e.take().map((f) => f.id), ['routed', 'window'])
+
+  subs.open(e.to, 'doc', '.book&?doc&.limit=1')
+  subs.open(e.to, 'whole', '.book&*&.limit=1')
+  e.take()
+  reads = []
+  g.apply([{ entity: { eid: 'b1' }, doc: { title: 'A new title' } }])
+  assertEquals(e.take().map((f) => f.id), ['doc', 'whole'])
+  assertEquals(reads.filter((r) => r.startsWith('read ')).length, 2)
 })
 
 Deno.test('a component a query holds out is not one its members wear', () => {
