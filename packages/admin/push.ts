@@ -26,7 +26,37 @@ export type Target = { app: string; space?: string; title?: string }
 export type Ask = (method: string, params?: unknown) => Promise<unknown>
 
 /** How long a push waits for a newly deployed answer contract to arrive. */
-export type PushOptions = { wait?: number; poll?: number }
+export type PushOptions = {
+  wait?: number
+  poll?: number
+  progress?: (done: number, total: number) => void
+}
+
+// An app_files write does per-file object-store and hashing work before its
+// MCP request can answer. Bound both parallel work and request bytes so a
+// directory with hundreds of files does not exhaust that request's deadline.
+let MAX_FILES = 16
+let MAX_BYTES = 256 * 1024
+
+let batches = (files: File[]): File[][] => {
+  let out: File[][] = []
+  let group: File[] = []
+  let bytes = 0
+  for (let f of files) {
+    let size = new TextEncoder().encode(JSON.stringify(f)).byteLength
+    if (
+      group.length && (group.length == MAX_FILES || bytes + size > MAX_BYTES)
+    ) {
+      out.push(group)
+      group = []
+      bytes = 0
+    }
+    group.push(f)
+    bytes += size
+  }
+  if (group.length) out.push(group)
+  return out
+}
 
 let utf8 = new TextDecoder('utf-8', { fatal: true })
 
@@ -142,7 +172,12 @@ export let push = async (
     )
     held = []
   }
-  await call(ask, 'app_files', { ...at, files })
+  let done = 0
+  for (let batch of batches(files)) {
+    await call(ask, 'app_files', { ...at, files: batch })
+    done += batch.length
+    opts.progress?.(done, files.length)
+  }
   let keep = new Set(files.map((f) => f.path))
   let gone = held.filter((p) => !keep.has(p))
   for (let path of gone) {

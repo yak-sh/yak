@@ -518,6 +518,8 @@ export let runs = (
         app: word(a, 'app') ?? dir.slice(dir.lastIndexOf('/') + 1),
         space: word(a, 'space'),
         title: word(a, 'title'),
+      }, {
+        progress: (done, total) => note(`uploaded ${done}/${total} files`),
       })
       return [said(call, lines)]
     }),

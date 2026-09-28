@@ -69,6 +69,83 @@ Deno.test('a push leaves the app holding exactly the directory, released once', 
   assertEquals(said[0], 'wrote 2 files, deleted old.js')
 })
 
+Deno.test('a large directory fits bounded calls before deletion and deploy', async () => {
+  let p = platform({ mail: held('old.js') })
+  let files = Array.from({ length: 40 }, (_, i) => ({
+    path: `part-${i}.js`,
+    content: 'x'.repeat(12_000),
+  }))
+  let calls: string[] = []
+  let ask: Ask = (method, params) => {
+    let { name, arguments: a } = params as { name: string; arguments: Args }
+    let op = a.files ? 'write' : String(a.op ?? name)
+    if (a.files) {
+      if (a.files.length > 20 || JSON.stringify(params).length > 270_000) {
+        throw new Error('app_files call too large')
+      }
+    }
+    calls.push(op)
+    return p.ask(method, params)
+  }
+  let progress: number[] = []
+  await push(ask, files, { app: 'mail' }, {
+    progress: (done) => progress.push(done),
+  })
+  assertEquals(p.held('mail'), files.map((f) => f.path).sort())
+  assertEquals(p.deployed, ['mail'])
+  assertEquals(calls.at(-2), 'delete')
+  assertEquals(calls.at(-1), 'app_deploy')
+  assertEquals(progress.at(-1), files.length)
+  assertEquals(progress.length > 1, true)
+})
+
+Deno.test('large files are split by request size', async () => {
+  let p = platform({ mail: held() })
+  let files = Array.from({ length: 3 }, (_, i) => ({
+    path: `large-${i}.js`,
+    content: 'x'.repeat(140_000),
+  }))
+  let calls = 0
+  let ask: Ask = (method, params) => {
+    let { arguments: a } = params as { arguments: Args }
+    if (a.files) {
+      calls++
+      if (JSON.stringify(params).length > 200_000) {
+        throw new Error('app_files call too large')
+      }
+    }
+    return p.ask(method, params)
+  }
+  await push(ask, files, { app: 'mail' })
+  assertEquals(p.held('mail'), files.map((f) => f.path))
+  assertEquals(p.deployed, ['mail'])
+  assertEquals(calls > 1, true)
+})
+
+Deno.test('an interrupted push can be run again before deletion or deploy', async () => {
+  let p = platform({ mail: held('old.js') })
+  let files = Array.from({ length: 40 }, (_, i) => file(`part-${i}.js`))
+  let writes = 0
+  let ask: Ask = async (method, params) => {
+    let { name, arguments: a } = params as { name: string; arguments: Args }
+    let answer = await p.ask(method, params)
+    if (name == 'app_files' && a.files && ++writes == 2) {
+      throw new Error('transport lost after write')
+    }
+    return answer
+  }
+  await assertRejects(
+    () => push(ask, files, { app: 'mail' }),
+    Error,
+    'transport lost after write',
+  )
+  assertEquals(p.held('mail').includes('old.js'), true)
+  assertEquals(p.deployed, [])
+  await push(p.ask, files, { app: 'mail' })
+  assertEquals(p.held('mail'), files.map((f) => f.path).sort())
+  assertEquals(p.deployed, ['mail'])
+})
+
 Deno.test('a list whose words carry more than the files still yields the files', async () => {
   let p = platform(
     { mail: held('index.html', 'old.js') },
