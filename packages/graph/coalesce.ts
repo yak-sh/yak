@@ -5,7 +5,10 @@ import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
 
 /** Accumulate unsent patches without re-reading the whole batch on each add. */
-export let coalescer = () => {
+export let coalescer = (): {
+  add: (bundles: Bundle[]) => void
+  read: () => Bundle[]
+} => {
   let clears = new Map<Eid, Bundle>()
   let values = new Map<Eid, Bundle>()
   let order = new Set<Eid>()
