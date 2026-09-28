@@ -1,7 +1,7 @@
 // What every land's props are made with: a model and a kind of prop, and the
 // few shapes more than one land builds from (a canopy, a heap of boulders).
 import type { Raised } from '../buildings/kit.ts'
-import { ball, type Vec, type Vox } from '../mesh.ts'
+import { ball, key, unkey, type Vec, type Vox } from '../mesh.ts'
 import { noise, stream } from '../rand.ts'
 import type { Craft } from '../trades.ts'
 
@@ -35,8 +35,32 @@ export type Kind = {
   foot?: number
   span?: [number, number]
   small?: boolean
+  /** Let the setting change surface cells, and refine at its finest edge. */
+  detail?: boolean
   glow?: { at: [number, number, number]; size: number; color?: number }
   aside?: boolean
+}
+
+/** Split each authored voxel without moving its faces or changing its seed. */
+export let refine = (m: Model, edge: number): Model => {
+  let n = Math.round(m.size / edge)
+  if (n == 1) return m
+  let vox: Vox = new Map()
+  for (let [k, color] of m.vox) {
+    let [x, y, z] = unkey(k)
+    for (let a = 0; a < n; a++) {
+      for (let b = 0; b < n; b++) {
+        for (let c = 0; c < n; c++) {
+          vox.set(key(x * n + a, y * n + b, z * n + c), color)
+        }
+      }
+    }
+  }
+  return {
+    vox,
+    size: edge,
+    at: m.at ?? [-m.size / 2, 0, -m.size / 2],
+  }
 }
 
 export let pickOf = <T>(r: () => number, xs: T[]) =>

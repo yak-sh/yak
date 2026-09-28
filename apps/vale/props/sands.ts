@@ -451,10 +451,10 @@ let colossus = (): Model => {
 }
 
 export let SANDS: Record<string, Kind> = {
-  palm: { make: palm(0x6e4a2e, 1), shapes: 5, girth: 0.4 },
-  datepalm: { make: palm(0xc8742a, 3), shapes: 5, girth: 0.4 },
+  palm: { make: palm(0x6e4a2e, 1), shapes: 5, girth: 0.4, detail: true },
+  datepalm: { make: palm(0xc8742a, 3), shapes: 5, girth: 0.4, detail: true },
   cactus: { make: cactus, shapes: 5, girth: 0.4 },
-  sandstone: { make: sandstone, shapes: 5, solid: true },
+  sandstone: { make: sandstone, shapes: 5, solid: true, detail: true },
   thornbush: { make: thornbush, shapes: 5 },
   adobe: { make: adobe, shapes: 4, foot: 4.5, span: [6.5, 5] },
   windpump: { make: windpump, girth: 1.2, foot: 1.5, span: [2.2, 2.2] },
@@ -466,7 +466,7 @@ export let SANDS: Record<string, Kind> = {
   buriedgate: { make: buriedgate, foot: 5 },
   arch: { make: arch, foot: 7 },
   hoodoo: { make: hoodoo, shapes: 5, girth: 1 },
-  cottonwood: { make: cottonwood, shapes: 4, girth: 0.5 },
+  cottonwood: { make: cottonwood, shapes: 4, girth: 0.5, detail: true },
   pyramid: { make: pyramid, foot: 10 },
   obelisk: { make: obelisk, shapes: 4, girth: 0.6 },
   mastaba: { make: mastaba, shapes: 3, foot: 4, span: [6, 4] },

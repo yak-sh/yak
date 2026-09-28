@@ -1,5 +1,6 @@
 // Worker-built geometry for natural resources, rebuilt one chunk at a time
-// when gathering changes their visible state.
+// when gathering changes their visible state. It uses the chunk's voxel edge
+// so a spent or rare resource has the same detail as its first mesh.
 import { cuboids } from './boxes.ts'
 import { LODES, naturalEid, nodeRarity } from './gather.ts'
 import { type Out, out, pack, type Packed, place } from './mesh.ts'
@@ -13,6 +14,7 @@ export type NatureState = Natural & { spent: boolean; rarity: Rarity }
 export type ChunkProps = {
   ci: number
   ck: number
+  voxel: number
   natural: Natural[]
   nature: Packed | null
   stood: Stood[]
@@ -29,6 +31,7 @@ export let natureMesh = (
   ci: number,
   ck: number,
   entries: NatureState[],
+  voxel: number,
 ): Packed | null => {
   if (!entries.length) return null
   let o: Out = out()
@@ -49,7 +52,7 @@ export let natureMesh = (
       )
       continue
     }
-    place(o, model(p.kind, p.seed, p.turn), [x, y, z])
+    place(o, model(p.kind, p.seed, p.turn, true, voxel), [x, y, z])
     if (rarity == 'common') continue
     let color = GRADES[rarity].light
     cuboids(o, [

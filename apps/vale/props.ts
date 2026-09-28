@@ -2,9 +2,9 @@
 // builds, the village, its buildings (buildings.ts), and the signpost at the
 // head of each road. Each kind is a row in its land's file under props/: a
 // small voxel model built by hand out of balls and boxes, and what a walker
-// makes of it. A model is meshed once per shape and turn and copied wherever
-// a level places one (terrain.ts `props`), and measured, so what a walker
-// bumps into or stands on is the size it is drawn (`bulk`).
+// makes of it. A model is meshed once per shape, turn and detail, then copied
+// wherever a level places one (terrain.ts `props`). Its authored shape is
+// measured for collision (`bulk`) at every visible detail.
 import { BUILDINGS } from './buildings.ts'
 import { type Glow, type Raised, spin, spun } from './buildings/kit.ts'
 import { light } from './buildings/light.ts'
@@ -14,7 +14,7 @@ import { DEEP } from './props/deep.ts'
 import { FIRE } from './props/fire.ts'
 import { FROST } from './props/frost.ts'
 import { HILLS } from './props/hills.ts'
-import type { Kind, Model } from './props/kit.ts'
+import { type Kind, type Model, refine } from './props/kit.ts'
 import { MARSH } from './props/marsh.ts'
 import { SANDS } from './props/sands.ts'
 import { VALE } from './props/vale.ts'
@@ -64,22 +64,54 @@ let shapeOf = (kind: string, seed: number) => {
 }
 let made = new Map<string, Model>()
 
+// Only the finest setting adds geometry. The visible cell follows every
+// setting, while the authored outline keeps placement and collision stable.
+let cellOf = (kind: string, m: Model, voxel: number) =>
+  KINDS[kind].detail && Number.isFinite(voxel) ? voxel : m.size
+let edgeOf = (m: Model, cell: number) =>
+  cell == 0.125 && m.size > cell ? m.size / 2 : m.size
+
 let meshed = new Map<string, Out>()
 let profiled = new Map<string, Profile>()
 
 /** The same model wherever its kind, shape, turn and detail are drawn. */
-export let modelKey = (kind: string, seed: number, turn = 0, near = true) =>
-  `${shapeOf(kind, seed).id}:${((turn % 4) + 4) % 4}${
+export let modelKey = (
+  kind: string,
+  seed: number,
+  turn = 0,
+  near = true,
+  voxel = Infinity,
+) => {
+  let s = shapeOf(kind, seed)
+  let cell = KINDS[kind].detail ? cellOf(kind, s.shape(), voxel) : null
+  return `${s.id}:${((turn % 4) + 4) % 4}${
     KINDS[kind].raise ? `:${near}` : ''
-  }`
+  }${cell != null ? `:${cell}` : ''}`
+}
 
 // Mesh once for drawing, or briefly to measure where its faces lie.
-let makeModel = (kind: string, seed: number, turn: number, near: boolean) => {
+let makeModel = (
+  kind: string,
+  seed: number,
+  turn: number,
+  near: boolean,
+  voxel: number,
+) => {
   let { shape } = shapeOf(kind, seed)
-  let { vox, size, at = [-size / 2, 0, -size / 2] } = shape()
+  let base = shape()
+  let cell = cellOf(kind, base, voxel)
+  let m = KINDS[kind].detail ? refine(base, edgeOf(base, cell)) : base
+  let { vox, size, at = [-size / 2, 0, -size / 2] } = m
   let raised = KINDS[kind].raise ? raisedOf(kind, seed) : null
   if (raised && !near) vox = raised.shell
-  let o = blob(out(), spun(vox, turn, 1 + (at[0] + at[2]) / size), size, at)
+  let o = blob(
+    out(),
+    spun(vox, turn, 1 + (at[0] + at[2]) / size),
+    size,
+    at,
+    0.22,
+    cell,
+  )
   if (raised?.glows.length) {
     let glows = raised.glows.map((g): Glow => {
       let [x, z] = spin(g.at[0], g.at[2], turn)
@@ -93,10 +125,16 @@ let makeModel = (kind: string, seed: number, turn: number, near: boolean) => {
 /** A prop's triangles, placed with the middle of its base at the origin and
  * turned `turn` quarter turns (a building faces its square). Buildings draw
  * their interiors only at the nearest detail. */
-export let model = (kind: string, seed: number, turn = 0, near = true): Out => {
-  let look = modelKey(kind, seed, turn, near)
+export let model = (
+  kind: string,
+  seed: number,
+  turn = 0,
+  near = true,
+  voxel = Infinity,
+): Out => {
+  let look = modelKey(kind, seed, turn, near, voxel)
   let o = meshed.get(look)
-  if (!o) meshed.set(look, o = makeModel(kind, seed, turn, near))
+  if (!o) meshed.set(look, o = makeModel(kind, seed, turn, near, voxel))
   return o
 }
 
@@ -106,11 +144,12 @@ export let modelProfile = (
   seed: number,
   turn = 0,
   near = true,
+  voxel = Infinity,
 ): Profile => {
-  let look = modelKey(kind, seed, turn, near)
+  let look = modelKey(kind, seed, turn, near, voxel)
   let p = profiled.get(look)
   if (!p) {
-    p = profileOf(meshed.get(look) ?? makeModel(kind, seed, turn, near))
+    p = profileOf(meshed.get(look) ?? makeModel(kind, seed, turn, near, voxel))
     profiled.set(look, p)
   }
   return p

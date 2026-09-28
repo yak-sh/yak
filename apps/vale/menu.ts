@@ -150,8 +150,9 @@ export let menu = (panel: Panel, o: Settings) => {
       `shift as the surface is sampled and rounded.</p>` +
       `<p class=Menu_VoxelNote data-voxel-cost${
         selected == 0.125 ? '' : ' hidden'
-      }>0.125 m makes about four times as much ground geometry as 0.25 m. ` +
-      `Loading can take several seconds and frame rate may drop.</p>` +
+      }>0.125 m makes about four times as much ground geometry as 0.25 m, ` +
+      `and nearby trees and rocks gain detail. Loading can take several ` +
+      `seconds and frame rate may drop.</p>` +
       `<button class="Btn Btn-go" data-do=voxel${
         selected == o.voxel.current ? ' disabled' : ''
       }>Apply and reload</button></div>`

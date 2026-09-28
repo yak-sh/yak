@@ -54,9 +54,31 @@ Deno.test('a natural resource changes shape when spent and shines when rare', ()
     prop: { kind: 'oak', x: 5, z: 7, seed: 1, natural: true },
     at: [5, 5, 7],
   }
-  let whole = natureMesh(0, 0, [{ ...entry, spent: false, rarity: 'common' }])!
-  let spent = natureMesh(0, 0, [{ ...entry, spent: true, rarity: 'common' }])!
-  let rare = natureMesh(0, 0, [{ ...entry, spent: false, rarity: 'rare' }])!
+  let whole = natureMesh(
+    0,
+    0,
+    [{ ...entry, spent: false, rarity: 'common' }],
+    0.25,
+  )!
+  let spent = natureMesh(
+    0,
+    0,
+    [{ ...entry, spent: true, rarity: 'common' }],
+    0.25,
+  )!
+  let rare = natureMesh(
+    0,
+    0,
+    [{ ...entry, spent: false, rarity: 'rare' }],
+    0.25,
+  )!
+  let finer = natureMesh(
+    0,
+    0,
+    [{ ...entry, spent: false, rarity: 'common' }],
+    0.125,
+  )!
   assert(whole.pos.length > spent.pos.length)
   assert(rare.pos.length > whole.pos.length)
+  assert(finer.pos.length > whole.pos.length)
 })

@@ -391,6 +391,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
         props: {
           ci: c.ci,
           ck: c.ck,
+          voxel: c.patch.voxel,
           natural: c.natural ?? [],
           nature: c.nature ?? null,
           stood: c.stood ?? [],

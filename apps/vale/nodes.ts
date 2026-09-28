@@ -585,6 +585,7 @@ export let nodes = (
               ? { ...entry, spent: n.spent, rarity: n.rarity }
               : baseline(entry)
           }),
+          chunk.voxel,
         )
         if (!packed) continue
         let mesh = new THREE.Mesh(geometry(packed), mat)

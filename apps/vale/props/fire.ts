@@ -254,8 +254,8 @@ let thornspire = (): Model => {
 }
 
 export let FIRE: Record<string, Kind> = {
-  cinder: { make: cinder, shapes: 5, solid: true },
-  basalt: { make: basalt, shapes: 5, solid: true },
+  cinder: { make: cinder, shapes: 5, solid: true, detail: true },
+  basalt: { make: basalt, shapes: 5, solid: true, detail: true },
   forgehouse: {
     make: forgehouse,
     shapes: 2,
@@ -264,7 +264,7 @@ export let FIRE: Record<string, Kind> = {
     glow: { at: [-1.25, 0.6, 2.4], size: 3.5, color: 0xff7a2a },
   },
   anvil: { make: anvil, girth: 1, foot: 1.2 },
-  chartree: { make: chartree, shapes: 5, girth: 0.5 },
+  chartree: { make: chartree, shapes: 5, girth: 0.5, detail: true },
   lavafall: {
     make: lavafall,
     foot: 3,

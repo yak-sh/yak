@@ -446,7 +446,8 @@ type Face = { u: number; v: number; color: number; rim: number; ao: number }
 /**
  * Mesh a voxel model into `o`: voxel `size`, placed with its origin at `at`.
  * Every exposed face is rounded along each edge that is convex; faces alike
- * in colour, rounding and shade merge into rectangles.
+ * in colour, rounding and shade merge into rectangles. `cell` controls the
+ * visible shade grid on those faces without changing their outline.
  */
 export let blob = (
   o: Out,
@@ -454,6 +455,7 @@ export let blob = (
   size: number,
   at: Vec = [0, 0, 0],
   round = 0.22,
+  cell = size,
 ) => {
   let solid = (p: Vec) => v.has(key(p[0], p[1], p[2]))
   // Faces by plane: axis, sign and depth.
@@ -570,7 +572,7 @@ export let blob = (
           [r.start, r.end, (r.across >> 2) & 1, (top.across >> 3) & 1],
           size * round,
           [r.ao & 3, (r.ao >> 2) & 3, (r.ao >> 4) & 3, (r.ao >> 6) & 3],
-          size,
+          cell,
           materialOf(r.color),
         )
       }

@@ -178,7 +178,7 @@ export let spacer = (grid: number) => {
 export let propAt = (v: Vale, p: Prop): Thing => {
   let own = partOf(
     [p.x, standAt(v, p), p.z],
-    modelProfile(p.kind, p.seed, p.turn),
+    modelProfile(p.kind, p.seed, p.turn, true, v.voxel),
     v.voxel,
   )
   let base = foundation(v, p)

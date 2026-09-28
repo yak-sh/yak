@@ -77,7 +77,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     let kind = KINDS[p.kind], tiny = kind.small
     if (tiny && !small) continue
     let y = standAt(v, p)
-    let mesh = tiny ? model(p.kind, p.seed, p.turn, small) : null
+    let mesh = tiny ? model(p.kind, p.seed, p.turn, small, v.voxel) : null
     let n = tiny
       ? smallSpace!(thingAt([p.x, y, p.z], [mesh!], v.voxel))
       : steps.get(p) ?? step(v, p)
@@ -91,11 +91,15 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
         at: [p.x + dx, y + dy, p.z + dz],
       })
     } else {
-      place(tiny ? bits : solid, mesh ?? model(p.kind, p.seed, p.turn, small), [
-        p.x - ox + dx,
-        y + dy,
-        p.z - oz + dz,
-      ])
+      place(
+        tiny ? bits : solid,
+        mesh ?? model(p.kind, p.seed, p.turn, small, v.voxel),
+        [
+          p.x - ox + dx,
+          y + dy,
+          p.z - oz + dz,
+        ],
+      )
     }
     let base = foundation(v, p)
     if (base) {
@@ -115,7 +119,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     small: bits.idx.length ? pack(bits) : null,
     buildings,
     natural,
-    nature: natureMesh(ci, ck, natural.map(baseline)),
+    nature: natureMesh(ci, ck, natural.map(baseline), v.voxel),
     stood,
     patch,
   }

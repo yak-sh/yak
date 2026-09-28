@@ -511,12 +511,12 @@ let bigpuff = (): Model => {
 
 export let MARSH: Record<string, Kind> = {
   reed: { make: reed, shapes: 6, small: true },
-  deadtree: { make: deadtree, shapes: 5, girth: 0.35 },
+  deadtree: { make: deadtree, shapes: 5, girth: 0.35, detail: true },
   goldreed: { make: goldreed, shapes: 6, small: true },
   eeltrap: { make: eeltrap, shapes: 3, small: true },
   stilthut: { make: stilthut, solid: true, foot: 3.5 },
   boardwalk: { make: boardwalk, foot: 1 },
-  swamptree: { make: swamptree, shapes: 5, girth: 0.6 },
+  swamptree: { make: swamptree, shapes: 5, girth: 0.6, detail: true },
   berrybush: { make: berrybush, shapes: 4, girth: 0.8 },
   oldcypress: { make: oldcypress, girth: 2.2, foot: 5 },
   cottongrass: { make: cottongrass, shapes: 5, small: true },
@@ -525,7 +525,7 @@ export let MARSH: Record<string, Kind> = {
   spoil: { make: spoil, shapes: 3, solid: true },
   belltower: { make: belltower, solid: true, foot: 3, span: [3, 3] },
   grave: { make: grave, shapes: 6, solid: true },
-  yew: { make: yew, shapes: 4, girth: 0.5 },
+  yew: { make: yew, shapes: 4, girth: 0.5, detail: true },
   crypt: { make: crypt, solid: true, foot: 2.5, span: [3, 2.5] },
   sphagnum: { make: sphagnum, shapes: 6, small: true },
   hut: { make: hut, solid: true, foot: 3, span: [4, 4] },

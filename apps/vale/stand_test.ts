@@ -33,21 +33,23 @@ Deno.test('adjacent crowns and a gathering node do not fight the ground or each 
 })
 
 Deno.test('prop spacing profiles follow their drawn faces', () => {
-  for (
-    let [kind, seed, turn] of [
-      ['oak', 1, 0],
-      ['rock', 3, 1],
-      ['hall.plaster', 2, 0],
-      ['hall.plaster', 2, 3],
-    ] as const
-  ) {
-    let p = { kind, x: 64.25, z: 64.25, seed, turn }
-    let v = flat(5, [], [p])
-    let at: [number, number, number] = [p.x, standAt(v, p), p.z]
-    assertEquals(
-      propAt(v, p)[0],
-      thingAt(at, [model(p.kind, p.seed, p.turn)], v.voxel)[0],
-    )
+  for (let voxel of [0.125, 0.25, 1]) {
+    for (
+      let [kind, seed, turn] of [
+        ['oak', 1, 0],
+        ['rock', 3, 1],
+        ['hall.plaster', 2, 0],
+        ['hall.plaster', 2, 3],
+      ] as const
+    ) {
+      let p = { kind, x: 64.25, z: 64.25, seed, turn }
+      let v = flat(5, [], [p], voxel)
+      let at: [number, number, number] = [p.x, standAt(v, p), p.z]
+      assertEquals(
+        propAt(v, p)[0],
+        thingAt(at, [model(p.kind, p.seed, p.turn, true, voxel)], v.voxel)[0],
+      )
+    }
   }
 })
 
