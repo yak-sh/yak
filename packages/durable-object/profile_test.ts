@@ -119,6 +119,24 @@ Deno.test('interleaved async invocations keep their own SQL costs', async () => 
   assertEquals(reports[0].total.rowsRead, 12)
 })
 
+Deno.test('a subscription keeps its scope after the socket handler returns', async () => {
+  let reports: Summary[] = []
+  let p = profile((summary) => reports.push(summary))
+  let resume!: () => void
+  let wait = new Promise<void>((resolve) => resume = resolve)
+  let finished!: Promise<void>
+  p.run('ws subscribe', () => {
+    finished = wait.then(() => {
+      p.observe({ shape: 'select "late"', rowsRead: 11, rowsWritten: 0 })
+    })
+  })
+  resume()
+  await finished
+  p.flush()
+  assertEquals(reports[0].operations[0].kind, 'ws subscribe')
+  assertEquals(reports[0].operations[0].total.rowsRead, 11)
+})
+
 Deno.test('many invocation labels and shapes remain bounded and fully counted', () => {
   let reports: Summary[] = []
   let p = profile((summary) => reports.push(summary))
