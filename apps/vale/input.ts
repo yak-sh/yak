@@ -111,10 +111,6 @@ export let listen = (
     number,
     { x: number; y: number; far: number; button: number; type: string }
   >()
-  let mouseDrags = new Set<number>()
-  let showCursor = () => {
-    if (!mouseDrags.size) stage.style.cursor = ''
-  }
 
   let base = document.createElement('div')
   base.className = 'Stick'
@@ -146,17 +142,11 @@ export let listen = (
     drags.clear()
     stick = null
     rest()
-    mouseDrags.clear()
-    showCursor()
   })
 
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
     stage.setPointerCapture(e.pointerId)
-    if (e.pointerType == 'mouse') {
-      mouseDrags.add(e.pointerId)
-      stage.style.cursor = 'none'
-    }
     if (e.pointerType == 'touch' && !stick && e.clientX < innerWidth * 0.45) {
       stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
       base.classList.remove('Stick-rest')
@@ -202,8 +192,6 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     drags.delete(e.pointerId)
-    mouseDrags.delete(e.pointerId)
-    showCursor()
     // A click that did not drag is a blow, or a dodge from the right
     // button; a tap on the right of a phone is a blow too, where the thumb
     // already is.
@@ -216,8 +204,6 @@ export let listen = (
   stage.addEventListener('pointercancel', up)
   stage.addEventListener('lostpointercapture', (e) => {
     drags.delete(e.pointerId)
-    mouseDrags.delete(e.pointerId)
-    showCursor()
     if (stick?.id == e.pointerId) {
       stick = null
       rest()
