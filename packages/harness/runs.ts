@@ -6,8 +6,8 @@
 // `session_new` and `session_send` write a line that asks a transcript for a
 // turn, and wait for the reply: the entry the transcript settles on. Neither
 // runs the transcript. The runner does, wherever the host's effects are
-// worked (./effects.ts): a box's `yak serve`, or the command's own duty thread
-// when nothing else holds that role. Drawing the reply is the caller's: a line
+// worked (./effects.ts): a box's `yak serve`, or another process explicitly
+// serving the effects role. Drawing the reply is the caller's: a line
 // on a command line, the harness itself under `--tui` (./view.ts).
 // `model_list` lists the OpenAI endpoint's catalog through the credential the
 // harness uses. A tool answers, it does not write to a terminal.

@@ -217,9 +217,12 @@ export type Model = ((req: Request) => Promise<Reply>) & {
  * it gave one, otherwise a name for the kind of failure. */
 export class ModelError extends Error {
   code: string
-  constructor(code: string, message = code) {
+  /** A provider can ask the runner to retry before its reply is visible. */
+  retry?: { after?: number }
+  constructor(code: string, message = code, retry?: { after?: number }) {
     super(message)
     this.name = 'ModelError'
     this.code = code
+    this.retry = retry
   }
 }

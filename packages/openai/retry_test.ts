@@ -95,6 +95,7 @@ Deno.test('three body-read failures become one ModelError, or a retry succeeds q
     } else {
       let error = await assertRejects(ask, ModelError, 'error reading a body')
       assertEquals(error.code, 'transport')
+      assertEquals(error.retry, { after: 0 })
     }
     assertEquals(calls, failures == 1 ? 2 : 3)
     assertEquals(pauses, failures == 1 ? [1000] : [1000, 4000])

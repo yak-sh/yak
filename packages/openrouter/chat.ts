@@ -17,6 +17,14 @@ let obj = (v: unknown): Data => isData(v) ? v : {}
 let str = (v: unknown) => typeof v == 'string' ? v : ''
 let list = (v: unknown): unknown[] => Array.isArray(v) ? v : []
 
+let retryAfter = (value: string | null) => {
+  if (!value) return 0
+  let ms = /^\d+(\.\d+)?$/.test(value)
+    ? Number(value) * 1000
+    : Date.parse(value) - Date.now()
+  return Number.isFinite(ms) ? Math.min(60_000, Math.max(0, ms)) : 0
+}
+
 let base64 = (bytes: Uint8Array) => {
   let parts: string[] = []
   for (let at = 0; at < bytes.length; at += 8192) {
@@ -150,7 +158,11 @@ export let chat = async (
       req.signal?.aborted || options.signal?.aborted ||
       (error instanceof Error && error.name == 'AbortError')
     ) throw error
-    throw new ModelError('transport', 'OpenRouter media connection failed')
+    throw new ModelError(
+      'transport',
+      'OpenRouter media connection failed',
+      { after: 0 },
+    )
   }
   if (!response.ok) {
     let fault = obj(await response.json().catch(() => undefined))
@@ -158,6 +170,9 @@ export let chat = async (
     throw new ModelError(
       str(error.code) || 'http_' + response.status,
       str(error.message).slice(0, 512) || 'OpenRouter media request failed',
+      response.status == 429 || response.status >= 500
+        ? { after: retryAfter(response.headers.get('retry-after')) }
+        : undefined,
     )
   }
   let id = '', model = req.model, text = '', chunks: string[] = []

@@ -457,6 +457,7 @@ Deno.test('responses names 429 limits after bounded retries without echoing secr
   // The body message rides into the fault message, redacted along the way.
   assertEquals(error.message, 'responses: HTTP 429 — [redacted]')
   assertEquals(error.code, 'rate_limit')
+  assertEquals(error.retry, { after: 2000 })
   assertEquals(error.limits, {
     'retry-after': '2',
     'x-ratelimit-remaining-requests': '0',

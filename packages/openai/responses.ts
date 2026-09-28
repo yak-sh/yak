@@ -255,7 +255,7 @@ let ask = (opts: Options) => {
         !(error instanceof ResponseError) ||
         error.code == 'invalid_request_error'
       ) throw error
-      throw new ModelError(error.code ?? error.kind, error.message)
+      throw new ModelError(error.code ?? error.kind, error.message, error.retry)
     }
   }
 }

@@ -60,6 +60,7 @@ export type ResponseResult = {
 export type ResponseFault = Error & {
   status?: number
   code?: string
+  retry?: { after: number }
   limits?: RateLimits
   evidence?: ResponseEvent[]
   items?: ResponseItem[]
@@ -189,6 +190,10 @@ export class ResponseError extends Error {
   constructor(public kind: string, message: string) {
     super(message)
     this.name = 'ResponseError'
+  }
+
+  get retry(): { after: number } | undefined {
+    return transient(this) ? { after: retryAfter(this) } : undefined
   }
 }
 

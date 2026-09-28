@@ -92,7 +92,11 @@ Deno.test('partial failure preserves text and does not automatically retry ambig
     model: (req) => {
       calls++
       req.onText?.({ index: 0, text: 'partial' })
-      return Promise.reject(new ModelError('network', 'connection lost'))
+      return Promise.reject(
+        new ModelError('network', 'connection lost', {
+          after: 0,
+        }),
+      )
     },
   })
   try {

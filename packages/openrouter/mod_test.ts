@@ -248,7 +248,7 @@ Deno.test('media connection faults are bounded without exposing credentials', as
     media: { store: artifactStore(memoryBlobs()) },
     fetch: () => Promise.reject(new Error('private-test-key')),
   })
-  await assertRejects(
+  let error = await assertRejects(
     () =>
       model({
         model: 'google/lyria-3-clip-preview',
@@ -259,4 +259,32 @@ Deno.test('media connection faults are bounded without exposing credentials', as
     Error,
     'OpenRouter media connection failed',
   )
+  assert(error instanceof ModelError)
+  assertEquals(error.retry, { after: 0 })
+})
+
+Deno.test('media HTTP failures tell the session which ones can retry', async () => {
+  for (let status of [400, 503]) {
+    let model = responses({
+      key: () => 'fake',
+      media: { store: artifactStore(memoryBlobs()) },
+      fetch: () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ error: { message: 'unavailable' } }),
+            { status },
+          ),
+        ),
+    })
+    let error = await assertRejects(() =>
+      model({
+        model: 'google/lyria-3-clip-preview',
+        modalities: ['text', 'audio'],
+        items: [{ kind: 'user', text: 'music' }],
+        tools: [],
+      })
+    )
+    assert(error instanceof ModelError)
+    assertEquals(error.retry, status == 503 ? { after: 0 } : undefined)
+  }
 })

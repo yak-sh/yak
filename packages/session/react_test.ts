@@ -515,6 +515,127 @@ Deno.test('errors retry to the bound, then the transcript is failed', async () =
   assertEquals(await kinds(g, ids.s), ['input', 'error', 'error', 'error'])
 })
 
+Deno.test('a transient model failure retries before a streaming reply is visible', async () => {
+  let g = world(), calls = 0, pauses: number[] = []
+  let model: Model = () => {
+    calls++
+    return calls < 3
+      ? Promise.reject(
+        new ModelError('transport', 'connection reset', {
+          after: 0,
+        }),
+      )
+      : Promise.resolve(says('r1', 'done'))
+  }
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      streaming: true,
+      mint,
+      pause: (ms) => {
+        pauses.push(ms)
+      },
+    }),
+    'settled',
+  )
+  assertEquals(calls, 3)
+  assertEquals(pauses, [1000, 4000])
+  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'output'])
+})
+
+Deno.test('exhausted transient failures explain the terminal outcome', async () => {
+  let g = world(), calls = 0
+  let model: Model = () => {
+    calls++
+    return Promise.reject(
+      new ModelError('http_503', 'provider unavailable', { after: 0 }),
+    )
+  }
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      streaming: true,
+      mint,
+      pause: () => {},
+    }),
+    'failed',
+  )
+  assertEquals(calls, 3)
+  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
+  let error = (await transcript(g, ids.s)).at(-1)!
+  assertEquals(
+    (error.content as Comp).body,
+    'Response interrupted: ModelError: Model request failed after 3 attempts (http_503): provider unavailable',
+  )
+})
+
+Deno.test('an exhausted nonstream request does not start another transcript ask', async () => {
+  let g = world(), calls = 0
+  let model: Model = () => {
+    calls++
+    return Promise.reject(
+      new ModelError('http_503', 'provider unavailable', { after: 0 }),
+    )
+  }
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      mint,
+      pause: () => {},
+    }),
+    'failed',
+  )
+  assertEquals(calls, 3)
+  assertEquals(await kinds(g, ids.s), ['input', 'error'])
+})
+
+Deno.test('stopping during model backoff starts no further attempt', async () => {
+  let g = world(), calls = 0, stop = new AbortController()
+  let model: Model = () => {
+    calls++
+    return Promise.reject(
+      new ModelError('transport', 'connection lost', { after: 0 }),
+    )
+  }
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      streaming: true,
+      mint,
+      stopping: stop.signal,
+      pause: () => stop.abort(),
+    }),
+    'failed',
+  )
+  assertEquals(calls, 1)
+})
+
+Deno.test('a permanent model refusal is not retried', async () => {
+  let g = world(), calls = 0
+  let model: Model = () => {
+    calls++
+    return Promise.reject(new ModelError('http_400', 'invalid request'))
+  }
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [],
+      streaming: true,
+      mint,
+    }),
+    'failed',
+  )
+  assertEquals(calls, 1)
+  assertEquals(
+    ((await transcript(g, ids.s)).at(-1)!.content as Comp).body,
+    'Response interrupted: ModelError: invalid request',
+  )
+})
+
 Deno.test('two tool calls in one reply are both answered before the next ask', async () => {
   let g = world()
   let { model, asked } = scripted([
