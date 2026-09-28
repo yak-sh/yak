@@ -45,6 +45,7 @@ import type { Held } from './rules.ts'
 import { HOME, LEVELS, type Spot } from './levels.ts'
 import { connect, type Hero, type Me } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
+import { FOES } from './soft.ts'
 import { recall, type Seen, sighting } from './seen.ts'
 import { formOf, SKILLS } from './skills.ts'
 import { within } from './solid.ts'
@@ -945,7 +946,17 @@ let loop = (t: number) => {
   feet.set(cam.x, cam.y, cam.z)
   let home = within(v, feet.x, feet.y, feet.z)
   aim(cam, camera, target, v, dt, home)
-  w.see(camera.position, feet, stature(BUILD), dt)
+  let foes = (last?.mobs ?? []).filter((m) => m.aim && !m.down && m.near < 8)
+    .sort((a, b) => a.near - b.near).slice(0, FOES).map((m) => {
+      let size = BEASTS[m.kind].size
+      return new THREE.Vector4(
+        m.body.x,
+        m.body.y + size * .55,
+        m.body.z,
+        Math.max(1.1, size * .85),
+      )
+    })
+  w.see(camera.position, feet, stature(BUILD), dt, foes)
   bounty.see(camera.position, feet, stature(BUILD))
   pins.see(camera.position, feet, stature(BUILD))
   sound.listen(camera, v, playing ? last : null, net.hero, dt)

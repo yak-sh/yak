@@ -72,6 +72,7 @@ export type World = {
     feet: THREE.Vector3,
     tall: number,
     dt?: number,
+    foes?: THREE.Vector4[],
   ) => void
   /** swing each door open while someone in `near` is near it */
   swing: (near: Vec[], dt: number) => void
@@ -540,8 +541,8 @@ export let world = (v: Vale, mesh: Mesher): World => {
     day: 0.4,
     pending: 0,
     chunks: [0, 0, 0],
-    see: (from, feet, tall, dt = 1 / 60) => {
-      sight(ground, from, feet, tall)
+    see: (from, feet, tall, dt = 1 / 60, foes = []) => {
+      sight(ground, from, feet, tall, foes)
       let want = cutaway(v, [feet.x, feet.y, feet.z], [from.x, from.y, from.z])
       for (let c of want) {
         let f = fades.get(c.b)

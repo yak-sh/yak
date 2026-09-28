@@ -21,13 +21,12 @@
 //   A flash. A creature or a player glows for a moment when struck.
 //
 //   A line of sight. The ground and what stands on it thin away where, as the
-//   camera sees them, they cover the hero, and right around the camera, so a
-//   tree or a toadstool in the way shows the hero through it (`see`). What
-//   the camera only looks down on, the ground before and below it, covers
-//   nothing and stays whole. It is a stipple, pixels left out in an even
-//   pattern, so nothing needs sorting. The roof and upper floors of a
-//   building the hero is in or behind thin away the same way, over a height
-//   within its box (`cut`).
+//   camera sees them, they cover the hero or nearby attackers, and right
+//   around the camera (`see`). The clearance is round but ends above the
+//   ground, so a tree in the way shows the fight without hollowing the land.
+//   It is a stipple, pixels left out in an even pattern, so nothing needs
+//   sorting. The roof and upper floors of a building the hero is in or behind
+//   thin away the same way, over a height within its box (`cut`).
 //
 //   No seams. A vertex is placed in the world before it is seen from the
 //   camera, never through the two at once, so where two chunks meet, the same
@@ -39,6 +38,8 @@ import type { Packed } from './mesh.ts'
 
 /** How many boxes a see-through material fades at once. */
 export let CUTS = 3
+/** The nearest attackers whose silhouettes the woods also leave clear. */
+export let FOES = 3
 
 /** A geometry over what a mesher wrote, packed (mesh.ts `pack`): the arrays
  * become the geometry's own, uncopied. */
@@ -130,6 +131,7 @@ varying float vWarmth;
 uniform vec3 seeFrom;
 uniform vec3 seeFeet;
 uniform float seeTall;
+uniform vec4 seeFoes[FOES];
 uniform vec4 cutLo[CUTS];
 uniform vec3 cutHi[CUTS];
 float edge(float flag, float d, float w) {
@@ -148,26 +150,37 @@ float bayer(vec2 p) {
 }
 `
 
-// What is left out: a pixel more than a metre before the hero whose ray from
-// the camera goes on to meet the hero's body, feet to head and a little
-// either side, where it crosses the upright plane through their middle; and
-// what is within 2 m of the camera, but not the ground a metre and more
-// below it.
+// A pixel's ray meets a disc at the subject's distance from the camera.
+// Keep the lower edge above the ground and the last metre before the subject
+// whole, so only the intervening woods thin away.
 let SIGHT = /* glsl */ `
 #ifdef SEE
-  float h = seeTall * .5;
-  vec3 sl = seeFeet + vec3(0., h, 0.) - seeFrom;
+  vec3 sl = seeFeet + vec3(0., seeTall * .5, 0.) - seeFrom;
   float sL = max(length(sl), 1e-3);
   vec3 ahead = sl / sL;
   float along = dot(vAt - seeFrom, ahead);
-  vec3 across = normalize(cross(ahead, vec3(0., 1., 0.)));
-  vec3 upward = cross(across, ahead);
+  vec3 upward = normalize(vec3(0., 1., 0.) - ahead * ahead.y);
   vec3 met = (vAt - seeFrom) * (sL / max(along, 1e-3)) - sl;
-  float side = abs(dot(met, across));
   float up = dot(met, upward);
-  float body = (1. - smoothstep(.55, .9, side)) *
-    smoothstep(-h - .35, -h - .1, up) * (1. - smoothstep(h + .1, h + .4, up));
+  float body = (1. - smoothstep(1.7, 2.4, length(met))) *
+    smoothstep(-seeTall * .5 - .35, -seeTall * .5 - .1, up);
   float thin = along > 0. && along < sL - 1. ? body : 0.;
+  for (int i = 0; i < FOES; i++) {
+    vec4 foe = seeFoes[i];
+    if (foe.w <= 0.) continue;
+    vec3 toFoe = foe.xyz - seeFrom;
+    float distanceToFoe = max(length(toFoe), 1e-3);
+    float alongFoe = dot(vAt - seeFrom, toFoe / distanceToFoe);
+    if (alongFoe <= 0. || alongFoe >= distanceToFoe - .5) continue;
+    vec3 metFoe = (vAt - seeFrom) *
+      (distanceToFoe / max(alongFoe, 1e-3)) - toFoe;
+    float upFoe = dot(metFoe,
+      normalize(vec3(0., 1., 0.) - toFoe *
+        (toFoe.y / (distanceToFoe * distanceToFoe))));
+    float clearFoe = (1. - smoothstep(foe.w * .7, foe.w, length(metFoe))) *
+      smoothstep(-foe.w * .8, -foe.w * .55, upFoe);
+    thin = max(thin, clearFoe);
+  }
   float near = 1. - smoothstep(1.2, 2., length(vAt - seeFrom));
   thin = max(thin, near * smoothstep(seeFrom.y - 1., seeFrom.y - .5, vAt.y));
   float gone = thin * .8;
@@ -270,11 +283,14 @@ export let soft = (
     seeFrom: { value: new THREE.Vector3() },
     seeFeet: { value: new THREE.Vector3() },
     seeTall: { value: 1 },
+    seeFoes: {
+      value: Array.from({ length: FOES }, () => new THREE.Vector4()),
+    },
     cutLo: { value: Array.from({ length: CUTS }, () => new THREE.Vector4()) },
     cutHi: { value: Array.from({ length: CUTS }, () => new THREE.Vector3()) },
   }
   m.userData.soft = uniforms
-  m.defines = { CUTS, ...opts.see ? { SEE: '' } : {} }
+  m.defines = { CUTS, FOES, ...opts.see ? { SEE: '' } : {} }
   m.onBeforeCompile = (s) => {
     Object.assign(s.uniforms, uniforms)
     s.vertexShader = s.vertexShader
@@ -313,18 +329,23 @@ export let soft = (
 }
 
 /** The sight a see-through material keeps clear: from the camera (`from`)
- * of the hero standing at `feet`, `tall` metres tall. */
+ * of the hero standing at `feet`, `tall` metres tall, and the nearest foes
+ * aiming at them. A foe's fourth coordinate is its clearance radius. */
 export let sight = (
   m: THREE.Material,
   from: THREE.Vector3,
   feet: THREE.Vector3,
   tall: number,
+  foes: THREE.Vector4[] = [],
 ) => {
   let u = m.userData.soft
   if (!u) return
   u.seeFrom.value.copy(from)
   u.seeFeet.value.copy(feet)
   u.seeTall.value = tall
+  u.seeFoes.value.forEach((at: THREE.Vector4, i: number) =>
+    foes[i] ? at.copy(foes[i]) : at.set(0, 0, 0, 0)
+  )
 }
 
 /** The boxes a see-through material fades, `lo` to `hi` in metres, each by
