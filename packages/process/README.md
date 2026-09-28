@@ -30,7 +30,9 @@ previous `exit` in the same transaction. An unsupervised process retains its
 same entity.
 
 Process output uses `content{body}` and `output{source}` from `@yaks/session`,
-where `source` is the process entity. The graph stores process state and output.
+where `source` is the process entity. Bodies are bounded near 64 KiB at newline
+boundaries, retain their newlines, and may contain several logical lines. One
+oversized logical line stays whole. The graph stores process state and output.
 Supervisor files are stored under `opts.dir`, then `$PROCESS_DIR`, then
 `$TASKS_HOME/processes`, then `~/.tasks/processes`. For tests, set `TASKS_HOME`
 instead of changing `HOME` so Deno can reuse its module cache. This changes

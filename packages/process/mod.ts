@@ -9,8 +9,9 @@
  * - `process{pid, command, cwd}` — a program running on this machine;
  *   `command` and `cwd` are present exactly when we launched it.
  * - `exit{code}` — it is over, and how. Absent means running.
- * - output is `content{body}` plus `output{source}` (@yaks/session), where
- *   `source` names the process.
+ * - output is bounded, newline-preserving `content{body}` plus
+ *   `output{source}` (@yaks/session); `source` names the process and one body
+ *   may carry several logical lines.
  *
  * The program doing the launching is one too: {@link started} and
  * {@link ended} return the components a process writes about itself on the way

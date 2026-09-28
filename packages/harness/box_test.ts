@@ -15,8 +15,8 @@ import { type Opts } from '@yaks/process'
 import { boxMachine } from './box.ts'
 import { machineTools } from './machine.ts'
 
-// The lines a process prints are `content` beside `output` (@yaks/tools), in
-// a graph that also knows sessions and models.
+// Process-output chunks are `content` beside `output` (@yaks/tools), in a graph
+// that also knows sessions and models.
 let vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
 let tracked = () =>
   graph({ storage: ram(vocab), vocab, plugins: [processes()] })
@@ -52,6 +52,37 @@ Deno.test('a short command answers inline, with its output and its code', async 
   let g = tracked()
   let said = await named(g).shell.run({ command: 'echo hi; exit 2' })
   assertMatch(said, /^process \S+ exited 2\nhi$/)
+})
+
+Deno.test('a command tail returns logical lines from packed output', async () => {
+  let g = tracked()
+  let said = await named(g).shell.run({
+    command: `perl -e 'print "x" x 70000; print "\\n\\nlast"'`,
+  })
+  let [head, long, blank, last] = said.split('\n')
+  assertMatch(head, /^process \S+ exited 0$/)
+  assertEquals(long, 'x'.repeat(70_000))
+  assertEquals(blank, '')
+  assertEquals(last, 'last')
+})
+
+Deno.test('a command tail reads existing line rows beside packed rows', async () => {
+  let g = tracked()
+  await g.apply([{ entity: { eid: 'run' }, process: {} }])
+  await g.apply([{
+    entity: { eid: 'old' },
+    content: { body: 'existing' },
+    output: { source: 'run' },
+  }, {
+    entity: { eid: 'packed' },
+    content: { body: 'new\n\nlast' },
+    output: { source: 'run' },
+  }])
+
+  assertEquals(
+    await boxMachine(g).tail('run', 4),
+    ['existing', 'new', '', 'last'],
+  )
 })
 
 Deno.test('a command that outlives its budget answers with the process, and stop ends it', async () => {

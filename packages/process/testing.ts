@@ -3,8 +3,7 @@
 // The store is @yaks/ram: a Map holding the bundles, with the same `apply()`
 // and the same query grammar as a database, so a test needs no file and no
 // schema. The vocabulary is this package's loaded beside @yaks/session's,
-// because the lines a process prints are stored as that package's `content`
-// component.
+// because process-output chunks use that package's `content` component.
 
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { type Graph, graph } from '@yaks/graph'

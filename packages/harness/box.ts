@@ -1,8 +1,8 @@
 // The box's machine: what @yaks/harness's machine tools (./machine.ts) run on
 // when the harness runs here. A command is a tracked process from the first
-// moment (`launch` writes the row before anything is waited on), its lines
-// arrive as `content{body}` plus `output{source}`, and its exit lands on the
-// same row as `exit{code}`.
+// moment (`launch` writes the row before anything is waited on), its raw output
+// arrives as bounded `content{body}` plus `output{source}`, and its exit lands
+// on the same row as `exit{code}`.
 //
 // `look` reads that row rather than a handle held in memory, so a process the
 // server launched before a restart behaves exactly like one it launched a
@@ -25,6 +25,12 @@ import type { Machine, Proc } from './machine.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
+
+let lines = (body: string) => {
+  let out = body.split('\n')
+  if (body.endsWith('\n')) out.pop()
+  return out
+}
 
 // Already gone is not a failure: the code watching the pid is recording it.
 let signal = (pid: number, sig: Deno.Signal) => {
@@ -83,7 +89,7 @@ export let boxMachine = (
     look,
     tail: async (eid, n) =>
       (await g.read(`.${OUTPUT}.source=${eid}&?${CONTENT}`))
-        .map((b) => String(comp(b, CONTENT)?.body ?? ''))
+        .flatMap((b) => lines(String(comp(b, CONTENT)?.body ?? '')))
         .slice(-n),
     kill: async (eid, sig) => {
       let pid = (await look(eid))?.pid

@@ -35,10 +35,10 @@
 // fresh pid beside a stale exit code. An unsupervised process keeps its `exit`
 // forever, and running the program again creates a new entity.
 //
-// Output is not declared here. A line a process printed is `content{body}` with
-// an `output{source}` naming the process — the same components @yaks/session
-// uses for a tool result and for a model's own text, so anything that can read
-// a transcript can read a process log.
+// Output is not declared here. A bounded chunk a process printed is
+// `content{body}` with an `output{source}` naming the process — the same
+// components @yaks/session uses for a tool result and for a model's own text.
+// Bodies retain newlines and may contain several logical lines.
 
 import type { Entity } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'

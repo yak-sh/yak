@@ -50,7 +50,7 @@ import {
 import type { Store } from './store.ts'
 
 // Components other packages declare, which a host composes beside this one:
-// each line a process prints is `content{body}` with an `output{source}`
+// each output chunk is `content{body}` with an `output{source}`
 // naming the process (@yaks/tools), and a `stop` on a service's entity
 // (@yaks/session) is the wish that it stop.
 let CONTENT = 'content'
@@ -71,7 +71,7 @@ export type Spec = {
 
 /** How the supervisor works, all optional. */
 export type Opts = {
-  /** import the child's output lines into the graph (default true); false
+  /** import the child's output chunks into the graph (default true); false
    * keeps only the files, for a caller that publishes its own bounded result */
   stream?: boolean
   /** where the pidfiles and output files live (default `$PROCESS_DIR`, else
@@ -440,7 +440,7 @@ let clear = (path: string) => {
 // One output file, read forward from wherever it already stands. Starting at
 // the end is what keeps a restart onto the same entity correct: the output
 // files are appended to across attempts (one service, one log), so reading
-// from byte 0 would import every earlier line a second time. Taking the size
+// from byte 0 would import every earlier byte a second time. Taking the size
 // before the child can write a byte makes the boundary exact. The decoder is
 // per-file and streaming, so a multi-byte character split across two reads
 // still decodes.
@@ -473,13 +473,34 @@ let sip = (t: Tail) => {
   }
 }
 
-// The complete lines this file has gained since the last read. `final` also
-// returns a last line the process never terminated with a newline.
-let lines = (t: Tail, final: boolean) => {
-  let parts = (t.rest + sip(t)).split('\n')
-  t.rest = final ? '' : parts.pop() ?? ''
-  if (final && parts.at(-1) === '') parts.pop()
-  return parts
+// Pack complete logical lines near this size. Newline boundaries are also the
+// semantic boundaries a reader needs, so one oversized line stays one row
+// rather than acquiring false line breaks from storage.
+let CHUNK_CHARS = 64 * 1024
+let chunks = (t: Tail, final: boolean) => {
+  let text = t.rest + sip(t) + (final ? t.dec.decode() : '')
+  let at = final ? text.length : text.lastIndexOf('\n') + 1
+  let ready = text.slice(0, at)
+  t.rest = text.slice(at)
+  let out: string[] = []
+  let body = ''
+  for (let start = 0; start < ready.length;) {
+    let newline = ready.indexOf('\n', start)
+    let end = newline < 0 ? ready.length : newline + 1
+    let line = ready.slice(start, end)
+    if (body && body.length + line.length > CHUNK_CHARS) {
+      out.push(body)
+      body = ''
+    }
+    body += line
+    if (body.length >= CHUNK_CHARS) {
+      out.push(body)
+      body = ''
+    }
+    start = end
+  }
+  if (body) out.push(body)
+  return out
 }
 
 let drain = async (
@@ -491,7 +512,7 @@ let drain = async (
 ) => {
   let bundles: Bundle[] = []
   for (let t of tails) {
-    for (let body of lines(t, final)) {
+    for (let body of chunks(t, final)) {
       bundles.push({
         entity: { eid: mint() },
         [CONTENT]: { body },

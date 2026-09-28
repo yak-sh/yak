@@ -26,7 +26,7 @@ for (let os of launchers) {
 
     let said = (await g.read(`.output.source=${run.eid}&*`))
       .map((b) => String(comp(b, 'content')?.body)).sort()
-    assertEquals(said, ['err', 'out'])
+    assertEquals(said, ['err\n', 'out\n'])
 
     let row = (await g.read(`.${PROCESS}&*`))[0]
     assertEquals(row.entity.eid, run.eid)
@@ -82,6 +82,22 @@ for (let os of launchers) {
     assertEquals(run.elapsed(), took)
   })
 }
+
+Deno.test('many lines keep their newlines in bounded output chunks', async () => {
+  let g = tracked()
+  let expected = 'line\n'.repeat(20_000) + '\nlast'
+  let run = await launch(store(g), {
+    command: 'perl',
+    args: ['-e', 'print "line\\n" x 20000; print "\\nlast"'],
+  }, { dir: dir(), poll: 5 })
+  assertEquals(await run.done, 0)
+
+  let bodies = (await g.read(`.output.source=${run.eid}&*`))
+    .map((b) => String(comp(b, 'content')?.body))
+  assertEquals(bodies.join(''), expected)
+  assert(bodies.length < 10, `${bodies.length} output rows`)
+  assert(bodies.every((body) => body.length <= 64 * 1024))
+})
 
 Deno.test('a machine with no launcher is refused before anything starts', async () => {
   let d = dir()
