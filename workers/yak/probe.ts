@@ -442,14 +442,17 @@ export let client = (
       body: JSON.stringify(body),
       headers,
     })
-  let applied = async (body: unknown) => {
+  type Envelope = {
+    ok: boolean
+    aliases: Record<string, string>
+    bundles: Bundle[]
+  }
+  let applied = async <T extends unknown[] | { entities: unknown[] }>(
+    body: T,
+  ): Promise<T extends unknown[] ? Bundle[] : Envelope> => {
     let r = await post(body)
     if (r.status != 200) throw new Error(`apply ${r.status}: ${await r.text()}`)
-    return (await r.json()) as {
-      ok: boolean
-      aliases: Record<string, string>
-      bundles: Bundle[]
-    }
+    return await r.json()
   }
   let put = (path: string, body: string, type?: string) =>
     k.at(host, `/${app}/api/files${path}`, {
