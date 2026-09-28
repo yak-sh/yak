@@ -416,7 +416,7 @@
       "kind": false,
       "floor": "person",
       "pace": "2s",
-      "description": "What a villager promised a hero out of what they hold, and for what: nothing, which is a gift, or things to bring and creatures to fell; or, naming no hero, a job pinned on their village's notice board, which the first hero to agree to it takes. The villager's model writes it (give, offer, post), as the person talking to them, and only a row that came through the villager's own turn counts (created.via, which the store stamps); the hero agrees to it and hands it in once what it asks is done, and only then does anything change hands. Whether it counts is the rules' (stock.ts): a villager promises only what they hold, a gift only a little and never their own things, a deal asks only what their land has and never gives much more than that is worth, and a board holds a few jobs, each villager's one at a time and rarely. What they hold is counted from these rows and the heroes' replies, in the order the store took them.",
+      "description": "What a villager promised a hero out of what they hold, and for what: nothing, which is a gift, or things to bring and creatures to fell; or a job pinned on their village's notice board, either made without naming a hero or pinned when the addressed hero declines, which the first hero to agree to it takes. The villager's model writes it (give, offer, post), as the person talking to them, and only a row that came through the villager's own turn counts (created.via, which the store stamps); the hero agrees to it and hands it in once what it asks is done, and only then does anything change hands. Whether it counts is the rules' (stock.ts): a villager promises only what they hold, a gift only a little and never their own things, a deal asks only what their land has and never gives much more than that is worth, and a board holds a few jobs, each villager's one at a time and rarely. What they hold is counted from these rows and the heroes' replies, in the order the store took them.",
       "properties": {
         "villager": {
           "type": "string",
@@ -459,6 +459,26 @@
           "type": "string",
           "description": "The hero."
         }
+      }
+    },
+    "declined": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "floor": "person",
+      "description": "A hero declining a villager's addressed offer of work. The offer becomes a job on the village notice board for the first hero to take, until the board job lapses. Only a reply by the person who made the offered hero counts.",
+      "properties": {
+        "deal": {
+          "type": "string",
+          "index": true,
+          "description": "The offered deal."
+        },
+        "villager": {
+          "type": "string",
+          "index": true,
+          "description": "The villager's row."
+        },
+        "player": { "type": "string", "description": "The hero who declined." }
       }
     },
     "handed": {

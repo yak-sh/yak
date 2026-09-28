@@ -271,3 +271,88 @@ Deno.test('a job nobody takes comes down, and what it set aside is free again', 
   assertEquals(tonics(60), [1])
   assertEquals(tonics(POSTED / MIN + 1), [2])
 })
+
+Deno.test('declining an addressed errand pins it, preserves stock, and lets another hero take it', () => {
+  let d = deal(0, '1 tonic', '6 tusk')
+  let declined = reply(d, 1, 'ada', 'declined')
+  let read = (replies: Reply[], now: number) =>
+    ledger(land('mossvale'), [d], replies, owner, now * MIN).get('wren')!
+  let offered = read([], 2)
+  assertEquals(offered.boarded.has(d.eid), false)
+  assertEquals(offered.post, null)
+  let pinned = read([declined], 2)
+  assertEquals(pinned.states.get(d.eid), 'open')
+  assertEquals(pinned.post, d.eid)
+  assertEquals(pinned.boarded.get(d.eid), MIN)
+  assertEquals(pinned.aside.get('tonic'), 1)
+  assertEquals(pinned.holds.get('tonic'), 1)
+  let taken = read([declined, { ...agree(d, 3, 'bob'), player: 'rook' }], 4)
+  assertEquals(taken.states.get(d.eid), 'taken')
+  assertEquals(taken.taker.get(d.eid), 'rook')
+  assertEquals(taken.since.get(d.eid), 3 * MIN)
+  assertEquals(read([declined], POSTED / MIN + 2).states.get(d.eid), 'gone')
+  assertEquals(read([declined], POSTED / MIN + 2).holds.get('tonic'), 2)
+})
+
+Deno.test('only the addressed hero can decline open work, and refusal cannot undo agreement', () => {
+  let d = deal(0, '1 tonic', '6 tusk')
+  let read = (replies: Reply[]) =>
+    ledger(land('mossvale'), [d], replies, owner, 4 * MIN).get('wren')!
+  let wrong = { ...reply(d, 1, 'bob', 'declined'), player: 'rook' }
+  assertEquals(read([wrong]).boarded.has(d.eid), false)
+  let declined = reply(d, 2, 'ada', 'declined')
+  assertEquals(read([agree(d, 1), declined]).states.get(d.eid), 'taken')
+  assertEquals(read([declined, agree(d, 3)]).states.get(d.eid), 'taken')
+  assertEquals(read([declined, agree(d, 3)]).taker.get(d.eid), 'hero')
+  // An unauthorized decline must not shorten a later, valid board posting.
+  assertEquals(
+    ledger(
+      land('mossvale'),
+      [d],
+      [wrong, declined],
+      owner,
+      POSTED + MIN + MIN / 2,
+    )
+      .get('wren')!.states.get(d.eid),
+    'open',
+  )
+})
+
+Deno.test('declining pins even when the board is full, taking down the oldest untaken job', () => {
+  let givers = [...land('mossvale').keys()]
+  let jobs = givers.slice(0, BOARD).map((v, i) =>
+    job(i, '1 tonic', '6 tusk', v)
+  )
+  let offered = deal(BOARD + 1, '1 tonic', '6 tusk')
+  let refusal = reply(offered, BOARD + 2, 'ada', 'declined')
+  let result = ledger(
+    land('mossvale'),
+    [...jobs, offered],
+    [refusal],
+    owner,
+    (BOARD + 3) * MIN,
+  )
+  assertEquals(result.get('wren')!.boarded.has(offered.eid), true)
+  assertEquals(result.get('wren')!.states.get(offered.eid), 'open')
+  assertEquals(result.get(jobs[0].villager)!.states.get(jobs[0].eid), 'gone')
+  assertEquals(result.get('wren')!.post, offered.eid)
+  assertEquals(result.get('wren')!.room, false)
+})
+
+Deno.test('a declined offer replaces this villager’s untaken board job', () => {
+  let old = job(0, '1 tonic', '6 tusk')
+  let proposed = deal(1, '1 tonic', '6 tusk', 'ada', 'hero')
+  let refused = reply(proposed, 2, 'ada', 'declined')
+  let books = ledger(
+    land('mossvale'),
+    [old, proposed],
+    [refused],
+    owner,
+    3 * MIN,
+  )
+  let b = books.get('wren')!
+  assertEquals(b.states.get(old.eid), 'gone')
+  assertEquals(b.states.get(proposed.eid), 'open')
+  assertEquals(b.post, proposed.eid)
+  assertEquals(b.room, false)
+})

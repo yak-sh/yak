@@ -340,12 +340,12 @@ export type Deal = {
 }
 
 /** A hero's reply to a deal, written by their page: they agreed to it, or
- * handed it in; who wrote it, and when. */
+ * handed it in, or declined it for the notice board; who wrote it, and when. */
 export type Reply = {
   eid: string
   deal: string
   player: string
-  did: 'agreed' | 'handed'
+  did: 'agreed' | 'handed' | 'declined'
   by: string
   at: number
 }
@@ -366,6 +366,7 @@ export type Book = {
   terms: Map<string, { give: Goods; take: Goods }>
   since: Map<string, number>
   taker: Map<string, string>
+  boarded: Map<string, number>
   why: Map<string, string>
   holds: Map<string, number>
   aside: Map<string, number>
@@ -386,7 +387,14 @@ export let BOARD = 3
 type Event =
   | { at: number; eid: string; deal: Deal }
   | { at: number; eid: string; reply: Reply }
-  | { at: number; eid: string; lapse: Deal; from: State; since?: number }
+  | {
+    at: number
+    eid: string
+    lapse: Deal
+    from: State
+    since?: number
+    board?: boolean
+  }
 
 let rank = (e: Event) =>
   'deal' in e ? 0 : 'reply' in e ? (e.reply.did == 'agreed' ? 1 : 2) : 3
@@ -428,8 +436,10 @@ type Stall = ReturnType<typeof stall>
  * the shelf. The hero's own person agrees to a deal, which then stands a
  * while, or hands it in, which passes what it gives over and takes what was
  * brought; the first hero to agree to a job takes it off the board, and it is
- * theirs to hand in. An offer nobody agreed to lapses soon, or gives way to a
- * newer one to the same hero, a job nobody took comes down in a day, and
+ * theirs to hand in. A hero can decline an addressed errand, pinning it on
+ * the board without freeing its stock; the first hero to agree takes it. An
+ * offer nobody agreed to lapses soon, or gives way to a newer one to the
+ * same hero, a job nobody took comes down a day after it was posted, and
  * what a deal set aside is free again once it is gone. `owner` names who made
  * a hero.
  */
@@ -462,12 +472,21 @@ export let ledger = (
   let terms = new Map<string, { give: Goods; take: Goods }>()
   let since = new Map<string, number>()
   let taker = new Map<string, string>()
+  // When an addressed offer was declined, it became a public board job.
+  let boarded = new Map<string, number>()
   let why = new Map<string, string>()
   // The jobs on the board that no hero has taken yet.
   let board = new Set<string>()
   let down = (st: Stall, d: Deal) => {
     board.delete(d.eid)
-    if (st.post == d.eid) st.post = null
+    if (st.post == d.eid) {
+      st.post = [...byEid.values()].find((other) =>
+        other.eid != d.eid && other.villager == d.villager &&
+        (states.get(other.eid) == 'open' && board.has(other.eid) ||
+          states.get(other.eid) == 'taken' &&
+            (!other.player || boarded.has(other.eid)))
+      )?.eid ?? null
+    }
   }
   let back = (st: Stall, d: Deal) => {
     states.set(d.eid, 'gone')
@@ -515,10 +534,19 @@ export let ledger = (
       eid: d.eid,
       lapse: d,
       from: 'open' as State,
+      board: false,
     })),
-    ...replies.flatMap((r) => {
+    ...replies.flatMap((r): Event[] => {
       let d = byEid.get(r.deal)
-      return d && r.did == 'agreed'
+      return d && r.did == 'declined'
+        ? [{
+          at: r.at + POSTED,
+          eid: d.eid,
+          lapse: d,
+          from: 'open' as State,
+          board: true,
+        }]
+        : d && r.did == 'agreed'
         ? [{
           at: r.at + LAST,
           eid: d.eid,
@@ -572,15 +600,38 @@ export let ledger = (
       let r = e.reply, state = states.get(d.eid)
       // Who the deal is with: the hero it names, whoever took it off the
       // board, or, while it is still there, whoever agrees to it.
-      let whose = d.player || taker.get(d.eid) ||
+      let whose = (boarded.has(d.eid) ? '' : d.player) || taker.get(d.eid) ||
         (r.did == 'agreed' ? r.player : '')
       if (r.player != whose || r.by != owner(whose)) continue
       let { give, take } = terms.get(d.eid) ?? { give: [], take: [] }
-      if (r.did == 'agreed') {
+      if (r.did == 'declined') {
+        // Only the person offered the still-open work can pin it. The
+        // villager's promised stock stays reserved for its first taker.
+        if (
+          state != 'open' || !d.player || !take.length ||
+          boarded.has(d.eid) || r.player != d.player
+        ) continue
+        // A refusal is a promised board posting, even if the board is
+        // full. Make room by taking down the oldest untaken job; never
+        // displace work a hero has already accepted.
+        if (st.post && board.has(st.post)) {
+          let old = byEid.get(st.post)
+          if (old) back(st, old)
+        }
+        if (board.size >= BOARD) {
+          let old = byEid.get(board.values().next().value!)
+          if (old) back(stalls.get(old.villager)!, old)
+        }
+        boarded.set(d.eid, r.at)
+        board.add(d.eid)
+        st.post = d.eid
+        st.posted = r.at
+        if (st.offered.get(d.player) == d.eid) st.offered.delete(d.player)
+      } else if (r.did == 'agreed') {
         if (state != 'open' || !take.length) continue
         states.set(d.eid, 'taken')
         since.set(d.eid, r.at)
-        if (!d.player) {
+        if (!d.player || boarded.has(d.eid)) {
           taker.set(d.eid, r.player)
           board.delete(d.eid)
         }
@@ -594,6 +645,10 @@ export let ledger = (
       }
     } else if (
       states.get(d.eid) == e.from &&
+      (e.from != 'open' ||
+        (e.board
+          ? boarded.get(d.eid) == e.at - POSTED
+          : !boarded.has(d.eid))) &&
       (e.from == 'open' || since.get(d.eid) == e.since)
     ) back(st, d)
   }
@@ -609,6 +664,7 @@ export let ledger = (
       terms,
       since,
       taker,
+      boarded,
       why,
       holds,
       aside: st.aside,

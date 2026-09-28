@@ -124,8 +124,9 @@ export let deals = (net: Net) => {
   let rows: Watch | null = null
   let agreed: Watch | null = null
   let handed: Watch | null = null
+  let declined: Watch | null = null
   let follow = (lv: string) => {
-    for (let w of [rows, agreed, handed]) w?.close()
+    for (let w of [rows, agreed, handed, declined]) w?.close()
     level = lv
     let eids = GIVERS.filter((g) => g.level == lv).map((g) => eidOf(g.id))
     let of = (name: string) =>
@@ -133,6 +134,7 @@ export let deals = (net: Net) => {
     rows = of('deal')
     agreed = of('agreed')
     handed = of('handed')
+    declined = of('declined')
   }
 
   // Who made a hero, off the rows village.ts watches.
@@ -145,10 +147,10 @@ export let deals = (net: Net) => {
   let books = new Map<string, Kept>()
   let read = () => {
     let r = rows?.value ?? [], a = agreed?.value ?? []
-    let h = handed?.value ?? []
+    let h = handed?.value ?? [], x = declined?.value ?? []
     let t = Math.floor(net.now() / 1000)
-    if ([r, a, h, t].every((k, i) => k === kept[i])) return books
-    kept = [r, a, h, t]
+    if ([r, a, h, x, t].every((k, i) => k === kept[i])) return books
+    kept = [r, a, h, x, t]
     let land = new Map(
       GIVERS.filter((g) => g.level == level).map((g) => [eidOf(g.id), g]),
     )
@@ -159,6 +161,7 @@ export let deals = (net: Net) => {
     let replies = [
       ...a.filter(stamped).map(replyOf('agreed')),
       ...h.filter(stamped).map(replyOf('handed')),
+      ...x.filter(stamped).map(replyOf('declined')),
     ]
     let ledgers = ledger(land, deals, replies, owner, t * 1000)
     books = new Map(
@@ -203,7 +206,8 @@ export let deals = (net: Net) => {
     let d = k?.deals.find((d) => d.eid == eid)
     let state = k?.book.states.get(eid)
     let terms = k?.book.terms.get(eid)
-    let whose = d?.player || k?.book.taker.get(eid)
+    let whose = (k?.book.boarded.has(eid) ? null : d?.player) ||
+      k?.book.taker.get(eid)
     return k && d && terms && (state == 'open' || state == 'taken') &&
         (!whose || whose == net.hero)
       ? { g: k.g, d, state, ...terms, since: k.book.since.get(eid) ?? d.at }
@@ -239,7 +243,7 @@ export let deals = (net: Net) => {
       for (let { g, deals, book } of read().values()) {
         for (let d of deals) {
           // A job on the board: whoever took it first has it.
-          let job = !d.player
+          let job = !d.player || book.boarded.has(d.eid)
           let whose = book.taker.get(d.eid)
           if (job && whose && took.delete(d.eid) && whose != hero) {
             out.push({
@@ -312,13 +316,14 @@ export let deals = (net: Net) => {
       return [...read().values()].flatMap(({ g, deals, book }) =>
         deals.flatMap((d): View[] => {
           let terms = book.terms.get(d.eid)
-          return !d.player && terms && book.states.get(d.eid) == 'open'
+          return (!d.player || book.boarded.has(d.eid)) && terms &&
+              book.states.get(d.eid) == 'open'
             ? [{
               eid: d.eid,
               giver: g,
               ...terms,
               state: 'open',
-              ends: d.at + POSTED,
+              ends: (book.boarded.get(d.eid) ?? d.at) + POSTED,
               steps: steps(terms.take, now, felled, s.bag),
               ready: false,
             }]
@@ -339,9 +344,12 @@ export let deals = (net: Net) => {
             let state = book.states.get(d.eid)
             let terms = book.terms.get(d.eid)
             if (
-              (d.player || book.taker.get(d.eid)) != hero || !terms ||
+              ((book.boarded.has(d.eid) ? null : d.player) ||
+                  book.taker.get(d.eid)) != hero ||
+              !terms ||
               !terms.take.length ||
-              (state != 'open' && state != 'taken') || refused.has(d.eid)
+              (state != 'open' && state != 'taken') ||
+              (state == 'open' && refused.has(d.eid))
             ) return []
             let since = book.since.get(d.eid)
             let st = steps(terms.take, since ?? d.at, felled, s.bag)
@@ -350,7 +358,11 @@ export let deals = (net: Net) => {
               giver: g,
               ...terms,
               state,
-              ends: since ? since + LAST : d.at + OFFER,
+              ends: since
+                ? since + LAST
+                : book.boarded.get(d.eid)
+                ? book.boarded.get(d.eid)! + POSTED
+                : d.at + OFFER,
               steps: st,
               ready: st.every((x) => x.have >= x.n) &&
                 !!pay(s.bag, terms.take),
@@ -366,7 +378,7 @@ export let deals = (net: Net) => {
         return null
       }
       done.add(`agreed/${eid}`)
-      let job = !f.d.player
+      let job = !f.d.player || !!read().get(id)?.book.boarded.has(eid)
       if (job) took.add(eid)
       write([
         {
@@ -422,15 +434,24 @@ export let deals = (net: Net) => {
     /** the hero turns an offer down */
     refuse: (id: string, eid: string) => {
       let hero = mine(), f = find(id, eid)
-      if (!hero || !f || refused.has(eid)) return
+      if (
+        !hero || !f || f.state != 'open' || !f.d.player ||
+        f.d.player != hero || !f.take.length || refused.has(eid)
+      ) return
       refused.add(eid)
-      write([hears(
-        id,
-        `(${nameOf(hero)} turned down your offer of ${said(f.give)} for ${
-          said(f.take)
-        }.)`,
-        uuidOf(`heard/refused/${eid}`),
-      )])
+      write([
+        {
+          entity: { eid: uuidOf(`declined/${eid}/${hero}`) },
+          declined: { deal: eid, villager: eidOf(id), player: hero },
+        },
+        hears(
+          id,
+          `(${nameOf(hero)} turned down your offer of ${said(f.give)} for ${
+            said(f.take)
+          }; the work is pinned on the notice board.)`,
+          uuidOf(`heard/refused/${eid}`),
+        ),
+      ])
     },
   }
 }
