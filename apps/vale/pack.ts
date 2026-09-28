@@ -102,6 +102,30 @@ let against = (s: Sheet, from: From, key: string) => {
     )
 }
 
+/** What the hero carries beyond what they wear: gear by item level, rarity,
+ * then name; other things stacked by kind and sorted by name. */
+export let carried = (s: Pick<Sheet, 'bag' | 'worn'>) => {
+  let wearing = new Set(Object.values(s.worn).map((w) => w?.eid))
+  let gear: { h: Held; n: number }[] = []
+  let stacks = new Map<string, { h: Held; n: number }>()
+  for (let h of s.bag) {
+    let st = stacks.get(h.kind)
+    if (wearing.has(h.eid)) continue
+    else if (ITEMS[h.kind]?.slot) gear.push({ h, n: 1 })
+    else if (st) st.n += h.n
+    else stacks.set(h.kind, { h, n: h.n })
+  }
+  let byName = (a: { h: Held }, b: { h: Held }) =>
+    piece(a.h).name.localeCompare(piece(b.h).name)
+  let byGear = (a: { h: Held }, b: { h: Held }) => {
+    let x = piece(a.h), y = piece(b.h)
+    return (y.lvl ?? 0) - (x.lvl ?? 0) ||
+      RARITIES.indexOf(y.rarity) - RARITIES.indexOf(x.rarity) ||
+      byName(a, b)
+  }
+  return [...gear.sort(byGear), ...[...stacks.values()].sort(byName)]
+}
+
 /** The pack, drawn into its tab (panel.ts). */
 export let pack = (panel: Page, acts: Acts) => {
   let box = panel.body
@@ -139,30 +163,6 @@ export let pack = (panel: Page, acts: Acts) => {
       ? against(sheet, from, key)
       : undefined
   })
-
-  // What the hero carries beyond what they wear: each piece of gear on its
-  // own, the finest first, then a stack for each other kind, by name, picked
-  // by its first row.
-  let carried = (s: Sheet) => {
-    let wearing = new Set(Object.values(s.worn).map((w) => w?.eid))
-    let gear: { h: Held; n: number }[] = []
-    let stacks = new Map<string, { h: Held; n: number }>()
-    for (let h of s.bag) {
-      let st = stacks.get(h.kind)
-      if (wearing.has(h.eid)) continue
-      else if (ITEMS[h.kind]?.slot) gear.push({ h, n: 1 })
-      else if (st) st.n += h.n
-      else stacks.set(h.kind, { h, n: h.n })
-    }
-    let rank = (h: Held) =>
-      RARITIES.indexOf(h.rarity ?? 'common') * 10 + (ITEMS[h.kind]?.tier ?? 0)
-    let byName = (a: { h: Held }, b: { h: Held }) =>
-      piece(a.h).name.localeCompare(piece(b.h).name)
-    return [
-      ...gear.sort((a, b) => rank(b.h) - rank(a.h) || byName(a, b)),
-      ...[...stacks.values()].sort(byName),
-    ]
-  }
 
   let tile = (
     pick: string,
