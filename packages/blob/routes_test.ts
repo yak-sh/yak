@@ -100,8 +100,19 @@ Deno.test('a PUT to an address stores the bytes and mints the artifact', async (
   assertEquals(got.headers.get('content-type'), 'text/plain')
   assertEquals(
     got.headers.get('cache-control'),
-    'public, max-age=31536000, immutable',
+    'public, no-cache',
   )
+  let part = await ask(
+    new Request(at(sha), {
+      headers: { range: 'bytes=2-5' },
+    }),
+  )
+  assertEquals(part.status, 206)
+  assertEquals(part.headers.get('content-range'), `bytes 2-5/${text.length}`)
+  assertEquals(new Uint8Array(await part.arrayBuffer()), text.slice(2, 6))
+  let head = await ask(new Request(at(sha), { method: 'HEAD' }))
+  assertEquals(head.status, 200)
+  assertEquals(head.headers.get('content-length'), String(text.length))
 })
 
 Deno.test('the same upload twice is one object and one row', async () => {

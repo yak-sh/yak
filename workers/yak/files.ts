@@ -16,7 +16,7 @@
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
 import { r2Objects } from './lib/objects.ts'
-import type { Objects } from '@yaks/blob'
+import { mimeOf, type Objects } from '@yaks/blob'
 import { keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -36,30 +36,7 @@ export let PREFIX = 'x-yak-prefix'
 // hit costs no hash at all.
 export let SHA = 'x-yak-sha'
 
-let MIME: Record<string, string> = {
-  html: 'text/html; charset=utf-8',
-  css: 'text/css; charset=utf-8',
-  js: 'text/javascript; charset=utf-8',
-  mjs: 'text/javascript; charset=utf-8',
-  json: 'application/json',
-  webmanifest: 'application/manifest+json',
-  svg: 'image/svg+xml',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  ico: 'image/x-icon',
-  txt: 'text/plain; charset=utf-8',
-  md: 'text/markdown; charset=utf-8',
-  woff: 'font/woff',
-  woff2: 'font/woff2',
-  wasm: 'application/wasm',
-  pdf: 'application/pdf',
-}
-
-export let mimeOf = (path: string) =>
-  MIME[path.slice(path.lastIndexOf('.') + 1)] ?? 'application/octet-stream'
+export { mimeOf } from '@yaks/blob'
 
 // A file's key in the blob store: the app's prefix then its path, a directory
 // answering with its index. Decoded, so the key is the name the file was put
@@ -173,7 +150,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let bytes = await blobs.read(key)
   if (source && key == keyed(prefix, `/${await source}`)) return missing(keep)
   let compiled = await made
-  if (compiled) return served(compiled, MIME.js, keep)
+  if (compiled) return served(compiled, mimeOf('compiled.js'), keep)
   if (!bytes && pretty(path)) {
     key = keyed(prefix, '/')
     bytes = await blobs.read(key)
@@ -193,6 +170,7 @@ let served = async (
   new Response(bytes, {
     headers: {
       'content-type': type,
+      'content-length': String(bytes.byteLength),
       [SHA]: (await sha256(bytes)).slice(0, 24),
       ...keep,
     },

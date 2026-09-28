@@ -57,7 +57,14 @@ import {
   refusedSell,
   selling,
 } from './sell.ts'
-import { served as fenced, type Size, sizeOf } from '@yaks/blob'
+import {
+  mimeOf,
+  ranged,
+  served as fenced,
+  type Size,
+  sizeOf,
+  validator,
+} from '@yaks/blob'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
 import { batched, lined, receipt } from './wire.ts'
@@ -420,12 +427,14 @@ let keeping = (app: App) =>
 // The bytes' half arrives already hashed from files.ts (`SHA`), so it is
 // computed on a cache miss and never again — a warm request hashes only the
 // mount, which is a handful of characters.
-let etagOf = async (sha: string, at: string) =>
-  `W/"${sha}${(await sha256(new TextEncoder().encode(at))).slice(0, 8)}"`
+let etagOf = async (sha: string, at: string, html: boolean) =>
+  html
+    ? `W/"${sha}${(await sha256(new TextEncoder().encode(at))).slice(0, 8)}"`
+    : `"${sha}"`
 
 let unchanged = (req: Request, etag: string) =>
   (req.headers.get('if-none-match') ?? '').split(',')
-    .some((t) => t.trim() == etag)
+    .some((t) => t.trim().replace(/^W\//, '') == etag.replace(/^W\//, ''))
 
 // An app's bytes, through the cache (cache.ts): `Files` is a second entrypoint
 // with Cloudflare's cache in front of it, addressed by the app's eid and this
@@ -527,14 +536,29 @@ let asset = async (
       }),
     )
   }
-  let etag = await etagOf(got.headers.get(SHA) ?? '', at)
+  let etag = await etagOf(got.headers.get(SHA) ?? '', at, html)
   let headers = { 'content-type': type, 'cache-control': keeping(app), etag }
   // The browser already has these bytes, so it is told so and sent none.
   if (unchanged(req, etag)) {
     await got.body?.cancel()
     return new Response(null, { status: 304, headers })
   }
-  if (!html) return new Response(got.body, { headers })
+  if (!html) {
+    let length = got.headers.get('content-length')
+    let media = {
+      ...headers,
+      'accept-ranges': 'bytes',
+      ...(length ? { 'content-length': length } : {}),
+    }
+    if (req.headers.has('range') && req.method == 'GET') {
+      return ranged(new Uint8Array(await got.arrayBuffer()), req, media)
+    }
+    return new Response(got.body, { headers: media })
+  }
+  if (req.method == 'HEAD') {
+    await got.body?.cancel()
+    return new Response(null, { headers })
+  }
   // A page, so it gets the app's address before its own first relative URL,
   // and the reporter after it. The weaving is done here rather than behind the
   // cache because the same file is a different document at each mount, and one
@@ -690,9 +714,13 @@ let blobKey = (space: Space, app: App, sha: string) =>
 // the request's own content-type, minus its parameters; the name rides
 // `x-yak-name` percent-encoded, since a header is ASCII and a file's name is
 // not (public/client.js encodes it).
-let mimeSent = (req: Request) =>
-  (req.headers.get('content-type') ?? '').split(';')[0].trim().slice(0, 120) ||
-  'application/octet-stream'
+let mimeSent = (req: Request) => {
+  let said = (req.headers.get('content-type') ?? '').split(';')[0].trim()
+    .slice(0, 120)
+  return said && said.toLowerCase() != 'application/octet-stream'
+    ? said
+    : mimeOf(nameSent(req))
+}
 
 let nameSent = (req: Request) => {
   let sent = req.headers.get('x-yak-name')
@@ -783,7 +811,8 @@ let took = async (
     bytes: bytes.byteLength,
   }])
   if (stopped) return json(413, 'space_full', stopped)
-  let file = await filed(env, space, app, bytes, mimeSent(req), nameSent(req))
+  let mime = mimeSent(req)
+  let file = await filed(env, space, app, bytes, mime, nameSent(req))
   try {
     await metaOf(store).apply(file.bundles, headers)
   } catch (e) {
@@ -793,16 +822,17 @@ let took = async (
   return Response.json({
     eid: file.sha,
     url: `/${app.slug}/api/blob/${file.sha}`,
-    mime: mimeSent(req),
+    mime,
     bytes: bytes.byteLength,
     ...file.size,
   })
 }
 
 // The bytes back, at the address the upload answered. The mime and the name
-// come off the attachment row the upload wrote; the fenced, immutable answer
-// is @yaks/blob's `served`, the same one the fleet's blob door gives.
+// come off the attachment row the upload wrote; @yaks/blob's `served` fences
+// the response and revalidates metadata, as the fleet's blob door does.
 let gave = async (
+  req: Request,
   env: Env,
   space: Space,
   app: App,
@@ -825,7 +855,11 @@ let gave = async (
     .find((r) => r.attachment)?.attachment
   let generated = (rows as { artifact?: { media_type?: string } }[])
     .find((r) => r.artifact)?.artifact
-  return fenced(bytes, file ?? { mime: generated?.media_type })
+  let meta = file ?? { mime: generated?.media_type }
+  return fenced(bytes, {
+    ...meta,
+    etag: await validator(sha, meta),
+  }, req)
 }
 
 // What to call this person, for the store to write beside their rows: the
@@ -1177,9 +1211,19 @@ let api = async (
     }, writes(who.role) ? MAX : VISIT_UPLOAD)
   }
   if (path.startsWith('/blob/')) {
-    if (req.method != 'GET') return json(405, 'method_not_allowed')
+    if (req.method != 'GET' && req.method != 'HEAD') {
+      return json(405, 'method_not_allowed')
+    }
     if (!mayRead) return refused('not_a_reader')
-    return gave(env, space, app, store, headers, path.slice('/blob/'.length))
+    return gave(
+      req,
+      env,
+      space,
+      app,
+      store,
+      headers,
+      path.slice('/blob/'.length),
+    )
   }
   if (path.startsWith('/files/')) {
     if (req.method != 'PUT') return json(405, 'method_not_allowed')

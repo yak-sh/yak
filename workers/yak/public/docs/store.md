@@ -523,7 +523,7 @@ directly from `curl`, from another page, or from your own `worker.js` through
        "mime": "image/jpeg", "bytes": 51234, "w": 1600, "h": 1200}
 
     GET ./api/blob/<eid>
-    → the bytes, with that mime, cached forever
+    → the bytes, with that mime and a revalidating cache header
 
 `./api/vocab.json` is every word the app's store speaks, the platform's and the
 app's own, as the JSON Schema documents the store loaded. A page that keeps a

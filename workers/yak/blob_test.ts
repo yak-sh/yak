@@ -63,6 +63,65 @@ let hex = async (bytes: Uint8Array<ArrayBuffer>) =>
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 
+Deno.test('a named media upload stays seekable when its metadata changes', async () => {
+  let k = await kernel()
+  let them = await seed(k, [{ slug: 'mediabox', apps: ['player'] }])
+  let host = 'mediabox.yaks.app'
+  let path = '/player/api/blob'
+  let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
+  let upload = async (mime: string, name: string) => {
+    let res = await k.at(host, path, {
+      method: 'POST',
+      headers: {
+        cookie: them.cookie,
+        'content-type': mime,
+        'x-yak-name': encodeURIComponent(name),
+      },
+      body: bytes,
+    })
+    assertEquals(res.status, 200)
+    return await res.json() as File
+  }
+  let file = await upload('application/octet-stream', '旅行—draft.MP4')
+  assertEquals(file.mime, 'video/mp4')
+  let get = (headers: HeadersInit = {}, method = 'GET') =>
+    k.at(host, file.url, { method, headers })
+  let first = await get()
+  assertEquals(first.status, 200)
+  assertEquals(first.headers.get('content-type'), 'video/mp4')
+  assertMatch(
+    first.headers.get('content-disposition') ?? '',
+    /filename\*=UTF-8''%E6%97%85/,
+  )
+  assertEquals(first.headers.get('cache-control'), 'public, no-cache')
+  let etag = first.headers.get('etag')!
+  await first.body?.cancel()
+  let part = await get({ range: 'bytes=2-4', 'if-range': etag })
+  assertEquals(part.status, 206)
+  assertEquals(part.headers.get('content-range'), 'bytes 2-4/6')
+  assertEquals(new Uint8Array(await part.arrayBuffer()), bytes.slice(2, 5))
+  let head = await get({}, 'HEAD')
+  assertEquals(head.status, 200)
+  assertEquals(head.headers.get('content-length'), '6')
+  assertEquals(await head.text(), '')
+
+  // The same bytes keep their address, but a corrected type changes the
+  // representation and its validator. A cache must fetch the new headers.
+  let again = await upload('audio/mp4', 'theme.m4a')
+  assertEquals(again.eid, file.eid)
+  let changed = await get({ 'if-none-match': etag })
+  assertEquals(changed.status, 200)
+  assertEquals(changed.headers.get('content-type'), 'audio/mp4')
+  let next = changed.headers.get('etag')!
+  assert(next != etag)
+  await changed.body?.cancel()
+  let oldRange = await get({ range: 'bytes=2-', 'if-range': etag })
+  assertEquals(oldRange.status, 200)
+  assertEquals(new Uint8Array(await oldRange.arrayBuffer()), bytes)
+  let valid = await get({ 'if-none-match': next })
+  assertEquals(valid.status, 304)
+})
+
 type File = {
   eid: string
   url: string
@@ -104,7 +163,7 @@ Deno.test('the file door: a page uploads bytes and gets an address', async () =>
     let got = await fetch(`${mine.origin}${file.url}`)
     assertEquals(got.status, 200)
     assertEquals(got.headers.get('content-type'), 'image/png')
-    assertMatch(got.headers.get('cache-control') ?? '', /immutable/)
+    assertEquals(got.headers.get('cache-control'), 'public, no-cache')
     assertEquals(new Uint8Array(await got.arrayBuffer()), png)
 
     // And it is a row: the app's own store knows what the file is called, and

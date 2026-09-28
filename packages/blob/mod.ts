@@ -87,6 +87,7 @@ export * from './object.ts'
 export * from './backend.ts'
 export * from './image.ts'
 export * from './serve.ts'
+export * from './mime.ts'
 
 export { VALUE_LIMIT, type ValueTool, valueTools } from './value.ts'
 export {

@@ -161,9 +161,11 @@ It returns one object:
       w: 1600, h: 1200 }                   // pictures only
 
 `mime` is the blob's own `type` — the browser fills it in for a file off an
-input — and `application/octet-stream` when the blob has none. `w` and `h` are
-there only when the bytes are a picture that declares its size; otherwise both
-keys are simply absent.
+input. When the type is empty or `application/octet-stream`, a recognized
+filename supplies it instead (`video/mp4` for `.mp4`, `audio/mpeg` for `.mp3`).
+An unknown name gets `application/octet-stream`. `w` and `h` are there only when
+the bytes are a picture that declares its size; otherwise both keys are simply
+absent.
 
 ## Content addressing, and what follows from it
 
@@ -175,8 +177,9 @@ devices, or twice from one form, and the second send lands on the same eid, the
 same object, and the same row — so a page need not remember what it has sent; it
 may send again and read what comes back.
 
-**The bytes at an address can never change**, so `GET ./api/blob/<eid>` is
-served `cache-control: public, max-age=31536000, immutable`.
+**The bytes at an address can never change.** The mime and filename can change
+if the file is uploaded again, so `GET ./api/blob/<eid>` uses
+`cache-control: public, no-cache` and an ETag that changes with those fields.
 
 **The address is not a secret.** Anyone who may read the app may read any blob
 in it, and someone holding the identical file can compute its eid without
@@ -276,15 +279,23 @@ same-origin HTTP, which `curl` or a worker can call too.
        "mime": "image/jpeg", "bytes": 51234, "w": 1600, "h": 1200}
 
     GET ./api/blob/9f2a…    → the bytes
+    Range: bytes=100-199    → 206, those 100 bytes
 
 A header is ASCII and a file's name is not, so the name is sent percent-encoded
 and the endpoint decodes it; the mime is kept to 120 characters and the name to
-200. The GET returns the bytes with the mime and the name from the attachment
-row, the immutable cache header,
+200. GET and HEAD return the mime and name from the attachment row. A single
+`Range: bytes=…` request gets `206` and `Content-Range`; a range beyond the end
+gets `416`. Responses include a revalidating cache header,
 `content-security-policy: sandbox; script-src 'none'` and
 `x-content-type-options: nosniff` — an uploaded HTML page or SVG opened in a tab
 cannot run anything. A path that is not 64 hex characters, or bytes this app
 never received, is `404 no_such_file`.
+
+Deployed audio and video files use media types from their extensions: `.mp4`,
+`.m4v`, `.mov`, `.webm`, `.mp3`, `.m4a`, `.aac`, `.wav`, `.ogg`, `.flac`, and
+HLS `.m3u8` and `.ts` are recognized. File responses also support HEAD and byte
+ranges, so a browser can start playback and seek without downloading the whole
+file again.
 
 ## Who may upload, who may read
 

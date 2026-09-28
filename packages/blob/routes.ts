@@ -17,7 +17,7 @@
 // (`store`) and how large one may be (`limit`).
 //
 // The GET is a prefix route because the address is the rest of the path: a
-// content-addressed read takes no query string, no range and no identity. The
+// content-addressed read takes no query string and no identity. The
 // row the PUT created supplies the one thing the bytes cannot state about
 // themselves — what they are — and the response is fenced either way
 // (./serve.ts).
@@ -27,7 +27,7 @@ import type { Graph } from '@yaks/graph'
 import type { Driver } from '@yaks/sql'
 import { addressOf, type Artifact, keep } from './artifact.ts'
 import { type Backend, backend } from './backend.ts'
-import { served } from './serve.ts'
+import { served, validator } from './serve.ts'
 import type { Blobs } from './store.ts'
 
 export { type Backend, backend } from './backend.ts'
@@ -123,15 +123,22 @@ export let routes = (
 
   let big = () => no('Refused', `an object is at most ${limit} bytes here`, 413)
 
-  return [{
-    method: 'GET',
+  let read: Route['handle'] = async (request) => {
+    let sha = addressed(request)
+    if (!sha) return missing()
+    let bytes = await store.get(sha)
+    if (!bytes) return missing()
+    let mime = await mimeOf(sha)
+    return served(bytes, {
+      mime,
+      etag: await validator(sha, { mime }),
+    }, request)
+  }
+
+  return [{ method: 'GET', path: `${PREFIX}*`, handle: read }, {
+    method: 'HEAD',
     path: `${PREFIX}*`,
-    handle: async (request) => {
-      let sha = addressed(request)
-      if (!sha) return missing()
-      let bytes = await store.get(sha)
-      return bytes ? served(bytes, { mime: await mimeOf(sha) }) : missing()
-    },
+    handle: read,
   }, {
     method: 'PUT',
     path: `${PREFIX}*`,

@@ -233,11 +233,15 @@ return `undefined`. `mediaTypeOf(bytes)` names the same four formats from their
 signatures (`image/png`, `image/jpeg`, `image/gif`, `image/webp`), and
 `undefined` for anything else.
 
-`served(bytes, { mime?, name? })` creates an HTTP response with immutable
-one-year public caching, `content-security-policy: sandbox; script-src 'none'`,
-`x-content-type-options: nosniff`, and optional inline filename disposition.
-Scripts are blocked; the policy does not mean an HTML or SVG document cannot
-render. Use this response for immutable content addressed by its bytes.
+`served(bytes, { mime?, name?, etag? }, request)` creates a byte-range capable
+HTTP response with `content-security-policy: sandbox; script-src 'none'`,
+`x-content-type-options: nosniff`, and an optional inline filename disposition.
+The response can be cached but revalidates because its mime and name may change
+while the bytes keep their address. `validator(address, meta)` makes the ETag
+for those bytes and metadata. Scripts are blocked; the policy does not mean an
+HTML or SVG document cannot render. `ranged(bytes, request, headers)` serves the
+same byte-range behavior when a caller supplies its own response headers.
+`mimeOf(name)` gives deployed files and named uploads one media type lookup.
 
 `artifactDoc` declares `artifact { address, media_type, size }` and an
 `attachment` component referencing an artifact. An attachment can also record

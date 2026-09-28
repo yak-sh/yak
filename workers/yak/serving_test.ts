@@ -104,6 +104,75 @@ Deno.test('a page is served with its base and its reporter', async () => {
   assert((await js.text()).includes('export let store ='))
 })
 
+Deno.test('an app serves audio and video with byte ranges', async () => {
+  using scenario = platform()
+  let { env, files } = scenario
+  await seeded(env)
+  let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
+  for (
+    let [name, mime] of [
+      ['movie.MP4', 'video/mp4'],
+      ['clip.webm', 'video/webm'],
+      ['song.mp3', 'audio/mpeg'],
+      ['song.m4a', 'audio/mp4'],
+      ['stream.m3u8', 'application/vnd.apple.mpegurl'],
+      ['segment.ts', 'video/mp2t'],
+    ]
+  ) {
+    files.held.set(`ada/cookbook/${name}`, bytes)
+    let url = `/cookbook/${name}`
+    let whole = await apps.fetch(visit(url), env)
+    assertEquals(whole.status, 200)
+    assertEquals(whole.headers.get('content-type'), mime)
+    assertEquals(whole.headers.get('content-length'), '6')
+    assertEquals(whole.headers.get('accept-ranges'), 'bytes')
+    assertEquals(new Uint8Array(await whole.arrayBuffer()), bytes)
+    let part = await apps.fetch(
+      visit(url, {
+        headers: { range: 'bytes=2-4' },
+      }),
+      env,
+    )
+    assertEquals(part.status, 206)
+    assertEquals(part.headers.get('content-range'), 'bytes 2-4/6')
+    assertEquals(part.headers.get('content-length'), '3')
+    assertEquals(new Uint8Array(await part.arrayBuffer()), bytes.slice(2, 5))
+  }
+  let url = '/cookbook/movie.MP4'
+  let first = await apps.fetch(visit(url), env)
+  let etag = first.headers.get('etag')!
+  assert(!etag.startsWith('W/'))
+  await first.body?.cancel()
+  let seek = await apps.fetch(
+    visit(url, {
+      headers: { range: 'bytes=-2', 'if-range': etag },
+    }),
+    env,
+  )
+  assertEquals(seek.status, 206)
+  assertEquals(new Uint8Array(await seek.arrayBuffer()), bytes.slice(-2))
+  let stale = await apps.fetch(
+    visit(url, {
+      headers: { range: 'bytes=2-', 'if-range': '"old"' },
+    }),
+    env,
+  )
+  assertEquals(stale.status, 200)
+  assertEquals(new Uint8Array(await stale.arrayBuffer()), bytes)
+  let beyond = await apps.fetch(
+    visit(url, {
+      headers: { range: 'bytes=6-' },
+    }),
+    env,
+  )
+  assertEquals(beyond.status, 416)
+  assertEquals(beyond.headers.get('content-range'), 'bytes */6')
+  let head = await apps.fetch(visit(url, { method: 'HEAD' }), env)
+  assertEquals(head.status, 200)
+  assertEquals(head.headers.get('content-length'), '6')
+  await head.body?.cancel()
+})
+
 Deno.test('an app is installable: the five tags, the icon, the manifest', async () => {
   using scenario = platform()
   let { env, files } = scenario
