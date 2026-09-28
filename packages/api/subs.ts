@@ -502,15 +502,15 @@ export let subscriptions = (graph: Graph, opts: {
     scope?: Set<Eid>,
     load = (q: string): Bundle[] | Promise<Bundle[]> =>
       graph.read(q, { durable: true }),
-    scoped?: Bundle[] | Promise<Bundle[]>,
+    prepared?: Bundle[] | Promise<Bundle[]>,
     joinsOnly = false,
   ) => {
     if (sub.agg) return tell(sub)
     let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
-    return then(sub.peer ? read(sub, scope, scoped) : load(query), (set) => {
+    return then(sub.peer ? read(sub, scope, prepared) : load(query), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
-      let gone = [...sub.members].filter((e) =>
-        (!scope || scope.has(e)) && !ids.has(e)
+      let gone = [...(scope ?? sub.members)].filter((e) =>
+        sub.members.has(e) && !ids.has(e)
       )
       // An entity can join without being touched: a hop or a computed
       // property moved it from the far side.
@@ -767,10 +767,10 @@ export let subscriptions = (graph: Graph, opts: {
   let read = (
     sub: Sub,
     scope?: Set<Eid>,
-    scoped?: Bundle[] | Promise<Bundle[]>,
+    prepared?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
     if (!sub.peer) return graph.read(sub.query, { durable: true })
-    return then(source(sub, scope, scoped), (bundles) => {
+    return then(prepared ?? source(sub, scope), (bundles) => {
       let chosen = matcher(sub.query, graph.vocab)(bundles)
       return chosen.filter((b) => !scope || scope.has(b.entity.eid))
         .map((b) => only(sub.want ?? null)(stored(b)))
@@ -802,6 +802,7 @@ export let subscriptions = (graph: Graph, opts: {
     // this movement. The cross-movement cache avoids SQL; this batch map
     // avoids rebuilding the combined answer for every watch.
     let batchLinks = new Map<string, Bundle[] | Promise<Bundle[]>>()
+    let batchSources = new Map<string, Bundle[] | Promise<Bundle[]>>()
     return then(durableRows(touched), (rows) => {
       let routing = route(
         overlay(rows, values),
@@ -843,7 +844,13 @@ export let subscriptions = (graph: Graph, opts: {
                     ])
                     if (!scope.size) return
                     let own = rows.filter((b) => roots.has(b.entity.eid))
-                    return push(s, scope, undefined, [...refs, ...own], true)
+                    let sourceKey = JSON.stringify([key, [...roots]])
+                    let prepared = batchSources.get(sourceKey)
+                    if (!prepared) {
+                      prepared = source(s, scope, [...refs, ...own])
+                      batchSources.set(sourceKey, prepared)
+                    }
+                    return push(s, scope, undefined, prepared, true)
                   },
                 )
               },

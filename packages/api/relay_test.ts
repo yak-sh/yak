@@ -430,6 +430,41 @@ Deno.test('shared reference watches refresh from one moved peer read', () => {
   ])
 })
 
+Deno.test('shared reference source keeps each watch membership', () => {
+  let graph = shop()
+  graph.apply([
+    { entity: { eid: 'p1' }, doc: { title: 'One' } },
+    { entity: { eid: 'l1' }, book: { author: 'p1', price: 12 } },
+    { entity: { eid: 'l2' }, book: { author: 'p1', price: 30 } },
+  ])
+  let subs = subscriptions(graph), writer = ear(), near = ear(), close = ear()
+  subs.open(
+    near.to,
+    'look',
+    '(.book.author.browsing.x<10|.book.price<20)&.book&*',
+  )
+  subs.open(
+    close.to,
+    'look',
+    '(.book.author.browsing.x<5|.book.price<10)&.book&*',
+  )
+  assertEquals(near.take()[0].bundles?.map((b) => b.entity.eid), ['l1'])
+  assertEquals(close.take()[0].bundles, [])
+
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 3 } }])
+  assertEquals(near.take()[0].bundles?.map((b) => b.entity.eid), ['l2'])
+  assertEquals(close.take()[0].bundles?.map((b) => b.entity.eid), [
+    'l1',
+    'l2',
+  ])
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 7 } }])
+  assertEquals(near.take(), [])
+  assertEquals(close.take()[0].gone, ['l1', 'l2'])
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 12 } }])
+  assertEquals(near.take()[0].gone, ['l2'])
+  assertEquals(close.take(), [])
+})
+
 Deno.test('scoped reference refresh keeps other roots and direct branches', () => {
   let graph = shop()
   graph.apply([
