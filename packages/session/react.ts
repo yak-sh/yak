@@ -1,6 +1,6 @@
 import { CallError, runner, UnfinishedCall } from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
-import { argsOf, transient } from '@yaks/graph'
+import { argsOf, Stale, token, transient } from '@yaks/graph'
 // The runner's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
 // result asks the model; an open tool call is run; an error within the retry
@@ -313,6 +313,32 @@ export let react = async (
       added,
     }
   }
+  let current = async (): Promise<Step> => ({
+    did: 'nothing',
+    status: statusOf(await transcript(g, session)),
+    added: [],
+  })
+  // Recovery and provider completion race for the same attempt. Guard the
+  // whole batch so the loser contributes neither reply items nor an error.
+  let finish = async (
+    attempt: Bundle,
+    patch: Bundle,
+    added: Bundle[],
+  ): Promise<Step | undefined> => {
+    try {
+      return await append([{
+        ...patch,
+        entity: attempt.entity,
+        $was: { attempt: { state: token('inflight') } },
+      }, ...added])
+    } catch (e) {
+      if (
+        e instanceof Stale && e.eid == attempt.entity.eid &&
+        e.comp == 'attempt' && e.prop == 'state'
+      ) return
+      throw e
+    }
+  }
   const unfinished = entries.find((b) =>
     (b.attempt as Comp | undefined)?.state == 'inflight'
   )
@@ -320,15 +346,19 @@ export let react = async (
     // The request may have reached the provider. Its partial output stays in
     // the transcript, but only a completed ask can be used as an anchor.
     // Continue from that history after the former worker has gone.
-    return append([
+    let recovered = await finish(
+      unfinished,
       { entity: unfinished.entity, attempt: { state: 'interrupted' } },
-      line(
-        {},
-        'System recovery: the previous response was interrupted. ' +
-          'Continue from the transcript. ' +
-          'Inspect the state before repeating any action that may have completed.',
-      ),
-    ])
+      [
+        line(
+          {},
+          'System recovery: the previous response was interrupted. ' +
+            'Continue from the transcript. ' +
+            'Inspect the state before repeating any action that may have completed.',
+        ),
+      ],
+    )
+    return recovered ?? await current()
   }
   const tools = deps.toolSnapshot
     ? await deps.toolSnapshot(
@@ -659,12 +689,17 @@ export let react = async (
         }
         let active = stream.get(key)
         if (!active) {
-          const [entry] = await g.apply([
+          let landed = await g.apply([
+            {
+              entity: ask.entity,
+              $was: { attempt: { state: token('inflight') } },
+            },
             line({
               [CONTENT]: { body: '' },
               [OUTPUT]: { source: ask.entity.eid },
             }),
           ], { trusted: true })
+          let entry = landed.find((b) => b.entity.eid != ask.entity.eid)!
           active = {
             entry,
             writer: await transient(g).begin(
@@ -697,28 +732,37 @@ export let react = async (
   } catch (e) {
     accepting = false
     await tail
-    for (const active of stream.values()) {
-      try {
-        await active.writer.commit()
-      } catch (failure) {
-        active.writer.discard()
-        deps.report?.(failure, session, 'stream-checkpoint')
-      }
-    }
     const operational = e instanceof ModelError ||
       (e instanceof Error && e.name == 'AbortError')
-    if (!operational) deps.report?.(e, session, 'model')
     if (deps.streaming) {
-      return append([
+      let failed = await finish(
+        ask,
         { entity: ask.entity, attempt: { state: 'interrupted' } },
-        line(
-          operational
-            ? { [ERROR]: { code: 'interrupted' } }
-            : { [EXCEPTION]: {} },
-          operational ? 'Response interrupted: ' + String(e) : String(e),
-        ),
-      ])
+        [
+          line(
+            operational
+              ? { [ERROR]: { code: 'interrupted' } }
+              : { [EXCEPTION]: {} },
+            operational ? 'Response interrupted: ' + String(e) : String(e),
+          ),
+        ],
+      )
+      if (!failed) {
+        for (const active of stream.values()) active.writer.discard()
+        return current()
+      }
+      if (!operational) deps.report?.(e, session, 'model')
+      for (const active of stream.values()) {
+        try {
+          await active.writer.commit()
+        } catch (failure) {
+          active.writer.discard()
+          deps.report?.(failure, session, 'stream-checkpoint')
+        }
+      }
+      return failed
     }
+    if (!operational) deps.report?.(e, session, 'model')
     return append([
       e instanceof ModelError
         ? line({ [ERROR]: { code: e.code } }, e.message)
@@ -806,31 +850,40 @@ export let react = async (
       },
     }))
   }
-  if (
-    [...stream.values()].some((active) =>
-      !added.some((b) => b.entity.eid == active.entry.entity.eid)
-    )
-  ) {
-    for (const active of stream.values()) await active.writer.commit()
-    return append([
-      { entity: ask.entity, attempt: { state: 'interrupted' } },
-      line(
-        { [EXCEPTION]: {} },
-        'Completed reply omitted a streamed text item; retained partial output',
-      ),
-    ])
-  }
   try {
-    return await append(added)
+    if (!deps.streaming) return await append(added)
+    if (
+      [...stream.values()].some((active) =>
+        !added.some((b) => b.entity.eid == active.entry.entity.eid)
+      )
+    ) {
+      let omitted = await finish(
+        ask,
+        { entity: ask.entity, attempt: { state: 'interrupted' } },
+        [
+          line(
+            { [EXCEPTION]: {} },
+            'Completed reply omitted a streamed text item; retained partial output',
+          ),
+        ],
+      )
+      if (!omitted) return current()
+      for (const active of stream.values()) await active.writer.commit()
+      return omitted
+    }
+    return await finish(ask, finalAsk, added.slice(1)) ?? await current()
   } catch (e) {
     if (!deps.streaming) throw e
-    return append([
+    return await finish(
+      ask,
       { entity: ask.entity, attempt: { state: 'interrupted' } },
-      line(
-        { [EXCEPTION]: {} },
-        'Could not finalize provider reply: ' + String(e),
-      ),
-    ])
+      [
+        line(
+          { [EXCEPTION]: {} },
+          'Could not finalize provider reply: ' + String(e),
+        ),
+      ],
+    ) ?? await current()
   } finally {
     for (const active of stream.values()) active.writer.discard()
   }

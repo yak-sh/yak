@@ -17,11 +17,12 @@ import {
 } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
-import { effectDoc, effects } from '@yaks/effects'
+import { effectDoc, effects, LEASE, leaseEid } from '@yaks/effects'
 import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import { processDoc } from '@yaks/process'
 import { type Model, modelDoc, type Request } from '@yaks/model'
+import { toolEid } from '@yaks/tools'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
@@ -29,7 +30,7 @@ import { transcript } from './react.ts'
 import { kindOf, sessionDerived, statusOf } from './status.ts'
 import { answers } from './providers.ts'
 import { sessionTools } from './children.ts'
-import { type Runner, running, settle } from './run.ts'
+import { RUN, type Runner, running, settle } from './run.ts'
 import { until } from '../../bin/testing.ts'
 
 let worker: VocabDoc = {
@@ -189,6 +190,63 @@ Deno.test('a run longer than its lease keeps the transcript, renewed while it go
   await first
   assertEquals(asked.length, 1)
   assertEquals(await kinds(a, 's1'), ['input', 'ask', 'output'])
+})
+
+Deno.test('a former lease holder takes no next transcript step', async () => {
+  let s = store()
+  let rival: ReturnType<typeof proc>
+  let asks = 0, runs = 0
+  let tool = {
+    name: 'echo',
+    description: 'say it back',
+    parameters: { type: 'object', properties: {} },
+    run: () => {
+      runs++
+      return 'echoed'
+    },
+  }
+  let model: Model = async (req) => {
+    if (++asks == 1) {
+      await rival.g.apply([{
+        entity: { eid: leaseEid(`${RUN}/s1`) },
+        [LEASE]: {
+          name: `${RUN}/s1`,
+          holder: 'w2',
+          until: new Date(Date.now() + 60_000).toISOString(),
+        },
+      }])
+      return {
+        id: 'call',
+        model: req.model,
+        items: [{ kind: 'call', id: 'c1', name: 'echo', args: '{}' }],
+      }
+    }
+    return {
+      id: 'done',
+      model: req.model,
+      items: [{ kind: 'assistant', text: 'done' }],
+    }
+  }
+  let a = proc(s, 'w1', model, { tools: [tool] })
+  rival = proc(s, 'w2', model, { tools: [tool] })
+  await a.g.apply([
+    { entity: { eid: toolEid('echo') }, tool: { name: 'echo' } },
+    ...ask('s1'),
+  ])
+  await settle(a.g, 's1', a.r)
+  assertEquals(runs, 0)
+  assertEquals(asks, 1)
+  await settle(rival.g, 's1', rival.r)
+  assertEquals(runs, 1)
+  assertEquals(asks, 2)
+  assertEquals(await kinds(a, 's1'), [
+    'input',
+    'ask',
+    'call',
+    'result',
+    'ask',
+    'output',
+  ])
 })
 
 Deno.test('a transcript asking for a provider this host was lent nothing for is left alone', async () => {

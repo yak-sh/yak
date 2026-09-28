@@ -573,6 +573,78 @@ Deno.test('provider completion allocates positions after concurrently admitted n
   assertEquals((all[2].ask as Comp).through, 'e1')
 })
 
+Deno.test('recovery excludes a stale streamed provider reply', async () => {
+  let g = world()
+  let releaseOld!: () => void, startedOld!: () => void
+  let oldGate = new Promise<void>((done) => releaseOld = done)
+  let oldStarted = new Promise<void>((done) => startedOld = done)
+  let old = react(g, ids.s, {
+    tools: [echo],
+    streaming: true,
+    mint,
+    model: async () => {
+      startedOld()
+      await oldGate
+      return {
+        id: 'late',
+        model: 'fake-1',
+        items: [
+          { kind: 'assistant', text: 'late reply' },
+          {
+            kind: 'call',
+            id: 'late-call',
+            name: 'echo',
+            args: '{"text":"late"}',
+          },
+        ],
+      }
+    },
+  })
+  await oldStarted
+  await react(g, ids.s, {
+    tools: [],
+    streaming: true,
+    mint,
+    model: () => Promise.reject(new Error('not dispatched')),
+  })
+
+  let releaseNew!: () => void, startedNew!: () => void
+  let newGate = new Promise<void>((done) => releaseNew = done)
+  let newStarted = new Promise<void>((done) => startedNew = done)
+  let fresh = react(g, ids.s, {
+    tools: [],
+    streaming: true,
+    mint,
+    model: async () => {
+      startedNew()
+      await newGate
+      return says('fresh', 'fresh reply')
+    },
+  })
+  await newStarted
+  releaseOld()
+  assertEquals((await old).did, 'nothing')
+  let midway = await transcript(g, ids.s)
+  assertEquals(midway.filter((b) => b.output).length, 0)
+  assertEquals(midway.filter((b) => b.call).length, 0)
+  assertEquals(midway.filter((b) => b.exception).length, 0)
+  assertEquals(
+    (midway.filter((b) => b.ask)[0].attempt as Comp).state,
+    'interrupted',
+  )
+  assertEquals(
+    (midway.filter((b) => b.ask)[1].attempt as Comp).state,
+    'inflight',
+  )
+
+  releaseNew()
+  await fresh
+  let done = await transcript(g, ids.s)
+  assertEquals(done.filter((b) => b.output).map(textOf), ['fresh reply'])
+  assertEquals(done.filter((b) => b.call).length, 0)
+  assertEquals(done.filter((b) => b.exception).length, 0)
+})
+
 Deno.test('an unanswered older call fails without replay or provider dispatch', async () => {
   let g = world()
   let { model, asked } = scripted([calls(['old-call', 'hi'])])

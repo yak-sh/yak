@@ -32,7 +32,7 @@
 // ({@link Runner}): nothing here names a machine or a provider.
 
 import type { Event, Handlers } from '@yaks/effects'
-import { HOLD, holding } from '@yaks/effects'
+import { held as lease, HOLD, holding } from '@yaks/effects'
 import {
   type Bundle,
   type Comp,
@@ -227,6 +227,10 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
   }
   if (!await admitted(g, session, r)) return newest(g, session)
   while (!r.stopping?.aborted) {
+    // A renewal timer notices a lost lease eventually; this read closes the
+    // gap between one completed step and the next.
+    let owner = await lease(g, `${RUN}/${session}`)
+    if (owner && owner.holder != r.holder) break
     let s = await step(g, session, r)
     r.each?.(s)
     if (ENDED.includes(s.status)) {
