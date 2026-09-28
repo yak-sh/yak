@@ -2,6 +2,7 @@
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { talkHtml } from './hud.ts'
+import { GIVERS } from './quests.ts'
 import { quests } from './quests/vale.ts'
 import { completion, WELCOME } from './village-tasks.ts'
 import { greeting } from './villagers.ts'
@@ -41,4 +42,31 @@ Deno.test('Pip reacts to this hero marking the welcome task in Village Tasks', a
   assertStringIncludes(link.getAttribute('href') ?? '', '/village-tasks/')
   assertEquals(greeting('pip', neutral, true, true), neutral)
   assertEquals(greeting('rowan', neutral, true), neutral)
+})
+
+Deno.test('a villager offer appears as a quest card with both choices', () => {
+  let document = parseHTML(`<html><body>${
+    talkHtml({
+      offer: {
+        eid: 'offer-1',
+        giver: GIVERS[0],
+        give: [{ kind: 'coin', n: 5 }],
+        take: [{ kind: 'tusk', n: 2 }],
+        state: 'open',
+        ends: 0,
+        steps: [{ kind: 'tusk', n: 2, have: 0, deed: false }],
+        ready: false,
+      },
+      name: GIVERS[0].name,
+    })
+  }</body></html>`).document
+  let body = document.querySelector('.Talk_Body')!.textContent
+  assertStringIncludes(body, 'Bring 2 Boar tusk')
+  assertStringIncludes(body, 'Reward: 5 Coins')
+  assertEquals(
+    [...document.querySelectorAll('.Talk_Acts button')].map((b) =>
+      b.getAttribute('data-do')
+    ),
+    ['accept', 'refuse', 'close'],
+  )
 })

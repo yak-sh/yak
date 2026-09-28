@@ -22,8 +22,8 @@ import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
 import { companion } from './companion.ts'
 import { companionView } from './companion-view.ts'
-import { dealbox } from './dealbox.ts'
-import { deals } from './deals.ts'
+import { type Act, dealbox } from './dealbox.ts'
+import { deals, type View } from './deals.ts'
 import { fires } from './fires.ts'
 import { map } from './map.ts'
 import { menu } from './menu.ts'
@@ -171,7 +171,7 @@ let notes = noticeboard(h.panels.notices, {
   },
 })
 // What the hero chose about a deal with a villager.
-let dealt = dealbox(h.panels.deal, (a, v) => {
+let chooseDeal = (a: Act, v: View) => {
   if (a == 'refuse') return deal.refuse(v.giver.id, v.eid)
   let s = last?.sheet
   let said = a == 'agree'
@@ -182,7 +182,8 @@ let dealt = dealbox(h.panels.deal, (a, v) => {
   if (!said) return
   h.toast(said, a == 'hand' ? 'Toast-loot' : 'Toast-big')
   sound.quest()
-})
+}
+let dealt = dealbox(h.panels.deal, chooseDeal)
 
 // What is drawn of the world: its chunks grown and meshed in the workers at
 // the detail asked (stream.ts `COARSER`).
@@ -684,6 +685,21 @@ let worked = (e: Work) => {
 }
 
 let greeted = new Map<string, boolean>()
+let offerTalk = (giver: NonNullable<Frame['talk']>, offer: View) => {
+  h.panels.deal.close()
+  h.talk(
+    {
+      offer,
+      name: giver.name,
+      hears: !!folk.near(),
+      looks: folk.looks(giver.id),
+    },
+    {
+      accept: () => chooseDeal('agree', offer),
+      refuse: () => chooseDeal('refuse', offer),
+    },
+  )
+}
 let talkTo = async () => {
   let giver = last?.talk
   if (!giver) return
@@ -695,11 +711,18 @@ let talkTo = async () => {
   )
   if (last?.talk?.id != giver.id || net.hero != player) return
   let next = giver.next
-  // A deal standing between them opens over their words.
-  if (last && deal.standing(last.sheet, giver.id).length) {
+  let standing = last ? deal.standing(last.sheet, giver.id) : []
+  let offer = standing.find((v) => v.state == 'open')
+  // A villager's offer uses the same Talk card as a quest they offer.
+  if (!offer && standing.length) {
     dealt.open(giver.id, giver.name)
   }
   folk.engage(giver.id)
+  if (offer) {
+    offerTalk(giver, offer)
+    chat.converse()
+    return
+  }
   h.talk(
     {
       quest: next?.quest ?? null,
@@ -714,22 +737,24 @@ let talkTo = async () => {
       hears: !!folk.near(),
       looks: folk.looks(giver.id),
     },
-    () => {
-      if (!next) return
-      g.accept(next.quest)
-      h.toast(`Quest taken: ${next.quest.title}`, 'Toast-big')
-      sound.quest()
-    },
-    () => {
-      if (!next) return
-      for (let e of g.handIn(next.quest)) react(e, target)
-      folk.news(
-        next.quest.giver,
-        `${
-          last?.sheet.name ?? 'A hero'
-        } did what you asked: ${next.quest.title}.`,
-      )
-      sound.quest()
+    {
+      accept: () => {
+        if (!next) return
+        g.accept(next.quest)
+        h.toast(`Quest taken: ${next.quest.title}`, 'Toast-big')
+        sound.quest()
+      },
+      hand: () => {
+        if (!next) return
+        for (let e of g.handIn(next.quest)) react(e, target)
+        folk.news(
+          next.quest.giver,
+          `${
+            last?.sheet.name ?? 'A hero'
+          } did what you asked: ${next.quest.title}.`,
+        )
+        sound.quest()
+      },
     },
   )
   if (giver.id == 'pip' && player && done != null) greeted.set(player, done)
@@ -833,13 +858,15 @@ let loop = (t: number) => {
       seen.tick(f)
       let found = camp.tick(f)
       if (found) h.toast(`${LEVELS[found.level].name} fire found`, 'Toast-big')
-      // An offer from the villager the hero is beside opens the deals.
+      // A villager's new offer opens the quest card at once.
       let talk = f.talk
-      for (let n of deal.tick(f.level)) {
-        h.toast(n.text, 'Toast-loot')
-        if (talk && n.offer == talk.id) dealt.open(talk.id, talk.name)
-      }
+      let news = deal.tick(f.level)
       let views = deal.standing(f.sheet)
+      for (let n of news) {
+        h.toast(n.text, 'Toast-loot')
+        let offer = views.find((v) => v.eid == n.offer)
+        if (talk && offer?.giver.id == talk.id) offerTalk(talk, offer)
+      }
       dealt.paint(
         views.filter((v) => v.giver.id == talk?.id),
         talk?.id ?? null,
@@ -870,7 +897,7 @@ let loop = (t: number) => {
       for (let e of job.events) worked(e)
       for (let e of helping.events) worked(e)
       if (i.talk && f.talk && !job.bench) talkTo()
-      if (h.talking && !f.talk) h.talk(null, () => {}, () => {})
+      if (h.talking && !f.talk) h.talk(null)
       if (!h.talking) folk.leave()
       if (f.body.gait == 'run' && Math.random() < 0.35) {
         dust.emit(

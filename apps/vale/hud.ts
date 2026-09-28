@@ -35,6 +35,7 @@
 // rests on it or a thumb holds it: its name, its key, and a line of what it
 // does; an ability's is bar.ts's, with its numbers. Give a new button one.
 import { about } from './about.ts'
+import type { View } from './deals.ts'
 import { type Action, keysOf } from './input.ts'
 import { fireNear } from './fires.ts'
 import type { Under } from './fx.ts'
@@ -51,6 +52,7 @@ import { cap, type Page, panels, type Spec, type TabSpec } from './panel.ts'
 import type { Quest } from './quests.ts'
 import { need } from './rules.ts'
 import { icon } from './sprites.ts'
+import { said } from './stock.ts'
 import { type Tip, tip, tipped, tips } from './tip.ts'
 import { TRADES } from './trades.ts'
 import type { Mic } from './voicebox.ts'
@@ -69,44 +71,60 @@ let meter = (k: number, cls: string, label = '') =>
     Math.max(0, Math.min(1, k)).toFixed(3)
   }"></i>${label ? `<span>${label}</span>` : ''}</div>`
 
-export type Talk = {
-  quest: Quest | null
-  state: string
-  have: number
-  greets: string
-  name: string
-  /** a line still shown when the villager has a quest on offer */
-  note?: string | null
-  /** another page the villager invites this hero to visit */
-  link?: { href: string; label: string } | null
-  /** they hear what is said beside them, and answer (village.ts) */
-  hears?: boolean
-  /** how their feeling shows, as in "looks tired" (villagers.ts) */
-  looks?: string | null
-}
+export type Talk =
+  & {
+    name: string
+    /** a line still shown when the villager has a quest on offer */
+    note?: string | null
+    /** another page the villager invites this hero to visit */
+    link?: { href: string; label: string } | null
+    /** they hear what is said beside them, and answer (village.ts) */
+    hears?: boolean
+    /** how their feeling shows, as in "looks tired" (villagers.ts) */
+    looks?: string | null
+  }
+  & (
+    | { quest: Quest | null; state: string; have: number; greets: string }
+    | { offer: View }
+  )
 
 /** The words and choices of a villager, including a note beside a quest. */
 export let talkHtml = (t: Talk): string => {
-  let q = t.quest
   let html = ''
   let act = ''
-  if (!q) html = `<p>${esc(t.greets)}</p>`
-  else if (t.state == 'open') {
-    html = `<h3>${esc(q.title)}</h3><p>${
-      esc(q.body)
-    }</p><p class=Talk_Reward>Reward: ${q.xp} xp${
-      q.gift ? `, ${esc(ITEMS[q.gift]?.name ?? q.gift)}` : ''
-    }</p>`
-    act = '<button class="Btn Btn-go" data-do=accept>I’ll do it</button>'
-  } else if (t.have >= q.count) {
-    html = `<h3>${esc(q.title)}</h3><p>You did it! The vale owes you one.</p>`
-    act = '<button class="Btn Btn-go" data-do=hand>Hand it in</button>'
+  if ('offer' in t) {
+    let v = t.offer
+    html = `<h3>An errand for ${esc(v.giver.name)}</h3><p>${
+      v.steps.map((s) =>
+        esc(
+          `${s.deed ? 'Fell' : 'Bring'} ${s.n} ${
+            BEASTS[s.kind]?.name ?? ITEMS[s.kind]?.name ?? s.kind
+          }`,
+        )
+      ).join(', ')
+    }</p><p class=Talk_Reward>Reward: ${esc(said(v.give))}</p>`
+    act = '<button class="Btn Btn-go" data-do=accept>I’ll do it</button>' +
+      '<button class=Btn data-do=refuse>No thanks</button>'
   } else {
-    html = `<h3>${esc(q.title)}</h3><p>${
-      esc(q.body)
-    }</p><p class=Talk_Reward>${t.have} / ${q.count} so far.</p>`
+    let q = t.quest
+    if (!q) html = `<p>${esc(t.greets)}</p>`
+    else if (t.state == 'open') {
+      html = `<h3>${esc(q.title)}</h3><p>${
+        esc(q.body)
+      }</p><p class=Talk_Reward>Reward: ${q.xp} xp${
+        q.gift ? `, ${esc(ITEMS[q.gift]?.name ?? q.gift)}` : ''
+      }</p>`
+      act = '<button class="Btn Btn-go" data-do=accept>I’ll do it</button>'
+    } else if (t.have >= q.count) {
+      html = `<h3>${esc(q.title)}</h3><p>You did it! The vale owes you one.</p>`
+      act = '<button class="Btn Btn-go" data-do=hand>Hand it in</button>'
+    } else {
+      html = `<h3>${esc(q.title)}</h3><p>${
+        esc(q.body)
+      }</p><p class=Talk_Reward>${t.have} / ${q.count} so far.</p>`
+    }
+    if (q && t.note) html += `<p class=Talk_Hint>${esc(t.note)}</p>`
   }
-  if (q && t.note) html += `<p class=Talk_Hint>${esc(t.note)}</p>`
   if (t.hears) {
     html += `<p class=Talk_Hint>${
       t.looks ? `${esc(t.name)} ${esc(t.looks)}. ` : ''
@@ -484,14 +502,19 @@ export let hud = (
     acts: [pads.querySelector<HTMLElement>('.Pad-strike')!, ...abilities],
     toast,
     /** someone's words, or none */
-    talk: (t: Talk | null, accept: () => void, handIn: () => void) => {
+    talk: (
+      t: Talk | null,
+      acts: { accept?: () => void; hand?: () => void; refuse?: () => void } =
+        {},
+    ) => {
       talk.hidden = !t
       if (!t) return
       talk.innerHTML = talkHtml(t)
       talk.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
         b.addEventListener('click', () => {
-          if (b.dataset.do == 'accept') accept()
-          if (b.dataset.do == 'hand') handIn()
+          if (b.dataset.do == 'accept') acts.accept?.()
+          if (b.dataset.do == 'hand') acts.hand?.()
+          if (b.dataset.do == 'refuse') acts.refuse?.()
           hush()
         })
       )

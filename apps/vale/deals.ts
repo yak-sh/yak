@@ -96,8 +96,7 @@ export type View = {
   ready: boolean
 }
 
-/** Something to say of a deal: its words, and, for an offer, the id of the
- * villager who made it. */
+/** Something to say of a deal: its words, and, for an offer, its deal id. */
 export type Note = { text: string; offer?: string }
 
 export type Deals = ReturnType<typeof deals>
@@ -287,7 +286,7 @@ export let deals = (net: Net) => {
               text: `${g.name} offers you ${said(terms.give)} for ${
                 said(terms.take)
               }.`,
-              offer: g.id,
+              offer: d.eid,
             })
           }
         }
