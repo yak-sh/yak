@@ -26,11 +26,11 @@ import { type Authenticate, json, refuse, type Route, signed } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
 import type { Driver } from '@yaks/sql'
 import { addressOf, type Artifact, keep } from './artifact.ts'
-import { fileBlobs } from './file.ts'
-import { type Bucket, objectBlobs } from './object.ts'
+import { type Backend, backend } from './backend.ts'
 import { served } from './serve.ts'
-import { sqliteBlobs } from './sqlite.ts'
 import type { Blobs } from './store.ts'
+
+export { type Backend, backend } from './backend.ts'
 
 /** The path prefix both endpoints are mounted under. */
 export let PREFIX = '/blob/'
@@ -40,64 +40,11 @@ export let LIMIT = 25 * 1024 * 1024
 
 /** The options a configuration passes to this plugin. */
 export type Options = {
-  /** where the objects these endpoints serve and accept live; name none and
-   * they live in the server's own table, beside the text `./rules` keeps
-   * there */
+  /** where a standalone door keeps objects; a composed host supplies its
+   * configured artifact store for both writers and readers */
   store?: Backend
   /** the largest upload, in bytes (default {@link LIMIT}) */
   limit?: number
-}
-
-/** A byte store, as a configuration names one — the same three ./store.ts
- * describes. */
-export type Backend =
-  | {
-    /** the server's own SQLite table — the default, and text: it is the table
-     * SQL reads a body property through (./sqlite.ts), so a server accepting
-     * binary uploads names one of the others */
-    via: 'sqlite'
-  }
-  | {
-    /** a directory, one file per address */
-    via: 'file'
-    /** where that directory is */
-    dir: string
-  }
-  | {
-    /** an S3-shaped bucket, R2 included */
-    via: 'object'
-    /** the binding object itself, so this store is configured by a server
-     * composing in code rather than from a JSON file */
-    bucket: Pick<Bucket, 'head' | 'get' | 'put'>
-    /** what to namespace the keys with */
-    prefix?: string
-  }
-
-/** The named store, built — or the message explaining why there is none. A
- * server that believes it is keeping uploads somewhere and is not is worse than
- * one that does not start, so the reason is reported rather than swallowed; it
- * is reported rather than thrown, because missing configuration never stops a
- * server coming up. With nowhere to put bytes, the endpoints are not mounted at
- * all, so an upload is refused where it is attempted instead of being written
- * into nothing. */
-export let backend = (
-  said: Backend,
-  host: { sql: Driver },
-): { store?: Blobs; waiting?: string } => {
-  if (said.via == 'sqlite') return { store: sqliteBlobs(host.sql) }
-  if (said.via == 'file') {
-    return said.dir
-      ? { store: fileBlobs(said.dir) }
-      : { waiting: 'a file store needs `dir`' }
-  }
-  if (said.via == 'object') {
-    return said.bucket
-      ? { store: objectBlobs(said.bucket, said.prefix) }
-      : { waiting: 'an object store needs `bucket`' }
-  }
-  return {
-    waiting: `no store called ${JSON.stringify((said as Backend).via)}`,
-  }
 }
 
 // An address is 64 lowercase hex characters; anything else never named an
@@ -154,10 +101,12 @@ let mediaOf = (request: Request): string => {
 /** The two endpoints: `GET /blob/<sha256>` returns the bytes, and
  * `PUT /blob/<sha256>` stores them. */
 export let routes = (
-  host: { sql: Driver; graph: Graph; who?: Authenticate },
+  host: { sql: Driver; graph: Graph; who?: Authenticate; artifacts?: Blobs },
   options: Options = {},
 ): Route[] => {
-  let { store, waiting } = backend(options.store ?? { via: 'sqlite' }, host)
+  let { store, waiting } = host.artifacts
+    ? { store: host.artifacts }
+    : backend(options.store ?? { via: 'sqlite' }, host)
   if (!store) {
     console.warn(`@yaks/blob: no door — ${waiting}`)
     return []

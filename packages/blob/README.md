@@ -277,17 +277,24 @@ entity. Repeating a successful upload uses the same address and entity ID.
 }
 ```
 
-`limit` defaults to 25 MiB (`LIMIT`). The routes use these backends:
+`limit` defaults to 25 MiB (`LIMIT`). A composed `yak` host gives the route and
+the harness the same artifact store. By default, a file-backed graph keeps
+binary artifacts in `images/` beside its database; an in-memory graph keeps them
+in memory. The plugin's `store` option changes that store for both. Graph text
+properties remain in the SQLite text table. Standalone routes without a host
+artifact store use their `store` option or the SQLite default.
+
+The routes use these backends:
 
 - `{ "via": "sqlite" }`: the default text table; rejects invalid UTF-8 uploads.
 - `{ "via": "file", "dir": "..." }`: a directory for binary or text uploads.
 - `{ via: 'object', bucket, prefix? }`: an object-store binding supplied in
   code, not serializable JSON configuration.
 
-These route options choose the upload/download backend. The `rules` sub-module
-keeps marked graph text properties in the host's blob store (`host.blobs`, a
-table in the server's database). Missing `dir`, missing `bucket` or an unknown
-backend logs a reason and returns no routes.
+The `rules` sub-module keeps marked graph text properties in the host's blob
+store (`host.blobs`, a table in the server's database). A composed host refuses
+an invalid artifact backend at startup; standalone routes log the reason and
+mount no door.
 
 ## Bounded text inspection for tools
 

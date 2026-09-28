@@ -4,12 +4,53 @@ import { images } from './images.ts'
 import { responses } from '@yaks/openai'
 import { responses as router } from '@yaks/openrouter'
 import { artifactStore, fileBlobs, memoryBlobs } from '@yaks/blob'
+import { routes as blobRoutes } from '@yaks/blob/routes'
+import { compose } from '@yaks/cli/host'
 import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
+import { hosted } from './store.ts'
 import { at, harness, worker } from './testing.ts'
 
 const png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
+
+Deno.test('the harness and blob door share the graph artifact store', async () => {
+  let dir = await Deno.makeTempDir()
+  try {
+    for (let custom of [false, true]) {
+      let db = `${dir}/${custom ? 'custom' : 'default'}.db`
+      let place = `${dir}/${custom ? 'media' : 'images'}`
+      let config = at(db)
+      if (custom) {
+        config.plugins = config.plugins!.map((p) =>
+          p == '@yaks/blob'
+            ? { use: p, with: { store: { via: 'file', dir: place } } }
+            : p
+        )
+      }
+      let host = await compose(config, ['graph'])
+      try {
+        let h = hosted(host)
+        let bytes = Uint8Array.from(atob(png), (c) => c.charCodeAt(0))
+        let artifact = await artifactStore(h.artifacts)(bytes, 'image/png')
+        await h.g.apply([{ entity: { eid: artifact.address }, artifact }])
+        let get = blobRoutes(host).find((r) => r.method == 'GET')!
+        let response = await get.handle(
+          new Request(`http://host/blob/${artifact.address}`),
+        )
+        assertEquals(response.status, 200)
+        assertEquals(response.headers.get('content-type'), 'image/png')
+        assertEquals(new Uint8Array(await response.arrayBuffer()), bytes)
+        assertEquals(await Deno.readFile(`${place}/${artifact.address}`), bytes)
+      } finally {
+        await host.close()
+      }
+    }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 Deno.test('generated artifacts survive database reopen and keep payloads out of transcript and requests', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graph.db', directory = dir + '/images'

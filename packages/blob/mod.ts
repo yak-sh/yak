@@ -84,6 +84,7 @@ export * from './sqlite.ts'
 export * from './hydrate.ts'
 export * from './file.ts'
 export * from './object.ts'
+export * from './backend.ts'
 export * from './image.ts'
 export * from './serve.ts'
 

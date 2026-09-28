@@ -5,7 +5,7 @@
 // a graph it runs over is the same graph with the same rules whichever process
 // opened it.
 
-import { type Blobs, fileBlobs, memoryBlobs } from '@yaks/blob'
+import { type Blobs } from '@yaks/blob'
 import type { Effects } from '@yaks/effects'
 import type { Eid, Graph } from '@yaks/graph'
 import { migrations, type Store } from '@yaks/sqlite'
@@ -29,19 +29,12 @@ export type Harness = {
   gone: (holder: Eid) => Promise<boolean>
   /** where this graph's secrets are kept — its sign-ins among them */
   vault: Vault
-  /** where its artifacts' bytes are kept (@yaks/blob): the `images` directory
-   * beside the database, or memory for a graph in memory */
+  /** where its artifacts' bytes are kept (@yaks/blob), shared with the host's
+   * blob door */
   artifacts: Blobs
   migrations: ReturnType<typeof migrations>
   close: () => void | Promise<void>
 }
-
-/** Where the artifacts of the graph at `path` keep their bytes: the `images`
- * directory beside it, or memory for a graph in memory. */
-export let artifactsAt = (path: string): Blobs =>
-  path == ':memory:'
-    ? memoryBlobs()
-    : fileBlobs(path.slice(0, path.lastIndexOf('/') + 1) + 'images')
 
 /** The graph a `yak` config composed, as a harness runs over it: its store,
  * graph, effects and vault are the host's. Closing the harness runs `close`,
@@ -60,7 +53,7 @@ export let hosted = (
     me: host.me,
     gone: host.gone,
     vault: host.vault,
-    artifacts: artifactsAt(path),
+    artifacts: host.artifacts,
     migrations: migrations(host.sql),
     close,
   }

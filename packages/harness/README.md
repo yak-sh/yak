@@ -582,8 +582,10 @@ fallback. Disable images explicitly if your endpoint rejects them.
 
 Generated media are `@yaks/blob` artifacts: each is an entity named by its
 bytes' SHA-256, and the bytes are kept in the graph's byte store
-(`h.artifacts`), the `images` directory beside the database (`~/.yak/images`),
-or memory for a graph in memory. Keep that directory with database backups.
+(`h.artifacts`), shared with the graph's `/blob` door. By default this is the
+`images` directory beside the database (`~/.yak/images`), or memory for an
+in-memory graph. The `@yaks/blob` plugin's `store` option chooses another
+backend for both. Keep a file store with database backups.
 
 OpenRouter audio and image models use the same store. Set their model row's
 `modalities` to the outputs they produce; the local provider passes that to
