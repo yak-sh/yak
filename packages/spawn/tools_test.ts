@@ -266,6 +266,49 @@ Deno.test('a peek keeps the entire last multiline output within its entry limit'
   assert(!seen.includes('earlier'))
 })
 
+Deno.test('a peek bounds transcript reads and previews a large entry', async () => {
+  let { g } = host()
+  await g.apply([
+    { entity: { eid: 's' }, session: {} },
+    {
+      entity: { eid: 'e1' },
+      entry: { session: 's' },
+      content: { body: 'earlier' },
+    },
+    {
+      entity: { eid: 'e2' },
+      entry: { session: 's' },
+      content: { body: 'A'.repeat(100_000) },
+      output: { source: 's' },
+    },
+  ])
+  let read = g.read.bind(g), get = g.get.bind(g)
+  g.read = ((q: string, ...rest: unknown[]) => {
+    if (q.includes('.entry.session=') && !q.includes('.limit=')) {
+      throw new Error('unbounded transcript read')
+    }
+    return read(q, ...rest as [])
+  }) as typeof g.read
+  g.get =
+    (async (ids, comps) =>
+      (await get(ids, comps)).map((b) =>
+        b.session
+          ? { ...b, session: { ...(b.session as Comp), status: 'settled' } }
+          : b
+      )) as typeof g.get
+
+  let seen = body(
+    await tools.session_peek!(...asked(g, {
+      session: 's',
+      lines: 1,
+    })),
+  )
+  assertStringIncludes(seen, 'settled')
+  assertStringIncludes(seen, '[100000 characters total]')
+  assert(seen.length < 17_000)
+  assert(!seen.includes('earlier'))
+})
+
 Deno.test('a transcript-only wait returns when its output settles', async () => {
   let { g } = host()
   await g.apply([

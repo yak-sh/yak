@@ -104,6 +104,14 @@ let entriesOf = async (graph: Graph, session: string): Promise<Bundle[]> =>
     await graph.read(`.${ENTRY}.session=${JSON.stringify(session)}&*`),
   )
 
+let recent = async (graph: Graph, session: string, limit: number) =>
+  ordered(
+    await graph.read(
+      `.${ENTRY}.session=${JSON.stringify(session)}` +
+        `&.order=-entry.seq&.limit=${limit}&*`,
+    ),
+  )
+
 // The session this call names, refused where the id is something else: a wait
 // on a task is a wait that would never end.
 let sessionAt = async (call: Bundle, graph: Graph): Promise<Bundle> => {
@@ -140,7 +148,13 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
   let beat = Number(options.poll ?? 250)
   let patience = (said: unknown) =>
     every(said, every(options.timeout, 30 * 60_000))
-  let lines = (said: unknown) => Number(said ?? options.lines ?? 40)
+  let lines = (said: unknown) => {
+    let n = Number(said ?? options.lines ?? 40)
+    if (!Number.isSafeInteger(n) || n < 1) {
+      throw new CallError('lines', 'lines must be a positive integer')
+    }
+    return Math.min(n, 256)
+  }
 
   // How a run ended, in a form a person reads: where it stands, the exit code
   // it ended on, and its own account of itself.
@@ -259,14 +273,18 @@ export let runs = (_host: Host, options: Options = {}): Runs => {
     session_peek: async (call, graph): Promise<Bundle[]> => {
       let args = argsOf(call)
       let row = await sessionAt(call, graph)
-      let entries = await entriesOf(graph, row.entity.eid)
-      let shown = entries.slice(-lines(args.lines))
+      let shown = await recent(graph, row.entity.eid, lines(args.lines))
+      let status = str(comp(row, SESSION)?.status) ||
+        statusOf(await entriesOf(graph, row.entity.eid))
       return [said(
         call,
         [
-          `${human(graph.vocab)(row)} — ${statusOf(entries)}`,
+          `${human(graph.vocab)(row)} — ${status}`,
           ...shown.map((b) =>
-            render(views, b, 'Line', graph.vocab, { full: true }, 'plain')
+            render(views, b, 'Line', graph.vocab, {
+              full: true,
+              maxChars: 16_384,
+            }, 'plain')
               .trim()
           ),
         ].join('\n'),

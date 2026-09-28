@@ -33,7 +33,13 @@ let reached = (
 /** Shared prose tree; renderers keep metadata structural rather than stripping
  * text. */
 export let entryBody: Renderer['render'] = (b, h, ctx) => {
-  let first = ctx.full ? textOf(b) : textOf(b).split('\n')[0].slice(0, 70)
+  let body = textOf(b)
+  let max = Number(ctx.maxChars)
+  let first = ctx.full
+    ? Number.isSafeInteger(max) && max > 0 && body.length > max
+      ? body.slice(0, max) + `\n… [${body.length} characters total]`
+      : body
+    : body.split('\n')[0].slice(0, 70)
   let names = (ctx.names ?? {}) as Record<string, string>
   let anchor = ctx.anchor as ((b: Bundle) => string | undefined) | undefined
   let line = [
@@ -84,7 +90,7 @@ let tile: Renderer['render'] = (b, h, ctx) => {
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
  * context may carry `names` (model or tool eid → name), `anchor` (reads a
  * provider's anchor off an ask entry), and `entries` (the transcript, for
- * `Status`), `full` (untruncated entry prose for transcript panes). In a list
+ * `Status`), `full` (entry prose), `maxChars` (a full prose preview bound). In a list
  * of answers, an entry's `Tile` is its line and a transcript's is its status
  * as the store computed it. */
 export let views: Registry = define([

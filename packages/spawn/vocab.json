@@ -111,7 +111,7 @@
       "noun": "session",
       "verb": "peek",
       "title": "Read the end of a session",
-      "description": "Return the last entries of an agent work session as stored in the graph, one line per entry, plus its current status. Returns at most lines entries (40 by default), as text in content.body; never the provider’s own log file.",
+      "description": "Return the last entries of an agent work session as stored in the graph, plus its current status. Returns at most lines entries (40 by default, 256 maximum), with long entry bodies previewed, as text in content.body; never the provider’s own log file.",
       "input": {
         "session": {
           "type": "string",
