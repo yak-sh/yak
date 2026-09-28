@@ -30,8 +30,8 @@ executing inside `transactionSync` must remain synchronous.
 Pass an optional observer to `driver(ctx.storage, observe)` or as the fourth
 argument to `storage(ctx.storage, vocab, base, observe)` to receive each drained
 cursor's `rowsRead` and `rowsWritten` with a value-free SQL shape.
-`profile(emit)` collects these samples in memory and emits a bounded summary at
-most once per minute when its host calls `flush()`.
+`profile(emit)` collects these samples in memory. `flush()` emits its first
+nonempty summary immediately and subsequent summaries at most once per minute.
 
 `sockets(subs, ctx)` connects hibernatable WebSockets to
 [@yaks/api](../api/README.md) subscriptions. The API registry re-evaluates saved

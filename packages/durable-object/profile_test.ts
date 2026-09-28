@@ -52,7 +52,7 @@ Deno.test('statement shapes keep identifiers but omit inline and bound values', 
   assertStringIncludes(shape(render(query('one'))), '"owner\'s"')
 })
 
-Deno.test('a profile reports bounded read costs once per minute', () => {
+Deno.test('a profile reports first costs promptly and later costs at most once per minute', () => {
   let at = 100
   let reports: Summary[] = []
   let p = profile((summary) => reports.push(summary), () => at)
@@ -61,10 +61,6 @@ Deno.test('a profile reports bounded read costs once per minute', () => {
   }
   p.observe({ shape: 'select "large"', rowsRead: 500, rowsWritten: 2 })
   p.observe({ shape: 'update "write"', rowsRead: 0, rowsWritten: 500 })
-  at += 59_999
-  p.flush()
-  assertEquals(reports.length, 0)
-  at++
   p.flush()
   p.flush()
   assertEquals(reports.length, 1)
@@ -84,4 +80,11 @@ Deno.test('a profile reports bounded read costs once per minute', () => {
       reports[0].statements.reduce((n, row) => n + row.rowsRead, 0),
     570,
   )
+  p.observe({ shape: 'select "next"', rowsRead: 7, rowsWritten: 1 })
+  at += 59_999
+  p.flush()
+  assertEquals(reports.length, 1)
+  at++
+  p.flush()
+  assertEquals(reports[1].total, { calls: 1, rowsRead: 7, rowsWritten: 1 })
 })

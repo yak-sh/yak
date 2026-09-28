@@ -42,9 +42,9 @@ let id = (s: string): string => {
   }`
 }
 
-/** One report per minute at most, with up to 64 tracked shapes. Each report
- * names the top ten by reads and up to two more by writes; `other` sums the
- * rest, including shapes that could not be tracked. */
+/** Report the first nonempty window at once, then at most once per minute
+ * while this object stays awake. Each report names the top ten by reads and
+ * up to two more by writes; `other` sums the rest. */
 export let profile = (
   emit: (summary: Summary) => void,
   now = Date.now,
@@ -57,6 +57,7 @@ export let profile = (
   let other = empty()
   let shapes = new Map<string, Entry>()
   let reported = false
+  let first = true
   let observe = (sample: Sample) => {
     since ??= now()
     let cost = {
@@ -85,7 +86,7 @@ export let profile = (
     add(entry ?? other, cost)
   }
   let flush = (at = now()) => {
-    if (since == null || at - since < 60_000) return
+    if (since == null || (!first && at - since < 60_000)) return
     let ranked = [...shapes.values()].sort((a, b) => b.rowsRead - a.rowsRead)
     let top = ranked.slice(0, 10)
     let written = [...ranked].sort((a, b) => b.rowsWritten - a.rowsWritten)
@@ -101,6 +102,7 @@ export let profile = (
       reported = true
     }
     since = null
+    first = false
     total = empty()
     other = empty()
     shapes = new Map()
