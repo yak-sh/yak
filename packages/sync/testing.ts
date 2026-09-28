@@ -192,6 +192,10 @@ export type Server = {
   sockets: Fake[]
   /** a client half waiting to be upgraded (the harness's own plumbing) */
   offer: (half: Fake) => void
+  /** run the server's pending relay batches */
+  flush: () => void
+  /** advance the server's socket clock */
+  pass: (ms: number) => void
 }
 
 /** The cook the server's handler treats every request as coming from — so a
@@ -204,16 +208,41 @@ export let server = (): Server => {
   let g = boxGraph()
   let sockets: Fake[] = []
   let waiting: Fake[] = []
+  let now = 0
+  let due: { at: number; fn: () => void }[] = []
+  let pass = (ms: number) => {
+    let until = now + ms
+    while (due.length && due[0].at <= until) {
+      let next = due.shift()!
+      now = next.at
+      next.fn()
+    }
+    now = until
+  }
   let handler = api({
     graph: g,
     authenticate: () => ({ by: COOK }),
+    socketTimer: (fn, ms) => {
+      due.push({ at: now + ms, fn })
+      due.sort((a, b) => a.at - b.at)
+    },
+    socketNow: () => now,
     upgrade: () => {
       let s = waiting.shift()!
       sockets.push(s)
       return { socket: s, response: new Response(null, { status: 101 }) }
     },
   })
-  return { graph: g, handler, sockets, offer: (half) => waiting.push(half) }
+  return {
+    graph: g,
+    handler,
+    sockets,
+    offer: (half) => waiting.push(half),
+    pass,
+    flush: () => {
+      while (due.length) pass(due[0].at - now)
+    },
+  }
 }
 
 /** A client graph connected to a server, with both transports pointed at an
@@ -284,13 +313,16 @@ export let client = (srv: Server): Client => {
       let until = now + ms
       while (due.length && due[0].at <= until) fire()
       now = until
+      srv.pass(ms)
     },
     socket: () => mine,
     idle: async () => {
       await opening
       await wire.idle()
+      srv.flush()
       await opening
       await wire.idle()
+      srv.flush()
     },
   }
 }

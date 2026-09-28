@@ -49,11 +49,11 @@ let TICK = 16
 let MAX_MESSAGE = 64 * 1024
 let gates = new WeakMap<Subs, WeakMap<Sink, ReturnType<typeof admission>>>()
 
-let gate = (subs: Subs, to: Sink) => {
+let gate = (subs: Subs, to: Sink, now?: () => number) => {
   let bySink = gates.get(subs)
   if (!bySink) gates.set(subs, bySink = new WeakMap())
   let one = bySink.get(to)
-  if (!one) bySink.set(to, one = admission(subs.pace ?? (() => null)))
+  if (!one) bySink.set(to, one = admission(subs.pace ?? (() => null), now))
   return one
 }
 let peerOnly = (frame: Frame): frame is Frame & { relay: Bundle[] } =>
@@ -102,9 +102,9 @@ export let queue = (
       if (batch) frame = { ...frame, relay: batch.read() }
       if (enabled && !peerOnly(frame)) {
         let token = crypto.randomUUID()
-        socket.send(JSON.stringify({ ...frame, ack: token }))
         owed = token
         resume.sent?.(frame, token)
+        socket.send(JSON.stringify({ ...frame, ack: token }))
       } else {
         socket.send(JSON.stringify(frame))
       }
@@ -181,7 +181,12 @@ export let sink = (
  * — which is precisely why it cannot go through `/apply`, a separate request
  * with no connection to name.
  */
-export let receive = (subs: Subs, to: Sink, data: unknown): void | 'close' => {
+export let receive = (
+  subs: Subs,
+  to: Sink,
+  data: unknown,
+  now?: () => number,
+): void | 'close' => {
   let id = ''
   let fail = (err: unknown) => {
     fault(err, 'socket message')
@@ -205,7 +210,7 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void | 'close' => {
       return
     }
     if (Array.isArray(msg?.relay)) {
-      let verdict = gate(subs, to)(msg.relay)
+      let verdict = gate(subs, to, now)(msg.relay)
       if (verdict == 'close') return 'close'
       if (verdict == 'skip') return
       let out = subs.relay(to, msg.relay)
@@ -223,8 +228,13 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void | 'close' => {
  * subscriptions, and closing it drops them all. Returns the sink its frames
  * go to, which is also the key its subscriptions are held under.
  */
-export let attach = (subs: Subs, socket: Socket): Sink => {
-  let q = queue(socket, undefined, () => socket.readyState == OPEN)
+export let attach = (
+  subs: Subs,
+  socket: Socket,
+  timer?: (fn: () => void, ms: number) => void,
+  now?: () => number,
+): Sink => {
+  let q = queue(socket, timer, () => socket.readyState == OPEN)
   let to = q.send
   let shut = false
   let drop = () => {
@@ -246,7 +256,7 @@ export let attach = (subs: Subs, socket: Socket): Sink => {
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
     ) q.enable()
-    if (receive(subs, to, e.data) == 'close') {
+    if (receive(subs, to, e.data, now) == 'close') {
       drop()
       socket.close?.(1008, 'relay flood')
     }

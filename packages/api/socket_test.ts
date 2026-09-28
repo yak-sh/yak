@@ -152,6 +152,22 @@ Deno.test('a resumed socket sends peers without changing its owed durable frame'
   assertEquals(sent, [{ id: 's', gone: ['a'] }])
 })
 
+Deno.test('an ACK received during send releases the next durable frame', () => {
+  let seen: { id: string; ack?: string }[] = []
+  let q: ReturnType<typeof queue>
+  q = queue({
+    send: (data) => {
+      let frame = JSON.parse(data)
+      seen.push(frame)
+      q.ack(frame.ack)
+    },
+  })
+  q.enable()
+  q.send({ id: 'first', bundles: [] })
+  q.send({ id: 'second', bundles: [] })
+  assertEquals(seen.map((f) => f.id), ['first', 'second'])
+})
+
 Deno.test('a pending membership frame stays ahead of later peer relays', () => {
   let socket = fake()
   let due: (() => void)[] = []

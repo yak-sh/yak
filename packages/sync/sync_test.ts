@@ -357,6 +357,7 @@ Deno.test("a peer's value goes with its connection", async () => {
   let { a, b, finger, point } = await pointing()
   await point({ x: 3, y: 9 })
   a.socket()!.close()
+  await b.idle()
   assertEquals(finger(), {})
   a.wire.close()
   b.wire.close()

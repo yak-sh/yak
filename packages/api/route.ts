@@ -52,6 +52,10 @@ export type Options = {
   authenticate?: Authenticate
   /** the runtime's WebSocket upgrade (default: Deno's) */
   upgrade?: Upgrade
+  /** schedule socket relay batches (default: setTimeout) */
+  socketTimer?: (fn: () => void, ms: number) => void
+  /** clock for socket relay admission (default: Date.now) */
+  socketNow?: () => number
   /** the subscription registry (default: a fresh one over `graph`) */
   subs?: Subs
 }
@@ -99,7 +103,7 @@ export let api = (opts: Options): Handler => {
           return no('/ws is a WebSocket endpoint', 405)
         }
         let { socket, response } = upgrade(request)
-        attach(subs, socket)
+        attach(subs, socket, opts.socketTimer, opts.socketNow)
         return response
       }
       return no(`no route for ${path}`, 404)
