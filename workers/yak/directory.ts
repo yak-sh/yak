@@ -178,6 +178,7 @@ export type App = {
   // A borrowed property can move this while the app's own files stay put.
   declaration?: string | null
   source?: string | null
+  draft?: string | null
   script?: string | null
   title: string
   // Who may read and write its store (T-32504): 'public', 'open', or
@@ -308,6 +309,7 @@ type Row = {
     version: number | null
     declaration?: string | null
     source?: string | null
+    draft?: string | null
     script?: string | null
     access?: Access | null
     store?: string | null
@@ -695,6 +697,7 @@ export let appOf = (r: Row): App => ({
   version: r.app!.version,
   declaration: r.app!.declaration ?? null,
   source: r.app!.source ?? null,
+  draft: r.app!.draft ?? null,
   script: r.app!.script ?? null,
   access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,

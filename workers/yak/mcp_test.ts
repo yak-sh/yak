@@ -468,7 +468,7 @@ Deno.test(
         'wrote index.html → https://jeff54.yaks.app/recipes/index.html — ' +
           `${page.length} bytes, sha256 ${await sha256(
             new TextEncoder().encode(page),
-          )}`,
+          )}; staged for app_deploy`,
       )
       // And `op` is not needed to say so: path and content are the write,
       // which is what the description always promised (T-34337).
@@ -499,7 +499,7 @@ Deno.test(
             new TextEncoder().encode('export let go = () => {}'),
           )}\nimg/logo.svg — 6 bytes, sha256 ${await sha256(
             new TextEncoder().encode('<svg/>'),
-          )}`,
+          )}\nStaged for app_deploy.`,
       )
       assertEquals(
         await agent.tool('app_files', { ...app, op: 'list' }),
@@ -644,9 +644,9 @@ Deno.test(
         path: 'add.wasm',
         base64: btoa(String.fromCharCode(...wasm)),
       })
-      let back = await k.at('jeff54.yaks.app', '/recipes/add.wasm')
-      assertEquals(back.headers.get('content-type'), 'application/wasm')
-      assertEquals(new Uint8Array(await back.arrayBuffer()), wasm)
+      let pending = await k.at('jeff54.yaks.app', '/recipes/add.wasm')
+      assertEquals(pending.status, 404)
+      await pending.body?.cancel()
       await assertRejects(
         () =>
           agent.tool('app_files', {
@@ -658,8 +658,11 @@ Deno.test(
         Error,
         'base64: not base64',
       )
-      await agent.tool('app_files', { ...app, op: 'delete', path: 'add.wasm' })
       assertMatch(await agent.tool('app_deploy', app), /v1/)
+      let back = await k.at('jeff54.yaks.app', '/recipes/add.wasm')
+      assertEquals(back.headers.get('content-type'), 'application/wasm')
+      assertEquals(new Uint8Array(await back.arrayBuffer()), wasm)
+      await agent.tool('app_files', { ...app, op: 'delete', path: 'add.wasm' })
       assertMatch(await agent.tool('app_deploy', app), /v2/)
       let served = await k.at('jeff54.yaks.app', '/recipes/')
       assertEquals(served.status, 200)

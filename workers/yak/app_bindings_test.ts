@@ -246,13 +246,14 @@ Deno.test('rollback switches files and worker only after the upload succeeds', a
     })
     await k.tool('app_deploy')
     let stage = `app-${k.app.eid}-r-3`
+    let space = (await k.dir.space('ada'))!
+    let before = (await k.dir.app(space, 'cookbook'))!
     k.state.fail = stage
     await assertRejects(() => k.tool('app_rollback'))
-    let space = (await k.dir.space('ada'))!
     let app = (await k.dir.app(space, 'cookbook'))!
     assertEquals(app.version, 2)
-    assertEquals(app.source, null)
-    assertEquals(app.script, null)
+    assertEquals(app.source, before.source)
+    assertEquals(app.script, before.script)
     assertEquals(
       await k.tool('app_files', { op: 'read', path: 'index.html' }),
       '<h1>second</h1>',
@@ -277,7 +278,7 @@ Deno.test('a vpc_services door needs a tunnel, and the script never holds it', a
   try {
     let service = '66666666-7777-4888-8999-aaaaaaaaaaaa'
     await k.write({ vpc_services: [{ binding: 'BOX', service_id: 'theirs' }] })
-    assertStringIncludes(await k.tool('app_deploy'), 'has no tunnel')
+    await assertRejects(() => k.tool('app_deploy'), Error, 'has no tunnel')
     assertEquals(k.uploads.length, 0)
     let space = (await k.dir.space('ada'))!
     await stamp(k.env, {
@@ -351,7 +352,7 @@ Deno.test('resource names fit every product and distinguish normalized binding n
   assert(await resourceName('app.bbb', 'DB') != names[0])
 })
 
-Deno.test('a refused provisioning scope leaves files serving and uploads no worker', async () => {
+Deno.test('a refused provisioning scope keeps draft files private and uploads no worker', async () => {
   for (
     let [path, scope, config] of [
       ['/d1/', 'D1 Edit', { d1_databases: configuration.d1_databases }],
@@ -363,19 +364,19 @@ Deno.test('a refused provisioning scope leaves files serving and uploads no work
     try {
       k.state.fail = path
       await k.write(config)
-      let result = await k.tool('app_deploy')
-      assertStringIncludes(result, scope)
-      assertStringIncludes(result, SCOPES)
-      assertStringIncludes(result, 'creation pending')
+      let error = await assertRejects(() => k.tool('app_deploy'), Error)
+      assertStringIncludes(error.message, scope)
+      assertStringIncludes(error.message, SCOPES)
+      assertStringIncludes(error.message, 'creation pending')
       assertStringIncludes(await k.tool('app_list'), 'creation pending')
-      assertEquals(result.includes('test-token'), false)
+      assertEquals(error.message.includes('test-token'), false)
       assertEquals(k.uploads.length, 0)
       let response = await apps.fetch(
         new Request('https://ada.yaks.app/cookbook/'),
         k.env,
       )
-      assertEquals(response.status, 200)
-      assertStringIncludes(await response.text(), 'The files keep serving')
+      assertEquals(response.status, 404)
+      await response.body?.cancel()
       k.state.fail = ''
       await k.tool('app_deploy')
       assertEquals(k.uploads.length, 1)
@@ -389,12 +390,12 @@ Deno.test('a missing explicit main refuses before resource creation, upload or d
   let k = await fixture()
   try {
     await k.write({ ...configuration, main: 'missing/server.js' })
-    let result = await k.tool('app_deploy')
+    let error = await assertRejects(() => k.tool('app_deploy'), Error)
     assertStringIncludes(
-      result,
+      error.message,
       'refused main: missing/server.js is not an app file',
     )
-    assertStringIncludes(result, 'upload the server source at that path')
+    assertStringIncludes(error.message, 'upload the server source at that path')
     assertEquals(k.calls, [])
     assertEquals(k.uploads, [])
     assertEquals(await k.rows('.binding'), [])
@@ -459,12 +460,12 @@ Deno.test('malformed JSONC keeps the prior worker and never falls back to JSON',
         },
       ],
     })
-    let result = await k.tool('app_deploy')
+    let error = await assertRejects(() => k.tool('app_deploy'), Error)
     assertStringIncludes(
-      result,
+      error.message,
       'refused wrangler config: expected valid JSON or JSONC',
     )
-    assertStringIncludes(result, 'the worker is unchanged')
+    assertStringIncludes(error.message, 'the prior worker is unchanged')
     assertEquals(k.calls.length, calls)
     assertEquals(k.uploads.length, 1)
     assertEquals((await k.rows('.binding')).length, 3)
@@ -478,7 +479,7 @@ Deno.test('a partial resource creation is recorded and reused on retry', async (
   try {
     k.state.fail = '/r2/'
     await k.write(configuration)
-    assertStringIncludes(await k.tool('app_deploy'), 'R2 Edit')
+    await assertRejects(() => k.tool('app_deploy'), Error, 'R2 Edit')
     assertEquals(k.uploads.length, 0)
     assertEquals((await k.rows('.binding')).length, 2)
     k.state.fail = ''
@@ -610,7 +611,7 @@ Deno.test('invalid main leaves the prior script intact even with no default sour
     await k.tool('app_files', {
       files: [{ path: 'wrangler.jsonc', content: '{"main":"../server.js"}' }],
     })
-    assertStringIncludes(await k.tool('app_deploy'), 'refused main:')
+    await assertRejects(() => k.tool('app_deploy'), Error, 'refused main:')
     assertEquals(k.calls, [])
   } finally {
     k.done()

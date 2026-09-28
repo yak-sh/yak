@@ -1070,6 +1070,15 @@ Deno.test('an app declares which of its own properties are searched', async () =
     })
     assertEquals(await titles('oven'), ['Lemon cake'])
 
+    await agent.tool('app_files', {
+      app: 'kitchen',
+      path: 'index.html',
+      content: '<h1>Published</h1>',
+    })
+    await agent.tool('app_deploy', { app: 'kitchen' })
+    let page = () => k.at(`${jeff.name}.yaks.app`, '/kitchen/')
+    let versions = await agent.tool('app_versions', { app: 'kitchen' })
+
     // A number holds no words. The deploy refuses the manifest in @yaks/vocab's
     // own sentence rather than planting an index over nothing, and refuses it
     // whole: the property that was searched still is.
@@ -1082,11 +1091,27 @@ Deno.test('an app declares which of its own properties are searched', async () =
         serves: { type: 'number', search: true },
       })),
     })
+    await agent.tool('app_files', {
+      app: 'kitchen',
+      path: 'index.html',
+      content: '<h1>Candidate</h1>',
+    })
+    assertStringIncludes(await (await page()).text(), '<h1>Published</h1>')
     let why = (await assertRejects(
       () => agent.tool('app_deploy', { app: 'kitchen' }),
       Error,
     )).message
     assertStringIncludes(why, 'recipe.serves is searched but holds no prose')
+    assertStringIncludes(await (await page()).text(), '<h1>Published</h1>')
+    assertEquals(await agent.tool('app_versions', { app: 'kitchen' }), versions)
+    assertEquals(
+      await agent.tool('app_files', {
+        app: 'kitchen',
+        op: 'read',
+        path: 'index.html',
+      }),
+      '<h1>Candidate</h1>',
+    )
     assertEquals(await titles('marzipan'), ['Lemon cake'])
   } finally {
     await k.stop()

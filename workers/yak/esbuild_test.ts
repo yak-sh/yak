@@ -142,6 +142,61 @@ Deno.test('a compile that fails refuses the deploy, and the last release serves'
   assertEquals((await s.served('main.ts')).body, '/* main.ts */')
 })
 
+Deno.test('draft files stay private through a refused deploy and rollback', async () => {
+  let broken = false
+  using s = await scenario((ask) =>
+    broken ? { errors: ['main.ts cannot compile'] } : compiles(ask)
+  )
+  let page = (name: string) => `<h1>${name}</h1>${PAGE}`
+  await s.write({ 'index.html': page('first'), 'main.ts': 'let n: number = 1' })
+  await s.tool('app_deploy')
+  await s.write({
+    'index.html': page('second'),
+    'main.ts': 'let n: number = 2',
+  })
+  assert((await s.served('index.html')).body.includes('first'))
+  assertEquals(
+    await s.tool('app_files', { op: 'read', path: 'index.html' }),
+    page('second'),
+  )
+  await s.tool('app_deploy')
+  broken = true
+  await s.write({ 'index.html': page('candidate'), 'main.ts': 'let n number' })
+  assert((await s.served('index.html')).body.includes('second'))
+  await assertRejects(() => s.tool('app_deploy'), Error, 'cannot compile')
+  assert((await s.served('index.html')).body.includes('second'))
+  assertEquals((await s.served('main.ts')).body, '/* main.ts */')
+  assert((await s.tool('app_versions')).includes('2 versions'))
+  broken = false
+  await s.tool('app_deploy')
+  assert((await s.served('index.html')).body.includes('candidate'))
+  assert((await s.tool('app_versions')).includes('3 versions'))
+  await s.tool('app_rollback', { version: 2 })
+  assert((await s.served('index.html')).body.includes('first'))
+  assert((await s.tool('app_versions')).includes('4 versions'))
+})
+
+Deno.test('concurrent first edits share one private draft', async () => {
+  using s = await scenario(compiles)
+  await s.write({ 'index.html': '<h1>old</h1>', 'main.ts': 'let n = 1' })
+  await s.tool('app_deploy')
+  await Promise.all([
+    s.write({ 'index.html': '<h1>new</h1>' }),
+    s.write({ 'main.ts': 'let n = 2' }),
+  ])
+  assertEquals(
+    await s.tool('app_files', { op: 'read', path: 'index.html' }),
+    '<h1>new</h1>',
+  )
+  assertEquals(
+    await s.tool('app_files', { op: 'read', path: 'main.ts' }),
+    'let n = 2',
+  )
+  assert((await s.served('index.html')).body.includes('<h1>old</h1>'))
+  await s.tool('app_deploy')
+  assert((await s.served('index.html')).body.includes('<h1>new</h1>'))
+})
+
 Deno.test('a page that no longer needs compiling serves as written', async () => {
   using s = await scenario(compiles)
   await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })

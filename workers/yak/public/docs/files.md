@@ -27,14 +27,16 @@ that does not show the same picture twice.
 
 The app's own files — `index.html`, the css and js beside it, `vocab.json` — are
 written with `app_files`. **Writing a file needs no `op`**: give it a `path` and
-a `content`, or a list of them as `files: [{path, content}, …]`.
+a `content`, or a list of them as `files: [{path, content}, …]`. The files stay
+in a private draft until `app_deploy` releases them. A refused deploy leaves the
+previous files, vocabulary and worker serving together.
 
 `app_files(app, op: 'list')` lists their paths. Its structured result also
 includes `files: [{path, sha}]`, where `sha` is the SHA-256 of each file's
 bytes, and `unreleased` says whether the files differ from the live version.
 
 **Every write reports what was stored**, so a file transcribed by hand is
-checked in the call that made it rather than once the app serves broken:
+checked in the call that made it before the app serves it:
 
     wrote index.html → https://yourname.yaks.app/recipes/index.html
       — 4213 bytes, sha256 9f2a…

@@ -457,7 +457,7 @@ Deno.test('a blob lives while anything names it, and a day besides', async () =>
 
   // What the sweep costs an app: staged files, path logs and pinned bytes.
   let cost = trips()
-  assertEquals(cost.list - before.list, 3)
+  assertEquals(cost.list - before.list, 4)
   assertEquals(cost.read - before.read, 0)
   assertEquals(cost.delete - before.delete, 1)
 })

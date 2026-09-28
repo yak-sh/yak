@@ -590,6 +590,7 @@ export let platformDoc: VocabDoc = {
         version: num,
         declaration: owned(text),
         source: owned(text),
+        draft: owned(text),
         script: owned(text),
         access: { type: 'string', enum: ['public', 'open', 'private'] },
         // The app's handle: what its Durable Object, its dispatch script and

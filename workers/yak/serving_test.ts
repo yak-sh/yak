@@ -555,7 +555,7 @@ Deno.test('a break is the platform writing about the app, not in it', async () =
   assertEquals((await openIn(env, space, app, who)).length, 0)
 })
 
-Deno.test('writing the file a break named closes it (T-34338)', async () => {
+Deno.test('draft edits leave served breaks open until deployment', async () => {
   using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env)
@@ -577,11 +577,9 @@ Deno.test('writing the file a break named closes it (T-34338)', async () => {
     { path: 'app.js', bytes: new TextEncoder().encode('let go = 1') },
   ])
 
-  // The one that named app.js is answered by those bytes; the one on the page
-  // itself is not, and stays open.
+  // Draft bytes do not yet answer either served break.
   let open = await openIn(env, space, app, who, true)
-  assertEquals(open.length, 1)
-  assertEquals(open[0].exception?.request, 'page /cookbook/')
+  assertEquals(open.length, 2)
 })
 
 Deno.test('seen closes a whole deploy at once (T-34338)', async () => {
@@ -1209,11 +1207,13 @@ Deno.test('photo and file uploads enforce space R2 limits from actual bytes', as
   // Synthetic size metadata exercises GB ceilings without allocating GBs.
   env.BLOBS.list = async (opts) => {
     let page = await list(opts)
-    page.objects.push({
-      key: 'ada/another/blob',
-      size: occupied,
-      uploaded: new Date(),
-    })
+    if (opts.prefix == 'ada/') {
+      page.objects.push({
+        key: 'ada/another/blob',
+        size: occupied,
+        uploaded: new Date(),
+      })
+    }
     return page
   }
   let upload = (path: string, body: string, length?: string) =>

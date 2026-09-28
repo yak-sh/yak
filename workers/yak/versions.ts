@@ -32,11 +32,10 @@
 // than counting references, so a batch that died halfway is healed by the next
 // run instead of drifting forever.
 //
-// And the same machinery a size down (T-34508): every write pins what it
-// replaced. A deploy is the release a person names; a write is the thing that
-// actually breaks a file, and the twenty minutes between two deploys is where
-// an agent overwrites the page somebody was using. So `replaced` puts the
-// outgoing bytes in the same content-addressed store, notes them in that path's
+// And the same machinery a size down (T-34508): every draft edit pins what it
+// replaced. A deploy is the release a person names; an edit waits privately
+// until then. `replaced` puts the outgoing draft bytes in the same
+// content-addressed store, notes them in that path's
 // own history, and `app_files` op history and op restore are the two words that
 // read it back. One store, one pin, and therefore one prune (`pruned`): the
 // rule "delete only what nothing names any more" can only be right if the thing
@@ -48,7 +47,7 @@
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins, Objects } from '@yaks/blob'
 import { mint, token } from '@yaks/graph'
-import type { App, Directory } from './directory.ts'
+import type { App, Directory, Space } from './directory.ts'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { vouched, type Who } from './session.ts'
@@ -95,47 +94,66 @@ export let BUILT = 'esbuild/'
 // Edits belong to the next version, while the app's source names the version
 // visitors read. A failed release keeps its draft for correction and retry.
 export let draftOf = (space: { slug: string }, app: App) =>
-  `${space.slug}/.drafts/${app.eid}/v${(app.version ?? 0) + 1}`
+  `${space.slug}/.drafts/${app.eid}/v${
+    (app.version ?? 0) + 1
+  }-${crypto.randomUUID()}`
 
 export let releaseOf = (space: { slug: string }, app: App) =>
   `${space.slug}/.releases/${app.eid}/${crypto.randomUUID()}`
 
-let readyOf = (prefix: string) => `${prefix}.ready`
-
 /** What the editor sees: this version's draft once one has been started. */
-export let working = async (
-  blobs: Objects,
-  space: { slug: string },
+export let working = (
   app: App,
   source: string,
-) => {
-  let draft = draftOf(space, app)
-  return await blobs.has(readyOf(draft)) ? draft : source
-}
+) => app.draft ?? source
 
 /** Start this version's draft with the files its published source serves. */
 export let editing = async (
   blobs: Objects,
-  space: { slug: string },
+  dir: Directory,
+  space: Space,
   app: App,
   source: string,
+  who: Who,
 ) => {
+  if (app.draft) return app.draft
   let draft = draftOf(space, app)
-  if (await blobs.has(readyOf(draft))) return draft
   let from = `${source}/`
   let into = `${draft}/`
-  // A previous attempt may have stopped halfway. Only a complete copy gets
-  // the marker, so a retry replaces the partial copy before any edit lands.
-  for (let key of await blobs.list(into)) await blobs.delete(key)
-  for (let key of await blobs.list(from)) {
+  await Promise.all((await blobs.list(from)).map(async (key) => {
     let path = key.slice(from.length)
     if (
       path.startsWith('blobs/') || path.startsWith('versions/') ||
       path.startsWith('history/')
-    ) continue
+    ) return
     await blobs.put(into + path, await blobs.get(key))
+  }))
+  // Each contender copies to its own prefix. The directory chooses one only
+  // after its copy is complete, so concurrent first edits never copy over
+  // one another's writes.
+  try {
+    await dir.stamp({
+      entities: [{
+        entity: { eid: app.eid },
+        app: { draft },
+        $was: {
+          app: {
+            draft: token(app.draft),
+            source: token(app.source),
+            version: token(app.version),
+          },
+        },
+      }],
+    }, vouched(who))
+  } catch (error) {
+    let current = (await dir.apps(space)).find((a) => a.eid == app.eid)
+    if (
+      current && current.source == app.source &&
+      current.version == app.version &&
+      current.draft
+    ) return current.draft
+    throw error
   }
-  await blobs.put(readyOf(draft), new Uint8Array())
   return draft
 }
 
@@ -354,6 +372,8 @@ export let record = async (
   files: Files,
   worker: string,
   homes: { app: App; release: string }[] = [],
+  sourceWas = app.source,
+  draftWas = app.draft,
 ) =>
   await dir.stamp({
     entities: [
@@ -363,12 +383,15 @@ export let record = async (
           version,
           declaration: String(version),
           source: app.source,
+          draft: null,
           script: app.script,
         },
         $was: {
           app: {
             version: token(app.version),
             declaration: token(app.declaration),
+            source: token(sourceWas),
+            draft: token(draftWas),
           },
         },
       },
@@ -583,6 +606,13 @@ export let pruned = async (
     let stage = `${prefix.split('/')[0]}/.releases/${app.eid}/`
     for (let [key, landed] of Object.entries(await blobs.uploaded(stage))) {
       if (app.source && key.startsWith(`${app.source}/`)) continue
+      if (now - landed < GRACE) continue
+      await blobs.delete(key)
+    }
+    let drafts = `${prefix.split('/')[0]}/.drafts/${app.eid}/`
+    let active = app.draft
+    for (let [key, landed] of Object.entries(await blobs.uploaded(drafts))) {
+      if (active && key.startsWith(`${active}/`)) continue
       if (now - landed < GRACE) continue
       await blobs.delete(key)
     }

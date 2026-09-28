@@ -224,14 +224,13 @@ share an app, a message and a place into one card with a count — a render loop
 that threw twenty times is one thing to fix — and a card names every id in its
 group, so archiving one archives them all.
 
-You will rarely archive by hand, because **new files close what the old ones
+You will rarely archive by hand, because **new releases close what the old ones
 broke.** Every `app_deploy`, `app_install` and `app_rollback` archives every
 open break from an earlier version (and every one that names no version at all,
 since nothing can tell whether those are still happening); the deploy's reply
-reports how many. And every `app_files` write archives the open breaks that
-named the files it just wrote — a page's "failed to load app.js" is fixed by
-writing app.js, without waiting for a deploy, because the files serve live. A
-break the new files still produce is written again the next time it happens.
+reports how many. An `app_files` write stays in a private draft until deploy, so
+a page's "failed to load app.js" is fixed when that deploy succeeds. A break the
+new files still produce is written again the next time it happens.
 
 ## app_versions
 

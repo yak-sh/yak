@@ -5,8 +5,8 @@
 // the session (session.ts), and serves the app's files out of its blob store
 // with the graph API for its (space, app) store beside them —
 // `/api/{apply,query,me,graph}` mapped onto the Store object's doors, the store
-// named from the route, never by the client. `PUT /api/files/<path>` is the
-// write side, what a deploy is until app_deploy (T-32329) exists, and
+// named from the route, never by the client. `PUT /api/files/<path>` stages a
+// member's file for app_deploy, and
 // `/api/blob` is the door for a page's own bytes — a photo a visitor picks —
 // content-addressed into the same bucket and named by a row in the app's
 // store (T-32677). An app's own Worker answers before the files do, where it
@@ -30,7 +30,7 @@ import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
 import * as files from './files.ts'
-import { keyed, PREFIX, prefixOf, purged, SHA } from './files.ts'
+import { keyed, PREFIX, prefixOf, SHA } from './files.ts'
 import {
   type App,
   appStore,
@@ -131,12 +131,6 @@ type Rewriter = {
   transform(res: Response): Response
 }
 declare let HTMLRewriter: { new (): Rewriter }
-
-// A file's key in the blob store: the app's slugs then its path, a directory
-// answering with its index. The vocabulary itself lives in files.ts, beside
-// the part that reads the bucket (T-33197).
-let keyOf = (space: Space, app: App, path: string) =>
-  keyed(prefixOf(space, app), path)
 
 // A refusal is read — by the page that catches it, and by the person's agent
 // after that — so it answers a sentence beside its code (C-32574 item 2, where
@@ -404,18 +398,15 @@ let MANIFEST = new Set([
 
 let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 
-// What the browser may keep, and for how long. An app's files are live — a
-// written file serves the moment app_files puts it, with no deploy in
-// between — so nothing here may be held past a revalidation: `no-cache` is
+// What the browser may keep, and for how long. A new release moves the source
+// pointer, so nothing here may be held past a revalidation: `no-cache` is
 // "ask every time", not "do not store", and with an ETag beside it that ask
 // is answered by a 304 carrying no bytes. `private` on an app that is not
 // public keeps its pages out of every shared cache between here and the
 // person reading them, which is the whole of the rule: a private app's bytes
 // belong to its members and to no proxy.
 //
-// The validator is the content, not the app's version: app_files writes
-// bytes without bumping `app.version` (tools.ts), so a version is no promise
-// about what the bytes are (T-33176).
+// The validator is the content: the same bytes may serve in two releases.
 let keeping = (app: App) =>
   `${app.access == null || app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
@@ -1182,9 +1173,11 @@ let api = async (
     if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
     let draft = await editing(
       r2Objects(env.BLOBS),
+      directory(bound(env.DIRECTORY, dirPart.fetch, env)),
       space,
       app,
       prefixOf(space, app),
+      who,
     )
     let key = keyed(draft, path.slice('/files'.length))
     let bytes = new Uint8Array(await req.arrayBuffer())

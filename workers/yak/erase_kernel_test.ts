@@ -46,6 +46,7 @@ Deno.test('a space erased: the letter, the act, and the name back', async () => 
     let agent = connector(k, them.cookie)
     let shop = client(k, 'shoplab19.yaks.app', 'shop', them.cookie)
     assertEquals((await shop.put('/index.html', '<h1>hi</h1>')).status, 200)
+    await agent.tool('app_deploy', { space: 'shoplab19', app: 'shop' })
     await shop.applied({
       entities: [{ doc: { title: 'a note only this space has' } }],
     })

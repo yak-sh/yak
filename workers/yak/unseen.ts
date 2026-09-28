@@ -4,8 +4,7 @@
 // in this graph stamps `notified` on each line it delivers (client.ts
 // notices()); this does the same, so an item rides one reply and then only
 // `app_errors` shows it again. Open means not `archived`: a later deploy
-// ({@link healed}), a write of the file it named ({@link rewrote}), or the
-// agent saying so ({@link archive}) archives it.
+// ({@link healed}) or the agent saying so ({@link archive}) archives it.
 // Reads and marks go through the store's own doors with the caller vouched,
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
@@ -454,44 +453,6 @@ export let healed = async (
   let old = (await openIn(env, space, app, who, true)).filter((h) => {
     let was = broke(h).version
     return was == null || was < version
-  })
-  return old.length ? close(env, space, app, who, old) : 0
-}
-
-// The app's own file a break happened on, if it names one. A request reads
-// `<type> <path>` (apps.ts `broken`) where the path is the address as the
-// browser asked for it — `page /recipes/app.js` — so the app's own name comes
-// off the front and a directory answers with its index. An app serving the
-// space's front page is asked for at the root, and its request carries no
-// slug to strip.
-export let fileOf = (slug: string, request = '') => {
-  let at = request.split(' ').pop() ?? ''
-  if (!at.startsWith('/')) return ''
-  let head = `/${slug}/`
-  let path = at == `/${slug}` || at.startsWith(head)
-    ? at.slice(head.length)
-    : at.slice(1)
-  return path && !path.endsWith('/') ? path : `${path}index.html`
-}
-
-// And fixed by a write, which is the other way a break ends without anyone
-// saying so (T-34338). An app's files serve live — a write is the fix, with
-// the deploy only naming it — so a break open against a path this write just
-// changed was produced by bytes that are not there any more. That is the same
-// bargain {@link healed} makes, and it is why six "failed to load app.js" from
-// before app.js existed stop riding along the moment app.js is written: a
-// break the new bytes still produce is written again the next time it happens.
-export let rewrote = async (
-  env: Env,
-  space: Space,
-  app: App,
-  who: Who,
-  paths: string[],
-) => {
-  let want = new Set(paths.map((p) => p.replace(/^\/+/, '')))
-  let old = (await openIn(env, space, app, who, true)).filter((h) => {
-    let file = fileOf(app.slug, broke(h).request)
-    return !!file && want.has(file)
   })
   return old.length ? close(env, space, app, who, old) : 0
 }

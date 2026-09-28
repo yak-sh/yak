@@ -103,10 +103,10 @@ app_files:
     call with files: [{path, content}, …]; passing a files list is the
     write, so leave op out. path and content write a single file, and base64
     in place of content writes a file that is not text, such as an image or
-    the .wasm a worker.js imports. Files are served live at
-    <space>.yaks.app/<app>/<path>, and index.html serves the directory; a
-    TypeScript script, or one importing an npm package, serves as app_deploy
-    last compiled it. An
+    the .wasm a worker.js imports. Edits stay private until app_deploy
+    releases them together with the app's vocabulary and worker. The released
+    files serve at <space>.yaks.app/<app>/<path>, and index.html serves the
+    directory. An
     app's data lives in its own store, never localStorage: a page reads and
     writes it with `import { apply, query, search } from './api/client.js'`,
     served beside the app. Each page gets a `<base>` at the app's own
@@ -193,7 +193,7 @@ sandbox_write:
     Write one file inside this space's build sandbox: a Cargo.toml, a
     src/lib.rs, whatever the build needs. These are not the app's files:
     nothing here is served, and files are temporary, not durable app
-    storage. app_files writes what the app serves; sandbox_ship copies a
+    storage. app_files stages what app_deploy will serve; sandbox_ship copies a
     built artifact from the sandbox into the app. Waking the sandbox is
     metered by the second, as with sandbox_shell. Pass a sandbox path and
     nonempty text; this overwrites that path without file history and
@@ -212,7 +212,7 @@ sandbox_read:
 sandbox_ship:
   title: Copy build output into the app
   description: >-
-    Copy what the build produced into the app, where it is served: name the
+    Copy what the build produced into the app's draft: name the
     files in the sandbox (pkg/*.wasm, pkg/*.js) and each is written beside
     index.html under its own filename, as if app_files had written it. The
     app keeps the artifact independently of the temporary sandbox. This call
@@ -226,8 +226,9 @@ sandbox_ship:
 app_deploy:
   title: Release a version
   description: >-
-    Release the app's files as a version. The files are already live, so
-    this marks them as one version, the one an error report will name. It
+    Release the app's staged files as a version. The files, vocabulary and
+    worker begin serving together when this succeeds. The version is the one
+    an error report will name. It
     also creates the components the app's vocab.json declares ({{vocab}}). A
     component is a named group of typed fields attached to a stored record,
     called an entity; vocab.json is the schema defining those groups and

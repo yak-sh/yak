@@ -95,7 +95,9 @@ import {
   pruned,
   renamed,
   versions,
+  working,
 } from './versions.ts'
+import { prefixOf } from './files.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -305,14 +307,19 @@ let under = (space: Space, app?: App) =>
 // One app's storage emptied — its bytes, the worker script that answers for
 // it, and the store that holds what it saved. Everything but the row, which
 // is the caller's to bury: app_delete tombstones the app, and a space's death
-// cascades to it. Answers the keys that went, so the caller can say how many
-// of them were files a person wrote.
+// cascades to it. Answers the file paths the editor saw before erasure, so
+// the caller can say how many files a person wrote.
 export let emptied = async (
   env: Env,
   space: Space,
   app: App,
   who: Who,
 ) => {
+  let blobs = r2Objects(env.BLOBS)
+  let source = await working(app, prefixOf(space, app))
+  let files = own(
+    (await blobs.list(`${source}/`)).map((key) => key.slice(source.length + 1)),
+  )
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
   if (env.CF_WORKERS_TOKEN) {
@@ -325,8 +332,9 @@ export let emptied = async (
     await drop(env, `app-${app.eid}-r-${(app.version ?? 0) + 1}`, true)
   }
   await deleteBindings(env, app)
-  let keys = await swept(env, under(space, app))
+  await swept(env, under(space, app))
   await swept(env, `${space.slug}/.releases/${app.eid}/`)
+  await swept(env, `${space.slug}/.drafts/${app.eid}/`)
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.
@@ -335,7 +343,7 @@ export let emptied = async (
   }, { ...vouched(who), 'x-yak-kernel': '1' })
   if (!r.ok) throw new Error(await r.text())
   await r.body?.cancel()
-  return keys
+  return files
 }
 
 // The act. Everything outside the directory first, the space row last; what
@@ -356,8 +364,7 @@ export let erase = async (
   for (let host of d.hosts) await release(env, host.name)
   let files = 0
   for (let app of d.apps) {
-    let keys = await emptied(env, d.space, app, who)
-    files += own(keys.map((k) => k.slice(under(d.space, app).length))).length
+    files += (await emptied(env, d.space, app, who)).length
   }
   // And whatever else stands under the space's own name — bytes an app that
   // was deleted before this tool existed left behind, or a delete that died
@@ -594,12 +601,11 @@ export let erased = async (
   app: App,
   who: Who,
 ) => {
-  let prefix = under(space, app)
-  let keys = await emptied(env, space, app, who)
+  let files = await emptied(env, space, app, who)
   await dir.apply({
     entities: [{ entity: { eid: app.eid }, tombstone: {} }],
   }, vouched(who))
-  return own(keys.map((k) => k.slice(prefix.length))).length
+  return files.length
 }
 
 // Kept at this public seam for callers that describe the trash schedule.

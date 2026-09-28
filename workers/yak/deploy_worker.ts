@@ -1,4 +1,4 @@
-// The files already serve when a release arrives here. Config and account
+// The files are staged when a release arrives here. Config and account
 // capabilities are checked before any upload, so a refused resource never
 // publishes a worker with only half of its requested bindings.
 import { type App, type Space, storeName } from './directory.ts'
@@ -67,7 +67,7 @@ export let deployWorker = async (
   if (why) refused.push(why)
   let held = await bindings(env, app)
   let worker = ''
-  let unchanged = 'the files are deployed and serving; the worker is unchanged'
+  let unchanged = 'the files remain staged; the prior worker is unchanged'
   let main = compiled?.source ?? config.main ?? WORKER
   let has = compiled != null || await read(main) != null
   if (!has && config.main) {

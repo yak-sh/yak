@@ -3,8 +3,8 @@
 // which break, which file a break happened in, and what the rider is quiet
 // about. The end-to-end half — a page reporting itself, the mark landing in
 // the app's store — is serving_test.ts and report_test.ts.
-import { assert, assertEquals } from '@std/assert'
-import { fileOf, line, named, past } from './unseen.ts'
+import { assert } from '@std/assert'
+import { line, named, past } from './unseen.ts'
 
 let E = 'e0000000-0000-4000-8000-00000000000e'
 
@@ -75,29 +75,6 @@ Deno.test('named: all, and nothing else sweeping', () => {
   assert(named('all', hit))
   assert(!named('everything', hit))
   assert(!named('', hit))
-})
-
-Deno.test('fileOf: the app-relative path a break names', () => {
-  let cases: [string, string][] = [
-    ['page /recipes/app.js', 'app.js'],
-    ['page /recipes/', 'index.html'],
-    ['page /recipes', 'index.html'],
-    ['page /recipes/deep/thing.css', 'deep/thing.css'],
-    // An app serving the space's front page is asked for at the root.
-    ['page /', 'index.html'],
-    ['page /app.js', 'app.js'],
-    // A network-error report from the browser wears its own type word.
-    ['network-error /recipes/app.js', 'app.js'],
-  ]
-  for (let [request, want] of cases) {
-    assertEquals(fileOf('recipes', request), want)
-  }
-})
-
-Deno.test('fileOf: nothing, where a break names no path', () => {
-  assertEquals(fileOf('recipes', ''), '')
-  assertEquals(fileOf('recipes', 'worker threw'), '')
-  assertEquals(fileOf('recipes', undefined), '')
 })
 
 Deno.test('past: what the rider is quiet about', () => {

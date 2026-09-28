@@ -59,13 +59,14 @@ import {
 import { withKinds } from './kinds.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
-import { mimeOf, prefixOf, purged } from './files.ts'
+import { mimeOf, prefixOf } from './files.ts'
 import {
   type Access,
   addresses,
   type App,
   appStore,
   clamped,
+  directory,
   draftStore,
   folded,
   handle,
@@ -79,6 +80,7 @@ import {
   TITLE,
   url,
 } from './directory.ts'
+import * as dirPart from './directory.ts'
 import { sandboxed, sandboxing } from './installed.ts'
 import {
   listCommands,
@@ -126,7 +128,7 @@ import {
   stageOf,
   steps,
 } from './domains.ts'
-import type { Env } from './env.ts'
+import { bound, type Env } from './env.ts'
 // The gallery is its own part (gallery.ts): the two stamps, the letter that
 // carries the decision, and the listing every door here reads.
 import {
@@ -199,7 +201,7 @@ import {
   type Sown,
   type Text,
 } from './seed.ts'
-import { archive, healed, line, openIn, rewrote, serve } from './unseen.ts'
+import { archive, healed, line, openIn, serve } from './unseen.ts'
 import {
   atCeiling,
   ceilings,
@@ -215,7 +217,6 @@ import {
 } from './meter.ts'
 import { acceptLink, paced, SUBJECT } from './invite.ts'
 import {
-  draftOf,
   editing,
   held,
   history,
@@ -683,7 +684,7 @@ let releasedDoc = async (
   space: Space,
   app: App,
 ): Promise<VocabDoc> => {
-  if (app.version == null) return {}
+  if (!app.version) return {}
   let at = (await ctx.dir.deploys(app)).find((v) => v.version == app.version)
   if (!at) throw refuse('missing', `no v${app.version} of ${app.slug}`)
   let file = ['vocab.yml', 'vocab.json'].find((name) => at.files[name])
@@ -803,8 +804,8 @@ let fits = async (
 }
 
 // A release, whichever door asked for it — app_deploy, app_install,
-// app_update. The app's files are already live; this is everything else a
-// version means: the components its vocab.json declares planted where the
+// app_update. Its private draft becomes one immutable source only after the
+// version record commits: the components its vocab.json declares planted where the
 // space says each word lives, the tools it declares beside them handed to the
 // store, its worker.js uploaded to the dispatch namespace, and the version
 // moved on — recorded as a version of its own (versions.ts), so app_rollback
@@ -816,10 +817,19 @@ let released = async (
   standing: App,
   who: Who,
   store: Door,
+  candidate?: { source: string; script: string },
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = r2Objects(ctx.env.BLOBS)
-  let work = await editing(blobs, space, standing, prefixOf(space, standing))
+  let work = candidate?.source ??
+    await editing(
+      blobs,
+      ctx.dir,
+      space,
+      standing,
+      prefixOf(space, standing),
+      who,
+    )
   let app = { ...standing, source: work }
   let prefix = fileKey(space, app, '')
   let bytesAt = (path: string) => blobs.read(prefix + path)
@@ -828,15 +838,7 @@ let released = async (
   // read files the release does not write. The snapshot lists again at the
   // end, since the compile may have written package-lock.json.
   let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
-  // What needs compiling is compiled first (esbuild.ts): a compile that fails
-  // refuses the release before anything else in it moves.
-  //
-  // Whatever door asked for this release wrote the app's bytes before asking
-  // — app_files, a rollback's restore, an install's copy — and the compile
-  // writes the pages it made, so the edge is emptied here, once, for all of
-  // them (cache.ts `purged`). Whether or not the compile refused: a release
-  // that dies still leaves the bucket changed, and the stale edge would
-  // outlive the failure.
+  // Compile in the draft. A failure leaves the serving source untouched.
   let made = await c.time(
     'compile',
     () => compiled(ctx, space, app, who, parsed.config, keys),
@@ -1111,9 +1113,9 @@ let released = async (
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
   toolsTook('tools')
-  let source = releaseOf(space, app)
-  let script = `app-${app.eid}-r-${crypto.randomUUID()}`
-  let stagedApp = { ...app, source, script }
+  let release = releaseOf(space, app)
+  let script = candidate?.script ?? `app-${app.eid}-r-${crypto.randomUUID()}`
+  let stagedApp = { ...app, source: release, script }
   let deployed = await c.time(
     'worker',
     () =>
@@ -1140,7 +1142,7 @@ let released = async (
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's version counter and the row that records the version move together.
   let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
-  await c.time('files', () => laid(blobs, prefix, `${source}/`))
+  await c.time('files', () => laid(blobs, prefix, `${release}/`))
   await c.time(
     'record',
     () =>
@@ -1152,6 +1154,8 @@ let released = async (
         pinned,
         worker,
         staged,
+        standing.source,
+        candidate ? standing.draft : work,
       ),
   )
   if (tooled.views) {
@@ -1242,14 +1246,17 @@ let copied = async (
   ctx: Ctx,
   from: { space: Space; app: App },
   onto: { space: Space; app: App },
+  who: Who,
 ) => {
   let blobs = r2Objects(ctx.env.BLOBS)
   let there = fileKey(from.space, from.app, '')
   let draft = await editing(
     blobs,
+    ctx.dir,
     onto.space,
     onto.app,
     prefixOf(onto.space, onto.app),
+    who,
   )
   let here = `${draft}/`
   let paths = (keys: string[], prefix: string) =>
@@ -1311,7 +1318,7 @@ let answer = async (r: Response) => {
   return body
 }
 
-// A file's key: the app's slugs, then its path from the slash (apps.ts keyOf).
+// A file's key: its source prefix, then its app-relative path.
 let fileKey = (space: Space, app: App, path: string) =>
   `${prefixOf(space, app)}/${path.replace(/^\/+/, '')}`
 
@@ -1329,9 +1336,9 @@ let fileKey = (space: Space, app: App, path: string) =>
  */
 let laid = async (blobs: Objects, from: string, onto: string) => {
   let keys = await blobs.list(from)
-  for (let key of keys) {
+  await Promise.all(keys.map(async (key) => {
     await blobs.put(onto + key.slice(from.length), await blobs.get(key))
-  }
+  }))
   return keys
 }
 
@@ -1451,13 +1458,12 @@ let declaring = async (
 }
 
 /**
- * Bytes into an app's files, and the edge emptied once after the last one —
+ * Bytes into the next release's private draft —
  * the write half of app_files, with no tool call in it, because bytes arrive
  * by other doors too: a zip somebody dropped on their space's page carries
  * pictures (drop.ts, T-34230), and `sandbox_ship` carries what a compiler
  * made (T-34264). Neither is `content: string` — a `.wasm` would not survive
- * a decode — which is why this takes bytes. Answers the paths as the app
- * serves them.
+ * a decode — which is why this takes bytes. Answers their app-relative paths.
  */
 export let wrote = async (
   env: Env,
@@ -1468,7 +1474,15 @@ export let wrote = async (
   c: Clock = clock(),
 ) => {
   let blobs = r2Objects(env.BLOBS)
-  let draft = await editing(blobs, space, app, prefixOf(space, app))
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let draft = await editing(
+    blobs,
+    dir,
+    space,
+    app,
+    prefixOf(space, app),
+    who,
+  )
   let edit = { ...app, source: draft }
   let prefix = fileKey(space, edit, '')
   let archive = `${space.slug}/${app.slug}/`
@@ -1490,10 +1504,7 @@ export let wrote = async (
     if (no) throw refuse('limit', no)
   }
   // What each path held goes into its own history first, pinned by its content
-  // (versions.ts `replaced`, T-34508), so the bytes about to be replaced can be
-  // put back. Before the put, per file, because after it they are gone: a
-  // deploy is the release a person names, and this is the twenty minutes
-  // between two of them, where the page somebody was using gets overwritten.
+  // (versions.ts `replaced`, T-34508), so the edit can be undone before deploy.
   //
   // The files go out at once: each path's pin-then-put is its own chain of
   // round trips to the bucket with nothing to wait on in another path's, so a
@@ -1514,10 +1525,6 @@ export let wrote = async (
   let paths = files.map((f) =>
     fileKey(space, edit, f.path).slice(prefix.length)
   )
-  // What these bytes replaced is closed by them (unseen.ts `rewrote`,
-  // T-34338), the way a release closes what the versions under it broke. The
-  // bytes are already out, so a store that cannot be asked leaves the breaks
-  // open rather than failing a write that landed.
   return paths
 }
 
@@ -2069,10 +2076,15 @@ let OURS: Row[] = [
       }]
       if (moving) {
         entities.push(
-          ...apps.filter((app) => app.source).map((app) => ({
+          ...apps.filter((app) => app.source || app.draft).map((app) => ({
             entity: { eid: app.eid },
             app: {
-              source: app.source!.replace(`${space.slug}/`, `${to}/`),
+              ...(app.source
+                ? { source: app.source.replace(`${space.slug}/`, `${to}/`) }
+                : {}),
+              ...(app.draft
+                ? { draft: app.draft.replace(`${space.slug}/`, `${to}/`) }
+                : {}),
             },
           })),
         )
@@ -2458,8 +2470,15 @@ let OURS: Row[] = [
       )
       let blobs = r2Objects(ctx.env.BLOBS)
       let source = op == 'delete'
-        ? await editing(blobs, space, app, prefixOf(space, app))
-        : await working(blobs, space, app, prefixOf(space, app))
+        ? await editing(
+          blobs,
+          ctx.dir,
+          space,
+          app,
+          prefixOf(space, app),
+          who,
+        )
+        : await working(app, prefixOf(space, app))
       let edit = { ...app, source }
       let prefix = fileKey(space, edit, '')
       let archive = `${space.slug}/${app.slug}/`
@@ -2502,7 +2521,7 @@ let OURS: Row[] = [
         await blobs.delete(key)
         return {
           text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
-            `'restore', path: '${path}') brings it back`,
+            `'restore', path: '${path}') brings it back; staged for app_deploy`,
           space,
         }
       }
@@ -2579,7 +2598,7 @@ let OURS: Row[] = [
             `${url(space, app, ctx.env)}${p} — ${
               stored(p, bytes, want.sha)
             }. This is itself a write, so op history now has the bytes it ` +
-            'replaced.',
+            'replaced. Staged for app_deploy.',
           space,
         }
       }
@@ -2614,7 +2633,7 @@ let OURS: Row[] = [
         return {
           text: `patched ${p} → ${url(space, app, ctx.env)}${p} — ${
             stored(p, now, await sha256(now))
-          }`,
+          }; staged for app_deploy`,
           space,
         }
       }
@@ -2638,7 +2657,8 @@ let OURS: Row[] = [
             (mimeOf(p) == 'application/octet-stream'
               ? ' — the app serves it as application/octet-stream; give the ' +
                 'path a known extension to serve it as anything else'
-              : ''),
+              : '') +
+            '; staged for app_deploy',
           space,
         }
       }
@@ -2658,9 +2678,10 @@ let OURS: Row[] = [
         text: paths.length == 1
           ? `wrote ${paths[0]} → ${url(space, app, ctx.env)}${paths[0]} — ${
             each[0]
-          }`
+          }; staged for app_deploy`
           : `wrote ${paths.length} files → ${url(space, app, ctx.env)}:\n` +
-            paths.map((p, i) => `${p} — ${each[i]}`).join('\n'),
+            paths.map((p, i) => `${p} — ${each[i]}`).join('\n') +
+            '\nStaged for app_deploy.',
         space,
       }
     },
@@ -2725,7 +2746,9 @@ let OURS: Row[] = [
       return {
         text: `shipped ${paths.length} ${
           paths.length == 1 ? 'file' : 'files'
-        } → ${url(space, app, ctx.env)}: ${paths.join(', ')}`,
+        } → ${url(space, app, ctx.env)}: ${
+          paths.join(', ')
+        }; staged for app_deploy`,
         space,
       }
     },
@@ -2794,7 +2817,8 @@ let OURS: Row[] = [
       let { space, app, who, store } = await inApp(ctx, args, true)
       let path = text(args.path, 'path')
       let blobs = r2Objects(ctx.env.BLOBS)
-      let prefix = fileKey(space, app, '')
+      let source = await working(app, prefixOf(space, app))
+      let prefix = `${source}/`
       let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
       let files = await texts(
         blobs,
@@ -2925,10 +2949,14 @@ let OURS: Row[] = [
       let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       let now = await manifest(blobs, prefix)
-      let draft = await editing(blobs, space, app, prefixOf(space, app))
+      let next = (app.version ?? 0) + 1
+      let candidate = {
+        source: `${space.slug}/.releases/${app.eid}/v${next}`,
+        script: `app-${app.eid}-r-${next}`,
+      }
       await restore(
         blobs,
-        `${draft}/`,
+        `${candidate.source}/`,
         want.files,
         `${space.slug}/${app.slug}/`,
       )
@@ -2941,6 +2969,7 @@ let OURS: Row[] = [
         app,
         who,
         store,
+        candidate,
       )
       return {
         text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
@@ -4175,7 +4204,7 @@ let OURS: Row[] = [
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
       let onto = { space, app }
-      let { wrote } = await copied(ctx, offer, onto)
+      let { wrote } = await copied(ctx, offer, onto, who)
       // A release of the copy, in the installer's own space: the components
       // its vocab.json declares planted in its store, its tools listed under
       // its slug, its worker.js uploaded as its own script.
@@ -4249,7 +4278,7 @@ let OURS: Row[] = [
       if (said.source != null) {
         await fits(ctx, space, app, store, said.source, said.file)
       }
-      let { wrote, gone } = await copied(ctx, from, { space, app })
+      let { wrote, gone } = await copied(ctx, from, { space, app }, who)
       let out = await released(ctx, space, app, who, store)
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, installed: { version: to } }],

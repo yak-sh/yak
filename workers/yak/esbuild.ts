@@ -69,8 +69,8 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
     throw refuse(
       'unavailable',
       "app_deploy could not reach the compiler for this app's TypeScript " +
-        'and npm imports; the files are live as written and the last ' +
-        'release still serves — app_deploy again',
+        'and npm imports; the draft remains private and the last release ' +
+        'still serves — app_deploy again',
     )
   }
 }
@@ -129,7 +129,7 @@ export let compiled = async (
     throw refuse(
       'unavailable',
       `${named(ask)} must be compiled, and this platform has no compiler ` +
-        'bound here (ESBUILD); the files are live as written and the last ' +
+        'bound here (ESBUILD); the draft remains private and the last ' +
         'release still serves',
     )
   }
@@ -148,7 +148,7 @@ export let compiled = async (
     throw refuse(
       'arguments',
       `could not compile ${named(ask)}:\n${answer.errors.join('\n')}\n` +
-        'The files are live as written; the last release still serves.',
+        'The draft remains private; the last release still serves.',
     )
   }
   await Promise.all(
