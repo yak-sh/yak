@@ -6,51 +6,25 @@ import { BUILD, hero } from './figures.ts'
 import { ITEMS } from './items.ts'
 
 Deno.test('a staff and tome carry their own soft light', () => {
-  let before = globalThis.document
-  let made = 0
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: {
-      createElement: () => {
-        made++
-        return {
-          width: 0,
-          height: 0,
-          getContext: () => ({
-            createRadialGradient: () => ({ addColorStop: () => {} }),
-            fillRect: () => {},
-          }),
-        }
-      },
-    },
+  let f = hero(BUILD, { tint: '#668866', hair: '#443322', skin: '#ddbb99' }, {
+    main: 'staff2',
+    off: 'tome2',
   })
-  try {
-    let f = hero(BUILD, { tint: '#668866', hair: '#443322', skin: '#ddbb99' }, {
-      main: 'staff2',
-      off: 'tome2',
-    })
-    let lights: THREE.Sprite[] = []
-    f.root.traverse((o) => {
-      if (o instanceof THREE.Sprite) lights.push(o)
-    })
-    assertEquals(lights.length, 2)
-    assertEquals(made <= 1, true)
-    assertEquals(lights[0].material.map, lights[1].material.map)
-    assertEquals(lights.map((s) => s.material.color.getHex()), [
-      ITEMS.staff2.aura?.color,
-      ITEMS.tome2.aura?.color,
-    ])
-    assertEquals(lights.every((s) => s.parent instanceof THREE.Bone), true)
-    assertEquals(
-      lights.every((s) =>
-        s.material.blending == THREE.AdditiveBlending && !s.material.depthWrite
-      ),
-      true,
-    )
-  } finally {
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: before,
-    })
-  }
+  let lights: THREE.Sprite[] = []
+  f.root.traverse((o) => {
+    if (o instanceof THREE.Sprite) lights.push(o)
+  })
+  assertEquals(lights.length, 2)
+  assertEquals(lights[0].material.map, lights[1].material.map)
+  assertEquals(lights.map((s) => s.material.color.getHex()), [
+    ITEMS.staff2.aura?.color,
+    ITEMS.tome2.aura?.color,
+  ])
+  assertEquals(lights.every((s) => s.parent instanceof THREE.Bone), true)
+  assertEquals(
+    lights.every((s) =>
+      s.material.blending == THREE.AdditiveBlending && !s.material.depthWrite
+    ),
+    true,
+  )
 })

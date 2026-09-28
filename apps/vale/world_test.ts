@@ -10,94 +10,73 @@ import { out, pack, type Packed } from './mesh.ts'
 import { chunkOf, flat } from './terrain.ts'
 import { world } from './world.ts'
 
-let canvas = () => ({
-  width: 0,
-  height: 0,
-  getContext: () => ({
-    createRadialGradient: () => ({ addColorStop: () => {} }),
-    fillRect: () => {},
-  }),
-})
-
 Deno.test('visible buildings share one mesh and release it when they leave', async () => {
-  let document = globalThis.document
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: { createElement: canvas },
-  })
-  try {
-    let v = flat(5), empty = pack(out())
-    let calls = 0
-    let reveal: (p: Packed) => void = () => {}
-    let held = new Promise<Packed>((done) => reveal = done)
-    let mid = SIZE / 2
-    let prop = { kind: 'oak', x: mid, z: mid, seed: 1 }
-    let placed: Chunk['buildings'] = [mid, mid + 4].map((x) => ({
-      kind: 'smithy.plaster',
-      seed: 0,
-      turn: 0,
-      at: [x, 5, mid],
-    }))
-    let w = world(v, {
-      chunk: (ci, ck): Promise<Chunk> =>
-        Promise.resolve({
+  let v = flat(5), empty = pack(out())
+  let calls = 0
+  let reveal: (p: Packed) => void = () => {}
+  let held = new Promise<Packed>((done) => reveal = done)
+  let mid = SIZE / 2
+  let prop = { kind: 'oak', x: mid, z: mid, seed: 1 }
+  let placed: Chunk['buildings'] = [mid, mid + 4].map((x) => ({
+    kind: 'smithy.plaster',
+    seed: 0,
+    turn: 0,
+    at: [x, 5, mid],
+  }))
+  let w = world(v, {
+    chunk: (ci, ck): Promise<Chunk> =>
+      Promise.resolve({
+        ci,
+        ck,
+        solid: empty,
+        small: null,
+        buildings: ci == chunkOf(mid) && ck == chunkOf(mid) ? placed : [],
+        stood: ci == chunkOf(mid) && ck == chunkOf(mid)
+          ? [{ prop, step: 1 }]
+          : [],
+        patch: {
           ci,
           ck,
-          solid: empty,
-          small: null,
-          buildings: ci == chunkOf(mid) && ck == chunkOf(mid) ? placed : [],
-          stood: ci == chunkOf(mid) && ck == chunkOf(mid)
-            ? [{ prop, step: 1 }]
-            : [],
-          patch: {
-            ci,
-            ck,
-            voxel: 1,
-            n: 0,
-            layers: [],
-            top: new Uint8Array(),
-            hue: new Float32Array(),
-            region: new Uint8Array(),
-            other: new Uint8Array(),
-            share: new Uint8Array(),
-            regions: [],
-          },
-        }),
-      template: () => {
-        calls++
-        return held
-      },
-    })
-    let done = false
-    let near = w.near().then(() => done = true)
-    for (let i = 0; i < 20 && !calls; i++) await Promise.resolve()
-    assertEquals(calls, 1)
-    assertEquals(done, false)
-    reveal(pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])))
-    await near
-    assertEquals(w.props().flatMap((c) => c.stood), [{ prop, step: 1 }])
-    let meshes = w.scene.children.filter((o): o is THREE.InstancedMesh =>
-      o instanceof THREE.InstancedMesh
-    )
-    let buildingMesh = meshes.find((m) => m.count == 2)
-    assert(buildingMesh)
-    let at = new THREE.Matrix4()
-    buildingMesh.getMatrixAt(0, at)
-    assertEquals(at.elements[12], mid)
-    buildingMesh.getMatrixAt(1, at)
-    assertEquals(at.elements[12], mid + 4)
-    let shown = buildingMesh.geometry
-    let disposed = 0
-    shown.addEventListener('dispose', () => disposed++)
-    w.focus.set(1000, 5, 1000)
-    w.tick(0, 0)
-    assertEquals(disposed, 1)
-    assertEquals(w.props().flatMap((c) => c.stood), [])
-    w.dispose()
-  } finally {
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: document,
-    })
-  }
+          voxel: 1,
+          n: 0,
+          layers: [],
+          top: new Uint8Array(),
+          hue: new Float32Array(),
+          region: new Uint8Array(),
+          other: new Uint8Array(),
+          share: new Uint8Array(),
+          regions: [],
+        },
+      }),
+    template: () => {
+      calls++
+      return held
+    },
+  })
+  let done = false
+  let near = w.near().then(() => done = true)
+  for (let i = 0; i < 20 && !calls; i++) await Promise.resolve()
+  assertEquals(calls, 1)
+  assertEquals(done, false)
+  reveal(pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])))
+  await near
+  assertEquals(w.props().flatMap((c) => c.stood), [{ prop, step: 1 }])
+  let meshes = w.scene.children.filter((o): o is THREE.InstancedMesh =>
+    o instanceof THREE.InstancedMesh
+  )
+  let buildingMesh = meshes.find((m) => m.count == 2)
+  assert(buildingMesh)
+  let at = new THREE.Matrix4()
+  buildingMesh.getMatrixAt(0, at)
+  assertEquals(at.elements[12], mid)
+  buildingMesh.getMatrixAt(1, at)
+  assertEquals(at.elements[12], mid + 4)
+  let shown = buildingMesh.geometry
+  let disposed = 0
+  shown.addEventListener('dispose', () => disposed++)
+  w.focus.set(1000, 5, 1000)
+  w.tick(0, 0)
+  assertEquals(disposed, 1)
+  assertEquals(w.props().flatMap((c) => c.stood), [])
+  w.dispose()
 })
