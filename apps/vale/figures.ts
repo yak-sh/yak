@@ -49,6 +49,7 @@ import {
 } from './parts.ts'
 import { lerp } from './rand.ts'
 import { flash, soft } from './soft.ts'
+import { LAND } from './strike.ts'
 
 /** What a figure is doing this frame. */
 export type Act = {
@@ -447,6 +448,15 @@ export let person = (
       foreR.rotation.x = lerp(rest, -0.2, up)
       held.rotation.x = hold + 0.9 * up
       torso.rotation.y = lerp(0.2, -0.2, up)
+    } else if (family == 'hammer') {
+      // Raise the head before the blow, then bring it down through the hit.
+      let wind = ease(Math.min(1, w / 0.12))
+      let hit = ease(Math.max(0, Math.min(1, (w - 0.12) / (LAND - 0.12))))
+      let back = ease(Math.max(0, Math.min(1, (w - 0.45) / 0.55)))
+      let high = wind * (1 - hit), low = hit * (1 - back)
+      armR.rotation.x = 0.4 - 2.6 * high - 0.2 * low
+      foreR.rotation.x = -0.2 - 0.4 * high - 0.8 * low
+      torso.rotation.x = 0.14 * low
     } else {
       // Up and over: the blade rises behind the head, the elbow bent, then
       // falls through the foe in front as the arm straightens.
