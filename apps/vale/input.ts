@@ -6,8 +6,10 @@
 export type Intent = {
   /** right and forward axes, at most 1 long */
   move: [number, number]
-  /** turn in radians/second and forward/back, in hero space */
-  steer?: { turn: number; forward: number; side?: number }
+  /** turn in radians/second; the camera and hero turn together */
+  turn: number
+  /** the thumbstick faces the direction it moves */
+  faceMove: boolean
   jump: boolean
   strike: boolean
   /** the ability asked for, by its slot on the bar, 1 to 3, or 0 */
@@ -19,8 +21,6 @@ export type Intent = {
   drink: boolean
   /** swing the camera behind the hero */
   snap: boolean
-  /** the camera follows the hero, or stops following */
-  follow: boolean
   /** turn the microphone on, or off */
   mic: boolean
   /** how far the view was turned since the last read: yaw, pitch */
@@ -42,7 +42,6 @@ export type Action =
   | 'gather'
   | 'drink'
   | 'snap'
-  | 'follow'
   | 'mic'
 
 // The keys for each action; the panels' keys are their own (hud.ts).
@@ -59,7 +58,6 @@ let KEYS: Record<string, Action> = {
   Digit3: 'ability3',
   KeyQ: 'drink',
   KeyC: 'snap',
-  KeyV: 'follow',
   KeyT: 'mic',
 }
 
@@ -88,33 +86,31 @@ let TURNS: Record<string, number> = {
   ArrowRight: 1,
 }
 
-let TOUCH_TURN = 3
 let KEY_TURN = 6
 
-/** Arrows always steer; A/D steer or strafe according to the setting. Touch
- * always steers at its familiar rate; keys turn faster. Both mouse buttons
- * add forward motion. The movement axes are normalised together so diagonals
- * are no faster.
+/** Arrows turn the camera and hero together; A/D turn or strafe according to
+ * the setting. The stick and keys both move in the camera's screen plane.
+ * Both mouse buttons add forward motion. Diagonals are no faster.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * assertEquals(movement(['KeyA'], true), {
- *   move: [-1, 0], steer: undefined,
+ *   move: [-1, 0], turn: 0, faceMove: false,
  * })
  * assertEquals(movement(['KeyA'], false), {
- *   move: [-1, 0], steer: { turn: -6, forward: 0 },
+ *   move: [0, 0], turn: -6, faceMove: false,
  * })
  * assertEquals(movement(['ArrowLeft'], true), {
- *   move: [0, 0], steer: { turn: -6, forward: 0 },
+ *   move: [0, 0], turn: -6, faceMove: false,
  * })
  * assertEquals(movement(['ArrowRight', 'KeyA'], true), {
- *   move: [-1, 0], steer: { turn: 6, forward: 0, side: -1 },
+ *   move: [-1, 0], turn: 6, faceMove: false,
  * })
  * assertEquals(movement([], true, [1, 0]), {
- *   move: [1, 0], steer: { turn: 3, forward: 0 },
+ *   move: [1, 0], turn: 0, faceMove: true,
  * })
  * assertEquals(movement([], false, undefined, true), {
- *   move: [0, 1], steer: undefined,
+ *   move: [0, 1], turn: 0, faceMove: false,
  * })
  * ```
  */
@@ -123,40 +119,34 @@ export let movement = (
   strafe: boolean,
   stick?: [number, number],
   mouseWalk = false,
-): Pick<Intent, 'move' | 'steer'> => {
-  let x = 0, y = 0, keyTurn = 0, turning = !!stick
+): Pick<Intent, 'move' | 'turn' | 'faceMove'> => {
+  let x = 0, y = 0, keyTurn = 0
   for (let code of held) {
-    if (TURNS[code]) keyTurn += TURNS[code], turning = true
+    if (TURNS[code]) keyTurn += TURNS[code]
     let a = AXES[code]
     if (a) {
-      x += a[0]
+      if (a[0] && !strafe) keyTurn += a[0]
+      else x += a[0]
       y += a[1]
-      if (a[0] && !strafe) keyTurn += a[0], turning = true
     }
   }
-  let side = strafe ? x : 0
   if (stick) x += stick[0], y += stick[1]
   if (mouseWalk) y++
-  let forward = y
-  let len = Math.hypot(side, forward)
-  if (len > 1) [side, forward] = [side / len, forward / len]
-  len = Math.hypot(x, y)
+  let len = Math.hypot(x, y)
   if (len > 1) [x, y] = [x / len, y / len]
-  let move: [number, number] = [x, y]
   return {
-    move,
-    steer: turning
-      ? {
-        turn: Math.max(-1, Math.min(1, keyTurn)) * KEY_TURN +
-          (stick?.[0] ?? 0) * TOUCH_TURN,
-        forward,
-        ...(side ? { side } : {}),
-      }
-      : undefined,
+    move: [x, y],
+    turn: Math.max(-1, Math.min(1, keyTurn)) * KEY_TURN,
+    faceMove: !!stick && Math.hypot(...stick) > 0.01,
   }
 }
 
 let STICK = 56
+
+/** A nonstick touch uses the look hand; mouse buttons may
+ * swap their roles in the menu. */
+export let lookDrag = (button: number, type: string, swapped: boolean) =>
+  type == 'touch' || button == (swapped ? 0 : 2)
 
 // A mouse has one pointer even while two buttons are down. Its second press
 // and first release arrive as mouse events, without a pointerdown or pointerup.
@@ -212,8 +202,7 @@ export let listen = (
     swapped = localStorage.getItem('mossvale.drag.swap') == '1'
     strafe = localStorage.getItem('mossvale.keys.strafe') == '1'
   } catch { /* this page keeps its setting */ }
-  let isLook = (button: number, type: string) =>
-    type != 'touch' && button == (swapped ? 0 : 2)
+  let isLook = (button: number, type: string) => lookDrag(button, type, swapped)
   let stick:
     | { id: number; x: number; y: number; dx: number; dy: number }
     | null = null
@@ -391,7 +380,6 @@ export let listen = (
         gather: pressed.has('gather'),
         drink: pressed.has('drink'),
         snap: pressed.has('snap'),
-        follow: pressed.has('follow'),
         mic: pressed.has('mic'),
         orbit: [orbit[0], orbit[1]],
         look: !mouse.chorded() && (looked ||

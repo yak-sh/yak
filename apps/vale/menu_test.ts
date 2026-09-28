@@ -21,8 +21,6 @@ Deno.test('voxel slider shows a choice before applying it', () => {
       music: { ...level, muted: false, toggle: () => {} },
       effects: level,
       voice: level,
-      follows: () => true,
-      follow: () => {},
       swapped: () => false,
       swap: () => {},
       strafes: () => false,

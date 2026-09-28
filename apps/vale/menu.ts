@@ -1,5 +1,5 @@
 // The menu, drawn into its panel (panel.ts): what a player sets for
-// themselves, the vale's sound and whether the camera follows them, and every
+// themselves, the vale's sound and camera controls, and every
 // key and touch the vale answers. The tray's last button opens it, and so does
 // Escape when nothing else is open.
 import { glyph } from './glyphs.ts'
@@ -20,8 +20,6 @@ export type Settings = {
   }
   effects: Level
   voice: Level
-  follows: () => boolean
-  follow: () => void
   swapped: () => boolean
   swap: () => void
   strafes: () => boolean
@@ -41,7 +39,6 @@ let DOES: [Action, string][] = [
   ['gather', 'Gather, or work a station'],
   ['drink', 'Drink a tonic'],
   ['snap', 'Camera behind you'],
-  ['follow', 'Camera follows you, or stays'],
   ['mic', 'Microphone'],
 ]
 
@@ -51,10 +48,10 @@ let kbd = (keys: string[]) =>
 let keys = (swapped: boolean, strafes: boolean) =>
   [
     [kbd(['W', 'S', '↑', '↓']), 'Walk forward or back'],
-    [kbd(['A', 'D']), strafes ? 'Strafe' : 'Turn'],
-    [kbd(['←', '→']), 'Turn'],
-    [swapped ? 'right drag' : 'left drag', 'Steer the camera while moving'],
-    [swapped ? 'left drag' : 'right drag', 'Look without turning your hero'],
+    [kbd(['A', 'D']), strafes ? 'Strafe' : 'Turn with the camera'],
+    [kbd(['←', '→']), 'Turn with the camera'],
+    [swapped ? 'right drag' : 'left drag', 'Turn the camera and your hero'],
+    [swapped ? 'left drag' : 'right drag', 'Orbit without turning your hero'],
     ['left + right mouse buttons', 'Walk forward; move the mouse to steer'],
     [`wheel`, 'Nearer or further'],
     ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
@@ -85,14 +82,13 @@ export let menu = (panel: Panel, o: Settings) => {
       : null
     if (act == 'sound') o.mute()
     if (act == 'music') o.music.toggle()
-    if (act == 'follow') o.follow()
     if (act == 'swap') o.swap()
     if (act == 'strafe') o.strafe()
     if (act == 'voxel' && selected != o.voxel.current) {
       o.voxel.apply(selected)
     }
     if (
-      act == 'sound' || act == 'music' || act == 'follow' || act == 'swap' ||
+      act == 'sound' || act == 'music' || act == 'swap' ||
       act == 'strafe'
     ) {
       was = ''
@@ -161,10 +157,10 @@ export let menu = (panel: Panel, o: Settings) => {
     /** show what is set, when the menu is open and it changed */
     show: () => {
       if (!panel.open) return
-      let sound = !o.muted(), follows = o.follows(), swapped = o.swapped()
+      let sound = !o.muted(), swapped = o.swapped()
       let strafes = o.strafes()
       let playing = !o.music.muted
-      let key = `${sound} ${playing} ${follows} ${swapped} ${strafes}`
+      let key = `${sound} ${playing} ${swapped} ${strafes}`
       if (key == was) return
       was = key
       let html = `<div class=Menu>` +
@@ -184,14 +180,6 @@ export let menu = (panel: Panel, o: Settings) => {
         slider('effects', 'Effects and ambience volume') +
         slider('voice', 'Player voice volume') +
         voxel() +
-        toggle(
-          'follow',
-          follows,
-          glyph(follows ? 'video' : 'videoOff'),
-          follows
-            ? 'The camera follows you'
-            : 'The camera stays where you turn it',
-        ) +
         toggle(
           'swap',
           swapped,

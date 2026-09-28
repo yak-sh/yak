@@ -9,6 +9,8 @@ import { flat } from './terrain.ts'
 
 let still: Intent = {
   move: [0, 0],
+  turn: 0,
+  faceMove: false,
   jump: false,
   strike: false,
   ability: 0,
@@ -17,7 +19,6 @@ let still: Intent = {
   gather: false,
   drink: false,
   snap: false,
-  follow: false,
   mic: false,
   orbit: [0, 0],
   look: false,

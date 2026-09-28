@@ -87,7 +87,7 @@ import {
 } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
-import { steerPush, steerStep, stride } from './stride.ts'
+import { stepPush, stride } from './stride.ts'
 import { regionOf, spotOf } from './regions.ts'
 import { destinationOf, nextTeleport, resumed } from './teleport.ts'
 import { placeOf } from './area.ts'
@@ -872,17 +872,7 @@ export let game = (
           events.push({ type: 'rise' })
         }
       } else {
-        let [mx, my] = intent.move
-        let push = intent.steer
-          ? {
-            ...steerPush(body.yaw, intent.steer),
-            jump: intent.jump,
-          }
-          : {
-            x: Math.cos(look) * mx - Math.sin(look) * my,
-            z: -Math.sin(look) * mx - Math.cos(look) * my,
-            jump: intent.jump,
-          }
+        let push = { ...stepPush(look, intent.move), jump: intent.jump }
         // A dodge rolls the way I am going, or back from where I face when I
         // am still, facing the same way throughout, and cuts short a blow or
         // an ability not yet landed.
@@ -926,25 +916,24 @@ export let game = (
           ) dash = null
           body = { ...n, yaw: body.yaw }
         } else {
-          body = intent.steer
-            ? steerStep(
-              v,
-              body,
-              intent.steer,
-              dt,
-              SPEED * (1 + s.kit.speed),
-              intent.jump,
-            )
-            : stride(
-              v,
-              body,
-              intent.move,
-              look,
-              dt,
-              SPEED * (1 + s.kit.speed),
-              intent.jump,
-              intent.look,
-            )
+          body = stride(
+            v,
+            body,
+            intent.move,
+            look,
+            dt,
+            SPEED * (1 + s.kit.speed),
+            intent.jump,
+            intent.look && !intent.turn,
+            intent.faceMove,
+          )
+          if (
+            (intent.turn || intent.orbit[0] && !intent.look) &&
+            !intent.move.some(Boolean)
+          ) {
+            let face = look + Math.PI
+            body.yaw = Math.atan2(Math.sin(face), Math.cos(face))
+          }
         }
       }
       if (travelTo) {

@@ -1,7 +1,6 @@
 // The camera: behind and above the hero, turned by dragging and pulled in or
-// out by the wheel. It follows, easing round behind the hero while they go
-// forward, or it is free and stays where it was turned; either way it swings
-// round behind the hero when asked (`snap`). It keeps its distance unless a
+// out by the wheel. It eases round behind the hero after a drag or stick move,
+// and swings round behind them when asked (`snap`). It keeps its distance unless a
 // hill or a house is in the way, when it comes in at once, and it eases back
 // out after. While the hero is in a building it rises to look down into it
 // over the walls, the roof and the floors over them faded (solid.ts
@@ -27,8 +26,6 @@ export type Cam = {
   y: number
   z: number
   shake: number
-  /** it eases round behind the hero while they go forward */
-  follow: boolean
   /** it is swinging round behind the hero */
   snap: boolean
   /** seconds since the view was last turned by hand */
@@ -57,7 +54,7 @@ export let depth = (camera: THREE.PerspectiveCamera, fog: THREE.Fog) => {
 }
 
 // How fast it swings behind the hero, snapping and following, and how long
-// after a turn by hand following waits.
+// after an orbit drag following waits.
 let SNAP = 12
 let FOLLOW = 2.5
 let WAIT = 1
@@ -65,42 +62,43 @@ let WAIT = 1
 let INDOORS = 0.85
 
 /** Turn the camera for a frame: as the hands turned and pulled it, and round
- * behind a hero facing `yaw`, at once when snapping and gently while
- * following them forward.
+ * behind a hero facing `yaw`, at once when snapping and gently once manual
+ * control rests. Holding the stick sideways cannot make the view spin.
  *
  * ```ts
  * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
  * let hands = (move: [number, number], more = {}) => ({
- *   move, jump: false, strike: false, ability: 0, dodge: false, talk: false,
- *   gather: false, drink: false, bag: false, snap: false, follow: false,
- *   map: false, mic: false,
+ *   move, turn: 0, faceMove: false, jump: false, strike: false, ability: 0,
+ *   dodge: false, talk: false, gather: false, drink: false, snap: false,
+ *   mic: false,
  *   orbit: [0, 0] as [number, number], look: false, zoom: 0, ...more,
  * })
- * let cam = (follow: boolean) => ({
+ * let cam = () => ({
  *   yaw: 0, pitch: 0.4, dist: 9, reach: 9, x: 0, y: 0, z: 0, shake: 0,
- *   follow, snap: false, idle: 5, lift: 0,
+ *   snap: false, idle: 5, lift: 0,
  * })
  * // A hero facing +x has the camera behind them at -x, which is yaw -π/2.
  * let run = (c: ReturnType<typeof cam>, i: ReturnType<typeof hands>) => {
  *   for (let f = 0; f < 60; f++) steer(c, f ? { ...i, snap: false } : i, Math.PI / 2, 1 / 60)
  *   return c.yaw
  * }
- * assertAlmostEquals(run(cam(false), hands([0, 0], { snap: true })), -Math.PI / 2, 1e-9)
- * assertEquals(run(cam(false), hands([0, 1])), 0) // free: stays put
- * assert(run(cam(true), hands([0, 1])) < -0.5) // following: comes round
- * assertEquals(run(cam(true), hands([1, 0])), 0) // not while going sideways
- * assertEquals(run(cam(true), hands([0, 1], { look: true })), 0)
+ * assertAlmostEquals(run(cam(), hands([0, 0], { snap: true })), -Math.PI / 2, 1e-9)
+ * assert(run(cam(), hands([1, 0])) < -0.5) // follows a keyboard strafe
+ * assertEquals(run(cam(), hands([1, 0], { faceMove: true })), 0)
+ * assertEquals(run(cam(), hands([0, 1], { look: true })), 0)
+ * let turned = cam()
+ * steer(turned, hands([0, 0], { turn: -6 }), Math.PI, 0.1)
+ * assertAlmostEquals(turned.yaw, 0.6)
  * ```
  */
 export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
   let [dx, dy] = i.orbit
-  cam.yaw += dx
+  cam.yaw += dx - i.turn * dt
   cam.pitch = clamp(cam.pitch + dy, 0.1, 1.3)
   cam.dist = clamp(cam.dist * (1 + i.zoom * 0.12), 4, 22)
-  cam.idle = dx || dy ? 0 : cam.idle + dt
-  if (i.follow) cam.follow = !cam.follow
-  if (i.snap || (i.follow && cam.follow)) cam.snap = true
-  if (!cam.idle || i.look) cam.snap = false
+  cam.idle = dx || dy || i.turn || i.faceMove ? 0 : cam.idle + dt
+  if (i.snap) cam.snap = true
+  if ((!cam.idle && !i.snap) || i.look) cam.snap = false
   let off = Math.atan2(
     Math.sin(yaw + Math.PI - cam.yaw),
     Math.cos(yaw + Math.PI - cam.yaw),
@@ -111,11 +109,7 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
     cam.snap = false
     return
   }
-  let k = cam.snap
-    ? SNAP
-    : cam.follow && !i.look && cam.idle > WAIT
-    ? FOLLOW * Math.max(0, i.move[1])
-    : 0
+  let k = cam.snap ? SNAP : !i.look && cam.idle > WAIT ? FOLLOW : 0
   cam.yaw += off * (1 - Math.exp(-dt * k))
 }
 
@@ -143,7 +137,7 @@ export let bearing = (yaw: number) =>
  * let home = v.buildings(30, 30, 0)[0]
  * let cam = {
  *   yaw: 0, pitch: 1.1, dist: 9, reach: 9, x: 30, y: 7, z: 30,
- *   shake: 0, follow: false, snap: false, idle: 0, lift: 0,
+ *   shake: 0, snap: false, idle: 0, lift: 0,
  * }
  * let camera = new THREE.PerspectiveCamera()
  * aim(cam, camera, new THREE.Vector3(30, home.floors[0] + 1.5, 30),

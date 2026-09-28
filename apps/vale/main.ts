@@ -220,11 +220,7 @@ let bounty = nodes(w.scene, v, marks, glow, phone)
 let pins = papers(w.scene, v, marks, phone)
 if (phone) w.sun.shadow.mapSize.set(1024, 1024)
 
-// The camera (cam.ts), following the hero unless this viewer set it free.
-let freed = false
-try {
-  freed = localStorage.getItem('mossvale.cam') == 'free'
-} catch { /* a page without storage starts following */ }
+// The camera (cam.ts) follows the hero.
 let cam: Cam = {
   yaw: 0,
   pitch: 0.42,
@@ -234,7 +230,6 @@ let cam: Cam = {
   y: 0,
   z: 0,
   shake: 0,
-  follow: !freed,
   snap: false,
   idle: 0,
   lift: 0,
@@ -255,8 +250,6 @@ let settings = menu(h.panels.menu, {
   music: sound.music,
   effects: sound.effects,
   voice: sound.voice,
-  follows: () => cam.follow,
-  follow: () => hands.press('follow'),
   swapped: hands.swapped,
   swap: hands.swap,
   strafes: hands.strafes,
@@ -832,19 +825,14 @@ let loop = (t: number) => {
     if (h.talking) {
       Object.assign(i, {
         move: [0, 0],
+        turn: 0,
         strike: false,
         ability: 0,
         dodge: false,
         jump: false,
       })
     }
-    let following = cam.follow
     steer(cam, i, last?.body.yaw ?? cam.yaw + Math.PI, dt)
-    if (cam.follow != following) {
-      try {
-        localStorage.setItem('mossvale.cam', cam.follow ? 'follow' : 'free')
-      } catch { /* kept for this page only */ }
-    }
     let f = g.frame(walking, i, cam.yaw, dt)
     last = f
     if (f) {

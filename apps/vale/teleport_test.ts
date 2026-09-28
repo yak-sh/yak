@@ -127,6 +127,8 @@ Deno.test('an active hero moves once and a returning hero keeps the move', () =>
   } as unknown as Net
   let still: Intent = {
     move: [0, 0],
+    turn: 0,
+    faceMove: false,
     jump: false,
     strike: false,
     ability: 0,
@@ -135,7 +137,6 @@ Deno.test('an active hero moves once and a returning hero keeps the move', () =>
     gather: false,
     drink: false,
     snap: false,
-    follow: false,
     mic: false,
     orbit: [0, 0],
     look: false,
