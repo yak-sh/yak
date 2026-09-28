@@ -5,7 +5,9 @@ import { handler } from '@yaks/api/routes'
 import { aliasDoc, aliases } from '@yaks/alias'
 import { docDoc } from '@yaks/doc'
 import { graph as open } from '@yaks/graph'
+import { human } from '@yaks/id'
 import { ids } from '@yaks/id/rules'
+import { idDoc } from '@yaks/id/vocab'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -13,12 +15,12 @@ import { taskDoc } from '@yaks/task'
 import { loadVocab } from '@yaks/vocab'
 import { letters, routes } from './routes.ts'
 
-let vocab = loadVocab([kernelDoc, docDoc, taskDoc, keyDoc, aliasDoc], [
+let vocab = loadVocab([kernelDoc, docDoc, taskDoc, keyDoc, aliasDoc, idDoc], [
   kernelKeywords,
   keyKeywords,
 ])
 let graph = open({
-  storage: ram(vocab),
+  storage: ram(vocab, { number: true }),
   vocab,
   plugins: [keys(vocab), aliases(), ids(vocab)],
 })
@@ -32,6 +34,7 @@ await graph.apply([
     entity: { eid: '0123456789abcdef0123456789abcdef01234567' },
     doc: { title: 'sha address' },
   },
+  { entity: { eid: 'kindless' }, favorite: {} },
 ])
 let table = routes({ vocab, graph })
 
@@ -91,6 +94,14 @@ Deno.test('a name opens the page, and a path naming nothing is the 404 page', as
   ) {
     assertEquals(await page(path), [404, true], path)
   }
+})
+
+Deno.test('a kindless entity opens at the id the page displays', async () => {
+  let [row] = await graph.get(['kindless'])
+  let id = human(vocab)(row)
+  assertEquals(id.startsWith('E-'), true)
+  assertEquals((await graph.address([id])).get(id), row.entity.eid)
+  assertEquals((await get(`/${id}`)).status, 200)
 })
 
 Deno.test('every address answers the one page, which loads the bundled app', async () => {

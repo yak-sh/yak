@@ -53,9 +53,11 @@ export let ids = (vocab: Vocab): Plugin => {
   // Every letter this entity could be printed with, not only the one it
   // displays as. An entity has several kinds at once — a task is a `doc` too —
   // and a person typing `T-17` for the thing to do is right whichever kind
-  // happens to win the display.
-  let series = (b: Bundle) =>
-    new Set(vocab.kinds.filter((k) => b[k]).map((k) => letter(k)))
+  // happens to win the display. An entity with no kind displays as `E-17`.
+  let series = (b: Bundle) => {
+    let kinds = vocab.kinds.filter((k) => b[k])
+    return new Set((kinds.length ? kinds : [vocab.kindOf(b)]).map(letter))
+  }
   let agrees = (b: Bundle, prefix: string) =>
     !prefix || series(b).has(prefix.toUpperCase())
   return {

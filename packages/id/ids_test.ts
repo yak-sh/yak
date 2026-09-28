@@ -1,6 +1,7 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Tx } from '@yaks/graph'
 import { idKeywords } from './keywords.ts'
+import { human } from './id.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ids } from './ids.ts'
 import { idDoc } from './vocab.ts'
@@ -21,6 +22,7 @@ let rows: Bundle[] = [
   // whichever kind wins the display, the id a person typed still lands.
   { entity: { eid: 'a', num: 7 }, task: {}, doc: {} },
   { entity: { eid: 'b', num: 9 }, memory: {} },
+  { entity: { eid: 'bare', num: 11 } },
   // Not numbered yet: known by their short handles. The two uuids share their
   // first ten hex characters; the last eid is content-addressed, no dashes.
   { entity: { eid: '47e9678b-df12-4000-8000-000000000001' }, task: {} },
@@ -57,6 +59,17 @@ Deno.test('the number is the identity; the letter only has to agree', async () =
   // M-7 names nothing: entity 7 is neither a memory nor anything else with an
   // M. T-9 names nothing either: entity 9 is a memory.
   assertEquals(await at('M-7', 'T-9'), { 'M-7': null, 'T-9': null })
+})
+
+Deno.test('an entity without a kind answers to its displayed E id', async () => {
+  let id = human(vocab)(rows[2])
+  assertEquals(id, 'E-11')
+  assertEquals(await at(id, 'e-11', '11'), {
+    'E-11': 'bare',
+    'e-11': 'bare',
+    '11': 'bare',
+  })
+  assertEquals(await at('T-11', 'E-7'), { 'T-11': null, 'E-7': null })
 })
 
 Deno.test("an eid and a name are not this plugin's to answer", async () => {
