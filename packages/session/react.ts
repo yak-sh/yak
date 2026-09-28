@@ -68,7 +68,7 @@ import {
   type TranscriptStatus,
   usingBefore,
 } from './status.ts'
-import { context, prefix } from './compact.ts'
+import { context, prefix, suffix } from './compact.ts'
 
 /** The caller, supplied by react rather than by model arguments, and a
  * signal that aborts when the process running the transcript is leaving: a
@@ -242,7 +242,7 @@ export let recent = (entries: Bundle[], n?: unknown): Bundle[] => {
   if (!(size >= 1)) return entries
   let from = Math.max(0, entries.length - size)
   while (from > 0 && kindOf(entries[from]) != 'input') from--
-  return entries.slice(from)
+  return suffix(entries, from)
 }
 
 /** The entry whose typed questions a turn asks: the newest since the

@@ -24,7 +24,7 @@ import { sessionDoc } from './comp.ts'
 import { kindOf, statusOf, textOf } from './status.ts'
 import { appendEntry } from './append.ts'
 import { sessions } from './plugin.ts'
-import { type Deps, react, transcript } from './react.ts'
+import { type Deps, react, recent, transcript } from './react.ts'
 import { running, settle } from './run.ts'
 import { took } from './timing.ts'
 
@@ -346,6 +346,56 @@ Deno.test('an imported compaction resumes from its summary and later entries', a
     { kind: 'instruction', text: 'The plan is to keep the bridge.' },
     { kind: 'user', text: 'The bridge must be blue.' },
     { kind: 'user', text: 'What is the plan and color?' },
+  ])
+})
+
+Deno.test('a checkpoint keeps a call whose result followed an input', async () => {
+  let g = world()
+  await g.apply([
+    {
+      entity: { eid: 'old-ask' },
+      entry: { session: ids.s, seq: 2 },
+      ask: { to: ids.m, through: 'e1' },
+    },
+    {
+      entity: { eid: 'old-call' },
+      entry: { session: ids.s, seq: 3 },
+      call: { to: ids.t, id: 'c1', args: { text: 'hi' }, source: 'old-ask' },
+    },
+    {
+      entity: { eid: 'between' },
+      entry: { session: ids.s, seq: 4 },
+      content: { body: 'One more thing.' },
+    },
+    {
+      entity: { eid: 'old-result' },
+      entry: { session: ids.s, seq: 5 },
+      result: { call: 'old-call' },
+      content: { body: 'echo: hi' },
+    },
+    {
+      entity: { eid: 'summary' },
+      entry: { session: ids.s, seq: 6 },
+      checkpoint: { through: 'old-call', seq: 3 },
+      content: { body: 'The user asked to echo hi.' },
+    },
+  ], { trusted: true })
+  let runs = 0
+  let { model, asked } = scripted([says('next', 'Done.')], false)
+  assertEquals(
+    await rest(g, ids.s, {
+      model,
+      tools: [{ ...echo, run: () => String(runs++) }],
+      mint,
+    }),
+    'settled',
+  )
+  assertEquals(runs, 0)
+  assertEquals(asked[0].items, [
+    { kind: 'instruction', text: 'The user asked to echo hi.' },
+    { kind: 'call', id: 'c1', name: 'echo', args: '{"text":"hi"}' },
+    { kind: 'user', text: 'One more thing.' },
+    { kind: 'result', id: 'c1', output: 'echo: hi' },
   ])
 })
 
@@ -799,6 +849,15 @@ Deno.test('a window sends the newest entries, from the input that began their tu
     'user',
   ])
   assertEquals(await say('e4', 'last', 1), ['user'])
+})
+
+Deno.test('a window keeps a call whose result followed an input', () => {
+  let entries = [
+    { entity: { eid: 'call' }, call: { to: ids.t, id: 'c1' } },
+    { entity: { eid: 'input' }, content: { body: 'while it runs' } },
+    { entity: { eid: 'result' }, result: { call: 'call' } },
+  ]
+  assertEquals(recent(entries, 2), entries)
 })
 
 Deno.test("a window counts the conversation, never a wake's typed questions", async () => {
