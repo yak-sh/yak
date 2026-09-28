@@ -707,7 +707,8 @@ Deno.test('a word the space already has is used where it lives', async () => {
     })
     assertStringIncludes(
       second,
-      'book lives in reading-list; this app reads and writes it there',
+      "warning: book lives in reading-list; this app's ./api/ page client cannot use it; " +
+        'graph_apply and commands route to reading-list',
     )
     assertStringIncludes(second, 'components: loan')
     assertEquals(second.includes('components: book'), false)
@@ -875,6 +876,56 @@ Deno.test('a word the space already has is used where it lives', async () => {
   }
 })
 
+Deno.test('a page gets its word after the scratch home leaves', async () => {
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'flame74', apps: ['probe', 'vale'] }])
+    let agent = connector(k, them.cookie)
+    let deploy = async (app: string) => {
+      await agent.tool('app_files', {
+        space: 'flame74',
+        app,
+        op: 'write',
+        path: 'vocab.json',
+        content: vocabFile({ fire: { village: txt } }),
+      })
+      return await agent.tool('app_deploy', { space: 'flame74', app })
+    }
+    await deploy('probe')
+    assertStringIncludes(
+      await deploy('vale'),
+      "this app's ./api/ page client cannot use it",
+    )
+
+    let page = (path: string) =>
+      k.at('flame74.yaks.app', `/vale/api/${path}`, {
+        headers: { cookie: them.cookie },
+      })
+    let speaks = async () => {
+      let docs = await (await page('vocab.json')).json() as {
+        $defs?: Record<string, unknown>
+      }[]
+      return docs.some((doc) => !!doc.$defs?.fire)
+    }
+    assertEquals(await speaks(), false)
+    let before = await page('query?.fire')
+    assertEquals(before.status, 400)
+    assertStringIncludes(await before.text(), 'unknown prop: .fire')
+
+    await agent.tool('app_delete', { space: 'flame74', app: 'probe' })
+    assertStringIncludes(
+      await agent.tool('app_deploy', { space: 'flame74', app: 'vale' }),
+      'components: fire',
+    )
+    assertEquals(await speaks(), true)
+    let after = await page('query?.fire')
+    assertEquals(after.status, 200)
+    assertEquals(await after.json(), [])
+  } finally {
+    await k.stop()
+  }
+})
+
 // Which prose is worth finding is the vocabulary's sentence (T-37546):
 // @yaks/doc says `"search": true` of its title and body, and an app says it of
 // its own properties, beside the type, in the one JSON Schema form the
@@ -957,7 +1008,8 @@ Deno.test('an app declares which of its own properties are searched', async () =
     )
     assertStringIncludes(
       second,
-      'recipe lives in kitchen; this app reads and writes it there',
+      "warning: recipe lives in kitchen; this app's ./api/ page client cannot use it; " +
+        'graph_apply and commands route to kitchen',
     )
     await agent.tool('graph_apply', {
       app: 'menus',

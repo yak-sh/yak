@@ -432,7 +432,8 @@ Deno.test('a word the space already has is a use, not a home', () => {
   assertEquals(out.uses, { book: 'reading-list' })
   assertEquals(out.grows, {})
   assertEquals(livesIn(out.uses), [
-    'book lives in reading-list; this app reads and writes it there',
+    "warning: book lives in reading-list; this app's ./api/ page client cannot use it; " +
+    'graph_apply and commands route to reading-list',
   ])
 
   // A property the home has never seen grows the HOME's table, keywords and
