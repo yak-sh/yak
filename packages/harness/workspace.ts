@@ -11,6 +11,11 @@ import { cutFor } from './worktrees.ts'
 export { workspaceDoc } from './vocab.ts'
 
 let row = async (g: Graph, eid: string) => (await g.get([eid]))[0]
+let absolute = (description: string) => ({
+  type: 'string',
+  pattern: '^/',
+  description,
+})
 /** Where a worktree entity is checked out — the one function everything here
  * goes through, so a worktree removed while its session was over is created
  * again before anything runs in it (@yaks/git/host `restore`). */
@@ -83,7 +88,7 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
       description:
         'Explicitly create a Git checkout (committed base only). Omit to share parent home. No sandbox; a path of your own choosing is never reclaimed when the session ends.',
       properties: {
-        path: { type: 'string' },
+        path: absolute('Absolute path for the new checkout.'),
         base: {
           type: 'string',
           description:
@@ -97,16 +102,12 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
       required: ['path'],
       additionalProperties: false,
     },
-    home: {
-      type: 'string',
-      description:
-        'Absolute path to an existing Git checkout to use as agent home, or as the source of a new worktree.',
-    },
-    cwd: {
-      type: 'string',
-      description:
-        'Default command directory, distinct from Git worktree home. Absolute path.',
-    },
+    home: absolute(
+      'Absolute path to an existing Git checkout to use as agent home, or as the source of a new worktree.',
+    ),
+    cwd: absolute(
+      'Default command directory, distinct from Git worktree home. Absolute path.',
+    ),
   },
   prepareChild: async ({ parent, args }) => {
     let inherited = (await row(g, parent))?.home as Comp | undefined ??

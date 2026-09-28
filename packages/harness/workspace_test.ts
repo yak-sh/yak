@@ -1,6 +1,7 @@
 import { kindOf } from '@yaks/session'
 import { local } from './local.ts'
 import type { Harness } from './store.ts'
+import type { Model } from '@yaks/model'
 import { harnessTools } from './tools.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -180,6 +181,38 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
     assertEquals(await checkoutAt(f.h.g, f.dir), undefined)
   } finally {
     await f.free()
+  }
+})
+
+Deno.test('spawn refuses relative workspace paths before enqueueing a child', async () => {
+  let h = await harness()
+  let source = await scratchRepo()
+  let turns = 0
+  let model: Model = () =>
+    Promise.resolve({
+      id: 'r',
+      model: 'fake',
+      items: turns++ ? [{ kind: 'assistant', text: 'done' }] : [{
+        kind: 'call',
+        id: 'relative',
+        name: 'spawn',
+        args: JSON.stringify({ prompt: 'work', cwd: '.' }),
+      }],
+    })
+  let a = local({ h, cwd: source.repo, model })
+  try {
+    let parent = await a.start('delegate')
+    await a.idle(parent)
+    let entries = await a.transcript(parent)
+    assertEquals(await a.children(parent), [])
+    assertEquals(
+      (entries.find((b) => b.error)?.error as Comp).code,
+      'arguments',
+    )
+    assertEquals(entries.some((b) => b.exception), false)
+  } finally {
+    await a.close()
+    await source.free()
   }
 })
 
