@@ -672,6 +672,7 @@ let worked = (e: Work) => {
       kind: e.item,
       rarity: e.rarity,
       plus: e.plus,
+      gain: e.gain,
     })
     h.toast(`Upgraded: ${t.name}`, `Toast-loot ${tint(t.rarity)}`, icon(e.item))
     glow.emit(v3(e.at, 1), GRADES[t.rarity].light, 24, {

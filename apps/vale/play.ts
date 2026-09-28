@@ -91,7 +91,7 @@ import { steerPush, steerStep, stride } from './stride.ts'
 import { regionOf, spotOf } from './regions.ts'
 import { destinationOf, nextTeleport, resumed } from './teleport.ts'
 import { placeOf } from './area.ts'
-import { plusOf } from './upgrade.ts'
+import { upgradesOf } from './upgrade.ts'
 import { groundAt, hearthNear, hearthOf, type Vale } from './terrain.ts'
 import { arriveOf } from './ways.ts'
 
@@ -588,9 +588,15 @@ export let game = (
       }
     })
     let spent = new Set(used.map((b) => str(comp(b, 'used').item)))
-    let ups = plusOf(upgraded.map((b) => ({
-      item: str(comp(b, 'upgraded').item),
-    })))
+    let ups = upgradesOf(upgraded.map((b) => {
+      let u = comp(b, 'upgraded')
+      return {
+        item: str(u.item),
+        at: num(u.at),
+        eid: b.entity.eid,
+        ...u.gain != null && { gain: num(u.gain) },
+      }
+    }))
     let bag = items.filter((b) => !spent.has(b.entity.eid)).map((b): Held => {
       let i = comp(b, 'item')
       return {
@@ -599,7 +605,7 @@ export let game = (
         n: num(i.n, 1),
         rarity: rarityOf(i.rarity),
         ...i.lvl != null && { lvl: num(i.lvl) },
-        plus: ups.get(b.entity.eid),
+        ...ups.get(b.entity.eid),
       }
     })
     let entries = journal.map((b) => {

@@ -14,7 +14,15 @@ import { hands, kitOf, twins, type Worn } from './gear.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Sheet } from './play.ts'
-import { BONUSES, GRADES, type Piece, STATS, tint } from './rarity.ts'
+import {
+  BONUSES,
+  GEAR_STATS,
+  GRADES,
+  type Piece,
+  type Stat,
+  STATS,
+  tint,
+} from './rarity.ts'
 import { blowOf, type Held, maxHp } from './rules.ts'
 import { skilled } from './skills.ts'
 
@@ -159,6 +167,22 @@ export let grown = (a: Piece, b: Piece): string =>
     }</span>`
   }).join('')
 
+export let statName = (s: Stat | 'dmg'): string =>
+  ({
+    dmg: 'Attack',
+    force: 'Attack bonus',
+    luck: 'Critical chance',
+    hp: 'Health',
+    armour: 'Armor',
+    speed: 'Speed',
+    haste: 'Attack speed',
+  })[s]
+
+export let statValue = (s: Stat | 'dmg', n: number): string =>
+  s == 'force' || s == 'luck' || s == 'speed' || s == 'haste'
+    ? `${(n * 100).toFixed(1).replace(/\.0$/, '')}%`
+    : String(n)
+
 /** What sort of thing a piece of gear is, with its item level first. */
 export let sortLine = (t: Piece): string =>
   `${t.lvl == null ? '' : `Level ${t.lvl} · `}${
@@ -254,4 +278,55 @@ export let step = (s: Hero, now: Side, then: Side): string => {
       ? `<small class=Compare_Label>You</small>${yours}`
       : `<small class=Compare_Same>Nothing would change.</small>`
   }</div>`
+}
+
+/** An exact piece and the bounds of its next upgrade, calculated through
+ * the same worn gear as a finished upgrade. */
+export let stepRange = (s: Hero, now: Side, low: Side, high: Side): string => {
+  let range = (a: string, b: string) => a == b ? a : `${a}–${b}`
+  let own = GEAR_STATS.flatMap((stat) => {
+    let a = now.p?.[stat] ?? 0, b = low.p?.[stat] ?? 0
+    let c = high.p?.[stat] ?? 0
+    if (a == b && a == c) return []
+    return [
+      `<span class=Pack_Num>${statName(stat)} ${
+        statValue(stat, a)
+      } → <em class=Pack_Up>${
+        range(statValue(stat, b), statValue(stat, c))
+      }</em></span>`,
+    ]
+  }).join('')
+  let [a, b, c] = [now, low, high].map((x) => numbers(s, x.worn))
+  let yours = LINES.flatMap((line) => {
+    let x = a[line.k], y = b[line.k], z = c[line.k]
+    if (x == y && x == z) return []
+    let show = (n: number) =>
+      line.k == 'pace'
+        ? `${n.toFixed(2)} s`
+        : line.k == 'reach'
+        ? `${n} m`
+        : line.k == 'speed' || line.k == 'luck'
+        ? `${n}%`
+        : String(n)
+    let name = {
+      blow: 'Attack',
+      twin: 'Off-hand attack',
+      pace: 'Attack interval',
+      reach: 'Reach',
+      armour: 'Armor',
+      hp: 'Health',
+      speed: 'Speed',
+      luck: 'Critical chance',
+    }[line.k]
+    return [
+      `<span class=Pack_Num>${name} ${show(x)} → <em class=Pack_Up>${
+        range(show(y), show(z))
+      }</em></span>`,
+    ]
+  }).join('')
+  return `<div class="Compare Compare-one">${
+    side(now)
+  }<small class=Compare_Label>Possible +${low.p?.plus ?? 0} result</small>${
+    own ? `<small class=Compare_Label>The piece</small>${own}` : ''
+  }${yours ? `<small class=Compare_Label>You</small>${yours}` : ''}</div>`
 }

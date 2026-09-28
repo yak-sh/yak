@@ -30,7 +30,7 @@ import type { Bundle, Net } from './net.ts'
 import { type Natural, NATURE } from './nature.ts'
 import { type Board, boardsNear, READ } from './notices.ts'
 import type { Frame, Vec3 } from './play.ts'
-import { itemLevel, made, type Rarity } from './rarity.ts'
+import { itemLevel, made, type Rarity, UP, upgradeGain } from './rarity.ts'
 import { upgradeOf, upgradeWorth, upgradeXp } from './upgrade.ts'
 import { fallOf } from './rules.ts'
 import {
@@ -108,6 +108,7 @@ export type Work =
     item: string
     rarity?: Rarity
     plus: number
+    gain: number
     trade: Trade
     xp: number
     at: Vec3
@@ -363,20 +364,23 @@ export let working = (
     let r = h && upgradeOf(h.kind, h.plus ?? 0)
     let took = r && plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))
     if (!h || !r || !took) return short
+    let row = crypto.randomUUID(), roll = upgradeGain(row)
     net.keep(
       {
-        entity: { eid: crypto.randomUUID() },
-        upgraded: { item: eid, by: me, at: now },
+        entity: { eid: row },
+        upgraded: { item: eid, by: me, at: now, gain: roll },
       },
       ...spending(took, me, now),
     )
     let plus = (h.plus ?? 0) + 1
+    let gain = (h.gain ?? UP * (h.plus ?? 0)) + roll
     return {
       type: 'upgraded',
       piece: eid,
       item: h.kind,
       rarity: h.rarity,
       plus,
+      gain,
       trade: r.at,
       xp: upgradeXp(r.tier, plus),
       at,

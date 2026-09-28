@@ -353,6 +353,7 @@ export type Piece = Thing & {
 }
 
 let two = (n: number) => Math.round(n * 100) / 100
+let three = (n: number) => Math.round(n * 1000) / 1000
 let lower = (s: string) => s[0].toLowerCase() + s.slice(1)
 
 /** An item level rolled from a new gear row's eid, within its tier. */
@@ -364,13 +365,18 @@ export let itemLevel = (eid: string, kind: string): number | undefined => {
 }
 
 // A piece's roll, from its eid: its own numbers, its bonuses, its name.
-let roll = (eid: string, kind: string, rarity: Rarity): Piece => {
+let roll = (
+  eid: string,
+  kind: string,
+  rarity: Rarity,
+  r = stream(hashOf(eid)),
+): Piece => {
   let t: Thing = ITEMS[kind] ?? { name: kind, look: [] }
   let slot = t.slot
   if (!slot || rarity == 'common') {
     return { ...t, eid, kind, rarity: 'common', plus: 0, bonuses: [] }
   }
-  let g = GRADES[rarity], r = stream(hashOf(eid)), tier = t.tier ?? 1
+  let g = GRADES[rarity], tier = t.tier ?? 1
   let p: Piece = { ...t, eid, kind, rarity, plus: 0, bonuses: [] }
   let fine = g.fine * (0.96 + 0.08 * r())
   if (t.dmg) p.dmg = two(t.dmg * fine)
@@ -418,25 +424,68 @@ let levelled = (p: Piece, lvl?: number): Piece => {
   return q
 }
 
-/** How much finer each upgrade makes a piece's numbers (upgrade.ts). */
-export let UP = 0.1
+/** Bounds for each number a newly made piece can roll. The high ends are
+ * calculated independently; one piece cannot necessarily reach them all. */
+export let GEAR_STATS: (Stat | 'dmg')[] = ['dmg', ...STATS]
+export let statRange = (
+  kind: string,
+): Partial<Record<Stat | 'dmg', [number, number]>> => {
+  let t = ITEMS[kind]
+  if (!t?.slot || !t.tier) return {}
+  let [lo, hi] = tierRange(t.tier)
+  let low = levelled(roll('preview', kind, 'common'), lo)
+  let slot = t.slot
+  let pool = STATS.filter((s) => BONUSES[s].on.includes(slot))
+  let high = (stat: Stat | 'dmg') => {
+    let calls = 0
+    let r = () => {
+      calls++
+      return calls == 2 && stat != 'dmg' && pool.includes(stat)
+        ? (pool.indexOf(stat) + 0.5) / pool.length
+        : 1 - Number.EPSILON
+    }
+    return levelled(roll('preview', kind, 'legendary', r), hi)
+  }
+  return Object.fromEntries(GEAR_STATS.flatMap((s) => {
+    let a = low[s] ?? 0, b = high(s)[s] ?? 0
+    return a || b ? [[s, [a, b]]] : []
+  }))
+}
 
-// A piece upgraded `plus` times: every number of it, and each bonus it
-// rolled, a tenth finer for each, and its name counting them. A number a
-// tenth of which rounds away would stall, so the piece's largest whole
-// number, or with none its largest share, rises at least a point a step (one,
-// or one in a hundred), and no step leaves the piece as it was.
-let hone = (p: Piece, plus: number): Piece => {
+/** An older upgrade's gain; new rows keep their own gain. */
+export let UP = 0.1
+export let UP_MIN = 0.08
+export let UP_MAX = 0.12
+
+/** A saved upgrade row's gain, rolled once from its eid. */
+export let upgradeGain = (eid: string): number => {
+  let steps = Math.round((UP_MAX - UP_MIN) * 100) + 1
+  return (Math.round(UP_MIN * 100) +
+    Math.floor(stream(hashOf(eid))() * steps)) / 100
+}
+
+// A piece upgraded `plus` times: every number and rolled bonus grows by its
+// saved gains. Older rows keep their tenth per step and their old rounding.
+// Small numbers get finer precision on new rolls so both ends can be seen.
+let hone = (p: Piece, plus: number, gain?: number): Piece => {
   if (!plus || !p.slot) return p
-  let k = 1 + UP * plus
-  let finer = (s: Stat, n: number) =>
-    BONUSES[s].whole ? Math.round(n * k) : two(n * k)
+  let k = 1 + (gain ?? UP * plus)
+  let round = (s: Stat, n: number) =>
+    gain == null
+      ? BONUSES[s].whole ? Math.round(n) : two(n)
+      : s == 'hp'
+      ? Math.round(n)
+      : s == 'armour'
+      ? two(n)
+      : three(n)
+  let finer = (s: Stat, n: number) => round(s, n * k)
   let top =
     STATS.filter((s) => p[s]).sort((a, b) =>
       Number(!!BONUSES[b].whole) - Number(!!BONUSES[a].whole) ||
       (p[b] ?? 0) - (p[a] ?? 0)
     )[0]
-  let point = (s: Stat) => BONUSES[s].whole ? 1 : 0.01
+  let point = (s: Stat) =>
+    gain == null ? BONUSES[s].whole ? 1 : 0.01 : s == 'hp' ? 1 : 0.001
   let q: Piece = {
     ...p,
     plus,
@@ -448,7 +497,12 @@ let hone = (p: Piece, plus: number): Piece => {
     let n = p[s]
     if (n) {
       q[s] = s == top
-        ? Math.max(finer(s, n), two(n + point(s) * plus))
+        ? Math.max(
+          finer(s, n),
+          gain == null
+            ? two(n + point(s) * plus)
+            : round(s, n + point(s) * plus),
+        )
         : finer(s, n)
     }
   }
@@ -502,23 +556,38 @@ let rolled = new Map<string, Piece>()
  * }
  * ```
  */
-export let piece = (
-  h: {
-    eid: string
-    kind: string
-    rarity?: Rarity
-    lvl?: number
-    plus?: number
-  },
-): Piece => {
+export type PieceRow = {
+  eid: string
+  kind: string
+  rarity?: Rarity
+  lvl?: number
+  plus?: number
+  /** combined gain from upgraded rows; absent means legacy +10% steps */
+  gain?: number
+}
+
+export let piece = (h: PieceRow): Piece => {
   let rarity = h.rarity ?? 'common', plus = h.plus ?? 0
-  let key = `${h.eid}:${h.kind}:${rarity}:${h.lvl ?? ''}:${plus}`
+  let key = `${h.eid}:${h.kind}:${rarity}:${h.lvl ?? ''}:${plus}:${
+    h.gain ?? ''
+  }`
   let p = rolled.get(key)
   if (!p) {
-    p = hone(levelled(roll(h.eid, h.kind, rarity), h.lvl), plus)
+    p = hone(levelled(roll(h.eid, h.kind, rarity), h.lvl), plus, h.gain)
     rolled.set(key, p)
   }
   return p
+}
+
+/** The least and most that the next upgrade can make of this piece. */
+export let upgradeRange = (h: PieceRow): [PieceRow, PieceRow] => {
+  let plus = h.plus ?? 0, gain = h.gain ?? UP * plus
+  let at = (roll: number): PieceRow => ({
+    ...h,
+    plus: plus + 1,
+    gain: gain + roll,
+  })
+  return [at(UP_MIN), at(UP_MAX)]
 }
 
 /** The class the glass marks a piece of rarity `r` with (ui/Rarity.css):

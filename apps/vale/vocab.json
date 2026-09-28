@@ -333,7 +333,7 @@
     "upgraded": {
       "component": true,
       "type": "object",
-      "description": "A piece of gear upgraded a step at the station that makes one like it (upgrade.ts), and what it took is spent by used rows in the same write. How far a piece is upgraded is how many rows name it, to +5; each step makes it a tenth finer.",
+      "description": "A piece of gear upgraded a step at the station that makes one like it (upgrade.ts), and what it took is spent by used rows in the same write. How far a piece is upgraded is how many rows name it, to +5; new steps keep their rolled gain, while older rows with none gain a tenth.",
       "properties": {
         "item": {
           "type": "string",
@@ -341,7 +341,13 @@
           "description": "The item row upgraded."
         },
         "by": { "type": "string", "index": true },
-        "at": { "type": "number" }
+        "at": { "type": "number" },
+        "gain": {
+          "type": "number",
+          "minimum": 0.08,
+          "maximum": 0.12,
+          "description": "The share this upgrade adds to a piece's numbers."
+        }
       }
     },
     "equip": {

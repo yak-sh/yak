@@ -82,6 +82,16 @@
   --have: #c0442a;
 }
 
+.Craft_Ranges {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.6rem;
+
+  & small {
+    color: var(--faint);
+  }
+}
+
 .Craft_Go {
   background: linear-gradient(
     90deg,

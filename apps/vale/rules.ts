@@ -300,6 +300,7 @@ export type Held = {
   rarity?: Rarity
   lvl?: number
   plus?: number
+  gain?: number
 }
 
 /** Where one player stands with a quest: done, taken (with how far along),

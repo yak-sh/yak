@@ -1,16 +1,17 @@
 // Upgrading a piece of gear, +1 and up to +5, at the station that makes one
 // like it (craft.ts `RECIPES`): what is smithed at the forge, what is made at
 // the bench there, and wherever a recipe moves, its upgrades follow. Each
-// step asks more of the stuff the piece is made from, and from +3 a gem too,
-// and makes the piece a tenth finer (rarity.ts `piece`).
+// step asks more of the stuff the piece is made from, and from +3 a gem too.
+// Its rolled gain lives on the upgraded row (rarity.ts `piece`).
 //
 // An upgrade writes an `upgraded` row naming the piece, and spends what it
 // took with `used` rows in the same write, so the bag is still items held
 // less items spent; how far a piece is upgraded is how many rows name it
-// (`plusOf`), so a guest, who can only add rows, keeps theirs. Each step is
+// (`upgradesOf`), so a guest, who can only add rows, keeps theirs. Each step is
 // worth xp to the station's trade, as making is (`upgradeWorth`).
 import { madeXp, type Recipe, RECIPES } from './craft.ts'
 import { ITEMS } from './items.ts'
+import { UP } from './rarity.ts'
 import type { Trade } from './trades.ts'
 
 /** The furthest a piece is upgraded. */
@@ -60,19 +61,33 @@ export let upgradeOf = (kind: string, plus: number): Recipe | null => {
   return { makes: kind, at: r.at, tier: r.tier, needs }
 }
 
-/** How far each piece is upgraded, by its eid: the rows naming it, to the
- * last step.
+/** How far each piece is upgraded, and its rolled gain, by item eid. Rows
+ * without a gain retain their original tenth per step.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * let rows = ['a', 'b', 'a', ...Array(9).fill('c')].map((item) => ({ item }))
- * assertEquals(Object.fromEntries(plusOf(rows)), { a: 2, b: 1, c: MOST })
+ * assertEquals(Object.fromEntries(upgradesOf(rows)), {
+ *   a: { plus: 2 }, b: { plus: 1 }, c: { plus: MOST },
+ * })
  * ```
  */
-export let plusOf = (rows: { item: string }[]): Map<string, number> => {
-  let by = new Map<string, number>()
-  for (let { item } of rows) {
-    by.set(item, Math.min(MOST, (by.get(item) ?? 0) + 1))
+export let upgradesOf = (
+  rows: { item: string; gain?: number; at?: number; eid?: string }[],
+): Map<string, { plus: number; gain?: number }> => {
+  let by = new Map<string, { plus: number; gain?: number }>()
+  for (
+    let { item, gain } of [...rows].sort((a, b) =>
+      (a.at ?? 0) - (b.at ?? 0) ||
+      (a.eid ?? '').localeCompare(b.eid ?? '')
+    )
+  ) {
+    let was = by.get(item) ?? { plus: 0 }
+    if (was.plus >= MOST) continue
+    let total = gain == null
+      ? was.gain == null ? undefined : was.gain + UP
+      : (was.gain ?? UP * was.plus) + gain
+    by.set(item, { plus: was.plus + 1, ...total != null && { gain: total } })
   }
   return by
 }

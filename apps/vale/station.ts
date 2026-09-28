@@ -20,12 +20,19 @@ import {
   STUFF,
   stuffName,
 } from './craft.ts'
-import { SLOTS, sortOf, tierName } from './arms.ts'
-import { sortLine, step, trying } from './compare.ts'
+import { SLOTS, sortOf, tierName, tierRange } from './arms.ts'
+import { sortLine, statName, statValue, stepRange, trying } from './compare.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Panel } from './panel.ts'
-import { piece, RARITIES, tint } from './rarity.ts'
+import {
+  GEAR_STATS,
+  piece,
+  RARITIES,
+  statRange,
+  tint,
+  upgradeRange,
+} from './rarity.ts'
 import type { Held } from './rules.ts'
 import { icon } from './sprites.ts'
 import type { Sheet } from './play.ts'
@@ -118,14 +125,34 @@ export let station = (panel: Panel, acts: Acts) => {
   // What the next step makes of a piece, worn, as a card; nothing past its
   // last step.
   let ahead = (s: Sheet, h: Held) => {
-    let to = { ...h, plus: (h.plus ?? 0) + 1 }
+    let [lo, hi] = upgradeRange(h)
     return upgradeOf(h.kind, h.plus ?? 0)
-      ? step(
+      ? stepRange(
         s,
         { label: 'Now', p: piece(h), worn: wearing(s, h, h) },
-        { label: `At +${to.plus}`, p: piece(to), worn: wearing(s, h, to) },
+        { label: 'Least', p: piece(lo), worn: wearing(s, h, { ...h, ...lo }) },
+        { label: 'Most', p: piece(hi), worn: wearing(s, h, { ...h, ...hi }) },
       )
       : undefined
+  }
+
+  // A recipe's possible numbers, one range per stat; the high end of each
+  // may come from a different legendary roll.
+  let makingRange = (kind: string) => {
+    let t = ITEMS[kind]
+    if (!t?.slot || !t.tier) return ''
+    let [lo, hi] = tierRange(t.tier), values = statRange(kind)
+    let lines = GEAR_STATS.flatMap((stat) => {
+      let pair = values[stat]
+      if (!pair) return []
+      let [a, b] = pair.map((n) => statValue(stat, n))
+      return [
+        `<span class=Pack_Num>${statName(stat)} ${
+          a == b ? a : `${a}–${b}`
+        }</span>`,
+      ]
+    }).join('')
+    return `<div class=Craft_Ranges><small>Possible per-stat ranges · Level ${lo}–${hi} · Common–Legendary</small>${lines}</div>`
   }
 
   // A piece's tip on the upgrade tab: what its next step makes of it; its
@@ -204,7 +231,7 @@ export let station = (panel: Panel, acts: Acts) => {
     }</span></div>${button}</div>` +
       `<div class=Craft_Needs>${
         r.needs.map((n) => need(bag, r, n)).join('')
-      }</div>`
+      }</div>` + makingRange(r.makes)
   }
 
   let draw = (c: Craft, s: Sheet, trades: Trades, job: Job) => {
