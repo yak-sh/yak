@@ -172,10 +172,12 @@ socket.send(
 ← { id, refused: { error, message, … } }
 ```
 
-`acks: true` opts a connection into one frame at a time. Every frame then
-carries an `ack` token; the server waits for that token before sending the next
-frame. Waiting peer relays replace older values for the same property. Clients
-without `acks: true` keep the original stream.
+Peer relays wait up to 16 ms so movements arriving together share a frame.
+Waiting relays keep the newest property values, with a clear retained before a
+later partial value. A membership or durable-data frame sends preceding relays
+first, then goes out without waiting for the relay timer. `acks: true` opts a
+connection into one frame at a time: every frame carries an `ack` token, and
+the server waits for it before sending the next frame.
 
 Query updates contain current bundles for matching entities and `gone` IDs for
 entities that were deleted or stopped matching. A refreshed query can return its

@@ -1,9 +1,25 @@
 /// <reference lib="deno.ns" />
 import { assertEquals, assertThrows } from '@std/assert'
 import { boxGraph, pair } from './testing.ts'
-import { land, snapshot } from './inbound.ts'
+import { hear, land, snapshot } from './inbound.ts'
 import { sync } from './sync.ts'
 import { type Frame, wire } from './socket.ts'
+
+Deno.test('batched peer clear then partial value clears older properties', async () => {
+  let g = boxGraph(true)
+  await g.apply([{
+    entity: { eid: 'a' },
+    pointing: { x: 1, y: 2 },
+  }])
+  await hear(g, {
+    id: 'peers',
+    relay: [
+      { entity: { eid: 'a' }, pointing: null },
+      { entity: { eid: 'a' }, pointing: { x: 3 } },
+    ],
+  })
+  assertEquals((await g.get(['a']))[0].pointing, { x: 3 })
+})
 
 Deno.test('low-level snapshots clear covered whole components, not other tiers or scopes', async () => {
   let g = boxGraph(true)

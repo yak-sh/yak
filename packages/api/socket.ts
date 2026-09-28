@@ -10,7 +10,7 @@
 // while sending its own initial result.
 
 import { fault, refusal } from './refuse.ts'
-import { coalesced, isPromise } from '@yaks/graph'
+import { coalescer, isPromise } from '@yaks/graph'
 import type { Frame, Sink, Subs } from './subs.ts'
 
 /** The part of a WebSocket this package uses: the standard `WebSocket`
@@ -42,6 +42,7 @@ export type Upgrade = (
 
 let OPEN = 1
 let BUFFER = 8 * 1024
+let TICK = 16
 
 /** A replaceable frame queue for a socket, including hibernatable sockets
  * whose incoming messages are delivered by a Durable Object method. */
@@ -68,18 +69,21 @@ export let queue = (
   let closed = false
   let enabled = false
   let owed = resume.owed
+  let relays = new WeakMap<Frame, ReturnType<typeof coalescer>>()
   let schedule = () => {
     if (draining || closed) return
     draining = true
     timer(() => {
       draining = false
       flush()
-    }, 16)
+    }, TICK)
   }
   let flush = () => {
     if (!ready() || closed || owed) return
     while (waiting.length && (socket.bufferedAmount ?? 0) < BUFFER) {
       let frame = waiting.shift()!
+      let batch = relays.get(frame)
+      if (batch) frame = { ...frame, relay: batch.read() }
       if (enabled) {
         let token = crypto.randomUUID()
         socket.send(JSON.stringify({ ...frame, ack: token }))
@@ -93,8 +97,9 @@ export let queue = (
   }
   let send: Sink = (frame) => {
     if (closed) return
-    // A relay is a patch. Only merge it with another relay of this
-    // subscription before the next membership or durable-data frame.
+    // Wait one tick to send the newest peer positions in one frame. A
+    // membership or durable frame flushes the preceding relays first, so
+    // their order relative to joins and leaves does not change.
     if (
       frame.relay && Object.keys(frame).every((k) => k == 'id' || k == 'relay')
     ) {
@@ -104,11 +109,16 @@ export let queue = (
           !was.relay || Object.keys(was).some((k) => k != 'id' && k != 'relay')
         ) break
         if (was.id == frame.id) {
-          was.relay = coalesced([...was.relay, ...frame.relay])
-          flush()
+          let batch = relays.get(was) ?? coalescer()
+          if (!relays.has(was)) batch.add(was.relay)
+          batch.add(frame.relay)
+          relays.set(was, batch)
           return
         }
       }
+      waiting.push(frame)
+      schedule()
+      return
     }
     waiting.push(frame)
     flush()

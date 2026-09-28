@@ -104,27 +104,31 @@ export let hear = (
   mine: Mine = none,
 ): Bundle[] | Promise<Bundle[]> => {
   let peer = (name: string) => syncOf(graph.vocab, name) == 'peers'
-  let said = new Map<Eid, Bundle>()
+  let said: Bundle[] = []
+  let seen = new Map<Eid, Set<string>>()
   for (let b of frame.relay ?? []) {
-    let out = said.get(b.entity.eid) ?? { entity: { eid: b.entity.eid } }
-    for (let [name, patch] of comps(b)) if (peer(name)) out[name] = patch
-    if (comps(out).length) said.set(b.entity.eid, out)
+    let out: Bundle = { entity: { eid: b.entity.eid } }
+    for (let [name, patch] of comps(b)) {
+      if (!peer(name)) continue
+      out[name] = patch
+      let names = seen.get(b.entity.eid) ?? new Set<string>()
+      names.add(name)
+      seen.set(b.entity.eid, names)
+    }
+    if (comps(out).length) said.push(out)
   }
-  let landed = () => {
-    let all = [...said.values()]
-    return all.length ? replicate(graph, all) : []
-  }
+  let landed = () => said.length ? replicate(graph, said) : []
   if (!frame.reset || !frame.bundles?.length) return landed()
   return then(graph.get(frame.bundles.map((b) => b.entity.eid)), (held) => {
     for (let b of held) {
       let eid = b.entity.eid
+      let out: Bundle = { entity: { eid } }
       for (let [name] of comps(b)) {
         if (!peer(name) || mine(eid, name)) continue
-        if (name in (said.get(eid) ?? {})) continue
-        let out = said.get(eid) ?? { entity: { eid } }
+        if (seen.get(eid)?.has(name)) continue
         out[name] = null
-        said.set(eid, out)
       }
+      if (comps(out).length) said.push(out)
     }
     return landed()
   })
