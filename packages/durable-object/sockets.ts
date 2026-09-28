@@ -81,7 +81,13 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 // A socket's subscriptions, stored on the socket. The runtime caps an
 // attachment at 2KB, and the application may be storing fields of its own
 // there, so the subscriptions live under one key and the rest is left alone.
-type Held = { subs?: Record<string, Ask>; relay?: string[]; acks?: boolean }
+type Held = {
+  subs?: Record<string, Ask>
+  relay?: string[]
+  acks?: boolean
+  owed?: string
+  seen?: string[]
+}
 let CAP = 2048
 // A `sync: peers` value is held in memory, and this object's memory does not
 // survive hibernation. What survives is the attachment, so the KEYS go there:
@@ -98,6 +104,14 @@ let asksOf = (ws: Wire): Record<string, Ask> => {
   return subs && typeof subs == 'object' ? { ...subs } : {}
 }
 
+let fits = (held: Held) => {
+  let ids = Object.entries(held.subs ?? {}).filter(([, ask]) => ask !== true)
+    .map(([id]) => id)
+  let full = held.acks ? { ...held, owed: '0'.repeat(36), seen: ids } : held
+  return JSON.stringify(held).length <= CAP &&
+    JSON.stringify(full).length <= CAP
+}
+
 // Write the subscriptions back beside whatever else the application stores.
 // `false` means they would not fit — the runtime would drop the whole
 // attachment at the next hibernation, so the subscription is rejected now
@@ -108,10 +122,20 @@ let hold = (ws: Wire, subs: Record<string, Ask>, acks = false): boolean => {
     ...(held && typeof held == 'object' ? held : {}),
     subs,
     ...(acks ? { acks: true } : {}),
+    seen: (held as Held | null)?.seen?.filter((id) => id in subs),
   }
-  if (JSON.stringify(next).length > CAP) return false
+  // Reserve room for serial delivery even after an eviction between frames.
+  if (!fits(next)) return false
   ws.serializeAttachment(next)
   return true
+}
+
+let delivery = (ws: Wire, owed?: string, seen: string[] = []) => {
+  let held = ws.deserializeAttachment()
+  let was = held && typeof held == 'object' ? held as Held : {}
+  let next = { ...was, owed, seen: seen.length ? seen : undefined }
+  if (!fits(next)) throw new RangeError('socket delivery exceeds attachment')
+  ws.serializeAttachment(next)
 }
 
 let relayOf = (ws: Wire): string[] => {
@@ -127,7 +151,7 @@ let remember = (ws: Wire, keys: string[]) => {
   let was = held && typeof held == 'object' ? held as Held : {}
   let relay = keys.slice(0, KEYS)
   let next = relay.length ? { ...was, relay } : { ...was, relay: undefined }
-  if (JSON.stringify(next).length <= CAP) ws.serializeAttachment(next)
+  if (fits(next)) ws.serializeAttachment(next)
 }
 
 // What a frame subscribed to, read alongside @yaks/api's own dispatch so that
@@ -169,7 +193,10 @@ let asked = (
  * lifetime is this socket's — see @yaks/api's `receive`.
  */
 export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
-  let sinks = new Map<Wire, ReturnType<typeof queue>>()
+  let sinks = new Map<
+    Wire,
+    ReturnType<typeof queue> & { forget: (id: string) => void }
+  >()
 
   // The sink for a socket, created once. A socket this object has not seen
   // before may still be one it inherited, so its stored subscriptions are
@@ -178,16 +205,50 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
   let sink = (ws: Wire): Sink => {
     let to = sinks.get(ws)?.send
     if (to) return to
-    let fresh = queue(ws)
-    sinks.set(ws, fresh)
-    if ((ws.deserializeAttachment() as Held | null)?.acks) fresh.enable()
+    let held = ws.deserializeAttachment() as Held | null
+    let seen = new Set(held?.owed ? held.seen ?? [] : [])
+    if (!held?.owed && held?.seen?.length) delivery(ws)
+    let fresh = queue(ws, undefined, undefined, {
+      owed: held?.owed,
+      sent: (frame, token) => {
+        if (frame.transientReset !== undefined || frame.reset) {
+          seen.add(frame.id)
+        } else seen.clear()
+        delivery(ws, token, [...seen])
+      },
+      acked: (owed) => {
+        if (!owed) seen.clear()
+        delivery(ws, owed, [...seen])
+      },
+    })
+    // A snapshot already on the wire before eviction needs its ACK, not a
+    // second copy. The remaining subscriptions still get their snapshots.
+    let skip = new Set(seen)
+    let reopening = new Map(Object.entries(asksOf(ws)))
+    let send: Sink = (frame) => {
+      let snapshot = reopening.has(frame.id) && reopening.get(frame.id) !== true
+      if (snapshot) reopening.delete(frame.id)
+      if (snapshot && skip.delete(frame.id)) return
+      fresh.send(snapshot ? { ...frame, reset: true } : frame)
+    }
+    sinks.set(ws, {
+      ...fresh,
+      send,
+      forget: (id) => {
+        seen.delete(id)
+        skip.delete(id)
+        let held = ws.deserializeAttachment() as Held | null
+        delivery(ws, held?.owed, [...seen])
+      },
+    })
+    if (held?.acks) fresh.enable()
     // The relay keys first: whatever else this socket did, the registry has to
     // know what it is saying before a close can stop saying it.
-    subs.relayed(fresh.send, relayOf(ws))
+    subs.relayed(send, relayOf(ws))
     for (let [id, ask] of Object.entries(asksOf(ws))) {
-      subs.open(fresh.send, id, ask)
+      subs.open(send, id, ask)
     }
-    return fresh.send
+    return send
   }
 
   return {
@@ -218,6 +279,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       let ask = asked(data)
       let sender = sinks.get(ws)!
       if (ask?.ack) return sender.ack(ask.ack)
+      if (ask) sender.forget(ask.id)
       if (ask?.acks) sender.enable()
       let was = subs.relaying(to).join('\n')
       receive(subs, to, data)

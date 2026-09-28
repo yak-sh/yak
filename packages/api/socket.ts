@@ -51,6 +51,11 @@ export let queue = (
     setTimeout(fn, ms)
   },
   ready: () => boolean = () => true,
+  resume: {
+    owed?: string
+    sent?: (frame: Frame, token: string) => void
+    acked?: (owed?: string) => void
+  } = {},
 ): {
   send: Sink
   flush: () => void
@@ -62,7 +67,7 @@ export let queue = (
   let draining = false
   let closed = false
   let enabled = false
-  let owed: string | undefined
+  let owed = resume.owed
   let schedule = () => {
     if (draining || closed) return
     draining = true
@@ -76,8 +81,10 @@ export let queue = (
     while (waiting.length && (socket.bufferedAmount ?? 0) < BUFFER) {
       let frame = waiting.shift()!
       if (enabled) {
-        owed = crypto.randomUUID()
-        socket.send(JSON.stringify({ ...frame, ack: owed }))
+        let token = crypto.randomUUID()
+        socket.send(JSON.stringify({ ...frame, ack: token }))
+        owed = token
+        resume.sent?.(frame, token)
         break
       }
       socket.send(JSON.stringify(frame))
@@ -117,6 +124,7 @@ export let queue = (
       if (token != owed) return
       owed = undefined
       flush()
+      resume.acked?.(owed)
     },
     close: () => {
       closed = true

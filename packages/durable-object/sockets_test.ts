@@ -7,6 +7,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { subscriptions } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { loadVocab, type Vocab } from '@yaks/vocab'
 import type { Frame } from '@yaks/api'
 import { shop, store } from './testing.ts'
 import { type Sockets, sockets, type Wire } from './sockets.ts'
@@ -42,13 +43,16 @@ let hibernation = () => {
 let instance = (
   storage: ReturnType<typeof store>,
   ctx: ReturnType<typeof hibernation>,
+  vocab: Vocab = shop,
 ): [Graph, Sockets] => {
-  let g = graph({ storage, vocab: shop })
+  let g = graph({ storage, vocab })
   return [g, sockets(subscriptions(g), ctx)]
 }
 
 let ask = (id: string, query: string) =>
   JSON.stringify({ subscribe: query, id })
+let send = (live: Sockets, ws: Wire, message: unknown) =>
+  live.message(ws, JSON.stringify(message))
 
 Deno.test('a subscription is answered, and a commit pushes to the socket', () => {
   let ctx = hibernation()
@@ -80,7 +84,7 @@ Deno.test('a woken object serves the socket it inherited', () => {
   woken.wake()
   assertEquals(
     ws.sent,
-    [{ id: 'p', bundles: [], transientReset: [] }],
+    [{ id: 'p', bundles: [], transientReset: [], reset: true }],
     'the set again, on waking',
   )
 
@@ -107,19 +111,113 @@ Deno.test('acknowledgement survives hibernation and gates later pushes', () => {
   assertEquals(ws.deserializeAttachment(), {
     subs: { p: '.kind=product' },
     acks: true,
+    owed: initial.ack,
+    seen: ['p'],
   })
 
   let [g, woken] = instance(storage, ctx)
   ws.sent.length = 0
   woken.wake()
-  let resync = ws.sent.at(-1)!
-  assert(typeof resync.ack == 'string')
+  assertEquals(ws.sent, [])
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
-  assertEquals(ws.sent.length, 1)
+  assertEquals(ws.sent, [])
   woken.message(ws, JSON.stringify({ ack: initial.ack }))
-  assertEquals(ws.sent.length, 1)
-  woken.message(ws, JSON.stringify({ ack: resync.ack }))
   assertEquals((ws.sent.at(-1)!.bundles as Bundle[])[0].entity.eid, 'p1')
+  let change = ws.sent.at(-1)!
+  send(woken, ws, { ack: change.ack })
+  let [, later] = instance(storage, ctx)
+  later.wake()
+  assertEquals(ws.sent.at(-1)?.reset, true)
+})
+
+Deno.test('an idle socket advances past snapshots across repeated hibernation', () => {
+  let storage = store(), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let [, first] = instance(storage, ctx)
+  send(first, ws, { subscribe: '.kind=product', id: 'products', acks: true })
+  send(first, ws, { subscribe: '.doc', id: 'docs', acks: true })
+  let firstFrame = ws.sent.at(-1)!
+  assertEquals(firstFrame.id, 'products')
+  assert(typeof firstFrame.ack == 'string')
+
+  let [, second] = instance(storage, ctx)
+  second.wake()
+  assertEquals(ws.sent.length, 1)
+  send(second, ws, { ack: firstFrame.ack })
+  let secondFrame = ws.sent.at(-1)!
+  assertEquals(secondFrame.id, 'docs')
+  assert(typeof secondFrame.ack == 'string')
+
+  let [g, third] = instance(storage, ctx)
+  third.wake()
+  assertEquals(ws.sent.length, 2)
+  send(third, ws, { ack: secondFrame.ack })
+  assertEquals(ws.sent.length, 2)
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  let change = ws.sent.at(-1)!
+  assertEquals(change.id, 'products')
+  assertEquals((change.bundles as Bundle[])[0].entity.eid, 'p1')
+})
+
+Deno.test('an idle area subscriber hears a mover after hibernation', () => {
+  let vocab = loadVocab({
+    $defs: {
+      product: {
+        component: true,
+        properties: { price: { type: 'number' } },
+      },
+      position: {
+        component: true,
+        sync: 'peers',
+        durable: 'connection',
+        properties: { x: { type: 'number' } },
+      },
+    },
+  })
+  let storage = store(vocab), ctx = hibernation()
+  let [g, first] = instance(storage, ctx, vocab)
+  g.apply([{ entity: { eid: 'mover' }, product: { price: 3 } }])
+  let idle = wire(), moving = wire()
+  ctx.live.push(idle, moving)
+  send(first, idle, {
+    subscribe: '.product&.position.x=0...10',
+    id: 'near',
+    acks: true,
+  })
+  let initial = idle.sent.at(-1)!
+  send(first, idle, { ack: initial.ack })
+  send(first, moving, {
+    relay: [{ entity: { eid: 'mover' }, position: { x: 2 } }],
+  })
+  let joined = idle.sent.at(-1)!
+  assertEquals(joined.bundles?.[0].entity.eid, 'mover')
+
+  let [, woken] = instance(storage, ctx, vocab)
+  woken.wake()
+  send(woken, moving, {
+    relay: [{ entity: { eid: 'mover' }, position: { x: 3 } }],
+  })
+  assertEquals(idle.sent.at(-1), joined)
+  send(woken, idle, { ack: joined.ack })
+  let reset = idle.sent.at(-1)!
+  assertEquals(reset.reset, true)
+  send(woken, idle, { ack: reset.ack })
+  let latest = idle.sent.at(-1)!
+  assertEquals(latest.relay?.[0].position, { x: 3 })
+})
+
+Deno.test('repointing a subscription invalidates its earlier snapshot', () => {
+  let storage = store(), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let [, first] = instance(storage, ctx)
+  send(first, ws, { subscribe: '.kind=product', id: 'one', acks: true })
+  let old = ws.sent.at(-1)!
+  send(first, ws, { subscribe: '.doc', id: 'one', acks: true })
+  let [, woken] = instance(storage, ctx)
+  woken.wake()
+  send(woken, ws, { ack: old.ack })
+  assertEquals(ws.sent.length, 2)
+  assertEquals(ws.sent.at(-1)?.reset, true)
 })
 
 Deno.test('unsubscribing forgets it here and on the socket', () => {

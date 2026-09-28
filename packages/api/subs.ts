@@ -66,6 +66,8 @@ import { type Relay, relay as relaying, type Timer } from './relay.ts'
 export type Frame = {
   /** the token a socket subscriber echoes after applying this frame */
   ack?: string
+  /** a whole answer after a hibernating socket wakes */
+  reset?: boolean
   transient?: TransientFrame[]
   transientReset?: Eid[]
   /** the subscription this frame answers */
