@@ -106,16 +106,20 @@ Deno.test('touch look and mouse look keep their own gesture', () => {
 
 Deno.test('left touch walks right while right touch orbits', () => {
   let { document, window } = parseHTML('<html><body></body></html>')
-  let before = {
-    document: globalThis.document,
-    innerWidth: globalThis.innerWidth,
-    addEventListener: globalThis.addEventListener,
+  let before = Object.fromEntries(
+    ['document', 'innerWidth', 'addEventListener'].map((
+      key,
+    ) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]),
+  )
+  for (
+    let [key, value] of Object.entries({
+      document,
+      innerWidth: 800,
+      addEventListener: () => {},
+    })
+  ) {
+    Object.defineProperty(globalThis, key, { configurable: true, value })
   }
-  Object.assign(globalThis, {
-    document,
-    innerWidth: 800,
-    addEventListener: () => {},
-  })
   try {
     let stage = document.createElement('div')
     let glass = document.createElement('div')
@@ -164,6 +168,9 @@ Deno.test('left touch walks right while right touch orbits', () => {
     assertEquals(stepped.x > body.x, true)
     assertAlmostEquals(stepped.yaw, Math.PI / 2 + i.orbit[0])
   } finally {
-    Object.assign(globalThis, before)
+    for (let [key, descriptor] of Object.entries(before)) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else Reflect.deleteProperty(globalThis, key)
+    }
   }
 })

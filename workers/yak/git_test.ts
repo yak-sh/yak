@@ -83,7 +83,10 @@ let deploy = async (
     manifest[path] = sha
     await pins(blobs, 'ada/recipes/').put(sha, bytes)
   }
-  await record(dir, WHO, app, version, manifest, '')
+  // Each deploy is a new request; record guards the snapshot it was given.
+  let space = (await dir.space('ada'))!
+  let current = (await dir.app(space, app.slug))!
+  await record(dir, WHO, current, version, manifest, '')
   return manifest
 }
 

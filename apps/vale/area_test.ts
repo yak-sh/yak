@@ -68,8 +68,14 @@ Deno.test('a crowded area keeps its looks as heroes move and restyle', () => {
   let g = graph({ storage: store, vocab })
   let subs = subscriptions(g)
   let heard: Frame[] = []
+  let present = new Set<string>()
   let writer: Sink = () => {}
-  let watcher: Sink = (frame) => heard.push(frame)
+  let watcher: Sink = (frame) => {
+    heard.push(frame)
+    if (frame.reset) present.clear()
+    for (let bundle of frame.bundles ?? []) present.add(bundle.entity.eid)
+    for (let eid of frame.gone ?? []) present.delete(eid)
+  }
   let heroes = Array.from({ length: 150 }, (_, i) => `hero-${i}`)
   g.apply(heroes.flatMap((eid) => [
     { entity: { eid }, player: {} },
@@ -89,14 +95,7 @@ Deno.test('a crowded area keeps its looks as heroes move and restyle', () => {
       position: { level: 'mossvale', x: i ? 70 : 500, y: 2, z: 60, at: 1000 },
     })),
   )
-  assertEquals(
-    [
-      ...new Set(
-        heard.flatMap((f) => f.bundles?.map((b) => b.entity.eid) ?? []),
-      ),
-    ].sort(),
-    heroes.map((eid) => `look-${eid}`).sort(),
-  )
+  assertEquals([...present].sort(), heroes.map((eid) => `look-${eid}`).sort())
   heard.length = 0
 
   subs.relay(writer, [{
