@@ -1,0 +1,92 @@
+/* A quiet stage for judging the Book; the game provides its own stage. */
+html,
+body {
+  min-height: 100%;
+  height: auto;
+  overflow: auto;
+}
+body {
+  background:
+    radial-gradient(ellipse at 20% 80%, #9bb15e 0, transparent 34%),
+    radial-gradient(ellipse at 85% 30%, #a2b6aa 0, transparent 40%),
+    linear-gradient(170deg, #859b8d 0%, #55725a 38%, #304a34 75%, #202e22 100%);
+}
+.BookPreview {
+  display: grid;
+  min-height: 100dvh;
+  align-content: center;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 5rem 1rem 1.5rem;
+}
+.BookPreview::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.4;
+  background: repeating-linear-gradient(97deg, transparent 0 7%, #1835287a 8%
+    9%, transparent 10% 17%);
+  filter: blur(9px);
+}
+.BookPreview_Hero {
+  position: fixed;
+  z-index: 5;
+  top: max(0.65rem, env(safe-area-inset-top));
+  left: max(0.65rem, env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 18.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #9c8f70;
+  border-radius: 0.35rem;
+  background: #222521ed;
+  box-shadow: 0 3px 10px #1b190f9c;
+  color: #fff3db;
+}
+.BookPreview_Portrait {
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border: 1px solid #9c8f70;
+  background: linear-gradient(145deg, #845d36, #344f32);
+  color: #e6d3a1;
+  font-size: 1.8rem;
+}
+.BookPreview_HeroBody {
+  display: grid;
+  flex: 1;
+  gap: 0.15rem;
+}
+.BookPreview_HeroName {
+  font-size: 1.03rem;
+}
+.BookPreview_Vital {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.72rem;
+}
+.BookPreview_Vital i {
+  height: 0.52rem;
+  background: linear-gradient(90deg, var(--bar) var(--fill), #433a2c
+    var(--fill));
+}
+.BookPreview_Caption {
+  margin: 0;
+  color: #fff6df;
+  text-shadow: 0 1px 4px #1c2517;
+  font-size: 0.82rem;
+}
+@media (max-width: 760px) {
+  .BookPreview {
+    align-content: start;
+    padding: 6.5rem 0.5rem 1rem;
+  }
+  .BookPreview_Hero {
+    min-width: min(18.5rem, calc(100vw - 1.3rem));
+  }
+}

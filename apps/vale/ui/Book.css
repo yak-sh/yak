@@ -1,0 +1,583 @@
+/* The field book: one cover, two parchment pages, and a small vocabulary
+   shared by Bag, Journal, Craft, and later in-game panels. */
+.Book {
+  width: min(1120px, calc(100vw - 2rem));
+  color: var(--book-ink);
+  font-family: 'Fredoka', system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.35;
+  filter: drop-shadow(0 16px 26px var(--book-shadow));
+}
+
+.Book_Tabs {
+  display: flex;
+  align-items: end;
+  gap: 0.3rem;
+  padding: 0 1.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.Book_Tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.Book_Tab {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-width: max-content;
+  min-height: 2.7rem;
+  padding: 0.45rem 1.25rem;
+  border: 1px solid #8e7248;
+  border-bottom: 0;
+  border-radius: 0.7rem 0.7rem 0 0;
+  background: linear-gradient(150deg, #e7d4a9, #cbb385 70%);
+  box-shadow: inset 0 2px 1px #fff5d7a6, 0 -2px 6px #23170c4d;
+  color: var(--book-ink);
+  cursor: pointer;
+  font-size: 1.12rem;
+  white-space: nowrap;
+}
+
+.Book_Tab .Glyph {
+  width: 1.15em;
+  height: 1.15em;
+}
+.Book_Tab:hover {
+  background: #efe0bc;
+}
+.Book_Tab[aria-selected='true'] {
+  position: relative;
+  z-index: 1;
+  min-height: 3.05rem;
+  background: linear-gradient(145deg, #617449, #324d2b);
+  border-color: #243d22;
+  box-shadow: inset 0 0 0 2px #9daa76, 0 -2px 7px #1725167a;
+  color: #fff2cc;
+}
+
+.Book_Frame {
+  position: relative;
+  padding: 0.85rem;
+  border: 2px solid #241509;
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(circle at 7% 8%, #a97640 0, transparent 18%),
+    radial-gradient(circle at 93% 85%, #7c522e 0, transparent 22%),
+    repeating-linear-gradient(90deg, transparent 0 3px, #23170d20 3px 4px),
+    linear-gradient(115deg, #4b2b19, #754b2c 52%, #382213);
+  box-shadow:
+    inset 0 0 0 3px #9b6d3d,
+    inset 0 0 0 6px #2b190e,
+    inset 0 0 18px #170d08,
+    0 5px 0 #26180e;
+}
+
+.Book_Frame::before,
+.Book_Frame::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  top: 36%;
+  width: 0.5rem;
+  height: 29%;
+  border: 1px solid #221509;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #5a391e, #a77942 48%, #422713);
+  box-shadow: 0 2px 4px #241307a8;
+}
+.Book_Frame::before {
+  left: -0.3rem;
+}
+.Book_Frame::after {
+  right: -0.3rem;
+}
+
+.Book_Spread {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: min(690px, calc(100dvh - 9rem));
+  border: 1px solid #a47d4b;
+  border-radius: 0.65rem;
+  background: var(--book-paper-dark);
+  box-shadow: 0 0 0 2px #e6c693, 0 3px 0 #b99663, 0 6px 0 #d4ad72;
+  overflow: hidden;
+}
+
+.Book_Spread::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+  inset: 0 calc(50% - 0.7rem);
+  background: linear-gradient(90deg,
+    #70492575, #9c714267 12%, #fff2d079 50%, #69411d55 90%, #55351578);
+  box-shadow: 0 0 1.2rem #704b2450;
+}
+
+.Book_Page {
+  position: relative;
+  min-width: 0;
+  padding: clamp(1.2rem, 3vw, 2.6rem);
+  background:
+    radial-gradient(ellipse at 20% 18%, #fff7df 0, transparent 58%),
+    radial-gradient(ellipse at 96% 92%, #c49c685c 0, transparent 43%),
+    repeating-linear-gradient(2deg, #ffffff0b 0 2px, #6c4f2410 2px 3px),
+    linear-gradient(110deg, #e6c99b, var(--book-paper-light) 14% 87%, #d4b27f);
+  box-shadow: inset 0 0 18px #8e653a63;
+}
+
+.Book_Page:first-child {
+  border-right: 1px solid #967748;
+}
+.Book_Page:last-child {
+  border-left: 1px solid #b6986b;
+}
+.Book_Page::before,
+.Book_Page::after {
+  content: '❧';
+  position: absolute;
+  color: #8d906a9e;
+  font-size: 2rem;
+  line-height: 1;
+}
+.Book_Page::before {
+  top: 0.8rem;
+  right: 1rem;
+  transform: rotate(-25deg);
+}
+.Book_Page::after {
+  bottom: 0.6rem;
+  left: 1rem;
+  transform: rotate(165deg);
+}
+.Book_Page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.Book_Head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  margin: 0 0 0.7rem;
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+  line-height: 1.1;
+  font-weight: 400;
+}
+.Book_Head::after {
+  content: '✥';
+  flex: 1;
+  border-bottom: 1px solid var(--book-line);
+  color: #81855c;
+  font-size: 1rem;
+  line-height: 0.7;
+  text-align: right;
+}
+.Book_Subhead {
+  margin: 1.1rem 0 0.45rem;
+  font-size: 1.18rem;
+  font-weight: 400;
+}
+.Book_Meta {
+  color: var(--book-muted);
+  font-size: 0.85rem;
+}
+.Book_Lead {
+  margin: 0.2rem 0 1rem;
+  color: var(--book-muted);
+}
+.Book_Rule {
+  height: 1px;
+  margin: 1rem 0;
+  background: var(--book-line);
+  box-shadow: 0 1px 0 #fff4d9;
+}
+.Book_Rule::after {
+  content: '✥';
+  display: block;
+  width: max-content;
+  margin: auto;
+  padding: 0 0.35rem;
+  background: var(--book-paper);
+  color: #828764;
+  line-height: 0.5;
+}
+
+.Book_Slots,
+.Book_Items {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--book-gap);
+}
+.Book_Items {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.Book_Slot {
+  min-width: 0;
+  text-align: center;
+}
+.Book_SlotLabel {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+}
+.Book_Tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 3.6rem;
+  padding: 0.2rem;
+  border: 1px solid #a99472;
+  border-radius: 0.3rem;
+  background: linear-gradient(145deg, #eee0bf8c, #b99b7370);
+  box-shadow: inset 0 0 0 2px #f9eac8a3, inset 0 0 0 3px #aa926d94;
+  cursor: pointer;
+}
+.Book_Tile:not(button) {
+  cursor: default;
+}
+.Book_Slot .Book_Tile {
+  min-height: 4.9rem;
+}
+.Book_Tile .Sprite {
+  width: 80%;
+  height: 80%;
+  max-width: 4rem;
+  max-height: 4rem;
+}
+.Book_Tile:hover,
+.Book_Tile[aria-pressed='true'] {
+  border-color: var(--book-rare);
+  outline: 2px solid #6c9ce1;
+  outline-offset: 0;
+  background: #dce6eac2;
+}
+.Book_Tier {
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0.15rem;
+  padding: 0.02rem 0.2rem;
+  border-radius: 0.15rem;
+  background: #595650;
+  color: #fff9ea;
+  font-size: 0.72rem;
+  line-height: 1.1;
+}
+.Book_Count {
+  position: absolute;
+  left: 0.2rem;
+  bottom: 0.1rem;
+  color: var(--book-ink);
+  font-size: 0.75rem;
+}
+
+.Book_ItemTop {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.9fr) 1.1fr;
+  align-items: center;
+  gap: 1rem;
+}
+.Book_Picture {
+  display: grid;
+  place-items: center;
+  min-height: 10rem;
+  padding: 0.4rem;
+  border: 2px double #a48b62;
+  border-radius: 0.5rem;
+  background: #f2e6c68c;
+  box-shadow: inset 0 0 0 4px #e9d7ad, inset 0 0 0 5px #bba277;
+}
+.Book_Picture .Sprite {
+  width: 8rem;
+  height: 8rem;
+  max-width: 100%;
+}
+.Book_ItemName {
+  margin: 0;
+  font-size: clamp(1.55rem, 2.6vw, 2.25rem);
+  line-height: 1.05;
+}
+.Book_Level {
+  margin: 0.3rem 0 0.6rem;
+  font-size: 1.18rem;
+}
+.Book_Badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.Book_Badge {
+  padding: 0.15rem 0.55rem;
+  border-radius: 0.2rem;
+  background: #575650;
+  color: #fff8e7;
+  font-size: 0.85rem;
+}
+.Book_Badge-rare {
+  background: #8eabd2;
+  color: #172839;
+}
+.Book_Badge-uncommon {
+  background: #88a46d;
+  color: #152a17;
+}
+
+.Book_Card {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #bba581;
+  border-radius: 0.3rem;
+  background: #e4d4b48c;
+  box-shadow: inset 0 1px 0 #fff2d5;
+}
+.Book_Stats {
+  display: grid;
+  gap: 0.55rem;
+}
+.Book_Stat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 1.08rem;
+}
+.Book_Stat + .Book_Stat {
+  border-top: 1px solid #ad967653;
+  padding-top: 0.4rem;
+}
+.Book_Stat > :first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.Book_Stat .Glyph {
+  width: 1.15em;
+  height: 1.15em;
+  color: var(--book-green);
+}
+.Book_StatVal {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.Book_Change {
+  color: var(--book-good);
+}
+.Book_Change-down {
+  color: #a74832;
+}
+.Book_Foot {
+  margin-top: 1.1rem;
+}
+.Book_Action {
+  display: block;
+  width: min(100%, 19rem);
+  min-height: 3.4rem;
+  margin: 0.85rem auto 0;
+  padding: 0.5rem 1.3rem;
+  border: 2px solid #2a4528;
+  border-radius: 999px;
+  background: linear-gradient(#68824d, #334f2c 55%, #294527);
+  box-shadow: inset 0 0 0 2px #8fa96a, 0 3px 0 #27371c, 0 5px 9px #49371e69;
+  color: #fff4d8;
+  cursor: pointer;
+  font-size: 1.45rem;
+}
+.Book_Action:hover {
+  filter: brightness(1.12);
+}
+.Book_Action:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 2px #8fa96a, 0 1px 0 #27371c;
+}
+.Book_Action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.Book_Pill {
+  min-height: 2.9rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--book-line);
+  border-radius: 0.3rem;
+  background: #ddc9a0;
+  cursor: pointer;
+}
+.Book_Pill[aria-pressed='true'] {
+  background: var(--book-green);
+  color: #fff4d9;
+}
+.Book_Note {
+  color: var(--book-muted);
+  font-size: 0.88rem;
+}
+.Book_Note .Glyph {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.16em;
+}
+
+.Book_List {
+  display: grid;
+  gap: 0.45rem;
+}
+.Book_ListButton {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--book-line);
+  border-radius: 0.3rem;
+  background: #ead9b5b5;
+  color: var(--book-ink);
+  cursor: pointer;
+  text-align: left;
+}
+.Book_ListButton:hover,
+.Book_ListButton[aria-pressed='true'] {
+  background: #d3dcb99c;
+  border-color: #667752;
+}
+.Book_ListButton small {
+  display: block;
+  color: var(--book-muted);
+}
+.Book_Steps {
+  margin: 0.8rem 0;
+  padding-left: 1.5rem;
+}
+.Book_Steps li {
+  margin: 0.5rem 0;
+}
+.Book_Steps .Book_Done {
+  color: var(--book-green);
+}
+.Book_Quote {
+  margin: 1rem 0;
+  padding: 0.7rem 1rem;
+  border-left: 3px solid #829068;
+  background: #dbc89f8a;
+  color: var(--book-muted);
+  font-style: italic;
+}
+.Book_Pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.Book_Needs {
+  display: grid;
+  gap: 0.4rem;
+}
+.Book_Need {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #aa946f70;
+}
+.Book_Need .Sprite {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+.Book_Range {
+  color: var(--book-muted);
+}
+.Book_MobileTurn {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .Book {
+    width: min(36rem, calc(100vw - 1rem));
+    font-size: 0.95rem;
+  }
+  .Book_Tabs {
+    padding: 0 0.6rem;
+    gap: 0.2rem;
+  }
+  .Book_Tab {
+    flex: 0 0 auto;
+    min-height: 3.2rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.98rem;
+  }
+  .Book_Tab[aria-selected='true'] {
+    min-height: 3.4rem;
+  }
+  .Book_Frame {
+    padding: 0.55rem;
+  }
+  .Book_Spread {
+    display: block;
+    min-height: min(600px, calc(100dvh - 10rem));
+  }
+  .Book_Spread::after {
+    display: none;
+  }
+  .Book_Page {
+    display: flex;
+    flex-direction: column;
+    min-height: min(600px, calc(100dvh - 10rem));
+    padding: 1.2rem;
+  }
+  .Book_Page:first-child {
+    border-right: 0;
+  }
+  .Book_Page:last-child {
+    border-left: 0;
+  }
+  .Book_Spread[data-page='left'] .Book_Page:last-child,
+  .Book_Spread[data-page='right'] .Book_Page:first-child {
+    display: none;
+  }
+  .Book_Slot .Book_Tile {
+    min-height: 4rem;
+  }
+  .Book_Items {
+    gap: 0.4rem;
+  }
+  .Book_Tile {
+    min-height: 3.2rem;
+  }
+  .Book_ItemTop {
+    gap: 0.6rem;
+  }
+  .Book_Picture {
+    min-height: 7rem;
+  }
+  .Book_Picture .Sprite {
+    width: 5rem;
+    height: 5rem;
+  }
+  .Book_MobileTurn {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: auto;
+  }
+  .Book_MobileTurn .Book_Pill {
+    min-width: 6rem;
+  }
+}
+
+@media (max-width: 370px) {
+  .Book_Page {
+    padding: 0.9rem;
+  }
+  .Book_ItemTop {
+    grid-template-columns: 6rem 1fr;
+  }
+  .Book_Picture {
+    min-height: 6rem;
+  }
+  .Book_Picture .Sprite {
+    width: 4.7rem;
+    height: 4.7rem;
+  }
+  .Book_Stat {
+    font-size: 0.94rem;
+  }
+}

@@ -62,6 +62,25 @@
   --ring2: 8.75rem;
   /* Where the thumbstick rests, kept clear of everything else. */
   --stick: 8rem;
+
+  /* The field book is a self-contained surface while the game panels still
+     use the glass palette. Its tokens become the shared palette at adoption. */
+  --book-ink: #29271e;
+  --book-muted: #665d48;
+  --book-leather: #4c301d;
+  --book-leather-light: #79502c;
+  --book-gold: #b28b50;
+  --book-paper: #efddb5;
+  --book-paper-light: #f9edcf;
+  --book-paper-dark: #d5b989;
+  --book-line: #a9936b;
+  --book-green: #3f5e35;
+  --book-green-light: #778b61;
+  --book-good: #386f39;
+  --book-rare: #567bb4;
+  --book-shadow: rgba(24, 17, 9, 0.52);
+  --book-gap: 0.65rem;
+  --book-round: 0.45rem;
 }
 
 /* A phone, either way up: everything a size smaller. */

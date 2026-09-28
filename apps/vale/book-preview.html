@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang=en>
+  <meta charset=utf-8>
+  <meta name=viewport
+    content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Mossvale · Field book preview</title>
+  <link rel=icon href=icon.png>
+  <link rel=preconnect href=https://fonts.googleapis.com>
+  <link rel=preconnect href=https://fonts.gstatic.com crossorigin>
+  <link rel=stylesheet
+    href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
+  <link rel=stylesheet href=ui/components.css>
+  <link rel=stylesheet href=book-preview.css>
+  <main class=BookPreview>
+    <aside class=BookPreview_Hero aria-label="Hero status">
+      <span class=BookPreview_Portrait aria-hidden=true>✦</span>
+      <div class=BookPreview_HeroBody>
+        <span class=BookPreview_HeroName>Hero · Level 29</span>
+        <span
+          class=BookPreview_Vital><span>♥ Health</span><i style="--fill:100%;--bar:#c64e3a"></i><span>324 / 324</span></span>
+        <span
+          class=BookPreview_Vital><span>ϟ Stamina</span><i style="--fill:100%;--bar:#79a56c"></i><span>120 / 120</span></span>
+      </div>
+    </aside>
+    <div id=book-preview></div>
+    <p
+      class=BookPreview_Caption>Field book preview · Bag, Journal, and Craft</p>
+  </main>
+  <script type=module src=book-preview.ts></script>
+</html>
