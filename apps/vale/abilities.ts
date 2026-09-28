@@ -27,7 +27,11 @@ export type Shape = 'one' | 'arc' | 'ring' | 'burst' | 'self'
  * foe at once. */
 export type Pose = 'swing' | 'spin' | 'guard' | 'cast' | 'cross'
 
+export type SpellElement = 'fire' | 'earth' | 'shadow' | 'light' | 'life'
+
 export type Ability = {
+  /** The visual language of this ability's cast and landing. */
+  element?: SpellElement
   name: string
   icon: Glyph
   /** what it does, as a sentence of its numbers in words (`does`) */
@@ -247,6 +251,7 @@ export let ABILITIES: Record<string, Ability> = {
     tint: 0xd8483a,
   },
   quake: {
+    element: 'earth',
     name: 'Quake',
     icon: 'activity',
     says: (w) =>
@@ -299,6 +304,7 @@ export let ABILITIES: Record<string, Ability> = {
     tint: 0xd8483a,
   },
   shadowstep: {
+    element: 'shadow',
     name: 'Shadowstep',
     icon: 'mask',
     says: (w) =>
@@ -336,6 +342,7 @@ export let ABILITIES: Record<string, Ability> = {
     cool: 10000,
   },
   blaze: {
+    element: 'fire',
     name: 'Blaze',
     icon: 'flame',
     says: (w) =>
@@ -348,6 +355,7 @@ export let ABILITIES: Record<string, Ability> = {
     tint: 0xff8a3a,
   },
   ward: {
+    element: 'light',
     name: 'Ward',
     icon: 'shieldCheck',
     says: (w) =>
@@ -371,6 +379,7 @@ export let ABILITIES: Record<string, Ability> = {
     tint: 0xffe08a,
   },
   mend: {
+    element: 'life',
     name: 'Mend',
     icon: 'handHeart',
     says: (w) => `Read a word of healing: ${w.heal} back.`,
@@ -381,6 +390,7 @@ export let ABILITIES: Record<string, Ability> = {
     tint: 0x8ff07a,
   },
   scorch: {
+    element: 'fire',
     name: 'Scorch',
     icon: 'flameKindling',
     says: (w) =>

@@ -105,6 +105,7 @@ export type Event =
     at: Vec3
     dmg: number
     great: boolean
+    by?: string
   }
   | { type: 'struck'; eid: string; at: Vec3; dmg: number }
   | { type: 'whiff'; family: string }
@@ -133,7 +134,14 @@ export type Event =
   /** a thing put on for a slot never chosen for: its kind, row and rarity */
   | { type: 'wear'; item: string; piece: string; rarity?: Rarity }
   /** someone did an ability: `at` their feet, facing `yaw` */
-  | { type: 'ability'; id: string; by: string; at: Vec3; yaw: number }
+  | {
+    type: 'ability'
+    id: string
+    by: string
+    at: Vec3
+    from?: Vec3
+    yaw: number
+  }
   /** an ability of mine lands over `r` metres about `at`, in `ms` */
   | { type: 'burst'; id: string; at: Vec3; r: number; ms: number }
   | { type: 'held'; at: Vec3 }
@@ -1300,7 +1308,7 @@ export let game = (
 
       // A blow landing on a creature: what I have dealt it in this life of
       // it, and, when the blow holds it, until when.
-      let land = (m: Mob, dmg: number, great: boolean, held = 0) => {
+      let land = (m: Mob, dmg: number, great: boolean, held = 0, by = '') => {
         let beast = foeOf(m.kind, m.land)
         let life = fallOf(falls.get(m.eid) ?? [], beast.respawn, now).fell
         let d = fought.dealt.find((d) => d.foe == m.eid && d.life == life)
@@ -1317,6 +1325,7 @@ export let game = (
           at: at(m.body, beast.size + 0.4),
           dmg,
           great,
+          by,
         })
         if (m.hp <= 0) {
           m.down = true
@@ -1384,6 +1393,7 @@ export let game = (
             })
           }
         } else {
+          let from = at(body)
           swingAt = now
           busy = a.time ?? k.pace
           doing = id
@@ -1431,6 +1441,7 @@ export let game = (
             id,
             by: me,
             at: at(body, 0),
+            ...a.dash && { from },
             yaw: body.yaw,
           })
         }
@@ -1541,7 +1552,7 @@ export let game = (
         if (b.lands > now) return true
         let m = mobs.find((m) => m.eid == b.eid)
         if (m && !m.down) {
-          land(m, b.dmg, b.great, b.held)
+          land(m, b.dmg, b.great, b.held, b.by)
           if (m.down && b.by) went(b.by, 'kill')
         }
         return false

@@ -53,6 +53,7 @@ import { recall, type Seen, sighting } from './seen.ts'
 import { formOf, SKILLS } from './skills.ts'
 import { within } from './solid.ts'
 import { sound } from './sound.ts'
+import { spellFx } from './spell_fx.ts'
 import { icon } from './sprites.ts'
 import { station } from './station.ts'
 import { voices } from './voicebox.ts'
@@ -216,6 +217,7 @@ let hearth = (): Spot => hearthOf(HOME) ?? arriveOf(HOME)
 }
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
+let magic = spellFx(dust, glow)
 let stage = cast(w.scene, v, marks, BUILD, glow)
 let helperView = companionView(w.scene, glass)
 let bounty = nodes(w.scene, v, marks, glow, phone)
@@ -437,8 +439,8 @@ let flourish = (id: string, a: Ability, at: THREE.Vector3, yaw: number) => {
       flame: true,
     })
   }
-  if (a.shape == 'ring') ring(at, a.far ?? 2, tint)
-  if (a.shape == 'self') {
+  if (a.shape == 'ring' && a.element != 'earth') ring(at, a.far ?? 2, tint)
+  if (a.shape == 'self' && !a.element) {
     glow.emit(at.clone().setY(at.y + 1), tint, 26, {
       speed: 1.6,
       up: 1.5,
@@ -448,7 +450,7 @@ let flourish = (id: string, a: Ability, at: THREE.Vector3, yaw: number) => {
       halo: true,
     })
   }
-  if (a.dash) {
+  if (a.dash && a.element != 'shadow') {
     dust.emit(at.clone().setY(at.y + 0.2), tint, 10, {
       speed: 2,
       up: 1,
@@ -550,6 +552,13 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
         up: 3,
       },
     )
+    let element = e.by && ABILITIES[e.by]?.element
+    if (element) {
+      let at = element == 'earth'
+        ? p(e.at).setY(groundAt(v, e.at[0], e.at[2]))
+        : m ?? p(e.at)
+      magic.hit(element, at)
+    }
     if (ITEMS[last?.sheet.worn.main?.kind ?? '']?.family == 'sword') {
       glow.emit(m ?? p(e.at), 0xffd040, e.great ? 16 : 9, {
         speed: 3.5,
@@ -642,6 +651,10 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     let foot = p(e.at)
     float(a.name, foot.clone().setY(foot.y + 2.5), 'ability')
     flourish(e.id, a, foot, e.yaw)
+    if (a.element) {
+      magic.cast(a.element, foot, a.far)
+      if (e.from) magic.travel(a.element, p(e.from), foot)
+    }
     if (a.shape == 'self') sound.heal(e.by)
     else if (e.id == 'blaze' || e.id == 'scorch') sound.fire(e.by)
     else sound.whiff(e.by)
