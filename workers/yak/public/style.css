@@ -735,7 +735,9 @@
      box is what fixes the row: cropped to fill, never stretched. */
   .Make_Shot {
     width: 100%;
+    height: auto;
     aspect-ratio: 1200 / 630;
+    align-self: start;
     object-fit: cover;
     border-radius: calc(var(--radius) / 2);
     background: var(--ground);

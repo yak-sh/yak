@@ -188,7 +188,8 @@
               </a>
             </div>
             <a class="Demo_Shot" href="https://yourname.yaks.app/vale/">
-              <img src="mossvale.webp" width="1280" height="453"
+              <img src="mossvale.webp" data-feature-shot="vale"
+                width="1280" height="453"
                 alt="A hero beside the village campfire in Mossvale, with quests and other players in a colorful voxel world" />
               <span
                 class="Demo_Play">Play Mossvale <span aria-hidden="true">↗</span></span>
@@ -233,10 +234,8 @@
       <section class="Make" aria-labelledby="examples">
         <div class="Make_Intro">
           <h2 id="examples" class="Title">Made with yaks.app</h2>
-          <!-- These six are the fallback. Once people have asked us to show
-               their apps, the newest three listings stand here instead
-               (gallery.ts `showcase`, T-34477) — the file is what a crawler
-               and a first visit get either way. -->
+          <!-- The six demo links remain when the directory is unavailable.
+               gallery.ts fills their cards from the apps' chosen screenshots. -->
           <p class="Note">
             Open an example to see what you could make, or
             <a href="/gallery">see the gallery</a>.

@@ -241,7 +241,12 @@ somebody's app on its own front page.
 later, puts a published app forward. Only when the person has said they want it
 shown: it is their app, their name and their address on a public page, so it is
 never something to assume. The app must be published — a gallery entry nobody
-can install is a picture of an app.
+can install is a picture of an app. It also needs a picture: upload one through
+the app's `/api/blob` door and pass its returned `eid` to
+`app_set(app, screenshot: '<eid>')`. This takes effect without deploying the
+app. An existing `og:image` in its `index.html` works too, though a chosen
+screenshot takes precedence. The screenshot can be cleared with
+`app_set(app, screenshot: '')` after withdrawing a listed app.
 
 It is not listed on the spot. Asking sends a letter to yaks.app carrying the
 app's title, its address, the line its owner wrote about it and who made it,

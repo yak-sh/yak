@@ -11,12 +11,15 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { App, Directory, Space } from './directory.ts'
 import {
   card,
+  DEMOS,
   door,
+  examples,
   found,
   install,
   letter,
   LIFE,
   listed,
+  made,
   page,
   pictured,
   searched,
@@ -26,6 +29,7 @@ import {
   ticket,
   ticketed,
 } from './gallery.ts'
+import type { Env } from './env.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
@@ -63,6 +67,7 @@ let app = (over: Partial<App> = {}): App => ({
   },
   installed: null,
   gallery: null,
+  screenshot: null,
   seeded: null,
   trashed: null,
   theme: null,
@@ -165,7 +170,7 @@ Deno.test('staging gallery listings, reviews and mail stay on its own host', asy
   let dir = {
     offers: () =>
       Promise.resolve([{ space: space(), app: app({ gallery: live }) }]),
-  } as Directory
+  } as unknown as Directory
   let all = await listed(dir, env)
   assertEquals(all[0].at, 'https://jeff.yaks.fyi/recipes/')
   let html = await page(all, env).text()
@@ -255,26 +260,59 @@ Deno.test('the gallery page carries the listings and its own metadata', async ()
 
 // The home page keeps its own examples in the file, and gives the space up to
 // the newest three listings when there are any.
-Deno.test('the showcase replaces the examples only when something is listed', () => {
+Deno.test('the showcase keeps the chosen demo order and featured image', () => {
   let file = `<ul class="Make_List"><li>A recipe box</li></ul><p>after</p>`
   assertEquals(showcase(file, []), file)
-  let one = showcase(file, [shown({ title: 'Potluck sheet' })])
-  assertEquals(one.includes('A recipe box'), false)
-  assertStringIncludes(one, 'Potluck sheet')
-  assertStringIncludes(one, '<p>after</p>')
-  assert(one.endsWith('</ul><p>after</p>'))
-  // Four listed, three shown: the section is a showcase, not the gallery.
-  let three = showcase(
+  let six = showcase(
     file,
-    ['a', 'b', 'c', 'd'].map((eid) => shown({ eid, title: `App ${eid}` })),
+    DEMOS.map((eid) => shown({ eid, title: `App ${eid}` })),
   )
-  assertEquals(three.includes('App d'), false)
-  assertStringIncludes(three, 'App c')
+  assertEquals((six.match(/class="Make_Card"/g) ?? []).length, 6)
+  assert(six.indexOf('App recipes') < six.indexOf('App chores'))
+  assertStringIncludes(six, '<p>after</p>')
+  let hero = showcase(
+    '<img src="mossvale.webp" data-feature-shot="vale">',
+    [],
+    'https://yourname.yaks.app/vale/api/blob/abc',
+  )
+  assertStringIncludes(
+    hero,
+    'src="https://yourname.yaks.app/vale/api/blob/abc"',
+  )
   // A file whose showcase has moved is left exactly as it is.
   assertEquals(
     showcase('<p>no list here</p>', [shown()]),
     '<p>no list here</p>',
   )
+})
+
+Deno.test('the homepage paints all six chosen screenshots and Mossvale', async () => {
+  let apps = [
+    ...DEMOS.map((slug) =>
+      app({ slug, gallery: null, screenshot: `${slug}-image` })
+    ),
+    app({ slug: 'vale', published: null, screenshot: 'abc' }),
+  ]
+  let dir = {
+    space: () => Promise.resolve(space({ slug: 'yourname' })),
+    apps: () => Promise.resolve(apps),
+  } as unknown as Directory
+  let found = await examples(dir)
+  assertEquals(found.demos.map((a) => a.app.slug), DEMOS)
+  assertEquals(found.feature, 'https://yourname.yaks.app/vale/api/blob/abc')
+  let file = new Response(
+    '<img src="mossvale.webp" data-feature-shot="vale">' +
+      '<ul class="Make_List"><li>fallback</li></ul>',
+  )
+  let html = await (await made({} as Env, dir, file)).text()
+  assertEquals((html.match(/class="Make_Card"/g) ?? []).length, 6)
+  for (let slug of DEMOS) {
+    assertStringIncludes(
+      html,
+      `https://yourname.yaks.app/${slug}/api/blob/${slug}-image`,
+    )
+  }
+  assertStringIncludes(html, 'https://yourname.yaks.app/vale/api/blob/abc')
 })
 
 Deno.test('a card keeps its copy instructions outside the app link', () => {

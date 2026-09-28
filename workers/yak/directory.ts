@@ -216,6 +216,8 @@ export type App = {
   // Where this offer stands with the gallery (gallery.ts, T-34476): null for
   // every app that never asked, which is almost all of them.
   gallery: Gallery | null
+  // The app's uploaded image chosen by its owner for listings.
+  screenshot: string | null
   // When this app's store was seeded and by which release (seed.ts), null
   // until it has been. A release reads it to know the seed has already run.
   seeded: Sowed | null
@@ -328,6 +330,7 @@ type Row = {
     sandboxed?: string | null
   }
   gallery?: { asked_at?: string | null; listed_at?: string | null }
+  screenshot?: { blob?: string | null }
   seeded?: { at?: string | null; version?: number | null }
   trashed?: { at?: string | null; by?: Id | null }
   theme?: { theme_color?: string | null; background_color?: string | null }
@@ -622,8 +625,8 @@ export let stamp = async (
 // What every read of an app asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
-let ABOUT = '?doc&?former&?home&?meter&?published&?installed&?gallery&?seeded' +
-  '&?trashed&?theme'
+let ABOUT = '?doc&?former&?home&?meter&?published&?installed&?gallery' +
+  '&?screenshot&?seeded&?trashed&?theme'
 
 // And what every read of a space asks for, for the same reason.
 let SPACE_ABOUT = '?doc&?plan&?meter&?notified&?trashed&?stripe&?fee&?former' +
@@ -730,6 +733,7 @@ export let appOf = (r: Row): App => ({
       listedAt: r.gallery.listed_at ?? '',
     }
     : null,
+  screenshot: r.screenshot?.blob ?? null,
   seeded: r.seeded
     ? { at: r.seeded.at ?? '', version: r.seeded.version ?? 0 }
     : null,

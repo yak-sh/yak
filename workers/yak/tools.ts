@@ -35,7 +35,8 @@
 import { configured, deployWorker } from './deploy_worker.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, bindings } from './bindings.ts'
-import type { Objects } from '@yaks/blob'
+import { mediaTypeOf, type Objects } from '@yaks/blob'
+import { blobPrefix } from './blob-key.ts'
 import { r2Objects } from './lib/objects.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
@@ -136,6 +137,7 @@ import {
   door as galleryDoor,
   drop as unGallery,
   letter as galleryLetter,
+  pictureOf,
   saying,
   searched,
   type Standing,
@@ -595,6 +597,14 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
     )
   }
   if (onGallery(app) == 'listed') return onGallery(app)
+  if (!await pictureOf(ctx.env, space, app)) {
+    throw refuse(
+      'conflict',
+      `${space.slug}/${app.slug} needs a screenshot before gallery review — ` +
+        'upload an image to its /api/blob door and pass the returned eid to ' +
+        'app_set(screenshot: …), or give its index.html an og:image',
+    )
+  }
   if (!ctx.env.SESSION_SECRET) {
     throw new Error('the platform cannot sign a gallery link here')
   }
@@ -3137,6 +3147,11 @@ let OURS: Row[] = [
             'approves it. false to remove it, or withdraw the submission, ' +
             'at once',
         },
+        screenshot: str(
+          'the eid returned by uploading an image to this app with ' +
+            'POST /<app>/api/blob, for its gallery card and the homepage ' +
+            "examples. Only the space owner may set it; '' clears it",
+        ),
         theme_color: str(
           "the browser or status-bar colour around the app's installed " +
             'window, as CSS; a hex colour like #4c773e is safest. Unset, ' +
@@ -3168,6 +3183,11 @@ let OURS: Row[] = [
       // a refusal here has to leave the app exactly as it was (router.ts).
       let first = args.first == null ? null : globs(args.first, [META.app])
       let show = args.gallery == null ? null : flag(args.gallery, 'gallery')
+      let image = args.screenshot == null
+        ? null
+        : args.screenshot == ''
+        ? ''
+        : text(args.screenshot, 'screenshot')
       let themeColor = args.theme_color == null
         ? null
         : color(args.theme_color, 'theme_color')
@@ -3179,13 +3199,14 @@ let OURS: Row[] = [
         : flag(args.sandboxed, 'sandboxed')
       if (
         title == null && to == null && open == null && home == null &&
-        first == null && show == null && drop == null &&
+        first == null && show == null && image == null && drop == null &&
         themeColor == null && background == null && wall == null
       ) {
         throw refuse(
           'arguments',
           'nothing to change: pass title, slug, access, home, first, ' +
-            'gallery, theme_color, background_color, sandboxed, forget, or all',
+            'gallery, screenshot, theme_color, background_color, ' +
+            'sandboxed, forget, or all',
         )
       }
       // Whether a copy is walled off from its space is the space owner's:
@@ -3216,6 +3237,34 @@ let OURS: Row[] = [
       if (show != null && who.role != 'owner') {
         throw refuse('access', `not the owner of ${space.slug}`)
       }
+      if (image != null) {
+        if (who.role != 'owner') {
+          throw refuse('access', `not the owner of ${space.slug}`)
+        }
+        if (image == '' && onGallery(app) == 'listed' && show != false) {
+          throw refuse(
+            'conflict',
+            'withdraw the gallery listing before clearing its screenshot',
+          )
+        }
+        if (image) {
+          if (!/^[0-9a-f]{64}$/.test(image)) {
+            throw refuse(
+              'arguments',
+              'screenshot must be an uploaded image eid',
+            )
+          }
+          let bytes = await r2Objects(ctx.env.BLOBS).read(
+            blobPrefix(space, app) + image,
+          )
+          if (!bytes || !mediaTypeOf(bytes)) {
+            throw refuse(
+              'missing',
+              `no uploaded image ${image} in ${space.slug}/${app.slug}`,
+            )
+          }
+        }
+      }
       // Which app the bare hostname opens is the SPACE's, not this app's:
       // everyone who is given the space lands there, so it is the owner's
       // to move, the way publishing and membership are (`ownsApp` above).
@@ -3242,7 +3291,7 @@ let OURS: Row[] = [
       let entities: Bundle[] = []
       if (
         title != null || moving || open || had || themeColor != null ||
-        background != null || wall != null
+        background != null || wall != null || image != null
       ) {
         entities.push({
           entity: { eid: app.eid },
@@ -3257,6 +3306,9 @@ let OURS: Row[] = [
             }
             : {}),
           ...(had ? { former: addresses(had) } : {}),
+          ...(image == null
+            ? {}
+            : { screenshot: image ? { blob: image } : null }),
           ...(themeColor != null || background != null
             ? {
               theme: {
@@ -3340,6 +3392,12 @@ let OURS: Row[] = [
             } before the apps that own them`
             : ' — it answers no path before the app that owns it'}${
           shown ? ` — ${saying(shown, ctx.env)}` : ''
+        }${
+          image == null
+            ? ''
+            : image
+            ? ` — screenshot: ${url(space, now, ctx.env)}api/blob/${image}`
+            : ' — screenshot cleared'
         }${
           wall == null
             ? ''

@@ -362,10 +362,40 @@ Deno.test('an app reaches the gallery only when yaks.app says yes', async () => 
     // The app's own og:image, read off the bytes we hold and resolved against
     // its address — never against ours.
     assertStringIncludes(page, `https://${mine}.yaks.app/recipes/card.png`)
-    // And on the home page, in place of the hand-written examples.
+    let upload = await k.at(`${mine}.yaks.app`, '/recipes/api/blob', {
+      method: 'POST',
+      headers: { cookie: jeff.cookie, 'content-type': 'image/png' },
+      body: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    })
+    assertEquals(upload.status, 200)
+    let image = (await upload.json() as { eid: string }).eid
+    await agent.tool('app_set', {
+      space: mine,
+      app: 'recipes',
+      screenshot: image,
+    })
+    page = await k.at('yaks.app', '/gallery').then((r) => r.text())
+    assertStringIncludes(
+      page,
+      `https://${mine}.yaks.app/recipes/api/blob/${image}`,
+    )
+    assertEquals(page.includes('/recipes/card.png'), false)
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          agent.tool('app_set', {
+            space: mine,
+            app: 'recipes',
+            screenshot: '',
+          }),
+        Error,
+      )).message,
+      'withdraw the gallery listing',
+    )
+    // Gallery approval does not replace the six chosen demos on the home page.
     let home = await k.at('yaks.app', '/').then((r) => r.text())
-    assertStringIncludes(home, 'Recipe box')
-    assertEquals(home.includes('A garden diary'), false)
+    assertStringIncludes(home, 'A recipe box')
+    assertStringIncludes(home, 'A garden diary')
 
     // A stranger finds it: no cookie, no bearer, the same answer with the
     // install line on it.
@@ -452,6 +482,25 @@ Deno.test('an app reaches the gallery only when yaks.app says yes', async () => 
         Error,
       )).message,
       'is not published',
+    )
+    await agent.tool('app_files', {
+      space: mine,
+      app: 'draft',
+      path: 'index.html',
+      content: '<h1>No picture</h1>',
+    })
+    await agent.tool('app_deploy', { space: mine, app: 'draft' })
+    assertStringIncludes(
+      (await assertRejects(
+        () =>
+          agent.tool('app_publish', {
+            space: mine,
+            app: 'draft',
+            gallery: true,
+          }),
+        Error,
+      )).message,
+      'needs a screenshot before gallery review',
     )
   } finally {
     await k.stop()

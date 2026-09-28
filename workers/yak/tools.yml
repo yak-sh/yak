@@ -366,7 +366,10 @@ app_set:
     meant to route the whole space; an empty list puts every path back where
     it was. gallery is whether a published app is submitted for
     https://yaks.app/gallery, the public page of yaks apps: true submits it,
-    false withdraws it at once. Pass forget with a slug this app has already
+    false withdraws it at once. screenshot takes the eid from an image uploaded
+    to this app through /api/blob and uses it on gallery and homepage cards;
+    an empty string clears it. The space owner sets it without redeploying.
+    Pass forget with a slug this app has already
     left to drop it: it stops redirecting and another app can be created
     there, so every link still aimed at it finds nothing. Only the space
     owner may do that, and it is final for that address. sandboxed is for an

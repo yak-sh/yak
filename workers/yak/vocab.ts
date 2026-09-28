@@ -852,6 +852,13 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { asked_at: owned(time), listed_at: owned(time) },
     },
+    // An uploaded image the owner chose to represent this app. Its bytes and
+    // attachment live in the app's store; only the content address lives here.
+    screenshot: {
+      component: true,
+      type: 'object',
+      properties: { blob: text },
+    },
     // The colours an app's owner set for its installed chrome (apps.ts
     // `manifesting`/`pinned`, T-33055) — settable by the app, through
     // `app_set`, never guessed off its page: an app that names neither gets

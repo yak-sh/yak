@@ -247,6 +247,11 @@ export let searched = async (
 
 // ---- the picture -------------------------------------------------------
 
+// A chosen screenshot is an app upload, addressed by its bytes. Build its URL
+// from the app's current address so an app move keeps the card working.
+export let screenshot = (space: Space, app: App, env: Host = {}) =>
+  app.screenshot ? `${url(space, app, env)}api/blob/${app.screenshot}` : ''
+
 // The app's own share card, read out of the bytes we already hold rather than
 // fetched from its address: the platform stores every file an app serves
 // (files.ts), so the picture costs a bucket read and no subrequest at all — and
@@ -272,20 +277,23 @@ export let pictured = (html: string, at: string) => {
   }
 }
 
-let shot = async (env: Env, a: Shown) => {
+export let pictureOf = async (env: Env, space: Space, app: App) => {
+  let chosen = screenshot(space, app, env)
+  if (chosen) return chosen
   let bytes = await r2Objects(env.BLOBS).read(
-    keyed(prefixOf(a.space, a.app), '/'),
+    keyed(prefixOf(space, app), '/'),
   )
-  return bytes ? pictured(new TextDecoder().decode(bytes), a.at) : ''
+  return bytes
+    ? pictured(new TextDecoder().decode(bytes), url(space, app, env))
+    : ''
 }
 
-// The listing with every picture in it. One bucket read per app, in a list
-// that is a page long by construction — and a read that fails is a missing
-// picture, never a missing app.
+// A chosen screenshot needs no bucket read. Older apps still use their
+// og:image card, read from index.html, until their owner chooses one.
 export let pictures = async (env: Env, all: Shown[]) =>
   await Promise.all(all.map(async (a) => ({
     ...a,
-    shot: await shot(env, a).catch((e) => {
+    shot: await pictureOf(env, a.space, a.app).catch((e) => {
       caught(e, { request: 'gallery picture' })
       return ''
     }),
@@ -595,45 +603,72 @@ export let answer = async (
 
 // ---- the home page's examples ------------------------------------------
 
-// "Made with yaks.app" on the front page (public/index.html), drawn from the
-// same source as the gallery: the newest three listings, in place of the
-// hand-written examples. Those examples stay in the file and stay the
-// fallback — a page whose showcase empties itself the first week nothing is
-// listed is worse than one showing what could be made — so this replaces the
-// list only when there is something to replace it with.
+// These are the six examples promised on the home page. Gallery approval and
+// listing recency do not decide which apps the platform features.
+export let DEMOS = [
+  'recipes',
+  'garden',
+  'bookclub',
+  'trip',
+  'guestbook',
+  'chores',
+]
+
+export let examples = async (dir: Directory, env: Host = {}) => {
+  let space = await dir.space('yourname')
+  if (!space) return { demos: [] as Shown[], feature: '' }
+  let apps = await dir.apps(space)
+  let chosen = DEMOS.map((slug) => apps.find((app) => app.slug == slug))
+  let demos = chosen.every((app) => app?.published && !app.trashed)
+    ? chosen.map((app) => shownOf(space, app!, env))
+    : []
+  let vale = apps.find((app) => app.slug == 'vale' && !app.trashed)
+  return { demos, feature: vale ? screenshot(space, vale, env) : '' }
+}
 //
 // A string splice rather than a template, because the page is a file: it is
 // the one every crawler and every reader gets, it is edited by hand, and the
 // showcase is one `<ul>` in it.
 export let LIST = '<ul class="Make_List">'
 
-export let showcase = (file: string, all: Shown[]) => {
+export let showcase = (file: string, all: Shown[], feature = '') => {
+  if (feature) {
+    file = file.replace(
+      'src="mossvale.webp" data-feature-shot="vale"',
+      `src="${esc(feature)}" data-feature-shot="vale"`,
+    )
+  }
   if (!all.length) return file
   let from = file.indexOf(LIST)
   if (from < 0) return file
   let to = file.indexOf('</ul>', from)
   if (to < 0) return file
   return file.slice(0, from + LIST.length) +
-    all.slice(0, 3).map(card).join('') +
+    all.map(card).join('') +
     file.slice(to)
 }
 
-// The home page as it is served: the file, with the newest listings in its
-// showcase. A directory that will not answer is a home page with its own
-// examples in it, never a home page that does not serve.
+// The home page as served: all six demos and the featured Mossvale image come
+// from the apps' chosen screenshots. The file remains the fallback when the
+// directory does not answer.
 export let made = async (env: Env, dir: Directory, file: Response) => {
   let html = await file.text()
-  let shown = await listed(dir, env).then((all) =>
-    pictures(env, all.slice(0, 3))
-  )
+  let { demos: shown, feature } = await examples(dir, env)
+    .then(async ({ demos, feature }) => ({
+      demos: await pictures(env, demos),
+      feature,
+    }))
     .catch((e) => {
       caught(e, { request: 'home showcase' })
-      return [] as Shown[]
+      return { demos: [] as Shown[], feature: '' }
     })
   // The headers the assets door set, minus the two that describe the bytes:
   // the body just changed length, and it is no longer the file that etag names.
   let headers = new Headers(file.headers)
   headers.delete('content-length')
   headers.delete('etag')
-  return new Response(showcase(html, shown), { status: file.status, headers })
+  return new Response(showcase(html, shown, feature), {
+    status: file.status,
+    headers,
+  })
 }
