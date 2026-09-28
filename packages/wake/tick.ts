@@ -7,7 +7,7 @@
 
 import { type Bundle, type Graph, token } from '@yaks/graph'
 import { due, ring, wakeOf } from './due.ts'
-import { cadence } from './while.ts'
+import { cadence, matches } from './while.ts'
 
 /** The part of the graph API a driver needs, also satisfied by a client for a
  * remote graph over HTTP. */
@@ -42,12 +42,30 @@ export let tick = async (
 ): Promise<Ticked> => {
   let result: Ticked = { fired: [], refused: [] }
   let at = new Date(now).toISOString()
+  let holds = matches(graph, now)
+  let chosen: (
+    | { wake: Bundle; every: string | null | undefined }
+    | { wake: Bundle; error: unknown }
+  )[] = []
   for (let wake of await due(graph, now)) {
+    try {
+      let w = wakeOf(wake) ?? {}
+      let every = (await cadence(graph, w, now, holds)) ?? w.every
+      chosen.push({ wake, every })
+    } catch (error) {
+      chosen.push({ wake, error })
+    }
+  }
+  for (let choice of chosen) {
+    let { wake } = choice
+    if ('error' in choice) {
+      result.refused.push({ wake, error: choice.error })
+      continue
+    }
     let w = wakeOf(wake) ?? {}
     try {
-      let every = (await cadence(graph, w, now)) ?? w.every
       let applied = await graph.apply([{
-        ...ring(wake, now, {}, every),
+        ...ring(wake, now, {}, choice.every),
         $was: {
           wake: {
             at: token(w.at),

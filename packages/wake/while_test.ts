@@ -6,7 +6,7 @@ import { type Bundle, graph } from '@yaks/graph'
 import { soonest, wakeOf } from './due.ts'
 import { rouse } from './while.ts'
 import { home, HOUR, store, T0, woken } from './testing.ts'
-import { tick } from './tick.ts'
+import { type Driver, tick } from './tick.ts'
 import { wakes } from './plugin.ts'
 
 let iso = (t: number) => new Date(t).toISOString()
@@ -68,6 +68,121 @@ Deno.test('a write that makes a condition hold arms a sleeping wake, and a faste
   w.plant('basil')
   await rouse(w.g, T0 + 10 * MIN)
   assertEquals(w.at(), iso(T0 + 40 * MIN))
+})
+
+Deno.test('a pass shares match answers while each wake chooses its own cadence', async () => {
+  let g = woken(store())
+  g.apply([{ entity: { eid: 'basil' }, plant: { name: 'basil' } }])
+  let ids = ['one', 'two', 'three']
+  g.apply(ids.map((eid, i) => ({
+    entity: { eid },
+    wake: {
+      at: iso(T0),
+      while: [
+        { match: '.plant.name=fern', every: '30m' },
+        { match: '.plant', every: `${i + 1}h` },
+      ],
+    },
+  })))
+  let reads = 0
+  let driver: Driver = {
+    read: (query, opts) => {
+      if (typeof query != 'string') reads++
+      return g.read(query, opts)
+    },
+    apply: g.apply,
+  }
+  let times = async () =>
+    (await g.read('.wake')).map((b) => wakeOf(b)?.at).sort()
+
+  assertEquals((await tick(driver, T0)).fired.length, 3)
+  assertEquals(reads, 2)
+  assertEquals(await times(), [1, 2, 3].map((h) => iso(T0 + h * HOUR)))
+
+  g.apply(ids.map((eid) => ({ entity: { eid }, wake: { at: null } })))
+  reads = 0
+  assertEquals((await rouse(driver, T0)).roused.length, 3)
+  assertEquals(reads, 2)
+  assertEquals(await times(), [1, 2, 3].map((h) => iso(T0 + h * HOUR)))
+
+  g.apply([{ entity: { eid: 'basil' }, $delete: true }])
+  reads = 0
+  assertEquals((await tick(driver, T0 + 3 * HOUR)).fired.length, 3)
+  assertEquals(reads, 2)
+  assertEquals((await g.read('.wake')).every((b) => !wakeOf(b)?.at), true)
+})
+
+Deno.test('a failed shared match can be read for the next wake', async () => {
+  let g = woken(store())
+  g.apply([{ entity: { eid: 'basil' }, plant: { name: 'basil' } }])
+  g.apply(['one', 'two'].map((eid, i) => ({
+    entity: { eid },
+    wake: {
+      at: iso(T0 - 1 + i),
+      while: [{ match: '.plant', every: '1h' }],
+    },
+  })))
+  let reads = 0
+  let driver: Driver = {
+    read: (query, opts) => {
+      if (typeof query != 'string' && ++reads == 1) {
+        throw new Error('read failed')
+      }
+      return g.read(query, opts)
+    },
+    apply: g.apply,
+  }
+  let result = await tick(driver, T0)
+  assertEquals(result.refused.map(({ wake }) => wake.entity.eid), ['one'])
+  assertEquals(result.fired.map((b) => b.entity.eid), ['two'])
+  assertEquals(reads, 2)
+})
+
+Deno.test('a wake write changes matches on the next pass', async () => {
+  let g = woken(store())
+  let plant = { entity: { eid: 'basil' }, plant: { name: 'basil' } }
+  let wakes = ['one', 'two'].map((eid) => ({
+    entity: { eid },
+    wake: {
+      at: iso(T0),
+      while: [{ match: '.plant', every: '1h' }],
+    },
+  }))
+  g.apply([plant, ...wakes])
+  let reads = 0
+  let driver: Driver = {
+    read: (query, opts) => {
+      if (typeof query != 'string') reads++
+      return g.read(query, opts)
+    },
+    apply: async (bundles, opts) => {
+      let applied = await g.apply(bundles, opts)
+      if (bundles[0].entity.eid == 'one') {
+        await g.apply([{ entity: plant.entity, $delete: true }])
+      }
+      return applied
+    },
+  }
+  let times = async () =>
+    (await g.read('.wake')).map((b) => wakeOf(b)?.at).sort()
+
+  assertEquals((await tick(driver, T0)).fired.length, 2)
+  assertEquals(reads, 1)
+  assertEquals(await times(), [iso(T0 + HOUR), iso(T0 + HOUR)])
+
+  g.apply([
+    plant,
+    ...wakes.map(({ entity }) => ({ entity, wake: { at: null } })),
+  ])
+  reads = 0
+  assertEquals((await rouse(driver, T0)).roused.length, 2)
+  assertEquals(reads, 1)
+  assertEquals(await times(), [iso(T0 + HOUR), iso(T0 + HOUR)])
+
+  reads = 0
+  assertEquals((await tick(driver, T0 + HOUR)).fired.length, 2)
+  assertEquals(reads, 1)
+  assertEquals((await g.read('.wake')).every((b) => !wakeOf(b)?.at), true)
 })
 
 Deno.test('a condition is refused when it is written, not when it fires', () => {

@@ -136,6 +136,9 @@ without one sleeps with `at` cleared. `rouse(graph, now)` arms each wake whose
 condition now holds at that cadence from `now`, when that is sooner than the
 instant it holds. A host calls it after its writes commit, so the write that
 makes a condition hold is what wakes the wake.
+Each pass chooses every wake's cadence before writing its first wake. It reads
+each distinct `match` once and shares the answer across wakes. A wake's write
+can change the next pass's choices; each wake still writes separately.
 
 ```ts
 import { assertEquals } from '@std/assert'

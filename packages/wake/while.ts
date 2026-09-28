@@ -41,6 +41,19 @@ let probe = (match: string): Query => {
   return and(...q.clauses.filter((c) => c.kind != 'limit'), limit(1))
 }
 
+// A scheduler pass asks each distinct condition once before it writes a wake.
+// Failed reads stay uncached so each affected wake can report its own refusal.
+export let matches = (graph: Pick<Driver, 'read'>, now: number) => {
+  let found = new Map<string, boolean>()
+  return async (match: string): Promise<boolean> => {
+    let yes = found.get(match)
+    if (yes != null) return yes
+    yes = (await graph.read(probe(match), { now })).length > 0
+    found.set(match, yes)
+    return yes
+  }
+}
+
 /**
  * The cadence a wake's conditions ask for at `now`: the `every` of the first
  * `while` entry whose query finds anything, or `null` when none does.
@@ -55,9 +68,10 @@ export let cadence = async (
   graph: Pick<Driver, 'read'>,
   wake: Wake,
   now: number,
+  holds = matches(graph, now),
 ): Promise<string | null> => {
   for (let { match, every } of wake.while ?? []) {
-    if ((await graph.read(probe(match), { now })).length) return every
+    if (await holds(match)) return every
   }
   return null
 }
@@ -89,15 +103,35 @@ export let rouse = async (
   now: number = Date.now(),
 ): Promise<Roused> => {
   let result: Roused = { roused: [], refused: [] }
+  let holds = matches(graph, now)
+  let ready: (
+    | { wake: Bundle; at: number }
+    | { wake: Bundle; error: unknown }
+  )[] = []
   for (let wake of await graph.read(`.${WAKE}.while`, { now })) {
     let w = wakeOf(wake) ?? {}
     try {
-      let every = await cadence(graph, w, now)
+      let every = await cadence(graph, w, now, holds)
       let at = every == null ? null : after(every, now, now)
       if (at == null || (w.at && Date.parse(w.at) <= at)) continue
+      ready.push({ wake, at })
+    } catch (error) {
+      ready.push({ wake, error })
+    }
+  }
+  for (let choice of ready) {
+    let { wake } = choice
+    if ('error' in choice) {
+      if (!(choice.error instanceof Stale)) {
+        result.refused.push({ wake, error: choice.error })
+      }
+      continue
+    }
+    let w = wakeOf(wake) ?? {}
+    try {
       let applied = await graph.apply([{
         entity: wake.entity,
-        [WAKE]: { at: iso(at) },
+        [WAKE]: { at: iso(choice.at) },
         $was: { [WAKE]: { at: token(w.at) } },
       }], { now: iso(now) })
       result.roused.push(
