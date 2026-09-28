@@ -1,0 +1,35 @@
+{
+  "land": "glowcap",
+  "song": 2,
+  "sha256": "d10c47c15b63cacece561cb2e2c07487a18eff1b0480477443a459728f3b6107",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Glowcap Hollow: a blue-dusk village beneath enormous glowing mushrooms and beside dark blue pools. A playful nocturnal theme with soft strings, harp and shimmering tones. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571720-bc2vGEXmEDGC4IfuypbU",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 181.19,
+    "integrated_lufs": -11.44,
+    "true_peak_dbfs": 0.29,
+    "loudness_range_lu": 7.4,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": true,
+    "defects_reported": false
+  }
+}

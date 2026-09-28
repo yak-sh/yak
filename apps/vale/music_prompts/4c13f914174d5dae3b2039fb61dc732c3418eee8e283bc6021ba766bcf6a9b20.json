@@ -1,0 +1,35 @@
+{
+  "land": "giantsteps",
+  "song": 2,
+  "sha256": "4c13f914174d5dae3b2039fb61dc732c3418eee8e283bc6021ba766bcf6a9b20",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Giantsteps: a monumental basalt stair across grey crags and a lonely stonefield. A spacious, ancient theme with low strings and a bright summit refrain. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571692-m5VSgiwlMhgABomjaWiv",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 175.44,
+    "integrated_lufs": -11.88,
+    "true_peak_dbfs": 0.3,
+    "loudness_range_lu": 11.2,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

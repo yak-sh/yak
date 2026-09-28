@@ -1,0 +1,35 @@
+{
+  "land": "dustmere",
+  "song": 1,
+  "sha256": "34f82a1cd7e490abd09834e2ff580024d23a4a547d21bc26c4d4ffa08a7cf506",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Dustmere: the dry bed of a vanished lake, dust in the air, an old shoreline and a last well. A spare, resilient melody with plucked strings and soft hand drum. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571751-SENgRxI79vEl0NO3LnbX",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 181.08,
+    "integrated_lufs": -11.72,
+    "true_peak_dbfs": 0.15,
+    "loudness_range_lu": 12.7,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "land": "gleamdeep",
+  "song": 1,
+  "sha256": "bc0da4600d9b8b13c5d901a8865e82534828ea2d204c5a846b83e23a93a57cc8",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Gleamdeep: violet mushroom woods, amethyst stone and shining pools under a lavender sky. A luminous, winding melody with harp and delicate strings. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571721-nTmKzn6ftqSqu8mcjsbc",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 177.95,
+    "integrated_lufs": -11.34,
+    "true_peak_dbfs": 0.17,
+    "loudness_range_lu": 8.4,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "land": "palmwell",
+  "song": 2,
+  "sha256": "0111db66c0d83d81ee88b22cd4b1dd28a8507bff3767ec818d7093f25a45031f",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Palmwell: a palm oasis and caravan camp among golden dunes, bright green shade around blue water. A restful oasis theme with soft flute, harp and bowed strings. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571800-KKUDR6ze8JUzbYiP4mcu",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 172.43,
+    "integrated_lufs": -11.46,
+    "true_peak_dbfs": 0.41,
+    "loudness_range_lu": 7.2,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "land": "shardvault",
+  "song": 2,
+  "sha256": "2156ea5e513144e8c53b9b913104fb9ed252b3b3bb8c32102d61cfb5ad3d5c3e",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Shardvault: a pale crystal vault among cold shards and blue-white water. An expansive icy theme with sustained strings and a fragile flute line. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571775-PqixPskm7CTVk5OEH1id",
+    "attempt": 2
+  },
+  "audit": {
+    "duration_seconds": 177.84,
+    "integrated_lufs": -11.35,
+    "true_peak_dbfs": 0.67,
+    "loudness_range_lu": 12.3,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}
