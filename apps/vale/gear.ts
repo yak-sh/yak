@@ -195,7 +195,7 @@ let TWIN = 0.8
  * import { assert, assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
  * import type { Rarity } from './rarity.ts'
- * import { blow } from './rules.ts'
+ * import { blow, blowOf, through } from './rules.ts'
  * let kit = (...kinds: string[]) =>
  *   kitOf(Object.fromEntries(
  *     kinds.map((kind) => [ITEMS[kind].slot!, { eid: kind, kind, n: 1 }]),
@@ -206,6 +206,22 @@ let TWIN = 0.8
  * assertEquals(kit('cuirass2').armour > kit('jerkin2').armour, true)
  * assertEquals(kit('jerkin2', 'boots2').speed, 0.08)
  * assertEquals(kit('robe1', 'tome1').force, 0.13)
+ * // Cloth turns fewer bites than plate, but grows into harder, faster casts.
+ * let wear = (t: number, weight: 'cloth' | 'plate') =>
+ *   kitOf(Object.fromEntries(
+ *     [
+ *       `staff${t}`,
+ *       ...(weight == 'cloth'
+ *         ? [`hood${t}`, `robe${t}`, `sandals${t}`]
+ *         : [`helm${t}`, `cuirass${t}`, `greaves${t}`]),
+ *     ].map((kind) => [ITEMS[kind].slot!, { eid: kind, kind, n: 1 }]),
+ *   ))
+ * let [cloth, plate] = [wear(5, 'cloth'), wear(5, 'plate')]
+ * assert(wear(5, 'cloth').force > wear(1, 'cloth').force)
+ * assert(cloth.pace < plate.pace)
+ * assert(blowOf(20, cloth) > blowOf(20, plate))
+ * assert(through(60, cloth.armour) > through(60, plate.armour))
+ * assert(cloth.hp < plate.hp)
  * // Two daggers strike quicker than one, and neither they nor a sword and
  * // shield is better at everything. At every tier, the daggers land more a
  * // second, more than a dagger with a tome or a torch beside it, but not

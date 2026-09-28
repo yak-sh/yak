@@ -129,12 +129,12 @@ let grip = (kind: string): Box[] => {
   return h.across ? boxes.map(topple) : boxes
 }
 
-// The colour of the `i`th box of a kind's look: its tier's metal, leather or
-// cloth.
+// The colour of the `i`th box of a kind's look. Cloth's first three boxes
+// carry its fabric, trim and gem, shared by the item and the worn figure.
 let tone = (kind: string, i = 0) => ITEMS[kind]?.look[i]?.[2] ?? 0x808080
 
 // Armour over a head, by weight, in the head's space.
-let HATS: Record<string, (c: number, trim: number) => Box[]> = {
+let HATS: Record<string, (c: number, trim: number, gem: number) => Box[]> = {
   plate: (c, trim) => [
     [[-0.245, 0.2, -0.225], [0.49, 0.27, 0.46], c, 0.06],
     [[-0.03, 0.04, 0.2], [0.06, 0.18, 0.04], c],
@@ -144,18 +144,22 @@ let HATS: Record<string, (c: number, trim: number) => Box[]> = {
     [[-0.245, 0.25, -0.225], [0.49, 0.21, 0.46], c, 0.08],
     [[-0.245, 0.02, -0.235], [0.49, 0.26, 0.09], c],
   ],
-  cloth: (c) => [
+  cloth: (c, trim, gem) => [
     [[-0.25, 0.2, -0.23], [0.5, 0.28, 0.48], c, 0.08],
     [[-0.25, 0, -0.23], [0.05, 0.22, 0.36], c],
     [[0.2, 0, -0.23], [0.05, 0.22, 0.36], c],
     [[-0.25, -0.04, -0.24], [0.5, 0.26, 0.09], c],
     [[-0.08, 0.46, -0.2], [0.16, 0.1, 0.18], c, 0.04],
+    [[-0.25, 0.2, 0.22], [0.5, 0.045, 0.04], trim],
+    [[-0.25, 0.02, 0.12], [0.05, 0.18, 0.12], trim],
+    [[0.2, 0.02, 0.12], [0.05, 0.18, 0.12], trim],
+    [[-0.045, 0.3, 0.255], [0.09, 0.09, 0.025], gem, 0.025],
   ],
 }
 
 // Armour over a middle, by weight, in the torso's space: close over the
 // tunic, as deep at the tummy as at the chest.
-let COATS: Record<string, (c: number, trim: number) => Box[]> = {
+let COATS: Record<string, (c: number, trim: number, gem: number) => Box[]> = {
   plate: (c, trim) => [
     [[-0.245, 0.06, -0.175], [0.49, 0.34, 0.35], c, 0.06],
     [[-0.25, 0.05, -0.18], [0.5, 0.05, 0.36], trim],
@@ -166,10 +170,16 @@ let COATS: Record<string, (c: number, trim: number) => Box[]> = {
     [[-0.24, 0.04, -0.17], [0.48, 0.36, 0.34], c, 0.08],
     [[-0.02, 0.1, 0.17], [0.04, 0.24, 0.01], trim],
   ],
-  cloth: (c, trim) => [
+  cloth: (c, trim, gem) => [
     [[-0.238, 0, -0.168], [0.476, 0.4, 0.336], c, 0.08],
-    [[-0.24, -0.3, -0.17], [0.48, 0.33, 0.34], c, 0.06],
+    [[-0.29, -0.31, -0.17], [0.58, 0.35, 0.34], c, 0.06],
     [[-0.243, 0.03, -0.173], [0.486, 0.06, 0.346], trim],
+    [[-0.15, -0.3, 0.17], [0.3, 0.33, 0.025], c],
+    [[-0.15, -0.3, 0.195], [0.045, 0.33, 0.015], trim],
+    [[0.105, -0.3, 0.195], [0.045, 0.33, 0.015], trim],
+    [[-0.29, -0.31, -0.175], [0.58, 0.045, 0.355], trim],
+    [[-0.27, 0.31, -0.18], [0.54, 0.1, 0.36], c, 0.06],
+    [[-0.045, 0.29, 0.185], [0.09, 0.09, 0.025], gem, 0.025],
   ],
 }
 
@@ -255,7 +265,7 @@ export let person = (
   let weight = (slot: string) => ITEMS[worn(slot)]?.weight ?? ''
   let feet = worn('feet')
   let pants = weight('feet') == 'plate' ? tone(feet) : 0x5b4a3e
-  let boots = feet ? tone(feet) : 0x5a3c28
+  let boots = weight('feet') == 'cloth' ? skin : feet ? tone(feet) : 0x5a3c28
   let sole = weight('feet') == 'cloth' ? 0.08 : 0.14
   let kt = over(b.torso, BUILD.torso)
   let kh = over(b.head, BUILD.head)
@@ -268,6 +278,21 @@ export let person = (
   // A thigh, and a shin in a boot, bending at the knee.
   let knee = b.hips * 0.45, shin = b.hips - knee, t = b.leg
   let [bw, bl] = b.boot
+  let straps: Box[] = weight('feet') == 'cloth'
+    ? [
+      [[-bw / 2, -shin, -t / 2 - 0.02], [bw, 0.025, bl], tone(feet)],
+      [
+        [-bw / 2, -shin + sole - 0.03, -t / 2 + 0.03],
+        [bw, 0.03, 0.045],
+        tone(feet, 1),
+      ],
+      [
+        [-bw / 2, -shin + sole - 0.03, -t / 2 + 0.12],
+        [bw, 0.03, 0.045],
+        tone(feet),
+      ],
+    ]
+    : []
   let leg = (x: number) =>
     limb(
       [[[-t / 2, -knee - 0.02, -t / 2], [t, knee + 0.08, t], pants, 0.06]],
@@ -279,6 +304,7 @@ export let person = (
           0.06,
         ],
         [[-bw / 2, -shin, -t / 2 - 0.02], [bw, sole, bl], boots, 0.06],
+        ...straps,
       ],
       [x, 0, 0],
       [0, -knee, 0],
@@ -293,8 +319,11 @@ export let person = (
       [[-0.23, 0.02, -0.16], [0.46, 0.07, 0.32], belt],
       [[-0.05, 0.025, 0.16], [0.1, 0.06, 0.01], 0xe7c35a],
       [[-0.15, 0.33, 0.12], [0.3, 0.1, 0.05], shade(tint, 0.8)],
-      ...(COATS[weight('body')]?.(tone(worn('body')), tone(worn('body'), 1)) ??
-        []),
+      ...(COATS[weight('body')]?.(
+        tone(worn('body')),
+        tone(worn('body'), 1),
+        tone(worn('body'), 2),
+      ) ?? []),
     ], kt),
     [0, 0, 0],
   )
@@ -368,8 +397,11 @@ export let person = (
       [[-0.12, 0.19, 0.2], [0.03, 0.03, 0.02], 0xffffff],
       [[0.08, 0.19, 0.2], [0.03, 0.03, 0.02], 0xffffff],
       [[-0.05, 0.05, 0.195], [0.1, 0.03, 0.02], shade(skin, 0.8)],
-      ...(HATS[weight('head')]?.(tone(worn('head')), tone(worn('head'), 1)) ??
-        []),
+      ...(HATS[weight('head')]?.(
+        tone(worn('head')),
+        tone(worn('head'), 1),
+        tone(worn('head'), 2),
+      ) ?? []),
     ], kh),
     [0, b.torso[1], 0],
   )

@@ -13,7 +13,7 @@
 // hands, a dagger is quick and short and often lands a great blow, a bow and
 // a staff strike from afar. Armour comes in three weights: plate turns the
 // most of a bite and adds the most health, leather less but runs faster, and
-// cloth least but every blow lands harder.
+// cloth least but its force and haste make every blow land harder and sooner.
 import type { Box } from './boxes.ts'
 import type { Thing, View } from './items.ts'
 import { metal } from './mesh.ts'
@@ -215,7 +215,7 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
   // Armour faces +z, and each look's first box is the stuff it is made of
   // and its second its trim, the colours a hero wears it in (figures.ts
   // `tone`). Plate has bands and pauldrons, leather laces and buckles, cloth
-  // hems and a sash.
+  // hems, a sash and a bright clasp.
   helm: (p) => [
     [[-0.13, 0, -0.13], [0.26, 0.23, 0.26], p.metal],
     [[-0.14, 0.15, -0.14], [0.28, 0.035, 0.28], p.trim],
@@ -266,27 +266,34 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
     ]),
   hood: (p) => [
     [[-0.13, 0.04, -0.12], [0.26, 0.2, 0.24], p.cloth],
-    [[-0.11, 0.03, 0.12], [0.22, 0.19, 0.02], p.trim],
+    [[-0.14, 0.18, 0.115], [0.28, 0.045, 0.035], p.trim],
+    [[-0.035, 0.23, 0.105], [0.07, 0.07, 0.055], p.gem],
     [[-0.08, 0.05, 0.13], [0.16, 0.13, 0.02], HOLLOW],
     [[-0.09, 0.24, -0.11], [0.18, 0.05, 0.18], p.cloth],
     [[-0.06, 0.29, -0.13], [0.12, 0.05, 0.12], p.cloth],
     [[-0.035, 0.33, -0.18], [0.07, 0.05, 0.08], p.cloth],
     [[-0.16, 0, -0.14], [0.32, 0.05, 0.27], p.cloth],
+    [[-0.15, 0.02, 0.1], [0.045, 0.17, 0.035], p.trim],
+    [[0.105, 0.02, 0.1], [0.045, 0.17, 0.035], p.trim],
   ],
   robe: (p) => [
     [[-0.11, 0.3, -0.08], [0.22, 0.18, 0.16], p.cloth],
     [[-0.12, 0.28, -0.09], [0.24, 0.045, 0.18], p.trim],
+    [[-0.035, 0.37, 0.09], [0.07, 0.07, 0.025], p.gem],
     [[-0.15, 0, -0.1], [0.3, 0.3, 0.2], p.cloth],
     [[-0.16, 0, -0.11], [0.32, 0.035, 0.22], p.trim],
     [[-0.2, 0.28, -0.07], [0.09, 0.2, 0.14], p.cloth],
     [[0.11, 0.28, -0.07], [0.09, 0.2, 0.14], p.cloth],
-    [[0.04, 0.13, 0.1], [0.04, 0.15, 0.015], p.trim],
+    [[-0.1, 0.03, 0.105], [0.2, 0.25, 0.018], p.cloth],
+    [[-0.1, 0.03, 0.123], [0.035, 0.25, 0.012], p.trim],
+    [[0.065, 0.03, 0.123], [0.035, 0.25, 0.012], p.trim],
+    [[-0.045, 0.26, 0.11], [0.09, 0.035, 0.025], p.trim],
     [[-0.04, 0.43, 0.075], [0.08, 0.05, 0.01], HOLLOW],
   ],
   sandals: (p) =>
     pair(0.13, 0.03, (x) => [
       [[x - 0.06, 0.025, -0.01], [0.12, 0.03, 0.045], p.cloth],
-      [[x - 0.012, 0.025, 0.035], [0.024, 0.03, 0.06], p.cloth],
+      [[x - 0.012, 0.025, 0.035], [0.024, 0.03, 0.06], p.trim],
       [[x - 0.05, 0, -0.03], [0.1, 0.025, 0.14], SOLE],
       [[x - 0.04, 0, -0.1], [0.08, 0.025, 0.08], SOLE],
       [[x - 0.045, 0.02, -0.105], [0.09, 0.06, 0.03], p.cloth],
@@ -335,7 +342,7 @@ let VIEWS: Record<string, View> = {
 
 /** The three weights of armour, and what each piece of each adds on top of
  * turning bites: plate the most armour and health, leather half as much and
- * speed, cloth a quarter and force. */
+ * speed, cloth a quarter as much protection with growing force and haste. */
 export let WEIGHTS = {
   plate: {
     name: 'Plate',
@@ -358,7 +365,8 @@ export let WEIGHTS = {
     body: 'robe',
     feet: 'sandals',
     k: 0.25,
-    force: 0.05,
+    force: [0.05, 0.06, 0.07, 0.08, 0.09],
+    haste: [0.02, 0.02, 0.03, 0.03, 0.04],
   },
 }
 
@@ -469,7 +477,8 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
         armour: Math.round(ARMOUR[slot][i] * w.k),
         hp: Math.round(HEALTH[slot][i] * w.k),
         speed: 'speed' in w ? w.speed : undefined,
-        force: 'force' in w ? w.force : undefined,
+        force: 'force' in w ? w.force[i] : undefined,
+        haste: 'haste' in w ? w.haste[i] : undefined,
         look: LOOKS[noun](p),
         view: VIEWS[noun],
       }]
