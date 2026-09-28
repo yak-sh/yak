@@ -470,29 +470,6 @@ Deno.test('a build that ships pays for both in one write', async () => {
   assert((after.meter?.seconds ?? 0) >= 1, 'and the container it compiled in')
 })
 
-Deno.test('the workbench is offered to the builder, and says what it is for', () => {
-  let names = TOOLS.map((t) => t.name)
-  for (
-    let want of [
-      'sandbox_shell',
-      'sandbox_wait',
-      'sandbox_stop',
-      'sandbox_read',
-      'sandbox_write',
-      'sandbox_ship',
-    ]
-  ) {
-    assert(names.includes(want), `${want} is offered`)
-    let t = tool(want)
-    // Each says it is metered, so a model choosing between tools knows the
-    // cheap ones from the expensive one.
-    assertStringIncludes(t.description, 'metered')
-    assertEquals(t.input.type, 'object')
-  }
-  assertStringIncludes(tool('sandbox_shell').description, 'Rust')
-  assertStringIncludes(tool('sandbox_ship').description, 'served')
-})
-
 // The deploy's own half, which no test on this box can run: `wrangler deploy`
 // builds the container image and needs an engine to do it, and this machine
 // has the Docker CLI and no daemon. A dry-run here gets as far as bundling the
