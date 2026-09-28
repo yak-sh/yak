@@ -61,6 +61,15 @@ let doc: VocabDoc = {
       durable: 'connection',
       properties: { x: { type: 'number' }, y: { type: 'number' } },
     },
+    pointing: {
+      component: true,
+      type: 'object',
+      sync: 'peers',
+      durable: 'connection',
+      properties: {
+        at: { type: 'string', ref: 'entity', death: 'detach' },
+      },
+    },
     // A typing indicator that clears itself after a few seconds.
     typing: {
       component: true,

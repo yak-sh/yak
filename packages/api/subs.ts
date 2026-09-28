@@ -309,14 +309,14 @@ export let subscriptions = (graph: Graph, opts: {
     JSON.stringify([comp, prop, peer])
   let linked = (
     ref: { comp: string; prop: string },
-    peers: Eid[],
+    targets: Eid[],
   ): Bundle[] | Promise<Bundle[]> => {
     let answers = new Map<Eid, Bundle[]>()
-    for (let peer of peers) {
+    for (let peer of targets) {
       let rows = backlinks.get(linkKey(ref.comp, ref.prop, peer))?.rows
       if (rows) answers.set(peer, rows)
     }
-    let missing = peers.filter((peer) => !answers.has(peer))
+    let missing = targets.filter((peer) => !answers.has(peer))
     let fresh = missing.length
       ? then(
         graph.read(
@@ -339,7 +339,8 @@ export let subscriptions = (graph: Graph, opts: {
       while (backlinks.size > BACKLINK_LIMIT) {
         backlinks.delete(backlinks.keys().next().value!)
       }
-      return peers.flatMap((peer) => answers.get(peer) ?? [])
+      let held = peers.referencing(ref.comp, ref.prop, targets)
+      return [...targets.flatMap((peer) => answers.get(peer) ?? []), ...held]
     })
   }
   let network = (sub: Sub) => sub.peer ? peerNet : durableNet
@@ -739,7 +740,7 @@ export let subscriptions = (graph: Graph, opts: {
       return then(candidates, (rows) => {
         let ids = new Set(scope)
         if (sub.ref) {
-          for (let row of rows) {
+          for (let row of overlay(rows, peers.values(scope))) {
             let eid = (row[sub.ref.comp] as Record<string, unknown> | undefined)
               ?.[sub.ref.prop]
             if (typeof eid == 'string') ids.add(eid)
@@ -821,23 +822,31 @@ export let subscriptions = (graph: Graph, opts: {
               () => {
                 if (s.routed) return send(s, routing.get(s))
                 if (!s.ref) return push(s)
+                let roots = new Set(
+                  bundles.filter((b) => s.ref!.comp in b)
+                    .map((b) => b.entity.eid),
+                )
                 let moved = bundles.filter((b) =>
                   Object.keys(b).some((c) => s.ref!.far.has(c))
                 )
-                if (!moved.length) return
+                if (!moved.length && !roots.size) return
                 let ids = [...new Set(moved.map((b) => b.entity.eid))]
                 let key = JSON.stringify([s.ref.comp, s.ref.prop, ids])
                 let found = batchLinks.get(key)
                 if (!found) {
-                  found = linked(s.ref, ids)
+                  found = ids.length ? linked(s.ref, ids) : []
                   batchLinks.set(key, found)
                 }
                 return then(
                   found,
-                  (rows) => {
-                    if (!rows.length) return
-                    let ids = [...new Set(rows.map((b) => b.entity.eid))]
-                    return push(s, new Set(ids), undefined, rows, true)
+                  (refs) => {
+                    let scope = new Set([
+                      ...roots,
+                      ...refs.map((b) => b.entity.eid),
+                    ])
+                    if (!scope.size) return
+                    let own = rows.filter((b) => roots.has(b.entity.eid))
+                    return push(s, scope, undefined, [...refs, ...own], true)
                   },
                 )
               },

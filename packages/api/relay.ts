@@ -68,6 +68,8 @@ export type Relay<C> = {
   /** Values currently said by all connections, for query membership. Pass
    * entity ids when only those rows can affect the answer. */
   values: (ids?: Iterable<Eid>) => Bundle[]
+  /** Held rows whose reference names one of these entities. */
+  referencing: (comp: string, prop: string, targets: Iterable<Eid>) => Bundle[]
   /** A connection went away: forget it, and return the nulls to forward for
    * what it still held. */
   drop: (conn: C) => Bundle[]
@@ -103,10 +105,28 @@ export let relay = <C>(
   // null when it was adopted after a lost memory, and only its key is known.
   let held = new Map<string, { conn: C; patch: Comp | null }>()
   let byEntity = new Map<Eid, Set<string>>()
+  // A reference kept by peers needs the same reverse lookup as a stored one.
+  let refs = new Map<string, Set<Eid>>()
   // conn → the keys it holds, in the order it first said them.
   let saying = new Map<C, Set<string>>()
   // key → cancel. Separate because most values have no timer at all.
   let timers = new Map<string, () => void>()
+  let refKey = (comp: string, prop: string, target: Eid) =>
+    JSON.stringify([comp, prop, target])
+  let index = (eid: Eid, comp: string, patch: Comp, add: boolean) => {
+    for (let [prop, target] of Object.entries(patch)) {
+      if (
+        typeof target != 'string' ||
+        vocab.prop(comp, prop)?.category != 'ref'
+      ) continue
+      let k = refKey(comp, prop, target)
+      let ids = refs.get(k) ?? new Set<Eid>()
+      if (add) ids.add(eid)
+      else ids.delete(eid)
+      if (ids.size) refs.set(k, ids)
+      else refs.delete(k)
+    }
+  }
 
   let cancel = (k: string) => {
     timers.get(k)?.()
@@ -118,7 +138,8 @@ export let relay = <C>(
     let was = held.get(k)
     if (was) saying.get(was.conn)?.delete(k)
     held.delete(k)
-    let eid = split(k)[0]
+    let [eid, comp] = split(k)
+    if (was?.patch) index(eid, comp, was.patch, false)
     let keys = byEntity.get(eid)
     keys?.delete(k)
     if (!keys?.size) byEntity.delete(eid)
@@ -127,11 +148,13 @@ export let relay = <C>(
   let hold = (conn: C, k: string, patch: Comp | null) => {
     let was = held.get(k)
     if (was && was.conn !== conn) saying.get(was.conn)?.delete(k)
-    let eid = split(k)[0]
+    let [eid, comp] = split(k)
+    if (was?.patch) index(eid, comp, was.patch, false)
     let keys = byEntity.get(eid) ?? new Set<string>()
     keys.add(k)
     byEntity.set(eid, keys)
     held.set(k, { conn, patch })
+    if (patch) index(eid, comp, patch, true)
     let mine = saying.get(conn) ?? new Set<string>()
     saying.set(conn, mine)
     mine.add(k)
@@ -211,6 +234,15 @@ export let relay = <C>(
     },
     snapshot: (mine, sees) => values(held.keys(), mine, sees),
     values: (ids) => values(ids ? keysFor(ids) : held.keys()),
+    referencing: (comp, prop, targets) => {
+      let ids = new Set<Eid>()
+      for (let target of targets) {
+        for (let eid of refs.get(refKey(comp, prop, target)) ?? []) {
+          ids.add(eid)
+        }
+      }
+      return values(keysFor(ids))
+    },
     drop: (conn) => {
       let mine = [...saying.get(conn) ?? []]
       saying.delete(conn)
@@ -222,6 +254,7 @@ export let relay = <C>(
       timers.clear()
       held.clear()
       byEntity.clear()
+      refs.clear()
       saying.clear()
     },
   }

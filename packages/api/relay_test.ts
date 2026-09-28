@@ -71,6 +71,29 @@ Deno.test('selected peer values follow writes, takeover, clear and drop', () => 
   relay.close()
 })
 
+Deno.test('held reference lookup follows retargeting and takeover', () => {
+  let relay = relaying<string>(shop().vocab, () => {})
+  let root = { entity: { eid: 'root' }, pointing: { at: 'one' } }
+  relay.write('one', [root])
+  assertEquals(relay.referencing('pointing', 'at', ['one']), [root])
+  relay.write('one', [{ entity: { eid: 'root' }, pointing: { at: 'two' } }])
+  assertEquals(relay.referencing('pointing', 'at', ['one']), [])
+  assertEquals(
+    relay.referencing('pointing', 'at', ['two'])[0].entity.eid,
+    'root',
+  )
+
+  relay.write('two', [{ entity: { eid: 'root' }, pointing: { at: 'three' } }])
+  relay.drop('one')
+  assertEquals(
+    relay.referencing('pointing', 'at', ['three'])[0].entity.eid,
+    'root',
+  )
+  relay.drop('two')
+  assertEquals(relay.referencing('pointing', 'at', ['three']), [])
+  relay.close()
+})
+
 Deno.test('a peer hears a relay; the writer does not hear its own', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
@@ -449,6 +472,31 @@ Deno.test('scoped reference refresh keeps other roots and direct branches', () =
   assertEquals(watcher.take()[0].gone, ['l4'])
   subs.drop(writer.to)
   assertEquals(watcher.take(), []) // the direct branch keeps l3
+})
+
+Deno.test('a peer-held reference follows its target and can retarget', () => {
+  let graph = shop(), subs = subscriptions(graph)
+  let writer = ear(), watcher = ear(), late = ear()
+  subs.open(watcher.to, 'looks', '.pointing.at.browsing.x<10&*')
+  assertEquals(watcher.take()[0].bundles, [])
+
+  subs.relay(writer.to, [{ entity: { eid: 'root' }, pointing: { at: 'one' } }])
+  assertEquals(watcher.take(), [])
+  subs.relay(writer.to, [{ entity: { eid: 'one' }, browsing: { x: 3 } }])
+  assertEquals(watcher.take()[0].bundles, [{ entity: { eid: 'root' } }])
+  subs.open(late.to, 'looks', '.pointing.at.browsing.x<10&*')
+  assertEquals(late.take()[0].bundles, [{ entity: { eid: 'root' } }])
+
+  subs.relay(writer.to, [{ entity: { eid: 'one' }, browsing: { x: 12 } }])
+  assertEquals(watcher.take()[0].gone, ['root'])
+  assertEquals(late.take()[0].gone, ['root'])
+  subs.relay(writer.to, [{ entity: { eid: 'two' }, browsing: { x: 4 } }])
+  assertEquals(watcher.take(), [])
+  subs.relay(writer.to, [{ entity: { eid: 'root' }, pointing: { at: 'two' } }])
+  assertEquals(watcher.take()[0].bundles, [{ entity: { eid: 'root' } }])
+
+  subs.relay(writer.to, [{ entity: { eid: 'root' }, pointing: null }])
+  assertEquals(watcher.take().at(-1)?.gone, ['root'])
 })
 
 Deno.test('reference peer movement sends rows only on entry and exit', () => {
