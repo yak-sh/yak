@@ -79,6 +79,7 @@ Deno.test('the log becomes the transcript: one entry per line that says somethin
     // session rather than becoming an entry.
     let [row] = await g.read('.session&*')
     assertEquals(comp(row, 'session').id, 'abc')
+    assertEquals(await Deno.stat(`${dir}/S1.out`).catch(() => null), null)
 
     // The stamp is the cursor: reading the same file again imports nothing.
     await follow(g, 'S1', claude.read, { dir })

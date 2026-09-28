@@ -379,7 +379,11 @@ let mtimeOf = (path: string) => {
 let elapsedOf = (dir: string, eid: string) => {
   let f = files(dir, eid)
   let start = codeOf(f.started) ?? Date.now()
-  return () => Math.max(0, (mtimeOf(f.code) ?? Date.now()) - start)
+  let end = mtimeOf(f.code)
+  return () => {
+    end ??= mtimeOf(f.code)
+    return Math.max(0, (end ?? Date.now()) - start)
+  }
 }
 
 // The process we track is never our direct child, so waitpid is unavailable
@@ -432,9 +436,20 @@ let sizeOf = (path: string) => {
 let clear = (path: string) => {
   try {
     Deno.removeSync(path)
-  } catch {
-    // the file was never written
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
   }
+}
+
+/**
+ * Remove a finished run's supervisor files.
+ *
+ * A caller that sets `stream: false` owns the raw output and calls this only
+ * after it has published the final bytes. Streamed runs are cleaned by
+ * {@link launch} once their final output and exit have reached the store.
+ */
+export let clean = (eid: string, o: Opts = {}): void => {
+  for (let path of Object.values(files(dirOf(o), eid))) clear(path)
 }
 
 // One output file, read forward from wherever it already stands. Starting at
@@ -615,8 +630,19 @@ export let launch = async (
     // transaction, so no reader ever sees the new pid beside it.
     ...(o.eid ? { [EXIT]: null } : {}),
   }])
-  let done = follow(store, eid, pid, tails, reported(f, beat(o)), o)
-  return { eid, pid, done, elapsed: elapsedOf(dir, eid) }
+  let elapsed = elapsedOf(dir, eid)
+  let done = follow(store, eid, pid, tails, reported(f, beat(o)), o).then(
+    (code) => {
+      // Cache the ending before its file goes away, so a held Run keeps
+      // reporting the whole elapsed time after cleanup.
+      if (o.stream !== false) {
+        elapsed()
+        clean(eid, o)
+      }
+      return code
+    },
+  )
+  return { eid, pid, done, elapsed }
 }
 
 /**

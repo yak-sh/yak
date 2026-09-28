@@ -34,9 +34,11 @@ where `source` is the process entity. Bodies are bounded near 64 KiB at newline
 boundaries, retain their newlines, and may contain several logical lines. One
 oversized logical line stays whole. The graph stores process state and output.
 Supervisor files are stored under `opts.dir`, then `$PROCESS_DIR`, then
-`$TASKS_HOME/processes`, then `~/.tasks/processes`. For tests, set `TASKS_HOME`
-instead of changing `HOME` so Deno can reuse its module cache. This changes
-supervisor file locations, not the child environment.
+`$TASKS_HOME/processes`, then `~/.tasks/processes`. A streamed run removes them
+after its final output and exit reach the graph. A caller using `stream: false`
+calls `clean()` after publishing the final raw output. For tests, set
+`TASKS_HOME` instead of changing `HOME` so Deno can reuse its module cache. This
+changes supervisor file locations, not the child environment.
 
 ## Launching and adopting processes
 
@@ -143,7 +145,7 @@ The main module exports:
 - host identity: `selfEid()`, `become()`, `started()`, and `ended()`;
 - storage: `Store`, `store()`, `RUNNING`, and `SERVICES`;
 - graph integration: `processes()`;
-- process operations: `dirOf()`, `paths()`, `launch()`, `adopt()`, `watch()`,
-  `vanished()`, `gone()`, `signal()`, and `supervise()`.
+- process operations: `dirOf()`, `paths()`, `clean()`, `launch()`, `adopt()`,
+  `watch()`, `vanished()`, `gone()`, `signal()`, and `supervise()`.
 
 Additional entry points are `@yaks/process/vocab` and `@yaks/process/rules`.

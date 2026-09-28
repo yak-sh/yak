@@ -41,6 +41,7 @@ import { edgeEid } from '@yaks/edge'
 import { type Reader, SESSION, sessionEnv } from '@yaks/session'
 import { pull, type Tail, tail } from '@yaks/session/tail'
 import {
+  clean,
   EXIT,
   launch,
   paths,
@@ -226,7 +227,11 @@ export let follow = async (
       t ??= await tail(g, paths(session, o).out, { session })
       let over = comp(await one(g, session), EXIT) != null
       await pull(g, t, read, { final: over, report: told(o) })
-      if (over) return ended(g, session, o)
+      if (over) {
+        await ended(g, session, o)
+        clean(session, o)
+        return
+      }
     } catch (e) {
       told(o)(e)
       t = undefined

@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
 import { launchers, reaped, tracked, until } from './testing.ts'
-import { adopt, gone, launch, vanished, watch } from './run.ts'
+import { adopt, clean, gone, launch, vanished, watch } from './run.ts'
 import { store } from './store.ts'
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
@@ -18,10 +18,11 @@ let comp = (b: Bundle | undefined, name: string) =>
 for (let os of launchers) {
   Deno.test(`${os}: a launched child streams both its streams and stamps its exit`, async () => {
     let g = tracked()
+    let at = dir()
     let run = await launch(store(g), {
       command: 'sh',
       args: ['-c', 'echo out; echo err >&2; exit 3'],
-    }, { dir: dir(), poll: 5, os })
+    }, { dir: at, poll: 5, os })
     assertEquals(await run.done, 3)
 
     let said = (await g.read(`.output.source=${run.eid}&*`))
@@ -36,6 +37,7 @@ for (let os of launchers) {
     )
     assert(Number(comp(row, PROCESS)?.pid) > 0)
     assertEquals(comp(row, EXIT)?.code, 3)
+    assertEquals([...Deno.readDirSync(at)].map((e) => e.name), ['wrapper.sh'])
   })
 
   // systemd expands the command line it launches, so an unescaped `$` reaches
@@ -82,6 +84,19 @@ for (let os of launchers) {
     assertEquals(run.elapsed(), took)
   })
 }
+
+Deno.test('raw output stays until its caller cleans the finished run', async () => {
+  let at = dir()
+  let run = await launch(store(tracked()), {
+    command: 'sh',
+    args: ['-c', 'echo kept'],
+  }, { dir: at, poll: 5, stream: false })
+  assertEquals(await run.done, 0)
+  assertEquals(Deno.readTextFileSync(`${at}/${run.eid}.out`), 'kept\n')
+
+  clean(run.eid, { dir: at })
+  assertEquals([...Deno.readDirSync(at)].map((e) => e.name), ['wrapper.sh'])
+})
 
 Deno.test('many lines keep their newlines in bounded output chunks', async () => {
   let g = tracked()
