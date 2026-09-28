@@ -51,8 +51,8 @@ export let stride = (
   }
 }
 
-/** Walk in the hero's own facing direction while the phone stick turns them.
- * Unlike camera-relative keys, sideways stick input never translates sideways.
+/** Walk in the hero's own facing direction while the stick or keys turn them.
+ * Unlike camera-relative strafing, sideways input never translates sideways.
  *
  * ```ts
  * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'

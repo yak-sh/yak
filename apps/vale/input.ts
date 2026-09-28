@@ -1,7 +1,7 @@
 // What the player asks for, from whichever hands they use: keys and a mouse,
 // or a thumb on a stick and another on the buttons. The frame reads it once
-// (`read`) and gets one answer: which way to move, relative to the camera,
-// what was pressed since the last frame, and how far the view was dragged.
+// (`read`) and gets one answer: which way to move or turn, what was pressed
+// since the last frame, and how far the view was dragged.
 
 export type Intent = {
   /** right and forward axes, at most 1 long */
@@ -136,10 +136,10 @@ export let listen = (
   let looked = false
   let zoom = 0
   let swapped = false
-  let strafe = true
+  let strafe = false
   try {
     swapped = localStorage.getItem('mossvale.drag.swap') == '1'
-    strafe = localStorage.getItem('mossvale.keys.strafe') != '0'
+    strafe = localStorage.getItem('mossvale.keys.strafe') == '1'
   } catch { /* this page keeps its setting */ }
   let isLook = (button: number, type: string) =>
     type != 'touch' && button == (swapped ? 0 : 2)
