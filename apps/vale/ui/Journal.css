@@ -9,8 +9,7 @@
 
 .Journal_Head {
   margin: 0.4rem 0 0;
-  font-size: 0.72rem;
-  font-weight: 800;
+  font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--faint);
@@ -44,6 +43,7 @@
 .Journal_Title {
   flex: 1;
   min-width: 0;
+  font-size: 1.05rem;
   color: var(--deep);
   text-wrap: balance;
 }
@@ -93,7 +93,6 @@
 
   & em {
     font-style: normal;
-    font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--deep);
   }

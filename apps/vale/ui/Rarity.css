@@ -2,7 +2,6 @@
    colour, for whatever frames or lights the piece, and a name set in it is
    .Rarity. A common piece wears no modifier, and nothing frames it. */
 .Rarity {
-  font-weight: 700;
   color: var(--rarity, inherit);
 }
 

@@ -136,7 +136,6 @@
   background: color-mix(in srgb, var(--rim) 36%, var(--well));
   font: inherit;
   font-size: 0.85rem;
-  font-weight: 700;
   color: var(--muted);
   white-space: nowrap;
   cursor: pointer;

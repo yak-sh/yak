@@ -30,6 +30,7 @@
     display: flex;
     align-items: center;
     gap: 0.3rem;
+    font-size: 1.05rem;
     color: var(--deep);
   }
 
@@ -39,7 +40,7 @@
   }
 
   & small {
-    font-size: 0.66rem;
+    font-size: 0.75rem;
     color: var(--faint);
   }
 }
@@ -79,8 +80,7 @@
 
   & span {
     max-width: 100%;
-    font-size: 0.64rem;
-    font-weight: 600;
+    font-size: 0.78rem;
     line-height: 1.1;
     text-wrap: balance;
     overflow-wrap: anywhere;
@@ -118,7 +118,7 @@
     text-align: start;
 
     & small {
-      font-size: 0.72rem;
+      font-size: 0.78rem;
     }
   }
 

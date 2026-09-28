@@ -36,7 +36,6 @@
 
   & em {
     font-style: normal;
-    font-weight: 700;
     color: var(--deep);
   }
 }

@@ -10,7 +10,6 @@
   box-shadow: 0 2px 0 var(--lip);
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 700;
   color: var(--deep);
   cursor: pointer;
   pointer-events: auto;
@@ -41,7 +40,6 @@
 
 .Yaks_Lead {
   font-size: 1.25rem;
-  font-weight: 700;
   color: var(--deep);
 }
 
@@ -50,7 +48,6 @@
   border-left: 3px solid var(--moss);
   border-radius: 0 var(--radius-small) var(--radius-small) 0;
   background: var(--well);
-  font-weight: 600;
 }
 
 .Yaks_Actions {

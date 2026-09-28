@@ -10,7 +10,6 @@
   box-shadow: 0 1px 0 var(--rim), inset 0 0 0 1px var(--line);
   font: inherit;
   font-size: 0.7rem;
-  font-weight: 600;
   line-height: 1.4;
   text-align: center;
   color: var(--ink);

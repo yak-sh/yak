@@ -26,7 +26,6 @@
     position: relative;
     display: block;
     font-size: calc(var(--tall) * 0.7);
-    font-weight: 700;
     line-height: var(--tall);
     text-align: center;
     color: var(--label);

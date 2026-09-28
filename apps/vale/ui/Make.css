@@ -13,7 +13,6 @@
 .Make_Name {
   display: grid;
   gap: 0.25rem;
-  font-weight: 600;
   color: var(--deep);
 
   & input {
@@ -37,7 +36,6 @@
 .Make_Label {
   margin-top: 0.2rem;
   font-size: 0.85rem;
-  font-weight: 600;
   color: var(--faint);
 }
 

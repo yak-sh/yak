@@ -7,7 +7,6 @@
   background: var(--glass);
   box-shadow: var(--flat);
   font-size: 0.95rem;
-  font-weight: 600;
   text-align: center;
   color: var(--tint);
   animation: toast-in 0.25s ease-out;

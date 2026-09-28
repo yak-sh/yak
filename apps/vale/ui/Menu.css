@@ -19,7 +19,6 @@
   border-radius: var(--radius);
   background: var(--face);
   box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--rim) 50%, transparent);
-  font-weight: 600;
   text-align: left;
   color: var(--tint);
   cursor: pointer;
@@ -39,7 +38,6 @@
   grid-template-columns: 1fr auto;
   gap: 0.35rem;
   padding: 0 0.8rem;
-  font-weight: 600;
   color: var(--deep);
 
   & input {
@@ -84,7 +82,7 @@
 
 .Menu_Head {
   margin: 0.4rem 0 0;
-  font-size: 0.85rem;
+  font-size: 1rem;
   color: var(--amber);
 }
 
@@ -100,7 +98,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.2rem;
-    font-weight: 600;
     color: var(--muted);
   }
 

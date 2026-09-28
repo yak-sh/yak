@@ -22,7 +22,6 @@
     border-radius: 8px 8px 0 0;
     background: color-mix(in srgb, var(--rim) 36%, var(--well));
     box-shadow: none;
-    font-weight: 700;
   }
 
   & .Pack_Tile-on {
@@ -67,7 +66,6 @@
   }
 
   & em {
-    font-weight: 700;
     color: var(--have);
   }
 

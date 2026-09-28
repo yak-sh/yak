@@ -27,7 +27,6 @@
 .Gate_Title {
   margin: 0;
   font-size: 2.6rem;
-  font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--deep);
 }
@@ -48,7 +47,6 @@
   color: var(--faint);
 
   & a {
-    font-weight: 600;
     color: var(--deep);
   }
 }

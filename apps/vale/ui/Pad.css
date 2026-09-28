@@ -151,7 +151,6 @@
   border-radius: var(--round);
   background: var(--deep);
   font-size: 0.75rem;
-  font-weight: 600;
   color: #fff;
 
   &:empty {

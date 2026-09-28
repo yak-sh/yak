@@ -57,15 +57,14 @@
   padding: 0.3rem 0.25rem 0.4rem;
 
   & small {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     color: var(--faint);
   }
 
   & span {
     max-width: 100%;
     overflow: hidden;
-    font-size: 0.78rem;
-    font-weight: 600;
+    font-size: 0.82rem;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -103,8 +102,7 @@
   padding: 0 0.1rem;
   border-radius: 3px;
   background: var(--well);
-  font-size: 0.65rem;
-  font-weight: 700;
+  font-size: 0.75rem;
   line-height: 1;
   color: var(--amber);
 }
@@ -129,7 +127,6 @@
 
   & em {
     font-style: normal;
-    font-weight: 700;
   }
 }
 

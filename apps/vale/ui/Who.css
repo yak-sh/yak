@@ -9,7 +9,6 @@
   background: var(--glass);
   box-shadow: var(--flat);
   font-size: 0.9rem;
-  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -27,7 +26,6 @@
   gap: 0.25rem;
   padding-left: 0.5rem;
   border-left: 2px solid var(--line);
-  font-weight: 500;
   color: var(--muted);
 
   & .Glyph {

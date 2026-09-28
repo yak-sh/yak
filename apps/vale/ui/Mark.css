@@ -4,7 +4,6 @@
   --under: #9a6a1c;
   display: block;
   font-size: 1.5rem;
-  font-weight: 700;
   line-height: 1;
   color: var(--tint);
   text-shadow: 0 2px 0 var(--under), 0 0 8px rgba(0, 0, 0, 0.35);

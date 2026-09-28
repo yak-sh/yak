@@ -5,7 +5,12 @@
 }
 
 html {
-  font: 500 16px/1.35 'Fredoka', system-ui, sans-serif;
+  font: 400 16px/1.35 'Fredoka', system-ui, sans-serif;
+}
+
+/* Keep semantic emphasis without the cramped, heavy face at HUD sizes. */
+:is(b, strong, h1, h2, h3, h4, h5, h6) {
+  font-weight: 400;
 }
 
 html,
