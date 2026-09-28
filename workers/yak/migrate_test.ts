@@ -461,6 +461,52 @@ Deno.test('a declared index the rows cannot satisfy refuses the boot', async () 
   assertEquals(slot(ctx, 'schema'), 'older schema')
 })
 
+Deno.test('a nullable unique key is raised over older rows without one', async () => {
+  let ctx = state()
+  let now = newer(ctx, 'ada/vale')
+  let deploy = (unique: boolean) =>
+    now.door('/vocab', {
+      method: 'POST',
+      body: JSON.stringify({
+        $defs: {
+          gathered: {
+            component: true,
+            ...unique ? { unique: [['node', 'life']] } : {},
+            properties: {
+              node: { type: 'string' },
+              ...unique ? { life: { type: 'number' } } : {},
+            },
+          },
+        },
+      }),
+    }, APP)
+  assertEquals((await deploy(false)).status, 200)
+  assertEquals(
+    (await now.apply([
+      { entity: { eid: ONE }, gathered: { node: 'oak' } },
+      { entity: { eid: TWO }, gathered: { node: 'oak' } },
+    ], APP)).status,
+    200,
+  )
+  assertEquals((await deploy(true)).status, 200)
+  assertEquals(catalogue(db(ctx), { name: 'gathered_node_life' }).length, 1)
+  assertEquals((await now.query('.gathered&*', APP)).length, 2)
+  assertEquals(
+    (await now.apply([{
+      entity: { eid: crypto.randomUUID() },
+      gathered: { node: 'oak', life: 0 },
+    }], APP)).status,
+    200,
+  )
+  assertEquals(
+    (await now.apply([{
+      entity: { eid: crypto.randomUUID() },
+      gathered: { node: 'oak', life: 0 },
+    }], APP)).status,
+    400,
+  )
+})
+
 Deno.test('a raw index creation failure still refuses an empty store', async () => {
   let ctx = state()
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)

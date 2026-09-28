@@ -321,10 +321,9 @@ export let rebuild = (d: Driver) => {
  * Only the tables that stood before it can be behind their vocabulary
  * (@yaks/sqlite `fit`), so a fresh object is asked nothing about its columns,
  * keys or checks. What `fit` had to leave as it stood comes back, for the
- * caller to report. Existing rows need a preparing migration before gaining a
- * unique constraint; empty tables can acquire it now without changing what old
- * rows must satisfy, and an index that stood before a rebuild took it stands
- * over the same rows again. */
+ * caller to report. A unique index can be added while it has no complete keys
+ * to index, even if its table has older rows. Otherwise existing rows need a
+ * preparing migration, unless the same index stood before a rebuild. */
 export let install = (
   storage: DurableStorage,
   vocab: Vocab,
@@ -343,6 +342,13 @@ export let install = (
         let name = `${table}_${i.props.join('_')}`
         if (held.has(name)) return false
         if (stood.has(name) || !i.unique || !tally(d, table)) return true
+        // Rows without a complete key occupy no slot in a unique index. A
+        // newly added nullable property therefore leaves the index empty even
+        // when its component already has rows.
+        let key = [...i.props, ...(i.present ?? [])]
+        if (!tally(d, table, and(...key.map((p) => notNull(col(p)))))) {
+          return true
+        }
         throw new Error(
           `skipped unique index ${name}: existing rows require a preparing migration`,
         )
