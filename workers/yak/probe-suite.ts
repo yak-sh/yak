@@ -6,8 +6,8 @@
 //
 // The test config is wrangler.toml's, less what cannot run on this box: the
 // sandbox's container, and the bindings that only exist on the account (AI,
-// vectorize, the dispatch namespace, service bindings). The kernel is written
-// to answer without them, as it does under `wrangler dev`.
+// vectorize, the dispatch namespace, outside services). Its own FILES service
+// binding runs in workerd, so file reads cross the deployed service boundary.
 //
 // Its config is every kernel's (probe.ts `vars`), and what the run's tests
 // share, it is handed in the environment (probe.ts `workerd`):
@@ -49,7 +49,9 @@ let ACCOUNT_ONLY = [
 /** wrangler.toml as the run's kernel wears it, `vars` laid over its own. */
 export let config = (toml: string, vars: Record<string, string>): Config => {
   let raw = parse(toml) as Config
+  let services = raw.services as { binding: string }[]
   for (let key of ACCOUNT_ONLY) delete raw[key]
+  raw.services = services.filter((s) => s.binding == 'FILES')
   raw.durable_objects = {
     bindings: (raw.durable_objects?.bindings ?? []).filter((b) =>
       b.name != 'SANDBOX'
@@ -185,6 +187,7 @@ export let probeSuite = async () => {
           main: 'probe-scripts.js',
           compatibility_date: '2025-05-08',
           worker_loaders: [{ binding: 'LOADER' }],
+          services: [{ binding: 'KERNEL', service: 'yak' }],
         },
       },
     ],

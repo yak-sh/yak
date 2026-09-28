@@ -4,7 +4,7 @@
 
 import { assertEquals } from '@std/assert'
 import { SHIM } from './dispatch.ts'
-import { script } from './probe.ts'
+import { connector, script, seed, workerd } from './probe.ts'
 
 let fixture = (name: string) =>
   Deno.readFileSync(new URL(`./fixtures/${name}`, import.meta.url))
@@ -35,4 +35,41 @@ Deno.test('workerd links the shim, the app, and its wasm', async () => {
   let pass = await w.at('/index.html')
   assertEquals(pass.status, 404)
   await pass.body?.cancel()
+})
+
+Deno.test('workerd serves a file through the cached FILES entrypoint', async () => {
+  let k = workerd()
+  let space = 'filebindprobe'
+  let { cookie } = await seed(k, [{ slug: space, apps: ['assets'] }])
+  let agent = connector(k, cookie)
+  await agent.tool('app_files', {
+    space,
+    app: 'assets',
+    path: 'index.html',
+    content: 'a cached page',
+  })
+  await agent.tool('app_deploy', { space, app: 'assets' })
+  let r = await k.at(`${space}.yaks.app`, '/assets/index.html')
+  assertEquals(r.status, 200)
+  assertEquals((await r.text()).includes('a cached page'), true)
+  let app = await script({
+    '__yak_entry.js': SHIM,
+    'worker.js': `export default {
+      fetch(req, env) {
+        return env.FILES.fetch('/index.html')
+      }
+    }`,
+    'probe.js': `import app from './__yak_entry.js'
+      export default {
+        fetch(req, env, ctx) {
+          return app.fetch(new Request(
+            'https://${space}.yaks.app/assets/read',
+            { headers: { 'x-yak-app': 'assets' } },
+          ), env, ctx)
+        }
+      }`,
+  }, 'probe.js')
+  let nested = await app.at('/read')
+  assertEquals(nested.status, 200)
+  assertEquals((await nested.text()).includes('a cached page'), true)
 })

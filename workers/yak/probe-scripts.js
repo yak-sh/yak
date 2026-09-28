@@ -6,14 +6,16 @@
 //   PUT /__script/<id>          {main, modules}: a module is its source, or
 //                               {wasm: <base64>}
 //   *   /__script/<id>/<path>   the request, as /<path>, to that set's Worker
+// The kernel binding lets an app's shim call its own FILES door in workerd.
 
 let sets = new Map()
 
 let bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer
 
-let loaded = ({ main, modules }) => ({
+let loaded = ({ main, modules }, env) => ({
   compatibilityDate: '2025-05-08',
   mainModule: main,
+  env: { KERNEL: env.KERNEL },
   modules: Object.fromEntries(
     Object.entries(modules).map(([name, m]) => [
       name,
@@ -27,7 +29,7 @@ export default {
     let url = new URL(request.url)
     let [, , id, ...rest] = url.pathname.split('/')
     if (request.method == 'PUT' && !rest.length) {
-      sets.set(id, loaded(await request.json()))
+      sets.set(id, loaded(await request.json(), env))
       return new Response(null, { status: 204 })
     }
     let set = sets.get(id)
