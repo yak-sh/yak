@@ -33,7 +33,10 @@
   color: var(--ink);
   cursor: pointer;
 
-  & i {
+  & > i {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
     font-size: 1.5rem;
     font-style: normal;
     line-height: 1.2;
@@ -92,15 +95,17 @@
     inset 0 -3px 0 color-mix(in srgb, var(--rim) 70%, transparent);
 }
 
-/* A thing's tier, as pips: in one colour, so that colour is rarity's. */
+/* The tier sits at the lower right of its picture, clear of most gear. */
 .Pack_Tier {
   position: absolute;
-  top: 0.15rem;
-  right: 0.3rem;
-  font-size: 0.7rem;
-  font-style: normal;
+  right: -0.1rem;
+  bottom: 0;
+  padding: 0 0.1rem;
+  border-radius: 3px;
+  background: var(--well);
+  font-size: 0.65rem;
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.05em;
   color: var(--amber);
 }
 

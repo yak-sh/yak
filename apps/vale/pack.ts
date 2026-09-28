@@ -10,7 +10,7 @@
 // would change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
 import { type Doer, does, GIVES, OFF } from './abilities.ts'
-import { HANDLES, type Slot, SLOT_NAMES, SLOTS } from './arms.ts'
+import { HANDLES, type Slot, SLOT_NAMES, SLOTS, tierName } from './arms.ts'
 import {
   bare,
   diff,
@@ -62,9 +62,11 @@ let gives = (t: Thing, slot: Slot | undefined, learned: string[], d: Doer) => {
   }).join('')
 }
 
-// A thing's tier, as pips.
-let pips = (t?: Thing) =>
-  t?.tier ? `<i class=Pack_Tier>${'•'.repeat(t.tier)}</i>` : ''
+// A thing's tier, beside its picture.
+let tier = (t?: Thing) =>
+  t?.tier
+    ? `<span class=Pack_Tier aria-hidden=true>${tierName(t.tier)}</span>`
+    : ''
 
 // Where a thing picked is: a slot worn, a row in the bag, or a kind on the
 // rack.
@@ -174,8 +176,8 @@ export let pack = (panel: Page, acts: Acts) => {
       on ? ' Pack_Tile-on' : ''
     }${had ? ' Pack_Tile-had' : ''}" data-pick="${pick}"${
       tipped({ name: p.name, note: p.slot ? sortLine(p) : undefined })
-    }><i>${icon(h.kind) || '•'}</i>${n > 1 ? `<b>${n}</b>` : ''}${
-      pips(p)
+    }><i>${icon(h.kind) || '•'}${tier(p)}</i>${
+      n > 1 ? `<b>${n}</b>` : ''
     }</button>`
   }
 
@@ -252,11 +254,11 @@ export let pack = (panel: Page, acts: Acts) => {
         on ? ' Pack_Tile-on' : ''
       }${t ? '' : ' Pack_Slot-empty'}" data-pick="worn:${slot}"${
         t ? tipped({ name: t.name, note: sortLine(t) }) : ''
-      }><small>${SLOT_NAMES[slot]}</small><i>${
-        h ? icon(h.kind) : '·'
+      }><small>${SLOT_NAMES[slot]}</small><i>${h ? icon(h.kind) : '·'}${
+        tier(t)
       }</i><span class=Rarity>${
         esc(t?.name ?? (slot == 'main' ? 'Bare hands' : 'Nothing'))
-      }</span>${pips(t)}</button>`
+      }</span></button>`
     }).join('')
     let bag = carried(s).map(({ h, n }) =>
       tile(
