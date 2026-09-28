@@ -676,7 +676,7 @@ export class Store {
     // object is an app, and wakes with the core plus whatever its `vocab.json`
     // declared.
     let name = this.#get('name') ?? ''
-    if (name == 'yourname/vale' && !this.#profile) {
+    if (name == 'yourname/vale.f52dc2' && !this.#profile) {
       this.#profile = profile((summary) =>
         console.log(
           'yak store rows',
