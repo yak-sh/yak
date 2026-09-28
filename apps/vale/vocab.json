@@ -138,7 +138,7 @@
       "type": "object",
       "sync": "peers",
       "durable": "connection",
-      "description": "A player's fight: the creature they fight, what they have dealt each creature they are hurting, how many blows they have swung, and the last ability they used, counted, so a page sees each one. A creature's health is its most less what every fight says was dealt it in this life, and one held by anyone's blow neither moves nor bites.",
+      "description": "A player's fight: the creature they fight, what they have dealt each creature they are hurting, how many blows they have swung, and recent combat events for nearby pages. A creature's health is its most less what every fight says was dealt it in this life, and one held by anyone's blow neither moves nor bites.",
       "properties": {
         "foe": {
           "type": "string",
@@ -161,13 +161,41 @@
           "type": "number",
           "description": "Counts their blows, so a page sees each one."
         },
-        "ability": {
-          "type": "string",
-          "description": "The last ability they used (abilities.ts)."
-        },
-        "abilities": {
+        "serial": {
           "type": "number",
-          "description": "Counts the abilities they have used."
+          "description": "The last combat event's sequence number."
+        },
+        "events": {
+          "type": "array",
+          "description": "Recent combat visuals, each numbered so nearby pages play it once.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "n": { "type": "number" },
+              "at": { "type": "number" },
+              "event": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": ["ability", "shot", "burst", "hit", "held"]
+                  },
+                  "id": { "type": "string" },
+                  "by": { "type": "string" },
+                  "at": { "type": "array", "items": { "type": "number" } },
+                  "yaw": { "type": "number" },
+                  "kind": { "enum": ["arrow", "bolt"] },
+                  "from": { "type": "array", "items": { "type": "number" } },
+                  "to": { "type": "array", "items": { "type": "number" } },
+                  "ms": { "type": "number" },
+                  "r": { "type": "number" },
+                  "eid": { "type": "string" },
+                  "beast": { "type": "string" },
+                  "dmg": { "type": "number" },
+                  "great": { "type": "boolean" }
+                }
+              }
+            }
+          }
         }
       }
     },

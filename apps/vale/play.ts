@@ -28,14 +28,7 @@
 //     in this life (rules.ts `hpOf`), and one that a fight says is held
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
-import {
-  ABILITIES,
-  abilitiesOf,
-  again,
-  BLEEDS,
-  WARD,
-  type Went,
-} from './abilities.ts'
+import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { foeOf } from './danger.ts'
@@ -52,6 +45,7 @@ import {
   wornOf,
 } from './gear.ts'
 import { type Home, homesNear } from './homes.ts'
+import { publish, pulses, replay } from './combat.ts'
 import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
 import { HOME, LEVELS, type Spot } from './levels.ts'
@@ -389,8 +383,8 @@ let fight = (b: Bundle | undefined) => {
     foe: str(f.foe),
     dealt: dealtOf(f.dealt),
     swing: num(f.swing),
-    ability: str(f.ability),
-    abilities: num(f.abilities),
+    serial: num(f.serial),
+    events: pulses(f.events),
   }
 }
 let hunt = (b: Bundle | undefined) => {
@@ -535,10 +529,8 @@ export let game = (
   // A lunge under way: which way, and how far it has still to go.
   let dash: { x: number; z: number; left: number } | null = null
   let said = -1e9
-  // How many abilities each other player had used, as last seen.
-  let acts = new Map<string, number>()
-  // What the others had dealt each creature, as last seen.
-  let othersWas = new Map<string, number>()
+  // How far each nearby player's combat events have been seen.
+  let seen = new Map<string, number>()
   let rollAt = -1e9
   let rollTo = { x: 0, z: 0 }
   let riposte = -1e9
@@ -862,6 +854,7 @@ export let game = (
       if (!me) return null
       let now = net.now()
       let events: Event[] = []
+      let heard: Event[] = []
       let change: Bundle[] = []
       let s = sheetOf()
       let row = c.ent(me)
@@ -1031,17 +1024,9 @@ export let game = (
           roll: Math.min(1, rolled),
         })
         theirs.push(...f.dealt.map((d) => ({ ...d, by: eid })))
-        let was = acts.get(eid)
-        acts.set(eid, f.abilities)
-        if (was != null && f.abilities > was && ABILITIES[f.ability]) {
-          events.push({
-            type: 'ability',
-            id: f.ability,
-            by: eid,
-            at: at(p, 0),
-            yaw: m.yaw,
-          })
-        }
+        let next = replay(f.events, f.serial, seen.get(eid) ?? 0, now)
+        seen.set(eid, next.seen)
+        heard.push(...next.events)
         spots.set(eid, {
           x: p.x,
           z: p.z,
@@ -1097,18 +1082,7 @@ export let game = (
           if (!sp.awake || dist(sp, home) > ACTIVE) continue
           if (!owner || who < owner) owner = who
         }
-        // Struck by someone else's blow.
-        let byOthers = beast.hp - hpOf(eid, beast.hp, life, theirs)
-        let byOthersWas = othersWas.get(eid) ?? byOthers
-        othersWas.set(eid, byOthers)
-        if (!fallen && byOthers > byOthersWas) {
-          events.push({
-            type: 'struck',
-            eid,
-            at: at(mb, beast.size + 0.3),
-            dmg: byOthers - byOthersWas,
-          })
-        }
+        // Peers show the individual blow from its sender's combat events.
         if (!fallen && hpNow < wasHp) hitAt.set(eid, now)
         if (owner == me && !fallen) {
           // Whom it is after: whoever is hurting it most, while they stay
@@ -1427,8 +1401,6 @@ export let game = (
           ready.set(id, now + a.cool)
           fought.swing++
           hand = handOf(k, fought.swing)
-          fought.ability = id
-          fought.abilities++
           if (target) face(target)
           if (target && a.dash) {
             let gap = BEASTS[target.kind].size * 0.5 + 0.9
@@ -1759,6 +1731,9 @@ export let game = (
       if (!same(vitalsNow, comp(row, 'vitals'))) {
         change.push({ entity: { eid: me }, vitals: vitalsNow })
       }
+      let next = publish(events, fought.events, fought.serial, now)
+      fought.events = next.events
+      fought.serial = next.serial
       if (JSON.stringify(fought) != JSON.stringify(mine)) {
         change.push({ entity: { eid: me }, fight: fought })
       }
@@ -1795,7 +1770,7 @@ export let game = (
         guard: now < guardUntil,
         ward: now < ward.until ? ward.left / ward.of : 0,
         roll: rolling ? (now - rollAt) / ROLL : -1,
-        events,
+        events: [...heard, ...events],
         now,
       }
     },

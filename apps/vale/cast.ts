@@ -39,7 +39,6 @@ import { GRADES, type Rarity } from './rarity.ts'
 import { follow, type Remote } from './remote.ts'
 import { floorAt } from './sim.ts'
 import { geometry, soft } from './soft.ts'
-import { FLIGHT, LAND } from './strike.ts'
 import { groundAt, type Vale } from './terrain.ts'
 import { signsNear } from './ways.ts'
 
@@ -294,15 +293,6 @@ export let cast = (
       return true
     })
   }
-  // A shooter's loose, a moment into a swing I see them start: at what they
-  // were fighting.
-  let loosing: {
-    eid: string
-    foe: string
-    at: number
-    kind: 'arrow' | 'bolt'
-  }[] = []
-
   let actor = (key: string, make: () => Figure, look = ''): Actor => {
     let a = actors.get(key)
     if (a && a.look != look) {
@@ -487,14 +477,6 @@ export let cast = (
         if (a.swings >= 0 && o.swing > a.swings) {
           a.swingAt = now
           a.hand = handOf(k, o.swing)
-          if (k.shot && o.foe) {
-            loosing.push({
-              eid: o.eid,
-              foe: o.foe,
-              at: now + k.pace * LAND,
-              kind: k.shot,
-            })
-          }
         }
         a.swings = o.swing
         if (a.hp >= 0 && o.vitals.hp < a.hp) a.hurtAt = now
@@ -692,18 +674,6 @@ export let cast = (
         lights.delete(eid)
       }
 
-      // The others' shots, loosed at what they fight.
-      loosing = loosing.filter((l) => {
-        if (l.at > now) return true
-        let from = actors.get(l.eid), to = actors.get(l.foe)
-        if (from && to) {
-          let a = new THREE.Vector3(from.x, from.y + 1, from.z)
-          let b = new THREE.Vector3(to.x, to.y + to.fig.height * 0.5, to.z)
-          let kind = l.kind
-          fly(kind, a, b, (a.distanceTo(b) / FLIGHT[kind]) * 1000)
-        }
-        return false
-      })
       soar(now)
 
       for (let [key, a] of actors) {
