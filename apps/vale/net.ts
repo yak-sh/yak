@@ -256,6 +256,22 @@ export let connect = (base: URL) => {
     return read<Bundle>(url)
   }
 
+  // Commands need the store's answer before telling the player they worked.
+  // Ordinary frame writes stay on the client's optimistic path (`move`).
+  let write = async (...entities: Bundle[]): Promise<{ pending: boolean }> => {
+    let r = await fetch(new URL('apply', base), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entities }),
+    })
+    let answer = await r.json().catch(() => ({})) as {
+      pending?: boolean
+      message?: string
+    }
+    if (!r.ok) throw new Error(answer.message ?? `Write refused (${r.status})`)
+    return { pending: answer.pending == true }
+  }
+
   let glimpsed = new Map<string, Hero | null>()
   let asking = new Map<string, Promise<{ hero: Hero | null; by: string }>>()
   let about = (eid: string): Promise<{ hero: Hero | null; by: string }> => {
@@ -344,6 +360,7 @@ export let connect = (base: URL) => {
     /** the nodes everyone has gathered, and mine still waiting */
     gathered: (): Bundle[] => join('gathered', rows('gathered'), 'gathered'),
     keep,
+    write,
     /** send what is waiting, if the pace allows */
     tick: () => {
       if (waiting.length && Date.now() - last >= PACE) flush()
