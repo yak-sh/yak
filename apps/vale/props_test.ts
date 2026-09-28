@@ -2,7 +2,7 @@
 // `fights`): every kind that stands on the ground, the village's buildings
 // among them, in its first shape.
 import { assert, assertEquals, assertStrictEquals } from '@std/assert'
-import { fights, pack, profileOf } from './mesh.ts'
+import { fights, key, pack, profileOf, unkey } from './mesh.ts'
 import { KINDS, model, modelKey } from './props.ts'
 
 Deno.test('no prop fights itself', () => {
@@ -32,4 +32,31 @@ Deno.test('finer tree and rock voxels keep their outline and share each mesh', (
     }
   }
   assertStrictEquals(model('well', 1, 0, true, 0.125), model('well', 1))
+})
+
+Deno.test('the well has no pieces hanging apart from its footing', () => {
+  let unseen = new Set(KINDS.well.make(0).vox.keys())
+  while (unseen.size) {
+    let first = unseen.values().next().value!
+    let queue = [first], grounded = false
+    unseen.delete(first)
+    for (let k of queue) {
+      let [x, y, z] = unkey(k)
+      if (y == 0) grounded = true
+      for (
+        let [dx, dy, dz] of [
+          [1, 0, 0],
+          [-1, 0, 0],
+          [0, 1, 0],
+          [0, -1, 0],
+          [0, 0, 1],
+          [0, 0, -1],
+        ]
+      ) {
+        let neighbor = key(x + dx, y + dy, z + dz)
+        if (unseen.delete(neighbor)) queue.push(neighbor)
+      }
+    }
+    assert(grounded)
+  }
 })

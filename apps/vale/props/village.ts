@@ -68,18 +68,34 @@ let well = (): Model => {
     [0, 0, 0],
     4.2,
     (x, y, z) =>
-      y < 0 || y > 3 || Math.hypot(x, z) < 3
+      y < 0 || y > 3 || Math.hypot(x, z) < 2.8
         ? null
-        : (x + z) & 1
-        ? FOUND
-        : 0x8a887f,
+        : [FOUND, 0x8a887f, 0xaaa79c][Math.abs(x * 7 + y * 3 + z * 11) % 3],
   )
-  box(v, [-2, 0, -2], [1, 1, 1], 0x3d6f8f)
-  box(v, [-4, 4, 0], [-4, 10, 0], TIMBER)
-  box(v, [3, 4, 0], [3, 10, 0], TIMBER)
-  box(v, [-5, 11, -2], [4, 11, 2], 0xc2573e)
-  box(v, [-4, 12, -1], [3, 12, 1], 0xb04c36)
-  box(v, [-3, 8, 0], [2, 8, 0], TIMBER)
+  for (let x = -2; x <= 2; x++) {
+    for (let z = -2; z <= 2; z++) {
+      if (Math.hypot(x, z) < 2.5) v.set(key(x, 1, z), 0x3d6f8f)
+    }
+  }
+  // The frame starts in the stone curb. The axle reaches both uprights.
+  for (let x of [-4, 4]) {
+    box(v, [x - 1, 0, -1], [x + 1, 1, 1], 0x87857c)
+    box(v, [x, 2, 0], [x, 11, 0], TIMBER)
+  }
+  box(v, [-4, 8, 0], [4, 8, 0], 0x785338)
+  box(v, [0, 3, 0], [0, 7, 0], 0xb4996d)
+  box(v, [-1, 2, -1], [1, 3, 1], 0x684a32)
+  box(v, [-1, 3, -1], [1, 3, 1], 0x98714b)
+  box(v, [-5, 12, 0], [5, 12, 0], 0x67442e)
+  for (let z = -4; z <= 4; z++) {
+    let y = 13 - Math.abs(z)
+    box(v, [-5, y, z], [5, y, z], Math.abs(z) & 1 ? 0xb04c36 : 0xc2573e)
+    if (Math.abs(z) > 1) {
+      for (let x of [-4, 4]) {
+        v.set(key(x, y, z - Math.sign(z)), 0x67442e)
+      }
+    }
+  }
   return { vox: v, size: 0.25 }
 }
 
