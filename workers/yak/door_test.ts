@@ -1,7 +1,27 @@
 // storeOf answers an eviction by taking a fresh stub and sending once more;
 // anything else it throws through untouched.
 import { assertEquals, assertRejects } from '@std/assert'
-import { evicted, type Namespace, storeOf } from './door.ts'
+import { doorOf, evicted, type Namespace, storeOf } from './door.ts'
+import { counts, tallying } from './lib/hops.ts'
+
+Deno.test('a request sums statement counts from each store response', async () => {
+  let tally = new Map<string, number>()
+  let next = 0
+  await tallying(tally, async () => {
+    let door = doorOf(() =>
+      Promise.resolve(
+        new Response('', {
+          headers: {
+            'x-yak-stmts': String(++next * 2),
+            'x-yak-hops': '1',
+          },
+        }),
+      ), 'jeff')
+    await Promise.all([door('/query'), door('/query')])
+  })
+  assertEquals(tally.get('stmts'), 6)
+  assertEquals(counts(tally).hops, 4)
+})
 
 let ns = (
   answers: Array<Error | string | Response>,

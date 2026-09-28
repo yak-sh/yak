@@ -183,6 +183,7 @@ import {
 } from './door.ts'
 import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
+import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import { weighed } from './meter.ts'
 import { directoryOf } from './directory.ts'
 import { commandWorker } from './dispatch.ts'
@@ -547,6 +548,12 @@ export class Store {
   // The object's SQLite, as the driver every statement here runs through.
   #sql!: Driver
   #profile: ReturnType<typeof profile> | null = null
+  // Constructor work belongs to the first fetch that woke this incarnation.
+  #pending: Tally = new Map()
+  #measure = (rowsRead?: number) => {
+    hop('stmts')
+    if (rowsRead != null) hop('rows', rowsRead)
+  }
   #people = new Map<string, string | null>()
   #live!: Sockets
   #route!: Handler
@@ -602,16 +609,18 @@ export class Store {
         setAlarm: (at) => setAlarm.call(ctx.storage, at),
       }
     }
-    try {
-      this.#start()
-    } catch (e) {
-      this.#failed(e)
-    }
+    tallying(this.#pending, () => {
+      try {
+        this.#start()
+      } catch (e) {
+        this.#failed(e)
+      }
+    })
   }
 
   #start() {
     let ctx = this.#ctx
-    this.#sql = driver(ctx.storage)
+    this.#sql = driver(ctx.storage, undefined, this.#measure)
     this.#sql.query(KV)
     // The write log, before anything that can refuse the object: a store
     // whose graph cannot boot still keeps what it is sent (writes.ts). What
@@ -697,24 +706,30 @@ export class Store {
       name,
       this.#get('vocab'),
     )
-    let drive = this.#sql = driver(ctx.storage, observe)
+    let drive = this.#sql = driver(ctx.storage, observe, this.#measure)
     let bytes = sqliteBlobs(drive)
-    let store = storage(ctx.storage, vocab, {
-      // A number is @yaks/id's, and only the platform's own stores loaded it
-      // (vocab.ts): the directory's memories are ordered by the number it
-      // minted, while an app's entities are pointed at by the eid its client
-      // minted and never by a number, so nothing mints one for them.
-      number: numbered(vocab),
-      // The vocabulary says which prose is searched — @yaks/doc declares its
-      // title and body, and an app's own vocab.json declares `"search": true`
-      // on whatever of its words it wants found. sqlite owns no index.
-      extend: [search(searchable)],
-      // A body is stored as its address (@yaks/blob `store: "blob"`), so the
-      // reads and the `doc_value` view resolve it as prose. The FTS schema
-      // receives the same resolution, keeping hashes out of the index
-      // (T-33978).
-      derived,
-    }, observe)
+    let store = storage(
+      ctx.storage,
+      vocab,
+      {
+        // A number is @yaks/id's, and only the platform's own stores loaded it
+        // (vocab.ts): the directory's memories are ordered by the number it
+        // minted, while an app's entities are pointed at by the eid its client
+        // minted and never by a number, so nothing mints one for them.
+        number: numbered(vocab),
+        // The vocabulary says which prose is searched — @yaks/doc declares its
+        // title and body, and an app's own vocab.json declares `"search": true`
+        // on whatever of its words it wants found. sqlite owns no index.
+        extend: [search(searchable)],
+        // A body is stored as its address (@yaks/blob `store: "blob"`), so the
+        // reads and the `doc_value` view resolve it as prose. The FTS schema
+        // receives the same resolution, keeping hashes out of the index
+        // (T-33978).
+        derived,
+      },
+      observe,
+      this.#measure,
+    )
     // The schema this object stands at is one word (`shapeOf`): a wake under
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
@@ -740,7 +755,7 @@ export class Store {
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
       for (let stmt of blobSchema()) drive.query(stmt)
-      let unfit = install(ctx.storage, vocab, blobRead(vocab))
+      let unfit = install(drive, vocab, blobRead(vocab))
       for (let e of unfit) defect(e, { request: 'schema fit', store: name })
       if (held) rebuild(drive)
       // A table left unfit is not yet at the stamp, so the next wake fits it
@@ -1642,31 +1657,53 @@ export class Store {
    * a batch applied by the request that woke this object still reaches the
    * sockets it inherited.
    */
-  async fetch(request: Request): Promise<Response> {
-    let base = request.headers.get('x-yak-base-release')
-    let leave = await this.#enter(base != null)
-    try {
-      if (logged(request)) return await this.#write(request)
-      let no = await this.#ready(request)
-      if (no) return no
-      // Writes the log kept while this object could not apply them go first:
-      // nothing is answered off rows they have yet to reach.
-      await this.#settle()
-      return await this.#serve(request)
-    } finally {
+  fetch(request: Request): Promise<Response> {
+    let tally = this.#pending
+    this.#pending = new Map()
+    return tallying(tally, async () => {
+      let base = request.headers.get('x-yak-base-release')
+      let leave = await this.#enter(base != null)
+      let answer: Response
       try {
-        if (base != null) {
-          this.#select(
-            new Request('http://store/', {
-              headers: { 'x-yak-release': base },
-            }),
-          )
+        if (logged(request)) answer = await this.#write(request)
+        else {
+          let no = await this.#ready(request)
+          if (no) answer = no
+          else {
+            // Writes kept during an outage land before a read is answered.
+            await this.#settle()
+            answer = await this.#serve(request)
+          }
         }
       } finally {
-        this.#profile?.flush()
-        leave()
+        try {
+          if (base != null) {
+            this.#select(
+              new Request('http://store/', {
+                headers: { 'x-yak-release': base },
+              }),
+            )
+          }
+        } finally {
+          this.#profile?.flush()
+          leave()
+        }
       }
-    }
+      if (answer.status == 101) return answer
+      let headers = new Headers(answer.headers)
+      let { hops, r2 } = counts(tally)
+      headers.set('x-yak-hops', String(hops))
+      headers.set('x-yak-stmts', String(tally.get('stmts') ?? 0))
+      if (tally.has('rows')) {
+        headers.set('x-yak-rows', String(tally.get('rows')))
+      }
+      headers.set('x-yak-r2', String(r2))
+      return new Response(answer.body, {
+        status: answer.status,
+        statusText: answer.statusText,
+        headers,
+      })
+    })
   }
 
   /** Everything before a door: the object brought up to date and told what

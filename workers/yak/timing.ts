@@ -11,8 +11,9 @@
 // That is exactly the thing being measured here; a stage that is slow because
 // of CPU belongs in a profile, not a header.
 //
-// Two entries carry a count in `dur` rather than milliseconds: `hops`, the
-// round trips this request made to a store (door.ts), and `r2`, the operations
+// Three entries carry a count in `dur` rather than milliseconds: `hops`, the
+// round trips this request made to a store (door.ts), `stmts`, the statements
+// those stores ran, and `r2`, the operations
 // it made against the bucket (lib/objects.ts `counted`). Server-Timing has no unit
 // but time, and a count is worth more than the field's tidiness: a duration
 // cannot tell one slow wait from forty fast ones, and forty fast ones is the
@@ -75,6 +76,8 @@ export let clock = () => {
         ...marks,
         ...[...sums].map(([name, ms]) => `${name};dur=${ms}`),
         `hops;dur=${hops}`,
+        `stmts;dur=${tally.get('stmts') ?? 0}`,
+        ...(tally.has('rows') ? [`rows;dur=${tally.get('rows')}`] : []),
         `r2;dur=${r2}`,
         `total;dur=${Date.now() - born}`,
       ].join(', ')

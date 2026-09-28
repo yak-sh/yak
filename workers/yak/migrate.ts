@@ -7,7 +7,7 @@
 // {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
 import { fields, schema as ftsSchema } from '@yaks/fts'
-import { driver, type DurableStorage, reserved } from '@yaks/durable-object'
+import { reserved } from '@yaks/durable-object'
 import {
   and,
   col,
@@ -325,11 +325,10 @@ export let rebuild = (d: Driver) => {
  * to index, even if its table has older rows. Otherwise existing rows need a
  * preparing migration, unless the same index stood before a rebuild. */
 export let install = (
-  storage: DurableStorage,
+  d: Driver,
   vocab: Vocab,
   derived: Derived = {},
 ): Error[] => {
-  let d = driver(storage)
   let before = standing(d, vocab)
   let stood = new Set(named(d, 'index').map((i) => i.name))
   for (let stmt of tabled(vocab, derived)) d.query(stmt)

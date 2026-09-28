@@ -10,6 +10,6 @@ Deno.test('worker Server-Timing names wall time total', () => {
   let response = timed(new Response('ok'), c)
   assertEquals(
     response.headers.get('server-timing'),
-    'hops;dur=0, r2;dur=0, total;dur=41',
+    'hops;dur=0, stmts;dur=0, r2;dur=0, total;dur=41',
   )
 })

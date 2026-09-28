@@ -8,7 +8,12 @@
 import type { Opts, Store } from '@yaks/sqlite'
 import { storage as bind } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
-import { driver, type DurableStorage, type Observe } from './sql.ts'
+import {
+  driver,
+  type DurableStorage,
+  type Measure,
+  type Observe,
+} from './sql.ts'
 
 export type { Opts, Store }
 
@@ -34,4 +39,5 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
   observe?: Observe,
-): Store => bind(driver(durable, observe), vocab, base)
+  measure?: Measure,
+): Store => bind(driver(durable, observe, measure), vocab, base)

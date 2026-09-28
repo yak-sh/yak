@@ -64,6 +64,7 @@ export type Sample = {
 }
 
 export type Observe = (sample: Sample) => void
+export type Measure = (rowsRead?: number, rowsWritten?: number) => void
 
 /**
  * The synchronous SQLite handle of a Durable Object — the shape of
@@ -126,32 +127,47 @@ let unbind = (row: Row): Row => {
  * // let store = storage(ctx.storage, vocab) // …which is this, bound
  * ```
  */
-export let driver = (durable: DurableStorage, observe?: Observe): Driver => {
+export let driver = (
+  durable: DurableStorage,
+  observe?: Observe,
+  measure?: Measure,
+): Driver => {
   let reported = false
   // The cursor is lazy: draining it is what runs the statement.
   let query = (s: Stmt): Row[] => {
     let rendered = render(s)
     let { sql, params } = rendered
-    let cursor = durable.sql.exec(sql, ...params.map(bind))
-    let rows = cursor.toArray().map(unbind)
-    if (observe && cursor.rowsRead != null && cursor.rowsWritten != null) {
-      try {
-        observe({
-          shape: shape(rendered),
-          rowsRead: cursor.rowsRead,
-          rowsWritten: cursor.rowsWritten,
-        })
-      } catch (e) {
-        // A broken observer cannot change a store answer, but its defect must
-        // still be visible. Each driver reports it at most once.
-        if (!reported) console.error('row profile observer failed', e)
+    let cursor: SqlCursor<Row> | undefined
+    try {
+      cursor = durable.sql.exec(sql, ...params.map(bind))
+      let rows = cursor.toArray().map(unbind)
+      if (observe && cursor.rowsRead != null && cursor.rowsWritten != null) {
+        try {
+          observe({
+            shape: shape(rendered),
+            rowsRead: cursor.rowsRead,
+            rowsWritten: cursor.rowsWritten,
+          })
+        } catch (e) {
+          // A broken observer cannot change a store answer, but its defect must
+          // still be visible. Each driver reports it at most once.
+          if (!reported) console.error('row profile observer failed', e)
+          reported = true
+        }
+      } else if (observe && !reported) {
+        console.error('row profile cursor counters unavailable')
         reported = true
       }
-    } else if (observe && !reported) {
-      console.error('row profile cursor counters unavailable')
-      reported = true
+      return rows
+    } finally {
+      // A statement that failed still cost a call to the engine.
+      try {
+        measure?.(cursor?.rowsRead, cursor?.rowsWritten)
+      } catch (e) {
+        if (!reported) console.error('statement meter failed', e)
+        reported = true
+      }
     }
-    return rows
   }
   query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   return { query, tx: (body) => durable.transactionSync(body) }

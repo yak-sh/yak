@@ -13,6 +13,25 @@
 import type { Caller } from '@yaks/egress'
 import { hop, writing } from './lib/hops.ts'
 
+// A store reports the statements it ran for this fetch, including any store
+// it asked in turn. Only the door sees every answer, so it is also where a
+// parent request collects those costs.
+let metered = async (send: () => Promise<Response>): Promise<Response> => {
+  let res = await send()
+  for (
+    let [header, name] of [
+      ['x-yak-hops', 'hops'],
+      ['x-yak-stmts', 'stmts'],
+      ['x-yak-rows', 'rows'],
+      ['x-yak-r2', 'r2.child'],
+    ]
+  ) {
+    let value = res.headers.get(header)
+    if (value != null && /^\d+$/.test(value)) hop(name, Number(value))
+  }
+  return res
+}
+
 /** Anything a request can be handed to: a service binding, or a part of this
  * Worker called in-process (env.ts `bound`). */
 export type Fetcher = { fetch(req: Request): Promise<Response> }
@@ -158,7 +177,7 @@ export let doorOf = (
   // read this request remembers is never answered from before it (hops.ts
   // `writing`, directory.ts `directory`).
   let read = req.method == 'GET' || req.method == 'HEAD'
-  return read ? send(req) : writing(name, () => send(req))
+  return metered(() => read ? send(req) : writing(name, () => send(req)))
 }
 
 // The runtime evicts an object out from under a request during a deploy or a

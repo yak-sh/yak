@@ -385,8 +385,8 @@ Deno.test('view metadata leaves portable sandbox selection to the host', () => {
 let booted = (ctx: Ctx) => call(ctx, 'app_list', {})
 
 // How many round trips a deploy took, on its own answer (timing.ts, hops.ts):
-// `hops` is the store doors it went through (door.ts) and `r2` the bucket
-// operations it made (lib/objects.ts `counted`), both counted where they are made.
+// `hops` is the store doors it went through (door.ts), `stmts` their SQL,
+// and `r2` the bucket operations (lib/objects.ts `counted`).
 // The numbers are asserted exactly, and that is the point of the test: a
 // duration says a deploy got slower, and only a count says it got slower
 // because something started asking one file at a time. Read back through the
@@ -409,6 +409,7 @@ Deno.test('a deploy says how many round trips it took', async () => {
     let ctx: Ctx = { env, dir, person: ADA, clock: c }
     await c.counting(() => call(ctx, name, args))
     let said = stages(c.header())
+    assertEquals(said.stmts > 0, true)
     return { hops: said.hops, r2: said.r2 }
   }
 
@@ -421,11 +422,11 @@ Deno.test('a deploy says how many round trips it took', async () => {
         { path: 'style.css', content: 'h1{color:teal}' },
       ],
     }),
-    { hops: 5, r2: 4 },
+    { hops: 5, r2: 5 },
   )
   assertEquals(
     await costs('app_deploy', { space: 'ada', app: 'recipes' }),
-    { hops: 17, r2: 27 },
+    { hops: 25, r2: 32 },
   )
 })
 
@@ -447,18 +448,24 @@ Deno.test('a listing asks the directory a fixed number of times', async () => {
     }
   }
   await booted(setup)
-  let costs = async (args: Record<string, unknown>) => {
+  let costs = async (name: string, args: Record<string, unknown>) => {
     let c = clock()
     await c.counting(() =>
-      call({ env, dir, person: ADA, clock: c }, 'app_list', args)
+      call({ env, dir, person: ADA, clock: c }, name, args)
     )
     let said = stages(c.header())
-    return { hops: said.hops, r2: said.r2 }
+    if (name == 'about') assertEquals(said.stmts, 0)
+    else assertEquals(said.stmts > 0, true)
+    return { hops: said.hops, stmts: said.stmts, r2: said.r2 }
   }
   // 3 seats + 1 apps + 1 bindings, then 9 apps × 2 facets.
-  assertEquals(await costs({}), { hops: 23, r2: 0 })
+  assertEquals(await costs('about', {}), { hops: 0, stmts: 0, r2: 0 })
+  let all = await costs('app_list', {})
+  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 23, r2: 0 })
   // One space named is read and its seat asked for by name — 2 for 3 apps.
-  assertEquals(await costs({ space: 'one' }), { hops: 10, r2: 0 })
+  let one = await costs('app_list', { space: 'one' })
+  assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 10, r2: 0 })
+  assertEquals(all.stmts > one.stmts, true)
 })
 
 // The other half of asking once: every row of the one answer has to find its

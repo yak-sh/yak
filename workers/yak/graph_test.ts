@@ -92,6 +92,23 @@ let post = (store: Store, path: string, body: string | unknown[], v?: Vouch) =>
     }),
   )
 
+Deno.test('each store response reports the SQL it ran for that fetch', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  let calls = 0
+  ctx.storage.sql.exec = (query, ...bindings) => {
+    calls++
+    return exec(query, ...bindings)
+  }
+  let store = new Store(ctx)
+  let first = await get(store, '/vocab')
+  assertEquals(Number(first.headers.get('x-yak-stmts')), calls)
+  let before = calls
+  let second = await get(store, '/vocab')
+  assertEquals(Number(second.headers.get('x-yak-stmts')), calls - before)
+})
+
 let APP = 'a0000000-0000-4000-8000-000000000001'
 let ADA = 'b0000000-0000-4000-8000-000000000002'
 let CAKE = 'c0000000-0000-4000-8000-000000000003'
