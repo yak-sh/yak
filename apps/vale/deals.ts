@@ -16,6 +16,7 @@ import { type Bundle, comp, type Me, type Net, num, str } from './net.ts'
 import type { Sheet } from './play.ts'
 import { type Giver, GIVERS } from './quests.ts'
 import { uuidOf } from './rand.ts'
+import { itemLevel } from './rarity.ts'
 import {
   type Book,
   type Deal,
@@ -76,10 +77,20 @@ let replyOf = (did: Reply['did']) => (b: Bundle): Reply => {
  * named by the deal so writing them twice writes them once. */
 let given = (deal: string, hero: string, give: Goods, now: number) =>
   give.flatMap(({ kind, n }) =>
-    Array.from({ length: kind == 'coin' ? 1 : n }, (_, i) => ({
-      entity: { eid: uuidOf(`deal/${deal}/${kind}/${i}`) },
-      item: { kind, n: kind == 'coin' ? n : 1, owner: hero, at: now },
-    }))
+    Array.from({ length: kind == 'coin' ? 1 : n }, (_, i) => {
+      let eid = uuidOf(`deal/${deal}/${kind}/${i}`)
+      let lvl = itemLevel(eid, kind)
+      return {
+        entity: { eid },
+        item: {
+          kind,
+          n: kind == 'coin' ? n : 1,
+          owner: hero,
+          at: now,
+          ...lvl != null && { lvl },
+        },
+      }
+    })
   )
 
 /** A deal standing between a villager and this page's hero, as the hero

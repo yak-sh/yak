@@ -291,13 +291,14 @@ export let wander = (
 }
 
 export type Entry = { quest: string; step: string; at: number; xp?: number }
-/** An item row in the bag: its kind, how many, and for a piece of gear, how
- * fine it is (rarity.ts) and how far it is upgraded (upgrade.ts). */
+/** An item row in the bag: its kind, how many, and for gear its rarity, item
+ * level (rarity.ts), and how far it is upgraded (upgrade.ts). */
 export type Held = {
   eid: string
   kind: string
   n: number
   rarity?: Rarity
+  lvl?: number
   plus?: number
 }
 

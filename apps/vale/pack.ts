@@ -23,7 +23,7 @@ import {
   trying,
   versus,
 } from './compare.ts'
-import { RACK } from './gear.ts'
+import { canWear, RACK } from './gear.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
 import { piece, RARITIES, tint } from './rarity.ts'
@@ -192,6 +192,7 @@ export let pack = (panel: Page, acts: Acts) => {
     if (!h || !t) return `<p class=Pack_Hint>Nothing worn there.</p>`
     let kind = h.kind
     let slot = from == 'worn' ? key as Slot : into(s, kind)
+    let ready = canWear(h, s.lvl)
     let now = numbers(s, s.worn)
     let then = from == 'worn'
       ? numbers(s, bare(s.worn, key))
@@ -219,6 +220,8 @@ export let pack = (panel: Page, acts: Acts) => {
           ? `<span class=Pack_Hint>You have one.</span>`
           : `<button class="Btn Btn-go Btn-small" data-do=take>Take it</button>`
         : ''
+      : !ready && t.slot
+      ? `<span class=Pack_Hint>Requires level ${t.lvl}</span>`
       : slot == 'off' && t.slot == 'main'
       ? `<button class="Btn Btn-small" data-do=wear>Hold it</button><button class="Btn Btn-go Btn-small" data-do=twin>Other hand</button>`
       : t.slot

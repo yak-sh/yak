@@ -29,7 +29,7 @@ import type { Bundle, Net } from './net.ts'
 import type { Natural } from './nature.ts'
 import { type Board, boardsNear, READ } from './notices.ts'
 import type { Frame, Vec3 } from './play.ts'
-import { made, type Rarity } from './rarity.ts'
+import { itemLevel, made, type Rarity } from './rarity.ts'
 import { upgradeOf, upgradeWorth, upgradeXp } from './upgrade.ts'
 import { fallOf } from './rules.ts'
 import {
@@ -310,6 +310,7 @@ export let working = (
     let took = plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))
     if (!took) return short
     let piece = crypto.randomUUID()
+    let level = itemLevel(piece, r.makes)
     let rarity = ITEMS[r.makes]?.slot
       ? made(Math.random(), lvl, least(r.tier))
       : undefined
@@ -322,6 +323,7 @@ export let working = (
           owner: me,
           at: now,
           ...rarity && { rarity },
+          ...level != null && { lvl: level },
         },
         crafted: { recipe: key, at: now },
       },

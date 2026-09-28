@@ -116,6 +116,11 @@ export let HANDLES: Record<string, Handle> = {
 export let tierOf = (lvl: number): number =>
   Math.max(1, Math.min(5, Math.ceil(lvl / 12)))
 
+/** The first and last item levels of a material tier. */
+export let tierRange = (
+  tier: number,
+): [number, number] => [12 * (tier - 1) + 1, 12 * tier]
+
 /** A material tier as it appears on equipment and at stations. */
 export let tierName = (tier: number): string =>
   ['I', 'II', 'III', 'IV', 'V'][tier - 1] ?? String(tier)

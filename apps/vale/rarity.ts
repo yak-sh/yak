@@ -3,15 +3,15 @@
 // own, more and bigger the rarer it is: harder or quicker blows, great blows,
 // health, armour, speed. A legendary has a name and a power no other piece
 // has. What a piece rolled comes from its own eid, so every page works out
-// the same numbers from the same row, and only its rarity is kept, on the
-// item row (`item.rarity`); a row without one is common, as every piece made
-// before there were rarities is.
+// the same numbers from the same row. Its rarity and item level are kept on
+// the item row; older rows without them are common and start at their tier's
+// first level.
 //
 // Which rarity a piece is comes from where it came from: a fall, likelier
 // fine the higher the creature's level and finer still from a boss
 // (`dropped`), or a hero's own hands at a station, likelier fine the further
 // their trade is past what the recipe asks (`made`).
-import type { Slot } from './arms.ts'
+import { type Slot, tierRange } from './arms.ts'
 import type { Glyph } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
 import { hashOf, stream } from './rand.ts'
@@ -343,6 +343,8 @@ export type Piece = Thing & {
   eid: string
   kind: string
   rarity: Rarity
+  /** the level needed to wear it; absent for things that are not gear */
+  lvl?: number
   /** how many times it was upgraded (upgrade.ts) */
   plus: number
   /** the bonuses it rolled, each its stat and how much */
@@ -352,6 +354,14 @@ export type Piece = Thing & {
 
 let two = (n: number) => Math.round(n * 100) / 100
 let lower = (s: string) => s[0].toLowerCase() + s.slice(1)
+
+/** An item level rolled from a new gear row's eid, within its tier. */
+export let itemLevel = (eid: string, kind: string): number | undefined => {
+  let t = ITEMS[kind]
+  if (!t?.slot || !t.tier) return undefined
+  let [lo, hi] = tierRange(t.tier)
+  return lo + Math.floor(stream(hashOf(eid))() * (hi - lo + 1))
+}
 
 // A piece's roll, from its eid: its own numbers, its bonuses, its name.
 let roll = (eid: string, kind: string, rarity: Rarity): Piece => {
@@ -387,6 +397,25 @@ let roll = (eid: string, kind: string, rarity: Rarity): Piece => {
     if (p.legend) p.name = p.legend.name
   }
   return p
+}
+
+// Level refines a kind's numbers within its material tier. The first level
+// keeps the numbers older item rows already had.
+let levelled = (p: Piece, lvl?: number): Piece => {
+  if (!p.slot || !p.tier) return p
+  let [lo, hi] = tierRange(p.tier)
+  let at = Math.max(lo, Math.min(hi, Math.floor(lvl ?? lo)))
+  let k = 1 + 0.2 * (at - lo) / (hi - lo)
+  let q: Piece = { ...p, lvl: at, bonuses: [...p.bonuses] }
+  if (p.dmg) q.dmg = two(p.dmg * k)
+  for (let s of STATS) {
+    let n = p[s]
+    if (n) q[s] = s == 'hp' ? Math.round(n * k) : two(n * k)
+  }
+  q.bonuses = p.bonuses.map((
+    [s, n],
+  ) => [s, s == 'hp' ? Math.round(n * k) : two(n * k)])
+  return q
 }
 
 /** How much finer each upgrade makes a piece's numbers (upgrade.ts). */
@@ -474,12 +503,21 @@ let rolled = new Map<string, Piece>()
  * ```
  */
 export let piece = (
-  h: { eid: string; kind: string; rarity?: Rarity; plus?: number },
+  h: {
+    eid: string
+    kind: string
+    rarity?: Rarity
+    lvl?: number
+    plus?: number
+  },
 ): Piece => {
   let rarity = h.rarity ?? 'common', plus = h.plus ?? 0
-  let key = `${h.eid}:${h.kind}:${rarity}:${plus}`
+  let key = `${h.eid}:${h.kind}:${rarity}:${h.lvl ?? ''}:${plus}`
   let p = rolled.get(key)
-  if (!p) rolled.set(key, p = hone(roll(h.eid, h.kind, rarity), plus))
+  if (!p) {
+    p = hone(levelled(roll(h.eid, h.kind, rarity), h.lvl), plus)
+    rolled.set(key, p)
+  }
   return p
 }
 

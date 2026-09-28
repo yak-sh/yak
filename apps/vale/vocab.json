@@ -260,6 +260,12 @@
           "type": "string",
           "enum": ["common", "uncommon", "rare", "epic", "legendary"],
           "description": "How fine a piece of gear is (rarity.ts); a row with none is common. What the piece rolled comes from its eid."
+        },
+        "lvl": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "description": "A piece of gear's item level, within its material tier. Older pieces with none use the tier's first level."
         }
       }
     },

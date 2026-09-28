@@ -159,16 +159,11 @@ export let grown = (a: Piece, b: Piece): string =>
     }</span>`
   }).join('')
 
-/** What sort of thing a piece of gear is: its rarity when finer than common,
- * its sort, and its tier. */
+/** What sort of thing a piece of gear is, with its item level first. */
 export let sortLine = (t: Piece): string =>
-  `${t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `}${sortOf(t)}${
-    t.tier
-      ? ` · tier ${tierName(t.tier)} · levels ${12 * (t.tier - 1) + 1}–${
-        12 * t.tier
-      }`
-      : ''
-  }`
+  `${t.lvl == null ? '' : `Level ${t.lvl} · `}${
+    t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `
+  }${sortOf(t)}${t.tier ? ` · tier ${tierName(t.tier)}` : ''}`
 
 /** What a piece rolled, each bonus with its glyph, and a legendary's power. */
 export let rolled = (p: Piece): string =>

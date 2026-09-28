@@ -22,6 +22,10 @@ export type Equip = { slot: string; item: string; at: number }
 export type Worn = Partial<Record<Slot, Held>>
 export type Hand = 'main' | 'off'
 
+/** Whether a hero has reached a piece's item level. */
+export let canWear = (h: Held, lvl: number): boolean =>
+  !!ITEMS[h.kind]?.slot && (piece(h).lvl ?? Infinity) <= lvl
+
 // The newest row for each slot; of two at once, the one naming the later
 // item, so every page picks the same.
 let newest = (rows: Equip[]) => {
@@ -89,7 +93,7 @@ export let hands = (worn: Worn, last: Hand): Worn => {
  * let wear = (known: Learned[]) => (...rows: Row[]) =>
  *   Object.fromEntries(
  *     Object.entries(
- *       wornOf(rows.map(([slot, item, at]) => ({ slot, item, at })), bag, known),
+ *       wornOf(rows.map(([slot, item, at]) => ({ slot, item, at })), bag, 60, known),
  *     ).map(([s, h]) => [s, h!.kind]),
  *   )
  * let worn = wear([])
@@ -126,6 +130,7 @@ export let hands = (worn: Worn, last: Hand): Worn => {
 export let wornOf = (
   rows: Equip[],
   bag: Held[],
+  lvl: number,
   known: Learned[] = [],
 ): Worn => {
   let held = new Map(bag.map((h) => [h.eid, h]))
@@ -133,7 +138,7 @@ export let wornOf = (
   let worn: Worn = {}
   for (let s of SLOTS) {
     let r = last.get(s), h = held.get(r?.item ?? ''), t = ITEMS[h?.kind ?? '']
-    if (!r || !h || !t) continue
+    if (!r || !h || !t || !canWear(h, lvl)) continue
     if (
       t.slot == s ||
       (s == 'off' && known.some((k) => lets(k.skill, t.family) && k.at < r.at))
@@ -336,23 +341,23 @@ let rank = (h: Held) => {
  *   { eid: 'c', kind: 'robe1', n: 1 },
  *   { eid: 'd', kind: 'jelly', n: 3 },
  * ]
- * assertEquals(firsts([], bag), [
+ * assertEquals(firsts([], bag, 60), [
  *   { slot: 'main', item: 'b' },
  *   { slot: 'body', item: 'c' },
  * ])
  * // Chosen once, a slot is left to the hero, even empty.
- * assertEquals(firsts([{ slot: 'main', item: '', at: 1 }], bag), [
+ * assertEquals(firsts([{ slot: 'main', item: '', at: 1 }], bag, 60), [
  *   { slot: 'body', item: 'c' },
  * ])
  * ```
  */
-export let firsts = (rows: Equip[], bag: Held[]) => {
+export let firsts = (rows: Equip[], bag: Held[], lvl: number) => {
   let chosen = new Set(rows.map((r) => r.slot))
-  let worn = wornOf(rows, bag)
+  let worn = wornOf(rows, bag, lvl)
   let out: { slot: Slot; item: string }[] = []
   for (let s of SLOTS) {
     if (chosen.has(s)) continue
-    let best = bag.filter((h) => ITEMS[h.kind]?.slot == s)
+    let best = bag.filter((h) => ITEMS[h.kind]?.slot == s && canWear(h, lvl))
       .sort((a, b) => rank(b) - rank(a))[0]
     if (!best) continue
     if (s == 'off') {

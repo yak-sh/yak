@@ -34,6 +34,7 @@ import { BEASTS } from './beasts.ts'
 import { foeOf } from './danger.ts'
 import { heed } from './gaze.ts'
 import {
+  canWear,
   firsts,
   type Hand,
   handOf,
@@ -72,7 +73,7 @@ import {
   worth,
   xpOf,
 } from './rules.ts'
-import { type Rarity, rarityOf } from './rarity.ts'
+import { itemLevel, type Rarity, rarityOf } from './rarity.ts'
 import { destination } from './fires.ts'
 import type { Seen } from './seen.ts'
 import {
@@ -597,6 +598,7 @@ export let game = (
         kind: str(i.kind),
         n: num(i.n, 1),
         rarity: rarityOf(i.rarity),
+        ...i.lvl != null && { lvl: num(i.lvl) },
         plus: ups.get(b.entity.eid),
       }
     })
@@ -624,7 +626,7 @@ export let game = (
       lvl,
     )
     let learned = known.map((k) => k.skill)
-    let worn = wornOf(rows, bag, known)
+    let worn = wornOf(rows, bag, lvl, known)
     let kit = skilled(kitOf(worn), learned, maxHp(lvl))
     sheet = {
       name,
@@ -634,7 +636,7 @@ export let game = (
       bag,
       worn,
       kit,
-      firsts: firsts(rows, bag),
+      firsts: firsts(rows, bag, lvl),
       abilities: abilitiesOf(worn),
       learned,
       points: pointsOf(lvl) - learned.length,
@@ -661,11 +663,20 @@ export let game = (
     n: number,
     now: number,
     rarity?: Rarity,
+    level?: number,
   ) => {
     let eid = crypto.randomUUID()
+    let lvl = level ?? itemLevel(eid, kind)
     net.keep({
       entity: { eid },
-      item: { kind, n, owner: me, at: now, ...rarity && { rarity } },
+      item: {
+        kind,
+        n,
+        owner: me,
+        at: now,
+        ...rarity && { rarity },
+        ...lvl != null && { lvl },
+      },
     })
     return eid
   }
@@ -709,7 +720,11 @@ export let game = (
     },
     /** put on a thing I carry, in its slot; with no item, take it off */
     wear: (slot: Slot, item = '') => {
-      if (net.hero) wear(net.hero, slot, item)
+      let s = sheetOf()
+      if (
+        net.hero &&
+        (!item || s?.bag.some((h) => h.eid == item && canWear(h, s.lvl)))
+      ) wear(net.hero, slot, item)
     },
     /** take a plain thing from the rack by a village's fire, and wear it: a
      * second blade in the other hand, for a hero who knows how */
@@ -717,7 +732,7 @@ export let game = (
       let me = net.hero, s = sheet
       let slot = s && twins(kind, s.worn, s.learned) ? 'off' : ITEMS[kind]?.slot
       if (!me || !slot || !RACK.includes(kind)) return
-      wear(me, slot, keepItem(me, kind, 1, net.now()))
+      wear(me, slot, keepItem(me, kind, 1, net.now(), undefined, 1))
     },
     /** spend a point on a skill, if one is left and it can be learned */
     learn: (skill: string) => {
