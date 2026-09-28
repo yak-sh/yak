@@ -7,6 +7,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { shopGraph } from './testing.ts'
+import { relay as relaying } from './relay.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
 let ear = () => {
@@ -42,6 +43,33 @@ let stopped = () => {
 }
 
 let shop = (): Graph => shopGraph()
+
+Deno.test('selected peer values follow writes, takeover, clear and drop', () => {
+  let clock = stopped()
+  let relay = relaying<string>(shop().vocab, () => {}, clock.timer)
+  relay.write('one', [
+    { entity: { eid: 'p1' }, browsing: { x: 1 }, typing: { who: 'Ada' } },
+    { entity: { eid: 'p2' }, browsing: { x: 2 } },
+  ])
+  assertEquals(relay.values(['p1']), [{
+    entity: { eid: 'p1' },
+    browsing: { x: 1 },
+    typing: { who: 'Ada' },
+  }])
+  relay.write('two', [{ entity: { eid: 'p1' }, browsing: { x: 3 } }])
+  relay.drop('one')
+  assertEquals(relay.values(['p1', 'p2']), [{
+    entity: { eid: 'p1' },
+    browsing: { x: 3 },
+  }])
+  relay.write('two', [{ entity: { eid: 'p1' }, browsing: null }])
+  assertEquals(relay.values(['p1']), [])
+  relay.write('two', [{ entity: { eid: 'p1' }, typing: { who: 'Ada' } }])
+  assertEquals(relay.values(['p1'])[0].typing, { who: 'Ada' })
+  clock.tick(5001)
+  assertEquals(relay.values(['p1']), [])
+  relay.close()
+})
 
 Deno.test('a peer hears a relay; the writer does not hear its own', () => {
   let graph = shop()
@@ -379,6 +407,50 @@ Deno.test('shared reference watches refresh from one moved peer read', () => {
   ])
 })
 
+Deno.test('scoped reference refresh keeps other roots and direct branches', () => {
+  let graph = shop()
+  graph.apply([
+    { entity: { eid: 'p1' }, doc: { title: 'One' } },
+    { entity: { eid: 'p2' }, doc: { title: 'Two' } },
+    { entity: { eid: 'p3' }, doc: { title: 'Three' } },
+    { entity: { eid: 'l1' }, book: { author: 'p1', price: 30 } },
+    { entity: { eid: 'l2' }, book: { author: 'p1', price: 30 } },
+    { entity: { eid: 'l3' }, book: { author: 'p2', price: 8 } },
+    { entity: { eid: 'l4' }, book: { author: 'p3', price: 30 } },
+  ])
+  let subs = subscriptions(graph), writer = ear(), watcher = ear()
+  subs.open(
+    watcher.to,
+    'looks',
+    '(.book.author.browsing.x<10|.book.price<20)&.book&*',
+  )
+  assertEquals(watcher.take()[0].bundles?.map((b) => b.entity.eid), ['l3'])
+
+  for (let i = 0; i < 50; i++) {
+    subs.relay(writer.to, [{
+      entity: { eid: `unrelated${i}` },
+      browsing: { x: 5 },
+    }])
+  }
+  assertEquals(watcher.take(), [])
+
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 5 } }])
+  assertEquals(watcher.take()[0].bundles?.map((b) => b.entity.eid), [
+    'l1',
+    'l2',
+  ])
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 12 } }])
+  assertEquals(watcher.take()[0].gone, ['l1', 'l2'])
+  subs.relay(writer.to, [{ entity: { eid: 'p2' }, browsing: { x: 5 } }])
+  assertEquals(watcher.take(), []) // l3 was already in the direct branch
+  subs.relay(writer.to, [{ entity: { eid: 'p3' }, browsing: { x: 5 } }])
+  assertEquals(watcher.take()[0].bundles?.map((b) => b.entity.eid), ['l4'])
+  graph.apply([{ entity: { eid: 'l4' }, $delete: true }])
+  assertEquals(watcher.take()[0].gone, ['l4'])
+  subs.drop(writer.to)
+  assertEquals(watcher.take(), []) // the direct branch keeps l3
+})
+
 Deno.test('reference peer movement sends rows only on entry and exit', () => {
   let graph = shop()
   graph.apply([
@@ -437,13 +509,15 @@ Deno.test('reference peer watch follows edits, retargets and deletion', () => {
   assertEquals(watcher.take()[0].bundles?.[0].entity.eid, 'l1')
   graph.apply([{ entity: { eid: 'l1' }, book: { price: 20 } }])
   assertEquals(watcher.take()[0].bundles?.[0].book, {
-    author: 'p1', price: 20,
+    author: 'p1',
+    price: 20,
   })
   graph.apply([{ entity: { eid: 'l1' }, book: { author: 'p2' } }])
   assertEquals(watcher.take()[0].gone, ['l1'])
   subs.relay(writer.to, [{ entity: { eid: 'p2' }, browsing: { x: 4 } }])
   assertEquals(watcher.take()[0].bundles?.[0].book, {
-    author: 'p2', price: 20,
+    author: 'p2',
+    price: 20,
   })
   graph.apply([{ entity: { eid: 'l1' }, $delete: true }])
   assertEquals(watcher.take()[0].gone, ['l1'])

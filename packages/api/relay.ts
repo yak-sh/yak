@@ -65,8 +65,9 @@ export type Relay<C> = {
    * connection holds, for the entities it can see. What it holds itself, it
    * already has. */
   snapshot: (mine: C, sees: (eid: Eid) => boolean) => Bundle[]
-  /** The values currently said by all connections, for query membership. */
-  values: (sees?: (eid: Eid) => boolean) => Bundle[]
+  /** Values currently said by all connections, for query membership. Pass
+   * entity ids when only those rows can affect the answer. */
+  values: (ids?: Iterable<Eid>) => Bundle[]
   /** A connection went away: forget it, and return the nulls to forward for
    * what it still held. */
   drop: (conn: C) => Bundle[]
@@ -101,6 +102,7 @@ export let relay = <C>(
   // key → the connection that said it last, and the value as it now stands:
   // null when it was adopted after a lost memory, and only its key is known.
   let held = new Map<string, { conn: C; patch: Comp | null }>()
+  let byEntity = new Map<Eid, Set<string>>()
   // conn → the keys it holds, in the order it first said them.
   let saying = new Map<C, Set<string>>()
   // key → cancel. Separate because most values have no timer at all.
@@ -116,11 +118,19 @@ export let relay = <C>(
     let was = held.get(k)
     if (was) saying.get(was.conn)?.delete(k)
     held.delete(k)
+    let eid = split(k)[0]
+    let keys = byEntity.get(eid)
+    keys?.delete(k)
+    if (!keys?.size) byEntity.delete(eid)
   }
 
   let hold = (conn: C, k: string, patch: Comp | null) => {
     let was = held.get(k)
     if (was && was.conn !== conn) saying.get(was.conn)?.delete(k)
+    let eid = split(k)[0]
+    let keys = byEntity.get(eid) ?? new Set<string>()
+    keys.add(k)
+    byEntity.set(eid, keys)
     held.set(k, { conn, patch })
     let mine = saying.get(conn) ?? new Set<string>()
     saying.set(conn, mine)
@@ -167,9 +177,16 @@ export let relay = <C>(
     return out
   }
 
-  let values = (sees: (eid: Eid) => boolean, mine?: C): Bundle[] => {
+  let values = (
+    keys: Iterable<string>,
+    mine?: C,
+    sees: (eid: Eid) => boolean = () => true,
+  ): Bundle[] => {
     let out = new Map<Eid, Bundle>()
-    for (let [k, { conn, patch }] of held) {
+    for (let k of keys) {
+      let value = held.get(k)
+      if (!value) continue
+      let { conn, patch } = value
       if (mine === conn || patch == null) continue
       let [eid, comp] = split(k)
       if (!sees(eid)) continue
@@ -178,6 +195,9 @@ export let relay = <C>(
       out.set(eid, b)
     }
     return [...out.values()]
+  }
+  function* keysFor(ids: Iterable<Eid>): Generator<string> {
+    for (let eid of ids) yield* byEntity.get(eid) ?? []
   }
 
   return {
@@ -189,15 +209,12 @@ export let relay = <C>(
       // value.
       for (let k of keys) if (!held.has(k)) hold(conn, k, null)
     },
-    snapshot: (mine, sees) => values(sees, mine),
-    values: (sees = () => true) => values(sees),
+    snapshot: (mine, sees) => values(held.keys(), mine, sees),
+    values: (ids) => values(ids ? keysFor(ids) : held.keys()),
     drop: (conn) => {
       let mine = [...saying.get(conn) ?? []]
       saying.delete(conn)
-      for (let k of mine) {
-        cancel(k)
-        held.delete(k)
-      }
+      for (let k of mine) forget(k)
       return mine.map((k) => cleared(...split(k)))
     },
     close: () => {

@@ -589,7 +589,7 @@ export let subscriptions = (graph: Graph, opts: {
       let routing = new Map([
         ...route(now, touched, durableNet),
         ...route(
-          overlay(now, peers.values((eid) => touched.includes(eid))),
+          overlay(now, peers.values(touched)),
           touched,
           peerNet,
         ),
@@ -731,12 +731,29 @@ export let subscriptions = (graph: Graph, opts: {
     scope?: Set<Eid>,
     scoped?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
-    let values = peers.values()
-    let ids = [...new Set(values.map((b) => b.entity.eid))]
     let candidates = scope ? scoped ?? graph.get([...scope]) : sub.candidates ??
       (sub.candidates = sub.durable
         ? graph.read(sub.durable, { durable: true })
         : [])
+    if (scope) {
+      return then(candidates, (rows) => {
+        let ids = new Set(scope)
+        if (sub.ref) {
+          for (let row of rows) {
+            let eid = (row[sub.ref.comp] as Record<string, unknown> | undefined)
+              ?.[sub.ref.prop]
+            if (typeof eid == 'string') ids.add(eid)
+          }
+        }
+        let values = peers.values(ids)
+        return then(
+          durableRows(values.map((b) => b.entity.eid)),
+          (held) => overlay([...rows, ...held], values),
+        )
+      })
+    }
+    let values = peers.values()
+    let ids = [...new Set(values.map((b) => b.entity.eid))]
     let refs = sub.ref && !scope && ids.length ? linked(sub.ref, ids) : []
     return then(
       candidates,
@@ -768,7 +785,7 @@ export let subscriptions = (graph: Graph, opts: {
     // its full held value in the membership frame below.
     cast(bundles, except)
     let touched = [...new Set(bundles.map((b) => b.entity.eid))]
-    let values = peers.values((eid) => touched.includes(eid))
+    let values = peers.values(touched)
     let active = new Set(values.map((b) => b.entity.eid))
     let release = () => {
       for (let eid of touched) {
