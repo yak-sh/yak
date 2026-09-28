@@ -300,6 +300,48 @@ export let subscriptions = (graph: Graph, opts: {
   // A missing row is cached too: a peer-only entity must not hit storage on
   // every movement.
   let peerRows = new Map<Eid, Bundle | null>()
+  // A reference's durable answer changes only on a durable commit. Keep its
+  // full rows across peer movements, including empty answers, with a fixed
+  // bound for spaces that hold many peer values at once.
+  let backlinks = new Map<string, { peer: Eid; rows: Bundle[] }>()
+  const BACKLINK_LIMIT = 512
+  let linkKey = (comp: string, prop: string, peer: Eid) =>
+    JSON.stringify([comp, prop, peer])
+  let linked = (
+    ref: { comp: string; prop: string },
+    peers: Eid[],
+  ): Bundle[] | Promise<Bundle[]> => {
+    let answers = new Map<Eid, Bundle[]>()
+    for (let peer of peers) {
+      let rows = backlinks.get(linkKey(ref.comp, ref.prop, peer))?.rows
+      if (rows) answers.set(peer, rows)
+    }
+    let missing = peers.filter((peer) => !answers.has(peer))
+    let fresh = missing.length
+      ? then(
+        graph.read(
+          `.${ref.comp}.${ref.prop}=${missing.join(',')}`,
+          { durable: true },
+        ),
+        (refs) => refs.length ? graph.get(refs.map((b) => b.entity.eid)) : [],
+      )
+      : []
+    return then(fresh, (rows) => {
+      for (let peer of missing) {
+        let key = linkKey(ref.comp, ref.prop, peer)
+        let matching = rows.filter((b) =>
+          (b[ref.comp] as Record<string, unknown> | undefined)
+            ?.[ref.prop] == peer
+        )
+        answers.set(peer, matching)
+        backlinks.set(key, { peer, rows: matching })
+      }
+      while (backlinks.size > BACKLINK_LIMIT) {
+        backlinks.delete(backlinks.keys().next().value!)
+      }
+      return peers.flatMap((peer) => answers.get(peer) ?? [])
+    })
+  }
   let network = (sub: Sub) => sub.peer ? peerNet : durableNet
   let peerComp = (name: string) => syncOf(graph.vocab, name) == 'peers'
   let pendingWork: Promise<void> | undefined
@@ -495,6 +537,7 @@ export let subscriptions = (graph: Graph, opts: {
 
   let commitNow = (applied: Bundle[]) => {
     flush()
+    backlinks.clear()
     let subs = all()
     // A raw feed sends the transaction to a client, and this hook is handed
     // what the phases passed to each other — one patch each, with the `$`
@@ -694,12 +737,7 @@ export let subscriptions = (graph: Graph, opts: {
       (sub.candidates = sub.durable
         ? graph.read(sub.durable, { durable: true })
         : [])
-    let refs = sub.ref && !scope && ids.length
-      ? graph.read(
-        `.${sub.ref.comp}.${sub.ref.prop}=${ids.join(',')}&*`,
-        { durable: true },
-      )
-      : []
+    let refs = sub.ref && !scope && ids.length ? linked(sub.ref, ids) : []
     return then(
       candidates,
       (rows) =>
@@ -733,14 +771,22 @@ export let subscriptions = (graph: Graph, opts: {
     let values = peers.values((eid) => touched.includes(eid))
     let active = new Set(values.map((b) => b.entity.eid))
     let release = () => {
-      for (let eid of touched) if (!active.has(eid)) peerRows.delete(eid)
+      for (let eid of touched) {
+        if (active.has(eid)) continue
+        peerRows.delete(eid)
+        for (let [key, value] of backlinks) {
+          if (value.peer == eid) backlinks.delete(key)
+        }
+      }
     }
     if (!all().some((s) => s.peer)) {
       release()
       return
     }
-    let backlinks = new Map<string, Bundle[] | Promise<Bundle[]>>()
-    let scoped = new Map<string, Bundle[] | Promise<Bundle[]>>()
+    // Every watch that follows the same reference sees the same rows for
+    // this movement. The cross-movement cache avoids SQL; this batch map
+    // avoids rebuilding the combined answer for every watch.
+    let batchLinks = new Map<string, Bundle[] | Promise<Bundle[]>>()
     return then(durableRows(touched), (rows) => {
       let routing = route(
         overlay(rows, values),
@@ -763,24 +809,18 @@ export let subscriptions = (graph: Graph, opts: {
                 )
                 if (!moved.length) return
                 let ids = [...new Set(moved.map((b) => b.entity.eid))]
-                let query = `.${s.ref.comp}.${s.ref.prop}=${ids.join(',')}`
-                let found = backlinks.get(query)
+                let key = JSON.stringify([s.ref.comp, s.ref.prop, ids])
+                let found = batchLinks.get(key)
                 if (!found) {
-                  found = graph.read(query, { durable: true })
-                  backlinks.set(query, found)
+                  found = linked(s.ref, ids)
+                  batchLinks.set(key, found)
                 }
                 return then(
                   found,
                   (rows) => {
                     if (!rows.length) return
                     let ids = [...new Set(rows.map((b) => b.entity.eid))]
-                    let key = ids.join(',')
-                    let full = scoped.get(key)
-                    if (!full) {
-                      full = graph.get(ids)
-                      scoped.set(key, full)
-                    }
-                    return push(s, new Set(ids), undefined, full, true)
+                    return push(s, new Set(ids), undefined, rows, true)
                   },
                 )
               },
