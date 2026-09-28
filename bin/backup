@@ -4,10 +4,10 @@
 # The data dir IS a git repo: files (frozen/, images, md) commit as
 # themselves; the LIVE SQLite db never commits — a commit could catch it
 # mid-transaction — so each run snapshots it atomically (VACUUM INTO) and
-# then writes that snapshot out as TEXT for history to hold.
+# then writes that snapshot as compressed SQL for history to hold.
 #
 # Restore into a NEW directory with no database or SQLite sidecars, then
-#   cat snap/schema.sql snap/graph.sql.part.* snap/journal.sql.part.* | sqlite3 yak.db
+#   { cat snap/schema.sql; zstd -dcq snap/graph.sql.part.*.zst snap/journal.sql.part.*.zst; } | sqlite3 yak.db
 # and start the server. The FTS indexes refill as the rows load — the virtual
 # tables and their sync triggers ride along in schema.sql — and @yaks/fts
 # adopt()/heal() at boot cuts and rebuilds any index the dump predates;
@@ -24,8 +24,8 @@
 #
 # SPLIT across files, and SHARDED into parts, because GitHub's hard 100 MB limit
 # is per FILE. The journal is the largest, fastest-growing data and append-only,
-# so it gets its own file; and each big dump is split into <50 MB parts
-# (schema stays whole). Sharding keeps every byte — the alternative, pruning old
+# so it gets its own file; and each big dump is compressed into parts from
+# <50 MB of SQL (schema stays whole). Sharding keeps every byte — pruning old
 # journal rows, would buy the same headroom by discarding the write history, and
 # the journal is mostly MIXED batches that also touch live entities, so pruning it
 # by "legacy" removes almost nothing without losing real undo history.
@@ -211,8 +211,8 @@ sqlite3 -batch -init /dev/null "$snapshot" \
 journal="name in ('journal_tx', 'journal_change', 'journal_field')"
 
 # SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
-# to clear the soft warning too); zero-padded numeric suffixes glob in order and
-# the restore cats them back before sqlite parses them. schema stays whole.
+# of SQL per part); zero-padded numeric suffixes glob in order. Each part is a
+# separate zstd frame, so restore decodes them in that order. Schema stays whole.
 #
 # Cut on LINE boundaries (-C: as many whole lines as fit), not bytes. One
 # inserted row shifts every byte after it, so a byte split changed EVERY later
@@ -220,8 +220,8 @@ journal="name in ('journal_tx', 'journal_change', 'journal_field')"
 # the data repo grew by a gigabyte a day and filled the disk. With whole rows
 # per part, a run that touches a few rows changes a few parts and the rest
 # dedupe to the blobs history already holds.
-# Stream each dump into split. A complete SQL file beside its shards would
-# double the scratch space needed while the snapshot and restore probe exist.
+# Stream each dump into split, and compress each shard as it is cut. The full
+# SQL dump and its uncompressed shards would exceed the free scratch space.
 # The FIFO lets this POSIX shell wait for the dump writer: a plain pipeline
 # reports only split's status, and could verify and commit incomplete output.
 shard_data() {
@@ -231,7 +231,9 @@ shard_data() {
   mkfifo "$fifo"
   dump_data "$filter" > "$fifo" &
   writer=$!
-  if ! split -C 45M -d -a 3 "$fifo" "$work/$name.sql.part."; then
+  if ! split -C 45M -d -a 3 \
+    --filter="zstd -3 -q -c > \"\$FILE.zst\"" \
+    "$fifo" "$work/$name.sql.part."; then
     kill "$writer" 2>/dev/null || true
     wait "$writer" 2>/dev/null || true
     echo "backup: could not shard $name dump" >&2
@@ -264,11 +266,27 @@ rm "$snapshot"
 # counts per table catches a truncated write, a quoting bug, a table silently
 # dropped from the dump, and a shard that failed to reassemble — the failures that
 # would otherwise be found at restore time, the one moment there is no second chance.
-cat "$work/schema.sql" "$work"/graph.sql.part.* "$work"/journal.sql.part.* |
-  sqlite3 -batch -init /dev/null "$probe" || {
+# Decode through a FIFO so both sqlite3 and zstd must succeed. A plain pipe
+# would report only sqlite3's status and could miss a damaged compressed part.
+restore_dump() {
+  cat "$work/schema.sql"
+  zstd -dcq "$work"/graph.sql.part.*.zst "$work"/journal.sql.part.*.zst
+}
+fifo="$work/restore.fifo"
+mkfifo "$fifo"
+restore_dump > "$fifo" &
+writer=$!
+if ! sqlite3 -batch -init /dev/null "$probe" < "$fifo"; then
+  kill "$writer" 2>/dev/null || true
+  wait "$writer" 2>/dev/null || true
   echo "backup: dump did not load back" >&2
   exit 1
-}
+fi
+if ! wait "$writer"; then
+  echo "backup: compressed dump did not decode" >&2
+  exit 1
+fi
+rm "$fifo"
 while read -r a t; do
   b=$(sq "$probe" "select count(*) from \"$t\"")
   [ "$a" = "$b" ] || {
@@ -280,7 +298,7 @@ done < "$work/counts"
 # previous (pre-shard) run left tracked, so `git add -A` records the switch.
 rm -f snap/graph.sql.part.* snap/journal.sql.part.*
 mv "$work/schema.sql" snap/schema.sql
-mv "$work"/graph.sql.part.* "$work"/journal.sql.part.* snap/
+mv "$work"/graph.sql.part.*.zst "$work"/journal.sql.part.*.zst snap/
 rm -f snap/graph.sql snap/journal.sql
 
 git add -A

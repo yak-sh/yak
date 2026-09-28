@@ -107,12 +107,33 @@ Deno.test(
       assertEquals(f.db.query({ t: 'pragma', name: 'integrity_check' }), [{
         integrity_check: 'ok',
       }])
-      let sql = await run(
+      await run(
         'git',
-        ['show', 'HEAD:snap/graph.sql.part.000'],
+        ['cat-file', '-e', 'HEAD:snap/graph.sql.part.000.zst'],
+        f.dir,
+      )
+      let sql = await run(
+        'zstd',
+        ['-dcq', 'snap/graph.sql.part.000.zst'],
         f.dir,
       )
       assert(sql.includes('INSERT INTO entity VALUES(1);'), sql)
+      await run('sh', [
+        '-c',
+        '{ cat snap/schema.sql; zstd -dcq snap/graph.sql.part.*.zst snap/journal.sql.part.*.zst; } | sqlite3 restored.db',
+      ], f.dir)
+      assertEquals(
+        await run('sqlite3', [
+          '-batch',
+          '-init',
+          '/dev/null',
+          '-noheader',
+          '-list',
+          'restored.db',
+          'select count(*) from entity',
+        ], f.dir),
+        '1\n',
+      )
       let pending = [...Deno.readDirSync(`${f.dir}/.git`)]
         .filter((e) => e.isDirectory && e.name.startsWith('yak-backup.'))
       assertEquals(pending, [])
@@ -140,8 +161,8 @@ Deno.test(
       assert(schema.includes('CREATE TRIGGER "note_fts_insert"'), schema)
       assert(!/CREATE TABLE ['"]?note_fts_/.test(schema), schema)
       let sql = await run(
-        'git',
-        ['show', 'HEAD:snap/graph.sql.part.000'],
+        'zstd',
+        ['-dcq', 'snap/graph.sql.part.000.zst'],
         f.dir,
       )
       assert(!sql.includes('note_fts'), sql)
