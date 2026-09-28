@@ -1,0 +1,32 @@
+{
+  "land": "tombsands",
+  "song": 2,
+  "sha256": "15a3661b6da3a417e966c7dff57a1b88d3f46fd208ce222a7b2b6fa115feb182",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Tombsands: dusk over a sand-buried necropolis, sunken tombs and pale cliffs. A mysterious elegy with flute and harp that resolves gently. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571893-qIhqtsMsQ41NaM3wzaen",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 180.17,
+    "integrated_lufs": -11.66,
+    "true_peak_dbfs": 0.02,
+    "loudness_range_lu": 9.3,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

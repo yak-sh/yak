@@ -1,0 +1,32 @@
+{
+  "land": "cinderreach",
+  "song": 2,
+  "sha256": "9f0d3ebf245b44e5a1f6fe9f6a53c47c5b390b8f9ed61eac4eff7ba761741bc8",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Cinderreach: black ash flats, volcanic vents and a dim grey sky full of drifting ash. A desolate but resolute theme with dark strings and spare flute. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790572112-ENgtD5D4XLxQSF1iLmWr",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 176.64,
+    "integrated_lufs": -11.59,
+    "true_peak_dbfs": -0.03,
+    "loudness_range_lu": 8.2,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "land": "maw",
+  "song": 1,
+  "sha256": "4a8d7e2e7599f765b41c66de8bb43ce3ae66b9064b3e8cedb89ce031f12d86e8",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for The Maw: the scorched edge of the world, an immense fiery chasm and sparks under a red sky. A grave, heroic finale with deep strings and measured drums. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790572141-L06nvbXmUX3jM6h4GDe5",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 180.01,
+    "integrated_lufs": -11.76,
+    "true_peak_dbfs": 0.18,
+    "loudness_range_lu": 7.9,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "land": "ashkeep",
+  "song": 2,
+  "sha256": "9fb8ffc677989430cad23c6e908f43ff1962762366eba87185ad784e76bdc6f6",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Ashkeep: a lonely grey keep and gate in a cold ashfield beneath a heavy sky. A last-watch theme, solemn yet humane, with flute over slow bowed strings. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790572140-6dbXLliUryV5zgx1hkhq",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 164.6,
+    "integrated_lufs": -11.61,
+    "true_peak_dbfs": 0.05,
+    "loudness_range_lu": 9.8,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

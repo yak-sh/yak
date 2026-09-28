@@ -1,0 +1,32 @@
+{
+  "land": "sunscar",
+  "song": 1,
+  "sha256": "75ee6b0848f5ab9a8306ce67bb8c0f8a6b590cce41a23297bd4312f379e21e67",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Sunscar Dunes: white-hot dunes, half-buried ruins, bones and a dark scar in the sand. A tense, wide-open melody with low strings and a restrained drum. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571855-pxrwNDFUxAAZsxAZTb1h",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 176.2,
+    "integrated_lufs": -12.09,
+    "true_peak_dbfs": 0.49,
+    "loudness_range_lu": 8.8,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

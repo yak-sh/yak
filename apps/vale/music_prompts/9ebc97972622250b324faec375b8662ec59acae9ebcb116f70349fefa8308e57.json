@@ -1,0 +1,32 @@
+{
+  "land": "emberfall",
+  "song": 2,
+  "sha256": "9ebc97972622250b324faec375b8662ec59acae9ebcb116f70349fefa8308e57",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Emberfall: a forge town beneath falling embers, lava cliffs and black cinder heath. A warm but uneasy theme with fiddle, cello and a rising flute refrain. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790572099-V7rh1pwxLftvdzrIs9PU",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 180.4,
+    "integrated_lufs": -11.58,
+    "true_peak_dbfs": 0.23,
+    "loudness_range_lu": 12.2,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

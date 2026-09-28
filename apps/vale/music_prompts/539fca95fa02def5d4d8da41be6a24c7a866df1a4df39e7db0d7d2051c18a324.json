@@ -1,0 +1,32 @@
+{
+  "land": "rimeholt",
+  "song": 1,
+  "sha256": "539fca95fa02def5d4d8da41be6a24c7a866df1a4df39e7db0d7d2051c18a324",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Rimeholt: a sheltering holt among frost-coated trees, a tarn and a glacier under a pale sky. A cozy winter melody with warm strings and wooden flute. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571923-jHM0PGFARyES1oum6Tsh",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 178.63,
+    "integrated_lufs": -11.25,
+    "true_peak_dbfs": 0.03,
+    "loudness_range_lu": 7.4,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

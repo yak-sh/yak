@@ -1,0 +1,32 @@
+{
+  "land": "frostmoor",
+  "song": 1,
+  "sha256": "7dc52a8fb70df690d450a69799930acb72816df0902e06ff6ef64ba36e39d808",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Frostmoor: a scoured snowy moor, stunted pines and a dark tarn under a blizzard sky. A spare, wind-bitten melody with cello and high flute. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571906-4zhgRHJo2aU6y15uBGZw",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 180.77,
+    "integrated_lufs": -11.67,
+    "true_peak_dbfs": 0.3,
+    "loudness_range_lu": 10.3,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

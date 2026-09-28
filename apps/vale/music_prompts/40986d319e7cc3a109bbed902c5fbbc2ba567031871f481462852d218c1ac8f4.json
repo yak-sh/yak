@@ -1,0 +1,32 @@
+{
+  "land": "icefall",
+  "song": 1,
+  "sha256": "40986d319e7cc3a109bbed902c5fbbc2ba567031871f481462852d218c1ac8f4",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Icefall: a blue icefield, steep glacier fall, deep crevasses and a cold tarn. A cascading, clear melody with high strings and icy chimes. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790572057-zSSnA1voTh5AS0O4zgdT",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 177.68,
+    "integrated_lufs": -11.29,
+    "true_peak_dbfs": 0.44,
+    "loudness_range_lu": 9.6,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

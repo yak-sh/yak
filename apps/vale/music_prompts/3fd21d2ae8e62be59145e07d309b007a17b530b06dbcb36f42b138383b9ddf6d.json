@@ -1,0 +1,32 @@
+{
+  "land": "whitepeak",
+  "song": 1,
+  "sha256": "3fd21d2ae8e62be59145e07d309b007a17b530b06dbcb36f42b138383b9ddf6d",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Whitepeak: an immense white summit above snowfields and cornices in clear thin air. An open, soaring melody with strings and a simple flute theme. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790572057-A4MPaZSL0qUsnhiEtgnr",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 176.32999999999998,
+    "integrated_lufs": -11.82,
+    "true_peak_dbfs": 0.21,
+    "loudness_range_lu": 10.1,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

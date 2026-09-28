@@ -1,0 +1,32 @@
+{
+  "land": "frostpine",
+  "song": 1,
+  "sha256": "b85091d31a7ae4a0f455a91ec3e7e8d3ddb702adde04e2f9c24d9d7c51a83a6b",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Frostpine: deep spruce forest, snow-covered pines and a remote logger camp beside a tarn. A dark, steady woodland melody with low strings and soft drum. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571947-gZrnD9gMiC4E5JcRVhRc",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 181.42,
+    "integrated_lufs": -11.63,
+    "true_peak_dbfs": 0.19,
+    "loudness_range_lu": 11.6,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "land": "redmesa",
+  "song": 1,
+  "sha256": "e89373d0cdb7cf2e4869438480f8d148883baad8f61511d2e15b1c76530d08ad",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Redmesa: red sandstone buttes, clay slopes and a spring under a copper sunset. A sweeping, sunlit melody with fiddle and a steady hand drum. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571855-YwkVtj3ZKEl8tP3UNCpb",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 178.1,
+    "integrated_lufs": -11.35,
+    "true_peak_dbfs": 0.6,
+    "loudness_range_lu": 10.3,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}
