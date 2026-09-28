@@ -89,11 +89,11 @@ Deno.test('a writing effect that triggers itself is stopped by the marker', () =
     write([post(`p${n + 1}`)])
   })
   apply([post('p1')])
-  // The batch at the door is generation 0 and fires; its write is generation 1
-  // and fires; generation 2 wakes nobody. The rows are all there — the batch
+  // The batch at the door is generation 0 and fires; its writes through
+  // generations 1 and 2 fire; generation 3 wakes nobody. The rows are all there — the batch
   // committed like any other, it simply woke no handler.
-  assertEquals(n, 2)
-  assertEquals((g.read('.post') as Bundle[]).length, 3)
+  assertEquals(n, 3)
+  assertEquals((g.read('.post') as Bundle[]).length, 4)
 })
 
 Deno.test('depth 0 lets an effect write without waking anything', () => {

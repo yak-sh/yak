@@ -1,6 +1,6 @@
 // What a server does about builders, exported as `@yaks/builders/effects`: the
-// code behind the three effects ./vocab.json declares — build a builder when
-// its schedule comes due, and write the named outputs a session answers with.
+// code behind ./vocab.json's effects — check scheduled and immediate inputs,
+// and write the named outputs a session answers with.
 // Nothing at all when the configuration names no session to open.
 //
 // That session is why this export takes OPTIONS. Opening one means asking a
@@ -29,7 +29,7 @@
 // at boot rather than thrown — malformed configuration never stops the server
 // coming up — and the plugin then gives no code.
 
-import { type Comp, then, token } from '@yaks/graph'
+import { type Comp, Stale, then, token } from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq } from '@yaks/query'
@@ -89,6 +89,26 @@ export let ringing = (o: Open): Handler => (event, tx, write) =>
       write,
     ))
 
+/** Recheck opted-in builders when any graph input enters, changes or leaves.
+ * The query and run key decide whether that change affected a builder. The
+ * run's precondition settles concurrent changes to several inputs. */
+export let changing = (o: Open): Handler => async (event, tx, write) => {
+  let builders = await tx.read(and(eq('builder.immediate', 'true')))
+  for (let builder of builders) {
+    // Creation is already builder_open's check, which respects its floor.
+    if (event.kind == 'created' && builder.entity.eid == event.entity.eid) {
+      continue
+    }
+    let v = await decide(o, builder.entity.eid, tx, (o.now ?? clock)(), false)
+    if (!v?.build) continue
+    try {
+      await write(v.build)
+    } catch (err) {
+      if (!(err instanceof Stale)) throw err
+    }
+  }
+}
+
 /**
  * `builder_answer` turns one session answer into named graph outputs. A late
  * answer from a superseded session has no current run and writes nothing.
@@ -113,12 +133,13 @@ export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
   }
 }
 
-/** The code that builds: a builder changing, a wake firing on one, and a
- * build's session answering. */
+/** The code that builds: a builder changing, a wake firing, an input changing,
+ * and a build's session answering. */
 export let watches = (o: Open): Handlers => ({
   builder_open: opening(o),
   builder_ring: ringing(o),
   builder_answer: answering(o.vocab),
+  builder_change: changing(o),
 })
 
 /** The code to run, when the configuration named a session to open. */

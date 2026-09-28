@@ -151,6 +151,12 @@ components were present before the write.
 | `removed(comp, run)`       | `removed: [comp]`   | The component is removed, directly or by entity deletion |
 | `on(pattern, run)`         | `match: pattern`    | A query matches an entity touched by the batch           |
 
+A declared effect may add `active: '.some-query'` to owe commit-triggered runs
+only while that query matches an entity. `without: ['effect']` excludes entities
+carrying any named component, including one removed in the batch. These
+conditions are checked before a pooled run is written; a declared `sweep` still
+uses its own query.
+
 The plugin reads component presence before applying changes, including
 components on entities about to be deleted by a cascade. After commit it
 interprets the applied patches in order to distinguish creation, change and
@@ -226,7 +232,7 @@ that pipeline.
 
 Writes carry a generation number under `$effect`: initial writes are generation
 0, handler writes are generation 1, and each further handler write increments
-it. Batches beyond `depth` (default 1) still commit but do not trigger more
+it. Batches beyond `depth` (default 2) still commit but do not trigger more
 handlers. `depth: 0` disables handlers for all effect-generated writes.
 
 <a id="the-durable-tier-optional"></a>

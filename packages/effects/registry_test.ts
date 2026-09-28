@@ -7,7 +7,9 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Tx } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
 import { effects, type Job } from './registry.ts'
+import { effectDoc } from './pool.ts'
 import type { Event } from './trace.ts'
 import { blog, blogGraph, owingBlog } from './testing.ts'
 
@@ -315,6 +317,35 @@ Deno.test('a declared effect runs where it is handled, on each trigger it declar
   apply([post('p1', { published: true })])
   apply([{ entity: { eid: 'p1' }, post: null }])
   assertEquals(seen, ['created p1', 'changed p1', 'removed p1'])
+})
+
+Deno.test('a declared effect can exclude bookkeeping entities', async () => {
+  let vocab = loadVocab([...blog.docs, effectDoc, {
+    $defs: {
+      watch_change: {
+        effect: true,
+        created: ['created'],
+        changed: ['updated'],
+        without: ['effect'],
+        active: '.subscriber',
+      },
+    },
+  }])
+  let fx = effects(vocab)
+  let g = blogGraph([fx], vocab)
+  await g.apply([post('p1')])
+  assertEquals((await g.read('.effect')).length, 0)
+  await g.apply([{
+    entity: { eid: 's1' },
+    subscriber: { email: 'one@example.com' },
+  }])
+  let owed = await g.read('.effect')
+  assertEquals(owed.length, 1)
+  await g.apply([{
+    entity: owed[0].entity,
+    effect: { state: 'done' },
+  }], { trusted: true })
+  assertEquals((await g.read('.effect')).length, 1)
 })
 
 Deno.test('a declared effect nobody handles runs nothing', () => {

@@ -10,9 +10,9 @@
  * shadow outputs, which downstream builders do not read.
  *
  * A build is one agent session, asked the instruction and the inputs by id,
- * whose answer is an array of graph-shaped outputs. It opens on a schedule (`floor`, a
- * configured `rest`, and @yaks/wake) through `@yaks/builders/effects`, or on
- * demand through the `builder build` tool in `@yaks/builders/tools`.
+ * whose answer is an array of graph-shaped outputs. It opens on a schedule
+ * (`floor`, a configured `rest`, and @yaks/wake), as inputs change when
+ * `builder.immediate` is true, or on demand through the `builder build` tool.
  *
  * ```ts
  * import { effects } from '@yaks/effects'

@@ -8,9 +8,9 @@ its id across rebuilds and cites the inputs used to make it.
 deno add jsr:@yaks/builders
 ```
 
-- `builder{query, floor}` — the `doc` body is the instruction. `query` uses
-  [@yaks/query](../query)'s grammar. `floor` is the earliest a scheduled run may
-  start.
+- `builder{query, floor, immediate}` — the `doc` body is the instruction.
+  `query` uses [@yaks/query](../query)'s grammar. `floor` is the earliest a
+  scheduled run may start; `immediate: true` also builds when an input changes.
 - `build{builder, variant, key, session, inputs, model}` — the latest run
   started for one variant. Its stable id lets the key guard concurrent starts.
 - `built{builder, variant, slot, key, session, model}` — one output. Its id is
@@ -51,8 +51,10 @@ write only client-writable properties; it cannot supply an eid or change builder
 metadata.
 
 Another builder can query a named output and cite it. When the output's content
-changes, that citation becomes stale and the downstream builder's key changes on
-its next check. Building immediately on input change is a separate option.
+changes, that citation becomes stale and the downstream builder's key changes.
+With `immediate: true`, it builds then, even while its scheduled floor is in the
+future. Without it, the changed key waits for a wake, schedule or on-demand
+build. A new or removed query match works the same way.
 
 `builder build <builder>` checks now regardless of the floor. An alternate
 provider, model or prompt starts a shadow variant. Shadow output ids are
@@ -93,7 +95,7 @@ reported after the initiating graph write commits.
   `inputs`, `plan`, `build`, `decide`, and their types.
 - `@yaks/builders/vocab`: the schema in `docs`.
 - `@yaks/builders/effects`: `effects(host, options)`, `watches`, and the
-  handlers `opening`, `ringing` and `answering`.
+  handlers `opening`, `ringing`, `answering` and `changing`.
 - `@yaks/builders/tools`: `runs(host, options)`, the `builder build` tool.
 
 Compose kernel, doc, edge, session, model and wake vocabularies beside this

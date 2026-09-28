@@ -255,8 +255,8 @@ Deno.test("a run's write owes a generation on, and the chain stops at depth", as
   await a.fx.idle()
   // The client's post owes a run, and so does the post that run wrote; the
   // post that one wrote is past the depth and owes nothing.
-  assertEquals(a.ran.sort(), ['p', 'p+'])
-  assertEquals((await rows(a.g, '.post')).length, 3)
+  assertEquals(a.ran.sort(), ['p', 'p+', 'p++'])
+  assertEquals((await rows(a.g, '.post')).length, 4)
 })
 
 // What a process that died left behind: its presence and a claim, both still

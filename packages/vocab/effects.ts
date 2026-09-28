@@ -37,6 +37,10 @@ export type EffectDecl = {
   /** the components whose removal owes a run, by their own deletion or with
    * their entity */
   removed?: string[]
+  /** commit-triggered entities carrying any of these components owe no run */
+  without?: string[]
+  /** commit triggers owe runs only while this query matches an entity */
+  active?: string
   /** a query over what committed: a run is owed wherever a batch made it hold
    * for an entity the batch touched */
   match?: string
@@ -70,11 +74,11 @@ export let effectsIn = (input: VocabDoc | VocabDoc[]): EffectDecl[] => {
       if (seen.has(name)) throw new Error(`effect '${name}' is declared twice`)
       seen.add(name)
       let decl: EffectDecl = { name }
-      for (let key of ['created', 'changed', 'removed'] as const) {
+      for (let key of ['created', 'changed', 'removed', 'without'] as const) {
         let said = strings(entry[key])
         if (said) decl[key] = said
       }
-      for (let key of ['match', 'sweep', 'description'] as const) {
+      for (let key of ['match', 'sweep', 'active', 'description'] as const) {
         let said = entry[key]
         if (typeof said == 'string') decl[key] = said
       }

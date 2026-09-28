@@ -55,6 +55,8 @@ import { asked, each, isPromise, match, over, reads, then } from '@yaks/graph'
 import { type Clause, eq, list } from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import {
+  BEFORE,
+  type Before,
   before,
   type Event,
   events,
@@ -139,9 +141,9 @@ export type Opts = Partial<PoolOpts> & {
    * rather than at its next pass */
   nudge?: () => void
   /** how many generations of effect-written batches still owe runs (default:
-   * `1`). A batch from a client is generation 0 and an effect's own write is
-   * 1, so the default lets one effect see another's write and stops the
-   * generation after that. */
+   * `2`). A batch from a client is generation 0 and an effect's own write is
+   * 1. The default lets an output effect write an entity, its change effect
+   * start a new session, and that session's effect see the request. */
   depth?: number
 }
 
@@ -288,7 +290,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       console.warn('effect reporting failed —', e)
     }
   }
-  let depth = opts.depth ?? 1
+  let depth = opts.depth ?? 2
 
   // The write callback as one run sees it: whatever it writes is marked a
   // generation on from the batch that owed it.
@@ -443,27 +445,58 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let chosen = slots.filter(which)
     if (!chosen.length) return []
     let seen = events(bundles)
+    let prior = (bundles.find((b) => b[BEFORE])?.[BEFORE] ?? {}) as Before
+    let allowed = (s: Slot, e: Event) =>
+      !s.effect?.without?.some((name) =>
+        prior[e.entity.eid]?.includes(name) ||
+        bundles.some((b) => b.entity.eid == e.entity.eid && b[name] != null)
+      )
     let found = seen.flatMap((e) =>
-      chosen.filter((s) => watching(s, e)).map((s) => [s, e] as [Slot, Event])
+      chosen.filter((s) => watching(s, e) && allowed(s, e))
+        .map((s) => [s, e] as [Slot, Event])
     )
     let asking = chosen.filter((s) =>
       s.kind == 'matched' && s.plan && stirred(s, seen)
     )
-    return each(asking, found, (out, s) => {
-      try {
-        return then(
-          hits(s, bundles, tx),
-          (evs) => [...out, ...evs.map((e) => [s, e] as [Slot, Event])],
-        )
-      } catch (err) {
-        report(err, {
-          handler: s.id,
-          slot: s,
-          event: { kind: 'matched', entity: { eid: '' }, name: s.comp },
-        })
-        return out
+    let active = new Map<string, boolean | Promise<boolean>>()
+    let enabled = (s: Slot): boolean | Promise<boolean> => {
+      let query = s.effect?.active
+      if (!query) return true
+      if (!active.has(query)) {
+        active.set(query, then(tx.read(query), (rows) => rows.length > 0))
       }
-    })
+      return active.get(query)!
+    }
+    return then(
+      each(asking, found, (out, s) => {
+        try {
+          return then(
+            hits(s, bundles, tx),
+            (evs) => [
+              ...out,
+              ...evs.filter((e) => allowed(s, e))
+                .map((e) => [s, e] as [Slot, Event]),
+            ],
+          )
+        } catch (err) {
+          report(err, {
+            handler: s.id,
+            slot: s,
+            event: { kind: 'matched', entity: { eid: '' }, name: s.comp },
+          })
+          return out
+        }
+      }),
+      (hits) => {
+        let kept: [Slot, Event][] = []
+        return each(
+          hits,
+          kept,
+          (out, pair) =>
+            then(enabled(pair[0]), (yes) => yes ? [...out, pair] : out),
+        )
+      },
+    )
   }
 
   // One observer run, isolated.

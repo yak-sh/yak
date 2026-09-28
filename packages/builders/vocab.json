@@ -17,6 +17,10 @@
           "type": "string",
           "format": "date-time",
           "description": "the earliest a schedule may build it again"
+        },
+        "immediate": {
+          "type": "boolean",
+          "description": "build when query inputs change, without waiting for its floor"
         }
       },
       "description": "runs its instruction (its doc body) on the inputs selected by its query"
@@ -158,6 +162,15 @@
       "effect": true,
       "created": ["output"],
       "description": "a build's session answered with named output entities and their components"
+    },
+    "builder_change": {
+      "effect": true,
+      "created": ["created", "updated"],
+      "changed": ["updated"],
+      "removed": ["created"],
+      "without": ["effect"],
+      "active": ".builder.immediate=true",
+      "description": "check immediate builders when an entity enters, changes or leaves their query"
     }
   }
 }

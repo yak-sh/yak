@@ -35,6 +35,17 @@ let writeup = (floor?: string, query?: string): Bundle => ({
   builder: { ...(floor ? { floor } : {}), ...(query ? { query } : {}) },
   doc: { title: 'Write up', body: 'Write up what is waiting.' },
 })
+let immediate = (floor?: string, query?: string): Bundle => {
+  let b = writeup(floor, query)
+  return {
+    ...b,
+    builder: {
+      ...(floor ? { floor } : {}),
+      ...(query ? { query } : {}),
+      immediate: true,
+    },
+  }
+}
 let note = (eid: string, body: string): Bundle => ({
   entity: { eid },
   doc: { title: 'Source', body },
@@ -153,6 +164,34 @@ Deno.test('the same key opens nothing, and a changed input changes the run key',
   assertNotEquals(comp(await one(g, run(ids.builder)), 'build')?.key, before)
 })
 
+Deno.test('immediate builders respond to new, changed and removed query matches', async () => {
+  let { g, failed } = await building()
+  let floor = '2026-09-19T13:00:00.000Z'
+  await g.apply([immediate(floor, '.doc.title=Source')])
+  assertEquals(await sessions(g), 0)
+
+  await g.apply([note('n-1', 'first')])
+  assertEquals(await sessions(g), 1)
+  await g.apply([note('n-1', 'first')])
+  await g.apply([{ entity: { eid: 'unrelated' }, doc: { title: 'Other' } }])
+  assertEquals(await sessions(g), 1)
+
+  await g.apply([note('n-1', 'second')])
+  assertEquals(await sessions(g), 2)
+  await g.apply([{ entity: { eid: 'n-1' }, doc: { title: 'Other' } }])
+  assertEquals(await sessions(g), 3)
+  assertEquals(failed, [])
+})
+
+Deno.test('without immediate, an input change waits for the scheduled check', async () => {
+  let { g } = await building()
+  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
+  await g.apply([note('n-1', 'second')])
+  assertEquals(await sessions(g), 1)
+  await stir(g)
+  assertEquals(await sessions(g), 2)
+})
+
 Deno.test('a new query match changes the key, while own outputs do not', async () => {
   let { g } = await building()
   await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
@@ -267,6 +306,36 @@ Deno.test('an upstream named output makes a downstream builder eligible', async 
   assertEquals(status(await one(g, citation), await one(g, upstream), vocab), {
     state: 'current',
   })
+})
+
+Deno.test('a changed cited output immediately starts its downstream builder', async () => {
+  let { g, vocab, fx, failed } = await building()
+  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
+  await reply(g, ids.builder, [spec('Ada', 'First story.', ['n-1'])])
+  let upstream = output(ids.builder, 'Ada')
+  await g.apply([{
+    entity: { eid: 'z-digest' },
+    builder: { query: `.eid=${upstream}`, immediate: true },
+    doc: { body: 'Digest the story.' },
+  }])
+  await reply(g, 'z-digest', [spec('guide', 'First guide.', [upstream])])
+  let citation = edgeEid(output('z-digest', 'guide'), 'cites', upstream)
+  let before = comp(await one(g, run('z-digest')), 'build')?.key
+  let starts = 0
+  fx.created('using', () => {
+    starts++
+  })
+
+  await g.apply([note('n-1', 'second')])
+  await stir(g)
+  await reply(g, ids.builder, [spec('Ada', 'Second story.', ['n-1'])])
+
+  assertEquals(status(await one(g, citation), await one(g, upstream), vocab), {
+    state: 'moved',
+  })
+  assertNotEquals(comp(await one(g, run('z-digest')), 'build')?.key, before)
+  assertEquals(starts, 2)
+  assertEquals(failed, [])
 })
 
 Deno.test('shadow runs write sibling outputs and downstream queries ignore them', async () => {
