@@ -1,7 +1,6 @@
 import { kindOf } from '@yaks/session'
 import { local } from './local.ts'
 import type { Harness } from './store.ts'
-import type { Model } from '@yaks/model'
 import { harnessTools } from './tools.ts'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -152,6 +151,13 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
       (await prepare({ parent: 'parent', child: 'one', args: {} })).home,
       home,
     )
+    let childHome = async (cwd: string) =>
+      (await prepare({ parent: 'parent', child: 'child', args: { cwd } })).home
+    assertEquals(await childHome('.'), home)
+    assertEquals(
+      await childHome('sub'),
+      { ...home, cwd: f.repo + '/sub' },
+    )
     let prepared = await prepare({
       parent: 'parent',
       child: 'two',
@@ -162,13 +168,13 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
     let attach = await prepare({
       parent: 'parent',
       child: 'three',
-      args: { home: f.dir + '/two', cwd: f.repo },
+      args: { home: f.dir + '/two', cwd: f.dir },
     })
     assertEquals(
       (attach.home as Comp).worktree,
       (prepared.home as Comp).worktree,
     )
-    assertEquals((attach.home as Comp).cwd, f.repo)
+    assertEquals((attach.home as Comp).cwd, f.dir)
     assertEquals((await f.h.g.read('.worktree&*')).length, 2)
     await assertRejects(() =>
       prepare({
@@ -181,38 +187,6 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
     assertEquals(await checkoutAt(f.h.g, f.dir), undefined)
   } finally {
     await f.free()
-  }
-})
-
-Deno.test('spawn refuses relative workspace paths before enqueueing a child', async () => {
-  let h = await harness()
-  let source = await scratchRepo()
-  let turns = 0
-  let model: Model = () =>
-    Promise.resolve({
-      id: 'r',
-      model: 'fake',
-      items: turns++ ? [{ kind: 'assistant', text: 'done' }] : [{
-        kind: 'call',
-        id: 'relative',
-        name: 'spawn',
-        args: JSON.stringify({ prompt: 'work', cwd: '.' }),
-      }],
-    })
-  let a = local({ h, cwd: source.repo, model })
-  try {
-    let parent = await a.start('delegate')
-    await a.idle(parent)
-    let entries = await a.transcript(parent)
-    assertEquals(await a.children(parent), [])
-    assertEquals(
-      (entries.find((b) => b.error)?.error as Comp).code,
-      'arguments',
-    )
-    assertEquals(entries.some((b) => b.exception), false)
-  } finally {
-    await a.close()
-    await source.free()
   }
 })
 

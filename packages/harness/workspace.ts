@@ -1,6 +1,7 @@
 /** A thin layer connecting sessions to @yaks/git's local checkout model. The
  * directory a session starts in and the root its children's checkouts are cut
  * under are the host's to say (./local.ts). */
+import { resolve } from '@std/path'
 import { checkoutAt, createWorktree, discover, restore } from '@yaks/git/host'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
@@ -105,9 +106,11 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
     home: absolute(
       'Absolute path to an existing Git checkout to use as agent home, or as the source of a new worktree.',
     ),
-    cwd: absolute(
-      'Default command directory, distinct from Git worktree home. Absolute path.',
-    ),
+    cwd: {
+      type: 'string',
+      description:
+        'Default command directory, distinct from Git worktree home. Relative paths resolve from the parent command directory.',
+    },
   },
   prepareChild: async ({ parent, args }) => {
     let inherited = (await row(g, parent))?.home as Comp | undefined ??
@@ -146,10 +149,8 @@ export let workspace = (g: Graph, cwd: string, root: string): ChildLimits => ({
       home = { worktree: tree.entity.eid }
     }
     if (args.cwd != null) {
-      if (typeof args.cwd != 'string' || !args.cwd.startsWith('/')) {
-        throw new Error('cwd must be absolute')
-      }
-      home.cwd = args.cwd
+      if (typeof args.cwd != 'string') throw new Error('cwd must be a string')
+      home.cwd = resolve(await sessionCwd(g, parent, cwd), args.cwd)
     }
     return { home } as Omit<Bundle, 'entity'>
   },
