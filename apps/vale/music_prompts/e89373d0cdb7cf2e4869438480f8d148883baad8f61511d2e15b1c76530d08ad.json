@@ -27,6 +27,13 @@
     "true_peak_dbfs": 0.6,
     "loudness_range_lu": 10.3,
     "decoder_errors": 0,
-    "max_interior_silence_seconds": 0
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "listening_response_id": "gen-1790595076-AjxpqXDXh9eLTwe7Sxef",
+    "vocals_reported": false,
+    "voice_type_reported": "none",
+    "mood_fit_reported": true,
+    "instruments_fit_reported": true,
+    "defects_reported": false
   }
 }

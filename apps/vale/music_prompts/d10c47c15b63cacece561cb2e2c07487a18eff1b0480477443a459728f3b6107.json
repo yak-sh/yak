@@ -30,6 +30,14 @@
     "max_interior_silence_seconds": 0,
     "listening_model": "google/gemini-3.1-flash-lite",
     "vocals_reported": true,
-    "defects_reported": false
+    "defects_reported": false,
+    "voice_followup": {
+      "model": "google/gemini-3.5-flash",
+      "response_id": "gen-1790595049-JyqZ8fuARSjbGbrnSVa7",
+      "voice_type_reported": "none",
+      "mood_fit_reported": true,
+      "instruments_fit_reported": true,
+      "defects_reported": false
+    }
   }
 }
