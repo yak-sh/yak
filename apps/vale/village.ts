@@ -21,9 +21,9 @@ import type { Vale } from './terrain.ts'
 import { GIVERS } from './quests.ts'
 import { wares } from './stock.ts'
 import {
-  answered,
   born,
   CHAT,
+  decided,
   deeds,
   eidOf,
   goings,
@@ -93,9 +93,11 @@ export let village = (net: Net, deal: Deals) => {
   // What the level's villagers said back and chose, newest first.
   let level = ''
   let heard: Watch | null = null
+  let chosen: Watch | null = null
   let follow = (lv: string) => {
     rows?.close()
     heard?.close()
+    chosen?.close()
     level = lv
     rows = watch(`.villager.level=${JSON.stringify(lv)}&*`)
     let eids = GIVERS.filter((g) => g.level == lv).map((g) => eidOf(g.id))
@@ -106,12 +108,24 @@ export let village = (net: Net, deal: Deals) => {
         }&.output&?content&?answer&?created&.order=-created.at&.limit=${HEARD}`,
       )
       : null
+    chosen = eids.length
+      ? watch(
+        `.going.villager=${
+          eids.join(',')
+        }&?created&.order=-created.at&.limit=${HEARD}`,
+      )
+      : null
   }
-  let read: { rows: unknown; out: ReturnType<typeof answered> } | null = null
+  let read: {
+    rows: unknown
+    choices: unknown
+    out: ReturnType<typeof decided>
+  } | null = null
   let told = () => {
-    let v = heard?.value ?? []
-    if (read?.rows !== v) {
-      read = { rows: v, out: answered(v, (s) => byEid.get(s)?.id ?? null) }
+    let v = heard?.value ?? [], choices = chosen?.value ?? []
+    if (read?.rows !== v || read?.choices !== choices) {
+      let out = decided(v, choices, (s) => byEid.get(s)?.id ?? null)
+      read = { rows: v, choices, out }
     }
     return read.out
   }

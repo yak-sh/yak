@@ -26,7 +26,7 @@ import type { Vec } from './mesh.ts'
 import { type Giver, GIVERS, type Quest } from './quests.ts'
 import { hashOf, stream, uuidOf } from './rand.ts'
 import { originOf, spotOf } from './regions.ts'
-import { fits } from './sim.ts'
+import { fits, floorAt } from './sim.ts'
 import { groundAt, type Vale } from './terrain.ts'
 import { walk } from './walk.ts'
 import {
@@ -370,6 +370,9 @@ export let persona = (g: Giver, f: Facts): string => {
     ...f.here.length ? [`Also here: ${f.here.join(', ')}.`] : [],
     'When you hear something a neighbour would want to know, tell them with ' +
     'tell, naming them by the id beside their name, and say it as you would.',
+    'You can change where you go for the next few minutes with move. If ' +
+    'someone asks you to move out of the way and you agree, choose about: ' +
+    'you will walk away from this spot. Your words alone do not move you.',
   ].join('\n')
 }
 
@@ -514,6 +517,70 @@ export let answered = (
   return { lines, plans, moods }
 }
 
+/** A villager's own movement choices. A row from a page, or from another
+ * villager's turn, does not direct them.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let row = (eid: string, villager: string, via: string, go: string) => ({
+ *   entity: { eid }, going: { villager, go },
+ *   created: { via, at: '2026-09-28T00:00:00.000Z' },
+ * })
+ * let own = eidOf('wren')
+ * assertEquals(plansOf([
+ *   row('a', own, own, 'about'),
+ *   row('b', own, 'a-page', 'home'),
+ *   row('c', own, own, 'somewhere'),
+ * ]).get('wren'), [{ go: 'about', at: Date.parse('2026-09-28') }])
+ * ```
+ */
+export let plansOf = (rows: Row[]): Map<string, Plan[]> => {
+  let plans = new Map<string, Plan[]>()
+  for (let b of rows) {
+    let p = part(b.going), villager = String(p.villager ?? '')
+    if (part(b.created).via != villager) continue
+    let g = GIVERS.find((g) => eidOf(g.id) == villager)
+    let go = GOES.find((x) => x == p.go)
+    if (!g || !go) continue
+    plans.set(g.id, [...plans.get(g.id) ?? [], { go, at: whenOf(b) }])
+  }
+  for (let ps of plans.values()) ps.sort((a, b) => a.at - b.at)
+  return plans
+}
+
+/** Periodic decisions and choices made while talking share one timeline.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let own = eidOf('wren')
+ * let at = (n: number) => new Date(n).toISOString()
+ * let routine = [{
+ *   entity: { eid: 'a' }, entry: { session: own },
+ *   answer: { question: 'go', choice: 'inn' }, created: { at: at(2000) },
+ * }]
+ * let spoken = [{
+ *   entity: { eid: 'b' }, going: { villager: own, go: 'about' },
+ *   created: { via: own, at: at(3000) },
+ * }]
+ * assertEquals(decided(routine, spoken, (s) => s == own ? 'wren' : null)
+ *   .plans.get('wren'), [{ go: 'inn', at: 2000 }, { go: 'about', at: 3000 }])
+ * ```
+ */
+export let decided = (
+  outputs: Row[],
+  choices: Row[],
+  idOf: (session: string) => string | null,
+) => {
+  let out = answered(outputs, idOf)
+  for (let [id, plans] of plansOf(choices)) {
+    out.plans.set(
+      id,
+      [...out.plans.get(id) ?? [], ...plans].sort((a, b) => a.at - b.at),
+    )
+  }
+  return out
+}
+
 /** The neighbour whose door a villager goes to when they visit: the nearest.
  * A villager who lives alone has none, and strolls instead. */
 export let nextDoor = (g: Giver): Giver | undefined => {
@@ -528,7 +595,14 @@ export let nextDoor = (g: Giver): Giver | undefined => {
 // Where a villager goes: a work position, a bed, the inn's table, a walk
 // round their square, or a neighbour's home. Unbuilt story places keep the
 // original standing point.
-let spot = (g: Giver, life: Life, go: Go, v: Vale): Vec => {
+let spot = (
+  g: Giver,
+  life: Life,
+  go: Go,
+  v: Vale,
+  at = 0,
+  away?: Vec,
+): Vec => {
   if (go == 'work') return life.work ?? life.home
   if (go == 'home') return life.home
   if (go == 'inn') return life.inn ?? life.home
@@ -536,13 +610,39 @@ let spot = (g: Giver, life: Life, go: Go, v: Vale): Vec => {
     let n = nextDoor(g)
     if (n) return lifeOf(n, v).home
   }
-  let [cx, cz] = spotOf(g.level, g.place) ?? homeOf(g)
+  let [cx, cz] = away
+    ? [away[0], away[2]]
+    : spotOf(g.level, g.place) ?? homeOf(g)
+  let peers = GIVERS.filter((n) => n.level == g.level && n.place == g.place)
+  let slot = peers.findIndex((n) => n.id == g.id)
+  let angle = (slot + 0.5) / peers.length * Math.PI * 2 +
+    (hashOf(`${g.id}/${at}`) / 4294967296 - 0.5) * 0.24
+  let can = (x: number, z: number): Vec | undefined => {
+    let y = away ? floorAt(v, x, z, away[1]) : groundAt(v, x, z)
+    let p: Vec = [x, y, z]
+    return fits(v, x, z, y) &&
+        (!away ||
+          (Math.hypot(x - away[0], z - away[2]) >= 1.5 &&
+            walk(v, away, p).at(-1) == p))
+      ? p
+      : undefined
+  }
   for (let n = 0; n < 12; n++) {
-    let a = g.id.length * 2.4 + n * 2.4
-    let x = cx + (3 + Math.floor(n / 6) * 2) * Math.cos(a)
-    let z = cz + (3 + Math.floor(n / 6) * 2) * Math.sin(a)
-    let y = groundAt(v, x, z)
-    if (fits(v, x, z, y)) return [x, y, z]
+    let a = angle + (n % 4 - 1.5) * 0.08
+    let r = 3 + Math.floor(n / 4) * 1.5
+    let x = cx + r * Math.cos(a)
+    let z = cz + r * Math.sin(a)
+    let p = can(x, z)
+    if (p) return p
+  }
+  if (away) {
+    for (let r of [2, 3, 4, 6]) {
+      for (let n = 0; n < 16; n++) {
+        let a = angle + n * Math.PI / 8
+        let p = can(cx + r * Math.cos(a), cz + r * Math.sin(a))
+        if (p) return p
+      }
+    }
   }
   return life.home
 }
@@ -582,6 +682,32 @@ let rhythm = (life: Life, now: number): Plan & { was: Go } => {
     was: inn,
     at: now - (d >= 0.9 ? d - 0.9 : d + 0.1) * dayMs,
   }
+}
+
+let starts = new WeakMap<Vale, WeakMap<Plan, Vec>>()
+let aims = new WeakMap<Vale, WeakMap<Plan, Vec>>()
+
+// A fresh choice starts where the villager was when they made it, including
+// if they were partway along an earlier walk.
+let startOf = (g: Giver, v: Vale, plans: Plan[]): Vec => {
+  let is = plans.at(-1)!
+  let known = starts.get(v)
+  if (!known) starts.set(v, known = new WeakMap())
+  let from = known.get(is)
+  if (!from) known.set(is, from = where(g, v, plans.slice(0, -1), is.at))
+  return from
+}
+
+let aimOf = (g: Giver, v: Vale, life: Life, plans: Plan[]): Vec => {
+  let is = plans.at(-1)!
+  let known = aims.get(v)
+  if (!known) aims.set(v, known = new WeakMap())
+  let aim = known.get(is)
+  if (!aim) {
+    let from = startOf(g, v, plans)
+    known.set(is, aim = spot(g, life, is.go, v, is.at, from))
+  }
+  return aim
 }
 
 /** Where a villager and the others of their land went lately, as they are
@@ -653,7 +779,7 @@ export let goings = (
  * latest choice send them, through their doors and the village square.
  *
  * ```ts
- * import { assertEquals } from '@std/assert'
+ * import { assert, assertEquals } from '@std/assert'
  * import { GIVERS } from './quests.ts'
  * import { lifeOf } from './lives.ts'
  * import { vale } from './terrain.ts'
@@ -661,18 +787,30 @@ export let goings = (
  * let v = vale()
  * assertEquals(where(wren, v, [], 900_000), lifeOf(wren, v).home)
  * assertEquals(where(wren, v, [], 300_000), lifeOf(wren, v).work)
+ * let first = { go: 'about' as const, at: 300_000 }
+ * let second = { go: 'home' as const, at: 301_000 }
+ * assertEquals(where(wren, v, [first, second], second.at),
+ *   where(wren, v, [first], second.at))
+ * let again = { go: 'about' as const, at: 360_000 }
+ * let before = where(wren, v, [first], again.at)
+ * let after = where(wren, v, [first, again], again.at + 60_000)
+ * assert(Math.hypot(before[0] - after[0], before[2] - after[2]) >= 1.5)
  * ```
  */
 export let where = (g: Giver, v: Vale, plans: Plan[], now: number): Vec => {
   let life = lifeOf(g, v)
   let is = plans.at(-1)
-  let latest = is && now - is.at < STAY
-    ? { ...is, was: plans.at(-2)?.go ?? rhythm(life, is.at).go }
-    : is && now - is.at < STAY + 60_000
-    ? { ...rhythm(life, now), was: is.go, at: is.at + STAY }
-    : rhythm(life, now)
+  let latest = rhythm(life, now)
   let from = spot(g, life, latest.was, v)
   let to = spot(g, life, latest.go, v)
+  if (is && now >= is.at && now - is.at < STAY) {
+    from = startOf(g, v, plans)
+    to = aimOf(g, v, life, plans)
+    latest = { ...is, was: is.go }
+  } else if (is && now >= is.at && now - is.at < STAY + 60_000) {
+    from = aimOf(g, v, life, plans)
+    latest = { ...latest, at: is.at + STAY }
+  }
   if (dist(from, to) < 0.1) return to
   return along(walk(v, from, to), Math.max(0, now - latest.at) / 1000 * SPEED)
 }

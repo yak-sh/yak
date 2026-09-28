@@ -35,12 +35,36 @@ Deno.test('smith and tailor work to the side while the station stays open', () =
         u.for == 'work' &&
         Math.hypot(u.at[0] - station.x, u.at[2] - station.z) < 2
       )!
-    assert(fits(v, ...work))
+    assert(fits(v, work[0], work[2], work[1]))
     assert(Math.hypot(work[0] - use.at[0], work[2] - use.at[2]) > 1)
     assert(
       Math.hypot(work[0] - station.x, work[2] - station.z) <
         STATIONS[craft].reach,
     )
     assert(walk(v, life.home, work).length > 2)
+  }
+})
+
+Deno.test('villagers sharing a village have separate places to rest and meet', () => {
+  let v = vale()
+  for (let id of ['wren', 'pip']) {
+    assert(lifeOf(GIVERS.find((g) => g.id == id)!, v).inn)
+  }
+  let locals = GIVERS.filter((g) =>
+    g.level == 'mossvale' || g.level == 'birchmere'
+  )
+  for (let place of ['home', 'inn'] as const) {
+    let stands = locals.flatMap((g) => {
+      let p = lifeOf(g, v)[place]
+      return p ? [{ g, p }] : []
+    })
+    for (let i = 0; i < stands.length; i++) {
+      let a = stands[i]
+      assert(fits(v, a.p[0], a.p[2], a.p[1]))
+      for (let b of stands.slice(i + 1)) {
+        if (a.g.level != b.g.level) continue
+        assert(Math.hypot(a.p[0] - b.p[0], a.p[2] - b.p[2]) >= 1.1)
+      }
+    }
   }
 })

@@ -383,6 +383,20 @@
         }
       }
     },
+    "going": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "description": "A villager's choice of where to go for a while. Only a row from that villager's own model turn counts (created.via); the page follows it along with their daily rhythm and periodic decisions (villagers.ts).",
+      "properties": {
+        "villager": { "type": "string", "index": true },
+        "go": {
+          "type": "string",
+          "enum": ["home", "work", "inn", "about", "visit"]
+        }
+      },
+      "required": ["villager", "go"]
+    },
     "fire": {
       "component": true,
       "type": "object",
@@ -600,6 +614,23 @@
           "body": "News: $news"
         },
         "notice": {}
+      }
+    },
+    "move": {
+      "tool": true,
+      "model": true,
+      "description": "Choose where you yourself go for the next few minutes, including when someone asks you to make room. You can go home, to your work, to the inn, stroll about your part of the land, or visit a neighbour. Choose 'about' to step away from where you are standing. You walk there; you do not teleport. A place your land does not have keeps you at home.",
+      "input": {
+        "go": {
+          "type": "string",
+          "enum": ["home", "work", "inn", "about", "visit"],
+          "description": "Where you choose to go."
+        }
+      },
+      "required": ["go"],
+      "apply": {
+        "entity": { "eid": "$going" },
+        "going": { "villager": "$session", "go": "$go" }
       }
     },
     "offer": {
