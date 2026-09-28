@@ -60,6 +60,31 @@ Deno.test('every land has encounters on the level-one-to-sixty path', () => {
   assert(foeOf('cinderwyrm', 'maw').lvl == 60)
 })
 
+Deno.test('outward roads get riskier, and skipping two lands is fatal', () => {
+  for (let land of Object.values(LEVELS)) {
+    let hops = HOPS[land.id]
+    if (!hops) continue
+    let hero = landLevel(Math.max(0, hops - 1)) + 2
+    let foes = [...new Set(dens(land).map((d) => d.kind))]
+      .filter((kind) => {
+        let b = foeOf(kind, land.id)
+        return b.aggro > 0 && !b.boss
+      })
+    let geared = wear(hero, Math.min(5, Math.ceil(hero / 12)), true, [])
+    assert(
+      foes.some((kind) => encounter(hero, geared, kind, land.id).bites <= 7),
+      land.id,
+    )
+    if (hops < 2) continue
+    let under = landLevel(hops - 2) + 2
+    let bare = wear(under, 1, false, [])
+    assert(
+      foes.some((kind) => encounter(under, bare, kind, land.id).bites == 1),
+      land.id,
+    )
+  }
+})
+
 Deno.test('equipment and a friend turn the next land from fatal to possible', () => {
   let lvl = 17
   let bare = wear(lvl, 1, false, [])
