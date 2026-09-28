@@ -225,12 +225,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let args = Deno.args.slice(1)
   let docs = args.filter((a) => a.startsWith('--doc=')).map((a) => a.slice(6))
   let files = args.filter((a) => !a.startsWith('--doc='))
-  // Half again as many shards as cores: a shard spends part of its time
-  // waiting on Stripe's sandbox and on timers, and the extra shards keep the
-  // cores busy through those waits.
-  let jobs = Number(
-    Deno.env.get('DENO_JOBS') ?? Math.ceil(navigator.hardwareConcurrency * 1.5),
-  )
+  // Keep a run light on a shared box; opt in to extra shards explicitly.
+  let jobs = Number(Deno.env.get('DENO_JOBS') ?? 1)
   // A file never timed weighs what the middle one does.
   let known = timed()
   let middle = Object.values(known).sort((a, b) => a - b)
