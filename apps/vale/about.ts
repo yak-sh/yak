@@ -10,11 +10,10 @@ export let about = (panel: Panel) => {
       <p>Bring your ideas to your own space. Ask Claude or ChatGPT to build
         the lands, quests, and characters you imagine, then keep asking for
         changes. yaks.app hosts the result at your own address.</p>
-      <p class=Yaks_Prompt>“Make a world where the villagers remember what
-        I tell them.”</p>
+      <p class=Yaks_Prompt>“Based on what we’ve talked about, how would you
+        make Mossvale mine?”</p>
       <p>Mossvale’s code is open if you want to start from this game. Give
-        your assistant the source and ask it to make your version. A
-        one-click Mossvale install is not available yet.</p>
+        your assistant the source and ask it to make your version.</p>
       <div class=Yaks_Actions>
         <a class="Btn Btn-go" href=https://yaks.app/login target=_blank
           rel="noopener noreferrer">Build on yaks.app</a>
