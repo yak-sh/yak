@@ -6,10 +6,8 @@
 // beside the primary one. An unchanged key is not an error: the output already
 // built is named and nothing runs.
 //
-// It writes the build itself, signed as whoever asked, and answers in one
-// line, the way @yaks/spawn's `session spawn` does: the bundles a build writes
-// are a session's first entry and its output, and a caller wants their
-// ids, not their dump.
+// It writes the build itself, signed as whoever asked, and answers with the
+// run and session ids. Named outputs arrive when that session answers.
 
 import {
   argsOf,
@@ -23,7 +21,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools'
 import { OUTPUT } from '@yaks/session'
 import type { Vocab } from '@yaks/vocab'
-import { BUILT, clock, decide, type Options } from './build.ts'
+import { BUILD, clock, decide, type Options } from './build.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
@@ -70,10 +68,10 @@ export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
       )
     }
     if (!v.build) {
-      return [said(call, `${v.plan.output} is built under this key already`)]
+      return [said(call, `${v.plan.run} is built under this key already`)]
     }
     await graph.apply(signed(v.build, who(call)), { trusted: true })
-    let made = v.build.find((b) => b[BUILT])?.[BUILT] as Comp
-    return [said(call, `${v.plan.output} building in ${str(made.session)}`)]
+    let made = v.build.find((b) => b[BUILD])?.[BUILD] as Comp
+    return [said(call, `${v.plan.run} building in ${str(made.session)}`)]
   },
 })

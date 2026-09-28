@@ -1,4 +1,4 @@
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { counter, ids, noon, shop } from '../builders/testing.ts'
 import { dreamingDoc } from './vocab.ts'
@@ -20,9 +20,11 @@ Deno.test('a dream is a builder: it builds on its schedule, and reads as a dream
     doc: { title: 'Write up', body: 'Write up what is waiting.' },
   }])
   let [line] = (await g.read('.entry&?content')) as Bundle[]
-  assertEquals(comp(line, 'content')?.body, 'Write up what is waiting.')
+  assert(
+    String(comp(line, 'content')?.body).startsWith('Write up what is waiting.'),
+  )
   let [dream] = (await g.read('.eid=z-writeup')) as Bundle[]
   assertEquals(vocab.kindOf(dream), 'dream')
   assertEquals(comp(dream, 'builder')?.floor, '2026-09-19T13:00:00.000Z')
-  assertEquals(((await g.read('.built')) as Bundle[]).length, 1)
+  assertEquals(((await g.read('.build')) as Bundle[]).length, 1)
 })

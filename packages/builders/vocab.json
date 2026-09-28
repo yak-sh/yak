@@ -19,14 +19,53 @@
           "description": "the earliest a schedule may build it again"
         }
       },
-      "description": "builds one output from its instruction (its doc body) and inputs selected by its query"
+      "description": "runs its instruction (its doc body) on the inputs selected by its query"
+    },
+    "build": {
+      "component": true,
+      "type": "object",
+      "identity": ["builder", "variant"],
+      "properties": {
+        "builder": {
+          "type": "string",
+          "ref": "builder",
+          "death": "keep"
+        },
+        "variant": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string",
+          "stamped": true,
+          "description": "the input key last started in this variant"
+        },
+        "model": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "session": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "inputs": {
+          "type": "array",
+          "items": { "type": "string", "ref": "entity" },
+          "stamped": true,
+          "description": "selected input ids offered to the session"
+        }
+      },
+      "description": "the last session started for one variant of a builder"
     },
     "built": {
       "component": true,
       "type": "object",
       "kind": true,
       "before": ["doc"],
-      "identity": ["builder", "slot"],
+      "identity": ["builder", "variant", "slot"],
       "properties": {
         "builder": {
           "type": "string",
@@ -35,10 +74,15 @@
           "bare": false,
           "description": "the builder it came from"
         },
+        "variant": {
+          "type": "string",
+          "bare": false,
+          "description": "main or a shadow variant"
+        },
         "slot": {
           "type": "string",
           "bare": false,
-          "description": "main for the current output, or a named shadow variant"
+          "description": "stable name of this output within one build"
         },
         "key": {
           "type": "string",
@@ -61,7 +105,7 @@
           "description": "the session that built it"
         }
       },
-      "description": "an output that keeps its identity as its key and answer change; shadow slots hold comparisons"
+      "description": "one named output, updated in place across builds of its variant"
     },
     "builder_build": {
       "tool": true,
@@ -113,7 +157,7 @@
     "builder_answer": {
       "effect": true,
       "created": ["output"],
-      "description": "a build's session answered: the answer is the output's body"
+      "description": "a build's session answered with named output entities and their components"
     }
   }
 }

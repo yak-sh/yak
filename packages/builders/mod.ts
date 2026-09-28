@@ -1,15 +1,16 @@
 /**
  * A builder's `doc` body is its instruction; its `builder.query` selects its
- * inputs. Its stable output wears `built{builder, slot, key, model, session}`
- * and cites the inputs used for the latest build.
+ * inputs. One run opens a session, whose JSON answer writes named output
+ * entities. Each wears `built{builder, variant, slot, key, model, session}`
+ * and cites the particular inputs it used.
  *
  * The key is a hash of the instruction, the model and each input's content
- * hash. An unchanged key opens no session; a changed key updates the output
- * in place. Explicit alternate model or prompt builds get sibling shadow
- * outputs, which downstream builders do not read.
+ * hash. An unchanged key opens no session; a changed key updates each named
+ * output in place. Explicit alternate model or prompt builds get sibling
+ * shadow outputs, which downstream builders do not read.
  *
  * A build is one agent session, asked the instruction and the inputs by id,
- * whose answer becomes the output's body. It opens on a schedule (`floor`, a
+ * whose answer is an array of graph-shaped outputs. It opens on a schedule (`floor`, a
  * configured `rest`, and @yaks/wake) through `@yaks/builders/effects`, or on
  * demand through the `builder build` tool in `@yaks/builders/tools`.
  *

@@ -1,5 +1,5 @@
 // The builders component declarations alone, exported as
-// `@yaks/builders/vocab`: `builder`, `built`, and the `builder build` tool.
+// `@yaks/builders/vocab`: `builder`, `build`, `built`, and its build tool.
 // Nothing here touches storage, SQL or any runtime API, so a browser tab that
 // only needs these components loads nothing else.
 //

@@ -1,52 +1,69 @@
 # @yaks/builders
 
-A builder is an instruction plus a query selecting its inputs. It opens an agent
-session and keeps that session's answer in one output whose id stays put across
-rebuilds. The output cites the input entities used for its latest build.
+A builder runs an instruction over graph inputs selected by a query. One run can
+write many named output entities, each with its own components. An output keeps
+its id across rebuilds and cites the inputs used to make it.
 
 ```sh
 deno add jsr:@yaks/builders
 ```
 
 - `builder{query, floor}` — the `doc` body is the instruction. `query` uses
-  [@yaks/query](../query)'s grammar to select input entities. `floor` is the
-  earliest a scheduled build may run.
-- `built{builder, slot, key, model, session}` — the output. Its identity is
-  derived from the builder and slot, normally `main`; its `doc` body is the
-  latest answer. The key, model and session are build bookkeeping, not content
-  that makes a downstream citation stale.
+  [@yaks/query](../query)'s grammar. `floor` is the earliest a scheduled run may
+  start.
+- `build{builder, variant, key, session, inputs, model}` — the latest run
+  started for one variant. Its stable id lets the key guard concurrent starts.
+- `built{builder, variant, slot, key, session, model}` — one output. Its id is
+  derived from the builder, variant and stable slot; its other components are
+  what the builder wrote.
 
 The key hashes the instruction, model and the id and content hash of every
-matched input. Content includes client-written properties and excludes server
-stamps. A new match, removed match, or changed input changes the key. An
-unchanged key opens no session; a changed key updates the same output in place.
-The builder and its own outputs are excluded from its input query, so its floor
-and answer cannot feed back into itself. Shadow outputs are also excluded from
-other builders' queries.
+matched input. Content is client-written properties, without server stamps. A
+new match, removed match, or changed input changes the key; an unchanged key
+opens no session. The builder and its own outputs are excluded from its input
+query. Shadow outputs are excluded from all builders' input queries.
 
-A build opens one session and its first entry. The entry asks the instruction
-and lists input ids, which the session can inspect. The build updates the
-output's key and session and verifies a `cites` edge from the output to each
-selected input; citations to inputs no longer selected are removed. The output's
-key has a `$was` precondition, so two concurrent triggers cannot both open a
-session on the same version. A session's answers replace the output's `doc` body
-while that session is still its current builder.
+A run opens one session whose first entry asks the instruction and lists the
+selected input ids. The session answers with JSON:
 
-Another builder can query an output and cite it. When the upstream answer
+```json
+{
+  "outputs": [
+    {
+      "slot": "Ada",
+      "inputs": ["land-id"],
+      "components": {
+        "doc": { "title": "Ada", "body": "Keeps the forge." },
+        "villager": { "role": "smith" }
+      }
+    }
+  ]
+}
+```
+
+Each slot names the same output across runs. `inputs` names the selected
+entities that _this output_ used; it may be a subset of the run's inputs. The
+builder writes one graph change containing all outputs and their verified
+`cites` edges. An output no longer citing an input loses that edge. Omitted
+components are unchanged, and an omitted slot keeps its last output. A malformed
+answer is reported and leaves the key retryable at the next check. The model can
+write only client-writable properties; it cannot supply an eid or change builder
+metadata.
+
+Another builder can query a named output and cite it. When the output's content
 changes, that citation becomes stale and the downstream builder's key changes on
-its next check. Building immediately on input change is separate from this
-package's scheduled and on-demand doors.
+its next check. Building immediately on input change is a separate option.
 
-`builder build <builder>` checks now regardless of the floor. Passing an
-alternate provider, model or prompt makes a sibling shadow output for
-comparison, identified by those alternate settings. The primary output keeps its
-identity. A deleted output stays deleted.
+`builder build <builder>` checks now regardless of the floor. An alternate
+provider, model or prompt starts a shadow variant. Shadow output ids are
+separate from the primary outputs and are not selected as downstream inputs. A
+deleted run stays deleted.
 
 A builder is checked when created, when its floor changes, and when a
 [@yaks/wake](../wake) wake fires on it or points at it. A configured `rest`
-advances the floor after each build; an unchanged key still opens nothing. The
-`builder_open` effect sweeps builders at worker startup. No polling or process
-launch happens in this package.
+advances the floor after each run. The `builder_open` effect also sweeps
+builders at worker startup. This package opens sessions but does not launch a
+process itself.
 
 ```json
 {
@@ -67,13 +84,13 @@ launch happens in this package.
 
 `desk` names the session to open. `ask` supplies an instruction when the builder
 has no `doc` body. Without a desk, no effects run and the tool refuses. An
-invalid `rest` reports a warning and disables the effects instead of preventing
-startup. Effect failures are reported after the initiating graph write commits.
+invalid `rest` reports a warning and disables the effects. Effect failures are
+reported after the initiating graph write commits.
 
 ## Exports
 
-- `@yaks/builders`: `builderDoc`, component-name constants, `content`, `key`,
-  `output`, `due`, `inputs`, `plan`, `build`, `decide`, and their types.
+- `@yaks/builders`: vocabulary, `content`, `key`, `run`, `output`, `due`,
+  `inputs`, `plan`, `build`, `decide`, and their types.
 - `@yaks/builders/vocab`: the schema in `docs`.
 - `@yaks/builders/effects`: `effects(host, options)`, `watches`, and the
   handlers `opening`, `ringing` and `answering`.

@@ -1,7 +1,7 @@
 // What a server does about builders, exported as `@yaks/builders/effects`: the
 // code behind the three effects ./vocab.json declares — build a builder when
-// its schedule comes due, and write what a build's session answers into its
-// output. Nothing at all when the configuration names no session to open.
+// its schedule comes due, and write the named outputs a session answers with.
+// Nothing at all when the configuration names no session to open.
 //
 // That session is why this export takes OPTIONS. Opening one means asking a
 // provider, at an effort, with a persona — an account, a model and a persona
@@ -29,21 +29,21 @@
 // at boot rather than thrown — malformed configuration never stops the server
 // coming up — and the plugin then gives no code.
 
-import { type Comp, then } from '@yaks/graph'
+import { type Comp, then, token } from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
-import { DOC } from '@yaks/doc'
 import { and, eq } from '@yaks/query'
 import { kindOf, textOf } from '@yaks/session'
 import { next, WAKE } from '@yaks/wake'
 import {
-  BUILT,
+  BUILD,
   clock,
   decide,
   ENTRY,
   type Open,
   type Options,
 } from './build.ts'
+import { answer } from './answer.ts'
 
 let str = (c: unknown, k: string): string => {
   let v = (c as Comp | undefined)?.[k]
@@ -90,33 +90,35 @@ export let ringing = (o: Open): Handler => (event, tx, write) =>
     ))
 
 /**
- * `builder_answer`, which fills an output: when a build's session answers, the
- * answer becomes the output's `doc` body. Each answer replaces the last, so
- * what the output holds once the session settles is what it said last.
+ * `builder_answer` turns one session answer into named graph outputs. A late
+ * answer from a superseded session has no current run and writes nothing.
  */
-export let answering: Handler = (event, tx, write) =>
-  then(tx.get([event.entity.eid]), (found) => {
-    let said = found[0]
-    let session = str(said?.[ENTRY], 'session')
-    if (!said || !session || kindOf(said) != 'output') return
-    return then(
-      tx.read(and(eq(`${BUILT}.session`, session))),
-      (outs) =>
-        outs.length
-          ? write(outs.map((b) => ({
-            entity: { eid: b.entity.eid },
-            [DOC]: { body: textOf(said) },
-          })))
-          : undefined,
-    )
-  })
+export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
+  let [said] = await tx.get([event.entity.eid])
+  let session = str(said?.[ENTRY], 'session')
+  if (!said || !session || kindOf(said) != 'output') return
+  let [run] = await tx.read(and(eq(`${BUILD}.session`, session)))
+  if (!run) return
+  try {
+    return await write(await answer(tx, run, textOf(said), vocab))
+  } catch (err) {
+    // A bad answer cannot be the current build forever: the next check must
+    // be able to retry the same key, while this error still reaches telemetry.
+    await write([{
+      entity: { eid: run.entity.eid },
+      [BUILD]: { key: null, session: null },
+      $was: { [BUILD]: { session: token(session) } },
+    }])
+    throw err
+  }
+}
 
 /** The code that builds: a builder changing, a wake firing on one, and a
  * build's session answering. */
 export let watches = (o: Open): Handlers => ({
   builder_open: opening(o),
   builder_ring: ringing(o),
-  builder_answer: answering,
+  builder_answer: answering(o.vocab),
 })
 
 /** The code to run, when the configuration named a session to open. */
