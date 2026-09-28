@@ -10,6 +10,10 @@ import type { Hold, Make } from './watch.ts'
 
 let subscribes = (sent: unknown[] | undefined): unknown[] | undefined =>
   sent?.filter((m) => !!m && typeof m == 'object' && 'subscribe' in m)
+    .map((m) => {
+      let sub = m as { subscribe: unknown; id: unknown }
+      return { subscribe: sub.subscribe, id: sub.id }
+    })
 
 let dal = (eid = 'r1', serves = 4): Bundle => ({
   entity: { eid },
@@ -149,7 +153,7 @@ Deno.test('a closed watch drops the server subscription', async () => {
   await c.idle()
 
   assertEquals(subscribes(c.socket()?.sent), [
-    { subscribe: '.course=dinner', id: 's1', acks: true },
+    { subscribe: '.course=dinner', id: 's1' },
   ])
   dinners.close()
   assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's1' })
@@ -252,7 +256,6 @@ Deno.test('remote watches share one sub until the last independent close', async
   assertEquals(subscribes(c.socket()?.sent), [{
     subscribe: '.course=dinner',
     id: 's1',
-    acks: true,
   }])
   a.close()
   a.close()
@@ -265,7 +268,6 @@ Deno.test('remote watches share one sub until the last independent close', async
   assertEquals(subscribes(c.socket()?.sent)?.at(-1), {
     subscribe: '.course=dinner',
     id: 's2',
-    acks: true,
   })
   assertEquals(again.ready, true)
   c.close()

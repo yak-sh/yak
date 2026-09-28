@@ -95,6 +95,7 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
       await c.ready
       for (let i = 0; i < 2; i++) {
         await opening
+        srv?.flush()
         await c.wire?.idle()
       }
     },
