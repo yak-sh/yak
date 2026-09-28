@@ -70,7 +70,6 @@ flock -w 60 -x 9 || { echo "backup: another backup or redaction holds the lock" 
 # mean a run that fails to acquire the lock cannot delete another run's DB.
 work=$(mktemp -d .git/yak-backup.XXXXXXXX)
 outside=
-snapshot="$work/snapshot.db"
 probe="$work/verify.db"
 cleanup() {
   rm -rf "$work"
@@ -86,34 +85,34 @@ abort() {
 }
 trap abort HUP INT QUIT TERM
 
-# An optional scratch filesystem holds only the VACUUM snapshot. Refuse one
-# without room for the live db plus its WAL and a small filesystem reserve.
-# All other temporary files remain under .git, and only our private directory
-# on the scratch filesystem is ever removed.
-if [ -n "${YAK_BACKUP_SNAPSHOT_DIR:-}" ]; then
-  case "$YAK_BACKUP_SNAPSHOT_DIR" in
-    /*) ;;
-    *) echo "backup: snapshot directory must be absolute" >&2; exit 1 ;;
-  esac
-  [ -d "$YAK_BACKUP_SNAPSHOT_DIR" ] || {
-    echo "backup: snapshot directory does not exist: $YAK_BACKUP_SNAPSHOT_DIR" >&2
-    exit 1
-  }
-  size=$(stat -c %s yak.db)
-  wal=0
-  [ ! -f yak.db-wal ] || wal=$(stat -c %s yak.db-wal)
-  need=$(( (size + wal + 67108864 + 1023) / 1024 ))
-  free=$(df -Pk "$YAK_BACKUP_SNAPSHOT_DIR" | awk 'NR == 2 { print $4 }')
-  case "$free" in
-    ''|*[!0-9]*) echo "backup: cannot measure snapshot space" >&2; exit 1 ;;
-  esac
-  [ "$free" -ge "$need" ] || {
-    echo "backup: snapshot directory needs $need KiB, has $free KiB" >&2
-    exit 1
-  }
-  outside=$(mktemp -d "$YAK_BACKUP_SNAPSHOT_DIR/yak-backup.XXXXXXXX")
-  snapshot="$outside/snapshot.db"
-fi
+# Keep the snapshot off the data disk so it does not overlap the dump and
+# restore probe there. Measure the scratch filesystem on each run: /dev/shm's
+# capacity depends on the host, and a full scratch filesystem must fail before
+# VACUUM starts. An explicit path may use another filesystem.
+YAK_BACKUP_SNAPSHOT_DIR=${YAK_BACKUP_SNAPSHOT_DIR:-/dev/shm}
+case "$YAK_BACKUP_SNAPSHOT_DIR" in
+  /*) ;;
+  *) echo "backup: snapshot directory must be absolute" >&2; exit 1 ;;
+esac
+[ -d "$YAK_BACKUP_SNAPSHOT_DIR" ] || {
+  echo "backup: snapshot directory does not exist: $YAK_BACKUP_SNAPSHOT_DIR" >&2
+  exit 1
+}
+size=$(stat -c %s yak.db)
+wal=0
+[ ! -f yak.db-wal ] || wal=$(stat -c %s yak.db-wal)
+need=$(( (size + wal + 67108864 + 1023) / 1024 ))
+free=$(df -Pk "$YAK_BACKUP_SNAPSHOT_DIR" | awk 'NR == 2 { print $4 }')
+case "$free" in
+  ''|*[!0-9]*) echo "backup: cannot measure snapshot space" >&2; exit 1 ;;
+esac
+[ "$free" -ge "$need" ] || {
+  echo "backup: snapshot directory needs $need KiB, has $free KiB" >&2
+  exit 1
+}
+outside=$(mktemp -d "$YAK_BACKUP_SNAPSHOT_DIR/yak-backup.XXXXXXXX")
+snapshot="$outside/snapshot.db"
+echo "backup: snapshot in $YAK_BACKUP_SNAPSHOT_DIR"
 mkdir -p snap
 
 # Plain output regardless of any ~/.sqliterc (box modes break the checks).
@@ -152,6 +151,22 @@ sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
   echo "backup: snapshot failed integrity_check" >&2
   exit 1
 }
+snapshot_size=$(stat -c %s "$snapshot")
+
+# The dump or restore probe may each grow to the snapshot's size on the data
+# disk. Refuse either phase unless 5 GiB remains for the live server.
+room() {
+  need=$(( (snapshot_size + 1023) / 1024 + 5242880 ))
+  free=$(df -Pk . | awk 'NR == 2 { print $4 }')
+  case "$free" in
+    ''|*[!0-9]*) echo "backup: cannot measure data disk space" >&2; return 1 ;;
+  esac
+  [ "$free" -ge "$need" ] || {
+    echo "backup: $1 needs $need KiB, has $free KiB" >&2
+    return 1
+  }
+}
+room dump
 
 # Derived tables carry no information the graph cannot rebuild, so their rows
 # never enter the dump — and WHICH tables those are is read out of the
@@ -299,6 +314,7 @@ while IFS= read -r t; do
   printf '%s\t%s\n' "$a" "$t"
 done < "$work/tables" > "$work/counts"
 rm "$snapshot"
+room restore
 
 # The gate: the dump must restore to the same graph it came from — and it must do
 # so FROM THE SHARDS, so a bad split is caught here, not at restore. Comparing row
@@ -336,6 +352,7 @@ while read -r a t; do
     exit 1
   }
 done < "$work/counts"
+rm "$probe"
 # schema whole; graph/journal live only as parts now — drop any monolithic files a
 # previous (pre-shard) run left tracked, so `git add -A` records the switch.
 rm -f snap/graph.sql.part.* snap/journal.sql.part.*

@@ -104,6 +104,7 @@ Deno.test(
       let inodes = paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino)
       let out = await f.backup()
       assert(out.success, decode(out.stderr))
+      assert(decode(out.stdout).includes('backup: snapshot in /dev/shm'))
       assertEquals(paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino), inodes)
       assertEquals(f.db.query({ t: 'pragma', name: 'integrity_check' }), [{
         integrity_check: 'ok',
@@ -183,6 +184,7 @@ Deno.test('a separate snapshot directory is private and cleaned', async () => {
   try {
     let out = await f.backup('30', scratch)
     assert(out.success, decode(out.stderr))
+    assert(decode(out.stdout).includes(`backup: snapshot in ${scratch}`))
     assertEquals([...Deno.readDirSync(scratch)], [])
     await run(
       'git',
@@ -202,15 +204,18 @@ Deno.test('a snapshot directory without enough space is refused', async () => {
     await run('git', ['init', '-q'], dir)
     await Deno.writeTextFile(`${dir}/yak.db`, '')
     await Deno.truncate(`${dir}/yak.db`, 2 ** 40)
-    let out = await new Deno.Command(script, {
-      env: {
+    for (let snapshotDir of ['', scratch]) {
+      let env: Record<string, string> = {
         YAK_DATA: dir,
         YAK_BACKUP_BOUND: '1',
-        YAK_BACKUP_SNAPSHOT_DIR: scratch,
-      },
-    }).output()
-    assert(!out.success)
-    assert(decode(out.stderr).includes('snapshot directory needs'))
+      }
+      if (snapshotDir) env.YAK_BACKUP_SNAPSHOT_DIR = snapshotDir
+      let out = await new Deno.Command(script, {
+        env,
+      }).output()
+      assert(!out.success)
+      assert(decode(out.stderr).includes('snapshot directory needs'))
+    }
     assertEquals([...Deno.readDirSync(scratch)], [])
   } finally {
     await Deno.remove(dir, { recursive: true })
