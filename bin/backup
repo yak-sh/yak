@@ -209,8 +209,6 @@ sqlite3 -batch -init /dev/null "$snapshot" \
        or name glob 'sqlite_stat*'))
    order by rowid" > "$work/schema.sql"
 journal="name in ('journal_tx', 'journal_change', 'journal_field')"
-dump_data "$journal" > "$work/journal.sql"
-dump_data "not ($journal)" > "$work/graph.sql"
 
 # SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
 # to clear the soft warning too); zero-padded numeric suffixes glob in order and
@@ -222,8 +220,31 @@ dump_data "not ($journal)" > "$work/graph.sql"
 # the data repo grew by a gigabyte a day and filled the disk. With whole rows
 # per part, a run that touches a few rows changes a few parts and the rest
 # dedupe to the blobs history already holds.
-split -C 45M -d -a 3 "$work/graph.sql"   "$work/graph.sql.part."
-split -C 45M -d -a 3 "$work/journal.sql" "$work/journal.sql.part."
+# Stream each dump into split. A complete SQL file beside its shards would
+# double the scratch space needed while the snapshot and restore probe exist.
+# The FIFO lets this POSIX shell wait for the dump writer: a plain pipeline
+# reports only split's status, and could verify and commit incomplete output.
+shard_data() {
+  name=$1
+  filter=$2
+  fifo="$work/$name.fifo"
+  mkfifo "$fifo"
+  dump_data "$filter" > "$fifo" &
+  writer=$!
+  if ! split -C 45M -d -a 3 "$fifo" "$work/$name.sql.part."; then
+    kill "$writer" 2>/dev/null || true
+    wait "$writer" 2>/dev/null || true
+    echo "backup: could not shard $name dump" >&2
+    exit 1
+  fi
+  if ! wait "$writer"; then
+    echo "backup: could not write $name dump" >&2
+    exit 1
+  fi
+  rm "$fifo"
+}
+shard_data graph "not ($journal)"
+shard_data journal "$journal"
 
 # The gate: the dump must restore to the same graph it came from — and it must do
 # so FROM THE SHARDS, so a bad split is caught here, not at restore. Comparing row
