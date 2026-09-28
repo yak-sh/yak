@@ -48,7 +48,11 @@ Deno.test('a refused seed bundle names its file and index', async () => {
         {
           path: 'seed/01-bottles.json',
           content: JSON.stringify([
-            { entity: { eid: '$a' }, bottle: { year: 2019 } },
+            {
+              entity: { eid: '$a' },
+              doc: { title: 'bottle-2019' },
+              bottle: { year: 2019 },
+            },
             { entity: { eid: '$b' }, bottle: { vintage: 2020 } },
           ]),
         },
@@ -60,13 +64,20 @@ Deno.test('a refused seed bundle names its file and index', async () => {
     assertStringIncludes(why, 'bottle.vintage')
     // Nothing was written: the batch is atomic and the mark is only made when
     // it lands, so fixing the file and deploying again seeds the whole thing.
-    assertEquals(await agent.tool('graph_query', { q: '.bottle' }), '[]')
+    assertEquals(
+      await agent.tool('graph_query', { q: '.doc.title=bottle-2019' }),
+      '[]',
+    )
     await agent.tool('app_files', {
       ...app,
       op: 'write',
       path: 'seed/01-bottles.json',
       content: JSON.stringify([
-        { entity: { eid: '$a' }, bottle: { year: 2019 } },
+        {
+          entity: { eid: '$a' },
+          doc: { title: 'bottle-2019' },
+          bottle: { year: 2019 },
+        },
         { entity: { eid: '$b' }, bottle: { year: 2020 } },
       ]),
     })

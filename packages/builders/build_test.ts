@@ -105,6 +105,18 @@ Deno.test('a due builder opens one session asking for named graph outputs', asyn
   assertEquals((await outputs(g)).length, 0)
 })
 
+Deno.test('deleting a configured model returns a builder to its desk model', async () => {
+  let { g } = await building()
+  await g.apply([{
+    ...writeup(),
+    builder: { model: ids.other },
+  }])
+  assertEquals(comp(await one(g, run(ids.builder)), 'build')?.model, ids.other)
+  await g.apply([{ entity: { eid: ids.other }, $delete: true }])
+  await demand(g, { builder: ids.builder })
+  assertEquals(comp(await one(g, run(ids.builder)), 'build')?.model, ids.mind)
+})
+
 Deno.test('one answer writes many stable output entities with their own components', async () => {
   let villager = {
     $defs: {

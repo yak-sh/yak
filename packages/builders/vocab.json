@@ -16,6 +16,7 @@
         "model": {
           "type": "string",
           "ref": "model",
+          "death": "detach",
           "description": "model for this builder, overriding the host default"
         },
         "format": {
