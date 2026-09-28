@@ -463,6 +463,7 @@ export let subscriptions = (graph: Graph, opts: {
     load = (q: string): Bundle[] | Promise<Bundle[]> =>
       graph.read(q, { durable: true }),
     scoped?: Bundle[] | Promise<Bundle[]>,
+    joinsOnly = false,
   ) => {
     if (sub.agg) return tell(sub)
     let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
@@ -479,10 +480,15 @@ export let subscriptions = (graph: Graph, opts: {
         for (let e of ids) sub.members.add(e)
       } else sub.members = ids
       if (sub.routed) network(sub).add(sub, sub.query, sub.members)
-      rememberFields(sub, set)
+      // A far peer movement changes membership, not stored answer rows.
+      // Existing members need no second copy of their unchanged row.
+      let changed = joinsOnly
+        ? set.filter((b) => joined.includes(b.entity.eid))
+        : set
+      rememberFields(sub, changed)
       for (let e of gone) sub.fields.delete(e)
-      if (set.length || gone.length) {
-        sub.sink({ id: sub.id, bundles: set, gone, ...hail(sub, joined) })
+      if (changed.length || gone.length) {
+        sub.sink({ id: sub.id, bundles: changed, gone, ...hail(sub, joined) })
       }
     })
   }
@@ -774,7 +780,7 @@ export let subscriptions = (graph: Graph, opts: {
                       full = graph.get(ids)
                       scoped.set(key, full)
                     }
-                    return push(s, new Set(ids), undefined, full)
+                    return push(s, new Set(ids), undefined, full, true)
                   },
                 )
               },

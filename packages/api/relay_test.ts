@@ -359,6 +359,49 @@ Deno.test('shared reference watches refresh from one moved peer read', () => {
   assertEquals(reads.filter((r) => r == 'get l1'), ['get l1'])
 })
 
+Deno.test('reference peer movement sends rows only on entry and exit', () => {
+  let graph = shop()
+  graph.apply([
+    { entity: { eid: 'p1' }, doc: { title: 'One' } },
+    { entity: { eid: 'l1' }, book: { author: 'p1', price: 12 } },
+  ])
+  let subs = subscriptions(graph), writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'owner', '.doc')
+  subs.open(watcher.to, 'looks', '.book.author.browsing.x<10&.book&*')
+  watcher.take()
+
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 3 } }])
+  let entered = watcher.take()
+  assertEquals(entered.find((f) => f.id == 'looks')?.bundles?.[0].book, {
+    author: 'p1',
+    price: 12,
+  })
+  assertEquals(entered.find((f) => f.id == 'owner')?.relay?.[0].browsing, {
+    x: 3,
+  })
+
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 4 } }])
+  assertEquals(watcher.take(), [{
+    id: 'owner',
+    relay: [{
+      entity: { eid: 'p1' },
+      browsing: { x: 4 },
+    }],
+  }])
+
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 12 } }])
+  assertEquals(watcher.take().find((f) => f.id == 'looks')?.gone, ['l1'])
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 2 } }])
+  assertEquals(watcher.take().find((f) => f.id == 'looks')?.bundles?.[0].book, {
+    author: 'p1',
+    price: 12,
+  })
+  subs.drop(writer.to)
+  let expired = watcher.take()
+  assertEquals(expired.find((f) => f.id == 'owner')?.relay?.[0].browsing, null)
+  assertEquals(expired.find((f) => f.id == 'looks')?.gone, ['l1'])
+})
+
 Deno.test('peer-only rows keep a missing durable candidate until expiry', () => {
   let clock = stopped(), graph = shop()
   let reads = 0
