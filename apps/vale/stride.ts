@@ -52,7 +52,7 @@ export let stride = (
 }
 
 /** Walk in the hero's own facing direction while the stick or keys turn them.
- * Unlike camera-relative strafing, sideways input never translates sideways.
+ * Turning stays in hero space, including a sideways step made with A/D.
  *
  * ```ts
  * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
@@ -70,24 +70,26 @@ export let stride = (
  * assert(arc.x > b.x && arc.z < b.z)
  * let back = steerStep(v, b, { turn: 0, forward: -1 }, 0.1, 5)
  * assert(back.z > b.z && back.z - b.z < b.z - go.z)
+ * let side = steerStep(v, b, { turn: 0, forward: 0, side: 1 }, 0.1, 5)
+ * assert(side.x < b.x && side.z == b.z && side.yaw == b.yaw)
  * ```
  */
 export let steerStep = (
   v: Vale,
   b: Body,
-  steer: { turn: number; forward: number },
+  steer: { turn: number; forward: number; side?: number },
   dt: number,
   speed: number,
   jump = false,
 ): Body => {
-  let { turn, forward } = steer
+  let { turn, forward, side = 0 } = steer
   let yaw = b.yaw - turn * dt
   let n = walk(
     v,
     b,
     {
-      x: Math.sin(yaw) * forward,
-      z: Math.cos(yaw) * forward,
+      x: Math.sin(yaw) * forward + Math.cos(yaw) * side,
+      z: Math.cos(yaw) * forward - Math.sin(yaw) * side,
       jump,
     },
     dt,

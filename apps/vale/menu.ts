@@ -49,7 +49,8 @@ let kbd = (keys: string[]) =>
 let keys = (swapped: boolean, strafes: boolean) =>
   [
     [kbd(['W', 'S', '↑', '↓']), 'Walk forward or back'],
-    [kbd(['A', 'D', '←', '→']), strafes ? 'Strafe' : 'Turn'],
+    [kbd(['A', 'D']), strafes ? 'Strafe' : 'Turn'],
+    [kbd(['←', '→']), 'Turn'],
     [swapped ? 'right drag' : 'left drag', 'Steer the camera while moving'],
     [swapped ? 'left drag' : 'right drag', 'Look without turning your hero'],
     ['left + right mouse buttons', 'Walk forward; move the mouse to steer'],

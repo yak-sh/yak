@@ -7,7 +7,7 @@ export type Intent = {
   /** right and forward axes, at most 1 long */
   move: [number, number]
   /** turn in radians/second and forward/back, in hero space */
-  steer?: { turn: number; forward: number }
+  steer?: { turn: number; forward: number; side?: number }
   jump: boolean
   strike: boolean
   /** the ability asked for, by its slot on the bar, 1 to 3, or 0 */
@@ -80,18 +80,21 @@ let AXES: Record<string, [number, number]> = {
   KeyS: [0, -1],
   ArrowDown: [0, -1],
   KeyA: [-1, 0],
-  ArrowLeft: [-1, 0],
   KeyD: [1, 0],
-  ArrowRight: [1, 0],
+}
+
+let TURNS: Record<string, number> = {
+  ArrowLeft: -1,
+  ArrowRight: 1,
 }
 
 let TOUCH_TURN = 3
 let KEY_TURN = 6
 
-/** A/D and the arrow keys either strafe or steer the hero. Touch always
- * steers at its familiar rate; keys turn faster. Both mouse buttons add
- * camera-facing forward motion. The two axes are normalised together so
- * diagonals are no faster.
+/** Arrows always steer; A/D steer or strafe according to the setting. Touch
+ * always steers at its familiar rate; keys turn faster. Both mouse buttons
+ * add forward motion. The movement axes are normalised together so diagonals
+ * are no faster.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -100,6 +103,12 @@ let KEY_TURN = 6
  * })
  * assertEquals(movement(['KeyA'], false), {
  *   move: [-1, 0], steer: { turn: -6, forward: 0 },
+ * })
+ * assertEquals(movement(['ArrowLeft'], true), {
+ *   move: [0, 0], steer: { turn: -6, forward: 0 },
+ * })
+ * assertEquals(movement(['ArrowRight', 'KeyA'], true), {
+ *   move: [-1, 0], steer: { turn: 6, forward: 0, side: -1 },
  * })
  * assertEquals(movement([], true, [1, 0]), {
  *   move: [1, 0], steer: { turn: 3, forward: 0 },
@@ -115,21 +124,34 @@ export let movement = (
   stick?: [number, number],
   mouseWalk = false,
 ): Pick<Intent, 'move' | 'steer'> => {
-  let x = 0, y = 0
+  let x = 0, y = 0, keyTurn = 0, turning = !!stick
   for (let code of held) {
+    if (TURNS[code]) keyTurn += TURNS[code], turning = true
     let a = AXES[code]
-    if (a) [x, y] = [x + a[0], y + a[1]]
+    if (a) {
+      x += a[0]
+      y += a[1]
+      if (a[0] && !strafe) keyTurn += a[0], turning = true
+    }
   }
-  if (stick) [x, y] = [x + stick[0], y + stick[1]]
+  let side = strafe ? x : 0
+  if (stick) x += stick[0], y += stick[1]
   if (mouseWalk) y++
-  let len = Math.hypot(x, y)
+  let forward = y
+  let len = Math.hypot(side, forward)
+  if (len > 1) [side, forward] = [side / len, forward / len]
+  len = Math.hypot(x, y)
   if (len > 1) [x, y] = [x / len, y / len]
+  let move: [number, number] = [x, y]
   return {
-    move: [x, y],
-    steer: stick
-      ? { turn: stick[0] * TOUCH_TURN, forward: stick[1] }
-      : !strafe && !mouseWalk
-      ? { turn: x * KEY_TURN, forward: y }
+    move,
+    steer: turning
+      ? {
+        turn: Math.max(-1, Math.min(1, keyTurn)) * KEY_TURN +
+          (stick?.[0] ?? 0) * TOUCH_TURN,
+        forward,
+        ...(side ? { side } : {}),
+      }
       : undefined,
   }
 }
@@ -216,7 +238,7 @@ export let listen = (
 
   addEventListener('keydown', (e) => {
     if (busy() || e.metaKey || e.ctrlKey) return
-    if (AXES[e.code] || KEYS[e.code]) e.preventDefault()
+    if (AXES[e.code] || TURNS[e.code] || KEYS[e.code]) e.preventDefault()
     if (e.repeat) return
     held.add(e.code)
     let a = KEYS[e.code]

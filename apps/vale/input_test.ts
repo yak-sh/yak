@@ -40,7 +40,7 @@ Deno.test('mouse chord follows button state through pointer motion and cancel', 
   assertEquals(mouse.walk(), true)
   assertEquals(
     movement(['KeyA'], false, undefined, mouse.walk()).steer,
-    undefined,
+    { turn: -6, forward: 1 },
   )
   mouse.move(2, 1) // releasing the first button stops walking
   assertEquals(mouse.walk(), false)
@@ -51,4 +51,29 @@ Deno.test('mouse chord follows button state through pointer motion and cancel', 
   assertEquals(mouse.walk(), false)
   assertEquals(mouse.up(0), undefined)
   assertEquals(mouse.up(2), undefined)
+})
+
+Deno.test('arrow keys turn in either A/D mode and still allow strafing', () => {
+  for (let strafe of [false, true]) {
+    for (
+      let [code, turn] of [
+        ['ArrowLeft', -6],
+        ['ArrowRight', 6],
+      ] as const
+    ) {
+      assertEquals(movement([code], strafe).steer, { turn, forward: 0 })
+      assertEquals(movement([code, 'KeyW'], strafe).steer?.turn, turn)
+      assertEquals(movement([code], strafe).move, [0, 0])
+    }
+  }
+  assertEquals(movement(['KeyA'], true).steer, undefined)
+  assertEquals(movement(['ArrowRight', 'KeyA'], true).steer, {
+    turn: 6,
+    forward: 0,
+    side: -1,
+  })
+  assertEquals(movement(['ArrowLeft'], true, undefined, true).steer, {
+    turn: -6,
+    forward: 1,
+  })
 })
