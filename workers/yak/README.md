@@ -73,10 +73,11 @@ nothing. A push's build that fails is started once more through the `BUILD_HOOK`
 deploy hook (builds.ts), since most failures are the network's; the second
 build's failure stands.
 
-Builds run one per push and finish in any order, so the deploy door
-(`wrangler.ts` `superseded`) deploys a commit only while it is main's tip and no
-live version is ahead of it. A build that loses that race deploys nothing and
-says why in its log; the newer build deploys.
+Builds run on watched-path pushes and finish in any order, so the deploy door
+(`wrangler.ts` `superseded`) deploys a commit only while no later commit changes
+the watched source and no live version is ahead of it. An app-only push starts
+no replacement build and does not supersede the last one. A build that loses the
+race to newer Worker source deploys nothing and says why in its log.
 
 The sandbox image is two halves (sandbox/base.ts). `sandbox/base/Dockerfile` is
 the toolchain, pushed to the registry once per version of that file as

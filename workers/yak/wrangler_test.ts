@@ -7,7 +7,7 @@
 // bundles by. A workers.json entry pointing anywhere else type-checks one file
 // and bundles another.
 import { assert, assertEquals } from '@std/assert'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   aliased,
@@ -119,7 +119,7 @@ let run = async (cwd: string, ...args: string[]) => {
   return new TextDecoder().decode(r.stdout).trim()
 }
 
-Deno.test('wrangler: only main’s tip goes live, and never over a version ahead of it', async () => {
+Deno.test('wrangler: app-only pushes do not supersede a build, but Worker source and newer live versions do', async () => {
   let root = Deno.makeTempDirSync({ prefix: 'yak-live-' })
   try {
     let origin = join(root, 'origin.git')
@@ -127,20 +127,32 @@ Deno.test('wrangler: only main’s tip goes live, and never over a version ahead
     let thin = join(root, 'thin')
     await run(root, 'init', '-q', '--bare', '-b', 'main', origin)
     await run(root, 'clone', '-q', origin, work)
-    let push = async () => {
-      await run(work, 'commit', '-q', '--allow-empty', '-m', 'c')
+    let push = async (path: string) => {
+      let file = join(work, path)
+      Deno.mkdirSync(dirname(file), { recursive: true })
+      Deno.writeTextFileSync(file, crypto.randomUUID())
+      await run(work, 'add', path)
+      await run(work, 'commit', '-q', '-m', 'c')
       await run(work, 'push', '-q', 'origin', 'HEAD:main')
       return await run(work, 'rev-parse', 'HEAD')
     }
-    let a = await push()
+    let a = await push('workers/yak/site.ts')
     // Cloned the way a build is, before the next push arrives.
     await run(root, 'clone', '-q', '--depth', '1', `file://${origin}`, thin)
-    let c = await push()
-    // The tip goes live over what is behind it.
+    let b = await push('apps/vale/main.ts')
+    // An app-only push starts no replacement build; the last one may land.
+    let app = await seen(thin, [a])
+    assertEquals(app.tip, b)
+    assertEquals(app.changed, false)
+    assertEquals(superseded(app), null)
+    let c = await push('packages/graph/mod.ts')
+    // The latest build goes live over what is behind it.
     assertEquals(superseded(await seen(work, [a])), null)
-    // An older build that finishes last: main has moved past it.
+    // An older build that finishes last must leave newer source to its build.
+    let old = await seen(thin, [a])
+    assertEquals(old.changed, true)
+    assert(superseded(old))
     await run(work, 'checkout', '-q', a)
-    assert(superseded(await seen(work, [a])))
     // With no remote to ask, a live version ahead of it still stops it.
     await run(work, 'remote', 'remove', 'origin')
     let blind = await seen(work, [c])

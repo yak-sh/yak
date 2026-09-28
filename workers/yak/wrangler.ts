@@ -191,29 +191,34 @@ export let descendants = (pid: number): number[] => {
 
 // ---- which commit may go live ----------------------------------------------
 //
-// Workers Builds runs one build per push, and the builds finish in whatever
-// order they finish: three pushes a minute apart once went live with the
-// middle one last. So a deploy asks two things before it uploads anything —
-// is this commit still main's tip, and is no live version ahead of it — and
-// stops on either "no", leaving the newer build to deploy. A live version that
-// is neither behind nor ahead (a commit that never reached main) is replaced:
-// main is what runs. What could not be read refuses nothing, and is printed.
+// Workers Builds runs one build per push that changes workers/yak or packages,
+// and the builds finish in whatever order they finish. A deploy stops when a
+// newer build has source to deploy, or a newer version is already live. Other
+// pushes do not start a build, so they must not supersede the last one.
+// A live version that is neither behind nor ahead (a commit that never reached
+// main) is replaced: main is what runs. What could not be read is printed.
 
 /** What a deploy sees: its own commit, main's tip at the remote (null when the
- * remote could not be asked), and each commit a live version was deployed
- * from, with whether it is ahead of this one (null when git cannot tell). */
+ * remote could not be asked), whether the watched source changed at that tip,
+ * and each commit a live version was deployed from, with whether it is ahead
+ * of this one (null when git cannot tell). */
 export type Seen = {
   head: string
   tip: string | null
+  changed: boolean | null
   live: { sha: string; ahead: boolean | null }[]
 }
 
 let short = (sha: string) => sha.slice(0, 8)
 
 /** Why this commit must not go live, or null when it may. */
-export let superseded = ({ head, tip, live }: Seen): string | null => {
-  if (tip && tip != head) {
-    return `main is at ${short(tip)}, past ${short(head)}; its build deploys it`
+export let superseded = ({ head, tip, changed, live }: Seen): string | null => {
+  if (tip && tip != head && changed !== false) {
+    return changed
+      ? `main is at ${
+        short(tip)
+      } with newer Worker source; its build deploys it`
+      : `main is at ${short(tip)}; watched source could not be compared`
   }
   let newer = live.find((l) => l.ahead)
   return newer
@@ -233,6 +238,10 @@ let git = async (root: string, ...args: string[]) => {
 
 let SHA = /^[0-9a-f]{40}\b/
 
+// The paths in the Workers Builds dashboard (README.md). An app-only push
+// changes neither, so no later build exists to take this one's place.
+let WATCHED = ['workers/yak', 'packages']
+
 /**
  * What a deploy from `root`'s checkout sees, given the commits live now. A
  * live commit this clone lacks is fetched first: it was pushed after the clone
@@ -242,17 +251,35 @@ export let seen = async (root: string, live: string[]): Promise<Seen> => {
   let head = (await git(root, 'rev-parse', 'HEAD')).out
   let asked = await git(root, 'ls-remote', 'origin', 'refs/heads/main')
   let tip = asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
-  let ahead = async (sha: string) => {
-    if (sha == head) return false
+  let include = async (sha: string) => {
     if ((await git(root, 'cat-file', '-e', `${sha}^{commit}`)).code) {
       await git(root, 'fetch', '--quiet', 'origin', sha)
     }
+  }
+  let changed: boolean | null = false
+  if (tip && tip != head) {
+    await include(tip)
+    let { code } = await git(
+      root,
+      'diff',
+      '--quiet',
+      head,
+      tip,
+      '--',
+      ...WATCHED,
+    )
+    changed = code == 0 ? false : code == 1 ? true : null
+  }
+  let ahead = async (sha: string) => {
+    if (sha == head) return false
+    await include(sha)
     let { code } = await git(root, 'merge-base', '--is-ancestor', head, sha)
     return code == 0 ? true : code == 1 ? false : null
   }
   return {
     head,
     tip,
+    changed,
     live: await Promise.all(
       live.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
     ),
