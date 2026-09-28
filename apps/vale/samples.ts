@@ -7,7 +7,7 @@ export let SAMPLES: Record<string, string> = {
   hammer: '410000827723e43c197861e59ee1045fead0f8ec34503e1f80294a3bfbd41c35',
   sword: 'fa331f1e59bd6e42fadbe184c5f6c424640d57103ad93aa3de1e5e26e534e0d5',
   spell: 'f39d94d4680b9fd6b85e8ccad2919848718f7fc18696e73c346479302550ca0b',
-  wolf: 'b5494d017bb7385b58bce2cf83c4eaaa46460b163624023fe495b0798bbbad9e',
+  wolf: 'd5a019cc0df66f1cc3e2ca5a049235b12678f78595d7fd0759058623a1b3911c',
 }
 
 type State = {
