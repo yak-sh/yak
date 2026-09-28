@@ -53,6 +53,7 @@ let app = (slug: string, spaceEid: string): App => ({
   published: null,
   installed: null,
   gallery: null,
+  screenshot: null,
   seeded: null,
   trashed: null,
   theme: null,
