@@ -29,6 +29,17 @@ let authorizeCommand: CliCommand = {
 }
 
 export let commands: CliCommand[] = [
+  {
+    name: 'session_tui',
+    noun: 'session',
+    verb: 'tui',
+    description: 'Open the session TUI without creating a session.',
+    run: async (_args, _host, context) => {
+      let { open } = await import('./view.ts')
+      await open(context.config!)
+      return 0
+    },
+  },
   authorizeCommand,
   {
     ...authorizeCommand,

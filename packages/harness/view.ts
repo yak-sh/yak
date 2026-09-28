@@ -1,8 +1,7 @@
-// The harness in a terminal, as a view: exported as `@yaks/harness/tui`, the
-// views a `yak` command holds an answer with (`--tui`, @yaks/cli answer.ts).
-// A session or an entry answered alone is drawn as the whole harness, selected
-// on that session — what `yak session new "…" --tui` shows once the session has
-// settled on its reply.
+// The harness in a terminal, opened directly by `yak session tui` or as a view
+// exported by `@yaks/harness/tui`. A session or an entry answered alone is
+// drawn as the whole harness, selected on that session — what
+// `yak session new "…" --tui` shows once the session has settled on its reply.
 //
 // It runs the harness the way the harness always ran in a terminal: the agent
 // and the graph in a worker (./remote.ts), drafts in a vault of their own
@@ -17,7 +16,8 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { ComponentRenderer } from '@yaks/preact'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
-import { useShutdown } from '@yaks/tui'
+import { sheet } from '@yaks/render/views'
+import { run, useShutdown } from '@yaks/tui'
 import { read } from '@yaks/cli/host'
 import { App } from './app.ts'
 import { openDrafts } from './draft_vault.ts'
@@ -30,7 +30,7 @@ type Up = {
 
 let boot = async (
   config: string,
-  session: string,
+  session: string | undefined,
   progress: (text: string) => void,
 ): Promise<Up> => {
   let drafts = await openDrafts()
@@ -49,7 +49,7 @@ let boot = async (
         }`,
       )
     })
-    await drafts.ui.patch({ selected: session })
+    if (session) await drafts.ui.patch({ selected: session })
     return { backend, drafts }
   } catch (error) {
     backend.force()
@@ -58,8 +58,10 @@ let boot = async (
   }
 }
 
-let Harness = ({ e, config }: { e: Bundle; config?: string }) => {
-  let session = String((e.entry as Comp | undefined)?.session ?? e.entity.eid)
+let Harness = ({ e, config }: { e?: Bundle; config?: string }) => {
+  let session = e
+    ? String((e.entry as Comp | undefined)?.session ?? e.entity.eid)
+    : undefined
   let [up, set] = useState<Up | Error>()
   let [stage, progress] = useState('opening the harness graph…')
   useEffect(() => {
@@ -102,3 +104,7 @@ export let views: Registry<ComponentRenderer> = define([
   page('.session'),
   page('.entry'),
 ])
+
+/** Open the harness without creating or selecting a session. */
+export let open = (config: string): Promise<void> =>
+  run(() => h(Harness, { config }), { sheet })

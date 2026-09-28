@@ -63,7 +63,7 @@ work (`@yaks/doc`, `@yaks/edge`, `@yaks/task`, `@yaks/project`). `PLUGINS` in
 ```sh
 yak session new 'reply with the word pong'
 yak session new 'inspect the task graph' --persona N-4568
-yak session new --tui
+yak session tui
 yak session send <session> 'and again'
 yak session send <session> 'continue here' --provider openai --model gpt-6-sol
 yak session list
@@ -77,10 +77,9 @@ yak auth openai
 `session new` and `session send` write the input, wait while the transcript runs
 wherever the graph's effects are worked, and answer with the entry it settled
 on, so a command line prints the reply. `session send` can select another
-provider and model on the same session. With `--tui` the answer is held as the
-terminal app, selected on that session: `yak session new '…' --tui`,
-`yak session new --tui` for an empty session ready for input, or
-`yak session list --tui` where the graph holds one session. The transcript
+provider and model on the same session. `yak session new '…' --tui` opens the
+terminal app selected on that session. `yak session tui` opens it without
+creating a session; `yak session` still lists its subcommands. The transcript
 scrolls and word-wraps beside the Sessions and Context usage panels. Enter
 starts a session (or sends to the selected one); Shift+Enter inserts a newline.
 In NORMAL mode, `b` opens a 20-row session browser, `>` and `<` change pages,
