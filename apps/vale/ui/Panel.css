@@ -92,6 +92,19 @@
   width: min(40rem, 100%);
 }
 
+/* Keep the hero's vitals beside their sheet on a wide glass, and above it
+   where there is no room for two columns. */
+.Panel-hero {
+  padding-top: calc(var(--safe-t) + 6rem);
+}
+
+@media (min-width: 55rem) {
+  .Panel-hero {
+    padding-top: var(--safe-t);
+    padding-left: calc(var(--safe-l) + 18rem + var(--gap));
+  }
+}
+
 .Panel-tabs .Panel_Head {
   align-items: end;
   gap: 0.35rem;

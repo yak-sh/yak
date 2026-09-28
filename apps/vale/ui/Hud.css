@@ -77,11 +77,15 @@
     display: none;
   }
 
-  /* A panel takes the glass: while one is open nothing else on it shows but
-     a tip, so nothing lies half under the sheet, and nothing under its scrim
-     could be pressed anyway. The scene's labels stay with the world. */
+  /* A panel takes the glass: while one is open the scene's controls hide,
+     except the hero's vitals beside their own sheet. */
   &:has(> .Panel:not([hidden])) > :not(.Panel, .Hud_Layer, .Tip) {
     visibility: hidden;
+  }
+
+  &:has(> .Panel-hero:not([hidden])) > .Vitals {
+    z-index: 4;
+    visibility: visible;
   }
 }
 
