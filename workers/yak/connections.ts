@@ -30,6 +30,7 @@
 // key is the secret it is checked against, and a request that fails is
 // refused rather than kept.
 import {
+  attach,
   begin,
   clientOf,
   connect,
@@ -106,6 +107,7 @@ let EID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
+let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
 
 /** A service as a page draws it: what a person calls it, a line about it,
  * its site and its logo, each empty where its integration says none. */
@@ -143,8 +145,11 @@ export type Shown = {
   keyed: boolean
   /** the hosts its key may be sent to */
   hosts: string[]
+  scopes: string[]
   /** the apps that call out through it */
   apps: Using[]
+  /** live apps in this space that the owner may attach */
+  available: { app: string; title: string }[]
   /** why it is not finished yet: the note on its `provisional` mark */
   saving: string
   /** why its key could not be saved: the text beside its `error` or
@@ -276,6 +281,16 @@ export let connectionsOf = async (
   )).flat()
   let links = all.filter((b) => b[USES])
   let named = new Map<string, string>()
+  let available = new Map<string, { app: string; title: string }[]>()
+  let dir = dirOf(env)
+  for (let space of spaces) {
+    available.set(
+      space.eid,
+      (await dir.apps(space))
+        .filter((app) => !app.trashed)
+        .map((app) => ({ app: app.eid, title: app.title || app.slug })),
+    )
+  }
   let apps = [...new Set(links.map((l) => String(comp(l, 'edge').from)))]
   if (apps.length) {
     for (let b of await read(`.eid=${apps.join(',')}&.app&*`)) {
@@ -302,6 +317,7 @@ export let connectionsOf = async (
         account: String(c.account ?? ''),
         keyed: !i || keyed(i),
         hosts: i?.hosts ?? [],
+        scopes: strs(c.scopes).length ? strs(c.scopes) : i?.scopes ?? [],
         apps: to.map((l): Using => {
           let app = String(comp(l, 'edge').from)
           let u = comp(l, USES)
@@ -313,6 +329,8 @@ export let connectionsOf = async (
             anyone: u.anyone == true,
           }
         }),
+        available: (available.get(String(c.owner)) ?? [])
+          .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
         failed: failed
           ? String(comp(b, 'content').body ?? 'the key could not be saved')
@@ -462,6 +480,28 @@ export let connecting = async (
       return no('That connection is not here any more.')
     }
     let apps = await usersOf(env, eid)
+    if (act == 'attach') {
+      if (who.role != 'owner' || owner != space.eid) {
+        return no('Only this space’s owner can attach its connection.')
+      }
+      let at = await dirOf(env).appAt(field('app'))
+      if (!at || at.space.eid != space.eid || at.app.trashed) {
+        return no('Choose a live app in this space.')
+      }
+      let changes = await attach(c.graph.read, {
+        owner: space.eid,
+        app: at.app.eid,
+        connection: eid,
+      })
+      if (changes.length) await c.graph.apply(changes)
+      await rebound(env, [at.app.eid])
+      return {
+        say: `${at.app.title || at.app.slug} can now use ${
+          integrationOf(b)
+        }. Only its members can call out through it.`,
+        no: false,
+      }
+    }
     // Opening a connection to anyone using an app, or closing it to its
     // members again, is the person's act on one link (@yaks/member
     // `callsOut`); what the app's code reads does not move.
@@ -721,6 +761,47 @@ let said = (u: Comp, title: string) =>
 // connections page; no row here ever carries one.
 let CONNECTIONS: Row[] = [
   {
+    name: 'connection_attach',
+    destructive: true,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        connection: str(
+          'the id of a connected connection owned by this space, from connection_list',
+        ),
+      },
+      required: ['app', 'connection'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await inApp(ctx, args)
+      if (who.role != 'owner') {
+        throw refuse(
+          'access',
+          `only the owner of ${space.slug} may attach its connection`,
+        )
+      }
+      let connection = text(args.connection, 'connection')
+      let c = ctxOf(ctx.env, who)
+      let changes = await attach(c.graph.read, {
+        owner: space.eid,
+        app: app.eid,
+        connection,
+      }).catch((e) => {
+        throw refuse('conflict', e instanceof Error ? e.message : String(e))
+      })
+      if (changes.length) await c.graph.apply(changes)
+      await rebound(ctx.env, [app.eid])
+      return {
+        space,
+        text: `${space.slug}/${app.slug} can use connection ${connection}. ` +
+          'Only app members can call out through it. The credential stays in the vault.',
+      }
+    },
+  },
+  {
     name: 'connection_need',
     destructive: false,
     idempotent: true,
@@ -843,7 +924,7 @@ let CONNECTIONS: Row[] = [
               titles.get(String(comp(l, 'edge').from)) ?? 'another app',
             )
           )
-        return `${c.integration}: ${c.status}${
+        return `${c.integration} (${b.entity.eid}): ${c.status}${
           c.account ? ` as ${c.account}` : ''
         }${uses.length ? `; ${uses.join('; ')}` : ''}`
       })

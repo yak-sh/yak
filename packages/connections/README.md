@@ -95,6 +95,13 @@ caller to apply in its own name:
 - `list(read, owner)` returns the owner's connections and the `uses` links to
   them.
 
+`attach(read, {owner, app, connection, binding?})` plans an owner's grant of an
+existing connected space connection to an app. The host checks that the actor
+owns the space and that the app belongs to it; `attach` checks the connection's
+owner and requested OAuth scopes. It replaces an unmet ask, retains that ask's
+binding, removes the unused needed connection, and starts the new link
+members-only with a sentinel. The key stays in the vault.
+
 `using(read, {app, integration, owner?, each?})` answers the connection an app
 uses through an integration: the shared one, or with `each`, the one the owner
 holds. A host reads the space's ask with it before a person connects their own.

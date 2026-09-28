@@ -310,8 +310,13 @@ Deno.test(
       )
       assertStringIncludes(
         await tool('connection_list', { space: mine }),
-        'roster: needed',
+        'roster (',
       )
+      await refused(tool, 'connection_attach', {
+        space: mine,
+        app,
+        connection: crypto.randomUUID(),
+      })
       // The secret tools the directory listed: a key the worker reads as
       // itself, or the sentence a runtime with no vault says instead.
       let kept = await refused(tool, 'app_secret_set', {

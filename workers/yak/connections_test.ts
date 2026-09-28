@@ -3,7 +3,12 @@
 // vault and nowhere else, a seal's state reaches the page, an app calls out
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { envOf, integrationEid, need, registration } from '@yaks/connections'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
@@ -26,6 +31,7 @@ import { outbound, outboundPlugin } from './outbound.ts'
 import { PUBLISHED } from './published.ts'
 import { answered, routed } from './plugin.ts'
 import { opened } from './lib/token.ts'
+import { desk } from './pages.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
 
@@ -244,6 +250,109 @@ Deno.test('a connection elsewhere is not this page to change', async () => {
     await s.post({ do: 'disconnect', connection: eid }),
     { say: 'That connection is not here any more.', no: true },
   )
+})
+
+let liveApp = async (s: Awaited<ReturnType<typeof setup>>) => {
+  await s.at.apply([{
+    entity: { eid: '$app' },
+    doc: { title: 'Notes' },
+    app: {
+      slug: 'notes',
+      space: s.space.eid,
+      version: 0,
+      access: 'public',
+      store: 'ada/notes.a1',
+    },
+  }], KERNEL)
+  return (await s.dir.app(s.space, 'notes'))!
+}
+
+Deno.test('the owner can attach a connected space key to a live app from the page', async () => {
+  let s = await setup()
+  let key = 'private-weather-key'
+  await s.post({
+    do: 'add',
+    integration: 'Weather',
+    hosts: 'api.weather.test',
+    key,
+  })
+  let app = await liveApp(s)
+  let c = ctxOf(s.p.env, { person: s.person, role: 'owner' })
+  await c.graph.apply(
+    await need(c.graph.read, {
+      owner: s.space.eid,
+      app: app.eid,
+      integration: 'Weather',
+      binding: 'SKY',
+    }),
+  )
+  let before = await s.shown()
+  let connected = before.list.find((c) => c.status == 'connected')!
+  assertEquals(connected.available, [{ app: app.eid, title: 'Notes' }])
+  let page = await (await desk({
+    space: s.space.slug,
+    apps: [],
+    view: 'connections',
+    connections: before,
+  })).text()
+  assertStringIncludes(page, 'Let an app use this connection')
+  assertStringIncludes(page, 'Only the app’s members can use it')
+  assertEquals(
+    await s.post({
+      do: 'attach',
+      connection: connected.eid,
+      app: app.eid,
+    }),
+    {
+      say:
+        'Notes can now use Weather. Only its members can call out through it.',
+      no: false,
+    },
+  )
+  let after = await s.shown()
+  assertEquals(after.list.length, 1)
+  assertEquals(
+    after.list[0].apps.map((a) => [a.app, a.binding, a.anyone, a.direct]),
+    [[app.eid, 'SKY', false, false]],
+  )
+  let sent = await envOf(c, app.eid)
+  assert(sent.SKY && sent.SKY != key)
+  assert(!s.dump().includes(key))
+})
+
+Deno.test('attaching a space connection is an owner tool, not an editor tool', async () => {
+  let s = await setup()
+  await s.post({
+    do: 'add',
+    integration: 'Weather',
+    hosts: 'api.weather.test',
+    key: 'private-key',
+  })
+  let app = await liveApp(s)
+  let connection = (await s.shown()).list[0].eid
+  let tool = connectionsPlugin.tools!.find((t) =>
+    t.name == 'connection_attach'
+  )!
+  let editor = crypto.randomUUID()
+  await s.at.apply([
+    { entity: { eid: editor }, person: {} },
+    {
+      entity: { eid: '$seat' },
+      member: { space: s.space.eid, person: editor, role: 'editor' },
+    },
+  ], KERNEL)
+  await assertRejects(() =>
+    tool.run(
+      { env: s.p.env, dir: s.dir, person: editor },
+      { space: 'ada', app: 'notes', connection },
+    )
+  )
+  let answer = await tool.run(
+    { env: s.p.env, dir: s.dir, person: s.person },
+    { space: 'ada', app: 'notes', connection },
+  )
+  assertStringIncludes(String(answer.text), 'Only app members')
+  assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['WEATHER'])
 })
 
 // A space whose Notes app asks each person to connect their own account

@@ -131,6 +131,8 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
           account: '',
           keyed: true,
           hosts: [],
+          scopes: [],
+          available: [],
           apps: [{
             app: 'n',
             title: 'Notes',
@@ -168,6 +170,8 @@ Deno.test('connections: the person’s own, then this space with what it could a
     account: '',
     keyed: true,
     hosts: [],
+    scopes: [],
+    available: [],
     apps: [],
     saving: '',
     failed: '',

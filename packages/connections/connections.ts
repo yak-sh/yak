@@ -35,12 +35,14 @@
 //
 // The two verbs an untrusted caller may ask, `need` and `list`, are the tools,
 // and answer bundles like every tool, for the caller to write in its own name.
-// The rest are for trusted code (the dashboard connecting, the egress finding
+// Attaching an existing credential is the owner's act through a host that
+// checks ownership. The rest are for trusted code (the dashboard connecting,
+// the egress finding
 // a sentinel among an app's connections, swapping in the credential and
 // refreshing a token), and act on the graph and vault they are given.
 
-import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { link } from '@yaks/edge'
+import { type Bundle, type Comp, type Eid, token } from '@yaks/graph'
+import { edgeEid, link } from '@yaks/edge'
 import { type Attempt, type Client, client, OAuthError } from '@yaks/oauth'
 import {
   records,
@@ -264,6 +266,76 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
       $was: { [INTEGRATION]: { name: null } },
     }],
     ...a.app ? [linked(a.app, made.entity.eid, u)] : [],
+  ]
+}
+
+/** Link an app to a connection its space already owns and has connected.
+ * The host verifies that the actor owns both. A previous unmet ask is
+ * replaced, with its binding kept, and an unused ask is removed. The new
+ * link starts members-only and never hands the app code a key. */
+export let attach = async (
+  read: Read,
+  a: { owner: Eid; app: Eid; connection: Eid; binding?: string },
+): Promise<Bundle[]> => {
+  let target = await held(read, a.connection)
+  let grant = comp(target, CONNECTION)
+  if (grant.owner != a.owner || grant.status != 'connected') {
+    throw new Error('Choose a connected connection owned by this space')
+  }
+  let integration = String(grant.integration)
+  let old = await using(read, { app: a.app, integration })
+  if (old?.entity.eid == a.connection) return []
+  let previous = old?.entity.eid
+  let oldLink = previous && (await read(
+    `.eid=${edgeEid(a.app, USES, previous)}&.${USES}${ALL}`,
+  ))[0]
+  if (comp(oldLink || undefined, USES).direct) {
+    throw new Error(
+      'This app asks for the key itself; attach requires a sentinel',
+    )
+  }
+  let binding = a.binding ?? comp(oldLink || undefined, USES).binding ??
+    bindingOf(integration)
+  if (typeof binding != 'string' || !NAME.test(binding)) {
+    throw new Error('The binding must be a name code can read')
+  }
+  if (old && comp(old, CONNECTION).status == 'needed') {
+    let i = await known(read, integration)
+    if (i?.token) {
+      let wanted = strs(comp(old, CONNECTION).scopes)
+      let granted = strs(grant.scopes)
+      wanted = wanted.length ? wanted : i.scopes ?? []
+      granted = granted.length ? granted : i.scopes ?? []
+      if (wanted.some((s) => !granted.includes(s))) {
+        throw new Error(
+          'This connection does not grant the scopes the app asked for',
+        )
+      }
+    }
+  }
+  let alone = previous && (await links(read, 'to', previous)).length == 1
+  return [
+    {
+      entity: { eid: a.connection },
+      $was: {
+        [CONNECTION]: {
+          status: token(grant.status),
+          owner: token(grant.owner),
+          integration: token(grant.integration),
+        },
+      },
+    },
+    ...previous
+      ? [{ entity: { eid: edgeEid(a.app, USES, previous) }, tombstone: {} }]
+      : [],
+    ...previous && alone && comp(old, CONNECTION).status == 'needed'
+      ? [{
+        entity: { eid: previous },
+        tombstone: {},
+        $was: { [CONNECTION]: { status: token('needed') } },
+      }]
+      : [],
+    linked(a.app, a.connection, { binding, direct: false }),
   ]
 }
 

@@ -19,6 +19,7 @@ import {
   sentinelOf,
 } from '@yaks/secrets'
 import {
+  attach,
   begin,
   clientOf,
   connect,
@@ -37,6 +38,7 @@ import {
   refresh,
   registration,
   resolve,
+  using,
 } from './mod.ts'
 import { runs } from './tools.ts'
 
@@ -129,6 +131,91 @@ let setup = async (...replies: [number, unknown][]) => {
   }
   return { g, vault, c, needs, seen: e.seen }
 }
+
+Deno.test('a space owner can attach a connected account in place of an unmet ask', async () => {
+  let { g, c, needs, vault } = await setup()
+  let connected = await needs({ app: undefined, integration: 'texts' })
+  await connect(c, connected, { key: 'private-key' })
+  let waiting = await needs({ integration: 'texts', binding: 'SMS' })
+  assertEquals(
+    (await attach(g.read, {
+      owner: 'space',
+      app: 'app',
+      connection: connected,
+    })).length,
+    4,
+  )
+  await g.apply(
+    await attach(g.read, {
+      owner: 'space',
+      app: 'app',
+      connection: connected,
+    }),
+  )
+  assertEquals(
+    await using(g.read, {
+      app: 'app',
+      integration: 'texts',
+    }).then((b) => b?.entity.eid),
+    connected,
+  )
+  assertEquals(await g.read(`.eid=${waiting}&.connection`), [])
+  let [link] = await g.read('.edge.from=app&.uses&*')
+  assertEquals(of(link, 'uses'), { binding: 'SMS' })
+  assertEquals(
+    await attach(g.read, {
+      owner: 'space',
+      app: 'app',
+      connection: connected,
+    }),
+    [],
+  )
+  let sent = await envOf(c, 'app')
+  assert(sent.SMS && sent.SMS != 'private-key')
+  assertEquals(
+    await reveal(vault, String(of(await at(g, connected), 'secret').name)),
+    'private-key',
+  )
+})
+
+Deno.test('attachment requires the space connection and sufficient OAuth scopes', async () => {
+  let { g, needs } = await setup()
+  let connected = await needs({ app: undefined, scopes: ['events'] })
+  await g.apply([{
+    entity: { eid: connected },
+    connection: { status: 'connected' },
+  }])
+  await assertRejects(() =>
+    attach(g.read, {
+      owner: 'ann',
+      app: 'app',
+      connection: connected,
+    })
+  )
+  await needs({ scopes: ['events', 'contacts'] })
+  await assertRejects(() =>
+    attach(g.read, {
+      owner: 'space',
+      app: 'app',
+      connection: connected,
+    })
+  )
+})
+
+Deno.test('attachment does not turn a direct-key request into an implicit grant', async () => {
+  let { g, c, needs } = await setup()
+  let connected = await needs({ app: undefined, integration: 'texts' })
+  await connect(c, connected, { key: 'private-key' })
+  await needs({ integration: 'texts', direct: true })
+  await assertRejects(() =>
+    attach(g.read, {
+      owner: 'space',
+      app: 'app',
+      connection: connected,
+    })
+  )
+  assertEquals(await envOf(c, 'app'), {})
+})
 
 let at = async (g: { read: Ctx['graph']['read'] }, eid: string) =>
   (await g.read(`.eid=${eid}`))[0] as Bundle | undefined

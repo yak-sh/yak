@@ -49,6 +49,7 @@ let DESTROYS = [
   // carrying nulls drops a component. So it takes the safe default rather than
   // a promise that would be wrong for half the commands there are.
   'command',
+  'connection_attach',
   'app_files',
   'app_rollback',
   'app_unpublish',

@@ -1039,6 +1039,19 @@ let connection = (
       c.status == 'needed' ? 'Remove' : 'Disconnect'
     }</button>`,
   )
+  let attach = c.status == 'connected' && !c.own && c.available.length
+    ? form(
+      `<label for="attach-${esc(c.eid)}">Let an app use this connection</label>
+<select class="Field" id="attach-${esc(c.eid)}" name="app" required>
+<option value="">Choose an app</option>${
+        c.available.map((a) =>
+          `<option value="${esc(a.app)}">${esc(a.title)}</option>`
+        ).join('')
+      }</select>
+<p>Only the app’s members can use it. Its code receives a sentinel, never the key.</p>
+<button class="Button" type="submit" name="do" value="attach">Attach to app</button>`,
+    )
+    : ''
   let apps = c.apps.map((a) => esc(a.title)).join(', ')
   return `<section class="Card Connection"><header class="Connection_Head">${
     logo(c.face)
@@ -1059,7 +1072,9 @@ let connection = (
         c.hosts.map((h) => `<code>${esc(h)}</code>`).join(', ')
       }.`
       : ''
-  }</p>${ask ? '' : c.apps.map(using).join('')}${
+  }${c.scopes.length ? ` Granted: ${c.scopes.map(esc).join(', ')}.` : ''}</p>${
+    ask ? '' : c.apps.map(using).join('')
+  }${attach}${
     c.failed
       ? `<p class="Say Say-no" role="status">${esc(sentence(c.failed))}</p>`
       : c.saving

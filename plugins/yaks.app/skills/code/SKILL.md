@@ -453,6 +453,15 @@ integration by name, or a name of your own with the hosts its key may be sent to
 this chat, the app's data, its history or any tool's answer. Never ask the
 person to paste a key to you, and never invent one.
 
+If the space already has a connected account for that integration,
+`connection_list` shows its connection id and the apps using it. The space's
+owner can attach it to another app with `connection_attach`, naming that app and
+connection id, or select the app under the connection at
+`yaks.app/manage/connections?space=<slug>` and click **Attach to app**.
+Attaching is the owner's grant: the app starts with access for its members only,
+receives a sentinel, and uses the connection's existing scopes. The owner can
+open that app's use to visitors separately on the same page.
+
 What the worker reads, as `env.WEATHER` (the integration's name in capitals, or
 the `binding` you give), is a **sentinel**: a string that stands for the key.
 Put it wherever the service wants its key — a header, the query, the body:

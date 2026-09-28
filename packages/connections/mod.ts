@@ -31,7 +31,8 @@
  * (`each`): each person's connection is theirs, and only they call out
  * through it.
  *
- * The verbs: {@link need}, {@link list} (the two tools), {@link using},
+ * The verbs: {@link need}, {@link list} (the two tools), {@link attach} for a
+ * space owner through its host, {@link using},
  * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve},
  * {@link used} and {@link envOf}, {@link credential}, {@link refresh}. A host
  * that composes this package
@@ -60,6 +61,7 @@ export {
   registration,
 } from './clients.ts'
 export {
+  attach,
   begin,
   bindingOf,
   connect,

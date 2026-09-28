@@ -377,6 +377,15 @@ app_set:
     'public', allows anyone to read and only members with write permission
     to change data. Returns the current URL and a summary of the changes.
     Documentation: https://yaks.app/docs/home.
+connection_attach:
+  title: Let an app use an existing connection
+  description: >-
+    Give an app access to one connected connection its space already owns.
+    Only the space's owner may do this. The app starts members-only, receives
+    a sentinel rather than the credential, and keeps any binding it already
+    asked for. Find the connection id with connection_list. No key or token
+    passes through this tool or its answer. Documentation:
+    https://yaks.app/docs/code.
 connection_need:
   title: Say an app needs a key or a sign-in
   description: >-
