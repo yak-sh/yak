@@ -142,12 +142,12 @@ let order = (look: Box[], see: (v: Vec) => Vec): Box[] => {
  * assertEquals(blade.map((f) => f.metal), [true, true, true])
  * ```
  */
-export let faces = (
+let picture = (
   look: Box[],
   size: number,
   pad: number,
   view: View = 'corner',
-): Face[] => {
+) => {
   let see = eye(view)
   let all = order(look, see).flatMap(sides(see))
   let turn = (VIEWS[view].lean ?? 0) * Math.PI / 180
@@ -164,8 +164,15 @@ export let faces = (
     let [x, y] = flat(v)
     return [ox + (x - x0) * k, oy + (y - y0) * k]
   }
-  return all.map((f) => ({ ...f, at: f.at.map(fit) }))
+  return { faces: all.map((f) => ({ ...f, at: f.at.map(fit) })), fit, k }
 }
+
+export let faces = (
+  look: Box[],
+  size: number,
+  pad: number,
+  view: View = 'corner',
+): Face[] => picture(look, size, pad, view).faces
 
 let hex = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 
@@ -186,7 +193,24 @@ export let sprite = (kind: string): string => {
     let canvas = document.createElement('canvas')
     canvas.width = canvas.height = SIZE
     let g = canvas.getContext('2d')!
-    let fs = faces(thing.look, SIZE, 7, thing.view)
+    let { faces: fs, fit, k } = picture(thing.look, SIZE, 7, thing.view)
+    let light = (at: Vec, r: number, core: string, edge: string) => {
+      let [x, y] = fit(at)
+      let glow = g.createRadialGradient(x, y, 0, x, y, r)
+      glow.addColorStop(0, core)
+      glow.addColorStop(1, edge)
+      g.fillStyle = glow
+      g.fillRect(x - r, y - r, 2 * r, 2 * r)
+    }
+    if (thing.aura) {
+      let color = hex(thing.aura.color)
+      light(
+        thing.aura.at,
+        Math.min(28, Math.max(14, thing.aura.size * k)),
+        `${color}bb`,
+        `${color}00`,
+      )
+    }
     let path = (f: Face) => {
       g.beginPath()
       f.at.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y))
@@ -217,6 +241,12 @@ export let sprite = (kind: string): string => {
       g.fillStyle = g.strokeStyle = paint
       g.fill()
       g.stroke()
+    }
+    if (thing.aura) {
+      let color = hex(thing.aura.color)
+      g.globalCompositeOperation = 'lighter'
+      light(thing.aura.at, 14, `${color}77`, `${color}00`)
+      g.globalCompositeOperation = 'source-over'
     }
     url = canvas.toDataURL()
   }

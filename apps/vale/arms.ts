@@ -15,7 +15,7 @@
 // most of a bite and adds the most health, leather less but runs faster, and
 // cloth least but its force and haste make every blow land harder and sooner.
 import type { Box } from './boxes.ts'
-import type { Thing, View } from './items.ts'
+import type { Aura, Thing, View } from './items.ts'
 import { metal } from './mesh.ts'
 
 export type Slot = 'main' | 'off' | 'head' | 'body' | 'feet' | 'trinket'
@@ -201,6 +201,7 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
     [[-0.037, 0, -0.037], [0.074, 1.3, 0.074], p.wood],
     [[-0.055, 1.24, -0.055], [0.11, 0.06, 0.11], p.trim],
     [[-0.085, 1.3, -0.085], [0.17, 0.17, 0.17], p.trim],
+    [[-0.06, 1.45, -0.06], [0.12, 0.16, 0.12], p.gem, 0.055],
   ],
   shield: (p) => [
     [[-0.25, 0.14, -0.03], [0.5, 0.44, 0.06], p.wood, 0.03],
@@ -213,7 +214,10 @@ let LOOKS: Record<string, (p: Paint) => Box[]> = {
   tome: (p) => [
     [[-0.16, 0, -0.12], [0.32, 0.07, 0.24], p.leather],
     [[-0.15, 0.07, -0.11], [0.3, 0.045, 0.22], 0xf4ecd8],
-    [[-0.035, 0.115, -0.12], [0.07, 0.012, 0.24], p.trim],
+    [[-0.16, 0.115, -0.12], [0.32, 0.025, 0.24], p.leather],
+    [[-0.15, 0.14, -0.11], [0.3, 0.012, 0.22], p.trim],
+    [[-0.022, 0.152, -0.075], [0.044, 0.012, 0.15], p.gem],
+    [[-0.065, 0.152, -0.022], [0.13, 0.012, 0.044], p.gem],
   ],
   torch: (p) => [
     [[-0.03, 0, -0.03], [0.06, 0.48, 0.06], p.wood],
@@ -407,6 +411,13 @@ let paint = (t: number): Paint => ({
 let tiers = (make: (t: number, p: Paint) => [string, Thing][]) =>
   Object.fromEntries([1, 2, 3, 4, 5].flatMap((t) => make(t, paint(t))))
 
+let aura = (kind: string, p: Paint): Aura | undefined =>
+  kind == 'staff'
+    ? { at: [0, 1.55, 0], color: p.gem, size: 0.42 }
+    : kind == 'tome'
+    ? { at: [0, 0.17, 0], color: p.gem, size: 0.28 }
+    : undefined
+
 /** The look of a kind of tier `t` in some colours of its own, for a gift
  * made after it (items.ts), and how its picture sees it.
  *
@@ -420,6 +431,7 @@ let tiers = (make: (t: number, p: Paint) => [string, Thing][]) =>
 export let forged = (kind: string, t: number, p: Partial<Paint>) => ({
   look: LOOKS[kind]({ ...paint(t), ...p }),
   view: VIEWS[kind],
+  aura: aura(kind, { ...paint(t), ...p }),
 })
 
 let MADE: Record<string, string[]> = {
@@ -444,6 +456,7 @@ let weapon = (family: string, t: number, p: Paint): Thing => ({
   name: `${MADE[family][t - 1]} ${family}`,
   ...wield(family, t),
   look: LOOKS[family](p),
+  aura: aura(family, p),
   view: VIEWS[family],
 })
 
@@ -510,6 +523,7 @@ export let ARMS: Record<string, Thing> = tiers((t, p) => {
       tier: t,
       force: 0.06 + 0.02 * t,
       look: LOOKS.tome(p),
+      aura: aura('tome', p),
     }],
     [`torch${t}`, {
       name: `${WOOD[i]} torch`,

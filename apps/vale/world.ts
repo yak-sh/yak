@@ -19,6 +19,7 @@ import type { Chunk } from './chunks.ts'
 import { doors, type Hung } from './doors.ts'
 import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
+import { halo as glowTexture } from './halo.ts'
 import { instances } from './instances.ts'
 import { LEVELS, SIZE, type Spot } from './levels.ts'
 import type { ChunkProps } from './nature_mesh.ts'
@@ -133,20 +134,6 @@ let LOOKS: [number, Look][] = [
 // What the sky's light bounces off: grass by day, nothing much by night.
 let GRASS = new THREE.Color(0x6b7f4a)
 let DARK = new THREE.Color(0x151b2e)
-
-// A round glow, bright in the middle and gone at the edge, drawn once.
-let glowTexture = () => {
-  let c = document.createElement('canvas')
-  c.width = c.height = 64
-  let g = c.getContext('2d')!
-  let r = g.createRadialGradient(32, 32, 0, 32, 32, 32)
-  r.addColorStop(0, 'rgba(255,255,255,0.9)')
-  r.addColorStop(0.35, 'rgba(255,255,255,0.35)')
-  r.addColorStop(1, 'rgba(255,255,255,0)')
-  g.fillStyle = r
-  g.fillRect(0, 0, 64, 64)
-  return new THREE.CanvasTexture(c)
-}
 
 let mixHex = (a: number, b: number, t: number) =>
   new THREE.Color(a).lerp(new THREE.Color(b), t)

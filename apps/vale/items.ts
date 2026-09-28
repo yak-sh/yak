@@ -17,6 +17,10 @@ export type { Box } from './boxes.ts'
  * around its long axis so its edge points down the picture. */
 export type View = 'corner' | 'front' | 'side' | 'top' | 'lying' | 'chop'
 
+/** A soft glow anchored in a thing's own look, shared by the held model and
+ * its picture. */
+export type Aura = { at: [number, number, number]; color: number; size: number }
+
 export type Thing = {
   name: string
   /** health a drink gives back */
@@ -44,6 +48,7 @@ export type Thing = {
   /** how much likelier a great blow is */
   luck?: number
   look: Box[]
+  aura?: Aura
   /** how its picture sees it; from a corner unless it says */
   view?: View
 }

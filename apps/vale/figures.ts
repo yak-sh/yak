@@ -24,6 +24,7 @@ import type { Box } from './boxes.ts'
 import type { Pose } from './abilities.ts'
 import { BEASTS, type Look, type Plans } from './beasts.ts'
 import type { Hand } from './gear.ts'
+import { halo } from './halo.ts'
 import { ITEMS } from './items.ts'
 import { biped } from './bodies/biped.ts'
 import { bird } from './bodies/bird.ts'
@@ -128,6 +129,32 @@ let grip = (kind: string): Box[] => {
     round,
   ])
   return h.across ? boxes.map(topple) : boxes
+}
+
+// A carried thing's glow follows its hand's bone through every pose. One
+// sprite per glowing item keeps the figure's single skinned mesh intact.
+let gleams = new Map<number, THREE.SpriteMaterial>()
+
+let gleam = (kind: string, hand: THREE.Bone) => {
+  let t = ITEMS[kind], a = t?.aura
+  if (!a) return
+  let h = HOLDS[t.family ?? ''] ?? { at: 0 }
+  let m = gleams.get(a.color)
+  if (!m) {
+    m = new THREE.SpriteMaterial({
+      map: halo(),
+      color: a.color,
+      transparent: true,
+      opacity: 0.78,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+    gleams.set(a.color, m)
+  }
+  let s = new THREE.Sprite(m)
+  s.position.set(a.at[0], a.at[1] - h.at, a.at[2] + (h.out ?? 0))
+  s.scale.setScalar(a.size)
+  hand.add(s)
 }
 
 // The colour of the `i`th box of a kind's look. Cloth's first three boxes
@@ -380,11 +407,13 @@ export let person = (
     0.05,
   )
   foreR.add(held)
+  gleam(worn('main'), held)
   let off = worn('off'), side = ITEMS[off]?.family
   // A blade in the left hand too is held as the right holds its own.
   let twin = ITEMS[off]?.slot == 'main'
   let other = partOf(grip(off), fist, 0.05)
   foreL.add(other)
+  gleam(off, other)
   let head = partOf(
     fit([
       [[-0.22, 0, -0.2], [0.44, 0.4, 0.4], skin, 0.1],
