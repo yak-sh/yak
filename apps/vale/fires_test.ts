@@ -58,6 +58,7 @@ Deno.test('a fire discovery belongs to its hero and survives a tab reload', () =
     let me: Me = {
       person: 'person',
       name: 'Person',
+      role: null,
       reads: true,
       writes: true,
       signIn: null,

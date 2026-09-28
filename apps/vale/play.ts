@@ -77,8 +77,6 @@ import { destination } from './fires.ts'
 import type { Seen } from './seen.ts'
 import {
   type Body,
-  fits,
-  floorAt,
   inVillage,
   prowl,
   rest,
@@ -90,6 +88,7 @@ import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
 import { steerPush, steerStep, stride } from './stride.ts'
 import { regionOf, spotOf } from './regions.ts'
+import { destinationOf, nextTeleport, resumed } from './teleport.ts'
 import { placeOf } from './area.ts'
 import { plusOf } from './upgrade.ts'
 import { groundAt, hearthNear, hearthOf, type Vale } from './terrain.ts'
@@ -256,6 +255,10 @@ export type Frame = {
   body: Body
   vitals: Vitals
   down: boolean
+  /** an admin request placed this hero during this frame */
+  teleported: string | null
+  /** the most recent request already answered on this tab or in the store */
+  teleportAck: string | undefined
   sheet: Sheet
   mobs: Mob[]
   others: Other[]
@@ -457,41 +460,6 @@ export let arrival = (v: Vale, near?: Spot): Body => {
   }
 }
 
-// How far above the ground a hero may have climbed, in metres: a jump's
-// height.
-let CLIMB = 1.2
-
-/** Where a hero stands back where they were last seen (seen.ts): the same
- * spot, facing the same way, on the ground or on the rock they had climbed;
- * or null, where they no longer fit, in a wall or deep in water.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * import { flat } from './terrain.ts'
- * // Flat ground 5 m up, a trunk at (10, 10), a rock a metre tall at (20, 20).
- * let v = flat(5, [
- *   { x: 10, z: 10, r: 0.5, top: 9 },
- *   { x: 20, z: 20, r: 1, top: 6 },
- * ])
- * let at = (x: number, z: number) => {
- *   let b = resumed(v, { x, z, yaw: 1 })
- *   return b && [b.x, b.y, b.z, b.yaw]
- * }
- * assertEquals(at(30, 40), [30, 5, 40, 1])
- * assertEquals(at(20, 20), [20, 6, 20, 1]) // up on the rock
- * assertEquals(at(10, 10), null) // in the trunk
- * ```
- */
-export let resumed = (
-  v: Vale,
-  s: { x: number; z: number; yaw: number },
-): Body | null => {
-  let y = floorAt(v, s.x, s.z, groundAt(v, s.x, s.z) + CLIMB)
-  return fits(v, s.x, s.z, y)
-    ? { x: s.x, y, z: s.z, vy: 0, yaw: s.yaw, speed: 0, gait: 'idle' }
-    : null
-}
-
 /** The game over one store. Each frame is played round where the hero is.
  * `stand` says where a giver is at a moment, given where their home is: the
  * villagers walk (village.ts). */
@@ -552,6 +520,7 @@ export let game = (
   // Where the hero was last seen before this page, until a frame plays.
   let lastSeen: Seen | null = null
   let travelTo: { level: string; known: ReadonlySet<string> } | null = null
+  let handled: string | undefined
   // Where the hero stands on the first frame: back where they were last
   // seen, when that spot lies in the region it names and they still fit
   // there, or else by the fire of that region, or of home.
@@ -839,6 +808,7 @@ export let game = (
       let change: Bundle[] = []
       let s = sheetOf()
       let row = c.ent(me)
+      let teleported: string | null = null
       let at = (b: { x: number; y: number; z: number }, up = 1): Vec3 => [
         b.x,
         b.y + up,
@@ -849,6 +819,8 @@ export let game = (
       // reload) stands where they land.
       let pos = where(row)
       let here = pos ? bodyOf(pos, motion(row)) : null
+      let recalledTeleport = lastSeen?.teleport
+      let teleportAck = str(comp(row, 'seen').teleport, recalledTeleport)
       let body = here ? { ...here } : landing(v)
       lastSeen = null
       let down = here?.gait == 'down'
@@ -969,6 +941,30 @@ export let game = (
           doing = ''
           fought.foe = ''
         }
+      }
+      let request = nextTeleport(
+        net.mine('teleport_request'),
+        me,
+        teleportAck,
+        handled,
+      )
+      if (request) {
+        handled = request.entity.eid
+        let ask = comp(request, 'teleport_request')
+        try {
+          let to = destinationOf(v, { x: num(ask.x, NaN), z: num(ask.z, NaN) })
+          if (to.level == ask.level) {
+            let landed = resumed(v, { x: to.x, z: to.z, yaw: body.yaw })
+            if (landed) {
+              body = landed
+              dash = null
+              busy = 0
+              doing = ''
+              fought.foe = ''
+              teleported = request.entity.eid
+            }
+          }
+        } catch { /* a malformed request never moves a hero */ }
       }
       let rolling = body.gait == 'roll'
 
@@ -1735,6 +1731,8 @@ export let game = (
         body,
         vitals: vitalsNow,
         down,
+        teleported,
+        teleportAck,
         sheet: s,
         mobs,
         others,

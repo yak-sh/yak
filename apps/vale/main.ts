@@ -30,6 +30,7 @@ import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
+import { healthMode } from './health.ts'
 import { meshed, template } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
@@ -129,7 +130,17 @@ let elsewhere = () => typing || h.talking || chat.typing
 let hands = listen(canvas, glass, elsewhere)
 let h = hud(glass, hands.press, elsewhere)
 let marks = overlay(h.layer, camera, h.under)
-let chat = chatbox(glass, h.orbs.chat, net, marks, folk)
+let chat = chatbox(
+  glass,
+  h.orbs.chat,
+  net,
+  marks,
+  folk,
+  (cmd) =>
+    cmd.kind == 'health'
+      ? healthMode(net, cmd.enabled)
+      : net.teleport(cmd.target),
+)
 let m = map(h.panels.map, (to) => g.travel(to, camp.known()))
 let p = pack(h.panels.bag, { wear: g.wear, take: g.take })
 let you = character(h.panels.character, {

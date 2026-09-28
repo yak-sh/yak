@@ -22,6 +22,7 @@ import { writer } from './chat.ts'
 import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
+import type { Target } from './teleport.ts'
 import { once as read } from './once.ts'
 import words from './vocab.json' with { type: 'json' }
 
@@ -34,6 +35,7 @@ export type Bundle = NonNullable<ReturnType<Client['ent']>>
 export type Me = {
   person: string | null
   name: string | null
+  role: 'owner' | 'editor' | 'viewer' | null
   reads: boolean
   writes: boolean
   signIn: string | null
@@ -223,6 +225,9 @@ export let connect = (base: URL) => {
       directive: c.watch(
         `.directive.player=${q}&?created&?companion&.order=-created.at&.limit=10`,
       ),
+      teleport_request: c.watch(
+        `.teleport_request.player=${q}&?created&.order=-created.at&.limit=10`,
+      ),
     }
   }
 
@@ -371,6 +376,20 @@ export let connect = (base: URL) => {
     move: (bundles: Bundle[]) => {
       if (bundles.length) c.mutate(bundles)
     },
+    /** Ask the app's worker to validate and keep an owner-authorized move. */
+    teleport: async (target: Target): Promise<string> => {
+      if (!hero) throw new Error('Choose a hero before teleporting.')
+      let res = await fetch(new URL('../teleport', base), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ player: hero, ...target }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      let answer = await res.json()
+      return answer.pending
+        ? 'Teleport queued; you will move when Mossvale is back online.'
+        : `Teleport requested to ${answer.level} (${answer.x}, ${answer.z}).`
+    },
     /** make a hero and play it in this tab */
     create: (look: Look) => {
       let eid = crypto.randomUUID()
@@ -407,6 +426,7 @@ export let connect = (base: URL) => {
         return {
           person: null,
           name: null,
+          role: null,
           reads: true,
           writes: true,
           signIn: null,
@@ -416,6 +436,7 @@ export let connect = (base: URL) => {
       return {
         person: body.person ?? null,
         name: body.name ?? null,
+        role: body.role ?? null,
         reads: body.reads ?? true,
         writes: body.writes ?? true,
         signIn: body.signIn ?? null,

@@ -2,6 +2,7 @@
 // page only reads the state it writes, so closing every page changes nothing.
 import { companionTick } from './companion-tick.ts'
 import { LODES } from './gather.ts'
+import { destinationOf } from './teleport.ts'
 import { vale } from './terrain.ts'
 
 let query = async (env, line) => {
@@ -95,12 +96,61 @@ let tick = async (req, env, v) => {
   return Response.json({ wrote: rows.length })
 }
 
+let teleport = async (req, env, v) => {
+  if (req.headers.get('x-yak-role') != 'owner') {
+    return new Response('Only the app owner can teleport a hero.', {
+      status: 403,
+    })
+  }
+  let args = await req.json().catch(() => null)
+  let player = args?.player
+  let named = typeof args?.level == 'string'
+  let point = args?.x !== undefined || args?.z !== undefined
+  if (typeof player != 'string' || named == point) {
+    return new Response('Pass a hero and either a land or both x and z.', {
+      status: 400,
+    })
+  }
+  let target = named ? { level: args.level } : { x: args.x, z: args.z }
+  let at
+  try {
+    at = destinationOf(v, target)
+  } catch (e) {
+    return new Response(e.message, { status: 400 })
+  }
+  let found = await env.STORE.fetch(
+    `query?${encodeURIComponent(`.eid=${JSON.stringify(player)}`)}&.player`,
+  )
+  if (!found.ok) return found
+  if (!(await found.json()).length) {
+    return new Response('No hero has that id.', { status: 404 })
+  }
+  let request = crypto.randomUUID()
+  let saved = await env.STORE.fetch('apply', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      entities: [{
+        entity: { eid: request },
+        teleport_request: { player, ...at },
+      }],
+    }),
+  })
+  if (!saved.ok) return saved
+  let { pending } = await saved.json()
+  return Response.json({ request, player, ...at, pending: !!pending })
+}
+
 export let workerOf = (v) => ({
   fetch(req, env) {
     let path = new URL(req.url).pathname
-    return req.method == 'POST' && path.endsWith('/companion/tick')
-      ? tick(req, env, v)
-      : new Response('Not found', { status: 404 })
+    if (req.method == 'POST' && path.endsWith('/companion/tick')) {
+      return tick(req, env, v)
+    }
+    if (req.method == 'POST' && path.endsWith('/teleport')) {
+      return teleport(req, env, v)
+    }
+    return new Response('Not found', { status: 404 })
   },
 })
 

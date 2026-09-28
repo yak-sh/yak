@@ -17,6 +17,10 @@ import { LEVELS, SIZE } from './levels.ts'
 import type { Bundle, Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 
+type Sighting = Pick<Frame, 'level' | 'down' | 'teleported' | 'teleportAck'> & {
+  body: Pick<Frame['body'], 'x' | 'z' | 'yaw'>
+}
+
 /** Where a hero was last seen: the region, where in the world in metres,
  * which way they faced in radians, and when, in ms. */
 export type Seen = {
@@ -25,6 +29,7 @@ export type Seen = {
   z: number
   yaw: number
   at: number
+  teleport?: string
 }
 
 // How often a hero who moves about is written, and one who stands, in ms;
@@ -78,11 +83,18 @@ export let due = (was: Seen | null, is: Seen): boolean => {
 export let seenOf = (b: Bundle | undefined): Seen | null => {
   let s = b?.seen
   if (!s || typeof s != 'object') return null
-  let { level, x, z, yaw, at } = s as Record<string, unknown>
+  let { level, x, z, yaw, at, teleport } = s as Record<string, unknown>
   let t = Date.parse(String(at))
   return typeof level == 'string' && Object.hasOwn(LEVELS, level) &&
       typeof x == 'number' && typeof z == 'number' && t
-    ? { level, x, z, yaw: typeof yaw == 'number' ? yaw : 0, at: t }
+    ? {
+      level,
+      x,
+      z,
+      yaw: typeof yaw == 'number' ? yaw : 0,
+      at: t,
+      ...(typeof teleport == 'string' ? { teleport } : {}),
+    }
     : null
 }
 
@@ -95,6 +107,7 @@ let rowOf = (hero: string, s: Seen): Bundle => ({
     z: s.z,
     yaw: s.yaw,
     at: new Date(s.at).toISOString(),
+    ...(s.teleport ? { teleport: s.teleport } : {}),
   },
 })
 
@@ -144,7 +157,8 @@ export let recall = (hero: string, stored: Seen | null): Seen | null => {
 
 let cm = (v: number) => Math.round(v * 100) / 100
 let same = (a: Seen, b: Seen) =>
-  a.level == b.level && a.x == b.x && a.z == b.z && a.yaw == b.yaw
+  a.level == b.level && a.x == b.x && a.z == b.z && a.yaw == b.yaw &&
+  a.teleport == b.teleport
 
 /** Where the hero this tab plays is seen, written as they play: `me` says
  * who is looking, and `tick` takes each frame played in the level on show. */
@@ -180,18 +194,26 @@ export let sighting = (net: Net) => {
     me: (who: Me) => {
       me = who
     },
-    tick: (f: Frame) => {
+    tick: (f: Sighting) => {
       let hero = net.hero
-      if (!hero || f.down) return
+      if (!hero || f.down && !f.teleported) return
       let b = f.body
+      let ack = f.teleported ||
+        f.teleportAck ||
+        (wrote?.hero == hero ? wrote.seen.teleport : undefined) ||
+        seenOf(net.client.ent(hero))?.teleport
       last = {
         level: f.level,
         x: cm(b.x),
         z: cm(b.z),
         yaw: cm(b.yaw),
         at: net.now(),
+        ...(ack ? { teleport: ack } : {}),
       }
-      if (due(wrote?.hero == hero ? wrote.seen : null, last)) write(hero, last)
+      if (f.teleported || due(wrote?.hero == hero ? wrote.seen : null, last)) {
+        write(hero, last)
+        if (f.teleported) net.flush()
+      }
     },
   }
 }

@@ -1,6 +1,7 @@
 // A tab that returns after the land grows keeps its hero's saved world spot.
 import { assertEquals } from '@std/assert'
-import { recall } from './seen.ts'
+import { recall, sighting } from './seen.ts'
+import type { Bundle, Net } from './net.ts'
 
 Deno.test('a tab carries its last seen hero into the larger land', () => {
   let previous = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')
@@ -40,4 +41,41 @@ Deno.test('a tab carries its last seen hero into the larger land', () => {
       Object.defineProperty(globalThis, 'sessionStorage', previous)
     } else Reflect.deleteProperty(globalThis, 'sessionStorage')
   }
+})
+
+Deno.test('later sightings keep a tab’s teleport acknowledgment', () => {
+  let now = 1000
+  let kept: Bundle[] = []
+  let net = {
+    hero: 'hero',
+    now: () => now,
+    client: {
+      ent: () => ({ entity: { eid: 'hero' }, created: { by: 'owner' } }),
+    },
+    keep: (row: Bundle) => kept.push(row),
+    flush: () => {},
+  } as unknown as Net
+  let seen = sighting(net)
+  seen.me({
+    person: 'owner',
+    name: 'Owner',
+    role: 'owner',
+    reads: true,
+    writes: true,
+    signIn: null,
+  })
+  let frame = (x: number, ack?: string) => ({
+    level: 'mossvale',
+    down: false,
+    teleported: null,
+    teleportAck: ack,
+    body: { x, y: 5, z: 50, yaw: 0 },
+  })
+  seen.tick(frame(50, 'move'))
+  now += 31_000
+  seen.tick(frame(55))
+  assertEquals(kept.map((b) => (b.seen as { teleport: string }).teleport), [
+    'move',
+    'move',
+  ])
 })

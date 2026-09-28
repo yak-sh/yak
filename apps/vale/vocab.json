@@ -31,6 +31,20 @@
         "on": { "type": "boolean" }
       }
     },
+    "teleport_request": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "floor": "owner",
+      "description": "An owner-authorized move of one hero to a safe spot in the world. The hero's active page moves them, or their next page moves them when they return. Their next seen position acknowledges it.",
+      "properties": {
+        "player": { "type": "string", "index": true },
+        "level": { "type": "string" },
+        "x": { "type": "number" },
+        "z": { "type": "number" }
+      },
+      "required": ["player", "level", "x", "z"]
+    },
     "look": {
       "component": true,
       "type": "object",
@@ -512,6 +526,10 @@
         "at": {
           "type": "string",
           "format": "date-time"
+        },
+        "teleport": {
+          "type": "string",
+          "description": "The latest admin teleport request this hero answered."
         }
       }
     },
@@ -651,6 +669,27 @@
         "entity": { "eid": "$player" },
         "invulnerable": { "on": "$on" }
       }
+    },
+    "teleport": {
+      "tool": true,
+      "description": "Teleport a Mossvale hero to a named land or exact world coordinates. Only the app owner may do this. The hero moves now if their game page is open, or when they next play. Pass either level (such as tombsands) or both x and z in world metres. Coordinates must be inside a known land and walkable.",
+      "input": {
+        "player": { "type": "string", "description": "The hero's eid." },
+        "level": {
+          "type": "string",
+          "description": "A land id, such as tombsands."
+        },
+        "x": {
+          "type": "number",
+          "description": "World metres east of Mossvale's origin."
+        },
+        "z": {
+          "type": "number",
+          "description": "World metres south of Mossvale's origin."
+        }
+      },
+      "required": ["player"],
+      "worker": "/teleport"
     },
     "gather_wood": {
       "tool": true,
