@@ -510,10 +510,20 @@ export let cli = async (
       out(toolHelp(found.verb, opts.name))
       return 0
     }
-    return await found.verb.run(
-      await argsFor(found.verb, found.args, c.reads),
-      at,
-    )
+    try {
+      return await found.verb.run(
+        await argsFor(found.verb, found.args, c.reads),
+        at,
+      )
+    } catch (e) {
+      if (!(e instanceof Usage)) throw e
+      note(
+        `${opts.name ?? 'yak'}: ${e.message}\n\n${
+          toolHelp(found.verb, opts.name)
+        }`,
+      )
+      return 2
+    }
   } catch (e) {
     note(`${opts.name ?? 'yak'}: ${(e as Error).message}`)
     return e instanceof Usage ? 2 : 1

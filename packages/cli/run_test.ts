@@ -272,6 +272,22 @@ Deno.test('an argument that is not key=value is a usage error, not a round trip'
   assertEquals(asked, [])
 })
 
+Deno.test('an invalid argument shows the command’s usage with its error', async () => {
+  let list: Command = {
+    noun: 'session',
+    verb: 'list',
+    description: 'List sessions',
+    inputSchema: {
+      type: 'object',
+      properties: { limit: { type: 'integer' } },
+    },
+    run: () => 0,
+  }
+  assertEquals(await ran([list], ['session', 'list', '--limit=nope']), 2)
+  assert(printed[0].includes('--limit wants a number, got nope'))
+  assert(printed[0].includes('yak session list [--limit <integer>]'))
+})
+
 // One declaration, read by a command line the way a transport reads it.
 let t: Tool = {
   ...toolDefinition({
