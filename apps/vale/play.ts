@@ -93,7 +93,7 @@ import {
 } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
-import { steerStep, stride } from './stride.ts'
+import { steerPush, steerStep, stride } from './stride.ts'
 import { regionOf, spotOf } from './regions.ts'
 import { placeOf } from './area.ts'
 import { plusOf } from './upgrade.ts'
@@ -856,8 +856,7 @@ export let game = (
         let [mx, my] = intent.move
         let push = intent.steer
           ? {
-            x: Math.sin(body.yaw) * intent.steer.forward,
-            z: Math.cos(body.yaw) * intent.steer.forward,
+            ...steerPush(body.yaw, intent.steer),
             jump: intent.jump,
           }
           : {

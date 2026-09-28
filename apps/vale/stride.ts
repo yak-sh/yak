@@ -4,6 +4,18 @@
 import { type Body, walk } from './sim.ts'
 import { type Vale } from './terrain.ts'
 
+/** A forward or sideways step in the hero's facing direction. */
+export let steerPush = (
+  yaw: number,
+  steer: { forward: number; side?: number },
+) => {
+  let { forward, side = 0 } = steer
+  return {
+    x: Math.sin(yaw) * forward + Math.cos(yaw) * side,
+    z: Math.cos(yaw) * forward - Math.sin(yaw) * side,
+  }
+}
+
 /** Step as the player asks. Backing away is slower than walking forward.
  *
  * ```ts
@@ -82,14 +94,13 @@ export let steerStep = (
   speed: number,
   jump = false,
 ): Body => {
-  let { turn, forward, side = 0 } = steer
+  let { turn, forward } = steer
   let yaw = b.yaw - turn * dt
   let n = walk(
     v,
     b,
     {
-      x: Math.sin(yaw) * forward + Math.cos(yaw) * side,
-      z: Math.cos(yaw) * forward - Math.sin(yaw) * side,
+      ...steerPush(yaw, steer),
       jump,
     },
     dt,
