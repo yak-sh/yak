@@ -33,6 +33,7 @@ import { crawler } from './bodies/crawler.ts'
 import { flier } from './bodies/flier.ts'
 import { hopper } from './bodies/hopper.ts'
 import { quadruped } from './bodies/quadruped.ts'
+import { seal } from './bodies/seal.ts'
 import { serpent } from './bodies/serpent.ts'
 import { slime } from './bodies/slime.ts'
 import { wisp } from './bodies/wisp.ts'
@@ -612,6 +613,7 @@ let PLANS: { [P in keyof Plans]: (l: Plans[P]) => Figure } = {
   flier,
   hopper,
   quadruped,
+  seal,
   serpent,
   slime,
   wisp,

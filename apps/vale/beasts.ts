@@ -26,6 +26,7 @@ import type { Crawler } from './bodies/crawler.ts'
 import type { Flier } from './bodies/flier.ts'
 import type { Hopper } from './bodies/hopper.ts'
 import type { Quadruped } from './bodies/quadruped.ts'
+import type { Seal } from './bodies/seal.ts'
 import type { Serpent } from './bodies/serpent.ts'
 import type { Slime } from './bodies/slime.ts'
 import type { Wisp } from './bodies/wisp.ts'
@@ -39,6 +40,7 @@ export type Plans = {
   flier: Flier
   hopper: Hopper
   quadruped: Quadruped
+  seal: Seal
   serpent: Serpent
   slime: Slime
   wisp: Wisp
