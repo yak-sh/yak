@@ -49,6 +49,39 @@
   }
 }
 
+.Menu_VoxelTicks {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.Menu_VoxelNote {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--muted);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.Menu_Voxel .Btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
 .Menu_Head {
   margin: 0.4rem 0 0;
   font-size: 0.85rem;

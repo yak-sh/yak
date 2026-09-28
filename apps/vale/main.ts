@@ -238,7 +238,8 @@ let feet = new THREE.Vector3()
 // tray's button, whose tap the browser may ask the player about.
 let voice = voices(net, h.mic)
 h.orbs.mic.addEventListener('click', () => void voice.toggle())
-// The menu: the vale's sound, and whether the camera follows.
+// The menu: the vale's sound, camera, and ground detail. Reloading through
+// this tab keeps its hero and most recent spot (seen.ts).
 let settings = menu(h.panels.menu, {
   muted: () => sound.muted,
   mute: () => sound.toggle(),
@@ -251,6 +252,14 @@ let settings = menu(h.panels.menu, {
   swap: hands.swap,
   strafes: hands.strafes,
   strafe: hands.strafe,
+  voxel: {
+    current: VOX,
+    apply: (size) => {
+      let url = new URL(location.href)
+      url.searchParams.set('voxel', String(size))
+      location.assign(url.href)
+    },
+  },
 })
 
 // Who is playing: one of your heroes, or a new one made at the gate.

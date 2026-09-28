@@ -6,6 +6,7 @@ import { glyph } from './glyphs.ts'
 import { SHEETS } from './hud.ts'
 import { type Action, keysOf } from './input.ts'
 import { cap, type Panel } from './panel.ts'
+import { VOXEL, VOXELS } from './terrain.ts'
 
 /** What the menu sets, and how it reads what is set. */
 type Level = { readonly level: number; set: (value: number) => void }
@@ -25,6 +26,7 @@ export type Settings = {
   swap: () => void
   strafes: () => boolean
   strafe: () => void
+  voxel: { current: number; apply: (size: number) => void }
 }
 
 // Each key and what it does, the actions' keys read from input.ts.
@@ -75,6 +77,7 @@ let TOUCH = [
 /** The menu, answering `o`. */
 export let menu = (panel: Panel, o: Settings) => {
   let was = ''
+  let selected = VOXELS.includes(o.voxel.current) ? o.voxel.current : VOXEL
   let volumes = { music: o.music, effects: o.effects, voice: o.voice }
   panel.body.addEventListener('click', (e) => {
     let act = e.target instanceof Element
@@ -85,6 +88,9 @@ export let menu = (panel: Panel, o: Settings) => {
     if (act == 'follow') o.follow()
     if (act == 'swap') o.swap()
     if (act == 'strafe') o.strafe()
+    if (act == 'voxel' && selected != o.voxel.current) {
+      o.voxel.apply(selected)
+    }
     if (
       act == 'sound' || act == 'music' || act == 'follow' || act == 'swap' ||
       act == 'strafe'
@@ -94,6 +100,16 @@ export let menu = (panel: Panel, o: Settings) => {
   })
   panel.body.addEventListener('input', (e) => {
     if (!(e.target instanceof HTMLInputElement)) return
+    if (e.target.dataset.voxel != null) {
+      selected = VOXELS[Number(e.target.value)] ?? o.voxel.current
+      let choice = panel.body.querySelector('[data-voxel-choice]')
+      if (choice) choice.textContent = `${selected} m`
+      let apply = panel.body.querySelector<HTMLButtonElement>('[data-do=voxel]')
+      if (apply) apply.disabled = selected == o.voxel.current
+      let cost = panel.body.querySelector<HTMLElement>('[data-voxel-cost]')
+      if (cost) cost.hidden = selected != 0.125
+      return
+    }
     let name = e.target.dataset.volume
     let level = name == 'music'
       ? volumes.music
@@ -118,6 +134,27 @@ export let menu = (panel: Panel, o: Settings) => {
       `<output for=Menu_${name}>${value}%</output>` +
       `<input id=Menu_${name} type=range data-volume=${name} ` +
       `min=0 max=100 value=${value}></div>`
+  }
+  let voxel = () => {
+    let index = VOXELS.indexOf(selected)
+    return `<div class="Menu_Volume Menu_Voxel">` +
+      `<label for=Menu_voxel>Terrain voxel size</label>` +
+      `<output for=Menu_voxel data-voxel-choice>${selected} m</output>` +
+      `<input id=Menu_voxel type=range data-voxel min=0 max=${
+        VOXELS.length - 1
+      } step=1 value=${index}>` +
+      `<div class=Menu_VoxelTicks><span>Fine · 0.125 m</span>` +
+      `<span>Chunky · 2 m</span></div>` +
+      `<p class=Menu_VoxelNote>Current: ${o.voxel.current} m. Reloads at your ` +
+      `spot to compare. The layout and placements stay; terrain steps can ` +
+      `shift as the surface is sampled and rounded.</p>` +
+      `<p class=Menu_VoxelNote data-voxel-cost${
+        selected == 0.125 ? '' : ' hidden'
+      }>0.125 m makes about four times as much ground geometry as 0.25 m. ` +
+      `Loading can take several seconds and frame rate may drop.</p>` +
+      `<button class="Btn Btn-go" data-do=voxel${
+        selected == o.voxel.current ? ' disabled' : ''
+      }>Apply and reload</button></div>`
   }
   return {
     /** show what is set, when the menu is open and it changed */
@@ -145,6 +182,7 @@ export let menu = (panel: Panel, o: Settings) => {
         slider('music', 'Music volume') +
         slider('effects', 'Effects and ambience volume') +
         slider('voice', 'Player voice volume') +
+        voxel() +
         toggle(
           'follow',
           follows,

@@ -66,6 +66,8 @@ export { SHORE, SIZE, type Spot }
 /** The voxel edge the ground is grown at unless asked for another, in
  * metres. */
 export let VOXEL = 0.25
+/** Sizes offered in settings, from fine to chunky; each divides a chunk. */
+export let VOXELS = [0.125, 0.25, 0.5, 1, 2]
 /** The water's surface, in metres. */
 export let WATER = 4.8
 /** A chunk's side, in metres: the ground is grown and drawn a chunk at a
