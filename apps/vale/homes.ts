@@ -3,16 +3,16 @@
 // them its odds pick (`dens`), homes picked around the place from the level's
 // own numbers, where a creature can stand: in the level's region, dry, level,
 // clear of trunks and rocks, and nearer that place than any place of another
-// kind. Picked on the smooth ground (terrain.ts `rise`), so the homes are the
-// same at every voxel size. The same list on every page, and each creature's
-// eid is named by where it lives, so no page has to be told what another
-// grew.
+// kind. A home on a traveled path moves into nearby open country. Picked on
+// the smooth ground (terrain.ts `rise`), the homes are the same at every voxel
+// size. The same list on every page, and each creature's eid is named by its
+// generated slot, so no page has to be told what another grew.
 import { type Beast, BEASTS, type Haunt } from './beasts.ts'
 import { isA } from './features.ts'
 import { HOPS, type Level, LEVELS, type Place } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
 import { nearby, originOf, regionOf } from './regions.ts'
-import { RADIUS } from './sim.ts'
+import { RADIUS, sheltered } from './sim.ts'
 import { onFoot } from './solid.ts'
 import { rise, SHORE, type Spot, steep, vale, wallsNear } from './terrain.ts'
 
@@ -93,28 +93,30 @@ export let homesOf = (id: string): Home[] => {
     kind: p.kind,
     at: [ox + p.at[0], oz + p.at[1]],
   }))
+  let belongs = (den: Den, x: number, z: number, extra = 0) => {
+    let [px, pz] = [ox + den.place.at[0], oz + den.place.at[1]]
+    let d = Math.hypot(x - px, z - pz)
+    return d <= den.haunt.within + extra && d >= (den.haunt.beyond ?? 0) &&
+      places.every((p) =>
+        p.kind == den.place.kind || Math.hypot(x - p.at[0], z - p.at[1]) > d
+      )
+  }
   let out: Home[] = []
+  let origin = new Map<string, Den>()
   let taken = new Map<string, Spot[]>()
-  for (let { kind, haunt, name, place } of dens(lv)) {
+  for (let den of dens(lv)) {
+    let { kind, haunt, name, place } = den
     let mine = taken.get(kind) ?? []
     taken.set(kind, mine)
     let key = `${id}/${kind}/${name}`
     let salt = hashOf(key)
     let [px, pz] = [ox + place.at[0], oz + place.at[1]]
-    let own = (x: number, z: number) => {
-      let d = Math.hypot(x - px, z - pz)
-      return d <= haunt.within && d >= (haunt.beyond ?? 0) &&
-        places.every((p) =>
-          p.kind == place.kind ||
-          Math.hypot(x - p.at[0], z - p.at[1]) > d
-        )
-    }
     let n = 0
     let r = haunt.within
     for (let tries = 0; n < haunt.count && tries < 4000; tries++) {
       let x = px + (rand(tries, salt, 1) * 2 - 1) * r
       let z = pz + (rand(tries, salt, 2) * 2 - 1) * r
-      if (!own(x, z) || regionOf(x, z) != id) continue
+      if (!belongs(den, x, z) || regionOf(x, z) != id) continue
       if (rise(x, z) <= SHORE || steep(rise, x, z) > 1) continue
       if (blocked(x, z)) continue
       if (mine.some(([a, b]) => Math.hypot(a - x, b - z) < haunt.apart)) {
@@ -122,6 +124,7 @@ export let homesOf = (id: string): Home[] => {
       }
       mine.push([x, z])
       let eid = uuidOf(`${key}/${n++}`)
+      origin.set(eid, den)
       out.push({
         eid,
         kind,
@@ -132,11 +135,51 @@ export let homesOf = (id: string): Home[] => {
       })
     }
   }
-  // Keep the generated slots and their eids fixed: a home under a building
-  // disappears, while the other homes and their falls keep their meaning.
-  let clear = out.filter((h) => !onFoot(v, ...h.home, RADIUS * 2))
-  listed.set(id, clear)
-  return clear
+  // Generate every slot before clearance, so moving one never changes
+  // another creature's eid or its falls. A building still removes a home;
+  // a traveled path moves it into nearby open country.
+  let standing = out.filter((h) => !onFoot(v, ...h.home, RADIUS * 2))
+  let clear = standing.filter((h) => !sheltered(v, ...h.home))
+  let byEid = new Map(clear.map((h) => [h.eid, h]))
+  for (let h of standing) {
+    if (!sheltered(v, ...h.home)) continue
+    let den = origin.get(h.eid)!, found: Spot | null = null
+    let [px, pz] = [ox + den.place.at[0], oz + den.place.at[1]]
+    for (let r = 4; r <= 24 && !found; r += 4) {
+      for (let j = 0; j < 16; j++) {
+        let a = (j + rand(h.seed, 9)) * Math.PI / 8
+        let x = h.home[0] + Math.cos(a) * r
+        let z = h.home[1] + Math.sin(a) * r
+        let d = Math.hypot(x - px, z - pz)
+        if (
+          d > den.haunt.within + 24 || d < (den.haunt.beyond ?? 0) ||
+          regionOf(x, z) != id
+        ) continue
+        if (sheltered(v, x, z) || rise(x, z) <= SHORE) continue
+        if (steep(rise, x, z) > 1 || blocked(x, z)) continue
+        if (onFoot(v, x, z, RADIUS * 2)) continue
+        if (
+          clear.some((c) =>
+            c.kind == h.kind &&
+            Math.hypot(c.home[0] - x, c.home[1] - z) < den.haunt.apart
+          )
+        ) continue
+        found = [x, z]
+        break
+      }
+    }
+    if (found) {
+      let moved = { ...h, home: found }
+      clear.push(moved)
+      byEid.set(h.eid, moved)
+    }
+  }
+  let homes = standing.flatMap((h) => {
+    let at = byEid.get(h.eid)
+    return at ? [at] : []
+  })
+  listed.set(id, homes)
+  return homes
 }
 
 // How far past its level's cell a creature may live, in metres: as far as a

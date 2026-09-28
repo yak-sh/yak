@@ -17,10 +17,14 @@ import {
   groundAt,
   hearthNear,
   roofOver,
+  streetsOf,
   type Vale,
+  villagesNear,
   wallsNear,
   WATER,
 } from './terrain.ts'
+import { EDGE } from './streets.ts'
+import { nearWay } from './ways.ts'
 
 /** A mover as a frame steps it: where it is, how fast it rises, which way it
  * faces, how fast it went, and its gait. */
@@ -235,6 +239,7 @@ export let rest = (
   seed: number,
   t: number,
 ): Body => {
+  let clearRoam = openRoam(v, home, roam)
   let clear = ([x, z]: [number, number]): [number, number] => {
     for (let w of wallsNear(v, x, z)) {
       let dx = x - w.x, dz = z - w.z, d = Math.hypot(dx, dz)
@@ -245,8 +250,18 @@ export let rest = (
     }
     return [x, z]
   }
-  let at = (time: number) =>
-    beforeFoot(v, home, clear(wander(home, roam, seed, time)), RADIUS * 2)
+  let at = (time: number) => {
+    let to = beforeFoot(
+      v,
+      home,
+      clear(wander(home, roam, seed, time)),
+      RADIUS * 2,
+    )
+    return clearRoam && Math.hypot(to[0] - home[0], to[1] - home[1]) <=
+        roam + 4
+      ? to
+      : beforeShelter(v, home, to)
+  }
   let [x, z] = at(t / 1000)
   let [px, pz] = at((t - 250) / 1000)
   let speed = Math.hypot(x - px, z - pz) / 0.25
@@ -264,6 +279,53 @@ export let rest = (
 /** Whether (x, z) is within reach of a village's fire, where no creature
  * comes. */
 export let inVillage = (x: number, z: number) => !!hearthNear(x, z, SAFE)
+
+// The fire's rack stays close to its hearth. Creatures give the square,
+// village streets and outer ways enough room that a walker can pass.
+let SHELTER = 16
+let ROOM = 3.5
+/** Whether a point, or a disk of radius `r` around it, meets shelter from
+ * creatures: the village square, a street, a road or a lane. */
+export let sheltered = (v: Vale, x: number, z: number, r = 0): boolean =>
+  // `flat()` has no world roads or villages laid in its ground.
+  !!v.world && (
+    !!hearthNear(x, z, SHELTER + r) || nearWay(x, z, ROOM + r) ||
+    villagesNear(x, z, EDGE + ROOM + r).some((s) =>
+      streetsOf(v, s).near(x, z, ROOM + 0.9 + r)
+    )
+  )
+
+// The named world and a creature's home do not change between frames. If
+// its whole roam clears every shelter, its wandering needs no path checks.
+let open = new WeakMap<Vale, WeakMap<[number, number], Map<number, boolean>>>()
+let openRoam = (v: Vale, home: [number, number], roam: number) => {
+  let places = open.get(v)
+  if (!places) open.set(v, places = new WeakMap())
+  let sizes = places.get(home)
+  if (!sizes) places.set(home, sizes = new Map())
+  let got = sizes.get(roam)
+  if (got != null) return got
+  // A wall may push the wander point a little beyond its nominal roam.
+  let clear = !sheltered(v, ...home, roam + 4)
+  sizes.set(roam, clear)
+  return clear
+}
+
+// Wandering is not a sequence of steps, so a sheltered destination must
+// settle at the boundary before it is shown.
+let beforeShelter = (v: Vale, from: [number, number], to: [number, number]) => {
+  let mid: [number, number] = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2]
+  let lo = 0, hi = sheltered(v, ...mid) ? 0.5 : sheltered(v, ...to) ? 1 : 0
+  if (!hi) return to
+  for (let i = 0; i < 5; i++) {
+    let t = (lo + hi) / 2
+    let x = from[0] + (to[0] - from[0]) * t
+    let z = from[1] + (to[1] - from[1]) * t
+    if (sheltered(v, x, z)) hi = t
+    else lo = t
+  }
+  return [from[0] + (to[0] - from[0]) * lo, from[1] + (to[1] - from[1]) * lo]
+}
 
 /** A creature's next step: toward its quarry when it has one, stopping at
  * the edge of its reach, and otherwise back to its wandering. It never comes
@@ -293,7 +355,7 @@ export let prowl = (
   let push = d > stop
     ? { x: dx / d, z: dz / d, jump: false }
     : { x: 0, z: 0, jump: false }
-  let n = walk(v, b, push, dt, speed, inVillage, false)
+  let n = walk(v, b, push, dt, speed, (x, z) => sheltered(v, x, z), false)
   if (quarry && d <= stop) n.yaw = turn(b.yaw, Math.atan2(dx, dz), dt * 10)
   return n
 }

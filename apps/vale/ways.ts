@@ -284,10 +284,16 @@ export let laneEntriesOf = (id: string): Spot[] =>
       : []
   )
 
-let lanesOf = (id: string): Course[] =>
-  villageLanes(id).flatMap((c) =>
+let outer = new Map<string, Course[]>()
+let lanesOf = (id: string): Course[] => {
+  let got = outer.get(id)
+  if (got) return got
+  got = villageLanes(id).flatMap((c) =>
     c.xs.length > VILLAGE_REACH + 1 ? [part(c, VILLAGE_REACH)] : []
   )
+  outer.set(id, got)
+  return got
+}
 
 // The levels whose cells lie within a cell of the box.
 let levelsIn = (x0: number, z0: number, x1: number, z1: number) => {
@@ -350,3 +356,29 @@ export let trodden = (x: number, z: number): boolean =>
     toLane(lanesIn(x, z, x, z, 2), x, z),
     toRoad(roadsIn(x, z, x, z, CLEAR), x, z),
   )
+
+let ways = new Map<string, { roads: Road[]; lanes: Course[] }>()
+let nearbyWays = (x: number, z: number, room: number) => {
+  let i = Math.floor(x / 32), k = Math.floor(z / 32)
+  let key = `${i},${k},${room}`
+  let got = ways.get(key)
+  if (got) return got
+  let [x0, z0] = [i * 32, k * 32]
+  got = {
+    roads: roadsIn(x0, z0, x0 + 32, z0 + 32, ROAD + room),
+    lanes: lanesIn(x0, z0, x0 + 32, z0 + 32, LANE * 1.6 + room),
+  }
+  ways.set(key, got)
+  return got
+}
+
+/** Whether a point is on or within `room` metres of a traveled way. */
+export let nearWay = (x: number, z: number, room: number): boolean => {
+  let { roads, lanes } = nearbyWays(x, z, room)
+  return toRoad(roads, x, z, ROAD + room) < ROAD + room ||
+    lanes.some((c) => {
+      let t = along(c, x, z)
+      return near(c, x, z, LANE * 1.6 + room) &&
+        off(c, x, z, t) < LANE * (0.6 + t) + room
+    })
+}

@@ -87,6 +87,7 @@ import {
   inVillage,
   prowl,
   rest,
+  sheltered,
   turn,
   walk,
 } from './sim.ts'
@@ -1071,11 +1072,14 @@ export let game = (
           let quarry = ''
           let hn = hunter(eid, life, all)
           let hs = hn ? spots.get(hn) : undefined
-          if (hn && hs?.prey && dist(hs, home) < h.roam + LEASH) quarry = hn
+          if (
+            hn && hs?.prey && !sheltered(v, hs.x, hs.z) &&
+            dist(hs, home) < h.roam + LEASH
+          ) quarry = hn
           else if (beast.aggro) {
             let best = beast.aggro * (hu.player ? 1.8 : 1)
             for (let [w, sp] of spots) {
-              if (!sp.prey || inVillage(sp.x, sp.z)) continue
+              if (!sp.prey || sheltered(v, sp.x, sp.z)) continue
               if (dist(sp, home) > h.roam + LEASH) continue
               let d = dist(sp, mb)
               if (d < best) [best, quarry] = [d, w]
@@ -1094,12 +1098,17 @@ export let game = (
             }
             if (from) {
               let k = 0.45 / Math.max(0.3, beast.size)
-              let a = Math.atan2(mb.x - from.x, mb.z - from.z)
-              mb = {
-                ...mb,
-                x: mb.x + Math.sin(a) * k,
-                z: mb.z + Math.cos(a) * k,
-              }
+              let dx = mb.x - from.x, dz = mb.z - from.z
+              let d = Math.hypot(dx, dz) || 1
+              mb = walk(
+                v,
+                mb,
+                { x: dx / d, z: dz / d, jump: false },
+                dt,
+                k / Math.max(dt, 1e-3),
+                (x, z) => sheltered(v, x, z),
+                false,
+              )
               knocked = true
             }
           }
@@ -1142,7 +1151,10 @@ export let game = (
         if (hu.bite > seen && hu.bite <= now) {
           bitten.set(eid, hu.bite)
           let near = dist(mb, body) <= beast.reach + LUNGE
-          if (hu.player == me && !down && !fallen && near && !stuck) {
+          if (
+            hu.player == me && !down && !fallen && near && !stuck &&
+            !sheltered(v, body.x, body.z)
+          ) {
             if (rolling) {
               riposte = now
               events.push({ type: 'dodge', at: at(body, 2) })

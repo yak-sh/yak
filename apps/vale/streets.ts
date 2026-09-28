@@ -32,6 +32,8 @@ export type Street = {
   cells: Map<number, number>
   doors: Spot[]
   entries: Spot[]
+  /** Whether a point is within `r` metres of a street cell. */
+  near: (x: number, z: number, r: number) => boolean
   /** A path height and cover for a point, or none beyond the streets. */
   lay: (
     x: number,
@@ -207,5 +209,18 @@ export let streets = (
       step: best < 0.9 && step,
     }
   }
-  return { at, cells, doors, entries, lay }
+  let close = (x: number, z: number, r: number) => {
+    let a = Math.ceil(x - at[0] - r), b = Math.floor(x - at[0] + r)
+    let c = Math.ceil(z - at[1] - r), d = Math.floor(z - at[1] + r)
+    for (let k = Math.max(-EDGE, c); k <= Math.min(EDGE, d); k++) {
+      for (let i = Math.max(-EDGE, a); i <= Math.min(EDGE, b); i++) {
+        if (
+          cells.has(index(i, k)) &&
+          Math.hypot(x - at[0] - i, z - at[1] - k) < r
+        ) return true
+      }
+    }
+    return false
+  }
+  return { at, cells, doors, entries, lay, near: close }
 }
