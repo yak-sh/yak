@@ -178,16 +178,20 @@ export let village = (net: Net, deal: Deals) => {
 
   return {
     /** Pip's line follows this hero's completion in the sibling task app. */
-    greeting: async (id: string, line: string): Promise<string> => {
+    greeting: async (
+      id: string,
+      line: string,
+      seen?: boolean,
+    ): Promise<{ words: string; done: boolean | null }> => {
       let hero = net.hero
-      if (id != 'pip' || !hero) return line
+      if (id != 'pip' || !hero) return { words: line, done: null }
       try {
         let done = await welcomed(hero)
         welcome.set(hero, done)
-        return greeting(id, line, done)
+        return { words: greeting(id, line, done, seen), done }
       } catch (e) {
         console.warn('mossvale village tasks:', e)
-        return line
+        return { words: line, done: null }
       }
     },
     /** who is looking: a person signed in is heard */

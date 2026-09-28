@@ -61,11 +61,18 @@ let STAY = 4 * 60_000
 /** A villager's row, by their giver id: the same on every page. */
 export let eidOf = (id: string): string => uuidOf(`villager/${id}`)
 
-/** The welcome a hero hears from Pip after checking his village list. */
-export let greeting = (id: string, line: string, done: boolean): string =>
-  id == 'pip' && done
-    ? 'You found my welcome sign on yaks.app! Now every new hero knows there is room for them by the fire.'
-    : line
+/** Pip notices a hero's first visit and the first time their mark appears. */
+export let greeting = (
+  id: string,
+  line: string,
+  done: boolean,
+  seen?: boolean,
+): string =>
+  id != 'pip' || seen == done
+    ? line
+    : done
+    ? 'There you are! Village Tasks on yaks.app showed your mark beside my welcome note. There is room for you by the fire, just like I promised.'
+    : 'I kept losing my welcome note under other scraps, so I put it in Village Tasks on yaks.app. Would you read it and mark it done before you come back?'
 
 /** Where a villager stands when they are at home, in world metres. */
 export let homeOf = (g: Giver): Spot => {
@@ -409,9 +416,15 @@ export let persona = (g: Giver, f: Facts): string => {
     `What you tell a stranger: "${g.greets}"`,
     ...g.id == 'pip'
       ? [
-        f.welcomeDone
-          ? 'This hero checked your welcome sign in Village Tasks on yaks.app. Thank them for reading it.'
-          : 'You made Village Tasks on yaks.app for little jobs in Mossvale. Ask this hero to check your welcome sign there. The app is at /village-tasks/.',
+        'You lose loose notes, so you made Village Tasks on yaks.app. ' +
+        'Your welcome note there says there is room for a new hero by the ' +
+        'fire. The hero can read it and mark it done at /village-tasks/. ' +
+        (f.welcomeDone
+          ? 'This hero marked it done; you saw their mark here in Mossvale. '
+          : 'This hero has not marked it done. ') +
+        'You like solving little village problems this way, but talk about ' +
+        'the app only when it fits what the hero says. Do not suggest other ' +
+        'apps that do not exist.',
       ]
       : [],
     `Your home is near the ${self.home} in ${land}.`,

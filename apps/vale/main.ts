@@ -678,11 +678,16 @@ let worked = (e: Work) => {
   } else h.toast(e.text)
 }
 
+let greeted = new Map<string, boolean>()
 let talkTo = async () => {
   let giver = last?.talk
   if (!giver) return
   let player = net.hero
-  let greets = await folk.greeting(giver.id, giver.greets)
+  let { words: greets, done } = await folk.greeting(
+    giver.id,
+    giver.greets,
+    greeted.get(player ?? ''),
+  )
   if (last?.talk?.id != giver.id || net.hero != player) return
   let next = giver.next
   // A deal standing between them opens over their words.
@@ -722,6 +727,7 @@ let talkTo = async () => {
       sound.quest()
     },
   )
+  if (giver.id == 'pip' && player && done != null) greeted.set(player, done)
   chat.converse()
 }
 

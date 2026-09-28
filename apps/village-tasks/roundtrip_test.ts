@@ -2,7 +2,7 @@
 // Village Tasks owns a seeded task and visitor completions scoped to a hero.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { completion, WELCOME } from '../vale/village-tasks.ts'
-import { eidOf } from '../vale/villagers.ts'
+import { eidOf, greeting } from '../vale/villagers.ts'
 import { client, connector, kernel, seed } from '../../workers/yak/probe.ts'
 import { completionEid } from './state.js'
 
@@ -79,6 +79,14 @@ Deno.test('a task completed in a sibling app changes Pip for one Vale hero', asy
     await list.applied(tick)
     assertEquals(await done(hero), true)
     assertEquals(await done(other), false)
+    assertStringIncludes(
+      greeting('pip', 'Come sit by the fire.', await done(hero), false),
+      'showed your mark',
+    )
+    assertStringIncludes(
+      greeting('pip', 'Come sit by the fire.', await done(other)),
+      'mark it done',
+    )
     await (await list.post(tick)).body?.cancel()
     assertEquals((await list.get('.village_done')).length, 1)
 

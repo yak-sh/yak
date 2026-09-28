@@ -24,7 +24,7 @@ export let givers: Giver[] = [
     place: 'plaza',
     offset: [1, 5],
     greets:
-      'I made a welcome sign for new heroes in Village Tasks on yaks.app. Will you check it for me?',
+      'Still got room by the fire. And this time I remembered where I wrote it down.',
     look: { tint: '#d9824a', hair: '#6b3f22', skin: '#f0c4a0' },
     build: 'child',
   },
