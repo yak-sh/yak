@@ -149,6 +149,8 @@ export type Env = {
   // Directory Bind role.
   DISPATCH?: Dispatch
   CF_WORKERS_TOKEN?: string
+  // The account API is directed to the probe's Cloudflare stand-in in tests.
+  WORKERS_API?: string
   // What makes and removes a space's tunnel and its Workers VPC Service
   // (tunnel.ts): Cloudflare Tunnel Write and the Connectivity Directory Admin
   // role on this account. Without it a space can still be linked to a

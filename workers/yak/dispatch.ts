@@ -53,6 +53,7 @@ import { COOKIE, opened, seal } from './lib/token.ts'
 import type { App, Role, Space } from './directory.ts'
 import { appStore, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
+import { accountUrl } from './workers_api.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
@@ -635,8 +636,10 @@ export let NEEDS_TOKEN =
   'the worker is not'
 
 let api = (env: Env, path: string) =>
-  `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT}` +
-  `/workers/dispatch/namespaces/${namespace(env)}/scripts${path}`
+  accountUrl(
+    env,
+    `/workers/dispatch/namespaces/${namespace(env)}/scripts${path}`,
+  )
 
 // What the API answered, or the sentence it refused with. Cloudflare wraps
 // every reply in `{success, errors, result}`, so a failure is read out of

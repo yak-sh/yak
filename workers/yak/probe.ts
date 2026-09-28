@@ -140,6 +140,8 @@ export let vars = (secret: string, cloudflare: string) => {
     REALTIME_APP: 'app',
     REALTIME_TOKEN: 'a-token',
     REALTIME_API: cloudflare,
+    CF_WORKERS_TOKEN: 'a-token',
+    WORKERS_API: cloudflare,
     ...stripe ? { STRIPE_KEY: stripe } : {},
     ...price ? { STRIPE_PRICE: price } : {},
   }
@@ -742,7 +744,7 @@ export let seed = async (
   return { ...them, eids }
 }
 
-// ---- Cloudflare's account API, stood in for (mail.ts, domains.ts, rtc.ts) --
+// ---- Cloudflare's account API, stood in for (mail, domains, rtc, workers) --
 //
 // The conversations a kernel has with Cloudflare, over the API's
 // `{success, errors, result}` envelope. A letter sent through Email Sending,
@@ -758,9 +760,11 @@ export let seed = async (
 // the tracks each holds, answered with a mid and an empty description, since
 // nothing here carries media. `GET` a session reads its tracks back, which is
 // how a test sees what the door opened and closed.
+// A worker upload keeps its script and secret names for later API calls.
 export let cloudflare = (log: string) => {
   let held = new Map<string, Custom>()
   let calls = new Map<string, Track[]>()
+  let workers = new Map<string, { version: string; secrets: Set<string> }>()
   let sfu = async (req: Request, path: string) => {
     let [, id = '', rest = ''] =
       /^\/apps\/[^/]+\/sessions\/([^/]+)\/?(.*)$/.exec(path) ?? []
@@ -804,6 +808,35 @@ export let cloudflare = (log: string) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
     if (url.pathname.startsWith('/apps/')) return await sfu(req, url.pathname)
+    let script =
+      /^\/accounts\/[^/]+\/workers\/dispatch\/namespaces\/[^/]+\/scripts\/([^/]+)(?:\/(.*))?$/
+        .exec(url.pathname)
+    if (script) {
+      let [, name, tail] = script
+      let held = workers.get(name)
+      if (!tail && req.method == 'PUT') {
+        let version = crypto.randomUUID()
+        workers.set(name, { version, secrets: held?.secrets ?? new Set() })
+        return ok({ version_id: version })
+      }
+      if (!held) return new Response(null, { status: 404 })
+      if (tail == 'secrets' && req.method == 'PUT') {
+        held.secrets.add((await req.json()).name)
+        return ok({})
+      }
+      if (tail == 'secrets' && req.method == 'GET') {
+        return ok([...held.secrets].map((name) => ({ name })))
+      }
+      if (tail?.startsWith('secrets/') && req.method == 'DELETE') {
+        held.secrets.delete(decodeURIComponent(tail.slice('secrets/'.length)))
+        return ok({})
+      }
+      if (!tail && req.method == 'DELETE') workers.delete(name)
+      else if (tail || !['GET', 'DELETE'].includes(req.method)) {
+        return new Response(null, { status: 404 })
+      }
+      return ok({ script: { id: name }, version_id: held.version })
+    }
     if (url.pathname.endsWith('/email/sending/send')) {
       let { to, subject, text } = await req.json()
       wrote(to, subject, text)
