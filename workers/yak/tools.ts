@@ -213,6 +213,7 @@ import {
   free,
   monthOf,
   refusedSpend,
+  requestUnits,
   size,
   SPACES,
   standing,
@@ -3682,9 +3683,13 @@ let OURS: Row[] = [
           lines.push(
             `- ${app.title} (${app.slug}) v${app.version ?? 0}${
               errors ? `, ${errors} open` : ''
-            }${its ? `, ${its.requests} requests, ${size(its.bytes)}` : ''}: ${
-              url(space, app, ctx.env)
-            } · ${mailbox(space, app, ctx.env)}${
+            }${
+              its
+                ? `, ${requestUnits(its)} estimated request units, ${
+                  size(its.bytes)
+                }`
+                : ''
+            }: ${url(space, app, ctx.env)} · ${mailbox(space, app, ctx.env)}${
               front ? ' — the front page' : ''
             }`,
           )

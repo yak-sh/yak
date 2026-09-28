@@ -15,8 +15,8 @@
 // anything: a request to one would be a request the next reading counts.
 //
 // Two datasets, because one does not carry both numbers:
-// `durableObjectsInvocationsAdaptiveGroups` has `sum.requests`,
-// `durableObjectsPeriodicGroups` has `sum.rowsRead`/`sum.rowsWritten`, and
+// `durableObjectsInvocationsAdaptiveGroups` has `sum.requests` by invocation
+// type, `durableObjectsPeriodicGroups` has inbound socket messages and rows,
 // both carry `dimensions.objectId`. Stored bytes are not from analytics:
 // `durableObjectsStorageGroups` is account-wide, with no per-object dimension,
 // so an app's size is what its own store told the directory when a write last
@@ -62,10 +62,10 @@ import { type Alerts, type Usage, warning } from './usage-alert.ts'
 
 export let GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql'
 
-// The whole month so far, grouped by Durable Object id and nothing else:
-// the fewer dimensions, the fewer rows, and one row per app is all a meter
-// wants. `limit` is the group count, not the request count — a thousand apps
-// still answer in one page.
+// The whole month so far, grouped by Durable Object id. Invocation type
+// separates hibernated socket messages from ordinary requests; periodic
+// metrics carry messages received while the object was active. `limit` is
+// the group count, not the request count.
 export let QUERY =
   `query Meter($account: string!, $since: string!, $until: string!) {
   viewer {
@@ -74,7 +74,7 @@ export let QUERY =
         limit: 10000
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) {
-        dimensions { objectId }
+        dimensions { objectId type }
         sum { requests }
       }
       durableObjectsPeriodicGroups(
@@ -82,7 +82,7 @@ export let QUERY =
         filter: {datetime_geq: $since, datetime_lt: $until}
       ) {
         dimensions { objectId }
-        sum { rowsRead rowsWritten }
+        sum { rowsRead rowsWritten inboundWebsocketMsgCount }
       }
       accountInvocations: durableObjectsInvocationsAdaptiveGroups(
         limit: 1
@@ -97,8 +97,14 @@ export let QUERY =
 }`
 
 type Group = {
-  dimensions?: { objectId?: string }
-  sum?: Record<string, number>
+  dimensions?: { objectId?: string; type?: string }
+  sum?: {
+    requests?: number
+    rowsRead?: number
+    rowsWritten?: number
+    duration?: number
+    inboundWebsocketMsgCount?: number
+  }
 }
 type Answer = {
   data?: {
@@ -130,12 +136,19 @@ export let read = (answer: Answer) => {
   }
   for (let g of account?.durableObjectsInvocationsAdaptiveGroups ?? []) {
     if (g.dimensions?.objectId) {
-      of(g.dimensions.objectId).requests += g.sum?.requests ?? 0
+      let row = of(g.dimensions.objectId)
+      let n = g.sum?.requests ?? 0
+      row.requests += n
+      if (g.dimensions.type == 'hibernation') {
+        row.ws_hibernated += n
+        row.ws_messages += n
+      }
     }
   }
   for (let g of account?.durableObjectsPeriodicGroups ?? []) {
     if (!g.dimensions?.objectId) continue
     let row = of(g.dimensions.objectId)
+    row.ws_messages += g.sum?.inboundWebsocketMsgCount ?? 0
     row.rows_read += g.sum?.rowsRead ?? 0
     row.rows_written += g.sum?.rowsWritten ?? 0
   }
@@ -266,6 +279,8 @@ export let sweep = async (env: Env, now = new Date()) => {
         meter: { month, ...got, at },
       })
       total.requests += got.requests
+      total.ws_messages += got.ws_messages
+      total.ws_hibernated += got.ws_hibernated
       total.rows_read += got.rows_read
       total.rows_written += got.rows_written
       total.bytes += held(app)

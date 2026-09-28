@@ -220,7 +220,7 @@ Deno.test('the plan cards and Plus offer carry the meter allowances', () => {
     let limits = tier == 'plus' ? PLUS : FREE
     return [
       limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`,
-      `${limits.requests.toLocaleString('en-US')} visits a month`,
+      `${limits.requests.toLocaleString('en-US')} request units a month`,
       `${size(limits.bytes)} of app data`,
       `${LETTERS[tier].toLocaleString('en-US')} emails a month`,
       ...(FILES[tier] == null
@@ -791,7 +791,7 @@ Deno.test('the signed-in plan copy derives both tiers from the meter', async () 
       html,
       `${limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`}, ${
         limits.requests.toLocaleString('en-US')
-      } visits a month, ${size(limits.bytes)} of app data`,
+      } request units a month, ${size(limits.bytes)} of app data`,
     )
   }
 })

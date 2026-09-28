@@ -54,7 +54,12 @@ export let META_STORE = PLATFORM_STORE
 // metered yet.
 export type Meter = {
   month: string
+  // GraphQL invocation requests include hibernated WebSocket messages.
   requests: number
+  // All inbound messages, and the subset included in `requests`. Older rows
+  // without them remain conservative until the next hourly reading.
+  ws_messages?: number
+  ws_hibernated?: number
   rows_read: number
   rows_written: number
   bytes: number
@@ -394,6 +399,8 @@ let meterOf = (r: Row): Meter | null =>
     ? {
       month: r.meter.month ?? '',
       requests: r.meter.requests ?? 0,
+      ws_messages: r.meter.ws_messages ?? 0,
+      ws_hibernated: r.meter.ws_hibernated ?? 0,
       rows_read: r.meter.rows_read ?? 0,
       rows_written: r.meter.rows_written ?? 0,
       bytes: r.meter.bytes ?? 0,

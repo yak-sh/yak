@@ -1690,7 +1690,7 @@ let plan = (
   let limits = y.plan.plus ? PLUS : FREE
   let allowance = `${
     limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
-  }, ${limits.requests.toLocaleString('en-US')} visits a month, ${
+  }, ${limits.requests.toLocaleString('en-US')} request units a month, ${
     size(limits.bytes)
   } of app data`
   let head = y.plan.plus

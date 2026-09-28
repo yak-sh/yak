@@ -941,6 +941,8 @@ export let platformDoc: VocabDoc = {
       properties: {
         month: text,
         requests: num,
+        ws_messages: num,
+        ws_hibernated: num,
         rows_read: num,
         rows_written: num,
         bytes: num,

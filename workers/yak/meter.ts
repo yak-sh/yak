@@ -108,6 +108,8 @@ let props = (c: unknown): Record<string, unknown> =>
 // written (directory.ts `Meter` is the whole component).
 export type Counts = {
   requests: number
+  ws_messages: number
+  ws_hibernated: number
   rows_read: number
   rows_written: number
 }
@@ -134,7 +136,26 @@ export let size = (bytes: number) => {
   return `${round ? Math.round(bytes) : bytes.toFixed(1)} ${units[n]}`
 }
 
-export let none = (): Counts => ({ requests: 0, rows_read: 0, rows_written: 0 })
+export let none = (): Counts => ({
+  requests: 0,
+  ws_messages: 0,
+  ws_hibernated: 0,
+  rows_read: 0,
+  rows_written: 0,
+})
+
+// `requests` is the raw invocation reading, kept in its original shape.
+// Hibernated messages are included in it; active-socket messages are not.
+// An unknown invocation type counts once. Cloudflare bills incoming messages
+// at 20:1, so this is a conservative estimate until analytics catches up.
+export let requestUnits = (
+  m: Pick<Meter, 'requests' | 'ws_messages' | 'ws_hibernated'>,
+) => {
+  let hibernated = m.ws_hibernated ?? 0
+  return Math.ceil(
+    m.requests - hibernated + (m.ws_messages ?? 0) / 20,
+  )
+}
 
 // ---- the ceilings (T-32758) ------------------------------------------------
 //
@@ -388,12 +409,14 @@ export let refusedVisit = (
   now = new Date(),
 ): Response | null => {
   let limit = ceilings(space.tier, space.slug)
-  if (!limit || spent(space, now).requests < limit.requests) return null
+  if (!limit || requestUnits(spent(space, now)) < limit.requests) return null
   let reset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
   return new Response(
     req.method == 'HEAD'
       ? null
-      : `This space has reached its ${count(limit.requests)} monthly visits. ` +
+      : `This space has reached its ${
+        count(limit.requests)
+      } monthly request units. ` +
         `Its apps will be available again on the 1st (UTC). ` +
         `Its own people, signed in, can still use them and manage the ` +
         `space. Plan settings: ${planSettings(space.slug, env)}`,
@@ -428,7 +451,7 @@ export let fullness = (space: Space, apps: number, now = new Date()) => {
   return free
     ? {
       ...(free.apps == null ? {} : { apps: apps / free.apps }),
-      requests: m.requests / free.requests,
+      requests: requestUnits(m) / free.requests,
       bytes: m.bytes / free.bytes,
       ...both,
     }
@@ -493,7 +516,7 @@ export let standing = (
       `${made} (${cost}), and ${files}.`
   }
   let refused =
-    `App serving pauses at ${count(free.requests)} monthly visits ` +
+    `App serving pauses at ${count(free.requests)} monthly request units ` +
     `(HTTP 429 to everyone but the space's own people signed in, checked ` +
     `hourly; resets on the 1st UTC); ${
       free.apps == null ? '' : `an app past ${free.apps}, `
@@ -513,10 +536,11 @@ export let standing = (
   // waits on the sweep. Before the first one this month there is no reading at
   // all, and zero would be a claim rather than a number.
   if (!read) {
-    return `${head}, ${files}, ${mail}, ${made} (${cost}). The month's requests and ` +
+    return `${head}, ${files}, ${mail}, ${made} (${cost}). The month's request units and ` +
       `data have not been read yet — the meter sweeps hourly. ${refused}`
   }
-  return `${head}, ${count(m.requests)} of ${count(free.requests)} requests, ` +
+  return `${head}, ${count(requestUnits(m))} of ${count(free.requests)} ` +
+    `estimated request units (incoming WebSocket messages at 20:1), ` +
     `${size(m.bytes)} of ${
       size(free.bytes)
     } app data, ${files}, ${mail}${read}, ${made} ` +

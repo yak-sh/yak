@@ -30,6 +30,7 @@ import {
   pooled,
   refusedSpend,
   refusedVisit,
+  requestUnits,
   size,
   spent,
   standing,
@@ -46,6 +47,10 @@ let ANSWER = {
             dimensions: { objectId: 'jeff/recipe-box' },
             sum: { requests: 93 },
           },
+          {
+            dimensions: { objectId: 'jeff/recipe-box', type: 'hibernation' },
+            sum: { requests: 40 },
+          },
           { dimensions: { objectId: 'yak/platform' }, sum: { requests: 2176 } },
           // Not an app of ours: nobody asks for it, and it costs nothing to
           // carry.
@@ -57,7 +62,11 @@ let ANSWER = {
         durableObjectsPeriodicGroups: [
           {
             dimensions: { objectId: 'jeff/recipe-box' },
-            sum: { rowsRead: 48358, rowsWritten: 1632 },
+            sum: {
+              rowsRead: 48358,
+              rowsWritten: 1632,
+              inboundWebsocketMsgCount: 100,
+            },
           },
           {
             dimensions: { objectId: 'yak/platform' },
@@ -116,7 +125,7 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
   let was = globalThis.fetch
   globalThis.fetch = ((_to: string | Request, init?: RequestInit) => {
     let { query } = JSON.parse(String(init?.body))
-    assertEquals(query.match(/dimensions \{ objectId \}/g)?.length, 2)
+    assertEquals(query.match(/dimensions \{ objectId(?: type)? \}/g)?.length, 2)
     let values = (key: string) => [
       {
         dimensions: { objectId: 'production:ada/recipes' },
@@ -128,8 +137,24 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
       data: {
         viewer: {
           accounts: [{
-            durableObjectsInvocationsAdaptiveGroups: values('requests'),
-            durableObjectsPeriodicGroups: values('rowsRead'),
+            durableObjectsInvocationsAdaptiveGroups: [
+              ...values('requests'),
+              {
+                dimensions: {
+                  objectId: 'staging:ada/recipes',
+                  type: 'hibernation',
+                },
+                sum: { requests: 20 },
+              },
+            ],
+            durableObjectsPeriodicGroups: values('rowsRead').map((g) => ({
+              ...g,
+              sum: {
+                ...g.sum,
+                inboundWebsocketMsgCount:
+                  g.dimensions.objectId.startsWith('staging:') ? 40 : 900,
+              },
+            })),
             accountInvocations: [{ sum: { requests: 7 } }],
             accountPeriodic: [{ sum: { rowsRead: 7, duration: 1 } }],
           }],
@@ -142,10 +167,15 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
     await sweep(env, new Date('2026-09-07T00:00:00Z'))
     let space = (await dir.space('ada'))!
     let app = (await dir.app(space, 'recipes'))!
-    assertEquals(app.meter?.requests, 7)
+    assertEquals(app.meter?.requests, 27)
+    assertEquals(app.meter?.ws_hibernated, 20)
+    assertEquals(app.meter?.ws_messages, 60)
+    assertEquals(requestUnits(app.meter!), 10)
     assertEquals(app.meter?.rows_read, 7)
     assertEquals(app.meter?.bytes, 4096)
-    assertEquals(space.meter?.requests, 7)
+    assertEquals(space.meter?.requests, 27)
+    assertEquals(space.meter?.ws_hibernated, 20)
+    assertEquals(space.meter?.ws_messages, 60)
     assertEquals(space.meter?.bytes, 4096)
     assertEquals(space.meter?.files, 17)
     // The reading asked the app's store nothing: only the directory's own.
@@ -158,7 +188,9 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
 Deno.test('an analytics answer reads as one row per store', () => {
   let by = read(ANSWER)
   assertEquals(by.get('jeff/recipe-box'), {
-    requests: 93,
+    requests: 133,
+    ws_messages: 140,
+    ws_hibernated: 40,
     rows_read: 48358,
     rows_written: 1632,
   })
@@ -193,6 +225,8 @@ Deno.test('a store in one dataset and not the other still reads', () => {
   })
   assertEquals(by.get('jeff/quiet'), {
     requests: 4,
+    ws_messages: 0,
+    ws_hibernated: 0,
     rows_read: 0,
     rows_written: 0,
   })
@@ -253,6 +287,8 @@ Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
   assertEquals(level(space({ requests: 39_999 }), 1, NOW), 'ok')
   assertEquals(level(space({ requests: 40_000 }), 1, NOW), 'near')
   assertEquals(level(space({ requests: 50_000 }), 1, NOW), 'over')
+  assertEquals(level(space({ ws_messages: 800_000 }), 1, NOW), 'near')
+  assertEquals(level(space({ ws_messages: 1_000_000 }), 1, NOW), 'over')
   // Any of the four is enough, and the apps are counted, not metered.
   assertEquals(level(space(), 4, NOW), 'near')
   assertEquals(level(space(), 5, NOW), 'over')
@@ -297,6 +333,27 @@ Deno.test('monthly serving quota: both tiers, comped spaces, and UTC reset', asy
     }
   }
   let full = space({ requests: FREE.requests })
+  assertEquals(
+    refusedVisit(space({ ws_messages: 999_980 }), req, {}, NOW),
+    null,
+  )
+  assertEquals(
+    refusedVisit(space({ ws_messages: 1_000_000 }), req, {}, NOW)?.status,
+    429,
+  )
+  assertEquals(
+    refusedVisit(
+      space({
+        requests: 1_000_000,
+        ws_hibernated: 1_000_000,
+        ws_messages: 1_000_000,
+      }),
+      req,
+      {},
+      NOW,
+    )?.status,
+    429,
+  )
   assertEquals(refusedVisit({ ...full, tier: 'plus' }, req, {}, NOW), null)
   let head = refusedVisit(full, new Request(req, { method: 'HEAD' }), {}, NOW)!
   assertEquals(head.status, 429)
@@ -352,7 +409,8 @@ Deno.test('the line says every number against its ceiling', () => {
     NOW,
   )
   assertStringIncludes(said, '3 of 5 apps')
-  assertStringIncludes(said, '41,000 of 50,000 requests')
+  assertStringIncludes(said, '41,000 of 50,000 estimated request units')
+  assertStringIncludes(said, 'WebSocket messages at 20:1')
   assertStringIncludes(said, '900 MB of 1 GB')
   assertStringIncludes(said, '0 of 100 emails')
   // The hour those figures were read: the meter is an hourly rollup, and a

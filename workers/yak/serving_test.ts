@@ -799,7 +799,7 @@ Deno.test('monthly visit quota stops all app serving before dispatch or files', 
     ) {
       let res = await k.at(path)
       assertEquals(res.status, 429, path)
-      assertStringIncludes(await res.text(), 'monthly visits')
+      assertStringIncludes(await res.text(), 'monthly request units')
     }
     // Neither a claimed internal request nor a socket upgrade skips the gate.
     for (

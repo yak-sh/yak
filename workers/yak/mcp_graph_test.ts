@@ -526,7 +526,7 @@ Deno.test('app_list answers what the month cost', async () => {
     // waiting out a TTL.
     await agent.tool('space_new', { slug: 'metered-too35', title: 'Too' })
     let said = await agent.tool('app_list', { space: 'metered35' })
-    assertStringIncludes(said, '1200 requests')
+    assertStringIncludes(said, '1200 estimated request units')
     assertStringIncludes(said, '241 MB')
 
     // The one number analytics cannot answer: what a store weighs. It comes
@@ -603,7 +603,7 @@ Deno.test('the free tier: a warning once, then the refusals', async () => {
     let files = { space: 'brim36', app: 'one', op: 'list' }
     let said = await agent.tool('app_files', files)
     assertStringIncludes(said, '## ceiling')
-    assertStringIncludes(said, '40,500 of 50,000 requests')
+    assertStringIncludes(said, '40,500 of 50,000 estimated request units')
     assertStringIncludes(said, 'App serving pauses at')
     let again = await agent.tool('app_files', files)
     assert(!again.includes('## ceiling'), 'the ceiling line is said once')
@@ -649,7 +649,7 @@ Deno.test('the free tier: a warning once, then the refusals', async () => {
     await agent.tool('space_new', { slug: 'quota-cache36', title: 'Quota' })
     let over = await k.at('brim36.yaks.app', '/one/')
     assertEquals(over.status, 429)
-    assertStringIncludes(await over.text(), '50,000 monthly visits')
+    assertStringIncludes(await over.text(), '50,000 monthly request units')
     let manage = await k.at('yaks.app', '/manage?space=brim36', {
       headers: { cookie },
     })
