@@ -20,6 +20,8 @@ import { BEASTS } from './beasts.ts'
 import { aim, bearing, type Cam, depth, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
+import { companion } from './companion.ts'
+import { companionView } from './companion-view.ts'
 import { dealbox } from './dealbox.ts'
 import { deals } from './deals.ts'
 import { fires } from './fires.ts'
@@ -113,6 +115,7 @@ let seen = sighting(net)
 let camp = fires(net)
 let g = game(net, folk.at)
 let toil = working(net)
+let helper = companion(net)
 // Who you are and your heroes, asked while the level grows.
 let asking = net.me().then(async (me) => ({
   me,
@@ -200,6 +203,7 @@ let hearth = (): Spot => hearthOf(HOME) ?? arriveOf(HOME)
   await w.near()
 }
 let stage = cast(w.scene, v, marks, BUILD)
+let helperView = companionView(w.scene, glass)
 let dust = bits(w.scene, true, 400)
 let glow = bits(w.scene, false, 300)
 let bounty = nodes(w.scene, v, marks, glow, phone)
@@ -802,13 +806,16 @@ let loop = (t: number) => {
       let mine = net.who(net.hero) ?? look
       let dressed = lookOf(net.hero)
       let props = w.props()
+      let natural = props.flatMap((c) => c.natural)
       job = toil.tick(
         v,
         f,
         i.gather || (i.talk && (!f.talk || !!job?.bench)),
         i.strike || i.dodge || i.jump || i.ability > 0,
-        props.flatMap((c) => c.natural),
+        natural,
       )
+      let helping = helper.tick(v, f, dt, natural)
+      helperView.show(helping, dt, now)
       let d = job.doing
       stage.tick(
         f,
@@ -850,6 +857,7 @@ let loop = (t: number) => {
       // Doors open for whoever is near them.
       w.swing([
         [f.body.x, f.body.y, f.body.z],
+        ...(helping.at ? [helping.at] : []),
         ...f.others.map((
           o,
         ): [number, number, number] => [o.body.x, o.body.y, o.body.z]),
@@ -859,6 +867,7 @@ let loop = (t: number) => {
       ], dt)
       for (let e of f.events) react(e, target)
       for (let e of job.events) worked(e)
+      for (let e of helping.events) worked(e)
       if (i.talk && f.talk && !job.bench) talkTo()
       if (h.talking && !f.talk) h.talk(null, () => {}, () => {})
       if (!h.talking) folk.leave()

@@ -1,0 +1,18 @@
+.Companion {
+  position: absolute;
+  left: 50%;
+  top: var(--gap);
+  transform: translateX(-50%);
+  max-width: min(88vw, 28rem);
+  padding: var(--gap);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--glass);
+  color: var(--ink);
+  text-align: center;
+  pointer-events: none;
+}
+
+.Companion[hidden] {
+  display: none;
+}

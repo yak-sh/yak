@@ -209,6 +209,7 @@
     },
     "gathered": {
       "component": true,
+      "unique": [["node", "life"]],
       "type": "object",
       "description": "Where an item came from when a hero gathered it: the node they worked (gather.ts), which kind of node, and when. It rides on the item it gave, so the bag is still items held less items spent. The first row after a node was last whole spends it for everyone until it grows back, the way a slain row fells a creature; a hero's trades are counted from the rows on their items.",
       "properties": {
@@ -216,6 +217,15 @@
           "type": "string",
           "index": true,
           "description": "The node, by the eid its level names it with."
+        },
+        "life": {
+          "type": "number",
+          "description": "When this node's previous life was spent, or zero for its first life. One gathering can spend each life."
+        },
+        "directive": {
+          "type": "string",
+          "index": true,
+          "description": "The companion objective this gathering advances, when a companion did it."
         },
         "kind": {
           "type": "string",
@@ -561,6 +571,51 @@
           "description": "The hero."
         }
       }
+    },
+    "directive": {
+      "component": true,
+      "kind": false,
+      "floor": "person",
+      "description": "A signed-in person's request to the companion of a hero they made. Only a request whose created.by matches the hero's created.by directs that companion. Newer requests replace older ones; gathered rows name the request they advance.",
+      "properties": {
+        "player": { "type": "string", "index": true },
+        "goal": { "type": "string", "enum": ["wood"] },
+        "count": { "type": "integer", "minimum": 1, "maximum": 10 }
+      },
+      "required": ["player", "goal", "count"]
+    },
+    "gather_wood": {
+      "tool": true,
+      "description": "Ask the companion of one of your Mossvale heroes to gather wood. First query player rows and choose a hero whose created.by is you; only that hero's owner can direct the companion. The command keeps the objective while a game page is open. Use companion_progress with the returned directive id to see its gathered items.",
+      "input": {
+        "player": {
+          "type": "string",
+          "description": "The eid of a hero you made."
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 1
+        }
+      },
+      "required": ["player"],
+      "apply": {
+        "entity": { "eid": "$objective" },
+        "directive": { "player": "$player", "goal": "wood", "count": "$count" }
+      }
+    },
+    "companion_progress": {
+      "tool": true,
+      "description": "List the wood gathered for a companion objective. Each gathered item is one completed tree; the requested count is on the directive row returned by gather_wood.",
+      "input": {
+        "directive": {
+          "type": "string",
+          "description": "The directive id returned by gather_wood."
+        }
+      },
+      "required": ["directive"],
+      "query": ".gathered.directive=$directive&.item&?created"
     },
     "think": {
       "tool": true,

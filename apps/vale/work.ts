@@ -56,6 +56,7 @@ export type Seen = {
   kind: string
   lode: Lode
   at: Vec3
+  life: number
   spent: boolean
   back: number
   near: number
@@ -68,6 +69,14 @@ export type Bench = { craft: Craft; at: Vec3; near: number }
 
 /** A notice board near enough to read, and how far off. */
 export type Reading = Board & { near: number }
+
+/** The part of a game frame that work needs, for a hero or a companion. */
+export type WorkFrame = {
+  body: Pick<Frame['body'], 'x' | 'y' | 'z'>
+  sheet: Pick<Frame['sheet'], 'bag' | 'worn'>
+  down: boolean
+  now: number
+}
 
 /** What happened at the work this frame, for the eyes and ears: a stroke
  * landing (a chop, a clink, a rustle, a splash, a hammer on the anvil), with
@@ -191,7 +200,9 @@ let spending = (
 let short: Work = { type: 'say', text: 'You no longer have all it needs.' }
 
 /** A hero's work over one store. */
-export let working = (net: Net) => {
+export let working = (
+  net: Pick<Net, 'hero' | 'mine' | 'gathered' | 'keep'>,
+) => {
   let job: {
     trade: Trade
     at: Vec3
@@ -203,6 +214,7 @@ export let working = (net: Net) => {
     x: number
     z: number
     strokes: number
+    directive: string | null
   } | null = null
   // A recipe the sheet asked to make, or a piece to upgrade, taken up at the
   // next frame.
@@ -246,14 +258,28 @@ export let working = (net: Net) => {
   }
 
   // A node's work done: the item it gave, wearing the row that spends it.
-  let gather = (n: Seen, me: string, now: number, mine: Trades): Work => {
+  let gather = (
+    n: Seen,
+    me: string,
+    now: number,
+    mine: Trades,
+    directive: string | null,
+  ): Work => {
     let lvl = mine[n.lode.trade].lvl
     let count = haulOf(n.eid, now, me, n.kind, lvl, n.rarity)
     let xp = gatherXp(n.lode.tier, n.rarity, lvl)
     net.keep({
       entity: { eid: crypto.randomUUID() },
       item: { kind: n.lode.gives, n: count, owner: me, at: now },
-      gathered: { node: n.eid, kind: n.kind, at: now, rarity: n.rarity, xp },
+      gathered: {
+        node: n.eid,
+        life: n.life,
+        kind: n.kind,
+        at: now,
+        rarity: n.rarity,
+        xp,
+        ...directive ? { directive } : {},
+      },
       place: placeOf(n.at[0], n.at[2]),
     })
     return {
@@ -276,7 +302,7 @@ export let working = (net: Net) => {
     me: string,
     now: number,
     at: Vec3,
-    f: Frame,
+    f: WorkFrame,
     lvl: number,
   ): Work => {
     let r = RECIPES[key]
@@ -320,7 +346,7 @@ export let working = (net: Net) => {
     me: string,
     now: number,
     at: Vec3,
-    f: Frame,
+    f: WorkFrame,
   ): Work => {
     let h = f.sheet.bag.find((h) => h.eid == eid)
     let r = h && upgradeOf(h.kind, h.plus ?? 0)
@@ -360,10 +386,11 @@ export let working = (net: Net) => {
      * `stop` their doing something else. */
     tick: (
       v: Vale,
-      f: Frame,
+      f: WorkFrame,
       want: boolean,
       stop: boolean,
       natural: Natural[] = [],
+      as?: { target: string; directive: string },
     ): Job => {
       let me = net.hero
       let now = f.now
@@ -390,6 +417,7 @@ export let working = (net: Net) => {
             kind: n.lode,
             lode,
             at: [n.x, y, n.z],
+            life: fall.fell,
             spent: fall.down,
             back: fall.down ? fall.fell + respawn - now : 0,
             near: Math.hypot(n.x - f.body.x, n.z - f.body.z),
@@ -399,7 +427,10 @@ export let working = (net: Net) => {
         },
       )
       let near = nodes
-        .filter((n) => n.near <= GATHER[n.lode.trade].reach)
+        .filter((n) =>
+          n.near <= GATHER[n.lode.trade].reach &&
+          (!as || n.eid == as.target)
+        )
         .sort((a, b) => a.near - b.near)[0] ?? null
       let bench = stationsNear(v, f.body.x, f.body.z, 12).flatMap(
         (s): Bench[] => {
@@ -463,6 +494,7 @@ export let working = (net: Net) => {
             x: f.body.x,
             z: f.body.z,
             strokes: 0,
+            directive: as?.directive ?? null,
           }
         }
       }
@@ -494,6 +526,7 @@ export let working = (net: Net) => {
             x: f.body.x,
             z: f.body.z,
             strokes: 0,
+            directive: null,
           }
         }
       }
@@ -501,7 +534,7 @@ export let working = (net: Net) => {
       // The work under way: a stroke landing, and at the end what it gave.
       let doing: Job['doing'] = null
       if (job && me) {
-        let { trade, at, eid, recipe, piece } = job
+        let { trade, at, eid, recipe, piece, directive } = job
         let n = recipe ? null : nodes.find((n) => n.eid == eid) ?? null
         let stroke = STROKE[trade]
         let into = now - job.from
@@ -517,7 +550,7 @@ export let working = (net: Net) => {
         }
         if (now >= job.until) {
           job = null
-          if (n) events.push(gather(n, me, now, mine))
+          if (n) events.push(gather(n, me, now, mine, directive))
           else if (piece) events.push(upgrade(piece, me, now, at, f))
           else if (recipe) {
             events.push(make(recipe, me, now, at, f, mine[trade].lvl))

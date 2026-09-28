@@ -172,6 +172,30 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     string,
     [string, string, Map<number, Map<Eid, Bundle>>]
   >()
+  // The same declared uniqueness that SQLite enforces on its indexes. A
+  // transaction's rollback travels through `put`, restoring these as well.
+  let uniques = new Map(vocab.all.map((comp) => [
+    comp,
+    vocab.indexes(comp).filter((i) => i.unique).map((index) => ({
+      comp,
+      index,
+      held: new Map<string, Eid>(),
+    })),
+  ]))
+  let uniqueKey = (
+    b: Bundle | undefined,
+    comp: string,
+    props: string[],
+    present: string[] = [],
+  ): string | undefined => {
+    if (!b?.[comp] || present.some((p) => valueOf(b, comp, p) == null)) {
+      return undefined
+    }
+    let values = props.map((p) => keyOf(valueOf(b, comp, p)))
+    return values.some((v) => v === undefined)
+      ? undefined
+      : JSON.stringify(values)
+  }
   let next = 1
   // The undo log: for each entity a transaction is about to change, the record
   // it held first. Replayed backwards, it is the rollback.
@@ -184,8 +208,26 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // disagrees with the rows.
   let put = (eid: Eid, b: Bundle | undefined) => {
     let was = rows.get(eid)
+    let checks = [
+      ...new Set([...Object.keys(was ?? {}), ...Object.keys(b ?? {})]),
+    ]
+      .flatMap((comp) => uniques.get(comp) ?? [])
+    for (let { comp, index, held } of checks) {
+      let key = uniqueKey(b, comp, index.props, index.present)
+      if (key !== undefined && held.has(key) && held.get(key) != eid) {
+        throw new Error(
+          `unique constraint failed: ${comp}.${index.props.join(', ')}`,
+        )
+      }
+    }
     if (b) rows.set(eid, b)
     else rows.delete(eid)
+    for (let { comp, index, held } of checks) {
+      let from = uniqueKey(was, comp, index.props, index.present)
+      let to = uniqueKey(b, comp, index.props, index.present)
+      if (from !== undefined && from != to) held.delete(from)
+      if (to !== undefined) held.set(to, eid)
+    }
     if (was) {
       for (let name in was) {
         if (name != 'entity' && !(b && name in b)) worn.get(name)?.delete(eid)

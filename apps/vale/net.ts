@@ -227,6 +227,9 @@ export let connect = (base: URL) => {
       learned: c.watch(`.learned.player=${q}`),
       respec: c.watch(`.respec.player=${q}`),
       fire: c.watch(`.fire.player=${q}`),
+      directive: c.watch(
+        `.directive.player=${q}&?created&.order=-created.at&.limit=10`,
+      ),
     }
   }
 
