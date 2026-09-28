@@ -2,6 +2,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { responses } from './responses.ts'
 import type { TextDelta } from '@yaks/model'
 const packet = (value: unknown) => 'data: ' + JSON.stringify(value) + '\n\n'
+let sse = (...events: unknown[]) => new Response(events.map(packet).join(''))
 Deno.test('provider emits only public text and retains response item identities', async () => {
   const events = [
     { type: 'response.created' },
@@ -39,6 +40,57 @@ Deno.test('provider emits only public text and retains response item identities'
   })
   assertEquals(deltas, [{ index: 0, id: 'm1', text: 'hello' }])
   assertEquals(reply.items, [{ kind: 'assistant', id: 'm1', text: 'hello' }])
+})
+Deno.test('streaming retries a transient failure before public text', async () => {
+  for (
+    let fail of [
+      () => Promise.reject(new TypeError('connection reset')),
+      () => Promise.resolve(new Response('', { status: 503 })),
+    ]
+  ) {
+    let calls = 0
+    let pauses: number[] = []
+    let deltas: TextDelta[] = []
+    let model = responses({
+      credential: () => ({ token: 'private', base: 'https://example.invalid' }),
+      pause: (ms) => {
+        pauses.push(ms)
+        return Promise.resolve()
+      },
+      fetch: () => {
+        if (++calls == 1) return fail()
+        return Promise.resolve(sse(
+          { type: 'response.output_text.delta', item_id: 'm', delta: 'done' },
+          {
+            type: 'response.output_item.done',
+            item: {
+              id: 'm',
+              type: 'message',
+              content: [{ type: 'output_text', text: 'done' }],
+            },
+          },
+          {
+            type: 'response.completed',
+            response: {
+              id: 'r',
+              model: 'fake',
+              status: 'completed',
+            },
+          },
+        ))
+      },
+    })
+    let reply = await model({
+      model: 'fake',
+      items: [],
+      tools: [],
+      onText: (delta) => deltas.push(delta),
+    })
+    assertEquals(calls, 2)
+    assertEquals(pauses, [1000])
+    assertEquals(deltas, [{ index: 0, id: 'm', text: 'done' }])
+    assertEquals(reply.items, [{ kind: 'assistant', id: 'm', text: 'done' }])
+  }
 })
 Deno.test('a broken streamed exchange is not retried after public text was exposed', async () => {
   let calls = 0

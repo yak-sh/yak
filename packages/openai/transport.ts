@@ -97,8 +97,8 @@ export type ResponseOptions = {
 
 /** Per-exchange cancellation and a hook for every parsed frame (after redaction). */
 export type RunOptions = {
-  /** Do not replay a dispatched exchange when callers expose partial output. */
-  noRetry?: boolean
+  /** Do not replay once callers expose partial output. Checked after failure. */
+  noRetry?: boolean | (() => boolean)
   signal?: AbortSignal
   event?: (event: ResponseEvent) => void
 }
@@ -287,6 +287,22 @@ let safe = (value: unknown, secrets: string[]) => {
 /** A short machine token — a fault code, a class name, an incomplete reason. */
 let codeOf = (value: unknown) =>
   typeof value == 'string' && /^[\w.:-]{1,64}$/.test(value) ? value : undefined
+
+// Fetch failures often hide the useful network error in `cause`. Carry enough
+// of that chain into a failed session to diagnose the next outage, without
+// recording credentials or URL parameters from a custom endpoint.
+let networkReason = (error: unknown, secrets: string[]) => {
+  let parts: string[] = []
+  for (let n = 0; n < 3 && error instanceof Error; n++) {
+    let code = codeOf((error as Error & { code?: unknown }).code)
+    let name = code ?? codeOf(error.name) ?? 'Error'
+    let message = error.message.replace(/https?:\/\/[^\s)]+/g, '[endpoint]')
+    let clean = scrub(message, secrets) as string
+    parts.push(clean ? `${name}: ${clean}` : name)
+    error = error.cause
+  }
+  return parts.join(' <- ').slice(0, 400)
+}
 
 // An HTTP-error body carries both a short machine `code` and the human
 // `message` naming what it rejected ("No tool output for function call …").
@@ -589,7 +605,11 @@ export let transport = (options: ResponseOptions): {
           if (run.signal?.aborted || (error as Error)?.name == 'AbortError') {
             throw error
           }
-          throw fault('transport', 'responses: transport failed')
+          let reason = networkReason(error, secrets)
+          throw fault(
+            'transport',
+            `responses: transport failed${reason ? ` — ${reason}` : ''}`,
+          )
         }
 
         if (
@@ -639,7 +659,8 @@ export let transport = (options: ResponseOptions): {
         // the same way, and a caller that states how long it can wait rides one
         // out instead of failing in five seconds.
         if (
-          run.noRetry || !(fail instanceof ResponseError) || !transient(fail) ||
+          (typeof run.noRetry == 'function' ? run.noRetry() : run.noRetry) ||
+          !(fail instanceof ResponseError) || !transient(fail) ||
           (failures >= retries && waited >= patienceMs)
         ) {
           throw fail

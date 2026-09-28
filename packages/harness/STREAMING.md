@@ -21,9 +21,9 @@ output, calls, artifacts, and usage are committed when the reply completes.
 Provider deltas are not necessarily individual tokens. Transient notifications
 are microtask-batched by subscriptions, and terminal paints use the existing
 renderer scheduling. The callback backlog is bounded at 4,096 deltas; overflow
-fails the attempt instead of silently dropping text. The transport disables its
-internal retry loop for streaming exchanges, because an already-exposed partial
-response must not be replayed as though nothing happened.
+fails the attempt instead of silently dropping text. The transport retries
+transient failures until the first public text delta. An already-exposed partial
+response is never replayed.
 
 ## Ask lifecycle and failures
 

@@ -220,7 +220,7 @@ let ask = (opts: Options) => {
           signal: req.signal && opts.signal
             ? AbortSignal.any([req.signal, opts.signal])
             : req.signal ?? opts.signal,
-          noRetry: !!req.onText,
+          noRetry: () => !!req.onText && textIndexes.size > 0,
           // Image payloads must never escape through diagnostic/event subscribers.
           event: (event) => {
             if (

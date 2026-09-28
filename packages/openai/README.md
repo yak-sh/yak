@@ -113,18 +113,20 @@ whatever its status. Auth and validation refusals fail fast. `Retry-After`
 extends the backoff, up to 60s. One refresh on 401 when supplied. `retries` sets
 the attempt limit and `pause` supplies the delay function. `patienceMs` can
 extend HTTP retries beyond that limit; its default of zero keeps the attempt
-limit. `run(request, { noRetry: true })` prevents replay of a dispatched
-exchange. `shape` replaces the default request shaping for compatible providers;
-otherwise requests always stream, default to `store: false`, and request
-encrypted reasoning. `reach()` probes `/models` with a five-second timeout: any
-HTTP answer proves connectivity, not authorization.
+limit. `run(request, { noRetry: true })` prevents replay; a function can defer
+that decision until partial output is exposed. `shape` replaces the default
+request shaping for compatible providers; otherwise requests always stream,
+default to `store: false`, and request encrypted reasoning. `reach()` probes
+`/models` with a five-second timeout: any HTTP answer proves connectivity, not
+authorization.
 
 Native failures are `ResponseError`s with a stable `kind` and optional provider
 `code` (the error body's or event's `code`, or its `type` when the code is
-null), HTTP `status`, rate `limits`, and partial `items`/`evidence`. The model
-adapter uses the same retry defaults, but disables HTTP replay when the request
-has an `onText` callback, preventing duplicate streamed text. It accepts the
-transport policies plus `refresh`, `signal`, and `event`; error mapping and
+null), HTTP `status`, rate `limits`, and partial `items`/`evidence`. Fetch
+failures include a bounded, redacted cause chain with URL parameters removed.
+The model adapter uses the same retry defaults and stops replay after it has
+delivered a public text delta, preventing duplicate streamed text. It accepts
+the transport policies plus `refresh`, `signal`, and `event`; error mapping and
 continuation behavior are described above. `frames(stream)` exposes the same SSE
 decoder without transport policies or redaction and releases its reader on exit.
 

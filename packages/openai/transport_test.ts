@@ -532,14 +532,27 @@ Deno.test('responses retries a network interruption with bounded evidence', asyn
     pause: () => Promise.resolve(),
     fetch: () => {
       calls++
-      return Promise.reject(Error('secret-old acct-1 socket reset'))
+      return Promise.reject(
+        new TypeError(
+          'request to https://fake.test/v1/responses?key=secret-old failed',
+          {
+            cause: Object.assign(new Error('connection closed for acct-1'), {
+              code: 'ECONNRESET',
+            }),
+          },
+        ),
+      )
     },
   })
   let error = await assertRejects(
     () => client.run({ model: 'm', input: [] }),
   ) as ResponseFault
   assertEquals(calls, 2)
-  assertEquals(error.message, 'responses: transport failed')
+  assertEquals(
+    error.message,
+    'responses: transport failed — TypeError: request to [endpoint] failed' +
+      ' <- ECONNRESET: connection closed for [redacted]',
+  )
   assertEquals(JSON.stringify(error).includes('secret-old'), false)
   assertEquals(JSON.stringify(error).includes('acct-1'), false)
 })
