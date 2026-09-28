@@ -148,7 +148,7 @@ import {
   reads,
 } from '@yaks/member'
 import { parse } from '@yaks/query'
-import type { Vocab, VocabDoc } from '@yaks/vocab'
+import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
 import { commands, type Tools } from './lib/tools.ts'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
@@ -858,11 +858,11 @@ export class Store {
     // store keeps no `effect` rows, so each runs here once the write commits.
     let due = (e: { entity: { eid: string } }) =>
       this.#runner().due(e.entity.eid)
-    fx.handle(
-      Object.fromEntries(
-        this.#runner(g).rules.map((r) => [r.rule.name, due]),
-      ),
-    )
+    let declared = new Set(effectsIn(vocab.docs).map((e) => e.name))
+    fx.handle(Object.fromEntries(
+      this.#runner(g).rules.filter((r) => declared.has(r.rule.name))
+        .map((r) => [r.rule.name, due]),
+    ))
     effected(PLUGINS, fx, this.#stored(g))
     this.#vocab = vocab
     this.#graph = g

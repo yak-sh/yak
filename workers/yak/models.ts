@@ -11,7 +11,8 @@
 // It is also how an app asks one, as a plugin (plugin.ts): the catalogue's
 // offered rows planted in every app's store as @yaks/model's provider, model
 // and serves rows, and that store's own transcript runner (@yaks/session),
-// lent Workers AI through the one metered binding (meter.ts `metered`) and the
+// lent providers through one resolver, with Workers AI on the metered binding
+// (meter.ts `metered`) and OpenRouter through a connected integration, and the
 // commands the app marks `"model": true` as its tools. A page writes an entry
 // wearing `using{model}` and the answer lands beside it.
 import type { Bundle, Comp, Eid } from '@yaks/graph'
@@ -29,9 +30,15 @@ import { edits, mode, writes } from '@yaks/member'
 import { ModelError } from '@yaks/model'
 import type { VocabDoc } from '@yaks/vocab'
 import { said, workersAi } from '@yaks/workers-ai'
-import { appStore, type Directory } from './directory.ts'
+import { artifactStore, objectBlobs } from '@yaks/blob'
+import { resolve } from '@yaks/connections'
+import { responses as openrouter } from '@yaks/openrouter'
+import { appStore, type Directory, directoryOf } from './directory.ts'
+import { ctxOf } from './connections.ts'
+import { blobPrefix } from './blob-key.ts'
 import { filled, schemaOf } from './lib/tools.ts'
 import { metered } from './meter.ts'
+import { outbound } from './outbound.ts'
 import { caught } from './sentry.ts'
 import {
   type Answer,
@@ -130,26 +137,57 @@ export let guess = (sent: unknown) =>
 /** The provider every model in the catalogue is served by, as its row names
  * it and the runner is lent it. */
 export let PROVIDER = 'workers-ai'
+let OPENROUTER = 'openrouter'
+let SPEECH = 'bytedance-seed/seed-audio-1-0'
 
-let provider = identityEid('provider', [PROVIDER])
+// The integration pays OpenRouter itself; these rows have no platform price.
+let integrated = [{
+  provider: OPENROUTER,
+  name: SPEECH,
+  label: 'Seed Audio 1.0',
+  modalities: ['audio'],
+  speech: true,
+}]
+
 let modelEid = (name: string): Eid => identityEid('model', [name])
 
 /** The catalogue as an app's store holds it: the provider, each model an app
  * may ask, and the edge saying the one serves the other under the model's own
  * name, which is what a request is sent with. */
 export let catalogued = (): Bundle[] => [
-  {
-    entity: { eid: provider },
-    provider: { name: PROVIDER, transport: 'http', offered: true },
-  },
-  ...CATALOGUE.filter((r) => r.offered).flatMap((r): Bundle[] => [
+  ...[PROVIDER, OPENROUTER].map((name): Bundle => ({
+    entity: { eid: identityEid('provider', [name]) },
+    provider: { name, transport: 'http', offered: true },
+  })),
+  ...[
+    ...CATALOGUE.filter((r) => r.offered).map((r) => ({
+      provider: PROVIDER,
+      name: r.name,
+      label: r.label,
+    })),
+    ...integrated,
+  ].flatMap((r): Bundle[] => [
     {
       entity: { eid: modelEid(r.name) },
-      model: { name: r.name, label: r.label, offered: true },
+      model: {
+        name: r.name,
+        label: r.label,
+        offered: true,
+        ...'modalities' in r ? { modalities: r.modalities } : {},
+      },
     },
     {
-      entity: { eid: edgeEid(provider, 'serves', modelEid(r.name)) },
-      edge: { from: provider, to: modelEid(r.name) },
+      entity: {
+        eid: edgeEid(
+          identityEid('provider', [r.provider]),
+          'serves',
+          modelEid(r.name),
+        ),
+      },
+      edge: {
+        from: identityEid('provider', [r.provider]),
+        to: modelEid(r.name),
+      },
       serves: { name: r.name },
     },
   ]),
@@ -230,6 +268,55 @@ export let tooled = (at: Stored): Tool[] =>
 let payer = (app: string) => async (dir: Directory) =>
   (await dir.appAt(app))?.space ?? null
 
+// A model calls out as the app whose store is running it. The sentinel comes
+// from that app's connected integration, and egress exchanges it only for the
+// integration's declared hosts. Nothing here reads or records the key.
+let connected = (at: Stored) =>
+  openrouter({
+    speech: integrated.filter((r) => r.speech).map((r) => r.name),
+    key: async () => {
+      if (!at.env.STORE) {
+        throw new ModelError('unbound', 'This app has no integration store')
+      }
+      let link = await resolve(
+        ctxOf({ ...at.env, STORE: at.env.STORE }),
+        at.app!,
+        OPENROUTER,
+      )
+      if (!link) {
+        throw new ModelError(
+          'connection',
+          'Connect OpenRouter to this app before asking its models',
+        )
+      }
+      return link.sentinel
+    },
+    fetch: (input, init) => {
+      if (!at.env.STORE) {
+        throw new ModelError('unbound', 'This app has no integration store')
+      }
+      return outbound(
+        new Request(input, init),
+        { ...at.env, STORE: at.env.STORE },
+        { app: at.app!, level: 'owner', person: null },
+      )
+    },
+    media: {
+      store: async (bytes, mediaType) => {
+        let found = at.env.STORE
+          ? await directoryOf(at.env.STORE).appAt(at.app!)
+          : null
+        if (!found || !at.env.BLOBS) {
+          throw new ModelError('media_storage', 'This app has no blob store')
+        }
+        return artifactStore(objectBlobs(
+          at.env.BLOBS,
+          blobPrefix(found.space, found.app),
+        ))(bytes, mediaType)
+      },
+    },
+  })
+
 /**
  * The store's transcript runner, registered on its registry: `session_run`
  * run here, lent Workers AI through the metered binding and the app's marked
@@ -241,7 +328,7 @@ let payer = (app: string) => async (dir: Directory) =>
 let asking: Effect = (on, at) => {
   if (at.meta || !at.app) return
   let served = workersAi(metered(at.env, payer(at.app)))
-  let lent = { [PROVIDER]: served }
+  let lent = { [PROVIDER]: served, [OPENROUTER]: connected(at) }
   let run = running(at.graph, {
     holder: at.app,
     model: served,

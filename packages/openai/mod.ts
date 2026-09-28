@@ -57,6 +57,6 @@ export {
 } from './transport.ts'
 
 export type { ImageGeneration, Images } from './images.ts'
-export { generatedMedia } from './media.ts'
+export { generatedBytes, generatedMedia } from './media.ts'
 export type { MediaStore } from './media.ts'
 export { jsonFrames } from './sse.ts'

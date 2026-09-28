@@ -2,7 +2,8 @@
 
 OpenRouter model access through `@yaks/model`. Text requests use its stateless
 Responses API, including streaming text and function calls. A request whose
-model row asks for image or audio output uses Chat Completions instead. Both
+model row asks for image or audio output uses Chat Completions instead. A model
+listed in `speech` uses OpenRouter's binary speech endpoint. The text and chat
 routes accept image input and report usage. They share media decoding and SSE
 parsing with `@yaks/openai`, but use only OpenRouter credentials.
 
@@ -32,9 +33,12 @@ The local harness supplies the graph's `@yaks/blob` artifact store to this
 adapter. Direct callers supply `media: { store }`. Audio uses OpenRouter's
 streamed Chat Completions output; MP3 is the default format, and `media.audio`
 can choose another documented format or a voice where the model supports it.
-Image output uses Chat Completions' `message.images` data URLs. Decoded bytes
-are checked and stored before the reply returns; `reply.artifacts` carries
-addresses and media types, never the encoded payload.
+`speech: ['bytedance-seed/seed-audio-1-0']` sends that model's latest user text
+to `/api/v1/audio/speech` and stores the returned MP3 bytes. Speech requests
+need a media store and answer with an artifact, without a text reply. Image
+output uses Chat Completions' `message.images` data URLs. Decoded bytes are
+checked and stored before the reply returns; `reply.artifacts` carries addresses
+and media types, never the encoded payload.
 
 The two Lyria rows use `google/lyria-3-clip-preview` and
 `google/lyria-3-pro-preview`, served by the `openrouter` provider. Neither
@@ -74,6 +78,7 @@ Official protocol references:
 
 - https://openrouter.ai/docs/api_reference/responses/overview
 - https://openrouter.ai/docs/guides/overview/multimodal/audio
+- https://openrouter.ai/docs/guides/overview/multimodal/tts
 - https://openrouter.ai/docs/guides/overview/auth/oauth
 
 Tests use mocked responses, not paid provider calls.

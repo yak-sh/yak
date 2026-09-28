@@ -82,6 +82,8 @@ import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { rtcDoc } from '@yaks/rtc/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
+import { openrouterDoc } from '@yaks/openrouter/vocab'
+import { artifactDoc } from '@yaks/blob/vocab'
 import { sessionDerived } from '@yaks/session/status'
 import { derived as statuses, taskDoc } from '@yaks/task/vocab'
 import { toolsDoc } from '@yaks/tools'
@@ -245,7 +247,14 @@ export let kernelDoc: VocabDoc = {
       type: 'object',
       kind: true,
       before: ['doc'],
-      properties: { blob: ref('cascade'), mime: text, name: text },
+      properties: {
+        blob: ref('cascade'),
+        mime: text,
+        name: text,
+        artifact: ref('keep'),
+        call: text,
+        revised_prompt: text,
+      },
     },
   },
 }
@@ -526,6 +535,8 @@ export let coreDocs: VocabDoc[] = storeDocs([
   hookDoc,
   transcriptDoc,
   askingDoc,
+  pick(artifactDoc, ['artifact']),
+  openrouterDoc,
   hostedBuilderDoc,
   rtcDoc,
 ])

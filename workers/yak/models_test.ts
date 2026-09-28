@@ -7,6 +7,9 @@
 // is a fake binding here; the directory and the stores are the platform's own.
 
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
+import { begin, connect, need } from '@yaks/connections'
+import type { D1Like } from '@yaks/d1'
+import { d1 } from '../../packages/d1/testing.ts'
 import type { Bundle, Comp } from '@yaks/graph'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -17,6 +20,7 @@ import { parseTools } from './lib/tools.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import { platform } from './testing.ts'
 import * as apps from './apps.ts'
+import { ctxOf } from './connections.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
 import { until } from '../../bin/testing.ts'
 
@@ -24,6 +28,7 @@ let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BOB = 'b0000000-0000-4000-8000-0000000000b0'
 let FLASH = '@cf/zai-org/glm-5.3-flash'
 let JEV = 'typesafe/jev'
+let SEED = 'bytedance-seed/seed-audio-1-0'
 
 type Asked = { model: string; input: Record<string, unknown> }
 
@@ -32,7 +37,12 @@ type Asked = { model: string; input: Record<string, unknown> }
 // vocab.json, deployed as its owner deploys one.
 let vale = async (
   answer: (a: Asked, n: number) => unknown,
-  { access = 'public', manifest = {} as unknown, models = 0 } = {},
+  {
+    access = 'public',
+    manifest = {} as unknown,
+    models = 0,
+    env = {} as Partial<Env>,
+  } = {},
 ) => {
   let asked: Asked[] = []
   let AI = {
@@ -43,7 +53,7 @@ let vale = async (
     },
     gateway: () => ({ getUrl: () => Promise.resolve('') }),
   }
-  let p = platform('a probe secret', { AI } as Partial<Env>)
+  let p = platform('a probe secret', { AI, ...env } as Partial<Env>)
   let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
   await dir.apply({
     entities: [
@@ -120,6 +130,8 @@ let vale = async (
   }
   return {
     asked,
+    env: p.env,
+    app,
     dir,
     send,
     run,
@@ -128,6 +140,82 @@ let vale = async (
     spent: async () => (await dir.space('ada'))!,
   }
 }
+
+Deno.test('a connected OpenRouter model puts generated audio in the app store', async () => {
+  let key = 'probe-openrouter-key'
+  let vaultKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(4)))
+  let v = await vale(() => ({ response: 'workers-only' }), {
+    env: { VAULT: d1() as unknown as D1Like, VAULT_KEY: vaultKey },
+    models: BUDGET.free,
+  })
+  let c = ctxOf(v.env, { person: ADA, role: 'owner' })
+  let space = (await v.dir.space('ada'))!
+  let [connection] = await c.graph.apply(
+    await need(c.graph.read, {
+      owner: space.eid,
+      app: v.app.eid,
+      integration: 'openrouter',
+    }),
+  )
+  c.fetch = () => Promise.resolve(Response.json({ key }))
+  let { attempt } = await begin(c, connection.entity.eid)
+  await connect(c, connection.entity.eid, {
+    attempt,
+    callback: 'https://yaks.app/connections/callback?code=probe',
+  })
+  let bytes = new TextEncoder().encode('ID3sound')
+  let calls = 0
+  let original = globalThis.fetch
+  globalThis.fetch =
+    (async (input: string | URL | Request, init?: RequestInit) => {
+      let sent = new Request(input, init)
+      calls++
+      assertEquals(sent.url, 'https://openrouter.ai/api/v1/audio/speech')
+      assertEquals(sent.headers.get('authorization'), 'Bearer ' + key)
+      assertEquals((await sent.json()).model, SEED)
+      return new Response(bytes, {
+        headers: {
+          'content-type': 'audio/mpeg',
+          'x-generation-id': 'gen-test',
+        },
+      })
+    }) as typeof fetch
+  try {
+    let session = crypto.randomUUID()
+    assertEquals((await v.send('/apply', asking(session, SEED))).status, 200)
+    let [attachment] = await v.landed(`.entry.session=${session}&.attachment&*`)
+    let eid = (attachment.attachment as Comp).artifact as string
+    let [artifact] = await v.read(`.eid=${eid}&.artifact&*`)
+    assertEquals((artifact.artifact as Comp).media_type, 'audio/mpeg')
+    let file = await apps.fetch(
+      visit(`/vale/api/blob/${eid}`, {
+        headers: { cookie: await signedIn(ADA) },
+      }),
+      v.env,
+    )
+    assertEquals(file.status, 200)
+    assertEquals(file.headers.get('content-type'), 'audio/mpeg')
+    assertEquals(new Uint8Array(await file.arrayBuffer()), bytes)
+    assertEquals(calls, 1)
+    assertEquals(v.asked.length, 0)
+    assertEquals((await v.spent()).meter!.models, BUDGET.free)
+    assert(
+      !JSON.stringify(await v.read(`.entry.session=${session}&*`))
+        .includes(key),
+    )
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+Deno.test('an app without the OpenRouter connection cannot ask its model', async () => {
+  let v = await vale(() => ({ response: 'workers-only' }))
+  let session = crypto.randomUUID()
+  assertEquals((await v.send('/apply', asking(session, SEED))).status, 200)
+  let [failed] = await v.landed(`.entry.session=${session}&.error&*`)
+  assertEquals((failed.error as Comp).code, 'connection')
+  assertEquals(v.asked.length, 0)
+})
 
 // A transcript and the entry that asks it for a turn, as a page writes them.
 let asking = (

@@ -242,6 +242,42 @@ Deno.test('OpenRouter image output shares the artifact path', async () => {
   assert(!JSON.stringify(reply).includes(png))
 })
 
+Deno.test('a speech model uses the audio door and stores its bytes as an artifact', async () => {
+  let bytes = new TextEncoder().encode('ID3sound')
+  let model = responses({
+    key: () => 'probe-key',
+    speech: ['vendor/speech'],
+    media: { store: artifactStore(memoryBlobs()) },
+    fetch: (url, init) => {
+      assertEquals(url, 'https://openrouter.ai/api/v1/audio/speech')
+      assertEquals(
+        new Headers(init?.headers).get('authorization'),
+        'Bearer probe-key',
+      )
+      assertEquals(JSON.parse(String(init?.body)), {
+        model: 'vendor/speech',
+        input: 'A forge hammer ringing',
+        response_format: 'mp3',
+      })
+      return Promise.resolve(
+        new Response(bytes, {
+          headers: { 'x-generation-id': 'gen-1', 'content-type': 'audio/mpeg' },
+        }),
+      )
+    },
+  })
+  let reply = await model({
+    model: 'vendor/speech',
+    modalities: ['audio'],
+    items: [{ kind: 'user', text: 'A forge hammer ringing' }],
+    tools: [],
+  })
+  assertEquals(reply.id, 'gen-1')
+  assertEquals(reply.artifacts?.[0].media_type, 'audio/mpeg')
+  assertEquals(reply.artifacts?.[0].size, bytes.length)
+  assert(!JSON.stringify(reply).includes('ID3sound'))
+})
+
 Deno.test('media connection faults are bounded without exposing credentials', async () => {
   let model = responses({
     key: () => 'private-test-key',

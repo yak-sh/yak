@@ -31,6 +31,7 @@ import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
 import * as files from './files.ts'
 import { keyed, PREFIX, prefixOf, SHA } from './files.ts'
+import { blobPrefix } from './blob-key.ts'
 import {
   type App,
   appStore,
@@ -681,7 +682,7 @@ let useOf = (sha: string) =>
 // files, so throwing the app away takes them with it (tools.ts app_delete)
 // and a rename carries them along.
 let blobKey = (space: Space, app: App, sha: string) =>
-  `${space.slug}/${app.slug}/blobs/${sha}`
+  blobPrefix(space, app) + sha
 
 // What the upload says these bytes are, and what to call them. The mime is
 // the request's own content-type, minus its parameters; the name rides
@@ -817,10 +818,12 @@ let gave = async (
   }
   let rows = await metaOf((path, init, sent) =>
     store(path, init, { ...headers, ...sent })
-  ).query(`.eid=${await useOf(sha)}`)
+  ).query(`.eid=${await useOf(sha)},${sha}&*`)
   let file = (rows as { attachment?: { mime?: string; name?: string } }[])
     .find((r) => r.attachment)?.attachment
-  return fenced(bytes, file)
+  let generated = (rows as { artifact?: { media_type?: string } }[])
+    .find((r) => r.artifact)?.artifact
+  return fenced(bytes, file ?? { mime: generated?.media_type })
 }
 
 // What to call this person, for the store to write beside their rows: the

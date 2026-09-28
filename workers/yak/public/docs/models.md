@@ -10,8 +10,7 @@ guide:
     subscribed to see. Instructions, typed questions answered as rows (a
     choice, a yes-or-no, a score), one call answered at once through
     ./api/ai/run or a worker's ai binding, the commands a model may call, who
-    may ask, the models there are and what each costs against the owner's
-    monthly account budget.
+    may ask, and how platform and connected models are paid for.
 ---
 
 # Asking a model
@@ -19,9 +18,10 @@ guide:
 The map is at <https://yaks.app/docs.md>. This page is the whole of an app
 asking a model: the rows that ask, the rows that come back, and what it costs.
 
-An app needs no key and no server of its own to use a model. It writes a row
-that asks, its own store asks the model, and the answer is written back as rows.
-A page subscribed to the transcript sees the answer land.
+An app needs no key in its code and no server of its own to use a model. It
+writes a row that asks, its own store asks the model, and the answer is written
+back as rows. A connected model uses the app's integration; the key stays in the
+space's vault. A page subscribed to the transcript sees the answer land.
 
 ## A transcript is rows
 
@@ -42,11 +42,11 @@ an entry that names a model with `using` asks for a turn:
       },
     ])
 
-`using.model` is the model's name (the table below), and `using.instructions` is
-what the model is told before the transcript. Every entry that asks for a turn
-carries its own `using`, so each turn names its model and its instructions; an
-entry without one is part of the transcript the next turn reads, and asks for
-nothing.
+`using.model` is the model's name (the list below), and `using.instructions` is
+what a conversational model is told before the transcript. Every entry that asks
+for a turn carries its own `using`, so each turn names its model and its
+instructions; an entry without one is part of the transcript the next turn
+reads, and asks for nothing.
 
 Two more keep a turn cheap. `using.window` is how many of the transcript's
 newest lines the model reads, reaching back to the line that began the turn it
@@ -114,6 +114,27 @@ questions are Jev's. The answers are for the page: no later turn reads them, or
 the questions another turn asked, so a transcript a page asks about every few
 minutes keeps its window for what was said.
 
+## Generate audio with a connected model
+
+An app can ask `bytedance-seed/seed-audio-1-0` for an audio clip. Its owner
+first calls `connection_need` for the app with `integration: 'openrouter'` and
+signs in on the space's connections page. The app never receives the OpenRouter
+key. The entry's text is the sound prompt; this model does not use
+`using.instructions` or typed questions.
+
+    await apply({
+      entity: { eid: '$sound' },
+      entry: { session: smith },
+      content: { body: 'A forge hammer ringing on an anvil' },
+      using: { model: 'bytedance-seed/seed-audio-1-0' },
+    })
+
+The reply is an `entry` with `attachment.artifact` pointing to an `artifact`
+row. That row carries the media type and size. A page can play the bytes at
+`./api/blob/<artifact-id>`; the platform keeps them in the app's blob store. If
+the app has no OpenRouter connection, the transcript receives an error with
+`code: 'connection'`.
+
 ## Build from stored rows
 
 A `builder` selects rows from this app's store with a query. Its `doc.body` is
@@ -176,11 +197,11 @@ never is: a row the app should trust only from its model says so.
 
 ## Who may ask
 
-A model's turn costs the space money, so by default only the space's members who
-may change the app ask for one: an entry with `using` from anybody else is
-refused like any other write they may not make, and so is their call to
-`./api/ai/run`. An app that wants its visitors to ask too says so at the top of
-its `vocab.json`:
+A model's turn costs money, so by default only the space's members who may
+change the app ask for one: an entry with `using` from anybody else is refused
+like any other write they may not make, and so is their call to `./api/ai/run`.
+An app that wants its visitors to ask too says so at the top of its
+`vocab.json`:
 
     { "models": "open", "$defs": { … } }
 
@@ -189,16 +210,21 @@ the link — held to the pace every visitor's writes keep, 30 changes a minute.
 
 ## The models, and what they cost
 
+These platform models spend the owner's monthly yaks.app account budget:
+
 | model                       | for             | per million tokens in | out   |
 | --------------------------- | --------------- | --------------------- | ----- |
 | `@cf/zai-org/glm-5.3-flash` | chat, and tools | $0.15                 | $0.50 |
 | `typesafe/jev`              | typed questions | $0.042                | free  |
 | `@cf/baai/bge-base-en-v1.5` | embeddings      | $0.067                | —     |
 
-Every call is weighed by its model's price and spends the owner's monthly
-account budget: $0.20, plus $3.00 for each Plus space they own. All their spaces
-share it. The builder and app voice spend it too. `app_list` says what each
-space spent.
+Every platform call is weighed by its model's price and spends that budget:
+$0.20, plus $3.00 for each Plus space they own. All their spaces share it. The
+builder and app voice spend it too. `app_list` says what each space spent.
+
+`bytedance-seed/seed-audio-1-0` uses the app's connected OpenRouter account.
+OpenRouter bills that account for generated audio at its published rate; it does
+not spend the yaks.app account budget.
 
 A call that starts under the budget finishes even if it crosses it. The next one
 is refused: the transcript gets an `error { code: 'limit' }` entry whose

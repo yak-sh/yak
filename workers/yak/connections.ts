@@ -182,13 +182,13 @@ export type Connections = {
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
-let readOf = (env: Env): Read => (q) =>
+let readOf = (env: Partial<Env> & Pick<Env, 'STORE'>): Read => (q) =>
   typeof q == 'string' ? meta(env).query(q) : []
 
 /** The verbs' context: the directory, the vault, and the person acting — or
  * the kernel, for what nobody in particular does (a token refreshed on the way
  * out, an app's bindings brought up to date). */
-export let ctxOf = (env: Env, who?: Who): Ctx => {
+export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
   return {
     graph: {
       read: readOf(env),

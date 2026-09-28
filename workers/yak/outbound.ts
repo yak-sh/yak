@@ -43,7 +43,11 @@ class Wire extends Error {
 
 // One call out, for a caller, with every ending but the service's own made an
 // answer.
-let sent = async (env: Env, caller: Caller, req: Request) => {
+let sent = async (
+  env: Partial<Env> & Pick<Env, 'STORE'>,
+  caller: Caller,
+  req: Request,
+) => {
   let c = {
     ...ctxOf(env),
     fetch: (r: RequestInfo | URL, init?: RequestInit) =>
@@ -69,7 +73,7 @@ let sent = async (env: Env, caller: Caller, req: Request) => {
  * caller dispatch.ts said. */
 export let outbound = (
   req: Request,
-  env: Env,
+  env: Partial<Env> & Pick<Env, 'STORE'>,
   caller: Caller,
 ): Promise<Response> => sent(env, caller, req)
 
