@@ -124,6 +124,52 @@ Deno.test('TypeScript and npm imports compile at deploy, and serve as JavaScript
   assert(await s.seconds() >= 1)
 })
 
+Deno.test('a deploy reuses unchanged compiled entries', async () => {
+  using s = await scenario(compiles)
+  await s.write({
+    'index.html': PAGE,
+    'main.ts': 'let n: number = 1',
+    'worker.ts': 'export default { fetch: () => new Response("one") }',
+    'style.css': 'body { color: blue }',
+  })
+  await s.tool('app_deploy')
+  let served = await s.served('main.ts')
+  let worker = await (s.uploads.at(-1)!.get('worker.js') as File).text()
+  let spent = await s.seconds()
+
+  await s.write({ 'style.css': 'body { color: red }' })
+  await s.tool('app_deploy')
+  assertEquals(s.asks.length, 1)
+  assertEquals(await s.seconds(), spent)
+  assertEquals(await s.served('main.ts'), served)
+  assertEquals(
+    await (s.uploads.at(-1)!.get('worker.js') as File).text(),
+    worker,
+  )
+
+  await s.write({ 'main.ts': 'let n: number = 2' })
+  await s.tool('app_deploy')
+  assertEquals(s.asks.length, 2)
+  assertEquals(s.asks.at(-1)?.worker, undefined)
+  assertEquals(s.asks.at(-1)?.pages, ['main.ts'])
+  assertEquals(
+    await (s.uploads.at(-1)!.get('worker.js') as File).text(),
+    worker,
+  )
+
+  await s.write({
+    'worker.ts': 'export default { fetch: () => new Response("two") }',
+  })
+  await s.tool('app_deploy')
+  assertEquals(s.asks.at(-1)?.worker?.entry, 'worker.ts')
+  assertEquals(s.asks.at(-1)?.pages, [])
+
+  s.env.CF_VERSION_METADATA = { id: 'new compiler' }
+  await s.tool('app_deploy')
+  assertEquals(s.asks.at(-1)?.worker?.entry, 'worker.ts')
+  assertEquals(s.asks.at(-1)?.pages, ['main.ts'])
+})
+
 Deno.test('a compile that fails refuses the deploy, and the last release serves', async () => {
   let broken = false
   using s = await scenario((ask) =>

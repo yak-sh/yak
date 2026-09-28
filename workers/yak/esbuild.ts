@@ -19,7 +19,7 @@
 //
 // A compile that fails refuses the deploy with the compiler's own lines, and
 // nothing here has moved: the last release's worker and pages still serve.
-import type { Answer, Ask } from '@yaks/esbuild'
+import type { Answer, Ask, Plan } from '@yaks/esbuild'
 import { plan, Unplanned } from '@yaks/esbuild'
 import type { App, Space } from './directory.ts'
 import type { Module } from './dispatch.ts'
@@ -30,10 +30,18 @@ import { countedSpend, refusedSpend } from './meter.ts'
 import { caught } from './sentry.ts'
 import type { Who } from './session.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { BUILT, own, replaced } from './versions.ts'
+import { BUILT, own, replaced, sha256 } from './versions.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 
 export let LOCK = 'package-lock.json'
+let CACHE = `${BUILT}.compile.json`
+let MODULE = `${BUILT}.worker.js`
+
+type Cache = {
+  compiler: string
+  worker?: { hash: string; main: string }
+  pages: Record<string, string>
+}
 
 /** What the compile step hands the rest of the release. */
 export type Compiled = {
@@ -45,6 +53,41 @@ export type Compiled = {
 }
 
 let encode = (text: string) => new TextEncoder().encode(text)
+let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
+// A bundle depends only on its own graph, the installed packages and the
+// compiler release. Other app files may change without changing its bytes.
+let fingerprint = (
+  ask: Ask,
+  paths: string[],
+  compiler: string,
+  flags: string[],
+) =>
+  sha256(encode(JSON.stringify({
+    compiler,
+    flags,
+    files: Object.fromEntries(
+      [...new Set([...paths, 'package.json', LOCK])]
+        .filter((path) => path in ask.files).sort()
+        .map((path) => [path, ask.files[path]]),
+    ),
+  })))
+
+let fingerprints = async (
+  ask: Ask,
+  inputs: Plan['inputs'],
+  compiler: string,
+) => ({
+  worker: ask.worker
+    ? await fingerprint(ask, inputs.worker ?? [], compiler, ask.worker.flags)
+    : undefined,
+  pages: Object.fromEntries(
+    await Promise.all(ask.pages.map(async (entry) => [
+      entry,
+      await fingerprint(ask, inputs.pages[entry], compiler, []),
+    ])),
+  ),
+})
 
 /** The compiler, over the binding. A failure of the binding itself is ours,
  * reported and refused in a sentence. */
@@ -115,35 +158,59 @@ export let compiled = async (
     if (e instanceof Unplanned) throw refuse('arguments', e.message)
     throw e
   }
-  let pages = planned?.ask.pages ?? []
-  let drop = () =>
+  let drop = (keep: Set<string>) =>
     Promise.all(
-      held.filter((k) => !pages.includes(k.slice(BUILT.length)))
+      held.filter((k) => !keep.has(k))
         .map((k) => blobs.delete(prefix + k)),
     )
   if (!planned) {
-    await drop()
+    await drop(new Set())
     return { lines: [] }
   }
-  let { ask, notes } = planned
-  if (!ctx.env.ESBUILD) {
-    throw refuse(
-      'unavailable',
-      `${named(ask)} must be compiled, and this platform has no compiler ` +
-        'bound here (ESBUILD); the draft remains private and the last ' +
-        'release still serves',
-    )
+  let { ask, notes, inputs } = planned
+  let compiler = ctx.env.CF_VERSION_METADATA?.id ?? 'local'
+  let old: Cache | null = null
+  let saved = await read(CACHE)
+  if (saved) {
+    try {
+      old = JSON.parse(decode(saved))
+    } catch (e) {
+      caught(e, { request: 'compile cache', app: app.slug })
+    }
   }
-  let no = await refusedSpend(ctx.dir, space, 'seconds', ctx.env)
-  if (no) throw refuse('limit', no)
-  let began = Date.now()
+  let hashes = await fingerprints(ask, inputs, compiler)
+  let oldWorker = old?.compiler == compiler &&
+      old.worker?.hash == hashes.worker && old.worker?.main
+    ? await read(MODULE)
+    : null
+  let pending: Ask = {
+    ...ask,
+    worker: oldWorker ? undefined : ask.worker,
+    pages: ask.pages.filter((entry) =>
+      old?.compiler != compiler || old.pages?.[entry] != hashes.pages[entry] ||
+      !held.includes(BUILT + entry)
+    ),
+  }
   let took = 0
-  let answer: Answer
-  try {
-    answer = await asked(ctx.env, ask, app)
-  } finally {
-    took = (Date.now() - began) / 1000
-    await countedSpend(ctx.env, space, 0, Math.max(1, Math.ceil(took)))
+  let answer: Answer = { pages: {}, installed: [], notes: [], errors: [] }
+  if (pending.worker || pending.pages.length) {
+    if (!ctx.env.ESBUILD) {
+      throw refuse(
+        'unavailable',
+        `${named(ask)} must be compiled, and this platform has no compiler ` +
+          'bound here (ESBUILD); the draft remains private and the last ' +
+          'release still serves',
+      )
+    }
+    let no = await refusedSpend(ctx.dir, space, 'seconds', ctx.env)
+    if (no) throw refuse('limit', no)
+    let began = Date.now()
+    try {
+      answer = await asked(ctx.env, pending, app)
+    } finally {
+      took = (Date.now() - began) / 1000
+      await countedSpend(ctx.env, space, 0, Math.max(1, Math.ceil(took)))
+    }
   }
   if (answer.errors.length) {
     throw refuse(
@@ -152,14 +219,39 @@ export let compiled = async (
         'The draft remains private; the last release still serves.',
     )
   }
+  let missed = pending.pages.filter((entry) => !(entry in answer.pages))
+  if (pending.worker && !answer.worker || missed.length) {
+    let error = new Error(`compiler omitted ${
+      [
+        ...pending.worker ? [pending.worker.entry] : [],
+        ...missed,
+      ].join(', ')
+    }`)
+    caught(error, { request: 'esbuild', app: app.slug })
+    throw refuse('unavailable', 'the compiler returned an incomplete build')
+  }
+  let builtWorker = answer.worker
+    ? { main: answer.worker.main, bytes: encode(answer.worker.code) }
+    : oldWorker && old?.worker?.main
+    ? { main: old.worker.main, bytes: oldWorker }
+    : null
   await Promise.all(
     Object.entries(answer.pages).map(([path, code]) =>
       blobs.put(prefix + BUILT + path, encode(code))
     ),
   )
-  await drop()
+  if (answer.worker) {
+    await blobs.put(prefix + MODULE, encode(answer.worker.code))
+  }
+  let reused = [
+    ...ask.worker && !pending.worker ? [ask.worker.entry] : [],
+    ...ask.pages.filter((page) => !pending.pages.includes(page)),
+  ]
   let lines = [
-    `compiled ${named(ask)} (${took.toFixed(1)}s)`,
+    ...(pending.worker || pending.pages.length
+      ? [`compiled ${named(pending)} (${took.toFixed(1)}s)`]
+      : []),
+    ...(reused.length ? [`reused ${reused.join(', ')}`] : []),
     ...notes,
     ...answer.notes,
   ]
@@ -181,7 +273,33 @@ export let compiled = async (
         'deploy installs the same versions',
     )
   }
-  if (!ask.worker || !answer.worker) return { lines }
+  let current = answer.lock == null || answer.lock == ask.files[LOCK] ? ask : {
+    ...ask,
+    files: { ...ask.files, [LOCK]: answer.lock },
+  }
+  let final = current == ask
+    ? hashes
+    : await fingerprints(current, inputs, compiler)
+  let cache: Cache = {
+    compiler,
+    worker: final.worker && builtWorker
+      ? {
+        hash: final.worker,
+        main: builtWorker.main,
+      }
+      : undefined,
+    pages: final.pages,
+  }
+  await blobs.put(prefix + CACHE, encode(JSON.stringify(cache)))
+  await drop(
+    new Set([
+      CACHE,
+      ...(ask.worker ? [MODULE] : []),
+      ...ask.pages.map((page) => BUILT + page),
+    ]),
+  )
+  if (!ask.worker) return { lines }
+  if (!builtWorker) throw new Error('missing compiled worker')
   let carried = await Promise.all(
     ask.worker.carry.map(async (name): Promise<Module[]> => {
       let bytes = await read(name)
@@ -192,9 +310,9 @@ export let compiled = async (
     lines,
     worker: {
       source: ask.worker.entry,
-      main: answer.worker.main,
+      main: builtWorker.main,
       modules: [
-        { name: answer.worker.main, bytes: encode(answer.worker.code) },
+        { name: builtWorker.main, bytes: builtWorker.bytes },
         ...carried.flat(),
       ],
     },

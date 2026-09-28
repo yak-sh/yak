@@ -69,8 +69,12 @@ export type Answer = {
   errors: string[]
 }
 
-/** The plan: what to ask, and what to say beside the answer. */
-export type Plan = { ask: Ask; notes: string[] }
+/** The plan: what to ask, what to say, and each entry's own source paths. */
+export type Plan = {
+  ask: Ask
+  notes: string[]
+  inputs: { worker?: string[]; pages: Record<string, string[]> }
+}
 
 // What esbuild reads as source. Anything else a worker imports is a module of
 // its own kind (`.wasm`, `.txt`, bytes) that the runtime links as it is.
@@ -200,6 +204,7 @@ export let plan = async (app: App): Promise<Plan | null> => {
   let named = new Set(Object.keys(dependencies(pkg)))
   let files: Record<string, string> = {}
   let notes: string[] = []
+  let inputs: Plan['inputs'] = { pages: {} }
   let send = (reached: Map<string, Uint8Array>) => {
     for (let [path, bytes] of reached) {
       if (COMPILED.test(path)) files[path] = decode(bytes)
@@ -211,6 +216,7 @@ export let plan = async (app: App): Promise<Plan | null> => {
     let packages = specs.filter((s) => packageOf(s))
     if ([...reached.keys()].some(typed) || packages.length) {
       send(reached)
+      inputs.worker = [...reached.keys()].filter((p) => COMPILED.test(p))
       worker = {
         entry: app.main,
         flags: app.flags ?? [],
@@ -251,6 +257,7 @@ export let plan = async (app: App): Promise<Plan | null> => {
     if (!compiled) continue
     pages.push(entry)
     send(reached)
+    inputs.pages[entry] = [...reached.keys()].filter((p) => COMPILED.test(p))
     // A package the compile leaves in is the browser's to resolve, and only
     // an import map on every page that loads the script resolves it.
     for (let spec of specs) {
@@ -279,5 +286,5 @@ export let plan = async (app: App): Promise<Plan | null> => {
   if (pkg != null) files['package.json'] = pkg
   let lock = await text('package-lock.json')
   if (lock != null) files['package-lock.json'] = lock
-  return { ask: { files, worker, pages }, notes }
+  return { ask: { files, worker, pages }, notes, inputs }
 }
