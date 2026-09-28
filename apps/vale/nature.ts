@@ -2,9 +2,39 @@
 // gathering gives them the same identity and lifecycle as placed nodes.
 // The value is the lode whose material and trade this prop gives.
 import type { Vec } from './mesh.ts'
-import type { Prop } from './terrain.ts'
+import { CHUNK, chunkOf, type Prop, standAt, type Vale } from './terrain.ts'
+import { off, step } from './stand.ts'
 
 export type Natural = { prop: Prop; at: Vec }
+
+/** The point a planted resource occupies, shared by the page and a tick. */
+export let naturalAt = (v: Vale, prop: Prop): Natural => {
+  let [dx, dy, dz] = off(step(v, prop))
+  return {
+    prop,
+    at: [prop.x + dx, standAt(v, prop) + dy, prop.z + dz],
+  }
+}
+
+/** Planted resources around a point, whether a chunk is drawn or not. */
+export let naturalNear = (
+  v: Vale,
+  x: number,
+  z: number,
+  r: number,
+): Natural[] => {
+  let out: Natural[] = []
+  for (let ci = chunkOf(x - r); ci <= chunkOf(x + r); ci++) {
+    for (let ck = chunkOf(z - r); ck <= chunkOf(z + r); ck++) {
+      for (let p of v.plant(ci, ck)) {
+        if (p.natural && Math.hypot(p.x - x, p.z - z) < r + CHUNK) {
+          out.push(naturalAt(v, p))
+        }
+      }
+    }
+  }
+  return out
+}
 
 export let NATURE: Record<string, string> = {
   oak: 'oak',

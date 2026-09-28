@@ -184,6 +184,7 @@ import { type Meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
 import { weighed } from './meter.ts'
 import { directoryOf } from './directory.ts'
+import { commandWorker } from './dispatch.ts'
 import { vaultOf } from './vault.ts'
 import {
   aside,
@@ -1293,7 +1294,33 @@ export class Store {
           { ...g, apply: (change, opts) => this.#asIs(change, opts) },
           {
             host: g,
-            tools: commands(declared),
+            tools: commands(declared, async (path, args, call) => {
+              let ns = this.#bind.STORE, appId = this.#get('app')
+              if (!ns || !appId) throw new Error('app store is unavailable')
+              let held = await directoryOf(ns).appAt(appId)
+              if (!held || held.app.trashed || held.space.trashed) {
+                throw new Error('app is unavailable')
+              }
+              let res = await commandWorker(
+                this.#bind,
+                held.space,
+                held.app,
+                { person: appId, role: 'editor' },
+                path,
+                args,
+                call.entity.eid,
+                typeof call.created == 'object' && call.created != null &&
+                  'at' in call.created
+                  ? String(call.created.at ?? '')
+                  : '',
+                typeof call.call == 'object' && call.call != null &&
+                  'source' in call.call
+                  ? String(call.call.source ?? call.entity.eid)
+                  : call.entity.eid,
+              )
+              await res.body?.cancel()
+              return []
+            }),
             // A call in a transcript is the transcript runner's, run in the
             // order its model asked (@yaks/session, models.ts).
             takes: (call) => !call.entry,

@@ -56,6 +56,28 @@ Deno.test('a tool entry: a sentence, its arguments, and one act', () => {
   assertEquals(parseTools('{}'), {})
 })
 
+Deno.test('a worker command takes its typed arguments to one local path', () => {
+  let [tool] = Object.values(parsed({
+    tick: {
+      description: 'Advance a world',
+      input: { n: NUMBER },
+      required: ['n'],
+      worker: '/world/tick',
+    },
+  }))
+  assertEquals(filled(tool, { n: '3' }), {
+    worker: '/world/tick',
+    args: { n: 3 },
+  })
+  assertStringIncludes(
+    assertThrows(() =>
+      parsed({
+        tick: { description: 'x', worker: '/../other' },
+      }), Error).message,
+    'tick.worker is an absolute path',
+  )
+})
+
 Deno.test('a manifest: one refusal names every problem', () => {
   let why = (tools: unknown, words: string[] = []) =>
     assertThrows(

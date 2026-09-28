@@ -51,7 +51,7 @@
 import type { Caller } from '@yaks/egress'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import type { App, Role, Space } from './directory.ts'
-import { appStore, storeName } from './directory.ts'
+import { appStore, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
@@ -91,6 +91,10 @@ export let SELF = 'x-yak-app-grant'
 // is looking, so the app's code can greet them. A client cannot send these
 // either.
 let VOUCH = ['x-yak-app', 'x-yak-person', 'x-yak-role']
+export let COMMAND_CALL = 'x-yak-command-call'
+export let COMMAND_AT = 'x-yak-command-at'
+export let COMMAND_SOURCE = 'x-yak-command-source'
+VOUCH.push(COMMAND_CALL, COMMAND_AT, COMMAND_SOURCE)
 
 // Long enough for an app's worker to answer, short enough that a grant that
 // leaks is worth nothing by the time anyone has it.
@@ -295,6 +299,9 @@ let handed = async (
   store: string,
   who: Who,
   secret: string,
+  call?: string,
+  at?: string,
+  source?: string,
 ) => {
   let headers = new Headers(req.headers)
   for (let h of [...VOUCH, GRANT, SELF]) headers.delete(h)
@@ -302,6 +309,9 @@ let handed = async (
   headers.set('x-yak-app', app.slug)
   if (who.person) headers.set('x-yak-person', who.person)
   if (who.role) headers.set('x-yak-role', who.role)
+  if (call) headers.set(COMMAND_CALL, call)
+  if (at) headers.set(COMMAND_AT, at)
+  if (source) headers.set(COMMAND_SOURCE, source)
   headers.set(GRANT, await granting(secret, store, who))
   headers.set(SELF, await owning(secret, store, app))
   return new Request(req, { headers })
@@ -380,7 +390,13 @@ let hostOnly = (res: Response): Response => {
  * every fetch the script makes, the app from the directory's row and the
  * visitor and their role on it from the kernel's own vouch. Throws for a
  * script that is not there (`nowhere`). */
-export let script = (dispatch: Dispatch, name: string, app: App, who: Who) =>
+export let script = (
+  dispatch: Dispatch,
+  name: string,
+  app: App,
+  who: Who,
+  cpuMs?: number,
+) =>
   dispatch.get(name, {}, {
     outbound: {
       CALLER: {
@@ -389,6 +405,7 @@ export let script = (dispatch: Dispatch, name: string, app: App, who: Who) =>
         person: who.person,
       } satisfies Caller,
     },
+    ...cpuMs ? { limits: { cpuMs, subRequests: 50 } } : {},
   })
 
 // The seam (T-33234). `worker.fetch` below is the one line in the whole
@@ -409,17 +426,28 @@ export let script = (dispatch: Dispatch, name: string, app: App, who: Who) =>
 // what that means is the callers' — it ends the request for the app that owns
 // the path (`ran`) and is skipped for the home app's router (`ahead`).
 let called = async (
-  env: Env,
+  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET'>,
   space: Space,
   app: App,
   req: Request,
   who: Who,
+  call?: string,
+  at?: string,
+  source?: string,
 ): Promise<Response | null> => {
   if (!env.DISPATCH || !env.SESSION_SECRET) return null
   let store = storeName(space, app)
   let worker
   try {
-    worker = script(env.DISPATCH, scriptName(app.script ?? store), app, who)
+    // Scheduled code has the same app sandbox and grants, but may spend more
+    // CPU on a bounded world step. A normal page request keeps its 50 ms.
+    worker = script(
+      env.DISPATCH,
+      scriptName(app.script ?? store),
+      app,
+      who,
+      call ? 5_000 : undefined,
+    )
   } catch (e) {
     // Not the app's code — the namespace refusing to hand it over is ours.
     if (nowhere(e)) return null
@@ -428,13 +456,50 @@ let called = async (
   try {
     return hostOnly(
       await worker.fetch(
-        await handed(req, app, store, who, env.SESSION_SECRET),
+        await handed(
+          req,
+          app,
+          store,
+          who,
+          env.SESSION_SECRET,
+          call,
+          at,
+          source,
+        ),
       ),
     )
   } catch (e) {
     if (nowhere(e)) return null
     throw e
   }
+}
+
+/** Run one declared command in the app's own worker, with the same scoped
+ * grants an ordinary visit receives. The caller chooses the actor; a wake
+ * runs as the app, while an MCP call runs as its person. */
+export let commandWorker = async (
+  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'APEX'>,
+  space: Space,
+  app: App,
+  who: Who,
+  path: string,
+  args: Record<string, unknown>,
+  call?: string,
+  at?: string,
+  source?: string,
+): Promise<Response> => {
+  let endpoint = new URL(path.slice(1), url(space, app, env))
+  let req = new Request(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(args),
+  })
+  let res = await called(env, space, app, req, who, call, at, source)
+  if (!res) throw new Error('app worker is unavailable')
+  if (!res.ok) {
+    throw new Error(`app worker answered ${res.status}: ${await res.text()}`)
+  }
+  return res
 }
 
 // The app's code fell over, written where its agent reads it. A no it relayed

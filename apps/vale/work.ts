@@ -24,7 +24,8 @@ import {
   nodesNear,
 } from './gather.ts'
 import { ITEMS } from './items.ts'
-import { type Bundle, comp, type Net, num, str } from './net.ts'
+import { comp, num, str } from './bundle.ts'
+import type { Bundle, Net } from './net.ts'
 import type { Natural } from './nature.ts'
 import { type Board, boardsNear, READ } from './notices.ts'
 import type { Frame, Vec3 } from './play.ts'
@@ -404,7 +405,7 @@ export let working = (
       }
       was = mine
       let rows = gatherings()
-      let nodes = nodesNear(f.body.x, f.body.z, SEEN, natural).map(
+      let nodes = nodesNear(f.body.x, f.body.z, SEEN, natural, as?.target).map(
         (n): Seen => {
           let lode = LODES[n.lode]
           let respawn = GATHER[lode.trade].respawn * 1000
@@ -432,7 +433,7 @@ export let working = (
           (!as || n.eid == as.target)
         )
         .sort((a, b) => a.near - b.near)[0] ?? null
-      let bench = stationsNear(v, f.body.x, f.body.z, 12).flatMap(
+      let bench = (as ? [] : stationsNear(v, f.body.x, f.body.z, 12)).flatMap(
         (s): Bench[] => {
           let d = Math.hypot(s.x - f.body.x, s.z - f.body.z)
           return d <= STATIONS[s.craft].reach && Math.abs(s.y - f.body.y) < 2
@@ -440,7 +441,7 @@ export let working = (
             : []
         },
       ).sort((a, b) => a.near - b.near)[0] ?? null
-      let board = boardsNear(v, f.body.x, f.body.z, READ).flatMap(
+      let board = (as ? [] : boardsNear(v, f.body.x, f.body.z, READ)).flatMap(
         (b): Reading[] =>
           Math.abs(b.at[1] - f.body.y) < 2
             ? [{

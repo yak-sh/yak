@@ -46,6 +46,7 @@ import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
 import { recall } from './lib/hops.ts'
 import { told } from './stream.ts'
+import { commandWorker } from './dispatch.ts'
 
 /** One app, as a command names it: `recipes`, or `yourname/recipes` where two
  * spaces spell one slug. */
@@ -190,6 +191,21 @@ let ran = async (
   args: Record<string, unknown>,
 ): Promise<Out> => {
   let act = filled(tool, args)
+  if (act.worker != null) {
+    let res = await commandWorker(
+      ctx.env,
+      space,
+      app,
+      await whoIn(ctx, space),
+      act.worker,
+      act.args ?? {},
+    )
+    let answer = await res.text()
+    return {
+      text: `${name}: ${answer || 'done'} in ${at(space, app)}`,
+      value: { answer },
+    }
+  }
   let door = acting(ctx.env, space, app, await whoIn(ctx, space))
   if (act.query != null) {
     let rows = await door.query(act.query) as unknown[]

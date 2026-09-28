@@ -77,6 +77,7 @@ export type ToolDef = {
   drop?: string[]
   apply?: unknown
   query?: string
+  worker?: string
   view?: string
   /** offered to the app's own models as a tool */
   model?: boolean
@@ -106,6 +107,7 @@ let KEYS = [
   'required',
   'apply',
   'query',
+  'worker',
   'view',
   'model',
 ]
@@ -257,17 +259,21 @@ export let parseTools = (
         }
       }
     }
-    if (HOLE.test(JSON.stringify(entry.apply ?? entry.query ?? ''))) {
+    if (
+      HOLE.test(
+        JSON.stringify(entry.apply ?? entry.query ?? entry.worker ?? ''),
+      )
+    ) {
       wrong.push(
         `${name}: {{arg}} is not a hole any more — write $arg, the same ` +
           'variable the wire and the query grammar already speak',
       )
     }
-    let acts = ['apply', 'query'].filter((k) => entry[k] != null)
+    let acts = ['apply', 'query', 'worker'].filter((k) => entry[k] != null)
     if (acts.length != 1) {
       wrong.push(
-        `${name} does one thing: apply (a bundle to write) or query (a ` +
-          'filter line to read)',
+        `${name} does one thing: apply (a bundle to write), query (a ` +
+          'filter line to read), or worker (a path in its server code)',
       )
     }
     if (entry.view != null) {
@@ -285,6 +291,13 @@ export let parseTools = (
       wrong.push(`${name}.query is a filter line, like ".run"`)
     }
     if (
+      entry.worker != null &&
+      (typeof entry.worker != 'string' ||
+        !/^\/[\w/-]+$/.test(entry.worker) || entry.worker.includes('..'))
+    ) {
+      wrong.push(`${name}.worker is an absolute path in this app, like "/tick"`)
+    }
+    if (
       entry.apply != null && !object(entry.apply) && !Array.isArray(entry.apply)
     ) {
       wrong.push(`${name}.apply is an entity bundle, or a list of them`)
@@ -295,7 +308,7 @@ export let parseTools = (
     // component` from a store it cannot see. A `$name` an entity in this same
     // template is minted at is neither: it is the join it looks like.
     let mints = entry.apply == null ? new Set<string>() : minted(entry.apply)
-    for (let held of vars(entry.apply ?? entry.query)) {
+    for (let held of vars(entry.apply ?? entry.query ?? entry.worker)) {
       if (held in input || mints.has(held)) continue
       if (CONTEXT.includes(held)) {
         if (entry.model !== true) {
@@ -325,6 +338,7 @@ export let parseTools = (
       ...(required.length ? { required } : {}),
       ...(entry.apply != null ? { apply: entry.apply } : {}),
       ...(typeof entry.query == 'string' ? { query: entry.query } : {}),
+      ...(typeof entry.worker == 'string' ? { worker: entry.worker } : {}),
       ...(typeof entry.view == 'string' && VIEW.test(entry.view)
         ? { view: entry.view }
         : {}),
@@ -477,7 +491,7 @@ let clause = (s: string, tool: ToolDef, vals: Record<string, unknown>) =>
 // one.
 let bound = (tool: ToolDef, context: Context) =>
   Object.fromEntries(
-    [...vars(tool.apply ?? tool.query)]
+    [...vars(tool.apply ?? tool.query ?? tool.worker)]
       .filter((v) => CONTEXT.includes(v) && !(v in tool.input))
       .map((v) => {
         let held = context[v as keyof Context]
@@ -492,15 +506,23 @@ let bound = (tool: ToolDef, context: Context) =>
       }),
   )
 
-// The act this call makes: the bundle to write, or the filter line to read,
-// with the caller's arguments in it. A clause whose argument the caller left
-// out drops out of the line, and the rest of it still reads.
+// The act this call makes: bundles to write, a filter to read, or a worker
+// path with its typed arguments. An optional query clause drops out when its
+// argument was left out.
 export let filled = (
   tool: ToolDef,
   sent: Record<string, unknown>,
   context: Context = {},
-): { apply?: unknown; query?: string } => {
+): {
+  apply?: unknown
+  query?: string
+  worker?: string
+  args?: Record<string, unknown>
+} => {
   let vals = { ...bound(tool, context), ...args(tool, sent) }
+  if (tool.worker != null) {
+    return { worker: tool.worker, args: vals }
+  }
   if (tool.query != null) {
     // A query that is nothing but one variable is a whole filter line passed
     // through, so it keeps its `&`s rather than being read as one clause.
@@ -530,16 +552,23 @@ export let filled = (
  * answer beside it, and a call wearing a wake waits for its firing first.
  *
  * A tool ANSWERS bundles and never applies them: an `apply` template is the
- * bundles it means, landed by the runner as the caller, and a `query`
- * template is a read, so those bundles are rows that already exist and the
- * runner keeps its hands off them.
+ * bundles it means, landed by the runner as the caller. A `query` template
+ * reads rows the runner keeps its hands off. A `worker` calls the app's own
+ * code through the host's scoped dispatch door.
  *
  * This is the same template language the kernel's `command` tool fills
  * (workers/yak/declared.ts `ran`); what differs is where the filled act goes —
  * there, through the app's own HTTP doors; here, straight into the store that
  * declared it.
  */
-export let commands = (said: Tools): Tool[] =>
+export let commands = (
+  said: Tools,
+  worker?: (
+    path: string,
+    args: Record<string, unknown>,
+    call: Bundle,
+  ) => Promise<Bundle[]>,
+): Tool[] =>
   Object.entries(said).map(([name, def]) => ({
     name,
     description: def.description,
@@ -547,6 +576,10 @@ export let commands = (said: Tools): Tool[] =>
     readOnly: def.query != null,
     run: (call: Bundle, graph: Graph) => {
       let act = filled(def, argsOf(call))
+      if (act.worker != null) {
+        if (!worker) throw new Error('app worker is unavailable')
+        return worker(act.worker, act.args ?? {}, call)
+      }
       if (act.query != null) return graph.read(act.query)
       return (Array.isArray(act.apply) ? act.apply : [act.apply]) as Bundle[]
     },

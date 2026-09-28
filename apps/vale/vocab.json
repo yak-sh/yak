@@ -584,9 +584,27 @@
       },
       "required": ["player", "goal", "count"]
     },
+    "companion": {
+      "component": true,
+      "kind": false,
+      "floor": "editor",
+      "description": "The companion's last scheduled step, kept on its objective so every page sees the same position and status.",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "at": { "type": "number" },
+        "call": { "type": "string" },
+        "phase": { "type": "string" },
+        "target": { "type": "string" },
+        "since": { "type": "number" },
+        "status": { "type": "string" },
+        "speed": { "type": "number" }
+      }
+    },
     "gather_wood": {
       "tool": true,
-      "description": "Ask the companion of one of your Mossvale heroes to gather wood. First query player rows and choose a hero whose created.by is you; only that hero's owner can direct the companion. The command keeps the objective while a game page is open. Use companion_progress with the returned directive id to see its gathered items.",
+      "description": "Ask the companion of one of your Mossvale heroes to gather wood, even while no game page is open. First query player rows and choose a hero whose created.by is you; only that hero's owner can direct the companion. Use companion_progress with the returned directive id to see its gathered items.",
       "input": {
         "player": {
           "type": "string",
@@ -602,8 +620,22 @@
       "required": ["player"],
       "apply": {
         "entity": { "eid": "$objective" },
-        "directive": { "player": "$player", "goal": "wood", "count": "$count" }
+        "directive": { "player": "$player", "goal": "wood", "count": "$count" },
+        "session": {},
+        "call": {
+          "to": "eefb86f9-f686-84b2-a700-3bc81c73a701",
+          "args": {}
+        },
+        "wake": {
+          "while": [{ "match": ".directive", "every": "5s" }]
+        }
       }
+    },
+    "companion_tick": {
+      "tool": true,
+      "description": "Advance a companion objective from its scheduled wake.",
+      "input": {},
+      "worker": "/companion/tick"
     },
     "companion_progress": {
       "tool": true,

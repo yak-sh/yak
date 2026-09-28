@@ -510,8 +510,11 @@ person connects their own. A published app that needs a key should say so in its
 
 ## The limits
 
-Each request runs under **50ms of CPU and 50 subrequests**. The compat date the
-script is uploaded with is `2025-05-08`.
+Each ordinary request runs under **50ms of CPU and 50 subrequests**. A scheduled
+command declared with `"worker": "/tick"` gets up to 5 seconds of CPU for one
+bounded step, with the same 50-subrequest limit. Its next step is another
+`wake`, not a worker kept running. The compat date the script is uploaded with
+is `2025-05-08`.
 
 50ms is CPU, not wall clock, so the time spent waiting on a fetch is not what
 spends it. A store read, an outside call, and shaping the answer fit with room

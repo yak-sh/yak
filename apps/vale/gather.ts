@@ -566,10 +566,15 @@ export let nodesNear = (
   z: number,
   r: number,
   natural: Natural[] = [],
+  target?: string,
 ): Node[] => [
-  ...near(x, z, r + PAST).filter((n) => Math.hypot(n.x - x, n.z - z) < r),
+  ...(target
+    ? []
+    : near(x, z, r + PAST).filter((n) => Math.hypot(n.x - x, n.z - z) < r)),
   ...natural.filter(({ prop: p }) =>
-    p.natural && NATURE[p.kind] && Math.hypot(p.x - x, p.z - z) < r
+    p.natural && NATURE[p.kind] &&
+    (!target || naturalEid(p) == target) &&
+    Math.hypot(p.x - x, p.z - z) < r
   ).map(wildNode),
 ]
 

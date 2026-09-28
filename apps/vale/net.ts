@@ -14,6 +14,8 @@
 // may write 30 times a minute, and a busy fight earns more rows than that.
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
 import { type Client, client, type Watch } from '@yaks/client'
+import { comp, num, str } from './bundle.ts'
+export { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
@@ -27,15 +29,6 @@ export type Bundle = NonNullable<ReturnType<Client['ent']>>
 
 /** One component of a row, or nothing: the fields are read with `num` and
  * `str`, which take what the store holds and default what it does not. */
-export let comp = (
-  b: Bundle | undefined,
-  name: string,
-): Record<string, unknown> => {
-  let c = b?.[name]
-  return c && typeof c == 'object' ? c : {}
-}
-export let num = (v: unknown, or = 0): number => typeof v == 'number' ? v : or
-export let str = (v: unknown, or = ''): string => typeof v == 'string' ? v : or
 
 /** Who is looking, as the app's door answers it. */
 export type Me = {
@@ -228,7 +221,7 @@ export let connect = (base: URL) => {
       respec: c.watch(`.respec.player=${q}`),
       fire: c.watch(`.fire.player=${q}`),
       directive: c.watch(
-        `.directive.player=${q}&?created&.order=-created.at&.limit=10`,
+        `.directive.player=${q}&?created&?companion&.order=-created.at&.limit=10`,
       ),
     }
   }

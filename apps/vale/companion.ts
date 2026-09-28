@@ -1,15 +1,15 @@
-// One hero's companion follows the latest objective its owner gave through
-// the app command. The request and its gathered items are store rows; this
-// page supplies the walk and the ordinary work of a hero while it is open.
+// The companion's shared choices and walk, plus the page's view of its
+// persisted state. The scheduled app worker owns every world-changing tick.
 import { writer } from './chat.ts'
-import { GATHER, LODES, nodesNear } from './gather.ts'
-import type { Natural } from './nature.ts'
-import { type Bundle, comp, type Net, num, str } from './net.ts'
+import { GATHER, LODES, naturalEid } from './gather.ts'
+import { type Natural, NATURE } from './nature.ts'
+import { comp, num, str } from './bundle.ts'
+import type { Bundle, Net } from './net.ts'
 import { fallOf } from './rules.ts'
 import { fits, floorAt } from './sim.ts'
 import type { Vale } from './terrain.ts'
 import { walk } from './walk.ts'
-import { type Work, type WorkFrame, working } from './work.ts'
+import type { Work } from './work.ts'
 
 export type Objective = { eid: string; player: string; count: number }
 export type Tree = { eid: string; kind: string; x: number; z: number }
@@ -54,11 +54,17 @@ export let treesOf = (
     if (!by.has(eid)) by.set(eid, [])
     by.get(eid)!.push({ at: num(g.at) })
   }
-  return nodesNear(x, z, 32, natural).filter((n) =>
-    n.prop?.natural && LODES[n.lode]?.trade == 'wood' &&
-    !fallOf(by.get(n.eid) ?? [], GATHER.wood.respawn, now).down
-  ).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))
-    .map((n) => ({ eid: n.eid, kind: n.lode, x: n.x, z: n.z }))
+  return natural.flatMap(({ prop }) => {
+    let kind = NATURE[prop.kind], eid = naturalEid(prop)
+    return prop.natural && LODES[kind]?.trade == 'wood' &&
+        Math.hypot(prop.x - x, prop.z - z) < 32 &&
+        !fallOf(by.get(eid) ?? [], GATHER.wood.respawn, now).down
+      ? [{ eid, kind, x: prop.x, z: prop.z }]
+      : []
+  }).sort((a, b) =>
+    Math.hypot(a.x - x, a.z - z) -
+    Math.hypot(b.x - x, b.z - z)
+  )
 }
 
 /** Reach a tree's side, outside its trunk but inside chopping range. */
@@ -116,151 +122,38 @@ export let advance = (
 
 export type Companion = ReturnType<typeof companion>
 
-/** The effectful boundary: read an objective, choose a tree, walk, and work. */
-export let companion = (net: Net) => {
-  let toil = working(net)
-  let at: [number, number, number] | null = null
-  let goal = ''
-  let target: Choice | null = null
-  let path: [number, number, number][] = []
-  let tried = new Set<string>()
-  let choosing = false
-  let status = ''
-  let nextTry = 0
-
-  let choose = async (trees: Choice[]): Promise<Choice | null> => {
-    let options = trees.slice(0, 3)
-    if (!options.length) return null
-    let criteria = Object.fromEntries(options.map((t, i) => [
-      `tree${i + 1}`,
-      `${LODES[t.kind].name}, ${Math.round(t.path.length / 4)} metres away`,
-    ]))
-    try {
-      let r = await fetch(new URL('api/ai/run', document.baseURI), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model: 'typesafe/jev',
-          input: {
-            state: [{
-              role: 'user',
-              content:
-                'Gather wood for your companion. Choose one reachable natural tree.',
-            }],
-            questions: {
-              tree: {
-                type: 'choice',
-                instructions: 'Which tree do you chop next?',
-                criteria,
-              },
-            },
-          },
-        }),
-      })
-      if (!r.ok) throw new Error(`Jev answered ${r.status}`)
-      let said = await r.json()
-      let key = said.answers?.tree?.choice
-      let i = Number(String(key).replace('tree', '')) - 1
-      return options[i] ?? options[0]
-    } catch (e) {
-      console.warn('mossvale companion:', e)
-      return options[0]
+/** The page reads the server's last tick; it never advances the world. */
+export let companion = (net: Net) => ({
+  tick: (
+    _v: Vale,
+    _f: unknown,
+    _dt: number,
+    _natural: Natural[],
+  ): {
+    at: [number, number, number] | null
+    speed: number
+    status: string
+    events: Work[]
+    swing: number
+  } => {
+    let hero = net.hero ? net.client.ent(net.hero) : undefined
+    let objective = objectiveOf(hero, net.mine('directive'))
+    let row = net.mine('directive').find((b) => b.entity.eid == objective?.eid)
+    let c = comp(row, 'companion')
+    let done = objective ? progressOf(net.mine('item'), objective.eid) : 0
+    let at: [number, number, number] | null =
+      typeof c.x == 'number' && typeof c.y == 'number' &&
+        typeof c.z == 'number'
+        ? [c.x, c.y, c.z]
+        : null
+    return {
+      at,
+      speed: num(c.speed),
+      status: objective
+        ? `Wood ${done}/${objective.count} · ${str(c.status, 'Waiting')}`
+        : '',
+      events: [],
+      swing: -1,
     }
-  }
-
-  return {
-    tick: (
-      v: Vale,
-      f: WorkFrame,
-      dt: number,
-      natural: Natural[],
-    ): {
-      at: [number, number, number] | null
-      speed: number
-      status: string
-      events: Work[]
-      swing: number
-    } => {
-      let hero = net.hero ? net.client.ent(net.hero) : undefined
-      let objective = objectiveOf(hero, net.mine('directive'))
-      let done = objective ? progressOf(net.mine('item'), objective.eid) : 0
-      if (!objective || objective.player != net.hero || f.down) {
-        if (goal) toil.tick(v, f, false, true, natural)
-        target = null
-        goal = ''
-        choosing = false
-        status = ''
-        return { at: null, speed: 0, status, events: [], swing: -1 }
-      }
-      if (!at || goal != objective.eid) {
-        toil.tick(v, f, false, true, natural)
-        at = [f.body.x, f.body.y, f.body.z]
-        goal = objective.eid
-        target = null
-        path = []
-        tried = new Set()
-        choosing = false
-        nextTry = 0
-      }
-      if (done >= objective.count) {
-        target = null
-        status = `Wood gathered ${done}/${objective.count}. Done!`
-        return { at, speed: 0, status, events: [], swing: -1 }
-      }
-      let events: Work[] = []
-      let speed = 0
-      if (!target && !choosing && f.now >= nextTry) {
-        let choices = treesOf(at[0], at[2], natural, net.gathered(), f.now)
-          .filter((t) => !tried.has(t.eid)).slice(0, 3)
-          .flatMap((t) => routeTo(v, at!, t) ?? [])
-        if (!choices.length) tried.clear()
-        choosing = true
-        nextTry = f.now + 5000
-        status = choices.length
-          ? 'Choosing a tree'
-          : 'Waiting for a nearby tree'
-        let asked = goal
-        void choose(choices).then((picked) => {
-          if (asked != goal) return
-          target = picked
-          path = picked?.path.slice(1) ?? []
-          choosing = false
-        })
-      }
-      if (target && path.length) {
-        let next = advance(at, path, dt)
-        at = next.at
-        path = next.path
-        speed = next.speed
-        status = `Walking to ${LODES[target.kind].name}`
-      }
-      if (target && !path.length) {
-        let frame = { ...f, body: { x: at[0], y: at[1], z: at[2] } }
-        let job = toil.tick(v, frame, true, false, natural, {
-          target: target.eid,
-          directive: objective.eid,
-        })
-        events = job.events
-        status = `Chopping ${LODES[target.kind].name}`
-        if (events.some((e) => e.type == 'got' || e.type == 'say')) {
-          tried.add(target.eid)
-          target = null
-        }
-        return {
-          at,
-          speed,
-          status: `Wood ${done}/${objective.count} · ${status}`,
-          events,
-          swing: job.doing?.swing ?? -1,
-        }
-      }
-      return {
-        at,
-        speed,
-        status: `Wood ${done}/${objective.count} · ${status}`,
-        events,
-        swing: -1,
-      }
-    },
-  }
-}
+  },
+})

@@ -7,7 +7,7 @@ import { groundChunk } from './ground.ts'
 import { cuboids } from './boxes.ts'
 import { out, pack, type Packed, place, type Vec } from './mesh.ts'
 import { KINDS, model } from './props.ts'
-import type { Natural } from './nature.ts'
+import { type Natural, naturalAt } from './nature.ts'
 import { baseline, natureMesh } from './nature_mesh.ts'
 import { off, propAt, spacer, step, type Stood, thingAt } from './stand.ts'
 import {
@@ -67,11 +67,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     if (p.natural) {
       let at = steps.get(p)!
       smallSpace?.add(propAt(v, p), at)
-      let [dx, dy, dz] = off(at)
-      natural.push({
-        prop: p,
-        at: [p.x + dx, standAt(v, p) + dy, p.z + dz],
-      })
+      natural.push(naturalAt(v, p))
       continue
     }
     let kind = KINDS[p.kind], tiny = kind.small

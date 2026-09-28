@@ -22,6 +22,7 @@ import { COOKIE, seal, sign } from './lib/token.ts'
 import type { App, Space } from './directory.ts'
 import {
   carried,
+  commandWorker,
   dropSecret,
   granted,
   granting,
@@ -166,6 +167,46 @@ Deno.test('what the worker sends out is said to be the app’s, for this visitor
   assertEquals(asked, ['jeff_recipes', {}, {
     outbound: { CALLER: { app: 'a1', level: 'editor', person: 'p1' } },
   }])
+})
+
+Deno.test('a scheduled command has its own bounded CPU and kernel context', async () => {
+  let m = mirror()
+  let asked: unknown[] = []
+  let env = envOf((...args: unknown[]) => (asked = args, m.get()))
+  await commandWorker(
+    env,
+    space,
+    app,
+    { person: app.eid, role: 'editor' },
+    '/tick',
+    {},
+    'call-1',
+    '2026-09-28T00:00:00Z',
+    'world-1',
+  )
+  assertEquals((asked[2] as { limits: unknown }).limits, {
+    cpuMs: 5_000,
+    subRequests: 50,
+  })
+  assertEquals(m.seen().headers.get('x-yak-command-call'), 'call-1')
+  assertEquals(m.seen().headers.get('x-yak-command-source'), 'world-1')
+  assertEquals(
+    m.seen().headers.get('x-yak-command-at'),
+    '2026-09-28T00:00:00Z',
+  )
+  await ran(
+    env,
+    space,
+    app,
+    visit('/tick', {
+      'x-yak-command-call': 'forged',
+      'x-yak-command-source': 'world-1',
+    }),
+    who,
+  )
+  assertEquals((asked[2] as { limits?: unknown }).limits, undefined)
+  assertEquals(m.seen().headers.get('x-yak-command-call'), null)
+  assertEquals(m.seen().headers.get('x-yak-command-source'), null)
 })
 
 Deno.test('an app sets cookies for its own host, and none for the zone', async () => {

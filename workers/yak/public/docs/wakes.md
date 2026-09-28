@@ -172,6 +172,16 @@ schedule — so a weekly digest is fifty-two calls and fifty-two answers, never
 one result re-run. The same instant twice is the same call, so a re-delivered
 alarm changes nothing.
 
+A command may declare `"worker": "/tick"` instead of `apply` or `query`. A
+scheduled call then invokes that route in the app's `worker.js`, even when no
+page is open. The worker receives `x-yak-command-call` (this invocation's eid),
+`x-yak-command-source` (the standing request's eid), and `x-yak-command-at` (the
+invocation's creation time). The platform sets these headers; a visitor cannot
+supply them. The worker reads and writes through its usual scoped `env.STORE` or
+`env.APP` door. Keep one step's writes in one `apply` and record the call eid
+there so a retry cannot repeat it. To stop a standing request, remove its `call`
+and `wake` together: removing only `wake` would make the call immediately due.
+
 ## A world that keeps going
 
 An idle game is the hardest version of this: a few minutes between ticks, and

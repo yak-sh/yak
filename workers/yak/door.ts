@@ -34,7 +34,10 @@ export type Dispatch = {
   get(
     name: string,
     args: Record<string, unknown>,
-    options: { outbound: { CALLER: Caller } },
+    options: {
+      outbound: { CALLER: Caller }
+      limits?: { cpuMs: number; subRequests: number }
+    },
   ): Fetcher
 }
 
