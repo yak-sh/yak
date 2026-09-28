@@ -1,11 +1,11 @@
 // The index: a manifest in, git's own objects out, and the rows a pack walks.
 // Constants: ./testing.ts.
 
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { keyEid } from '@yaks/key'
 import { COMPAT } from './comp.ts'
-import { entryEid } from './index.ts'
+import { entryEid, index } from './index.ts'
 import { DIR, FILE } from './tree.ts'
 import {
   AUTHOR,
@@ -95,6 +95,27 @@ Deno.test('a manifest written twice writes one graph and reads no bytes again', 
   await git.files(manifest)
   assertEquals((await g.read('.gitobj')).length, once)
   assertEquals(bytes.reads(), reads)
+})
+
+Deno.test('a repeat manifest reads existing Git names in batches', async () => {
+  let { g, git, bytes } = fixture()
+  let manifest = Object.fromEntries(
+    Array.from({ length: 101 }, (_, i) => [
+      `f${i}.txt`,
+      file(bytes, String(i)),
+    ]),
+  )
+  let want = await git.files(manifest)
+  let reads = 0
+  let batched = index({
+    read: (query, opts) => {
+      reads++
+      return g.read(query, opts)
+    },
+    apply: g.apply,
+  }, bytes)
+  assertEquals(await batched.files(manifest), want)
+  assert(reads < Object.keys(manifest).length)
 })
 
 Deno.test('bytes nothing stored are refused by name', async () => {

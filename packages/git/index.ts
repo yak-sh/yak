@@ -108,6 +108,18 @@ export let index = (g: Writes, store: Blobs): Index => {
 
   // The row every object gets, plus its SHA-256 object id and whatever edges
   // it contributes. Writing it again updates what is already there.
+  let rows = (
+    oids: Oids,
+    type: Kind,
+    size: number,
+    sha: string,
+    walk: Bundle[] = [],
+  ): Bundle[] => [
+    { entity: { eid: oids.oid }, [GITOBJ]: { type, size }, [BLOB]: { sha } },
+    keyed(COMPAT, oids.oid, oids.oid256),
+    ...walk,
+  ]
+
   let write = async (
     oids: Oids,
     type: Kind,
@@ -115,11 +127,7 @@ export let index = (g: Writes, store: Blobs): Index => {
     sha: string,
     walk: Bundle[] = [],
   ): Promise<Oids> => {
-    await g.apply([
-      { entity: { eid: oids.oid }, [GITOBJ]: { type, size }, [BLOB]: { sha } },
-      keyed(COMPAT, oids.oid, oids.oid256),
-      ...walk,
-    ])
+    await g.apply(rows(oids, type, size, sha, walk))
     return oids
   }
 
@@ -149,6 +157,52 @@ export let index = (g: Writes, store: Blobs): Index => {
       bytes.length,
       sha,
     )
+  }
+
+  // A manifest's files are independent. Read their existing names in bounded
+  // batches and write new names together, so a large deploy does not make two
+  // serial graph round trips for every file it already committed before.
+  let blobs = async (shas: string[]): Promise<Map<string, Oids>> => {
+    let out = new Map<string, Oids>()
+    let unique = [...new Set(shas)]
+    for (let i = 0; i < unique.length; i += 100) {
+      let part = unique.slice(i, i + 100)
+      let found = await g.read(`.gitobj.type=blob&.blob.sha=${part.join(',')}`)
+      let ids = found.map((b) => b.entity.eid)
+      let keys = ids.length
+        ? await g.read(`.${COMPAT}&.key.of=${ids.join(',')}`)
+        : []
+      let byId = new Map(keys.map((b) => [
+        String((b.key as { of: string }).of),
+        valueOf(b),
+      ]))
+      for (let b of found) {
+        let sha = String((b[BLOB] as { sha: string }).sha)
+        let oid256 = byId.get(b.entity.eid)
+        if (oid256) out.set(sha, { oid: b.entity.eid, oid256 })
+      }
+      let fresh = await Promise.all(
+        part.filter((sha) => !out.has(sha))
+          .map(async (sha) => {
+            let bytes = await store.get(sha)
+            if (!bytes) throw new Error(`git: no bytes stored under ${sha}`)
+            let oids = {
+              oid: await oid('blob', bytes),
+              oid256: await oid256('blob', bytes),
+            }
+            return { sha, bytes, oids }
+          }),
+      )
+      if (fresh.length) {
+        await g.apply(
+          fresh.flatMap(({ sha, bytes, oids }) =>
+            rows(oids, 'blob', bytes.length, sha)
+          ),
+        )
+        for (let { sha, oids } of fresh) out.set(sha, oids)
+      }
+    }
+    return out
   }
 
   let tree = async (children: Child[]): Promise<Oids> => {
@@ -200,16 +254,21 @@ export let index = (g: Writes, store: Blobs): Index => {
   }
 
   // Bottom up: a directory has no id until every child under it has one.
-  let fold = async (at: Dir): Promise<Oids> => {
+  let fold = async (at: Dir, names: Map<string, Oids>): Promise<Oids> => {
     let children: Child[] = []
     for (let [name, sha] of at.files) {
-      children.push({ name, mode: FILE, ...await blob(sha) })
+      children.push({ name, mode: FILE, ...names.get(sha)! })
     }
     for (let [name, sub] of at.dirs) {
-      children.push({ name, mode: DIR, ...await fold(sub) })
+      children.push({ name, mode: DIR, ...await fold(sub, names) })
     }
     return tree(children)
   }
 
-  return { blob, tree, commit, files: (m) => fold(nest(m)) }
+  return {
+    blob,
+    tree,
+    commit,
+    files: async (m) => fold(nest(m), await blobs(Object.values(m))),
+  }
 }
