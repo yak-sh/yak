@@ -89,7 +89,12 @@ Deno.test('a page at another address reaches no door here', async () => {
     // altogether — no preflight exists for it — so a page on any address can
     // open one, and the cookie goes with it. Deno's WebSocket sends no
     // `Origin` of its own, so the relay puts the attacker's on the wire.
-    let evil = relay(k, 'jeff55.yaks.app', cookie, 'https://evil.yaks.app')
+    let evil = await relay(
+      k,
+      'jeff55.yaks.app',
+      cookie,
+      'https://evil.yaks.app',
+    )
     try {
       assertEquals(
         await opened(`${evil.origin.replace('http:', 'ws:')}/recipes/api/ws`),

@@ -22,6 +22,8 @@ import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
+import { createServer, request } from 'node:http'
+import { connect, type Socket } from 'node:net'
 
 /** What the run's kernel checks a Stripe event against, at both doors
  * (probe-suite.ts). */
@@ -328,62 +330,85 @@ export let browser = (k: Kernel, host: string, cookie?: string) => {
   return { origin: `http://127.0.0.1:${port}`, stop: () => server.shutdown() }
 }
 
-// An origin that stands for `<space>.yaks.app` on a socket. `new WebSocket`
-// sends the URL's own Host and takes no headers, so `x-yak-host` — the header
-// a fetch-driven probe sets (route.ts) — has to go on the wire itself: this
-// relay inserts it (and a cookie) into the handshake it forwards, then copies
-// bytes both ways, so the socket a test holds is the kernel's own, framing
-// and all. HTTP through it works too, for one request per connection.
+// An origin that stands for `<space>.yaks.app`. HTTP parsing belongs to the
+// runtime so each request on a reused connection gets its own host and cookie.
+// A WebSocket upgrade tunnels its bytes after the rewritten handshake: that
+// one request must keep the kernel's own hibernating socket at the far end.
 //
 // `origin` is the third thing only the wire can say: Deno's WebSocket sends
 // no `Origin` at all, and the page a handshake comes from is exactly what
 // separates one space from another (route.ts `sameOrigin`), so a test that
 // drives a cross-space socket puts it here.
-export let relay = (
-  k: Kernel,
+export let relay = async (
+  k: Pick<Kernel, 'base'>,
   host: string,
   cookie?: string,
   origin?: string,
 ) => {
   let up = Number(new URL(k.base).port)
-  let l = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let open = new Set<Deno.Conn>()
-  let carry = async (down: Deno.Conn) => {
-    open.add(down)
-    let out = await Deno.connect({ hostname: '127.0.0.1', port: up })
+  let open = new Set<Socket>()
+  let headers = (from: Record<string, unknown>) => ({
+    ...from,
+    'x-yak-host': host,
+    ...(cookie ? { cookie } : {}),
+    ...(origin ? { origin } : {}),
+  })
+  let server = createServer((from, to) => {
+    let sent = request({
+      hostname: '127.0.0.1',
+      port: up,
+      path: from.url,
+      method: from.method,
+      headers: headers(from.headers),
+    }, (answer) => {
+      to.writeHead(answer.statusCode ?? 502, answer.headers)
+      answer.pipe(to)
+    })
+    sent.on('error', (e) => {
+      if (!to.headersSent) to.writeHead(502)
+      to.end(String(e))
+    })
+    from.pipe(sent)
+  })
+  server.on('connection', (socket) => {
+    open.add(socket)
+    socket.on('close', () => open.delete(socket))
+  })
+  server.on('upgrade', (from, down, first) => {
+    let out = connect(up, '127.0.0.1')
     open.add(out)
-    // The handshake is one write, and ASCII; read to its blank line.
-    let head = ''
-    let buf = new Uint8Array(4096)
-    while (!head.includes('\r\n\r\n')) {
-      let n = await down.read(buf)
-      if (n == null) return
-      head += new TextDecoder().decode(buf.subarray(0, n))
+    out.on('close', () => open.delete(out))
+    let kept: string[] = []
+    for (let i = 0; i < from.rawHeaders.length; i += 2) {
+      let name = from.rawHeaders[i], low = name.toLowerCase()
+      if (
+        low == 'x-yak-host' || cookie && low == 'cookie' ||
+        origin && low == 'origin'
+      ) continue
+      kept.push(`${name}: ${from.rawHeaders[i + 1]}`)
     }
-    let extra = `x-yak-host: ${host}\r\n` +
-      (cookie ? `cookie: ${cookie}\r\n` : '') +
-      (origin ? `origin: ${origin}\r\n` : '')
-    await out.write(
-      new TextEncoder().encode(head.replace('\r\n', `\r\n${extra}`)),
+    for (let [name, value] of Object.entries(headers({}))) {
+      kept.push(`${name}: ${value}`)
+    }
+    out.write(
+      `${from.method} ${from.url} HTTP/${from.httpVersion}\r\n${
+        kept.join('\r\n')
+      }\r\n\r\n`,
     )
-    await Promise.all([
-      down.readable.pipeTo(out.writable).catch(() => {}),
-      out.readable.pipeTo(down.writable).catch(() => {}),
-    ])
-  }
-  let serving = (async () => {
-    for await (let down of l) carry(down).catch(() => {})
-  })().catch(() => {})
+    if (first.length) out.write(first)
+    down.pipe(out).pipe(down)
+    out.on('error', () => down.destroy())
+    down.on('error', () => out.destroy())
+  })
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+  let address = server.address()
+  if (!address || typeof address == 'string') throw Error('relay has no port')
+  let port = address.port
   return {
-    origin: `http://127.0.0.1:${(l.addr as Deno.NetAddr).port}`,
+    origin: `http://127.0.0.1:${port}`,
     stop: async () => {
-      l.close()
-      for (let c of open) {
-        try {
-          c.close()
-        } catch { /* the pipe closed it */ }
-      }
-      await serving
+      for (let c of open) c.destroy()
+      await new Promise<void>((done) => server.close(() => done()))
     },
   }
 }

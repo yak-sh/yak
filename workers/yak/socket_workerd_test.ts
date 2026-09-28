@@ -44,7 +44,7 @@ let page = async (k: Kernel) => {
   Deno.writeTextFileSync(`${dir}/client.js`, source)
   let mod = await import(`file://${dir}/client.js`)
   let mine = browser(k, host, them.cookie)
-  let wire = relay(k, host, them.cookie, `https://${host}`)
+  let wire = await relay(k, host, them.cookie, `https://${host}`)
   return {
     them,
     slug,
@@ -82,7 +82,7 @@ Deno.test('a page watches a component homed in another app', async () => {
   let host = `${slug}.yaks.app`
   let them = await seed(k, [{ slug, apps: ['probe', 'vale'] }])
   let agent = connector(k, them.cookie)
-  let wire = relay(k, host, them.cookie, `https://${host}`)
+  let wire = await relay(k, host, them.cookie, `https://${host}`)
   let box: ReturnType<typeof client> | undefined
   try {
     for (let app of ['probe', 'vale']) {
