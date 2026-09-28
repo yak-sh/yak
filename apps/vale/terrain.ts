@@ -338,14 +338,34 @@ let VILLAGES: Village[] = Object.keys(LEVELS).flatMap((id) =>
   }))
 )
 
+let villageDistance = (x: number, z: number, v: Village) => {
+  let dx = x - v.at[0], dz = z - v.at[1]
+  return dx * dx + dz * dz
+}
+
 /** The villages within `r` metres of (x, z), nearest first. */
-export let villagesNear = (x: number, z: number, r: number): Village[] =>
-  VILLAGES.filter((v) => dist(x, z, v.at) < r)
-    .sort((a, b) => dist(x, z, a.at) - dist(x, z, b.at))
+export let villagesNear = (x: number, z: number, r: number): Village[] => {
+  let near: { village: Village; distance: number }[] = []
+  let radius = r > 0 ? r * r : 0
+  for (let village of VILLAGES) {
+    let distance = villageDistance(x, z, village)
+    if (distance < radius) near.push({ village, distance })
+  }
+  return near.sort((a, b) => a.distance - b.distance).map((n) => n.village)
+}
 
 /** The fire of the village nearest (x, z), within `r` metres; or null. */
-export let hearthNear = (x: number, z: number, r = Infinity): Spot | null =>
-  villagesNear(x, z, r)[0]?.at ?? null
+export let hearthNear = (x: number, z: number, r = Infinity): Spot | null => {
+  let nearest: Village | null = null, best = r > 0 ? r * r : 0
+  for (let village of VILLAGES) {
+    let distance = villageDistance(x, z, village)
+    if (distance < best) {
+      nearest = village
+      best = distance
+    }
+  }
+  return nearest?.at ?? null
+}
 
 /** The village of a level, if it has one. */
 export let villageOf = (id: string): Village | null =>
