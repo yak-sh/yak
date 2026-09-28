@@ -50,3 +50,46 @@ export let stride = (
       : b.yaw,
   }
 }
+
+/** Walk in the hero's own facing direction while the phone stick turns them.
+ * Unlike camera-relative keys, sideways stick input never translates sideways.
+ *
+ * ```ts
+ * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
+ * import { flat } from './terrain.ts'
+ * let v = flat(5)
+ * let b = { x: 20, y: 5, z: 20, vy: 0, yaw: Math.PI, speed: 0, gait: 'idle' as const }
+ * let turn = steerStep(v, b, [1, 0], 0.1, 5)
+ * assertAlmostEquals(turn.yaw, Math.PI - 0.3)
+ * assertEquals([turn.x, turn.z], [b.x, b.z])
+ * let go = steerStep(v, b, [0, 1], 0.1, 5)
+ * assert(go.z < b.z)
+ * let arc = steerStep(v, b, [0.5, 0.5], 0.1, 5)
+ * assert(arc.x > b.x && arc.z < b.z)
+ * let back = steerStep(v, b, [0, -1], 0.1, 5)
+ * assert(back.z > b.z && back.z - b.z < b.z - go.z)
+ * ```
+ */
+export let steerStep = (
+  v: Vale,
+  b: Body,
+  stick: [number, number],
+  dt: number,
+  speed: number,
+  jump = false,
+): Body => {
+  let [turn, forward] = stick
+  let yaw = b.yaw - turn * 3 * dt
+  let n = walk(
+    v,
+    b,
+    {
+      x: Math.sin(yaw) * forward,
+      z: Math.cos(yaw) * forward,
+      jump,
+    },
+    dt,
+    speed * (forward < 0 ? 0.6 : 1),
+  )
+  return { ...n, yaw }
+}

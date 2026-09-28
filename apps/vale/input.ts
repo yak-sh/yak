@@ -6,6 +6,8 @@
 export type Intent = {
   /** right and forward, relative to the camera, at most 1 long */
   move: [number, number]
+  /** phone stick: horizontal steering and forward/back, in hero space */
+  stick?: [number, number]
   jump: boolean
   strike: boolean
   /** the ability asked for, by its slot on the bar, 1 to 3, or 0 */
@@ -237,6 +239,7 @@ export let listen = (
       if (len > 1) [x, y] = [x / len, y / len]
       let out: Intent = {
         move: [x, y],
+        stick: stick ? [stick.dx, -stick.dy] : undefined,
         jump: pressed.has('jump') || (!busy() && held.has('Space')),
         strike: pressed.has('strike'),
         ability: [1, 2, 3].find((n) => pressed.has(`ability${n}` as Action)) ??

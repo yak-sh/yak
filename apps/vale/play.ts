@@ -91,7 +91,7 @@ import {
 } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
 import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
-import { stride } from './stride.ts'
+import { steerStep, stride } from './stride.ts'
 import { regionOf, spotOf } from './regions.ts'
 import { placeOf } from './area.ts'
 import { plusOf } from './upgrade.ts'
@@ -895,16 +895,25 @@ export let game = (
           ) dash = null
           body = { ...n, yaw: body.yaw }
         } else {
-          body = stride(
-            v,
-            body,
-            intent.move,
-            look,
-            dt,
-            SPEED * (1 + s.kit.speed),
-            intent.jump,
-            intent.look,
-          )
+          body = intent.stick
+            ? steerStep(
+              v,
+              body,
+              intent.stick,
+              dt,
+              SPEED * (1 + s.kit.speed),
+              intent.jump,
+            )
+            : stride(
+              v,
+              body,
+              intent.move,
+              look,
+              dt,
+              SPEED * (1 + s.kit.speed),
+              intent.jump,
+              intent.look,
+            )
         }
       }
       let rolling = body.gait == 'roll'
