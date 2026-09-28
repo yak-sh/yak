@@ -219,6 +219,8 @@ import {
 } from './meter.ts'
 import { acceptLink, paced, SUBJECT } from './invite.ts'
 import {
+  draftFiles,
+  draftManifest,
   editing,
   fenced,
   held,
@@ -1249,19 +1251,16 @@ let released = async (
 ) => {
   let standing = await waiting(ctx.dir, space, app, who)
   let blobs = r2Objects(ctx.env.BLOBS)
-  let work = candidate?.source ?? await editing(
-    blobs,
-    ctx.dir,
-    space,
-    standing,
-    prefixOf(space, standing),
-    who,
-  )
+  let work = candidate?.source ?? await editing(ctx.dir, space, standing, who)
   let release = releaseOf(space, standing)
   let draft = candidate ? standing.draft ?? null : standing.draft ?? work
   let fence = await fenced(ctx.dir, standing, draft, who)
   try {
-    await laid(blobs, `${work}/`, `${release}/`)
+    await laid(
+      draftFiles(blobs, candidate ? null : work, prefixOf(space, standing)),
+      `${work}/`,
+      `${release}/`,
+    )
     return await published(
       ctx,
       space,
@@ -1301,19 +1300,19 @@ let copied = (
     onto.app,
     who,
     (app) => prefixOf(onto.space, app),
-    async (draft) => {
+    async (draft, _app, _attempt, editFiles) => {
       let here = `${draft}/`
       let paths = (keys: string[], prefix: string) =>
         own(keys.map((k) => k.slice(prefix.length)))
       let code = paths(await blobs.list(there), there)
-      let had = paths(await blobs.list(here), here)
+      let had = paths(await editFiles.list(here), here)
       await Promise.all(
         code.map(async (path) =>
-          blobs.put(here + path, await blobs.get(there + path))
+          editFiles.put(here + path, await blobs.get(there + path))
         ),
       )
       let gone = had.filter((p) => !code.includes(p))
-      await Promise.all(gone.map((path) => blobs.delete(here + path)))
+      await Promise.all(gone.map((path) => editFiles.delete(here + path)))
       return { wrote: code, gone }
     },
   )
@@ -1530,17 +1529,21 @@ export let wrote = (
     app,
     who,
     (app) => prefixOf(space, app),
-    async (draft, app) => {
+    async (draft, app, _attempt, editFiles) => {
       let edit = { ...app, source: draft }
       let prefix = fileKey(space, edit, '')
       let archive = `${space.slug}/${app.slug}/`
-      let stopped = await fullFiles(
-        env,
-        space,
-        files.map((f) => ({
-          key: fileKey(space, edit, f.path),
-          bytes: f.bytes.byteLength,
-        })),
+      let stopped = await c.time(
+        'quota',
+        () =>
+          fullFiles(
+            env,
+            space,
+            files.map((f) => ({
+              key: fileKey(space, edit, f.path),
+              bytes: f.bytes.byteLength,
+            })),
+          ),
       )
       if (stopped) throw refuse('limit', stopped)
       // The one file with a ceiling of its own (standing.ts): the app's notes are
@@ -1566,9 +1569,9 @@ export let wrote = (
         Promise.all(files.map(async (f) => {
           let path = fileKey(space, edit, f.path).slice(prefix.length)
           await pin(() =>
-            replaced(blobs, prefix, path, who.person ?? '', at, archive)
+            replaced(editFiles, prefix, path, who.person ?? '', at, archive)
           )
-          await put(() => blobs.put(prefix + path, f.bytes))
+          await put(() => editFiles.put(prefix + path, f.bytes))
         })))
       let paths = files.map((f) =>
         fileKey(space, edit, f.path).slice(prefix.length)
@@ -2522,15 +2525,18 @@ let OURS: Row[] = [
       let source = working(app, prefixOf(space, app))
       let edit = { ...app, source }
       let prefix = fileKey(space, edit, '')
+      let view = draftFiles(blobs, app.draft, prefixOf(space, app))
       let archive = `${space.slug}/${app.slug}/`
       if (op == 'list') {
         let all = await versions(ctx.dir, app)
         let live = all.find((v) => v.version == app.version)
         // With no draft, source is the immutable release whose file hashes
         // the version already records. A draft needs its own bytes inspected.
-        let files = !app.draft && live
+        let files = app.draft && live
+          ? await draftManifest(blobs, app.draft, live.files)
+          : live && !app.draft
           ? live.files
-          : await manifest(blobs, prefix)
+          : await manifest(view, prefix)
         let paths = Object.keys(files).sort()
         return {
           text: paths.join('\n') || '(no files)',
@@ -2543,10 +2549,10 @@ let OURS: Row[] = [
       }
       if (op == 'read') {
         let key = fileKey(space, edit, text(args.path, 'path'))
-        if (!(await blobs.has(key))) {
+        if (!(await view.has(key))) {
           throw refuse('missing', `no file ${args.path}`)
         }
-        return { text: new TextDecoder().decode(await blobs.get(key)), space }
+        return { text: new TextDecoder().decode(await view.get(key)), space }
       }
       if (op == 'delete') {
         return modifying(
@@ -2556,14 +2562,14 @@ let OURS: Row[] = [
           app,
           who,
           (app) => prefixOf(space, app),
-          async (draft, app, attempt) => {
+          async (draft, app, attempt, editFiles) => {
             let prefix = `${draft}/`
             let key = fileKey(
               space,
               { ...app, source: draft },
               text(args.path, 'path'),
             )
-            if (!(await blobs.has(key))) {
+            if (!(await editFiles.has(key))) {
               if (attempt) {
                 return {
                   text: `deleted ${args.path} — staged for app_deploy`,
@@ -2577,14 +2583,14 @@ let OURS: Row[] = [
             // same way: the file is in its own history the moment it stops being a
             // file, and op restore brings it back (T-34508).
             await replaced(
-              blobs,
+              editFiles,
               prefix,
               path,
               who.person ?? '',
               new Date(),
               archive,
             )
-            await blobs.delete(key)
+            await editFiles.delete(key)
             return {
               text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
                 `'restore', path: '${path}') brings it back; staged for app_deploy`,
@@ -2601,7 +2607,7 @@ let OURS: Row[] = [
         let path = fileKey(space, edit, text(args.path, 'path'))
           .slice(prefix.length)
         let all = await history(blobs, archive, path)
-        let live = await blobs.read(prefix + path)
+        let live = await view.read(prefix + path)
         return {
           text: [
             `${path} in ${space.slug}/${app.slug}:`,
@@ -2675,7 +2681,7 @@ let OURS: Row[] = [
       if (op == 'patch') {
         let path = text(args.path, 'path')
         let key = fileKey(space, edit, path)
-        if (!(await blobs.has(key))) throw refuse('missing', `no file ${path}`)
+        if (!(await view.has(key))) throw refuse('missing', `no file ${path}`)
         // Empty is a legal replacement — it is how a line is removed — so
         // this asks for a string rather than for something.
         if (typeof args.replace != 'string') {
@@ -2685,7 +2691,7 @@ let OURS: Row[] = [
           )
         }
         let now = new TextEncoder().encode(patched(
-          new TextDecoder().decode(await blobs.get(key)),
+          new TextDecoder().decode(await view.get(key)),
           text(args.find, 'find'),
           args.replace,
           key.slice(prefix.length),
@@ -2885,11 +2891,12 @@ let OURS: Row[] = [
       let { space, app, who, store } = await inApp(ctx, args, true)
       let path = text(args.path, 'path')
       let blobs = r2Objects(ctx.env.BLOBS)
-      let source = await working(app, prefixOf(space, app))
+      let source = working(app, prefixOf(space, app))
       let prefix = `${source}/`
-      let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
+      let view = draftFiles(blobs, app.draft, prefixOf(space, app))
+      let keys = (await view.list(prefix)).map((k) => k.slice(prefix.length))
       let files = await texts(
-        blobs,
+        view,
         prefix,
         own(keys).filter((p) => asked(path, p)),
       )

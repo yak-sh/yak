@@ -88,6 +88,7 @@ import { KERNEL } from './meta.ts'
 import { defect } from './sentry.ts'
 import { NOTES } from './standing.ts'
 import {
+  draftFiles,
   GRACE as PIN_GRACE,
   moved,
   own,
@@ -316,9 +317,12 @@ export let emptied = async (
   who: Who,
 ) => {
   let blobs = r2Objects(env.BLOBS)
-  let source = await working(app, prefixOf(space, app))
+  let source = working(app, prefixOf(space, app))
+  let filesAt = draftFiles(blobs, app.draft, prefixOf(space, app))
   let files = own(
-    (await blobs.list(`${source}/`)).map((key) => key.slice(source.length + 1)),
+    (await filesAt.list(`${source}/`)).map((key) =>
+      key.slice(source.length + 1)
+    ),
   )
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.

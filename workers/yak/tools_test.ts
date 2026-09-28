@@ -423,7 +423,7 @@ Deno.test('a deploy says how many round trips it took', async () => {
         { path: 'style.css', content: 'h1{color:teal}' },
       ],
     }),
-    { hops: 5, r2: 5 },
+    { hops: 5, r2: 4 },
   )
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
   assert(deploy.hops <= 25)

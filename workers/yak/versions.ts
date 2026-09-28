@@ -94,9 +94,126 @@ export let BUILT = 'esbuild/'
 // Edits belong to the next version, while the app's source names the version
 // visitors read. A failed release keeps its draft for correction and retry.
 export let draftOf = (space: { slug: string }, app: App) =>
-  `${space.slug}/.drafts/${app.eid}/v${
+  `${space.slug}/.drafts/${app.eid}/${app.source ? 'delta-' : ''}v${
     (app.version ?? 0) + 1
   }-${crypto.randomUUID()}`
+
+let delta = (draft: string) => draft.split('/').pop()?.startsWith('delta-v')
+
+// A draft keeps only what differs from its immutable source. The old vN
+// drafts are complete copies and remain readable until their next deploy.
+// Deletions are keys outside the app's file set, so a missing draft file can
+// still mean "read the source" without reviving a deleted path.
+export let draftFiles = (
+  blobs: Objects,
+  draft: string | null | undefined,
+  source: string,
+): Objects => {
+  if (!draft || !delta(draft)) return blobs
+  let base = `${source}/`
+  let at = `${draft}/`
+  let gone = `${at}.deleted/`
+  let path = (key: string) => key.slice(at.length)
+  let original = (key: string) => base + path(key)
+  let deleted = (key: string) => gone + path(key)
+  let inDraft = (key: string) => key.startsWith(at) && !key.startsWith(gone)
+  let known: { own: Set<string>; gone: Set<string> } | undefined
+  let read = async (key: string) => {
+    if (!inDraft(key)) return blobs.read(key)
+    if (known) {
+      if (known.own.has(path(key))) return blobs.read(key)
+      return known.gone.has(path(key)) ? null : blobs.read(original(key))
+    }
+    let bytes = await blobs.read(key)
+    if (bytes || await blobs.has(deleted(key))) return bytes
+    return blobs.read(original(key))
+  }
+  return {
+    read,
+    get: async (key) => {
+      let bytes = await read(key)
+      if (!bytes) throw new Error(`no object at ${key}`)
+      return bytes
+    },
+    has: async (key) => {
+      if (!inDraft(key)) return blobs.has(key)
+      if (known) {
+        if (known.own.has(path(key))) return true
+        return !known.gone.has(path(key)) && await blobs.has(original(key))
+      }
+      return await blobs.has(key) ||
+        !await blobs.has(deleted(key)) && await blobs.has(original(key))
+    },
+    put: async (key, bytes) => {
+      await blobs.put(key, bytes)
+      if (inDraft(key)) {
+        await blobs.delete(deleted(key))
+        known?.own.add(path(key))
+        known?.gone.delete(path(key))
+      }
+    },
+    delete: async (key) => {
+      if (!inDraft(key)) return blobs.delete(key)
+      await blobs.put(deleted(key), new Uint8Array())
+      await blobs.delete(key)
+      known?.own.delete(path(key))
+      known?.gone.add(path(key))
+    },
+    list: async (prefix) => {
+      if (!prefix.startsWith(at)) return blobs.list(prefix)
+      let [old, fresh] = await Promise.all([
+        blobs.list(base + path(prefix)),
+        blobs.list(at),
+      ])
+      let paths = new Set(
+        old.map((key) => key.slice(base.length)).filter(
+          (name) =>
+            !['blobs/', 'versions/', 'history/'].some((kept) =>
+              name.startsWith(kept)
+            ),
+        ),
+      )
+      let own = new Set<string>()
+      let gone = new Set<string>()
+      for (let key of fresh) {
+        let name = path(key)
+        if (name.startsWith('.deleted/')) gone.add(name.slice(9))
+        else own.add(name)
+      }
+      for (let name of gone) paths.delete(name)
+      for (let name of own) paths.add(name)
+      known = { own, gone }
+      return [...paths].filter((name) => name.startsWith(path(prefix))).map((
+        name,
+      ) => at + name).sort()
+    },
+    uploaded: (prefix) => blobs.uploaded(prefix),
+  }
+}
+
+// A released version already names every unchanged path. Only the draft's
+// physical keys need hashing; the source manifest supplies the rest.
+export let draftManifest = async (
+  blobs: Objects,
+  draft: string,
+  base: Files,
+): Promise<Files> => {
+  if (!delta(draft)) return manifest(blobs, `${draft}/`)
+  let prefix = `${draft}/`
+  let paths = (await blobs.list(prefix)).map((key) => key.slice(prefix.length))
+  let files = { ...base }
+  for (let path of paths) {
+    if (path.startsWith('.deleted/')) delete files[path.slice(9)]
+  }
+  await Promise.all(
+    paths.filter((path) => !path.startsWith('.deleted/') && !kept(path)).map(
+      async (path) => {
+        files[path] = await sha256(await blobs.get(prefix + path))
+      },
+    ),
+  )
+  return files
+}
 
 export let releaseOf = (space: { slug: string }, app: App) =>
   `${space.slug}/.releases/${app.eid}/${crypto.randomUUID()}`
@@ -183,30 +300,16 @@ export let working = (
   source: string,
 ) => app.draft ?? source
 
-/** Start this version's draft with the files its published source serves. */
+/** Start this version's draft over the immutable source. */
 export let editing = async (
-  blobs: Objects,
   dir: Directory,
   space: Space,
   app: App,
-  source: string,
   who: Who,
 ) => {
   if (app.draft) return app.draft
   let draft = draftOf(space, app)
-  let from = `${source}/`
-  let into = `${draft}/`
-  await Promise.all((await blobs.list(from)).map(async (key) => {
-    let path = key.slice(from.length)
-    if (
-      path.startsWith('blobs/') || path.startsWith('versions/') ||
-      path.startsWith('history/')
-    ) return
-    await blobs.put(into + path, await blobs.get(key))
-  }))
-  // Each contender copies to its own prefix. The directory chooses one only
-  // after its copy is complete, so concurrent first edits never copy over
-  // one another's writes.
+  // The directory chooses one before either contender writes its first file.
   try {
     await dir.stamp({
       entities: [{
@@ -241,13 +344,18 @@ export let modifying = async <T>(
   app: App,
   who: Who,
   source: (app: App) => string,
-  act: (draft: string, app: App, attempt: number) => Promise<T>,
+  act: (draft: string, app: App, attempt: number, files: Objects) => Promise<T>,
 ): Promise<T> => {
   let row = app
   for (let n = 0; n < 3; n++) {
     row = await waiting(dir, space, row, who)
-    let draft = await editing(blobs, dir, space, row, source(row), who)
-    let result = await act(draft, row, n)
+    let draft = await editing(dir, space, row, who)
+    let result = await act(
+      draft,
+      row,
+      n,
+      draftFiles(blobs, draft, source(row)),
+    )
     let after = await waiting(dir, space, row, who)
     if (
       after.version == row.version && after.source == row.source &&

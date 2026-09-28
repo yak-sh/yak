@@ -1243,14 +1243,14 @@ let api = async (
       app,
       who,
       (app) => prefixOf(space, app),
-      async (draft) => {
+      async (draft, _app, _attempt, files) => {
         let key = keyed(draft, path.slice('/files'.length))
         let stopped = await fullFiles(env, space, [{
           key,
           bytes: bytes.byteLength,
         }])
         if (stopped) return { error: stopped }
-        await r2Objects(env.BLOBS).put(key, bytes)
+        await files.put(key, bytes)
         return { key }
       },
     )

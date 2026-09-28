@@ -198,6 +198,48 @@ Deno.test('concurrent first edits share one private draft', async () => {
   assert((await s.served('index.html')).body.includes('<h1>new</h1>'))
 })
 
+Deno.test('a released app stages changed files over its source', async () => {
+  using s = await scenario(compiles)
+  await s.write({
+    'index.html': '<h1>old</h1>',
+    'style.css': 'h1{color:blue}',
+    'main.ts': 'let n = 1',
+  })
+  await s.tool('app_deploy')
+  let keys = async () =>
+    (await s.env.BLOBS.list({ prefix: 'ada/.drafts/' })).objects.map((o) =>
+      o.key
+    )
+  let before = new Set(await keys())
+  await s.write({ 'index.html': '<h1>new</h1>' })
+  assertEquals(
+    (await keys()).filter((key) => !before.has(key)).map((key) =>
+      key.split('/').pop()
+    ),
+    ['index.html'],
+  )
+  assertEquals(
+    await s.tool('app_files', { op: 'read', path: 'main.ts' }),
+    'let n = 1',
+  )
+  await s.tool('app_files', { op: 'delete', path: 'style.css' })
+  assertEquals(
+    await s.tool('app_files', { op: 'list' }),
+    'index.html\nmain.ts',
+  )
+  await assertRejects(
+    () => s.tool('app_files', { op: 'read', path: 'style.css' }),
+    Error,
+    'no file',
+  )
+  await s.tool('app_deploy')
+  assert((await s.served('index.html')).body.includes('new'))
+  assertEquals(
+    (await apps.fetch(visit('/cookbook/style.css'), s.env)).status,
+    404,
+  )
+})
+
 Deno.test('an edit crossing deployment is replayed into the next draft', async () => {
   using s = await scenario(compiles)
   await s.write({ 'index.html': '<h1>old</h1>' })
