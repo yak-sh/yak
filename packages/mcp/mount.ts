@@ -43,7 +43,7 @@ export type MountOptions = Omit<Options, 'actor'> & {
    * (default: nobody). Throwing `Unauthorized` refuses the request with a
    * 401. */
   authenticate?: Authenticate
-  /** how long one call may take, in ms (default: 60000) */
+  /** how long one call may take, in ms; absent, wait for its outcome */
   timeout?: number
 }
 
@@ -94,7 +94,7 @@ let connected = async (
 let ask = async (
   mcp: ReturnType<typeof server>,
   request: JSONRPCMessage,
-  ms: number,
+  ms?: number,
 ): Promise<unknown> => {
   let [mine, theirs] = InMemoryTransport.createLinkedPair()
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -102,7 +102,9 @@ let ask = async (
     await mcp.connect(theirs)
     let reply = new Promise<unknown>((ok, no) => {
       mine.onmessage = ok
-      timer = setTimeout(() => no(new Error('mcp timeout')), ms)
+      if (ms != null) {
+        timer = setTimeout(() => no(new Error('mcp timeout')), ms)
+      }
     })
     await mine.start()
     await mine.send(request)
@@ -127,7 +129,7 @@ export let mcp = (opts: MountOptions): Handler => {
   if (opts.sessions && !opts.sessions.vocab.comp(SESSION)) {
     throw new Error('the MCP session graph has no session vocabulary')
   }
-  let ms = opts.timeout ?? 60_000
+  let ms = opts.timeout
   // One runner for the whole handler, not one per HTTP request: the `tool`
   // rows a call references are written once for the process, and a call still
   // running is one run however many requests ask about it.

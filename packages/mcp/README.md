@@ -337,8 +337,9 @@ malformed JSON or anything other than one JSON-RPC request or notification, 401
 for `Unauthorized`, and 202 for notifications. Request arrays are rejected.
 Other thrown errors use [@yaks/api](../api/README.md#refusals)'s status mapping.
 
-The HTTP transport has no SSE stream. Its request timeout defaults to 60,000 ms
-and can be configured with `timeout`.
+The HTTP transport has no SSE stream. It waits for each call's outcome by
+default. A host can set `timeout` to limit how long it waits for a reply; timing
+out does not cancel a tool already running.
 
 ## stdio
 

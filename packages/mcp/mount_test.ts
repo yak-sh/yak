@@ -4,6 +4,7 @@
 // own words.
 
 import { assert, assertEquals } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import { type Bundle, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
 import { Unauthorized } from '@yaks/api'
@@ -73,6 +74,36 @@ Deno.test('the door answers the protocol, and signs what a tool writes', async (
 
   let found: Bundle[] = await graph.read('.price=12&*')
   assertEquals(comp(found[0], 'created').by, 'm1')
+})
+
+Deno.test('a slow tool answers with its committed outcome', async () => {
+  using time = new FakeTime()
+  let graph = shopGraph()
+  let started = Promise.withResolvers<void>()
+  let finish = Promise.withResolvers<void>()
+  graph.use({
+    name: 'shelf',
+    tools: [{
+      name: 'shelve',
+      description: 'put a book on the shelf',
+      input: {},
+      run: async () => {
+        started.resolve()
+        await finish.promise
+        return [{ entity: { eid: 'b1' }, book: { status: 'shelved' } }]
+      },
+    }],
+  })
+  let door = mcp({ graph })
+  let waiting = door(call('shelve'))
+  await started.promise
+  time.tick(60_001)
+  finish.resolve()
+  let reply = await waiting
+  assertEquals(reply.status, 200)
+  let said = await reply.json()
+  assertEquals(said.result.isError, undefined)
+  assertEquals(comp((await graph.get(['b1']))[0], 'book').status, 'shelved')
 })
 
 // A host with a face gives it to `initialize`, whole: MCP's `Implementation`
