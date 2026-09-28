@@ -829,7 +829,7 @@ export let game = (
       let hp = vit?.max && vit.max != s.max
         ? Math.min(s.max, Math.round(vit.hp * s.max / vit.max))
         : Math.min(vit?.hp ?? s.max, s.max)
-      let damage = comp(row, 'damage').on !== false
+      let damage = comp(row, 'damageable').on !== false
       if (!damage) {
         hp = s.max
         down = false

@@ -33,7 +33,7 @@ Deno.test('damage off revives and protects until damage is turned on', () => {
     [hero, {
       entity: { eid: hero },
       player: {},
-      damage: { on: false },
+      damageable: { on: false },
       position: { level: 'mossvale', x, y: 5, z, at: now },
       motion: { yaw: 0, gait: 'down', vy: 0, vx: 0, vz: 0 },
       vitals: { hp: 0, max: 100, lvl: 1 },
@@ -78,7 +78,7 @@ Deno.test('damage off revives and protects until damage is turned on', () => {
   assertEquals(guarded.vitals.hp, guarded.vitals.max)
   assertEquals(guarded.events.some((e) => e.type == 'hurt'), false)
 
-  rows.set(hero, { ...rows.get(hero)!, damage: { on: true } })
+  rows.set(hero, { ...rows.get(hero)!, damageable: { on: true } })
   rows.set(home.eid, {
     ...rows.get(home.eid)!,
     hunt: { player: hero, bite: 1500 },

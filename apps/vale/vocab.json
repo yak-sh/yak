@@ -22,7 +22,7 @@
       "description": "A hero belonging to the person who made it, as the row's created stamp says. Their appearance lives in look rows; everything else they earn lives in rows of its own.",
       "properties": {}
     },
-    "damage": {
+    "damageable": {
       "component": true,
       "type": "object",
       "floor": "owner",
@@ -657,7 +657,7 @@
         "speed": { "type": "number" }
       }
     },
-    "damage_mode": {
+    "damage": {
       "tool": true,
       "description": "Turn damage on or off for a Mossvale hero. Off restores full health and prevents damage; on returns to ordinary combat. Only the app owner may change a hero's damage mode.",
       "input": {
@@ -667,7 +667,7 @@
       "required": ["player", "on"],
       "apply": {
         "entity": { "eid": "$player" },
-        "damage": { "on": "$on" }
+        "damageable": { "on": "$on" }
       }
     },
     "teleport": {

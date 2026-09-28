@@ -1,29 +1,27 @@
+// Chat's slash form calls the commands declared by the app, with typed args.
 import { assertEquals } from '@std/assert'
 import { slash } from './slash.ts'
 
-Deno.test('chat keeps ordinary speech, and handles every slash locally', () => {
+Deno.test('slash adapts declared app commands and leaves chat alone', () => {
   assertEquals(slash('hello /damage on'), null)
   assertEquals(slash('/damage on'), {
-    command: { kind: 'damage', on: true },
+    command: { name: 'damage', args: { on: true } },
   })
   assertEquals(slash('/damage off'), {
-    command: { kind: 'damage', on: false },
+    command: { name: 'damage', args: { on: false } },
   })
   assertEquals(slash('/teleport tombsands'), {
-    command: { kind: 'teleport', target: { level: 'tombsands' } },
+    command: { name: 'teleport', args: { level: 'tombsands' } },
   })
-  assertEquals(slash('/teleport -12.5 48'), {
-    command: { kind: 'teleport', target: { x: -12.5, z: 48 } },
+  assertEquals(slash('/teleport x=-1152 z=624'), {
+    command: { name: 'teleport', args: { x: -1152, z: 624 } },
   })
-  assertEquals(slash('/teleport unknown'), { error: 'Unknown land: unknown.' })
-  assertEquals(slash('/teleport constructor'), {
-    error: 'Unknown land: constructor.',
+  assertEquals(slash('/companion_progress directive=order'), {
+    command: { name: 'companion_progress', args: { directive: 'order' } },
   })
-  assertEquals(slash('/teleport 1 Infinity'), {
-    error: 'Use /teleport <land> or /teleport <x> <z>.',
+  assertEquals(slash('/teleport x=Infinity z=624'), {
+    error: 'x has the wrong value.',
   })
-  assertEquals(slash('/damage maybe'), {
-    error: 'Use /damage on or /damage off.',
-  })
+  assertEquals(slash('/damage maybe'), { error: 'on has the wrong value.' })
   assertEquals(slash('/unknown'), { error: 'Unknown command: /unknown.' })
 })

@@ -22,7 +22,6 @@ import { writer } from './chat.ts'
 import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
-import type { Target } from './teleport.ts'
 import { once as read } from './once.ts'
 import words from './vocab.json' with { type: 'json' }
 
@@ -35,7 +34,6 @@ export type Bundle = NonNullable<ReturnType<Client['ent']>>
 export type Me = {
   person: string | null
   name: string | null
-  role: 'owner' | 'editor' | 'viewer' | null
   reads: boolean
   writes: boolean
   signIn: string | null
@@ -261,20 +259,25 @@ export let connect = (base: URL) => {
     return read<Bundle>(url)
   }
 
-  // Commands need the store's answer before telling the player they worked.
-  // Ordinary frame writes stay on the client's optimistic path (`move`).
-  let write = async (...entities: Bundle[]): Promise<{ pending: boolean }> => {
-    let r = await fetch(new URL('apply', base), {
+  // The page and an agent use the same declared app command, with the same
+  // caller and access checks. The selected hero is the page's default player.
+  let command = async (
+    name: string,
+    args: Record<string, string | number | boolean>,
+  ): Promise<string> => {
+    let r = await fetch(new URL('command', base), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ entities }),
+      body: JSON.stringify({
+        name,
+        args: { ...(hero ? { player: hero } : {}), ...args },
+      }),
     })
-    let answer = await r.json().catch(() => ({})) as {
-      pending?: boolean
-      message?: string
+    let answer = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      throw new Error(answer.error?.message ?? `Command refused (${r.status})`)
     }
-    if (!r.ok) throw new Error(answer.message ?? `Write refused (${r.status})`)
-    return { pending: answer.pending == true }
+    return answer.text || `${name} completed.`
   }
 
   let glimpsed = new Map<string, Hero | null>()
@@ -365,7 +368,7 @@ export let connect = (base: URL) => {
     /** the nodes everyone has gathered, and mine still waiting */
     gathered: (): Bundle[] => join('gathered', rows('gathered'), 'gathered'),
     keep,
-    write,
+    command,
     /** send what is waiting, if the pace allows */
     tick: () => {
       if (waiting.length && Date.now() - last >= PACE) flush()
@@ -375,20 +378,6 @@ export let connect = (base: URL) => {
     /** this frame's changes that stay on the page or go to the peers */
     move: (bundles: Bundle[]) => {
       if (bundles.length) c.mutate(bundles)
-    },
-    /** Ask the app's worker to validate and keep an owner-authorized move. */
-    teleport: async (target: Target): Promise<string> => {
-      if (!hero) throw new Error('Choose a hero before teleporting.')
-      let res = await fetch(new URL('../teleport', base), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ player: hero, ...target }),
-      })
-      if (!res.ok) throw new Error(await res.text())
-      let answer = await res.json()
-      return answer.pending
-        ? 'Teleport queued; you will move when Mossvale is back online.'
-        : `Teleport requested to ${answer.level} (${answer.x}, ${answer.z}).`
     },
     /** make a hero and play it in this tab */
     create: (look: Look) => {
@@ -426,7 +415,6 @@ export let connect = (base: URL) => {
         return {
           person: null,
           name: null,
-          role: null,
           reads: true,
           writes: true,
           signIn: null,
@@ -436,7 +424,6 @@ export let connect = (base: URL) => {
       return {
         person: body.person ?? null,
         name: body.name ?? null,
-        role: body.role ?? null,
         reads: body.reads ?? true,
         writes: body.writes ?? true,
         signIn: body.signIn ?? null,

@@ -28,10 +28,11 @@ Deno.test('the Mossvale owner turns a hero’s damage off and on', async () => {
     let damage = (on: boolean) =>
       agent.tool('command', {
         app: 'damagelab/vale',
-        name: 'damage_mode',
+        name: 'damage',
         args: { player: hero, on },
       })
-    let state = async () => (await page.get(`.eid=${hero}&?damage`))[0]?.damage
+    let state = async () =>
+      (await page.get(`.eid=${hero}&?damageable`))[0]?.damageable
 
     await damage(false)
     assertEquals(await state(), { on: false })
@@ -47,7 +48,7 @@ Deno.test('the Mossvale owner turns a hero’s damage off and on', async () => {
     let refused = await assertRejects(() =>
       another.tool('command', {
         app: 'damagelab/vale',
-        name: 'damage_mode',
+        name: 'damage',
         args: { player: hero, on: true },
       })
     )
@@ -57,7 +58,7 @@ Deno.test('the Mossvale owner turns a hero’s damage off and on', async () => {
       .post({
         entities: [{
           entity: { eid: hero },
-          damage: { on: true },
+          damageable: { on: true },
         }],
       })
     assert(posted.status >= 400, await posted.text())

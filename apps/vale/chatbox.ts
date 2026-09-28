@@ -224,9 +224,6 @@ export let chatbox = (
     let parsed = slash(text)
     if (parsed) {
       if ('error' in parsed) notice(parsed.error)
-      else if (!me || !('role' in me) || me.role != 'owner') {
-        notice('Only the space owner can use commands.')
-      } else if (!net.hero) notice('Choose a hero first.')
       else void run(parsed.command)
       return
     }

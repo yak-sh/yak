@@ -59,7 +59,6 @@ Deno.test('later sightings keep a tab’s teleport acknowledgment', () => {
   seen.me({
     person: 'owner',
     name: 'Owner',
-    role: 'owner',
     reads: true,
     writes: true,
     signIn: null,
