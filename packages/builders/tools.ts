@@ -67,7 +67,7 @@ export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
       ...(provider ? { provider } : {}),
     }
     let v = await graph.storage.tx((tx) =>
-      decide(o, builder, tx, clock(), false)
+      decide(o, builder, tx, clock(), false, true)
     )
     if (!v) {
       throw new CallError(

@@ -17,6 +17,7 @@ import type { Vocab } from '@yaks/vocab'
 import { BODY, DOC } from '@yaks/doc'
 import { link } from '@yaks/edge'
 import { content } from '@yaks/kernel'
+import { statusOf } from '@yaks/session'
 import { next } from '@yaks/wake'
 import { type Input, key } from './key.ts'
 
@@ -173,7 +174,7 @@ export let build = (
   p: Plan,
   o: Open,
   at: string = clock(),
-  prior: string | null = null,
+  prior: Comp | undefined = undefined,
 ): Bundle[] => {
   let d = o.desk
   let eid = o.eid ?? uuid
@@ -204,7 +205,12 @@ export let build = (
         inputs: p.inputs.map((b) => b.entity.eid),
         prompt: words(p),
       },
-      $was: { [BUILD]: { key: token(prior) } },
+      $was: {
+        [BUILD]: {
+          key: token(prior?.key),
+          session: token(prior?.session),
+        },
+      },
     },
     ...(floor ? [{ entity: { eid: p.builder }, [BUILDER]: { floor } }] : []),
   ]
@@ -217,6 +223,7 @@ export let decide = (
   tx: Tx,
   at: string,
   scheduled = true,
+  retryFailed = false,
 ): Verdict | undefined | Promise<Verdict | undefined> =>
   then(tx.get([eid]), ([it]) => {
     let b = comp(it, BUILDER)
@@ -225,13 +232,16 @@ export let decide = (
       plan(o, it, tx),
       (p) =>
         !p ? undefined : then(tx.get([p.run]), ([have]) => {
-          if (have?.[TOMBSTONE] || str(comp(have, BUILD), 'key') == p.key) {
-            return { plan: p }
-          }
-          return {
-            plan: p,
-            build: build(p, o, at, str(comp(have, BUILD), 'key') || null),
-          }
+          if (have?.[TOMBSTONE]) return { plan: p }
+          let prior = comp(have, BUILD)
+          let session = str(prior, 'session')
+          let same = str(prior, 'key') == p.key
+          if (!same) return { plan: p, build: build(p, o, at, prior) }
+          if (!session || !retryFailed) return { plan: p }
+          return then(tx.read(`.entry.session=${session}&*`), (entries) =>
+            statusOf(entries) == 'failed'
+              ? { plan: p, build: build(p, o, at, prior) }
+              : { plan: p })
         }),
     )
   })

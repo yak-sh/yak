@@ -165,6 +165,26 @@ Deno.test('the same key opens nothing, and a changed input changes the run key',
   assertNotEquals(comp(await one(g, run(ids.builder)), 'build')?.key, before)
 })
 
+Deno.test('a failed session can be retried under the same key', async () => {
+  let { g } = await building()
+  await g.apply([writeup()])
+  let before = comp(await one(g, run(ids.builder)), 'build')
+  await g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: before?.session, seq: 2 },
+    error: { code: 'limit' },
+    content: { body: 'The provider refused the request.' },
+  }])
+  assertEquals(await sessions(g), 1)
+  await demand(g, { builder: ids.builder })
+  let after = comp(await one(g, run(ids.builder)), 'build')
+  assertEquals(after?.key, before?.key)
+  assertNotEquals(after?.session, before?.session)
+  assertEquals(await sessions(g), 2)
+  await demand(g, { builder: ids.builder })
+  assertEquals(await sessions(g), 2)
+})
+
 Deno.test('artifact builders cite one description and rebuild only its output', async () => {
   let { g, failed } = await shop({
     desk: scribe,
