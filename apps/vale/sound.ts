@@ -7,12 +7,11 @@
 // at a node; or nowhere, straight to the ears, for what is only the player's
 // own news: the arpeggio of a level and the chime of a quest. The hearth
 // crackles and the water laps as sounds the level keeps making (`keep`), and
-// a marsh's frogs call now and then. A voice from another player will be one
-// more kept sound: a MediaStreamAudioSourceNode made from their stream and
-// kept at their hero's eid follows them as their footsteps do.
+// a marsh's frogs call now and then. A voice from another player is a kept
+// MediaStreamAudioSourceNode at their hero's eid and follows them.
 //
 // Silent until the player first touches a key or the screen, as browsers
-// require, and silent for good once muted.
+// require, and while muted.
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
 import {
@@ -24,6 +23,7 @@ import {
   NEAR,
   QUIET,
 } from './ears.ts'
+import { bus, fireLevel } from './bus.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import { music } from './music.ts'
 import type { Frame, Vec3 } from './play.ts'
@@ -43,6 +43,7 @@ export type Keep = (ctx: AudioContext, into: AudioNode) => () => void
 // its falloff has up close: `until` it has sounded its last; `fixed` at a
 // point, or following what its id names; `end` stops the sound kept there.
 type Source = {
+  id: string
   pan: PannerNode
   into: AudioNode
   until: number
@@ -66,13 +67,22 @@ let LOOP = {
 let FROG = { every: 7, within: 5 }
 
 let ctx: AudioContext | null = null
-// The last stop before the speakers: every source plays into it.
+// The last stop before the speakers: all three buses play into it.
 let out: AudioNode | null = null
+let levels = {
+  music: bus('music', 0.7),
+  effects: bus('effects', 1),
+  voice: bus('voice', 1),
+}
+type Channel = 'effects' | 'voice'
+let destination: Record<Channel, AudioNode | null> = {
+  effects: null,
+  voice: null,
+}
+let sourceKey = (id: string, channel: Channel) => `${channel}/${id}`
 let loops: Record<keyof typeof LOOP, AudioBuffer> | null = null
 let fireGains = new Set<GainNode>()
 let voiceDucking = false
-/** Relative fire level while speech is actually present. */
-export let fireLevel = (voice: boolean) => voice ? 0.22 : 1
 let muted = false
 try {
   muted = localStorage.getItem('mossvale.quiet') == '1'
@@ -102,6 +112,8 @@ let wake = () => {
     })
     limit.connect(ctx.destination)
     out = limit
+    destination.effects = levels.effects.into(ctx, limit)
+    destination.voice = levels.voice.into(ctx, limit)
     speakers = ctx.destination
     loops = {
       fire: voices.fire(ctx),
@@ -109,7 +121,7 @@ let wake = () => {
       surf: voices.surf(ctx),
       marsh: voices.marsh(ctx),
     }
-    music.start(ctx, out)
+    music.start(ctx, levels.music.into(ctx, limit))
   } catch {
     ctx = null
   }
@@ -155,13 +167,14 @@ let panner = (
   at: Vec3,
   fixed: boolean,
   falloff: Falloff = FALLOFF,
+  channel: Channel = 'effects',
 ) => {
   let pan = new PannerNode(ctx!, falloff.pan)
   let into = new GainNode(ctx!, { gain: falloff.near })
   move(pan, at)
-  into.connect(pan).connect(out!)
-  let s: Source = { pan, into, until: 0, fixed }
-  sources.set(id, s)
+  into.connect(pan).connect(destination[channel]!)
+  let s: Source = { id, pan, into, until: 0, fixed }
+  sources.set(sourceKey(id, channel), s)
   return s
 }
 
@@ -169,11 +182,12 @@ let panner = (
  * too faint to hear. */
 let make = (from: From, v: Voice) => {
   if (!ctx || !out || muted) return
-  if (from == null) return v.play(out)
+  if (from == null) return v.play(destination.effects!)
   let id = typeof from == 'string' ? from : `@${points++}`
   let at = typeof from == 'string' ? spots.get(from) : from
   if (!at || (ears && hear(ears, at).gain * v.loud < QUIET)) return
-  let s = sources.get(id) ?? panner(id, at, typeof from != 'string')
+  let s = sources.get(sourceKey(id, 'effects')) ??
+    panner(id, at, typeof from != 'string')
   s.until = Math.max(s.until, ctx.currentTime + v.dur + TAIL)
   v.play(s.into)
 }
@@ -188,10 +202,16 @@ let end = (s: Source) => {
 /** Keep a sound going at `id`, where the frames put it, falling away as
  * `falloff` says, until it is let go by what this returns, or what it is at
  * is gone. */
-let keep = (id: string, sound: Keep, falloff: Falloff = FALLOFF) => {
+let keep = (
+  id: string,
+  sound: Keep,
+  falloff: Falloff = FALLOFF,
+  channel: Channel = 'effects',
+) => {
   let at = spots.get(id)
   if (!ctx || !at) return () => {}
-  let s = sources.get(id) ?? panner(id, at, false, falloff)
+  let s = sources.get(sourceKey(id, channel)) ??
+    panner(id, at, false, falloff, channel)
   if (s.end) end(s)
   let stop = sound(ctx, s.into)
   s.end = stop
@@ -257,7 +277,19 @@ export let sound = {
   get muted() {
     return muted
   },
-  music,
+  music: {
+    get level() {
+      return levels.music.level
+    },
+    set: levels.music.set,
+    get muted() {
+      return music.muted
+    },
+    toggle: music.toggle,
+    duck: music.duck,
+  },
+  effects: levels.effects,
+  voice: levels.voice,
   /** Quiet the fire under audible speech; never attenuate the speaker. */
   duckVoice: (speaking: boolean) => {
     if (voiceDucking == speaking) return
@@ -301,17 +333,17 @@ export let sound = {
     let around = ambience(v, ears.at)
     for (let a of around) spots.set(a.id, a.at)
     let t = ctx.currentTime
-    for (let [id, s] of sources) {
-      let at = s.fixed ? undefined : spots.get(id)
+    for (let [key, s] of sources) {
+      let at = s.fixed ? undefined : spots.get(s.id)
       if (at) move(s.pan, at)
       else if (s.end) end(s)
       if (t > s.until) {
         s.pan.disconnect()
-        sources.delete(id)
+        sources.delete(key)
       }
     }
     for (let a of around) {
-      if (!sources.get(a.id)?.end) {
+      if (!sources.get(sourceKey(a.id, 'effects'))?.end) {
         keep(a.id, loop(a.kind), LOOP[a.kind].falloff)
       }
     }

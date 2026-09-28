@@ -7,13 +7,10 @@ import type { Vec3 } from './play.ts'
 let LOUD = 0.28
 let QUIET = 8
 let FADE = 0.7
-let level = 0.7
 let muted = false
 try {
-  level = Number(localStorage.getItem('mossvale.music.level') ?? 0.7)
   muted = localStorage.getItem('mossvale.music.muted') == '1'
 } catch { /* A page without storage keeps its setting for this visit. */ }
-level = Number.isFinite(level) ? Math.max(0, Math.min(1, level)) : 0.7
 
 type Land = {
   id: string
@@ -116,24 +113,14 @@ let update = (pos: Vec3) => {
   if (TRACKS[b.b] && 1 - b.t > 0.002) heard.set(b.b, 1 - b.t)
   for (let [id, share] of heard) {
     let land = enter(id)
-    fade(land, LOUD * (muted ? 0 : level) * (ducked ? 0.35 : 1) * share)
+    fade(land, (muted ? 0 : LOUD) * (ducked ? 0.35 : 1) * share)
   }
   for (let [id, land] of lands) if (!heard.has(id)) leave(land)
 }
 
 export let music = {
-  get level() {
-    return level
-  },
   get muted() {
     return muted
-  },
-  set: (value: number) => {
-    level = Math.max(0, Math.min(1, value))
-    try {
-      localStorage.setItem('mossvale.music.level', String(level))
-    } catch { /* A page without storage keeps its setting for this visit. */ }
-    if (at) update(at)
   },
   toggle: () => {
     muted = !muted

@@ -8,15 +8,17 @@ import { type Action, keysOf } from './input.ts'
 import { cap, type Panel } from './panel.ts'
 
 /** What the menu sets, and how it reads what is set. */
+type Level = { readonly level: number; set: (value: number) => void }
+
 export type Settings = {
   muted: () => boolean
   mute: () => void
-  music: {
-    readonly level: number
+  music: Level & {
     readonly muted: boolean
-    set: (value: number) => void
     toggle: () => void
   }
+  effects: Level
+  voice: Level
   follows: () => boolean
   follow: () => void
   swapped: () => boolean
@@ -50,6 +52,7 @@ let keys = (swapped: boolean, strafes: boolean) =>
     [kbd(['A', 'D', '←', '→']), strafes ? 'Strafe' : 'Turn'],
     [swapped ? 'right drag' : 'left drag', 'Steer the camera while moving'],
     [swapped ? 'left drag' : 'right drag', 'Look without turning your hero'],
+    ['left + right mouse buttons', 'Walk forward; move the mouse to steer'],
     [`wheel`, 'Nearer or further'],
     ...DOES.map(([a, what]) => [kbd(keysOf(a).map(cap)), what]),
     [kbd(['Enter']), 'Chat'],
@@ -71,6 +74,7 @@ let TOUCH = [
 /** The menu, answering `o`. */
 export let menu = (panel: Panel, o: Settings) => {
   let was = ''
+  let volumes = { music: o.music, effects: o.effects, voice: o.voice }
   panel.body.addEventListener('click', (e) => {
     let act = e.target instanceof Element
       ? e.target.closest<HTMLElement>('[data-do]')?.dataset.do
@@ -88,18 +92,32 @@ export let menu = (panel: Panel, o: Settings) => {
     }
   })
   panel.body.addEventListener('input', (e) => {
-    if (
-      !(e.target instanceof HTMLInputElement) ||
-      e.target.dataset.do != 'volume'
-    ) return
-    o.music.set(Number(e.target.value) / 100)
-    let value = panel.body.querySelector('.Menu_VolumeValue')
+    if (!(e.target instanceof HTMLInputElement)) return
+    let name = e.target.dataset.volume
+    let level = name == 'music'
+      ? volumes.music
+      : name == 'effects'
+      ? volumes.effects
+      : name == 'voice'
+      ? volumes.voice
+      : null
+    if (!level) return
+    level.set(Number(e.target.value) / 100)
+    let value = e.target.parentElement?.querySelector('output')
     if (value) value.textContent = `${e.target.value}%`
   })
   let toggle = (act: string, on: boolean, icon: string, what: string) =>
     `<button class="Menu_Set${
       on ? ' Menu_Set-on' : ''
     }" data-do=${act} aria-pressed=${on}>${icon}<span>${what}</span></button>`
+  let slider = (name: keyof typeof volumes, label: string) => {
+    let value = Math.round(volumes[name].level * 100)
+    return `<div class=Menu_Volume>` +
+      `<label for=Menu_${name}>${label}</label>` +
+      `<output for=Menu_${name}>${value}%</output>` +
+      `<input id=Menu_${name} type=range data-volume=${name} ` +
+      `min=0 max=100 value=${value}></div>`
+  }
   return {
     /** show what is set, when the menu is open and it changed */
     show: () => {
@@ -110,7 +128,6 @@ export let menu = (panel: Panel, o: Settings) => {
       let key = `${sound} ${playing} ${follows} ${swapped} ${strafes}`
       if (key == was) return
       was = key
-      let volume = Math.round(o.music.level * 100)
       let html = `<div class=Menu>` +
         toggle(
           'sound',
@@ -124,10 +141,9 @@ export let menu = (panel: Panel, o: Settings) => {
           glyph(playing ? 'sound' : 'soundOff'),
           playing ? 'Music is on' : 'Music is off',
         ) +
-        `<label class=Menu_Volume>Music volume ` +
-        `<output class=Menu_VolumeValue>${volume}%</output>` +
-        `<input type=range data-do=volume min=0 max=100 value=${volume} ` +
-        `aria-label="Music volume"></label>` +
+        slider('music', 'Music volume') +
+        slider('effects', 'Effects and ambience volume') +
+        slider('voice', 'Player voice volume') +
         toggle(
           'follow',
           follows,

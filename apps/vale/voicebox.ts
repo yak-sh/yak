@@ -203,25 +203,30 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
   // (they left the level) or this page does.
   let keep = (eid: string, v: Voice) => {
     let stream = v.heard!.stream
-    v.let = sound.keep(eid, (ctx, into) => {
-      let src = ctx.createMediaStreamSource(stream)
-      let gain = ctx.createGain()
-      gain.gain.value = 0
-      let analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      src.connect(analyser).connect(gain).connect(into)
-      v.analyser = analyser
-      v.gain = gain
-      return () => {
-        gain.gain.setTargetAtTime(0, ctx.currentTime, 0.1)
-        setTimeout(() => src.disconnect(), 500)
-        if (v.gain == gain) {
-          v.gain = null
-          v.analyser = null
+    v.let = sound.keep(
+      eid,
+      (ctx, into) => {
+        let src = ctx.createMediaStreamSource(stream)
+        let gain = ctx.createGain()
+        gain.gain.value = 0
+        let analyser = ctx.createAnalyser()
+        analyser.fftSize = 256
+        src.connect(analyser).connect(gain).connect(into)
+        v.analyser = analyser
+        v.gain = gain
+        return () => {
+          gain.gain.setTargetAtTime(0, ctx.currentTime, 0.1)
+          setTimeout(() => src.disconnect(), 500)
+          if (v.gain == gain) {
+            v.gain = null
+            v.analyser = null
+          }
+          analyser.disconnect()
         }
-        analyser.disconnect()
-      }
-    }, TALK)
+      },
+      TALK,
+      'voice',
+    )
   }
 
   return {
@@ -414,10 +419,11 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
           )
         }
       }
-      let speaking = [...held.values()].some((v) =>
-        v.analyser && (v.gain?.gain.value ?? 0) > 0.02 &&
-        voiceMeter(v.analyser).talking
-      )
+      let speaking = sound.voice.level > 0 &&
+        [...held.values()].some((v) =>
+          v.analyser && (v.gain?.gain.value ?? 0) > 0.02 &&
+          voiceMeter(v.analyser).talking
+        )
       sound.duckVoice(speaking)
       sound.music.duck(speaking || mic == 'on')
     },

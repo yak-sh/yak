@@ -237,6 +237,8 @@ let settings = menu(h.panels.menu, {
   muted: () => sound.muted,
   mute: () => sound.toggle(),
   music: sound.music,
+  effects: sound.effects,
+  voice: sound.voice,
   follows: () => cam.follow,
   follow: () => hands.press('follow'),
   swapped: hands.swapped,
