@@ -11,7 +11,7 @@
 // A guest reads what villagers say and is not heard by them: only a person
 // signed in speaks (chat.ts).
 import type { Watch } from '@yaks/client'
-import type { Line } from './chat.ts'
+import { EARSHOT, type Line } from './chat.ts'
 import type { Deals } from './deals.ts'
 import { type Bundle, comp, type Me, type Net, num, str } from './net.ts'
 import type { Frame } from './play.ts'
@@ -29,6 +29,7 @@ import {
   goings,
   hears,
   looks,
+  named,
   persona,
   said,
   where,
@@ -42,6 +43,36 @@ let LATELY = 60 * 60_000
 let HEARD = 60
 
 export type Village = ReturnType<typeof village>
+
+/** Only E engagement or a nearby name mention chooses a listener. The nearest
+ * named villager hears an open mention when several names were said.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { listener } from './village.ts'
+ * let nearby = [
+ *   { id: 'bob', name: 'Bob the farmer', near: 9 },
+ *   { id: 'wren', name: 'Elder Wren', near: 4 },
+ *   { id: 'pip', name: 'Pip', near: 30 },
+ * ]
+ * assertEquals(listener(null, nearby, 'farm'), null)
+ * assertEquals(listener(null, nearby, "Bob's farm"), { id: 'bob', heard: 'mentioned' })
+ * assertEquals(listener(null, nearby, 'Bob and Wren'), { id: 'wren', heard: 'mentioned' })
+ * assertEquals(listener(null, nearby, 'Pip'), null)
+ * assertEquals(listener('bob', nearby, 'hello'), { id: 'bob', heard: 'addressed' })
+ * ```
+ */
+export let listener = (
+  engaged: string | null,
+  nearby: { id: string; name: string; near: number }[],
+  words: string,
+): { id: string; heard: 'addressed' | 'mentioned' } | null => {
+  if (engaged) return { id: engaged, heard: 'addressed' }
+  let mentioned =
+    nearby.filter((v) => v.near <= EARSHOT && named(v.name, words))
+      .sort((a, b) => a.near - b.near)[0]
+  return mentioned ? { id: mentioned.id, heard: 'mentioned' } : null
+}
 
 /** The villagers of whatever level the hero is in, over the store; `deal`
  * says what one holds free to give, and what deals stand with the hero. */
@@ -97,6 +128,7 @@ export let village = (net: Net, deal: Deals) => {
 
   let me: Me | null = null
   let last: Frame | null = null
+  let engaged: string | null = null
   let asked = new Set<string>()
   let held = (id: string) =>
     !!rows?.value.some((b) => b.entity.eid == eidOf(id))
@@ -124,6 +156,7 @@ export let village = (net: Net, deal: Deals) => {
      * villagers the store does not hold yet */
     tick: (f: Frame) => {
       last = f
+      if (engaged && f.talk?.id != engaged) engaged = null
       if (f.level != level) follow(f.level)
       if (!net.hero || !me?.writes) return
       let tool = think?.value[0]?.entity.eid
@@ -135,23 +168,36 @@ export let village = (net: Net, deal: Deals) => {
       // Another page adding the same row first refuses this one.
       if (missing.length) write(missing.map((g) => born(g, tool)))
     },
-    /** the name of the villager a line said now would be said to */
+    /** E starts a conversation; being nearby alone never does. */
+    engage: (id: string) => {
+      engaged = last?.talk?.id == id ? id : null
+    },
+    leave: () => {
+      engaged = null
+    },
     near: (): string | null => {
-      let g = last?.talk
+      let g = engaged && byId.get(engaged)
       return g && held(g.id) && me?.person ? g.name : null
     },
-    /** the rest of a line said now, when it is said beside a villager: the
-     * entry of their transcript that asks them to answer */
+    /** Address the engaged villager, or a nearby villager whose actual name
+     * was said aloud. No listener means no model call. */
     to: (words: string): Record<string, unknown> | null => {
       let f = last
-      let g = f?.talk && byId.get(f.talk.id)
-      if (!f || !g || !held(g.id) || !me?.person) return null
+      if (!f || !me?.person) return null
+      let heard = listener(
+        engaged && f.talk?.id == engaged ? engaged : null,
+        f.givers,
+        words,
+      )
+      let g = heard && byId.get(heard.id)
+      if (!g || !held(g.id)) return null
       let has = wares(g.level), bag = new Map<string, number>()
       for (let h of f.sheet.bag) {
         if (has.has(h.kind)) bag.set(h.kind, (bag.get(h.kind) ?? 0) + h.n)
       }
       let instructions = persona(g, {
         hero: { eid: net.hero ?? '', name: f.sheet.name, lvl: f.sheet.lvl },
+        heard: heard!.heard,
         holds: deal.holds(g.id),
         bag,
         dealt: deal.standing(f.sheet, g.id).map((v) => ({

@@ -678,6 +678,7 @@ let talkTo = () => {
   if (last && deal.standing(last.sheet, giver.id).length) {
     dealt.open(giver.id, giver.name)
   }
+  folk.engage(giver.id)
   h.talk(
     {
       quest: next?.quest ?? null,
@@ -706,6 +707,7 @@ let talkTo = () => {
       sound.quest()
     },
   )
+  chat.converse()
 }
 
 let last: Frame | null = null
@@ -833,6 +835,7 @@ let loop = (t: number) => {
       for (let e of job.events) worked(e)
       if (i.talk && f.talk && !job.bench) talkTo()
       if (h.talking && !f.talk) h.talk(null, () => {}, () => {})
+      if (!h.talking) folk.leave()
       if (f.body.gait == 'run' && Math.random() < 0.35) {
         dust.emit(
           new THREE.Vector3(f.body.x, f.body.y + 0.05, f.body.z),

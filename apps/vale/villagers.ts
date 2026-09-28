@@ -1,6 +1,6 @@
 // The people of the vale as minds of their own. Each quest-giver (quests.ts
 // GIVERS) is a transcript in the app's store (models.md): a hero talks to one
-// by speaking near them, a neighbour's news reaches them as a line they
+// by opening a conversation or mentioning their name nearby; a neighbour's news reaches them as a line they
 // heard, and every few minutes, while a hero is in their land, they decide
 // how to spend the next while. These are the pure parts: the row a villager
 // is born as, what a turn is told, what came back, and where a villager
@@ -98,6 +98,45 @@ export let born = (g: Giver, think: string) => ({
 })
 
 /** A hero's line as a villager hears it: who said it, then what. */
+/** Meaningful components of a villager's name, not their title or job.
+ * A possessive ("Bob's") counts, but a substring ("bobcat") does not.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { named } from './villagers.ts'
+ * assertEquals(named('Bob the farmer', "Bob's farm is so cool"), true)
+ * assertEquals(named('Bob the farmer', 'farm'), false)
+ * assertEquals(named('Rowan the smith', 'The smith is here'), false)
+ * assertEquals(named('Elder Wren', 'WREN?'), true)
+ * assertEquals(named('Elder Wren', 'the elder'), false)
+ * assertEquals(named('Reeve Alder', 'the reeve'), false)
+ * assertEquals(named('Old Gorm the stonecaller', 'old stonecaller'), false)
+ * assertEquals(named('Marigold Furrow', 'Furrow is here'), true)
+ * assertEquals(named('Pip', 'Pippin is here'), false)
+ * ```
+ */
+export let named = (name: string, words: string): boolean => {
+  let tokens = (
+    s: string,
+  ) => [...(s.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])]
+  let names = tokens(name)
+  let end = names.findIndex((n) => n == 'the' || n == 'of')
+  if (end >= 0) names = names.slice(0, end)
+  let titles = new Set([
+    'elder',
+    'old',
+    'reeve',
+    'warden',
+    'brother',
+    'sir',
+    'keeper',
+    'harbourmaster',
+    'skipper',
+    'capwife',
+  ])
+  return names.some((n) => !titles.has(n) && tokens(words).includes(n))
+}
+
 export let said = (hero: string, words: string) => `${hero}: ${words}`
 
 /** A line a villager hears without answering it: news of a quest handed in,
@@ -132,6 +171,8 @@ export type Posted = {
 /** What a villager knows, beyond who they are, when a hero speaks to them. */
 export type Facts = {
   hero: { eid: string; name: string; lvl: number }
+  /** how this hero’s words reached the villager */
+  heard?: 'addressed' | 'mentioned'
   /** what they hold free to give, by kind (stock.ts `ledger`) */
   holds: Map<string, number>
   /** what the hero carries that the land has, by kind */
@@ -260,6 +301,12 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * assertStringIncludes(told, `Pip (${eidOf('pip')})`)
  * assertStringIncludes(told, 'Tansy felled 3 Moss slimes')
  * assertStringIncludes(told, 'Bramble (id h1)')
+ * assertStringIncludes(told, 'talking directly to you')
+ * assertStringIncludes(persona(wren, {
+ *   hero: { eid: 'h1', name: 'Bramble', lvl: 2 }, holds: new Map(),
+ *   bag: new Map(), dealt: [], quests: [], deeds: [], here: [],
+ *   heard: 'mentioned',
+ * }), 'did not address you')
  * assertStringIncludes(told, 'What you hold: 18 coin.')
  * assertStringIncludes(told, 'Bramble carries: 3 Boar tusk (tusk, 5 coin each)')
  * assertStringIncludes(told, 'Old Thornback (thornback) 93')
@@ -287,8 +334,11 @@ export let persona = (g: Giver, f: Facts): string => {
     'beginning "News:" is something a neighbour told you.',
     ...f.mood ? [MOODS[f.mood].told] : [],
     ...f.goings?.self ? [f.goings.self] : [],
-    `${f.hero.name} (id ${f.hero.eid}), a hero of level ${f.hero.lvl}, is ` +
-    'talking to you.',
+    `${f.hero.name} (id ${f.hero.eid}), a hero of level ${f.hero.lvl}, ` +
+    (f.heard == 'mentioned'
+      ? 'was speaking out loud to others nearby. You overheard your name in their conversation; they did not address you. If you reply, respond naturally to the mention, not as if they asked you a question.'
+      : 'pressed E to start a conversation with you and is talking directly to you.'),
+    'Your reply is spoken out loud in open chat; every nearby player can hear it.',
     `What you hold: ${kept || 'nothing to spare'}.`,
     ...own ? [`Your own things, dear to you: ${own}.`] : [],
     `${land} has ${landOf(g.level)}.`,

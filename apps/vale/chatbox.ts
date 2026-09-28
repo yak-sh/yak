@@ -12,7 +12,7 @@
 // a line it shows here at once, marked as waiting, and floats over the
 // speaker's own head.
 //
-// A line said beside a villager is said to them too (village.ts): the same
+// A line addressed to a villager, or mentioning one nearby (village.ts), uses the same
 // row asks them to answer, and what they answer floats over their head and
 // joins the log like anybody's line.
 import type { Watch } from '@yaks/client'
@@ -203,7 +203,9 @@ export let chatbox = (
     e.preventDefault()
     let text = clean(input.value)
     input.value = ''
-    hide()
+    // E conversations stay open for another line; open chat outside one
+    // returns to its compact log after sending.
+    if (!folk.near()) hide()
     let hero = net.hero
     if (!text || !hero || !level || !speaks()) return
     outbox.push({
@@ -278,6 +280,8 @@ export let chatbox = (
   }
 
   return {
+    /** E opens chat focused on the villager, while replies remain public. */
+    converse: () => show(),
     /** the keyboard is the chat's while a line is being written */
     get typing() {
       return open
@@ -322,7 +326,9 @@ export let chatbox = (
         now,
       )
       let to = folk.near()
-      let hint = to ? `Say something to ${to}…` : 'Say something…'
+      let hint = to
+        ? `Say something to ${to} (everyone hears)…`
+        : 'Say something…'
       if (input.placeholder != hint) input.placeholder = hint
       let near = new Set([
         hero,
