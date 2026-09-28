@@ -181,8 +181,9 @@ export let shore = (v: Vale, [x, , z]: Vec3): Vec3 | null => {
   return null
 }
 
-// How far off a fire is heard at all, in metres.
-let HEARD = 90
+// The village fire dies out beyond the buildings (their centres sit 13–28 m
+// from the hearth). Keep the source only while its quiet tail can be heard.
+let HEARD = 30
 
 /** The sounds the world keeps making, by an id of their own, and where each
  * is heard from by ears at `ear`: the nearest village's fire, and the water

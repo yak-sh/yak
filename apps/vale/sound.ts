@@ -53,10 +53,10 @@ type Source = {
 // How long a source is kept after its last sound: HRTF rings a moment.
 let TAIL = 0.5
 // How loud each sound a level keeps making is at its source, and how it
-// falls away (ears.ts): the fire as the vale's sounds do, and water fast, so
-// it is heard at its edge and not across the level.
+// falls away (ears.ts): fire and water fade quickly, so neither carries
+// across the buildings around a village hearth.
 let LOOP = {
-  fire: { loud: 0.45, falloff: FALLOFF },
+  fire: { loud: 0.45, falloff: NEAR },
   water: { loud: 0.12, falloff: NEAR },
   surf: { loud: 0.12, falloff: NEAR },
   marsh: { loud: 0.15, falloff: NEAR },
