@@ -162,6 +162,7 @@ socket.send(
 ```text
 → { subscribe: "<query>" | true, id: "<id>" }
 → { subscribe: "<query>" | true, id: "<id>", acks: true }
+→ { subscribe: "<query>" | true, id: "<id>", acks: true, frames: true }
 → { ack: "<token>" }
 → { unsubscribe: "<id>" }
 → { relay: Bundle[] }
@@ -170,6 +171,7 @@ socket.send(
 ← { id, relay: Bundle[] }
 ← { id, transient: TransientFrame[] }
 ← { id, refused: { error, message, … } }
+← { frames: [{ id, … }, …], ack: "<token>" }
 ```
 
 Peer relays wait up to 16 ms so movements arriving together share a frame.
@@ -177,11 +179,14 @@ Waiting relays keep the newest property values, with a clear retained before a
 later partial value. A membership or durable-data frame sends preceding relays
 first, then goes out without waiting for the relay timer. With `acks: true`,
 durable and membership frames carry an `ack` token and wait for its return.
-Peer-only frames carry no token or replay state. On reconnect, clients resend
-the peer values they are saying and reopen their subscriptions. The server
-admits peer relays at the component's declared pace, caps unpaced traffic, and
-closes connections that keep flooding. A rejected update leaves the last
-accepted value in place until it clears or the connection closes.
+`frames: true` opts into ordered groups of adjacent non-peer frames with one
+outer `ack` token. The client acknowledges a group after applying every frame.
+Without that opt-in, each frame keeps its original single-frame shape. Peer-only
+frames carry no token or replay state. On reconnect, clients resend the peer
+values they are saying and reopen their subscriptions. The server admits peer
+relays at the component's declared pace, caps unpaced traffic, and closes
+connections that keep flooding. A rejected update leaves the last accepted value
+in place until it clears or the connection closes.
 
 Query updates contain current bundles for matching entities and `gone` IDs for
 entities that were deleted or stopped matching. A refreshed query can return its

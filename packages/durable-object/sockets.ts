@@ -20,6 +20,7 @@
 
 import {
   type Ask,
+  type Frame,
   json,
   queue,
   receive,
@@ -92,6 +93,7 @@ type Held = {
   subref?: string
   relay?: string[]
   acks?: boolean
+  frames?: boolean
   owed?: string
   seen?: string[]
 }
@@ -139,6 +141,15 @@ let delivery = (
   ws.serializeAttachment(next)
 }
 
+let snapshots = (
+  frames: Frame[],
+) => [
+  ...new Set(
+    frames.filter((frame) => frame.transientReset !== undefined || frame.reset)
+      .map((frame) => frame.id),
+  ),
+]
+
 let relayOf = (ws: Wire): string[] => {
   let held = ws.deserializeAttachment() as Held | null
   let keys = held && typeof held == 'object' ? held.relay : undefined
@@ -160,7 +171,9 @@ let remember = (ws: Wire, keys: string[], subs: Record<string, Ask>) => {
 // `receive` rejects it.
 let asked = (
   data: unknown,
-): { id: string; ask?: Ask; acks?: boolean; ack?: string } | null => {
+):
+  | { id: string; ask?: Ask; acks?: boolean; frames?: boolean; ack?: string }
+  | null => {
   try {
     let msg = JSON.parse(String(data))
     if (typeof msg?.ack == 'string') return { id: '', ack: msg.ack }
@@ -169,6 +182,7 @@ let asked = (
         id: msg?.id == null ? '' : String(msg.id),
         ask: msg.subscribe,
         acks: msg.acks === true,
+        frames: msg.acks === true && msg.frames === true,
       }
     }
     if (msg?.unsubscribe != null) return { id: String(msg.unsubscribe) }
@@ -212,7 +226,12 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
   }
   // Keep the small map on the socket. Once it exceeds the attachment's
   // allowance, keep only its key there and store the queries on this object.
-  let hold = (ws: Wire, nextSubs: Record<string, Ask>, acks = false) => {
+  let hold = (
+    ws: Wire,
+    nextSubs: Record<string, Ask>,
+    acks = false,
+    frames = false,
+  ) => {
     let held = ws.deserializeAttachment() as Held | null
     let was = held && typeof held == 'object' ? held : {}
     let next = {
@@ -220,6 +239,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       subs: nextSubs,
       subref: undefined,
       ...(acks ? { acks: true } : {}),
+      ...(frames ? { frames: true } : {}),
       seen: was.seen?.filter((id) => id in nextSubs),
     }
     if (fits(next)) {
@@ -264,10 +284,16 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     }
     let fresh = queue(ws, undefined, undefined, {
       owed: held?.owed,
-      sent: (frame, token) => {
-        if (frame.transientReset !== undefined || frame.reset) {
-          seen.add(frame.id)
-        } else seen.clear()
+      fits: (frames) => {
+        let held = ws.deserializeAttachment() as Held | null
+        return fits(
+          { ...held, owed: '0'.repeat(36), seen: snapshots(frames) },
+          asks(ws),
+        )
+      },
+      sent: (frames, token) => {
+        if ((ws.deserializeAttachment() as Held | null)?.frames) seen.clear()
+        for (let id of snapshots(frames)) seen.add(id)
         delivery(ws, token, [...seen], asks(ws))
       },
       acked: (owed) => {
@@ -295,7 +321,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
         delivery(ws, held?.owed, [...seen], asks(ws))
       },
     })
-    if (held?.acks) fresh.enable()
+    if (held?.acks) fresh.enable(held.frames)
     // The relay keys first: whatever else this socket did, the registry has to
     // know what it is saying before a close can stop saying it.
     subs.relayed(send, relayOf(ws))
@@ -335,7 +361,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       let sender = sinks.get(ws)!
       if (ask?.ack) return sender.ack(ask.ack)
       if (ask) sender.forget(ask.id)
-      if (ask?.acks) sender.enable()
+      if (ask?.acks) sender.enable(ask.frames)
       let was = subs.relaying(to).join('\n')
       if (receive(subs, to, data) == 'close') {
         drop(ws)
@@ -350,7 +376,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       let subscriptions = { ...asks(ws) }
       if (ask.ask === undefined) delete subscriptions[ask.id]
       else subscriptions[ask.id] = ask.ask
-      if (hold(ws, subscriptions, ask.acks)) return
+      if (hold(ws, subscriptions, ask.acks, ask.frames)) return
       subs.close(to, ask.id)
       to({
         id: ask.id,

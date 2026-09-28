@@ -149,7 +149,7 @@ Deno.test('a resumed socket sends peers without changing its owed durable frame'
   let [gone] = socket.taken()
   assertEquals(gone.gone, ['a'])
   assert(typeof gone.ack == 'string')
-  assertEquals(sent, [{ id: 's', gone: ['a'] }])
+  assertEquals(sent, [[{ id: 's', gone: ['a'] }]])
 })
 
 Deno.test('an ACK received during send releases the next durable frame', () => {
@@ -189,9 +189,36 @@ Deno.test('a pending membership frame stays ahead of later peer relays', () => {
   assertEquals(relay.relay, [{ entity: { eid: 'a' }, browsing: null }])
   assertEquals(relay.ack, undefined)
   assertEquals(sent, [
-    { id: 's', bundles: [{ entity: { eid: 'a' }, book: {} }] },
-    { id: 's', gone: ['a'] },
+    [{ id: 's', bundles: [{ entity: { eid: 'a' }, book: {} }] }],
+    [{ id: 's', gone: ['a'] }],
   ])
+})
+
+Deno.test('a batched subscriber lands adjacent frames under one ACK', () => {
+  let sent: Record<string, unknown>[] = []
+  let take = () => sent.splice(0, sent.length)
+  let q = queue({ send: (data) => void sent.push(JSON.parse(data)) })
+  q.enable(true)
+  q.send({ id: 's', bundles: [] })
+  let [initial] = take()
+  assertEquals(initial.frames, [{ id: 's', bundles: [] }])
+  q.send({ id: 's', gone: ['a'] })
+  q.send({ id: 't', bundles: [{ entity: { eid: 'b' } }] })
+  q.send({ id: 's', relay: [{ entity: { eid: 'a' }, pointing: { x: 1 } }] })
+  q.send({ id: 's', gone: ['b'] })
+  q.ack(String(initial.ack))
+  let [group, relay] = take()
+  assertEquals(group.frames, [
+    { id: 's', gone: ['a'] },
+    { id: 't', bundles: [{ entity: { eid: 'b' } }] },
+  ])
+  assertEquals(relay.relay, [
+    { entity: { eid: 'a' }, pointing: { x: 1 } },
+  ])
+  assertEquals(relay.ack, undefined)
+  assertEquals(sent, [])
+  q.ack(String(group.ack))
+  assertEquals(take()[0].frames, [{ id: 's', gone: ['b'] }])
 })
 
 Deno.test('peer movement remains bounded behind an unacknowledged frame', () => {
@@ -237,6 +264,7 @@ Deno.test('a subscriber opts into acknowledgements through the socket', () => {
   )
   let [first] = socket.taken()
   assert(typeof first.ack == 'string')
+  assertEquals(Object.hasOwn(first, 'frames'), false)
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 1 } }])
   assertEquals(socket.sent, [])
   socket.emit('message', JSON.stringify({ ack: first.ack }))

@@ -177,10 +177,12 @@ the socket without those checks or deletion requests.
 
 ## Reading is a subscription
 
-`subscribe(query)` sends `{"subscribe": "<query>", "id": "s1", "acks": true}`
-over `/ws`. The server sends an initial answer followed by updates; the plugin
-applies each frame to the graph, then acknowledges it so the server can send the
-next. Until the initial answer arrives, a local read can return cached or
+`subscribe(query)` sends
+`{"subscribe": "<query>", "id": "s1", "acks": true,
+"frames": true}` over `/ws`.
+The server sends an initial answer followed by updates; the plugin applies each
+frame to the graph in order, then acknowledges its packet so the server can send
+the next. Until the initial answer arrives, a local read can return cached or
 incomplete data.
 
 `subscribe(true)` requests the raw stream of committed patches instead of a

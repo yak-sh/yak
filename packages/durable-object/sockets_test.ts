@@ -17,7 +17,7 @@ import { holds } from './holds.ts'
 // A socket, faked: what it was sent, and the attachment it carries across a
 // hibernation.
 let wire = () => {
-  let sent: Frame[] = []
+  let sent: (Frame & { frames?: Frame[] })[] = []
   let held: unknown = null
   let writes = 0
   return {
@@ -163,6 +163,54 @@ Deno.test('an idle socket advances past snapshots across repeated hibernation', 
   let change = ws.sent.at(-1)!
   assertEquals(change.id, 'products')
   assertEquals((change.bundles as Bundle[])[0].entity.eid, 'p1')
+})
+
+Deno.test('a batched socket wakes without replaying snapshots already on the wire', () => {
+  let storage = store(), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let [, first] = instance(storage, ctx)
+  for (let id of ['a', 'b', 'c']) {
+    send(first, ws, {
+      subscribe: '.kind=product',
+      id,
+      acks: true,
+      frames: true,
+    })
+  }
+  let initial = ws.sent[0]
+  assertEquals(initial.frames?.map((f) => f.id), ['a'])
+  send(first, ws, { ack: initial.ack })
+  let batch = ws.sent[1]
+  assertEquals(batch.frames?.map((f) => f.id), ['b', 'c'])
+  assertEquals((ws.deserializeAttachment() as { seen: string[] }).seen, [
+    'b',
+    'c',
+  ])
+
+  let [, woken] = instance(storage, ctx)
+  woken.wake()
+  assertEquals(ws.sent.length, 2)
+  send(woken, ws, { ack: batch.ack })
+  assertEquals(ws.sent[2].frames?.map((f) => f.id), ['a'])
+  assertEquals(ws.sent[2].frames?.[0].reset, true)
+})
+
+Deno.test('a batch stops where the socket attachment cannot remember more snapshots', () => {
+  let storage = store(), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let [, live] = instance(storage, ctx)
+  for (let n = 0; n < 30; n++) {
+    let id = `${n}-${'x'.repeat(90)}`
+    send(live, ws, { subscribe: '.kind=product', id, acks: true, frames: true })
+  }
+  send(live, ws, { ack: ws.sent[0].ack })
+  let group = ws.sent[1]
+  assert((group.frames?.length ?? 0) > 1)
+  assert((group.frames?.length ?? 0) < 29)
+  assertEquals(
+    (ws.deserializeAttachment() as { seen: string[] }).seen,
+    group.frames?.map((f) => f.id),
+  )
 })
 
 Deno.test('an idle area subscriber hears a mover after hibernation', async () => {

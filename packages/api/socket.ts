@@ -46,6 +46,7 @@ export type Upgrade = (
 let OPEN = 1
 let BUFFER = 8 * 1024
 let TICK = 16
+let BATCH = 32
 let MAX_MESSAGE = 64 * 1024
 let gates = new WeakMap<Subs, WeakMap<Sink, ReturnType<typeof admission>>>()
 
@@ -69,20 +70,22 @@ export let queue = (
   ready: () => boolean = () => true,
   resume: {
     owed?: string
-    sent?: (frame: Frame, token: string) => void
+    sent?: (frames: Frame[], token: string) => void
     acked?: (owed?: string) => void
+    fits?: (frames: Frame[]) => boolean
   } = {},
 ): {
   send: Sink
   flush: () => void
   close: () => void
-  enable: () => void
+  enable: (frames?: boolean) => void
   ack: (token: string) => void
 } => {
   let waiting: Frame[] = []
   let draining = false
   let closed = false
   let enabled = false
+  let frames = false
   let owed = resume.owed
   let relays = new WeakMap<Frame, ReturnType<typeof coalescer>>()
   let schedule = () => {
@@ -103,8 +106,20 @@ export let queue = (
       if (enabled && !peerOnly(frame)) {
         let token = crypto.randomUUID()
         owed = token
-        resume.sent?.(frame, token)
-        socket.send(JSON.stringify({ ...frame, ack: token }))
+        let group = [frame]
+        if (frames) {
+          while (
+            group.length < BATCH && waiting.length &&
+            !peerOnly(waiting[0]) &&
+            (resume.fits?.([...group, waiting[0]]) ?? true)
+          ) group.push(waiting.shift()!)
+        }
+        resume.sent?.(group, token)
+        socket.send(
+          JSON.stringify(
+            frames ? { frames: group, ack: token } : { ...frame, ack: token },
+          ),
+        )
       } else {
         socket.send(JSON.stringify(frame))
       }
@@ -138,8 +153,9 @@ export let queue = (
   return {
     send,
     flush,
-    enable: () => {
+    enable: (batched = false) => {
       enabled = true
+      frames ||= batched
       flush()
     },
     ack: (token) => {
@@ -255,7 +271,7 @@ export let attach = (
     if (
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
-    ) q.enable()
+    ) q.enable(msg.frames === true)
     if (receive(subs, to, e.data, now) == 'close') {
       drop()
       socket.close?.(1008, 'relay flood')

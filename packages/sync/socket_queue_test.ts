@@ -54,7 +54,12 @@ Deno.test('a subscriber acknowledges only after landing a frame', async () => {
   })
   w.subscribe(true, 's')
   socket.emit('open')
-  assertEquals(socket.sent, [{ subscribe: true, id: 's', acks: true }])
+  assertEquals(socket.sent, [{
+    subscribe: true,
+    id: 's',
+    acks: true,
+    frames: true,
+  }])
   socket.emit('message', JSON.stringify({ id: 's', bundles: [], ack: 'token' }))
   assertEquals(socket.sent.length, 1)
   done()
@@ -126,6 +131,46 @@ Deno.test('a server without acknowledgements can send consecutive frames', () =>
     subscribe: '.recipe',
     id: 's',
     acks: true,
+    frames: true,
   }])
+  w.close()
+})
+
+Deno.test('a batched packet is applied in order before its ACK', async () => {
+  let socket = pair().client
+  let done: () => void = () => {}
+  let settled = new Promise<void>((resolve) => done = resolve)
+  let seen: string[] = []
+  let w = wire({
+    url: 'http://box.test',
+    connect: () => socket,
+    land: (frame) => {
+      seen.push(frame.id)
+      if (frame.id == 'a') return settled
+    },
+    report: (err) => {
+      throw err
+    },
+  })
+  w.subscribe(true, 'a')
+  w.subscribe(true, 'b')
+  socket.emit('open')
+  socket.emit(
+    'message',
+    JSON.stringify({
+      frames: [
+        { id: 'a', bundles: [] },
+        { id: 'b', bundles: [] },
+      ],
+      ack: 'group',
+    }),
+  )
+  assertEquals(seen, ['a'])
+  assertEquals(socket.sent.length, 2)
+  done()
+  await settled
+  await Promise.resolve()
+  assertEquals(seen, ['a', 'b'])
+  assertEquals(socket.sent.at(-1), { ack: 'group' })
   w.close()
 })

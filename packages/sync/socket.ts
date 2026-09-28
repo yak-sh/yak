@@ -254,7 +254,9 @@ export let wire = (opts: WireOpts): Wire => {
       if (said.length) s.send(JSON.stringify({ relay: said }))
       for (let [id, query] of asks) {
         resetting.add(id) // its answer will be the whole set, as it now stands
-        s.send(JSON.stringify({ subscribe: query, id, acks: true }))
+        s.send(
+          JSON.stringify({ subscribe: query, id, acks: true, frames: true }),
+        )
       }
     })
     let inbox: Frame[] = []
@@ -294,7 +296,18 @@ export let wire = (opts: WireOpts): Wire => {
     s.addEventListener('message', (e) => {
       if (socket != s || closed) return
       try {
-        inbox.push(JSON.parse(String(e.data)) as Frame)
+        let packet = JSON.parse(String(e.data)) as
+          | Frame
+          | { frames: Frame[]; ack?: string }
+        if ('frames' in packet) {
+          if (!Array.isArray(packet.frames) || !packet.frames.length) {
+            throw new SyntaxError('expected nonempty frames')
+          }
+          inbox.push(...packet.frames.map((frame, i) => ({
+            ...frame,
+            ack: i == packet.frames.length - 1 ? packet.ack : undefined,
+          })))
+        } else inbox.push(packet)
         drain()
       } catch (err) {
         opts.report(err)
@@ -321,7 +334,7 @@ export let wire = (opts: WireOpts): Wire => {
       resetting.add(key)
       opts.pending?.(key)
       open()
-      send({ subscribe: query, id: key, acks: true })
+      send({ subscribe: query, id: key, acks: true, frames: true })
       return key
     },
     unsubscribe: (id) => {
