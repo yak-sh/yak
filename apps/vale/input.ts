@@ -89,8 +89,9 @@ let TOUCH_TURN = 3
 let KEY_TURN = 6
 
 /** A/D and the arrow keys either strafe or steer the hero. Touch always
- * steers at its familiar rate; keys turn faster. The two axes are normalised
- * together so diagonals are no faster.
+ * steers at its familiar rate; keys turn faster. Both mouse buttons add
+ * camera-facing forward motion. The two axes are normalised together so
+ * diagonals are no faster.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -103,12 +104,16 @@ let KEY_TURN = 6
  * assertEquals(movement([], true, [1, 0]), {
  *   move: [1, 0], steer: { turn: 3, forward: 0 },
  * })
+ * assertEquals(movement([], false, undefined, true), {
+ *   move: [0, 1], steer: undefined,
+ * })
  * ```
  */
 export let movement = (
   held: Iterable<string>,
   strafe: boolean,
   stick?: [number, number],
+  mouseWalk = false,
 ): Pick<Intent, 'move' | 'steer'> => {
   let x = 0, y = 0
   for (let code of held) {
@@ -116,19 +121,55 @@ export let movement = (
     if (a) [x, y] = [x + a[0], y + a[1]]
   }
   if (stick) [x, y] = [x + stick[0], y + stick[1]]
+  if (mouseWalk) y++
   let len = Math.hypot(x, y)
   if (len > 1) [x, y] = [x / len, y / len]
   return {
     move: [x, y],
     steer: stick
       ? { turn: stick[0] * TOUCH_TURN, forward: stick[1] }
-      : !strafe
+      : !strafe && !mouseWalk
       ? { turn: x * KEY_TURN, forward: y }
       : undefined,
   }
 }
 
 let STICK = 56
+
+// A mouse has one pointer even while two buttons are down. Its second press
+// and first release arrive as mouse events, without a pointerdown or pointerup.
+export let mouseButtons = () => {
+  let buttons = 0, far = 0, chorded = false
+  let bit = (button: number) => button == 0 ? 1 : button == 2 ? 2 : 0
+  return {
+    down: (button: number) => {
+      let b = bit(button)
+      if (!b) return
+      if (!buttons) far = 0, chorded = false
+      buttons |= b
+      if (buttons == 3) chorded = true
+    },
+    move: (mask: number, distance: number) => {
+      if (!buttons) return
+      far += distance
+      if (mask & 3) buttons = mask & 3
+      if (buttons == 3) chorded = true
+    },
+    up: (button: number): Action | undefined => {
+      let b = bit(button)
+      if (!(buttons & b)) return
+      buttons &= ~b
+      return !chorded && far < 8 ? button == 0 ? 'strike' : 'dodge' : undefined
+    },
+    walk: () => buttons == 3,
+    chorded: () => chorded,
+    active: () => buttons != 0,
+    cancel: () => {
+      buttons = far = 0
+      chorded = false
+    },
+  }
+}
 
 /** Listen on `stage` and the window. `busy` says when the keyboard belongs
  * to something else (a name being typed); the thumbstick is drawn in
@@ -158,6 +199,7 @@ export let listen = (
     number,
     { x: number; y: number; far: number; button: number; type: string }
   >()
+  let mouse = mouseButtons()
 
   let base = document.createElement('div')
   base.className = 'Stick'
@@ -183,6 +225,11 @@ export let listen = (
   addEventListener('keyup', (e) => held.delete(e.code))
   addEventListener('blur', () => {
     held.clear()
+    pressed.clear()
+    orbit = [0, 0]
+    looked = false
+    zoom = 0
+    mouse.cancel()
     for (let id of drags.keys()) {
       if (stage.hasPointerCapture(id)) stage.releasePointerCapture(id)
     }
@@ -194,6 +241,7 @@ export let listen = (
   stage.addEventListener('contextmenu', (e) => e.preventDefault())
   stage.addEventListener('pointerdown', (e) => {
     stage.setPointerCapture(e.pointerId)
+    if (e.pointerType == 'mouse') mouse.down(e.button)
     if (e.pointerType == 'touch' && !stick && e.clientX < innerWidth * 0.45) {
       stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
       base.classList.remove('Stick-rest')
@@ -208,6 +256,14 @@ export let listen = (
       button: e.button,
       type: e.pointerType,
     })
+  })
+  stage.addEventListener('mousedown', (e) => {
+    if (mouse.active()) mouse.down(e.button)
+    if (mouse.chorded()) looked = false
+  })
+  addEventListener('mouseup', (e) => {
+    let action = mouse.up(e.button)
+    if (action) pressed.add(action)
   })
   stage.addEventListener('pointermove', (e) => {
     if (stick?.id == e.pointerId) {
@@ -224,12 +280,16 @@ export let listen = (
     let mx = e.pointerType == 'touch' ? e.clientX - d.x : e.movementX
     let my = e.pointerType == 'touch' ? e.clientY - d.y : e.movementY
     d.far += Math.hypot(mx, my)
+    if (e.pointerType == 'mouse') {
+      mouse.move(e.buttons, Math.hypot(mx, my))
+      if (mouse.chorded()) looked = false
+    }
     d.x = e.clientX
     d.y = e.clientY
     let k = e.pointerType == 'touch' ? 0.009 : 0.006
     orbit[0] -= mx * k
     orbit[1] += my * k
-    if (isLook(d.button, d.type)) looked = true
+    if (!mouse.chorded() && isLook(d.button, d.type)) looked = true
   })
   let up = (e: PointerEvent) => {
     if (stick?.id == e.pointerId) {
@@ -239,9 +299,16 @@ export let listen = (
     }
     let d = drags.get(e.pointerId)
     drags.delete(e.pointerId)
-    // A click that did not drag is a blow, or a dodge from the right
-    // button; a tap on the right of a phone is a blow too, where the thumb
-    // already is.
+    if (e.pointerType == 'mouse') {
+      if (e.type == 'pointercancel') mouse.cancel()
+      else {
+        let action = mouse.up(e.button)
+        if (action) pressed.add(action)
+      }
+      return
+    }
+    // Touch and pen use their pointer release; a tap on the right of a phone
+    // is a blow too, where the thumb already is.
     if (d && d.far < 8 && e.type == 'pointerup') {
       if (d.button == 0) pressed.add('strike')
       if (d.button == 2) pressed.add('dodge')
@@ -250,7 +317,13 @@ export let listen = (
   stage.addEventListener('pointerup', up)
   stage.addEventListener('pointercancel', up)
   stage.addEventListener('lostpointercapture', (e) => {
+    // Chrome drops capture when the second mouse button goes down.
+    if (e.pointerType == 'mouse' && mouse.active() && e.buttons & 3) {
+      stage.setPointerCapture(e.pointerId)
+      return
+    }
     drags.delete(e.pointerId)
+    if (e.pointerType == 'mouse') mouse.cancel()
     if (stick?.id == e.pointerId) {
       stick = null
       rest()
@@ -283,6 +356,7 @@ export let listen = (
         busy() ? [] : held,
         strafe,
         stick ? [stick.dx, -stick.dy] : undefined,
+        mouse.walk(),
       )
       let out: Intent = {
         ...axes,
@@ -298,8 +372,8 @@ export let listen = (
         follow: pressed.has('follow'),
         mic: pressed.has('mic'),
         orbit: [orbit[0], orbit[1]],
-        look: looked ||
-          [...drags.values()].some((d) => isLook(d.button, d.type)),
+        look: !mouse.chorded() && (looked ||
+          [...drags.values()].some((d) => isLook(d.button, d.type))),
         zoom,
       }
       pressed.clear()
