@@ -32,6 +32,7 @@ Deno.test('a reference reads back as the target eid', () => {
     { entity: { eid: 'p1' }, product: { price: 5, maker: 'm1' } },
   ])
   assertEquals(c(s.read('.kind=product')[0], 'product').maker, 'm1')
+  assertEquals(eids(s.read('.product.maker')), ['p1'])
 })
 
 Deno.test('a reference-deref path filters through the target', () => {
@@ -43,6 +44,17 @@ Deno.test('a reference-deref path filters through the target', () => {
     { entity: { eid: 'p2' }, product: { price: 6, maker: 'm2' } },
   ])
   assertEquals(eids(s.read('.product.maker.doc.title~=acme')), ['p1'])
+})
+
+Deno.test('a reverse child property presence tests the child', () => {
+  let s = store()
+  seed(s, [
+    { entity: { eid: 'p1' }, product: { price: 1 } },
+    { entity: { eid: 'p2' }, product: { price: 2 } },
+    { entity: { eid: 'r1' }, review: { product: 'p1' }, doc: { title: 'A' } },
+    { entity: { eid: 'r2' }, review: { product: 'p2' }, doc: {} },
+  ])
+  assertEquals(eids(s.read('.reviews.title')), ['p1'])
 })
 
 Deno.test('a bare-word query requires an explicitly registered extension', () => {

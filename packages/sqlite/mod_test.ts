@@ -76,6 +76,40 @@ Deno.test('indexed text predicates seek their component rows', () => {
   assert(!plan.includes('SCAN entity'), plan)
 })
 
+Deno.test('stored property presence reads its component without scanning entities', () => {
+  let vocab = loadVocab({
+    $defs: {
+      wake: {
+        component: true,
+        type: 'object',
+        properties: { while: { type: 'array', items: { type: 'string' } } },
+      },
+    },
+  })
+  let driver = mem()
+  let s = storage(driver, vocab)
+  s.install()
+  s.tx((tx) => {
+    tx.patch([
+      { entity: { eid: 'bare' } },
+      { entity: { eid: 'first' }, wake: { while: ['a'] } },
+      { entity: { eid: 'cleared' }, wake: { while: ['b'] } },
+      { entity: { eid: 'buried' }, wake: { while: ['c'] } },
+      { entity: { eid: 'last' }, wake: { while: [] } },
+    ])
+    tx.patch([{ entity: { eid: 'cleared' }, wake: { while: null } }])
+    tx.remove([{ eid: 'buried' }])
+  })
+
+  assertEquals(s.rows('.wake.while'), [{ eid: 'first' }, { eid: 'last' }])
+  let plan = driver.query({
+    t: 'explain query plan',
+    of: bind(parse('.wake.while'), vocab),
+  }).map((r) => String(r.detail)).join('\n')
+  assert(plan.includes('SCAN wake'), plan)
+  assert(!plan.includes('SCAN entity'), plan)
+})
+
 Deno.test('ddl() lists the statements install() runs', () => {
   let s = storage(mem(), shop)
   let ddl = s.ddl()

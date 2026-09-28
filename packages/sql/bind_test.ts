@@ -640,7 +640,7 @@ Deno.test('a property test says its component is present, so the planner drives 
   // `.board.query~=<id>` scanned the spine through a left join (243 ms on
   // the live graph) where the boards were 22 rows: a value test cannot hold
   // on a row without the component, and saying so lets SQLite start there.
-  let guarded = ['.priority=1', '.priority~=1', '.priority>1', '.priority']
+  let guarded = ['.priority=1', '.priority~=1', '.priority>1']
   for (let line of guarded) {
     let { sql } = compile(parse(line), v)
     assert(sql.includes('("task"."entity" is not null and '), `${line}: ${sql}`)
