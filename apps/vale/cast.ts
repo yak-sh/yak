@@ -35,6 +35,7 @@ import { LEVELS } from './levels.ts'
 import { pack } from './mesh.ts'
 import type { Drop, Frame } from './play.ts'
 import { GRADES, type Rarity } from './rarity.ts'
+import { follow, type Remote } from './remote.ts'
 import { floorAt } from './sim.ts'
 import { geometry, soft } from './soft.ts'
 import { FLIGHT, LAND } from './strike.ts'
@@ -49,6 +50,7 @@ let dressOf = (s: Frame['sheet']): Dress =>
 
 type Actor = {
   fig: Figure
+  remote: Remote | null
   x: number
   y: number
   z: number
@@ -312,6 +314,7 @@ export let cast = (
       scene.add(fig.root)
       a = {
         fig,
+        remote: null,
         x: NaN,
         y: 0,
         z: 0,
@@ -467,7 +470,17 @@ export let cast = (
           () => hero(build, o.look, o.gear),
           JSON.stringify([o.look, o.gear]),
         )
-        glide(a, b.x, b.y, b.z, b.yaw, dt, 9)
+        a.remote = follow(a.remote, b, now, dt)
+        ;[a.x, a.y, a.z, a.yaw, a.speed, a.ahead] = [
+          a.remote.x,
+          a.remote.y,
+          a.remote.z,
+          a.remote.yaw,
+          a.remote.speed,
+          a.remote.ahead,
+        ]
+        a.fig.root.position.set(a.x, a.y, a.z)
+        a.fig.root.rotation.y = a.yaw
         tumble(a, o.roll)
         let k = kitIn(o.gear)
         if (a.swings >= 0 && o.swing > a.swings) {

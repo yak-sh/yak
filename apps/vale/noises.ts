@@ -31,7 +31,7 @@ export type Noise =
 /** As much of a frame as is heard. */
 export type Scene = {
   body: Body
-  others: Pick<Other, 'eid' | 'body' | 'swing' | 'roll'>[]
+  others: (Pick<Other, 'eid' | 'swing' | 'roll'> & { body: Body })[]
   mobs: Pick<Mob, 'eid' | 'kind' | 'body' | 'down' | 'bite'>[]
 }
 

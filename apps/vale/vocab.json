@@ -85,7 +85,7 @@
       "sync": "peers",
       "durable": "connection",
       "pace": "100ms",
-      "description": "How something is moving this moment: which way it faces, its gait, and how fast it is rising or falling.",
+      "description": "How something is moving this moment: which way it faces, its gait, and its velocity, so peers can draw movement between relayed positions.",
       "properties": {
         "yaw": {
           "type": "number",
@@ -99,6 +99,14 @@
         "vy": {
           "type": "number",
           "description": "How fast it is rising, in metres a second."
+        },
+        "vx": {
+          "type": "number",
+          "description": "How fast it is moving east, in metres a second."
+        },
+        "vz": {
+          "type": "number",
+          "description": "How fast it is moving north, in metres a second."
         }
       }
     },

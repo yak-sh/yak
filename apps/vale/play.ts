@@ -208,7 +208,7 @@ export type Other = {
   eid: string
   name: string
   look: { tint: string; hair: string; skin: string }
-  body: Body
+  body: Body & { vx: number; vz: number; at: number }
   vitals: Vitals
   /** what they wear, the kind in each slot, as they say */
   gear: Record<string, string>
@@ -355,7 +355,13 @@ let where = (b: Bundle | undefined): Where | null => {
 }
 let motion = (b: Bundle | undefined) => {
   let m = comp(b, 'motion')
-  return { yaw: num(m.yaw), gait: str(m.gait, 'idle'), vy: num(m.vy) }
+  return {
+    yaw: num(m.yaw),
+    gait: str(m.gait, 'idle'),
+    vy: num(m.vy),
+    vx: num(m.vx),
+    vz: num(m.vz),
+  }
 }
 let vitals = (b: Bundle | undefined): Vitals | null => {
   let t = comp(b, 'vitals')
@@ -401,7 +407,13 @@ let bodyOf = (p: Where, m: ReturnType<typeof motion>): Body => ({
 // A mover's components as they should be written at `now`: rounded, and said
 // to the second, so a mover that has not moved writes nothing new until the
 // next second.
-let placed = (level: string, b: Body, now: number) => ({
+let placed = (
+  level: string,
+  b: Body,
+  now: number,
+  vx: number,
+  vz: number,
+) => ({
   position: {
     level,
     x: round(b.x),
@@ -409,7 +421,13 @@ let placed = (level: string, b: Body, now: number) => ({
     z: round(b.z),
     at: Math.floor(now / BEAT) * BEAT,
   },
-  motion: { yaw: round(b.yaw, 100), gait: b.gait, vy: round(b.vy, 100) },
+  motion: {
+    yaw: round(b.yaw, 100),
+    gait: b.gait,
+    vy: round(b.vy, 100),
+    vx: round(vx, 100),
+    vz: round(vz, 100),
+  },
 })
 let same = (a: Record<string, unknown>, b: Record<string, unknown>) =>
   Object.keys(a).every((k) => a[k] === b[k])
@@ -552,16 +570,25 @@ export let game = (
 
   // Where a mover this page moves is (its hero, the creatures it owns),
   // written when it differs from what the graph holds.
+  let sampled = new Map<string, { x: number; z: number; at: number }>()
   let say = (eid: string, level: string, body: Body, change: Bundle[]) => {
-    let p = placed(level, body, net.now()), e = c.ent(eid)
+    let now = net.now(), prior = sampled.get(eid)
+    let dt = prior ? Math.max((now - prior.at) / 1000, 1e-3) : 1
+    let jump = prior && Math.hypot(body.x - prior.x, body.z - prior.z) > 10
+    let vx = prior && !jump ? (body.x - prior.x) / dt : 0
+    let vz = prior && !jump ? (body.z - prior.z) / dt : 0
+    sampled.set(eid, { x: body.x, z: body.z, at: now })
+    let p = placed(level, body, now, vx, vz), e = c.ent(eid)
     if (
       !same(p.position, comp(e, 'position')) ||
       !same(p.motion, comp(e, 'motion'))
     ) change.push({ entity: { eid }, ...p })
   }
   // A creature back on its wandering: nothing to say about where it is.
-  let hush = (eid: string, change: Bundle[]) =>
+  let hush = (eid: string, change: Bundle[]) => {
+    sampled.delete(eid)
     change.push({ entity: { eid }, position: null, motion: null, hunt: null })
+  }
 
   // The sheet, worked out again only when one of its rows changed.
   let sheetKey: unknown[] = []
@@ -974,7 +1001,7 @@ export let game = (
           eid,
           name: pl.name,
           look: { tint: pl.tint, hair: pl.hair, skin: pl.skin },
-          body: bodyOf(p, m),
+          body: { ...bodyOf(p, m), vx: m.vx, vz: m.vz, at: p.at },
           vitals: t,
           gear: Object.fromEntries(
             Object.entries(comp(e, 'gear')).map(([k, v]) => [k, str(v)]),
