@@ -34,6 +34,7 @@ import { after } from './every.ts'
 import type { Driver } from './tick.ts'
 
 let iso = (t: number): string => new Date(t).toISOString()
+type Holds = (match: string) => Promise<boolean>
 
 // A condition asks only whether anything matches, so it is read one row deep.
 let probe = (match: string): Query => {
@@ -43,7 +44,7 @@ let probe = (match: string): Query => {
 
 // A scheduler pass asks each distinct condition once before it writes a wake.
 // Failed reads stay uncached so each affected wake can report its own refusal.
-export let matches = (graph: Pick<Driver, 'read'>, now: number) => {
+export let matches = (graph: Pick<Driver, 'read'>, now: number): Holds => {
   let found = new Map<string, boolean>()
   return async (match: string): Promise<boolean> => {
     let yes = found.get(match)
@@ -68,7 +69,7 @@ export let cadence = async (
   graph: Pick<Driver, 'read'>,
   wake: Wake,
   now: number,
-  holds = matches(graph, now),
+  holds: Holds = matches(graph, now),
 ): Promise<string | null> => {
   for (let { match, every } of wake.while ?? []) {
     if (await holds(match)) return every
