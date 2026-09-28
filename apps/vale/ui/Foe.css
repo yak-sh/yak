@@ -48,3 +48,18 @@
 .Foe-boss .Bar {
   --fill: var(--char);
 }
+
+.Foe-danger {
+  & .Bar {
+    --fill: var(--hp);
+  }
+
+  & em {
+    color: #b71519;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: var(--round);
+    padding-inline: 0.3em;
+    font-weight: 800;
+    opacity: 1;
+  }
+}

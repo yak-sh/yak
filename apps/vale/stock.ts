@@ -115,13 +115,13 @@ let mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1)
 
 // What felling one creature of each material tier's lands teaches, on
 // average: what a gathered thing or a piece of gear costs to earn.
+let ENCOUNTERS = Object.values(LEVELS).flatMap((lv) =>
+  [...new Set(dens(lv).map((d) => d.kind))].map((kind) => foeOf(kind, lv.id))
+)
 let KILL = [1, 2, 3, 4, 5].map((t) =>
   mean(
-    Object.values(LEVELS).flatMap((lv) =>
-      [...new Set(dens(lv).map((d) => d.kind))].map((kind) =>
-        foeOf(kind, lv.id)
-      )
-    ).filter((b) => !b.boss && tierOf(b.lvl) == t).map((b) => b.xp),
+    ENCOUNTERS.filter((b) => !b.boss && tierOf(b.lvl) == t)
+      .map((b) => b.xp),
   )
 )
 
@@ -131,7 +131,7 @@ let GATHERED = new Map(Object.values(LODES).map((l) => [l.gives, l.tier]))
 // What each kind that falls from a creature is worth: the least a hero
 // spends, in xp of felling, until one falls to them.
 let DROPS = new Map<string, number>()
-for (let b of Object.values(BEASTS)) {
+for (let b of ENCOUNTERS) {
   for (let [kind, chance] of b.loot) {
     let each = kind == 'coin' ? (3 * b.lvl + 1) / 2 : 1
     let v = b.xp / (chance * each)
