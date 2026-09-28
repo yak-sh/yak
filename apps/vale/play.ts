@@ -829,8 +829,8 @@ export let game = (
       let hp = vit?.max && vit.max != s.max
         ? Math.min(s.max, Math.round(vit.hp * s.max / vit.max))
         : Math.min(vit?.hp ?? s.max, s.max)
-      let invulnerable = comp(row, 'invulnerable').on === true
-      if (invulnerable) {
+      let damage = comp(row, 'damage').on !== false
+      if (!damage) {
         hp = s.max
         down = false
       }
@@ -1153,7 +1153,7 @@ export let game = (
           bitten.set(eid, hu.bite)
           let near = dist(mb, body) <= beast.reach + LUNGE
           if (
-            hu.player == me && !invulnerable && !down && hp > 0 &&
+            hu.player == me && damage && !down && hp > 0 &&
             !fallen && near && !stuck &&
             !sheltered(v, body.x, body.z)
           ) {

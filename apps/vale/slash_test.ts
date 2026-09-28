@@ -2,12 +2,12 @@ import { assertEquals } from '@std/assert'
 import { slash } from './slash.ts'
 
 Deno.test('chat keeps ordinary speech, and handles every slash locally', () => {
-  assertEquals(slash('hello /health on'), null)
-  assertEquals(slash('/health on'), {
-    command: { kind: 'health', enabled: true },
+  assertEquals(slash('hello /damage on'), null)
+  assertEquals(slash('/damage on'), {
+    command: { kind: 'damage', on: true },
   })
-  assertEquals(slash('/health off'), {
-    command: { kind: 'health', enabled: false },
+  assertEquals(slash('/damage off'), {
+    command: { kind: 'damage', on: false },
   })
   assertEquals(slash('/teleport tombsands'), {
     command: { kind: 'teleport', target: { level: 'tombsands' } },
@@ -22,8 +22,8 @@ Deno.test('chat keeps ordinary speech, and handles every slash locally', () => {
   assertEquals(slash('/teleport 1 Infinity'), {
     error: 'Use /teleport <land> or /teleport <x> <z>.',
   })
-  assertEquals(slash('/health maybe'), {
-    error: 'Use /health on or /health off.',
+  assertEquals(slash('/damage maybe'), {
+    error: 'Use /damage on or /damage off.',
   })
   assertEquals(slash('/unknown'), { error: 'Unknown command: /unknown.' })
 })

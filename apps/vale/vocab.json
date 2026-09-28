@@ -22,11 +22,11 @@
       "description": "A hero belonging to the person who made it, as the row's created stamp says. Their appearance lives in look rows; everything else they earn lives in rows of its own.",
       "properties": {}
     },
-    "invulnerable": {
+    "damage": {
       "component": true,
       "type": "object",
       "floor": "owner",
-      "description": "Whether this hero ignores damage. Only the app owner may change it.",
+      "description": "Whether damage can reach this hero. Off restores full health and prevents damage; on returns to ordinary combat. Only the app owner may change it.",
       "properties": {
         "on": { "type": "boolean" }
       }
@@ -657,9 +657,9 @@
         "speed": { "type": "number" }
       }
     },
-    "health_mode": {
+    "damage_mode": {
       "tool": true,
-      "description": "Turn damage on or off for a Mossvale hero. Only the app owner may change a hero's health mode. Pass on: true to prevent damage, or false to restore ordinary combat.",
+      "description": "Turn damage on or off for a Mossvale hero. Off restores full health and prevents damage; on returns to ordinary combat. Only the app owner may change a hero's damage mode.",
       "input": {
         "player": { "type": "string", "description": "The hero's eid." },
         "on": { "type": "boolean" }
@@ -667,7 +667,7 @@
       "required": ["player", "on"],
       "apply": {
         "entity": { "eid": "$player" },
-        "invulnerable": { "on": "$on" }
+        "damage": { "on": "$on" }
       }
     },
     "teleport": {

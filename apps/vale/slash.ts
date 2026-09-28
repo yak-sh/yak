@@ -4,7 +4,7 @@ import { LEVELS } from './levels.ts'
 
 export type Command =
   | { kind: 'teleport'; target: { level: string } | { x: number; z: number } }
-  | { kind: 'health'; enabled: boolean }
+  | { kind: 'damage'; on: boolean }
 
 export type Slash = { command: Command } | { error: string }
 
@@ -18,13 +18,13 @@ let metre = (s: string): number | null => {
 export let slash = (text: string): Slash | null => {
   if (!text.startsWith('/')) return null
   let [name, ...args] = text.slice(1).trim().split(/\s+/)
-  if (name?.toLowerCase() == 'health') {
+  if (name?.toLowerCase() == 'damage') {
     if (args.length == 1 && /^(on|off)$/i.test(args[0])) {
       return {
-        command: { kind: 'health', enabled: args[0].toLowerCase() == 'on' },
+        command: { kind: 'damage', on: args[0].toLowerCase() == 'on' },
       }
     }
-    return { error: 'Use /health on or /health off.' }
+    return { error: 'Use /damage on or /damage off.' }
   }
   if (name?.toLowerCase() == 'teleport') {
     if (args.length == 1) {

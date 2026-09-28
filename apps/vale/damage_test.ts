@@ -1,5 +1,5 @@
-// The active hero rises at full health when protected, ignores a landed bite,
-// and can be hurt by the next bite after protection is turned off.
+// A hero rises at full health when damage is off, ignores a landed bite,
+// and can be hurt by the next bite after damage is turned on.
 import { assert, assertEquals } from '@std/assert'
 import { homesNear } from './homes.ts'
 import { type Intent } from './input.ts'
@@ -24,7 +24,7 @@ let still: Intent = {
   zoom: 0,
 }
 
-Deno.test('health mode revives a hero and prevents damage until turned off', () => {
+Deno.test('damage off revives and protects until damage is turned on', () => {
   let home = homesNear(128, 128, 90).find((h) => h.kind == 'boar')!
   let [x, z] = home.home
   let hero = 'hero'
@@ -33,7 +33,7 @@ Deno.test('health mode revives a hero and prevents damage until turned off', () 
     [hero, {
       entity: { eid: hero },
       player: {},
-      invulnerable: { on: true },
+      damage: { on: false },
       position: { level: 'mossvale', x, y: 5, z, at: now },
       motion: { yaw: 0, gait: 'down', vy: 0, vx: 0, vz: 0 },
       vitals: { hp: 0, max: 100, lvl: 1 },
@@ -78,7 +78,7 @@ Deno.test('health mode revives a hero and prevents damage until turned off', () 
   assertEquals(guarded.vitals.hp, guarded.vitals.max)
   assertEquals(guarded.events.some((e) => e.type == 'hurt'), false)
 
-  rows.set(hero, { ...rows.get(hero)!, invulnerable: { on: false } })
+  rows.set(hero, { ...rows.get(hero)!, damage: { on: true } })
   rows.set(home.eid, {
     ...rows.get(home.eid)!,
     hunt: { player: hero, bite: 1500 },
