@@ -66,6 +66,7 @@ let scenario = async (
   }
   let seconds = async () => (await dir.space('ada'))!.meter?.seconds ?? 0
   return {
+    env: p.env,
     asks,
     uploads,
     tool,
@@ -195,6 +196,40 @@ Deno.test('concurrent first edits share one private draft', async () => {
   assert((await s.served('index.html')).body.includes('<h1>old</h1>'))
   await s.tool('app_deploy')
   assert((await s.served('index.html')).body.includes('<h1>new</h1>'))
+})
+
+Deno.test('an edit crossing deployment is replayed into the next draft', async () => {
+  using s = await scenario(compiles)
+  await s.write({ 'index.html': '<h1>old</h1>' })
+  await s.tool('app_deploy')
+  await s.write({ 'style.css': 'body{}' })
+  let put = s.env.BLOBS.put.bind(s.env.BLOBS)
+  let entered = Promise.withResolvers<void>()
+  let resume = Promise.withResolvers<void>()
+  let held = false
+  s.env.BLOBS.put = async (key, value) => {
+    if (!held && key.includes('/.drafts/') && key.endsWith('/index.html')) {
+      held = true
+      entered.resolve()
+      await resume.promise
+    }
+    return put(key, value)
+  }
+  let edit = s.write({ 'index.html': '<h1>late</h1>' })
+  await entered.promise
+  try {
+    await s.tool('app_deploy')
+  } finally {
+    resume.resolve()
+  }
+  await edit
+  assert((await s.served('index.html')).body.includes('<h1>old</h1>'))
+  assertEquals(
+    await s.tool('app_files', { op: 'read', path: 'index.html' }),
+    '<h1>late</h1>',
+  )
+  await s.tool('app_deploy')
+  assert((await s.served('index.html')).body.includes('<h1>late</h1>'))
 })
 
 Deno.test('a page that no longer needs compiling serves as written', async () => {

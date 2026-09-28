@@ -179,6 +179,7 @@ export type App = {
   declaration?: string | null
   source?: string | null
   draft?: string | null
+  fence?: string | null
   script?: string | null
   title: string
   // Who may read and write its store (T-32504): 'public', 'open', or
@@ -310,6 +311,7 @@ type Row = {
     declaration?: string | null
     source?: string | null
     draft?: string | null
+    fence?: string | null
     script?: string | null
     access?: Access | null
     store?: string | null
@@ -698,6 +700,7 @@ export let appOf = (r: Row): App => ({
   declaration: r.app!.declaration ?? null,
   source: r.app!.source ?? null,
   draft: r.app!.draft ?? null,
+  fence: r.app!.fence ?? null,
   script: r.app!.script ?? null,
   access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,

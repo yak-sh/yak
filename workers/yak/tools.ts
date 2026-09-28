@@ -218,10 +218,12 @@ import {
 import { acceptLink, paced, SUBJECT } from './invite.ts'
 import {
   editing,
+  fenced,
   held,
   history,
   KEEP,
   manifest,
+  modifying,
   own,
   pins,
   record,
@@ -232,8 +234,10 @@ import {
   same,
   sha256,
   snapshot,
+  unfenced,
   type Version,
   versions,
+  waiting,
   whatChanged,
   when,
   working,
@@ -811,26 +815,19 @@ let fits = async (
 // moved on — recorded as a version of its own (versions.ts), so app_rollback
 // can put this release back later. The answer is every line said beneath the
 // door's own sentence.
-let released = async (
+let published = async (
   ctx: Ctx,
   space: Space,
   standing: App,
   who: Who,
   store: Door,
+  release: string,
+  fence: string,
   candidate?: { source: string; script: string },
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = r2Objects(ctx.env.BLOBS)
-  let work = candidate?.source ??
-    await editing(
-      blobs,
-      ctx.dir,
-      space,
-      standing,
-      prefixOf(space, standing),
-      who,
-    )
-  let app = { ...standing, source: work }
+  let app = { ...standing, source: release }
   let prefix = fileKey(space, app, '')
   let bytesAt = (path: string) => blobs.read(prefix + path)
   let parsed = await configured(bytesAt)
@@ -1113,7 +1110,6 @@ let released = async (
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
   toolsTook('tools')
-  let release = releaseOf(space, app)
   let script = candidate?.script ?? `app-${app.eid}-r-${crypto.randomUUID()}`
   let stagedApp = { ...app, source: release, script }
   let deployed = await c.time(
@@ -1142,7 +1138,6 @@ let released = async (
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's version counter and the row that records the version move together.
   let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
-  await c.time('files', () => laid(blobs, prefix, `${release}/`))
   await c.time(
     'record',
     () =>
@@ -1155,7 +1150,8 @@ let released = async (
         worker,
         staged,
         standing.source,
-        candidate ? standing.draft : work,
+        standing.draft,
+        fence,
       ),
   )
   if (tooled.views) {
@@ -1233,6 +1229,44 @@ let released = async (
   }
 }
 
+let released = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  who: Who,
+  store: Door,
+  candidate?: { source: string; script: string },
+) => {
+  let standing = await waiting(ctx.dir, space, app, who)
+  let blobs = r2Objects(ctx.env.BLOBS)
+  let work = candidate?.source ?? await editing(
+    blobs,
+    ctx.dir,
+    space,
+    standing,
+    prefixOf(space, standing),
+    who,
+  )
+  let release = releaseOf(space, standing)
+  let draft = candidate ? standing.draft ?? null : standing.draft ?? work
+  let fence = await fenced(ctx.dir, standing, draft, who)
+  try {
+    await laid(blobs, `${work}/`, `${release}/`)
+    return await published(
+      ctx,
+      space,
+      { ...standing, draft },
+      who,
+      store,
+      release,
+      fence,
+      candidate,
+    )
+  } finally {
+    await unfenced(ctx.dir, standing, fence, who)
+  }
+}
+
 // One app's code copied onto another's, which is what an install is and what
 // an update is again: every file of the source written under the target's own
 // prefix, and every file the target has that the source does not, gone — so
@@ -1242,7 +1276,7 @@ let released = async (
 // (apps.ts `blobKey`) — a photo somebody picked, the app's data — and
 // `versions/` is one app's own deploy history, which the copy earns for
 // itself on the release that follows.
-let copied = async (
+let copied = (
   ctx: Ctx,
   from: { space: Space; app: App },
   onto: { space: Space; app: App },
@@ -1250,25 +1284,29 @@ let copied = async (
 ) => {
   let blobs = r2Objects(ctx.env.BLOBS)
   let there = fileKey(from.space, from.app, '')
-  let draft = await editing(
+  return modifying(
     blobs,
     ctx.dir,
     onto.space,
     onto.app,
-    prefixOf(onto.space, onto.app),
     who,
+    (app) => prefixOf(onto.space, app),
+    async (draft) => {
+      let here = `${draft}/`
+      let paths = (keys: string[], prefix: string) =>
+        own(keys.map((k) => k.slice(prefix.length)))
+      let code = paths(await blobs.list(there), there)
+      let had = paths(await blobs.list(here), here)
+      await Promise.all(
+        code.map(async (path) =>
+          blobs.put(here + path, await blobs.get(there + path))
+        ),
+      )
+      let gone = had.filter((p) => !code.includes(p))
+      await Promise.all(gone.map((path) => blobs.delete(here + path)))
+      return { wrote: code, gone }
+    },
   )
-  let here = `${draft}/`
-  let paths = (keys: string[], prefix: string) =>
-    own(keys.map((k) => k.slice(prefix.length)))
-  let code = paths(await blobs.list(there), there)
-  let had = paths(await blobs.list(here), here)
-  for (let path of code) {
-    await blobs.put(here + path, await blobs.get(there + path))
-  }
-  let gone = had.filter((p) => !code.includes(p))
-  for (let path of gone) await blobs.delete(here + path)
-  return { wrote: code, gone }
 }
 
 // Every store this call reaches. An app named is that one store, as it always
@@ -1465,7 +1503,7 @@ let declaring = async (
  * made (T-34264). Neither is `content: string` — a `.wasm` would not survive
  * a decode — which is why this takes bytes. Answers their app-relative paths.
  */
-export let wrote = async (
+export let wrote = (
   env: Env,
   space: Space,
   app: App,
@@ -1475,57 +1513,59 @@ export let wrote = async (
 ) => {
   let blobs = r2Objects(env.BLOBS)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let draft = await editing(
+  return modifying(
     blobs,
     dir,
     space,
     app,
-    prefixOf(space, app),
     who,
-  )
-  let edit = { ...app, source: draft }
-  let prefix = fileKey(space, edit, '')
-  let archive = `${space.slug}/${app.slug}/`
-  let stopped = await fullFiles(
-    env,
-    space,
-    files.map((f) => ({
-      key: fileKey(space, edit, f.path),
-      bytes: f.bytes.byteLength,
-    })),
-  )
-  if (stopped) throw refuse('limit', stopped)
-  // The one file with a ceiling of its own (standing.ts): the app's notes are
-  // handed whole to any agent that can reach the app, so they are refused
-  // over the cap here — at the write, whichever door brought the bytes —
-  // rather than truncated at the read.
-  for (let f of files) {
-    let no = tooLong(f.path, f.bytes.byteLength)
-    if (no) throw refuse('limit', no)
-  }
-  // What each path held goes into its own history first, pinned by its content
-  // (versions.ts `replaced`, T-34508), so the edit can be undone before deploy.
-  //
-  // The files go out at once: each path's pin-then-put is its own chain of
-  // round trips to the bucket with nothing to wait on in another path's, so a
-  // three-file write costs one file's time, not three (T-34986). `pin` and
-  // `put` are still summed per file — total waiting, which overlaps — and
-  // `files` is the wall clock the batch actually took.
-  let at = new Date()
-  let pin = c.sum('pin')
-  let put = c.sum('put')
-  await c.time('files', () =>
-    Promise.all(files.map(async (f) => {
-      let path = fileKey(space, edit, f.path).slice(prefix.length)
-      await pin(() =>
-        replaced(blobs, prefix, path, who.person ?? '', at, archive)
+    (app) => prefixOf(space, app),
+    async (draft, app) => {
+      let edit = { ...app, source: draft }
+      let prefix = fileKey(space, edit, '')
+      let archive = `${space.slug}/${app.slug}/`
+      let stopped = await fullFiles(
+        env,
+        space,
+        files.map((f) => ({
+          key: fileKey(space, edit, f.path),
+          bytes: f.bytes.byteLength,
+        })),
       )
-      await put(() => blobs.put(prefix + path, f.bytes))
-    })))
-  let paths = files.map((f) =>
-    fileKey(space, edit, f.path).slice(prefix.length)
+      if (stopped) throw refuse('limit', stopped)
+      // The one file with a ceiling of its own (standing.ts): the app's notes are
+      // handed whole to any agent that can reach the app, so they are refused
+      // over the cap here — at the write, whichever door brought the bytes —
+      // rather than truncated at the read.
+      for (let f of files) {
+        let no = tooLong(f.path, f.bytes.byteLength)
+        if (no) throw refuse('limit', no)
+      }
+      // What each path held goes into its own history first, pinned by its content
+      // (versions.ts `replaced`, T-34508), so the edit can be undone before deploy.
+      //
+      // The files go out at once: each path's pin-then-put is its own chain of
+      // round trips to the bucket with nothing to wait on in another path's, so a
+      // three-file write costs one file's time, not three (T-34986). `pin` and
+      // `put` are still summed per file — total waiting, which overlaps — and
+      // `files` is the wall clock the batch actually took.
+      let at = new Date()
+      let pin = c.sum('pin')
+      let put = c.sum('put')
+      await c.time('files', () =>
+        Promise.all(files.map(async (f) => {
+          let path = fileKey(space, edit, f.path).slice(prefix.length)
+          await pin(() =>
+            replaced(blobs, prefix, path, who.person ?? '', at, archive)
+          )
+          await put(() => blobs.put(prefix + path, f.bytes))
+        })))
+      let paths = files.map((f) =>
+        fileKey(space, edit, f.path).slice(prefix.length)
+      )
+      return paths
+    },
   )
-  return paths
 }
 
 /**
@@ -2469,16 +2509,7 @@ let OURS: Row[] = [
         () => inApp(ctx, args, WRITES.includes(op)),
       )
       let blobs = r2Objects(ctx.env.BLOBS)
-      let source = op == 'delete'
-        ? await editing(
-          blobs,
-          ctx.dir,
-          space,
-          app,
-          prefixOf(space, app),
-          who,
-        )
-        : await working(app, prefixOf(space, app))
+      let source = working(app, prefixOf(space, app))
       let edit = { ...app, source }
       let prefix = fileKey(space, edit, '')
       let archive = `${space.slug}/${app.slug}/`
@@ -2498,32 +2529,57 @@ let OURS: Row[] = [
           },
         }
       }
-      if (op == 'read' || op == 'delete') {
+      if (op == 'read') {
         let key = fileKey(space, edit, text(args.path, 'path'))
         if (!(await blobs.has(key))) {
           throw refuse('missing', `no file ${args.path}`)
         }
-        let path = key.slice(prefix.length)
-        if (op == 'read') {
-          return { text: new TextDecoder().decode(await blobs.get(key)), space }
-        }
-        // A delete takes bytes away like a write does, so it keeps them the
-        // same way: the file is in its own history the moment it stops being a
-        // file, and op restore brings it back (T-34508).
-        await replaced(
+        return { text: new TextDecoder().decode(await blobs.get(key)), space }
+      }
+      if (op == 'delete') {
+        return modifying(
           blobs,
-          prefix,
-          path,
-          who.person ?? '',
-          new Date(),
-          archive,
-        )
-        await blobs.delete(key)
-        return {
-          text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
-            `'restore', path: '${path}') brings it back; staged for app_deploy`,
+          ctx.dir,
           space,
-        }
+          app,
+          who,
+          (app) => prefixOf(space, app),
+          async (draft, app, attempt) => {
+            let prefix = `${draft}/`
+            let key = fileKey(
+              space,
+              { ...app, source: draft },
+              text(args.path, 'path'),
+            )
+            if (!(await blobs.has(key))) {
+              if (attempt) {
+                return {
+                  text: `deleted ${args.path} — staged for app_deploy`,
+                  space,
+                }
+              }
+              throw refuse('missing', `no file ${args.path}`)
+            }
+            let path = key.slice(prefix.length)
+            // A delete takes bytes away like a write does, so it keeps them the
+            // same way: the file is in its own history the moment it stops being a
+            // file, and op restore brings it back (T-34508).
+            await replaced(
+              blobs,
+              prefix,
+              path,
+              who.person ?? '',
+              new Date(),
+              archive,
+            )
+            await blobs.delete(key)
+            return {
+              text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
+                `'restore', path: '${path}') brings it back; staged for app_deploy`,
+              space,
+            }
+          },
+        )
       }
       // What this file has been (T-34508). Every write pins what it replaced,
       // so a path answers its own past — and `now` is at the top because "what

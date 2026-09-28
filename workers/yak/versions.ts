@@ -101,6 +101,82 @@ export let draftOf = (space: { slug: string }, app: App) =>
 export let releaseOf = (space: { slug: string }, app: App) =>
   `${space.slug}/.releases/${app.eid}/${crypto.randomUUID()}`
 
+let latest = async (dir: Directory, space: Space, app: App) =>
+  (await dir.apps(space)).find((row) => row.eid == app.eid) ?? app
+
+/** A release fence holds new edits until its source switch or refusal. */
+export let waiting = async (
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+) => {
+  let until = Date.now() + 60_000
+  for (;;) {
+    let row = await latest(dir, space, app)
+    if (!row.fence) return row
+    let started = Number(row.fence.split(':')[0])
+    if (Date.now() - started > 5 * 60_000) {
+      try {
+        await dir.stamp({
+          entities: [{
+            entity: { eid: app.eid },
+            app: { fence: null },
+            $was: { app: { fence: token(row.fence) } },
+          }],
+        }, vouched(who))
+      } catch { /* another request moved the fence */ }
+    }
+    if (Date.now() > until) {
+      throw refuse('unavailable', `release in progress for ${app.slug}; retry`)
+    }
+    await new Promise((done) => setTimeout(done, 25))
+  }
+}
+
+/** Hold new edits while one release copies its selected draft. */
+export let fenced = async (
+  dir: Directory,
+  app: App,
+  draft: string | null,
+  who: Who,
+) => {
+  let fence = `${Date.now()}:${crypto.randomUUID()}`
+  await dir.stamp({
+    entities: [{
+      entity: { eid: app.eid },
+      app: { fence },
+      $was: {
+        app: {
+          fence: token(app.fence),
+          draft: token(draft),
+          source: token(app.source),
+          version: token(app.version),
+        },
+      },
+    }],
+  }, vouched(who))
+  return fence
+}
+
+/** Release a fence left by a refused deploy; a committed release cleared it. */
+export let unfenced = async (
+  dir: Directory,
+  app: App,
+  fence: string,
+  who: Who,
+) => {
+  try {
+    await dir.stamp({
+      entities: [{
+        entity: { eid: app.eid },
+        app: { fence: null },
+        $was: { app: { fence: token(fence) } },
+      }],
+    }, vouched(who))
+  } catch { /* a committed release or a newer fence already moved it */ }
+}
+
 /** What the editor sees: this version's draft once one has been started. */
 export let working = (
   app: App,
@@ -155,6 +231,31 @@ export let editing = async (
     throw error
   }
   return draft
+}
+
+/** An edit crossing a release fence is replayed into the next draft. */
+export let modifying = async <T>(
+  blobs: Objects,
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+  source: (app: App) => string,
+  act: (draft: string, app: App, attempt: number) => Promise<T>,
+): Promise<T> => {
+  let row = app
+  for (let n = 0; n < 3; n++) {
+    row = await waiting(dir, space, row, who)
+    let draft = await editing(blobs, dir, space, row, source(row), who)
+    let result = await act(draft, row, n)
+    let after = await waiting(dir, space, row, who)
+    if (
+      after.version == row.version && after.source == row.source &&
+      after.draft == draft
+    ) return result
+    row = after
+  }
+  throw refuse('conflict', `app ${app.slug} changed during edit; retry`)
 }
 
 // What the platform keeps beside an app's files, under the app's own prefix:
@@ -374,6 +475,7 @@ export let record = async (
   homes: { app: App; release: string }[] = [],
   sourceWas = app.source,
   draftWas = app.draft,
+  fenceWas = app.fence,
 ) =>
   await dir.stamp({
     entities: [
@@ -384,6 +486,7 @@ export let record = async (
           declaration: String(version),
           source: app.source,
           draft: null,
+          fence: null,
           script: app.script,
         },
         $was: {
@@ -392,6 +495,7 @@ export let record = async (
             declaration: token(app.declaration),
             source: token(sourceWas),
             draft: token(draftWas),
+            fence: token(fenceWas),
           },
         },
       },

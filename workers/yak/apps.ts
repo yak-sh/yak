@@ -95,8 +95,7 @@ import { fault, noted, refusal, serving } from './unseen.ts'
 import { caught } from './sentry.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
-import { sha256 } from './versions.ts'
-import { editing } from './versions.ts'
+import { modifying, sha256 } from './versions.ts'
 // The space index's own visitor block reads views.ts directly (`visits`
 // below): drawing a page out of another module's data is not a slot, it is one
 // module using another. What does arrive through the host is the `/stats` door
@@ -1171,23 +1170,27 @@ let api = async (
     // token, and that token is the page's — writing the app's code stays a
     // member's act through the tools, never something its own page does.
     if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
-    let draft = await editing(
+    let bytes = new Uint8Array(await req.arrayBuffer())
+    let key = await modifying(
       r2Objects(env.BLOBS),
       directory(bound(env.DIRECTORY, dirPart.fetch, env)),
       space,
       app,
-      prefixOf(space, app),
       who,
+      (app) => prefixOf(space, app),
+      async (draft) => {
+        let key = keyed(draft, path.slice('/files'.length))
+        let stopped = await fullFiles(env, space, [{
+          key,
+          bytes: bytes.byteLength,
+        }])
+        if (stopped) return { error: stopped }
+        await r2Objects(env.BLOBS).put(key, bytes)
+        return { key }
+      },
     )
-    let key = keyed(draft, path.slice('/files'.length))
-    let bytes = new Uint8Array(await req.arrayBuffer())
-    let stopped = await fullFiles(env, space, [{
-      key,
-      bytes: bytes.byteLength,
-    }])
-    if (stopped) return json(413, 'space_full', stopped)
-    await r2Objects(env.BLOBS).put(key, bytes)
-    return Response.json({ ok: true, key })
+    if ('error' in key) return json(413, 'space_full', key.error)
+    return Response.json({ ok: true, key: key.key })
   }
   return json(404, 'not_found')
 }
