@@ -69,7 +69,8 @@ build. A new or removed query match works the same way.
 provider, model or prompt starts a shadow variant. Shadow output ids are
 separate from the primary outputs and are not selected as downstream inputs. A
 deleted run stays deleted. It retries a failed session under the same key when
-called again; incidental graph changes do not start a retry loop.
+called again; moving the builder's floor due or firing its wake does too.
+Incidental graph changes do not start a retry loop.
 
 A builder is checked when created, when its floor changes, and when a
 [@yaks/wake](../wake) wake fires on it or points at it. A configured `rest`
