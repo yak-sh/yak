@@ -20,6 +20,7 @@
 
 import {
   type Ask,
+  decode,
   type Frame,
   json,
   queue,
@@ -67,7 +68,11 @@ export type Sockets = {
   /** answer a `/ws` request: accept the socket for hibernation, return the 101 */
   accept(request: Request): Response
   /** a frame arrived — the object's `webSocketMessage` */
-  message(ws: Wire, data: unknown): void
+  message(
+    ws: Wire,
+    data: unknown,
+    scope?: (kind: SocketKind, work: () => void) => void,
+  ): void
   /** a socket went away — the object's `webSocketClose` */
   close(ws: Wire): void
   /** re-open the subscriptions of every socket this object inherited; call it
@@ -170,26 +175,46 @@ let remember = (ws: Wire, keys: string[], subs: Record<string, Ask>) => {
 // the attachment stays current. Anything malformed is not a subscription —
 // `receive` rejects it.
 let asked = (
-  data: unknown,
+  msg: unknown,
 ):
   | { id: string; ask?: Ask; acks?: boolean; frames?: boolean; ack?: string }
   | null => {
-  try {
-    let msg = JSON.parse(String(data))
-    if (typeof msg?.ack == 'string') return { id: '', ack: msg.ack }
-    if (typeof msg?.subscribe == 'string' || msg?.subscribe === true) {
-      return {
-        id: msg?.id == null ? '' : String(msg.id),
-        ask: msg.subscribe,
-        acks: msg.acks === true,
-        frames: msg.acks === true && msg.frames === true,
-      }
-    }
-    if (msg?.unsubscribe != null) return { id: String(msg.unsubscribe) }
-    return null
-  } catch {
-    return null
+  if (!msg || typeof msg != 'object') return null
+  if ('ack' in msg && typeof msg.ack == 'string') {
+    return { id: '', ack: msg.ack }
   }
+  let sub = 'subscribe' in msg ? msg.subscribe : undefined
+  if (typeof sub == 'string' || sub === true) {
+    return {
+      id: 'id' in msg && msg.id != null ? String(msg.id) : '',
+      ask: sub,
+      acks: 'acks' in msg && msg.acks === true,
+      frames: 'acks' in msg && msg.acks === true &&
+        'frames' in msg && msg.frames === true,
+    }
+  }
+  if ('unsubscribe' in msg && msg.unsubscribe != null) {
+    return { id: String(msg.unsubscribe) }
+  }
+  return null
+}
+
+/** The finite protocol label a host may use for aggregate socket costs.
+ * Frame ids, queries, relay values and malformed input never become labels. */
+export type SocketKind = 'ack' | 'subscribe' | 'unsubscribe' | 'relay' | 'other'
+let messageKind = (msg: unknown): SocketKind => {
+  if (msg && typeof msg == 'object') {
+    if ('ack' in msg && typeof msg.ack == 'string') return 'ack'
+    if (
+      'subscribe' in msg &&
+      (typeof msg.subscribe == 'string' || msg.subscribe === true)
+    ) {
+      return 'subscribe'
+    }
+    if ('unsubscribe' in msg && msg.unsubscribe != null) return 'unsubscribe'
+    if ('relay' in msg && Array.isArray(msg.relay)) return 'relay'
+  }
+  return 'other'
 }
 
 /**
@@ -354,36 +379,41 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       )
     },
 
-    message: (ws, data) => {
+    message: (ws, data, scope) => {
       if (closed.has(ws)) return
-      let to = sink(ws)
-      let ask = asked(data)
-      let sender = sinks.get(ws)!
-      if (ask?.ack) return sender.ack(ask.ack)
-      if (ask) sender.forget(ask.id)
-      if (ask?.acks) sender.enable(ask.frames)
-      let was = subs.relaying(to).join('\n')
-      if (receive(subs, to, data) == 'close') {
-        drop(ws)
-        ws.close?.(1008, 'relay flood')
-        return
+      let input = decode(data)
+      let run = () => {
+        let to = sink(ws)
+        let ask = asked('value' in input ? input.value : null)
+        let sender = sinks.get(ws)!
+        if (ask?.ack) return sender.ack(ask.ack)
+        if (ask) sender.forget(ask.id)
+        if (ask?.acks) sender.enable(ask.frames)
+        let was = subs.relaying(to).join('\n')
+        if (receive(subs, to, data, undefined, input) == 'close') {
+          drop(ws)
+          ws.close?.(1008, 'relay flood')
+          return
+        }
+        // Only when it moved: a frame that relays nothing should not rewrite
+        // an attachment, and most frames relay nothing.
+        let now = subs.relaying(to)
+        if (now.join('\n') != was) remember(ws, now, asks(ws))
+        if (!ask) return
+        let subscriptions = { ...asks(ws) }
+        if (ask.ask === undefined) delete subscriptions[ask.id]
+        else subscriptions[ask.id] = ask.ask
+        if (hold(ws, subscriptions, ask.acks, ask.frames)) return
+        subs.close(to, ask.id)
+        to({
+          id: ask.id,
+          refused: refusal(
+            new RangeError('too many subscriptions to survive hibernation'),
+          ),
+        })
       }
-      // Only when it moved: a frame that relays nothing should not rewrite an
-      // attachment, and most frames relay nothing.
-      let now = subs.relaying(to)
-      if (now.join('\n') != was) remember(ws, now, asks(ws))
-      if (!ask) return
-      let subscriptions = { ...asks(ws) }
-      if (ask.ask === undefined) delete subscriptions[ask.id]
-      else subscriptions[ask.id] = ask.ask
-      if (hold(ws, subscriptions, ask.acks, ask.frames)) return
-      subs.close(to, ask.id)
-      to({
-        id: ask.id,
-        refused: refusal(
-          new RangeError('too many subscriptions to survive hibernation'),
-        ),
-      })
+      let kind = messageKind('value' in input ? input.value : null)
+      return scope ? scope(kind, run) : run()
     },
 
     close: drop,

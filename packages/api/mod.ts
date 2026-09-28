@@ -81,6 +81,8 @@ export {
 } from './subs.ts'
 export {
   attach,
+  decode,
+  type Incoming,
   queue,
   receive,
   sink,

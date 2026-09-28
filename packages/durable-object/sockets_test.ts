@@ -354,6 +354,39 @@ Deno.test('a subscription bigger than an attachment survives hibernation', () =>
   assertThrows(() => holds(ctx.storage).read(later), Error, 'missing')
 })
 
+Deno.test('a hibernated frame includes subscription restore in its scope', () => {
+  let ctx = hibernation(), storage = store()
+  let [, first] = instance(storage, ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  first.message(
+    ws,
+    ask('big', `.doc.title=${JSON.stringify('x'.repeat(3000))}`),
+  )
+  let [, woken] = instance(storage, ctx)
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  let active = ''
+  let seen: string[] = []
+  ctx.storage.sql.exec = (query, ...bindings) => {
+    seen.push(active)
+    return exec(query, ...bindings)
+  }
+  woken.message(
+    ws,
+    JSON.stringify({ ack: 'unknown' }),
+    (kind, work) => {
+      active = kind
+      try {
+        work()
+      } finally {
+        active = ''
+      }
+    },
+  )
+  assert(seen.length > 0)
+  assertEquals(seen, Array(seen.length).fill('ack'))
+})
+
 // The runtime's socket factory is a global, so a test can stand in for it.
 let pair = () => ({ 0: 'client', 1: wire() })
 

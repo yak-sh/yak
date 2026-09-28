@@ -50,6 +50,29 @@ let BATCH = 32
 let MAX_MESSAGE = 64 * 1024
 let gates = new WeakMap<Subs, WeakMap<Sink, ReturnType<typeof admission>>>()
 
+/** Decode one incoming frame before anyone dispatches it. A hibernating socket
+ * can use the decoded shape to route its own work without parsing it again. */
+export type Incoming =
+  | { close: true }
+  | { error: unknown }
+  | { value: unknown }
+
+export let decode = (data: unknown): Incoming => {
+  try {
+    if (data instanceof ArrayBuffer && data.byteLength > MAX_MESSAGE) {
+      return { close: true }
+    }
+    if (data instanceof Blob && data.size > MAX_MESSAGE) {
+      return { close: true }
+    }
+    let raw = String(data)
+    if (raw.length > MAX_MESSAGE) return { close: true }
+    return { value: JSON.parse(raw) }
+  } catch (error) {
+    return { error }
+  }
+}
+
 let gate = (subs: Subs, to: Sink, now?: () => number) => {
   let bySink = gates.get(subs)
   if (!bySink) gates.set(subs, bySink = new WeakMap())
@@ -202,6 +225,7 @@ export let receive = (
   to: Sink,
   data: unknown,
   now?: () => number,
+  input: Incoming = decode(data),
 ): void | 'close' => {
   let id = ''
   let fail = (err: unknown) => {
@@ -209,23 +233,23 @@ export let receive = (
     to({ id, refused: refusal(err) })
   }
   try {
-    if (data instanceof ArrayBuffer && data.byteLength > MAX_MESSAGE) {
-      return 'close'
+    if ('close' in input) return 'close'
+    if ('error' in input) throw input.error
+    let msg = input.value
+    if (!msg || typeof msg != 'object') {
+      throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')
     }
-    if (data instanceof Blob && data.size > MAX_MESSAGE) return 'close'
-    let raw = String(data)
-    if (raw.length > MAX_MESSAGE) return 'close'
-    let msg = JSON.parse(raw)
-    id = msg?.id == null ? '' : String(msg.id)
-    if (typeof msg?.subscribe == 'string' || msg?.subscribe === true) {
-      subs.open(to, id, msg.subscribe)
+    id = 'id' in msg && msg.id != null ? String(msg.id) : ''
+    let subscribe = 'subscribe' in msg ? msg.subscribe : undefined
+    if (typeof subscribe == 'string' || subscribe === true) {
+      subs.open(to, id, subscribe)
       return
     }
-    if (msg?.unsubscribe != null) {
+    if ('unsubscribe' in msg && msg.unsubscribe != null) {
       subs.close(to, String(msg.unsubscribe))
       return
     }
-    if (Array.isArray(msg?.relay)) {
+    if ('relay' in msg && Array.isArray(msg.relay)) {
       let verdict = gate(subs, to, now)(msg.relay)
       if (verdict == 'close') return 'close'
       if (verdict == 'skip') return

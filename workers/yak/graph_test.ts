@@ -109,6 +109,61 @@ Deno.test('each store response reports the SQL it ran for that fetch', async () 
   assertEquals(Number(second.headers.get('x-yak-stmts')), calls - before)
 })
 
+Deno.test('a Store row profile attributes SQL to the HTTP route', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (query, ...bindings) => {
+    let cursor = exec(query, ...bindings)
+    let drained = false
+    return {
+      toArray: () => {
+        let rows = cursor.toArray()
+        drained = true
+        return rows
+      },
+      [Symbol.iterator]: () => cursor[Symbol.iterator](),
+      get rowsRead() {
+        return drained ? 1 : 0
+      },
+      get rowsWritten() {
+        return 0
+      },
+    }
+  }
+  let at = Date.now()
+  using _clock = stub(Date, 'now', () => at)
+  using logged = stub(console, 'log')
+  let store = new Store(ctx)
+  let vouch = { ...headers(owner), 'x-store': 'yourname/vale.f52dc2' }
+  let request = (path: string, method = 'GET', body?: string) =>
+    new Request(`http://store${path}`, { method, headers: vouch, body })
+
+  assertEquals(
+    (await store.fetch(request('/vocab', 'POST', SCHEMA))).status,
+    200,
+  )
+  at++
+  assertEquals((await store.fetch(request('/query?q=.recipe'))).status, 200)
+  at += 60_000
+  assertEquals((await store.fetch(request('/query?q=.recipe'))).status, 200)
+
+  let reports = logged.calls
+    .filter((call) => call.args[0] == 'yak store rows')
+    .map((call) => JSON.parse(String(call.args[1])))
+  let query = reports.flatMap((report) => report.operations)
+    .find((operation) => operation.kind == 'GET /query')
+  assert(query)
+  assert(query.total.calls > 0)
+  assert(query.total.rowsRead > 0)
+  assertEquals(
+    query.statements.every((entry: { shape: string }) =>
+      !entry.shape.includes('yourname/vale.f52dc2')
+    ),
+    true,
+  )
+})
+
 let APP = 'a0000000-0000-4000-8000-000000000001'
 let ADA = 'b0000000-0000-4000-8000-000000000002'
 let CAKE = 'c0000000-0000-4000-8000-000000000003'

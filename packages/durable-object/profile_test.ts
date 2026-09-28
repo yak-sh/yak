@@ -88,3 +88,64 @@ Deno.test('a profile reports first costs promptly and later costs at most once p
   p.flush()
   assertEquals(reports[1].total, { calls: 1, rowsRead: 7, rowsWritten: 1 })
 })
+
+Deno.test('interleaved async invocations keep their own SQL costs', async () => {
+  let reports: Summary[] = []
+  let p = profile((summary) => reports.push(summary))
+  let resume!: () => void
+  let wait = new Promise<void>((resolve) => resume = resolve)
+  let first = p.run('GET /query', async () => {
+    p.observe({ shape: 'select "before"', rowsRead: 2, rowsWritten: 0 })
+    await wait
+    p.observe({ shape: 'select "after"', rowsRead: 3, rowsWritten: 0 })
+  })
+  await p.run('ws subscribe', async () => {
+    await Promise.resolve()
+    p.observe({ shape: 'select "socket"', rowsRead: 7, rowsWritten: 0 })
+  })
+  resume()
+  await first
+  p.flush()
+  assertEquals(
+    reports[0].operations.map(({ kind, total }) => ({
+      kind,
+      rowsRead: total.rowsRead,
+    })),
+    [
+      { kind: 'GET /query', rowsRead: 5 },
+      { kind: 'ws subscribe', rowsRead: 7 },
+    ],
+  )
+  assertEquals(reports[0].total.rowsRead, 12)
+})
+
+Deno.test('many invocation labels and shapes remain bounded and fully counted', () => {
+  let reports: Summary[] = []
+  let p = profile((summary) => reports.push(summary))
+  for (let i = 0; i < 30; i++) {
+    p.run(`kind-${i}`, () => {
+      for (let j = 0; j < 30; j++) {
+        p.observe({
+          shape: `select "table_${i}_${j}"`,
+          rowsRead: 1,
+          rowsWritten: 0,
+        })
+      }
+    })
+  }
+  p.flush()
+  assertEquals(reports[0].total, {
+    calls: 900,
+    rowsRead: 900,
+    rowsWritten: 0,
+  })
+  assertEquals(reports[0].operations.length, 16)
+  assertEquals(
+    reports[0].operations.reduce((n, op) => n + op.total.rowsRead, 0),
+    900,
+  )
+  assertEquals(
+    reports[0].operations.every((op) => op.statements.length <= 7),
+    true,
+  )
+})

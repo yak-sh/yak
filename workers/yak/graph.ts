@@ -542,6 +542,30 @@ export let floorsOf = (manifest: VocabDoc): Floors =>
 export let grantEid = (app: string, person: string): string =>
   sha256(`grant\x00${app}\x00${person}`)
 
+// Request paths become profile labels only for known Store doors. An arbitrary
+// caller path or method must not create a new label.
+let routes = new Set([
+  '/',
+  '/vocab',
+  '/vocab.json',
+  '/uses',
+  '/storage',
+  '/tools',
+  '/graph',
+  '/restore',
+  '/alarm',
+  '/ws',
+  '/apply',
+  '/query',
+])
+let routeKind = (request: Request): string => {
+  let path = new URL(request.url).pathname
+  return routes.has(path) &&
+      ['GET', 'POST', 'PUT', 'DELETE'].includes(request.method)
+    ? `${request.method} ${path}`
+    : 'http other'
+}
+
 export class Store {
   #ctx: State
   #vocab!: Vocab
@@ -1466,14 +1490,17 @@ export class Store {
    * stretch nobody was there for is. A directory that cannot say is asked
    * again in a minute, never guessed at.
    */
-  async tick(now = Date.now()): Promise<Ticked> {
-    let leave = await this.#enter(false)
-    try {
-      return await this.#tick(now)
-    } finally {
-      this.#profile?.flush()
-      leave()
+  tick(now = Date.now()): Promise<Ticked> {
+    let run = async () => {
+      let leave = await this.#enter(false)
+      try {
+        return await this.#tick(now)
+      } finally {
+        this.#profile?.flush()
+        leave()
+      }
     }
+    return this.#profile ? this.#profile.run('tick', run) : run()
   }
 
   async #tick(now: number): Promise<Ticked> {
@@ -1494,26 +1521,28 @@ export class Store {
   }
 
   /** The runtime's clock going off: whatever this object armed itself for. */
-  async alarm(): Promise<void> {
-    let leave = await this.#enter(false)
-    try {
-      // Writes the log still holds are replayed first, which is what makes the
-      // replay need nobody: the alarm set when one was kept wakes the object
-      // after a deploy too.
-      let kept = waiting(this.#sql)
-      if (this.#refused) {
-        if (kept) await this.#retry()
-        return
+  alarm(): Promise<void> {
+    let run = async () => {
+      let leave = await this.#enter(false)
+      try {
+        // Writes the log still holds are replayed first, which is what makes
+        // the replay need nobody after a deploy.
+        let kept = waiting(this.#sql)
+        if (this.#refused) {
+          if (kept) await this.#retry()
+          return
+        }
+        if (kept) {
+          this.#stuck = false
+          await this.#drain()
+        }
+        await this.#tick(Date.now())
+      } finally {
+        this.#profile?.flush()
+        leave()
       }
-      if (kept) {
-        this.#stuck = false
-        await this.#drain()
-      }
-      await this.#tick(Date.now())
-    } finally {
-      this.#profile?.flush()
-      leave()
     }
+    return this.#profile ? this.#profile.run('alarm', run) : run()
   }
 
   // What this object was born owing: the rows its plugins declare — the
@@ -1662,50 +1691,52 @@ export class Store {
   fetch(request: Request): Promise<Response> {
     let tally = this.#pending
     this.#pending = new Map()
-    return tallying(tally, async () => {
-      let base = request.headers.get('x-yak-base-release')
-      let leave = await this.#enter(base != null)
-      let answer: Response
-      try {
-        if (logged(request)) answer = await this.#write(request)
-        else {
-          let no = await this.#ready(request)
-          if (no) answer = no
-          else {
-            // Writes kept during an outage land before a read is answered.
-            await this.#settle()
-            answer = await this.#serve(request)
-          }
-        }
-      } finally {
+    let run = () =>
+      tallying(tally, async () => {
+        let base = request.headers.get('x-yak-base-release')
+        let leave = await this.#enter(base != null)
+        let answer: Response
         try {
-          if (base != null) {
-            this.#select(
-              new Request('http://store/', {
-                headers: { 'x-yak-release': base },
-              }),
-            )
+          if (logged(request)) answer = await this.#write(request)
+          else {
+            let no = await this.#ready(request)
+            if (no) answer = no
+            else {
+              // Writes kept during an outage land before a read is answered.
+              await this.#settle()
+              answer = await this.#serve(request)
+            }
           }
         } finally {
-          this.#profile?.flush()
-          leave()
+          try {
+            if (base != null) {
+              this.#select(
+                new Request('http://store/', {
+                  headers: { 'x-yak-release': base },
+                }),
+              )
+            }
+          } finally {
+            this.#profile?.flush()
+            leave()
+          }
         }
-      }
-      if (answer.status == 101) return answer
-      let headers = new Headers(answer.headers)
-      let { hops, r2 } = counts(tally)
-      headers.set('x-yak-hops', String(hops))
-      headers.set('x-yak-stmts', String(tally.get('stmts') ?? 0))
-      if (tally.has('rows')) {
-        headers.set('x-yak-rows', String(tally.get('rows')))
-      }
-      headers.set('x-yak-r2', String(r2))
-      return new Response(answer.body, {
-        status: answer.status,
-        statusText: answer.statusText,
-        headers,
+        if (answer.status == 101) return answer
+        let headers = new Headers(answer.headers)
+        let { hops, r2 } = counts(tally)
+        headers.set('x-yak-hops', String(hops))
+        headers.set('x-yak-stmts', String(tally.get('stmts') ?? 0))
+        if (tally.has('rows')) {
+          headers.set('x-yak-rows', String(tally.get('rows')))
+        }
+        headers.set('x-yak-r2', String(r2))
+        return new Response(answer.body, {
+          status: answer.status,
+          statusText: answer.statusText,
+          headers,
+        })
       })
-    })
+    return this.#profile ? this.#profile.run(routeKind(request), run) : run()
   }
 
   /** Everything before a door: the object brought up to date and told what
@@ -2428,25 +2459,34 @@ export class Store {
     ws: Wire,
     data: string | ArrayBuffer,
   ): void | Promise<void> {
-    if (this.#draft) {
-      return this.#draft.then(() => this.webSocketMessage(ws, data))
+    let run = (): void | Promise<void> => {
+      if (this.#draft) {
+        return this.#draft.then(() => this.webSocketMessage(ws, data))
+      }
+      // A hibernated socket outlives a deploy, so one can wake an object
+      // whose schema refused to stand. The page must reopen the socket.
+      if (this.#unbuilt) return void this.#hangUp(ws)
+      try {
+        let prof = this.#profile
+        this.#live.message(
+          ws,
+          data,
+          prof ? (kind, work) => prof.run(`ws ${kind}`, work) : undefined,
+        )
+      } finally {
+        this.#profile?.flush()
+      }
     }
-    // A hibernated socket outlives a deploy, so one can wake an object whose
-    // schema refused to stand, where nothing above the storage exists. There
-    // is nothing to serve it: hang up, and the page opens a socket onto
-    // whatever answers next.
-    if (this.#unbuilt) return void this.#hangUp(ws)
-    try {
-      this.#live.message(ws, data)
-    } finally {
-      this.#profile?.flush()
-    }
+    return run()
   }
 
   /** That client went away. */
   webSocketClose(ws: Wire): void | Promise<void> {
-    if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))
-    if (!this.#unbuilt) this.#live.close(ws)
+    let run = (): void | Promise<void> => {
+      if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))
+      if (!this.#unbuilt) this.#live.close(ws)
+    }
+    return this.#profile ? this.#profile.run('ws close', run) : run()
   }
 
   /** Whether the boot refused, so nothing above the storage was raised. */
