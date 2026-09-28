@@ -25,6 +25,7 @@ import { companionView } from './companion-view.ts'
 import { type Act, dealbox } from './dealbox.ts'
 import { deals, type View } from './deals.ts'
 import { fires } from './fires.ts'
+import { exploration } from './explore.ts'
 import { map } from './map.ts'
 import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
@@ -114,6 +115,7 @@ let deal = deals(net)
 let folk = village(net, deal)
 let seen = sighting(net)
 let camp = fires(net)
+let explored = exploration(net)
 let g = game(net, folk.at)
 let toil = working(net)
 let walking = withoutSpent(v, (p) => toil.spent(p, net.now()))
@@ -895,6 +897,7 @@ let loop = (t: number) => {
       folk.tick(f)
       seen.tick(f)
       let found = camp.tick(f)
+      explored.tick(f)
       if (found) h.toast(`${LEVELS[found.level].name} fire found`, 'Toast-big')
       // A villager's new offer opens the quest card at once.
       let talk = f.talk
@@ -1014,7 +1017,7 @@ let loop = (t: number) => {
         return false
       })
       h.work(job)
-      m.show(f, job.nodes, way.marks, camp.known())
+      m.show(f, job.nodes, way.marks, camp.known(), explored.known())
       p.show(f)
       you.show(f.sheet, mine)
       skills.show(f)
@@ -1173,6 +1176,7 @@ chat.me(me)
 folk.me(me)
 seen.me(me)
 camp.me(me)
+explored.me(me)
 deal.me(me)
 if (!me.reads) {
   gateCard.innerHTML = `${TITLE}<p class=Gate_Lede>This vale is private.</p>${

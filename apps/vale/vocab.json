@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done, and where they were last seen, is kept in this app's store (player, look, seen, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "models": "open",
   "$defs": {
     "sfx": {
@@ -505,6 +505,25 @@
         }
       },
       "required": ["villager", "go"]
+    },
+    "explored": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "floor": "person",
+      "identity": ["player", "x", "z"],
+      "description": "One twenty-metre world cell visited by a hero. Each hero uncovers their own map. The identity lets visits from several tabs agree on one discovery.",
+      "properties": {
+        "player": {
+          "type": "string",
+          "ref": "player",
+          "death": "cascade",
+          "index": true
+        },
+        "x": { "type": "integer" },
+        "z": { "type": "integer" }
+      },
+      "required": ["player", "x", "z"]
     },
     "fire": {
       "component": true,

@@ -20,6 +20,7 @@ import { arriveOf, roadsOf } from './ways.ts'
 import type { Seen } from './work.ts'
 import { fireNear } from './fires.ts'
 import { villageOf } from './terrain.ts'
+import { REACH, revealed } from './explore.ts'
 
 // How far past the region's cell the map shows, in metres, and how many
 // metres a pixel of its chart is.
@@ -74,8 +75,9 @@ export let exits = (id: string): { at: Spot; side: Side; to: string }[] => {
 /** The map, drawn into its panel (panel.ts). */
 export let map = (panel: Panel, travel: (to: string) => void) => {
   panel.body.innerHTML =
-    `<div class=Map_Wrap><div class=Map><canvas class=Map_Ground></canvas><div class=Map_Marks></div></div><div class=Map_Travel></div></div>`
-  let canvas = panel.body.querySelector('canvas')!
+    `<div class=Map_Wrap><div class=Map><canvas class=Map_Ground></canvas><canvas class=Map_Fog></canvas><div class=Map_Marks></div></div><div class=Map_Travel></div></div>`
+  let canvas = panel.body.querySelector<HTMLCanvasElement>('.Map_Ground')!
+  let fog = panel.body.querySelector<HTMLCanvasElement>('.Map_Fog')!
   let marks = panel.body.querySelector<HTMLElement>('.Map_Marks')!
   let choices = panel.body.querySelector<HTMLElement>('.Map_Travel')!
   let near = false
@@ -93,6 +95,12 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let shown = ''
   let box: Box = [0, 0, SIZE]
   let was = ''
+  let fogWas: ReadonlyArray<Spot> | null = null
+  let fogCells: ReadonlyArray<Spot> | null = null
+  let fogAt: Spot = [NaN, NaN]
+  let points: Spot[] = []
+  let local: Spot[] = []
+  let localWas: ReadonlyArray<Spot> | null = null
   let choicesWas = ''
   let draw = (id: string) => {
     if (shown == id) return
@@ -100,6 +108,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     box = boxOf(id)
     panel.head(esc(LEVELS[id]?.name ?? id))
     was = ''
+    fogWas = null
+    fogCells = null
+    localWas = null
+    fog.width = fog.height = Math.round(box[2] / M)
     charted(...box, M).then((px) => {
       if (shown != id) return
       let n = Math.round(box[2] / M)
@@ -110,6 +122,31 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   // Where a point sits on the map, as a percentage across and down.
   let pct = (m: number, from: number) =>
     `${(clamp((m - from) / box[2], 0, 1) * 100).toFixed(2)}%`
+  let uncover = (points: ReadonlyArray<Spot>) => {
+    if (points == fogWas) return
+    fogWas = points
+    let ctx = fog.getContext('2d')!
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.fillStyle = '#22231f'
+    ctx.fillRect(0, 0, fog.width, fog.height)
+    ctx.globalCompositeOperation = 'destination-out'
+    for (let [x, z] of points) {
+      let cx = (x - box[0]) / M, cz = (z - box[1]) / M
+      let r = REACH / M
+      if (
+        cx + r < 0 || cz + r < 0 || cx - r > fog.width ||
+        cz - r > fog.height
+      ) continue
+      let shade = ctx.createRadialGradient(cx, cz, r - 5, cx, cz, r)
+      shade.addColorStop(0, '#000')
+      shade.addColorStop(1, 'transparent')
+      ctx.fillStyle = shade
+      ctx.beginPath()
+      ctx.arc(cx, cz, r, 0, 2 * Math.PI)
+      ctx.fill()
+    }
+    ctx.globalCompositeOperation = 'source-over'
+  }
 
   return {
     /** mark who is where this frame, the nodes, and where each quest tracked
@@ -119,9 +156,27 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       nodes: Seen[] = [],
       goals: Mark[] = [],
       visited: ReadonlySet<string> = new Set(),
+      explored: ReadonlyArray<Spot> = [],
     ) => {
       if (!panel.open) return
       draw(f.level)
+      if (localWas != explored) {
+        localWas = explored
+        local = explored.filter(([x, z]) =>
+          x + REACH >= box[0] && x - REACH <= box[0] + box[2] &&
+          z + REACH >= box[1] && z - REACH <= box[1] + box[2]
+        )
+      }
+      if (
+        fogCells != explored ||
+        Math.hypot(f.body.x - fogAt[0], f.body.z - fogAt[1]) >= 2
+      ) {
+        fogCells = explored
+        fogAt = [f.body.x, f.body.z]
+        points = [...local, fogAt]
+      }
+      uncover(points)
+      let visible = (x: number, z: number) => revealed([x, z], points)
       let here = f.down ? null : fireNear(f.body.x, f.body.z)
       near = !!here
       known = new Set(visited)
@@ -147,34 +202,36 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         `left:${pct(x, box[0])};top:${pct(z, box[1])}`
       let fire = villageOf(f.level)
       let html =
-        (fire
+        (fire && visible(...fire.at)
           ? `<i class=Map_Fire style="${at(...fire.at)}"${
             tipped({ name: `${LEVELS[f.level].name} fire` })
           }>${glyph('flame')}</i>`
           : '') +
-        goals.map((g) =>
+        goals.filter((g) => visible(...g.at)).map((g) =>
           `<i class=Map_Goal style="${at(...g.at)}"${
             tipped({ name: g.title })
           }></i>`
         ).join('') +
-        nodes.filter((n) => !n.prop || n.rarity != 'common').map((n) =>
+        nodes.filter((n) =>
+          (!n.prop || n.rarity != 'common') && visible(n.at[0], n.at[2])
+        ).map((n) =>
           `<i class="Map_Node Map_Node-${n.lode.trade}${
             n.spent ? ' Map_Node-spent' : ''
           } ${tint(n.rarity)}" style="${at(n.at[0], n.at[2])}"${
             tipped({ name: n.lode.name })
           }></i>`
         ).join('') +
-        exits(f.level).map((r) =>
+        exits(f.level).filter((r) => visible(...r.at)).map((r) =>
           `<span class="Map_Road Map_Road-${r.side}" style="${at(...r.at)}">${
             esc(LEVELS[r.to]?.name ?? r.to)
           }</span>`
         ).join('') +
-        f.givers.map((g) =>
+        f.givers.filter((g) => visible(g.x, g.z)).map((g) =>
           `<i class="Map_Giver${g.mark ? ' Map_Giver-quest' : ''}" style="${
             at(g.x, g.z)
           }"${tipped({ name: g.name })}>${g.mark}</i>`
         ).join('') +
-        f.others.map((o) =>
+        f.others.filter((o) => visible(o.body.x, o.body.z)).map((o) =>
           `<i class=Map_Other style="${at(o.body.x, o.body.z)}"${
             tipped({ name: o.name })
           }></i>`
