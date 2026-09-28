@@ -1,7 +1,7 @@
 // The one door to an embedded database: what `open()` sets on a connection,
 // and what its driver does once the connection is closed.
 
-import { assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { as, insert, lit, scan, select, val } from '@yaks/sql'
 import { open } from './db.ts'
 
@@ -21,17 +21,26 @@ Deno.test('a closed database refuses cached and new statements', () => {
   ) assertThrows(operation, Error, 'the database is closed')
 })
 
-Deno.test('a file opens in WAL with NORMAL sync', () => {
+Deno.test('a file opens in WAL with NORMAL sync and a bounded journal', () => {
   let dir = Deno.makeTempDirSync()
   let sql = open(`${dir}/nested/graph.db`)
   try {
     let pragma = (name: string) => sql.query({ t: 'pragma', name })[0]
     assertEquals(pragma('journal_mode'), { journal_mode: 'wal' })
     assertEquals(pragma('synchronous'), { synchronous: 1 })
+    let limit = pragma('journal_size_limit')?.journal_size_limit
+    assert(typeof limit == 'number' && Number.isFinite(limit) && limit >= 0)
   } finally {
     sql.close()
     Deno.removeSync(dir, { recursive: true })
   }
+})
+
+Deno.test('an in-memory database leaves the journal size unlimited', () => {
+  using sql = scratch()
+  assertEquals(sql.query({ t: 'pragma', name: 'journal_size_limit' }), [{
+    journal_size_limit: -1,
+  }])
 })
 
 Deno.test('a kept statement answers with the columns the schema now has', () => {

@@ -175,10 +175,10 @@ size, defaulting to `@yaks/sql`'s conservative `ARMS`; the embedded driver uses
 `@yaks/sqlite/db` exports `open(path)` and nothing of the embedded driver
 itself, so a driver swap touches only this package. `open` creates a missing
 directory and turns on foreign keys; a file also runs in WAL mode with
-`synchronous = normal` and a five-second busy timeout. It honors
-`DENO_SQLITE_PATH`, otherwise selecting the platform's system library. This
-module uses Deno environment/FFI APIs. The root adapter can instead receive
-another runtime's synchronous SQLite driver.
+`synchronous = normal`, a 64 MiB retained WAL limit, and a one-minute busy
+timeout. It honors `DENO_SQLITE_PATH`, otherwise selecting the platform's system
+library. This module uses Deno environment/FFI APIs. The root adapter can
+instead receive another runtime's synchronous SQLite driver.
 
 ### Exports
 

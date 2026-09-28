@@ -26,11 +26,11 @@ export type Opened = Driver & { close: () => void }
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
- * `synchronous = normal` and a one-minute busy timeout; a database in memory
- * belongs to this process alone and needs none of that. A graph change may be
- * a large atomic batch, so contention gives the one writer that bounded
- * minute to finish. A writer held longer is a performance failure, not a
- * reason for every other process to wait forever.
+ * `synchronous = normal`, a 64 MiB retained WAL limit, and a one-minute busy
+ * timeout; a database in memory belongs to this process alone and needs none
+ * of that. A graph change may be a large atomic batch, so contention gives
+ * the one writer that bounded minute to finish. A writer held longer is a
+ * performance failure, not a reason for every other process to wait forever.
  *
  * ```ts
  * import { open } from '@yaks/sqlite/db'
@@ -60,6 +60,7 @@ export let open = (path: string): Opened => {
   if (path != ':memory:') {
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
+    set('journal_size_limit', 64 * 1024 * 1024)
   }
   return {
     ...d,
