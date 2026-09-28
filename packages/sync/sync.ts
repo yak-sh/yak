@@ -46,7 +46,7 @@ export type Replica = {
   /** apply one frame; `mine` is what this node is saying itself, which a
    * reset frame leaves out (inbound.ts `hear`) */
   land: (frame: Frame, mine?: Mine) => Bundle[] | Promise<Bundle[]>
-  protect: (eids: Eid[]) => (accepted: boolean) => void
+  protect: (eids: Eid[]) => (accepted?: boolean) => void
 }
 
 /** Local priming is optional: an authoritative server query may not be
@@ -173,7 +173,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         report,
         held,
       }).then((result) => {
-        if (result.settled || held) release?.(!held && !!result.applied)
+        if (result.settled || held) release?.(!held && !!result.applied?.length)
       })
     ).catch((error) => report({ sent: [], error, reverted: false }))
   }

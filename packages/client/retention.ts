@@ -494,7 +494,12 @@ export let retention = (
     },
     land: (frame, mine) => {
       let sub = subscriptions.get(frame.id)
-      if (!sub || frame.refused) return []
+      if (!sub) return []
+      if (frame.refused) {
+        releaseAccepted(frame.id, accepted.get(frame.id) ?? [])
+        notify(frame.id)
+        return []
+      }
       if (
         sub.query === true &&
         (frame.coverage || frame.peerCoverage || frame.peers || frame.peerGone)
@@ -619,7 +624,7 @@ export let retention = (
       }
       for (let id of subscriptions.keys()) notify(id)
       let active = true
-      return (didAccept: boolean) => {
+      return (didAccept = false) => {
         if (!active || closed) return
         active = false
         if (didAccept) {
