@@ -80,16 +80,16 @@ export type Sight = {
  * // Walking, they face the way they walk and look ahead.
  * let g = run(2, -1, false, 2)
  * assertEquals(g.body, 2)
- * assertAlmostEquals(neck(g, 2), 0, 0.01)
+ * assertAlmostEquals(neck(g.eye, 2), 0, 0.01)
  * // Standing, they turn their head to a hero beside them, not their body,
  * // and it eases there.
  * assertEquals(run(null, 1, false, 2).body, 0)
- * assertAlmostEquals(neck(run(null, 1, false, 2), 0), 1, 0.01)
- * assert(neck(run(null, 1, false, 0.1), 0) < 0.5)
+ * assertAlmostEquals(neck(run(null, 1, false, 2).eye, 0), 1, 0.01)
+ * assert(neck(run(null, 1, false, 0.1).eye, 0) < 0.5)
  * // A hero behind them: the head turns as far as a neck goes; a while later
  * // the body turns, slowly, until it faces them.
  * assertEquals(run(null, 3, false, 1).body, 0)
- * assertAlmostEquals(neck(run(null, 3, false, 1), 0), 1.2, 0.05)
+ * assertAlmostEquals(neck(run(null, 3, false, 1).eye, 0), 1.2, 0.05)
  * assert(run(null, 3, false, 2.5).body < 1)
  * assertAlmostEquals(run(null, 3, false, 6).body, 3, 0.1)
  * // Talking to them, they turn to face them.
@@ -118,6 +118,36 @@ export let gaze = (g: Gaze, s: Sight, dt: number): Gaze => {
   return { body, eye, wait }
 }
 
-/** How far the head turns from a body facing `yaw` to look where `g` looks,
+/** How far the head turns from a body facing `yaw` to look toward `eye`,
  * within a neck's reach. */
-export let neck = (g: Gaze, yaw: number) => clamp(wrap(g.eye - yaw), NECK)
+export let neck = (eye: number, yaw: number) => clamp(wrap(eye - yaw), NECK)
+
+/** Ease a hero's head toward a selected target, or back ahead when none is
+ * held. The body bearing is only read; it is not steered toward the target.
+ *
+ * ```ts
+ * import { assertAlmostEquals } from '@std/assert'
+ * let at = { x: 0, z: 0, yaw: 0 }
+ * let eye = 0
+ * for (let i = 0; i < 30; i++) eye = focus(eye, at, { x: 4, z: 4 }, 0.05)
+ * assertAlmostEquals(eye, Math.PI / 4, 0.01)
+ * for (let i = 0; i < 30; i++) eye = focus(eye, at, null, 0.05)
+ * assertAlmostEquals(eye, 0, 0.01)
+ * assertAlmostEquals(focus(0, at, { x: 0, z: -4 }, 1), 1.2, 0.01)
+ * assertAlmostEquals(neck(-Math.PI + 0.1, Math.PI - 0.1), 0.2)
+ * assertAlmostEquals(focus(0, { ...at, yaw: Math.PI / 2 },
+ *   { x: 4, z: 0 }, 1), 0)
+ * ```
+ */
+export let focus = (
+  eye: number,
+  at: Spot & { yaw: number },
+  target: Spot | null,
+  dt: number,
+) => {
+  let toward = target && (target.x != at.x || target.z != at.z)
+    ? Math.atan2(target.x - at.x, target.z - at.z)
+    : at.yaw
+  let wanted = neck(toward, at.yaw)
+  return eye + (wanted - eye) * (1 - Math.exp(-dt * 8))
+}

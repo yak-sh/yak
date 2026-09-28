@@ -527,7 +527,7 @@ export let person = (
       torso.scale.y = 1 + Math.sin(a.t * 2.2) * 0.012
       head.rotation.set(
         -amp * 0.06,
-        Math.sin(a.t * 0.7) * 0.15 * (1 - amp) + (a.look ?? 0),
+        a.look ?? Math.sin(a.t * 0.7) * 0.15 * (1 - amp),
         0,
       )
       cape.rotation.x = 0.08 + amp * 0.7 + Math.sin(a.t * 5) * 0.04

@@ -28,7 +28,7 @@ import {
   person,
 } from './figures.ts'
 import type { overlay } from './fx.ts'
-import { type Gaze, gaze, neck } from './gaze.ts'
+import { focus, type Gaze, gaze, neck } from './gaze.ts'
 import { type Hand, handOf, kitOf } from './gear.ts'
 import { ITEMS, meshed, onGround } from './items.ts'
 import { laid } from './laid.ts'
@@ -55,6 +55,8 @@ type Actor = {
   y: number
   z: number
   yaw: number
+  /** head turn from the body's facing */
+  eye: number
   speed: number
   /** metres a second the way it faces, back when negative */
   ahead: number
@@ -310,6 +312,7 @@ export let cast = (
         y: 0,
         z: 0,
         yaw: 0,
+        eye: 0,
         speed: 0,
         ahead: 0,
         tumble: 0,
@@ -426,6 +429,12 @@ export let cast = (
         ? Math.atan2(work.x - f.body.x, work.z - f.body.z)
         : f.body.yaw
       glide(mine, f.body.x, f.body.y, f.body.z, facing, dt, 30)
+      mine.eye = focus(
+        mine.eye,
+        { x: mine.x, z: mine.z, yaw: mine.yaw },
+        f.aim?.body ?? null,
+        dt,
+      )
       tumble(mine, f.roll)
       plates.plate(
         me,
@@ -448,6 +457,7 @@ export let cast = (
           hand: f.swing >= 0 ? f.hand : 'main',
           hurt: Math.max(0, 1 - (now - mine.hurtAt) / 250),
           down: f.down,
+          look: mine.eye,
         },
         t,
         dt,
@@ -606,7 +616,7 @@ export let cast = (
           { x: a.x, z: a.z, walk: g.walk, heed: g.heed },
           dt,
         )
-        play(a, { look: neck(a.gaze, a.yaw) }, t, dt)
+        play(a, { look: neck(a.gaze.eye, a.yaw) }, t, dt)
         let mark = g.mark == '!'
           ? '<span class=Mark>!</span>'
           : g.mark == '?'
