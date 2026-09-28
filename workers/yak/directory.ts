@@ -9,7 +9,7 @@
 // in it, its home, a person's role) and writes the ones that change it (a
 // space born, an app born, a deploy). meta.ts is the store below it.
 //
-// Answers are cached per store in private Maps, with a 30-second TTL
+// Non-app answers are cached per store in private Maps, with a 30-second TTL
 // rather than the Cache API: a resolution is a few hundred bytes, the Cache
 // API is per-colo anyway and wants a synthetic Request as its key, and a Map
 // costs nothing to reason about; a rename shows within the TTL. An empty
@@ -18,8 +18,9 @@
 // space whose home app was just named answers its own hostname at once
 // rather than a TTL later. A write that goes around this door — the generic
 // graph tier aimed at (yak, platform) — is seen within the TTL like any
-// change made elsewhere. The cache is this part's own — no other module
-// reads it — and moves with it.
+// change made elsewhere. App rows select Store declarations, so each request
+// reads its space's app roster fresh and uses that one answer for every app it
+// serves. The cache is this part's own — no other module reads it.
 // The meta space seeds itself on first touch (space `yak`, app `platform`),
 // written as bundles through the store's /apply, so the directory can describe
 // its own store.
@@ -517,12 +518,10 @@ let seed = async (store: Meta) => {
 
 let notFound = () => new Response('not found', { status: 404 })
 
-// A read that must not be a moment old, asked for by the caller. The cache
-// above is per-isolate and 30 seconds wide, which is exactly the window a
-// deploy opens: the isolate serving the app has not heard of the bump the
-// deploy just made, so the first break after one named the version before it
-// (C-32869 item 4). A break is rare and its read is fresh; everything else
-// keeps the cache. The header is the kernel's own — a client's copy never
+// A read that must not be a moment old, asked for by the caller. App rows
+// always use this door so a release selects the consumer and its homes from
+// one directory answer. Other reads keep the 30-second cache unless their
+// caller asks fresh. The header is the kernel's own — a client's copy never
 // reaches here, since this part is only ever called with `bound`.
 export let FRESH = 'x-yak-fresh'
 
@@ -920,11 +919,10 @@ export let addresses = (had: string[]) => ({
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 
-// `now` makes every read of this client a fresh one (FRESH above): the agent
-// tier asks for it, because a tool answers right after a tool wrote, and the
-// cache is per-isolate — `app_versions` straight after `app_rollback` still
-// marked the version before it live (C-32905 item 5). Page traffic keeps the
-// cache; an agent's answer never disagrees with the write it just made.
+// `now` makes every read of this client fresh (FRESH above). App rows are
+// always fresh: the app and the homes it borrows from must select declarations
+// written by one directory commit, even when two isolates hold old caches.
+// A request asks the space's app roster once and reads every app from it.
 //
 // A request asks once. The door, the reach it answers over and the tool itself
 // each ask who the caller is and where they sit, and within one request those
@@ -988,16 +986,8 @@ export let directory = (via: Fetcher, now = false) => {
         .find((s) => s.slug != slug && s.slugs.includes(slug))
       return space ?? null
     },
-    // `fresh` skips the read cache: what a break names has to be the deploy
-    // it happened on, not one the cache is still holding (unseen.ts
-    // `serving`).
-    app: async (space: Space, slug: string, fresh = now) => {
-      let row = await one(
-        `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,
-        fresh,
-      )
-      return row ? appOf(row) : null
-    },
+    app: async (space: Space, slug: string) =>
+      (await self.apps(space)).find((app) => app.slug == slug) ?? null,
     // An address the app has left, still pointing at it. A rename moves
     // `app.slug` and keeps the old address in the app's `former`, so the answer
     // is the app of this space that still answers to the address asked for —
@@ -1015,7 +1005,8 @@ export let directory = (via: Fetcher, now = false) => {
     apps: async (space: Space | Space[]): Promise<App[]> => {
       let eids = [space].flat().map((s) => s.eid)
       if (!eids.length) return []
-      return (await query(`.app.space=${eids.join(',')}&${ABOUT}`)).map(appOf)
+      return (await query(`.app.space=${eids.join(',')}&${ABOUT}`, true))
+        .map(appOf)
     },
     // The space that pays as this Stripe customer (billing.ts). It is how a
     // subscription event is attributed when its metadata does not say — a
@@ -1047,11 +1038,13 @@ export let directory = (via: Fetcher, now = false) => {
     // One app by eid, with the space it belongs to — what an installed app's
     // pin names (`installed.of`), and how an offer is read back.
     appAt: async (eid: string) => {
-      let row = await one(`.eid=${eid}`)
+      let row = await one(`.eid=${eid}`, true)
       if (!row?.app) return null
       let app = appOf(row)
       let space = await self.at(app.space)
-      return space ? { space, app } : null
+      if (!space) return null
+      let selected = (await self.apps(space)).find((one) => one.eid == eid)
+      return selected ? { space, app: selected } : null
     },
     // What a hostname someone else owns is aimed at (T-33037, T-34596): the
     // hostname row, the space it opens, and the app when it opens one app
@@ -1131,11 +1124,8 @@ export let directory = (via: Fetcher, now = false) => {
     // stays on it so a restore puts the space back exactly as it was, and
     // until then the space is one with no front page — which is the ordinary
     // state and already has an answer everywhere.
-    home: async (space: Space) => {
-      let rows = await query(`.app.space=${space.eid}&.home&${ABOUT}`)
-      return rows.filter((r) => r.app).map(appOf).find((a) => !a.trashed) ??
-        null
-    },
+    home: async (space: Space) =>
+      (await self.apps(space)).find((app) => app.home && !app.trashed) ?? null,
     // A person's membership row: the eid, so an invite can revise or remove
     // the one that stands, and the role, which is the same question asked
     // shorter.

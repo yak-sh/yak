@@ -391,7 +391,7 @@ Deno.test(
 
     assertEquals(await collected(env), 1)
     assertEquals(
-      (await dir.app(space, 'live', true))!.title,
+      (await dir.app(space, 'live'))!.title,
       `Live ## Heading ${'x'.repeat(64)}`,
     )
     // The notes are under the one name read now, and the old one is gone.

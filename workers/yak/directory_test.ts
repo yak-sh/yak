@@ -1,14 +1,11 @@
-// The directory's read cache, and the one read that must not use it. Every
-// kernel part asks the directory who a space is and what an app is, and the
-// answers are cached per isolate for 30 seconds — cheap, and stale for at
-// most that long. A deploy opens exactly that window: the isolate serving the
-// app has not heard of the version bump, so a break in those seconds named
-// the deploy before the one it happened on (C-32869 item 4). A break is rare,
-// so the report path asks fresh.
+// Directory reads through its cache and the serving app roster that must be
+// fresh and coherent across apps in one request.
 import { assertEquals } from '@std/assert'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
+import { tallying } from './lib/hops.ts'
+import type { Meta } from './meta.ts'
 
 let space: Space = {
   eid: 's1',
@@ -56,6 +53,13 @@ let stub = () => {
           let url = new URL(r.url)
           // The boot seed asks whether the meta space exists; it does.
           if (url.search.includes('space.slug')) {
+            if (url.search.includes('space.slug%3Djeff')) {
+              at.reads++
+              return Response.json([{
+                entity: { eid: 's1', num: 1 },
+                space: { slug: 'jeff' },
+              }])
+            }
             return Response.json([
               { entity: { eid: 'm1', num: 1 }, space: { slug: 'yak' } },
             ])
@@ -105,6 +109,12 @@ let hosts = () => {
               hostname: { name: 'ourbookclub.com', serves: 's1' },
             }])
           }
+          if (q.includes('.app.space=s1')) {
+            return Response.json([{
+              entity: { eid: 'a1', num: 2 },
+              app: { slug: 'recipes', space: 's1', version: 1 },
+            }])
+          }
           if (q.includes('id=a1')) {
             return Response.json([{
               entity: { eid: 'a1', num: 2 },
@@ -141,22 +151,62 @@ Deno.test('a hostname on the space resolves to the space, with no app', async ()
   assertEquals(at?.host.serves, 's1')
 })
 
-Deno.test('a fresh read goes past the 30-second cache, and refills it', async () => {
+Deno.test('an app read selects the current release', async () => {
   let { at, dir } = stub()
   assertEquals((await dir.app(space, 'recipes'))?.version, 1)
   at.version = 2
-  // An ordinary read is the cached one — this is what the ninth user test's
-  // first break named.
-  assertEquals((await dir.app(space, 'recipes'))?.version, 1)
-  assertEquals(at.reads, 1)
-  // The read a break makes says what the app is serving now.
-  assertEquals((await dir.app(space, 'recipes', true))?.version, 2)
-  assertEquals(at.reads, 2)
-  // And it leaves the cache holding what it just learned, so the next
-  // ordinary read is not stale either.
-  at.version = 3
   assertEquals((await dir.app(space, 'recipes'))?.version, 2)
   assertEquals(at.reads, 2)
+})
+
+Deno.test('a release reaches consumer and home through stale isolate caches', async () => {
+  let version = 1
+  let reads = [0, 0]
+  let isolate = (i: number) => {
+    let store: Meta = {
+      query: (line) => {
+        reads[i]++
+        if (!line.includes('.app.space=s1')) return Promise.resolve([])
+        return Promise.resolve(['consumer', 'home'].map((slug) => ({
+          entity: { eid: slug },
+          app: {
+            slug,
+            space: 's1',
+            version: slug == 'consumer' ? version : 1,
+            declaration: `${slug}-${version}`,
+          },
+          ...(slug == 'home' ? { home: {} } : {}),
+        })))
+      },
+      apply: () => Promise.resolve([]),
+    }
+    let via = { fetch: dirPart.over(store) }
+    return { dir: directory(via), another: () => directory(via) }
+  }
+  let first = isolate(0)
+  let second = isolate(1)
+  // Both isolates still hold v1 in their 30-second caches when the directory
+  // commits the consumer release and home declaration together.
+  await first.dir.apps(space)
+  await second.dir.apps(space)
+  version = 2
+  await tallying(new Map(), async () => {
+    let consumer = await first.dir.app(space, 'consumer')
+    let home = await first.another().home(space)
+    assertEquals([consumer?.declaration, home?.declaration], [
+      'consumer-2',
+      'home-2',
+    ])
+  })
+  await tallying(new Map(), async () => {
+    let home = await second.dir.home(space)
+    let consumer = await second.another().app(space, 'consumer')
+    assertEquals([consumer?.declaration, home?.declaration], [
+      'consumer-2',
+      'home-2',
+    ])
+  })
+  assertEquals(reads, [2, 2])
 })
 
 // A comp is the platform holding one of its own spaces to no ceiling. It is a
@@ -355,11 +405,9 @@ Deno.test('signing in asks the directory a bounded number of questions', async (
 Deno.test('directory caches belong to a store, not the shared isolate', async () => {
   let a = stub()
   let b = stub()
-  a.at.version = 17
-  b.at.version = 23
-  assertEquals((await a.dir.app(space, 'recipes'))?.version, 17)
-  assertEquals((await b.dir.app(space, 'recipes'))?.version, 23)
-  assertEquals((await a.dir.app(space, 'recipes'))?.version, 17)
+  assertEquals((await a.dir.space('jeff'))?.slug, 'jeff')
+  assertEquals((await b.dir.space('jeff'))?.slug, 'jeff')
+  assertEquals((await a.dir.space('jeff'))?.slug, 'jeff')
   assertEquals(a.at.reads, 1)
   assertEquals(b.at.reads, 1)
 })

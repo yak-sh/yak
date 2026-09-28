@@ -3974,7 +3974,7 @@ let OURS: Row[] = [
       // app in hand has no offer on it at all.
       let shown: Standing | null = null
       if (show) {
-        let now = (await ctx.dir.app(space, app.slug, true))!
+        let now = (await ctx.dir.app(space, app.slug))!
         shown = await toGallery(ctx, space, now)
       } else if (show == false && onGallery(app) != 'no') {
         await unGallery(ctx.env, app)
