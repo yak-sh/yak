@@ -162,6 +162,7 @@ let toml = () =>
 let boot = async () => {
   // Loaded when a test asks: the runner imports this module for its Stripe
   // helpers and has no use for the kernel's whole graph.
+  await (await import('./wrangler.ts')).ready()
   let [{ handler }, { emailed, limiter, platform }] = await Promise.all([
     import('./kernel.ts'),
     import('./testing.ts'),
