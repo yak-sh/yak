@@ -67,15 +67,51 @@ flock -w 60 -x 9 || { echo "backup: another backup or redaction holds the lock" 
 # journal, or a reader may still hold the old inode open. Private paths also
 # mean a run that fails to acquire the lock cannot delete another run's DB.
 work=$(mktemp -d .git/yak-backup.XXXXXXXX)
+outside=
 snapshot="$work/snapshot.db"
 probe="$work/verify.db"
 cleanup() {
   rm -rf "$work"
+  [ -z "$outside" ] || rm -rf "$outside"
 }
 trap cleanup EXIT
 # The foreground SQLite child may still be unwinding when a signal reaches
-# this shell. Preserve its entire directory instead of unlinking open files.
-trap 'trap - EXIT; echo "backup: aborted; retained $work" >&2; exit 124' HUP INT QUIT TERM
+# this shell. Preserve both private directories instead of unlinking open files.
+abort() {
+  trap - EXIT
+  echo "backup: aborted; retained $work${outside:+ and $outside}" >&2
+  exit 124
+}
+trap abort HUP INT QUIT TERM
+
+# An optional scratch filesystem holds only the VACUUM snapshot. Refuse one
+# without room for the live db plus its WAL and a small filesystem reserve.
+# All other temporary files remain under .git, and only our private directory
+# on the scratch filesystem is ever removed.
+if [ -n "${YAK_BACKUP_SNAPSHOT_DIR:-}" ]; then
+  case "$YAK_BACKUP_SNAPSHOT_DIR" in
+    /*) ;;
+    *) echo "backup: snapshot directory must be absolute" >&2; exit 1 ;;
+  esac
+  [ -d "$YAK_BACKUP_SNAPSHOT_DIR" ] || {
+    echo "backup: snapshot directory does not exist: $YAK_BACKUP_SNAPSHOT_DIR" >&2
+    exit 1
+  }
+  size=$(stat -c %s yak.db)
+  wal=0
+  [ ! -f yak.db-wal ] || wal=$(stat -c %s yak.db-wal)
+  need=$(( (size + wal + 67108864 + 1023) / 1024 ))
+  free=$(df -Pk "$YAK_BACKUP_SNAPSHOT_DIR" | awk 'NR == 2 { print $4 }')
+  case "$free" in
+    ''|*[!0-9]*) echo "backup: cannot measure snapshot space" >&2; exit 1 ;;
+  esac
+  [ "$free" -ge "$need" ] || {
+    echo "backup: snapshot directory needs $need KiB, has $free KiB" >&2
+    exit 1
+  }
+  outside=$(mktemp -d "$YAK_BACKUP_SNAPSHOT_DIR/yak-backup.XXXXXXXX")
+  snapshot="$outside/snapshot.db"
+fi
 mkdir -p snap
 
 # Plain output regardless of any ~/.sqliterc (box modes break the checks).
@@ -108,7 +144,8 @@ sq yak.db "PRAGMA quick_check;" | grep -qx ok || {
 # run covers ungraceful exits (crash/kill) that never reach the drain.
 sq yak.db "PRAGMA optimize;"
 
-sq yak.db "VACUUM INTO '$snapshot'"
+quoted=$(printf '%s' "$snapshot" | sed "s/'/''/g")
+sq yak.db "VACUUM INTO '$quoted'"
 sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
   echo "backup: snapshot failed integrity_check" >&2
   exit 1

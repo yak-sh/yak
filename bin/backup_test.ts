@@ -79,12 +79,13 @@ let fixture = async () => {
   return {
     dir,
     db,
-    backup: (timeout = '30') =>
+    backup: (timeout = '30', snapshotDir = '') =>
       new Deno.Command(script, {
         env: {
           YAK_DATA: dir,
           YAK_BACKUP_BOUND: '',
           YAK_BACKUP_TIMEOUT: timeout,
+          YAK_BACKUP_SNAPSHOT_DIR: snapshotDir,
         },
       }).output(),
     close: async () => {
@@ -175,6 +176,47 @@ Deno.test(
     }
   },
 )
+
+Deno.test('a separate snapshot directory is private and cleaned', async () => {
+  let f = await fixture()
+  let scratch = await Deno.makeTempDir({ prefix: 'yak-snapshot-' })
+  try {
+    let out = await f.backup('30', scratch)
+    assert(out.success, decode(out.stderr))
+    assertEquals([...Deno.readDirSync(scratch)], [])
+    await run(
+      'git',
+      ['cat-file', '-e', 'HEAD:snap/graph.sql.part.000.zst'],
+      f.dir,
+    )
+  } finally {
+    await f.close()
+    await Deno.remove(scratch)
+  }
+})
+
+Deno.test('a snapshot directory without enough space is refused', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'yak-backup-capacity-' })
+  let scratch = await Deno.makeTempDir({ prefix: 'yak-snapshot-' })
+  try {
+    await run('git', ['init', '-q'], dir)
+    await Deno.writeTextFile(`${dir}/yak.db`, '')
+    await Deno.truncate(`${dir}/yak.db`, 2 ** 40)
+    let out = await new Deno.Command(script, {
+      env: {
+        YAK_DATA: dir,
+        YAK_BACKUP_BOUND: '1',
+        YAK_BACKUP_SNAPSHOT_DIR: scratch,
+      },
+    }).output()
+    assert(!out.success)
+    assert(decode(out.stderr).includes('snapshot directory needs'))
+    assertEquals([...Deno.readDirSync(scratch)], [])
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+    await Deno.remove(scratch)
+  }
+})
 
 Deno.test('the restore proof compares against snapshot row counts', async () => {
   let f = await fixture()
