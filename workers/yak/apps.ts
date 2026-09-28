@@ -85,7 +85,7 @@ import { covers, PLATFORM_PATHS } from './router.ts'
 import { nobody, titling, vouched, type Who, whoIs } from './session.ts'
 import { seedy } from './seed.ts'
 import { nameOf } from './signin.ts'
-import { type Reach, split, written } from './reach.ts'
+import { type Reach, read, split, written } from './reach.ts'
 import type { Bundle } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
@@ -882,24 +882,31 @@ let borrowed = async (
     .map((one) => ({ space, app: one, who }))
 }
 
-// Where a filter line's words live, when every word it names is one this app
-// borrows from a single other app. Anything else is this app's own store: a
-// line spanning two stores is a composition, which the agent door's federated
-// read owns and a template's one line does not.
-let homeOf = async (
+// A page reads a borrowed word where it lives, including a line that spans
+// the app's own store and a home. The same graph read serves app commands;
+// ordinary lines stay on this app's store so `.doc` still names its own rows.
+let queried = async (
   env: Env,
   space: Space,
   app: App,
+  who: Who,
   line: string,
-): Promise<Door | null> => {
+): Promise<unknown> => {
+  let asked = asking(line)
   let uses = await usesOf(env, space, app)
-  if (!Object.keys(uses).length) return null
   let names = [...split(line).parts.keys()]
-  if (!names.length || !names.every((n) => uses[n])) return null
-  let slugs = [...new Set(names.map((n) => uses[n]))]
-  if (slugs.length != 1) return null
-  let [home] = await appsAt(env, space, slugs)
-  return home ? appStore(env.STORE, space, home, env) : null
+  let slugs = [...new Set(names.map((n) => uses[n]).filter(Boolean))]
+  let mine = { space, app, who }
+  if (slugs.length) {
+    let homes = (await appsAt(env, space, slugs))
+      .map((one) => ({ space, app: one, who }))
+    return read(env, [mine, ...homes], asked)
+  }
+  let store = appStore(env.STORE, space, app, env)
+  let rows = await metaOf((path, init, headers) =>
+    store(path, init, { ...vouched(who), ...headers })
+  ).query(asked)
+  return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
 }
 
 // The app's two acts, as one person: what a page does through the doors
@@ -950,17 +957,9 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
         aliases: minted(applied),
       }
     },
-    query: async (line: string) => {
+    query: (line: string) => {
       if (!reads(mode(app.access), who.role)) no('not_a_reader')
-      let asked = asking(lined(line))
-      // A line about a borrowed word is asked where that word lives. One
-      // home per line: a filter spanning two stores is a composition, and
-      // the agent door's federated read is where that is done.
-      let door = await homeOf(env, space, app, line) ?? store
-      let rows = await metaOf((path, init, headers) =>
-        door(path, init, { ...vouched(who), ...headers })
-      ).query(asked)
-      return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
+      return queried(env, space, app, who, lined(line))
     },
   }
 }
@@ -1107,17 +1106,9 @@ let api = async (
     // the whole line as one parameter (wire.ts `lined`). The ask then carries
     // the listing's own screen (listing.ts `asking`), so what a count counts is
     // what a list lists.
-    let asked = asking(lined(new URL(req.url).search.slice(1)))
     try {
-      let rows = await metaOf((at, init, sent) =>
-        store(at, init, { ...headers, ...sent })
-      ).query(asked)
-      // The same rule the person's agent reads a listing by (listing.ts): one
-      // filter line, one answer, whichever door asked it. An aggregate is not
-      // a listing — `.count` answers one number — so it passes through whole.
-      return Response.json(
-        Array.isArray(rows) ? listed(rows as Row[], asked) : rows,
-      )
+      let line = lined(new URL(req.url).search.slice(1))
+      return Response.json(await queried(env, space, app, who, line))
     } catch (e) {
       caught(e, { request: 'GET /api/query', space: space.slug, app: app.slug })
       return json(400, 'refused', e instanceof Error ? e.message : String(e))

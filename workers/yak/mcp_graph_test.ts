@@ -707,8 +707,8 @@ Deno.test('a word the space already has is used where it lives', async () => {
     })
     assertStringIncludes(
       second,
-      "warning: book lives in reading-list; this app's ./api/ page client cannot use it; " +
-        'graph_apply and commands route to reading-list',
+      'warning: book lives in reading-list; ./api/query, graph_apply and ' +
+        "commands route to reading-list; ./api/apply and ./api/ws use this app's store",
     )
     assertStringIncludes(second, 'components: loan')
     assertEquals(second.includes('components: book'), false)
@@ -876,7 +876,7 @@ Deno.test('a word the space already has is used where it lives', async () => {
   }
 })
 
-Deno.test('a page gets its word after the scratch home leaves', async () => {
+Deno.test('a page queries a borrowed word at its home', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'flame74', apps: ['probe', 'vale'] }])
@@ -894,8 +894,24 @@ Deno.test('a page gets its word after the scratch home leaves', async () => {
     await deploy('probe')
     assertStringIncludes(
       await deploy('vale'),
-      "this app's ./api/ page client cannot use it",
+      'fire lives in probe',
     )
+
+    let saved = await agent.tool('graph_apply', {
+      space: 'flame74',
+      app: 'vale',
+      entities: [{
+        entity: { eid: '$fire' },
+        fire: { village: 'Vale' },
+        doc: { title: 'Campfire' },
+      }],
+    })
+    let eid = minted(saved, '$fire')
+    await agent.tool('graph_apply', {
+      space: 'flame74',
+      app: 'probe',
+      entities: [{ entity: { eid: '$other' }, doc: { title: 'Probe' } }],
+    })
 
     let page = (path: string) =>
       k.at('flame74.yaks.app', `/vale/api/${path}`, {
@@ -909,8 +925,21 @@ Deno.test('a page gets its word after the scratch home leaves', async () => {
     }
     assertEquals(await speaks(), false)
     let before = await page('query?.fire')
-    assertEquals(before.status, 400)
-    assertStringIncludes(await before.text(), 'unknown prop: .fire')
+    assertEquals(before.status, 200)
+    let [fire] = await before.json()
+    assertEquals(fire.entity.eid, eid)
+    assertEquals(fire.fire.village, 'Vale')
+    assertEquals(
+      (await (await page('query?.fire&?doc')).json())[0].doc.title,
+      'Campfire',
+    )
+    assertEquals(await (await page('query?.fire&.count')).json(), { count: 1 })
+    assertEquals(
+      (await (await page('query?.doc')).json()).map((
+        r: { doc: { title: string } },
+      ) => r.doc.title),
+      ['Campfire'],
+    )
 
     await agent.tool('app_delete', { space: 'flame74', app: 'probe' })
     assertStringIncludes(
@@ -1008,8 +1037,8 @@ Deno.test('an app declares which of its own properties are searched', async () =
     )
     assertStringIncludes(
       second,
-      "warning: recipe lives in kitchen; this app's ./api/ page client cannot use it; " +
-        'graph_apply and commands route to kitchen',
+      'warning: recipe lives in kitchen; ./api/query, graph_apply and ' +
+        "commands route to kitchen; ./api/apply and ./api/ws use this app's store",
     )
     await agent.tool('graph_apply', {
       app: 'menus',

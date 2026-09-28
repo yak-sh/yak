@@ -76,7 +76,7 @@ Declare `book` in a second app of the same space and nothing is planted twice.
 The first app in the space to declare a component is its _home_; a later
 manifest naming it is a use, not a second declaration. The deploy reports that:
 
-    warning: book lives in reading-list; this app's ./api/ page client cannot use it; graph_apply and commands route to reading-list
+    warning: book lives in reading-list; ./api/query, graph_apply and commands route to reading-list; ./api/apply and ./api/ws use this app's store
     components: loan
 
 `book` is missing from `components:` on purpose — the lending app homes only
@@ -100,13 +100,15 @@ writable from either app:
         "to": { "type": "string" } } } } }
     → added: book.isbn
 
-**From an agent's tools and from an app's own commands, a borrowed component
-just works**: `graph_apply { app: 'lending', entities: [{ book: … }] }` lands in
-the reading list's store, and a command of the lending app may name `book` in
-its `apply` or its `query`. **From a page it does not**: `./api/apply` and
-`./api/query` are this app's own HTTP endpoints onto its own store, so a page
-that writes a borrowed component gets `unknown component: book`. Reach the home
-app by its address instead — `store('/reading-list/api/')`, below.
+From an agent's tools, an app's commands and a page query, a borrowed component
+reads where it lives. `graph_apply { app: 'lending', entities: [{ book: … }] }`
+lands in the reading list's store, and a command of the lending app may name
+`book` in its `apply` or its `query`. The lending page can ask
+`query('.book&?loan')`, joining its own `loan` to the home app's `book`.
+
+Page writes and live subscriptions still speak the page app's own store:
+`./api/apply` cannot write `book` through lending, and `./api/ws` cannot watch
+it there. Use `store('/reading-list/api/')` for the home app's write or watch.
 
 ## The one refusal: a shape conflict
 
@@ -167,8 +169,9 @@ path like any other, so `store('/reading/api/')` is the same store as the bare
 
 These are that app's own endpoints, so that app's `access` decides: a `private`
 sibling answers its members only, whoever is asking, and a `public` one accepts
-writes from a member and reads from anyone with the link. Nothing about being a
-neighbour grants anything.
+writes from a member and reads from anyone with the link. A page query naming a
+borrowed word also checks access to its home. Nothing about being a neighbour
+grants anything.
 
 ## `graph_query` with no app named
 
@@ -221,7 +224,7 @@ Two apps, one shelf of books.
 
 The lending deploy reports:
 
-    warning: book lives in reading-list; this app's ./api/ page client cannot use it; graph_apply and commands route to reading-list
+    warning: book lives in reading-list; ./api/query, graph_apply and commands route to reading-list; ./api/apply and ./api/ws use this app's store
     components: loan
 
 Now one call writes both halves:
@@ -234,15 +237,11 @@ Now one call writes both halves:
 
 `doc` and `book` land in the reading list; `loan` lands in lending; the alias is
 minted once, so both are the same entity. Each app's own page draws its own half
-— the reading list's `query('.book&?doc')` never mentions loans — and either
-page can borrow the other's view when it wants it:
+— the reading list's `query('.book&?doc')` never mentions loans — and the
+lending page can read both of its declared words through one query:
 
-    let out = await store('/lending/api/').query('.loan')
-    let due = new Map(out.map((r) => [r.entity.eid, r.loan.due]))
-
-    for (let b of await query('.book&?doc')) {
-      draw(b.doc.title, due.get(b.entity.eid))
-    }
+    let out = await query('.book&?loan&?doc')
+    for (let b of out) draw(b.doc.title, b.loan?.due)
 
 And the person's agent sees the whole thing at once, without naming an app:
 
