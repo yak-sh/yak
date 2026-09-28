@@ -1,7 +1,7 @@
-// A missing sound leaves a procedural voice available, then a later request
-// can load the blob; simultaneous callers share one fetch and decode.
+// Hosted sound rows name the blob the player hears; the listening set keeps
+// its reviewed clips even if a builder has a candidate with the same name.
 import { assertEquals, assertStrictEquals } from '@std/assert'
-import { load, loaded, SAMPLES } from './samples.ts'
+import { blendLoop, catalog, load, loaded, SAMPLES } from './samples.ts'
 
 Deno.test('sound samples retry a missing blob and share a successful load', async () => {
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -52,4 +52,32 @@ Deno.test('sound samples retry a missing blob and share a successful load', asyn
     else Reflect.deleteProperty(globalThis, 'document')
     if (report) Object.defineProperty(globalThis, 'reportError', report)
   }
+})
+
+Deno.test('hosted audio outputs supply clips without replacing the listening set', () => {
+  assertEquals(
+    catalog([
+      {
+        doc: { title: 'water' },
+        built: { artifact: 'water-blob', media_type: 'audio/mpeg' },
+      },
+      {
+        doc: { title: 'campfire' },
+        built: { artifact: 'new-fire', media_type: 'audio/mpeg' },
+      },
+      {
+        doc: { title: 'letter' },
+        built: { artifact: 'not-a-sound', media_type: 'text/plain' },
+      },
+    ]),
+    { water: 'water-blob' },
+  )
+})
+
+Deno.test('an ambient overlap meets at neighboring source samples', () => {
+  let input = new Float32Array([0, 1, 2, 3, 4, 5, 6, 7])
+  let output = blendLoop(input, 2)
+  assertEquals(output.length, 6)
+  assertEquals(output[0], 4)
+  assertEquals(output[5], 5)
 })

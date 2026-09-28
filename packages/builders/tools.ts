@@ -57,7 +57,15 @@ export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
     let shadow = alternate
       ? `shadow:${sha256(JSON.stringify([desk.provider, desk.model, prompt]))}`
       : undefined
-    let o = { desk, rest: options.rest, vocab: host.vocab, shadow, prompt }
+    let o = {
+      desk,
+      rest: options.rest,
+      vocab: host.vocab,
+      shadow,
+      prompt,
+      ...(model ? { model } : {}),
+      ...(provider ? { provider } : {}),
+    }
     let v = await graph.storage.tx((tx) =>
       decide(o, builder, tx, clock(), false)
     )

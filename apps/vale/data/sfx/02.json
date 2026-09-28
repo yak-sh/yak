@@ -1,0 +1,240 @@
+[
+  {
+    "entity": {
+      "eid": "$surf"
+    },
+    "alias": {
+      "name": "sfx:surf"
+    },
+    "doc": {
+      "title": "surf",
+      "body": "Sound effect only: About eight seconds of ocean shore ambience: rolling waves swell, break gently in scattered sprays, and draw back across wet sand. Continuous natural bed. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "surf",
+      "loop": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-surf"
+    },
+    "alias": {
+      "name": "sfx-builder:surf"
+    },
+    "doc": {
+      "title": "surf sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=surf",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$marsh"
+    },
+    "alias": {
+      "name": "sfx:marsh"
+    },
+    "doc": {
+      "title": "marsh",
+      "body": "Sound effect only: About eight seconds of quiet marsh water: infrequent soft laps, gas bubbles rising through mud and occasional little plops. Continuous natural bed, no frogs. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "marsh",
+      "loop": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-marsh"
+    },
+    "alias": {
+      "name": "sfx-builder:marsh"
+    },
+    "doc": {
+      "title": "marsh sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=marsh",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$frog"
+    },
+    "alias": {
+      "name": "sfx:frog"
+    },
+    "doc": {
+      "title": "frog",
+      "body": "Sound effect only: A nearby marsh frog gives two or three short raspy croaks, each pulsing from its throat, the last lower. Isolated animal call, no ambience. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "frog",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-frog"
+    },
+    "alias": {
+      "name": "sfx-builder:frog"
+    },
+    "doc": {
+      "title": "frog sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=frog",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$hit"
+    },
+    "alias": {
+      "name": "sfx:hit"
+    },
+    "doc": {
+      "title": "hit",
+      "body": "Sound effect only: A short, solid melee blow lands on a creature: muffled body impact with a small bright edge and quick decay, without a weapon swing. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "hit",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-hit"
+    },
+    "alias": {
+      "name": "sfx-builder:hit"
+    },
+    "doc": {
+      "title": "hit sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=hit",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$hit-great"
+    },
+    "alias": {
+      "name": "sfx:hit-great"
+    },
+    "doc": {
+      "title": "hit-great",
+      "body": "Sound effect only: A powerful melee blow lands on a creature: heavier low body impact, sharper bright crack and brief satisfying decay. One impact only. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "hit-great",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-hit-great"
+    },
+    "alias": {
+      "name": "sfx-builder:hit-great"
+    },
+    "doc": {
+      "title": "hit-great sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=hit-great",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$struck"
+    },
+    "alias": {
+      "name": "sfx:struck"
+    },
+    "doc": {
+      "title": "struck",
+      "body": "Sound effect only: Another hero receives a melee blow nearby: a solid but somewhat distant body impact, quick dry decay. One hit only. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "struck",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-struck"
+    },
+    "alias": {
+      "name": "sfx-builder:struck"
+    },
+    "doc": {
+      "title": "struck sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=struck",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$swing"
+    },
+    "alias": {
+      "name": "sfx:swing"
+    },
+    "doc": {
+      "title": "swing",
+      "body": "Sound effect only: One quick unarmed or light-weapon swing misses through air: a brief soft swish that dies immediately. No impact. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "swing",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-swing"
+    },
+    "alias": {
+      "name": "sfx-builder:swing"
+    },
+    "doc": {
+      "title": "swing sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=swing",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]

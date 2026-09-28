@@ -1,0 +1,240 @@
+[
+  {
+    "entity": {
+      "eid": "$quest"
+    },
+    "alias": {
+      "name": "sfx:quest"
+    },
+    "doc": {
+      "title": "quest",
+      "body": "Sound effect only: A quest is accepted or finished: a small warm three-note chime, distinct from the level-up flourish. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "quest",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-quest"
+    },
+    "alias": {
+      "name": "sfx-builder:quest"
+    },
+    "doc": {
+      "title": "quest sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=quest",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$spoil-rare"
+    },
+    "alias": {
+      "name": "sfx:spoil-rare"
+    },
+    "doc": {
+      "title": "spoil-rare",
+      "body": "Sound effect only: A rare gear piece drops: one delicate high metal chime with a second answering overtone, brief tail. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "spoil-rare",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-spoil-rare"
+    },
+    "alias": {
+      "name": "sfx-builder:spoil-rare"
+    },
+    "doc": {
+      "title": "spoil-rare sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=spoil-rare",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$spoil-epic"
+    },
+    "alias": {
+      "name": "sfx:spoil-epic"
+    },
+    "doc": {
+      "title": "spoil-epic",
+      "body": "Sound effect only: An epic gear piece drops: four ascending resonant metal chimes, bright and celebratory but brief. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "spoil-epic",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-spoil-epic"
+    },
+    "alias": {
+      "name": "sfx-builder:spoil-epic"
+    },
+    "doc": {
+      "title": "spoil-epic sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=spoil-epic",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$spoil-legendary"
+    },
+    "alias": {
+      "name": "sfx:spoil-legendary"
+    },
+    "doc": {
+      "title": "spoil-legendary",
+      "body": "Sound effect only: A legendary gear piece drops: deep warm boom beneath six ascending resonant bells and one long high bell, dramatic but clean. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "spoil-legendary",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-spoil-legendary"
+    },
+    "alias": {
+      "name": "sfx-builder:spoil-legendary"
+    },
+    "doc": {
+      "title": "spoil-legendary sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=spoil-legendary",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$stroke-wood"
+    },
+    "alias": {
+      "name": "sfx:stroke-wood"
+    },
+    "doc": {
+      "title": "stroke-wood",
+      "body": "Sound effect only: One axe strike bites into a tree trunk: sharp woody chop, fiber split and short leaf rustle. No falling tree. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "stroke-wood",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-stroke-wood"
+    },
+    "alias": {
+      "name": "sfx-builder:stroke-wood"
+    },
+    "doc": {
+      "title": "stroke-wood sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=stroke-wood",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$stroke-ore"
+    },
+    "alias": {
+      "name": "sfx:stroke-ore"
+    },
+    "doc": {
+      "title": "stroke-ore",
+      "body": "Sound effect only: One pickaxe strike on a mineral seam: bright stone-and-metal clink with tiny grit scattering. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "stroke-ore",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-stroke-ore"
+    },
+    "alias": {
+      "name": "sfx-builder:stroke-ore"
+    },
+    "doc": {
+      "title": "stroke-ore sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=stroke-ore",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$stroke-herb"
+    },
+    "alias": {
+      "name": "sfx:stroke-herb"
+    },
+    "doc": {
+      "title": "stroke-herb",
+      "body": "Sound effect only: A small clump of herbs is pulled: soft leaf swish and root fibers loosening from soil. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "stroke-herb",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-stroke-herb"
+    },
+    "alias": {
+      "name": "sfx-builder:stroke-herb"
+    },
+    "doc": {
+      "title": "stroke-herb sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=stroke-herb",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]

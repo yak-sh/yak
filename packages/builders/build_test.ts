@@ -6,6 +6,7 @@ import {
 } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
+import { artifactDoc } from '@yaks/blob/vocab'
 import { status } from '@yaks/kernel'
 import { effectsIn } from '@yaks/vocab'
 import { counter, ids, noon, shop, workshop } from './testing.ts'
@@ -162,6 +163,75 @@ Deno.test('the same key opens nothing, and a changed input changes the run key',
   await stir(g)
   assertEquals(await sessions(g), 2)
   assertNotEquals(comp(await one(g, run(ids.builder)), 'build')?.key, before)
+})
+
+Deno.test('artifact builders cite one description and rebuild only its output', async () => {
+  let { g, failed } = await shop({
+    desk: scribe,
+    now: noon,
+    eid: counter(),
+  }, [artifactDoc])
+  let sound = (name: string, body: string) => ({
+    entity: { eid: `sound-${name}` },
+    doc: { title: name, body },
+  })
+  let builder = (name: string) => ({
+    entity: { eid: `build-${name}` },
+    doc: { body: 'Make an isolated sound effect.' },
+    builder: {
+      query: `.doc.title=${name}`,
+      model: ids.other,
+      format: 'artifact',
+      immediate: true,
+    },
+  })
+  let attach = async (name: string, address: string) => {
+    let session = String(
+      comp(await one(g, run(`build-${name}`)), 'build')?.session,
+    )
+    await g.apply([{
+      entity: { eid: address },
+      artifact: { address, media_type: 'audio/mpeg', size: 100 },
+    }, {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session, seq: 2 },
+      output: { source: 'ask' },
+      content: { body: `Generated media: ${address}` },
+      attachment: { artifact: address },
+    }])
+  }
+  await g.apply([
+    sound('water', 'Gentle stream.'),
+    sound('bird', 'Small bird call.'),
+    builder('water'),
+    builder('bird'),
+  ])
+  assertEquals(await sessions(g), 2)
+  let waterRun = await one(g, run('build-water'))
+  assertEquals(comp(waterRun, 'build')?.model, ids.other)
+  assertEquals(
+    comp(waterRun, 'build')?.prompt,
+    'Make an isolated sound effect.\n\nGentle stream.',
+  )
+  await attach('water', 'water-1')
+  await attach('bird', 'bird-1')
+  let water = output('build-water')
+  assertEquals(comp(await one(g, water), 'built')?.artifact, 'water-1')
+  assertEquals(
+    comp(await one(g, water), 'doc')?.body,
+    'Make an isolated sound effect.\n\nGentle stream.',
+  )
+  let citation = edgeEid(water, 'cites', 'sound-water')
+  assertEquals(comp(await one(g, citation), 'edge')?.to, 'sound-water')
+  await g.apply([sound('water', 'Gentle stream with bubbles.')])
+  assertEquals(await sessions(g), 3)
+  assertEquals(
+    comp(await one(g, output('build-bird')), 'built')?.artifact,
+    'bird-1',
+  )
+  await attach('water', 'water-2')
+  assertEquals(comp(await one(g, water), 'built')?.artifact, 'water-2')
+  assertEquals(failed, [])
 })
 
 Deno.test('immediate builders respond to new, changed and removed query matches', async () => {

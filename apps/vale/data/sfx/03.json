@@ -1,0 +1,240 @@
+[
+  {
+    "entity": {
+      "eid": "$roll"
+    },
+    "alias": {
+      "name": "sfx:roll"
+    },
+    "doc": {
+      "title": "roll",
+      "body": "Sound effect only: A hero rolls across packed earth: short rush of cloth and scuff of boots, low and soft, under half a second. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "roll",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-roll"
+    },
+    "alias": {
+      "name": "sfx-builder:roll"
+    },
+    "doc": {
+      "title": "roll sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=roll",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$dodge"
+    },
+    "alias": {
+      "name": "sfx:dodge"
+    },
+    "doc": {
+      "title": "dodge",
+      "body": "Sound effect only: A hero evades a blow with one nimble sidestep: quick airy swish, boot scrape and a faint high accent. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "dodge",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-dodge"
+    },
+    "alias": {
+      "name": "sfx-builder:dodge"
+    },
+    "doc": {
+      "title": "dodge sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=dodge",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$hurt"
+    },
+    "alias": {
+      "name": "sfx:hurt"
+    },
+    "doc": {
+      "title": "hurt",
+      "body": "Sound effect only: A hero is hurt: one restrained low human pain grunt with a brief body-impact thud. No words or prolonged cry. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "hurt",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-hurt"
+    },
+    "alias": {
+      "name": "sfx-builder:hurt"
+    },
+    "doc": {
+      "title": "hurt sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=hurt",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$pick"
+    },
+    "alias": {
+      "name": "sfx:pick"
+    },
+    "doc": {
+      "title": "pick",
+      "body": "Sound effect only: A small useful item is picked up: a delicate two-note bright chime with a short natural tail, warm fantasy game feel. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "pick",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-pick"
+    },
+    "alias": {
+      "name": "sfx-builder:pick"
+    },
+    "doc": {
+      "title": "pick sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=pick",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$fall"
+    },
+    "alias": {
+      "name": "sfx:fall"
+    },
+    "doc": {
+      "title": "fall",
+      "body": "Sound effect only: A hero falls to the ground: one low soft thud followed by a short settling scrape. No voice. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "fall",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-fall"
+    },
+    "alias": {
+      "name": "sfx-builder:fall"
+    },
+    "doc": {
+      "title": "fall sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=fall",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$heal"
+    },
+    "alias": {
+      "name": "sfx:heal"
+    },
+    "doc": {
+      "title": "heal",
+      "body": "Sound effect only: A healing ability restores a hero: a warm, brief ascending shimmer of gentle glassy tones, no music phrase. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "heal",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-heal"
+    },
+    "alias": {
+      "name": "sfx-builder:heal"
+    },
+    "doc": {
+      "title": "heal sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=heal",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$level"
+    },
+    "alias": {
+      "name": "sfx:level"
+    },
+    "doc": {
+      "title": "level",
+      "body": "Sound effect only: A hero gains a level: a short uplifting four-note bell flourish, clear and satisfying, about half a second. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "level",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-level"
+    },
+    "alias": {
+      "name": "sfx-builder:level"
+    },
+    "doc": {
+      "title": "level sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=level",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]

@@ -8,11 +8,14 @@ its id across rebuilds and cites the inputs used to make it.
 deno add jsr:@yaks/builders
 ```
 
-- `builder{query, floor, immediate}` — the `doc` body is the instruction.
-  `query` uses [@yaks/query](../query)'s grammar. `floor` is the earliest a
-  scheduled run may start; `immediate: true` also builds when an input changes.
-- `build{builder, variant, key, session, inputs, model}` — the latest run
-  started for one variant. Its stable id lets the key guard concurrent starts.
+- `builder{query, model, format, floor, immediate}` — the `doc` body is the
+  instruction. `query` uses [@yaks/query](../query)'s grammar. `floor` is the
+  earliest a scheduled run may start; `immediate: true` also builds when an
+  input changes. `model` overrides the host's default. `format: 'artifact'` asks
+  a media model for one selected input instead of asking a text model for JSON.
+- `build{builder, variant, key, session, inputs, model, prompt}` — the latest
+  run started for one variant. Its stable id lets the key guard concurrent
+  starts.
 - `built{builder, variant, slot, key, session, model}` — one output. Its id is
   derived from the builder, variant and stable slot; its other components are
   what the builder wrote.
@@ -49,6 +52,12 @@ components are unchanged, and an omitted slot keeps its last output. A malformed
 answer is reported and leaves the key retryable at the next check. The model can
 write only client-writable properties; it cannot supply an eid or change builder
 metadata.
+
+An artifact builder selects one input. Its request is the builder's instruction
+followed by that input's `doc.body`. The model's attachment becomes one stable
+`built` output in slot `main`: `built.artifact` points to the stored bytes,
+`built.media_type` names the type, `doc.body` keeps the exact request, and a
+`cites` edge points to the input. Changing that input reruns only its builder.
 
 Another builder can query a named output and cite it. When the output's content
 changes, that citation becomes stale and the downstream builder's key changes.

@@ -5,6 +5,17 @@
   "description": "A voxel world to adventure in together. What a player is and has done, and where they were last seen, is kept in this app's store (player, look, seen, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "models": "open",
   "$defs": {
+    "sfx": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "unique": [["name"]],
+      "description": "The description of one sound Vale needs. Its own builder reads this row and cites it in the generated recording.",
+      "properties": {
+        "name": { "type": "string", "index": true },
+        "loop": { "type": "boolean" }
+      }
+    },
     "player": {
       "component": true,
       "type": "object",

@@ -13,6 +13,7 @@ export type Spec = {
   slot: string
   inputs: Eid[]
   components: Record<string, Comp | null>
+  media?: { artifact: Eid; media_type: string }
 }
 
 let object = (v: unknown): v is Record<string, unknown> =>
@@ -84,7 +85,7 @@ export let parse = (
 export let answer = async (
   tx: Tx,
   run: Bundle,
-  body: string,
+  body: string | Spec[],
   vocab: Vocab,
 ): Promise<Bundle[]> => {
   let b = comp(run, BUILD)
@@ -92,7 +93,7 @@ export let answer = async (
   let variant = str(b?.variant)
   let session = str(b?.session)
   let selected = Array.isArray(b?.inputs) ? b.inputs.map(str) : []
-  let specs = parse(body, selected, vocab)
+  let specs = typeof body == 'string' ? parse(body, selected, vocab) : body
   let ids = specs.map((s) => output(builder, s.slot, variant))
   let prior = await tx.get(ids)
   let have = new Map(prior.map((b) => [b.entity.eid, b]))
@@ -116,6 +117,8 @@ export let answer = async (
         key: b?.key,
         ...(b?.model ? { model: b.model } : {}),
         session,
+        artifact: spec.media?.artifact ?? null,
+        media_type: spec.media?.media_type ?? null,
       },
       $was: { [BUILT]: { session: token(comp(before, BUILT)?.session) } },
     })
@@ -136,4 +139,32 @@ export let answer = async (
     }
   }
   return writes
+}
+
+/** An artifact reply becomes one output citing the one row it came from. */
+export let media = async (
+  tx: Tx,
+  run: Bundle,
+  said: Bundle,
+): Promise<Spec[]> => {
+  let b = comp(run, BUILD)
+  let inputs = b?.inputs
+  let eid = str(comp(said, 'attachment')?.artifact)
+  if (!Array.isArray(inputs) || inputs.length != 1 || !eid) {
+    throw new Error('artifact builder needs one input and one attachment')
+  }
+  let [source, artifact] = await tx.get([str(inputs[0]), eid])
+  let type = str(comp(artifact, 'artifact')?.media_type)
+  if (!source || !type) throw new Error('builder artifact or input is missing')
+  return [{
+    slot: 'main',
+    inputs: [source.entity.eid],
+    components: {
+      doc: {
+        title: str(comp(source, 'doc')?.title),
+        body: str(b?.prompt),
+      },
+    },
+    media: { artifact: eid, media_type: type },
+  }]
 }

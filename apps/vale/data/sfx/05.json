@@ -1,0 +1,240 @@
+[
+  {
+    "entity": {
+      "eid": "$stroke-fish"
+    },
+    "alias": {
+      "name": "sfx:stroke-fish"
+    },
+    "doc": {
+      "title": "stroke-fish",
+      "body": "Sound effect only: A fishing line is worked: small wet plop and a quick tug of taut line at a quiet river. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "stroke-fish",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-stroke-fish"
+    },
+    "alias": {
+      "name": "sfx-builder:stroke-fish"
+    },
+    "doc": {
+      "title": "stroke-fish sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=stroke-fish",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$stroke-bench"
+    },
+    "alias": {
+      "name": "sfx:stroke-bench"
+    },
+    "doc": {
+      "title": "stroke-bench",
+      "body": "Sound effect only: One woodworking plane stroke across a board: clean shaving scrape, slight woody tap at the end. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "stroke-bench",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-stroke-bench"
+    },
+    "alias": {
+      "name": "sfx-builder:stroke-bench"
+    },
+    "doc": {
+      "title": "stroke-bench sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=stroke-bench",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$stroke-cauldron"
+    },
+    "alias": {
+      "name": "sfx:stroke-cauldron"
+    },
+    "doc": {
+      "title": "stroke-cauldron",
+      "body": "Sound effect only: One ladle stir in a bubbling cauldron: wet ceramic clink and small liquid swirl. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "stroke-cauldron",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-stroke-cauldron"
+    },
+    "alias": {
+      "name": "sfx-builder:stroke-cauldron"
+    },
+    "doc": {
+      "title": "stroke-cauldron sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=stroke-cauldron",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$stroke-loom"
+    },
+    "alias": {
+      "name": "sfx:stroke-loom"
+    },
+    "doc": {
+      "title": "stroke-loom",
+      "body": "Sound effect only: One loom stroke: wooden shuttle clicking across taut threads and a soft cloth rustle. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "stroke-loom",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-stroke-loom"
+    },
+    "alias": {
+      "name": "sfx-builder:stroke-loom"
+    },
+    "doc": {
+      "title": "stroke-loom sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=stroke-loom",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$done-wood"
+    },
+    "alias": {
+      "name": "sfx:done-wood"
+    },
+    "doc": {
+      "title": "done-wood",
+      "body": "Sound effect only: A felled tree falls: trunk creaks, branches brush down and a heavy soft ground impact. One short event. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-wood",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-wood"
+    },
+    "alias": {
+      "name": "sfx-builder:done-wood"
+    },
+    "doc": {
+      "title": "done-wood sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-wood",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$done-ore"
+    },
+    "alias": {
+      "name": "sfx:done-ore"
+    },
+    "doc": {
+      "title": "done-ore",
+      "body": "Sound effect only: A worked mineral seam crumbles: brittle rock crack, falling grit and one low stone thud. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-ore",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-ore"
+    },
+    "alias": {
+      "name": "sfx-builder:done-ore"
+    },
+    "doc": {
+      "title": "done-ore sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-ore",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$done-herb"
+    },
+    "alias": {
+      "name": "sfx:done-herb"
+    },
+    "doc": {
+      "title": "done-herb",
+      "body": "Sound effect only: A harvested herb clump comes free: small earthy root pop, leaves rustle, delicate finishing chime. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-herb",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-herb"
+    },
+    "alias": {
+      "name": "sfx-builder:done-herb"
+    },
+    "doc": {
+      "title": "done-herb sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-herb",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]

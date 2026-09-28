@@ -55,12 +55,16 @@ export type Open = Options & {
   /** alternate model/provider/prompt runs beside the primary variant */
   shadow?: string
   prompt?: string
+  model?: string
+  provider?: string
 }
 
 export type Plan = {
   builder: Eid
   instruction: string
   model: string
+  provider?: string
+  format: 'json' | 'artifact'
   inputs: Bundle[]
   key: string
   variant: string
@@ -121,32 +125,48 @@ export let plan = (
   let instruction = o.prompt || str(comp(it, DOC), BODY) || o.desk.ask || ''
   if (!instruction) return undefined
   let builder = it.entity.eid
-  let model = o.desk.model ?? ''
+  let model = o.model ?? (str(comp(it, BUILDER), 'model') || o.desk.model || '')
+  let provider = o.provider ??
+    (model == o.desk.model ? o.desk.provider : undefined)
+  let format: Plan['format'] = str(comp(it, BUILDER), 'format') == 'artifact'
+    ? 'artifact'
+    : 'json'
   let variant = o.shadow ?? 'main'
-  return then(inputs(tx, it), (read) => ({
-    builder,
-    instruction,
-    model,
-    inputs: read,
-    key: key(
+  return then(inputs(tx, it), (read) => {
+    if (format == 'artifact' && !read.length) return undefined
+    if (format == 'artifact' && read.length > 1) {
+      throw new Error('an artifact builder selects more than one input')
+    }
+    return ({
+      builder,
       instruction,
       model,
-      read.map((b): Input => [b.entity.eid, content(o.vocab)(b)]),
-    ),
-    variant,
-    run: run(builder, variant),
-  }))
+      provider,
+      format,
+      inputs: read,
+      key: key(
+        format == 'artifact' ? `artifact\0${instruction}` : instruction,
+        model,
+        read.map((b): Input => [b.entity.eid, content(o.vocab)(b)]),
+      ),
+      variant,
+      run: run(builder, variant),
+    })
+  })
 }
 
 // The instruction asks for one graph-shaped answer with stable output slots.
 let words = (p: Plan): string =>
-  `${p.instruction}\n\nInputs:\n${
-    p.inputs.map((b) => `- ${b.entity.eid}`).join('\n') || '(none)'
-  }\n\nReturn only JSON in this shape: ` +
-  '{"outputs":[{"slot":"stable-name","inputs":["input-id"],' +
-  '"components":{"doc":{"title":"Example"}}}]}. ' +
-  'Each slot names the same thing across runs. Each output lists only the ' +
-  'selected input ids it used. Put its own graph components under components.'
+  p.format == 'artifact'
+    ? [p.instruction, ...p.inputs.map((b) => str(comp(b, DOC), BODY))]
+      .filter(Boolean).join('\n\n')
+    : `${p.instruction}\n\nInputs:\n${
+      p.inputs.map((b) => `- ${b.entity.eid}`).join('\n') || '(none)'
+    }\n\nReturn only JSON in this shape: ` +
+      '{"outputs":[{"slot":"stable-name","inputs":["input-id"],' +
+      '"components":{"doc":{"title":"Example"}}}]}. ' +
+      'Each slot names the same thing across runs. Each output lists only the ' +
+      'selected input ids it used. Put its own graph components under components.'
 
 /** Open one session and record its key and selected inputs atomically. */
 export let build = (
@@ -159,7 +179,7 @@ export let build = (
   let eid = o.eid ?? uuid
   let session = eid()
   let using: Comp = {
-    ...(d.provider ? { provider: d.provider } : {}),
+    ...(p.provider ? { provider: p.provider } : {}),
     ...(p.model ? { model: p.model } : {}),
     ...(d.effort ? { effort: d.effort } : {}),
   }
@@ -182,6 +202,7 @@ export let build = (
         ...(p.model ? { model: p.model } : {}),
         session,
         inputs: p.inputs.map((b) => b.entity.eid),
+        prompt: words(p),
       },
       $was: { [BUILD]: { key: token(prior) } },
     },

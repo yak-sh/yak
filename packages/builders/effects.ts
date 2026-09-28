@@ -43,7 +43,7 @@ import {
   type Open,
   type Options,
 } from './build.ts'
-import { answer } from './answer.ts'
+import { answer, media } from './answer.ts'
 
 let str = (c: unknown, k: string): string => {
   let v = (c as Comp | undefined)?.[k]
@@ -116,11 +116,15 @@ export let changing = (o: Open): Handler => async (event, tx, write) => {
 export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
   let [said] = await tx.get([event.entity.eid])
   let session = str(said?.[ENTRY], 'session')
-  if (!said || !session || kindOf(said) != 'output') return
+  if (!said || !session || !('output' in said)) return
   let [run] = await tx.read(and(eq(`${BUILD}.session`, session)))
   if (!run) return
+  let [builder] = await tx.get([str(run[BUILD], 'builder')])
+  let artifact = str(builder?.builder, 'format') == 'artifact'
+  if (!artifact && kindOf(said) != 'output') return
   try {
-    return await write(await answer(tx, run, textOf(said), vocab))
+    let content = artifact ? await media(tx, run, said) : textOf(said)
+    return await write(await answer(tx, run, content, vocab))
   } catch (err) {
     // A bad answer cannot be the current build forever: the next check must
     // be able to retry the same key, while this error still reaches telemetry.

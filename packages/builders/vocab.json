@@ -13,6 +13,16 @@
           "type": "string",
           "description": "query selecting the entities this builder reads"
         },
+        "model": {
+          "type": "string",
+          "ref": "model",
+          "description": "model for this builder, overriding the host default"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["json", "artifact"],
+          "description": "JSON graph outputs or one stored media artifact"
+        },
         "floor": {
           "type": "string",
           "format": "date-time",
@@ -60,6 +70,11 @@
           "items": { "type": "string", "ref": "entity" },
           "stamped": true,
           "description": "selected input ids offered to the session"
+        },
+        "prompt": {
+          "type": "string",
+          "stamped": true,
+          "description": "the exact request sent to the model"
         }
       },
       "description": "the last session started for one variant of a builder"
@@ -107,6 +122,18 @@
           "death": "keep",
           "stamped": true,
           "description": "the session that built it"
+        },
+        "artifact": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the media artifact this output names, when present"
+        },
+        "media_type": {
+          "type": "string",
+          "stamped": true,
+          "description": "the artifact's media type, when present"
         }
       },
       "description": "one named output, updated in place across builds of its variant"
@@ -160,8 +187,8 @@
     },
     "builder_answer": {
       "effect": true,
-      "created": ["output"],
-      "description": "a build's session answered with named output entities and their components"
+      "created": ["output", "attachment"],
+      "description": "a build's session answered with graph outputs or a media artifact"
     },
     "builder_change": {
       "effect": true,

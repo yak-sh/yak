@@ -27,7 +27,7 @@ import {
 import { bus, fireLevel } from './bus.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import { music } from './music.ts'
-import { load, loaded } from './samples.ts'
+import { load, loaded, looping, watch } from './samples.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
 import * as voices from './voices.ts'
@@ -125,6 +125,7 @@ let wake = () => {
       surf: voices.surf(ctx),
       marsh: voices.marsh(ctx),
     }
+    void watch()
     music.start(ctx, levels.music.into(ctx, limit))
   } catch {
     ctx = null
@@ -252,9 +253,11 @@ let keep = (
 
 // A level's own sound, looping, faded in, and faded out when it ends.
 let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
-  let name = kind == 'fire' ? 'campfire' : kind == 'forge' ? 'forge' : null
-  let ready = name ? loaded(c, name) : undefined
-  let b = ready ?? loops![kind]
+  let name = kind == 'fire' ? 'campfire' : kind
+  let ready = loaded(c, name)
+  let b = ready
+    ? kind == 'fire' || kind == 'forge' ? ready : looping(c, ready)
+    : loops![kind]
   let s = new AudioBufferSourceNode(c, { buffer: b, loop: true })
   let g = c.createGain()
   let sourceGain = c.createGain()
@@ -270,11 +273,14 @@ let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
   s.connect(sourceGain).connect(g)
   s.start(c.currentTime, Math.random() * b.duration)
   let stopped = false
-  if (name && !ready) {
+  if (!ready) {
     void load(c, name).then((next) => {
       if (!next || stopped) return
       let old = s, oldGain = sourceGain, at = c.currentTime
-      s = new AudioBufferSourceNode(c, { buffer: next, loop: true })
+      s = new AudioBufferSourceNode(c, {
+        buffer: kind == 'fire' || kind == 'forge' ? next : looping(c, next),
+        loop: true,
+      })
       sourceGain = c.createGain()
       sourceGain.gain.setValueAtTime(0, at)
       sourceGain.gain.linearRampToValueAtTime(1, at + 0.75)
@@ -308,7 +314,7 @@ let noisy = (n: Noise) =>
   make(
     n.of,
     n.type == 'step'
-      ? voices.step(n.plan, n.size)
+      ? sampled(`step-${n.plan}`, voices.step(n.plan, n.size), 0.25)
       : n.type == 'cry'
       ? n.kind.endsWith('wolf')
         ? sampled(
@@ -316,10 +322,14 @@ let noisy = (n: Noise) =>
           voices.cry(n.plan, n.size, n.loud),
           n.loud ? 0.35 : 0.2,
         )
-        : voices.cry(n.plan, n.size, n.loud)
+        : sampled(
+          `cry-${n.plan}`,
+          voices.cry(n.plan, n.size, n.loud),
+          n.loud ? 0.32 : 0.2,
+        )
       : n.type == 'swing'
-      ? voices.whiff
-      : voices.roll,
+      ? sampled('swing', voices.whiff, 0.25)
+      : sampled('roll', voices.roll, 0.25),
   )
 
 export let sound = {
@@ -413,43 +423,54 @@ export let sound = {
     let bog = around.find((a) => a.kind == 'marsh')
     if (bog && Math.random() < dt / FROG.every) {
       let [x, y, z] = bog.at, off = () => (Math.random() * 2 - 1) * FROG.within
-      make([x + off(), y, z + off()], voices.croak())
+      make([x + off(), y, z + off()], sampled('frog', voices.croak(), 0.2))
     }
     if (f && me) heard(f, me, dt).forEach(noisy)
   },
   keep,
-  hit: (from: From, great: boolean) => make(from, voices.hit(great)),
-  struck: (from: From) => make(from, voices.struck),
+  hit: (from: From, great: boolean) =>
+    make(from, sampled(great ? 'hit-great' : 'hit', voices.hit(great), 0.35)),
+  struck: (from: From) => make(from, sampled('struck', voices.struck, 0.3)),
   whiff: (from: From, family = '') =>
     make(
       from,
-      family == 'sword' ? sampled('sword', voices.whiff, 0.35) : voices.whiff,
+      family == 'sword'
+        ? sampled('sword', voices.whiff, 0.35)
+        : sampled('swing', voices.whiff, 0.25),
     ),
   fire: (from: From) => make(from, sampled('spell', voices.whiff, 0.4)),
-  roll: (from: From) => make(from, voices.roll),
-  dodge: (from: From) => make(from, voices.dodge),
-  hurt: (from: From) => make(from, voices.hurt),
-  pick: (from: From) => make(from, voices.pick),
-  fall: (from: From) => make(from, voices.fall),
-  heal: (from: From) => make(from, voices.heal),
+  roll: (from: From) => make(from, sampled('roll', voices.roll, 0.25)),
+  dodge: (from: From) => make(from, sampled('dodge', voices.dodge, 0.25)),
+  hurt: (from: From) => make(from, sampled('hurt', voices.hurt, 0.25)),
+  pick: (from: From) => make(from, sampled('pick', voices.pick, 0.25)),
+  fall: (from: From) => make(from, sampled('fall', voices.fall, 0.3)),
+  heal: (from: From) => make(from, sampled('heal', voices.heal, 0.25)),
   /** A stroke of work at a node or a station, by its trade (trades.ts). */
   stroke: (from: From, trade: string) =>
     make(
       from,
-      trade == 'forge'
-        ? sampled('hammer', voices.stroke.forge, 0.45)
-        : voices.stroke[trade] ?? voices.whiff,
+      trade == 'forge' ? sampled('hammer', voices.stroke.forge, 0.45) : sampled(
+        `stroke-${trade}`,
+        voices.stroke[trade] ?? voices.whiff,
+        0.3,
+      ),
     ),
   /** Work done at a node or a station, by its trade. */
   done: (from: From, trade: string) =>
-    make(from, voices.done[trade] ?? voices.pick),
+    make(
+      from,
+      sampled(`done-${trade}`, voices.done[trade] ?? voices.pick, 0.3),
+    ),
   /** A level gained: the player's own news, straight to the ears. */
-  level: () => make(null, voices.level),
+  level: () => make(null, sampled('level', voices.level, 0.25)),
   /** A quest taken or handed in, or a new land reached: the player's own
    * news, straight to the ears. */
-  quest: () => make(null, voices.quest),
+  quest: () => make(null, sampled('quest', voices.quest, 0.25)),
   /** A fine piece of gear falling, or coming into the bag, by its rarity:
    * nothing more than a find for an uncommon one. */
   spoil: (from: From, rarity: string) =>
-    make(from, voices.spoils[rarity] ?? voices.pick),
+    make(
+      from,
+      sampled(`spoil-${rarity}`, voices.spoils[rarity] ?? voices.pick, 0.25),
+    ),
 }

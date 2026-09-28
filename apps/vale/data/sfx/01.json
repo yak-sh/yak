@@ -1,0 +1,36 @@
+[
+  {
+    "entity": {
+      "eid": "$water"
+    },
+    "alias": {
+      "name": "sfx:water"
+    },
+    "doc": {
+      "title": "water",
+      "body": "Sound effect only: About eight seconds of small, soft freshwater laps at a calm pond shore. Irregular tiny slaps, wash-back and occasional bubbles. Continuous even bed, no surf or rain. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "water",
+      "loop": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-water"
+    },
+    "alias": {
+      "name": "sfx-builder:water"
+    },
+    "doc": {
+      "title": "water sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=water",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]

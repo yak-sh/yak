@@ -1,0 +1,240 @@
+[
+  {
+    "entity": {
+      "eid": "$step-serpent"
+    },
+    "alias": {
+      "name": "sfx:step-serpent"
+    },
+    "doc": {
+      "title": "step-serpent",
+      "body": "Sound effect only: One serpent slithering movement: dry scales and earth brushing under the body. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-serpent",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-step-serpent"
+    },
+    "alias": {
+      "name": "sfx-builder:step-serpent"
+    },
+    "doc": {
+      "title": "step-serpent sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=step-serpent",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$step-flier"
+    },
+    "alias": {
+      "name": "sfx:step-flier"
+    },
+    "doc": {
+      "title": "step-flier",
+      "body": "Sound effect only: One flying creature movement: a compact flap of leathery wings through air. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-flier",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-step-flier"
+    },
+    "alias": {
+      "name": "sfx-builder:step-flier"
+    },
+    "doc": {
+      "title": "step-flier sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=step-flier",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-biped"
+    },
+    "alias": {
+      "name": "sfx:cry-biped"
+    },
+    "doc": {
+      "title": "cry-biped",
+      "body": "Sound effect only: A hostile biped creature gives one low guttural battle growl. No human words. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-biped",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-biped"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-biped"
+    },
+    "doc": {
+      "title": "cry-biped sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-biped",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-quadruped"
+    },
+    "alias": {
+      "name": "sfx:cry-quadruped"
+    },
+    "doc": {
+      "title": "cry-quadruped",
+      "body": "Sound effect only: A wild four-legged beast gives one throaty growl with a short snarl, canine rather than feline. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-quadruped",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-quadruped"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-quadruped"
+    },
+    "doc": {
+      "title": "cry-quadruped sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-quadruped",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-crawler"
+    },
+    "alias": {
+      "name": "sfx:cry-crawler"
+    },
+    "doc": {
+      "title": "cry-crawler",
+      "body": "Sound effect only: A large crawler gives one rasping hiss and chitter, close and unsettling. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-crawler",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-crawler"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-crawler"
+    },
+    "doc": {
+      "title": "cry-crawler sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-crawler",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-hopper"
+    },
+    "alias": {
+      "name": "sfx:cry-hopper"
+    },
+    "doc": {
+      "title": "cry-hopper",
+      "body": "Sound effect only: A hostile hopping creature gives one sharp throaty bark with a short trill. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-hopper",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-hopper"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-hopper"
+    },
+    "doc": {
+      "title": "cry-hopper sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-hopper",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-slime"
+    },
+    "alias": {
+      "name": "sfx:cry-slime"
+    },
+    "doc": {
+      "title": "cry-slime",
+      "body": "Sound effect only: A gelatinous slime gives one wet burbling call and low wobbling squeak. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-slime",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-slime"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-slime"
+    },
+    "doc": {
+      "title": "cry-slime sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-slime",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]

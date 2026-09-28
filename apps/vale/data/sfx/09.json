@@ -1,0 +1,172 @@
+[
+  {
+    "entity": {
+      "eid": "$cry-crag"
+    },
+    "alias": {
+      "name": "sfx:cry-crag"
+    },
+    "doc": {
+      "title": "cry-crag",
+      "body": "Sound effect only: A stone creature gives one deep grinding bellow, rock-on-rock texture and falling grit. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-crag",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-crag"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-crag"
+    },
+    "doc": {
+      "title": "cry-crag sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-crag",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-bird"
+    },
+    "alias": {
+      "name": "sfx:cry-bird"
+    },
+    "doc": {
+      "title": "cry-bird",
+      "body": "Sound effect only: A wild bird gives two short piercing chirps, natural and lively. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-bird",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-bird"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-bird"
+    },
+    "doc": {
+      "title": "cry-bird sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-bird",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-wisp"
+    },
+    "alias": {
+      "name": "sfx:cry-wisp"
+    },
+    "doc": {
+      "title": "cry-wisp",
+      "body": "Sound effect only: A floating wisp gives one thin spectral ascending call, airy and brief. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-wisp",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-wisp"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-wisp"
+    },
+    "doc": {
+      "title": "cry-wisp sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-wisp",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-serpent"
+    },
+    "alias": {
+      "name": "sfx:cry-serpent"
+    },
+    "doc": {
+      "title": "cry-serpent",
+      "body": "Sound effect only: A serpent gives one long breathy hiss that tapers off, no roar. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-serpent",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-serpent"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-serpent"
+    },
+    "doc": {
+      "title": "cry-serpent sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-serpent",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$cry-flier"
+    },
+    "alias": {
+      "name": "sfx:cry-flier"
+    },
+    "doc": {
+      "title": "cry-flier",
+      "body": "Sound effect only: A large flying creature gives one short rough aerial screech and wing rustle. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "cry-flier",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-cry-flier"
+    },
+    "alias": {
+      "name": "sfx-builder:cry-flier"
+    },
+    "doc": {
+      "title": "cry-flier sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=cry-flier",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]

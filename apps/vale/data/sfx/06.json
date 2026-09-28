@@ -1,0 +1,240 @@
+[
+  {
+    "entity": {
+      "eid": "$done-fish"
+    },
+    "alias": {
+      "name": "sfx:done-fish"
+    },
+    "doc": {
+      "title": "done-fish",
+      "body": "Sound effect only: A caught fish is hauled from water: lively small splash, line tug and brief wet flop. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-fish",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-fish"
+    },
+    "alias": {
+      "name": "sfx-builder:done-fish"
+    },
+    "doc": {
+      "title": "done-fish sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-fish",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$done-forge"
+    },
+    "alias": {
+      "name": "sfx:done-forge"
+    },
+    "doc": {
+      "title": "done-forge",
+      "body": "Sound effect only: A forged piece is quenched: hot iron enters water with a brief bright hiss and a fading metallic ring. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-forge",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-forge"
+    },
+    "alias": {
+      "name": "sfx-builder:done-forge"
+    },
+    "doc": {
+      "title": "done-forge sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-forge",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$done-bench"
+    },
+    "alias": {
+      "name": "sfx:done-bench"
+    },
+    "doc": {
+      "title": "done-bench",
+      "body": "Sound effect only: A finished board is set down: two neat mallet taps on wood, warm and dry. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-bench",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-bench"
+    },
+    "alias": {
+      "name": "sfx-builder:done-bench"
+    },
+    "doc": {
+      "title": "done-bench sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-bench",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$done-cauldron"
+    },
+    "alias": {
+      "name": "sfx:done-cauldron"
+    },
+    "doc": {
+      "title": "done-cauldron",
+      "body": "Sound effect only: A finished brew is poured off: liquid glug, glass touch and a subtle confirming chime. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-cauldron",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-cauldron"
+    },
+    "alias": {
+      "name": "sfx-builder:done-cauldron"
+    },
+    "doc": {
+      "title": "done-cauldron sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-cauldron",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$done-loom"
+    },
+    "alias": {
+      "name": "sfx:done-loom"
+    },
+    "doc": {
+      "title": "done-loom",
+      "body": "Sound effect only: A finished length of cloth is lifted from the loom: wooden click and soft fabric sweep. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "done-loom",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-done-loom"
+    },
+    "alias": {
+      "name": "sfx-builder:done-loom"
+    },
+    "doc": {
+      "title": "done-loom sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=done-loom",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$step-hero"
+    },
+    "alias": {
+      "name": "sfx:step-hero"
+    },
+    "doc": {
+      "title": "step-hero",
+      "body": "Sound effect only: One light leather-boot footstep on packed earth, close and dry, no speech or ambience. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-hero",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-step-hero"
+    },
+    "alias": {
+      "name": "sfx-builder:step-hero"
+    },
+    "doc": {
+      "title": "step-hero sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=step-hero",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "$step-biped"
+    },
+    "alias": {
+      "name": "sfx:step-biped"
+    },
+    "doc": {
+      "title": "step-biped",
+      "body": "Sound effect only: One firm biped creature footfall on soil: heavier than a person, short dull thud. No speech, words, music, or other sounds."
+    },
+    "sfx": {
+      "name": "step-biped",
+      "loop": false
+    }
+  },
+  {
+    "entity": {
+      "eid": "$builder-step-biped"
+    },
+    "alias": {
+      "name": "sfx-builder:step-biped"
+    },
+    "doc": {
+      "title": "step-biped sound",
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+    },
+    "builder": {
+      "query": ".sfx.name=step-biped",
+      "model": "bytedance-seed/seed-audio-1-0",
+      "format": "artifact",
+      "immediate": true
+    }
+  }
+]
