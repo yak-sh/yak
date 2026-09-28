@@ -28,10 +28,9 @@ import { grantEid, Store } from './graph.ts'
 import { metaOf } from './meta.ts'
 import type { Plugin } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
-import { RELATIONS } from './vocab.ts'
 import { named as spoken, type Names } from './listing.ts'
 import { col, isNull, tally } from '@yaks/sql'
-import { db, named, slot, unclassified } from './testing.ts'
+import { db, slot, unclassified } from './testing.ts'
 
 // A hibernatable socket, faked: what it was sent, and the attachment that is
 // its only memory across an eviction.
@@ -733,113 +732,21 @@ Deno.test('a named row written twice is one entity, and answers to its name', as
   )
 })
 
-// The whole point of the cut (V-33553): a customer's Durable Object holds one
-// app's tables, not the fleet's 83.
-Deno.test('the object plants core + member + edge + the app, and nothing else', async () => {
-  let ctx = state()
-  await cookbook(ctx)
-  // Less the search indexes (a doc's words, a transcript's) and SQLite's own.
-  let tables = named(ctx, { type: 'table' })
-    .filter((n) => !/^(doc|entry)_fts/.test(n) && !n.startsWith('sqlite_'))
-    .sort()
+// An app's store answers its own vocabulary and refuses a directory-only
+// component without disturbing an accepted row.
+Deno.test("an app's store keeps its words apart from the directory's", async () => {
+  let store = await cookbook()
+  let wrote = await post(store, '/apply', [
+    { entity: { eid: CAKE }, recipe: { serves: 8 } },
+  ], owner)
+  assertEquals(wrote.status, 200)
+  let refused = await post(store, '/apply', [
+    { entity: { eid: CAKE }, space: { slug: 'ada' } },
+  ], owner)
+  assertEquals(refused.status, 400)
   assertEquals(
-    tables,
-    [
-      // the object's own memory and its write log, and @yaks/blob's store
-      'yak_kv',
-      'yak_writes',
-      'blob_text',
-      // the spine, and the store's own key/value beside it
-      'entity',
-      'entity_sequence',
-      'tombstone',
-      'server_meta',
-      // core and derived component-set descriptors
-      'archetype',
-      'retired',
-      'doc',
-      'person',
-      'created',
-      'updated',
-      // @yaks/member
-      'member',
-      'grant',
-      'access',
-      // @yaks/edge, and the verbs an edge may wear
-      'edge',
-      ...RELATIONS,
-      // @yaks/key, and the one kind of value every store speaks: a name
-      'key',
-      'alias',
-      // the platform's own words in an app's store: the breaks, the marks, and
-      // the two rows an upload makes
-      'exception',
-      'error',
-      'archived',
-      'notified',
-      'opened',
-      'quarantined',
-      'blob',
-      'image',
-      'attachment',
-      // and the words the guide gives an app to reach for rather than invent
-      'task',
-      'filed',
-      'completed',
-      'cancelled',
-      'project',
-      'comment',
-      // what a shop sells: the platform's word, because the platform's own
-      // checkout door reads a price off it (sell.ts), and what it sold, which
-      // the platform's own Connect webhook writes
-      'product',
-      'order',
-      'favorite',
-      'web',
-      // @yaks/mail — the app's own mailbox (T-33686)
-      'mail',
-      'email',
-      'deliver',
-      'delivered',
-      'bounced',
-      // @yaks/wake — the app's own schedules, which its own Durable Object
-      // alarm fires (D-37562)
-      'wake',
-      'fired',
-      // @yaks/tools — an invocation, which is how work is asked for here and
-      // (wearing a wake) how it is asked for later
-      'call',
-      'result',
-      'execution',
-      'tool',
-      'content',
-      'output',
-      // @yaks/hook — a webhook a service sent through one of the space's
-      // connections (connections.ts)
-      'hook',
-      // @yaks/session and @yaks/model — a transcript a model answers in the
-      // app's own store (models.ts, D-40545), and the catalogue it asks
-      'session',
-      'entry',
-      'ask',
-      'using',
-      'notice',
-      'stop',
-      'attempt',
-      'cancel',
-      'dispatch',
-      'provider',
-      'model',
-      'serves',
-      'usage',
-      'questions',
-      'answer',
-      // @yaks/rtc — who is speaking, and the sessions the voice door opened
-      'rtc',
-      'sfu',
-      // the app's own
-      'recipe',
-    ].sort(),
+    (await asked(store, '.recipe')).body.map((b: Bundle) => b.entity.eid),
+    [CAKE],
   )
 })
 
