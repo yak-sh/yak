@@ -50,23 +50,12 @@
     "place": {
       "component": true,
       "type": "object",
-      "description": "The region and chunk a stored world row belongs to. A creature's home, a fall and a gathering each wear it; a page watches only the places near its hero. Chunk is the numeric key of ci and ck (area.ts).",
+      "description": "The region and chunk a stored world row belongs to. Falls and gatherings wear it; a page watches only the places near its hero. Chunk is the numeric key of ci and ck (area.ts).",
       "properties": {
         "level": { "type": "string", "index": true },
         "chunk": { "type": "number", "index": true },
         "ci": { "type": "integer", "index": true },
         "ck": { "type": "integer", "index": true }
-      }
-    },
-    "creature": {
-      "component": true,
-      "type": "object",
-      "description": "A creature, as the store knows it: which kind. Its place is its home in the world; the row is what its relayed position and its falls attach to, and a page adds it the first time it meets the creature.",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "description": "Which creature, by the app's list of kinds."
-        }
       }
     },
     "position": {
@@ -75,7 +64,7 @@
       "sync": "peers",
       "durable": "connection",
       "pace": "100ms",
-      "description": "Where something is this moment: its region and world coordinates, in metres. Relayed to nearby pages and kept by nobody, so it goes when the connection that wrote it does. A creature that is only wandering has none: its wandering says where it is.",
+      "description": "Where something is this moment: its region and world coordinates, in metres. Relayed to nearby pages and kept by nobody, so it goes when the connection that wrote it does. A moving creature's position reaches peers directly, without a stored creature row. A creature that is only wandering has none: its wandering says where it is.",
       "properties": {
         "level": {
           "type": "string",

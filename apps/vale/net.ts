@@ -284,10 +284,7 @@ export let connect = (base: URL) => {
     now,
     /** Keep the world rows and moving players near this point. */
     follow,
-    /** The area watch has answered before a page adds missing creatures. */
-    nearReady: () => !pending && near.ready,
     players: () => rows('player'),
-    creatures: () => rows('creature'),
     /** the eid of the hero this tab plays, once there is one */
     get hero() {
       return hero

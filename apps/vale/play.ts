@@ -44,7 +44,7 @@ import {
   type Worn,
   wornOf,
 } from './gear.ts'
-import { type Home, homesNear } from './homes.ts'
+import { homesNear } from './homes.ts'
 import { publish, pulses, replay } from './combat.ts'
 import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
@@ -546,7 +546,6 @@ export let game = (
   let bitten = new Map<string, number>()
   let wasDown = new Set<string>()
   let last = new Map<string, Body>()
-  let anchored = new Set<string>()
   // The region the hero was in last frame, to tell when they cross into
   // another.
   let was = ''
@@ -726,24 +725,6 @@ export let game = (
       entity: { eid: crypto.randomUUID() },
       used: { item: eid, by: me, at: now },
     })
-
-  // The store's row for each creature near, added the first time a page
-  // meets it: what its position and falls attach to.
-  let anchor = (homes: Home[]) => {
-    if (!net.nearReady()) return
-    let held = new Set(net.creatures().map((b) => b.entity.eid))
-    let missing = homes.filter((h) => !held.has(h.eid) && !anchored.has(h.eid))
-    for (let h of missing) anchored.add(h.eid)
-    if (missing.length) {
-      net.keep(
-        ...missing.map((h) => ({
-          entity: { eid: h.eid },
-          creature: { kind: h.kind },
-          place: placeOf(...h.home),
-        })),
-      )
-    }
-  }
 
   return {
     /** the hero's current sheet, for the stage before its first frame */
@@ -1044,7 +1025,6 @@ export let game = (
 
       // The creatures living within sight.
       let homes = homesNear(body.x, body.z, SIGHT)
-      anchor(homes)
       let mobs: Mob[] = []
       for (let h of homes) {
         if (!BEASTS[h.kind]) continue

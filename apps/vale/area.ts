@@ -14,9 +14,9 @@ export let placeOf = (x: number, z: number) => {
 }
 
 /** A rectangle that contains every chunk within `r` of the page's chunk.
- * The player branch follows relayed positions; the stored-row branch uses
- * indexed places. @yaks/api moves a player into and out of the result as its
- * relayed position moves.
+ * Stored world rows use indexed places; players and creatures enter by their
+ * relayed positions. @yaks/api moves them into and out of the result as they
+ * move, even when a creature has no stored row.
  */
 export let areaOf = (x: number, z: number, r: number) => {
   let ci = chunkOf(x), ck = chunkOf(z), n = Math.ceil(r / CHUNK)
@@ -25,7 +25,7 @@ export let areaOf = (x: number, z: number, r: number) => {
   if (!levels.length) levels = [regionOf(x, z)]
   let region = `.place.level=${levels.join(',')}`
   let stored = `${region}&.place.ci=${i}..${j}&.place.ck=${k}..${l}`
-  let players = `.player&.position.x=${i * CHUNK}...${(j + 1) * CHUNK}` +
+  let moving = `.position.x=${i * CHUNK}...${(j + 1) * CHUNK}` +
     `&.position.z=${k * CHUNK}...${(l + 1) * CHUNK}`
-  return { key: chunkKey(ci, ck), query: `(${stored}|${players})&*` }
+  return { key: chunkKey(ci, ck), query: `(${stored}|${moving})&*` }
 }
