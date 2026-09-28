@@ -33,6 +33,7 @@ import {
 import type { overlay } from './fx.ts'
 import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
+import { type Command, slash } from './slash.ts'
 import type { Village } from './village.ts'
 
 // Lines the store is asked for at once. Observed lines are retained while open.
@@ -55,6 +56,7 @@ let FADE = 4000
 
 // A line of mine, and the rest of its row when it is said to a villager.
 type Said = Line & { level: string; to: Record<string, unknown> | null }
+type Notice = { eid: string; text: string; at: number }
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -72,6 +74,7 @@ export let chatbox = (
   net: Net,
   marks: ReturnType<typeof overlay>,
   folk: Village,
+  command?: (cmd: Command) => Promise<string>,
 ) => {
   let box = el('div', 'Chat')
   let log = el('ol', 'Chat_Log')
@@ -81,7 +84,7 @@ export let chatbox = (
   input.placeholder = 'Say something…'
   input.enterKeyHint = 'send'
   input.autocomplete = 'off'
-  input.setAttribute('aria-label', 'Say something to everyone here')
+  input.setAttribute('aria-label', 'Say something or enter a command')
   form.append(input)
   form.hidden = true
   let ask = el('a', 'Btn Btn-small Chat_Ask')
@@ -133,6 +136,21 @@ export let chatbox = (
   // store has not answered with yet.
   let outbox: Said[] = []
   let waiting: Said[] = []
+  let notices: Notice[] = []
+  let notice = (text: string) => {
+    let n = { eid: crypto.randomUUID(), text, at: net.now() }
+    notices = [...notices, n].slice(-ASKED)
+    return n
+  }
+  let run = async (cmd: Command) => {
+    let n = notice('Running command…')
+    try {
+      n.text = command ? await command(cmd) : 'Commands are unavailable.'
+    } catch (e) {
+      n.text = clean(e instanceof Error ? e.message : String(e)) ||
+        'The command failed.'
+    }
+  }
   let went = -Infinity
   let send = () => {
     let t = performance.now()
@@ -151,7 +169,7 @@ export let chatbox = (
   // When a line starts to fade: `STAY` after it was said, and never before
   // the box last closed, so what the open box showed fades away gently.
   let shut = -Infinity
-  let fades = (l: Line) => Math.max(l.at + STAY, shut)
+  let fades = (l: { at: number }) => Math.max(l.at + STAY, shut)
 
   let open = false
   let asked = 0
@@ -203,6 +221,15 @@ export let chatbox = (
     e.preventDefault()
     let text = clean(input.value)
     input.value = ''
+    let parsed = slash(text)
+    if (parsed) {
+      if ('error' in parsed) notice(parsed.error)
+      else if (!me || !('role' in me) || me.role != 'owner') {
+        notice('Only the space owner can use commands.')
+      } else if (!net.hero) notice('Choose a hero first.')
+      else void run(parsed.command)
+      return
+    }
     // E conversations stay open for another line; open chat outside one
     // returns to its compact log after sending.
     if (!folk.near()) hide()
@@ -238,6 +265,16 @@ export let chatbox = (
         fades: fades(l),
       }
     })
+    rows.push(...notices.map((n) => ({
+      eid: n.eid,
+      name: 'Mossvale',
+      tint: '#dff5c8',
+      text: n.text,
+      wait: false,
+      at: n.at,
+      fades: fades(n),
+    })))
+    rows.sort((a, b) => a.at - b.at)
     let key = JSON.stringify([open, rows])
     if (key == drawn) return
     drawn = key
@@ -320,6 +357,7 @@ export let chatbox = (
         open ? Infinity : ASKED,
       )
       let shown = history(past, mine, Infinity)
+      notices = notices.filter((n) => now < fades(n) + FADE)
       draw(
         open ? shown : shown.slice(-6).filter((l) => now < fades(l) + FADE),
         new Set(mine.map((l) => l.eid)),
