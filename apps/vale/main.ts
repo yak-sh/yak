@@ -515,7 +515,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   } else if (e.type == 'struck') {
     float(String(e.dmg), p(e.at), 'ally')
     sound.struck(e.eid)
-  } else if (e.type == 'whiff') sound.whiff(net.hero)
+  } else if (e.type == 'whiff') sound.whiff(net.hero, e.family)
   else if (e.type == 'roll') {
     dust.emit(p(e.at), 0xc9b896, 6, {
       speed: 1.4,
@@ -593,6 +593,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
     float(a.name, foot.clone().setY(foot.y + 2.5), 'ability')
     flourish(a, foot, e.yaw)
     if (a.shape == 'self') sound.heal(e.by)
+    else if (e.id == 'blaze' || e.id == 'scorch') sound.fire(e.by)
     else sound.whiff(e.by)
   } else if (e.type == 'burst') {
     bursts.push({

@@ -1,0 +1,29 @@
+{
+  "sound": "wolf",
+  "sha256": "b5494d017bb7385b58bce2cf83c4eaaa46460b163624023fe495b0798bbbad9e",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Sound effect only: one close wolf growl, low throaty animal rumble with a short angry snarl and natural decay. Animal only; no human voice, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "pcm",
+    "observed_output": "audio/pcm;rate=24000;channels=2"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790582643-rF9upm39oM2eCiTAFkTZ"
+  },
+  "processing": {
+    "source": "signed 16-bit little-endian PCM, 24000 Hz, stereo",
+    "output": "WAV, signed 16-bit PCM, 24000 Hz, stereo",
+    "loop": false,
+    "trim_start_seconds": 0.26,
+    "trim_end_seconds": 2.64,
+    "edge_fade_seconds": 0.015
+  },
+  "audit": {
+    "duration_seconds": 2.38,
+    "peak": 0.368,
+    "rms": 0.0345,
+    "loop_boundary_jump": null
+  }
+}

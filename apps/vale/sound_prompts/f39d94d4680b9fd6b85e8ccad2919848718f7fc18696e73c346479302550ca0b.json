@@ -1,0 +1,29 @@
+{
+  "sound": "spell",
+  "sha256": "f39d94d4680b9fd6b85e8ccad2919848718f7fc18696e73c346479302550ca0b",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Sound effect only: one fantasy fire spell cast, a brief rising ignition whoosh followed by a hot rushing flame burst and crackling decay, about one and a half seconds. No explosion, voice, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "pcm",
+    "observed_output": "audio/pcm;rate=24000;channels=2"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790582625-nSQ5ZT4ecrnVxCVPoMLI"
+  },
+  "processing": {
+    "source": "signed 16-bit little-endian PCM, 24000 Hz, stereo",
+    "output": "WAV, signed 16-bit PCM, 24000 Hz, stereo",
+    "loop": false,
+    "trim_start_seconds": 0.14,
+    "trim_end_seconds": 2.8,
+    "edge_fade_seconds": 0.015
+  },
+  "audit": {
+    "duration_seconds": 2.66,
+    "peak": 0.287,
+    "rms": 0.0402,
+    "loop_boundary_jump": null
+  }
+}

@@ -112,7 +112,7 @@ export type Event =
     great: boolean
   }
   | { type: 'struck'; eid: string; at: Vec3; dmg: number }
-  | { type: 'whiff' }
+  | { type: 'whiff'; family: string }
   | { type: 'roll'; at: Vec3 }
   | { type: 'dodge'; at: Vec3 }
   | { type: 'hurt'; dmg: number; at: Vec3 }
@@ -1479,7 +1479,9 @@ export let game = (
         if (a?.shape == 'burst') {
           events.push({ type: 'burst', id: doing, at: to, r: a.far ?? 0, ms })
         }
-        if (!taken.length && a?.shape != 'self') events.push({ type: 'whiff' })
+        if (!taken.length && a?.shape != 'self') {
+          events.push({ type: 'whiff', family: k.family })
+        }
         let might = blowOf(s.lvl, k, !a && hand == 'off' ? k.twin : k.dmg)
         for (let [j, m] of taken.entries()) {
           let hits = (a?.hits ?? 1) + +(Math.random() < (k.powers.echo ?? 0))

@@ -19,7 +19,14 @@ export type Noise =
   | { type: 'step'; of: string; plan: string; size: number }
   | { type: 'swing'; of: string }
   | { type: 'roll'; of: string }
-  | { type: 'cry'; of: string; plan: string; size: number; loud: boolean }
+  | {
+    type: 'cry'
+    of: string
+    kind: string
+    plan: string
+    size: number
+    loud: boolean
+  }
 
 /** As much of a frame as is heard. */
 export type Scene = {
@@ -136,9 +143,23 @@ export let noises = () => {
       walk(m.eid, m.body, plan, size)
       let b = bit.get(m.eid) ?? -1
       if (m.bite >= 0 && (b < 0 || m.bite < b)) {
-        out.push({ type: 'cry', of: m.eid, plan, size, loud: true })
+        out.push({
+          type: 'cry',
+          of: m.eid,
+          kind: m.kind,
+          plan,
+          size,
+          loud: true,
+        })
       } else if (m.bite < 0 && rand() < dt / CALL) {
-        out.push({ type: 'cry', of: m.eid, plan, size, loud: false })
+        out.push({
+          type: 'cry',
+          of: m.eid,
+          kind: m.kind,
+          plan,
+          size,
+          loud: false,
+        })
       }
       bites.set(m.eid, m.bite)
     }
@@ -211,7 +232,7 @@ let HEARD = 30
 export let ambience = (v: Vale, ear: Vec3) => {
   let out: {
     id: string
-    kind: 'fire' | 'water' | 'marsh' | 'surf'
+    kind: 'fire' | 'forge' | 'water' | 'marsh' | 'surf'
     at: Vec3
   }[] = []
   let fire = hearthNear(ear[0], ear[2], HEARD)
@@ -230,7 +251,7 @@ export let ambience = (v: Vale, ear: Vec3) => {
       }
       out.push({
         id: `forge:${b.x}:${b.z}`,
-        kind: 'fire',
+        kind: 'forge',
         at: g.at,
       })
     }

@@ -1,6 +1,6 @@
-import { assert } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { NEAR } from './ears.ts'
-import { ambience } from './noises.ts'
+import { ambience, noises } from './noises.ts'
 import { builtOf, groundAt, hearthOf, vale } from './terrain.ts'
 
 Deno.test('village fire is near the square but not beyond surrounding buildings', () => {
@@ -25,5 +25,23 @@ Deno.test('village fire is near the square but not beyond surrounding buildings'
     )
     assert(farthest < 30, `${id}: buildings exceed fire range`)
     assert(!heard(farthest + 10), `${id}: fire heard beyond buildings`)
+  }
+})
+
+Deno.test('a wolf bite keeps its kind for the recorded cry', () => {
+  let body = { x: 0, y: 5, z: 0, vy: 0, yaw: 0, speed: 0, gait: 'idle' }
+  let scene = (kind: string, bite: number) => ({
+    body,
+    others: [],
+    mobs: [{ eid: 'wolf-1', kind, body, down: false, bite }],
+  })
+  for (let kind of ['wolf', 'direwolf', 'frostwolf']) {
+    let hear = noises()
+    hear(scene(kind, -1), 'hero', 1 / 60, () => 1)
+    assertEquals(
+      hear(scene(kind, 0.1), 'hero', 1 / 60, () => 1)
+        .filter((n) => n.type == 'cry').map((n) => n.kind),
+      [kind],
+    )
   }
 })

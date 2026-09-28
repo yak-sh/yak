@@ -1,0 +1,29 @@
+{
+  "sound": "sword",
+  "sha256": "fa331f1e59bd6e42fadbe184c5f6c424640d57103ad93aa3de1e5e26e534e0d5",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Sound effect only: one fast steel sword swing cutting through air, a clean short whoosh with a faint metallic edge and natural quick decay. No impact, voice, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "pcm",
+    "observed_output": "audio/pcm;rate=24000;channels=2"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790582614-yxzP62lsx4viq0uxY30R"
+  },
+  "processing": {
+    "source": "signed 16-bit little-endian PCM, 24000 Hz, stereo",
+    "output": "WAV, signed 16-bit PCM, 24000 Hz, stereo",
+    "loop": false,
+    "trim_start_seconds": 0.42,
+    "trim_end_seconds": 1.1,
+    "edge_fade_seconds": 0.015
+  },
+  "audit": {
+    "duration_seconds": 0.68,
+    "peak": 0.354,
+    "rms": 0.0427,
+    "loop_boundary_jump": null
+  }
+}

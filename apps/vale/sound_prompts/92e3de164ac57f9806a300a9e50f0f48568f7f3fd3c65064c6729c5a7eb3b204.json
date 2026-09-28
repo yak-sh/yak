@@ -1,0 +1,28 @@
+{
+  "sound": "campfire",
+  "sha256": "92e3de164ac57f9806a300a9e50f0f48568f7f3fd3c65064c6729c5a7eb3b204",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Sound effect only, about eight seconds: a small wood campfire outdoors, soft steady flames, irregular close crackles and tiny pops, warm and natural. An even continuous bed suitable for a seamless loop. No dramatic flare, voice, words, music, footsteps, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "pcm",
+    "observed_output": "audio/pcm;rate=24000;channels=2"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790582556-0e0NNRHZCgjo7pleI1EA"
+  },
+  "processing": {
+    "source": "signed 16-bit little-endian PCM, 24000 Hz, stereo",
+    "output": "WAV, signed 16-bit PCM, 24000 Hz, stereo",
+    "loop": true,
+    "trim_start_seconds": 0,
+    "crossfade_seconds": 1
+  },
+  "audit": {
+    "duration_seconds": 7.0,
+    "peak": 0.364,
+    "rms": 0.0124,
+    "loop_boundary_jump": 0.00778
+  }
+}

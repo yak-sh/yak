@@ -1,6 +1,7 @@
 // Every sound in the vale comes from somewhere, and is heard through one pair
-// of ears at the hero, turned the way the camera looks (ears.ts). How each
-// sound is made is voices.ts; this is where it is made.
+// of ears at the hero, turned the way the camera looks (ears.ts). Its voice
+// comes from a decoded sample or a procedural fallback (samples.ts,
+// voices.ts); this is where it is made.
 //
 // A sound is made at what made it (`From`): at a hero or creature, whose
 // source follows them from frame to frame; at a point, for a find or the work
@@ -26,6 +27,7 @@ import {
 import { bus, fireLevel } from './bus.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import { music } from './music.ts'
+import { load, loaded } from './samples.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
 import * as voices from './voices.ts'
@@ -58,6 +60,7 @@ let TAIL = 0.5
 // across the buildings around a village hearth.
 let LOOP = {
   fire: { loud: 0.45, falloff: NEAR },
+  forge: { loud: 0.12, falloff: NEAR },
   water: { loud: 0.12, falloff: NEAR },
   surf: { loud: 0.12, falloff: NEAR },
   marsh: { loud: 0.15, falloff: NEAR },
@@ -117,6 +120,7 @@ let wake = () => {
     speakers = ctx.destination
     loops = {
       fire: voices.fire(ctx),
+      forge: voices.fire(ctx),
       water: voices.water(ctx),
       surf: voices.surf(ctx),
       marsh: voices.marsh(ctx),
@@ -192,6 +196,31 @@ let make = (from: From, v: Voice) => {
   v.play(s.into)
 }
 
+// A decoded sample plays through the same source, falloff and effects bus as
+// its procedural voice. Until it arrives, the procedural voice still sounds.
+let sampled = (name: string, fallback: Voice, gain: number): Voice => {
+  if (!ctx) return fallback
+  let b = loaded(ctx, name)
+  if (!b) {
+    void load(ctx, name)
+    return fallback
+  }
+  return {
+    dur: b.duration,
+    loud: fallback.loud,
+    play: (into) => {
+      let s = new AudioBufferSourceNode(into.context, { buffer: b })
+      let g = new GainNode(into.context, { gain })
+      s.connect(g).connect(into)
+      s.onended = () => {
+        s.disconnect()
+        g.disconnect()
+      }
+      s.start()
+    },
+  }
+}
+
 // A kept sound ends: it fades, and its source goes once it has.
 let end = (s: Source) => {
   s.end?.()
@@ -223,26 +252,54 @@ let keep = (
 
 // A level's own sound, looping, faded in, and faded out when it ends.
 let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
-  let b = loops![kind]
+  let name = kind == 'fire' ? 'campfire' : kind == 'forge' ? 'forge' : null
+  let ready = name ? loaded(c, name) : undefined
+  let b = ready ?? loops![kind]
   let s = new AudioBufferSourceNode(c, { buffer: b, loop: true })
   let g = c.createGain()
+  let sourceGain = c.createGain()
   g.gain.setValueAtTime(0, c.currentTime)
   g.gain.linearRampToValueAtTime(LOOP[kind].loud, c.currentTime + 1.5)
   // Fire is a persistent source; duck its own bus, not the voice bus.
-  let fire = kind == 'fire' ? c.createGain() : null
+  let fire = name ? c.createGain() : null
   if (fire) {
     fire.gain.value = fireLevel(voiceDucking)
     g.connect(fire).connect(into)
     fireGains.add(fire)
   } else g.connect(into)
-  s.connect(g)
+  s.connect(sourceGain).connect(g)
   s.start(c.currentTime, Math.random() * b.duration)
+  let stopped = false
+  if (name && !ready) {
+    void load(c, name).then((next) => {
+      if (!next || stopped) return
+      let old = s, oldGain = sourceGain, at = c.currentTime
+      s = new AudioBufferSourceNode(c, { buffer: next, loop: true })
+      sourceGain = c.createGain()
+      sourceGain.gain.setValueAtTime(0, at)
+      sourceGain.gain.linearRampToValueAtTime(1, at + 0.75)
+      oldGain.gain.setValueAtTime(1, at)
+      oldGain.gain.linearRampToValueAtTime(0, at + 0.75)
+      s.connect(sourceGain).connect(g)
+      s.start(at, Math.random() * next.duration)
+      old.onended = () => {
+        old.disconnect()
+        oldGain.disconnect()
+      }
+      old.stop(at + 0.75)
+    })
+  }
   return () => {
+    stopped = true
     g.gain.setTargetAtTime(0, c.currentTime, 0.2)
     s.stop(c.currentTime + 1)
-    if (fire) {
-      fireGains.delete(fire)
-      s.onended = () => fire.disconnect()
+    if (fire) fireGains.delete(fire)
+    let last = s, gain = sourceGain
+    last.onended = () => {
+      last.disconnect()
+      gain.disconnect()
+      g.disconnect()
+      fire?.disconnect()
     }
   }
 }
@@ -253,7 +310,13 @@ let noisy = (n: Noise) =>
     n.type == 'step'
       ? voices.step(n.plan, n.size)
       : n.type == 'cry'
-      ? voices.cry(n.plan, n.size, n.loud)
+      ? n.kind.endsWith('wolf')
+        ? sampled(
+          'wolf',
+          voices.cry(n.plan, n.size, n.loud),
+          n.loud ? 0.35 : 0.2,
+        )
+        : voices.cry(n.plan, n.size, n.loud)
       : n.type == 'swing'
       ? voices.whiff
       : voices.roll,
@@ -357,7 +420,12 @@ export let sound = {
   keep,
   hit: (from: From, great: boolean) => make(from, voices.hit(great)),
   struck: (from: From) => make(from, voices.struck),
-  whiff: (from: From) => make(from, voices.whiff),
+  whiff: (from: From, family = '') =>
+    make(
+      from,
+      family == 'sword' ? sampled('sword', voices.whiff, 0.35) : voices.whiff,
+    ),
+  fire: (from: From) => make(from, sampled('spell', voices.whiff, 0.4)),
   roll: (from: From) => make(from, voices.roll),
   dodge: (from: From) => make(from, voices.dodge),
   hurt: (from: From) => make(from, voices.hurt),
@@ -366,7 +434,12 @@ export let sound = {
   heal: (from: From) => make(from, voices.heal),
   /** A stroke of work at a node or a station, by its trade (trades.ts). */
   stroke: (from: From, trade: string) =>
-    make(from, voices.stroke[trade] ?? voices.whiff),
+    make(
+      from,
+      trade == 'forge'
+        ? sampled('hammer', voices.stroke.forge, 0.45)
+        : voices.stroke[trade] ?? voices.whiff,
+    ),
   /** Work done at a node or a station, by its trade. */
   done: (from: From, trade: string) =>
     make(from, voices.done[trade] ?? voices.pick),

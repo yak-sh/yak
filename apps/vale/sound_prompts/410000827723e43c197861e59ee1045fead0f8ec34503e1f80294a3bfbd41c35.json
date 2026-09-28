@@ -1,0 +1,29 @@
+{
+  "sound": "hammer",
+  "sha256": "410000827723e43c197861e59ee1045fead0f8ec34503e1f80294a3bfbd41c35",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Sound effect only: one dry iron hammer strike on a blacksmith anvil, sharp metallic attack and short natural ringing decay. No voice, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "pcm",
+    "observed_output": "audio/pcm;rate=24000;channels=2"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790582498-X4oFdgL8S0gkBOXf4vcC"
+  },
+  "processing": {
+    "source": "signed 16-bit little-endian PCM, 24000 Hz, stereo",
+    "output": "WAV, signed 16-bit PCM, 24000 Hz, stereo",
+    "loop": false,
+    "trim_start_seconds": 0.12,
+    "trim_end_seconds": 0.82,
+    "edge_fade_seconds": 0.015
+  },
+  "audit": {
+    "duration_seconds": 0.7,
+    "peak": 0.751,
+    "rms": 0.0817,
+    "loop_boundary_jump": null
+  }
+}

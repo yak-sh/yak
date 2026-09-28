@@ -1,5 +1,5 @@
-// How each sound in the vale is made: on the spot with Web Audio, so there is
-// nothing to load. A thump for a blow, a swish for a miss, a chime for a
+// Procedural voices made on the spot with Web Audio, also used while a
+// recorded sound loads or if it fails. A thump for a blow, a swish for a
 // find, the strokes of work at a node, a footstep, a creature's cry, the
 // fire and water a level keeps making, and a marsh's frogs. A voice plays
 // into whatever node it is given; sound.ts says where that is.

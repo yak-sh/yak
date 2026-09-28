@@ -1,0 +1,28 @@
+{
+  "sound": "forge",
+  "sha256": "579c76352d873716929daf518eebd007471c463d67f1ac237310ffbf39b37248",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Sound effect only, about eight seconds: a village blacksmith forge fire and gentle bellows, low warm roaring embers, airy breathing and occasional subtle hot metal hiss. Continuous ambience suitable for a seamless loop. No hammer strikes, voice, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "pcm",
+    "observed_output": "audio/pcm;rate=24000;channels=2"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790582575-hqK7eTYUpE7p4akagv6C"
+  },
+  "processing": {
+    "source": "signed 16-bit little-endian PCM, 24000 Hz, stereo",
+    "output": "WAV, signed 16-bit PCM, 24000 Hz, stereo",
+    "loop": true,
+    "trim_start_seconds": 0.8,
+    "crossfade_seconds": 0.8
+  },
+  "audit": {
+    "duration_seconds": 6.4,
+    "peak": 0.22,
+    "rms": 0.032,
+    "loop_boundary_jump": 0.00119
+  }
+}
