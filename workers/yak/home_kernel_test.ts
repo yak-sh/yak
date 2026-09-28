@@ -183,6 +183,7 @@ Deno.test('the front page is served at the space root', async () => {
     await owner.put('/photo.png', 'not really a png')
     await owner.put('/style.css', 'h1 { color: peru }')
     await owner.put('/deep/note.txt', 'down a directory')
+    await agent.tool('app_deploy', { space: 'jeff23', app: 'site' })
 
     // The root is the app: 200 with its page, not a 302 into `/site/`.
     let root = await k.at('jeff23.yaks.app', '/', { redirect: 'manual' })
@@ -249,6 +250,7 @@ Deno.test('the front page is served at the space root', async () => {
     // anything, and the site's face is the home app. It is the obvious thing
     // to sweep in beside the others, so it is held here on purpose.
     await owner.put('/robots.txt', 'User-agent: *\nDisallow:')
+    await agent.tool('app_deploy', { space: 'jeff23', app: 'site' })
     let robots = await k.at('jeff23.yaks.app', '/robots.txt')
     assertEquals(robots.status, 200)
     assertEquals(await robots.text(), 'User-agent: *\nDisallow:')

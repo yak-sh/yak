@@ -16,7 +16,7 @@ import {
 import { client as keeper } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { until } from '../../bin/testing.ts'
-import { browser, client, kernel, seed } from './probe.ts'
+import { browser, client, connector, kernel, seed } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a
 // component per name — what `query()` answers with, and what `subscribe()`
@@ -63,6 +63,10 @@ Deno.test('the served client: a page saves, lists and watches', async () => {
       '/index.html',
       page,
     )
+    await connector(k, cookie).tool('app_deploy', {
+      space: 'jeff7',
+      app: 'recipes',
+    })
     let html = await (await k.at('jeff7.yaks.app', '/recipes/')).text()
     assertStringIncludes(html, '"./api/client.js"')
     assertStringIncludes(html, '<base href="/recipes/">')
@@ -276,6 +280,10 @@ Deno.test('the client at a pretty path, and a sibling app by path', async () => 
       "import { query, store } from '/reading/api/client.js'</script>"
     await client(k, 'nora8.yaks.app', 'reading', them.cookie)
       .put('/index.html', page)
+    await connector(k, them.cookie).tool('app_deploy', {
+      space: 'nora8',
+      app: 'reading',
+    })
     let deep = await k.at('nora8.yaks.app', '/reading/loans/1')
     assertEquals(deep.status, 200)
     assertStringIncludes(await deep.text(), '/reading/api/client.js')

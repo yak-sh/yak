@@ -113,6 +113,10 @@ Deno.test('the kernel routes, vouches, serves, and surfaces', async () => {
       (await owner.put('/style.css', 'h1 { color: peru }')).status,
       200,
     )
+    await connector(k, cookie).tool('app_deploy', {
+      space: 'jeff69',
+      app: 'recipes',
+    })
     let served = await k.at('jeff69.yaks.app', '/recipes/')
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /text\/html/)
@@ -456,6 +460,7 @@ Deno.test('an app says who may read it and who may write it', async () => {
       path: 'index.html',
       content: '<!doctype html><h1>the diary</h1>',
     })
+    await agent.tool('app_deploy', { space: 'club70', app: 'diary' })
     let stranger = await k.at('club70.yaks.app', '/diary/', {
       redirect: 'manual',
     })
@@ -499,6 +504,7 @@ Deno.test('an app says who may read it and who may write it', async () => {
       path: 'index.html',
       content: '<!doctype html><h1>the list</h1>',
     })
+    await agent.tool('app_deploy', { space: 'club70', app: 'list' })
     let open_ = await k.at('club70.yaks.app', '/list/')
     assertEquals(open_.headers.get('cache-control'), 'public, no-cache')
     let tag = open_.headers.get('etag') ?? ''

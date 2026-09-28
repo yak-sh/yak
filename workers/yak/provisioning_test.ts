@@ -7,7 +7,7 @@
 // lives in the router. domain_test.ts covers the fully wired customer domain; this is the
 // one state that never used to have an answer of its own.
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { client, kernel, meta, seed } from './probe.ts'
+import { client, connector, kernel, meta, seed } from './probe.ts'
 
 Deno.test(
   'a domain with nothing ready gets the branded page, not the apex',
@@ -44,6 +44,10 @@ Deno.test('a domain marked active still routes to its app', async () => {
     }])
     let owner = client(k, 'jeff57.yaks.app', 'recipes', cookie)
     await owner.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
+    await connector(k, cookie).tool('app_deploy', {
+      space: 'jeff57',
+      app: 'recipes',
+    })
     // Stamped the way domain_attach leaves it once Cloudflare says so
     // (tools.ts, directory.ts `Host`) — `settling` reads this cached stage
     // and never asks Cloudflare at all once it says `active`.
