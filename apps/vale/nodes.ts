@@ -19,7 +19,7 @@ import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, meshed } from './items.ts'
 import { LIFT } from './laid.ts'
 import { type Box, cuboids } from './boxes.ts'
-import { baseline, type NatureChunk, natureMesh } from './nature_mesh.ts'
+import { baseline, type ChunkProps, natureMesh } from './nature_mesh.ts'
 import {
   ball,
   blob,
@@ -37,7 +37,7 @@ import { GRADES, tint } from './rarity.ts'
 import { naturalEid, nodeRarity } from './gather.ts'
 import { hashOf, noise, rand, stream } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
-import { among, off } from './stand.ts'
+import { among, off, type Stood } from './stand.ts'
 import { CHUNK, chunkOf, type Vale } from './terrain.ts'
 import { TRADES } from './trades.ts'
 import type { Job, Seen } from './work.ts'
@@ -57,6 +57,7 @@ let SINK = 0.6
 let SWELL = 0.5
 // How long what a node gives takes to fly to the hero, in seconds.
 let FLIGHT = 0.45
+let EMPTY: ChunkProps[] = []
 
 // Logs cut and stacked beside a tree, south of its trunk, their ends the
 // colour of the wood.
@@ -273,23 +274,34 @@ export let nodes = (
   })
   let ringGeo = new THREE.RingGeometry(0.9, 1, 40)
   let made = new Map<string, THREE.BufferGeometry>()
+  let models = new Map<string, Out>()
+  let modelFor = (n: Seen, whole: boolean, shape: number): Out => {
+    let id = `${n.kind}:${whole}:${shape}`
+    let got = models.get(id)
+    if (!got) models.set(id, got = modelOf(n.lode.look, whole, shape))
+    return got
+  }
   let geo = (key: string, make: () => Out) => {
     let g = made.get(key)
     if (!g) made.set(key, g = geometry(pack(make())))
     return g
   }
   let drawn = new Map<string, Drawn>()
-  let wild = new Map<string, { mesh: THREE.Mesh; state: string }>()
-  let next = among(v), stood = new Map<string, number>()
+  let wild = new Map<
+    string,
+    { mesh: THREE.Mesh; state: string; source: ChunkProps }
+  >()
+  let next = among(v), stepped = new Map<string, number>()
+  let shown: ChunkProps[] | null = null, stands: Stood[] = []
   let stepOf = (n: Seen) => {
-    let got = stood.get(n.eid)
+    let got = stepped.get(n.eid)
     if (got != null) return got
     let shape = hashOf(n.eid) % SHAPES
     got = next(n.at, [
-      modelOf(n.lode.look, true, shape),
-      modelOf(n.lode.look, false, shape),
-    ])
-    stood.set(n.eid, got)
+      modelFor(n, true, shape),
+      modelFor(n, false, shape),
+    ], stands)
+    stepped.set(n.eid, got)
     return got
   }
   // Felled trees falling, and things flying to the hero.
@@ -324,7 +336,7 @@ export let nodes = (
       return { obj, rings, fish }
     }
     let mesh = new THREE.Mesh(
-      geo(`${n.kind}:${whole}:${shape}`, () => modelOf(look, whole, shape)),
+      geo(`${n.kind}:${whole}:${shape}`, () => modelFor(n, whole, shape)),
       mat,
     )
     mesh.castShadow = look.plan != 'herb'
@@ -390,8 +402,15 @@ export let nodes = (
 
   return {
     /** Draw this frame's nodes, with the hero at `hero`. */
-    tick: (job: Job, hero: Vec3, dt: number, chunks: NatureChunk[] = []) => {
+    tick: (job: Job, hero: Vec3, dt: number, chunks: ChunkProps[] = EMPTY) => {
       let t = performance.now() / 1000
+      let rebased = shown != chunks
+      if (rebased) {
+        shown = chunks
+        stands = chunks.flatMap((c) => c.stood)
+        next = among(v)
+        stepped.clear()
+      }
       let natural = new Map<string, Seen[]>()
       let byChunk = new Map(chunks.map((c) => [`${c.ci} ${c.ck}`, c]))
       for (let d of drawn.values()) d.seen = false
@@ -430,8 +449,6 @@ export let nodes = (
         let d = drawn.get(n.eid)
         if (!d) {
           let group = new THREE.Group()
-          let [dx, dy, dz] = off(stepOf(n))
-          group.position.set(n.at[0] + dx, n.at[1] + dy, n.at[2] + dz)
           scene.add(group)
           d = {
             group,
@@ -443,6 +460,10 @@ export let nodes = (
             seen: true,
           }
           drawn.set(n.eid, d)
+        }
+        if (rebased || d.was == null) {
+          let [dx, dy, dz] = off(stepOf(n))
+          d.group.position.set(n.at[0] + dx, n.at[1] + dy, n.at[2] + dz)
         }
         d.seen = true
         let whole = !n.spent
@@ -545,19 +566,20 @@ export let nodes = (
       // respawn rebuilds that one chunk on the page's thread.
       for (let [id, group] of natural) {
         let chunk = byChunk.get(id)
-        if (!chunk?.packed) continue
+        if (!chunk?.nature) continue
         let changed = group.filter((n) =>
           n.spent || n.rarity != nodeRarity(n.eid, 0)
         )
         let state = changed.map((n) =>
           `${n.eid}:${n.spent}:${n.rarity}`
         ).join('|') || 'base'
-        if (wild.get(id)?.state == state) continue
+        let old = wild.get(id)
+        if (old?.state == state && old.source == chunk) continue
         let seen = new Map(group.map((n) => [n.eid, n]))
-        let packed = state == 'base' ? chunk.packed : natureMesh(
+        let packed = state == 'base' ? chunk.nature : natureMesh(
           chunk.ci,
           chunk.ck,
-          chunk.entries.map((entry) => {
+          chunk.natural.map((entry) => {
             let n = seen.get(naturalEid(entry.prop))
             return n
               ? { ...entry, spent: n.spent, rarity: n.rarity }
@@ -569,13 +591,12 @@ export let nodes = (
         mesh.position.set(chunk.ci * CHUNK, 0, chunk.ck * CHUNK)
         mesh.castShadow = true
         mesh.receiveShadow = true
-        let old = wild.get(id)
         if (old) {
           old.mesh.removeFromParent()
           old.mesh.geometry.dispose()
         }
         scene.add(mesh)
-        wild.set(id, { mesh, state })
+        wild.set(id, { mesh, state, source: chunk })
       }
       for (let [id, batch] of wild) {
         if (natural.has(id)) continue

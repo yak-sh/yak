@@ -9,7 +9,7 @@ import { out, pack, type Packed, place, type Vec } from './mesh.ts'
 import { KINDS, model } from './props.ts'
 import type { Natural } from './nature.ts'
 import { baseline, natureMesh } from './nature_mesh.ts'
-import { off, propAt, spacer, step, thingAt } from './stand.ts'
+import { off, propAt, spacer, step, type Stood, thingAt } from './stand.ts'
 import {
   adopt,
   CHUNK,
@@ -31,6 +31,7 @@ export type Chunk = {
   buildings: { kind: string; seed: number; turn: number; at: Vec }[]
   natural?: Natural[]
   nature?: Packed | null
+  stood?: Stood[]
   patch: Patch
 }
 
@@ -58,11 +59,13 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
   let bits = out()
   let buildings: Chunk['buildings'] = []
   let props = v.plant(ci, ck)
+  let stood: Stood[] = props.map((prop) => ({ prop, step: step(v, prop) }))
+  let steps = new Map(stood.map(({ prop, step }) => [prop, step]))
   let natural: Natural[] = []
   let smallSpace = small ? spacer(v.voxel) : null
   for (let p of small ? [...props, ...decor(patch)] : props) {
     if (p.natural) {
-      let at = step(v, p)
+      let at = steps.get(p)!
       smallSpace?.add(propAt(v, p), at)
       let [dx, dy, dz] = off(at)
       natural.push({
@@ -77,7 +80,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     let mesh = tiny ? model(p.kind, p.seed, p.turn, small) : null
     let n = tiny
       ? smallSpace!(thingAt([p.x, y, p.z], [mesh!], v.voxel))
-      : step(v, p)
+      : steps.get(p) ?? step(v, p)
     if (!tiny) smallSpace?.add(propAt(v, p), n)
     let [dx, dy, dz] = off(n)
     if (kind.raise) {
@@ -113,6 +116,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     buildings,
     natural,
     nature: natureMesh(ci, ck, natural.map(baseline)),
+    stood,
     patch,
   }
 }

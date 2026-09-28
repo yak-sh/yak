@@ -42,6 +42,9 @@ export type Part = { room: Room; planes: [number[], number[], number[]] }
 /** A thing as a spacer sees it: its parts, drawn together. */
 export type Thing = Part[]
 
+/** A world prop and the spacing its chunk worker chose for it. */
+export type Stood = { prop: Prop; step: number }
+
 // How much further than its room each thing is taken to reach, in metres, so
 // two rooms that only touch count as overlapping.
 let SLACK = 0.01
@@ -280,17 +283,25 @@ export let step = (v: Vale, p: Prop): number => {
   return cache.get(id(p))!
 }
 
-/** A spacer for nodes drawn among the vale's props and earlier nodes. */
+/** A spacer for nodes drawn among the vale's props and earlier nodes. A page
+ * passes the prop placements from its drawn chunks; pure callers may let this
+ * find them from the vale. */
 export let among = (v: Vale) => {
   let next = spacer(v.voxel), seen = new Set<string>()
-  return (at: Vec, models: Out[]): number => {
+  return (at: Vec, models: Out[], stood?: Stood[]): number => {
     let t = thingAt(at, models.filter((o) => o.pos.length), v.voxel)
     if (!t.length) return 0
     let r = REACH + radius(t, at[0], at[2])
-    for (let p of propsNear(v, at[0], at[2], r)) {
+    let props = stood
+      ? stood.filter(({ prop: p }) => Math.hypot(p.x - at[0], p.z - at[2]) < r)
+      : propsNear(v, at[0], at[2], r).map((prop) => ({
+        prop,
+        step: step(v, prop),
+      }))
+    for (let { prop: p, step: n } of props) {
       let key = id(p)
       if (seen.has(key)) continue
-      next.add(propAt(v, p), step(v, p))
+      next.add(propAt(v, p), n)
       seen.add(key)
     }
     return next(t)

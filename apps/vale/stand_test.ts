@@ -50,3 +50,19 @@ Deno.test('prop spacing profiles follow their drawn faces', () => {
     )
   }
 })
+
+Deno.test('a node keeps its spacing from worker-provided prop placements', () => {
+  let p = { kind: 'oak', x: 50.25, z: 50.25, seed: 0 }
+  let v = flat(5, [], [p])
+  let at: [number, number, number] = [51, 5, 50.25]
+  let model = modelOf(LODES.oak.look, true, 0)
+  let expected = among(v)(at, [model])
+  let withoutPlant = {
+    ...v,
+    plant: () => {
+      throw new Error('terrain read')
+    },
+  }
+  let got = among(withoutPlant)(at, [model], [{ prop: p, step: step(v, p) }])
+  assertEquals(got, expected)
+})

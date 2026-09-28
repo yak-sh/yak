@@ -795,13 +795,13 @@ let loop = (t: number) => {
     if (f) {
       let mine = net.who(net.hero) ?? look
       let dressed = lookOf(net.hero)
-      let wild = w.natural()
+      let props = w.props()
       job = toil.tick(
         v,
         f,
         i.gather || (i.talk && (!f.talk || !!job?.bench)),
         i.strike || i.dodge || i.jump || i.ability > 0,
-        wild.flatMap((c) => c.entries),
+        props.flatMap((c) => c.natural),
       )
       let d = job.doing
       stage.tick(
@@ -814,7 +814,7 @@ let loop = (t: number) => {
         d ? { swing: d.swing, x: d.at[0], z: d.at[2] } : null,
       )
       h.mic(voice.mic, voice.input, voice.sending)
-      bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt, wild)
+      bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt, props)
       folk.tick(f)
       seen.tick(f)
       let found = camp.tick(f)

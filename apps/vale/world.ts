@@ -21,7 +21,7 @@ import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
 import { instances } from './instances.ts'
 import { LEVELS, SIZE, type Spot } from './levels.ts'
-import type { NatureChunk } from './nature_mesh.ts'
+import type { ChunkProps } from './nature_mesh.ts'
 import type { Packed, Vec } from './mesh.ts'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
@@ -83,8 +83,8 @@ export type World = {
   pending: number
   /** how many chunks are drawn at each detail */
   chunks: number[]
-  /** natural props in the chunks currently drawn */
-  natural: () => NatureChunk[]
+  /** props and their worker-chosen placements in the chunks now drawn */
+  props: () => ChunkProps[]
   /** let the GPU go of everything the world drew */
   dispose: () => void
 }
@@ -260,13 +260,13 @@ export let world = (v: Vale, mesh: Mesher): World => {
     lamps: Lamp[]
     glows: Glow[]
     doors: Hung
-    natural: NatureChunk
+    props: ChunkProps
     /** its middle */
     x: number
     z: number
   }
   let drawn = new Map<string, Drawn>()
-  let natural: NatureChunk[] | null = null
+  let props: ChunkProps[] | null = null
   let asked = new Set<string>()
   let wants = new Map<string, Want>()
   let waiting: (() => void)[] = []
@@ -350,7 +350,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     }
     buildings.drop(k)
     drawn.delete(k)
-    natural = null
+    props = null
     if (keeps) return
     for (let l of d.lamps) {
       scene.remove(l.box, l.sprite)
@@ -388,16 +388,17 @@ export let world = (v: Vale, mesh: Mesher): World => {
         lamps: lamps ?? lampsOf(glows),
         glows,
         doors: hung ?? doorsOf(c.ci, c.ck),
-        natural: {
+        props: {
           ci: c.ci,
           ck: c.ck,
-          entries: c.natural ?? [],
-          packed: c.nature ?? null,
+          natural: c.natural ?? [],
+          nature: c.nature ?? null,
+          stood: c.stood ?? [],
         },
         x,
         z,
       })
-      natural = null
+      props = null
     } finally {
       prepared.release()
     }
@@ -554,7 +555,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     day: 0.4,
     pending: 0,
     chunks: [0, 0, 0],
-    natural: () => natural ??= [...drawn.values()].map((d) => d.natural),
+    props: () => props ??= [...drawn.values()].map((d) => d.props),
     see: (from, feet, tall, dt = 1 / 60, foes = []) => {
       sight(ground, from, feet, tall, foes)
       let want = cutaway(v, [feet.x, feet.y, feet.z], [from.x, from.y, from.z])

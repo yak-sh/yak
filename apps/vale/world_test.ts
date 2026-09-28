@@ -31,6 +31,7 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     let reveal: (p: Packed) => void = () => {}
     let held = new Promise<Packed>((done) => reveal = done)
     let mid = SIZE / 2
+    let prop = { kind: 'oak', x: mid, z: mid, seed: 1 }
     let placed: Chunk['buildings'] = [mid, mid + 4].map((x) => ({
       kind: 'smithy.plaster',
       seed: 0,
@@ -45,6 +46,9 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
           solid: empty,
           small: null,
           buildings: ci == chunkOf(mid) && ck == chunkOf(mid) ? placed : [],
+          stood: ci == chunkOf(mid) && ck == chunkOf(mid)
+            ? [{ prop, step: 1 }]
+            : [],
           patch: {
             ci,
             ck,
@@ -71,6 +75,7 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     assertEquals(done, false)
     reveal(pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])))
     await near
+    assertEquals(w.props().flatMap((c) => c.stood), [{ prop, step: 1 }])
     let meshes = w.scene.children.filter((o): o is THREE.InstancedMesh =>
       o instanceof THREE.InstancedMesh
     )
@@ -87,6 +92,7 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     w.focus.set(1000, 5, 1000)
     w.tick(0, 0)
     assertEquals(disposed, 1)
+    assertEquals(w.props().flatMap((c) => c.stood), [])
     w.dispose()
   } finally {
     Object.defineProperty(globalThis, 'document', {

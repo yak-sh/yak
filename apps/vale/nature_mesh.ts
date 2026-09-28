@@ -6,14 +6,16 @@ import { type Out, out, pack, type Packed, place } from './mesh.ts'
 import { type Natural, NATURE } from './nature.ts'
 import { model } from './props.ts'
 import { GRADES, type Rarity } from './rarity.ts'
+import type { Stood } from './stand.ts'
 import { CHUNK } from './terrain.ts'
 
 export type NatureState = Natural & { spent: boolean; rarity: Rarity }
-export type NatureChunk = {
+export type ChunkProps = {
   ci: number
   ck: number
-  entries: Natural[]
-  packed: Packed | null
+  natural: Natural[]
+  nature: Packed | null
+  stood: Stood[]
 }
 
 export let baseline = (n: Natural): NatureState => ({
