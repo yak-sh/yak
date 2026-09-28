@@ -214,6 +214,34 @@ Deno.test('a checkout with nothing recorded cannot be cut again', async () => {
   }
 })
 
+Deno.test('concurrent resumes share one restored checkout', async () => {
+  let f = await fixture()
+  let h = await harness()
+  try {
+    let path = await f.cut('child-one')
+    let home = (await discover(h.g, path)).entity.eid
+    await h.g.apply([{
+      entity: { eid: 'child:one' },
+      session: {},
+      home: { worktree: home },
+    }])
+    await git(f.repo, 'worktree', 'remove', path)
+    await git(f.repo, 'branch', '-D', 'task-child-one')
+
+    let resumed = await Promise.allSettled([
+      sessionCwd(h.g, 'child:one', '/wrong'),
+      sessionCwd(h.g, 'child:one', '/wrong'),
+    ])
+    assertEquals(
+      resumed.map((r) => r.status == 'fulfilled' ? r.value : String(r.reason)),
+      [path, path],
+    )
+  } finally {
+    h.close()
+    await f.free()
+  }
+})
+
 Deno.test('live homes are the checkouts named for a session and the ones it inherited', async () => {
   let h = await harness()
   try {

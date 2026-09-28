@@ -65,6 +65,39 @@ let canonical = async (path: string): Promise<string> => {
   }
 }
 
+// Serialize creation and restoration at one worktree path, including requests
+// through different graph clients. The advisory lock holds across processes,
+// and the kernel releases it if this one dies. Lock files stay: unlinking one
+// races with processes waiting on it.
+let pending = new Map<string, Promise<unknown>>()
+let locked = async <T>(
+  common: string,
+  path: string,
+  change: () => Promise<T>,
+): Promise<T> => {
+  let before = pending.get(path) ?? Promise.resolve()
+  let run = before.catch(() => {}).then(async () => {
+    let dir = common + '/yaks-locks'
+    await Deno.mkdir(dir, { recursive: true })
+    let file = await Deno.open(
+      dir + '/' + worktreeEid(repositoryEid(common), path),
+      { create: true, write: true },
+    )
+    try {
+      await file.lock()
+      return await change()
+    } finally {
+      file.close()
+    }
+  })
+  pending.set(path, run)
+  try {
+    return await run
+  } finally {
+    if (pending.get(path) === run) pending.delete(path)
+  }
+}
+
 /** Find the checkout containing `cwd`, and update the repository's refs from
  * Git. A ref that Git no longer has keeps its row, marked absent. */
 export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
@@ -282,47 +315,24 @@ export let checkoutAt = async (
   return discover(g, cwd)
 }
 
-// Serialize requests for the same path within this process, including ones
-// from different graph clients. Across processes, Git's own locks and the
-// stored `checkout` row are what allow recovery.
-let pending = new Map<string, Promise<unknown>>()
 export let createWorktree = async (
   g: Graph,
   source: string,
   request: CheckoutRequest,
 ): Promise<Bundle> => {
   let path = await canonical(request.path)
-  let before = pending.get(path) ?? Promise.resolve()
-  let run = before.catch(() => {}).then(async () => {
-    // An advisory lock file holds across processes, and the kernel releases it
-    // if this one dies. The lock files are left in place: unlinking one races
-    // with the processes waiting on it.
-    let common = await Deno.realPath(
-      (await git(source, [
-        'rev-parse',
-        '--path-format=absolute',
-        '--git-common-dir',
-      ]))!,
-    )
-    let dir = common + '/yaks-locks'
-    await Deno.mkdir(dir, { recursive: true })
-    let file = await Deno.open(
-      dir + '/' + worktreeEid(repositoryEid(common), path),
-      { create: true, write: true },
-    )
-    try {
-      await file.lock()
-      return await create(g, source, { ...request, path })
-    } finally {
-      file.close()
-    }
-  })
-  pending.set(path, run)
-  try {
-    return await run
-  } finally {
-    if (pending.get(path) === run) pending.delete(path)
-  }
+  let common = await Deno.realPath(
+    (await git(source, [
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-common-dir',
+    ]))!,
+  )
+  return locked(
+    common,
+    path,
+    () => create(g, source, { ...request, path }),
+  )
 }
 
 /** Why a worktree was kept: uncommitted files, commits that exist nowhere
@@ -399,31 +409,38 @@ export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
   let w = tree.worktree as Comp | undefined
   if (!w?.path) throw new Error('worktree ' + tree.entity.eid + ' has no path')
   let path = String(w.path)
-  if (await Deno.stat(path).then(() => true, () => false)) return path
   let common =
     ((await row(g, String(w.repository)))?.repository as Comp | undefined)
       ?.common
   let head = w.head
-  if (typeof common != 'string' || typeof head != 'string') {
+  if (typeof common != 'string') {
+    if (await Deno.stat(path).then(() => true, () => false)) return path
     throw new Error('nothing recorded to cut ' + path + ' again from')
   }
-  let name = w.branch
-    ? String(
-      ((await row(g, String(w.branch)))?.ref as Comp | undefined)?.name ?? '',
-    )
-    : ''
-  let branch = name.replace(/^refs\/heads\//, '')
-  // Removing a worktree deletes its branch too, but a branch somebody else
-  // kept is where that work actually is, not a stale copy of it.
-  let standing = !!branch &&
-    await quiet(common, ['rev-parse', '--verify', '--quiet', name]) != null
-  await git(common, [
-    'worktree',
-    'add',
-    ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
-    path,
-    standing ? branch : head,
-  ])
-  await discover(g, path)
-  return path
+  return locked(common, path, async () => {
+    // A peer may have restored it while this request waited for the lock.
+    if (await Deno.stat(path).then(() => true, () => false)) return path
+    if (typeof head != 'string') {
+      throw new Error('nothing recorded to cut ' + path + ' again from')
+    }
+    let name = w.branch
+      ? String(
+        ((await row(g, String(w.branch)))?.ref as Comp | undefined)?.name ?? '',
+      )
+      : ''
+    let branch = name.replace(/^refs\/heads\//, '')
+    // Removing a worktree deletes its branch too, but a branch somebody else
+    // kept is where that work actually is, not a stale copy of it.
+    let standing = !!branch &&
+      await quiet(common, ['rev-parse', '--verify', '--quiet', name]) != null
+    await git(common, [
+      'worktree',
+      'add',
+      ...branch ? standing ? [] : ['-b', branch] : ['--detach'],
+      path,
+      standing ? branch : head,
+    ])
+    await discover(g, path)
+    return path
+  })
 }
