@@ -1,0 +1,61 @@
+/* The small yaks.app mark stays on the glass; its sheet explains how to
+   build a world in a space of your own. */
+.YaksBadge {
+  grid-area: brand;
+  justify-self: end;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--rim);
+  border-radius: var(--round);
+  background: var(--glass);
+  box-shadow: 0 2px 0 var(--lip);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--deep);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+
+  &:hover {
+    background: var(--paper);
+  }
+
+  &:active {
+    translate: 0 1px;
+    box-shadow: 0 1px 0 var(--lip);
+  }
+}
+
+.Panel-about .Panel_Sheet {
+  width: min(32rem, 100%);
+}
+
+.Yaks {
+  width: min(27rem, 100%);
+  line-height: 1.5;
+
+  & p {
+    margin: 0 0 0.9rem;
+  }
+}
+
+.Yaks_Lead {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--deep);
+}
+
+.Yaks_Prompt {
+  padding: 0.65rem 0.8rem;
+  border-left: 3px solid var(--moss);
+  border-radius: 0 var(--radius-small) var(--radius-small) 0;
+  background: var(--well);
+  font-weight: 600;
+}
+
+.Yaks_Actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  padding-bottom: 0.2rem;
+}

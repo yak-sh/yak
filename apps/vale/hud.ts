@@ -9,7 +9,8 @@
 //
 // How a panel plugs in. Every sheet that opens over the glass is a panel
 // (panel.ts), one open at a time: the map, the hero's, a station's crafting,
-// the menu, and the ones standing ready below. A panel is a row of SHEETS;
+// the menu, the yaks.app badge, and the ones standing ready below. A panel is
+// a row of SHEETS;
 // `h.panels.<id>` hands its owner a `body` to draw into and `open` to say
 // whether to. Draw only while it is open and only when what it shows changed,
 // as map.ts and pack.ts do. Give it keys to open it, and a tray button with
@@ -33,6 +34,7 @@
 // Every button says what it does in its tip (tip.ts), shown while a mouse
 // rests on it or a thumb holds it: its name, its key, and a line of what it
 // does; an ability's is bar.ts's, with its numbers. Give a new button one.
+import { about } from './about.ts'
 import { type Action, keysOf } from './input.ts'
 import { fireNear } from './fires.ts'
 import type { Under } from './fx.ts'
@@ -105,6 +107,7 @@ let MICS: Record<Mic, string> = {
  * The map and the menu are one size whatever is done in them, so each is as
  * tall as it is; every other sheet keeps one height (ui/Panel.css). */
 export let SHEETS = {
+  about: { title: 'Make this world yours', tall: 'auto' },
   map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
   hero: {
     title: 'Your hero',
@@ -138,6 +141,9 @@ export let hud = (
   let foe = el('Foe')
   foe.hidden = true
   let nav = el('Hud_Nav')
+  let badge = el('YaksBadge', 'yaks.app', 'button')
+  badge.setAttribute('type', 'button')
+  badge.setAttribute('aria-label', 'About Mossvale and yaks.app')
   let who = el('Who')
   let trayBox = el('Hud_Tray')
   // The compass, which opens the map. Up is the way the camera looks, and
@@ -162,7 +168,7 @@ export let hud = (
   })
   // Where the first quest tracked goes next, on the compass's rim.
   let aim = rose.querySelector<HTMLElement>('.Rose_Goal')!
-  nav.append(who, rose, trayBox)
+  nav.append(badge, who, rose, trayBox)
   let toasts = el('Hud_Toasts')
   let pads = el('Hud_Pads')
   let talk = el('Talk')
@@ -177,6 +183,7 @@ export let hud = (
 
   let shelf = panels(root, busy)
   let panel = {
+    about: shelf.add('about', SHEETS.about),
     map: shelf.add('map', SHEETS.map),
     ...shelf.book('hero', SHEETS.hero),
     menu: shelf.add('menu', SHEETS.menu),
@@ -184,6 +191,8 @@ export let hud = (
     notices: shelf.add('notices', SHEETS.notices),
     deal: shelf.add('deal', SHEETS.deal),
   }
+  about(panel.about)
+  badge.addEventListener('click', panel.about.toggle)
   rose.addEventListener('click', panel.map.toggle)
   // The hero's frame opens their panel on themselves.
   vitals.addEventListener('click', panel.character.toggle)

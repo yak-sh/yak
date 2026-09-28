@@ -96,8 +96,8 @@
 /* The compass, who is here, and the tray of round buttons. */
 .Hud_Nav {
   display: grid;
-  grid-template-areas: 'who' 'rose' 'tray';
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas: 'brand' 'who' 'rose' 'tray';
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   justify-items: end;
   align-content: start;
   gap: var(--gap);
@@ -288,8 +288,8 @@
    so the column is no taller than the room. */
 @media (max-height: 540px), (pointer: coarse) and (orientation: landscape) {
   .Hud_Nav {
-    grid-template-areas: 'who who' 'tray rose';
-    grid-template-rows: auto auto;
+    grid-template-areas: 'brand brand' 'who who' 'tray rose';
+    grid-template-rows: auto auto auto;
     grid-template-columns: auto auto;
     align-items: center;
   }
