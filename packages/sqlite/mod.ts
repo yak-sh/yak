@@ -66,7 +66,6 @@ import {
   grown,
   indexed,
   logged,
-  schema,
   standing,
   tabled,
 } from './ddl.ts'
@@ -290,7 +289,14 @@ export let storage = (
     revive: (eids) => revive(driver, eids),
   }
   return {
-    ddl: () => schema(vocab, base.derived),
+    // A caller replaying these statements over a standing file must add new
+    // columns before creating their indexes. `schema()` alone describes a
+    // fresh file; it cannot see what a standing table still lacks.
+    ddl: () => [
+      ...tabled(vocab, base.derived),
+      ...grown(vocab, standing(driver, vocab)),
+      ...indexed(vocab),
+    ],
     grown: () => grown(vocab, standing(driver, vocab)),
     install: () => {
       // A file whose schema nothing has touched since this vocabulary

@@ -10,6 +10,7 @@ import {
   col,
   type Driver,
   eq,
+  type Expr,
   type Param,
   render,
   type Row,
@@ -17,6 +18,46 @@ import {
   STOCK,
   val,
 } from '@yaks/sql'
+
+// SQLite can read an unknown double-quoted index column as a string literal.
+// Once a later migration adds that column, the index still holds the literal
+// keys and disagrees with its table. Check the AST against the table first.
+let refs = (e: Expr): string[] => {
+  switch (e.t) {
+    case 'col':
+      return [e.name]
+    case 'fn':
+      return e.args.flatMap(refs)
+    case 'op':
+      return e.parts.flatMap(refs)
+    case 'not':
+    case 'neg':
+    case 'null':
+    case 'cast':
+    case 'as':
+    case 'desc':
+      return refs(e.e)
+    case 'in':
+      return [
+        ...refs(e.e),
+        ...(Array.isArray(e.set) ? e.set.flatMap(refs) : []),
+      ]
+    case 'case':
+      return [
+        ...(e.of ? refs(e.of) : []),
+        ...e.arms.flatMap((arm) => arm.flatMap(refs)),
+        ...(e.else ? refs(e.else) : []),
+      ]
+    case 'over':
+      return [
+        ...refs(e.fn),
+        ...(e.partition ?? []).flatMap(refs),
+        ...(e.order ?? []).flatMap(refs),
+      ]
+    default:
+      return []
+  }
+}
 
 /*
  * Text in, rows out, over one open embedded database: what {@link driver}
@@ -112,6 +153,21 @@ export let driver = (db: Database): Driver => {
   let file = !!run(main.sql, main.params)[0]?.file
   return {
     query: (s) => {
+      if (s.t == 'create index') {
+        let info = render({ t: 'pragma', name: 'table_info', arg: s.on })
+        let cols = new Set(
+          run(info.sql, info.params).map((r) => String(r.name)),
+        )
+        for (
+          let name of [...s.cols, ...(s.where ? [s.where] : [])].flatMap(refs)
+        ) {
+          if (!cols.has(name)) {
+            throw new Error(
+              `index ${s.name} names missing column ${s.on}.${name}`,
+            )
+          }
+        }
+      }
       let { sql, params } = render(s)
       return run(sql, params)
     },

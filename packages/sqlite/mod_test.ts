@@ -3,7 +3,8 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { col, type Driver, render } from '@yaks/sql'
+import { loadVocab } from '@yaks/vocab'
+import { col, type Driver, isNull, render, select, table } from '@yaks/sql'
 import { objects, storage, type Store } from './mod.ts'
 import { open } from './db.ts'
 import { mem, shop, spy } from './testing.ts'
@@ -17,6 +18,47 @@ Deno.test('ddl() lists the statements install() runs', () => {
       render(s).sql.includes('create table if not exists "entity"')
     ),
   )
+})
+
+Deno.test('ddl() grows a populated table before indexing its new column', () => {
+  let book = (indexed: boolean) =>
+    loadVocab({
+      $defs: {
+        book: {
+          component: true,
+          type: 'object',
+          ...(indexed ? { index: [['tag']] } : {}),
+          properties: {
+            title: { type: 'string' },
+            ...(indexed ? { tag: { type: 'string' } } : {}),
+          },
+        },
+      },
+    })
+  let d = mem()
+  let old = storage(d, book(false))
+  old.install()
+  old.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'a' }, book: { title: 'A' } },
+      { entity: { eid: 'b' }, book: { title: 'B' } },
+    ])
+  )
+
+  let next = storage(d, book(true))
+  for (let stmt of next.ddl()) d.query(stmt)
+  let probe = select({
+    cols: [col('entity')],
+    from: table('book'),
+    where: isNull(col('tag')),
+  })
+  let plan = d.query({ t: 'explain query plan', of: probe })
+    .map((r) => String(r.detail)).join('\n')
+  assert(plan.includes('book_tag'), plan)
+  assertEquals(d.query(probe).length, next.read('.book').length)
+  assertEquals(d.query({ t: 'pragma', name: 'integrity_check' }), [{
+    integrity_check: 'ok',
+  }])
 })
 
 Deno.test('install() is idempotent', () => {
