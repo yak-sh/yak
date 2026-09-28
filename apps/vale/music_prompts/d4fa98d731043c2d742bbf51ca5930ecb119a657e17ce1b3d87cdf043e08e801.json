@@ -1,0 +1,33 @@
+{
+  "land": "cinderreach",
+  "song": 2,
+  "sha256": "d4fa98d731043c2d742bbf51ca5930ecb119a657e17ce1b3d87cdf043e08e801",
+  "previous_sha256": "9f0d3ebf245b44e5a1f6fe9f6a53c47c5b390b8f9ed61eac4eff7ba761741bc8",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length fantasy game soundtrack song for Cinderreach: a lonely cinder plain beneath a dark volcano, its fissures glowing on the road toward the Maw. A desolate, spacious theme slowly uncovers a thread of courage, opens into a brief flare of hope and fades with resolve. Wordless choir voices may carry the melody; no lyrics, chanting, speech or spoken words. Memorable melodic theme, natural dynamics and a satisfying ending.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790574304-a6CW8oIuQCH6kQAvIdHj",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 177.63,
+    "integrated_lufs": -12.15,
+    "true_peak_dbfs": 0.26,
+    "loudness_range_lu": 8.0,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

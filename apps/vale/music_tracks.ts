@@ -122,8 +122,8 @@ export let TRACKS: Record<string, [string, string]> = {
     '9ed75963aea2dfe2d9527cacc306fbffadf57b35151967930c01330c83e38dce',
   ],
   tombsands: [
-    '3ca75958bd2ca2590be448d47aadf4a161f870f415cfabfc08eb5a7d7aabfa5f',
-    '15a3661b6da3a417e966c7dff57a1b88d3f46fd208ce222a7b2b6fa115feb182',
+    '069cd3af8efa9bfb1f0f0314c751b0efd8a547fd8c5fd95a8f77fe24dfd066e7',
+    '1d876966a4a4b1e025cf7277244db7f93b81fe8835a58d8454c474e24281a975',
   ],
   frostmoor: [
     '7dc52a8fb70df690d450a69799930acb72816df0902e06ff6ef64ba36e39d808',
@@ -150,8 +150,8 @@ export let TRACKS: Record<string, [string, string]> = {
     '9ebc97972622250b324faec375b8662ec59acae9ebcb116f70349fefa8308e57',
   ],
   cinderreach: [
-    '397298acd622201fc6b25ac46a4be737fdf46ec7b3a2c98159cf98ead7302a8a',
-    '9f0d3ebf245b44e5a1f6fe9f6a53c47c5b390b8f9ed61eac4eff7ba761741bc8',
+    '0a9872cea2699442570e7f35771300efc16afcfcd66f4b2018ad8b8591721d2a',
+    'd4fa98d731043c2d742bbf51ca5930ecb119a657e17ce1b3d87cdf043e08e801',
   ],
   ashkeep: [
     '279abaaafda546cb5b08c1b8c88c45cea7b75b3fe4206f1803d04fafa6c18380',

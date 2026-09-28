@@ -1,0 +1,33 @@
+{
+  "land": "tombsands",
+  "song": 1,
+  "sha256": "069cd3af8efa9bfb1f0f0314c751b0efd8a547fd8c5fd95a8f77fe24dfd066e7",
+  "previous_sha256": "3ca75958bd2ca2590be448d47aadf4a161f870f415cfabfc08eb5a7d7aabfa5f",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length fantasy game soundtrack song for Tombsands: dusk over a sand-buried necropolis, pale cliffs and half-seen tombs. A solemn, ancient theme slowly gathers quiet grandeur as the lost city comes into view, then settles into peace. Wordless choir voices may carry the melody; no lyrics, chanting, speech or spoken words. Memorable melodic theme, natural dynamics and a satisfying ending.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790574275-5YrPZV7Oo1EtigUX0wHi",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 164.1,
+    "integrated_lufs": -12.09,
+    "true_peak_dbfs": 0.4,
+    "loudness_range_lu": 8.7,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

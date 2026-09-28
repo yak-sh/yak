@@ -1,0 +1,33 @@
+{
+  "land": "tombsands",
+  "song": 2,
+  "sha256": "1d876966a4a4b1e025cf7277244db7f93b81fe8835a58d8454c474e24281a975",
+  "previous_sha256": "15a3661b6da3a417e966c7dff57a1b88d3f46fd208ce222a7b2b6fa115feb182",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length fantasy game soundtrack song for Tombsands: moonlight over shifting dunes and a hidden chamber among the buried tombs. An intimate, searching elegy circles an elusive motif, rises briefly into wonder and resolves with warmth. Wordless choir voices may carry the melody; no lyrics, chanting, speech or spoken words. Memorable melodic theme, natural dynamics and a satisfying ending.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790574275-NCLQw0ityl6rUrfc5lXx",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 176.14,
+    "integrated_lufs": -11.58,
+    "true_peak_dbfs": 0.17,
+    "loudness_range_lu": 10.4,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0
+  }
+}

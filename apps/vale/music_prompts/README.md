@@ -1,7 +1,9 @@
 # Music generation provenance
 
-One JSON file per track, named by the SHA-256 used in `../music_tracks.ts`. The
+One JSON file per generated track, named by the SHA-256 of its MP3. The
 `prompt` field is the exact recorded generation prompt, not a reconstruction.
+`../music_tracks.ts` selects the tracks heard in the app. Earlier Tombsands and
+Cinderreach takes remain here and in the Vale blob store for comparison.
 The first twenty tracks were generated with OpenRouter's
 `google/lyria-3-pro-preview`; output was MP3. Request settings beyond the
 prompt and model were not recorded.
