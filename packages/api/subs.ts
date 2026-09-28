@@ -424,10 +424,11 @@ export let subscriptions = (graph: Graph, opts: {
     scope?: Set<Eid>,
     load = (q: string): Bundle[] | Promise<Bundle[]> =>
       graph.read(q, { durable: true }),
+    scoped?: Bundle[] | Promise<Bundle[]>,
   ) => {
     if (sub.agg) return tell(sub)
     let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
-    return then(sub.peer ? read(sub, scope) : load(query), (set) => {
+    return then(sub.peer ? read(sub, scope, scoped) : load(query), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) =>
         (!scope || scope.has(e)) && !ids.has(e)
@@ -612,10 +613,11 @@ export let subscriptions = (graph: Graph, opts: {
   let source = (
     sub: Sub,
     scope?: Set<Eid>,
+    scoped?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
     let values = peers.values()
     let ids = [...new Set(values.map((b) => b.entity.eid))]
-    let candidates = scope ? graph.get([...scope]) : sub.candidates ??
+    let candidates = scope ? scoped ?? graph.get([...scope]) : sub.candidates ??
       (sub.candidates = sub.durable
         ? graph.read(sub.durable, { durable: true })
         : [])
@@ -639,9 +641,10 @@ export let subscriptions = (graph: Graph, opts: {
   let read = (
     sub: Sub,
     scope?: Set<Eid>,
+    scoped?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
     if (!sub.peer) return graph.read(sub.query, { durable: true })
-    return then(source(sub, scope), (bundles) => {
+    return then(source(sub, scope, scoped), (bundles) => {
       let chosen = matcher(sub.query, graph.vocab)(bundles)
       return chosen.filter((b) => !scope || scope.has(b.entity.eid))
         .map((b) => only(sub.want ?? null)(stored(b)))
@@ -663,6 +666,8 @@ export let subscriptions = (graph: Graph, opts: {
       release()
       return
     }
+    let backlinks = new Map<string, Bundle[] | Promise<Bundle[]>>()
+    let scoped = new Map<string, Bundle[] | Promise<Bundle[]>>()
     return then(durableRows(touched), (rows) => {
       let routing = route(
         overlay(rows, values),
@@ -685,15 +690,25 @@ export let subscriptions = (graph: Graph, opts: {
                 )
                 if (!moved.length) return
                 let ids = [...new Set(moved.map((b) => b.entity.eid))]
+                let query = `.${s.ref.comp}.${s.ref.prop}=${ids.join(',')}`
+                let found = backlinks.get(query)
+                if (!found) {
+                  found = graph.read(query, { durable: true })
+                  backlinks.set(query, found)
+                }
                 return then(
-                  graph.read(
-                    `.${s.ref.comp}.${s.ref.prop}=${ids.join(',')}`,
-                    { durable: true },
-                  ),
-                  (rows) =>
-                    rows.length
-                      ? push(s, new Set(rows.map((b) => b.entity.eid)))
-                      : undefined,
+                  found,
+                  (rows) => {
+                    if (!rows.length) return
+                    let ids = [...new Set(rows.map((b) => b.entity.eid))]
+                    let key = ids.join(',')
+                    let full = scoped.get(key)
+                    if (!full) {
+                      full = graph.get(ids)
+                      scoped.set(key, full)
+                    }
+                    return push(s, new Set(ids), undefined, full)
+                  },
                 )
               },
             ),

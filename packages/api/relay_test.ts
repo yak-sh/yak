@@ -322,6 +322,43 @@ Deno.test('peer movement reads storage once until a commit or release', () => {
   assertEquals(reads, 1) // a new held lifetime reads its durable row
 })
 
+Deno.test('shared reference watches refresh from one moved peer read', () => {
+  let graph = shop()
+  graph.apply([
+    { entity: { eid: 'p1' }, doc: { title: 'One' } },
+    { entity: { eid: 'p2' }, doc: { title: 'Two' } },
+    { entity: { eid: 'l1' }, book: { author: 'p1' } },
+    { entity: { eid: 'l2' }, book: { author: 'p2' } },
+  ])
+  let reads: string[] = []
+  let spy: Graph = {
+    ...graph,
+    get: (ids) => (reads.push(`get ${ids.join(',')}`), graph.get(ids)),
+    read: (q, opts) => (reads.push(`read ${q}`), graph.read(q, opts)),
+  }
+  let subs = subscriptions(spy), writer = ear()
+  let watchers = Array.from({ length: 8 }, () => ear())
+  for (let watcher of watchers) {
+    subs.open(
+      watcher.to,
+      'looks',
+      '(.book.author.browsing.x<10|.book.author=p2)&.book&*',
+    )
+    assertEquals(watcher.take()[0].bundles?.map((b) => b.entity.eid), ['l2'])
+  }
+  reads = []
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 5 } }])
+  for (let watcher of watchers) {
+    assertEquals(watcher.take().at(-1)?.bundles?.map((b) => b.entity.eid), [
+      'l1',
+    ])
+  }
+  assertEquals(reads.filter((r) => r.startsWith('read .book.author=')), [
+    'read .book.author=p1',
+  ])
+  assertEquals(reads.filter((r) => r == 'get l1'), ['get l1'])
+})
+
 Deno.test('peer-only rows keep a missing durable candidate until expiry', () => {
   let clock = stopped(), graph = shop()
   let reads = 0
