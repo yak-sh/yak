@@ -316,6 +316,55 @@ Deno.test('an expired MCP session is a refusal, not a defect', async () => {
   }
 })
 
+Deno.test('an MCP 500 names its request without dumping an HTML page', async () => {
+  let old = globalThis.fetch
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response('<html>Something went wrong.</html>', {
+        status: 500,
+        headers: {
+          'content-type': 'text/html',
+          'x-request-id': '4eea153b-f8ad-46fa-8f89-2c54f70fa014',
+        },
+      }),
+    )) as typeof fetch
+  try {
+    let error = await assertRejects(
+      () => rpc('session')('tools/list'),
+      Error,
+    )
+    assertEquals(
+      error.message,
+      '/mcp said 500 (request 4eea153b-f8ad-46fa-8f89-2c54f70fa014)',
+    )
+  } finally {
+    globalThis.fetch = old
+  }
+})
+
+Deno.test('an edge MCP 500 names its Cloudflare ray', async () => {
+  let old = globalThis.fetch
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response('<html>Unavailable</html>', {
+        status: 500,
+        headers: {
+          'content-type': 'text/html',
+          'cf-ray': 'ray-123',
+        },
+      }),
+    )) as typeof fetch
+  try {
+    let error = await assertRejects(
+      () => rpc('session')('tools/list'),
+      Error,
+    )
+    assertEquals(error.message, '/mcp said 500 (Cloudflare ray ray-123)')
+  } finally {
+    globalThis.fetch = old
+  }
+})
+
 Deno.test("an app store's refusal keeps its code, rather than becoming a defect", async () => {
   let stub = answering({
     ...fee(),

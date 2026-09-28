@@ -556,11 +556,12 @@ let router = {
       // `aimed` it is the address the platform derived rather than the
       // customer's own domain.
       let where = `${hostOf(req)}${new URL(req.url).pathname}`
+      let requestId = crypto.randomUUID()
       await fault(env, `${req.method} ${where}`, e, {
         space: r.space,
         app: r.app,
-      })
-      return oops(env)
+      }, requestId)
+      return oops(env, requestId)
     }
   },
 

@@ -191,6 +191,7 @@ export let exceptionDoc: VocabDoc = {
       properties: {
         at: owned(time),
         request: owned(text),
+        requestId: owned(text),
         version: owned(num),
         message: owned(text),
         stack: owned(text),

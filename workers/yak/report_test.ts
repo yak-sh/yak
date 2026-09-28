@@ -491,7 +491,9 @@ Deno.test("the platform's own break is ours, not the app's", async () => {
     let app = { space: 'acme64', app: 'shop' }
 
     let broke = await k.at('acme64.yaks.app', '/shop/%E0%A4%A')
-    await broke.body?.cancel()
+    let requestId = broke.headers.get('x-request-id')
+    assert(requestId)
+    assertStringIncludes(await broke.text(), `Request ID: ${requestId}`)
     assertEquals(broke.status, 500, 'the visitor got the soft page')
 
     // Nothing in the customer's store: no entity asserting their app broke,
@@ -509,6 +511,10 @@ Deno.test("the platform's own break is ours, not the app's", async () => {
     let said = ours.map((r) => JSON.stringify(r.exception)).join('\n')
     assertEquals(ours.length, 1, `one break of ours: ${said}`)
     assertStringIncludes(said, 'GET acme64.yaks.app/shop/%E0%A4%A')
+    assertEquals(
+      (ours[0].exception as { requestId: string }).requestId,
+      requestId,
+    )
     // No version: the code that broke is the platform's, and the meta store
     // has no deploy of its own to name.
     assertEquals((ours[0].exception as { version: unknown }).version, null)

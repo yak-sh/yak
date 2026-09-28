@@ -352,7 +352,17 @@ export let rpc = (session: string) => {
       if (r.status == 401 && refusal) {
         throw new CallError(refusal.code, refusal.message)
       }
-      throw new Error(`/mcp said ${r.status}: ${text}`)
+      let requestId = r.headers.get('x-request-id')
+      let ray = r.headers.get('cf-ray')
+      let trace = requestId
+        ? ` (request ${requestId})`
+        : ray
+        ? ` (Cloudflare ray ${ray})`
+        : ''
+      let detail = r.headers.get('content-type')?.includes('text/html')
+        ? ''
+        : `: ${text}`
+      throw new Error(`/mcp said ${r.status}${trace}${detail}`)
     }
     let reply = await r.json()
     if (reply.error) {

@@ -1256,12 +1256,15 @@ export let spaceIndex = (at: SpacePage, env: Host = {}) => {
   )
 }
 
-export let oops = (env: Host = {}) =>
+export let oops = (env: Host = {}, requestId?: string) =>
   shell(
     env,
     'Something went wrong.',
-    'Try again shortly. If the problem continues, ask your assistant to check the app.',
+    'Try again shortly. If the problem continues, ask your assistant to check the app.' +
+      (requestId ? ` Request ID: ${esc(requestId)}.` : ''),
     500,
+    home(env),
+    requestId ? { 'x-request-id': requestId } : {},
   )
 
 // A custom domain that reached the Worker before there was anything to

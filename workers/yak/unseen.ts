@@ -144,12 +144,14 @@ export let metaBreaks = (env: Env): Breaks => (bundles) =>
 /** What a break is noted as: the `exception` component, stamped now. */
 export let exceptionOf = (broke: {
   request: string
+  requestId?: string
   version?: number | null
   message: string
   stack?: string
 }) => ({
   at: new Date().toISOString(),
   request: broke.request,
+  requestId: broke.requestId ?? null,
   version: broke.version ?? null,
   message: broke.message,
   stack: broke.stack ?? '',
@@ -190,10 +192,12 @@ export let fault = async (
   request: string,
   e: unknown,
   tags: Record<string, string | null | undefined> = {},
+  requestId?: string,
 ) => {
-  defect(e, { request, ...tags })
+  defect(e, { request, ...tags, request_id: requestId })
   await noted(metaBreaks(env), {
     request,
+    requestId,
     message: e instanceof Error ? e.message : String(e),
     stack: e instanceof Error ? e.stack ?? '' : '',
   }).catch((why) => caught(why, { request: `file ${request}` }))
