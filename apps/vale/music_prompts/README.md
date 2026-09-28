@@ -4,7 +4,12 @@ One JSON file per generated track, named by the SHA-256 of its MP3. The `prompt`
 field is the exact recorded generation prompt, not a reconstruction.
 `../music_tracks.ts` selects the tracks heard in the app. Earlier Tombsands and
 Cinderreach takes remain here and in the Vale blob store for comparison. The
-first twenty tracks were generated with OpenRouter's
+authored direction for each land is in `../music_direction.ts`; new prompts use
+`../music_prompt.ts`. That direction does not alter any recorded prompt or song.
+Tombsands and Cinderreach choose wordless choir for their own terrain and mood;
+other lands choose a solo voice or no voice.
+
+The first twenty tracks were generated with OpenRouter's
 `google/lyria-3-pro-preview`; output was MP3. Request settings beyond the prompt
 and model were not recorded. The surviving logs record the successful attempts
 (and three successful retries), but not every request parameter or random seed.
