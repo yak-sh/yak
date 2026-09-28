@@ -101,13 +101,22 @@ let well = (): Model => {
 
 let fire = (): Model => {
   let v: Vox = new Map()
-  for (let a = 0; a < 12; a++) {
-    let t = (a / 12) * Math.PI * 2
-    let x = Math.round(Math.cos(t) * 5), z = Math.round(Math.sin(t) * 5)
-    box(v, [x, 0, z], [x, a % 2, z], a % 3 ? 0x8f8d85 : 0x7a7870)
+  for (let a = 0; a < 10; a++) {
+    let t = (a / 10) * Math.PI * 2
+    let x = Math.round(Math.cos(t) * 3), z = Math.round(Math.sin(t) * 3)
+    box(
+      v,
+      [x, 0, z],
+      [x, a % 3 == 0 ? 1 : 0, z],
+      [0x77756d, 0x939087, 0xaaa69a][a % 3],
+    )
   }
-  box(v, [-3, 0, 0], [3, 0, 0], 0x6e4a31)
-  box(v, [0, 1, -3], [0, 1, 3], 0x7a5236)
+  box(v, [-2, 0, -1], [2, 1, -1], 0x65452e)
+  box(v, [-2, 0, 1], [2, 1, 1], 0x805838)
+  box(v, [-1, 1, -2], [-1, 2, 2], 0x6b482f)
+  box(v, [1, 1, -2], [1, 2, 2], 0x795136)
+  box(v, [0, 0, 0], [0, 1, 0], 0xff9a36)
+  box(v, [0, 2, 0], [0, 2, 0], 0xffc25b)
   return { vox: v, size: 0.25 }
 }
 
@@ -156,7 +165,7 @@ let signpost = (diagonal = false): Model => {
 
 export let VILLAGE: Record<string, Kind> = {
   well: { make: well, girth: 1.2, foot: 1.2, span: [2.2, 2.2] },
-  fire: { make: fire, girth: 1.2, foot: 1.5, span: [2.6, 2.6] },
+  fire: { make: fire, solid: true, foot: 1.5, span: [2.6, 2.6] },
   board: { make: board, girth: 0.35, foot: 0.8, span: [2.2, 0.5] },
   lamp: {
     make: lamp,

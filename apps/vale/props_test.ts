@@ -4,6 +4,8 @@
 import { assert, assertEquals, assertStrictEquals } from '@std/assert'
 import { fights, key, pack, profileOf, unkey } from './mesh.ts'
 import { KINDS, model, modelKey } from './props.ts'
+import { walk } from './sim.ts'
+import { groundAt, hearthNear, propsNear, vale } from './terrain.ts'
 
 Deno.test('no prop fights itself', () => {
   let fighting = Object.keys(KINDS)
@@ -59,4 +61,26 @@ Deno.test('the well has no pieces hanging apart from its footing', () => {
     }
     assert(grounded)
   }
+})
+
+Deno.test('a hero jumps across the village fire but cannot run through it', () => {
+  let v = vale(), hearth = hearthNear(0, 0)!
+  let fire = propsNear(v, ...hearth, 5).find((p) => p.kind == 'fire')!
+  let run = (jump: boolean) => {
+    let body = {
+      x: fire.x - 1.6,
+      y: groundAt(v, fire.x - 1.6, fire.z),
+      z: fire.z,
+      vy: 0,
+      yaw: 0,
+      speed: 0,
+      gait: 'idle',
+    }
+    for (let i = 0; i < 60; i++) {
+      body = walk(v, body, { x: 1, z: 0, jump: jump && i == 0 }, 1 / 60, 5)
+    }
+    return body.x
+  }
+  assert(run(false) < fire.x - 1)
+  assert(run(true) > fire.x + 1.5)
 })
