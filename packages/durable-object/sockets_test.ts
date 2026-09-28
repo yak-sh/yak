@@ -4,14 +4,15 @@
 // batches still serves the same client, because what it asked for was written
 // on the socket rather than kept in the object's memory.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { until } from '../../bin/testing.ts'
 import { subscriptions } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import type { Frame } from '@yaks/api'
-import { shop, store } from './testing.ts'
+import { durable, shop, store } from './testing.ts'
 import { type Sockets, sockets, type Wire } from './sockets.ts'
+import { holds } from './holds.ts'
 
 // A socket, faked: what it was sent, and the attachment it carries across a
 // hibernation.
@@ -37,6 +38,7 @@ let hibernation = () => {
   let live: Wire[] = []
   return {
     live,
+    storage: durable(),
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
   }
@@ -263,17 +265,45 @@ Deno.test('a closed socket drops its subscriptions', () => {
   assertEquals(ws.sent, [])
 })
 
-Deno.test('a subscription too big to survive hibernation is refused', () => {
-  let ctx = hibernation()
-  let [g, live] = instance(store(), ctx)
+Deno.test('a subscription bigger than an attachment survives hibernation', () => {
+  let ctx = hibernation(), storage = store()
+  let [, live] = instance(storage, ctx)
   let ws = wire()
   ctx.live.push(ws)
 
-  live.message(ws, ask('big', `.title~=${'x'.repeat(3000)}`))
-  assertEquals(ws.sent.at(-1)!.refused?.error, 'RangeError')
+  let title = 'x'.repeat(3000)
+  send(live, ws, {
+    subscribe: `.doc.title=${JSON.stringify(title)}`,
+    id: 'big',
+    acks: true,
+  })
+  assert(!ws.sent.some((f) => f.refused))
+  let first = ws.sent.at(-1)!
+  let ref = (ws.deserializeAttachment() as { subref?: string }).subref!
+  assert(ref)
+  assertEquals(Object.keys(holds(ctx.storage).read(ref)), ['big'])
 
-  g.apply([{ entity: { eid: 'p1' }, doc: { title: 'x' } }])
-  assert(!ws.sent.some((f) => f.bundles?.length), 'it was closed, not kept')
+  let [g, woken] = instance(storage, ctx)
+  woken.wake()
+  assertEquals(ws.sent.length, 1, 'the first snapshot still needs its ACK')
+  g.apply([{ entity: { eid: 'p1' }, doc: { title } }])
+  assertEquals(ws.sent.length, 1, 'the push waits for the ACK')
+  send(woken, ws, { ack: first.ack })
+  assertEquals(ws.sent.at(-1)?.bundles?.[0].entity.eid, 'p1')
+
+  send(woken, ws, { unsubscribe: 'big' })
+  assertThrows(() => holds(ctx.storage).read(ref), Error, 'missing')
+  assertEquals((ws.deserializeAttachment() as { subs?: object }).subs, {})
+
+  send(woken, ws, {
+    subscribe: `.doc.title=${JSON.stringify(title)}`,
+    id: 'again',
+    acks: true,
+  })
+  let later = (ws.deserializeAttachment() as { subref?: string }).subref!
+  assert(later)
+  woken.close(ws)
+  assertThrows(() => holds(ctx.storage).read(later), Error, 'missing')
 })
 
 // The runtime's socket factory is a global, so a test can stand in for it.

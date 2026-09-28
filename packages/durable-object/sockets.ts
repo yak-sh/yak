@@ -27,6 +27,8 @@ import {
   type Sink,
   type Subs,
 } from '@yaks/api'
+import type { DurableStorage } from './sql.ts'
+import { holds } from './holds.ts'
 
 /**
  * The part of a hibernatable WebSocket this package uses: a frame out, and the
@@ -55,6 +57,8 @@ export type Hibernation = {
   acceptWebSocket(ws: Wire): void
   /** every socket this object is serving, hibernated or not */
   getWebSockets(): Wire[]
+  /** the object's storage, used only when subscription queries exceed 2 KB */
+  storage: DurableStorage
 }
 
 /** The plumbing an object wires its handlers to. */
@@ -85,6 +89,7 @@ declare let WebSocketPair: { new (): { 0: unknown; 1: Wire } }
 // there, so the subscriptions live under one key and the rest is left alone.
 type Held = {
   subs?: Record<string, Ask>
+  subref?: string
   relay?: string[]
   acks?: boolean
   owed?: string
@@ -99,44 +104,33 @@ let CAP = 2048
 // this many keys, a value lost to an eviction remains until its writer clears
 // it.
 let KEYS = 16
+let bytes = new TextEncoder()
 
-let asksOf = (ws: Wire): Record<string, Ask> => {
-  let held = ws.deserializeAttachment() as Held | null
-  let subs = held && typeof held == 'object' ? held.subs : undefined
-  return subs && typeof subs == 'object' ? { ...subs } : {}
-}
-
-let fits = (held: Held) => {
-  let ids = Object.entries(held.subs ?? {}).filter(([, ask]) => ask !== true)
-    .map(([id]) => id)
-  let full = held.acks ? { ...held, owed: '0'.repeat(36), seen: ids } : held
-  return JSON.stringify(held).length <= CAP &&
-    JSON.stringify(full).length <= CAP
-}
-
-// Write the subscriptions back beside whatever else the application stores.
-// `false` means they would not fit — the runtime would drop the whole
-// attachment at the next hibernation, so the subscription is rejected now
-// rather than disappearing silently later.
-let hold = (ws: Wire, subs: Record<string, Ask>, acks = false): boolean => {
-  let held = ws.deserializeAttachment()
-  let next = {
-    ...(held && typeof held == 'object' ? held : {}),
-    subs,
-    ...(acks ? { acks: true } : {}),
-    seen: (held as Held | null)?.seen?.filter((id) => id in subs),
+let fits = (held: Held, subs = held.subs ?? {}) => {
+  // Serial ACKs allow only one snapshot on the wire at a time. Reserve its
+  // longest possible subscription id, not every id in the query map.
+  let longest = ''
+  for (let [id, ask] of Object.entries(subs)) {
+    if (ask !== true && id.length > longest.length) longest = id
   }
-  // Reserve room for serial delivery even after an eviction between frames.
-  if (!fits(next)) return false
-  ws.serializeAttachment(next)
-  return true
+  let seen = longest ? [longest] : held.seen
+  let full = held.acks ? { ...held, owed: '0'.repeat(36), seen } : held
+  return bytes.encode(JSON.stringify(held)).length <= CAP &&
+    bytes.encode(JSON.stringify(full)).length <= CAP
 }
 
-let delivery = (ws: Wire, owed?: string, seen: string[] = []) => {
+let delivery = (
+  ws: Wire,
+  owed?: string,
+  seen: string[] = [],
+  subs?: Record<string, Ask>,
+) => {
   let held = ws.deserializeAttachment()
   let was = held && typeof held == 'object' ? held as Held : {}
   let next = { ...was, owed, seen: seen.length ? seen : undefined }
-  if (!fits(next)) throw new RangeError('socket delivery exceeds attachment')
+  if (!fits(next, subs)) {
+    throw new RangeError('socket delivery exceeds attachment')
+  }
   ws.serializeAttachment(next)
 }
 
@@ -148,12 +142,12 @@ let relayOf = (ws: Wire): string[] => {
 
 // The relay keys, written back beside everything else. Over the cap they are
 // simply not written: a relay must never cost somebody their subscriptions.
-let remember = (ws: Wire, keys: string[]) => {
+let remember = (ws: Wire, keys: string[], subs: Record<string, Ask>) => {
   let held = ws.deserializeAttachment()
   let was = held && typeof held == 'object' ? held as Held : {}
   let relay = keys.slice(0, KEYS)
   let next = relay.length ? { ...was, relay } : { ...was, relay: undefined }
-  if (fits(next)) ws.serializeAttachment(next)
+  if (fits(next, subs)) ws.serializeAttachment(next)
 }
 
 // What a frame subscribed to, read alongside @yaks/api's own dispatch so that
@@ -200,6 +194,42 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     ReturnType<typeof queue> & { forget: (id: string) => void }
   >()
   let closed = new WeakSet<Wire>()
+  let queries = new Map<Wire, Record<string, Ask>>()
+  let repo: ReturnType<typeof holds> | undefined
+  let backing = () => repo ??= holds(ctx.storage)
+  let asks = (ws: Wire): Record<string, Ask> => {
+    let cached = queries.get(ws)
+    if (cached) return cached
+    let held = ws.deserializeAttachment() as Held | null
+    let found = held?.subref ? backing().read(held.subref) : held?.subs ?? {}
+    queries.set(ws, found)
+    return found
+  }
+  // Keep the small map on the socket. Once it exceeds the attachment's
+  // allowance, keep only its key there and store the queries on this object.
+  let hold = (ws: Wire, nextSubs: Record<string, Ask>, acks = false) => {
+    let held = ws.deserializeAttachment() as Held | null
+    let was = held && typeof held == 'object' ? held : {}
+    let next = {
+      ...was,
+      subs: nextSubs,
+      subref: undefined,
+      ...(acks ? { acks: true } : {}),
+      seen: was.seen?.filter((id) => id in nextSubs),
+    }
+    if (fits(next)) {
+      ws.serializeAttachment(next)
+      if (was.subref) backing().delete(was.subref)
+    } else {
+      let ref = was.subref ?? crypto.randomUUID()
+      let short = { ...next, subs: undefined, subref: ref }
+      if (!fits(short, nextSubs)) return false
+      backing().write(ref, nextSubs)
+      ws.serializeAttachment(short)
+    }
+    queries.set(ws, nextSubs)
+    return true
+  }
 
   let drop = (ws: Wire) => {
     if (closed.has(ws)) return
@@ -210,6 +240,9 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       subs.drop(to.send)
     }
     sinks.delete(ws)
+    queries.delete(ws)
+    let held = ws.deserializeAttachment() as Held | null
+    if (held?.subref) backing().delete(held.subref)
   }
 
   // The sink for a socket, created once. A socket this object has not seen
@@ -221,24 +254,26 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     if (to) return to
     let held = ws.deserializeAttachment() as Held | null
     let seen = new Set(held?.owed ? held.seen ?? [] : [])
-    if (!held?.owed && held?.seen?.length) delivery(ws)
+    if (!held?.owed && held?.seen?.length) {
+      delivery(ws, undefined, [], asks(ws))
+    }
     let fresh = queue(ws, undefined, undefined, {
       owed: held?.owed,
       sent: (frame, token) => {
         if (frame.transientReset !== undefined || frame.reset) {
           seen.add(frame.id)
         } else seen.clear()
-        delivery(ws, token, [...seen])
+        delivery(ws, token, [...seen], asks(ws))
       },
       acked: (owed) => {
         if (!owed) seen.clear()
-        delivery(ws, owed, [...seen])
+        delivery(ws, owed, [...seen], asks(ws))
       },
     })
     // A snapshot already on the wire before eviction needs its ACK, not a
     // second copy. The remaining subscriptions still get their snapshots.
     let skip = new Set(seen)
-    let reopening = new Map(Object.entries(asksOf(ws)))
+    let reopening = new Map(Object.entries(asks(ws)))
     let send: Sink = (frame) => {
       let snapshot = reopening.has(frame.id) && reopening.get(frame.id) !== true
       if (snapshot) reopening.delete(frame.id)
@@ -252,14 +287,14 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
         seen.delete(id)
         skip.delete(id)
         let held = ws.deserializeAttachment() as Held | null
-        delivery(ws, held?.owed, [...seen])
+        delivery(ws, held?.owed, [...seen], asks(ws))
       },
     })
     if (held?.acks) fresh.enable()
     // The relay keys first: whatever else this socket did, the registry has to
     // know what it is saying before a close can stop saying it.
     subs.relayed(send, relayOf(ws))
-    for (let [id, ask] of Object.entries(asksOf(ws))) {
+    for (let [id, ask] of Object.entries(asks(ws))) {
       subs.open(send, id, ask)
     }
     return send
@@ -305,9 +340,9 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       // Only when it moved: a frame that relays nothing should not rewrite an
       // attachment, and most frames relay nothing.
       let now = subs.relaying(to)
-      if (now.join('\n') != was) remember(ws, now)
+      if (now.join('\n') != was) remember(ws, now, asks(ws))
       if (!ask) return
-      let subscriptions = asksOf(ws)
+      let subscriptions = { ...asks(ws) }
       if (ask.ask === undefined) delete subscriptions[ask.id]
       else subscriptions[ask.id] = ask.ask
       if (hold(ws, subscriptions, ask.acks)) return

@@ -172,12 +172,12 @@ results. Forward `webSocketMessage` and `webSocketClose` to `message` and
 Ordinary event-listener attachment through `@yaks/api` does not handle this
 hibernation lifecycle.
 
-Attachments have a 2 KB runtime limit. The adapter checks serialized attachment
-size and refuses subscriptions it cannot save with a `RangeError` response.
-Subscriptions use the `subs` field, preserving other application fields. It also
-remembers up to 16 temporary relay keys in `relay` when they fit, allowing stale
-peer state to be cleared after hibernation. The relay values themselves do not
-persist.
+Attachments have a 2 KB runtime limit. Small subscription maps use the `subs`
+field, preserving other application fields. When queries exceed that limit, the
+adapter keeps them in the object's SQLite and holds their key in `subref`. The
+socket still holds its serial ACK and up to 16 temporary relay keys, so ACKs and
+relays do not write the subscription row. Closing the socket removes the row.
+The relay values themselves do not persist.
 
 ## What the runtime is strict about
 
