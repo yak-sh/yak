@@ -15,6 +15,10 @@ export let VALE: Record<string, Row> = {
       lake: { kind: 'lake', at: [90, 113] },
       fields: { kind: 'fields', at: [163, 116] },
       plaza: { kind: 'village', at: [128, 128] },
+      northwest: { kind: 'woods', at: [39, 39] },
+      northeast: { kind: 'crags', at: [212, 44] },
+      southwest: { kind: 'meadow', at: [40, 215] },
+      southeast: { kind: 'woods', at: [213, 207] },
     },
     roads: {
       north: 'fernwood',
@@ -22,6 +26,7 @@ export let VALE: Record<string, Row> = {
       south: 'stonestep',
       west: 'birchmere',
     },
+    wild: 'meadow',
   },
   birchmere: {
     name: 'Birchmere',
@@ -34,12 +39,17 @@ export let VALE: Record<string, Row> = {
       east: { kind: 'birchwood', at: [162, 149] },
       fields: { kind: 'fields', at: [104, 99] },
       green: { kind: 'mereside', at: [133, 126] },
+      northwest: { kind: 'birchwood', at: [46, 47] },
+      northeast: { kind: 'meadow', at: [206, 39] },
+      southwest: { kind: 'birchwood', at: [47, 210] },
+      southeast: { kind: 'lake', at: [207, 215] },
     },
     roads: {
       north: 'clovermead',
       east: 'mossvale',
       west: 'gullwick',
     },
+    wild: 'birchwood',
     look: {
       ground: { grass: 0x9ccf6e, lush: 0x7fbd5c },
       sky: 0xe8f4ff,
@@ -57,11 +67,16 @@ export let VALE: Record<string, Row> = {
       woods: { kind: 'woods', at: [98, 102] },
       pond: { kind: 'lake', at: [154, 150] },
       copse: { kind: 'woods', at: [162, 104] },
+      northwest: { kind: 'meadow', at: [50, 46] },
+      northeast: { kind: 'woods', at: [210, 51] },
+      southwest: { kind: 'lake', at: [51, 209] },
+      southeast: { kind: 'meadow', at: [211, 214] },
     },
     roads: {
       east: 'fernwood',
       south: 'birchmere',
     },
+    wild: 'meadow',
     look: {
       ground: { grass: 0x86d468, lush: 0x6cc45a },
       sky: 0xfff0c8,
@@ -80,6 +95,10 @@ export let VALE: Record<string, Row> = {
       meadow: { kind: 'meadow', at: [100, 152] },
       pond: { kind: 'lake', at: [154, 154] },
       glade: { kind: 'fernhamlet', at: [126, 130] },
+      northwest: { kind: 'fernwood', at: [39, 39] },
+      northeast: { kind: 'meadow', at: [212, 44] },
+      southwest: { kind: 'lake', at: [40, 215] },
+      southeast: { kind: 'fernwood', at: [213, 207] },
     },
     roads: {
       north: 'elderglade',
@@ -87,6 +106,7 @@ export let VALE: Record<string, Row> = {
       south: 'mossvale',
       west: 'clovermead',
     },
+    wild: 'fernwood',
     look: {
       ground: { grass: 0x5c9e46, lush: 0x3f8a3c },
       sky: 0xa8d8a0,
@@ -105,11 +125,16 @@ export let VALE: Record<string, Row> = {
       east: { kind: 'elders', at: [158, 148] },
       pool: { kind: 'lake', at: [102, 154] },
       meadow: { kind: 'meadow', at: [156, 100] },
+      northwest: { kind: 'elders', at: [43, 51] },
+      northeast: { kind: 'meadow', at: [216, 43] },
+      southwest: { kind: 'lake', at: [44, 214] },
+      southeast: { kind: 'elders', at: [217, 206] },
     },
     roads: {
       south: 'fernwood',
       west: 'glowcap',
     },
+    wild: 'elders',
     look: {
       ground: { grass: 0xa8c85a, lush: 0x86b04c },
       sky: 0xffd890,
@@ -127,11 +152,16 @@ export let VALE: Record<string, Row> = {
       tarn: { kind: 'lake', at: [154, 148] },
       crags: { kind: 'watchcrag', at: [98, 156] },
       high: { kind: 'greypines', at: [160, 98] },
+      northwest: { kind: 'greypines', at: [45, 44] },
+      northeast: { kind: 'crags', at: [205, 49] },
+      southwest: { kind: 'lake', at: [46, 207] },
+      southeast: { kind: 'greypines', at: [206, 212] },
     },
     roads: {
       east: 'wolfden',
       west: 'fernwood',
     },
+    wild: 'greypines',
     look: {
       ground: { grass: 0x8e9e80, lush: 0x6f8a6a, dry: 0xa0a08a },
       water: [0x4a6a78, 0x6a8a94, 0xc8d2d6],
@@ -150,11 +180,16 @@ export let VALE: Record<string, Row> = {
       crags: { kind: 'lair', at: [156, 104] },
       scree: { kind: 'dens', at: [108, 160] },
       tarn: { kind: 'lake', at: [158, 154] },
+      northwest: { kind: 'hollow', at: [49, 43] },
+      northeast: { kind: 'dens', at: [209, 48] },
+      southwest: { kind: 'lake', at: [50, 206] },
+      southeast: { kind: 'dens', at: [210, 211] },
     },
     roads: {
       east: 'frostmoor',
       west: 'greypine',
     },
+    wild: 'hollow',
     look: {
       ground: {
         grass: 0x4d6440,

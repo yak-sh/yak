@@ -14,6 +14,10 @@ export let FIRE: Record<string, Row> = {
       volcano: { kind: 'lavafall', at: [160, 98] },
       moor: { kind: 'cinderheath', at: [94, 104] },
       forge: { kind: 'forgetown', at: [122, 134] },
+      northwest: { kind: 'emberash', at: [50, 46] },
+      northeast: { kind: 'cinderheath', at: [210, 51] },
+      southwest: { kind: 'volcano', at: [51, 209] },
+      southeast: { kind: 'emberash', at: [211, 214] },
     },
     roads: {
       east: 'giantsteps',
@@ -45,6 +49,10 @@ export let FIRE: Record<string, Row> = {
       ash: { kind: 'cinderflats', at: [128, 128] },
       volcano: { kind: 'volcano', at: [102, 102] },
       cone: { kind: 'vents', at: [160, 156] },
+      northwest: { kind: 'cinderflats', at: [43, 51] },
+      northeast: { kind: 'volcano', at: [216, 43] },
+      southwest: { kind: 'vents', at: [44, 214] },
+      southeast: { kind: 'cinderflats', at: [217, 206] },
     },
     roads: {
       north: 'tombsands',
@@ -77,6 +85,10 @@ export let FIRE: Record<string, Row> = {
       keep: { kind: 'keep', at: [128, 118] },
       gate: { kind: 'ashgate', at: [154, 152] },
       volcano: { kind: 'coldcone', at: [100, 154] },
+      northwest: { kind: 'ashfield', at: [49, 43] },
+      northeast: { kind: 'coldcone', at: [209, 48] },
+      southwest: { kind: 'volcano', at: [50, 206] },
+      southeast: { kind: 'ashfield', at: [210, 211] },
     },
     roads: {
       north: 'cinderreach',
@@ -103,6 +115,10 @@ export let FIRE: Record<string, Row> = {
       ash: { kind: 'scorch', at: [128, 134] },
       maw: { kind: 'maw', at: [128, 114] },
       cone: { kind: 'spatter', at: [94, 152] },
+      northwest: { kind: 'scorch', at: [51, 49] },
+      northeast: { kind: 'spatter', at: [211, 41] },
+      southwest: { kind: 'volcano', at: [39, 212] },
+      southeast: { kind: 'scorch', at: [212, 217] },
     },
     roads: {
       east: 'cinderreach',

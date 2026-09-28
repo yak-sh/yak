@@ -14,12 +14,17 @@ export let COAST: Record<string, Row> = {
       meadow: { kind: 'farmland', at: [100, 104] },
       woods: { kind: 'woods', at: [100, 156] },
       harbour: { kind: 'fishtown', at: [124, 126] },
+      northwest: { kind: 'woods', at: [47, 50] },
+      northeast: { kind: 'meadow', at: [207, 42] },
+      southwest: { kind: 'coast', at: [48, 213] },
+      southeast: { kind: 'woods', at: [208, 205] },
     },
     roads: {
       east: 'birchmere',
       south: 'saltreach',
       west: 'driftwood',
     },
+    wild: 'meadow',
     look: {
       ground: {
         grass: 0x8cc070,
@@ -42,11 +47,16 @@ export let COAST: Record<string, Row> = {
       woods: { kind: 'shorewood', at: [156, 102] },
       meadow: { kind: 'marram', at: [156, 156] },
       wharf: { kind: 'shacks', at: [132, 130] },
+      northwest: { kind: 'shorewood', at: [48, 40] },
+      northeast: { kind: 'marram', at: [208, 45] },
+      southwest: { kind: 'coast', at: [49, 216] },
+      southeast: { kind: 'shorewood', at: [209, 208] },
     },
     roads: {
       east: 'gullwick',
       south: 'dustmere',
     },
+    wild: 'marram',
     look: {
       ground: {
         sand: 0xece0c4,
@@ -72,11 +82,16 @@ export let COAST: Record<string, Row> = {
       moor: { kind: 'saltflat', at: [126, 120] },
       crags: { kind: 'bluffs', at: [94, 114] },
       head: { kind: 'bluffs', at: [162, 108] },
+      northwest: { kind: 'bluffs', at: [40, 42] },
+      northeast: { kind: 'tideline', at: [213, 47] },
+      southwest: { kind: 'bluffs', at: [41, 205] },
+      southeast: { kind: 'tideline', at: [214, 210] },
     },
     roads: {
       north: 'gullwick',
       south: 'shellstrand',
     },
+    wild: 'saltflat',
     look: {
       ground: {
         sand: 0xf0ebe0,
@@ -103,11 +118,16 @@ export let COAST: Record<string, Row> = {
       isles: { kind: 'shellisles', at: [128, 128] },
       coast: { kind: 'shellbeach', at: [164, 160] },
       meadow: { kind: 'thrift', at: [100, 104] },
+      northwest: { kind: 'thrift', at: [46, 47] },
+      northeast: { kind: 'shellbeach', at: [206, 39] },
+      southwest: { kind: 'thrift', at: [47, 210] },
+      southeast: { kind: 'shellbeach', at: [207, 215] },
     },
     roads: {
       north: 'saltreach',
       east: 'stormhead',
     },
+    wild: 'thrift',
     look: {
       ground: {
         sand: 0xf4d8cc,
@@ -130,10 +150,15 @@ export let COAST: Record<string, Row> = {
       moor: { kind: 'windmoor', at: [128, 124] },
       crags: { kind: 'headland', at: [102, 148] },
       head: { kind: 'beacon', at: [164, 94] },
+      northwest: { kind: 'windmoor', at: [41, 45] },
+      northeast: { kind: 'headland', at: [214, 50] },
+      southwest: { kind: 'surf', at: [42, 208] },
+      southeast: { kind: 'windmoor', at: [215, 213] },
     },
     roads: {
       west: 'shellstrand',
     },
+    wild: 'windmoor',
     look: {
       ground: {
         grass: 0x6f8a5a,

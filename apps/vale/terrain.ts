@@ -242,11 +242,15 @@ let pickOf = (w: Hold, what: 'grows' | 'stones', h: number, rest: string) => {
   return xs ? xs[h % xs.length] : rest
 }
 
-// A sum over the kinds holding a point, each weighted by `by`.
+// The wild fills the ground between places. A place replaces that share of
+// the wild as its hold grows, instead of leaving bare ground around a site.
 let weigh = (w: Hold, by: (f: Feature) => number | undefined) => {
-  let sum = 0
-  for (let i = 0; i < w.fs.length; i++) sum += (by(w.fs[i]) ?? 0) * w.k[i]
-  return sum
+  let sum = 0, held = 0
+  for (let i = 0; i < w.fs.length; i++) {
+    sum += (by(w.fs[i]) ?? 0) * w.k[i]
+    held = Math.max(held, w.k[i])
+  }
+  return sum + (w.wild ? by(w.wild) ?? 0 : 0) * (1 - Math.min(1, held))
 }
 
 // The wild of a point's region, of the two it blends with the one `roll`

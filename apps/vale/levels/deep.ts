@@ -13,6 +13,10 @@ export let DEEP: Record<string, Row> = {
       pool: { kind: 'lake', at: [156, 104] },
       mere: { kind: 'lake', at: [100, 154] },
       hollow: { kind: 'capvillage', at: [120, 134] },
+      northwest: { kind: 'glowcaps', at: [45, 44] },
+      northeast: { kind: 'lake', at: [205, 49] },
+      southwest: { kind: 'lake', at: [46, 207] },
+      southeast: { kind: 'glowcaps', at: [206, 212] },
     },
     roads: {
       east: 'elderglade',
@@ -47,6 +51,10 @@ export let DEEP: Record<string, Row> = {
       gleam: { kind: 'gleam', at: [108, 108] },
       deep: { kind: 'amethyst', at: [154, 150] },
       pool: { kind: 'lake', at: [156, 100] },
+      northwest: { kind: 'gleamwood', at: [51, 49] },
+      northeast: { kind: 'amethyst', at: [211, 41] },
+      southwest: { kind: 'gleamwood', at: [39, 212] },
+      southeast: { kind: 'amethyst', at: [212, 217] },
     },
     roads: {
       north: 'shardvault',
@@ -79,6 +87,10 @@ export let DEEP: Record<string, Row> = {
       west: { kind: 'shards', at: [102, 104] },
       east: { kind: 'shards', at: [156, 152] },
       north: { kind: 'shards', at: [160, 100] },
+      northwest: { kind: 'palecaps', at: [42, 48] },
+      northeast: { kind: 'shards', at: [215, 40] },
+      southwest: { kind: 'shards', at: [43, 211] },
+      southeast: { kind: 'palecaps', at: [216, 216] },
     },
     roads: {
       south: 'gleamdeep',

@@ -152,9 +152,12 @@ Deno.test('what a deal set aside is free again if it is never handed in', () => 
 Deno.test('a trade moves only things both sides hold', () => {
   let trade = deal(0, '1 tonic', '6 tusk')
   let kinds = ['tonic', 'tusk']
-  assertEquals(book([trade], [], 1, kinds).holds, [1, 4])
+  let before = book([trade], [], 1, kinds).holds
   // Handed in, the tonic is the hero's and the tusks are Wren's.
-  assertEquals(book([trade], [hand(trade, 1)], 1, kinds).holds, [1, 10])
+  assertEquals(book([trade], [hand(trade, 1)], 1, kinds).holds, [
+    before[0],
+    before[1] + 6,
+  ])
   // She never promises what she does not hold.
   assertEquals(book([deal(0, '3 tonic', '9 tusk')]).states, ['void'])
   // And a hero pays only from their bag.

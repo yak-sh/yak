@@ -15,11 +15,16 @@ export let HILLS: Record<string, Row> = {
       meadow: { kind: 'meadow', at: [100, 154] },
       woods: { kind: 'woods', at: [160, 156] },
       steps: { kind: 'stonetown', at: [124, 128] },
+      northwest: { kind: 'moor', at: [45, 44] },
+      northeast: { kind: 'crags', at: [205, 49] },
+      southwest: { kind: 'meadow', at: [46, 207] },
+      southeast: { kind: 'woods', at: [206, 212] },
     },
     roads: {
       north: 'mossvale',
       south: 'heatherfell',
     },
+    wild: 'moor',
     look: {
       ground: {
         stone: 0xc8bea4,
@@ -42,11 +47,16 @@ export let HILLS: Record<string, Row> = {
       fell: { kind: 'fell', at: [156, 100] },
       scree: { kind: 'scree', at: [100, 156] },
       tarn: { kind: 'lake', at: [102, 104] },
+      northwest: { kind: 'moor', at: [47, 50] },
+      northeast: { kind: 'scree', at: [207, 42] },
+      southwest: { kind: 'lake', at: [48, 213] },
+      southeast: { kind: 'moor', at: [208, 205] },
     },
     roads: {
       north: 'stonestep',
       south: 'oldwall',
     },
+    wild: 'moor',
     look: {
       ground: { heath: 0x8e4a8e, grass: 0x7a9a5a, dry: 0x9a9a6a },
       sky: 0xe8e0f8,
@@ -64,12 +74,17 @@ export let HILLS: Record<string, Row> = {
       crags: { kind: 'crags', at: [160, 104] },
       woods: { kind: 'autumnwood', at: [160, 158] },
       tarn: { kind: 'lake', at: [94, 104] },
+      northwest: { kind: 'bracken', at: [40, 42] },
+      northeast: { kind: 'crags', at: [213, 47] },
+      southwest: { kind: 'lake', at: [41, 205] },
+      southeast: { kind: 'autumnwood', at: [214, 210] },
     },
     roads: {
       north: 'heatherfell',
       east: 'sunkenkirk',
       west: 'kingsbarrow',
     },
+    wild: 'bracken',
     look: {
       ground: {
         grass: 0xa8a050,
@@ -93,11 +108,16 @@ export let HILLS: Record<string, Row> = {
       hall: { kind: 'meadhall', at: [152, 148] },
       crags: { kind: 'crags', at: [98, 98] },
       scree: { kind: 'crags', at: [100, 158] },
+      northwest: { kind: 'barrowmoor', at: [44, 41] },
+      northeast: { kind: 'crags', at: [217, 46] },
+      southwest: { kind: 'barrowmoor', at: [45, 217] },
+      southeast: { kind: 'crags', at: [205, 209] },
     },
     roads: {
       east: 'oldwall',
       west: 'giantsteps',
     },
+    wild: 'barrowmoor',
     look: {
       ground: {
         grass: 0x6a8a5a,
@@ -121,11 +141,16 @@ export let HILLS: Record<string, Row> = {
       steps: { kind: 'giantstair', at: [156, 156] },
       fell: { kind: 'basaltcrags', at: [160, 98] },
       scree: { kind: 'basaltcrags', at: [98, 158] },
+      northwest: { kind: 'stonefield', at: [50, 46] },
+      northeast: { kind: 'basaltcrags', at: [210, 51] },
+      southwest: { kind: 'basaltcrags', at: [51, 209] },
+      southeast: { kind: 'stonefield', at: [211, 214] },
     },
     roads: {
       east: 'kingsbarrow',
       west: 'emberfall',
     },
+    wild: 'stonefield',
     look: {
       ground: {
         stone: 0x3e3e46,
