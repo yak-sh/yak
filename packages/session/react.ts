@@ -384,18 +384,6 @@ export let react = async (
   // a transcript is never called settled with work left here (T-35230).
   let asked = newestAsk(entries)
   let open = openCalls(entries)
-  // A superseded call may already have performed side effects. Do not replay
-  // it or send an invalid transcript to the provider; expose it for repair.
-  let orphan = open.find((b) => comp(b, CALL)?.source != asked?.entity.eid)
-  if (orphan) {
-    return append([
-      line(
-        { [EXCEPTION]: {} },
-        `Unanswered tool call from an older request: ${orphan.entity.eid}. ` +
-          'Verify execution before recording its result.',
-      ),
-    ])
-  }
   if (open.length) {
     const added: Bundle[] = []
     // The runner is what runs a call — here and everywhere else (@yaks/tools).
@@ -456,6 +444,48 @@ export let react = async (
       otherwise: unserved,
       report: (error) => deps.report?.(error, session, 'tool'),
     })
+    let older = open.filter((b) => comp(b, CALL)?.source != asked?.entity.eid)
+    let unstarted = older.filter((b) => !b.execution)
+    let inspect = (call: Bundle) =>
+      append([
+        line(
+          { [EXCEPTION]: {} },
+          `Unanswered tool call from an older request: ${call.entity.eid}. ` +
+            'Verify execution before recording its result.',
+        ),
+      ])
+    if (unstarted.length) {
+      let raced: Bundle | undefined
+      for (let call of unstarted) {
+        try {
+          added.push(
+            ...await run.interruptCall(
+              call.entity.eid,
+              'Tool call was superseded before execution and was not run.',
+            ),
+          )
+        } catch (error) {
+          if (!(error instanceof UnfinishedCall)) throw error
+          raced ??= call
+        }
+      }
+      if (raced) {
+        let step = await inspect(raced)
+        return {
+          ...step,
+          did: added.length ? 'ran' : step.did,
+          added: [...added, ...step.added],
+        }
+      }
+      return {
+        did: 'ran',
+        status: statusOf(await transcript(g, session)),
+        added,
+      }
+    }
+    // A superseded call with an execution record may have performed effects.
+    // Leave it for inspection rather than replaying it.
+    if (older.length) return inspect(older[0])
     for (const pending of open) {
       try {
         added.push(...await run.run(pending.entity.eid))

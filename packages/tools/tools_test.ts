@@ -213,6 +213,32 @@ Deno.test('a claim with no answer is unfinished, and the boot pass re-drives it'
   )
 })
 
+Deno.test('interrupting an unstarted call answers it once without running the tool', async () => {
+  let runs = 0
+  let { g, r } = world([{
+    ...echo,
+    run: (call, graph) => (runs++, echo.run(call, graph)),
+  }])
+  await r.ensure()
+  await g.apply([{
+    entity: { eid: 'unstarted' },
+    call: { to: toolEid('example_echo'), args: { value: 'skip' } },
+  }])
+  let first = await r.interruptCall('unstarted', 'superseded before execution')
+  let again = await r.interruptCall('unstarted', 'superseded before execution')
+  assertEquals(runs, 0)
+  assertEquals(first.filter((b) => b.result).length, 1)
+  assertEquals(first.filter((b) => b.error).length, 1)
+  assertEquals((await g.read('.result&*')).length, 1)
+  assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
+  assertEquals(
+    again.find((b) => b.result)?.entity.eid,
+    first.find((b) => b.result)?.entity.eid,
+  )
+  assertEquals(await r.drive(), [])
+  assertEquals(runs, 0)
+})
+
 Deno.test('a call a live process holds is left alone, redrive and all', async () => {
   // What an imported transcript looks like: every call in it was made by the
   // process that recorded it, and it says so. This process's own claim, not

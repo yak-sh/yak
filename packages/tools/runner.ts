@@ -207,8 +207,8 @@ export type Runner = {
    * that holder claimed and never answered instead, read from the graph: what
    * is written for a process that ended without writing it itself. */
   interrupt: (why: string, holder?: Eid) => Promise<Bundle[]>
-  /** Give an abandoned, anonymously claimed call a result without invoking
-   * its tool again. Its effects may have landed before the runner died. */
+  /** Give an unstarted or abandoned, anonymously claimed call a result
+   * without invoking its tool. A claimed call's effects may have landed. */
   interruptCall: (
     call: Eid,
     why: string,
@@ -602,6 +602,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     started: number | undefined,
     state: string,
     said: Bundle[],
+    before: string | null = 'running',
   ): Bundle[] => [
     {
       ...attached(
@@ -614,7 +615,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     {
       entity: call.entity,
       execution: { state },
-      $was: { execution: { state: token('running') } },
+      $was: { execution: { state: before == null ? null : token(before) } },
     },
   ]
 
@@ -759,7 +760,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let prior = await recalled(id)
     if (prior.length) return prior
     let execution = call.execution as Comp | undefined
-    if (execution?.state != 'running' || execution.by != null) {
+    if (execution && (execution.state != 'running' || execution.by != null)) {
       throw new UnfinishedCall(id)
     }
     let fault: Bundle = {
@@ -768,14 +769,24 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       output: { source: id },
       error: { code: 'interrupted' },
     }
-    let said = answer ?? [fault]
+    let said = execution && answer ? answer : [fault]
     try {
       return await g.apply([
         ...said,
-        ...ending(call, undefined, answer ? 'done' : 'failed', said),
+        ...ending(
+          call,
+          undefined,
+          execution && answer ? 'done' : 'failed',
+          said,
+          execution ? 'running' : null,
+        ),
       ])
     } catch (error) {
-      if (error instanceof Stale) return await recalled(id)
+      if (error instanceof Stale) {
+        let prior = await recalled(id)
+        if (prior.length) return prior
+        throw new UnfinishedCall(id)
+      }
       throw error
     }
   }

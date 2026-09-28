@@ -751,9 +751,12 @@ Deno.test('recovery excludes a stale streamed provider reply', async () => {
   assertEquals(done.filter((b) => b.exception).length, 0)
 })
 
-Deno.test('an unanswered older call fails without replay or provider dispatch', async () => {
+Deno.test('unstarted older calls get results without replay or provider dispatch', async () => {
   let g = world()
-  let { model, asked } = scripted([calls(['old-call', 'hi'])])
+  let { model, asked } = scripted([
+    calls(['old-one', 'hi'], ['old-two', 'bye']),
+    says('next', 'done'),
+  ])
   let runs = 0
   let deps = {
     model,
@@ -779,27 +782,57 @@ Deno.test('an unanswered older call fails without replay or provider dispatch', 
     },
   ])
   let step = await react(g, ids.s, deps)
-  assertEquals(step.status, 'failed')
-  assertEquals(step.added.some((b) => !!b.exception), true)
+  assertEquals(step.did, 'ran')
+  assertEquals(step.added.filter((b) => b.result).length, 2)
+  assertEquals(step.added.filter((b) => b.error).length, 2)
   assertEquals(runs, 0)
   assertEquals(asked.length, 1)
-  let orphan = (await transcript(g, ids.s)).find((b) => b.call)!
+  let entries = await transcript(g, ids.s)
+  assertEquals(entries.filter((b) => b.result).length, 2)
+  assertEquals(
+    entries.filter((b) => b.call).map((b) => (b.execution as Comp).state),
+    ['failed', 'failed'],
+  )
+  let resumed = await react(g, ids.s, deps)
+  assertEquals(resumed.did, 'asked')
+  assertEquals(asked.length, 2)
+  assertEquals(
+    asked[1].items.filter((i) => i.kind == 'result').length,
+    2,
+  )
+  assertEquals(runs, 0)
+})
+
+Deno.test('a claimed older call still fails for manual inspection', async () => {
+  let g = world()
+  let { model, asked } = scripted([
+    calls(['unstarted', 'hi'], ['claimed', 'bye']),
+  ])
+  await react(g, ids.s, { model, tools: [echo] })
+  let call = (await transcript(g, ids.s)).find((b) =>
+    (b.call as Comp | undefined)?.id == 'claimed'
+  )!
   await g.apply([
+    { entity: call.entity, execution: { state: 'running', by: ids.s } },
     {
-      entity: { eid: 'repaired-result' },
+      entity: { eid: 'new-ask' },
       entry: { session: ids.s },
-      result: { call: orphan.entity.eid },
-      content: { body: 'Verified not executed; skipped superseded call.' },
+      ask: { to: ids.m, through: 'e1' },
+    },
+    {
+      entity: { eid: 'new-input' },
+      entry: { session: ids.s },
+      content: { body: 'continue' },
     },
   ])
-  let recovery = scripted(
-    [{ id: 'recovered', model: 'fake-1', items: [] }],
-    false,
-  )
-  let resumed = await react(g, ids.s, { ...deps, model: recovery.model })
-  assertEquals(resumed.did, 'asked')
-  assertEquals(recovery.asked.length, 1)
-  assertEquals(runs, 0)
+  let safe = await react(g, ids.s, { model, tools: [echo] })
+  assertEquals(safe.did, 'ran')
+  assertEquals(safe.added.filter((b) => b.result).length, 1)
+  let step = await react(g, ids.s, { model, tools: [echo] })
+  assertEquals(step.status, 'failed')
+  assertEquals(step.added.some((b) => !!b.exception), true)
+  assertEquals((await transcript(g, ids.s)).filter((b) => b.result).length, 1)
+  assertEquals(asked.length, 1)
 })
 
 Deno.test('typed questions are asked once and answered one entry each', async () => {
