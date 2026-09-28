@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { TextDelta } from '@yaks/model'
+import { ModelError, type TextDelta } from '@yaks/model'
 import { responses } from './mod.ts'
 import { artifactStore, memoryBlobs } from '@yaks/blob'
 const sse = (events: unknown[]) =>
@@ -126,18 +126,12 @@ Deno.test('OpenRouter propagates cancellation without replaying streaming calls'
   assertEquals(calls, 1)
 })
 
-Deno.test('vision input uses Responses image parts, provider failures are not retried during streaming', async () => {
-  let calls = 0
+Deno.test('vision input uses Responses image parts and HTTP 400 fails without retry', async () => {
+  let seen: Record<string, unknown>[] = []
   const model = responses({
     key: () => 'private-key',
     fetch: (_url, init) => {
-      calls++
-      const body = JSON.parse(String(init?.body))
-      assertEquals(body.input[0].content[0].type, 'input_image')
-      assertEquals(
-        body.input[0].content[0].image_url,
-        'data:image/png;base64,AQID',
-      )
+      seen.push(JSON.parse(String(init?.body)))
       return Promise.resolve(
         Response.json({
           error: { message: 'not supported', code: 'unsupported_model' },
@@ -145,20 +139,29 @@ Deno.test('vision input uses Responses image parts, provider failures are not re
       )
     },
   })
-  await assertRejects(() =>
-    model({
-      model: 'vendor/model',
-      tools: [],
-      onText: () => {},
-      items: [{
-        kind: 'image',
-        mediaType: 'image/png',
-        bytes: new Uint8Array([1, 2, 3]),
-        label: 'test',
-      }],
-    })
+  let error = await assertRejects(
+    () =>
+      model({
+        model: 'vendor/model',
+        tools: [],
+        onText: () => {},
+        items: [{
+          kind: 'image',
+          mediaType: 'image/png',
+          bytes: new Uint8Array([1, 2, 3]),
+          label: 'test',
+        }],
+      }),
+    ModelError,
+    'not supported',
   )
-  assertEquals(calls, 1)
+  assertEquals(error.code, 'unsupported_model')
+  assertEquals(seen.length, 1)
+  let input = seen[0].input as { content: unknown[] }[]
+  assertEquals(input[0].content, [
+    { type: 'input_text', text: 'test' },
+    { type: 'input_image', image_url: 'data:image/png;base64,AQID' },
+  ])
 })
 
 Deno.test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes in the reply', async () => {

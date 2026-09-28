@@ -64,10 +64,11 @@ complete applicable conversation. This adapter sends `store: false`, never
 `openrouter{response_id}` for diagnostics only. Expect higher request bytes than
 a provider supporting stored continuation, especially for forks.
 
-Streaming Responses calls retain the shared transport's no-retry behavior.
-Cancellation uses `Request.signal`. Native `image_generation` and `web_search`
-declarations are not enabled on text requests; function tools remain available
-there.
+The shared transport retries transient failures before text reaches the caller.
+It does not replay text delivered through `onText`, or retry a rejected request
+such as HTTP 400. Cancellation uses `Request.signal`. Native `image_generation`
+and `web_search` declarations are not enabled on text requests; function tools
+remain available there.
 
 Official protocol references:
 
