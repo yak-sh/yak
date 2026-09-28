@@ -127,6 +127,7 @@ define([
   { view: 'Tile', match: and(), Render: ListTile },
   { view: 'Wake', match: parse('.wake'), Render: Wake },
   { view: 'Session', match: parse('.session'), Render: Session },
+  { view: 'Media', match: parse('.artifact'), Render: Media },
   { view: 'Full', match: parse('.doc'), Render: Show },
   { view: 'Card.Full', match: parse('.doc'), Render: CardFull },
   { view: 'Board', match: parse('.doc .board'), Render: Board },
@@ -177,9 +178,8 @@ define([
     Render: (props) => <Role {...props} />,
   },
   { view: 'Web', match: parse('.web'), Render: Web },
-  // Registered AFTER Full: a bare attachment has no doc, so Media is its sole
-  // match; a task/comment that wears one keeps its own face while still
-  // offering a Media tab. Blob entities are shared content, not attachments.
+  // An attachment shares the artifact's face. A doc carrying one still opens
+  // on Full and offers Media as a tab.
   { view: 'Media', match: parse('.attachment'), Render: Media },
   // Entry faces use the same specificity rules as every entity view. The
   // generic entry is the floor; facets such as bash and result override it.

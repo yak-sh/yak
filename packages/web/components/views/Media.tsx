@@ -1,12 +1,12 @@
-// An attached file's face (T-12781). The bytes never ride the graph — the
-// card points at GET /blob/<sha>, served from the store beside the db. An
-// image shows inline (its own w/h reserve the box, so nothing reflows when it
-// loads); anything else is a download link with its name and size.
+// An artifact's face, directly or through an attachment. The bytes never ride
+// the graph: GET /blob/<address> serves them from the store beside the db.
 import { type Ent } from '../../types.ts'
 import { ent } from '../../live.ts'
 import { block, el } from '../ui.tsx'
 
 let Img = el('img', 'Media')
+let Audio = el('audio', 'Media')
+let Video = el('video', 'Media')
 let File = block('a', 'MediaFile', { Name: 'span', Size: 'span' })
 let { Name, Size } = File
 
@@ -21,21 +21,26 @@ let size = (n?: number | null) =>
     : `${(n / 1024 ** 2).toFixed(1)} MB`
 
 export let Media = ({ e }: { e: Ent }) => {
-  let a = e.attachment!
-  let b = ent(a.artifact)
-  let src = `/blob/${a.artifact}`
-  return a.media_type?.startsWith('image/')
+  let b = e.attachment ? ent(e.attachment.artifact) : e
+  let address = b.artifact?.address ?? e.attachment?.artifact
+  let src = `/blob/${address}`
+  let mime = b.artifact?.media_type ?? e.attachment?.media_type
+  return mime?.startsWith('image/')
     ? (
       <Img
         src={src}
-        alt={a.name ?? ''}
+        alt={e.attachment?.name ?? 'image'}
         width={b.image?.w ?? undefined}
         height={b.image?.h ?? undefined}
       />
     )
+    : mime?.startsWith('audio/')
+    ? <Audio src={src} controls preload='metadata' />
+    : mime?.startsWith('video/')
+    ? <Video src={src} controls preload='metadata' />
     : (
-      <File href={src} download={a.name ?? undefined}>
-        <Name>{a.name ?? 'file'}</Name>
+      <File href={src} download={e.attachment?.name ?? 'file'}>
+        <Name>{e.attachment?.name ?? 'download'}</Name>
         <Size>{size(b.artifact?.size)}</Size>
       </File>
     )

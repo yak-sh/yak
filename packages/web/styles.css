@@ -2807,6 +2807,9 @@ html {
   height: auto;
   border-radius: var(--radius);
 }
+.Media:is(audio, video) {
+  width: 100%;
+}
 /* A non-image attachment: a plain download row — name left, size right. */
 .MediaFile {
   display: flex;

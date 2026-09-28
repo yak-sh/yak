@@ -637,6 +637,8 @@ export type Web = { eid: string; url: string; frozen_at?: string | null }
 // STORE, and @yaks/git's `blob{sha}` is a git blob, a different idea.
 export type Artifact = {
   eid: string
+  address: string
+  media_type: string
   size?: number | null
 }
 // Per-use file metadata points at shared content.
