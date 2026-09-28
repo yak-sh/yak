@@ -315,7 +315,10 @@ fifo="$work/restore.fifo"
 mkfifo "$fifo"
 restore_dump > "$fifo" &
 writer=$!
-if ! sqlite3 -batch -init /dev/null "$probe" < "$fifo"; then
+# Keep more index pages in memory while replaying; the 64 MiB cache reduced
+# scratch restore time without changing the dump or its proof.
+if ! sqlite3 -batch -init /dev/null -cmd 'PRAGMA cache_size=-65536;' \
+  "$probe" < "$fifo"; then
   kill "$writer" 2>/dev/null || true
   wait "$writer" 2>/dev/null || true
   echo "backup: dump did not load back" >&2
