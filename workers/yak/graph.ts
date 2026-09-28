@@ -515,12 +515,15 @@ let NO_PITR =
  *            its members' to make, unless the app's manifest says
  *            `"models": "open"` ({@link floorsOf}), and then its visitors keep
  *            the pace every write of theirs keeps (apps.ts `visiting`).
+ *   builder  an instruction that starts model turns at the account's expense.
+ *            Only an editor may write its settings, even in an open app.
  */
 export let FLOORS: Floors = {
   product: 'editor',
   order: 'owner',
   [DELIVER]: 'editor',
   using: 'editor',
+  builder: 'editor',
 }
 
 /** The floors an app's own manifest leaves standing: every one, less the

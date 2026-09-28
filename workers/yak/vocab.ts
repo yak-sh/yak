@@ -61,6 +61,7 @@ import {
 } from '@yaks/vocab'
 import { aliasDoc } from '@yaks/alias'
 import { blobKeywords } from '@yaks/blob'
+import { builderDoc } from '@yaks/builders/vocab'
 import { docDoc } from '@yaks/doc'
 import { dreamingDoc } from '@yaks/dreaming/vocab'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
@@ -162,10 +163,10 @@ export let RELATIONS: string[] = relationDocs.flatMap((d) =>
 )
 
 /** The marks any row may wear, in every store the platform keeps: somebody
- * opened it, put it away or quarantined it — and an image's size. */
+ * opened, archived, quarantined or verified it — and an image's size. */
 let markDocs: VocabDoc[] = [
   marksDoc,
-  pick(kernelWords, ['image', 'quarantined']),
+  pick(kernelWords, ['image', 'quarantined', 'verified']),
 ]
 
 /**
@@ -426,6 +427,18 @@ let askingDoc: VocabDoc = sealed(
   ['provider', 'model', 'serves'],
 )
 
+// A hosted builder uses this store's session runner. Its command-line tool is
+// not an app command; the app keeps the components and effect declarations.
+let hostedBuilderDoc = pick(builderDoc, [
+  'builder',
+  'build',
+  'built',
+  'builder_open',
+  'builder_ring',
+  'builder_answer',
+  'builder_change',
+])
+
 /**
  * The properties an app's store reads rather than stores, as the SQL that
  * reads them (@yaks/sql `Derived`), from the packages that declare them: a
@@ -513,6 +526,7 @@ export let coreDocs: VocabDoc[] = storeDocs([
   hookDoc,
   transcriptDoc,
   askingDoc,
+  hostedBuilderDoc,
   rtcDoc,
 ])
 

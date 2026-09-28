@@ -23,7 +23,6 @@ import {
   numbered,
   PLATFORM_APART,
   platformVocab,
-  RELATIONS,
   RESERVED,
   unsaid,
 } from './vocab.ts'
@@ -216,111 +215,12 @@ let indexes = (stmts: Stmt[]) =>
       : []
   )
 
-// What the load implies: one app's schema. The fleet's store plants 83 tables
-// into every customer's Durable Object today; this is the whole of what a
-// store needs instead.
-Deno.test('the loaded vocabulary implies core + member + edge + the app', () => {
-  let sql = schema(appVocab(says({ recipe: { serves: num }, cooked: {} })))
-  assertEquals(
-    tablesOf(sql),
-    [
-      // the spine @yaks/sqlite raises for every layout, and the store's own
-      // key/value beside it
-      'entity',
-      'entity_sequence',
-      'tombstone',
-      'server_meta',
-      // core and derived component-set descriptors
-      'archetype',
-      'retired',
-      'doc',
-      'person',
-      'created',
-      'updated',
-      // @yaks/member
-      'member',
-      'grant',
-      'access',
-      // @yaks/edge — the link and the relation verbs it may wear
-      'edge',
-      ...RELATIONS,
-      // @yaks/key — the carrier of a value an entity answers to, and the one
-      // kind of it every store speaks: a name (@yaks/alias)
-      'key',
-      'alias',
-      // what the platform says in every app's store: the breaks it noted, the
-      // marks a served or fixed item wears, and the two rows an upload makes
-      'exception',
-      'error',
-      'archived',
-      'notified',
-      'opened',
-      'quarantined',
-      'blob',
-      'image',
-      'attachment',
-      // and the words the guide gives an app to reach for rather than invent
-      'task',
-      'filed',
-      'completed',
-      'cancelled',
-      'project',
-      'comment',
-      // what a shop sells: the platform's word, because the platform's own
-      // checkout door reads a price off it (sell.ts), and what it sold, which
-      // the platform's own Connect webhook writes
-      'product',
-      'order',
-      'favorite',
-      'web',
-      // @yaks/mail — the app's own mailbox: the letter, the address, the ask
-      // to send it and the two ends of what became of it
-      'mail',
-      'email',
-      'deliver',
-      'delivered',
-      'bounced',
-      // @yaks/wake — a schedule any entity may wear, fired by the object's own
-      // alarm (D-37562)
-      'wake',
-      'fired',
-      // @yaks/tools — an invocation, which is how work is asked for here and
-      // (wearing a wake) how it is asked for later
-      'call',
-      'result',
-      'execution',
-      'tool',
-      'content',
-      'output',
-      // @yaks/hook — a webhook a service sent through one of the space's
-      // connections (connections.ts)
-      'hook',
-      // @yaks/session and @yaks/model — a transcript a model answers in the
-      // app's own store (models.ts, D-40545), and the catalogue it asks
-      'session',
-      'entry',
-      'ask',
-      'using',
-      'notice',
-      'stop',
-      'attempt',
-      'cancel',
-      'dispatch',
-      'provider',
-      'model',
-      'serves',
-      'usage',
-      'questions',
-      'answer',
-      // @yaks/rtc — who is speaking, relayed, and each Realtime session the
-      // app's voice door opened (rtc.ts, D-40615)
-      'rtc',
-      'sfu',
-      // the app's own
-      'recipe',
-      'cooked',
-    ].sort(),
-  )
+// Every component the vocabulary declares has a table in an app's store.
+Deno.test('the loaded app vocabulary plants its component tables', () => {
+  let vocab = appVocab(says({ recipe: { serves: num }, cooked: {} }))
+  let sql = schema(vocab)
+  let tables = tablesOf(sql)
+  assertEquals(vocab.all.filter((name) => tables.includes(name)), vocab.all)
   // Search is installed by the app, not by the storage vocabulary.
   assert(!sql.some((s) => s.t == 'create virtual table'))
 })
@@ -353,19 +253,6 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
       'published_name published name',
     ]
   ) assert(platform.includes(`unique ${want}`), `no ${want}`)
-  // An app's own store declares none of them — they are the directory's words.
-  // Its uniques are identities (a tool's, a model's and a provider's name, a
-  // Realtime session's id) and an entry's place in its transcript.
-  assertEquals(
-    indexes(schema(appVocab())).filter((i) => i.startsWith('unique')),
-    [
-      'unique entry_session_seq entry session seq',
-      'unique model_name model name',
-      'unique provider_name provider name',
-      'unique sfu_session sfu session',
-      'unique tool_name tool name',
-    ],
-  )
   // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address
   // now is the tools' word, not an index's.

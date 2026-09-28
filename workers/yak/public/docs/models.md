@@ -114,6 +114,28 @@ questions are Jev's. The answers are for the page: no later turn reads them, or
 the questions another turn asked, so a transcript a page asks about every few
 minutes keeps its window for what was said.
 
+## Build from stored rows
+
+A `builder` selects rows from this app's store with a query. Its `doc.body` is
+the instruction. Creating it starts a session in the same store; the answer
+becomes `built` rows there, so a page can query or subscribe to them:
+
+    await apply({
+      entity: { eid: '$summaries' },
+      doc: { title: 'Summaries', body: 'Summarize each note.' },
+      builder: { query: '.note' },
+    })
+
+The model returns named output slots, each with its own components and the ids
+of the selected inputs it used. A slot keeps its id when built again. The
+builder stores the run as `build`, and each output as `built`; its citations to
+inputs are `cites` edges. Read `.built.builder=<builder-id>&*` to find them.
+Changing `builder.floor` to a time in the past checks it again, while an
+unchanged instruction and inputs open no new session. A `wake` on the builder
+can check it later. `builder.immediate: true` also checks when a matching input
+is added, changed or removed. Only app editors may write a builder, since its
+model turns spend the owner's account budget.
+
 ## One call, answered at once
 
 A page that wants the answer in the same request, rather than in a transcript,
