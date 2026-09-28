@@ -109,11 +109,16 @@ let bytes = new TextEncoder()
 let fits = (held: Held, subs = held.subs ?? {}) => {
   // Serial ACKs allow only one snapshot on the wire at a time. Reserve its
   // longest possible subscription id, not every id in the query map.
-  let longest = ''
+  let longest: string | undefined
+  let width = 0
   for (let [id, ask] of Object.entries(subs)) {
-    if (ask !== true && id.length > longest.length) longest = id
+    let size = bytes.encode(JSON.stringify(id)).length
+    if (ask !== true && (longest === undefined || size > width)) {
+      longest = id
+      width = size
+    }
   }
-  let seen = longest ? [longest] : held.seen
+  let seen = longest === undefined ? held.seen : [longest]
   let full = held.acks ? { ...held, owed: '0'.repeat(36), seen } : held
   return bytes.encode(JSON.stringify(held)).length <= CAP &&
     bytes.encode(JSON.stringify(full)).length <= CAP
