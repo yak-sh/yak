@@ -69,7 +69,7 @@ Declare `book` in a second app of the same space and nothing is planted twice.
 The first app in the space to declare a component is its _home_; a later
 manifest naming it is a use, not a second declaration. The deploy reports that:
 
-    book lives in reading-list; this app reads and writes it there
+    warning: book lives in reading-list; this app's ./api/ page client cannot use it; graph_apply and commands route to reading-list
     components: loan
 
 `book` is missing from `components:` on purpose — the lending app homes only
@@ -214,7 +214,7 @@ Two apps, one shelf of books.
 
 The lending deploy reports:
 
-    book lives in reading-list; this app reads and writes it there
+    warning: book lives in reading-list; this app's ./api/ page client cannot use it; graph_apply and commands route to reading-list
     components: loan
 
 Now one call writes both halves:
