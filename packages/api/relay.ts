@@ -221,6 +221,7 @@ export let relay = <C>(
       for (let off of timers.values()) off()
       timers.clear()
       held.clear()
+      byEntity.clear()
       saying.clear()
     },
   }
