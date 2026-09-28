@@ -3,6 +3,7 @@ import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import { react, statusOf, transcript, UnknownSession } from '@yaks/session'
 import { seed, sessionTitle, titleOf } from './agent.ts'
+import { sessionTree } from './tree.ts'
 import { local } from './local.ts'
 import { harness, repo } from './testing.ts'
 import { until } from '../../bin/testing.ts'
@@ -82,6 +83,37 @@ Deno.test('a session lists with its derived status, and renders as a line', asyn
   assert(a.line(entries.find((b) => !b.prompt && b.content)!).includes('ping'))
   assert(a.line(row, 'Status', { entries }).includes('settled'))
   await a.close()
+})
+
+Deno.test('selected session lists queued direct children', async () => {
+  let a = await started()
+  let parent = 'child:parent'
+  try {
+    await a.h.g.apply([
+      {
+        entity: { eid: parent },
+        session: { id: parent, status: 'running' },
+      },
+      {
+        entity: { eid: 'queued-child' },
+        session: { id: 'queued-child', status: 'queued' },
+        spawned: { parent },
+        dispatch: { state: 'queued' },
+      },
+      {
+        entity: { eid: 'unrelated' },
+        session: { id: 'unrelated', status: 'running' },
+      },
+    ], { trusted: true })
+    let rows = await a.sessions(parent)
+    assertEquals(rows.map((b) => b.entity.eid), [parent, 'queued-child'])
+    assertEquals(
+      sessionTree(rows, { selected: parent }).map((r) => r.bundle.entity.eid),
+      [parent, 'queued-child'],
+    )
+  } finally {
+    await a.close()
+  }
 })
 
 Deno.test('the picker lists the recent transcripts, not the whole archive', async () => {

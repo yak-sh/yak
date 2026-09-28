@@ -222,7 +222,7 @@ export type Agent<H extends Host = Host> = {
   close: (reason?: Error) => Promise<void>
 }
 
-/** A page of sidebar rows. A selected session alone needs no list query. */
+/** A page of sidebar rows. A selected session only queries its direct children. */
 export type ListPage = { after?: string | number; limit?: number }
 export let LISTED = 20
 let page = (query: string, options: ListPage = {}) =>
@@ -529,7 +529,13 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     sessions: admitted(async (selected?: Eid, options?: ListPage) => {
       let rows = options || !selected
         ? await h.g.read(page('.session', options))
-        : (await h.g.get([selected])).filter((b) => b.session)
+        : [
+          ...(await h.g.get([selected])).filter((b) => b.session),
+          // The closed browser is a selected-session tree, not an archive page.
+          // Include direct children even before they start (spawned.call may be
+          // null), without scanning or titling every historical session.
+          ...await h.g.read('.session&.spawned.parent=' + selected + '&*'),
+        ]
       // A selected session need not belong to the current page.
       if (selected && !rows.some((b) => b.entity.eid == selected)) {
         rows = [

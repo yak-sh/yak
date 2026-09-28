@@ -142,12 +142,12 @@ the options: `local({ ...hosted(host) })` is rejected by both the type contract
 and a runtime check.
 
 Settled subagents are hidden by default regardless of their assigned tasks. The
-sidebar shows the selected session; `b` opens a paged session browser.
-**Ctrl+S** toggles **Show settled**; NORMAL mode also provides `s`. Root
-sessions on the visible page, the selected child, and its visible ancestors stay
-reachable. Explicit archival remains separate. This filter changes
-display/navigation only; completion messages and child transcripts remain
-available. Failed and stopped children remain visible.
+sidebar shows the selected session and its direct children; `b` opens a paged
+session browser. **Ctrl+S** toggles **Show settled**; NORMAL mode also provides
+`s`. Root sessions on the visible page, the selected child, and its visible
+ancestors stay reachable. Explicit archival remains separate. This filter
+changes display/navigation only; completion messages and child transcripts
+remain available. Failed and stopped children remain visible.
 
 ## Keyboard modes
 
