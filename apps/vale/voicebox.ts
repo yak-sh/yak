@@ -19,6 +19,7 @@ import type { Body } from './sim.ts'
 import { sound } from './sound.ts'
 import { loud, near, TALK } from './voice.ts'
 import { voiceMeter } from './voice-meter.ts'
+import { micHint, type MicSignal, senderActive } from './mic-health.ts'
 
 // How long a voice that could not be had waits before it is asked again.
 let AGAIN = 5000
@@ -29,7 +30,7 @@ let lib: typeof import('@yaks/rtc') | null = null
 let rtc = () => import('@yaks/rtc').then((m) => lib = m)
 
 /** How the microphone stands, as its button shows it. */
-export type Mic = 'off' | 'starting' | 'on' | 'denied' | 'spent'
+export type Mic = 'off' | 'starting' | 'on' | 'denied' | 'missing' | 'spent'
 
 // One voice asked for: the session it comes from, its stream once it arrives
 // (null while asked, or when it could not be had, `at` then), and the gain it
@@ -54,6 +55,13 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
   let mic: Mic = 'off'
   let track: MediaStreamTrack | null = null
   let sent: { stop: () => Promise<void> } | null = null
+  let startedAt = 0
+  let lastInput = 0
+  let signal: MicSignal | null = null
+  let checking = false
+  let attempt = 0
+  let sending = false
+  let checkedAt = 0
   let held = new Map<string, Voice>()
   let local: {
     analyser: AnalyserNode
@@ -72,21 +80,37 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
   let startMeter = (track: MediaStreamTrack) => {
     stopMeter()
     // The game's context may be asleep if the player has muted its sounds.
-    let context = sound.context ?? new AudioContext()
-    let source = context.createMediaStreamSource(new MediaStream([track]))
-    let analyser = context.createAnalyser()
-    analyser.fftSize = 256
-    let silence = context.createGain()
-    silence.gain.value = 0
-    source.connect(analyser).connect(silence).connect(context.destination)
-    local = {
-      analyser,
-      source,
-      silence,
-      context: sound.context ? null : context,
+    let context = new AudioContext()
+    void context.resume().catch(() => {})
+    try {
+      let source = context.createMediaStreamSource(new MediaStream([track]))
+      let analyser = context.createAnalyser()
+      analyser.fftSize = 256
+      let silence = context.createGain()
+      silence.gain.value = 0
+      source.connect(analyser).connect(silence).connect(context.destination)
+      local = { analyser, source, silence, context }
+    } catch (error) {
+      void context.close()
+      throw error
     }
   }
   let moved = (m: Mic) => told(mic = m)
+  let micState = (): Mic => mic
+  // End capture immediately, even if an in-flight publish has not returned
+  // its stop handle yet. Its completion checks `attempt` and stops itself.
+  let releaseMic = () => {
+    ++attempt
+    signal = null
+    sending = false
+    let was = sent
+    sent = null
+    if (track) track.onended = null
+    track?.stop()
+    stopMeter()
+    track = null
+    void was?.stop().catch(() => {})
+  }
 
   // While the microphone is on, the vale plays through a loop the browser's
   // echo canceller hears (@yaks/rtc `loopback`), so a player on speakers does
@@ -127,13 +151,17 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
     if (call && as == net.hero) return call
     if (call) void call.then((c) => c.leave()).catch(() => {})
     for (let eid of [...held.keys()]) drop(eid)
-    as = net.hero
+    let hero = net.hero
+    as = hero
     let made = rtc().then(({ join }) =>
       join({
-        entity: as!,
+        entity: hero!,
         write: (b) => net.client.mutate(b),
         change: (s) => {
-          if (s == 'limit') moved('spent')
+          if (s == 'limit' && call == made) {
+            releaseMic()
+            moved('spent')
+          }
         },
       })
     )
@@ -191,10 +219,33 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
     get mic() {
       return mic
     },
-    /** Samples at the listener for others, and at the microphone for me. */
+    /** The browser-chosen input is private to this player's button. */
+    get input() {
+      return track?.label || null
+    },
+    /** Sender level plus an active connection and outbound RTP, not merely a
+     * lit mic toggle or an echo from our own audio monitor. */
+    get sending() {
+      return mic == 'on' && sending
+    },
+    /** Samples at the listener for others, and at the microphone for me.
+     * Only my plate diagnoses my device: never infer a peer's mic state. */
     meter: (eid: string) => {
-      let analyser = eid == net.hero ? local?.analyser : held.get(eid)?.analyser
-      return analyser ? voiceMeter(analyser) : null
+      if (eid != net.hero) {
+        let analyser = held.get(eid)?.analyser
+        return analyser ? voiceMeter(analyser) : null
+      }
+      let measured = local?.context?.state == 'running'
+        ? voiceMeter(local.analyser)
+        : null
+      let now = Date.now()
+      if (measured?.talking) lastInput = now
+      let hint = micHint(mic, track?.readyState ?? null, measured, signal, {
+        now,
+        startedAt,
+        lastInput,
+      })
+      return { ...measured, hint }
     },
     /** The loop the vale plays through while the microphone is on, if any. */
     get loop() {
@@ -212,37 +263,117 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
      * browser may ask the player for it. */
     toggle: async () => {
       if (mic == 'starting' || !net.hero) return
+      let begun = ++attempt
       if (mic == 'on') {
-        let was = sent
-        sent = null
-        track?.stop()
-        stopMeter()
-        track = null
+        releaseMic()
         moved('off')
-        await was?.stop().catch(() => {})
         return
       }
+      let hero = net.hero
       moved('starting')
+      let captured: MediaStreamTrack
       try {
-        track = await (await rtc()).microphone()
-      } catch {
-        return moved('denied')
+        captured = await (await rtc()).microphone()
+      } catch (error) {
+        if (attempt != begun || micState() != 'starting') return
+        return moved(
+          error instanceof DOMException &&
+            (error.name == 'NotFoundError' ||
+              error.name == 'DevicesNotFoundError')
+            ? 'missing'
+            : 'denied',
+        )
       }
-      try {
-        sent = await (await joined()).publish(track)
-        startMeter(track)
-        moved('on')
-      } catch {
-        track.stop()
+      if (micState() != 'starting' || net.hero != hero || attempt != begun) {
+        captured.stop()
+        if (micState() == 'starting') moved('off')
+        return
+      }
+      track = captured
+      // Observe a device disappearing even while publish is still pending.
+      captured.onended = () => {
+        if (track != captured) return
+        ++attempt
         stopMeter()
         track = null
-        moved(mic == 'spent' ? 'spent' : 'off')
+        signal = null
+        sending = false
+        moved('missing')
+        let was = sent
+        sent = null
+        void was?.stop().catch(() => {})
+      }
+      if (captured.readyState == 'ended') captured.onended(new Event('ended'))
+      if (track != captured) return
+      try {
+        try {
+          startMeter(captured)
+        } catch {
+          /* Meter may be unavailable; publishing can still work. */
+          stopMeter()
+        }
+        let published = await (await joined()).publish(captured)
+        if (micState() != 'starting' || net.hero != hero || attempt != begun) {
+          captured.stop()
+          void published.stop().catch(() => {})
+          if (track == captured) {
+            stopMeter()
+            track = null
+          }
+          if (micState() == 'starting' && attempt == begun) moved('off')
+          return
+        }
+        sent = published
+        startedAt = lastInput = Date.now()
+        signal = null
+        sending = false
+        checkedAt = 0
+        if (captured.readyState == 'ended') {
+          captured.onended?.(new Event('ended'))
+          return
+        }
+        moved('on')
+      } catch {
+        captured.stop()
+        if (track == captured) {
+          stopMeter()
+          track = null
+          sent = null
+          signal = null
+          sending = false
+        }
+        if (attempt == begun && micState() == 'starting') moved('off')
       }
     },
     /** Each frame: the vale played through the loop while the microphone is
      * on, the voices within earshot asked for, the ones out of it let go, and
      * each one heard placed and faded. */
     tick: (f: Frame) => {
+      // The session belongs to the hero that joined it. Never keep a live
+      // microphone (or an old RTC presence) when this tab changes heroes.
+      if (as && as != net.hero) {
+        releaseMic()
+        moved('off')
+        let old = call
+        call = null
+        as = null
+        if (old) void old.then((c) => c.leave()).catch(() => {})
+        for (let eid of [...held.keys()]) drop(eid)
+      }
+      // Check the actual sender separately from capture. A lively local trace
+      // cannot prove that RTP is leaving this device.
+      if (mic == 'on' && call && Date.now() - checkedAt >= 1000 && !checking) {
+        checkedAt = Date.now()
+        checking = true
+        let captured = track, joinedAs = call
+        void joinedAs.then((c) => c.diagnose()).then((s) => {
+          if (mic != 'on' || track != captured || call != joinedAs) return
+          sending = senderActive(signal, s)
+          signal = s
+        }).catch(() => {
+          if (track == captured) sending = false
+        }).finally(() => checking = false)
+      }
       echo()
       let want = new Map<string, { session: string; body: Body }>()
       if (!sound.muted && mic != 'spent') {
@@ -274,10 +405,12 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
           )
         }
       }
-      sound.music.duck(
-        mic == 'on' ||
-          [...held.values()].some((v) => (v.gain?.gain.value ?? 0) > 0.02),
+      let speaking = [...held.values()].some((v) =>
+        v.analyser && (v.gain?.gain.value ?? 0) > 0.02 &&
+        voiceMeter(v.analyser).talking
       )
+      sound.duckVoice(speaking)
+      sound.music.duck(speaking || mic == 'on')
     },
   }
 }

@@ -91,7 +91,8 @@ let MICS: Record<Mic, string> = {
   off: 'Your microphone is off: turn it on and heroes near you hear you',
   starting: 'Asking for your microphone…',
   on: 'Heroes near you hear you',
-  denied: 'The browser did not give the vale your microphone',
+  denied: 'Mic blocked: allow microphone access in your browser, then retry',
+  missing: 'No microphone found: select or connect a browser input, then retry',
   spent: "This space's voice is spent for the month",
 }
 
@@ -501,13 +502,25 @@ export let hud = (
       }
     },
     /** how the microphone stands (voicebox.ts) */
-    mic: (m: Mic) => {
-      mic.querySelector('.Glyph')!.outerHTML = glyph(
-        m == 'on' ? 'mic' : 'micOff',
+    mic: (m: Mic, input?: string | null, sending = false) => {
+      let icon: 'mic' | 'micOff' = m == 'on' ? 'mic' : 'micOff'
+      if (mic.dataset.icon != icon) {
+        mic.querySelector('.Glyph')!.outerHTML = glyph(icon)
+        mic.dataset.icon = icon
+      }
+      mic.classList.toggle(
+        'Orb-off',
+        m == 'denied' || m == 'missing' || m == 'spent',
       )
-      mic.classList.toggle('Orb-off', m == 'denied' || m == 'spent')
       mic.classList.toggle('Orb-on', m == 'on')
-      tip(mic, { name: 'Microphone', key: micKey, says: MICS[m] })
+      mic.classList.toggle('Orb-sending', sending)
+      tip(mic, {
+        name: 'Microphone',
+        key: micKey,
+        says: `${MICS[m]}${input && m == 'on' ? ` · Input: ${input}` : ''}${
+          sending ? ' · Voice going out' : ''
+        }`,
+      })
     },
     /** paint this frame, the camera looking `facing` degrees from north,
      * tracking the hero's `tasks` (journal.ts), the compass pointing to `goal`,

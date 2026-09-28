@@ -796,6 +796,7 @@ let loop = (t: number) => {
         mine.name,
         d ? { swing: d.swing, x: d.at[0], z: d.at[2] } : null,
       )
+      h.mic(voice.mic, voice.input, voice.sending)
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)
       folk.tick(f)
       seen.tick(f)

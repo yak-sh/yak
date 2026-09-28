@@ -50,6 +50,18 @@ export type Opts = {
   fetch?: typeof fetch
 }
 
+/** A snapshot of the actual microphone sender, not a promise that a listener
+ * hears it. A null statistic means this browser does not expose that field. */
+export type MicSignal = {
+  ready: boolean
+  enabled: boolean
+  connected: boolean
+  level: number | null
+  energy: number | null
+  duration: number | null
+  packets: number | null
+}
+
 /** A track the call publishes. */
 export type Published = { name: string; stop: () => Promise<void> }
 
@@ -65,6 +77,8 @@ export type Call = {
   readonly state: State
   publish: (track: MediaStreamTrack, name?: string) => Promise<Published>
   mute: (muted: boolean) => void
+  /** Inspect the published sender, for local input and transport guidance. */
+  diagnose: (name?: string) => Promise<MicSignal | null>
   hear: (session: string, track: string) => Promise<Heard | null>
   leave: () => Promise<void>
 }
@@ -92,14 +106,21 @@ export let VOICE = 'voice'
 export let RENEW = 30_000
 
 /** A microphone as a voice wants it. */
-export let microphone = async (): Promise<MediaStreamTrack> =>
-  (await navigator.mediaDevices.getUserMedia({
+export let microphone = async (): Promise<MediaStreamTrack> => {
+  let stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: true,
       noiseSuppression: true,
       autoGainControl: true,
     },
-  })).getAudioTracks()[0]
+  })
+  let track = stream.getAudioTracks()[0]
+  if (!track) {
+    stream.getTracks().forEach((t) => t.stop())
+    throw new DOMException('No audio input was returned', 'NotFoundError')
+  }
+  return track
+}
 
 /**
  * Whether a microphone is hearing a voice, from its level (0 to 1) and
@@ -336,6 +357,37 @@ export let join = async (opts: Opts): Promise<Call> => {
             }),
         }
       }),
+    diagnose: async (name = VOICE) => {
+      let selected = sent.get(name)
+      if (!selected) return null
+      let stats = await selected.tx.sender.getStats()
+      let level: number | null = null
+      let energy: number | null = null
+      let duration: number | null = null
+      let packets: number | null = null
+      for (let r of stats.values()) {
+        if (r.type == 'media-source') {
+          if (typeof r.audioLevel == 'number') level = r.audioLevel
+          if (typeof r.totalAudioEnergy == 'number') energy = r.totalAudioEnergy
+          if (typeof r.totalSamplesDuration == 'number') {
+            duration = r.totalSamplesDuration
+          }
+        }
+        if (
+          r.type == 'outbound-rtp' && r.kind == 'audio' &&
+          typeof r.packetsSent == 'number'
+        ) packets = r.packetsSent
+      }
+      return {
+        ready: selected.track.readyState == 'live',
+        enabled: selected.track.enabled,
+        connected: pc.connectionState == 'connected',
+        level,
+        energy,
+        duration,
+        packets,
+      }
+    },
     mute: (on) => {
       muted = on
       for (let { track } of sent.values()) track.enabled = !on

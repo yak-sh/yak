@@ -97,3 +97,18 @@
   stroke: #c1ff78;
   stroke-width: 2;
 }
+
+/* Only the local player's plate carries device guidance. Permit the long
+   browser-input instruction to wrap instead of clipping against a name. */
+.Plate_MicWarning {
+  display: block;
+  width: min(18rem, 75vw);
+  white-space: normal;
+  text-align: center;
+  line-height: 1.25;
+  padding: 0.3rem 0.45rem;
+  color: #fff3c4;
+  background: rgba(53, 32, 25, 0.9);
+  border: 1px solid #e7a868;
+  border-radius: var(--round);
+}

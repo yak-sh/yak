@@ -15,17 +15,17 @@
   <link rel=stylesheet
     href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
   <link rel=stylesheet href=ui/components.css>
-  <!-- @yaks/client, @yaks/rtc and @yaks/vocab as JSR holds them, each
-       bundled by esm.sh with what it imports, so it arrives in one file rather
-       than a chain of them; the app's own code and three.js are compiled from
-       main.ts at deploy. What main.ts waits for is fetched while main.ts is:
-       @yaks/client, @yaks/vocab and the store's words (api/vocab.json).
-       @yaks/rtc waits for the first voice (voicebox.ts). -->
+  <!-- @yaks/client and @yaks/vocab arrive from JSR as esm.sh bundles;
+       keep ?bundle so each is one download. @yaks/rtc is a local browser
+       bundle of packages/rtc/mod.ts (deno bundle packages/rtc/mod.ts -o
+       apps/vale/rtc.bundle.js), since the published 0.2.10 does not yet have
+       the sender diagnostics. Its single file waits for the first voice.
+       The app code and three.js are compiled from main.ts at deploy. -->
   <script type=importmap>
   {
     "imports": {
       "@yaks/client": "https://esm.sh/jsr/@yaks/client@0.2.10?bundle",
-      "@yaks/rtc": "https://esm.sh/jsr/@yaks/rtc@0.2.10?bundle",
+      "@yaks/rtc": "./rtc.bundle.js",
       "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.10?bundle"
     }
   }

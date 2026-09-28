@@ -69,6 +69,10 @@ let ctx: AudioContext | null = null
 // The last stop before the speakers: every source plays into it.
 let out: AudioNode | null = null
 let loops: Record<keyof typeof LOOP, AudioBuffer> | null = null
+let fireGains = new Set<GainNode>()
+let voiceDucking = false
+/** Relative fire level while speech is actually present. */
+export let fireLevel = (voice: boolean) => voice ? 0.22 : 1
 let muted = false
 try {
   muted = localStorage.getItem('mossvale.quiet') == '1'
@@ -204,11 +208,22 @@ let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
   let g = c.createGain()
   g.gain.setValueAtTime(0, c.currentTime)
   g.gain.linearRampToValueAtTime(LOOP[kind].loud, c.currentTime + 1.5)
-  s.connect(g).connect(into)
+  // Fire is a persistent source; duck its own bus, not the voice bus.
+  let fire = kind == 'fire' ? c.createGain() : null
+  if (fire) {
+    fire.gain.value = fireLevel(voiceDucking)
+    g.connect(fire).connect(into)
+    fireGains.add(fire)
+  } else g.connect(into)
+  s.connect(g)
   s.start(c.currentTime, Math.random() * b.duration)
   return () => {
     g.gain.setTargetAtTime(0, c.currentTime, 0.2)
     s.stop(c.currentTime + 1)
+    if (fire) {
+      fireGains.delete(fire)
+      s.onended = () => fire.disconnect()
+    }
   }
 }
 
@@ -243,6 +258,18 @@ export let sound = {
     return muted
   },
   music,
+  /** Quiet the fire under audible speech; never attenuate the speaker. */
+  duckVoice: (speaking: boolean) => {
+    if (voiceDucking == speaking) return
+    voiceDucking = speaking
+    for (let fire of fireGains) {
+      fire.gain.setTargetAtTime(
+        fireLevel(speaking),
+        fire.context.currentTime,
+        0.12,
+      )
+    }
+  },
   toggle: () => {
     muted = !muted
     try {

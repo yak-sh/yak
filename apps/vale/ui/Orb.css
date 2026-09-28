@@ -71,3 +71,10 @@
     box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 65%, transparent);
   }
 }
+
+/* An outgoing *sender* level, not merely an enabled microphone. */
+.Orb-sending {
+  border-color: #c1ff78;
+  box-shadow: 0 0 0 3px rgba(193, 255, 120, 0.6),
+    0 0 16px rgba(193, 255, 120, 0.65);
+}

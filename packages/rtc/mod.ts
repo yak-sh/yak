@@ -32,6 +32,7 @@ export {
   type Heard,
   join,
   microphone,
+  type MicSignal,
   type Opts,
   type Published,
   Refused,

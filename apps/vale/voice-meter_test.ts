@@ -9,7 +9,7 @@ Deno.test('the waveform and talking state follow audio samples, not a voice flag
   } as unknown as AnalyserNode
   assertEquals(voiceMeter(analyser).talking, false)
   for (let i = 0; i < data.length; i++) {
-    data[i] = Math.round(128 + Math.sin(i * Math.PI / 8) * 60)
+    data[i] = Math.round(128 + Math.sin(i * Math.PI / 13) * 60)
   }
   let heard = voiceMeter(analyser)
   assert(heard.talking)

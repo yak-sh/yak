@@ -143,15 +143,21 @@ let beamOf = (r: Rarity, glow: THREE.Material) => {
 }
 
 /** A voice is marked only when its own audio samples arrive at this page. */
-type Meter = { talking: boolean; points: string } | null
-let voicePlate = (meter: Meter) =>
-  meter
+type Meter = { talking?: boolean; points?: string; hint?: string | null } | null
+export let voicePlate = (meter: Meter) => {
+  if (!meter) return ''
+  let trace = meter.points
     ? `<svg class="Plate_Voice${
       meter.talking ? ' Plate_Voice-talking' : ''
     }" viewBox="0 0 64 16" width="64" height="16" role="img" aria-label="${
       meter.talking ? 'Talking' : 'Quiet'
     }"><polyline points="${meter.points}" /></svg>`
     : ''
+  return trace +
+    (meter.hint
+      ? `<span class="Plate_MicWarning" role="status">${esc(meter.hint)}</span>`
+      : '')
+}
 
 /** The stage over one level's scene, its people built `build`. */
 export let cast = (
