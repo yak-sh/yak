@@ -37,6 +37,7 @@ import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import { refuse } from './tool.ts'
 import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
+import { prefixOf } from './files.ts'
 import { storeOf } from './door.ts'
 import { recall } from './lib/hops.ts'
 import { told } from './stream.ts'
@@ -400,7 +401,7 @@ export let readView = async (ctx: Ctx, uri: string) => {
     .some((t) => t.view == file)
   if (!declared) return null
   let blobs = r2Objects(ctx.env.BLOBS)
-  let key = `${space.slug}/${app.slug}/${file}`
+  let key = `${prefixOf(space, app)}/${file}`
   if (!(await blobs.has(key))) return null
   let page = new TextDecoder().decode(await blobs.get(key))
   // The same tag the app door gives every page it serves (apps.ts

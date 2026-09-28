@@ -47,7 +47,6 @@ import { r2Objects } from './lib/objects.ts'
 import { type Directory, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { prefixOf } from './files.ts'
 import { bodies, graphOf, held, MAIN, refAt } from './gitobj.ts'
 import { held as heldGrant, ledger, narrowed } from './grants.ts'
 import { meta } from './meta.ts'
@@ -190,7 +189,7 @@ export let answer = async (at: Arrived): Promise<Response | null> => {
       // pack breaks mid-stream — which is a clone that fails after the
       // commits are already minted. gitobj.ts `placed` mints with this same
       // prefix, so the door reads what the commit was written from.
-      bodies(r2Objects(env.BLOBS), `${prefixOf(space, app)}/`),
+      bodies(r2Objects(env.BLOBS), `${space.slug}/${app.slug}/`),
     ),
   )
 }

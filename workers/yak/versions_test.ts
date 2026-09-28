@@ -124,6 +124,24 @@ type Entity = {
 
 let directory = () => {
   let rows: (Version & { app: string })[] = []
+  let apply = (m: { entities: Entity[] }) => {
+    for (let e of m.entities) {
+      let had = rows.find((r) => r.eid == e.entity?.eid)
+      if (e.deploy && had) had.files = JSON.parse(e.deploy.files)
+      else if (e.deploy) {
+        rows.push({
+          app: e.deploy.app!,
+          eid: `d${e.deploy.app}-${e.deploy.version}`,
+          version: e.deploy.version!,
+          at: '',
+          files: JSON.parse(e.deploy.files),
+          worker: e.deploy.worker!,
+        })
+      }
+      if (e.tombstone) rows = rows.filter((r) => r.eid != e.entity!.eid)
+    }
+    return Promise.resolve([])
+  }
   let dir = {
     // Per app, because the sweep now marks from every app in the bucket and
     // what one names has to be tellable from what another does.
@@ -132,24 +150,8 @@ let directory = () => {
         rows.filter((r) => r.app == app.eid)
           .sort((a, b) => b.version - a.version),
       ),
-    apply: (m: { entities: Entity[] }) => {
-      for (let e of m.entities) {
-        let had = rows.find((r) => r.eid == e.entity?.eid)
-        if (e.deploy && had) had.files = JSON.parse(e.deploy.files)
-        else if (e.deploy) {
-          rows.push({
-            app: e.deploy.app!,
-            eid: `d${e.deploy.app}-${e.deploy.version}`,
-            version: e.deploy.version!,
-            at: '',
-            files: JSON.parse(e.deploy.files),
-            worker: e.deploy.worker!,
-          })
-        }
-        if (e.tombstone) rows = rows.filter((r) => r.eid != e.entity!.eid)
-      }
-      return Promise.resolve([])
-    },
+    apply,
+    stamp: apply,
   } as unknown as Directory
   return { dir, rows: () => rows }
 }
@@ -453,10 +455,9 @@ Deno.test('a blob lives while anything names it, and a day besides', async () =>
     'v1 is past the page and still restorable',
   )
 
-  // What the sweep costs an app: two listings of the bucket — the path logs
-  // and the pinned bytes — one read per log, and one delete per blob let go.
+  // What the sweep costs an app: staged files, path logs and pinned bytes.
   let cost = trips()
-  assertEquals(cost.list - before.list, 2)
+  assertEquals(cost.list - before.list, 3)
   assertEquals(cost.read - before.read, 0)
   assertEquals(cost.delete - before.delete, 1)
 })

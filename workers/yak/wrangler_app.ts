@@ -396,6 +396,7 @@ export let metadata = (
   bound: Bound[] = [],
   tag?: string,
   service = 'yak',
+  durableOwner?: string,
 ) => {
   let bindings: Record<string, unknown>[] = [
     { type: 'service', name: 'KERNEL', service },
@@ -419,9 +420,15 @@ export let metadata = (
     bindings.push({ type: held.type, name: held.name, [id]: held.id })
   }
   for (let binding of config.durable_objects?.bindings ?? []) {
-    bindings.push({ type: 'durable_object_namespace', ...binding })
+    bindings.push({
+      type: 'durable_object_namespace',
+      ...binding,
+      ...(durableOwner ? { script_name: durableOwner } : {}),
+    })
   }
-  let migrations = migrationMetadata(config.migrations, tag)
+  let migrations = durableOwner
+    ? undefined
+    : migrationMetadata(config.migrations, tag)
   return {
     main_module: WRAPPER,
     compatibility_date: config.compatibility_date ?? '2025-05-08',

@@ -38,6 +38,7 @@
 // refused over CAP at the write rather than truncated at the read — half of
 // what somebody wrote is worse than a pointer to all of it.
 import { r2Objects } from './lib/objects.ts'
+import { prefixOf } from './files.ts'
 import { type App, type Space, url } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Host } from './host.ts'
@@ -96,7 +97,7 @@ export let notesOf = async (
   // door, and most apps have no notes, so a second round trip would land on
   // the common case.
   let bytes = await r2Objects(env.BLOBS).read(
-    `${space.slug}/${app.slug}/${NOTES}`,
+    `${prefixOf(space, app)}/${NOTES}`,
   )
   if (!bytes) return ''
   // The write refuses anything over CAP, so this slice only ever catches a

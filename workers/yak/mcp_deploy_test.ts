@@ -334,6 +334,92 @@ Deno.test('a deploy is a version, and one word puts it back', async () => {
   }
 })
 
+Deno.test('a failed rollback leaves the served files and deploy unchanged', async () => {
+  let k = await kernel()
+  try {
+    let { cookie, eids } = await seed(k, [{
+      slug: 'partialrollback',
+      apps: ['page'],
+    }])
+    let agent = connector(k, cookie)
+    let app = { space: 'partialrollback', app: 'page' }
+    let put = (text: string) =>
+      agent.tool('app_files', {
+        ...app,
+        files: [
+          { path: 'index.html', content: text },
+          { path: 'style.css', content: `body{color:${text}}` },
+        ],
+      })
+    await put('first')
+    await agent.tool('app_deploy', app)
+    await put('second')
+    await agent.tool('app_deploy', app)
+
+    let dir = meta(k)
+    let [first] = await dir.query(
+      `.deploy.app=${eids['partialrollback/page']}&.deploy.version=1`,
+    )
+    let deploy = first.deploy
+    if (
+      !deploy || typeof deploy != 'object' || !('files' in deploy) ||
+      typeof deploy.files != 'string'
+    ) throw new Error('missing first deploy')
+    let files = JSON.parse(deploy.files)
+    files['style.css'] = 'missing-pin'
+    await dir.apply([{
+      entity: { eid: first.entity.eid },
+      deploy: { files: JSON.stringify(files) },
+    }])
+
+    await assertRejects(() => agent.tool('app_rollback', app))
+    assertStringIncludes(await agent.tool('app_versions', app), 'v2 (live)')
+    assertEquals(
+      await agent.tool('app_files', { ...app, op: 'read', path: 'index.html' }),
+      'second',
+    )
+    let page = await k.at('partialrollback.yaks.app', '/page/')
+    assertStringIncludes(await page.text(), 'second')
+  } finally {
+    await k.stop()
+  }
+})
+
+Deno.test('a rolled back app keeps serving through app and space renames', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{ slug: 'backrename', apps: ['page'] }])
+    let agent = connector(k, cookie)
+    let app = { space: 'backrename', app: 'page' }
+    for (let content of ['first', 'second']) {
+      await agent.tool('app_files', {
+        ...app,
+        files: [{ path: 'index.html', content }],
+      })
+      await agent.tool('app_deploy', app)
+    }
+    await agent.tool('app_rollback', app)
+    await agent.tool('app_set', { ...app, slug: 'renamed' })
+    await agent.tool('space_set', {
+      space: 'backrename',
+      slug: 'backrename-new',
+    })
+    let moved = { space: 'backrename-new', app: 'renamed' }
+    assertEquals(
+      await agent.tool('app_files', {
+        ...moved,
+        op: 'read',
+        path: 'index.html',
+      }),
+      'first',
+    )
+    let page = await k.at('backrename-new.yaks.app', '/renamed/')
+    assertStringIncludes(await page.text(), 'first')
+  } finally {
+    await k.stop()
+  }
+})
+
 // After a rollback the answers agree (T-32910, C-32905 items 5 and 6): the
 // list says which version is live and which one this version put back, and it
 // says it right after the write. The directory's read cache is 30 seconds

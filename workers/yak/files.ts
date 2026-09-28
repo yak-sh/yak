@@ -71,8 +71,10 @@ export let keyed = (prefix: string, path: string) =>
 
 // The prefix an app's files live under, which is its address and therefore
 // moves when its slug does.
-export let prefixOf = (space: { slug: string }, app: { slug: string }) =>
-  `${space.slug}/${app.slug}`
+export let prefixOf = (
+  space: { slug: string },
+  app: { slug: string; source?: string | null },
+) => app.source ?? `${space.slug}/${app.slug}`
 
 // A path behind no file whose last segment names no file type is a route, not
 // a miss (T-32769): `/recipes/42` is the page asking to be opened at a place,

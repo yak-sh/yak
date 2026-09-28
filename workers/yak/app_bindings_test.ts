@@ -236,6 +236,42 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
   }
 })
 
+Deno.test('rollback switches files and worker only after the upload succeeds', async () => {
+  let k = await fixture()
+  try {
+    await k.write({ main: 'worker.js' })
+    await k.tool('app_deploy')
+    await k.tool('app_files', {
+      files: [{ path: 'index.html', content: '<h1>second</h1>' }],
+    })
+    await k.tool('app_deploy')
+    let stage = `app-${k.app.eid}-r-3`
+    k.state.fail = stage
+    await assertRejects(() => k.tool('app_rollback'))
+    let space = (await k.dir.space('ada'))!
+    let app = (await k.dir.app(space, 'cookbook'))!
+    assertEquals(app.version, 2)
+    assertEquals(app.source, null)
+    assertEquals(app.script, null)
+    assertEquals(
+      await k.tool('app_files', { op: 'read', path: 'index.html' }),
+      '<h1>second</h1>',
+    )
+
+    k.state.fail = ''
+    await k.tool('app_rollback')
+    app = (await k.dir.app(space, 'cookbook'))!
+    assertEquals(app.version, 3)
+    assertEquals(app.script, stage)
+    assertStringIncludes(app.source!, '/.releases/')
+    assert(k.state.scripts.has(
+      `/workers/dispatch/namespaces/yak-apps/scripts/${stage}`,
+    ))
+  } finally {
+    k.done()
+  }
+})
+
 Deno.test('a vpc_services door needs a tunnel, and the script never holds it', async () => {
   let k = await fixture()
   try {

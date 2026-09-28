@@ -17,6 +17,7 @@ import { meta } from './meta.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
 import { rebind } from './connections.ts'
+import { scriptName } from './dispatch.ts'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
@@ -59,6 +60,7 @@ export let deployWorker = async (
   compiled?: Compiled['worker'],
 ) => {
   let store = storeName(space, app)
+  let target = app.script ?? store
   let { config, report } = parsed
   let refused = [...parsed.refused]
   let why = unreached(space, app, config)
@@ -77,14 +79,16 @@ export let deployWorker = async (
   if (refused.length) {
     return {
       worker,
+      ready: false,
       lines: [...report, ...ids, ...refused, unchanged, ...bindingLines(held)],
     }
   }
   if (!has) {
-    if (env.CF_WORKERS_TOKEN) await drop(env, store)
+    if (env.CF_WORKERS_TOKEN) await drop(env, target)
     else if (held.length) {
       return {
         worker,
+        ready: false,
         lines: [
           ...report,
           ...ids,
@@ -95,12 +99,14 @@ export let deployWorker = async (
     }
     return {
       worker,
+      ready: true,
       lines: [...report, ...ids, ...refused, ...retained(held, {})],
     }
   }
   if (!env.CF_WORKERS_TOKEN) {
     return {
       worker,
+      ready: false,
       lines: [...report, ...ids, NEEDS_TOKEN, ...bindingLines(held)],
     }
   }
@@ -115,6 +121,7 @@ export let deployWorker = async (
     let why = e instanceof Error ? e.message : String(e)
     return {
       worker,
+      ready: false,
       lines: [
         ...report,
         ...idReport(config, held),
@@ -126,21 +133,25 @@ export let deployWorker = async (
   }
   worker = await upload(
     env,
-    store,
+    target,
     modules,
     compiled ? { ...config, main: compiled.main } : config,
     bound,
+    target == store ? undefined : scriptName(store),
   )
   // What its code reads as env.NAME: a first upload is the first script there
   // is to bind the app's connections to (connections.ts). The worker is up
   // either way, so a binding that did not take is ours to hear about.
-  await rebind(env, store, app.eid).catch((e) =>
+  try {
+    await rebind(env, target, app.eid)
+  } catch (e) {
     caught(e, { request: 'rebind', app: app.slug })
-  )
+    if (target != store) throw e
+  }
   // An upload can finish after permanent deletion's script DELETE. Reconcile
   // that late effect while its ids are still in hand, before recording a release.
   if (!(await meta(env).query(`.eid=${app.eid}&.app`)).length) {
-    await drop(env, store, true)
+    await drop(env, target, true)
     for (let binding of bound) await discard(env, binding)
     throw refuse(
       'conflict',
@@ -149,6 +160,7 @@ export let deployWorker = async (
   }
   return {
     worker,
+    ready: true,
     lines: [
       ...report,
       ...idReport(config, bound),

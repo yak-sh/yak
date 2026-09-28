@@ -572,6 +572,8 @@ export let platformDoc: VocabDoc = {
         slug: text,
         space: ref('cascade'),
         version: num,
+        source: owned(text),
+        script: owned(text),
         access: { type: 'string', enum: ['public', 'open', 'private'] },
         // The app's handle: what its Durable Object, its dispatch script and
         // its analytics rows are named by (directory.ts
@@ -735,6 +737,7 @@ export let platformDoc: VocabDoc = {
         version: num,
         files: text,
         worker: text,
+        script: text,
       },
     },
     // One time this app's store was put back to a moment (recover.ts,

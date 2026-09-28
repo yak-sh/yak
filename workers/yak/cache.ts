@@ -73,8 +73,10 @@ export let keepable = (tags: string[]) => ({
 // domain is a third address for the same bytes. Keying on the eid means those
 // are one cache entry rather than three, and it means a rename cannot make one
 // app read another's entry.
-export let at = (eid: string, path: string) =>
-  `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}`
+export let at = (eid: string, path: string, source = '') =>
+  `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}${
+    source ? `?source=${encodeURIComponent(source)}` : ''
+  }`
 
 // The tag a purge names. One tag, the app's eid, and the reason there is only
 // one is the reason this design is safe: what is cached is bytes, so the only

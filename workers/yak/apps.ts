@@ -443,7 +443,9 @@ let unchanged = (req: Request, etag: string) =>
 // calls the module in-process: the same bytes, no cache.
 let bytes = (env: Env, app: App, prefix: string, path: string) =>
   bound(env.FILES, files.fetch, env).fetch(
-    new Request(cachedAt(app.eid, path), { headers: { [PREFIX]: prefix } }),
+    new Request(cachedAt(app.eid, path, app.source ?? ''), {
+      headers: { [PREFIX]: prefix },
+    }),
   )
 
 // The two addresses the kernel answers for an app that wrote neither file

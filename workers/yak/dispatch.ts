@@ -419,7 +419,7 @@ let called = async (
   let store = storeName(space, app)
   let worker
   try {
-    worker = script(env.DISPATCH, scriptName(store), app, who)
+    worker = script(env.DISPATCH, scriptName(app.script ?? store), app, who)
   } catch (e) {
     // Not the app's code — the namespace refusing to hand it over is ours.
     if (nowhere(e)) return null
@@ -689,6 +689,7 @@ export let upload = async (
   modules: Module[],
   config: Config = {},
   bound: Bound[] = [],
+  durableOwner?: string,
 ) => {
   let names = new Set(['metadata', WRAPPER])
   for (let { name } of modules) {
@@ -701,7 +702,7 @@ export let upload = async (
     names.add(name)
   }
   let tag: string | undefined
-  if (config.migrations?.length) {
+  if (config.migrations?.length && !durableOwner) {
     let r = await sent(env, `/${scriptName(store)}`, { method: 'GET' })
     if (r.status == 404) await r.body?.cancel()
     else {
@@ -713,7 +714,9 @@ export let upload = async (
   body.append(
     'metadata',
     new Blob([
-      JSON.stringify(metadata(config, bound, tag, env.WORKER_NAME)),
+      JSON.stringify(
+        metadata(config, bound, tag, env.WORKER_NAME, durableOwner),
+      ),
     ], { type: 'application/json' }),
   )
   // Each part is named by the module name that imports it, and typed by what

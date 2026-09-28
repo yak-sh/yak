@@ -74,6 +74,7 @@ export type Version = {
   // worker.js the manifest names, so putting an app back never depends on
   // Cloudflare having kept anything.
   worker: string
+  script?: string
 }
 
 // How many versions a list shows at once, and the floor under a path's history
@@ -209,18 +210,26 @@ export let snapshot = (blobs: Objects, prefix: string) =>
 // already kept, so a rollback is undone by another — and noting each file it
 // moved would be the same fact written down twice, in two grains, free to
 // disagree.
-export let restore = async (blobs: Objects, prefix: string, files: Files) => {
-  let store = pins(blobs, prefix)
-  for (let [path, sha] of Object.entries(files)) {
-    await blobs.put(prefix + path, await must(store, sha))
-  }
-  for (
-    let path of own(
-      (await blobs.list(prefix)).map((k) => k.slice(prefix.length)),
-    )
-  ) {
-    if (!(path in files)) await blobs.delete(prefix + path)
-  }
+export let restore = async (
+  blobs: Objects,
+  prefix: string,
+  files: Files,
+  archive = prefix,
+) => {
+  let store = pins(blobs, archive)
+  await Promise.all(
+    Object.entries(files).map(async ([path, sha]) =>
+      await blobs.put(prefix + path, await must(store, sha))
+    ),
+  )
+  let paths = own(
+    (await blobs.list(prefix)).map((k) => k.slice(prefix.length)),
+  )
+  await Promise.all(
+    paths.filter((path) => !(path in files)).map((path) =>
+      blobs.delete(prefix + path)
+    ),
+  )
 }
 
 // What one version did to the one before it, in the words a person would use.
@@ -297,9 +306,12 @@ export let record = async (
   files: Files,
   worker: string,
 ) =>
-  await dir.apply({
+  await dir.stamp({
     entities: [
-      { entity: { eid: app.eid }, app: { version } },
+      {
+        entity: { eid: app.eid },
+        app: { version, source: app.source, script: app.script },
+      },
       {
         entity: { eid: mint() },
         deploy: {
@@ -307,6 +319,7 @@ export let record = async (
           version,
           files: JSON.stringify(files),
           worker,
+          script: app.script ?? '',
         },
       },
     ],
@@ -390,6 +403,7 @@ export let replaced = async (
   path: string,
   by: string,
   at = new Date(),
+  archive = prefix,
 ) => {
   let bytes = await blobs.read(prefix + path)
   if (!bytes) return null
@@ -405,14 +419,14 @@ export let replaced = async (
   // wait on in each other, so they go out together: three round trips to the
   // bucket where there were five (T-34986).
   await Promise.all([
-    pins(blobs, prefix).put(sha, bytes),
+    pins(blobs, archive).put(sha, bytes),
     (async () => {
       let all = trimmed(
-        [was, ...await history(blobs, prefix, path)],
+        [was, ...await history(blobs, archive, path)],
         at.getTime(),
       )
       await blobs.put(
-        logKey(prefix, path),
+        logKey(archive, path),
         new TextEncoder().encode(JSON.stringify(all)),
       )
     })(),
@@ -499,7 +513,14 @@ export let pruned = async (
   plugins = PLUGINS,
 ) => {
   let named = new Set<string>()
+  let gone = 0
   for (let { prefix, app } of apps) {
+    let stage = `${prefix.split('/')[0]}/.releases/${app.eid}/`
+    for (let [key, landed] of Object.entries(await blobs.uploaded(stage))) {
+      if (app.source && key.startsWith(`${app.source}/`)) continue
+      if (now - landed < GRACE) continue
+      await blobs.delete(key)
+    }
     for (let key of await blobs.list(`${prefix}history/`)) {
       let all = entries(await blobs.read(key))
       let keep = trimmed(all, now)
@@ -522,7 +543,6 @@ export let pruned = async (
       named.add(sha)
     }
   }
-  let gone = 0
   for (let [key, landed] of Object.entries(await blobs.uploaded(SHA))) {
     if (named.has(key.slice(SHA.length))) continue
     if (now - landed < GRACE) continue

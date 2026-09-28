@@ -165,7 +165,14 @@ export let compiled = async (
   if (answer.lock != null) {
     let was = await read(LOCK)
     if (!was || new TextDecoder().decode(was) != answer.lock) {
-      await replaced(blobs, prefix, LOCK, who.person ?? '')
+      await replaced(
+        blobs,
+        prefix,
+        LOCK,
+        who.person ?? '',
+        new Date(),
+        `${space.slug}/${app.slug}/`,
+      )
       await blobs.put(prefix + LOCK, encode(answer.lock))
     }
     lines.push(

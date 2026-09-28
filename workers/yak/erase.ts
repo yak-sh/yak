@@ -87,7 +87,15 @@ import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { defect } from './sentry.ts'
 import { NOTES } from './standing.ts'
-import { moved, own, type Pinner, pruned, renamed } from './versions.ts'
+import {
+  GRACE as PIN_GRACE,
+  moved,
+  own,
+  type Pinner,
+  pruned,
+  renamed,
+  versions,
+} from './versions.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -307,9 +315,18 @@ export let emptied = async (
 ) => {
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
-  if (env.CF_WORKERS_TOKEN) await drop(env, storeName(space, app), true)
+  if (env.CF_WORKERS_TOKEN) {
+    if (app.script) await drop(env, app.script, true)
+    await drop(env, storeName(space, app), true)
+    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+    for (let v of await versions(dir, app)) {
+      if (v.script && v.script != app.script) await drop(env, v.script, true)
+    }
+    await drop(env, `app-${app.eid}-r-${(app.version ?? 0) + 1}`, true)
+  }
   await deleteBindings(env, app)
   let keys = await swept(env, under(space, app))
+  await swept(env, `${space.slug}/.releases/${app.eid}/`)
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.
@@ -674,6 +691,18 @@ export let collected = async (env: Env, now = new Date()) => {
     if (await renamed(blobs, dir, one, 'AGENTS.md', NOTES)) notes++
   }
   let unpinned = await pruned(dir, blobs, standing, now.getTime())
+  if (env.CF_WORKERS_TOKEN) {
+    for (let { app } of standing) {
+      for (let v of await versions(dir, app)) {
+        if (!v.script || v.script == app.script) continue
+        if (!v.at || now.getTime() - Date.parse(v.at) < PIN_GRACE) continue
+        await drop(env, v.script, true)
+        await dir.apply({
+          entities: [{ entity: { eid: v.eid }, deploy: { script: null } }],
+        })
+      }
+    }
+  }
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
   if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
   if (notes) console.log(`yak-trash: ${notes} AGENTS.md renamed to ${NOTES}`)

@@ -174,6 +174,8 @@ export type App = {
   slug: string
   space: string
   version: number | null
+  source?: string | null
+  script?: string | null
   title: string
   // Who may read and write its store (T-32504): 'public', 'open', or
   // 'private'. Null for an app born before the word, which means public —
@@ -301,6 +303,8 @@ type Row = {
     slug: string
     space: Id
     version: number | null
+    source?: string | null
+    script?: string | null
     access?: Access | null
     store?: string | null
   }
@@ -325,7 +329,13 @@ type Row = {
     stage?: HostStage | null
     at?: string | null
   }
-  deploy?: { app: Id; version: number; files?: string; worker?: string }
+  deploy?: {
+    app: Id
+    version: number
+    files?: string
+    worker?: string
+    script?: string
+  }
   restored?: {
     app: Id
     at?: string | null
@@ -513,9 +523,9 @@ let notFound = () => new Response('not found', { status: 404 })
 // reaches here, since this part is only ever called with `bound`.
 export let FRESH = 'x-yak-fresh'
 
-// The headers a caller's request carries through to the store: who is
-// asking, and nothing a client could have sent — `x-yak-kernel` is never
-// forwarded, so a directory write is an ordinary one.
+// The headers an ordinary caller carries through to the store. The directory
+// binding is internal; its `stamp` door passes the kernel header separately
+// for platform-owned properties that an ordinary graph write cannot set.
 let VOUCH = ['x-yak-person', 'x-yak-role', 'x-via']
 
 let forwarded = (req: Request) =>
@@ -538,7 +548,11 @@ export let over = (store: Meta) => async (req: Request): Promise<Response> => {
     await first
     try {
       let sent = await req.json() as { entities?: Bundle[] }
-      let applied = await store.apply(sent.entities ?? [], forwarded(req))
+      let headers = forwarded(req)
+      if (req.headers.get('x-yak-kernel') == '1') {
+        headers['x-yak-kernel'] = '1'
+      }
+      let applied = await store.apply(sent.entities ?? [], headers)
       // The directory just moved; nothing read before it is still true.
       cache.clear()
       return Response.json(applied)
@@ -677,6 +691,8 @@ export let appOf = (r: Row): App => ({
   slug: r.app!.slug,
   space: idOf(r.app!.space),
   version: r.app!.version,
+  source: r.app!.source ?? null,
+  script: r.app!.script ?? null,
   access: r.app!.access ?? null,
   title: r.doc?.title || r.app!.slug,
   store: r.app!.store ?? null,
@@ -741,6 +757,7 @@ export let deployOf = (r: Row) => ({
     }
   })(),
   worker: r.deploy!.worker ?? '',
+  script: r.deploy!.script ?? '',
 })
 
 // One restore of an app's store, as recover.ts reads it (T-34507). `from` is
@@ -908,28 +925,29 @@ export let directory = (via: Fetcher, now = false) => {
   let query = async (q: string, fresh = now): Promise<Row[]> =>
     JSON.parse(await recall(META_STORE, q, () => ask(q, fresh), fresh))
   let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
+  let write = async (
+    mutation: { entities: Bundle[] },
+    headers: Record<string, string> = {},
+  ): Promise<Bundle[]> => {
+    let r = await writing(META_STORE, () =>
+      via.fetch(
+        new Request('http://directory/apply', {
+          method: 'POST',
+          body: JSON.stringify(mutation),
+          headers,
+        }),
+      ))
+    if (!r.ok) throw await answered(r)
+    return r.json()
+  }
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
     // A write that changes the directory: a batch of bundles, each minting at
     // an eid its author chose (T-32455), answered as applied.
-    apply: async (
-      mutation: { entities: Bundle[] },
-      headers: Record<string, string> = {},
-    ): Promise<Bundle[]> => {
-      // Marked here as well as at the store's door, which a directory across a
-      // service binding would pass in a request of its own.
-      let r = await writing(META_STORE, () =>
-        via.fetch(
-          new Request('http://directory/apply', {
-            method: 'POST',
-            body: JSON.stringify(mutation),
-            headers,
-          }),
-        ))
-      if (!r.ok) throw await answered(r)
-      return r.json()
-    },
+    apply: write,
+    stamp: (mutation: { entities: Bundle[] }, headers = {}) =>
+      write(mutation, { ...headers, 'x-yak-kernel': '1' }),
     space: async (slug: string) => {
       let row = await one(`.space.slug=${slug}&${SPACE_ABOUT}`)
       return row ? spaceOf(row) : null

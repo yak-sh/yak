@@ -182,7 +182,7 @@ let ROWS: Row[] = [
       let made = await c.graph.apply(asked)
       let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
       await connect(c, eid, { key: value })
-      await rebind(ctx.env, storeName(space, app), app.eid)
+      await rebind(ctx.env, app.script ?? storeName(space, app), app.eid)
       return {
         space,
         text: `${space.slug}/${app.slug}: ${name} is set — worker.js reads ` +
@@ -243,7 +243,12 @@ let ROWS: Row[] = [
         let left = await c.graph.read(`.edge.to=${to}&.${USES}`)
         if (comp(link, USES).direct && !left.length) await disconnect(c, to)
       }
-      await rebind(ctx.env, storeName(space, app), app.eid, [name])
+      await rebind(
+        ctx.env,
+        app.script ?? storeName(space, app),
+        app.eid,
+        [name],
+      )
       return { space, text: `${space.slug}/${app.slug}: ${name} removed` }
     },
   },

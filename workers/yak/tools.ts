@@ -59,7 +59,7 @@ import {
 import { withKinds } from './kinds.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
-import { mimeOf, purged } from './files.ts'
+import { mimeOf, prefixOf, purged } from './files.ts'
 import {
   type Access,
   addresses,
@@ -792,6 +792,7 @@ let released = async (
   app: App,
   who: Who,
   store: Door,
+  strict = false,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = r2Objects(ctx.env.BLOBS)
@@ -1009,8 +1010,22 @@ let released = async (
   toolsTook('tools')
   let deployed = await c.time(
     'worker',
-    () => deployWorker(ctx.env, space, app, bytesAt, parsed, made.worker),
+    () =>
+      deployWorker(
+        ctx.env,
+        space,
+        strict ? app : { ...app, script: null },
+        bytesAt,
+        parsed,
+        made.worker,
+      ),
   )
+  if (strict && !deployed.ready) {
+    throw refuse(
+      'unavailable',
+      `rollback did not deploy the worker: ${deployed.lines.join('; ')}`,
+    )
+  }
   let worker = deployed.worker
   let ran = [...made.lines, ...deployed.lines].map((line) => `\n${line}`)
     .join('')
@@ -1021,7 +1036,15 @@ let released = async (
   let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
   await c.time(
     'record',
-    () => record(ctx.dir, who, app, version, pinned, worker),
+    () =>
+      record(
+        ctx.dir,
+        who,
+        strict ? app : { ...app, script: null },
+        version,
+        pinned,
+        worker,
+      ),
   )
   // What the versions before this one broke is closed by this one: the code
   // that produced it is not what serves any more (unseen.ts `healed`,
@@ -1169,7 +1192,7 @@ let answer = async (r: Response) => {
 
 // A file's key: the app's slugs, then its path from the slash (apps.ts keyOf).
 let fileKey = (space: Space, app: App, path: string) =>
-  `${space.slug}/${app.slug}/${path.replace(/^\/+/, '')}`
+  `${prefixOf(space, app)}/${path.replace(/^\/+/, '')}`
 
 /**
  * Every file under one R2 prefix laid down under another, answering with the
@@ -1325,6 +1348,7 @@ export let wrote = async (
 ) => {
   let blobs = r2Objects(env.BLOBS)
   let prefix = fileKey(space, app, '')
+  let archive = `${space.slug}/${app.slug}/`
   let stopped = await fullFiles(
     env,
     space,
@@ -1359,7 +1383,9 @@ export let wrote = async (
   await c.time('files', () =>
     Promise.all(files.map(async (f) => {
       let path = fileKey(space, app, f.path).slice(prefix.length)
-      await pin(() => replaced(blobs, prefix, path, who.person ?? '', at))
+      await pin(() =>
+        replaced(blobs, prefix, path, who.person ?? '', at, archive)
+      )
       await put(() => blobs.put(prefix + path, f.bytes))
     })))
   // One purge for the whole batch, after the last byte lands: the tag is the
@@ -1899,17 +1925,40 @@ let OURS: Row[] = [
       let keys: string[] = []
       for (let app of apps) {
         keys.push(
-          ...await laid(blobs, fileKey(space, app, ''), `${to}/${app.slug}/`),
+          ...await laid(
+            blobs,
+            `${space.slug}/${app.slug}/`,
+            `${to}/${app.slug}/`,
+          ),
+        )
+        keys.push(
+          ...await laid(
+            blobs,
+            `${space.slug}/.releases/${app.eid}/`,
+            `${to}/.releases/${app.eid}/`,
+          ),
         )
       }
-      await ctx.dir.apply({
-        entities: [{
-          entity: { eid: space.eid },
-          ...(title == null ? {} : { doc: { title } }),
-          ...(moving ? { space: { slug: to! } } : {}),
-          ...(had ? { former: addresses(had) } : {}),
-        }],
-      }, vouched(who))
+      let entities: Bundle[] = [{
+        entity: { eid: space.eid },
+        ...(title == null ? {} : { doc: { title } }),
+        ...(moving ? { space: { slug: to! } } : {}),
+        ...(had ? { former: addresses(had) } : {}),
+      }]
+      if (moving) {
+        entities.push(
+          ...apps.filter((app) => app.source).map((app) => ({
+            entity: { eid: app.eid },
+            app: {
+              source: app.source!.replace(`${space.slug}/`, `${to}/`),
+            },
+          })),
+        )
+      }
+      await (entities.length > 1 ? ctx.dir.stamp : ctx.dir.apply)(
+        { entities },
+        vouched(who),
+      )
       for (let key of keys) await blobs.delete(key)
       let now = (await ctx.dir.space(to ?? space.slug))!
       return {
@@ -2287,6 +2336,7 @@ let OURS: Row[] = [
       )
       let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
+      let archive = `${space.slug}/${app.slug}/`
       if (op == 'list') {
         let [files, all] = await Promise.all([
           manifest(blobs, prefix),
@@ -2315,7 +2365,14 @@ let OURS: Row[] = [
         // A delete takes bytes away like a write does, so it keeps them the
         // same way: the file is in its own history the moment it stops being a
         // file, and op restore brings it back (T-34508).
-        await replaced(blobs, prefix, path, who.person ?? '')
+        await replaced(
+          blobs,
+          prefix,
+          path,
+          who.person ?? '',
+          new Date(),
+          archive,
+        )
         await blobs.delete(key)
         await purged(ctx.env, app)
         return {
@@ -2331,7 +2388,7 @@ let OURS: Row[] = [
       if (op == 'history') {
         let path = fileKey(space, app, text(args.path, 'path'))
           .slice(prefix.length)
-        let all = await history(blobs, prefix, path)
+        let all = await history(blobs, archive, path)
         let live = await blobs.read(prefix + path)
         return {
           text: [
@@ -2360,7 +2417,7 @@ let OURS: Row[] = [
       if (op == 'restore') {
         let path = fileKey(space, app, text(args.path, 'path'))
           .slice(prefix.length)
-        let all = await history(blobs, prefix, path)
+        let all = await history(blobs, archive, path)
         if (!all.length) {
           throw refuse(
             'missing',
@@ -2383,7 +2440,7 @@ let OURS: Row[] = [
                 'there is already what it was then',
           )
         }
-        let bytes = await pins(blobs, prefix).get(want.sha)
+        let bytes = await pins(blobs, archive).get(want.sha)
         if (!bytes) {
           throw refuse(
             'missing',
@@ -2743,11 +2800,29 @@ let OURS: Row[] = [
       let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       let now = await manifest(blobs, prefix)
-      await restore(blobs, prefix, want.files)
+      let next = (app.version ?? 0) + 1
+      let staged = {
+        ...app,
+        source: `${space.slug}/.releases/${app.eid}/v${next}`,
+        script: `app-${app.eid}-r-${next}`,
+      }
+      await restore(
+        blobs,
+        fileKey(space, staged, ''),
+        want.files,
+        `${space.slug}/${app.slug}/`,
+      )
       // A rollback is a release — of files that were live once — so the same
       // door plants the vocabulary, the tools and the worker this version
       // pinned, and records it as a new version. History is never rewritten.
-      let { version, said } = await released(ctx, space, app, who, store)
+      let { version, said } = await released(
+        ctx,
+        space,
+        staged,
+        who,
+        store,
+        true,
+      )
       return {
         text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
           `now as v${version}: ${url(space, app, ctx.env)} — ${
@@ -2957,7 +3032,7 @@ let OURS: Row[] = [
       // store is untouched: it is named by the app's own handle, not by where
       // it lives (directory.ts storeName).
       let blobs = r2Objects(ctx.env.BLOBS)
-      let from = fileKey(space, app, '')
+      let from = `${space.slug}/${app.slug}/`
       let onto = moving ? `${space.slug}/${to}/` : from
       let keys = moving ? await laid(blobs, from, onto) : []
       let entities: Bundle[] = []
