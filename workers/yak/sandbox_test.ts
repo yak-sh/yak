@@ -159,8 +159,9 @@ Deno.test('the machine tools write, run and read, and a ship copies out', async 
   })
   assertStringIncludes(shipped.text, 'shipped 2 files')
   assertStringIncludes(shipped.text, 'chess.js, chess_bg.wasm')
+  await tool('app_deploy').run(ctx, { app: 'chess' })
 
-  // And the app serves them — the .wasm as application/wasm, whole (files.ts
+  // The release serves them — the .wasm as application/wasm, whole (files.ts
   // MIME), which is what makes the ship path a bytes path.
   let js = await apps.fetch(
     new Request('https://ada.yaks.app/chess/chess.js'),
