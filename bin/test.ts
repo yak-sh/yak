@@ -219,13 +219,17 @@ function report(
 // Deno prints a test's name before running it, then finishes the same line
 // with its result. Keep that name while the reporter's bytes stay buffered
 // for an intact shard report at exit.
-let observe = async (
+// deno-lint-ignore no-control-regex -- ESC starts the reporter's color codes
+let ansi = /\x1b\[[0-9;]*m/g
+
+export let observe = async (
   stream: ReadableStream<Uint8Array>,
   progress: { name: string; completed: number },
 ) => {
   let decoder = new TextDecoder()
   let pending = ''
   let read = (line: string) => {
+    line = line.replace(ansi, '')
     let test = line.match(/^(.+?) \.\.\./)
     if (test) progress.name = test[1]
     if (/ \.\.\. (ok|FAILED)(?: |$)/.test(line)) {

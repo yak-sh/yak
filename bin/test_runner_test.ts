@@ -1,7 +1,22 @@
 import { until } from './testing.ts'
 import { fileURLToPath } from 'node:url'
-import { assertEquals, assertMatch, assertThrows } from '@std/assert'
-import { groups, pages, RUN, shards, timesIn } from './test.ts'
+import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
+import { groups, observe, pages, RUN, shards, timesIn } from './test.ts'
+
+Deno.test('colored test results count as completed', async () => {
+  let progress = { name: 'loading tests', completed: 0 }
+  let encoder = new TextEncoder()
+  let output = new ReadableStream<Uint8Array>({
+    start(stream) {
+      stream.enqueue(encoder.encode('one ... \x1b[0m'))
+      stream.enqueue(encoder.encode('\x1b[32mok\x1b[0m (1ms)\n'))
+      stream.close()
+    },
+  })
+  await observe(output, progress)
+  assertEquals(progress.name, 'one')
+  assert(progress.completed > 0)
+})
 
 Deno.test('examples come from every root, and never a module by name', async () => {
   let got = await pages([
