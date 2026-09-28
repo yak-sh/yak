@@ -92,6 +92,53 @@ export let GRACE = 24 * 60 * 60_000
  * served at the source's address (files.ts), and made again by every deploy. */
 export let BUILT = 'esbuild/'
 
+// Edits belong to the next version, while the app's source names the version
+// visitors read. A failed release keeps its draft for correction and retry.
+export let draftOf = (space: { slug: string }, app: App) =>
+  `${space.slug}/.drafts/${app.eid}/v${(app.version ?? 0) + 1}`
+
+export let releaseOf = (space: { slug: string }, app: App) =>
+  `${space.slug}/.releases/${app.eid}/${crypto.randomUUID()}`
+
+let readyOf = (prefix: string) => `${prefix}.ready`
+
+/** What the editor sees: this version's draft once one has been started. */
+export let working = async (
+  blobs: Objects,
+  space: { slug: string },
+  app: App,
+  source: string,
+) => {
+  let draft = draftOf(space, app)
+  return await blobs.has(readyOf(draft)) ? draft : source
+}
+
+/** Start this version's draft with the files its published source serves. */
+export let editing = async (
+  blobs: Objects,
+  space: { slug: string },
+  app: App,
+  source: string,
+) => {
+  let draft = draftOf(space, app)
+  if (await blobs.has(readyOf(draft))) return draft
+  let from = `${source}/`
+  let into = `${draft}/`
+  // A previous attempt may have stopped halfway. Only a complete copy gets
+  // the marker, so a retry replaces the partial copy before any edit lands.
+  for (let key of await blobs.list(into)) await blobs.delete(key)
+  for (let key of await blobs.list(from)) {
+    let path = key.slice(from.length)
+    if (
+      path.startsWith('blobs/') || path.startsWith('versions/') ||
+      path.startsWith('history/')
+    ) continue
+    await blobs.put(into + path, await blobs.get(key))
+  }
+  await blobs.put(readyOf(draft), new Uint8Array())
+  return draft
+}
+
 // What the platform keeps beside an app's files, under the app's own prefix:
 // the bytes a page uploaded (apps.ts `blobKey`), what each path has held
 // (`history/`), the page scripts a deploy compiled (`esbuild/`), and — until

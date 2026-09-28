@@ -215,6 +215,8 @@ import {
 } from './meter.ts'
 import { acceptLink, paced, SUBJECT } from './invite.ts'
 import {
+  draftOf,
+  editing,
   held,
   history,
   KEEP,
@@ -222,6 +224,7 @@ import {
   own,
   pins,
   record,
+  releaseOf,
   replaced,
   restore,
   restored,
@@ -232,6 +235,7 @@ import {
   versions,
   whatChanged,
   when,
+  working,
 } from './versions.ts'
 import { within } from './rate.ts'
 // The one ceiling on bytes going into an app's store, wherever they arrive
@@ -809,13 +813,14 @@ let fits = async (
 let released = async (
   ctx: Ctx,
   space: Space,
-  app: App,
+  standing: App,
   who: Who,
   store: Door,
-  strict = false,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = r2Objects(ctx.env.BLOBS)
+  let work = await editing(blobs, space, standing, prefixOf(space, standing))
+  let app = { ...standing, source: work }
   let prefix = fileKey(space, app, '')
   let bytesAt = (path: string) => blobs.read(prefix + path)
   let parsed = await configured(bytesAt)
@@ -832,15 +837,10 @@ let released = async (
   // them (cache.ts `purged`). Whether or not the compile refused: a release
   // that dies still leaves the bucket changed, and the stale edge would
   // outlive the failure.
-  let made
-  try {
-    made = await c.time(
-      'compile',
-      () => compiled(ctx, space, app, who, parsed.config, keys),
-    )
-  } finally {
-    await c.time('purge', () => purged(ctx.env, app))
-  }
+  let made = await c.time(
+    'compile',
+    () => compiled(ctx, space, app, who, parsed.config, keys),
+  )
   // What this release will be called, read here because the seed below is
   // marked with it the moment it lands and the version row is written at the
   // end.
@@ -1111,22 +1111,25 @@ let released = async (
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
   toolsTook('tools')
+  let source = releaseOf(space, app)
+  let script = `app-${app.eid}-r-${crypto.randomUUID()}`
+  let stagedApp = { ...app, source, script }
   let deployed = await c.time(
     'worker',
     () =>
       deployWorker(
         ctx.env,
         space,
-        strict ? app : { ...app, script: null },
+        stagedApp,
         bytesAt,
         parsed,
         made.worker,
       ),
   )
-  if (strict && !deployed.ready) {
+  if (!deployed.ready) {
     throw refuse(
       'unavailable',
-      `rollback did not deploy the worker: ${deployed.lines.join('; ')}`,
+      `app_deploy did not deploy the worker: ${deployed.lines.join('; ')}`,
     )
   }
   let worker = deployed.worker
@@ -1137,13 +1140,14 @@ let released = async (
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's version counter and the row that records the version move together.
   let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
+  await c.time('files', () => laid(blobs, prefix, `${source}/`))
   await c.time(
     'record',
     () =>
       record(
         ctx.dir,
         who,
-        strict ? app : { ...app, script: null },
+        stagedApp,
         version,
         pinned,
         worker,
@@ -1241,7 +1245,13 @@ let copied = async (
 ) => {
   let blobs = r2Objects(ctx.env.BLOBS)
   let there = fileKey(from.space, from.app, '')
-  let here = fileKey(onto.space, onto.app, '')
+  let draft = await editing(
+    blobs,
+    onto.space,
+    onto.app,
+    prefixOf(onto.space, onto.app),
+  )
+  let here = `${draft}/`
   let paths = (keys: string[], prefix: string) =>
     own(keys.map((k) => k.slice(prefix.length)))
   let code = paths(await blobs.list(there), there)
@@ -1458,13 +1468,15 @@ export let wrote = async (
   c: Clock = clock(),
 ) => {
   let blobs = r2Objects(env.BLOBS)
-  let prefix = fileKey(space, app, '')
+  let draft = await editing(blobs, space, app, prefixOf(space, app))
+  let edit = { ...app, source: draft }
+  let prefix = fileKey(space, edit, '')
   let archive = `${space.slug}/${app.slug}/`
   let stopped = await fullFiles(
     env,
     space,
     files.map((f) => ({
-      key: fileKey(space, app, f.path),
+      key: fileKey(space, edit, f.path),
       bytes: f.bytes.byteLength,
     })),
   )
@@ -1493,27 +1505,19 @@ export let wrote = async (
   let put = c.sum('put')
   await c.time('files', () =>
     Promise.all(files.map(async (f) => {
-      let path = fileKey(space, app, f.path).slice(prefix.length)
+      let path = fileKey(space, edit, f.path).slice(prefix.length)
       await pin(() =>
         replaced(blobs, prefix, path, who.person ?? '', at, archive)
       )
       await put(() => blobs.put(prefix + path, f.bytes))
     })))
-  // One purge for the whole batch, after the last byte lands: the tag is the
-  // app, not the file, so writing ten files empties the edge once (cache.ts
-  // `tagsOf`).
-  await c.time('purge', () => purged(env, app))
-  let paths = files.map((f) => fileKey(space, app, f.path).slice(prefix.length))
+  let paths = files.map((f) =>
+    fileKey(space, edit, f.path).slice(prefix.length)
+  )
   // What these bytes replaced is closed by them (unseen.ts `rewrote`,
   // T-34338), the way a release closes what the versions under it broke. The
   // bytes are already out, so a store that cannot be asked leaves the breaks
   // open rather than failing a write that landed.
-  try {
-    await c.time('rewrote', () => rewrote(env, space, app, who, paths))
-  } catch (e) {
-    // The files are out; an open break is the softer wrong, and Sentry hears.
-    caught(e, { tool: 'app_files', space: space.slug, app: app.slug })
-  }
   return paths
 }
 
@@ -2049,6 +2053,13 @@ let OURS: Row[] = [
             `${to}/.releases/${app.eid}/`,
           ),
         )
+        keys.push(
+          ...await laid(
+            blobs,
+            `${space.slug}/.drafts/${app.eid}/`,
+            `${to}/.drafts/${app.eid}/`,
+          ),
+        )
       }
       let entities: Bundle[] = [{
         entity: { eid: space.eid },
@@ -2446,7 +2457,11 @@ let OURS: Row[] = [
         () => inApp(ctx, args, WRITES.includes(op)),
       )
       let blobs = r2Objects(ctx.env.BLOBS)
-      let prefix = fileKey(space, app, '')
+      let source = op == 'delete'
+        ? await editing(blobs, space, app, prefixOf(space, app))
+        : await working(blobs, space, app, prefixOf(space, app))
+      let edit = { ...app, source }
+      let prefix = fileKey(space, edit, '')
       let archive = `${space.slug}/${app.slug}/`
       if (op == 'list') {
         let [files, all] = await Promise.all([
@@ -2465,7 +2480,7 @@ let OURS: Row[] = [
         }
       }
       if (op == 'read' || op == 'delete') {
-        let key = fileKey(space, app, text(args.path, 'path'))
+        let key = fileKey(space, edit, text(args.path, 'path'))
         if (!(await blobs.has(key))) {
           throw refuse('missing', `no file ${args.path}`)
         }
@@ -2485,7 +2500,6 @@ let OURS: Row[] = [
           archive,
         )
         await blobs.delete(key)
-        await purged(ctx.env, app)
         return {
           text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
             `'restore', path: '${path}') brings it back`,
@@ -2497,7 +2511,7 @@ let OURS: Row[] = [
       // is there this second" is half of what somebody reading a history is
       // trying to work out.
       if (op == 'history') {
-        let path = fileKey(space, app, text(args.path, 'path'))
+        let path = fileKey(space, edit, text(args.path, 'path'))
           .slice(prefix.length)
         let all = await history(blobs, archive, path)
         let live = await blobs.read(prefix + path)
@@ -2526,7 +2540,7 @@ let OURS: Row[] = [
       // And putting one back, as a new write — so the bytes it replaces are
       // themselves kept, and a restore can be undone by another.
       if (op == 'restore') {
-        let path = fileKey(space, app, text(args.path, 'path'))
+        let path = fileKey(space, edit, text(args.path, 'path'))
           .slice(prefix.length)
         let all = await history(blobs, archive, path)
         if (!all.length) {
@@ -2573,7 +2587,7 @@ let OURS: Row[] = [
       // miscounted a bracket in a 46 KB file had no cheap way to run.
       if (op == 'patch') {
         let path = text(args.path, 'path')
-        let key = fileKey(space, app, path)
+        let key = fileKey(space, edit, path)
         if (!(await blobs.has(key))) throw refuse('missing', `no file ${path}`)
         // Empty is a legal replacement — it is how a line is removed — so
         // this asks for a string rather than for something.
@@ -2911,15 +2925,10 @@ let OURS: Row[] = [
       let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       let now = await manifest(blobs, prefix)
-      let next = (app.version ?? 0) + 1
-      let staged = {
-        ...app,
-        source: `${space.slug}/.releases/${app.eid}/v${next}`,
-        script: `app-${app.eid}-r-${next}`,
-      }
+      let draft = await editing(blobs, space, app, prefixOf(space, app))
       await restore(
         blobs,
-        fileKey(space, staged, ''),
+        `${draft}/`,
         want.files,
         `${space.slug}/${app.slug}/`,
       )
@@ -2929,10 +2938,9 @@ let OURS: Row[] = [
       let { version, said } = await released(
         ctx,
         space,
-        staged,
+        app,
         who,
         store,
-        true,
       )
       return {
         text: `put ${space.slug}/${app.slug} back to v${want.version}, live ` +
