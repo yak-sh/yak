@@ -1316,15 +1316,11 @@ export let homed = (next: VocabDoc, homes: Homes) => {
 }
 
 /**
- * What a deploy says about a word it does not own. Graph writes, app
- * commands and page queries route to its home; page writes and sockets still
- * speak this app's own store.
+ * What a deploy says about a word it uses from another app: where the
+ * component lives, whether the caller is an agent, command or page.
  */
 export let livesIn = (uses: Record<string, string>) =>
-  Object.entries(uses).map(([name, at]) =>
-    `warning: ${name} lives in ${at}; ./api/query, graph_apply and ` +
-    `commands route to ${at}; ./api/apply and ./api/ws use this app's store`
-  )
+  Object.entries(uses).map(([name, at]) => `uses: ${name} from ${at}`)
 
 /** One component an app declared. Its own word is the most specific thing said
  * about a row — an entity wearing `recipe` is a recipe, not the `doc` it also

@@ -57,7 +57,6 @@ import {
   selling,
 } from './sell.ts'
 import { served as fenced, type Size, sizeOf } from '@yaks/blob'
-import { asking, listed, type Row } from './listing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
 import { batched, lined, receipt } from './wire.ts'
@@ -85,7 +84,9 @@ import { covers, PLATFORM_PATHS } from './router.ts'
 import { nobody, titling, vouched, type Who, whoIs } from './session.ts'
 import { seedy } from './seed.ts'
 import { nameOf } from './signin.ts'
-import { type Reach, read, split, written } from './reach.ts'
+import { written } from './reach.ts'
+import { borrowed, queried, sources, vocabulary } from './page-graph.ts'
+import { pageSocket } from './page-socket.ts'
 import type { Bundle } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
@@ -846,69 +847,6 @@ let named = (env: Env, who: Who, app?: App) =>
 // shape for both paths, so a caller never has to know which one ran.
 type Wrote = { entities: string[]; aliases: Record<string, string> }
 
-// The words this app uses but does not home (T-32728), as its own store last
-// accepted them: the word, and the app in this space whose store holds its
-// rows. A sandboxed app borrows none (installed.ts, T-37926): its words stay
-// in its own store, whatever a release before it was walled off recorded.
-let usesOf = async (env: Env, space: Space, app: App) => {
-  if (sandboxed(app)) return {} as Record<string, string>
-  let r = await appStore(env.STORE, space, app)('/uses')
-  if (!r.ok) {
-    await r.body?.cancel()
-    return {} as Record<string, string>
-  }
-  return await r.json() as Record<string, string>
-}
-
-// The homes those words live in. A sandboxed app is never one (T-37926):
-// the space's own app would be writing its rows into a store whose code is a
-// stranger's.
-let appsAt = async (env: Env, space: Space, slugs: string[]) => {
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  return (await Promise.all(slugs.map((s) => dir.app(space, s))))
-    .filter((a): a is App => !!a && !sandboxed(a))
-}
-
-// The other stores this app's acts reach: one per app it borrows a word from.
-let borrowed = async (
-  env: Env,
-  space: Space,
-  app: App,
-  who: Who,
-): Promise<Reach[]> => {
-  let slugs = [...new Set(Object.values(await usesOf(env, space, app)))]
-  if (!slugs.length) return []
-  return (await appsAt(env, space, slugs))
-    .map((one) => ({ space, app: one, who }))
-}
-
-// A page reads a borrowed word where it lives, including a line that spans
-// the app's own store and a home. The same graph read serves app commands;
-// ordinary lines stay on this app's store so `.doc` still names its own rows.
-let queried = async (
-  env: Env,
-  space: Space,
-  app: App,
-  who: Who,
-  line: string,
-): Promise<unknown> => {
-  let asked = asking(line)
-  let uses = await usesOf(env, space, app)
-  let names = [...split(line).parts.keys()]
-  let slugs = [...new Set(names.map((n) => uses[n]).filter(Boolean))]
-  let mine = { space, app, who }
-  if (slugs.length) {
-    let homes = (await appsAt(env, space, slugs))
-      .map((one) => ({ space, app: one, who }))
-    return read(env, [mine, ...homes], asked)
-  }
-  let store = appStore(env.STORE, space, app, env)
-  let rows = await metaOf((path, init, headers) =>
-    store(path, init, { ...vouched(who), ...headers })
-  ).query(asked)
-  return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
-}
-
 // The app's two acts, as one person: what a page does through the doors
 // below, without a page. An app's own MCP tools are templates over exactly
 // these (lib/tools.ts, T-32685), so a tool call goes the page's way — the
@@ -1092,13 +1030,11 @@ let api = async (
     >
     return Response.json({ ...r, person: who.person, role: who.role })
   }
-  // Every word this app's store speaks (graph.ts `/vocab.json`), the byline
-  // `created` as much as the app's own: what a page keeping its own copy of
-  // the store (@yaks/client) loads before it opens, so it speaks what its store
-  // speaks. A reader's, like the rows.
+  // The vocabulary a page's local graph loads: this store's words and the
+  // borrowed words its own manifest uses, from their component homes.
   if (path == '/vocab.json') {
     if (!mayRead) return refused('not_a_reader')
-    return store('/vocab.json', {}, headers)
+    return Response.json(await vocabulary(env, space, app, who))
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
@@ -1114,17 +1050,19 @@ let api = async (
       return json(400, 'refused', e instanceof Error ? e.message : String(e))
     }
   }
-  // The live door: one socket per page onto this app's store, so a write from
-  // another device arrives here without asking. The upgrade goes to the object
-  // itself — the socket is the store's, and the kernel is out of the way once
-  // it is open — so the whole question is decided here, at the handshake, and
-  // it is a read: no write crosses this seam (@yaks/api), a batch goes through
-  // `/apply` like any other, and whoever may read may listen.
+  // A page with only its own words listens straight to its store. A page that
+  // uses another app's word listens to every component home through one
+  // socket (page-socket.ts); each frame answers its filters with the same
+  // ownership rule as /query. The handshake is a read, and writes use /apply.
   if (path == '/ws') {
     if (req.headers.get('upgrade') != 'websocket') {
       return json(426, 'expected_websocket')
     }
     if (!mayRead) return refused('not_a_reader')
+    let graph = await sources(env, space, app, who)
+    if (graph.reach.length > 1) {
+      return pageSocket(req, env, space, app, graph)
+    }
     return store('/ws', req, headers)
   }
   if (path == '/apply') {
@@ -1156,14 +1094,21 @@ let api = async (
     let sent: unknown
     try {
       sent = JSON.parse(body)
+      let graph = await sources(env, space, app, who)
+      let applied = graph.reach.length > 1
+        ? (await written(
+          env,
+          graph.reach,
+          graph.reach[0],
+          batched(sent),
+          await named(env, who, app),
+        )).bundles
+        : await metaOf(store).apply(batched(sent), {
+          ...headers,
+          ...(await named(env, who, app)),
+        })
       return Response.json(
-        receipt(
-          sent,
-          await metaOf(store).apply(batched(sent), {
-            ...headers,
-            ...(await named(env, who, app)),
-          }),
-        ),
+        receipt(sent, applied),
       )
     } catch (e) {
       // Kept by the store's write log (writes.ts): the page's edit is safe

@@ -707,8 +707,7 @@ Deno.test('a word the space already has is used where it lives', async () => {
     })
     assertStringIncludes(
       second,
-      'warning: book lives in reading-list; ./api/query, graph_apply and ' +
-        "commands route to reading-list; ./api/apply and ./api/ws use this app's store",
+      'uses: book from reading-list',
     )
     assertStringIncludes(second, 'components: loan')
     assertEquals(second.includes('components: book'), false)
@@ -894,7 +893,7 @@ Deno.test('a page queries a borrowed word at its home', async () => {
     await deploy('probe')
     assertStringIncludes(
       await deploy('vale'),
-      'fire lives in probe',
+      'uses: fire from probe',
     )
 
     let saved = await agent.tool('graph_apply', {
@@ -923,7 +922,7 @@ Deno.test('a page queries a borrowed word at its home', async () => {
       }[]
       return docs.some((doc) => !!doc.$defs?.fire)
     }
-    assertEquals(await speaks(), false)
+    assertEquals(await speaks(), true)
     let before = await page('query?.fire')
     assertEquals(before.status, 200)
     let [fire] = await before.json()
@@ -1037,8 +1036,7 @@ Deno.test('an app declares which of its own properties are searched', async () =
     )
     assertStringIncludes(
       second,
-      'warning: recipe lives in kitchen; ./api/query, graph_apply and ' +
-        "commands route to kitchen; ./api/apply and ./api/ws use this app's store",
+      'uses: recipe from kitchen',
     )
     await agent.tool('graph_apply', {
       app: 'menus',

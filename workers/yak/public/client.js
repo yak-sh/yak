@@ -17,10 +17,10 @@
 // the moment the app is copied.
 //
 // `subscribe(filter, cb)` is `query(filter)` that keeps answering: one socket
-// onto the app's store (the Store object's /ws, hibernating while nothing
-// happens), so a write from another device — or another tab, or an agent —
-// re-renders the page without a poll. It hands back the same rows `query`
-// does; the returned function ends it.
+// onto the app's API, which watches any component homes the app uses, so a
+// write from another device — or another tab, or an agent — re-renders the
+// page without a poll. It hands back the same rows `query` does; the returned
+// function ends it.
 //
 // `me()` is who is looking: the page asks before it asks the person for
 // anything, so it can show a sign-in link or a name field on load rather than

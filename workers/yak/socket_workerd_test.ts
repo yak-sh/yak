@@ -8,13 +8,17 @@ import { assertEquals, assertObjectMatch } from '@std/assert'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { until } from '../../bin/testing.ts'
+import { minted } from './mcp-probe.ts'
 import {
   arrives,
   browser,
+  connector,
   type Kernel,
   relay,
   rfc822,
   seed,
+  txt,
+  vocabFile,
   workerd,
 } from './probe.ts'
 
@@ -71,6 +75,93 @@ let heard = (live: Live, filter: string) => {
   }
   return { next, stop }
 }
+
+Deno.test('a page watches a component homed in another app', async () => {
+  let k = workerd()
+  let slug = `borrow${crypto.randomUUID().slice(0, 6)}`
+  let host = `${slug}.yaks.app`
+  let them = await seed(k, [{ slug, apps: ['probe', 'vale'] }])
+  let agent = connector(k, them.cookie)
+  let wire = relay(k, host, them.cookie, `https://${host}`)
+  let box: ReturnType<typeof client> | undefined
+  try {
+    for (let app of ['probe', 'vale']) {
+      await agent.tool('app_files', {
+        space: slug,
+        app,
+        op: 'write',
+        path: 'vocab.json',
+        content: vocabFile({ fire: { village: txt } }),
+      })
+      await agent.tool('app_deploy', { space: slug, app })
+    }
+    let saved = await agent.tool('graph_apply', {
+      space: slug,
+      app: 'vale',
+      entities: [{
+        entity: { eid: '$camp' },
+        fire: { village: 'Vale' },
+        doc: { title: 'Campfire' },
+      }],
+    })
+    let eid = minted(saved, '$camp')
+    let docs = await (await k.at(host, '/vale/api/vocab.json', {
+      headers: { cookie: them.cookie },
+    })).json()
+    box = client(loadVocab(docs), [], {
+      url: `${wire.origin}/vale/api`,
+      vault: false,
+      wireVault: false,
+    })
+    let fires = box.watch('.fire')
+    let mixed = box.watch('.fire&?doc')
+    let village = () => (fires.value[0]?.fire as { village?: string })?.village
+    await until(() => fires.ready && mixed.ready && village() == 'Vale', {
+      timeout: 15_000,
+    })
+    assertEquals(mixed.value[0]?.entity.eid, eid)
+    assertEquals((mixed.value[0]?.doc as { title?: string })?.title, 'Campfire')
+
+    await agent.tool('graph_apply', {
+      space: slug,
+      app: 'probe',
+      entities: [{ entity: { eid }, fire: { village: 'Ridge' } }],
+    })
+    await until(() => village() == 'Ridge', { timeout: 15_000 })
+    assertEquals(
+      (mixed.value[0]?.fire as { village?: string })?.village,
+      'Ridge',
+    )
+    await box.mutate([{
+      entity: { eid },
+      fire: { village: 'Forest' },
+    }])
+    await box.wire?.idle()
+    await until(() => village() == 'Forest', { timeout: 15_000 })
+    let home = JSON.parse(
+      await agent.tool('graph_query', {
+        space: slug,
+        app: 'probe',
+        filter: `.eid=${eid}&.fire`,
+      }),
+    ) as { fire: { village: string } }[]
+    assertEquals(home[0].fire.village, 'Forest')
+    await agent.tool('graph_apply', {
+      space: slug,
+      app: 'probe',
+      entities: [{ entity: { eid }, fire: null }],
+    })
+    await until(() => fires.value.length == 0 && mixed.value.length == 0, {
+      timeout: 15_000,
+    })
+    fires.close()
+    mixed.close()
+  } finally {
+    box?.close()
+    await wire.stop()
+    await k.stop()
+  }
+})
 
 Deno.test('a page watches its store and hears what others write', async () => {
   let k = workerd()

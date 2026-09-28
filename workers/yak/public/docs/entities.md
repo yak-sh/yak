@@ -76,7 +76,7 @@ Declare `book` in a second app of the same space and nothing is planted twice.
 The first app in the space to declare a component is its _home_; a later
 manifest naming it is a use, not a second declaration. The deploy reports that:
 
-    warning: book lives in reading-list; ./api/query, graph_apply and commands route to reading-list; ./api/apply and ./api/ws use this app's store
+    uses: book from reading-list
     components: loan
 
 `book` is missing from `components:` on purpose — the lending app homes only
@@ -89,6 +89,10 @@ refusal, and the rows are all in one place:
     graph_query { app: 'reading-list', filter: '.book' }
     → both books, however they were written
 
+`graph_query` with an app named asks that store directly. The lending page's
+`./api/query`, its local graph and its socket follow the app's declared uses and
+can read `book` at the reading list's home.
+
 A property the borrower adds grows the home's table, additively, and is then
 writable from either app:
 
@@ -100,15 +104,14 @@ writable from either app:
         "to": { "type": "string" } } } } }
     → added: book.isbn
 
-From an agent's tools, an app's commands and a page query, a borrowed component
-reads where it lives. `graph_apply { app: 'lending', entities: [{ book: … }] }`
+From an agent's tools, an app's commands and its page, a borrowed component
+lives in one place. `graph_apply { app: 'lending', entities: [{ book: … }] }`
 lands in the reading list's store, and a command of the lending app may name
-`book` in its `apply` or its `query`. The lending page can ask
-`query('.book&?loan')`, joining its own `loan` to the home app's `book`.
-
-Page writes and live subscriptions still speak the page app's own store:
-`./api/apply` cannot write `book` through lending, and `./api/ws` cannot watch
-it there. Use `store('/reading-list/api/')` for the home app's write or watch.
+`book` in its `apply` or its `query`. The lending page can query, apply and
+subscribe to `book` through its own `./api/` doors. Its vocabulary includes the
+borrowed schema, so a local `@yaks/client` graph can watch `.book` too. A filter
+such as `.book&?loan` joins the reading list's `book` to lending's `loan` on
+their shared eid.
 
 ## The one refusal: a shape conflict
 
@@ -153,8 +156,9 @@ bundle: reach is the apps you may read, and nothing else.
 
 ## Reading a sibling app from a page
 
-`client.js` exports `store(base)`, which is the same six functions pointed at an
-address you name:
+`client.js` exports `store(base)`, which points its functions at an address you
+name. Use it to read a sibling app's components that your app has not declared
+as uses:
 
     import { query, store } from './api/client.js'
 
@@ -224,7 +228,7 @@ Two apps, one shelf of books.
 
 The lending deploy reports:
 
-    warning: book lives in reading-list; ./api/query, graph_apply and commands route to reading-list; ./api/apply and ./api/ws use this app's store
+    uses: book from reading-list
     components: loan
 
 Now one call writes both halves:
