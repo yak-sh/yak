@@ -49,7 +49,7 @@ import {
 } from '@yaks/graph'
 import { matcher, net, rows as matchRows } from '@yaks/match'
 import { type And, parse } from '@yaks/query'
-import { syncOf } from '@yaks/vocab'
+import { paceOf, syncOf } from '@yaks/vocab'
 import { cares, type Interest, interest } from './interest.ts'
 import { peerPlan } from './peer_query.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
@@ -114,6 +114,8 @@ export type Subs = {
    * components update their membership against the value now held.
    */
   relay: (sink: Sink, bundles: Bundle[]) => void | Promise<void>
+  /** The vocabulary's cadence for a peer component, if it declares one. */
+  pace?: (comp: string) => number | null
   /** The keys one sink's relayed values are held under — small enough to
    * store somewhere that outlives this process's memory. */
   relaying: (sink: Sink) => string[]
@@ -750,5 +752,6 @@ export let subscriptions = (graph: Graph, opts: {
     },
     relaying: (sink) => peers.holds(sink),
     relayed: (sink, keys) => peers.adopt(sink, keys),
+    pace: (comp) => peerComp(comp) ? paceOf(graph.vocab, comp) : null,
   }
 }

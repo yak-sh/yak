@@ -11,6 +11,7 @@
 
 import { fault, refusal } from './refuse.ts'
 import { coalescer, isPromise } from '@yaks/graph'
+import { admission } from './admission.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
 
 /** The part of a WebSocket this package uses: the standard `WebSocket`
@@ -22,6 +23,8 @@ export type Socket = {
   bufferedAmount?: number
   /** send one frame, already serialized */
   send(data: string): void
+  /** stop a peer that keeps sending beyond its relay allowance */
+  close?(code?: number, reason?: string): void
   /** listen for `open`, `message` and `close` */
   addEventListener(
     type: string,
@@ -43,6 +46,16 @@ export type Upgrade = (
 let OPEN = 1
 let BUFFER = 8 * 1024
 let TICK = 16
+let MAX_MESSAGE = 64 * 1024
+let gates = new WeakMap<Subs, WeakMap<Sink, ReturnType<typeof admission>>>()
+
+let gate = (subs: Subs, to: Sink) => {
+  let bySink = gates.get(subs)
+  if (!bySink) gates.set(subs, bySink = new WeakMap())
+  let one = bySink.get(to)
+  if (!one) bySink.set(to, one = admission(subs.pace ?? (() => null)))
+  return one
+}
 
 /** A replaceable frame queue for a socket, including hibernatable sockets
  * whose incoming messages are delivered by a Durable Object method. */
@@ -169,14 +182,20 @@ export let sink = (
  * — which is precisely why it cannot go through `/apply`, a separate request
  * with no connection to name.
  */
-export let receive = (subs: Subs, to: Sink, data: unknown): void => {
+export let receive = (subs: Subs, to: Sink, data: unknown): void | 'close' => {
   let id = ''
   let fail = (err: unknown) => {
     fault(err, 'socket message')
     to({ id, refused: refusal(err) })
   }
   try {
-    let msg = JSON.parse(String(data))
+    if (data instanceof ArrayBuffer && data.byteLength > MAX_MESSAGE) {
+      return 'close'
+    }
+    if (data instanceof Blob && data.size > MAX_MESSAGE) return 'close'
+    let raw = String(data)
+    if (raw.length > MAX_MESSAGE) return 'close'
+    let msg = JSON.parse(raw)
     id = msg?.id == null ? '' : String(msg.id)
     if (typeof msg?.subscribe == 'string' || msg?.subscribe === true) {
       subs.open(to, id, msg.subscribe)
@@ -187,6 +206,9 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
       return
     }
     if (Array.isArray(msg?.relay)) {
+      let verdict = gate(subs, to)(msg.relay)
+      if (verdict == 'close') return 'close'
+      if (verdict == 'skip') return
       let out = subs.relay(to, msg.relay)
       if (isPromise(out)) out.catch(fail)
       return
@@ -205,8 +227,17 @@ export let receive = (subs: Subs, to: Sink, data: unknown): void => {
 export let attach = (subs: Subs, socket: Socket): Sink => {
   let q = queue(socket, undefined, () => socket.readyState == OPEN)
   let to = q.send
+  let shut = false
+  let drop = () => {
+    if (shut) return
+    shut = true
+    q.close()
+    let out = subs.drop(to)
+    if (isPromise(out)) out.catch((err) => fault(err, 'socket close'))
+  }
   socket.addEventListener('open', q.flush)
   socket.addEventListener('message', (e) => {
+    if (shut) return
     let msg: Record<string, unknown> | undefined
     try {
       msg = JSON.parse(String(e.data))
@@ -216,12 +247,11 @@ export let attach = (subs: Subs, socket: Socket): Sink => {
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
     ) q.enable()
-    receive(subs, to, e.data)
+    if (receive(subs, to, e.data) == 'close') {
+      drop()
+      socket.close?.(1008, 'relay flood')
+    }
   })
-  socket.addEventListener('close', () => {
-    q.close()
-    let out = subs.drop(to)
-    if (isPromise(out)) out.catch((err) => fault(err, 'socket close'))
-  })
+  socket.addEventListener('close', drop)
   return to
 }

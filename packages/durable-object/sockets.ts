@@ -36,6 +36,8 @@ import {
 export type Wire = {
   /** send one frame, already serialized */
   send(data: string): void
+  /** close a connection whose messages keep exceeding its relay allowance */
+  close?(code?: number, reason?: string): void
   /** bytes waiting inside the socket transport */
   bufferedAmount?: number
   /** hold a value on the socket itself — it survives hibernation (2KB cap) */
@@ -197,6 +199,18 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     Wire,
     ReturnType<typeof queue> & { forget: (id: string) => void }
   >()
+  let closed = new WeakSet<Wire>()
+
+  let drop = (ws: Wire) => {
+    if (closed.has(ws)) return
+    closed.add(ws)
+    let to = sinks.get(ws)
+    if (to) {
+      to.close()
+      subs.drop(to.send)
+    }
+    sinks.delete(ws)
+  }
 
   // The sink for a socket, created once. A socket this object has not seen
   // before may still be one it inherited, so its stored subscriptions are
@@ -275,6 +289,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     },
 
     message: (ws, data) => {
+      if (closed.has(ws)) return
       let to = sink(ws)
       let ask = asked(data)
       let sender = sinks.get(ws)!
@@ -282,7 +297,11 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       if (ask) sender.forget(ask.id)
       if (ask?.acks) sender.enable()
       let was = subs.relaying(to).join('\n')
-      receive(subs, to, data)
+      if (receive(subs, to, data) == 'close') {
+        drop(ws)
+        ws.close?.(1008, 'relay flood')
+        return
+      }
       // Only when it moved: a frame that relays nothing should not rewrite an
       // attachment, and most frames relay nothing.
       let now = subs.relaying(to)
@@ -301,14 +320,7 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
       })
     },
 
-    close: (ws) => {
-      let to = sinks.get(ws)
-      if (to) {
-        to.close()
-        subs.drop(to.send)
-      }
-      sinks.delete(ws)
-    },
+    close: drop,
 
     wake: () => {
       for (let ws of ctx.getWebSockets()) sink(ws)

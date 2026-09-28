@@ -2127,6 +2127,7 @@ export class Store {
       // A relay carries no membership news and no stored rows, so there is
       // nothing here to rename — only the sink to translate.
       relay: (sink, bundles) => subs.relay(by(sink), bundles),
+      pace: subs.pace,
       relaying: (sink) => subs.relaying(by(sink)),
       relayed: (sink, keys) => subs.relayed(by(sink), keys),
     }

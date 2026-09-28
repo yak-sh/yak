@@ -14,13 +14,17 @@ import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Store } from './graph.ts'
+import { until } from '../../bin/testing.ts'
 
 let wire = () => {
   let sent: Frame[] = []
+  let closed: number[] = []
   let held: unknown = null
   return {
     sent,
+    closed,
     send: (data: string) => void sent.push(JSON.parse(data)),
+    close: (code: number) => void closed.push(code),
     serializeAttachment: (v: unknown) => {
       held = JSON.parse(JSON.stringify(v))
     },
@@ -55,6 +59,7 @@ let SCHEMA = JSON.stringify({
       component: true,
       sync: 'peers',
       durable: 'connection',
+      pace: '100ms',
       properties: {
         x: { type: 'number' },
         y: { type: 'number' },
@@ -120,12 +125,67 @@ Deno.test('a finger moves, and only the other cooks hear it', async () => {
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
+  await until(() => relay(bert).length)
   assertEquals(relay(bert), says(CAKE, { x: 3, y: 9, name: 'Ada' }))
   assertEquals(ada.sent, []) // its own graph already has it
 
   // And the shop kept none of it: the row reads as it was written.
   let [b] = await (await get(store, '/query?q=.recipe')).json() as Bundle[]
   assertEquals(b.presence, undefined)
+})
+
+Deno.test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
+  let date = Date.now
+  let offset = 0
+  Date.now = () => date() + offset
+  try {
+    let { store, watch } = await watching()
+    let ada = watch(), bert = watch()
+    let move = (ws: ReturnType<typeof wire>, x: number) =>
+      store.webSocketMessage(
+        ws,
+        JSON.stringify({ relay: says(CAKE, { x }) }),
+      )
+
+    for (let x = 0; x < 10; x++, offset += 100) move(ada, x)
+    await until(() =>
+      relay(bert).at(-1)?.presence &&
+      (relay(bert).at(-1)?.presence as { x: number }).x == 9
+    )
+    assertEquals(relay(bert).at(-1)?.presence, { x: 9 })
+    bert.sent.length = 0
+
+    let flood = watch()
+    let at = date() + offset
+    Date.now = () => at
+    move(flood, 10)
+    move(flood, 11)
+    for (let x = 12; x < 19; x++) move(flood, x)
+    let late = wire()
+    store.webSocketMessage(
+      late,
+      JSON.stringify({ subscribe: '.recipe', id: 'r' }),
+    )
+    assertEquals(late.sent[0].relay, says(CAKE, { x: 11 }))
+    assertEquals(flood.closed, [])
+
+    move(flood, 19) // the eighth rejected relay closes only the flooder
+    Date.now = () => date() + offset
+    assertEquals(flood.closed, [1008])
+    assertEquals(ada.closed, [])
+    await until(() => relay(bert).at(-1)?.presence === null)
+    assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
+    assertEquals(late.closed, [])
+    move(flood, 20)
+    assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
+    move(ada, 21)
+    await until(() =>
+      (relay(late).at(-1)?.presence as { x?: number } | null)?.x == 21
+    )
+    assertEquals(relay(late).at(-1), says(CAKE, { x: 21 })[0])
+  } finally {
+    Date.now = date
+  }
 })
 
 Deno.test('a cook who arrives late sees the fingers already on the page', async () => {
@@ -154,9 +214,11 @@ Deno.test('a cook who leaves takes her finger with her', async () => {
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
+  await until(() => relay(bert).length)
   bert.sent.length = 0
 
   store.webSocketClose(ada)
+  await until(() => relay(bert).length)
   assertEquals(relay(bert), says(CAKE, null))
 })
 
@@ -167,8 +229,10 @@ Deno.test('clearing it is the component set to null, like anywhere else', async 
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
+  await until(() => relay(bert).length)
   bert.sent.length = 0
   store.webSocketMessage(ada, JSON.stringify({ relay: says(CAKE, null) }))
+  await until(() => relay(bert).length)
   assertEquals(relay(bert), says(CAKE, null))
 })
 
@@ -179,6 +243,7 @@ Deno.test('a finger lost to an eviction is still taken away', async () => {
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
+  await until(() => relay(bert).length)
 
   // The object is evicted. Its memory went with it — the value is gone, and a
   // cook arriving now is told nothing …
@@ -194,6 +259,7 @@ Deno.test('a finger lost to an eviction is still taken away', async () => {
   bert.sent.length = 0
   late.sent.length = 0
   woken.webSocketClose(ada)
+  await until(() => relay(bert).length && relay(late).length)
   assertEquals(relay(bert), says(CAKE, null))
   assertEquals(relay(late), says(CAKE, null))
 })
