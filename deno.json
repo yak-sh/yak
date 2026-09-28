@@ -197,7 +197,8 @@
     "AGENTS.md",
     "CLAUDE.md",
     "workers/yak/.content.gen.ts",
-    "plugins/.gen"
+    "plugins/.gen",
+    "apps/vale/rtc.bundle.js"
   ],
   "fmt": {
     "semiColons": false,
