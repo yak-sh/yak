@@ -1,0 +1,16 @@
+{
+  "land": "driftwood",
+  "song": 1,
+  "sha256": "9bf27d478b6853fe17db733065ea8a2be32722f7055879fd062275ccc1e18b1a",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Driftwood: Driftwood Bay: wild pale strand, weathered wharf and shacks, shorewood and dune grass, salt spray under a grey sky. Wide wistful melody, wind-swept and resilient. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "observed_output": "audio/mpeg (MP3)",
+    "request_parameters": "not recorded; random seed and any model-specific settings unknown"
+  },
+  "generation": {
+    "attempt": 1,
+    "source": "scratchpad/songs/generation.json; retries.json for retries"
+  }
+}

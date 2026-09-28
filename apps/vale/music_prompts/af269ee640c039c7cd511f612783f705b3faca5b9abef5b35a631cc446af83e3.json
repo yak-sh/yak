@@ -1,0 +1,16 @@
+{
+  "land": "elderglade",
+  "song": 2,
+  "sha256": "af269ee640c039c7cd511f612783f705b3faca5b9abef5b35a631cc446af83e3",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Elderglade: ancient elder trees, a still pool and a meadow touched by amber light, tiny glowing motes in the air. Reverent luminous melody, old and quietly magical. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. Purely instrumental throughout: no human voice, humming, vocal pads, singing, speech, chanting, or spoken words. This is song two of two for this land; make it distinct and complete.",
+  "settings": {
+    "observed_output": "audio/mpeg (MP3)",
+    "request_parameters": "not recorded; random seed and any model-specific settings unknown"
+  },
+  "generation": {
+    "attempt": 1,
+    "source": "scratchpad/songs/generation.json; retries.json for retries"
+  }
+}

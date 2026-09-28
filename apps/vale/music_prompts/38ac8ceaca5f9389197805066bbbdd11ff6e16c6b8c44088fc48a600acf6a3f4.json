@@ -1,0 +1,16 @@
+{
+  "land": "birchmere",
+  "song": 1,
+  "sha256": "38ac8ceaca5f9389197805066bbbdd11ff6e16c6b8c44088fc48a600acf6a3f4",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Birchmere: Birchmere: silver birch woods around a peaceful mere, bright fields and a small waterside green; fresh blue sky, airy drifting fluff. Delicate rippling melody, hopeful and pastoral. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "observed_output": "audio/mpeg (MP3)",
+    "request_parameters": "not recorded; random seed and any model-specific settings unknown"
+  },
+  "generation": {
+    "attempt": 1,
+    "source": "scratchpad/songs/generation.json; retries.json for retries"
+  }
+}

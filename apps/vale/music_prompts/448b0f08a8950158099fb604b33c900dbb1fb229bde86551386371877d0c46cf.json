@@ -1,0 +1,16 @@
+{
+  "land": "gullwick",
+  "song": 1,
+  "sha256": "448b0f08a8950158099fb604b33c900dbb1fb229bde86551386371877d0c46cf",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Gullwick: Gullwick: busy fishing harbour beside blue bay, farmland and woods, with gulls and fresh sea air. Warm seafaring melody, lively but gentle, inviting and human. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "observed_output": "audio/mpeg (MP3)",
+    "request_parameters": "not recorded; random seed and any model-specific settings unknown"
+  },
+  "generation": {
+    "attempt": 1,
+    "source": "scratchpad/songs/generation.json; retries.json for retries"
+  }
+}

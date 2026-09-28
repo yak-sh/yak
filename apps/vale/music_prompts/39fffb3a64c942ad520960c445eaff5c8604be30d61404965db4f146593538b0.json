@@ -1,0 +1,16 @@
+{
+  "land": "clovermead",
+  "song": 1,
+  "sha256": "39fffb3a64c942ad520960c445eaff5c8604be30d61404965db4f146593538b0",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Clovermead: Clovermead: green clover meadow, little pond and sunny copses under warm golden sky, pollen drifting in a gentle breeze. Light dancing melody, playful and unhurried. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "observed_output": "audio/mpeg (MP3)",
+    "request_parameters": "not recorded; random seed and any model-specific settings unknown"
+  },
+  "generation": {
+    "attempt": 2,
+    "source": "scratchpad/songs/generation.json; retries.json for retries"
+  }
+}

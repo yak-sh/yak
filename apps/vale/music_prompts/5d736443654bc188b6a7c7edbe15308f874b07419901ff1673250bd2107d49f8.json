@@ -1,0 +1,16 @@
+{
+  "land": "saltreach",
+  "song": 2,
+  "sha256": "5d736443654bc188b6a7c7edbe15308f874b07419901ff1673250bd2107d49f8",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Saltreach: Saltreach: sunlit white salt flats, tidal edge and pale bluffs, bright glints in warm mist. Open shimmering melody, sparse and reflective with a sense of distant coast. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "observed_output": "audio/mpeg (MP3)",
+    "request_parameters": "not recorded; random seed and any model-specific settings unknown"
+  },
+  "generation": {
+    "attempt": 1,
+    "source": "scratchpad/songs/generation.json; retries.json for retries"
+  }
+}

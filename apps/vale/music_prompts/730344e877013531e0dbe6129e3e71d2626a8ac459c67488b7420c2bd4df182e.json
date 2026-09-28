@@ -1,0 +1,16 @@
+{
+  "land": "wolfden",
+  "song": 2,
+  "sha256": "730344e877013531e0dbe6129e3e71d2626a8ac459c67488b7420c2bd4df182e",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Wolfden: Wolfden: dark pine hollow, wolf lair, rocky dens and a black tarn under a dusky violet sky. Low strings and restrained drum pulse, wary and brave, melodic without becoming horror music. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "observed_output": "audio/mpeg (MP3)",
+    "request_parameters": "not recorded; random seed and any model-specific settings unknown"
+  },
+  "generation": {
+    "attempt": 1,
+    "source": "scratchpad/songs/generation.json; retries.json for retries"
+  }
+}
