@@ -174,10 +174,7 @@ let notices = (sub: Sub, b: Bundle): boolean => {
   if (sub.peer || !sub.reads || b.$delete) return true
   if (sub.want === null && sub.members.has(b.entity.eid)) return true
   let i = sub.reads
-  if (
-    b.created &&
-    (i.near.has('entity') || (!i.near.size && !i.own.length))
-  ) return true
+  if (b.created && !i.own.length) return true
   return Object.keys(b).some((c) =>
     c != 'entity' &&
     (i.near.has(c) || i.far.has(c) || i.via.has(c))
@@ -247,12 +244,12 @@ let affected = (
   for (let [eid, t] of touch) {
     if (!relevant.has(eid)) continue
     if (!t.worn) return null
-    if (t.born && !i.own.length && !i.near.size) return null
     if ([...i.far].some((c) => t.named.has(c) || t.worn!.has(c))) {
       return null
     }
     if (
       sub.members.has(eid) ||
+      (t.born && !i.own.length) ||
       (cares(i, t.named, t.worn) &&
         i.fixed.every(({ comp, prop, value }) =>
           (t.bundle?.[comp] as Record<string, unknown> | undefined)
@@ -425,7 +422,7 @@ export let subscriptions = (graph: Graph, opts: {
       // parsed is refused rather than quietly demoted to a subscription that
       // runs it again on every commit forever.
       let ast = parse(line)
-      sub.reads = interest(ast, graph.vocab)
+      sub.reads = interest(ast, graph.vocab, graph.stored)
       let plan = peerPlan(ast, graph.vocab)
       sub.peer = plan.peers
       sub.durable = plan.durable

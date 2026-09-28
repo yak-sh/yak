@@ -548,6 +548,7 @@ export let reaching = async (
   let plugins = [platform(ctx), post(ctx)]
   let self: Graph = {
     vocab,
+    stored: () => false,
     storage,
     plugins,
     use: (p) => (plugins.push(p), self),

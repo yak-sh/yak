@@ -4,9 +4,8 @@
 // and every writer waits for that inside the effect phase: before this, each
 // tool call's bookkeeping rows paid for every open tab's session tray.
 //
-//   own   components every member wears: the top-level presence tests
-//         (`.session`). An entity that wears none of them, and whose change
-//         named none, can neither join the set nor leave it.
+//   own   components every member wears: presence and direct positive property
+//         tests required by the query. An entity missing one cannot join.
 //   near  the components the query reads on each entity itself, which stand
 //         in for `own` when there is no presence test to narrow it.
 //   far   components read on other entities whose owner cannot be located.
@@ -36,8 +35,48 @@ let QUIET = new Set(['every', 'never'])
 
 class Opaque extends Error {}
 
+// A disjunction requires only what every arm requires; a conjunction requires
+// all of its clauses. Missing properties satisfy absence and not-equals, and
+// an empty equality alternative can do the same.
+let missing = (c: Clause): boolean =>
+  c.kind == 'pred' && c.op == '=' && (
+    c.value?.kind == 'scalar' && !c.value.raw ||
+    c.value?.kind == 'list' &&
+      c.value.items.some((v) => v.kind == 'scalar' && !v.raw)
+  )
+
+let required = (
+  c: Clause,
+  v: Vocab,
+  stored: (comp: string, prop: string) => boolean,
+): Set<string> => {
+  if (c.kind == 'and') {
+    return new Set(c.clauses.flatMap((part) => [...required(part, v, stored)]))
+  }
+  if (c.kind == 'or') {
+    let [first, ...rest] = c.clauses.map((part) => required(part, v, stored))
+    return new Set(
+      [...first].filter((comp) => rest.every((arm) => arm.has(comp))),
+    )
+  }
+  if (
+    c.kind != 'pred' || c.not || c.where || v.assoc(c.path[0]) ||
+    c.op == '?' || c.op == '!=' || missing(c)
+  ) return new Set()
+  if (c.facet && c.path.length != 1) return new Set()
+  let hops = v.aim(c.path.join('.'), bare(c) || !!c.facet)
+  return hops.length == 1 && hops[0].comp != 'entity' &&
+      (!hops[0].prop || stored(hops[0].comp, hops[0].prop))
+    ? new Set([hops[0].comp])
+    : new Set()
+}
+
 /** What a parsed query reads, or `null` when it cannot be said. */
-export let interest = (ast: And, v: Vocab): Interest | null => {
+export let interest = (
+  ast: And,
+  v: Vocab,
+  stored: (comp: string, prop: string) => boolean,
+): Interest | null => {
   let near = new Set<string>()
   let far = new Set<string>()
   let via = new Map<string, string>()
@@ -92,14 +131,7 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
   }
   try {
     walk(ast.clauses, near)
-    // A presence test (`.session`) is worn by every member. An absence
-    // (`!session`) is a bare form too, and says the opposite: no member wears
-    // it, so it narrows nothing and stays with the rest of `near`.
-    let own = ast.clauses.flatMap((c) =>
-      c.kind == 'pred' && bare(c) && c.op == '!'
-        ? [v.aim(c.path[0], true)[0].comp]
-        : []
-    )
+    let own = [...required(ast, v, stored)]
     // An exact reference at the top level of an AND belongs to every
     // member. It can rule out a changed nonmember before a window re-reads.
     let fixed = ast.clauses.flatMap((c) => {
@@ -109,7 +141,8 @@ export let interest = (ast: And, v: Vocab): Interest | null => {
         v.assoc(c.path[0])
       ) return []
       let [hop, ...more] = v.aim(c.path.join('.'))
-      return !more.length && v.prop(hop.comp, hop.prop)?.category == 'ref'
+      return !more.length && stored(hop.comp, hop.prop) &&
+          v.prop(hop.comp, hop.prop)?.category == 'ref'
         ? [{ ...hop, value: c.value.raw }]
         : []
     })
@@ -135,5 +168,5 @@ export let cares = (
 ): boolean =>
   any(i.far, named) || any(i.far, worn) ||
   (i.own.length
-    ? i.own.every((c) => worn.has(c)) || i.own.some((c) => named.has(c))
+    ? i.own.every((c) => worn.has(c))
     : any(i.near, named) || any(i.near, worn))

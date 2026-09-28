@@ -4,7 +4,8 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
-import { col, count, eq, select, sub, table } from '@yaks/sql'
+import { ram } from '@yaks/ram'
+import { col, count, eq, lit, select, sub, table } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
@@ -226,6 +227,137 @@ Deno.test('a windowed query ignores writes outside its fixed owner', () => {
   let [left] = take()
   assertEquals(ids(left), ['r1'])
   assertEquals(left.gone, ['r2'])
+})
+
+Deno.test('windowed property filters skip births without their components', () => {
+  let g = shop()
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(String(q)), g.read(q, o)),
+  }
+  let subs = subscriptions(spy), e = ear()
+  let review = '.review.stars=3&?created&.order=-created.at&.limit=10'
+  let book = '.book.price=9&?created&.order=-created.at&.limit=10'
+  let bare = '.review&?created&.limit=10'
+  subs.open(e.to, 'reviews', review)
+  subs.open(e.to, 'books', book)
+  subs.open(e.to, 'bare', bare)
+  e.take()
+  reads = []
+
+  g.apply([{ entity: { eid: 'note' }, doc: { title: 'Unrelated' } }])
+  assertEquals([reads, e.take()], [[], []])
+
+  g.apply([{ entity: { eid: 'r1' }, review: { stars: 3 } }])
+  assertEquals(reads, [review, bare])
+  assertEquals(e.take().map((f) => [f.id, ids(f)]), [
+    ['reviews', ['r1']],
+    ['bare', ['r1']],
+  ])
+
+  reads = []
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 9 } }])
+  assertEquals(reads, [book])
+  assertEquals(e.take().map((f) => [f.id, ids(f)]), [['books', ['b1']]])
+
+  reads = []
+  g.apply([{ entity: { eid: 'b1' }, book: null }])
+  assertEquals(reads, [book])
+  assertEquals(e.take().map((f) => [f.id, f.gone]), [['books', ['b1']]])
+})
+
+Deno.test('a created edit on a member refreshes its window', () => {
+  let g = graph({
+    storage: ram(shopVocab),
+    vocab: shopVocab,
+    provenance: () => ({ kind: 'created' }),
+  })
+  g.apply([{ entity: { eid: 'r1' }, review: { book: 'owner' } }], {
+    now: '2026-01-01T00:00:00.000Z',
+  })
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(String(q)), g.read(q, o)),
+  }
+  let subs = subscriptions(spy), e = ear()
+  let query = '.review.book=owner&?created&.order=-created.at&.limit=10'
+  subs.open(e.to, 'reviews', query)
+  e.take()
+  reads = []
+
+  g.apply([{ entity: { eid: 'r1' }, doc: { title: 'Edited' } }], {
+    now: '2026-01-02T00:00:00.000Z',
+  })
+  assertEquals(reads, [query])
+  let [frame] = e.take()
+  assertEquals(ids(frame), ['r1'])
+  assertEquals(
+    comp(frame.bundles![0], 'created').at,
+    '2026-01-02T00:00:00.000Z',
+  )
+})
+
+Deno.test('a derived value can join a window without its component', () => {
+  let store = storage(open(':memory:'), shopVocab, {
+    derived: {
+      'review.stars': {
+        tag: 'number',
+        worn: false,
+        expr: () => lit(3),
+      },
+      'review.book': {
+        tag: 'eid',
+        worn: false,
+        expr: () => lit('owner'),
+      },
+    },
+  })
+  store.install()
+  let g = graph({ storage: store, vocab: shopVocab })
+  let subs = subscriptions(g), e = ear()
+  subs.open(e.to, 'derived', '.review.stars>0&?created&.limit=10')
+  subs.open(e.to, 'ref', '.review.book=owner&?created&.limit=10')
+  e.take()
+
+  g.apply([{ entity: { eid: 'note' }, doc: { title: 'A note' } }])
+  assertEquals(e.take().map((f) => [f.id, ids(f)]), [
+    ['derived', ['note']],
+    ['ref', ['note']],
+  ])
+})
+
+Deno.test('OR and absence keep births eligible for a window', () => {
+  let g = shop(), subs = subscriptions(g), e = ear()
+  let heard = () => e.take().map((f) => [f.id, ids(f).sort()])
+  subs.open(
+    e.to,
+    'either',
+    '(.book.price<20|.review.stars>0)&?created&.limit=10',
+  )
+  subs.open(e.to, 'without', '!doc&.limit=10')
+  subs.open(e.to, 'unequal', '.book.price!=20&.limit=10')
+  e.take()
+
+  g.apply([{ entity: { eid: 'r1' }, review: { stars: 3 } }])
+  assertEquals(heard(), [
+    ['either', ['r1']],
+    ['without', ['r1']],
+    ['unequal', ['r1']],
+  ])
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 9 } }])
+  assertEquals(heard(), [
+    ['either', ['b1', 'r1']],
+    ['without', ['b1', 'r1']],
+    ['unequal', ['b1', 'r1']],
+  ])
+  g.apply([{ entity: { eid: 'note' }, doc: { title: 'Has doc' } }])
+  assertEquals(heard(), [
+    ['either', ['b1', 'r1']],
+    ['without', ['b1', 'r1']],
+    ['unequal', ['b1', 'note', 'r1']],
+  ])
 })
 
 // The shop again, where a book also counts its reviews: a computed property
