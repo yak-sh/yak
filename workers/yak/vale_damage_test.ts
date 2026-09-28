@@ -31,10 +31,17 @@ Deno.test('the Mossvale owner turns a hero’s damage off and on', async () => {
         name: 'damage',
         args: { player: hero, on },
       })
+    let pageDamage = (cookie: string, on: boolean) =>
+      k.at('damagelab.yaks.app', '/vale/api/command', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'damage', args: { player: hero, on } }),
+      })
     let state = async () =>
       (await page.get(`.eid=${hero}&?damageable`))[0]?.damageable
 
-    await damage(false)
+    let protectedHero = await pageDamage(owner.cookie, false)
+    assertEquals(protectedHero.status, 200, await protectedHero.text())
     assertEquals(await state(), { on: false })
 
     let editor = await signIn(k)
@@ -54,6 +61,8 @@ Deno.test('the Mossvale owner turns a hero’s damage off and on', async () => {
     )
     assert(refused instanceof Error)
     assertStringIncludes(refused.message, 'owner is the least that may')
+    let pageRefused = await pageDamage(editor.cookie, true)
+    assertEquals(pageRefused.status, 403, await pageRefused.text())
     let posted = await client(k, 'damagelab.yaks.app', 'vale', editor.cookie)
       .post({
         entities: [{
