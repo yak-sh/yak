@@ -125,9 +125,7 @@ export let App = (
       selected: s.id ?? null,
       sidebar: s.id ?? 'new',
       generation: current().generation + 1,
-      browse: false,
-      page: '',
-      pageTrail: '[]',
+      ...s.id ? {} : { browse: false, page: '', pageTrail: '[]' },
     })
     // Preserve the accepted display while another session loads. A deliberate
     // new-session selection is empty immediately, not a pending remote read.

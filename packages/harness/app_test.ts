@@ -122,7 +122,7 @@ Deno.test('selected session opens alone and the browser requests one page at a t
   }))
   let a: UIAgent = {
     sessions: (selected, page) => {
-      assertEquals(selected, 's1')
+      assert(['s1', 's2', 's3'].includes(String(selected)))
       asked.push(page?.after == null ? undefined : String(page.after))
       return Promise.resolve(
         page
@@ -160,6 +160,11 @@ Deno.test('selected session opens alone and the browser requests one page at a t
     await ui.send('b')
     await until(() => asked.length > 1)
     assertEquals(asked.at(-1), undefined)
+    await ui.send('\x17l') // focus sidebar
+    await ui.send('jjj') // browse -> s1 -> s2 -> s3
+    await until(() => (f.client.ent('view')!.frontend as Comp).selected == 's3')
+    assertEquals((f.client.ent('view')!.frontend as Comp).browse, true)
+    assertEquals((f.client.ent('view')!.frontend as Comp).sidebar, 's3')
     await ui.send('>')
     await until(() => asked.includes('s20'))
     await ui.send('<')
