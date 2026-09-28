@@ -1,24 +1,9 @@
-// Building: one session opened on a builder, and the output it will answer
-// into, minted under the key that names it.
-//
-// A builder is an instruction (its `doc` body) plus its inputs (the far ends
-// of its `reads` links), and it builds one output. The output is an entity
-// wearing `built{builder, key, model, session}`, whose id is derived from the
-// builder and the key. So before anything runs, the key is computed and the
-// output it names is looked up: if it exists, the output already built still
-// answers and nothing runs. A changed key names an output that does not exist
-// yet, and that one is built from scratch by a fresh session that is never
-// shown the old one.
-//
-// The model is part of the key, so the same builder built by two models gives
-// two sibling outputs. A builder's own outputs are never among its inputs,
-// even when it links to one: what it built last time is not something it may
-// build from.
-//
-// The output is minted when its session opens, empty, which is also what keeps
-// a builder to one session per key: a second trigger finds the output and does
-// nothing. The write carries `$was` on the output's key, so two triggers racing
-// to mint it cannot both commit.
+// Building: a builder's query selects its inputs, and one stable output answers.
+// The output cites the inputs used for its latest build. Its key changes when
+// the instruction, model, or selected content changes; its identity does not.
+// An explicit alternate desk gets a separate shadow output for comparison.
+// The output's key carries a precondition so concurrent triggers cannot both
+// open a session for the same version.
 //
 // When is the schedule's decision: `floor` is the earliest a schedule may build
 // the builder again, and a configured `rest` moves it forward each time a
@@ -33,22 +18,21 @@ import {
   type Eid,
   identityEid,
   then,
+  token,
   TOMBSTONE,
   type Tx,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq, present } from '@yaks/query'
 import { BODY, DOC } from '@yaks/doc'
-import { EDGE, link } from '@yaks/edge'
+import { EDGE, link, unlink } from '@yaks/edge'
+import { content, verify } from '@yaks/kernel'
 import { next } from '@yaks/wake'
-import { content, type Input, key } from './key.ts'
+import { type Input, key } from './key.ts'
 
 /** The components this package declares. */
 export let BUILDER = 'builder'
 export let BUILT = 'built'
-
-/** The relation a builder's inputs hang off: @yaks/kernel's `reads`. */
-export let READS = 'reads'
 
 // The components a build is written with, which belong to other packages: the
 // session and its entries are @yaks/session's, and the persona is linked
@@ -97,21 +81,24 @@ export type Open = Options & {
   now?: () => string
   /** where a new eid comes from (default: a uuid) */
   eid?: () => string
+  /** an explicit alternate desk builds a sibling, not the primary output */
+  shadow?: string
+  /** an alternate instruction for a shadow build */
+  prompt?: string
 }
 
-/** One build, worked out: what it asks, what it reads, the key those make
- * with the model, and the output that key names. */
+/** One build, worked out: its instruction, selected inputs, key, and output. */
 export type Plan = {
   builder: Eid
   instruction: string
   model: string
-  inputs: Eid[]
+  inputs: Bundle[]
   key: string
   output: Eid
+  slot: string
 }
 
-/** What building a builder now comes to: its plan, and the bundles that build
- * it — absent when the output under its key is built already. */
+/** What building a builder now comes to; `build` is absent for a current key. */
 export type Verdict = { plan: Plan; build?: Bundle[] }
 
 export let clock = (): string => new Date().toISOString()
@@ -131,32 +118,33 @@ export let due = (builder: Comp | undefined, at: string): boolean => {
   return Number.isNaN(floor) || floor <= Date.parse(at)
 }
 
-/** The id of the output a builder builds under a key. */
-export let output = (builder: Eid, k: string): Eid =>
-  identityEid(BUILT, [builder, k])
+/** The primary output's id, or a shadow's stable id under its slot. */
+export let output = (builder: Eid, slot = 'main'): Eid =>
+  identityEid(BUILT, [builder, slot])
 
 /**
- * A builder's inputs as its key reads them: the far end of every `reads` link
- * leaving it, with its content hash — less any output of the builder itself,
- * which it never reads, and anything deleted.
+ * The builder's query selects its inputs. The builder itself and its own
+ * outputs are excluded so a build cannot trigger itself by changing its floor
+ * or answer.
  */
 export let inputs = (
   tx: Tx,
-  vocab: Vocab,
-  builder: Eid,
-): Input[] | Promise<Input[]> =>
-  then(tx.read(and(eq(`${EDGE}.from`, builder), present(READS))), (links) => {
-    let far = [...new Set(links.map((b) => str(comp(b, EDGE), 'to')))]
-      .filter(Boolean)
-    if (!far.length) return []
-    let hash = content(vocab)
-    return then(tx.get(far), (found) =>
-      found
-        .filter((b) =>
-          b[TOMBSTONE] == null && str(comp(b, BUILT), 'builder') != builder
-        )
-        .map((b): Input => [b.entity.eid, hash(b)]))
-  })
+  it: Bundle,
+): Bundle[] | Promise<Bundle[]> => {
+  let query = str(comp(it, BUILDER), 'query')
+  if (!query) return []
+  return then(
+    tx.read(query),
+    (found) =>
+      found.filter((b) =>
+        b.entity.eid != it.entity.eid && b[TOMBSTONE] == null &&
+        str(comp(b, BUILT), 'builder') != it.entity.eid &&
+        (!comp(b, BUILT) || str(comp(b, BUILT), 'slot') == 'main')
+      ).toSorted((a, b) =>
+        a.entity.eid < b.entity.eid ? -1 : a.entity.eid > b.entity.eid ? 1 : 0
+      ),
+  )
+}
 
 /** The plan for building `it` with the desk's model, or `undefined` when there
  * is no instruction to ask. */
@@ -165,19 +153,25 @@ export let plan = (
   it: Bundle,
   tx: Tx,
 ): Plan | undefined | Promise<Plan | undefined> => {
-  let instruction = str(comp(it, DOC), BODY) || o.desk.ask || ''
+  let instruction = o.prompt || str(comp(it, DOC), BODY) || o.desk.ask || ''
   if (!instruction) return undefined
   let builder = it.entity.eid
   let model = o.desk.model ?? ''
-  return then(inputs(tx, o.vocab, builder), (read) => {
-    let k = key(instruction, model, read)
+  return then(inputs(tx, it), (read) => {
+    let hash = content(o.vocab)
+    let k = key(
+      instruction,
+      model,
+      read.map((b): Input => [b.entity.eid, hash(b)]),
+    )
     return {
       builder,
       instruction,
       model,
-      inputs: read.map(([eid]) => eid).toSorted(),
+      inputs: read,
       key: k,
-      output: output(builder, k),
+      slot: o.shadow ?? 'main',
+      output: output(builder, o.shadow),
     }
   })
 }
@@ -186,18 +180,25 @@ export let plan = (
 // reads for itself.
 let words = (p: Plan): string =>
   p.inputs.length
-    ? `${p.instruction}\n\nInputs:\n${p.inputs.map((e) => `- ${e}`).join('\n')}`
+    ? `${p.instruction}\n\nInputs:\n${
+      p.inputs.map((b) => `- ${b.entity.eid}`).join('\n')
+    }`
     : p.instruction
 
 /**
  * The bundles that build a plan: the session, its first entry asking the
- * instruction, the persona edge, the output it will answer into — minted only
- * if nothing minted it first — and, with a rest configured, the builder's floor
- * moved forward.
+ * instruction, the persona edge, an output update, its current citations, and
+ * (with a rest configured) the builder's floor moved forward.
  *
  * A pure function, so a test can assert on it with no graph involved.
  */
-export let build = (p: Plan, o: Open, at: string = clock()): Bundle[] => {
+export let build = (
+  p: Plan,
+  o: Open,
+  at: string = clock(),
+  prior: string | null = null,
+  uncite: Eid[] = [],
+): Bundle[] => {
   let d = o.desk
   let eid = o.eid ?? uuid
   let session = eid()
@@ -223,12 +224,21 @@ export let build = (p: Plan, o: Open, at: string = clock()): Bundle[] => {
       entity: { eid: p.output },
       [BUILT]: {
         builder: p.builder,
+        slot: p.slot,
         key: p.key,
         ...(p.model ? { model: p.model } : {}),
         session,
       },
-      $was: { [BUILT]: { key: null } },
+      $was: { [BUILT]: { key: token(prior) } },
     },
+    ...p.inputs.map((b) => {
+      let cite = link(p.output, 'cites', b.entity.eid)
+      return { ...cite, ...verify(cite, b, o.vocab) }
+    }),
+    ...uncite.map((to) => ({
+      ...unlink(p.output, 'cites', to),
+      verified: null,
+    })),
     ...(floor ? [{ entity: { eid: p.builder }, [BUILDER]: { floor } }] : []),
   ]
 }
@@ -237,9 +247,7 @@ export let build = (p: Plan, o: Open, at: string = clock()): Bundle[] => {
  * What building `eid` at `at` comes to, read against the graph as it stands:
  * nothing when it is no builder, has no instruction, or — on a schedule — is
  * still resting; otherwise its plan, with the bundles that build it unless the
- * output under its key exists already. A deleted output counts as existing:
- * building it again would bring back what someone deleted, so only a new key
- * builds again.
+ * output already carries this key. A deleted output remains deleted.
  */
 export let decide = (
   o: Open,
@@ -252,10 +260,31 @@ export let decide = (
     let it = found[0]
     let b = comp(it, BUILDER)
     if (!it || !b || (scheduled && !due(b, at))) return undefined
-    return then(plan(o, it, tx), (p) =>
-      !p ? undefined : then(
-        tx.get([p.output]),
-        (have): Verdict =>
-          have.length ? { plan: p } : { plan: p, build: build(p, o, at) },
-      ))
+    return then(
+      plan(o, it, tx),
+      (p) =>
+        !p ? undefined : then(tx.get([p.output]), ([have]) => {
+          if (have?.[TOMBSTONE] || str(comp(have, BUILT), 'key') == p.key) {
+            return { plan: p }
+          }
+          return then(
+            tx.read(and(eq(`${EDGE}.from`, p.output), present('cites'))),
+            (edges): Verdict => {
+              let current = new Set(p.inputs.map((b) => b.entity.eid))
+              let uncite = edges.map((b) => str(comp(b, EDGE), 'to'))
+                .filter((eid) => eid && !current.has(eid))
+              return {
+                plan: p,
+                build: build(
+                  p,
+                  o,
+                  at,
+                  str(comp(have, BUILT), 'key') || null,
+                  uncite,
+                ),
+              }
+            },
+          )
+        }),
+    )
   })

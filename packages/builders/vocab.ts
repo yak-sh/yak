@@ -3,7 +3,7 @@
 // Nothing here touches storage, SQL or any runtime API, so a browser tab that
 // only needs these components loads nothing else.
 //
-// A builder's inputs hang off @yaks/kernel's `reads` relation, and a build
+// A builder's query selects inputs, and each output cites what it used. A build
 // writes @yaks/session's components, so a graph loading this document loads
 // those beside it.
 

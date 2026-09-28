@@ -37,7 +37,7 @@ let doc: VocabDoc = {
       properties: { name: { type: 'string' } },
     },
     // The persona a build uses is @yaks/persona's, and `references` and
-    // `reads` are @yaks/kernel's; declared here so these tests need no
+    // `cites` are @yaks/kernel's; declared here so these tests need no
     // dependency on either package.
     persona: {
       component: true,
@@ -46,7 +46,13 @@ let doc: VocabDoc = {
       properties: { name: { type: 'string' } },
     },
     references: { component: true, type: 'object', edge: 'referenced' },
-    reads: { component: true, type: 'object', edge: 'reads' },
+    cites: {
+      component: true,
+      type: 'object',
+      edge: true,
+      properties: { hash: { type: 'string' } },
+    },
+    verified: { component: true, type: 'object' },
     created: {
       component: true,
       type: 'object',

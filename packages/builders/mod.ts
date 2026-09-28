@@ -1,14 +1,12 @@
 /**
- * A builder is an instruction plus its inputs, and it builds one output. The
- * instruction is the builder's `doc` body; its inputs are the entities its
- * @yaks/kernel `reads` links point at; its output is an entity wearing
- * `built{builder, key, model, session}`.
+ * A builder's `doc` body is its instruction; its `builder.query` selects its
+ * inputs. Its stable output wears `built{builder, slot, key, model, session}`
+ * and cites the inputs used for the latest build.
  *
  * The key is a hash of the instruction, the model and each input's content
- * hash, and the output's id is derived from the builder and the key. So an
- * unchanged key names the output already built, which is reused and nothing
- * runs; a changed key names a new one, built from scratch. A builder never
- * reads its own output, and two models on one builder build sibling outputs.
+ * hash. An unchanged key opens no session; a changed key updates the output
+ * in place. Explicit alternate model or prompt builds get sibling shadow
+ * outputs, which downstream builders do not read.
  *
  * A build is one agent session, asked the instruction and the inputs by id,
  * whose answer becomes the output's body. It opens on a schedule (`floor`, a

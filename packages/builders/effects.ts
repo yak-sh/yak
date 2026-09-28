@@ -50,7 +50,7 @@ let str = (c: unknown, k: string): string => {
   return v == null ? '' : String(v)
 }
 
-// Build `eid` if its schedule says so and its key is not built yet. Every
+// Build `eid` if its schedule says so and its key has changed. Every
 // other case — not a builder, resting, nothing to ask, built already — is a
 // builder with nothing to do right now, which is ordinary and not an error.
 let stir = (o: Open): Handler => (event, tx, write) =>
@@ -65,7 +65,7 @@ let stir = (o: Open): Handler => (event, tx, write) =>
  * whose floor was moved back into the present builds then.
  *
  * It is idempotent, which is what lets its sweep replay it over every builder
- * in the graph: a second run finds the output under the key, or
+ * in the graph: a second run finds the current output key, or
  * the floor it moved, and builds nothing. Its own write moves that floor, so
  * the write triggers this handler once more, and that run is the one that
  * finds the output.

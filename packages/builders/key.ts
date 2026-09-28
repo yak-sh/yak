@@ -4,7 +4,7 @@
 // A key is the SHA-256 of three things: the instruction, the model, and each
 // input's content hash. Nothing else that could vary between two builds goes
 // in, so an unchanged key means the output already built still answers, and a
-// changed one means it no longer does.
+// changed one calls for rebuilding that output.
 //
 // An input's content is what someone wrote on it: every property a client
 // may write, on every component it wears. Server-owned bookkeeping is left out —

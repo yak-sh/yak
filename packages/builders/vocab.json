@@ -9,20 +9,24 @@
       "type": "object",
       "kind": true,
       "properties": {
+        "query": {
+          "type": "string",
+          "description": "query selecting the entities this builder reads"
+        },
         "floor": {
           "type": "string",
           "format": "date-time",
           "description": "the earliest a schedule may build it again"
         }
       },
-      "description": "builds one output from its instruction (its doc body) and its inputs (its `reads` links)"
+      "description": "builds one output from its instruction (its doc body) and inputs selected by its query"
     },
     "built": {
       "component": true,
       "type": "object",
       "kind": true,
       "before": ["doc"],
-      "identity": ["builder", "key"],
+      "identity": ["builder", "slot"],
       "properties": {
         "builder": {
           "type": "string",
@@ -31,32 +35,40 @@
           "bare": false,
           "description": "the builder it came from"
         },
+        "slot": {
+          "type": "string",
+          "bare": false,
+          "description": "main for the current output, or a named shadow variant"
+        },
         "key": {
           "type": "string",
           "bare": false,
+          "stamped": true,
           "description": "the hash of the instruction, the model and each input's content hash it was built from"
         },
         "model": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
+          "stamped": true,
           "description": "the model that built it"
         },
         "session": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
+          "stamped": true,
           "description": "the session that built it"
         }
       },
-      "description": "an output: what one builder built under one key. Its id is derived from the two, so an unchanged key names the output already built"
+      "description": "an output that keeps its identity as its key and answer change; shadow slots hold comparisons"
     },
     "builder_build": {
       "tool": true,
       "noun": "builder",
       "verb": "build",
       "title": "Build now",
-      "description": "Build a builder now, whatever its schedule says: hash its instruction, the model and each input's content into a key, and open one session on it unless an output under that key exists already. Passing a model other than the configured one builds a sibling output, which is how two models are compared on one builder. Returns one line: the output and the session building it, or the output that is already current.",
+      "description": "Build a builder now, whatever its schedule says. Its query selects inputs; an unchanged key reuses the output, and a changed key updates that output in place. Passing an alternate provider, model or prompt builds a shadow output for comparison. Returns the output and session, or the current output.",
       "input": {
         "builder": {
           "type": "string",
@@ -72,6 +84,10 @@
           "type": "string",
           "ref": "model",
           "description": "the model to build with instead of the configured one"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "alternate instruction for a shadow build"
         }
       },
       "required": ["builder"],

@@ -28,8 +28,8 @@ what happens to them between conversations.
 ## A dream is a builder
 
 A dream runs as a [@yaks/builders](../builders) builder. It wears `builder`
-beside `dream`, its `doc` body is the instruction, and anything it `reads` is an
-input:
+beside `dream`, its `doc` body is the instruction, and its `builder.query`
+selects inputs:
 
 ```
 { entity: { eid: '$d' }, dream: { scope: 'P-1' }, builder: {},

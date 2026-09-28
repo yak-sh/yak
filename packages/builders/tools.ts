@@ -2,17 +2,23 @@
 // builds a builder now, whatever its floor says.
 //
 // It decides exactly as the schedule does (./build.ts `decide`), less the
-// floor, and with the model and provider the caller names in place of the
-// configured ones — which is how one builder gets a sibling output per model,
-// to compare them. An unchanged key is not an error: the output already built
-// is named and nothing runs.
+// floor. Alternate model, provider, or prompt settings get a shadow output
+// beside the primary one. An unchanged key is not an error: the output already
+// built is named and nothing runs.
 //
 // It writes the build itself, signed as whoever asked, and answers in one
 // line, the way @yaks/spawn's `session spawn` does: the bundles a build writes
-// are a session's first entry and an empty output, and a caller wants their
+// are a session's first entry and its output, and a caller wants their
 // ids, not their dump.
 
-import { argsOf, type Bundle, type Comp, signed, who } from '@yaks/graph'
+import {
+  argsOf,
+  type Bundle,
+  type Comp,
+  sha256,
+  signed,
+  who,
+} from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools'
 import { OUTPUT } from '@yaks/session'
@@ -42,12 +48,18 @@ export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
     let builder = str(args.builder)
     let provider = str(args.provider)
     let model = str(args.model)
+    let prompt = str(args.prompt)
     let desk = {
       ...options.desk,
       ...(provider ? { provider } : {}),
       ...(model ? { model } : {}),
     }
-    let o = { desk, rest: options.rest, vocab: host.vocab }
+    let alternate = (provider && provider != options.desk.provider) ||
+      (model && model != options.desk.model) || prompt
+    let shadow = alternate
+      ? `shadow:${sha256(JSON.stringify([desk.provider, desk.model, prompt]))}`
+      : undefined
+    let o = { desk, rest: options.rest, vocab: host.vocab, shadow, prompt }
     let v = await graph.storage.tx((tx) =>
       decide(o, builder, tx, clock(), false)
     )
@@ -60,7 +72,7 @@ export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
     if (!v.build) {
       return [said(call, `${v.plan.output} is built under this key already`)]
     }
-    await graph.apply(signed(v.build, who(call)))
+    await graph.apply(signed(v.build, who(call)), { trusted: true })
     let made = v.build.find((b) => b[BUILT])?.[BUILT] as Comp
     return [said(call, `${v.plan.output} building in ${str(made.session)}`)]
   },
