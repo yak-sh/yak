@@ -58,7 +58,7 @@ let batches = (files: File[]): File[][] => {
   return out
 }
 
-let utf8 = new TextDecoder('utf-8', { fatal: true })
+let utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 let b64 = (bytes: Uint8Array) => {
   let s = ''
@@ -76,6 +76,14 @@ export let fileOf = (path: string, bytes: Uint8Array): File => {
   } catch {
     return { path, base64: b64(bytes) }
   }
+}
+
+let shaOf = async (file: File) => {
+  let bytes = 'content' in file
+    ? new TextEncoder().encode(file.content)
+    : Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0))
+  let hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+  return Array.from(hash, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 /** Every file under `dir`, paths relative to it, dotfiles left out, sorted. */
@@ -102,7 +110,7 @@ let reply = async (ask: Ask, name: string, args: Record<string, unknown>) =>
 let call = async (ask: Ask, name: string, args: Record<string, unknown>) =>
   saidBy(await reply(ask, name, args))
 
-let pathsIn = (value: Record<string, unknown>) => {
+let filesIn = (value: Record<string, unknown>) => {
   let files = value.files
   if (
     !Array.isArray(files) ||
@@ -113,10 +121,27 @@ let pathsIn = (value: Record<string, unknown>) => {
   ) {
     throw new Error('app_files answered malformed file data')
   }
-  return files.map((f) => (f as { path: string }).path)
+  // A checkout can reach an older Worker while its own commit deploys.
+  if (
+    value.unreleased == null &&
+    files.every((f) => (f as { sha?: unknown }).sha == null)
+  ) return null
+  if (
+    typeof value.unreleased != 'boolean' ||
+    files.some((f) =>
+      !/^[0-9a-f]{64}$/.test(String((f as { sha?: unknown }).sha))
+    )
+  ) throw new Error('app_files answered malformed file data')
+  return {
+    held: new Map(files.map((f) => [
+      (f as { path: string }).path,
+      (f as { sha: string }).sha,
+    ])),
+    unreleased: value.unreleased,
+  }
 }
 
-// The paths an app holds, read off the list's answer as data: its words are
+// The files an app holds, read off the list's answer as data: its words are
 // for a person, and carry more than the list (the unseen block). A checkout
 // may speak the new data contract before the Worker built from that checkout
 // is live. Wait through that bounded rollout gap; a refusal still throws from
@@ -132,10 +157,13 @@ let listed = async (
     let value = valueOf(
       await reply(ask, 'app_files', { ...at, op: 'list' }),
     )
-    if (value) return pathsIn(value)
+    if (value) {
+      let files = filesIn(value)
+      if (files) return files
+    }
     if (Date.now() >= deadline) {
       throw new Error(
-        `app_files answered no value after ${Math.round(wait / 1000)}s`,
+        `app_files answered no file hashes after ${Math.round(wait / 1000)}s`,
       )
     }
     await new Promise((go) => setTimeout(go, opts.poll ?? 3_000))
@@ -158,7 +186,7 @@ export let push = async (
   if (!files.length) throw new CallError('dir', 'no files to push')
   let at = { app: to.app, ...to.space ? { space: to.space } : {} }
   let said: string[] = []
-  let held: string[]
+  let held: { held: Map<string, string>; unreleased: boolean }
   try {
     held = await listed(ask, at, opts)
   } catch (e) {
@@ -170,21 +198,26 @@ export let push = async (
         ...to.space ? { space: to.space } : {},
       }),
     )
-    held = []
+    held = { held: new Map(), unreleased: true }
   }
+  let hashes = await Promise.all(files.map(shaOf))
+  let changed = files.filter((f, i) => held.held.get(f.path) != hashes[i])
   let done = 0
-  for (let batch of batches(files)) {
+  for (let batch of batches(changed)) {
     await call(ask, 'app_files', { ...at, files: batch })
     done += batch.length
-    opts.progress?.(done, files.length)
+    opts.progress?.(done, changed.length)
   }
   let keep = new Set(files.map((f) => f.path))
-  let gone = held.filter((p) => !keep.has(p))
+  let gone = [...held.held.keys()].filter((p) => !keep.has(p))
   for (let path of gone) {
     await call(ask, 'app_files', { ...at, op: 'delete', path })
   }
+  if (!changed.length && !gone.length && !held.unreleased) {
+    return [...said, 'no files changed']
+  }
   said.push(
-    `wrote ${files.length} file${files.length == 1 ? '' : 's'}` +
+    `wrote ${changed.length} file${changed.length == 1 ? '' : 's'}` +
       (gone.length ? `, deleted ${gone.join(', ')}` : ''),
     await call(ask, 'app_deploy', at),
   )

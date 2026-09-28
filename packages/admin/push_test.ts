@@ -14,6 +14,10 @@ let platform = (
   valuesAfter = 0,
 ) => {
   let deployed: string[] = []
+  let writes: string[][] = []
+  let released = new Map(
+    Object.entries(apps).map(([app, files]) => [app, new Map(files)]),
+  )
   let lists = 0
   let ok = (text: string, value?: Record<string, unknown>) => ({
     content: [{ type: 'text', text: text + more }],
@@ -26,38 +30,63 @@ let platform = (
     },
   })
   let no = (text: string) => ({ ...ok(text), isError: true })
-  let ask: Ask = (_method, params) => {
+  let ask: Ask = async (_method, params) => {
     let { name, arguments: a } = params as { name: string; arguments: Args }
     let app = String(a.app ?? a.slug)
     let files = apps[app]
     if (name == 'app_new') {
-      return Promise.resolve(ok(`${apps[app] = new Map()}`))
+      return ok(`${apps[app] = new Map()}`)
     }
-    if (!files) return Promise.resolve(no(`no app ${app}`))
-    if (name == 'app_deploy') deployed.push(app)
-    else if (a.op == 'list') {
+    if (!files) return no(`no app ${app}`)
+    if (name == 'app_deploy') {
+      deployed.push(app)
+      released.set(app, new Map(files))
+    } else if (a.op == 'list') {
       let paths = [...files.keys()]
-      return Promise.resolve(
-        ok(
-          paths.join('\n'),
-          ++lists > valuesAfter
-            ? { files: paths.map((path) => ({ path })) }
-            : undefined,
-        ),
+      let live = released.get(app)
+      return ok(
+        paths.join('\n'),
+        ++lists > valuesAfter
+          ? {
+            files: await Promise.all(paths.map(async (path) => ({
+              path,
+              sha: await hash(files.get(path)!),
+            }))),
+            unreleased: !live || paths.length != live.size ||
+              (await Promise.all(paths.map(async (path) =>
+                live.has(path) &&
+                await hash(files.get(path)!) == await hash(live.get(path)!)
+              ))).includes(false),
+          }
+          : valuesAfter == Infinity
+          ? undefined
+          : {
+            files: paths.map((path) => ({ path })),
+          },
       )
     } else if (a.op == 'delete') {
       if (!files.delete(String(a.path))) {
-        return Promise.resolve(no(`no file ${a.path}`))
+        return no(`no file ${a.path}`)
       }
-    } else for (let f of a.files!) files.set(f.path, f)
-    return Promise.resolve(ok('done'))
+    } else if (a.files) {
+      writes.push(a.files.map((f) => f.path))
+      for (let f of a.files) files.set(f.path, f)
+    }
+    return ok('done')
   }
   let held = (app: string) => [...apps[app].keys()].sort()
-  return { ask, held, deployed, lists: () => lists }
+  return { ask, held, deployed, writes, lists: () => lists }
 }
 
 let file = (path: string): File => ({ path, content: path })
 let held = (...paths: string[]) => new Map(paths.map((p) => [p, file(p)]))
+let hash = async (f: File) => {
+  let bytes = 'content' in f
+    ? new TextEncoder().encode(f.content)
+    : Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0))
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
+    .map((b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 Deno.test('a push leaves the app holding exactly the directory, released once', async () => {
   let p = platform({ mail: held('index.html', 'old.js') })
@@ -66,7 +95,55 @@ Deno.test('a push leaves the app holding exactly the directory, released once', 
   })
   assertEquals(p.held('mail'), ['index.html', 'new.js'])
   assertEquals(p.deployed, ['mail'])
-  assertEquals(said[0], 'wrote 2 files, deleted old.js')
+  assertEquals(p.writes, [['new.js']])
+  assertEquals(said[0], 'wrote 1 file, deleted old.js')
+})
+
+Deno.test('a changed file is written and an unchanged file is left alone', async () => {
+  let p = platform({ mail: held('index.html', 'icon.png') })
+  let files = [
+    { path: 'index.html', content: 'new page' },
+    file('icon.png'),
+  ]
+  let said = await push(p.ask, files, { app: 'mail' })
+  assertEquals(p.writes, [['index.html']])
+  assertEquals(p.deployed, ['mail'])
+  assertEquals(said[0], 'wrote 1 file')
+})
+
+Deno.test('a released app with the same bytes causes no write or deploy', async () => {
+  let p = platform({
+    mail: new Map([
+      ['index.html', { path: 'index.html', content: 'é' }],
+      ['icon.png', { path: 'icon.png', base64: 'iVD/' }],
+    ]),
+  })
+  let files = [
+    { path: 'index.html', content: 'é' },
+    { path: 'icon.png', base64: 'iVD/' },
+  ]
+  assertEquals(await push(p.ask, files, { app: 'mail' }), ['no files changed'])
+  assertEquals(p.writes, [])
+  assertEquals(p.deployed, [])
+})
+
+Deno.test('a retry releases files written before the deploy failed', async () => {
+  let p = platform({ mail: held('index.html') })
+  let files = [file('index.html'), file('new.js')]
+  let ask: Ask = (method, params) => {
+    let { name } = params as { name: string }
+    if (name == 'app_deploy') throw new Error('transport lost before deploy')
+    return p.ask(method, params)
+  }
+  await assertRejects(() => push(ask, files, { app: 'mail' }))
+  assertEquals(p.writes, [['new.js']])
+  assertEquals(p.deployed, [])
+  assertEquals(await push(p.ask, files, { app: 'mail' }), [
+    'wrote 0 files',
+    'done',
+  ])
+  assertEquals(p.writes, [['new.js']])
+  assertEquals(p.deployed, ['mail'])
 })
 
 Deno.test('a large directory fits bounded calls before deletion and deploy', async () => {
@@ -153,10 +230,10 @@ Deno.test('a list whose words carry more than the files still yields the files',
   )
   let said = await push(p.ask, [file('index.html')], { app: 'mail' })
   assertEquals(p.held('mail'), ['index.html'])
-  assertEquals(said[0], 'wrote 1 file, deleted old.js')
+  assertEquals(said[0], 'wrote 0 files, deleted old.js')
 })
 
-Deno.test('a push waits for a deploying server to answer its list as data', async () => {
+Deno.test('a push waits for a deploying server to answer file hashes', async () => {
   let p = platform({ mail: held('index.html', 'old.js') }, '', 1)
   let said = await push(
     p.ask,
@@ -167,7 +244,7 @@ Deno.test('a push waits for a deploying server to answer its list as data', asyn
   assertEquals(p.lists(), 2)
   assertEquals(p.held('mail'), ['index.html'])
   assertEquals(p.deployed, ['mail'])
-  assertEquals(said[0], 'wrote 1 file, deleted old.js')
+  assertEquals(said[0], 'wrote 0 files, deleted old.js')
 })
 
 Deno.test('a server that keeps answering no list data changes nothing', async () => {
@@ -181,7 +258,7 @@ Deno.test('a server that keeps answering no list data changes nothing', async ()
         { wait: 0, poll: 0 },
       ),
     Error,
-    'app_files answered no value after 0s',
+    'app_files answered no file hashes after 0s',
   )
   assertEquals(p.lists(), 1)
   assertEquals(p.held('mail'), ['index.html', 'old.js'])
@@ -245,5 +322,9 @@ Deno.test('fileOf keeps UTF-8 as text', () => {
   assertEquals(fileOf('a.txt', new TextEncoder().encode('é')), {
     path: 'a.txt',
     content: 'é',
+  })
+  assertEquals(fileOf('bom.txt', new Uint8Array([0xef, 0xbb, 0xbf, 0x61])), {
+    path: 'bom.txt',
+    content: '\ufeffa',
   })
 })

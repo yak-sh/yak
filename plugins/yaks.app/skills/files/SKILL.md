@@ -19,6 +19,10 @@ The app's own files — `index.html`, the css and js beside it, `vocab.json` —
 written with `app_files`. **Writing a file needs no `op`**: give it a `path` and
 a `content`, or a list of them as `files: [{path, content}, …]`.
 
+`app_files(app, op: 'list')` lists their paths. Its structured result also
+includes `files: [{path, sha}]`, where `sha` is the SHA-256 of each file's
+bytes, and `unreleased` says whether the files differ from the live version.
+
 **Every write reports what was stored**, so a file transcribed by hand is
 checked in the call that made it rather than once the app serves broken:
 

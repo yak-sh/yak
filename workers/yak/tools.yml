@@ -129,8 +129,10 @@ app_files:
     default or the one sha or at names. A restore is itself a write, so it
     too can be undone. To undo any write, patch, fetch or delete here: op:
     history, then op: restore. Pass op explicitly unless supplying files,
-    content or base64 for a write. list returns file paths, read returns
-    file text, and delete confirms the path removed. Documentation:
+    content or base64 for a write. list returns file paths as text and files:
+    [{path, sha}] as data, with unreleased true when these files differ from
+    the live version. read returns file text, and delete confirms the path
+    removed. Documentation:
     https://yaks.app/docs/files.
 sandbox_shell:
   title: Run a build command

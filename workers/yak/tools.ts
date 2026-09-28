@@ -224,6 +224,7 @@ import {
   replaced,
   restore,
   restored,
+  same,
   sha256,
   snapshot,
   type Version,
@@ -2287,17 +2288,19 @@ let OURS: Row[] = [
       let blobs = r2Objects(ctx.env.BLOBS)
       let prefix = fileKey(space, app, '')
       if (op == 'list') {
-        let keys = await blobs.list(prefix)
-        // The app's own files: what the platform keeps beside them — the
-        // bytes a page uploaded, the bytes a version pins — is addressed by
-        // its content and was never a file anyone wrote (versions.ts `own`).
-        // Each as `files` takes one, so a program that lists and then writes
-        // speaks one shape.
-        let paths = own(keys.map((k) => k.slice(prefix.length)))
+        let [files, all] = await Promise.all([
+          manifest(blobs, prefix),
+          versions(ctx.dir, app),
+        ])
+        let paths = Object.keys(files).sort()
+        let live = all.find((v) => v.version == app.version)
         return {
           text: paths.join('\n') || '(no files)',
           space,
-          value: { files: paths.map((path) => ({ path })) },
+          value: {
+            files: paths.map((path) => ({ path, sha: files[path] })),
+            unreleased: !live || !same(live.files, files),
+          },
         }
       }
       if (op == 'read' || op == 'delete') {

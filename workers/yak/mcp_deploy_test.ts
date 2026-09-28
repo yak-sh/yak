@@ -15,6 +15,7 @@ import {
   txt,
   vocabFile,
 } from './probe.ts'
+import { sha256 } from './versions.ts'
 
 Deno.test('a trashed app releases its component to another app in the space', async () => {
   let k = await kernel()
@@ -175,6 +176,8 @@ Deno.test('a deploy is a version, and one word puts it back', async () => {
       ...app,
       files: [{ path: 'index.html', content: '<h1>lemon cake</h1>' }],
     })
+    let pending = await agent.answer('app_files', { ...app, op: 'list' })
+    assertEquals((pending.value as { unreleased: boolean }).unreleased, true)
     assertMatch(await agent.tool('app_deploy', app), /v1/)
 
     // v2: the change that broke it, with a file that did not exist before.
@@ -233,11 +236,16 @@ Deno.test('a deploy is a version, and one word puts it back', async () => {
       )).message,
       'no v9 of undo31/recipes — it keeps v4, v3, v2, v1',
     )
-    assertEquals(
-      (await agent.tool('app_files', { ...app, op: 'list' })).split('\n')
-        .sort(),
-      ['broken.js', 'index.html'],
-    )
+    let listing = await agent.answer('app_files', { ...app, op: 'list' })
+    assertEquals(listing.text.split('\n').sort(), ['broken.js', 'index.html'])
+    let digest = (s: string) => sha256(new TextEncoder().encode(s))
+    assertEquals(listing.value, {
+      files: [
+        { path: 'broken.js', sha: await digest('throw new Error("no")') },
+        { path: 'index.html', sha: await digest('<h1>OOPS</h1>') },
+      ],
+      unreleased: false,
+    })
 
     // A size down from a deploy: every write keeps what it replaced
     // (versions.ts, T-34508). The page has been written three times by now, so

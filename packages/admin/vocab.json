@@ -326,7 +326,7 @@
       "noun": "admin",
       "verb": "push",
       "title": "Push a directory to a yaks.app app",
-      "description": "Make an app hold exactly the files in a directory, through the connector's own tools: app_new when the app does not exist yet, app_files for every file (base64 for any that is not UTF-8), a delete for each file the directory no longer has, then app_deploy. Git is the app's only source. The app's slug is the directory's name unless --app names another; --space picks one when the account has several.\n\n  yak admin push apps/mail --owner\n  yak admin push apps/mail --app inbox --space jeff --title Inbox --owner",
+      "description": "Make an app hold exactly the files in a directory, through the connector's own tools: app_new when the app does not exist yet, app_files for new or changed files (base64 for any that is not UTF-8), a delete for each file the directory no longer has, then app_deploy when files need releasing. An unchanged, released app is left alone. Git is the app's only source. The app's slug is the directory's name unless --app names another; --space picks one when the account has several.\n\n  yak admin push apps/mail --owner\n  yak admin push apps/mail --app inbox --space jeff --title Inbox --owner",
       "input": {
         "dir": {
           "type": "string",

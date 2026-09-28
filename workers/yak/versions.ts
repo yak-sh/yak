@@ -251,7 +251,7 @@ export let whatChanged = (before: Files | null, after: Files) => {
 
 // Two versions with the same files are the same release: the manifest is the
 // whole of what a version IS.
-let same = (a: Files, b: Files) => {
+export let same = (a: Files, b: Files) => {
   let paths = Object.keys(a)
   return paths.length == Object.keys(b).length &&
     paths.every((p) => a[p] == b[p])
