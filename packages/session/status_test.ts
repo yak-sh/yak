@@ -260,6 +260,40 @@ Deno.test('a status filter answers only the entities wearing session', () => {
   assertEquals(eids('.session&.session.status!=settled,stopped,failed'), [S])
 })
 
+Deno.test('one transcript stays settled beside other transcripts with open work', () => {
+  let g = store()
+  g.apply([
+    { entity: { eid: 'open' }, session: { id: 'open' } },
+    { entity: { eid: 'flight' }, session: { id: 'flight' } },
+    { entity: { eid: 'abandoned' }, session: { id: 'abandoned' } },
+    request(1),
+    entry(2, { ask: { to: M } }),
+    said(3, 'e2'),
+    {
+      entity: { eid: 'open-call' },
+      entry: { session: 'open', seq: 1 },
+      call: { to: T },
+    },
+    {
+      entity: { eid: 'flight-attempt' },
+      entry: { session: 'flight', seq: 1 },
+      attempt: { state: 'inflight' },
+    },
+    {
+      entity: { eid: 'abandoned-call' },
+      entry: { session: 'abandoned', seq: 1 },
+      call: { to: T },
+      execution: { state: 'running' },
+    },
+  ], { trusted: true })
+  let [read] = g.get([S]) as Bundle[]
+  assertEquals((read.session as { status: string }).status, 'settled')
+  assertEquals(
+    (g.read('.session.status=settled') as Bundle[]).map((b) => b.entity.eid),
+    [S],
+  )
+})
+
 Deno.test('usingBefore is the newest using at or before a seq', () => {
   let entries = [
     entry(1, { content: { body: 'a' }, using: { model: 'a' } }),

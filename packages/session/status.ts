@@ -41,7 +41,6 @@
 
 import type { Bundle, Comp } from '@yaks/graph'
 import {
-  among,
   and,
   col,
   count,
@@ -286,59 +285,43 @@ export let sessionStatus = {
       })),
       lit(RETRIES),
     )
-    // The sessions with an attempt in flight: the few such attempts, found
-    // once for the whole statement by their index, where a test per session
-    // would scan all of its entries.
-    let inflight = among(
-      owner,
-      select({
-        cols: [col('session', 'e')],
-        from: table('attempt', 'a'),
-        joins: [
-          join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'a'))),
-        ],
-        where: eq(col('state', 'a'), lit('inflight')),
-      }),
-    )
-    // One pass over calls answers every session in a status query.
-    let open = among(
-      owner,
-      select({
-        cols: [col('session', 'e')],
+    // Start at this transcript's indexed entries. These checks also run when
+    // one session is read by eid, so scanning every call in the store for each
+    // such read multiplies the cost of an unrelated transcript.
+    let entries = (also: Expr) =>
+      exists(select({
+        cols: [lit(1)],
+        from: table('entry', 'e'),
+        where: and(mine('e'), also),
+      }))
+    let calls = (also: Expr) =>
+      entries(exists(select({
+        cols: [lit(1)],
         from: table(CALL, 'c'),
-        joins: [
-          join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
-        ],
-        where: not(exists(select({
-          cols: [lit(1)],
-          from: table(RESULT, 'r'),
-          where: eq(col('call', 'r'), col('entity', 'c')),
-        }))),
-      }),
-    )
-    let abandoned = among(
-      owner,
-      select({
-        cols: [col('session', 'e')],
-        from: table(CALL, 'c'),
-        joins: [
-          join(table('entry', 'e'), eq(col('entity', 'e'), col('entity', 'c'))),
-          join(
-            table('execution', 'x'),
-            eq(col('entity', 'x'), col('entity', 'c')),
-          ),
-        ],
-        where: and(
-          eq(col('state', 'x'), lit('running')),
-          isNull(col('by', 'x')),
-          not(exists(select({
-            cols: [lit(1)],
-            from: table(RESULT, 'r'),
-            where: eq(col('call', 'r'), col('entity', 'c')),
-          }))),
+        where: and(eq(col('entity', 'c'), col('entity', 'e')), also),
+      })))
+    let unanswered = not(exists(select({
+      cols: [lit(1)],
+      from: table(RESULT, 'r'),
+      where: eq(col('call', 'r'), col('entity', 'c')),
+    })))
+    let inflight = entries(has(
+      'attempt',
+      col('entity', 'e'),
+      eq(col('state', 'k'), lit('inflight')),
+    ))
+    let open = calls(unanswered)
+    let abandoned = calls(and(
+      has(
+        'execution',
+        col('entity', 'c'),
+        and(
+          eq(col('state', 'k'), lit('running')),
+          isNull(col('by', 'k')),
         ),
-      }),
-    )
+      ),
+      unanswered,
+    ))
     // The newest ask.
     let ask = sub(select({
       cols: [col('entity', 'e')],
