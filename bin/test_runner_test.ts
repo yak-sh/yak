@@ -287,6 +287,35 @@ Deno.test('a shard ends when its parent is killed', async () => {
   }
 })
 
+Deno.test('a phase ends with its runner killed outright', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'test-phase-orphan-' })
+  let runner: Deno.ChildProcess | undefined
+  let leader = 0
+  try {
+    runner = new Deno.Command(Deno.execPath(), {
+      args: ['run', '-A', fixture, 'orchestrator', 'broad', dir],
+      stdout: 'null',
+      stderr: 'null',
+    }).spawn()
+    await waitFor(`${dir}/grandchild.pid`)
+    let grandchild = Number(await Deno.readTextFile(`${dir}/grandchild.pid`))
+    leader = Number(await Deno.readTextFile(`${dir}/broad.ready`))
+    runner.kill('SIGKILL')
+    await runner.status
+    runner = undefined
+    await until(async () =>
+      !await fixtureExists(leader, dir) &&
+      !await fixtureExists(grandchild, dir), {
+      timeout: 5_000,
+      label: 'phase and descendant to exit after runner death',
+    })
+  } finally {
+    if (runner) killChild(runner)
+    if (leader) killGroup(leader)
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 let fixture = fileURLToPath(
   new URL('./test_runner_fixture.ts', import.meta.url),
 )

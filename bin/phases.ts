@@ -56,6 +56,23 @@ function spawnGroup(spec: TestCommand): Deno.ChildProcess {
   }).spawn()
 }
 
+// The phase runner can be killed without executing its signal handlers. A
+// separate session watches the pipe only this process holds and settles the
+// phase's group if that pipe closes before the phase is done.
+let guardGroup = (pid: number) =>
+  new Deno.Command('setsid', {
+    args: [
+      Deno.execPath(),
+      'run',
+      '-A',
+      new URL('./phase-guard.ts', import.meta.url).pathname,
+      String(pid),
+    ],
+    stdin: 'piped',
+    stdout: 'null',
+    stderr: 'inherit',
+  }).spawn()
+
 function signalGroup(pid: number, signal: Deno.Signal): void {
   try {
     Deno.kill(-pid, signal)
@@ -121,6 +138,7 @@ export async function runTestCommands(
 ): Promise<Result> {
   let clock = options.clock ?? realClock
   let active: Deno.ChildProcess | undefined
+  let guard: Deno.ChildProcess | undefined
   let failure: Result | undefined
   let cancellation: (typeof cancellationSignals)[number] | undefined
   let terminalSignal: Deno.Signal | undefined
@@ -128,6 +146,16 @@ export async function runTestCommands(
   let terminating = false
   let settlement: Promise<void> | undefined
   let settlementStarted: (() => void) | undefined
+
+  let releaseGuard = async (settled: boolean) => {
+    if (!guard) return
+    let owned = guard
+    guard = undefined
+    let writer = owned.stdin.getWriter()
+    if (settled) await writer.write(new Uint8Array([1]))
+    await writer.close()
+    await owned.status
+  }
 
   let startSettlement = (signal?: Deno.Signal): Promise<void> => {
     if (!active) return Promise.resolve()
@@ -189,6 +217,7 @@ export async function runTestCommands(
     for (let spec of commands) {
       if (cancellation) return await finish({ signal: cancellation })
       active = spawnGroup(spec)
+      guard = guardGroup(active.pid)
       let cancellationStarted = new Promise<void>((resolve) => {
         settlementStarted = resolve
       })
@@ -208,6 +237,7 @@ export async function runTestCommands(
       if (first.kind === 'settlement') await settlement
       let status = first.kind === 'status' ? first.status : await statusPromise
       await startSettlement()
+      await releaseGuard(true)
       active = undefined
       settlement = undefined
       settlementStarted = undefined
@@ -228,13 +258,19 @@ export async function runTestCommands(
     // A synchronous spawn failure and any future exception still cannot leave
     // an already-owned group behind.
     if (active) {
-      let cleanup = startSettlement(cancellation ?? 'SIGTERM')
-      // Join leader status and whole-group settlement concurrently. Awaiting
-      // the leader first would recreate the unbounded stubborn-handler bug.
-      await Promise.all([
-        active.status.catch(() => undefined),
-        cleanup,
-      ])
+      let settled = false
+      try {
+        let cleanup = startSettlement(cancellation ?? 'SIGTERM')
+        // Join leader status and whole-group settlement concurrently. Awaiting
+        // the leader first would recreate the unbounded stubborn-handler bug.
+        await Promise.all([
+          active.status.catch(() => undefined),
+          cleanup,
+        ])
+        settled = true
+      } finally {
+        await releaseGuard(settled)
+      }
     }
     if (!terminating) {
       for (let signal of cancellationSignals) {
