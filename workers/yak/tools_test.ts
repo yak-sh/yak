@@ -4,6 +4,7 @@
 // say, the file it miscounted, the patch that matched twice, the URL it
 // reached for — each a function, so a case is a line.
 import {
+  assert,
   assertEquals,
   assertRejects,
   assertStringIncludes,
@@ -424,10 +425,33 @@ Deno.test('a deploy says how many round trips it took', async () => {
     }),
     { hops: 5, r2: 5 },
   )
+  let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
+  assert(deploy.hops <= 25)
+  assert(deploy.r2 <= 32)
   assertEquals(
-    await costs('app_deploy', { space: 'ada', app: 'recipes' }),
-    { hops: 25, r2: 32 },
+    (await costs('app_files', {
+      space: 'ada',
+      app: 'recipes',
+      op: 'list',
+    })).r2,
+    0,
   )
+  let listed = await call(setup, 'app_files', {
+    space: 'ada',
+    app: 'recipes',
+    op: 'list',
+  })
+  assertEquals(listed.value?.files, [
+    {
+      path: 'index.html',
+      sha: await sha256(new TextEncoder().encode('<h1>hi</h1>')),
+    },
+    {
+      path: 'style.css',
+      sha: await sha256(new TextEncoder().encode('h1{color:teal}')),
+    },
+  ])
+  assertEquals(listed.value?.unreleased, false)
 })
 
 // And what a listing costs (T-35431). The shape is what the exact numbers are

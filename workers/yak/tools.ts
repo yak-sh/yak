@@ -2524,12 +2524,14 @@ let OURS: Row[] = [
       let prefix = fileKey(space, edit, '')
       let archive = `${space.slug}/${app.slug}/`
       if (op == 'list') {
-        let [files, all] = await Promise.all([
-          manifest(blobs, prefix),
-          versions(ctx.dir, app),
-        ])
-        let paths = Object.keys(files).sort()
+        let all = await versions(ctx.dir, app)
         let live = all.find((v) => v.version == app.version)
+        // With no draft, source is the immutable release whose file hashes
+        // the version already records. A draft needs its own bytes inspected.
+        let files = !app.draft && live
+          ? live.files
+          : await manifest(blobs, prefix)
+        let paths = Object.keys(files).sort()
         return {
           text: paths.join('\n') || '(no files)',
           space,
