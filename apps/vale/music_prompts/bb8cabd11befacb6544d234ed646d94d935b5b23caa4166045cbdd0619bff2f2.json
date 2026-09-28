@@ -1,0 +1,35 @@
+{
+  "land": "sporefen",
+  "song": 2,
+  "sha256": "bb8cabd11befacb6544d234ed646d94d935b5b23caa4166045cbdd0619bff2f2",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Sporefen: a luminous fungal marsh, tall toadstools and green water beneath drifting spores. A softly enchanted theme with harp, airy strings and gentle pulse. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571593-SIIlPl1VJ4EnQVFHlgPa",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 177.42000000000002,
+    "integrated_lufs": -11.18,
+    "true_peak_dbfs": 0.23,
+    "loudness_range_lu": 12.6,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

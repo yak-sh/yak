@@ -1,0 +1,35 @@
+{
+  "land": "bogheart",
+  "song": 1,
+  "sha256": "7a58780ff9752b4e9cc11e26c16d009fdbe5ecb89698c9ce3efe7a4c686fb48e",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Bogheart: deep brown bog pools and a toadstool wood under a yellow-grey sky, midges in the air. A wary, earthy melody with low strings and restrained hand drum. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571568-75I4wdeQveHLI1uwEQyO",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 176.59,
+    "integrated_lufs": -12.63,
+    "true_peak_dbfs": 0.26,
+    "loudness_range_lu": 10.7,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

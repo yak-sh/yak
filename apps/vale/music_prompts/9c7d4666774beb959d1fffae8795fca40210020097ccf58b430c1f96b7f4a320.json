@@ -1,0 +1,35 @@
+{
+  "land": "stonestep",
+  "song": 2,
+  "sha256": "9c7d4666774beb959d1fffae8795fca40210020097ccf58b430c1f96b7f4a320",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Stonestep: a small stone town, pale quarry steps, green meadow and watchful moor. A broad ascending melody with warm strings and flute. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571597-rCXo5qjoPbb3VHtitgFn",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 177.45,
+    "integrated_lufs": -11.37,
+    "true_peak_dbfs": 0.11,
+    "loudness_range_lu": 9.4,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

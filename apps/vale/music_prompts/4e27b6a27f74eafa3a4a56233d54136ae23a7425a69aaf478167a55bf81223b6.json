@@ -1,0 +1,35 @@
+{
+  "land": "heatherfell",
+  "song": 1,
+  "sha256": "4e27b6a27f74eafa3a4a56233d54136ae23a7425a69aaf478167a55bf81223b6",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Heatherfell: violet heather moor, stony fell, loose scree and a small high tarn. An airy, roaming melody with high flute and open strings. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571625-b9sdBQ49IJuB6KZ9Mo8c",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 174.37,
+    "integrated_lufs": -11.19,
+    "true_peak_dbfs": 0.09,
+    "loudness_range_lu": 10.9,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

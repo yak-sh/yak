@@ -65,4 +65,28 @@ export let TRACKS: Record<string, [string, string]> = {
     '915c3a133a08f48b97f821e1f68105aeab4ade6eb0127e0522c0320b09d25617',
     '10fec26c13083421bf093b6912510c00a38a433f50c7df2d0ce40eae1aa4f049',
   ],
+  bogheart: [
+    '7a58780ff9752b4e9cc11e26c16d009fdbe5ecb89698c9ce3efe7a4c686fb48e',
+    '77a60d6a3fa3ccaaa139c9cb4e2013069a254f58ac64ad30c00c884da740324c',
+  ],
+  sporefen: [
+    '924086e81158da77a50c6d82ba026da251ba34eb19446a55a6aa55e113743634',
+    'bb8cabd11befacb6544d234ed646d94d935b5b23caa4166045cbdd0619bff2f2',
+  ],
+  stonestep: [
+    'b6eed3b7c11a0fed025b67c9af42eb19e4a097002018e9ca4884bed05f56b478',
+    '9c7d4666774beb959d1fffae8795fca40210020097ccf58b430c1f96b7f4a320',
+  ],
+  heatherfell: [
+    '4e27b6a27f74eafa3a4a56233d54136ae23a7425a69aaf478167a55bf81223b6',
+    'a948736c06aa8bc4bc6acea9cc6c75facae9414c9b6be62fa7d2c51238a15d71',
+  ],
+  oldwall: [
+    '85d4e26ed668c8447c0c1b88e58e90739d1518955303cf8a221bfa1e2e24e40f',
+    '01b4c1cc13e04567f9e9c25267938151fbace45162f6e672e2905b95e07cf5a8',
+  ],
+  kingsbarrow: [
+    'e21a8af626d520966d7a8f0b4c8b65d0b87ae6a50edf9ace3be2fba315ff1ae5',
+    '5bd6a695617aad8257d3f35e6628bf1ec87db9653950fccce350cd94ee1ad865',
+  ],
 }

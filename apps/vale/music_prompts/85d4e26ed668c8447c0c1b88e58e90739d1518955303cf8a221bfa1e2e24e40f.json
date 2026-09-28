@@ -1,0 +1,35 @@
+{
+  "land": "oldwall",
+  "song": 1,
+  "sha256": "85d4e26ed668c8447c0c1b88e58e90739d1518955303cf8a221bfa1e2e24e40f",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Oldwall: broken ancient walls among bracken and autumn woods above a quiet tarn. A nostalgic melody with amber strings and flute. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571635-2feFIYQkYPLAommbMvwb",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 179.54,
+    "integrated_lufs": -11.3,
+    "true_peak_dbfs": 0.35,
+    "loudness_range_lu": 8.6,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "land": "oldwall",
+  "song": 2,
+  "sha256": "01b4c1cc13e04567f9e9c25267938151fbace45162f6e672e2905b95e07cf5a8",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Oldwall: broken ancient walls among bracken and autumn woods above a quiet tarn. A patient, dignified theme suggesting a forgotten kingdom with cello and harp. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571649-JNWFvfdie3iZ2hS1CnbK",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 175.44,
+    "integrated_lufs": -11.46,
+    "true_peak_dbfs": 0.15,
+    "loudness_range_lu": 8.2,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}
