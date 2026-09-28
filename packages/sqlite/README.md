@@ -134,7 +134,10 @@ aggregates.
 
 `install()` preserves existing data, adds missing columns, and rebuilds a table
 whose foreign keys or checks (a reference's death word, an enum) no longer match
-the vocabulary, then recreates declared indexes. A table whose rows the new
+the vocabulary, then recreates declared indexes. When a text property becomes a
+reference, it resolves each stored eid to the entity spine's integer id during
+the rebuild; an unresolved eid leaves the old table untouched and reports an
+error. A table whose rows the new
 shape would refuse, such as a value an enum no longer lists, is left as it stood
 and reported through `base.report` (the console by default): its rows need a
 migration that prepares them. It initializes the store epoch and number sequence

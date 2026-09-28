@@ -2,6 +2,7 @@
 // per component, and the doc view (search indexes belong to @yaks/fts).
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import {
@@ -28,6 +29,59 @@ import { mem, shop, spy } from './testing.ts'
 
 let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
 let all = text(schema(shop)).join('\n')
+
+let lookWords = (ref = false) =>
+  loadVocab({
+    $defs: {
+      player: { component: true, properties: {} },
+      seen: { component: true, properties: { level: { type: 'string' } } },
+      look: {
+        component: true,
+        properties: {
+          player: ref
+            ? { type: 'string', ref: 'player', death: 'cascade' }
+            : { type: 'string' },
+          name: { type: 'string' },
+        },
+      },
+    },
+  })
+
+Deno.test('a stored eid becomes a reference without losing its look row', () => {
+  let d = mem(), old = lookWords(), next = lookWords(true)
+  let before = storage(d, old)
+  before.install()
+  graph({ storage: before, vocab: old }).apply([
+    { entity: { eid: 'hero' }, player: {}, seen: { level: 'vale' } },
+    { entity: { eid: 'face' }, look: { player: 'hero', name: 'Ada' } },
+  ])
+
+  let after = storage(d, next)
+  after.install()
+  assertEquals(after.read('.look.player.seen.level=vale&*'), [{
+    entity: { eid: 'face' },
+    look: { player: 'hero', name: 'Ada' },
+  }])
+})
+
+Deno.test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
+  let d = mem(), old = lookWords(), next = lookWords(true)
+  let before = storage(d, old)
+  before.install()
+  graph({ storage: before, vocab: old }).apply([{
+    entity: { eid: 'face' },
+    look: { player: 'missing', name: 'Ada' },
+  }])
+  let errors: Error[] = []
+  storage(d, next, { report: (e) => errors.push(e) }).install()
+  assertEquals(errors.map((e) => e.message), [
+    'look keeps its old shape: a reference names no entity',
+  ])
+  assertEquals(before.read('.look&*'), [{
+    entity: { eid: 'face' },
+    look: { player: 'missing', name: 'Ada' },
+  }])
+})
 
 Deno.test('the shop vocabulary loads with its kinds and death words', () => {
   assertEquals(shop.all.includes('product'), true)

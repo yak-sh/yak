@@ -141,6 +141,8 @@ type Sub = {
   /** the durable rows that may match a query reading peers */
   durable?: And | null
   candidates?: Bundle[] | Promise<Bundle[]>
+  /** one reference through which this query reads a peer value */
+  ref?: { comp: string; prop: string; far: Set<string> }
   /** the components its rows carry, or `null` for every one (@yaks/graph
    * `wanted`), so a pushed bundle is cut the way the first answer was */
   want?: Set<string> | null
@@ -346,6 +348,7 @@ export let subscriptions = (graph: Graph, opts: {
       let plan = peerPlan(ast, graph.vocab)
       sub.peer = plan.peers
       sub.durable = plan.durable
+      sub.ref = plan.ref
       sub.agg = aggregate(ast)
       if (sub.agg) return tell(sub, true)
       sub.want = wanted(graph.vocab, line)
@@ -423,11 +426,8 @@ export let subscriptions = (graph: Graph, opts: {
       graph.read(q, { durable: true }),
   ) => {
     if (sub.agg) return tell(sub)
-    // Peer candidates include held values, so only durable queries can use
-    // the scoped storage read. Read the complete peer answer when it moves.
-    if (sub.peer) scope = undefined
     let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
-    return then(sub.peer ? read(sub) : load(query), (set) => {
+    return then(sub.peer ? read(sub, scope) : load(query), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...sub.members].filter((e) =>
         (!scope || scope.has(e)) && !ids.has(e)
@@ -609,27 +609,42 @@ export let subscriptions = (graph: Graph, opts: {
       return collect()
     })
   }
-  let source = (sub: Sub): Bundle[] | Promise<Bundle[]> => {
+  let source = (
+    sub: Sub,
+    scope?: Set<Eid>,
+  ): Bundle[] | Promise<Bundle[]> => {
     let values = peers.values()
     let ids = [...new Set(values.map((b) => b.entity.eid))]
-    let candidates = sub.candidates ??
+    let candidates = scope ? graph.get([...scope]) : sub.candidates ??
       (sub.candidates = sub.durable
         ? graph.read(sub.durable, { durable: true })
         : [])
+    let refs = sub.ref && !scope && ids.length
+      ? graph.read(
+        `.${sub.ref.comp}.${sub.ref.prop}=${ids.join(',')}&*`,
+        { durable: true },
+      )
+      : []
     return then(
       candidates,
       (rows) =>
         then(
-          durableRows(ids),
-          (held) => overlay([...rows, ...held], values),
+          refs,
+          (linked) =>
+            then(durableRows(ids), (held) =>
+              overlay([...rows, ...linked, ...held], values)),
         ),
     )
   }
-  let read = (sub: Sub): Bundle[] | Promise<Bundle[]> => {
+  let read = (
+    sub: Sub,
+    scope?: Set<Eid>,
+  ): Bundle[] | Promise<Bundle[]> => {
     if (!sub.peer) return graph.read(sub.query, { durable: true })
-    return then(source(sub), (bundles) => {
+    return then(source(sub, scope), (bundles) => {
       let chosen = matcher(sub.query, graph.vocab)(bundles)
-      return chosen.map((b) => only(sub.want ?? null)(stored(b)))
+      return chosen.filter((b) => !scope || scope.has(b.entity.eid))
+        .map((b) => only(sub.want ?? null)(stored(b)))
     })
   }
 
@@ -662,7 +677,25 @@ export let subscriptions = (graph: Graph, opts: {
           (s) =>
             attempt(
               s,
-              () => s.routed ? send(s, routing.get(s)) : push(s),
+              () => {
+                if (s.routed) return send(s, routing.get(s))
+                if (!s.ref) return push(s)
+                let moved = bundles.filter((b) =>
+                  Object.keys(b).some((c) => s.ref!.far.has(c))
+                )
+                if (!moved.length) return
+                let ids = [...new Set(moved.map((b) => b.entity.eid))]
+                return then(
+                  graph.read(
+                    `.${s.ref.comp}.${s.ref.prop}=${ids.join(',')}`,
+                    { durable: true },
+                  ),
+                  (rows) =>
+                    rows.length
+                      ? push(s, new Set(rows.map((b) => b.entity.eid)))
+                      : undefined,
+                )
+              },
             ),
         ),
         () => undefined,

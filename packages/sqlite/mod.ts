@@ -108,6 +108,7 @@ export {
   standing,
   tabled,
   unfit,
+  unresolved,
   vacant,
 } from './ddl.ts'
 export { EPOCH, epoch, type Meta, meta } from './meta.ts'

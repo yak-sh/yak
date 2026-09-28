@@ -76,6 +76,39 @@ Deno.test('a d1 install removes empty old columns but keeps written ones', async
   assertEquals((await has('used')).results.length, 1)
 })
 
+Deno.test('a d1 install resolves stored eids when a property becomes a reference', async () => {
+  let words = (ref: boolean) =>
+    loadVocab({
+      $defs: {
+        player: { component: true, properties: {} },
+        seen: { component: true, properties: { level: { type: 'string' } } },
+        look: {
+          component: true,
+          properties: {
+            player: ref
+              ? { type: 'string', ref: 'player', death: 'cascade' }
+              : { type: 'string' },
+          },
+        },
+      },
+    })
+  let db = d1(), before = storage(db, words(false))
+  await before.install()
+  await before.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'hero' }, player: {}, seen: { level: 'vale' } },
+      { entity: { eid: 'face' }, look: { player: 'hero' } },
+    ])
+  )
+  assertEquals((await before.read('.look&*'))[0].look, { player: 'hero' })
+  let after = storage(db, words(true))
+  await after.install()
+  assertEquals((await after.read('.look&*'))[0].look, { player: 'hero' })
+  assertEquals((await after.read('.look.player.seen.level=vale&*'))[0].look, {
+    player: 'hero',
+  })
+})
+
 Deno.test('a d1 store takes a state its vocabulary stopped listing', async () => {
   let db = d1()
   let repo = (state: Record<string, unknown>) =>

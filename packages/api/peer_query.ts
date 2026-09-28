@@ -52,9 +52,9 @@ let positive = (v: Vocab, c: Clause) => {
 // null is true and `never` is false while simplifying AND and OR. Directives
 // are dropped so an order or limit never cuts candidates before the full
 // query runs over durable rows and peer values together.
-let relax = (v: Vocab, c: Clause): Clause | null => {
+let relax = (v: Vocab, c: Clause, without = false): Clause | null => {
   if (c.kind == 'and' || c.kind == 'or') {
-    let parts = c.clauses.map((p) => relax(v, p))
+    let parts = c.clauses.map((p) => relax(v, p, without))
     if (c.kind == 'and') {
       if (parts.some((p) => p?.kind == 'never')) return NEVER
       let kept = parts.filter((p) => p != null)
@@ -65,7 +65,7 @@ let relax = (v: Vocab, c: Clause): Clause | null => {
     return kept.length ? { kind: 'or', clauses: kept } : NEVER
   }
   if (c.kind == 'pred' && uses(v, [c])) {
-    return positive(v, c) ? NEVER : null
+    return without || positive(v, c) ? NEVER : null
   }
   if (
     c.kind == 'order' || c.kind == 'limit' || c.kind == 'after' ||
@@ -75,19 +75,68 @@ let relax = (v: Vocab, c: Clause): Clause | null => {
   return c
 }
 
+// A peer predicate reached through one reference can be refreshed by finding
+// the rows that point at the moved peer. Negative predicates also match when
+// that peer has no held value, so they keep the ordinary whole-answer path.
+let referent = (q: And, v: Vocab) => {
+  let ref: { comp: string; prop: string; far: Set<string> } | undefined
+  let count = 0
+  let valid = true
+  let walk = (cs: Clause[]) => {
+    for (let c of cs) {
+      if (c.kind == 'and' || c.kind == 'or') walk(c.clauses)
+      else if (c.kind == 'pred' && uses(v, [c])) {
+        count++
+        let hops = aim(v, c.path, bare(c))
+        let first = hops[0], last = hops[1]
+        if (
+          c.where || c.not || c.op == '?' || c.op == '!=' ||
+          c.op == '=' && c.value?.kind == 'scalar' && c.value.raw == '' ||
+          hops.length != 2 ||
+          !first || v.prop(first.comp, first.prop)?.category != 'ref' ||
+          syncOf(v, last?.comp ?? '') != 'peers' ||
+          ref && (ref.comp != first.comp || ref.prop != first.prop)
+        ) {
+          valid = false
+          continue
+        }
+        if (!ref) ref = { comp: first.comp, prop: first.prop, far: new Set() }
+        ref.far.add(last.comp)
+      } else if (c.kind == 'pred') {
+        // A second relation could change a row's answer without moving the
+        // peer reached through this reference.
+        if (
+          c.where || c.not || v.assoc(c.path[0]) ||
+          aim(v, c.path, bare(c)).length > 1
+        ) valid = false
+      } else if (
+        c.kind == 'order' || c.kind == 'limit' || c.kind == 'after' ||
+        c.kind == 'count' || c.kind == 'distinct' || c.kind == 'tally' ||
+        c.kind == 'refs' || c.kind == 'near' || c.kind == 'walk' ||
+        c.kind == 'edges'
+      ) valid = false
+    }
+  }
+  walk(q.clauses)
+  return valid && count ? ref : undefined
+}
+
 /** The original query reads peers, and the durable rows that might match it.
  * `durable: null` means every matching row must have a held peer value. */
 export let peerPlan = (q: And, v: Vocab): {
   peers: boolean
   durable: And | null
+  ref?: { comp: string; prop: string; far: Set<string> }
 } => {
   if (!uses(v, q.clauses)) return { peers: false, durable: q }
-  let clause = relax(v, q)
-  if (clause?.kind == 'never') return { peers: true, durable: null }
+  let ref = referent(q, v)
+  let clause = relax(v, q, !!ref)
+  if (clause?.kind == 'never') return { peers: true, durable: null, ref }
   if (!clause) return { peers: true, durable: parse('.entity&*') }
   let clauses = clause.kind == 'and' ? clause.clauses : [clause]
   return {
     peers: true,
     durable: { kind: 'and', clauses: [...clauses, { kind: 'every' }] },
+    ...(ref ? { ref } : {}),
   }
 }

@@ -647,8 +647,9 @@ export class Store {
   // rebuilt from the remembered vocabulary, which is why a deploy is a write
   // and a reboot rather than a migration: a table the store has never seen is
   // created, a column a word grew is added, and what changed is which words the
-  // graph admits. Only a word that holds nothing is dropped or retyped, by
-  // `prepare` (the vocab door).
+  // graph admits. Only a word that holds nothing is dropped or retyped by
+  // `prepare` (the vocab door); a text eid becoming a reference is converted
+  // by schema fitting while the old rows stay in place until it succeeds.
   #boot(prepare = () => {}) {
     this.#atomic(() => {
       prepare()

@@ -50,7 +50,12 @@
       "type": "object",
       "description": "A hero's name and colours. The newest row for a player is how they look now; the first row is written when the hero is made.",
       "properties": {
-        "player": { "type": "string", "index": true },
+        "player": {
+          "type": "string",
+          "ref": "player",
+          "death": "cascade",
+          "index": true
+        },
         "name": {
           "type": "string",
           "description": "The name over their head."

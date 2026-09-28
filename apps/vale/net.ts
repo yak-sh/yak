@@ -17,7 +17,7 @@ import { type Client, client, type Watch } from '@yaks/client'
 import { comp, num, str } from './bundle.ts'
 export { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
-import { areaOf, REACH } from './area.ts'
+import { areaOf, looksOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
 import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
@@ -193,17 +193,11 @@ export let connect = (base: URL) => {
     return found
   }
   let syncLooks = () => {
-    let ids = [
-      ...new Set([
-        ...rows('player').map((b) => b.entity.eid),
-        ...(hero ? [hero] : []),
-      ]),
-    ].sort()
-    let query = ids.length ? `.look.player=${ids.join(',')}&*` : ''
+    let query = looksOf(area, hero ?? undefined)
     if (query == lookQuery) return
     lookWatch?.close()
     lookQuery = query
-    lookWatch = query ? c.watch(query) : null
+    lookWatch = c.watch(query)
   }
   let own: Record<string, Watch> = {}
   let chosen: Watch | null = null

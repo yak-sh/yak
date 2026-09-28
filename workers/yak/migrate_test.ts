@@ -39,6 +39,45 @@ let APP = 'd0000000-0000-4000-8000-0000000000ab'
 let ONE = '10000000-0000-4000-8000-000000000001'
 let TWO = '20000000-0000-4000-8000-000000000002'
 
+Deno.test('an app deploy turns stored player eids into queryable look references', async () => {
+  let ctx = state(), now = newer(ctx, 'ada/vale')
+  let words = (ref: boolean) => ({
+    $defs: {
+      player: { component: true, properties: {} },
+      seen: { component: true, properties: { level: { type: 'string' } } },
+      look: {
+        component: true,
+        properties: {
+          player: ref
+            ? { type: 'string', ref: 'player', death: 'cascade' }
+            : { type: 'string' },
+          name: { type: 'string' },
+        },
+      },
+    },
+  })
+  let deploy = (ref: boolean) =>
+    now.door('/vocab', {
+      method: 'POST',
+      body: JSON.stringify(words(ref)),
+    }, APP)
+  assertEquals((await deploy(false)).status, 200)
+  assertEquals(
+    (await now.apply([
+      { entity: { eid: ONE }, player: {}, seen: { level: 'vale' } },
+      { entity: { eid: TWO }, look: { player: ONE, name: 'Ada' } },
+    ], APP)).status,
+    200,
+  )
+
+  assertEquals((await deploy(true)).status, 200)
+  let [look] = await newer(ctx, 'ada/vale').query(
+    '.look.player.seen.level=vale&*',
+    APP,
+  )
+  assertEquals(look.look, { player: ONE, name: 'Ada' })
+})
+
 // A Store over the object, as a new incarnation, driven through its own doors.
 let newer = (ctx: State, name: string) => {
   let store = new Store(

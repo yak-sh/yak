@@ -51,12 +51,15 @@ import {
   eq,
   type Expr,
   fn,
+  isNull,
+  left,
   lit,
   notNull,
   NOW,
   render,
   select,
   type Stmt,
+  sub,
   table,
 } from '@yaks/sql'
 import { checks, type Stood, stood } from './physical.ts'
@@ -356,14 +359,64 @@ let comps = (vocab: Vocab, was: Standing): string[] =>
 // the two things only a rebuild changes: which columns are keyed to another
 // table, and what each column checks. A column the table lacks is `grown`'s,
 // and arrives with its check.
-let fits = (t: Stood, fresh: CreateTable): boolean => {
+let fits = (t: Stood, fresh: CreateTable, refs: string[]): boolean => {
   let keyed = fresh.cols.filter((c) => c.ref).map((c) => c.name)
   let checked = checks(render(fresh).sql)
   let names = ['', ...t.cols.map((r) => String(r.name).toLowerCase())]
   return keyed.length == t.keys.length &&
     keyed.every((c) => t.keys.includes(c)) &&
+    !refs.length &&
     names.every((n) => (t.checks[n] ?? '') == (checked[n] ?? ''))
 }
+
+// A scalar eid becomes an integer reference when its vocabulary learns the
+// relation. The existing values need resolving through the entity spine.
+let converted = (
+  vocab: Vocab,
+  comp: string,
+  t: Stood,
+  fresh: CreateTable,
+): string[] =>
+  fresh.cols.flatMap((c) => {
+    let old = t.cols.find((r) => r.name == c.name)
+    return vocab.prop(comp, c.name)?.category == 'ref' &&
+        c.type == 'integer' && String(old?.type).toLowerCase() == 'text'
+      ? [c.name]
+      : []
+  })
+
+/** Existing scalar eids that cannot become references. A failed conversion
+ * must leave its old column untouched rather than turn a missing eid into null. */
+export let unresolved = (
+  vocab: Vocab,
+  was: Standing,
+): Record<string, Stmt[]> =>
+  Object.fromEntries(
+    comps(vocab, was).flatMap((comp) => {
+      let fresh = tableDdl(vocab, comp)
+      let names = converted(vocab, comp, was[comp], fresh)
+      return names.length
+        ? [[
+          comp,
+          names.map((name) =>
+            select({
+              cols: [col(name, comp)],
+              from: table(comp),
+              joins: [left(
+                table('entity', '__ref'),
+                eq(
+                  col('eid', '__ref'),
+                  col(name, comp),
+                ),
+              )],
+              where: and(notNull(col(name, comp)), isNull(col('id', '__ref'))),
+              limit: lit(1),
+            })
+          ),
+        ]]
+        : []
+    }),
+  )
 
 /**
  * What {@link grown} cannot fix: a constraint the vocabulary changed its mind
@@ -431,17 +484,30 @@ export let refit = (
           type: String(r.type ?? '') || undefined,
         }))
       let fresh = tableDdl(vocab, comp, comp, extra)
-      if (fits(t, fresh) && !empty[comp]?.length) return []
+      let refs = converted(vocab, comp, t, fresh)
+      if (fits(t, fresh, refs) && !empty[comp]?.length) return []
       let old = t.cols.map((r) => String(r.name))
       let cols = fresh.cols.map((r) => r.name).filter((name) =>
         old.includes(name)
       )
       let aside = `${comp}__refit`
+      let changed = new Set(refs)
       let copy = (into: string, from: string, names: string[]): Stmt => ({
         t: 'insert',
         into,
         cols: names,
-        q: select({ cols: names.map((c) => col(c)), from: table(from) }),
+        q: select({
+          cols: names.map((c) =>
+            from == aside && changed.has(c)
+              ? sub(select({
+                cols: [col('id')],
+                from: table('entity'),
+                where: eq(col('eid'), col(c, aside)),
+              }))
+              : col(c)
+          ),
+          from: table(from),
+        }),
       })
       return [[comp, [
         // A column of no type holds each value exactly as it was stored.
@@ -502,6 +568,12 @@ export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
 export let fit = (driver: Driver, vocab: Vocab, was: Standing): Error[] =>
   unit(driver, () => {
     for (let stmt of grown(vocab, was)) driver.query(stmt)
+    let missing = Object.fromEntries(
+      Object.entries(unresolved(vocab, was)).map(([comp, checks]) => [
+        comp,
+        checks.some((q) => driver.query(q).length),
+      ]),
+    )
     let empty = Object.fromEntries(
       Object.entries(vacant(vocab, was)).map(
         ([comp, queries]) => [
@@ -512,6 +584,13 @@ export let fit = (driver: Driver, vocab: Vocab, was: Standing): Error[] =>
       ),
     )
     return Object.entries(refit(vocab, was, empty)).flatMap(([comp, stmts]) => {
+      if (missing[comp]) {
+        return [
+          new Error(
+            `${comp} keeps its old shape: a reference names no entity`,
+          ),
+        ]
+      }
       try {
         unit(driver, () => stmts.forEach((s) => driver.query(s)))
         return []

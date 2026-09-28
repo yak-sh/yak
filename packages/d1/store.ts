@@ -95,6 +95,7 @@ import {
   touched,
   unburySql,
   unfit,
+  unresolved,
   vacant,
 } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
@@ -548,7 +549,25 @@ export let storage = <S extends Prepared<S>>(
           ]),
         ),
       ) as Record<string, string[]>
+      let missing = Object.fromEntries(
+        await Promise.all(
+          Object.entries(unresolved(vocab, before)).map(
+            async ([comp, checks]) => [
+              comp,
+              (await Promise.all(checks.map(one))).some((rows) => rows.length),
+            ],
+          ),
+        ),
+      )
       for (let [comp, stmts] of Object.entries(refit(vocab, before, empty))) {
+        if (missing[comp]) {
+          report(
+            new Error(
+              `${comp} keeps its old shape: a reference names no entity`,
+            ),
+          )
+          continue
+        }
         await send(stmts).catch((e) => report(unfit(comp, e)))
       }
       // The indexes last: one may stand on a table just rebuilt.

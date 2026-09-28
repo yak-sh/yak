@@ -25,7 +25,19 @@ export let areaOf = (x: number, z: number, r: number) => {
   if (!levels.length) levels = [regionOf(x, z)]
   let region = `.place.level=${levels.join(',')}`
   let stored = `${region}&.place.ci=${i}..${j}&.place.ck=${k}..${l}`
-  let moving = `.position.x=${i * CHUNK}...${(j + 1) * CHUNK}` +
-    `&.position.z=${k * CHUNK}...${(l + 1) * CHUNK}`
-  return { key: chunkKey(ci, ck), query: `(${stored}|${moving})&*` }
+  let moving = (path: string) =>
+    `${path}.x=${i * CHUNK}...${(j + 1) * CHUNK}` +
+    `&${path}.z=${k * CHUNK}...${(l + 1) * CHUNK}`
+  return {
+    key: chunkKey(ci, ck),
+    query: `(${stored}|${moving('.position')})&*`,
+    looks: moving('.look.player.position'),
+  }
 }
+
+/** Look rows for the heroes whose positions reach this area, plus this tab's
+ * hero even before its first position is relayed. */
+export let looksOf = (area: ReturnType<typeof areaOf>, hero?: string) =>
+  `(${area.looks}${
+    hero ? `|.look.player=${JSON.stringify(hero)}` : ''
+  })&.look&*`
