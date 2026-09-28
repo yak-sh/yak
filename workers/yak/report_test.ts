@@ -105,10 +105,9 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
       'two, and only two',
     )
     // The words carry more than the list; the list as data is the files.
-    assertEquals(
-      (list.value as { files: { path: string }[] }).files.map((f) => f.path),
-      ['bare.html', 'index.html'],
-    )
+    let entries = list.value?.files
+    assert(Array.isArray(entries))
+    assertEquals(entries.map((file) => file.path), ['bare.html', 'index.html'])
     assert(
       !(await agent.tool('app_files', { ...app, op: 'list' })).includes(
         'unseen',
