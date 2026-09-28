@@ -415,6 +415,7 @@ Deno.test('a long native transcript writes a checkpoint before continuing', asyn
       model,
       tools: [],
       contextTokens: 20,
+      compactModel: { model, name: 'fake-1' },
     }),
     'settled',
   )
@@ -448,6 +449,61 @@ Deno.test('a long native transcript writes a checkpoint before continuing', asyn
     kind: 'instruction',
     text: 'Keep the blue bridge.',
   })
+})
+
+Deno.test('media transcripts compact only through a text model without persona instructions', async () => {
+  let g = world()
+  let media = scripted([says('media', 'Audio ready.')], false)
+  let text = scripted([says('summary', 'Remember the blue bridge.')], false)
+  let persona = 'PRIVATE PERSONA: never forward this'
+  await g.apply([
+    {
+      entity: { eid: 'later' },
+      entry: { session: ids.s },
+      content: { body: 'Remember the blue bridge. '.repeat(20) },
+    },
+    { entity: { eid: 'e1' }, using: { instructions: persona } },
+  ])
+  assertEquals(
+    await rest(g, ids.s, {
+      model: media.model,
+      tools: [],
+      contextTokens: 40,
+      compactModel: { model: text.model, name: 'text-only' },
+    }),
+    'settled',
+  )
+  assertEquals(text.asked.length, 1)
+  assertEquals(text.asked[0].model, 'text-only')
+  assertEquals(text.asked[0].instructions?.includes(persona), false)
+  assertEquals(text.asked[0].tools, [])
+  assertEquals(media.asked.length, 1)
+  assertEquals(media.asked[0].instructions?.includes(persona), true)
+  assertEquals((await transcript(g, ids.s)).some((b) => !!b.checkpoint), true)
+})
+
+Deno.test('an over-budget media transcript without a summarizer never asks for a summary', async () => {
+  let g = world()
+  let media = scripted([says('media', 'Audio ready.')], false)
+  await g.apply([{
+    entity: { eid: 'later' },
+    entry: { session: ids.s },
+    content: { body: 'Remember the blue bridge. '.repeat(20) },
+  }])
+  assertEquals(
+    await rest(g, ids.s, {
+      model: media.model,
+      tools: [],
+      contextTokens: 40,
+    }),
+    'settled',
+  )
+  assertEquals(media.asked.length, 1)
+  assertEquals(
+    media.asked[0].instructions?.includes('Summarize this transcript') ?? false,
+    false,
+  )
+  assertEquals((await transcript(g, ids.s)).some((b) => !!b.checkpoint), false)
 })
 
 Deno.test('errors retry to the bound, then the transcript is failed', async () => {
