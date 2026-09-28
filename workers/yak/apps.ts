@@ -88,7 +88,7 @@ import { nameOf } from './signin.ts'
 import { type Reach, split, written } from './reach.ts'
 import type { Bundle } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
-import { type Door, storeOf } from './door.ts'
+import type { Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { fault, noted, refusal, serving } from './unseen.ts'
 import { caught } from './sentry.ts'
@@ -852,7 +852,7 @@ type Wrote = { entities: string[]; aliases: Record<string, string> }
 // in its own store, whatever a release before it was walled off recorded.
 let usesOf = async (env: Env, space: Space, app: App) => {
   if (sandboxed(app)) return {} as Record<string, string>
-  let r = await storeOf(env.STORE, storeName(space, app))('/uses')
+  let r = await appStore(env.STORE, space, app)('/uses')
   if (!r.ok) {
     await r.body?.cancel()
     return {} as Record<string, string>

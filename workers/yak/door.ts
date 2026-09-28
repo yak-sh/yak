@@ -92,6 +92,8 @@ let VOUCH = [
   'x-yak-app',
   'x-yak-access',
   'x-yak-mail',
+  'x-yak-release',
+  'x-yak-base-release',
   'x-yak-person',
   'x-yak-role',
   'x-yak-title',
@@ -109,7 +111,13 @@ let VOUCH = [
  * The address is the directory's to derive rather than the store's, because
  * only the directory knows the app's current slug and whether it is the
  * space's home — a store is named at birth and never renamed (`storeName`). */
-export type Served = { eid: string; access: string | null; mail?: string }
+export type Served = {
+  eid: string
+  access: string | null
+  mail?: string
+  release?: number
+  base?: number
+}
 
 /** The door as a request builder over whatever answers it: the stub, or the
  * object itself when the caller is that object (graph.ts). Either way the
@@ -135,6 +143,12 @@ export let doorOf = (
     req.headers.set('x-yak-app', app.eid)
     if (app.access) req.headers.set('x-yak-access', app.access)
     if (app.mail) req.headers.set('x-yak-mail', app.mail)
+    if (app.release != null) {
+      req.headers.set('x-yak-release', String(app.release))
+    }
+    if (app.base != null) {
+      req.headers.set('x-yak-base-release', String(app.base))
+    }
   }
   hop('hops')
   // And the one place a write to a store is seen, whichever door made it: a

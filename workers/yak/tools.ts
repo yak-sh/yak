@@ -64,7 +64,9 @@ import {
   type Access,
   addresses,
   type App,
+  appStore,
   clamped,
+  draftStore,
   folded,
   handle,
   homing,
@@ -74,7 +76,6 @@ import {
   type Role,
   type Space,
   stamp,
-  storeName,
   TITLE,
   url,
 } from './directory.ts'
@@ -187,7 +188,7 @@ import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { mode, reads } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
-import { type Door, storeOf } from './door.ts'
+import type { Door } from './door.ts'
 import {
   type Applying,
   asked,
@@ -630,7 +631,7 @@ let vocabs = async (ctx: Ctx, space: Space, app: App) => {
   let all = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
   if (!all.some((a) => a.eid == app.eid)) all = [...all, app]
   let read = await Promise.all(all.map(async (one) => {
-    let r = await storeOf(ctx.env.STORE, storeName(space, one))('/vocab')
+    let r = await appStore(ctx.env.STORE, space, one)('/vocab')
     if (!r.ok) {
       await r.body?.cancel()
       return [one.slug, {} as VocabDoc] as const
@@ -825,6 +826,10 @@ let released = async (
   // marked with it the moment it lands and the version row is written at the
   // end.
   let version = (app.version ?? 0) + 1
+  // Read the serving release before preparing the next one. This also gives
+  // a store first reached during a deploy the version to keep if staging fails.
+  await answer(await store('/vocab'))
+  let draft = draftStore(ctx.env.STORE, space, app, version)
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
@@ -895,7 +900,7 @@ let released = async (
       }
       let whole: VocabDoc = { ...was, $defs: defs }
       await answer(
-        await storeOf(ctx.env.STORE, storeName(space, home))('/vocab', {
+        await appStore(ctx.env.STORE, space, home)('/vocab', {
           method: 'POST',
           body: JSON.stringify(whole),
         }, vouched(who)),
@@ -903,7 +908,7 @@ let released = async (
     }
     let mine = JSON.parse(
       await answer(
-        await store('/vocab', {
+        await draft('/vocab', {
           method: 'POST',
           body: JSON.stringify(split.mine),
         }, vouched(who)),
@@ -914,7 +919,7 @@ let released = async (
     added = [...added, ...(mine.added ?? [])]
     kept = mine.kept ?? []
     await answer(
-      await store('/uses', {
+      await draft('/uses', {
         method: 'POST',
         body: JSON.stringify(uses),
       }, vouched(who)),
@@ -932,7 +937,7 @@ let released = async (
   if (!app.seeded) {
     sowed = await sow(
       await texts(blobs, prefix, own(keys).filter(seedy)),
-      applying(store, await byCaller(ctx, who)),
+      applying(draft, await byCaller(ctx, who)),
     )
     if (sowed.length) {
       await ctx.dir.apply({
@@ -977,8 +982,8 @@ let released = async (
   // core every app's store plants, the app's own, and the ones it borrows.
   let words = [
     ...componentsOf(coreDocs),
-    ...componentsOf([appDoc(JSON.parse(await answer(await store('/vocab'))))]),
-    ...Object.keys(JSON.parse(await answer(await store('/uses')))),
+    ...componentsOf([appDoc(JSON.parse(await answer(await draft('/vocab'))))]),
+    ...Object.keys(JSON.parse(await answer(await draft('/uses')))),
   ]
   // And the two tools every kind this app declares is worth (kinds.ts,
   // T-34513), beside whatever the manifest said: an app that declared a recipe
@@ -991,7 +996,7 @@ let released = async (
   )
   let tooled = JSON.parse(
     await answer(
-      await store('/tools', {
+      await draft('/tools', {
         method: 'POST',
         body: JSON.stringify(checked),
       }, vouched(who)),
@@ -1006,7 +1011,6 @@ let released = async (
   // deploy grew is a command inside `command`, and what a moved vocabulary
   // grew is graph_apply's schema, not its name. The roster is the same for
   // everybody and moves only when the platform is released (stream.ts).
-  if (tooled.views) await viewsMoved(ctx, space)
   toolsTook('tools')
   let deployed = await c.time(
     'worker',
@@ -1046,6 +1050,13 @@ let released = async (
         worker,
       ),
   )
+  if (tooled.views) {
+    try {
+      await viewsMoved(ctx, space)
+    } catch (e) {
+      caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
+    }
+  }
   // What the versions before this one broke is closed by this one: the code
   // that produced it is not what serves any more (unseen.ts `healed`,
   // D-32318 §Errors). The release already happened, so a store that cannot be
@@ -4065,7 +4076,7 @@ let OURS: Row[] = [
         space,
         app,
         who,
-        storeOf(ctx.env.STORE, storeName(space, app)),
+        appStore(ctx.env.STORE, space, app),
       )
       return {
         text:

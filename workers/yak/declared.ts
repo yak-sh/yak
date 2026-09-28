@@ -28,7 +28,13 @@
 // in is reachable on the web and not here, because a call names an app by slug
 // and has no space to resolve it against — the door would have to remember
 // which apps this session has opened, and it remembers nothing (mcp.ts).
-import { type App, type Directory, type Space, storeName } from './directory.ts'
+import {
+  type App,
+  appStore,
+  type Directory,
+  type Space,
+  storeName,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
@@ -38,7 +44,6 @@ import { refuse } from './tool.ts'
 import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
-import { storeOf } from './door.ts'
 import { recall } from './lib/hops.ts'
 import { told } from './stream.ts'
 
@@ -57,7 +62,7 @@ export let toolsOf = async (
   let name = storeName(space, app)
   return JSON.parse(
     await recall(name, '/tools', async () => {
-      let r = await storeOf(env.STORE, name)('/tools')
+      let r = await appStore(env.STORE, space, app)('/tools')
       if (r.ok) return await r.text()
       await r.body?.cancel()
       return '{}'

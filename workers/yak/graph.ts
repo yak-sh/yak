@@ -356,6 +356,10 @@ type Word =
   | 'vocab'
   | 'uses'
   | 'tools'
+  | 'release'
+  | `vocab:${number}`
+  | `uses:${number}`
+  | `tools:${number}`
   | 'app'
   | 'access'
   | 'mail'
@@ -574,6 +578,12 @@ export class Store {
   // no statement. A transaction that fails forgets the copy (`#atomic`),
   // since what it wrote there rolled back.
   #kv = new Map<Word, string | null>()
+  // A draft changes the Store's in-memory graph while one request prepares it.
+  // Other requests and alarms wait for that request to restore the serving
+  // release; ordinary requests still run together.
+  #visits = 0
+  #quiet: (() => void) | null = null
+  #draft: Promise<void> | null = null
 
   constructor(ctx: State, bind: Bindings = {}) {
     this.#ctx = ctx
@@ -932,6 +942,59 @@ export class Store {
   // opens a transaction.
   #learn(req: Request) {
     if (this.#heard(req).length) this.#atomic(() => this.#remember(req))
+  }
+
+  // A deploy prepares declarations in this store before the directory moves
+  // the app's version. The version in the directory is the serving decision:
+  // every request selects its declarations here, so a failed release keeps
+  // answering with the old vocabulary and commands even after preparation.
+  #select(req: Request) {
+    let release = req.headers.get('x-yak-release')
+    if (release == null || !/^\d+$/.test(release)) return
+    let active = this.#get('release')
+    if (active == release) return
+    this.#atomic(() => {
+      if (active == null) {
+        this.#put('release', release)
+        return
+      }
+      let words = ['vocab', 'uses', 'tools'] as const
+      let was = this.#get('vocab') ?? '{}'
+      for (let word of words) {
+        this.#put(`${word}:${Number(active)}`, this.#get(word) ?? '{}')
+      }
+      for (let word of words) {
+        this.#put(
+          word,
+          this.#get(`${word}:${Number(release)}`) ??
+            this.#get(word) ?? '{}',
+        )
+      }
+      this.#put('release', release)
+      if (this.#get('vocab') != was) this.#build()
+    })
+  }
+
+  async #enter(draft: boolean): Promise<() => void> {
+    while (this.#draft) await this.#draft
+    if (!draft) {
+      this.#visits++
+      return () => {
+        if (--this.#visits == 0) {
+          this.#quiet?.()
+          this.#quiet = null
+        }
+      }
+    }
+    let done!: () => void
+    this.#draft = new Promise((resolve) => (done = resolve))
+    if (this.#visits) {
+      await new Promise<void>((resolve) => (this.#quiet = resolve))
+    }
+    return () => {
+      this.#draft = null
+      done()
+    }
   }
 
   // What a request says about this object that it does not already hold.
@@ -1334,6 +1397,15 @@ export class Store {
    * again in a minute, never guessed at.
    */
   async tick(now = Date.now()): Promise<Ticked> {
+    let leave = await this.#enter(false)
+    try {
+      return await this.#tick(now)
+    } finally {
+      leave()
+    }
+  }
+
+  async #tick(now: number): Promise<Ticked> {
     let none: Ticked = { fired: [], refused: [] }
     try {
       if (await this.#trashed()) return none
@@ -1352,19 +1424,24 @@ export class Store {
 
   /** The runtime's clock going off: whatever this object armed itself for. */
   async alarm(): Promise<void> {
-    // Writes the log still holds are replayed first, which is what makes the
-    // replay need nobody: the alarm set when one was kept wakes the object
-    // after a deploy too.
-    let kept = waiting(this.#sql)
-    if (this.#refused) {
-      if (kept) await this.#retry()
-      return
+    let leave = await this.#enter(false)
+    try {
+      // Writes the log still holds are replayed first, which is what makes the
+      // replay need nobody: the alarm set when one was kept wakes the object
+      // after a deploy too.
+      let kept = waiting(this.#sql)
+      if (this.#refused) {
+        if (kept) await this.#retry()
+        return
+      }
+      if (kept) {
+        this.#stuck = false
+        await this.#drain()
+      }
+      await this.#tick(Date.now())
+    } finally {
+      leave()
     }
-    if (kept) {
-      this.#stuck = false
-      await this.#drain()
-    }
-    await this.tick()
   }
 
   // What this object was born owing: the rows its plugins declare — the
@@ -1511,13 +1588,29 @@ export class Store {
    * sockets it inherited.
    */
   async fetch(request: Request): Promise<Response> {
-    if (logged(request)) return this.#write(request)
-    let no = await this.#ready(request)
-    if (no) return no
-    // Writes the log kept while this object could not apply them go first:
-    // nothing is answered off rows they have yet to reach.
-    await this.#settle()
-    return this.#serve(request)
+    let base = request.headers.get('x-yak-base-release')
+    let leave = await this.#enter(base != null)
+    try {
+      if (logged(request)) return await this.#write(request)
+      let no = await this.#ready(request)
+      if (no) return no
+      // Writes the log kept while this object could not apply them go first:
+      // nothing is answered off rows they have yet to reach.
+      await this.#settle()
+      return await this.#serve(request)
+    } finally {
+      try {
+        if (base != null) {
+          this.#select(
+            new Request('http://store/', {
+              headers: { 'x-yak-release': base },
+            }),
+          )
+        }
+      } finally {
+        leave()
+      }
+    }
   }
 
   /** Everything before a door: the object brought up to date and told what
@@ -1525,6 +1618,8 @@ export class Store {
   async #ready(request: Request): Promise<Response | null> {
     if (this.#refused) return this.#stalled()
     this.#learn(request)
+    if (this.#refused) return this.#stalled()
+    this.#select(request)
     if (this.#refused) return this.#stalled()
     this.#live.wake()
     // The clock, started. A wake row is owed at an instant and the runtime's

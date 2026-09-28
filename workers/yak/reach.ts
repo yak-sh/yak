@@ -50,7 +50,6 @@ import {
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
-import { storeOf } from './door.ts'
 import { recall } from './lib/hops.ts'
 import { appKeywords, coreDocs, meant, platformDocs } from './vocab.ts'
 import { matcher } from '@yaks/match'
@@ -689,7 +688,7 @@ export let vocabAt = async (
   if (at({ space, app }) == META_STORE) return PLATFORM_WORDS
   let name = storeName(space, app)
   let said = await recall(name, '/vocab', async () => {
-    let res = await storeOf(env.STORE, name)('/vocab')
+    let res = await appStore(env.STORE, space, app)('/vocab')
     if (res.ok) return await res.text()
     await res.body?.cancel()
     return '{}'

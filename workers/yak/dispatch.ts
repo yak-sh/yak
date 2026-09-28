@@ -51,11 +51,11 @@
 import type { Caller } from '@yaks/egress'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import type { App, Role, Space } from './directory.ts'
-import { storeName } from './directory.ts'
+import { appStore, storeName } from './directory.ts'
 import type { Env } from './env.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
-import { type Dispatch, storeOf } from './door.ts'
+import type { Dispatch } from './door.ts'
 import { failed, noted, refusal, serving } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import {
@@ -338,7 +338,7 @@ let broke = (
 ) =>
   serving(env, space, app).then((version) =>
     noted((bundles) =>
-      metaOf(storeOf(env.STORE, storeName(space, app)))
+      metaOf(appStore(env.STORE, space, app))
         .apply(bundles, KERNEL), {
       request: `worker ${req.method} ${new URL(req.url).pathname}`,
       version,

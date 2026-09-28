@@ -807,6 +807,12 @@ export let handle = (space: Pick<Space, 'slug'>, slug: string, eid: string) =>
 // that has an App in hand opens its store this way; the ones that only have a
 // name — the meta store, the usage sweep — have no app to name and use
 // `storeOf` directly.
+let served = (space: Space, app: App, env: HostEnv) => ({
+  eid: app.eid,
+  access: app.access,
+  mail: mailbox(space, app, env),
+})
+
 export let appStore = (
   ns: Namespace,
   space: Space,
@@ -814,9 +820,23 @@ export let appStore = (
   env: HostEnv = {},
 ): Door =>
   storeOf(ns, storeName(space, app), {
-    eid: app.eid,
-    access: app.access,
-    mail: mailbox(space, app, env),
+    ...served(space, app, env),
+    release: app.version ?? 0,
+  })
+
+/** Prepare a release without leaving its declarations selected in the Store.
+ * The directory's version remains the serving version until record() commits. */
+export let draftStore = (
+  ns: Namespace,
+  space: Space,
+  app: App,
+  version: number,
+  env: HostEnv = {},
+): Door =>
+  storeOf(ns, storeName(space, app), {
+    ...served(space, app, env),
+    release: version,
+    base: app.version ?? 0,
   })
 
 // The other address a (space, app) has, beside {@link url}: what its letters

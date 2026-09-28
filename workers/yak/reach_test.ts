@@ -11,7 +11,14 @@ import { type Bundle, identityEid } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Store } from './graph.ts'
-import { type App, appStore, type Space } from './directory.ts'
+import {
+  type App,
+  appStore,
+  draftStore,
+  type Space,
+  storeName,
+} from './directory.ts'
+import { storeOf } from './door.ts'
 import type { Env } from './env.ts'
 import { vouched, type Who } from './session.ts'
 import { type Reach, read, written } from './reach.ts'
@@ -88,6 +95,83 @@ let deploy = async (env: Env, r: Reach, manifest: Record<string, unknown>) => {
   assertEquals(res.status, 200)
   await res.body?.cancel()
 }
+
+Deno.test('the app version selects its store declarations after preparation', async () => {
+  let env = { STORE: namespace() } as unknown as Env
+  let here = space('release-switch')
+  let page = app('page', here.eid)
+  let door = (version: number) =>
+    appStore(env.STORE, here, { ...page, version })
+  let write = async (
+    version: number,
+    path: string,
+    value: Record<string, unknown>,
+    draft = false,
+  ) => {
+    let send = draft
+      ? draftStore(env.STORE, here, page, version)
+      : door(version)
+    let r = await send(path, {
+      method: 'POST',
+      body: JSON.stringify(value),
+    }, vouched(owner))
+    assertEquals(r.status, 200, await r.text())
+  }
+  let read = async (version: number, path: string) =>
+    await (await door(version)(path)).json()
+  let props = async (version: number) =>
+    Object.keys((await read(version, '/vocab')).$defs.note.properties)
+  let old = {
+    $defs: {
+      note: {
+        component: true,
+        properties: { body: { type: 'string' } },
+      },
+    },
+  }
+  let next = {
+    $defs: {
+      note: {
+        component: true,
+        properties: {
+          body: { type: 'string' },
+          mood: { type: 'string' },
+        },
+      },
+    },
+  }
+
+  await write(1, '/vocab', old)
+  await write(1, '/uses', { neighbor: 'other' })
+  let oldTool = { description: 'old', input: {}, query: '.note' }
+  let newTool = { description: 'new', input: {}, query: '.note' }
+  await write(1, '/tools', { old: oldTool })
+  await write(2, '/vocab', next, true)
+  await write(2, '/uses', { neighbor: 'new' }, true)
+  await write(2, '/tools', { new: newTool }, true)
+
+  let raw = storeOf(env.STORE, storeName(here, page))
+  let between = await (await raw('/vocab')).json()
+  assertEquals(Object.keys(between.$defs.note.properties), ['body'])
+
+  assertEquals(await props(1), ['body'])
+  assertEquals(await read(1, '/uses'), { neighbor: 'other' })
+  assertEquals(await read(1, '/tools'), { old: oldTool })
+  let change = [{
+    entity: { eid: crypto.randomUUID() },
+    note: { body: 'hello', mood: 'bright' },
+  }]
+  let apply = (version: number) =>
+    door(version)('/apply', {
+      method: 'POST',
+      body: JSON.stringify(change),
+    }, vouched(owner))
+  assertEquals((await apply(1)).status, 400)
+  assertEquals(await props(2), ['body', 'mood'])
+  assertEquals(await read(2, '/uses'), { neighbor: 'new' })
+  assertEquals(await read(2, '/tools'), { new: newTool })
+  assertEquals((await apply(2)).status, 200)
+})
 
 // A space with a reading list and a lending app in it, each declaring one word
 // of its own — the shape M-32311 describes: two apps, two stores, joined by
