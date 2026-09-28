@@ -52,12 +52,13 @@ export let stride = (
   let push = { ...stepPush(look, move), jump }
   let n = walk(v, b, push, dt, speed * (y < 0 && !faceMove ? 0.6 : 1))
   let face = look + Math.PI
+  let moving = x || y
   return {
     ...n,
-    yaw: (x || y) && !looking
-      ? faceMove
-        ? Math.atan2(push.x, push.z)
-        : Math.atan2(Math.sin(face), Math.cos(face))
+    yaw: moving && faceMove
+      ? Math.atan2(push.x, push.z)
+      : moving && !looking
+      ? Math.atan2(Math.sin(face), Math.cos(face))
       : b.yaw,
   }
 }

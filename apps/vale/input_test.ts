@@ -1,8 +1,11 @@
 // Mouse button gestures and the movement they ask of the hero.
 
-import { assertEquals } from '@std/assert'
+import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { listen, lookDrag, mouseButtons, movement } from './input.ts'
+import { type Body } from './sim.ts'
+import { stride } from './stride.ts'
+import { flat } from './terrain.ts'
 
 Deno.test('solo mouse clicks act, while a drag does not', () => {
   for (let [button, action] of [[0, 'strike'], [2, 'dodge']] as const) {
@@ -138,6 +141,28 @@ Deno.test('left touch walks right while right touch orbits', () => {
     assertEquals(i.turn, 0)
     assertEquals(i.look, true)
     assertEquals(i.orbit[0] < 0, true)
+    let body: Body = {
+      x: 20,
+      y: 5,
+      z: 20,
+      vy: 0,
+      yaw: Math.PI,
+      speed: 0,
+      gait: 'idle',
+    }
+    let stepped = stride(
+      flat(5),
+      body,
+      i.move,
+      i.orbit[0],
+      0.1,
+      5,
+      false,
+      i.look,
+      i.faceMove,
+    )
+    assertEquals(stepped.x > body.x, true)
+    assertAlmostEquals(stepped.yaw, Math.PI / 2 + i.orbit[0])
   } finally {
     Object.assign(globalThis, before)
   }
