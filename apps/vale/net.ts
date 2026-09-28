@@ -229,6 +229,7 @@ export let connect = (base: URL) => {
       equip: c.watch(`.equip.player=${q}`),
       learned: c.watch(`.learned.player=${q}`),
       respec: c.watch(`.respec.player=${q}`),
+      fire: c.watch(`.fire.player=${q}`),
     }
   }
 

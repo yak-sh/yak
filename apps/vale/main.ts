@@ -22,6 +22,7 @@ import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
 import { dealbox } from './dealbox.ts'
 import { deals } from './deals.ts'
+import { fires } from './fires.ts'
 import { map } from './map.ts'
 import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
@@ -108,6 +109,7 @@ let net = connect(new URL('api/', document.baseURI))
 let deal = deals(net)
 let folk = village(net, deal)
 let seen = sighting(net)
+let camp = fires(net)
 let g = game(net, folk.at)
 let toil = working(net)
 // Who you are and your heroes, asked while the level grows.
@@ -124,7 +126,7 @@ let hands = listen(canvas, glass, elsewhere)
 let h = hud(glass, hands.press, elsewhere)
 let marks = overlay(h.layer, camera, h.under)
 let chat = chatbox(glass, h.orbs.chat, net, marks, folk)
-let m = map(h.panels.map)
+let m = map(h.panels.map, (to) => g.travel(to, camp.known()))
 let p = pack(h.panels.bag, { wear: g.wear, take: g.take })
 let you = character(h.panels.character, {
   restyle: (l) => {
@@ -802,6 +804,8 @@ let loop = (t: number) => {
       bounty.tick(job, [f.body.x, f.body.y, f.body.z], dt)
       folk.tick(f)
       seen.tick(f)
+      let found = camp.tick(f)
+      if (found) h.toast(`${LEVELS[found.level].name} fire found`, 'Toast-big')
       // An offer from the villager the hero is beside opens the deals.
       let talk = f.talk
       for (let n of deal.tick(f.level)) {
@@ -890,7 +894,7 @@ let loop = (t: number) => {
         return false
       })
       h.work(job)
-      m.show(f, job.nodes, way.marks)
+      m.show(f, job.nodes, way.marks, camp.known())
       p.show(f)
       you.show(f.sheet, mine)
       skills.show(f)
@@ -1038,6 +1042,7 @@ let { me, heroes } = await asking
 chat.me(me)
 folk.me(me)
 seen.me(me)
+camp.me(me)
 deal.me(me)
 if (!me.reads) {
   gateCard.innerHTML = `${TITLE}<p class=Gate_Lede>This vale is private.</p>${

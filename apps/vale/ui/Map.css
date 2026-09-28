@@ -10,6 +10,47 @@
   box-shadow: inset 0 0 0 2px var(--line);
 }
 
+.Map_Wrap {
+  display: grid;
+  gap: var(--gap);
+  width: min(36rem, 100cqw - 2rem);
+}
+
+.Map_Wrap .Map {
+  width: min(100%, 100cqh - 11rem);
+}
+
+.Map_Travel {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  border-radius: var(--radius-small);
+  background: var(--well);
+  color: var(--deep);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.Map_Fires {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-height: 5rem;
+  overflow: auto;
+}
+
+.Map_Fire {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--ember);
+  color: white;
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
 .Map_Ground {
   display: block;
   width: 100%;

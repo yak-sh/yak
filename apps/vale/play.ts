@@ -78,6 +78,7 @@ import {
   xpOf,
 } from './rules.ts'
 import { type Rarity, rarityOf } from './rarity.ts'
+import { destination } from './fires.ts'
 import type { Seen } from './seen.ts'
 import {
   type Body,
@@ -537,6 +538,7 @@ export let game = (
   let was = ''
   // Where the hero was last seen before this page, until a frame plays.
   let lastSeen: Seen | null = null
+  let travelTo: { level: string; known: ReadonlySet<string> } | null = null
   // Where the hero stands on the first frame: back where they were last
   // seen, when that spot lies in the region it names and they still fit
   // there, or else by the fire of that region, or of home.
@@ -721,6 +723,10 @@ export let game = (
      * played */
     resume: (s: Seen) => {
       lastSeen = s
+    },
+    /** ask to travel between village fires on the next frame */
+    travel: (level: string, known: ReadonlySet<string>) => {
+      travelTo = { level, known }
     },
     /** put on a thing I carry, in its slot; with no item, take it off */
     wear: (slot: Slot, item = '') => {
@@ -920,6 +926,22 @@ export let game = (
               intent.jump,
               intent.look,
             )
+        }
+      }
+      if (travelTo) {
+        let to = destination(
+          body.x,
+          body.z,
+          travelTo.known,
+          travelTo.level,
+        )
+        travelTo = null
+        if (to && !down) {
+          body = arrival(v, to.at)
+          dash = null
+          busy = 0
+          doing = ''
+          fought.foe = ''
         }
       }
       let rolling = body.gait == 'roll'

@@ -34,6 +34,7 @@
 // rests on it or a thumb holds it: its name, its key, and a line of what it
 // does; an ability's is bar.ts's, with its numbers. Give a new button one.
 import { type Action, keysOf } from './input.ts'
+import { fireNear } from './fires.ts'
 import type { Under } from './fx.ts'
 import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
@@ -235,6 +236,18 @@ export let hud = (
     panel.bag.toggle,
     panel.bag,
   )
+  let fire = tray(
+    'fire',
+    'flame',
+    {
+      name: 'Travel by fire',
+      key: cap(SHEETS.map.keys[0]),
+      says: 'Choose a village fire you have found.',
+    },
+    panel.map.show,
+    panel.map,
+  )
+  fire.hidden = true
   tray(
     'journal',
     'journal',
@@ -593,6 +606,7 @@ export let hud = (
         aim.style.setProperty('--at', `${way || 0}deg`)
       }
       for (let [b, p] of marked) b.classList.toggle('Orb-on', p.open)
+      fire.hidden = f.down || !fireNear(f.body.x, f.body.z)
       // Arms or armour found mark the bag, until it is opened; points to
       // spend mark the skills.
       fresh = !panel.bag.open &&

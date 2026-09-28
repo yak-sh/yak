@@ -7,6 +7,7 @@
 // (journal.ts). What lies off the map is marked at its edge, the way it lies.
 // M or the compass opens its panel.
 import { charted } from './grown.ts'
+import { glyph } from './glyphs.ts'
 import type { Mark } from './journal.ts'
 import { LEVELS, type Side, SIZE, type Spot } from './levels.ts'
 import type { Panel } from './panel.ts'
@@ -16,6 +17,8 @@ import { originOf } from './regions.ts'
 import { tipped } from './tip.ts'
 import { arriveOf, roadsOf } from './ways.ts'
 import type { Seen } from './work.ts'
+import { fireNear } from './fires.ts'
+import { villageOf } from './terrain.ts'
 
 // How far past the region's cell the map shows, in metres, and how many
 // metres a pixel of its chart is.
@@ -68,16 +71,28 @@ export let exits = (id: string): { at: Spot; side: Side; to: string }[] => {
 }
 
 /** The map, drawn into its panel (panel.ts). */
-export let map = (panel: Panel) => {
+export let map = (panel: Panel, travel: (to: string) => void) => {
   panel.body.innerHTML =
-    `<div class=Map><canvas class=Map_Ground></canvas><div class=Map_Marks></div></div>`
+    `<div class=Map_Wrap><div class=Map><canvas class=Map_Ground></canvas><div class=Map_Marks></div></div><div class=Map_Travel></div></div>`
   let canvas = panel.body.querySelector('canvas')!
   let marks = panel.body.querySelector<HTMLElement>('.Map_Marks')!
+  let choices = panel.body.querySelector<HTMLElement>('.Map_Travel')!
+  let near = false
+  let known = new Set<string>()
+  choices.addEventListener('click', (e) => {
+    let to = e.target instanceof Element
+      ? e.target.closest<HTMLElement>('[data-fire]')?.dataset.fire
+      : undefined
+    if (!to || !near || !known.has(to)) return
+    travel(to)
+    panel.close()
+  })
 
   // What the chart shows: the region it was painted for, and its square.
   let shown = ''
   let box: Box = [0, 0, SIZE]
   let was = ''
+  let choicesWas = ''
   let draw = (id: string) => {
     if (shown == id) return
     shown = id
@@ -98,12 +113,44 @@ export let map = (panel: Panel) => {
   return {
     /** mark who is where this frame, the nodes, and where each quest tracked
      * goes next, when the map is open */
-    show: (f: Frame, nodes: Seen[] = [], goals: Mark[] = []) => {
+    show: (
+      f: Frame,
+      nodes: Seen[] = [],
+      goals: Mark[] = [],
+      visited: ReadonlySet<string> = new Set(),
+    ) => {
       if (!panel.open) return
       draw(f.level)
+      let here = f.down ? null : fireNear(f.body.x, f.body.z)
+      near = !!here
+      known = new Set(visited)
+      let destinations = [...visited].filter((id) =>
+        id != here?.level && !!villageOf(id)
+      ).sort((a, b) => LEVELS[a].name.localeCompare(LEVELS[b].name))
+      let choicesHtml = here
+        ? `<b>Travel by fire</b><span>Choose a village fire you have found.</span><div class=Map_Fires>${
+          destinations.length
+            ? destinations.map((id) =>
+              `<button class="Btn Btn-small" data-fire="${esc(id)}">${
+                esc(LEVELS[id].name)
+              }</button>`
+            ).join('')
+            : '<span>Explore to find another village fire.</span>'
+        }</div>`
+        : '<span>Stand beside a village fire to travel.</span>'
+      if (choicesHtml != choicesWas) {
+        choicesWas = choicesHtml
+        choices.innerHTML = choicesHtml
+      }
       let at = (x: number, z: number) =>
         `left:${pct(x, box[0])};top:${pct(z, box[1])}`
+      let fire = villageOf(f.level)
       let html =
+        (fire
+          ? `<i class=Map_Fire style="${at(...fire.at)}"${
+            tipped({ name: `${LEVELS[f.level].name} fire` })
+          }>${glyph('flame')}</i>`
+          : '') +
         goals.map((g) =>
           `<i class=Map_Goal style="${at(...g.at)}"${
             tipped({ name: g.title })

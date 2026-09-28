@@ -339,9 +339,12 @@ export let villagesNear = (x: number, z: number, r: number): Village[] =>
 export let hearthNear = (x: number, z: number, r = Infinity): Spot | null =>
   villagesNear(x, z, r)[0]?.at ?? null
 
+/** The village of a level, if it has one. */
+export let villageOf = (id: string): Village | null =>
+  VILLAGES.find((v) => v.level == id) ?? null
+
 /** Where a level's village fire is, if it has a village. */
-export let hearthOf = (id: string): Spot | null =>
-  VILLAGES.find((v) => v.level == id)?.at ?? null
+export let hearthOf = (id: string): Spot | null => villageOf(id)?.at ?? null
 
 // What each level builds, laid out the first time it is asked for: each
 // place's builds round its middle, with village plots and aside props taking

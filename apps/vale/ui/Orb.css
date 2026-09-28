@@ -33,6 +33,10 @@
   }
 }
 
+.Orb[hidden] {
+  display: none;
+}
+
 .Orb-small {
   --size: 2.1rem;
   --face: var(--well);
