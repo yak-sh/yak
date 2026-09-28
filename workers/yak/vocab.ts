@@ -138,6 +138,7 @@ let referencedDoc: VocabDoc = {
 let relationDocs: VocabDoc[] = [
   pick(kernelWords, [
     'about',
+    'cites',
     'delegates',
     'reads',
     'supersedes',

@@ -241,7 +241,7 @@ Deno.test('the loaded vocabulary implies core + member + edge + the app', () => 
       'member',
       'grant',
       'access',
-      // @yaks/edge — the link, and the twelve verbs it may wear
+      // @yaks/edge — the link and the relation verbs it may wear
       'edge',
       ...RELATIONS,
       // @yaks/key — the carrier of a value an entity answers to, and the one
