@@ -183,7 +183,8 @@
         "by": { "type": "string", "index": true, "description": "The player." },
         "kind": { "type": "string" },
         "at": { "type": "number", "description": "When it fell, in ms." },
-        "xp": { "type": "number" }
+        "xp": { "type": "number" },
+        "lvl": { "type": "integer", "description": "Its level in this land." }
       }
     },
     "item": {
@@ -349,7 +350,8 @@
           "type": "string",
           "enum": ["taken", "done", "pinned", "unpinned"]
         },
-        "at": { "type": "number" }
+        "at": { "type": "number" },
+        "xp": { "type": "number", "description": "The award on completion." }
       }
     },
     "chat": {

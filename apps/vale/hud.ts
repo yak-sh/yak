@@ -41,6 +41,7 @@ import type { Under } from './fx.ts'
 import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
 import { BEASTS } from './beasts.ts'
+import { skull } from './danger.ts'
 import { STATIONS } from './craft.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
@@ -558,6 +559,7 @@ export let hud = (
       let s = f.sheet
       let hp = f.vitals.hp
       let from = need(s.lvl), to = need(s.lvl + 1)
+      let capped = s.lvl == 60
       put(
         'vitals',
         vitals,
@@ -573,9 +575,9 @@ export let hud = (
         }</div>` +
           meter(hp / s.max, 'Bar-hp', `${hp} / ${s.max}`) +
           meter(
-            (s.xp - from) / Math.max(1, to - from),
+            capped ? 1 : (s.xp - from) / Math.max(1, to - from),
             'Bar-xp',
-            `${s.xp - from} / ${to - from} xp`,
+            capped ? 'Max level' : `${s.xp - from} / ${to - from} xp`,
           ) + `<kbd class=Key>${cap(TABS.character.keys[0])}</kbd>`,
       )
       put('quest', quest, tracking(tasks, f))
@@ -583,18 +585,22 @@ export let hud = (
       foe.hidden = !m
       if (m) {
         let b = BEASTS[m.kind]
+        let danger = skull(m.lvl, s.lvl)
         put(
           'foe',
           foe,
           meter(
             m.hp / m.most,
             'Bar-foe',
-            `<b>${esc(b.name)}</b><em>level ${b.lvl}</em><small>${
+            `<b>${esc(b.name)}</b><em${
+              danger ? ' title="Overwhelming foe"' : ''
+            }>${danger ? '☠' : `level ${m.lvl}`}</em><small>${
               Math.ceil(m.hp)
             } / ${m.most}</small>`,
           ),
         )
         foe.classList.toggle('Foe-boss', !!b.boss)
+        foe.classList.toggle('Foe-danger', danger)
       }
       let [sky, word] = CLOCKS[clock]
       put(
