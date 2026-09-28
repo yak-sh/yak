@@ -126,9 +126,15 @@ export let off = (c: Course, x: number, z: number, t: number) => {
   )
 }
 
-/** A signpost: the level it stands in, where it leads and which way that
- * lies, and where it stands, in world metres. */
-export type Sign = { level: string; to: string; side: Side; at: Spot }
+/** A signpost: its destination, broad road name, position in world metres,
+ * and eight-way heading along the road (east, northeast, north, etc.). */
+export type Sign = {
+  level: string
+  to: string
+  side: Side
+  at: Spot
+  heading: number
+}
 
 /** A road between two levels: its course between their village streets,
  * the height of its bed every metre along it, and its two
@@ -170,11 +176,14 @@ let post = (
   let j = Math.min(len, Math.max(0, i + (t ? -1 : 1)))
   let ux = c.xs[j] - c.xs[i], uz = c.zs[j] - c.zs[i]
   let u = norm(ux, uz) || 1
+  let ahead = Math.min(len, Math.max(0, i + (t ? -6 : 6)))
+  let dx = c.xs[ahead] - c.xs[i], dz = c.zs[ahead] - c.zs[i]
   return {
     level,
     to,
     side: sideTo(level, to),
     at: [snap(c.xs[i] - (uz / u) * ASIDE), snap(c.zs[i] + (ux / u) * ASIDE)],
+    heading: (Math.round(Math.atan2(-dz, dx) * 4 / Math.PI) + 8) % 8,
   }
 }
 

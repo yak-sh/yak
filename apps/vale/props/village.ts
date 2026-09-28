@@ -115,19 +115,24 @@ let lamp = (): Model => {
   return { vox: v, size: 0.25 }
 }
 
-// A fingerpost at the head of a road: a timber post on a cairn of stones,
-// its arms pointing every way, and a lantern hung from it.
-let signpost = (): Model => {
+// One finger points down the named road. The diagonal board is built along
+// northeast; the placed prop turns either board toward its destination.
+let signpost = (diagonal = false): Model => {
   let v: Vox = new Map()
   box(v, [-1, 0, -1], [1, 1, 1], 0x8f8d85)
   box(v, [0, 2, 0], [0, 12, 0], TIMBER)
-  box(v, [-4, 10, 0], [4, 11, 0], 0xb08a5a)
-  v.set(key(5, 10, 0), 0xb08a5a)
-  box(v, [0, 7, -4], [0, 8, 4], 0xa07c4e)
-  v.set(key(0, 7, 5), 0xa07c4e)
+  if (diagonal) {
+    for (let i = 0; i < 4; i++) {
+      box(v, [i, 10, -i], [i + 1, 11, 1 - i], 0xb08a5a)
+    }
+    v.set(key(4, 10, -4), 0xb08a5a)
+  } else {
+    box(v, [-1, 10, 0], [4, 11, 0], 0xb08a5a)
+    v.set(key(5, 10, 0), 0xb08a5a)
+  }
   box(v, [0, 13, 0], [0, 13, 0], 0xc2573e)
-  box(v, [1, 12, 0], [2, 12, 0], 0x4b3a2c)
-  box(v, [2, 10, 0], [2, 11, 0], 0xffd37a)
+  box(v, [-2, 9, 0], [-1, 9, 0], 0x4b3a2c)
+  box(v, [-2, 7, 0], [-2, 8, 0], 0xffd37a)
   v.set(key(-1, 0, 1), 0x6f9a48)
   v.set(key(1, 1, -1), 0x6f9a48)
   return { vox: v, size: 0.25 }
@@ -144,7 +149,13 @@ export let VILLAGE: Record<string, Kind> = {
     aside: true,
     glow: { at: [0.5, 2.5, 0], size: 3.2 },
   },
-  signpost: { make: signpost, girth: 0.3, foot: 1, aside: true },
+  signpost: { make: () => signpost(), girth: 0.3, foot: 1, aside: true },
+  'signpost.diagonal': {
+    make: () => signpost(true),
+    girth: 0.3,
+    foot: 1,
+    aside: true,
+  },
   ...Object.fromEntries(
     Object.entries(DRESSES).flatMap(([name, dress]) => [
       [`garden.${name}`, {

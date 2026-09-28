@@ -409,8 +409,20 @@ export let builtOf = (id: string): Prop[] => {
     }
   }
   for (let r of roadsOf(id)) {
-    let [x, z] = r.signs.find((s) => s.level == id)!.at
-    built.push(stand({ kind: 'signpost', x, z, seed: 0 }, [0, 0], true))
+    let sign = r.signs.find((s) => s.level == id)!
+    let [x, z] = sign.at
+    let kind = sign.heading & 1 ? 'signpost.diagonal' : 'signpost'
+    built.push(stand(
+      {
+        kind,
+        x,
+        z,
+        seed: 0,
+        turn: Math.floor(sign.heading / 2),
+      },
+      [0, 0],
+      true,
+    ))
   }
   raised.set(id, built)
   return built
