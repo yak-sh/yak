@@ -1,4 +1,4 @@
-// The models a space may spend its model allowance on, each with its price:
+// The models an account may spend its budget on, each with its price:
 // the platform's catalogue (D-40545). A model with no row here has no price,
 // so nothing asks it: a call is weighed in dollars by its row and counted on
 // the space's meter (meter.ts `models`), and a call that could not be weighed

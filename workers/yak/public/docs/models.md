@@ -10,8 +10,8 @@ guide:
     subscribed to see. Instructions, typed questions answered as rows (a
     choice, a yes-or-no, a score), one call answered at once through
     ./api/ai/run or a worker's ai binding, the commands a model may call, who
-    may ask, the models there are and what each costs against the space's
-    monthly model allowance.
+    may ask, the models there are and what each costs against the owner's
+    monthly account budget.
 ---
 
 # Asking a model
@@ -138,10 +138,9 @@ said. An app's worker asks the same way through a binding:
 `env.AI.run(model, input)` (see [Code](/docs/code)), which asks as the app
 itself.
 
-The same people may call it as may ask for a turn (below), and the same
-allowance pays. A refusal comes in the envelope every door answers with: `429`
-past the allowance, with the sentence that says so, and `503` while the model is
-busy.
+The same people may call it as may ask for a turn (below), and the same account
+budget pays. A refusal comes in the envelope every door answers with: `429` past
+the budget, with the sentence that says so, and `503` while the model is busy.
 
 ## Commands a model may call
 
@@ -174,15 +173,15 @@ the link — held to the pace every visitor's writes keep, 30 changes a minute.
 | `typesafe/jev`              | typed questions | $0.042                | free  |
 | `@cf/baai/bge-base-en-v1.5` | embeddings      | $0.067                | —     |
 
-Every call is weighed by its model's price and spends the space's one model
-allowance: $0.20 a month on a free space, shared by the free spaces its owner
-has, and $3.00 on the Plus plan. The builder spends the same allowance, and
-`app_list` says how much of it the month has spent.
+Every call is weighed by its model's price and spends the owner's monthly
+account budget: $0.20, plus $3.00 for each Plus space they own. All their spaces
+share it. The builder and app voice spend it too. `app_list` says what each
+space spent.
 
-A call that starts under the allowance finishes even if it crosses it. The next
-one is refused: the transcript gets an `error { code: 'limit' }` entry whose
+A call that starts under the budget finishes even if it crosses it. The next one
+is refused: the transcript gets an `error { code: 'limit' }` entry whose
 `content.body` says which ceiling it met, and it rests there (`failed`) until a
-new entry asks again — on the 1st, or once the space moves to the Plus plan. An
+new entry asks again — on the 1st, or once the account's budget grows. An
 `error` row is the platform's, so a listing leaves it out unless the filter
 names it: subscribe with `&?error` to show the sentence.
 

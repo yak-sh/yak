@@ -68,7 +68,7 @@ export type Meter = {
   models: number
   // Dollars an app's voices received this month (rtc.ts): Cloudflare
   // Realtime's egress, weighed at each renewal of a session's lease. It spends
-  // the allowance `models` does (meter.ts `used`).
+  // the same account budget as `models` (meter.ts `budgets`).
   realtime: number
   // The seconds the builder's workbench spent awake (sandbox.ts, T-34264).
   // Its own property beside `models` because a model call and a

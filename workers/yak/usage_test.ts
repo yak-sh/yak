@@ -14,6 +14,8 @@ import { platform } from './testing.ts'
 import type { Env } from './env.ts'
 import {
   atCeiling,
+  BUDGET,
+  budgets,
   BUILDS,
   ceilings,
   counted,
@@ -24,7 +26,6 @@ import {
   FREE,
   LETTERS,
   level,
-  MODELS,
   PLUS,
   pooled,
   refusedSpend,
@@ -491,21 +492,18 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
   assertEquals(level(space({ builds: 4, built: 40 }), 1, NOW), 'near')
   assertEquals(level(space({ builds: 5, built: 40 }), 1, NOW), 'over')
 
-  // Both the build allowance and model use are monthly on either plan, and
-  // model use is said in dollars, down to a fraction of a cent.
+  // Build counts are per space; model cost is attributed to this space while
+  // the budget is shared across its owner's account.
   let said = standing(space({ builds: 1, models: 0.04, built: 1 }), 2, NOW)
   assertStringIncludes(
     said,
-    `1 of 5 builds a month ($0.04 of $${
-      MODELS.free.toFixed(2)
-    } of model use and voice, and 0 of 3,600 build seconds this month)`,
+    '1 of 5 builds a month ($0.04 of model use and voice here, ' +
+      "from the owner's account budget, and 0 of 3,600 build seconds this month)",
   )
   assertStringIncludes(said, 'a build past 5')
   assertStringIncludes(
     standing(space({ builds: 4, models: 0.0012, built: 44 }, 'plus'), 9, NOW),
-    `4 of ${BUILDS.plus} builds a month ($0.0012 of $${
-      MODELS.plus.toFixed(2)
-    } of model use and voice`,
+    `4 of ${BUILDS.plus} builds a month ($0.0012 of model use and voice here`,
   )
 })
 
@@ -697,7 +695,7 @@ Deno.test('a free space answers to the free spaces its owner owns, summed', asyn
   })
   let a = as('a', { emails: 60, models: 0.125 })
   let b = as('b', { emails: 40, seconds: 3_000 })
-  let paid = as('paid', { emails: 900 }, 'plus')
+  let paid = as('paid', { emails: 900, models: 3 }, 'plus')
   let lastMonth = as('old', { month: '2026-08', emails: 99 })
   let dir = {
     owners: () => Promise.resolve(['ada']),
@@ -713,8 +711,11 @@ Deno.test('a free space answers to the free spaces its owner owns, summed', asyn
   // What a build holds uncounted is added to the reading.
   assertEquals(await refusedSpend(dir, b, 'seconds', {}, 599, NOW), null)
   assert(await refusedSpend(dir, b, 'seconds', {}, 600, NOW))
+  assertEquals(await budgets(dir, a, NOW), [{ spent: 3.125, limit: 3.2 }])
   assertEquals(await refusedSpend(dir, a, 'models', {}, 0.0625, NOW), null)
-  assert(await refusedSpend(dir, a, 'models', {}, 0.125, NOW))
+  assert(await refusedSpend(dir, a, 'models', {}, 0.075, NOW))
+  // The free space can spend the Plus space's remaining budget and vice versa.
+  assert(await refusedSpend(dir, paid, 'models', {}, 0.075, NOW))
   // The Plus plan space is paid for on its own.
   assertEquals((await pooled(dir, paid, NOW)).emails, 900)
   assertEquals(await refusedSpend(dir, paid, 'emails', {}, 0, NOW), null)
@@ -777,8 +778,8 @@ Deno.test('spends counted at once all count, and the sweep keeps them', async ()
   })
 })
 
-Deno.test('models and voice spend one allowance, each counted apart', async () => {
-  let half = MODELS.free / 2
+Deno.test('models and voice spend one account budget, each counted apart', async () => {
+  let half = BUDGET.free / 2
   let both = space({ models: half, realtime: half })
   assert(await refusedSpend(alone, both, 'models', {}, 0, NOW))
   assert(await refusedSpend(alone, both, 'realtime', {}, 0, NOW))

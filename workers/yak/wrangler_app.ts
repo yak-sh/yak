@@ -48,7 +48,7 @@ export type Config = {
   vpc_services?: { binding: string }[]
   // The models the app's space may spend on, under the name its worker reaches
   // them by: a door the shim hands over (dispatch.ts `shim`) onto
-  // `./api/ai/run`, metered against the space's allowance, and never the
+  // `./api/ai/run`, metered against the owner's account budget, and never the
   // account's own Workers AI binding.
   ai?: { binding: string }
 }

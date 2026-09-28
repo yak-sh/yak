@@ -136,7 +136,7 @@ export let scriptName = (store: string) =>
 // `ai` is the name the app's config gives the models its space may spend on
 // (wrangler_app.ts `ai`), and it is a door for the same reason:
 // `env.AI.run(model, input)` is the app itself posting `./api/ai/run`, which
-// meters the call against the space's allowance (models.ts). The account's
+// meters the call against the owner's account budget (models.ts). The account's
 // own Workers AI binding is never on an app's script.
 export let shim = (
   main = WORKER,

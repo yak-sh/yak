@@ -28,7 +28,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { platform } from './testing.ts'
 import { remember } from './memory.ts'
-import { BUILDS, MODELS, monthOf } from './meter.ts'
+import { BUDGET, BUILDS, monthOf } from './meter.ts'
 import type { Who } from './session.ts'
 
 let SECRET = 'a probe secret'
@@ -187,7 +187,7 @@ Deno.test('a space at its build ceiling is told so before a token is spent', asy
   assertEquals(out.usage, { input: 0, output: 0, cached: 0 })
 })
 
-Deno.test('a space out of model allowance is told so before a model is asked', async () => {
+Deno.test('an account out of budget is told so before a model is asked', async () => {
   let { env, space } = await seeded()
   let model = fake([{ text: 'never asked' }])
   let spent = {
@@ -195,13 +195,13 @@ Deno.test('a space out of model allowance is told so before a model is asked', a
     meter: {
       month: monthOf(new Date()),
       built: 0,
-      models: MODELS.free,
+      models: BUDGET.free,
       realtime: 0,
     },
   } as Space
   let out = await build(env, owner, spent, asked('one more'), { model })
 
-  assertStringIncludes(out.refused!, 'of models and voice a month')
+  assertStringIncludes(out.refused!, 'account budget of $0.20')
   assertEquals(model.asked.length, 0)
 })
 

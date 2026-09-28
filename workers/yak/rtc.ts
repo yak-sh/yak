@@ -13,7 +13,7 @@
 // account's free 1,000 GB a month, and nothing going in. A session is weighed
 // by what it receives: each remote audio track at the 32 kbit/s Opus @yaks/rtc
 // publishes, about 48 kbit/s on the wire, and each DataChannel at a flat 16
-// kbit/s. The space pays from the dollar allowance it spends on models
+// kbit/s. The owner pays from the account budget shared with models
 // (meter.ts `realtime`).
 import { edits, mode, writes } from '@yaks/member'
 import {

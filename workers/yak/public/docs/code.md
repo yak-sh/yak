@@ -403,7 +403,7 @@ somewhere else, is refused it.
 the worker `env.AI`, and `await env.AI.run(model, input)` asks one and returns
 what it said, as Workers AI's own binding does. It is the app asking
 `./api/ai/run` as itself, so every call is weighed by the model's price and
-spent from the space's monthly model allowance; past it, `run` throws with the
+spent from the owner's monthly account budget; past it, `run` throws with the
 sentence that says so. Only the models the catalogue offers answer (see
 [Models](/docs/models)), and it is never the account's own Workers AI.
 

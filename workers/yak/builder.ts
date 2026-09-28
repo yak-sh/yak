@@ -38,7 +38,7 @@
 // conversation that ships one app costs one build and one that ships nothing
 // costs none. What its model calls cost is counted either way
 // (`countedSpend`), weighed in dollars by the model's price (models.ts), and
-// the month's model allowance is asked before every round, since a
+// the account budget is asked before every round, since a
 // conversation that never deploys spends it all the same. What the meter is holding is meter.ts's (T-34241); the page is
 // somebody else's (T-34242).
 import { type Item, ModelError, type Reply } from '@yaks/model'
@@ -50,7 +50,14 @@ import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { instructions, whole } from './guide.ts'
 import { type Host, hosted, url } from './host.ts'
-import { atCeiling, countedBuild, countedSpend, over, pooled } from './meter.ts'
+import {
+  atCeiling,
+  budgets,
+  countedBuild,
+  countedSpend,
+  over,
+  pooled,
+} from './meter.ts'
 import { type Price, priceOf, weigh } from './models.ts'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
@@ -560,15 +567,18 @@ export let build = async (
   // Fresh, every read: a tool answers about what a tool just wrote
   // (directory.ts, mcp.ts).
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
-  // The month's builds and model allowance, the account's on a free space
-  // (meter.ts, T-34241, T-37882). They are asked before anything is spent,
+  // The month's builds and account budget are asked before anything is spent,
   // and what comes back is a sentence the builder says rather than a door
   // slammed mid-conversation — so a refused build costs the person nothing,
   // not a build and not the model call of the refusal. The reading is taken
   // once; what this conversation spends is added to it round by round.
   let month = await pooled(dir, space)
-  let full = (['builds', 'models'] as const).find((w) => over(space, month, w))
-  if (full) return await end(atCeiling(space, full, env))
+  let accounts = await budgets(dir, space)
+  if (over(space, month, 'builds')) {
+    return await end(atCeiling(space, 'builds', env))
+  }
+  let full = accounts.find((a) => a.spent >= a.limit)
+  if (full) return await end(atCeiling(space, 'models', env, full.limit))
 
   let ctx: Ctx = { env, dir, person: who.person, spend }
   let model = opts.model ?? modelOf(env, opts.id ?? idOf(env, space))
@@ -586,8 +596,9 @@ export let build = async (
 
   while (true) {
     if (rounds >= max) return await end(tooMany(max))
-    if (over(space, month, 'models', cost())) {
-      return await end(atCeiling(space, 'models', env))
+    let full = accounts.find((a) => a.spent + cost() >= a.limit)
+    if (full) {
+      return await end(atCeiling(space, 'models', env, full.limit))
     }
     if (now() - started > ms) return await end(tooLong(ms))
     let answer: Answer

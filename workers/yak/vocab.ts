@@ -1374,7 +1374,7 @@ export let OPENS: Record<string, string> = {
  * off and carried on the document. `tools: false` synthesizes no tools for its
  * kinds (kinds.ts, T-34513); a boolean tells it from a component named
  * `tools`, which is an object of properties like any other. The other two are
- * each {@link OPENS}: who may spend the space's allowance through the app.
+ * each {@link OPENS}: who may spend the owner's account budget through the app.
  *
  * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
  * component: it is left out here and read by lib/tools.ts `parseTools`, so a

@@ -232,7 +232,7 @@ permanently deleted, including its 30 days in the trash. vpc_services
 ({binding}) reaches the paths the space owner opened on a machine the space has
 a tunnel to, as env.BINDING.fetch(url); an installed app, or a space with no
 tunnel, is refused it. ai ({binding}) gives the worker env.BINDING.run(model,
-input), the models the space's allowance pays for (page models), never the
+input), the models the owner's account budget pays for (page models), never the
 account's Workers AI.
 
 Almost nothing else needs compiling: an app is html, css and js, served as

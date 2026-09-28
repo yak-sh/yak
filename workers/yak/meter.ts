@@ -151,13 +151,10 @@ export let BUILDS: Record<Tier, number> = { free: 5, plus: 100 }
 
 export let builds = (tier: Tier | null): number => BUILDS[tier ?? 'free']
 
-// What a space may spend on models in a month, in dollars: every call on it,
-// the builder's and its apps' alike (models.ts weighs each by its price). The
-// free twenty cents are about a million tokens of GLM Flash, the five free
-// builds with room for the conversations that ship nothing; the Plus plan's
-// three dollars are a few of the nine it costs. Kept low on purpose while
-// who pays for a model call is still open (D-40545).
-export let MODELS: Record<Tier, number> = { free: 0.2, plus: 3 }
+// One monthly dollar budget belongs to an account. Each Plus subscription
+// contributes the $3 its space was previously allowed, on top of the free
+// $0.20. Space meters still say where the dollars went.
+export let BUDGET: Record<Tier, number> = { free: 0.2, plus: 3 }
 
 // Build seconds a month: the sandbox container's (sandbox.ts) and the compile
 // at app_deploy's (esbuild.ts). An hour free is six builds' whole sandbox
@@ -186,38 +183,34 @@ export let CURRENCY = 'USD'
 // upgrade, but also the reason for more spaces is to *share*, so that should
 // be encouraged! and yeah, limit anything currently uncapped"
 //
-// So a free allowance is a person's, not a space's. A person owns at most
-// {@link SPACES} free spaces, and the spaces somebody else made and invited
-// them into are not theirs to count. What they spend is counted where it
-// always was, on each space's meter, and the account's month is those meters
-// summed over the free spaces they own ({@link pooled}) rather than a second
-// counter beside them: one place a letter is written down, and a space that
-// moves to the Plus plan takes its reading with it. A Plus space answers to
-// its own allowance alone, since it is paid for on its own.
+// A person owns at most {@link SPACES} free spaces. Their letter, build and
+// second allowances pool over those free spaces; a Plus space has its own.
+// Dollar costs pool across all spaces the person owns, including Plus spaces.
+// Every spend stays on its source space's meter, so changing a plan or moving
+// through a month never requires moving a balance between rows.
 
 /** The free spaces one person may own. */
 export let SPACES = 5
 
-/** The monthly allowances a spend is refused at, before it is spent. Models
- * and realtime (voice, rtc.ts) are one allowance in dollars (D-40615), each
- * counted apart so a person can see which spent it. */
+/** The monthly usage counters. Models and realtime spend the same account
+ * budget; their separate counters still say what each source cost. */
 export type Spend = 'emails' | 'builds' | 'models' | 'realtime' | 'seconds'
+export type Limited = Exclude<Spend, 'models' | 'realtime'>
+export type Budget = { spent: number; limit: number }
 
-let ALLOWANCE: Record<Spend, Record<Tier, number>> = {
+let ALLOWANCE: Record<Limited, Record<Tier, number>> = {
   emails: LETTERS,
   builds: BUILDS,
-  models: MODELS,
-  realtime: MODELS,
   seconds: SECONDS,
 }
-let SPENDS = Object.keys(ALLOWANCE) as Spend[]
+let SPENDS: Spend[] = ['emails', 'builds', 'models', 'realtime', 'seconds']
+let LIMITED = Object.keys(ALLOWANCE) as Limited[]
 
-/** What a reading has spent of the allowance `what` is refused at: models and
- * realtime together for either. */
+/** What a reading has spent: model and voice dollars together. */
 let used = (m: Meter, what: Spend) =>
   what == 'models' || what == 'realtime' ? m.models + m.realtime : m[what]
 
-export let allowance = (what: Spend, tier: Tier | null) =>
+export let allowance = (what: Limited, tier: Tier | null) =>
   ALLOWANCE[what][tier ?? 'free']
 
 /** A space its owners' free allowance covers: not on the Plus plan, and not
@@ -243,7 +236,7 @@ export let pooled = async (
   if (!free(space)) return most
   for (let person of await dir.owners(space)) {
     let theirs = (await dir.spaces(person, 'owner')).filter(free)
-    for (let what of SPENDS) {
+    for (let what of LIMITED) {
       let sum = theirs.reduce((n, s) => n + spent(s, now)[what], 0)
       most[what] = Math.max(most[what], sum)
     }
@@ -253,8 +246,35 @@ export let pooled = async (
 
 /** Whether a reading is at an allowance; `more` is what the caller holds
  * that is not counted yet — the dollars and seconds of a build still going. */
-export let over = (space: Space, m: Meter, what: Spend, more = 0) =>
+export let over = (space: Space, m: Meter, what: Limited, more = 0) =>
   used(m, what) + more >= allowance(what, space.tier)
+
+/** Each owner pays from one budget across every space they own. A shared
+ * space must fit every owner's budget, as its free allowances already do. */
+export let budgets = async (
+  dir: Owned,
+  space: Space,
+  now = new Date(),
+): Promise<Budget[]> => {
+  let owners = await dir.owners(space)
+  if (!owners.length) {
+    return [{
+      spent: used(spent(space, now), 'models'),
+      limit: BUDGET[space.tier ?? 'free'],
+    }]
+  }
+  return await Promise.all(owners.map(async (person) => {
+    let spaces = [
+      space,
+      ...(await dir.spaces(person, 'owner')).filter((s) => s.eid != space.eid),
+    ]
+    let paid = spaces.filter((s) => s.tier == 'plus').length
+    return {
+      spent: spaces.reduce((n, s) => n + used(spent(s, now), 'models'), 0),
+      limit: BUDGET.free + paid * BUDGET.plus,
+    }
+  }))
+}
 
 /** What stops this spend here, or null to go ahead. */
 export let refusedSpend = async (
@@ -264,10 +284,17 @@ export let refusedSpend = async (
   env: Host = {},
   more = 0,
   now = new Date(),
-) =>
-  over(space, await pooled(dir, space, now), what, more)
+) => {
+  if (what == 'models' || what == 'realtime') {
+    let full = (await budgets(dir, space, now)).find((b) =>
+      b.spent + more >= b.limit
+    )
+    return full ? atCeiling(space, what, env, full.limit) : null
+  }
+  return over(space, await pooled(dir, space, now), what, more)
     ? atCeiling(space, what, env)
     : null
+}
 
 let empty = (month: string, built = 0): Meter => ({
   month,
@@ -357,16 +384,15 @@ export let refusedVisit = (
 export let usedBuilds = (space: Space, now = new Date()) =>
   spent(space, now).builds
 
-// How full a space is, per ceiling, as a fraction: 1 is at it. The letters and
-// the builds are there on every plan; the other three only where the plan has
-// them.
+// How full a space is, per space ceiling, as a fraction: 1 is at it. The
+// account's dollar budget is checked through `budgets`, not a space's reading.
 export let fullness = (space: Space, apps: number, now = new Date()) => {
   let free = ceilings(space.tier, space.slug)
   let m = spent(space, now)
   let both = {
     files: (m.files ?? 0) / FILES[space.tier ?? 'free'],
     ...Object.fromEntries(
-      SPENDS.map((
+      LIMITED.map((
         what,
       ) => [what, used(m, what) / allowance(what, space.tier)]),
     ),
@@ -423,15 +449,14 @@ export let standing = (
   let made = `${count(usedBuilds(space, now))} of ${
     count(builds(space.tier))
   } builds a month`
-  // What models, voice and build time cost: the one place a person sees what
-  // the builder, their apps' model calls and their apps' voices spend, against
-  // the monthly allowances they share.
+  // Space meters attribute model and voice cost; the budget is shared by the
+  // owner's accounts across spaces, so no space may state its own ceiling.
   let voice = m.realtime ? ` (${dollars(m.realtime)} of it voice)` : ''
-  let cost = `${dollars(used(m, 'models'))} of ${
-    dollars(allowance('models', space.tier))
-  } of model use and voice${voice}, and ${count(m.seconds)} of ${
-    count(allowance('seconds', space.tier))
-  } build seconds this month`
+  let cost =
+    `${dollars(used(m, 'models'))} of model use and voice here${voice}, ` +
+    `from the owner's account budget, and ${count(m.seconds)} of ${
+      count(allowance('seconds', space.tier))
+    } build seconds this month`
   let files = `${size(m.files ?? 0)} of ${
     size(FILES[space.tier ?? 'free'])
   } photos and files (hourly reading)`
@@ -446,9 +471,7 @@ export let standing = (
       free.apps == null ? '' : `an app past ${free.apps}, `
     }a build past ${count(builds(space.tier))}, data past ${
       size(free.bytes)
-    }, files past ${size(free.files)}, model use and voice past ${
-      dollars(allowance('models', space.tier))
-    }, or the ${
+    }, files past ${size(free.files)}, the account budget spent, or the ${
       count(letters(space.tier) + 1)
     }st letter sent is refused — a letter that ` +
     `arrives always lands. Plan settings: ${planSettings(space.slug, env)}`
@@ -484,6 +507,7 @@ export let atCeiling = (
   space: Space,
   what: 'apps' | 'bytes' | 'files' | Spend,
   env: Host = {},
+  budget = BUDGET[space.tier ?? 'free'],
 ) => {
   let free = ceilings(space.tier, space.slug)!
   let tier = space.tier ?? 'free'
@@ -524,15 +548,13 @@ export let atCeiling = (
     // alike, so it names neither: models answer again on the 1st. Voice
     // spends the same dollars, so each sentence says both.
     models: () =>
-      `${space.slug} is on the ${tier} tier, which is ${
-        dollars(allowance('models', space.tier))
-      } of models and voice a month${shared}, and this month's is spent — ` +
+      `the account budget of ${dollars(budget)} for models and voice ` +
+      `this month is spent — ` +
       `models answer again on the 1st, and a connected agent can keep ` +
       `building`,
     realtime: () =>
-      `${space.slug} is on the ${tier} tier, which is ${
-        dollars(allowance('realtime', space.tier))
-      } of models and voice a month${shared}, and this month's is spent — ` +
+      `the account budget of ${dollars(budget)} for models and voice ` +
+      `this month is spent — ` +
       `voices go quiet until the 1st`,
     seconds: () =>
       `${space.slug} is on the ${tier} tier, which is ${
@@ -723,7 +745,7 @@ export let metering = (
 // ---- the models (D-40545) ---------------------------------------------------
 //
 // A model call is counted where it happens, like a letter and for the same
-// reason: nothing in the analytics knows which space asked. The allowance is
+// reason: nothing in the analytics knows which space asked. The budget is
 // read before the call and the call weighed after it, by its model's price in
 // the catalogue (models.ts), so the call that crosses the line still
 // completes: a soft ceiling, like the others.
@@ -735,11 +757,11 @@ export let metering = (
  * call that could not be counted — no namespace to count it in, no space to
  * count it against — since nothing reaches the account's AI unmetered.
  *
- * Over the allowance it throws a `ModelError` coded `limit` carrying the
+ * Over the budget it throws a `ModelError` coded `limit` carrying the
  * ceiling's sentence, which a transcript comes to rest on (@yaks/session
  * `LIMIT`) and the direct door answers 429 with. The account's own credits
  * spent are a ceiling too (@yaks/workers-ai `failure`), refused the same way,
- * and reported: the space met no allowance of its own, and only the platform
+ * and reported: the account met no budget of its own, and only the platform
  * can buy more.
  */
 export let metered = (

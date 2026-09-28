@@ -5,7 +5,7 @@
 // call at Realtime.
 import { assert, assertEquals } from '@std/assert'
 import { until } from '../../bin/testing.ts'
-import { MODELS, monthOf } from './meter.ts'
+import { BUDGET, monthOf } from './meter.ts'
 import {
   cloudflare,
   connector,
@@ -101,10 +101,10 @@ Deno.test("an app's voice door calls for its members, and for visitors where it 
     }[]
     assert((row.meter?.realtime ?? 0) > 0)
 
-    // Models and voice spend one allowance: spent on models, no new call.
+    // Models and voice spend one account budget: spent on models, no new call.
     await meta(k).apply([{
       entity: { eid: eids[slug] },
-      meter: { month: monthOf(new Date()), models: MODELS.free },
+      meter: { month: monthOf(new Date()), models: BUDGET.free },
     }])
     assertEquals(await code(owner, 'sessions/new', {}), [429, 'limit'])
   } finally {
