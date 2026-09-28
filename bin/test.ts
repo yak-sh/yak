@@ -216,6 +216,37 @@ function report(
   while (bytes.length) bytes = bytes.subarray(stream.writeSync(bytes))
 }
 
+// Deno prints a test's name before running it, then finishes the same line
+// with its result. Keep that name while the reporter's bytes stay buffered
+// for an intact shard report at exit.
+let observe = async (
+  stream: ReadableStream<Uint8Array>,
+  progress: { name: string; completed: number },
+) => {
+  let decoder = new TextDecoder()
+  let pending = ''
+  let read = (line: string) => {
+    let test = line.match(/^(.+?) \.\.\./)
+    if (test) progress.name = test[1]
+    if (/ \.\.\. (ok|FAILED)(?: |$)/.test(line)) {
+      progress.completed = Date.now()
+    }
+  }
+  for await (let bytes of stream) {
+    pending += decoder.decode(bytes, { stream: true })
+    let lines = pending.split('\n')
+    pending = lines.pop() ?? ''
+    for (let line of lines) read(line)
+    read(pending)
+  }
+  read(pending + decoder.decode())
+}
+
+let group = () => {
+  let stat = Deno.readTextFileSync('/proc/self/stat')
+  return Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2])
+}
+
 // `--bulk [--doc=<page>]... <file>...`
 if (import.meta.main && Deno.args[0] === '--bulk') {
   // Deno --parallel shares a native SQLite allocator across its worker threads.
@@ -232,6 +263,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let middle = Object.values(known).sort((a, b) => a - b)
   let usual = middle[middle.length >> 1] ?? 1
   let weight = (file: string) => known[file.replace(/^\.\//, '')] ?? usual
+  let idleLimit = Number(Deno.env.get('TASKS_TEST_IDLE_MS') ?? 60_000)
+  if (!Number.isFinite(idleLimit) || idleLimit < 1) {
+    throw new Error('invalid test idle limit')
+  }
   let reports = await Deno.makeTempDir({ prefix: 'tasks-junit-' })
   let runs = [
     ...groups(files, jobs, weight).map((g, i) => [
@@ -254,17 +289,76 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     }).spawn()
   )
   let failed: string[] = []
-  await Promise.all(children.map(async (child) => {
-    let status = await child.output()
-    report(Deno.stdout, status.stdout)
-    report(Deno.stderr, status.stderr)
-    // Every shard runs to its own end and prints its own report. Exiting here
-    // on the first failure killed the shards still running, so their failures
-    // were never printed at all.
-    if (!status.success) {
-      failed.push(`test shard ${child.pid}: ${status.signal ?? status.code}`)
-    }
+  let progress = children.map(() => ({
+    name: 'loading tests',
+    completed: Date.now(),
+    reported: 0,
+    done: false,
   }))
+  let parent = Deno.ppid
+  let ending = false
+  let end = (why: string) => {
+    if (ending) return
+    ending = true
+    console.error(why)
+    // runTestCommands starts this coordinator as a session leader. End its
+    // whole process group, including test-spawned descendants. A direct
+    // `--bulk` invocation only owns its immediate children.
+    if (group() == Deno.pid) Deno.kill(-Deno.pid, 'SIGTERM')
+    else {
+      for (let child of children) child.kill('SIGTERM')
+      Deno.exit(1)
+    }
+  }
+  let watch = setInterval(() => {
+    if (Deno.ppid != parent) {
+      end('test bulk: parent exited; ending its shards')
+      return
+    }
+    for (let [i, p] of progress.entries()) {
+      if (p.done) continue
+      let idle = Date.now() - p.completed
+      if (idle >= 30_000 && Date.now() - p.reported >= 30_000) {
+        console.error(
+          `test shard ${i}: waiting ${Math.floor(idle / 1000)}s on ${p.name}`,
+        )
+        p.reported = Date.now()
+      }
+      if (idle >= idleLimit) {
+        end(
+          `test shard ${i}: no test completed for ${
+            Math.ceil(idle / 1000)
+          }s; last: ${p.name}`,
+        )
+        return
+      }
+    }
+  }, 1_000)
+  try {
+    await Promise.all(children.map(async (child, i) => {
+      let [stdout, preview] = child.stdout.tee()
+      let [stderr, errors] = child.stderr.tee()
+      let output = new Response(stdout).arrayBuffer()
+      let error = new Response(stderr).arrayBuffer()
+      let followed = Promise.all([
+        observe(preview, progress[i]),
+        observe(errors, progress[i]),
+      ])
+      let status = await child.status
+      await followed
+      progress[i].done = true
+      report(Deno.stdout, new Uint8Array(await output))
+      report(Deno.stderr, new Uint8Array(await error))
+      // Every shard runs to its own end and prints its own report. Exiting here
+      // on the first failure killed the shards still running, so their failures
+      // were never printed at all.
+      if (!status.success) {
+        failed.push(`test shard ${child.pid}: ${status.signal ?? status.code}`)
+      }
+    }))
+  } finally {
+    clearInterval(watch)
+  }
   let times: Record<string, number> = {}
   for await (let e of Deno.readDir(reports)) {
     Object.assign(

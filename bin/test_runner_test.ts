@@ -170,6 +170,123 @@ for (let failure of [false, true]) {
   })
 }
 
+let waiting = async (dir: string) => {
+  let file = `${dir}/waiting_test.ts`
+  let held = JSON.stringify(`${dir}/held.pid`)
+  await Deno.writeTextFile(
+    file,
+    `Deno.test('waiting on a lost reply', async () => {
+      let held = new Deno.Command('sleep', { args: ['60'] }).spawn()
+      Deno.writeTextFileSync(${held}, String(held.pid))
+      await held.status
+    })`,
+  )
+  return file
+}
+
+let gone = (pid: number) =>
+  until(async () => {
+    try {
+      await Deno.stat(`/proc/${pid}`)
+      return false
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error
+      return true
+    }
+  }, { timeout: 5_000, label: `test descendant ${pid} to exit` })
+
+let killGroup = (pid: number) => {
+  try {
+    Deno.kill(-pid, 'SIGKILL')
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  }
+}
+
+let killChild = (child: Deno.ChildProcess) => {
+  try {
+    child.kill('SIGKILL')
+  } catch (error) {
+    if (
+      !(error instanceof Deno.errors.NotFound) &&
+      !(error instanceof TypeError && /already terminated/.test(error.message))
+    ) throw error
+  }
+}
+
+Deno.test('a test that stops completing is named and its descendants end', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'test-idle-' })
+  let child: Deno.ChildProcess | undefined
+  try {
+    let file = await waiting(dir)
+    child = new Deno.Command('setsid', {
+      args: [
+        Deno.execPath(),
+        'run',
+        '-A',
+        fileURLToPath(new URL('./test.ts', import.meta.url)),
+        '--bulk',
+        file,
+      ],
+      env: { TASKS_TEST_IDLE_MS: '3000' },
+      stdout: 'piped',
+      stderr: 'piped',
+    }).spawn()
+    let result = await child.output()
+    assertEquals(result.signal, 'SIGTERM')
+    assertMatch(
+      new TextDecoder().decode(result.stderr),
+      /no test completed for \d+s; last: waiting on a lost reply/,
+    )
+    let held = Number(await Deno.readTextFile(`${dir}/held.pid`))
+    await gone(held)
+  } finally {
+    if (child) killGroup(child.pid)
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
+Deno.test('a shard ends when its parent is killed', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'test-orphan-' })
+  let parent: Deno.ChildProcess | undefined
+  let bulk = 0
+  try {
+    let file = await waiting(dir)
+    let fixture = `${dir}/parent.ts`
+    let runner = JSON.stringify(
+      fileURLToPath(new URL('./test.ts', import.meta.url)),
+    )
+    let pid = JSON.stringify(`${dir}/bulk.pid`)
+    await Deno.writeTextFile(
+      fixture,
+      `let child = new Deno.Command('setsid', {
+        args: [Deno.execPath(), 'run', '-A', ${runner}, '--bulk', ${
+        JSON.stringify(file)
+      }],
+        stdout: 'null', stderr: 'null',
+      }).spawn()
+      Deno.writeTextFileSync(${pid}, String(child.pid))
+      setInterval(() => {}, 1000)`,
+    )
+    parent = new Deno.Command(Deno.execPath(), {
+      args: ['run', '-A', fixture],
+      stdout: 'null',
+      stderr: 'null',
+    }).spawn()
+    await waitFor(`${dir}/held.pid`)
+    bulk = Number(await Deno.readTextFile(`${dir}/bulk.pid`))
+    let held = Number(await Deno.readTextFile(`${dir}/held.pid`))
+    parent.kill('SIGKILL')
+    await parent.status
+    parent = undefined
+    await Promise.all([gone(bulk), gone(held)])
+  } finally {
+    if (bulk) killGroup(bulk)
+    if (parent) killChild(parent)
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 let fixture = fileURLToPath(
   new URL('./test_runner_fixture.ts', import.meta.url),
 )
