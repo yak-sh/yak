@@ -63,6 +63,7 @@ import {
   hearthOf,
   vale,
   VOXEL,
+  withoutSpent,
 } from './terrain.ts'
 import { ledger, TRADES } from './trades.ts'
 import { world } from './world.ts'
@@ -115,6 +116,7 @@ let seen = sighting(net)
 let camp = fires(net)
 let g = game(net, folk.at)
 let toil = working(net)
+let walking = withoutSpent(v, (p) => toil.spent(p, net.now()))
 let helper = companion(net)
 // Who you are and your heroes, asked while the level grows.
 let asking = net.me().then(async (me) => ({
@@ -842,7 +844,7 @@ let loop = (t: number) => {
         localStorage.setItem('mossvale.cam', cam.follow ? 'follow' : 'free')
       } catch { /* kept for this page only */ }
     }
-    let f = g.frame(v, i, cam.yaw, dt)
+    let f = g.frame(walking, i, cam.yaw, dt)
     last = f
     if (f) {
       let mine = net.who(net.hero) ?? look

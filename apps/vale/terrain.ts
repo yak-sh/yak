@@ -107,7 +107,7 @@ export type Prop = {
 
 /** Something a walker cannot pass: a circle at (x, z) of radius r, in metres,
  * up to height `top`. */
-export type Wall = { x: number; z: number; r: number; top: number }
+export type Wall = { x: number; z: number; r: number; top: number; prop?: Prop }
 
 /** A chunk's ground as grown at one voxel size. Its layers are `n` columns
  * on a side, the chunk's own and one more all round, from the column
@@ -1047,14 +1047,26 @@ let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
         let y = standAt(v, p), kind = KINDS[p.kind]
         if (kind.solid) {
           let { r, tall } = bulk(p.kind, p.seed)
-          add({ x: p.x, z: p.z, r, top: y + tall })
+          add({
+            x: p.x,
+            z: p.z,
+            r,
+            top: y + tall,
+            prop: p.natural ? p : undefined,
+          })
         } else if (kind.girth) {
           // A trunk or a post is too tall to jump; a row as tall as it is
           // drawn.
           let tall = kind.row ? bulk(p.kind, p.seed).tall : 3
           let row = kind.row ?? 0
           for (let dx = -row; dx <= row + 1e-9; dx += kind.girth) {
-            add({ x: p.x + dx, z: p.z, r: kind.girth, top: y + tall })
+            add({
+              x: p.x + dx,
+              z: p.z,
+              r: kind.girth,
+              top: y + tall,
+              prop: p.natural ? p : undefined,
+            })
           }
         }
       }
@@ -1111,6 +1123,14 @@ export let vale = (voxel = VOXEL): Vale => {
   vales.set(voxel, v)
   return v
 }
+
+/** The same ground with spent natural props omitted from its walls. The
+ * predicate reads the page's gathering state, so a cached wall can stop
+ * blocking as soon as its resource is gathered or grow back with it. */
+export let withoutSpent = (v: Vale, spent: (p: Prop) => boolean): Vale => ({
+  ...v,
+  bump: (ci, ck) => v.bump(ci, ck).filter((w) => !w.prop || !spent(w.prop)),
+})
 
 // How many chunks' ground a vale keeps.
 let PATCHES = 200

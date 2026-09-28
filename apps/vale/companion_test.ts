@@ -11,10 +11,11 @@ import {
   routeTo,
   treesOf,
 } from './companion.ts'
-import { effort, LODES, naturalEid } from './gather.ts'
+import { effort, GATHER, LODES, naturalEid } from './gather.ts'
 import type { Natural } from './nature.ts'
 import { type Bundle, comp } from './net.ts'
-import { flat, type Prop } from './terrain.ts'
+import { flat, type Prop, withoutSpent } from './terrain.ts'
+import { fits } from './sim.ts'
 import { type WorkFrame, working } from './work.ts'
 import words from './vocab.json' with { type: 'json' }
 
@@ -101,6 +102,18 @@ Deno.test('companion work gathers by the hero’s ordinary rules', () => {
   assertEquals(comp(rows[0], 'gathered').directive, 'order')
   assertEquals(comp(rows[0], 'gathered').node, as.target)
   assertEquals(comp(rows[0], 'gathered').life, 0)
+  let blocked = flat(5, [{ x: 5, z: 5, r: 0.8, top: 9, prop }], [prop])
+  let walking = withoutSpent(blocked, (p) => toil.spent(p, f.now))
+  assertEquals(fits(blocked, 5, 5, 5), false)
+  let spent = () =>
+    toil.tick(v, f, false, false, natural).nodes.find((n) =>
+      n.eid == as.target
+    )!.spent
+  assertEquals(spent(), true)
+  assertEquals(fits(walking, 5, 5, 5), true)
+  f.now += GATHER.wood.respawn * 1000
+  assertEquals(spent(), false)
+  assertEquals(fits(walking, 5, 5, 5), false)
 })
 
 Deno.test('two gathers cannot credit the same node life', async () => {

@@ -156,6 +156,9 @@ export let connect = (base: URL) => {
   let lookBy = new Map<string, Bundle>()
   let area = areaOf(SIZE / 2, SIZE / 2, REACH)
   let near = c.watch(area.query)
+  // The remote watch brings rows here; the local view also sees a write this
+  // page just made, before the server adds it to the remote watch's members.
+  let nearby = c.watch(area.query, { remote: false })
   let pending: { area: typeof area; watch: Watch; off: () => void } | null =
     null
   let follow = (x: number, z: number) => {
@@ -176,7 +179,9 @@ export let connect = (base: URL) => {
       if (!watch.ready || pending?.watch != watch) return
       pending.off()
       near.close()
+      nearby.close()
       near = watch
+      nearby = c.watch(next.query, { remote: false })
       area = next
       pending = null
       syncLooks()
@@ -186,7 +191,7 @@ export let connect = (base: URL) => {
   }
   let selected = new Map<string, { held: Bundle[]; rows: Bundle[] }>()
   let rows = (name: string): Bundle[] => {
-    let held = near.value, was = selected.get(name)
+    let held = nearby.value, was = selected.get(name)
     if (was?.held == held) return was.rows
     let found = held.filter((b) => b[name])
     selected.set(name, { held, rows: found })

@@ -20,13 +20,14 @@ import {
   haulOf,
   type Lode,
   LODES,
+  naturalEid,
   nodeRarity,
   nodesNear,
 } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { comp, num, str } from './bundle.ts'
 import type { Bundle, Net } from './net.ts'
-import type { Natural } from './nature.ts'
+import { type Natural, NATURE } from './nature.ts'
 import { type Board, boardsNear, READ } from './notices.ts'
 import type { Frame, Vec3 } from './play.ts'
 import { itemLevel, made, type Rarity } from './rarity.ts'
@@ -42,6 +43,7 @@ import {
 import {
   ALL,
   type Craft,
+  type Gather,
   least,
   type Trade,
   TRADES,
@@ -257,6 +259,12 @@ export let working = (
     }
     return by
   }
+  let life = (
+    rows: Map<string, { at: number }[]>,
+    eid: string,
+    trade: Gather,
+    now: number,
+  ) => fallOf(rows.get(eid) ?? [], GATHER[trade].respawn, now)
 
   // A node's work done: the item it gave, wearing the row that spends it.
   let gather = (
@@ -376,6 +384,11 @@ export let working = (
   }
 
   return {
+    /** Whether a natural prop is spent in the gathering state the nodes use. */
+    spent: (p: Prop, now: number) => {
+      let lode = LODES[NATURE[p.kind]]
+      return !!lode && life(gatherings(), naturalEid(p), lode.trade, now).down
+    },
     /** make a thing by a recipe, at the station the hero stands at */
     make: (recipe: string) => {
       asked = { recipe, piece: null }
@@ -411,7 +424,7 @@ export let working = (
         (n): Seen => {
           let lode = LODES[n.lode]
           let respawn = GATHER[lode.trade].respawn * 1000
-          let fall = fallOf(rows.get(n.eid) ?? [], respawn / 1000, now)
+          let fall = life(rows, n.eid, lode.trade, now)
           let y = lode.trade == 'fish'
             ? WATER
             : n.ground ?? groundAt(v, n.x, n.z)
