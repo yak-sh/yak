@@ -142,15 +142,17 @@ export let staged = async (
         : files.list(at),
     uploaded: (at) => raw.uploaded(at),
   }
-  let finish = async (): Promise<Files> => {
+  let manifest = (): Files | null => {
     let version = Object.fromEntries(
       own(Object.keys(index)).map((path) => [path, index[path].sha]),
     ) as Files
-    if (Object.values(version).some((sha) => !sha)) {
-      throw new Error('release has a file without a pinned sha')
-    }
+    return Object.values(version).some((sha) => !sha) ? null : version
+  }
+  let finish = async (): Promise<Files> => {
+    let version = manifest()
+    if (!version) throw new Error('release has a file without a pinned sha')
     await raw.put(prefix + META, encode(index))
     return version
   }
-  return { files: view, finish }
+  return { files: view, manifest, finish }
 }

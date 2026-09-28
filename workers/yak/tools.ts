@@ -850,7 +850,17 @@ let published = async (
   // Compile in the private release candidate. A failure leaves serving alone.
   let made = await c.time(
     'compile',
-    () => compiled(ctx, space, app, who, parsed.config, keys, blobs),
+    () =>
+      compiled(
+        ctx,
+        space,
+        app,
+        who,
+        parsed.config,
+        keys,
+        blobs,
+        files.manifest,
+      ),
   )
   // What this release will be called, read here because the seed below is
   // marked with it the moment it lands and the version row is written at the

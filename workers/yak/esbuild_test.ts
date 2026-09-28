@@ -137,9 +137,16 @@ Deno.test('a deploy reuses unchanged compiled entries', async () => {
   let worker = await (s.uploads.at(-1)!.get('worker.js') as File).text()
   let spent = await s.seconds()
 
+  let get = s.env.BLOBS.get.bind(s.env.BLOBS)
+  let sourceReads: string[] = []
+  s.env.BLOBS.get = ((key: string) => {
+    if (/\/(?:main|worker)\.ts$/.test(key)) sourceReads.push(key)
+    return get(key)
+  }) as typeof s.env.BLOBS.get
   await s.write({ 'style.css': 'body { color: red }' })
   await s.tool('app_deploy')
   assertEquals(s.asks.length, 1)
+  assertEquals(sourceReads, [])
   assertEquals(await s.seconds(), spent)
   assertEquals(await s.served('main.ts'), served)
   assertEquals(
@@ -168,6 +175,28 @@ Deno.test('a deploy reuses unchanged compiled entries', async () => {
   await s.tool('app_deploy')
   assertEquals(s.asks.at(-1)?.worker?.entry, 'worker.ts')
   assertEquals(s.asks.at(-1)?.pages, ['main.ts'])
+})
+
+Deno.test('a changed lock or previously plain script replans a release', async () => {
+  using s = await scenario(compiles)
+  await s.write({
+    'index.html': PAGE + '<script type="module" src="plain.js"></script>',
+    'main.ts': 'let n: number = 1',
+    'plain.js': 'export let x = 1',
+    'package.json': '{"dependencies": {"three": "^0.186.0"}}',
+  })
+  await s.tool('app_deploy')
+  await s.write({ 'package-lock.json': '{"lockfileVersion": 2}\n' })
+  await s.tool('app_deploy')
+  assertEquals(s.asks.length, 2)
+  assertEquals(
+    s.asks.at(-1)?.files['package-lock.json'],
+    '{"lockfileVersion": 2}\n',
+  )
+
+  await s.write({ 'plain.js': "import 'three'" })
+  await s.tool('app_deploy')
+  assertEquals(s.asks.at(-1)?.pages, ['plain.js'])
 })
 
 Deno.test('a compile that fails refuses the deploy, and the last release serves', async () => {

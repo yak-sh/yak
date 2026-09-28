@@ -17,12 +17,14 @@ Two halves, because the compiler runs only inside workerd:
 
 ## The verbs
 
-- `plan({paths, read, main, flags})` returns `{ask, notes, inputs}`, or `null`
+- `plan({paths, read, main, flags})` returns `{ask, notes, inputs, reads}`, or `null`
   when nothing needs compiling. `main` is the server source, if the app has one;
   `flags` its compatibility flags. It throws `Unplanned` with a sentence the
   author can act on, such as a `package.json` that is not JSON. Its `inputs`
   name each compiled entry's source paths, so a host can reuse unchanged output
-  across deploys.
+  across deploys. `reads` names every source examined to form the plan, including
+  plain scripts and HTML. A host with an immutable file manifest can reuse the
+  plan when its paths and the digests of these files are unchanged.
 - `modules(read, entry)` and `sources(read, entry)` walk the module graph from
   one file: `modules` as the runtime links (a specifier names a file exactly),
   `sources` as esbuild resolves (extensions, `index` files, the `.ts` twin of a

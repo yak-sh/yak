@@ -30,7 +30,7 @@ import { countedSpend, refusedSpend } from './meter.ts'
 import { caught } from './sentry.ts'
 import type { Who } from './session.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { BUILT, own, replaced, sha256 } from './versions.ts'
+import { BUILT, type Files, own, replaced, sha256 } from './versions.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 
 export let LOCK = 'package-lock.json'
@@ -41,6 +41,10 @@ type Cache = {
   compiler: string
   worker?: { hash: string; main: string }
   pages: Record<string, string>
+  plan?: Plan
+  source?: Files
+  main?: string
+  flags?: string[]
 }
 
 /** What the compile step hands the rest of the release. */
@@ -54,6 +58,29 @@ export type Compiled = {
 
 let encode = (text: string) => new TextEncoder().encode(text)
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
+// A release index already knows the digest of every source file. A graph
+// cannot change if its paths and the bytes it read to form the plan did not.
+let samePlan = (
+  old: Cache | null,
+  source: Files | null,
+  main: string | undefined,
+  flags: string[],
+  compiler: string,
+) => {
+  if (
+    !old?.plan || !old.source || !source || old.compiler != compiler ||
+    old.main != main || JSON.stringify(old.flags) != JSON.stringify(flags)
+  ) {
+    return false
+  }
+  let paths = Object.keys(source)
+  return paths.length == Object.keys(old.source).length &&
+    paths.every((path) => path in old.source!) &&
+    [...old.plan.reads, 'package.json', LOCK].every((path) =>
+      source[path] == old.source![path]
+    )
+}
 
 // A bundle depends only on its own graph, the installed packages and the
 // compiler release. Other app files may change without changing its bytes.
@@ -138,22 +165,42 @@ export let compiled = async (
   config: Config,
   keys: string[],
   files = r2Objects(ctx.env.BLOBS),
+  manifest: () => Files | null = () => null,
 ): Promise<Compiled> => {
   let blobs = files
   let prefix = `${prefixOf(space, app)}/`
   let paths = own(keys)
   let held = keys.filter((k) => k.startsWith(BUILT))
   let read = (path: string) => blobs.read(prefix + path)
+  let source = manifest()
   let has = new Set(paths)
   let main = sourceOf(config, (p) => has.has(p))
+  let compiler = ctx.env.CF_VERSION_METADATA?.id ?? 'local'
+  let old: Cache | null = null
+  let saved = await read(CACHE)
+  if (saved) {
+    try {
+      old = JSON.parse(decode(saved))
+    } catch (e) {
+      caught(e, { request: 'compile cache', app: app.slug })
+    }
+  }
   let planned
   try {
-    planned = await plan({
-      paths,
-      read,
-      main,
-      flags: config.compatibility_flags,
-    })
+    planned = samePlan(
+        old,
+        source,
+        main,
+        config.compatibility_flags ?? [],
+        compiler,
+      )
+      ? old!.plan!
+      : await plan({
+        paths,
+        read,
+        main,
+        flags: config.compatibility_flags,
+      })
   } catch (e) {
     if (e instanceof Unplanned) throw refuse('arguments', e.message)
     throw e
@@ -168,16 +215,6 @@ export let compiled = async (
     return { lines: [] }
   }
   let { ask, notes, inputs } = planned
-  let compiler = ctx.env.CF_VERSION_METADATA?.id ?? 'local'
-  let old: Cache | null = null
-  let saved = await read(CACHE)
-  if (saved) {
-    try {
-      old = JSON.parse(decode(saved))
-    } catch (e) {
-      caught(e, { request: 'compile cache', app: app.slug })
-    }
-  }
   let hashes = await fingerprints(ask, inputs, compiler)
   let oldWorker = old?.compiler == compiler &&
       old.worker?.hash == hashes.worker && old.worker?.main
@@ -289,6 +326,10 @@ export let compiled = async (
       }
       : undefined,
     pages: final.pages,
+    plan: { ...planned, ask: current },
+    source: manifest() ?? undefined,
+    main,
+    flags: config.compatibility_flags ?? [],
   }
   await blobs.put(prefix + CACHE, encode(JSON.stringify(cache)))
   await drop(

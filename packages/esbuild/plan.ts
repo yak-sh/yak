@@ -74,6 +74,8 @@ export type Plan = {
   ask: Ask
   notes: string[]
   inputs: { worker?: string[]; pages: Record<string, string[]> }
+  /** Every existing source read to decide this plan, including plain JS. */
+  reads: string[]
 }
 
 // What esbuild reads as source. Anything else a worker imports is a module of
@@ -286,5 +288,10 @@ export let plan = async (app: App): Promise<Plan | null> => {
   if (pkg != null) files['package.json'] = pkg
   let lock = await text('package-lock.json')
   if (lock != null) files['package-lock.json'] = lock
-  return { ask: { files, worker, pages }, notes, inputs }
+  return {
+    ask: { files, worker, pages },
+    notes,
+    inputs,
+    reads: [...reads.keys()],
+  }
 }
