@@ -38,6 +38,34 @@ import { defect } from './sentry.ts'
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */
 export let meterPlugin: Plugin = {
   name: 'yak/meter',
+  vocab: [{
+    $defs: {
+      account_usage: {
+        component: true,
+        wire: false,
+        type: 'object',
+        properties: {
+          month: { type: 'string' },
+          at: { type: 'string', format: 'date-time' },
+          requests: { type: 'number' },
+          rows_read: { type: 'number' },
+          duration: { type: 'number' },
+        },
+      },
+      account_alert: {
+        component: true,
+        wire: false,
+        type: 'object',
+        properties: {
+          month: { type: 'string' },
+          requests: { type: 'string' },
+          rows_read: { type: 'string' },
+          duration: { type: 'string' },
+          rate: { type: 'string' },
+        },
+      },
+    },
+  }],
   wakes: [{
     entity: { eid: 'yak-meter' },
     wake: { every: '@hourly', note: 'Read yaks.app usage for this month' },

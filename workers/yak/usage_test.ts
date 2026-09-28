@@ -7,7 +7,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Meter, Space, Tier } from './directory.ts'
-import { filesOf, full, fullFiles, read, sweep } from './usage.ts'
+import { accountOf, filesOf, full, fullFiles, read, sweep } from './usage.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
@@ -64,6 +64,14 @@ let ANSWER = {
             sum: { rowsRead: 872425, rowsWritten: 8741 },
           },
         ],
+        accountInvocations: [{ sum: { requests: 2240 } }],
+        accountPeriodic: [{
+          sum: {
+            rowsRead: 920783,
+            duration: 125,
+            inboundWebsocketMsgCount: 11,
+          },
+        }],
       }],
     },
   },
@@ -122,6 +130,8 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
           accounts: [{
             durableObjectsInvocationsAdaptiveGroups: values('requests'),
             durableObjectsPeriodicGroups: values('rowsRead'),
+            accountInvocations: [{ sum: { requests: 7 } }],
+            accountPeriodic: [{ sum: { rowsRead: 7, duration: 1 } }],
           }],
         },
       },
@@ -156,6 +166,16 @@ Deno.test('an analytics answer reads as one row per store', () => {
   // A store the datasets never named is not zero — it is absent, and the
   // sweep writes zeros for it from its own list of apps.
   assertEquals(by.get('jeff/nothing-yet'), undefined)
+})
+
+Deno.test('account usage includes the directory and active-socket messages', () => {
+  assertEquals(accountOf(ANSWER, new Date('2026-09-28T10:00:00Z')), {
+    month: '2026-09',
+    at: '2026-09-28T10:00:00.000Z',
+    requests: 2251,
+    rows_read: 920783,
+    duration: 125,
+  })
 })
 
 Deno.test('a store in one dataset and not the other still reads', () => {
@@ -762,6 +782,8 @@ Deno.test('spends counted at once all count, and the sweep keeps them', async ()
   let groups = {
     durableObjectsInvocationsAdaptiveGroups: [],
     durableObjectsPeriodicGroups: [],
+    accountInvocations: [],
+    accountPeriodic: [],
   }
   globalThis.fetch = () =>
     Promise.resolve(

@@ -55,6 +55,10 @@ import {
   thisMonth,
   WARN,
 } from './meter.ts'
+import { GRAPH, mail } from './mail.ts'
+import { replyTo } from './host.ts'
+import { KERNEL, meta } from './meta.ts'
+import { type Alerts, type Usage, warning } from './usage-alert.ts'
 
 export let GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql'
 
@@ -80,6 +84,14 @@ export let QUERY =
         dimensions { objectId }
         sum { rowsRead rowsWritten }
       }
+      accountInvocations: durableObjectsInvocationsAdaptiveGroups(
+        limit: 1
+        filter: {datetime_geq: $since, datetime_lt: $until}
+      ) { sum { requests } }
+      accountPeriodic: durableObjectsPeriodicGroups(
+        limit: 1
+        filter: {datetime_geq: $since, datetime_lt: $until}
+      ) { sum { rowsRead duration inboundWebsocketMsgCount } }
     }
   }
 }`
@@ -94,6 +106,8 @@ type Answer = {
       accounts?: {
         durableObjectsInvocationsAdaptiveGroups?: Group[]
         durableObjectsPeriodicGroups?: Group[]
+        accountInvocations?: Group[]
+        accountPeriodic?: Group[]
       }[]
     }
   }
@@ -126,6 +140,53 @@ export let read = (answer: Answer) => {
     row.rows_written += g.sum?.rowsWritten ?? 0
   }
   return by
+}
+
+// Unlike the app meter, the alert covers the whole Cloudflare account: its
+// directory object, other Workers and any object not named by this deploy.
+// The ungrouped aliases are one row each, so the 10,000-app meter limit cannot
+// truncate these totals. Active-socket messages live in periodic metrics;
+// hibernated-socket messages live in invocations. Add both as raw events so
+// this early warning cannot miss either path; billing discounts them later.
+export let accountOf = (answer: Answer, now: Date): Usage | null => {
+  let account = answer.data?.viewer?.accounts?.[0]
+  if (!account) return null
+  if (!account.accountInvocations || !account.accountPeriodic) {
+    throw new Error('analytics: account usage is absent')
+  }
+  return {
+    month: monthOf(now),
+    at: now.toISOString(),
+    requests: (account.accountInvocations[0]?.sum?.requests ?? 0) +
+      (account.accountPeriodic[0]?.sum?.inboundWebsocketMsgCount ?? 0),
+    rows_read: account.accountPeriodic[0]?.sum?.rowsRead ?? 0,
+    duration: account.accountPeriodic[0]?.sum?.duration ?? 0,
+  }
+}
+
+let accountAlert = async (env: Env, usage: Usage) => {
+  let graph = meta(env)
+  let [row] = await graph.query('.eid=yak-meter') as {
+    account_usage?: Usage
+    account_alert?: Alerts
+  }[]
+  let { body, next } = warning(
+    row?.account_usage ?? null,
+    usage,
+    row?.account_alert ?? null,
+  )
+  if (body) {
+    await mail(env)({
+      to: [GRAPH, replyTo(env)],
+      subject: 'Cloudflare Durable Object usage alert',
+      body,
+    })
+  }
+  await graph.apply([{
+    entity: { eid: 'yak-meter' },
+    account_usage: usage,
+    account_alert: next,
+  }], KERNEL)
 }
 
 // One call to the analytics API. A token that cannot read analytics answers
@@ -166,16 +227,15 @@ let held = (app: App) => app.meter?.bytes ?? 0
 export let sweep = async (env: Env, now = new Date()) => {
   let month = monthOf(now)
   let at = now.toISOString()
-  let counts = env.CF_ANALYTICS_TOKEN
-    ? read(
-      await ask(
-        env.CF_ANALYTICS_TOKEN,
-        env.CF_ACCOUNT ?? '',
-        `${month}-01T00:00:00Z`,
-        at,
-      ),
+  let answer = env.CF_ANALYTICS_TOKEN
+    ? await ask(
+      env.CF_ANALYTICS_TOKEN,
+      env.CF_ACCOUNT ?? '',
+      `${month}-01T00:00:00Z`,
+      at,
     )
     : null
+  let counts = answer ? read(answer) : null
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let entities: Bundle[] = []
   let turned: Bundle[] = []
@@ -238,7 +298,9 @@ export let sweep = async (env: Env, now = new Date()) => {
   }
   if (turned.length) await stamp(env, { entities: turned })
   if (entities.length) await stamp(env, { entities })
-  return entities.length
+  let account = answer && accountOf(answer, now)
+  if (account) await accountAlert(env, account)
+  return entities.length + (account ? 1 : 0)
 }
 
 // What the sweep reports on the log: one line, whatever happened.
