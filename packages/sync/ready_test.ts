@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import { assertEquals, assertThrows } from '@std/assert'
+import { until } from '../../bin/testing.ts'
 import type { Bundle } from '@yaks/graph'
 import { boxGraph, pair } from './testing.ts'
 import { sync } from './sync.ts'
@@ -30,6 +31,7 @@ Deno.test('ready waits for apply, and an old completion cannot confirm a new ask
   assertEquals(s.ready('r'), false)
   assertEquals(heard, [])
   socket.emit('message', JSON.stringify({ id: 'r', bundles: [] }))
+  await until(() => s.ready('r'))
   assertEquals(s.ready('r'), true)
   assertEquals(heard, [true])
   s.close()

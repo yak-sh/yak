@@ -5,6 +5,7 @@
 // on the socket rather than kept in the object's memory.
 
 import { assert, assertEquals } from '@std/assert'
+import { until } from '../../bin/testing.ts'
 import { subscriptions } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab, type Vocab } from '@yaks/vocab'
@@ -17,10 +18,13 @@ import { type Sockets, sockets, type Wire } from './sockets.ts'
 let wire = () => {
   let sent: Frame[] = []
   let held: unknown = null
+  let writes = 0
   return {
     sent,
+    writes: () => writes,
     send: (data: string) => void sent.push(JSON.parse(data)),
     serializeAttachment: (value: unknown) => {
+      writes++
       held = JSON.parse(JSON.stringify(value))
     },
     deserializeAttachment: () => held,
@@ -159,7 +163,7 @@ Deno.test('an idle socket advances past snapshots across repeated hibernation', 
   assertEquals((change.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
-Deno.test('an idle area subscriber hears a mover after hibernation', () => {
+Deno.test('an idle area subscriber hears a mover after hibernation', async () => {
   let vocab = loadVocab({
     $defs: {
       product: {
@@ -202,8 +206,20 @@ Deno.test('an idle area subscriber hears a mover after hibernation', () => {
   let reset = idle.sent.at(-1)!
   assertEquals(reset.reset, true)
   send(woken, idle, { ack: reset.ack })
+  await until(() => idle.sent.length >= 4)
   let latest = idle.sent.at(-1)!
   assertEquals(latest.relay?.[0].position, { x: 3 })
+  assert(typeof latest.ack == 'string') // the membership join is replayed
+  send(woken, idle, { ack: latest.ack })
+  let writes = idle.writes()
+  send(woken, moving, {
+    relay: [{ entity: { eid: 'mover' }, position: { x: 4 } }],
+  })
+  await until(() => idle.sent.length >= 5)
+  let peer = idle.sent.at(-1)!
+  assertEquals(peer.relay?.[0].position, { x: 4 })
+  assertEquals(peer.ack, undefined)
+  assertEquals(idle.writes(), writes)
 })
 
 Deno.test('repointing a subscription invalidates its earlier snapshot', () => {

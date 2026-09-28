@@ -257,27 +257,47 @@ export let wire = (opts: WireOpts): Wire => {
         s.send(JSON.stringify({ subscribe: query, id, acks: true }))
       }
     })
-    s.addEventListener('message', (e) => {
-      if (socket != s || closed) return
-      let frame: Frame | undefined
-      let ack = (frame: Frame) => {
-        if (frame.ack && socket == s && s.readyState == OPEN) {
-          s.send(JSON.stringify({ ack: frame.ack }))
+    let inbox: Frame[] = []
+    let landing = false
+    let ack = (frame: Frame) => {
+      if (frame.ack && socket == s && s.readyState == OPEN) {
+        s.send(JSON.stringify({ ack: frame.ack }))
+      }
+    }
+    let drain = () => {
+      if (landing || socket != s || closed) return
+      while (inbox.length) {
+        let frame = inbox.shift()!
+        try {
+          let out = landed(frame)
+          if (out instanceof Promise) {
+            landing = true
+            out.then(() => {
+              ack(frame)
+              landing = false
+              drain()
+            }, (err) => {
+              opts.report(err)
+              ack(frame)
+              landing = false
+              drain()
+            })
+            return
+          }
+          ack(frame)
+        } catch (err) {
+          opts.report(err)
+          ack(frame)
         }
       }
+    }
+    s.addEventListener('message', (e) => {
+      if (socket != s || closed) return
       try {
-        let received = JSON.parse(String(e.data)) as Frame
-        frame = received
-        let out = landed(received)
-        if (out instanceof Promise) {
-          out.then(() => ack(received), (err) => {
-            opts.report(err)
-            ack(received)
-          })
-        } else ack(received)
+        inbox.push(JSON.parse(String(e.data)) as Frame)
+        drain()
       } catch (err) {
         opts.report(err)
-        if (frame) ack(frame)
       }
     })
     s.addEventListener('error', (e) => opts.report(e))
@@ -285,6 +305,7 @@ export let wire = (opts: WireOpts): Wire => {
       if (socket != s) return
       socket = null
       waiting = []
+      inbox = []
       for (let id of asks.keys()) opts.pending?.(id)
       retry()
     })

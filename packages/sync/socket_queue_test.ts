@@ -64,6 +64,42 @@ Deno.test('a subscriber acknowledges only after landing a frame', async () => {
   w.close()
 })
 
+Deno.test('an unacknowledged peer frame lands before the next durable frame', async () => {
+  let socket = pair().client
+  let done: () => void = () => {}
+  let settled = new Promise<void>((resolve) => done = resolve)
+  let seen: string[] = []
+  let w = wire({
+    url: 'http://box.test',
+    connect: () => socket,
+    land: (frame) => {
+      seen.push(frame.relay ? 'peer' : 'durable')
+      if (frame.relay) return settled
+    },
+    report: (err) => {
+      throw err
+    },
+  })
+  w.subscribe(true, 's')
+  socket.emit('open')
+  socket.emit(
+    'message',
+    JSON.stringify({
+      id: 's',
+      relay: [{ entity: { eid: 'a' }, pointing: { x: 1 } }],
+    }),
+  )
+  socket.emit('message', JSON.stringify({ id: 's', gone: ['a'], ack: 'next' }))
+  assertEquals(seen, ['peer'])
+  assertEquals(socket.sent.length, 1)
+  done()
+  await settled
+  await Promise.resolve()
+  assertEquals(seen, ['peer', 'durable'])
+  assertEquals(socket.sent.at(-1), { ack: 'next' })
+  w.close()
+})
+
 Deno.test('a server without acknowledgements can send consecutive frames', () => {
   let sockets = pair()
   let seen: Frame[] = []

@@ -55,7 +55,7 @@ Deno.test('subscriber queue folds relay patches without crossing a data frame', 
   ])
 })
 
-Deno.test('acknowledged subscriber holds one frame and sends latest relay next', () => {
+Deno.test('acknowledged subscriber sends coalesced peer relays without ACKs', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let q = queue(socket, (fn) => due.push(fn))
@@ -64,7 +64,7 @@ Deno.test('acknowledged subscriber holds one frame and sends latest relay next',
   assertEquals(socket.sent, [])
   due.shift()!()
   let [first] = socket.taken()
-  assert(typeof first.ack == 'string')
+  assertEquals(first.ack, undefined)
   q.send({ id: 's', relay: [{ entity: { eid: 'a' }, pointing: { x: 2 } }] })
   q.send({ id: 's', relay: [{ entity: { eid: 'b' }, pointing: { x: 3 } }] })
   q.send({ id: 's', relay: [{ entity: { eid: 'a' }, pointing: null }] })
@@ -72,15 +72,14 @@ Deno.test('acknowledged subscriber holds one frame and sends latest relay next',
   assertEquals(socket.sent, [])
   q.ack('old-token')
   assertEquals(socket.sent, [])
-  q.ack(first.ack)
+  due.shift()!()
   let [second] = socket.taken()
-  assert(typeof second.ack == 'string' && second.ack != first.ack)
+  assertEquals(second.ack, undefined)
   assertEquals(second.relay, [
     { entity: { eid: 'a' }, pointing: null },
     { entity: { eid: 'a' }, pointing: { x: 4 } },
     { entity: { eid: 'b' }, pointing: { x: 3 } },
   ])
-  q.ack(first.ack)
   assertEquals(socket.sent, [])
 })
 
@@ -128,7 +127,7 @@ Deno.test('membership and durable frames keep their place among peer relays', ()
   ])
 })
 
-Deno.test('a resumed socket keeps its ACK barrier while batching peer relays', () => {
+Deno.test('a resumed socket sends peers without changing its owed durable frame', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let sent: unknown[] = []
@@ -141,21 +140,50 @@ Deno.test('a resumed socket keeps its ACK barrier while batching peer relays', (
   q.send({ id: 's', relay: [{ entity: { eid: 'a' }, browsing: { x: 2 } }] })
   q.send({ id: 's', gone: ['a'] })
   due.shift()!()
-  assertEquals(socket.sent, [])
-  q.ack('before-hibernation')
   let [relay] = socket.taken()
   assertEquals(relay.relay, [{ entity: { eid: 'a' }, browsing: { x: 2 } }])
-  assertEquals(sent, [{ id: 's', relay: relay.relay }])
+  assertEquals(relay.ack, undefined)
+  assertEquals(sent, [])
   assertEquals(socket.sent, [])
-  q.ack(relay.ack!)
-  assertEquals(socket.taken()[0].gone, ['a'])
+  q.ack('before-hibernation')
+  let [gone] = socket.taken()
+  assertEquals(gone.gone, ['a'])
+  assert(typeof gone.ack == 'string')
+  assertEquals(sent, [{ id: 's', gone: ['a'] }])
+})
+
+Deno.test('a pending membership frame stays ahead of later peer relays', () => {
+  let socket = fake()
+  let due: (() => void)[] = []
+  let sent: unknown[] = []
+  let q = queue(socket, (fn) => due.push(fn), () => true, {
+    sent: (frame) => sent.push(frame),
+  })
+  q.enable()
+  q.send({ id: 's', bundles: [{ entity: { eid: 'a' }, book: {} }] })
+  let [snapshot] = socket.taken()
+  q.send({ id: 's', gone: ['a'] })
+  q.send({ id: 's', relay: [{ entity: { eid: 'a' }, browsing: null }] })
+  due.shift()!()
+  assertEquals(socket.sent, [])
+  q.ack(snapshot.ack!)
+  let [gone, relay] = socket.taken()
+  assertEquals(gone.gone, ['a'])
+  assert(typeof gone.ack == 'string')
+  assertEquals(relay.relay, [{ entity: { eid: 'a' }, browsing: null }])
+  assertEquals(relay.ack, undefined)
+  assertEquals(sent, [
+    { id: 's', bundles: [{ entity: { eid: 'a' }, book: {} }] },
+    { id: 's', gone: ['a'] },
+  ])
 })
 
 Deno.test('peer movement remains bounded behind an unacknowledged frame', () => {
   let graph = shopGraph()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let socket = fake()
-  let q = queue(socket)
+  let due: (() => void)[] = []
+  let q = queue(socket, (fn) => due.push(fn))
   q.enable()
   let subs = subscriptions(graph)
   subs.open(q.send, 'near', '.book&.browsing.x<10')
@@ -172,14 +200,14 @@ Deno.test('peer movement remains bounded behind an unacknowledged frame', () => 
     subs.relay(writer, [{ entity: { eid: 'b1' }, browsing: { x: x % 9 } }])
   }
   assertEquals(socket.sent, [])
-  q.ack(joined.ack)
+  due.shift()!()
   let [newest] = socket.taken()
   assertEquals(newest.relay, [
     { entity: { eid: 'b1' }, browsing: { x: 201 % 9 } },
   ])
   assertEquals(newest.bundles, undefined)
-  assert(typeof newest.ack == 'string')
-  q.ack(newest.ack)
+  assertEquals(newest.ack, undefined)
+  q.ack(joined.ack)
   assertEquals(socket.sent, [])
 })
 

@@ -10,7 +10,7 @@
 // while sending its own initial result.
 
 import { fault, refusal } from './refuse.ts'
-import { coalescer, isPromise } from '@yaks/graph'
+import { type Bundle, coalescer, isPromise } from '@yaks/graph'
 import { admission } from './admission.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
 
@@ -56,6 +56,8 @@ let gate = (subs: Subs, to: Sink) => {
   if (!one) bySink.set(to, one = admission(subs.pace ?? (() => null)))
   return one
 }
+let peerOnly = (frame: Frame): frame is Frame & { relay: Bundle[] } =>
+  !!frame.relay && Object.keys(frame).every((k) => k == 'id' || k == 'relay')
 
 /** A replaceable frame queue for a socket, including hibernatable sockets
  * whose incoming messages are delivered by a Durable Object method. */
@@ -92,35 +94,32 @@ export let queue = (
     }, TICK)
   }
   let flush = () => {
-    if (!ready() || closed || owed) return
+    if (!ready() || closed) return
     while (waiting.length && (socket.bufferedAmount ?? 0) < BUFFER) {
+      if (owed && !peerOnly(waiting[0])) break
       let frame = waiting.shift()!
       let batch = relays.get(frame)
       if (batch) frame = { ...frame, relay: batch.read() }
-      if (enabled) {
+      if (enabled && !peerOnly(frame)) {
         let token = crypto.randomUUID()
         socket.send(JSON.stringify({ ...frame, ack: token }))
         owed = token
         resume.sent?.(frame, token)
-        break
+      } else {
+        socket.send(JSON.stringify(frame))
       }
-      socket.send(JSON.stringify(frame))
     }
-    if (waiting.length && !owed) schedule()
+    if (waiting.length && (!owed || peerOnly(waiting[0]))) schedule()
   }
   let send: Sink = (frame) => {
     if (closed) return
     // Wait one tick to send the newest peer positions in one frame. A
     // membership or durable frame flushes the preceding relays first, so
     // their order relative to joins and leaves does not change.
-    if (
-      frame.relay && Object.keys(frame).every((k) => k == 'id' || k == 'relay')
-    ) {
+    if (peerOnly(frame)) {
       for (let i = waiting.length - 1; i >= 0; i--) {
         let was = waiting[i]
-        if (
-          !was.relay || Object.keys(was).some((k) => k != 'id' && k != 'relay')
-        ) break
+        if (!peerOnly(was)) break
         if (was.id == frame.id) {
           let batch = relays.get(was) ?? coalescer()
           if (!relays.has(was)) batch.add(was.relay)
