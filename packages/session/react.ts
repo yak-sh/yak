@@ -183,27 +183,30 @@ export let transcript = async (g: Graph, session: Eid): Promise<Bundle[]> => {
 }
 
 /** The model's view of a window of the transcript: inputs as user turns, what
- * what the model returned as assistant turns, tool calls and results as the
- * pair a
- * model expects. Ask entries are our record, not the model's; a tool call the
- * anchored reply itself asked for is already in the provider's state, so only
- * its result travels. */
+ * the model returned as assistant turns, tool calls and results as the pair a
+ * model expects. The full transcript resolves a result's call even when that
+ * call is outside the window. Ask entries are our record, not the model's; a
+ * tool call the anchored reply itself asked for is already in the provider's
+ * state, so only its result travels. */
 export let project = (
-  entries: Bundle[],
+  transcript: Bundle[],
+  window: Bundle[],
   tools: Map<Eid, Declared>,
-  anchor?: Eid,
-  results?: Map<Eid, string>,
+  opts: {
+    anchor?: Eid
+    results?: Map<Eid, string>
+  } = {},
 ): Item[] => {
   let out: Item[] = []
-  let byId = new Map(entries.map((b) => [b.entity.eid, b]))
-  for (let b of entries) {
+  let byId = new Map(transcript.map((b) => [b.entity.eid, b]))
+  for (let b of window) {
     let kind = kindOf(b)
     let c = comp(b, CALL)
     if (b.prompt || b.checkpoint) {
       out.push({ kind: 'instruction', text: textOf(b) })
     } else if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
     else if (kind == 'output') out.push({ kind: 'assistant', text: textOf(b) })
-    else if (kind == 'call' && c?.source != anchor) {
+    else if (kind == 'call' && c?.source != opts.anchor) {
       out.push({
         kind: 'call',
         id: String(c!.id),
@@ -211,12 +214,16 @@ export let project = (
         args: c!.args == null ? textOf(b) || '{}' : JSON.stringify(c!.args),
       })
     } else if (kind == 'result') {
-      let call = byId.get(String(comp(b, RESULT)?.call))
-      let text = results?.get(b.entity.eid) ?? textOf(b)
+      let eid = String(comp(b, RESULT)?.call)
+      let call = byId.get(eid)
+      if (!call?.call) {
+        throw new Error(`Result ${b.entity.eid} references missing call ${eid}`)
+      }
+      let text = opts.results?.get(b.entity.eid) ?? textOf(b)
       let ms = comp(b, RESULT)?.ms
       out.push({
         kind: 'result',
-        id: String(comp(call!, CALL)?.id ?? ''),
+        id: String(comp(call, CALL)?.id ?? ''),
         output: typeof ms == 'number' ? took(text, ms) : text,
       })
     }
@@ -601,10 +608,13 @@ export let react = async (
       ? deps.instructions
       : String(using.instructions),
     items: project(
+      entries,
       window,
       toolEntities,
-      anchorId ? asked!.entity.eid : undefined,
-      results,
+      {
+        anchor: anchorId ? asked!.entity.eid : undefined,
+        results,
+      },
     ),
     tools: tools.map(({ name, description, parameters }) => ({
       name,
@@ -620,7 +630,7 @@ export let react = async (
   if (
     deps.compactModel && using?.window == null &&
     String(req.instructions ?? '').length < budget &&
-    JSON.stringify(project(said, toolEntities)).length +
+    JSON.stringify(project(entries, said, toolEntities)).length +
           String(req.instructions ?? '').length > budget
   ) {
     let historyResults = deps.resultText
@@ -633,7 +643,9 @@ export let react = async (
       )
       : undefined
     if (
-      JSON.stringify(project(said, toolEntities, undefined, historyResults))
+      JSON.stringify(project(entries, said, toolEntities, {
+            results: historyResults,
+          }))
             .length + String(req.instructions ?? '').length > budget
     ) {
       let chunk = prefix(said, budget)
@@ -653,7 +665,9 @@ export let react = async (
             items: [{
               kind: 'user',
               text: JSON.stringify(
-                project(chunk, toolEntities, undefined, historyResults),
+                project(entries, chunk, toolEntities, {
+                  results: historyResults,
+                }),
               ),
             }],
             tools: [],

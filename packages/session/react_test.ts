@@ -162,6 +162,42 @@ Deno.test('an input is asked, a tool call is run, the transcript settles', async
   }])
 })
 
+Deno.test('an anchored ask can include a late result from an earlier call', async () => {
+  let g = world()
+  await g.apply([{
+    entity: { eid: 'old-ask' },
+    entry: { session: ids.s },
+    ask: { to: ids.m, through: 'e1' },
+    fake: { reply: 'old' },
+  }, {
+    entity: { eid: 'old-call' },
+    entry: { session: ids.s },
+    call: { to: ids.t, id: 'c1', args: { text: 'hi' }, source: 'old-ask' },
+  }, {
+    entity: { eid: 'anchor' },
+    entry: { session: ids.s },
+    ask: { to: ids.m, through: 'old-call' },
+    using: { provider: ids.p, model: ids.m },
+    fake: { reply: 'anchor' },
+  }, {
+    entity: { eid: 'late-result' },
+    entry: { session: ids.s },
+    result: { call: 'old-call' },
+    content: { body: 'echo: hi' },
+  }, {
+    entity: { eid: 'follow-up' },
+    entry: { session: ids.s },
+    content: { body: 'Continue.' },
+  }], { trusted: true })
+  let { model, asked } = scripted([says('done', 'Done.')])
+  assertEquals(await rest(g, ids.s, { model, tools: [echo] }), 'settled')
+  assertEquals(asked[0].anchor, 'anchor')
+  assertEquals(asked[0].items, [
+    { kind: 'result', id: 'c1', output: 'echo: hi' },
+    { kind: 'user', text: 'Continue.' },
+  ])
+})
+
 Deno.test('an interrupted tool call gets a result and the model continues without replay', async () => {
   let g = world()
   await g.apply([{

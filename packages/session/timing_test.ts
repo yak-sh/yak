@@ -45,9 +45,9 @@ Deno.test('portable timing survives result bounding without changing raw JSON', 
   ]
   let items = project(
     entries,
+    entries,
     new Map(),
-    undefined,
-    new Map([['result', 'bounded preview']]),
+    { results: new Map([['result', 'bounded preview']]) },
   )
   assertEquals(items.at(-1), {
     kind: 'result',
