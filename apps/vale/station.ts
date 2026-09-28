@@ -3,9 +3,8 @@
 // of it the bag holds, and the button that makes it, filling while the hero
 // works. Tap a thing to see what it asks. Beside the tiers, the pieces the
 // hero carries that the station upgrades (upgrade.ts): what the next step
-// asks, and what it would change, on its card and in its tip: its own
-// numbers and the hero's, from what they are to what they would be
-// (compare.ts `step`). It opens when the hero works the
+// asks, and the current-to-possible-result ranges on its card and tip
+// (compare.ts `stepRange`). It opens when the hero works the
 // station (E, G, or the button), and folds away as any panel does, or when the
 // hero walks off. It is written again only when what it shows changed.
 import {
@@ -147,8 +146,8 @@ export let station = (panel: Panel, acts: Acts) => {
       if (!pair) return []
       let [a, b] = pair.map((n) => statValue(stat, n))
       return [
-        `<span class=Pack_Num>${statName(stat)} ${
-          a == b ? a : `${a}–${b}`
+        `<span class=Pack_Num>${a == b ? a : `${a}–${b}`} ${
+          statName(stat)
         }</span>`,
       ]
     }).join('')

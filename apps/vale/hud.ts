@@ -608,7 +608,7 @@ export let hud = (
             }>Level ${s.lvl} · ✦ ${s.points}</span>`
             : `<span class=Badge>Level ${s.lvl}</span>`
         }</div>` +
-          meter(hp / s.max, 'Bar-hp', `${hp} / ${s.max}`) +
+          meter(hp / s.max, 'Bar-hp', `Health ${hp} / ${s.max}`) +
           meter(
             capped ? 1 : (s.xp - from) / Math.max(1, to - from),
             'Bar-xp',

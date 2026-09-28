@@ -162,35 +162,24 @@ export type Stat = 'force' | 'luck' | 'hp' | 'armour' | 'speed' | 'haste'
 /** Every number a bonus adds to. */
 export let STATS: Stat[] = ['force', 'luck', 'hp', 'armour', 'speed', 'haste']
 
-/** Each bonus a piece may roll: which slots it rolls on, the most it adds to
- * an uncommon piece of tier `t`, how its number is written and the word it
- * is a number of, with which glyph, and the words a piece's name takes from
- * it, before and after. */
+/** Each bonus a piece may roll: its slots, size, rounding, and the words it
+ * adds to the piece's name. Display names and units live in compare.ts. */
 export let BONUSES: Record<Stat, {
   on: Slot[]
   most: (t: number) => number
   whole?: boolean
-  shows: (n: number) => string
-  word: string
-  icon: Glyph
   before: string
   after: string
 }> = {
   force: {
     on: ['main', 'off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 0.02 + 0.01 * t,
-    shows: (n) => `+${Math.round(n * 100)}%`,
-    word: 'harder blows',
-    icon: 'blow',
     before: 'Fierce',
     after: 'of Might',
   },
   luck: {
     on: ['main', 'off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 0.015 + 0.005 * t,
-    shows: (n) => `+${Math.round(n * 100)}%`,
-    word: 'great blows',
-    icon: 'luck',
     before: 'Lucky',
     after: 'of Fortune',
   },
@@ -198,9 +187,6 @@ export let BONUSES: Record<Stat, {
     on: ['main', 'off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 4 + 4 * t,
     whole: true,
-    shows: (n) => `+${n}`,
-    word: 'health',
-    icon: 'health',
     before: 'Stout',
     after: 'of Vigour',
   },
@@ -208,27 +194,18 @@ export let BONUSES: Record<Stat, {
     on: ['off', 'head', 'body', 'feet', 'trinket'],
     most: (t) => 1 + 0.6 * t,
     whole: true,
-    shows: (n) => `+${n}`,
-    word: 'armour',
-    icon: 'armour',
     before: 'Sturdy',
     after: 'of Warding',
   },
   speed: {
     on: ['body', 'feet', 'trinket'],
     most: (t) => 0.02 + 0.006 * t,
-    shows: (n) => `+${Math.round(n * 100)}%`,
-    word: 'speed',
-    icon: 'speed',
     before: 'Fleet',
     after: 'of the Hare',
   },
   haste: {
     on: ['main', 'off', 'trinket'],
     most: (t) => 0.02 + 0.008 * t,
-    shows: (n) => `+${Math.round(n * 100)}%`,
-    word: 'quicker blows',
-    icon: 'pace',
     before: 'Quick',
     after: 'of Haste',
   },
@@ -543,7 +520,7 @@ let rolled = new Map<string, Piece>()
  * // tenth of it to show rises a point.
  * let robe = (plus: number) => piece({ eid: 'e1', kind: 'robe3', plus }).hp
  * assertEquals([0, 1, 2, 3, 4, 5].map(robe), [6, 7, 8, 9, 10, 11])
- * let shown = (p: Piece) => STATS.map((s) => BONUSES[s].shows(p[s] ?? 0))
+ * let shown = (p: Piece) => STATS.map((s) => p[s] ?? 0)
  * for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
  *   for (let rarity of RARITIES) {
  *     let at = (plus: number) => piece({ eid: 'e3', kind, rarity, plus })

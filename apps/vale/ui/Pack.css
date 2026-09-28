@@ -110,10 +110,14 @@
 }
 
 .Pack_Nums {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
   gap: 0.25rem 0.7rem;
   font-size: 0.85rem;
+
+  & .Pack_Num {
+    white-space: normal;
+  }
 }
 
 .Pack_Num {
@@ -224,13 +228,15 @@
   opacity: 0.45;
 }
 
-/* What a finer piece rolled, in its rarity's colour, and a legendary's
-   power. */
+/* An item's own named stats and, when present, its legendary power. */
 .Pack_Rolled {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.7rem;
+  display: grid;
+  gap: 0.2rem;
   font-size: 0.85rem;
+
+  & .Pack_Num {
+    white-space: normal;
+  }
 }
 
 .Pack_Legend {

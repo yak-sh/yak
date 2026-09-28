@@ -4,8 +4,8 @@
 // to try. Each piece of gear is its own, framed and named in its rarity's
 // colour (rarity.ts); everything else is a stack of its kind. A piece's tip
 // sets it beside what is worn in its place (compare.ts `versus`). Tap a thing
-// to see, at the sheet's foot, what it is, what it rolled, the abilities it
-// gives, and what wearing it would change, then wear it, take it off, or take
+// to see, at the sheet's foot, its own stats, the abilities it gives, and
+// what wearing it would change, then wear it, take it off, or take
 // it from the rack; a second dagger, for a hero who knows how, shows what it
 // would change in the other hand. B or the tray's bag opens it. It is written
 // again only when what it shows changed.
@@ -13,11 +13,11 @@ import { type Doer, does, GIVES, OFF } from './abilities.ts'
 import { HANDLES, type Slot, SLOT_NAMES, SLOTS, tierName } from './arms.ts'
 import {
   bare,
-  diff,
   doer,
   into,
+  itemStats,
+  moved,
   numbers,
-  rolled,
   solo,
   sortLine,
   trying,
@@ -203,12 +203,8 @@ export let pack = (panel: Page, acts: Acts) => {
       : t.heals
       ? `Drink it to mend ${t.heals} (Q)`
       : 'Carried'
-    // Worn, what taking it off loses; else, what putting it on gains.
-    let changes = !t.slot
-      ? ''
-      : from == 'worn'
-      ? diff(then, now)
-      : diff(now, then)
+    // Compare the hero before and after the action offered on this card.
+    let changes = !t.slot ? '' : moved(now, then)
     // The rack gives one of each, and a second of a blade for the other hand.
     let held = s.bag.filter((b) => b.kind == kind).length >=
       (slot == t.slot ? 1 : 2)
@@ -235,17 +231,25 @@ export let pack = (panel: Page, acts: Acts) => {
       s.learned,
       doer(s, from == 'worn' ? s.worn : trying(s.worn, h, slot)),
     )
-    let rolls = rolled(t)
+    let stats = t.slot ? itemStats(t) : ''
     return `<div class=Pack_Card><i class="Pack_Big ${tint(t.rarity)}">${
       icon(kind)
     }</i><div><b class="Rarity ${tint(t.rarity)}">${esc(t.name)}</b><span>${
       esc(what)
     }</span></div>${act}</div>${
-      rolls
-        ? `<div class="Pack_Rolled Rarity ${tint(t.rarity)}">${rolls}</div>`
+      stats
+        ? `<small class=Compare_Label>Item stats</small><div class="Pack_Rolled Rarity ${
+          tint(t.rarity)
+        }">${stats}</div>`
         : ''
     }${can ? `<div class=Pack_Abilities>${can}</div>` : ''}${
-      changes ? `<div class=Pack_Nums>${changes}</div>` : ''
+      t.slot
+        ? `<small class=Compare_Label>${
+          from == 'worn' ? 'If removed' : 'If equipped'
+        }</small><div class=Pack_Nums>${
+          changes || '<span class=Pack_Hint>No listed stats change.</span>'
+        }</div>`
+        : ''
     }`
   }
 

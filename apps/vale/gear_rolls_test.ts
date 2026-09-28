@@ -2,7 +2,7 @@
 // contain the pieces those rolls can make.
 import { assert, assertEquals } from '@std/assert'
 import { tierRange } from './arms.ts'
-import { statValue, stepRange } from './compare.ts'
+import { itemStats, numbers, statValue, stepRange, versus } from './compare.ts'
 import { ITEMS } from './items.ts'
 import {
   GEAR_STATS,
@@ -94,8 +94,28 @@ Deno.test('upgrade preview shows current values and possible next values', () =>
     side({ ...h, ...lo }),
     side({ ...h, ...hi }),
   )
-  assert(html.includes('Possible +1 result'))
+  assert(html.includes('Upgrade to +1: current → possible result'))
+  assert(html.includes('Weapon power '))
   assert(html.includes('Attack '))
   assert(html.includes(statValue('dmg', piece(h).dmg!)))
   assert(!html.includes('a blow'))
+})
+
+Deno.test('item stats and equipped hero changes read separately', () => {
+  let h = { eid: 's', kind: 'sword2', n: 1, lvl: 13 }
+  let hero = { lvl: 13, learned: [] }
+  let p = piece(h)
+  let card = versus(
+    hero,
+    { label: 'In your bag', p, worn: { main: h } },
+    { label: 'Worn', worn: {} },
+  )
+  let own = itemStats(p)
+  let attack = numbers(hero, { main: h }).blow
+  assert(own.includes(`${statValue('dmg', p.dmg!)} Weapon power`))
+  assert(!own.includes(' Attack</span>'))
+  assert(card.indexOf('Weapon power') < card.indexOf('If equipped'))
+  assert(card.includes(`>${attack}</em>`))
+  assert(card.includes('Attack '))
+  assert(!card.includes('a blow'))
 })
