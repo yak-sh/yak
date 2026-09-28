@@ -388,6 +388,18 @@
           "type": "string",
           "index": true,
           "description": "The level they live in."
+        },
+        "home": {
+          "type": "string",
+          "description": "The named place in their level near which their home stands."
+        },
+        "workplace": {
+          "type": "string",
+          "description": "The kind of building where they work, when one stands near their home."
+        },
+        "role": {
+          "type": "string",
+          "description": "Their profession or title, when their name states it."
         }
       }
     },

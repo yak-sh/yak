@@ -18,6 +18,7 @@
 // their land, so a vale nobody plays asks no model at all.
 import type { Line } from './chat.ts'
 import { BEASTS } from './beasts.ts'
+import { PLANS } from './buildings.ts'
 import { DAY, day } from './day.ts'
 import { ITEMS } from './items.ts'
 import { type Life, lifeOf } from './lives.ts'
@@ -70,6 +71,50 @@ export let homeOf = (g: Giver): Spot => {
 export let neighbours = (g: Giver): Giver[] =>
   GIVERS.filter((n) => n.level == g.level && n.id != g.id)
 
+/** The places and work a villager knows as their own. The name tells us a
+ * role only when it says one; a building's `works` names their workplace. */
+export type About = { home: string; workplace?: string; role?: string }
+
+let titles = new Set([
+  'elder',
+  'reeve',
+  'warden',
+  'harbourmaster',
+  'digger',
+  'capwife',
+  'captain',
+  'scholar',
+  'sexton',
+  'keeper',
+  'skipper',
+])
+
+export let aboutOf = (
+  g: Giver,
+  saved: Record<string, unknown> = {},
+): About => {
+  let name = g.name.toLocaleLowerCase()
+  let title = name.split(' ')[0]
+  let role =
+    (!name.includes(' of the ')
+      ? name.match(/\bthe ([\p{L}-]+)$/u)?.[1]
+      : undefined) ??
+      (titles.has(title) ? title : undefined)
+  let workplace = g.work && Object.entries(PLANS)
+    .find(([, plan]) => plan.works == g.work)?.[0]
+  let seed = {
+    home: g.place,
+    ...workplace ? { workplace } : {},
+    ...role ? { role } : {},
+  }
+  return {
+    ...seed,
+    ...typeof saved.home == 'string' ? { home: saved.home } : {},
+    ...typeof saved.workplace == 'string' ? { workplace: saved.workplace } : {},
+    ...typeof saved.role == 'string' ? { role: saved.role } : {},
+  }
+}
+
 /**
  * A villager as the store first holds them: a transcript, and a standing call
  * to `think` (the command whose row is `think`) that wakes every `EVERY`
@@ -81,12 +126,17 @@ export let neighbours = (g: Giver): Giver[] =>
  * import { GIVERS } from './quests.ts'
  * let pip = GIVERS.find((g) => g.id == 'pip')!
  * assertEquals(born(pip, 't1').entity, born(pip, 't2').entity)
+ * assertEquals(aboutOf(pip).workplace, undefined)
+ * let mira = GIVERS.find((g) => g.id == 'mira')!
+ * assertEquals(aboutOf(mira).role, undefined)
+ * let rowan = GIVERS.find((g) => g.id == 'rowan')!
+ * assertEquals(aboutOf(rowan, { role: 'armorer' }).role, 'armorer')
  * ```
  */
 export let born = (g: Giver, think: string) => ({
   entity: { eid: eidOf(g.id) },
   doc: { title: g.name },
-  villager: { id: g.id, level: g.level },
+  villager: { id: g.id, level: g.level, ...aboutOf(g) },
   session: {},
   call: { to: think, args: { villager: eidOf(g.id) } },
   wake: {
@@ -171,6 +221,8 @@ export type Posted = {
 /** What a villager knows, beyond who they are, when a hero speaks to them. */
 export type Facts = {
   hero: { eid: string; name: string; lvl: number }
+  /** the villagers' lives as their rows in the store say them */
+  people: Map<string, About>
   /** how this hero’s words reached the villager */
   heard?: 'addressed' | 'mentioned'
   /** what they hold free to give, by kind (stock.ts `ledger`) */
@@ -282,6 +334,7 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * let wren = GIVERS.find((g) => g.id == 'wren')!
  * let told = persona(wren, {
  *   hero: { eid: 'h1', name: 'Bramble', lvl: 2 },
+ *   people: new Map(GIVERS.map((g) => [g.id, aboutOf(g)])),
  *   holds: new Map([['coin', 18], ['staff2', 1]]),
  *   bag: new Map([['tusk', 3]]),
  *   dealt: [{
@@ -304,6 +357,7 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * assertStringIncludes(told, 'talking directly to you')
  * assertStringIncludes(persona(wren, {
  *   hero: { eid: 'h1', name: 'Bramble', lvl: 2 }, holds: new Map(),
+ *   people: new Map(GIVERS.map((g) => [g.id, aboutOf(g)])),
  *   bag: new Map(), dealt: [], quests: [], deeds: [], here: [],
  *   heard: 'mentioned',
  * }), 'did not address you')
@@ -311,11 +365,28 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * assertStringIncludes(told, 'Bramble carries: 3 Boar tusk (tusk, 5 coin each)')
  * assertStringIncludes(told, 'Old Thornback (thornback) 93')
  * assertStringIncludes(told, 'felled 1 of 1 Old Thornback, brought 0 of 1')
+ * assertStringIncludes(told, 'Your home is near the plaza in Mossvale.')
+ * assertStringIncludes(told, 'You work at the hall near the plaza.')
+ * assertStringIncludes(told, `Rowan the smith (${eidOf('rowan')}), role: smith`)
+ * let revised = persona(wren, {
+ *   hero: { eid: 'h1', name: 'Bramble', lvl: 2 },
+ *   people: new Map([
+ *     ['wren', { home: 'plaza', role: 'elder' }],
+ *     ['rowan', { home: 'plaza', role: 'armorer' }],
+ *   ]),
+ *   holds: new Map(), bag: new Map(), dealt: [], quests: [], deeds: [],
+ *   here: [],
+ * })
+ * assertStringIncludes(revised, `Rowan the smith (${eidOf('rowan')}), role: armorer`)
  * ```
  */
 export let persona = (g: Giver, f: Facts): string => {
   let land = LEVELS[g.level]?.name ?? g.level
-  let others = neighbours(g).map((n) => `${n.name} (${eidOf(n.id)})`)
+  let self = f.people.get(g.id) ?? aboutOf(g)
+  let others = neighbours(g).map((n) => {
+    let role = f.people.get(n.id)?.role
+    return `${n.name} (${eidOf(n.id)})${role ? `, role: ${role}` : ''}`
+  })
   let quests = asked(f.quests)
   let { kept, own } = stores(g, f.holds)
   let gift = Math.round(most(g.level) / valueOf('coin'))
@@ -328,6 +399,11 @@ export let persona = (g: Giver, f: Facts): string => {
     'directions. You know your land and what you have heard, nothing more. ' +
     'Never say you are a model, or in a game.',
     `What you tell a stranger: "${g.greets}"`,
+    `Your home is near the ${self.home} in ${land}.`,
+    ...self.role ? [`Your role here is ${self.role}.`] : [],
+    ...self.workplace
+      ? [`You work at the ${self.workplace} near the ${self.home}.`]
+      : [],
     `Roads out of ${land}: ${roadsOf(g.level) || 'none'}.`,
     `Your neighbours here: ${others.join(', ') || 'none'}.`,
     'A line you hear begins with the name of whoever said it. A line ' +

@@ -21,6 +21,8 @@ import type { Vale } from './terrain.ts'
 import { GIVERS } from './quests.ts'
 import { wares } from './stock.ts'
 import {
+  type About,
+  aboutOf,
   born,
   CHAT,
   decided,
@@ -147,6 +149,16 @@ export let village = (net: Net, deal: Deals) => {
   let held = (id: string) =>
     !!rows?.value.some((b) => b.entity.eid == eidOf(id))
 
+  let people = (): Map<string, About> => {
+    let byId = new Map(rows?.value.map((b) => [b.entity.eid, b]) ?? [])
+    return new Map(
+      GIVERS.filter((g) => g.level == level).map((g) => [
+        g.id,
+        aboutOf(g, comp(byId.get(eidOf(g.id)), 'villager')),
+      ]),
+    )
+  }
+
   // The falls in the level the hero is in, as a villager hears of them.
   let falls = (f: Frame) => {
     let here = new Set(f.mobs.map((m) => m.eid))
@@ -175,12 +187,29 @@ export let village = (net: Net, deal: Deals) => {
       if (!net.hero || !me?.writes) return
       let tool = think?.value[0]?.entity.eid
       if (!tool || !rows?.ready) return
+      let stored = new Map(rows.value.map((b) => [b.entity.eid, b]))
       let missing = GIVERS.filter((g) =>
-        g.level == f.level && !held(g.id) && !asked.has(g.id)
+        g.level == f.level && !stored.has(eidOf(g.id)) && !asked.has(g.id)
       )
+      let older = GIVERS.filter((g) =>
+        g.level == f.level && stored.has(eidOf(g.id)) && !asked.has(g.id)
+      ).flatMap((g) => {
+        let saved = comp(stored.get(eidOf(g.id)), 'villager')
+        let patch = Object.fromEntries(
+          Object.entries(aboutOf(g)).filter(([key]) => !(key in saved)),
+        )
+        return Object.keys(patch).length ? [{ g, patch }] : []
+      })
       for (let g of missing) asked.add(g.id)
+      for (let { g } of older) asked.add(g.id)
       // Another page adding the same row first refuses this one.
       if (missing.length) write(missing.map((g) => born(g, tool)))
+      if (older.length) {
+        write(older.map(({ g, patch }) => ({
+          entity: { eid: eidOf(g.id) },
+          villager: patch,
+        })))
+      }
     },
     /** E starts a conversation; being nearby alone never does. */
     engage: (id: string) => {
@@ -211,6 +240,7 @@ export let village = (net: Net, deal: Deals) => {
       }
       let instructions = persona(g, {
         hero: { eid: net.hero ?? '', name: f.sheet.name, lvl: f.sheet.lvl },
+        people: people(),
         heard: heard!.heard,
         holds: deal.holds(g.id),
         bag,
