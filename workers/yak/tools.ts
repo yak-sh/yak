@@ -835,7 +835,7 @@ let published = async (
   // read files the release does not write. The snapshot lists again at the
   // end, since the compile may have written package-lock.json.
   let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
-  // Compile in the draft. A failure leaves the serving source untouched.
+  // Compile in the private release candidate. A failure leaves serving alone.
   let made = await c.time(
     'compile',
     () => compiled(ctx, space, app, who, parsed.config, keys),
