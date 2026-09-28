@@ -37,7 +37,8 @@ import { compiled } from './esbuild.ts'
 import { bindingLines, bindings } from './bindings.ts'
 import { mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
-import { r2Objects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { staged } from './release.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
 import { parseTools, TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
@@ -237,7 +238,6 @@ import {
   restored,
   same,
   sha256,
-  snapshot,
   unfenced,
   type Version,
   versions,
@@ -835,22 +835,22 @@ let published = async (
   store: Door,
   release: string,
   fence: string,
+  files: Awaited<ReturnType<typeof staged>>,
   candidate?: { source: string; script: string },
 ) => {
   let c = ctx.clock ?? clock()
-  let blobs = r2Objects(ctx.env.BLOBS)
+  let blobs = files.files
   let app = { ...standing, source: release }
   let prefix = fileKey(space, app, '')
   let bytesAt = (path: string) => blobs.read(prefix + path)
   let parsed = await configured(bytesAt)
-  // Every key under the app, listed once for the compile and the seed, which
-  // read files the release does not write. The snapshot lists again at the
-  // end, since the compile may have written package-lock.json.
+  // Every key under the app, listed once for the compile and the seed. The
+  // release index also records any package-lock.json the compile writes.
   let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
   // Compile in the private release candidate. A failure leaves serving alone.
   let made = await c.time(
     'compile',
-    () => compiled(ctx, space, app, who, parsed.config, keys),
+    () => compiled(ctx, space, app, who, parsed.config, keys, blobs),
   )
   // What this release will be called, read here because the seed below is
   // marked with it the moment it lands and the version row is written at the
@@ -1149,7 +1149,7 @@ let published = async (
   // as a manifest of path to the name of their bytes, those bytes pinned
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's version counter and the row that records the version move together.
-  let pinned = await c.time('snapshot', () => snapshot(blobs, prefix))
+  let pinned = await c.time('snapshot', () => files.finish())
   await c.time(
     'record',
     () =>
@@ -1250,16 +1250,19 @@ let released = async (
   candidate?: { source: string; script: string },
 ) => {
   let standing = await waiting(ctx.dir, space, app, who)
-  let blobs = r2Objects(ctx.env.BLOBS)
+  let blobs = r2RawObjects(ctx.env.BLOBS)
   let work = candidate?.source ?? await editing(ctx.dir, space, standing, who)
   let release = releaseOf(space, standing)
   let draft = candidate ? standing.draft ?? null : standing.draft ?? work
   let fence = await fenced(ctx.dir, standing, draft, who)
   try {
-    await laid(
-      draftFiles(blobs, candidate ? null : work, prefixOf(space, standing)),
-      `${work}/`,
-      `${release}/`,
+    let files = await staged(
+      blobs,
+      standing.source,
+      work,
+      release,
+      async () => (await versions(ctx.dir, standing))[0]?.files ?? {},
+      !candidate && work.split('/').pop()?.startsWith('delta-v') == true,
     )
     return await published(
       ctx,
@@ -1269,6 +1272,7 @@ let released = async (
       store,
       release,
       fence,
+      files,
       candidate,
     )
   } finally {

@@ -9,6 +9,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
+import { releaseFiles, staged } from './release.ts'
 import type { Tally } from './lib/hops.ts'
 import * as dirPart from './directory.ts'
 import type { App, Directory, Space } from './directory.ts'
@@ -283,6 +284,45 @@ Deno.test('no version is ever buried, and every one keeps its bytes', async () =
   assert(await blobs.has(addressed(shared)))
   // One page per version, plus the stylesheet they all share.
   assertEquals((await blobs.list(SHA)).length, KEEP + 4)
+})
+
+Deno.test('pruning keeps source bytes named by the serving release', async () => {
+  let { blobs, clock } = memory()
+  let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
+  let source = 'jeff/.releases/a1/source'
+  let current = 'jeff/.releases/a1/current'
+  let draft = 'jeff/.drafts/a1/delta-v2'
+  await blobs.put(`${source}/index.html`, bytes('kept'))
+  await blobs.put(`${source}/removed.css`, bytes('removed'))
+  await blobs.put(`${draft}/.deleted/removed.css`, bytes(''))
+  let base = {
+    'index.html': await sha256(bytes('kept')),
+    'removed.css': await sha256(bytes('removed')),
+  }
+  let release = await staged(
+    blobs,
+    source,
+    draft,
+    current,
+    () => Promise.resolve(base),
+    true,
+  )
+  let files = await release.finish()
+  await record(dir, WHO, APP, 2, files, '')
+  await pruned(dir, blobs, [{
+    prefix: PREFIX,
+    app: { ...APP, source: current },
+  }])
+  assertEquals(await blobs.has(`${source}/index.html`), true)
+  assertEquals(await blobs.has(`${source}/removed.css`), false)
+  assertEquals(await blobs.has(`${current}.json`), true)
+  assertEquals(
+    new TextDecoder().decode(
+      await releaseFiles(blobs).get(`${current}/index.html`),
+    ),
+    'kept',
+  )
 })
 
 // The worker's last hop. A dispatch namespace is remote-only, so what a

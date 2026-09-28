@@ -53,6 +53,7 @@ import { PLUGINS } from './plugins.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
+import { indexOf, META } from './release_index.ts'
 
 // A version's file set: the path the app serves it at, and the name of its
 // bytes.
@@ -816,8 +817,16 @@ export let pruned = async (
   let gone = 0
   for (let { prefix, app } of apps) {
     let stage = `${prefix.split('/')[0]}/.releases/${app.eid}/`
+    let current = app.source ? await indexOf(blobs, `${app.source}/`) : null
+    let namedFiles = new Set(
+      Object.values(current ?? {}).map((file) =>
+        `${prefix.split('/')[0]}/${file.key}`
+      ),
+    )
     for (let [key, landed] of Object.entries(await blobs.uploaded(stage))) {
       if (app.source && key.startsWith(`${app.source}/`)) continue
+      if (app.source && key == app.source + META) continue
+      if (namedFiles.has(key)) continue
       if (now - landed < GRACE) continue
       await blobs.delete(key)
     }

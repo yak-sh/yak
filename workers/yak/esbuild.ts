@@ -94,8 +94,9 @@ export let compiled = async (
   who: Who,
   config: Config,
   keys: string[],
+  files = r2Objects(ctx.env.BLOBS),
 ): Promise<Compiled> => {
-  let blobs = r2Objects(ctx.env.BLOBS)
+  let blobs = files
   let prefix = `${prefixOf(space, app)}/`
   let paths = own(keys)
   let held = keys.filter((k) => k.startsWith(BUILT))
