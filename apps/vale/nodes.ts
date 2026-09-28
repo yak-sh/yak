@@ -19,6 +19,7 @@ import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, meshed } from './items.ts'
 import { LIFT } from './laid.ts'
 import { type Box, cuboids } from './boxes.ts'
+import { baseline, type NatureChunk, natureMesh } from './nature_mesh.ts'
 import {
   ball,
   blob,
@@ -32,11 +33,13 @@ import {
 } from './mesh.ts'
 import type { Vec3 } from './play.ts'
 import { model } from './props.ts'
+import { GRADES, tint } from './rarity.ts'
+import { naturalEid, nodeRarity } from './gather.ts'
 import { hashOf, noise, rand, stream } from './rand.ts'
 import { geometry, sight, soft } from './soft.ts'
 import { among, off } from './stand.ts'
-import type { Vale } from './terrain.ts'
-import { least, TRADES } from './trades.ts'
+import { CHUNK, chunkOf, type Vale } from './terrain.ts'
+import { TRADES } from './trades.ts'
 import type { Job, Seen } from './work.ts'
 
 /** How many shapes each kind of node is drawn in. */
@@ -276,6 +279,7 @@ export let nodes = (
     return g
   }
   let drawn = new Map<string, Drawn>()
+  let wild = new Map<string, { mesh: THREE.Mesh; state: string }>()
   let next = among(v), stood = new Map<string, number>()
   let stepOf = (n: Seen) => {
     let got = stood.get(n.eid)
@@ -345,13 +349,13 @@ export let nodes = (
   let plate = (n: Seen, job: Job) => {
     let doing = job.doing?.node?.eid == n.eid ? job.doing : null
     let t = TRADES[n.lode.trade]
-    let name = `<b>${esc(n.lode.name)}</b>`
+    let name = `<b>${esc(n.lode.name)}</b>${
+      n.rarity == 'common' ? '' : ` <em>${GRADES[n.rarity].name}</em>`
+    }`
     let html = doing
       ? `<span>${name}</span>${bar(doing.k)}`
       : n.spent
       ? `<span>${name} <em>back in ${secs(n.back)}</em></span>`
-      : !n.able
-      ? `<span>${name} <em>${t.name} ${least(n.lode.tier)}</em></span>`
       : job.near?.eid == n.eid
       ? `<span>${name} ${hint(t.icon, GATHER[n.lode.trade].verb)}</span>`
       : `<span>${name}</span>`
@@ -360,7 +364,7 @@ export let nodes = (
       `node:${n.eid}`,
       new THREE.Vector3(x, y + HIGH[n.lode.look.plan], z),
       html,
-      `Plate Plate-node${n.able ? '' : ' Plate-locked'}`,
+      `Plate Plate-node ${tint(n.rarity)}`,
     )
   }
 
@@ -386,8 +390,10 @@ export let nodes = (
 
   return {
     /** Draw this frame's nodes, with the hero at `hero`. */
-    tick: (job: Job, hero: Vec3, dt: number) => {
+    tick: (job: Job, hero: Vec3, dt: number, chunks: NatureChunk[] = []) => {
       let t = performance.now() / 1000
+      let natural = new Map<string, Seen[]>()
+      let byChunk = new Map(chunks.map((c) => [`${c.ci} ${c.ck}`, c]))
       for (let d of drawn.values()) d.seen = false
       for (let e of job.events) {
         let d = e.type == 'stroke' ? drawn.get(e.eid) : undefined
@@ -396,6 +402,31 @@ export let nodes = (
       for (let n of job.nodes) {
         let plan = n.lode.look.plan
         if (n.near > FAR[plan]) continue
+        if (n.prop) {
+          let id = `${chunkOf(n.at[0])} ${chunkOf(n.at[2])}`
+          let group = natural.get(id) ?? []
+          group.push(n)
+          natural.set(id, group)
+          if (
+            !n.spent && n.rarity != 'common' && n.near < 30 &&
+            Math.random() < dt * 2
+          ) {
+            glow.emit(
+              v3(n.at, 0.5 + Math.random() * 1.5),
+              GRADES[n.rarity].light,
+              1,
+              {
+                speed: 0.2,
+                up: 0.6,
+                life: 0.8,
+                size: 0.08,
+                fall: 0,
+              },
+            )
+          }
+          if (n.near < LABEL || job.doing?.node?.eid == n.eid) plate(n, job)
+          continue
+        }
         let d = drawn.get(n.eid)
         if (!d) {
           let group = new THREE.Group()
@@ -459,6 +490,23 @@ export let nodes = (
             w.scale.y *= 1 - 0.12 * d.shake * Math.abs(Math.sin(t * 30))
           }
         }
+        if (
+          w && n.rarity != 'common' && n.near < 30 &&
+          Math.random() < dt * 2
+        ) {
+          glow.emit(
+            v3(n.at, 0.5 + Math.random() * 1.5),
+            GRADES[n.rarity].light,
+            1,
+            {
+              speed: 0.2,
+              up: 0.6,
+              life: 0.8,
+              size: 0.08,
+              fall: 0,
+            },
+          )
+        }
         // A shoal: rings spreading, faster while it is fished, and now and
         // then a fish leaping out.
         let { rings, fish } = d.whole ?? {}
@@ -492,6 +540,48 @@ export let nodes = (
           )
         }
         if (n.near < LABEL || job.doing?.node?.eid == n.eid) plate(n, job)
+      }
+      // The worker gives each chunk its whole mesh. Only a harvest or
+      // respawn rebuilds that one chunk on the page's thread.
+      for (let [id, group] of natural) {
+        let chunk = byChunk.get(id)
+        if (!chunk?.packed) continue
+        let changed = group.filter((n) =>
+          n.spent || n.rarity != nodeRarity(n.eid, 0)
+        )
+        let state = changed.map((n) =>
+          `${n.eid}:${n.spent}:${n.rarity}`
+        ).join('|') || 'base'
+        if (wild.get(id)?.state == state) continue
+        let seen = new Map(group.map((n) => [n.eid, n]))
+        let packed = state == 'base' ? chunk.packed : natureMesh(
+          chunk.ci,
+          chunk.ck,
+          chunk.entries.map((entry) => {
+            let n = seen.get(naturalEid(entry.prop))
+            return n
+              ? { ...entry, spent: n.spent, rarity: n.rarity }
+              : baseline(entry)
+          }),
+        )
+        if (!packed) continue
+        let mesh = new THREE.Mesh(geometry(packed), mat)
+        mesh.position.set(chunk.ci * CHUNK, 0, chunk.ck * CHUNK)
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        let old = wild.get(id)
+        if (old) {
+          old.mesh.removeFromParent()
+          old.mesh.geometry.dispose()
+        }
+        scene.add(mesh)
+        wild.set(id, { mesh, state })
+      }
+      for (let [id, batch] of wild) {
+        if (natural.has(id)) continue
+        batch.mesh.removeFromParent()
+        batch.mesh.geometry.dispose()
+        wild.delete(id)
       }
       bench(job)
 
@@ -537,6 +627,10 @@ export let nodes = (
       sight(mat, from, feet, tall),
     /** let the GPU go of what the nodes drew */
     dispose: () => {
+      for (let batch of wild.values()) {
+        batch.mesh.removeFromParent()
+        batch.mesh.geometry.dispose()
+      }
       for (let d of drawn.values()) {
         drop(d.whole)
         scene.remove(d.group)

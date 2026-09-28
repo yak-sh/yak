@@ -26,6 +26,7 @@
 // voxels, and lays the ground round it as it needs (`lay`).
 import { dressed } from './buildings.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
+import { NATURE } from './nature.ts'
 import { LEVELS, SIZE, type Spot } from './levels.ts'
 import { bulk, halfOf, KINDS, raisedOf } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
@@ -99,6 +100,7 @@ export type Prop = {
   z: number
   seed: number
   turn?: number
+  natural?: true
 }
 
 /** Something a walker cannot pass: a circle at (x, z) of radius r, in metres,
@@ -684,7 +686,7 @@ let planted = kept(400, (ci: number, ck: number): Prop[] => {
   let taken = takenIn(a)
   let props = a.built.filter((p) =>
     p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1
-  )
+  ).map((p): Prop => NATURE[p.kind] ? { ...p, natural: true } : p)
   for (let gk = Math.floor(z0 / CELL); gk * CELL < z1; gk++) {
     for (let gi = Math.floor(x0 / CELL); gi * CELL < x1; gi++) {
       let x = snap(gi * CELL + rand(gi, gk, 1) * (CELL - GRID))
@@ -703,7 +705,15 @@ let planted = kept(400, (ci: number, ck: number): Prop[] => {
         : roll < tree + rock
         ? pickOf(w, 'stones', h, 'rock')
         : undefined
-      if (kind) props.push({ kind, x, z, seed: hash(gi, gk, grow ? 4 : 5) })
+      if (kind) {
+        props.push({
+          kind,
+          x,
+          z,
+          seed: hash(gi, gk, grow ? 4 : 5),
+          ...NATURE[kind] && { natural: true },
+        })
+      }
     }
   }
   return props

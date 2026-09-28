@@ -8,9 +8,9 @@
 // those within sight of the focus are grown and meshed off the page's thread
 // (chunks.ts), nearest first and finer the nearer (stream.ts), and those left
 // behind are let go, with the lamps and doors of what stands in them. A
-// chunk's arrays are let go too once the GPU has them, since nothing on the
-// page reads them; the ground a finest chunk was grown from is kept in the
-// page's vale, where its walkers read it.
+// chunk's ground arrays are let go once the GPU has them; natural props and
+// their first mesh stay until the chunk leaves, for gathering. The ground a
+// finest chunk was grown from is kept in the page's vale for its walkers.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { airOf } from './air.ts'
@@ -21,6 +21,7 @@ import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
 import { instances } from './instances.ts'
 import { LEVELS, SIZE, type Spot } from './levels.ts'
+import type { NatureChunk } from './nature_mesh.ts'
 import type { Packed, Vec } from './mesh.ts'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from './rand.ts'
@@ -82,6 +83,8 @@ export type World = {
   pending: number
   /** how many chunks are drawn at each detail */
   chunks: number[]
+  /** natural props in the chunks currently drawn */
+  natural: () => NatureChunk[]
   /** let the GPU go of everything the world drew */
   dispose: () => void
 }
@@ -257,11 +260,13 @@ export let world = (v: Vale, mesh: Mesher): World => {
     lamps: Lamp[]
     glows: Glow[]
     doors: Hung
+    natural: NatureChunk
     /** its middle */
     x: number
     z: number
   }
   let drawn = new Map<string, Drawn>()
+  let natural: NatureChunk[] | null = null
   let asked = new Set<string>()
   let wants = new Map<string, Want>()
   let waiting: (() => void)[] = []
@@ -345,6 +350,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     }
     buildings.drop(k)
     drawn.delete(k)
+    natural = null
     if (keeps) return
     for (let l of d.lamps) {
       scene.remove(l.box, l.sprite)
@@ -382,9 +388,16 @@ export let world = (v: Vale, mesh: Mesher): World => {
         lamps: lamps ?? lampsOf(glows),
         glows,
         doors: hung ?? doorsOf(c.ci, c.ck),
+        natural: {
+          ci: c.ci,
+          ck: c.ck,
+          entries: c.natural ?? [],
+          packed: c.nature ?? null,
+        },
         x,
         z,
       })
+      natural = null
     } finally {
       prepared.release()
     }
@@ -541,6 +554,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     day: 0.4,
     pending: 0,
     chunks: [0, 0, 0],
+    natural: () => natural ??= [...drawn.values()].map((d) => d.natural),
     see: (from, feet, tall, dt = 1 / 60, foes = []) => {
       sight(ground, from, feet, tall, foes)
       let want = cutaway(v, [feet.x, feet.y, feet.z], [from.x, from.y, from.z])

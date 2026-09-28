@@ -45,6 +45,7 @@ addEventListener('message', (e: MessageEvent<Ask & { n: number }>) => {
   let handed = [
     ...buffers(drawn.solid),
     ...(drawn.small ? buffers(drawn.small) : []),
+    ...(drawn.nature ? buffers(drawn.nature) : []),
   ]
   let answer: Answer = { n: a.n, drawn }
   postMessage(answer, { transfer: handed })

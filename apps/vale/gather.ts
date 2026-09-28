@@ -1,30 +1,34 @@
-// Gathering: the nodes of each level a hero works for what they give, and the
-// four trades that grow by working them. A node is a tree to fell, a seam to
-// mine, a herb to pick or a shoal to fish, of a kind (`LODES`) that grows
-// around the kinds of place it names (features.ts) in the levels whose danger
-// it suits, the way a creature lives around its haunts (homes.ts). Every page
-// places the same nodes from the level's own numbers and names each by where
-// it stands, so nothing about where they are is stored.
+// Gathering: each natural tree and rock is a node to chop or mine. Herbs and
+// shoals remain placed nodes near fitting places. The four trades grow by
+// working them, and every page names a node from where it stands.
 //
 // Working a node writes an item wearing a `gathered` row: the item is what the
 // hero gets, and the row spends the node for everyone until it grows back, the
 // way a `slain` row fells a creature (rules.ts `fallOf`). A hero's trades
 // (trades.ts) are counted from the gathered rows on their items: each is xp in
-// its node's trade, and a node of a higher tier asks a trade that high before
-// it can be worked.
+// its node's trade. A low trade level makes harder nodes slow and less useful.
 import { isA } from './features.ts'
 import { HOPS, LEVELS } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
+import { type Natural, NATURE } from './nature.ts'
 import { nearby, originOf, regionOf } from './regions.ts'
-import { rise, SHORE, steep, vale, wallsNear, WATER } from './terrain.ts'
+import {
+  type Prop,
+  rise,
+  SHORE,
+  steep,
+  vale,
+  wallsNear,
+  WATER,
+} from './terrain.ts'
 import { trodden } from './ways.ts'
 import { type Gather, least } from './trades.ts'
+import { pick, type Rarity } from './rarity.ts'
 
 /** How each gathering trade works a node: what working one is called, how
  * near a hero must stand to work it, in metres, and how long the work takes
- * against a tree's; and how its nodes grow: how many around each place, within
- * how many metres of it, how far apart, and how many seconds a spent one takes
- * to grow back. */
+ * against a tree's; and for placed herbs and shoals, how many around each
+ * place, within how many metres, and how far apart. Respawn is in seconds. */
 export let GATHER: Record<Gather, {
   verb: string
   reach: number
@@ -41,7 +45,7 @@ export let GATHER: Record<Gather, {
     count: 3,
     within: 24,
     apart: 7,
-    respawn: 150,
+    respawn: 3600,
   },
   ore: {
     verb: 'Mine',
@@ -50,7 +54,7 @@ export let GATHER: Record<Gather, {
     count: 2,
     within: 22,
     apart: 6,
-    respawn: 180,
+    respawn: 3600,
   },
   herb: {
     verb: 'Pick',
@@ -431,7 +435,14 @@ export let LODES: Record<string, Lode> = {
 }
 
 /** A node where it stands: its eid, its kind, and where, in metres. */
-export type Node = { eid: string; lode: string; x: number; z: number }
+export type Node = {
+  eid: string
+  lode: string
+  x: number
+  z: number
+  prop?: Prop
+  ground?: number
+}
 
 // How far from a village's middle no node grows, in metres.
 let HOMELY = 16
@@ -440,8 +451,8 @@ let ROUND = Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2)
 
 let placed = new Map<string, Node[]>()
 
-/** Every node a level grows, and where: for each kind that suits the level,
- * round each place of a kind it grows near, as many as its trade grows, on
+/** Every herb and shoal a level grows, and where: for each kind that suits
+ * the level, round each place of a kind it grows near, on
  * ground they can stand on (a shoal on deep water a hero can reach from the
  * bank) in the level's region, nearer that place than any place of another
  * kind, clear of trunks, rocks, roads and lanes, the village and each other.
@@ -481,6 +492,7 @@ export let nodesOf = (id: string): Node[] => {
       rise(x + Math.cos(a) * 2.6, z + Math.sin(a) * 2.6) > WATER - 0.5
     )
   for (let [kind, lode] of Object.entries(LODES)) {
+    if (lode.trade == 'wood' || lode.trade == 'ore') continue
     if (hops < lode.hops[0] || hops > lode.hops[1]) continue
     let t = GATHER[lode.trade]
     let fits = lode.trade == 'fish' ? wet : dry
@@ -529,13 +541,65 @@ let PAST = 48
 
 let near = nearby(nodesOf)
 
+let wild = new WeakMap<Prop, Node>()
+export let naturalEid = (prop: Prop): string =>
+  uuidOf(`natural/${prop.kind}@${prop.x},${prop.z}`)
+let wildNode = ({ prop, at }: Natural): Node => {
+  let got = wild.get(prop)
+  if (got) return got
+  got = {
+    eid: naturalEid(prop),
+    lode: NATURE[prop.kind],
+    x: prop.x,
+    z: prop.z,
+    prop,
+    ground: at[1],
+  }
+  wild.set(prop, got)
+  return got
+}
+
 /** The nodes within `r` metres of (x, z), as far as they are found yet: the
  * levels near are looked at one a call, nearest first. */
-export let nodesNear = (x: number, z: number, r: number): Node[] =>
-  near(x, z, r + PAST).filter((n) => Math.hypot(n.x - x, n.z - z) < r)
+export let nodesNear = (
+  x: number,
+  z: number,
+  r: number,
+  natural: Natural[] = [],
+): Node[] => [
+  ...near(x, z, r + PAST).filter((n) => Math.hypot(n.x - x, n.z - z) < r),
+  ...natural.filter(({ prop: p }) =>
+    p.natural && NATURE[p.kind] && Math.hypot(p.x - x, p.z - z) < r
+  ).map(wildNode),
+]
 
-/** What working a node of `tier` is worth to its trade. */
-export let gatherXp = (tier: number): number => 5 * tier
+let bonus: Record<Rarity, number> = {
+  common: 1,
+  uncommon: 2,
+  rare: 3,
+  epic: 5,
+  legendary: 8,
+}
+
+// A glint among ordinary trees is worth turning off the road for.
+let NODE_ODDS = [0.95, 0.04, 0.008, 0.0018, 0.0002]
+
+/** A node's rarity for this life, shared by everyone and rolled anew after
+ * its last spent life. */
+export let nodeRarity = (eid: string, fell: number): Rarity =>
+  pick(NODE_ODDS, rand(hashOf(`${eid}:${fell}`)))
+
+/** What working a node is worth to its trade. Low skill yields poor xp,
+ * while rarity makes a find worth taking a detour for. */
+export let gatherXp = (
+  tier: number,
+  rarity: Rarity = 'common',
+  lvl = least(tier),
+): number =>
+  Math.max(
+    1,
+    Math.round(5 * tier * bonus[rarity] * Math.min(1, lvl / least(tier))),
+  )
 
 /** How long working a node takes a hero whose trade is at `lvl`, in ms: a
  * moment more for each tier, as long again for a shoal to bite, and less the
@@ -551,7 +615,9 @@ export let gatherXp = (tier: number): number => 5 * tier
 export let effort = (lode: Lode, lvl: number): number =>
   Math.round(
     (1300 + 300 * lode.tier) * GATHER[lode.trade].work *
-      Math.max(2 / 3, 1 - (lvl - least(lode.tier)) * 0.05),
+      (lvl < least(lode.tier)
+        ? 1 + 0.45 * (least(lode.tier) - lvl) ** 2
+        : Math.max(2 / 3, 1 - (lvl - least(lode.tier)) * 0.05)),
   )
 
 /** How many of what it gives a node yields a hero at one gathering: one, and
@@ -574,9 +640,13 @@ export let haulOf = (
   player: string,
   kind: string,
   lvl: number,
+  rarity: Rarity = 'common',
 ): number => {
   let l = LODES[kind]
   let past = l ? lvl - least(l.tier) : 0
   let odds = Math.min(0.5, past * 0.08)
-  return rand(hashOf(`${node}:${at}:${player}`), 3) < odds ? 2 : 1
+  let extra = rand(hashOf(`${node}:${at}:${player}`), 3) < odds ? 1 : 0
+  let rare = Math.max(0, bonus[rarity] - 1)
+  let skill = l ? Math.min(1, lvl / least(l.tier)) : 1
+  return 1 + (rare ? Math.max(1, Math.round(rare * skill)) : 0) + extra
 }

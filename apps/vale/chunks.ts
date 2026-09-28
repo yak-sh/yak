@@ -7,6 +7,8 @@ import { groundChunk } from './ground.ts'
 import { cuboids } from './boxes.ts'
 import { out, pack, type Packed, place, type Vec } from './mesh.ts'
 import { KINDS, model } from './props.ts'
+import type { Natural } from './nature.ts'
+import { baseline, natureMesh } from './nature_mesh.ts'
 import { off, propAt, spacer, step, thingAt } from './stand.ts'
 import {
   adopt,
@@ -27,6 +29,8 @@ export type Chunk = {
   solid: Packed
   small: Packed | null
   buildings: { kind: string; seed: number; turn: number; at: Vec }[]
+  natural?: Natural[]
+  nature?: Packed | null
   patch: Patch
 }
 
@@ -54,8 +58,19 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
   let bits = out()
   let buildings: Chunk['buildings'] = []
   let props = v.plant(ci, ck)
+  let natural: Natural[] = []
   let smallSpace = small ? spacer(v.voxel) : null
   for (let p of small ? [...props, ...decor(patch)] : props) {
+    if (p.natural) {
+      let at = step(v, p)
+      smallSpace?.add(propAt(v, p), at)
+      let [dx, dy, dz] = off(at)
+      natural.push({
+        prop: p,
+        at: [p.x + dx, standAt(v, p) + dy, p.z + dz],
+      })
+      continue
+    }
     let kind = KINDS[p.kind], tiny = kind.small
     if (tiny && !small) continue
     let y = standAt(v, p)
@@ -96,6 +111,8 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     solid: pack(solid),
     small: bits.idx.length ? pack(bits) : null,
     buildings,
+    natural,
+    nature: natureMesh(ci, ck, natural.map(baseline)),
     patch,
   }
 }

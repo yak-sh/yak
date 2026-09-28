@@ -516,7 +516,7 @@ export let hud = (
             says: 'Read the jobs pinned on it.',
           },
       )
-      gatherPad.classList.toggle('Pad-off', !!n && (n.spent || !n.able))
+      gatherPad.classList.toggle('Pad-off', !!n?.spent)
       let k = job?.doing ? job.doing.k.toFixed(3) : '0'
       if (was.gatherK != k) {
         was.gatherK = k

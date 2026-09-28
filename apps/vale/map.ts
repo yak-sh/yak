@@ -13,6 +13,7 @@ import { LEVELS, type Side, SIZE, type Spot } from './levels.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
 import { clamp } from './rand.ts'
+import { tint } from './rarity.ts'
 import { originOf } from './regions.ts'
 import { tipped } from './tip.ts'
 import { arriveOf, roadsOf } from './ways.ts'
@@ -156,10 +157,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
             tipped({ name: g.title })
           }></i>`
         ).join('') +
-        nodes.map((n) =>
+        nodes.filter((n) => !n.prop || n.rarity != 'common').map((n) =>
           `<i class="Map_Node Map_Node-${n.lode.trade}${
             n.spent ? ' Map_Node-spent' : ''
-          }${n.able ? '' : ' Map_Node-far'}" style="${at(n.at[0], n.at[2])}"${
+          } ${tint(n.rarity)}" style="${at(n.at[0], n.at[2])}"${
             tipped({ name: n.lode.name })
           }></i>`
         ).join('') +

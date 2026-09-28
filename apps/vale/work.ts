@@ -20,16 +20,24 @@ import {
   haulOf,
   type Lode,
   LODES,
+  nodeRarity,
   nodesNear,
 } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
+import type { Natural } from './nature.ts'
 import { type Board, boardsNear, READ } from './notices.ts'
 import type { Frame, Vec3 } from './play.ts'
 import { made, type Rarity } from './rarity.ts'
 import { upgradeOf, upgradeWorth, upgradeXp } from './upgrade.ts'
 import { fallOf } from './rules.ts'
-import { groundAt, stationsNear, type Vale, WATER } from './terrain.ts'
+import {
+  groundAt,
+  type Prop,
+  stationsNear,
+  type Vale,
+  WATER,
+} from './terrain.ts'
 import {
   ALL,
   type Craft,
@@ -42,7 +50,7 @@ import {
 
 /** A node as this frame sees it: which, where it stands on the ground or the
  * water, whether it is spent and for how many ms more, how far from the hero
- * it is, middle to middle, and whether the hero's trade reaches its tier. */
+ * it is, middle to middle, and its rarity for this life. */
 export type Seen = {
   eid: string
   kind: string
@@ -51,7 +59,8 @@ export type Seen = {
   spent: boolean
   back: number
   near: number
-  able: boolean
+  rarity: Rarity
+  prop?: Prop
 }
 
 /** A station near enough to work: which, where, and how far off. */
@@ -153,10 +162,11 @@ let making = (tier: number) => 1400 + 300 * tier
 
 // What an item row was worth to a trade: its gathering, or its making.
 let worth = (b: Bundle): [Trade, number][] => {
-  let lode = LODES[str(comp(b, 'gathered').kind)]
+  let gathered = comp(b, 'gathered')
+  let lode = LODES[str(gathered.kind)]
   let r = RECIPES[str(comp(b, 'crafted').recipe)]
   let out: [Trade, number][] = []
-  if (lode) out.push([lode.trade, gatherXp(lode.tier)])
+  if (lode) out.push([lode.trade, num(gathered.xp, gatherXp(lode.tier))])
   if (r) out.push([r.at, madeXp(r.tier)])
   return out
 }
@@ -237,11 +247,13 @@ export let working = (net: Net) => {
 
   // A node's work done: the item it gave, wearing the row that spends it.
   let gather = (n: Seen, me: string, now: number, mine: Trades): Work => {
-    let count = haulOf(n.eid, now, me, n.kind, mine[n.lode.trade].lvl)
+    let lvl = mine[n.lode.trade].lvl
+    let count = haulOf(n.eid, now, me, n.kind, lvl, n.rarity)
+    let xp = gatherXp(n.lode.tier, n.rarity, lvl)
     net.keep({
       entity: { eid: crypto.randomUUID() },
       item: { kind: n.lode.gives, n: count, owner: me, at: now },
-      gathered: { node: n.eid, kind: n.kind, at: now },
+      gathered: { node: n.eid, kind: n.kind, at: now, rarity: n.rarity, xp },
       place: placeOf(n.at[0], n.at[2]),
     })
     return {
@@ -250,7 +262,7 @@ export let working = (net: Net) => {
       item: n.lode.gives,
       n: count,
       trade: n.lode.trade,
-      xp: gatherXp(n.lode.tier),
+      xp,
       at: n.at,
     }
   }
@@ -346,7 +358,13 @@ export let working = (net: Net) => {
     },
     /** A frame of work: `want` is the player asking to work what is near,
      * `stop` their doing something else. */
-    tick: (v: Vale, f: Frame, want: boolean, stop: boolean): Job => {
+    tick: (
+      v: Vale,
+      f: Frame,
+      want: boolean,
+      stop: boolean,
+      natural: Natural[] = [],
+    ): Job => {
       let me = net.hero
       let now = f.now
       let events: Work[] = []
@@ -359,22 +377,27 @@ export let working = (net: Net) => {
       }
       was = mine
       let rows = gatherings()
-      let nodes = nodesNear(f.body.x, f.body.z, SEEN).map((n): Seen => {
-        let lode = LODES[n.lode]
-        let respawn = GATHER[lode.trade].respawn * 1000
-        let fall = fallOf(rows.get(n.eid) ?? [], respawn / 1000, now)
-        let y = lode.trade == 'fish' ? WATER : groundAt(v, n.x, n.z)
-        return {
-          eid: n.eid,
-          kind: n.lode,
-          lode,
-          at: [n.x, y, n.z],
-          spent: fall.down,
-          back: fall.down ? fall.fell + respawn - now : 0,
-          near: Math.hypot(n.x - f.body.x, n.z - f.body.z),
-          able: mine[lode.trade].lvl >= least(lode.tier),
-        }
-      })
+      let nodes = nodesNear(f.body.x, f.body.z, SEEN, natural).map(
+        (n): Seen => {
+          let lode = LODES[n.lode]
+          let respawn = GATHER[lode.trade].respawn * 1000
+          let fall = fallOf(rows.get(n.eid) ?? [], respawn / 1000, now)
+          let y = lode.trade == 'fish'
+            ? WATER
+            : n.ground ?? groundAt(v, n.x, n.z)
+          return {
+            eid: n.eid,
+            kind: n.lode,
+            lode,
+            at: [n.x, y, n.z],
+            spent: fall.down,
+            back: fall.down ? fall.fell + respawn - now : 0,
+            near: Math.hypot(n.x - f.body.x, n.z - f.body.z),
+            rarity: nodeRarity(n.eid, fall.fell),
+            prop: n.prop,
+          }
+        },
+      )
       let near = nodes
         .filter((n) => n.near <= GATHER[n.lode.trade].reach)
         .sort((a, b) => a.near - b.near)[0] ?? null
@@ -413,9 +436,7 @@ export let working = (net: Net) => {
         }
       }
 
-      // Asked to work: the nearest node, if it is whole and the hero's trade
-      // reaches it; else the station there, whose sheet opens, or the board,
-      // whose notices do.
+      // Asked to work: the nearest whole node, or the station or board there.
       if (want && !job && !f.down && me) {
         if (!near && bench) {
           events.push({ type: 'station', craft: bench.craft })
@@ -429,14 +450,6 @@ export let working = (net: Net) => {
             text: `${near.lode.name}: spent. It grows back in ${
               secs(near.back)
             }.`,
-          })
-        } else if (!near.able) {
-          let t = TRADES[near.lode.trade]
-          events.push({
-            type: 'say',
-            text: `${near.lode.name} requires ${t.name} ${
-              least(near.lode.tier)
-            }. Yours is ${mine[near.lode.trade].lvl}.`,
           })
         } else {
           job = {

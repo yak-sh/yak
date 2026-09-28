@@ -223,6 +223,15 @@
         "at": {
           "type": "number",
           "description": "When it was gathered, in ms."
+        },
+        "rarity": {
+          "type": "string",
+          "enum": ["common", "uncommon", "rare", "epic", "legendary"],
+          "description": "The node's rarity when this item was gathered."
+        },
+        "xp": {
+          "type": "number",
+          "description": "What this gathering was worth to the hero's trade."
         }
       }
     },

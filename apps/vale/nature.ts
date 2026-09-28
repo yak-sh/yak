@@ -1,0 +1,51 @@
+// Which wild props are resources. Terrain grows these from its feature data;
+// gathering gives them the same identity and lifecycle as placed nodes.
+// The value is the lode whose material and trade this prop gives.
+import type { Vec } from './mesh.ts'
+import type { Prop } from './terrain.ts'
+
+export type Natural = { prop: Prop; at: Vec }
+
+export let NATURE: Record<string, string> = {
+  oak: 'oak',
+  birch: 'oak',
+  elder: 'oak',
+  treefern: 'oak',
+  autumnoak: 'oak',
+  swamptree: 'oak',
+  yew: 'oak',
+  deadtree: 'oak',
+  pine: 'pine',
+  greypine: 'pine',
+  darkpine: 'pine',
+  shorepine: 'pine',
+  windtree: 'pine',
+  driftlog: 'driftwood',
+  log: 'driftwood',
+  palm: 'palm',
+  datepalm: 'palm',
+  cottonwood: 'palm',
+  toadstool: 'toadstool',
+  glowcap: 'toadstool',
+  violetcap: 'toadstool',
+  palecap: 'toadstool',
+  spruce: 'spruce',
+  bigspruce: 'spruce',
+  rimespruce: 'rimepine',
+  stuntpine: 'rimepine',
+  chartree: 'charpine',
+  rock: 'copper',
+  chalk: 'copper',
+  sandstone: 'sunstone',
+  snowrock: 'iceore',
+  serac: 'iceore',
+  cinder: 'emberstone',
+  basalt: 'iron',
+  obsidian: 'obsidian',
+  crystal: 'gleam',
+  amethyst: 'gleam',
+  clearstone: 'gleam',
+  glassrock: 'gleam',
+  hoodoo: 'sunstone',
+  shard: 'gleam',
+}
