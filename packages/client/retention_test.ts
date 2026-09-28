@@ -160,6 +160,27 @@ Deno.test('pending optimistic writes survive pressure, gone and stale socket sna
   c.close()
 })
 
+Deno.test('an accepted write stays in its matching watch until the socket answers', async () => {
+  let { c, frame } = fixture({
+    retention: 0,
+    fetch: async (request) => Response.json(JSON.parse(await request.text())),
+  })
+  let matching = c.watch('.doc')
+  let unrelated = c.watch('.doc.title=other')
+  frame('s1', [])
+  frame('s2', [])
+  c.mutate([row('new')])
+  assertEquals(readIds(matching.value), ['new'])
+  await c.wire!.idle()
+  assertEquals(readIds(matching.value), ['new'])
+  assertEquals(unrelated.value, [])
+  frame('s1', [row('new')])
+  assertEquals(readIds(matching.value), ['new'])
+  matching.close()
+  unrelated.close()
+  c.close()
+})
+
 Deno.test('overlapping pending writes release only their own pins; uncertain transport stays pinned', async () => {
   let first = Promise.withResolvers<Response>()
   let second = Promise.withResolvers<Response>()

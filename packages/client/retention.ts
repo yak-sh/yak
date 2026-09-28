@@ -48,7 +48,7 @@ export type Retained = Replica & {
    * a budget separate from the row limit */
   answerBytes: () => number
   /** whether that server subscription's result includes this entity, or this
-   * page has an unacknowledged local write to it */
+   * page's accepted write has not reached that subscription yet */
   includes: (id: string, eid: Eid) => boolean
   /** the subscription's current members, in the order the server delivered
    * them, with the entities read from memory. Nothing is matched locally and
@@ -122,6 +122,22 @@ export let retention = (
   }
   let owners = new Map<Eid, Set<string>>()
   let pins = new Map<Eid, number>()
+  // An HTTP write can be accepted before its socket subscription hears it.
+  // Keep only the local matches of that accepted write until each matching
+  // subscription answers, so a row does not blink out between transports.
+  let accepted = new Map<string, Set<Eid>>()
+  let awaiting = new Map<Eid, number>()
+  let releaseAccepted = (id: string, eids: Iterable<Eid>) => {
+    let held = accepted.get(id)
+    if (!held) return
+    for (let eid of eids) {
+      if (!held.delete(eid)) continue
+      let n = awaiting.get(eid)! - 1
+      if (n) awaiting.set(eid, n)
+      else awaiting.delete(eid)
+    }
+    if (!held.size) accepted.delete(id)
+  }
   let known = new Set<Eid>()
   let inactive = new Set<Eid>() // insertion order = least recently used first
   let invalid = new Set<Eid>() // gone, but a pending write still needs it
@@ -138,7 +154,8 @@ export let retention = (
   }
   let held = (eid: Eid) => store.tx((tx) => tx.get([eid]))[0]
   let protectedByOwner = (eid: Eid) => !!owners.get(eid)?.size
-  let protectedRow = (eid: Eid) => protectedByOwner(eid) || pins.has(eid)
+  let protectedRow = (eid: Eid) =>
+    protectedByOwner(eid) || pins.has(eid) || awaiting.has(eid)
   let payloads = (sub: Sub) =>
     new Set([...sub.members.keys(), ...sub.peers.keys()])
   let covered = (
@@ -310,7 +327,7 @@ export let retention = (
     if (opts.retainUnownedProps) return
     let changed: Eid[] = []
     for (let eid of eids) {
-      if (!protectedByOwner(eid) || pins.has(eid)) continue
+      if (!protectedByOwner(eid) || pins.has(eid) || awaiting.has(eid)) continue
       let b = held(eid)
       if (!b || dead(b)) continue
       let cuts: Bundle = { entity: b.entity }
@@ -342,6 +359,7 @@ export let retention = (
     }
   }
   let unsubscribe = (id: string) => {
+    releaseAccepted(id, accepted.get(id) ?? [])
     let sub = subscriptions.get(id)
     subscriptions.delete(id)
     let eids = sub ? [...payloads(sub)] : []
@@ -431,7 +449,8 @@ export let retention = (
       }
     },
     includes: (id, eid) =>
-      !!subscriptions.get(id)?.members.has(eid) || pins.has(eid),
+      !!subscriptions.get(id)?.members.has(eid) || pins.has(eid) ||
+      !!accepted.get(id)?.has(eid),
     onMembership: (fn) => {
       listeners.add(fn)
       return () => {
@@ -497,6 +516,10 @@ export let retention = (
         ...frame.peerGone ?? [],
         ...frame.reset ? payloads(sub) : [],
       ])
+      releaseAccepted(
+        frame.id,
+        frame.reset ? accepted.get(frame.id) ?? [] : affected,
+      )
       let owns = (eid: Eid) => sub.members.has(eid) || sub.peers.has(eid)
       let before = new Set([...affected].filter(owns))
       let changed = !!frame.reset || !sub.confirmed
@@ -596,9 +619,27 @@ export let retention = (
       }
       for (let id of subscriptions.keys()) notify(id)
       let active = true
-      return () => {
+      return (didAccept: boolean) => {
         if (!active || closed) return
         active = false
+        if (didAccept) {
+          let written = new Set(eids)
+          for (let [id, sub] of subscriptions) {
+            if (!sub.prime || sub.query === true) continue
+            let matches = store.read(sub.query).filter((b) =>
+              written.has(b.entity.eid) && !sub.members.has(b.entity.eid)
+            )
+            if (!matches.length) continue
+            let held = accepted.get(id) ?? new Set<Eid>()
+            for (let b of matches) {
+              let eid = b.entity.eid
+              if (held.has(eid)) continue
+              held.add(eid)
+              awaiting.set(eid, (awaiting.get(eid) ?? 0) + 1)
+            }
+            accepted.set(id, held)
+          }
+        }
         for (let eid of eids) {
           let n = pins.get(eid)! - 1
           if (n) pins.set(eid, n)
@@ -621,6 +662,7 @@ export let retention = (
       let touched = new Set<Eid>()
       loading = touched
       if (current !== undefined && current !== epoch) {
+        for (let [id, eids] of accepted) releaseAccepted(id, eids)
         answers.clear()
         owners.clear()
         for (let sub of subscriptions.values()) {
