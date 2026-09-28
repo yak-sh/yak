@@ -105,9 +105,10 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
       'two, and only two',
     )
     // The words carry more than the list; the list as data is the files.
-    assertEquals(list.value, {
-      files: [{ path: 'bare.html' }, { path: 'index.html' }],
-    })
+    assertEquals(
+      (list.value as { files: { path: string }[] }).files.map((f) => f.path),
+      ['bare.html', 'index.html'],
+    )
     assert(
       !(await agent.tool('app_files', { ...app, op: 'list' })).includes(
         'unseen',
@@ -360,7 +361,8 @@ let browser = (code: string, page: string) => {
     createElement: () => ({ style: {}, setAttribute: () => {} }),
   }
   let win = {
-    fetch: () => Promise.reject(new Error('this page fetches nothing')),
+    fetch: (_url?: string) =>
+      Promise.reject(new Error('this page fetches nothing')),
     matchMedia: () => ({ matches: false }),
   }
   new Function(
@@ -389,6 +391,7 @@ let browser = (code: string, page: string) => {
     // reporter listens in the capture phase (T-32909).
     blocked: (tagName: string, src: string) =>
       ears.error?.forEach((fn) => fn({ target: { tagName, src } })),
+    ask: (url: string) => win.fetch(url),
     filed: () =>
       Promise.all(beacons.map(async (b) => JSON.parse(await b.text()))),
     drawn,
@@ -427,6 +430,16 @@ Deno.test("the platform's own scripts are never the app's break", async () => {
     assertStringIncludes(
       filed[0].message,
       'failed to load script https://jeff63.yaks.app/weather/app.js',
+    )
+
+    // An abort includes the filter that stalled, without exposing query
+    // strings from other API doors in the exception store.
+    let query = browser(code, page)
+    await query.ask(`${page}api/query?.player&.created.by=ada`).catch(() => {})
+    let failures = await query.filed()
+    assertStringIncludes(
+      failures[0].message,
+      '/weather/api/query?.player&.created.by=ada',
     )
     assertEquals(own.drawn.length, 1, 'and the soft state over the shell')
 

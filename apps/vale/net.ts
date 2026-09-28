@@ -20,6 +20,7 @@ import { writer } from './chat.ts'
 import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
+import { once as read } from './once.ts'
 import words from './vocab.json' with { type: 'json' }
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
@@ -85,10 +86,6 @@ let newest = (rows: Bundle[]) => {
   }
   return by
 }
-
-// How long the gate waits for the store to answer before it lists what it
-// holds.
-let PATIENCE = 8000
 
 // How long rows wait to be sent together: under the door's 30 a minute.
 let PACE = 2100
@@ -247,18 +244,10 @@ export let connect = (base: URL) => {
 
   // A one-time read uses the app's query door. It does not add a subscription
   // to the page's hibernating socket while the gate or a distant name loads.
-  let once = async (query: string): Promise<Bundle[]> => {
+  let once = (query: string): Promise<Bundle[]> => {
     let url = new URL('query', base)
     url.search = query.split('&').map(encodeURIComponent).join('&')
-    try {
-      let r = await fetch(url, { signal: AbortSignal.timeout(PATIENCE) })
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
-      let rows: unknown = await r.json()
-      return Array.isArray(rows) ? rows as Bundle[] : []
-    } catch (e) {
-      console.warn('mossvale store:', e)
-      return []
-    }
+    return read<Bundle>(url)
   }
 
   let glimpsed = new Map<string, Hero | null>()

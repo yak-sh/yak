@@ -78,6 +78,12 @@ let broke = (body) => {
 // needs no line of its own: a script that never loaded never listens.
 let mine = (url) => url.origin == location.origin && url.href != door
 
+// A failed graph query needs its filter to be diagnosable. Other API query
+// strings may carry credentials or an outbound URL, so their path is enough.
+let asked = (url) =>
+  url.pathname +
+  (url.pathname.endsWith('/api/query') ? url.search : '')
+
 // Where a src points, or nothing if the browser handed us something that is
 // not an address: a reporter that throws is worse than one that misses.
 let at = (url) => {
@@ -144,7 +150,7 @@ globalThis.fetch = async (input, init) => {
     if (!r.ok && mine(where)) {
       let why = await r.clone().text().catch(() => '')
       send({
-        message: `${r.status} ${where.pathname}: ${why}`.slice(0, 2000),
+        message: `${r.status} ${asked(where)}: ${why}`.slice(0, 2000),
         url: location.href,
         // The answer as it came, so the door can tell a no it meant — a
         // signed-out visitor sent to sign in — from one it did not
@@ -161,7 +167,7 @@ globalThis.fetch = async (input, init) => {
     return r
   } catch (e) {
     if (mine(where)) {
-      broke({ message: `${where.pathname}: ${said(e)}`, url: location.href })
+      broke({ message: `${asked(where)}: ${said(e)}`, url: location.href })
     }
     throw e
   }
