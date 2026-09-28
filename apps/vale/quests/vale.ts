@@ -23,7 +23,8 @@ export let givers: Giver[] = [
     level: 'mossvale',
     place: 'plaza',
     offset: [1, 5],
-    greets: 'When I’m big I’m going to have a sword just like yours.',
+    greets:
+      'I made a welcome sign for new heroes in Village Tasks on yaks.app. Will you check it for me?',
     look: { tint: '#d9824a', hair: '#6b3f22', skin: '#f0c4a0' },
     build: 'child',
   },

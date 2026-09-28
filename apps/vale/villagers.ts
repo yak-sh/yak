@@ -61,6 +61,12 @@ let STAY = 4 * 60_000
 /** A villager's row, by their giver id: the same on every page. */
 export let eidOf = (id: string): string => uuidOf(`villager/${id}`)
 
+/** The welcome a hero hears from Pip after checking his village list. */
+export let greeting = (id: string, line: string, done: boolean): string =>
+  id == 'pip' && done
+    ? 'You found my welcome sign on yaks.app! Now every new hero knows there is room for them by the fire.'
+    : line
+
 /** Where a villager stands when they are at home, in world metres. */
 export let homeOf = (g: Giver): Spot => {
   let [x, z] = spotOf(g.level, g.place) ?? originOf(g.level)
@@ -221,6 +227,8 @@ export type Posted = {
 /** What a villager knows, beyond who they are, when a hero speaks to them. */
 export type Facts = {
   hero: { eid: string; name: string; lvl: number }
+  /** whether this hero checked Pip's welcome sign in Village Tasks */
+  welcomeDone?: boolean
   /** the villagers' lives as their rows in the store say them */
   people: Map<string, About>
   /** how this hero’s words reached the villager */
@@ -399,6 +407,13 @@ export let persona = (g: Giver, f: Facts): string => {
     'directions. You know your land and what you have heard, nothing more. ' +
     'Never say you are a model, or in a game.',
     `What you tell a stranger: "${g.greets}"`,
+    ...g.id == 'pip'
+      ? [
+        f.welcomeDone
+          ? 'This hero checked your welcome sign in Village Tasks on yaks.app. Thank them for reading it.'
+          : 'You made Village Tasks on yaks.app for little jobs in Mossvale. Ask this hero to check your welcome sign there. The app is at /village-tasks/.',
+      ]
+      : [],
     `Your home is near the ${self.home} in ${land}.`,
     ...self.role ? [`Your role here is ${self.role}.`] : [],
     ...self.workplace

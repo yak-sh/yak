@@ -678,9 +678,12 @@ let worked = (e: Work) => {
   } else h.toast(e.text)
 }
 
-let talkTo = () => {
+let talkTo = async () => {
   let giver = last?.talk
   if (!giver) return
+  let player = net.hero
+  let greets = await folk.greeting(giver.id, giver.greets)
+  if (last?.talk?.id != giver.id || net.hero != player) return
   let next = giver.next
   // A deal standing between them opens over their words.
   if (last && deal.standing(last.sheet, giver.id).length) {
@@ -692,7 +695,7 @@ let talkTo = () => {
       quest: next?.quest ?? null,
       state: next?.state ?? 'done',
       have: next?.have ?? 0,
-      greets: giver.greets,
+      greets,
       name: giver.name,
       hears: !!folk.near(),
       looks: folk.looks(giver.id),

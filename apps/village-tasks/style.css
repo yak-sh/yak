@@ -1,0 +1,93 @@
+/* The village list: a quiet paper card beside Mossvale's moss and stone. */
+:root {
+  font-family: system-ui, sans-serif;
+  color: #253e2d;
+  background: #e9edda;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  width: min(100% - 2rem, 42rem);
+  margin: 0 auto;
+  padding: 2rem 0 5rem;
+}
+header {
+  padding: 1.5rem 0 2rem;
+}
+h1,
+h2,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  line-height: 1.1;
+}
+.Intro {
+  margin-top: 1rem;
+  max-width: 30rem;
+  line-height: 1.5;
+}
+.Hero {
+  color: #416b44;
+  font-weight: 700;
+}
+.Back {
+  display: inline-block;
+  margin-bottom: 2rem;
+}
+.Eyebrow,
+.Task_Who {
+  color: #54754e;
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.Eyebrow {
+  margin-bottom: .6rem;
+}
+.Task {
+  padding: 1.5rem;
+  border: 1px solid #b5c8a8;
+  border-radius: 1rem;
+  background: #fafbf3;
+  box-shadow: 0 .6rem 2rem #253e2d12;
+}
+.Task h2 {
+  margin-top: .4rem;
+  font-size: 1.45rem;
+}
+.Task > p:not(.Task_Who) {
+  margin-top: .8rem;
+  line-height: 1.5;
+}
+button {
+  margin-top: 1.5rem;
+  padding: .75rem 1.2rem;
+  border: 0;
+  border-radius: .6rem;
+  background: #416b44;
+  color: white;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: #315836;
+}
+button:disabled {
+  background: #b5c8a8;
+  color: #253e2d;
+  cursor: default;
+}
+a {
+  color: #315836;
+}
+.Status {
+  line-height: 1.5;
+}

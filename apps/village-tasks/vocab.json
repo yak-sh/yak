@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mossvale Village Tasks",
+  "description": "Villagers' tasks and each hero's completed tasks. Vale owns the villager and player rows; this app owns only the tasks and completions.",
+  "$defs": {
+    "village_task": {
+      "component": true,
+      "type": "object",
+      "description": "A task offered by a villager in Vale. The villager field is that villager's stable Vale eid.",
+      "properties": {
+        "villager": { "type": "string", "index": true },
+        "title": { "type": "string" },
+        "body": { "type": "string" }
+      },
+      "required": ["villager", "title", "body"]
+    },
+    "village_done": {
+      "component": true,
+      "type": "object",
+      "description": "One hero's completion of one village task. Vale reads this to choose what that hero hears; it remains the authority for the hero and villager.",
+      "properties": {
+        "task": { "type": "string", "index": true },
+        "player": { "type": "string", "index": true },
+        "at": { "type": "number" }
+      },
+      "required": ["task", "player", "at"]
+    }
+  }
+}

@@ -19,6 +19,7 @@ import type { Spot } from './levels.ts'
 import type { Vec } from './mesh.ts'
 import type { Vale } from './terrain.ts'
 import { GIVERS } from './quests.ts'
+import { welcomed } from './village-tasks.ts'
 import { wares } from './stock.ts'
 import {
   type About,
@@ -29,6 +30,7 @@ import {
   deeds,
   eidOf,
   goings,
+  greeting,
   hears,
   looks,
   named,
@@ -143,6 +145,7 @@ export let village = (net: Net, deal: Deals) => {
   }
 
   let me: Me | null = null
+  let welcome = new Map<string, boolean>()
   let last: Frame | null = null
   let engaged: string | null = null
   let asked = new Set<string>()
@@ -174,6 +177,19 @@ export let village = (net: Net, deal: Deals) => {
   }
 
   return {
+    /** Pip's line follows this hero's completion in the sibling task app. */
+    greeting: async (id: string, line: string): Promise<string> => {
+      let hero = net.hero
+      if (id != 'pip' || !hero) return line
+      try {
+        let done = await welcomed(hero)
+        welcome.set(hero, done)
+        return greeting(id, line, done)
+      } catch (e) {
+        console.warn('mossvale village tasks:', e)
+        return line
+      }
+    },
     /** who is looking: a person signed in is heard */
     me: (who: Me) => {
       me = who
@@ -256,6 +272,7 @@ export let village = (net: Net, deal: Deals) => {
         here: f.others.map((o) => o.name),
         mood: told().moods.get(g.id),
         goings: goings(g, told().plans, net.now() - LATELY),
+        welcomeDone: g.id == 'pip' && welcome.get(net.hero ?? '') == true,
       })
       return {
         entry: { session: eidOf(g.id) },

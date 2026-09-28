@@ -1,0 +1,10 @@
+[
+  {
+    "entity": { "eid": "913f4fa5-f071-8191-bead-b46c138a7655" },
+    "village_task": {
+      "villager": "744b934d-ac04-8713-88f3-539fce751517",
+      "title": "Check Pip's welcome sign",
+      "body": "Pip has written a welcome sign for new heroes: ‘There is room for you by the fire.’ Read it, then let Pip know you saw it."
+    }
+  }
+]
