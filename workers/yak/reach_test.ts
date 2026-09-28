@@ -109,7 +109,7 @@ Deno.test('the app version selects its store declarations after preparation', as
     draft = false,
   ) => {
     let send = draft
-      ? draftStore(env.STORE, here, page, version)
+      ? draftStore(env.STORE, here, page, String(version))
       : door(version)
     let r = await send(path, {
       method: 'POST',

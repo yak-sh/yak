@@ -573,6 +573,7 @@ export let platformDoc: VocabDoc = {
         slug: text,
         space: ref('cascade'),
         version: num,
+        declaration: owned(text),
         source: owned(text),
         script: owned(text),
         access: { type: 'string', enum: ['public', 'open', 'private'] },

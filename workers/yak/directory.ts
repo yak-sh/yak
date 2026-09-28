@@ -174,6 +174,8 @@ export type App = {
   slug: string
   space: string
   version: number | null
+  // A borrowed property can move this while the app's own files stay put.
+  declaration?: string | null
   source?: string | null
   script?: string | null
   title: string
@@ -303,6 +305,7 @@ type Row = {
     slug: string
     space: Id
     version: number | null
+    declaration?: string | null
     source?: string | null
     script?: string | null
     access?: Access | null
@@ -691,6 +694,7 @@ export let appOf = (r: Row): App => ({
   slug: r.app!.slug,
   space: idOf(r.app!.space),
   version: r.app!.version,
+  declaration: r.app!.declaration ?? null,
   source: r.app!.source ?? null,
   script: r.app!.script ?? null,
   access: r.app!.access ?? null,
@@ -821,22 +825,22 @@ export let appStore = (
 ): Door =>
   storeOf(ns, storeName(space, app), {
     ...served(space, app, env),
-    release: app.version ?? 0,
+    release: app.declaration ?? String(app.version ?? 0),
   })
 
-/** Prepare a release without leaving its declarations selected in the Store.
- * The directory's version remains the serving version until record() commits. */
+/** Prepare a declaration without selecting it for ordinary Store requests.
+ * The directory's pointer moves only when record() commits. */
 export let draftStore = (
   ns: Namespace,
   space: Space,
   app: App,
-  version: number,
+  release: string,
   env: HostEnv = {},
 ): Door =>
   storeOf(ns, storeName(space, app), {
     ...served(space, app, env),
-    release: version,
-    base: app.version ?? 0,
+    release,
+    base: app.declaration ?? String(app.version ?? 0),
   })
 
 // The other address a (space, app) has, beside {@link url}: what its letters

@@ -47,7 +47,7 @@
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins, Objects } from '@yaks/blob'
-import { mint } from '@yaks/graph'
+import { mint, token } from '@yaks/graph'
 import type { App, Directory } from './directory.ts'
 import { pinsOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
@@ -290,7 +290,8 @@ export let versions = (dir: Directory, app: App) => dir.deploys(app)
 // a deploy that pruned its own pins would be deciding about bytes while it is
 // itself the reason the answer is about to change. The row and the app's
 // version counter go in one batch: the number an error names and the number a
-// rollback picks are the same number.
+// rollback picks are the same number. A home's borrowed declaration pointer
+// moves in that same batch, so a refused release selects none of it.
 //
 // The row is minted at an eid chosen here, never an alias, so the batch says
 // the same thing however often it arrives: a store restarted after it
@@ -305,13 +306,30 @@ export let record = async (
   version: number,
   files: Files,
   worker: string,
+  homes: { app: App; release: string }[] = [],
 ) =>
   await dir.stamp({
     entities: [
       {
         entity: { eid: app.eid },
-        app: { version, source: app.source, script: app.script },
+        app: {
+          version,
+          declaration: String(version),
+          source: app.source,
+          script: app.script,
+        },
+        $was: {
+          app: {
+            version: token(app.version),
+            declaration: token(app.declaration),
+          },
+        },
       },
+      ...homes.map(({ app, release }) => ({
+        entity: { eid: app.eid },
+        app: { declaration: release },
+        $was: { app: { declaration: token(app.declaration) } },
+      })),
       {
         entity: { eid: mint() },
         deploy: {

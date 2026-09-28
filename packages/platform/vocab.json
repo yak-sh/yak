@@ -26,6 +26,10 @@
         "version": {
           "type": "number"
         },
+        "declaration": {
+          "type": "string",
+          "stamped": true
+        },
         "source": {
           "type": "string",
           "stamped": true

@@ -115,8 +115,8 @@ export type Served = {
   eid: string
   access: string | null
   mail?: string
-  release?: number
-  base?: number
+  release?: string
+  base?: string
 }
 
 /** The door as a request builder over whatever answers it: the stub, or the

@@ -357,9 +357,9 @@ type Word =
   | 'uses'
   | 'tools'
   | 'release'
-  | `vocab:${number}`
-  | `uses:${number}`
-  | `tools:${number}`
+  | `vocab:${string}`
+  | `uses:${string}`
+  | `tools:${string}`
   | 'app'
   | 'access'
   | 'mail'
@@ -945,12 +945,12 @@ export class Store {
   }
 
   // A deploy prepares declarations in this store before the directory moves
-  // the app's version. The version in the directory is the serving decision:
+  // the app's declaration pointer. That pointer is the serving decision:
   // every request selects its declarations here, so a failed release keeps
   // answering with the old vocabulary and commands even after preparation.
   #select(req: Request) {
     let release = req.headers.get('x-yak-release')
-    if (release == null || !/^\d+$/.test(release)) return
+    if (release == null || !/^[a-z0-9-]+$/.test(release)) return
     let active = this.#get('release')
     if (active == release) return
     this.#atomic(() => {
@@ -961,12 +961,12 @@ export class Store {
       let words = ['vocab', 'uses', 'tools'] as const
       let was = this.#get('vocab') ?? '{}'
       for (let word of words) {
-        this.#put(`${word}:${Number(active)}`, this.#get(word) ?? '{}')
+        this.#put(`${word}:${active}`, this.#get(word) ?? '{}')
       }
       for (let word of words) {
         this.#put(
           word,
-          this.#get(`${word}:${Number(release)}`) ??
+          this.#get(`${word}:${release}`) ??
             this.#get(word) ?? '{}',
         )
       }

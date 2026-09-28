@@ -670,6 +670,25 @@ let homesIn = async (ctx: Ctx, space: Space, app: App) => {
   return { said, homes }
 }
 
+// The bytes a serving release declared, even if its editable files have since
+// moved. Rollback needs these to distinguish a borrow being withdrawn from a
+// property another app still declares.
+let releasedDoc = async (
+  ctx: Ctx,
+  blobs: Objects,
+  space: Space,
+  app: App,
+): Promise<VocabDoc> => {
+  if (app.version == null) return {}
+  let at = (await ctx.dir.deploys(app)).find((v) => v.version == app.version)
+  if (!at) throw refuse('missing', `no v${app.version} of ${app.slug}`)
+  let file = ['vocab.yml', 'vocab.json'].find((name) => at.files[name])
+  if (!file) return {}
+  let bytes = await pins(blobs, fileKey(space, app, '')).get(at.files[file])
+  if (!bytes) throw refuse('missing', `no blob for ${at.files[file]}`)
+  return appDoc(new TextDecoder().decode(bytes), file)
+}
+
 // The app's data files, as text (seed.ts) — the seed ones for a release, the
 // ones a path names for store_load. Only the named ones are read: an app's
 // bytes are its pictures as well as its pages, and neither caller has any
@@ -827,9 +846,9 @@ let released = async (
   // end.
   let version = (app.version ?? 0) + 1
   // Read the serving release before preparing the next one. This also gives
-  // a store first reached during a deploy the version to keep if staging fails.
+  // a store first reached during a deploy the declaration to keep on failure.
   await answer(await store('/vocab'))
-  let draft = draftStore(ctx.env.STORE, space, app, version)
+  let draft = draftStore(ctx.env.STORE, space, app, String(version))
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
@@ -862,69 +881,149 @@ let released = async (
   let kept: string[] = []
   // And the words this app uses rather than homes (T-32728).
   let uses: Record<string, string> = {}
+  let staged: { app: App; release: string }[] = []
   // The manifest as written, which is where a kind says what it means. It is
   // what the tools below are generated from.
   let manifest: VocabDoc = {}
   let vocabTook = c.since()
-  if (source != null) {
-    // The manifest as one document (vocab.ts `appDoc`, @yaks/yaml — the file
-    // may be .json or .yml): a property's keywords ride all the way to the
-    // store that plants it.
-    // One word, one home: a word another app in the space already declares is
-    // that app's, so this release records a use of it instead of planting a
-    // second table, and any property it adds grows the HOME's.
-    let { said, homes } = await homesIn(ctx, space, app)
-    manifest = unsaid(
-      appDoc(source, vocabFile),
-      said.get(app.slug),
-      vocabFile,
+  // The manifest as one document (vocab.ts `appDoc`, @yaks/yaml — the file
+  // may be .json or .yml): a property's keywords ride all the way to the
+  // store that plants it.
+  // One word, one home: a word another app in the space already declares is
+  // that app's, so this release records a use of it instead of planting a
+  // second table, and any property it adds grows the HOME's.
+  let { said, homes } = await homesIn(ctx, space, app)
+  manifest = unsaid(
+    appDoc(source ?? {}, vocabFile),
+    said.get(app.slug),
+    vocabFile,
+  )
+  let split = homed(manifest, homes)
+  uses = split.uses
+  let peers: Promise<VocabDoc[]> | undefined
+  let peerDocs = () =>
+    peers ??= ctx.dir.apps(space).then((all) =>
+      Promise.all(
+        all.filter((one) =>
+          one.eid != app.eid && !one.trashed && !sandboxed(one)
+        ).map((one) => releasedDoc(ctx, blobs, space, one)),
+      )
     )
-    let split = homed(manifest, homes)
-    uses = split.uses
-    // The home's table grows first: a use whose property the home does not have
-    // yet is not a use anyone can write until it does. Its whole manifest is
-    // written back, so it goes back as the document the home declared —
-    // projected to types, a sibling's deploy would silently unsearch the
-    // home's own properties (T-37546).
-    for (let [slug, grown] of Object.entries(split.grows)) {
-      let home = await ctx.dir.app(space, slug)
-      if (!home) continue
-      let was = said.get(slug) ?? {}
-      let defs: Record<string, PropSchema> = { ...was.$defs }
-      for (let [name, props] of Object.entries(grown)) {
+  // A home release may withdraw a property its borrower still declares.
+  // Build its next declaration from its own file and the serving files of
+  // peers, rather than treating an empty column as permission to erase it.
+  let current = said.get(app.slug)?.$defs ?? {}
+  let changed = Object.entries(current).some(([name, schema]) =>
+    !(name in (split.mine.$defs ?? {})) ||
+    Object.entries(schema.properties ?? {}).some(([prop, was]) =>
+      JSON.stringify(was) !=
+        JSON.stringify(split.mine.$defs?.[name]?.properties?.[prop])
+    )
+  )
+  if (changed) {
+    let defs: Record<string, PropSchema> = { ...split.mine.$defs }
+    let names = new Set([...Object.keys(current), ...Object.keys(defs)])
+    for (let peer of await peerDocs()) {
+      let homeWords: Homes = Object.fromEntries(
+        [...names].map((name) => [name, {
+          at: app.slug,
+          props: defs[name]?.properties ?? {},
+        }]),
+      )
+      for (
+        let [name, props] of Object.entries(
+          homed(peer, homeWords).grows[app.slug] ?? {},
+        )
+      ) {
         defs[name] = {
-          ...defs[name],
+          ...(defs[name] ?? current[name] ?? peer.$defs?.[name]),
+          component: true,
           properties: { ...defs[name]?.properties, ...props },
         }
-        for (let prop of Object.keys(props)) added.push(`${name}.${prop}`)
       }
-      let whole: VocabDoc = { ...was, $defs: defs }
-      await answer(
-        await appStore(ctx.env.STORE, space, home)('/vocab', {
-          method: 'POST',
-          body: JSON.stringify(whole),
-        }, vouched(who)),
-      )
     }
-    let mine = JSON.parse(
-      await answer(
-        await draft('/vocab', {
-          method: 'POST',
-          body: JSON.stringify(split.mine),
-        }, vouched(who)),
-      ),
+    split.mine = { ...split.mine, $defs: defs }
+  }
+  let oldUses: Record<string, string> = JSON.parse(
+    await answer(await store('/uses')),
+  )
+  let retired: Record<string, Record<string, string[]>> = {}
+  if (Object.keys(oldUses).length) {
+    let previous = await releasedDoc(ctx, blobs, space, app)
+    let gone = Object.entries(oldUses).flatMap(([name, slug]) =>
+      Object.keys(previous.$defs?.[name]?.properties ?? {})
+        .filter((prop) => !(prop in (manifest.$defs?.[name]?.properties ?? {})))
+        .map((prop) => ({ name, slug, prop }))
     )
-    planted = mine.comps ?? []
-    dropped = mine.dropped ?? []
-    added = [...added, ...(mine.added ?? [])]
-    kept = mine.kept ?? []
+    if (gone.length) {
+      let docs = await peerDocs()
+      for (let { name, slug, prop } of gone) {
+        if (
+          docs.some((doc) => prop in (doc.$defs?.[name]?.properties ?? {}))
+        ) {
+          continue
+        }
+        let props = retired[slug] ??= {}
+        props[name] = [...(props[name] ?? []), prop]
+      }
+    }
+  }
+  // Stage the home's table before recording the consumer release. Its whole
+  // manifest is written back, so it stays the document the home declared —
+  // projected to types, a sibling's deploy would silently unsearch the
+  // home's own properties (T-37546).
+  for (
+    let slug of new Set([
+      ...Object.keys(split.grows),
+      ...Object.keys(retired),
+    ])
+  ) {
+    let home = await ctx.dir.app(space, slug)
+    if (!home) continue
+    let was = said.get(slug) ?? {}
+    let defs: Record<string, PropSchema> = { ...was.$defs }
+    for (let [name, props] of Object.entries(retired[slug] ?? {})) {
+      let remaining = { ...defs[name]?.properties }
+      for (let prop of props) delete remaining[prop]
+      defs[name] = { ...defs[name], properties: remaining }
+    }
+    let grown = split.grows[slug] ?? {}
+    for (let [name, props] of Object.entries(grown)) {
+      defs[name] = {
+        ...defs[name],
+        properties: { ...defs[name]?.properties, ...props },
+      }
+      for (let prop of Object.keys(props)) added.push(`${name}.${prop}`)
+    }
+    let whole: VocabDoc = { ...was, $defs: defs }
+    let release = crypto.randomUUID()
+    await answer(await appStore(ctx.env.STORE, space, home)('/vocab'))
     await answer(
-      await draft('/uses', {
+      await draftStore(ctx.env.STORE, space, home, release)('/vocab', {
         method: 'POST',
-        body: JSON.stringify(uses),
+        body: JSON.stringify(whole),
       }, vouched(who)),
     )
+    staged.push({ app: home, release })
   }
+  let mine = JSON.parse(
+    await answer(
+      await draft('/vocab', {
+        method: 'POST',
+        body: JSON.stringify(split.mine),
+      }, vouched(who)),
+    ),
+  )
+  planted = mine.comps ?? []
+  dropped = mine.dropped ?? []
+  added = [...added, ...(mine.added ?? [])]
+  kept = mine.kept ?? []
+  await answer(
+    await draft('/uses', {
+      method: 'POST',
+      body: JSON.stringify(uses),
+    }, vouched(who)),
+  )
   vocabTook('vocab')
   // And the data the app comes with (seed.ts, T-34327), after the words it is
   // written in — an app's own components seed like the platform's — and once
@@ -1048,6 +1147,7 @@ let released = async (
         version,
         pinned,
         worker,
+        staged,
       ),
   )
   if (tooled.views) {

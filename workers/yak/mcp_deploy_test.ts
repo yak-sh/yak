@@ -385,6 +385,67 @@ Deno.test('a failed rollback leaves the served files and deploy unchanged', asyn
   }
 })
 
+Deno.test('borrowed declarations switch with their consumer release', async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{
+      slug: 'borrowed-release',
+      apps: ['home', 'borrower'],
+    }])
+    let agent = connector(k, cookie)
+    let space = 'borrowed-release'
+    let put = (app: string, content: string) =>
+      agent.tool('app_files', {
+        space,
+        app,
+        files: [{ path: 'vocab.json', content }],
+      })
+    let deploy = (app: string) => agent.tool('app_deploy', { space, app })
+    let add = () =>
+      agent.tool('graph_apply', {
+        space,
+        app: 'home',
+        entities: [{ entity: { eid: '$book' }, book: { isbn: '978' } }],
+      })
+
+    await put('home', vocabFile({ book: { title: txt } }))
+    await deploy('home')
+    await put('borrower', vocabFile({ book: { title: txt } }))
+    await deploy('borrower')
+
+    await put(
+      'borrower',
+      vocabFile(
+        { book: { title: txt, isbn: txt } },
+        { shelf: { description: 'Shelf', query: '.book', view: 'gone.html' } },
+      ),
+    )
+    await assertRejects(() => deploy('borrower'), Error, 'gone.html')
+    await assertRejects(() => add(), Error, 'unknown property: book.isbn')
+
+    await put('borrower', vocabFile({ book: { title: txt, isbn: txt } }))
+    await deploy('borrower')
+    await agent.tool('app_rollback', { space, app: 'borrower' })
+    await assertRejects(() => add(), Error, 'unknown property: book.isbn')
+
+    await put('borrower', vocabFile({ book: { title: txt, isbn: txt } }))
+    await deploy('borrower')
+    await deploy('home')
+    await add()
+    await agent.tool('app_rollback', { space, app: 'borrower' })
+    let books = JSON.parse(
+      await agent.tool('graph_query', {
+        space,
+        app: 'home',
+        filter: '.book.isbn=978',
+      }),
+    )
+    assertEquals(books[0].book.isbn, '978')
+  } finally {
+    await k.stop()
+  }
+})
+
 Deno.test('a rolled back app keeps serving through app and space renames', async () => {
   let k = await kernel()
   try {
