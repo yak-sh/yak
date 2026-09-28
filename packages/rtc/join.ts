@@ -140,8 +140,6 @@ export let microphone = async (): Promise<MediaStreamTrack> => {
 export let voiced = (level: number, was: boolean) =>
   level >= (was ? 0.01 : 0.04)
 
-let wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms))
-
 /** Open a call: a session at Realtime, through the app's door. */
 export let join = async (opts: Opts): Promise<Call> => {
   let door = new URL(opts.door ?? 'api/rtc/', document.baseURI)
@@ -153,6 +151,8 @@ export let join = async (opts: Opts): Promise<Call> => {
     opts.change?.(s)
   }
 
+  let leaving = new AbortController()
+  let hasLeft = () => leaving.signal.aborted
   let session = ''
   let key = ''
   let ask = async (method: string, path: string, body?: unknown) => {
@@ -164,7 +164,7 @@ export let join = async (opts: Opts): Promise<Call> => {
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.any([AbortSignal.timeout(15_000), leaving.signal]),
     })
     let said = await res.json().catch(() => null)
     if (!res.ok) {
@@ -188,35 +188,50 @@ export let join = async (opts: Opts): Promise<Call> => {
     return next
   }
 
-  let pc: RTCPeerConnection
+  let pc!: RTCPeerConnection
   let voice: RTCRtpTransceiver
   let sent = new Map<
     string,
     { track: MediaStreamTrack; tx: RTCRtpTransceiver }
   >()
-  let heard = new Set<{ dead: boolean }>()
+  let heard = new Set<{ dead: boolean; detach: () => void }>()
+  let cancelBackoff: (() => void) | null = null
   let muted = false
   let talking = false
 
+  // Graph writes may be asynchronous. Keep their order even when an older
+  // publication is still settling as a call leaves and another joins.
+  let writes: Promise<void> = Promise.resolve()
+  let writePresence = (rtc: Bundle['rtc']) => {
+    let next = writes.then(() =>
+      opts.write([{
+        entity: { eid: opts.entity },
+        rtc,
+      }])
+    ).then(() => {})
+    writes = next.catch(() => {})
+    return next
+  }
   let wear = () =>
-    opts.write([{
-      entity: { eid: opts.entity },
-      rtc: sent.size
+    hasLeft() ? Promise.resolve() : writePresence(
+      sent.size
         ? { session, tracks: [...sent.keys()], muted, talking }
         : { session, tracks: [], muted, talking: false },
-    }])
+    )
 
   let open = async () => {
     key = ''
     let { iceServers } = await ask('POST', 'ice')
+    if (hasLeft()) return
     let opened = await ask('POST', 'sessions/new')
+    if (hasLeft()) return
     session = opened.sessionId
     key = opened.key
     pc = new RTCPeerConnection({ iceServers, bundlePolicy: 'max-bundle' })
     let mine = pc
     let lost: ReturnType<typeof setTimeout> | undefined
     pc.onconnectionstatechange = () => {
-      if (mine != pc || state == 'left') return
+      if (mine != pc || hasLeft()) return
       clearTimeout(lost)
       if (pc.connectionState == 'failed') void rebuild()
       // A connection that drops often comes back by itself; one that stays
@@ -226,6 +241,7 @@ export let join = async (opts: Opts): Promise<Call> => {
       }
     }
     voice = await sender(null, VOICE)
+    if (hasLeft()) pc.close()
   }
 
   // A sender section, offered and answered as a local track of the session.
@@ -244,8 +260,25 @@ export let join = async (opts: Opts): Promise<Call> => {
   }
 
   let push = async (track: MediaStreamTrack, name: string) => {
+    let previous = sent.get(name)
+    let live = () => track.readyState != 'ended'
     let tx = name == VOICE ? voice : await sender(track, name)
+    if (
+      hasLeft() || !live() ||
+      (previous && sent.get(name) != previous)
+    ) {
+      if (tx != voice) tx.stop()
+      return
+    }
     if (tx == voice) await voice.sender.replaceTrack(track)
+    if (
+      hasLeft() || !live() ||
+      (previous && sent.get(name) != previous)
+    ) {
+      await tx.sender.replaceTrack(null).catch(() => {})
+      if (tx != voice) tx.stop()
+      return
+    }
     sent.set(name, { track, tx })
   }
 
@@ -267,37 +300,63 @@ export let join = async (opts: Opts): Promise<Call> => {
     }
   }
 
+  // Leave does not wait for a failing connection's backoff or negotiations.
+  let backoff = (ms: number) =>
+    new Promise<void>((resolve) => {
+      let timer = setTimeout(done, ms)
+      function done() {
+        clearTimeout(timer)
+        if (cancelBackoff == done) cancelBackoff = null
+        resolve()
+      }
+      cancelBackoff = done
+    })
+
   let rebuilding: Promise<void> | null = null
   let rebuild = () =>
     rebuilding ??= serial(async () => {
       moved('lost')
-      for (let h of heard) h.dead = true
+      for (let h of heard) {
+        h.dead = true
+        h.detach()
+      }
       heard.clear()
-      let tracks = [...sent].map(([name, { track }]) => ({ name, track }))
-      sent.clear()
       pc.close()
-      for (let tries = 0; state != 'left'; tries++) {
+      for (let tries = 0; !hasLeft(); tries++) {
         try {
           await open()
-          for (let t of tracks) await push(t.track, t.name)
-          wear()
+          if (hasLeft()) {
+            pc.close()
+            return
+          }
+          // A stopped input is removed from sent immediately, even while
+          // the rebuild is awaiting a failing door or its backoff.
+          for (let [name, { track }] of [...sent]) {
+            if (hasLeft()) return
+            if (sent.get(name)?.track == track) await push(track, name)
+          }
+          if (hasLeft()) return
+          await wear()
+          if (hasLeft()) return
           moved('live')
           return
         } catch (e) {
+          if (hasLeft()) return
           if (e instanceof Refused && e.code == 'limit') return moved('limit')
-          await wait(Math.min(30_000, 1000 * 2 ** tries))
+          await backoff(Math.min(30_000, 1000 * 2 ** tries))
         }
       }
     }).finally(() => rebuilding = null)
 
   let renew = async () => {
-    if (state == 'left' || rebuilding) return
+    if (hasLeft() || rebuilding) return
     try {
       await ask('POST', on('/renew'))
+      if (hasLeft()) return
       moved('live')
-      wear()
+      await wear()
     } catch (e) {
-      if (!(e instanceof Refused)) return
+      if (hasLeft() || !(e instanceof Refused)) return
       if (e.code == 'limit') moved('limit')
       else if (e.status == 404) void rebuild()
     }
@@ -315,10 +374,11 @@ export let join = async (opts: Opts): Promise<Call> => {
         }
       }
     }
+    if (hasLeft()) return
     let now = voice && !muted ? voiced(level, talking) : false
     if (now != talking) {
       talking = now
-      wear()
+      await wear()
     }
   }
 
@@ -328,8 +388,20 @@ export let join = async (opts: Opts): Promise<Call> => {
     if (e instanceof Refused) moved(e.code == 'limit' ? 'limit' : 'refused')
     throw e
   }
+  try {
+    await wear()
+  } catch (error) {
+    // An asynchronous graph refusal during setup must not leave an open RTC
+    // session with no Call handle that could close it.
+    leaving.abort()
+    pc.close()
+    throw error
+  }
+  if (hasLeft()) {
+    pc.close()
+    throw new Error('The call has left')
+  }
   moved('live')
-  wear()
   let renewing = setInterval(renew, RENEW)
   let hearing = setInterval(() => void listen().catch(() => {}), 200)
 
@@ -342,19 +414,50 @@ export let join = async (opts: Opts): Promise<Call> => {
     },
     publish: (track, name = VOICE) =>
       serial(async () => {
+        if (hasLeft()) throw new Error('The call has left')
         await push(track, name)
-        wear()
+        if (hasLeft() || track.readyState == 'ended') {
+          let held = sent.get(name)
+          if (held?.track == track) {
+            sent.delete(name)
+            await held.tx.sender.replaceTrack(null).catch(() => {})
+          }
+          throw new Error('The call or microphone has ended')
+        }
+        try {
+          await wear()
+          if (hasLeft()) throw new Error('The call has left')
+        } catch (error) {
+          // If the graph refuses the write, do not strand a sender without
+          // a stop handle. The media is detached even if renegotiation fails.
+          let held = sent.get(name)
+          if (held?.track == track) {
+            sent.delete(name)
+            if (held.tx == voice) await voice.sender.replaceTrack(null)
+            else await close([held.tx]).catch(() => {})
+          }
+          throw error
+        }
         return {
           name,
-          stop: () =>
-            serial(async () => {
-              let held = sent.get(name)
-              if (!held || held.track != track) return
-              sent.delete(name)
-              wear()
-              if (held.tx == voice) await voice.sender.replaceTrack(null)
-              else await close([held.tx])
-            }),
+          stop: async () => {
+            let held = sent.get(name)
+            if (!held || held.track != track) return
+            sent.delete(name)
+            // Presence and outgoing audio must go away now, not after a
+            // reconnect's 30-second backoff in the negotiation queue.
+            if (held.tx == voice) {
+              await held.tx.sender.replaceTrack(null).catch(() => {})
+            } else {
+              // Stop sending even if a reconnection holds the negotiation queue.
+              held.tx.stop()
+              let at = pc
+              void serial(async () => {
+                if (!hasLeft() && at == pc) await close([held.tx])
+              }).catch(() => {})
+            }
+            await wear()
+          },
         }
       }),
     diagnose: async (name = VOICE) => {
@@ -392,11 +495,11 @@ export let join = async (opts: Opts): Promise<Call> => {
       muted = on
       for (let { track } of sent.values()) track.enabled = !on
       if (on) talking = false
-      wear()
+      void wear().catch(() => {})
     },
     hear: (from, name) =>
       serial(async () => {
-        if (state == 'left' || state == 'limit') return null
+        if (hasLeft() || state == 'limit') return null
         let res = await ask('POST', on('/tracks/new'), {
           tracks: [{ location: 'remote', sessionId: from, trackName: name }],
         })
@@ -414,7 +517,12 @@ export let join = async (opts: Opts): Promise<Call> => {
         el.muted = true
         el.srcObject = stream
         el.play().catch(() => {})
-        let mark = { dead: false }
+        let mark = {
+          dead: false,
+          detach: () => {
+            el.srcObject = null
+          },
+        }
         heard.add(mark)
         let at = pc
         return {
@@ -424,28 +532,33 @@ export let join = async (opts: Opts): Promise<Call> => {
           },
           stop: () =>
             serial(async () => {
-              el.srcObject = null
+              mark.detach()
               if (mark.dead) return
               mark.dead = true
               heard.delete(mark)
-              if (at == pc) await close([tx])
+              if (at == pc && !hasLeft()) await close([tx])
             }),
         }
       }),
-    // After whatever negotiation is in flight, so none lands on a closed
-    // connection.
-    leave: () =>
-      serial(() => {
-        clearInterval(renewing)
-        clearInterval(hearing)
-        moved('left')
-        for (let h of heard) h.dead = true
-        heard.clear()
-        sent.clear()
-        pc.close()
-        opts.write([{ entity: { eid: opts.entity }, rtc: null }])
-        return Promise.resolve()
-      }),
+    // Leave cannot wait behind a reconnect's backoff or a stuck door.
+    // Its caller may immediately join again as this hero; the presence write
+    // is performed before this promise settles.
+    leave: async () => {
+      if (hasLeft()) return
+      clearInterval(renewing)
+      clearInterval(hearing)
+      moved('left')
+      leaving.abort()
+      cancelBackoff?.()
+      for (let h of heard) {
+        h.dead = true
+        h.detach()
+      }
+      heard.clear()
+      sent.clear()
+      pc.close()
+      await writePresence(null)
+    },
   }
   return call
 }

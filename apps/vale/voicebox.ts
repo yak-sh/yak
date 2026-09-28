@@ -52,6 +52,15 @@ let apart = (a: Body, b: Body) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 export let voices = (net: Net, told: (m: Mic) => void) => {
   let call: Promise<Call> | null = null
   let as: string | null = null
+  // A fresh call must not publish this hero before the previous one clears
+  // its presence, even if its join or leave is still in flight.
+  let leaving: Promise<void> = Promise.resolve()
+  let retire = (old: Promise<Call> | null) => {
+    if (old) {
+      leaving = leaving.then(() => old.then((c) => c.leave()))
+        .catch(() => {})
+    }
+  }
   let mic: Mic = 'off'
   let track: MediaStreamTrack | null = null
   let sent: { stop: () => Promise<void> } | null = null
@@ -149,11 +158,11 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
   // plays another.
   let joined = (): Promise<Call> => {
     if (call && as == net.hero) return call
-    if (call) void call.then((c) => c.leave()).catch(() => {})
+    retire(call)
     for (let eid of [...held.keys()]) drop(eid)
     let hero = net.hero
     as = hero
-    let made = rtc().then(({ join }) =>
+    let made = leaving.then(() => rtc()).then(({ join }) =>
       join({
         entity: hero!,
         write: (b) => net.client.mutate(b),
@@ -357,7 +366,7 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
         let old = call
         call = null
         as = null
-        if (old) void old.then((c) => c.leave()).catch(() => {})
+        retire(old)
         for (let eid of [...held.keys()]) drop(eid)
       }
       // Check the actual sender separately from capture. A lively local trace

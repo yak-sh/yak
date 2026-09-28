@@ -31,7 +31,6 @@ var microphone = async () => {
   return track;
 };
 var voiced = (level, was) => level >= (was ? 0.01 : 0.04);
-var wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 var join = async (opts) => {
   let door = new URL(opts.door ?? "api/rtc/", document.baseURI);
   let send = opts.fetch ?? fetch.bind(globalThis);
@@ -41,6 +40,8 @@ var join = async (opts) => {
     state = s;
     opts.change?.(s);
   };
+  let leaving = new AbortController();
+  let hasLeft = () => leaving.signal.aborted;
   let session = "";
   let key = "";
   let ask = async (method, path, body) => {
@@ -56,7 +57,10 @@ var join = async (opts) => {
         }
       },
       body: body === void 0 ? void 0 : JSON.stringify(body),
-      signal: AbortSignal.timeout(15e3)
+      signal: AbortSignal.any([
+        AbortSignal.timeout(15e3),
+        leaving.signal
+      ])
     });
     let said = await res.json().catch(() => null);
     if (!res.ok) {
@@ -77,32 +81,43 @@ var join = async (opts) => {
   let voice;
   let sent = /* @__PURE__ */ new Map();
   let heard = /* @__PURE__ */ new Set();
+  let cancelBackoff = null;
   let muted = false;
   let talking = false;
-  let wear = () => opts.write([
-    {
-      entity: {
-        eid: opts.entity
-      },
-      rtc: sent.size ? {
-        session,
-        tracks: [
-          ...sent.keys()
-        ],
-        muted,
-        talking
-      } : {
-        session,
-        tracks: [],
-        muted,
-        talking: false
+  let writes = Promise.resolve();
+  let writePresence = (rtc) => {
+    let next = writes.then(() => opts.write([
+      {
+        entity: {
+          eid: opts.entity
+        },
+        rtc
       }
-    }
-  ]);
+    ])).then(() => {
+    });
+    writes = next.catch(() => {
+    });
+    return next;
+  };
+  let wear = () => hasLeft() ? Promise.resolve() : writePresence(sent.size ? {
+    session,
+    tracks: [
+      ...sent.keys()
+    ],
+    muted,
+    talking
+  } : {
+    session,
+    tracks: [],
+    muted,
+    talking: false
+  });
   let open = async () => {
     key = "";
     let { iceServers } = await ask("POST", "ice");
+    if (hasLeft()) return;
     let opened = await ask("POST", "sessions/new");
+    if (hasLeft()) return;
     session = opened.sessionId;
     key = opened.key;
     pc = new RTCPeerConnection({
@@ -112,7 +127,7 @@ var join = async (opts) => {
     let mine = pc;
     let lost;
     pc.onconnectionstatechange = () => {
-      if (mine != pc || state == "left") return;
+      if (mine != pc || hasLeft()) return;
       clearTimeout(lost);
       if (pc.connectionState == "failed") void rebuild();
       if (pc.connectionState == "disconnected") {
@@ -120,6 +135,7 @@ var join = async (opts) => {
       }
     };
     voice = await sender(null, VOICE);
+    if (hasLeft()) pc.close();
   };
   let sender = async (track, name) => {
     let tx = pc.addTransceiver(track ?? "audio", {
@@ -145,8 +161,20 @@ var join = async (opts) => {
     return tx;
   };
   let push = async (track, name) => {
+    let previous = sent.get(name);
+    let live = () => track.readyState != "ended";
     let tx = name == VOICE ? voice : await sender(track, name);
+    if (hasLeft() || !live() || previous && sent.get(name) != previous) {
+      if (tx != voice) tx.stop();
+      return;
+    }
     if (tx == voice) await voice.sender.replaceTrack(track);
+    if (hasLeft() || !live() || previous && sent.get(name) != previous) {
+      await tx.sender.replaceTrack(null).catch(() => {
+      });
+      if (tx != voice) tx.stop();
+      return;
+    }
     sent.set(name, {
       track,
       tx
@@ -169,40 +197,58 @@ var join = async (opts) => {
       await pc.setRemoteDescription(res.sessionDescription);
     }
   };
+  let backoff = (ms) => new Promise((resolve) => {
+    let timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      if (cancelBackoff == done) cancelBackoff = null;
+      resolve();
+    }
+    cancelBackoff = done;
+  });
   let rebuilding = null;
   let rebuild = () => rebuilding ??= serial(async () => {
     moved("lost");
-    for (let h of heard) h.dead = true;
+    for (let h of heard) {
+      h.dead = true;
+      h.detach();
+    }
     heard.clear();
-    let tracks = [
-      ...sent
-    ].map(([name, { track }]) => ({
-      name,
-      track
-    }));
-    sent.clear();
     pc.close();
-    for (let tries = 0; state != "left"; tries++) {
+    for (let tries = 0; !hasLeft(); tries++) {
       try {
         await open();
-        for (let t of tracks) await push(t.track, t.name);
-        wear();
+        if (hasLeft()) {
+          pc.close();
+          return;
+        }
+        for (let [name, { track }] of [
+          ...sent
+        ]) {
+          if (hasLeft()) return;
+          if (sent.get(name)?.track == track) await push(track, name);
+        }
+        if (hasLeft()) return;
+        await wear();
+        if (hasLeft()) return;
         moved("live");
         return;
       } catch (e) {
+        if (hasLeft()) return;
         if (e instanceof Refused && e.code == "limit") return moved("limit");
-        await wait(Math.min(3e4, 1e3 * 2 ** tries));
+        await backoff(Math.min(3e4, 1e3 * 2 ** tries));
       }
     }
   }).finally(() => rebuilding = null);
   let renew = async () => {
-    if (state == "left" || rebuilding) return;
+    if (hasLeft() || rebuilding) return;
     try {
       await ask("POST", on("/renew"));
+      if (hasLeft()) return;
       moved("live");
-      wear();
+      await wear();
     } catch (e) {
-      if (!(e instanceof Refused)) return;
+      if (hasLeft() || !(e instanceof Refused)) return;
       if (e.code == "limit") moved("limit");
       else if (e.status == 404) void rebuild();
     }
@@ -219,10 +265,11 @@ var join = async (opts) => {
         }
       }
     }
+    if (hasLeft()) return;
     let now = voice2 && !muted ? voiced(level, talking) : false;
     if (now != talking) {
       talking = now;
-      wear();
+      await wear();
     }
   };
   try {
@@ -231,8 +278,18 @@ var join = async (opts) => {
     if (e instanceof Refused) moved(e.code == "limit" ? "limit" : "refused");
     throw e;
   }
+  try {
+    await wear();
+  } catch (error) {
+    leaving.abort();
+    pc.close();
+    throw error;
+  }
+  if (hasLeft()) {
+    pc.close();
+    throw new Error("The call has left");
+  }
   moved("live");
-  wear();
   let renewing = setInterval(renew, RENEW);
   let hearing = setInterval(() => void listen().catch(() => {
   }), 200);
@@ -244,20 +301,53 @@ var join = async (opts) => {
       return state;
     },
     publish: (track, name = VOICE) => serial(async () => {
+      if (hasLeft()) throw new Error("The call has left");
       await push(track, name);
-      wear();
-      return {
-        name,
-        stop: () => serial(async () => {
-          let held = sent.get(name);
-          if (!held || held.track != track) return;
+      if (hasLeft() || track.readyState == "ended") {
+        let held = sent.get(name);
+        if (held?.track == track) {
           sent.delete(name);
-          wear();
+          await held.tx.sender.replaceTrack(null).catch(() => {
+          });
+        }
+        throw new Error("The call or microphone has ended");
+      }
+      try {
+        await wear();
+        if (hasLeft()) throw new Error("The call has left");
+      } catch (error) {
+        let held = sent.get(name);
+        if (held?.track == track) {
+          sent.delete(name);
           if (held.tx == voice) await voice.sender.replaceTrack(null);
           else await close([
             held.tx
-          ]);
-        })
+          ]).catch(() => {
+          });
+        }
+        throw error;
+      }
+      return {
+        name,
+        stop: async () => {
+          let held = sent.get(name);
+          if (!held || held.track != track) return;
+          sent.delete(name);
+          if (held.tx == voice) {
+            await held.tx.sender.replaceTrack(null).catch(() => {
+            });
+          } else {
+            held.tx.stop();
+            let at = pc;
+            void serial(async () => {
+              if (!hasLeft() && at == pc) await close([
+                held.tx
+              ]);
+            }).catch(() => {
+            });
+          }
+          await wear();
+        }
       };
     }),
     diagnose: async (name = VOICE) => {
@@ -292,10 +382,11 @@ var join = async (opts) => {
       muted = on2;
       for (let { track } of sent.values()) track.enabled = !on2;
       if (on2) talking = false;
-      wear();
+      void wear().catch(() => {
+      });
     },
     hear: (from, name) => serial(async () => {
-      if (state == "left" || state == "limit") return null;
+      if (hasLeft() || state == "limit") return null;
       let res = await ask("POST", on("/tracks/new"), {
         tracks: [
           {
@@ -323,7 +414,10 @@ var join = async (opts) => {
       el.play().catch(() => {
       });
       let mark = {
-        dead: false
+        dead: false,
+        detach: () => {
+          el.srcObject = null;
+        }
       };
       heard.add(mark);
       let at = pc;
@@ -333,36 +427,35 @@ var join = async (opts) => {
           return !mark.dead;
         },
         stop: () => serial(async () => {
-          el.srcObject = null;
+          mark.detach();
           if (mark.dead) return;
           mark.dead = true;
           heard.delete(mark);
-          if (at == pc) await close([
+          if (at == pc && !hasLeft()) await close([
             tx
           ]);
         })
       };
     }),
-    // After whatever negotiation is in flight, so none lands on a closed
-    // connection.
-    leave: () => serial(() => {
+    // Leave cannot wait behind a reconnect's backoff or a stuck door.
+    // Its caller may immediately join again as this hero; the presence write
+    // is performed before this promise settles.
+    leave: async () => {
+      if (hasLeft()) return;
       clearInterval(renewing);
       clearInterval(hearing);
       moved("left");
-      for (let h of heard) h.dead = true;
+      leaving.abort();
+      cancelBackoff?.();
+      for (let h of heard) {
+        h.dead = true;
+        h.detach();
+      }
       heard.clear();
       sent.clear();
       pc.close();
-      opts.write([
-        {
-          entity: {
-            eid: opts.entity
-          },
-          rtc: null
-        }
-      ]);
-      return Promise.resolve();
-    })
+      await writePresence(null);
+    }
   };
   return call;
 };
