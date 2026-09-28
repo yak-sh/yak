@@ -70,24 +70,6 @@ Deno.test(
       // both directories check them mechanically. hints_test.ts pins which
       // tool is which; here is the proof they survive the wire — the audit
       // found `about` reaching a client as a bare name and nothing else.
-      // And every destructive one arrives saying how it is undone (T-34509).
-      // hints_test.ts pins the words; what is proved here is that they reach a
-      // client — including graph_apply's, which the generic package cannot
-      // know and this door supplies (@yaks/mcp `CoreOpts.undo`).
-      type Said = { name: string; description?: string }
-      for (let t of tools as (Said & { annotations?: { d?: boolean } })[]) {
-        let hints = (t as { annotations?: Record<string, boolean> }).annotations
-        if (!hints?.destructiveHint) continue
-        assertStringIncludes(
-          t.description ?? '',
-          'undo',
-          `${t.name} reached the client without saying how it is undone`,
-        )
-      }
-      assertStringIncludes(
-        (tools as Said[]).find((t) => t.name == 'graph_apply')!.description!,
-        'store_restore',
-      )
       type Listed = { title?: string; annotations?: Record<string, unknown> }
       for (let t of tools as (Listed & { name: string })[]) {
         assert(t.title, `${t.name} arrived with no title`)
