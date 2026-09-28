@@ -2321,7 +2321,13 @@ export class Store {
   }
 
   /** A frame from a client: a subscription opened or closed. */
-  webSocketMessage(ws: Wire, data: string | ArrayBuffer): void {
+  webSocketMessage(
+    ws: Wire,
+    data: string | ArrayBuffer,
+  ): void | Promise<void> {
+    if (this.#draft) {
+      return this.#draft.then(() => this.webSocketMessage(ws, data))
+    }
     // A hibernated socket outlives a deploy, so one can wake an object whose
     // schema refused to stand, where nothing above the storage exists. There
     // is nothing to serve it: hang up, and the page opens a socket onto
@@ -2331,7 +2337,8 @@ export class Store {
   }
 
   /** That client went away. */
-  webSocketClose(ws: Wire): void {
+  webSocketClose(ws: Wire): void | Promise<void> {
+    if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))
     if (!this.#unbuilt) this.#live.close(ws)
   }
 

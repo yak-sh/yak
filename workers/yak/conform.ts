@@ -32,6 +32,7 @@ let store = new Store(ctx)
 // argument types.
 let _fetch: (request: Request) => Response | Promise<Response> = (r) =>
   store.fetch(r)
-let _message = (ws: WebSocket, data: string | ArrayBuffer): void =>
+let _message = (ws: WebSocket, data: string | ArrayBuffer): void | Promise<void> =>
   store.webSocketMessage(ws, data)
-let _close = (ws: WebSocket): void => store.webSocketClose(ws)
+let _close = (ws: WebSocket): void | Promise<void> =>
+  store.webSocketClose(ws)
