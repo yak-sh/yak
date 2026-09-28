@@ -282,6 +282,7 @@ let begin = async (eid: string, stored: Seen | null = null) => {
   starting = true
   try {
     net.choose(eid)
+    await net.settle()
     let back = recall(eid, stored)
     if (back) g.resume(back)
     stage.prepare(eid, lookOf(eid), g.sheet())

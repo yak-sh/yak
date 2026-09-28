@@ -235,6 +235,16 @@ export let connect = (base: URL) => {
 
   let none: Bundle[] = []
 
+  let ready = (w: Watch): Promise<void> =>
+    w.ready ? Promise.resolve() : new Promise((done) => {
+      let off = w.subscribe(() => {
+        if (w.ready) {
+          off()
+          done()
+        }
+      })
+    })
+
   // One indexed watch holds the looks of this hero and nearby heroes. Its
   // answer is cached across area changes so a new watch need not flash the
   // creation colours while it loads.
@@ -334,7 +344,11 @@ export let connect = (base: URL) => {
       join(name, own[name]?.value ?? none, name),
     /** whether the store has answered for all my rows */
     settled: (): boolean =>
-      Object.values(own).length > 0 && Object.values(own).every((w) => w.ready),
+      !!chosen?.ready && Object.values(own).every((w) => w.ready),
+    /** Wait for the selected hero and every row that shapes their sheet. */
+    settle: async (): Promise<void> => {
+      if (chosen) await Promise.all([chosen, ...Object.values(own)].map(ready))
+    },
     /** the falls everyone has written, and mine still waiting */
     falls: (): Bundle[] => join('falls', rows('slain'), 'slain'),
     /** the nodes everyone has gathered, and mine still waiting */
