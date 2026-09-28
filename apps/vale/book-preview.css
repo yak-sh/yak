@@ -76,6 +76,14 @@ body {
   text-shadow: 0 1px 4px #1c2517;
   font-size: 0.82rem;
 }
+.Book_PreviewResponse {
+  margin: 0.4rem 0;
+  color: var(--book-good);
+  text-align: center;
+}
+.Book_PreviewResponse:empty {
+  display: none;
+}
 @media (max-width: 760px) {
   .BookPreview {
     align-content: start;

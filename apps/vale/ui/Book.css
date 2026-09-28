@@ -31,11 +31,14 @@
   min-width: max-content;
   min-height: 2.7rem;
   padding: 0.45rem 1.25rem;
-  border: 1px solid #8e7248;
+  border: 1px solid var(--book-gold);
   border-bottom: 0;
   border-radius: 0.7rem 0.7rem 0 0;
-  background: linear-gradient(150deg, #e7d4a9, #cbb385 70%);
-  box-shadow: inset 0 2px 1px #fff5d7a6, 0 -2px 6px #23170c4d;
+  background: linear-gradient(150deg, var(--book-paper), var(--book-paper-dark)
+    70%);
+  box-shadow: inset 0 2px 1px color-mix(in srgb, var(--book-cream) 65%,
+    transparent),
+    0 -2px 6px color-mix(in srgb, var(--book-leather-dark) 30%, transparent);
   color: var(--book-ink);
   cursor: pointer;
   font-size: 1.12rem;
@@ -47,33 +50,39 @@
   height: 1.15em;
 }
 .Book_Tab:hover {
-  background: #efe0bc;
+  background: var(--book-paper);
 }
-.Book_Tab[aria-selected='true'] {
+.Book_Tab[aria-current='page'] {
   position: relative;
   z-index: 1;
   min-height: 3.05rem;
-  background: linear-gradient(145deg, #617449, #324d2b);
-  border-color: #243d22;
-  box-shadow: inset 0 0 0 2px #9daa76, 0 -2px 7px #1725167a;
-  color: #fff2cc;
+  background: linear-gradient(145deg, var(--book-green-light),
+    var(--book-green));
+  border-color: color-mix(in srgb, var(--book-green) 65%,
+    var(--book-leather-dark));
+  box-shadow: inset 0 0 0 2px var(--book-green-light),
+    0 -2px 7px color-mix(in srgb, var(--book-green) 45%, transparent);
+  color: var(--book-cream);
 }
 
 .Book_Frame {
   position: relative;
   padding: 0.85rem;
-  border: 2px solid #241509;
+  border: 2px solid var(--book-leather-dark);
   border-radius: 1.2rem;
   background:
-    radial-gradient(circle at 7% 8%, #a97640 0, transparent 18%),
-    radial-gradient(circle at 93% 85%, #7c522e 0, transparent 22%),
-    repeating-linear-gradient(90deg, transparent 0 3px, #23170d20 3px 4px),
-    linear-gradient(115deg, #4b2b19, #754b2c 52%, #382213);
+    radial-gradient(circle at 7% 8%, var(--book-gold) 0, transparent 18%),
+    radial-gradient(circle at 93% 85%, var(--book-leather-light) 0, transparent
+    22%),
+    repeating-linear-gradient(90deg, transparent 0 3px,
+    color-mix(in srgb, var(--book-leather-dark) 12%, transparent) 3px 4px),
+    linear-gradient(115deg, var(--book-leather), var(--book-leather-light) 52%,
+    var(--book-leather-dark));
   box-shadow:
-    inset 0 0 0 3px #9b6d3d,
-    inset 0 0 0 6px #2b190e,
-    inset 0 0 18px #170d08,
-    0 5px 0 #26180e;
+    inset 0 0 0 3px var(--book-gold),
+    inset 0 0 0 6px var(--book-leather-dark),
+    inset 0 0 18px var(--book-leather-dark),
+    0 5px 0 var(--book-leather-dark);
 }
 
 .Book_Frame::before,
@@ -84,10 +93,12 @@
   top: 36%;
   width: 0.5rem;
   height: 29%;
-  border: 1px solid #221509;
+  border: 1px solid var(--book-leather-dark);
   border-radius: 2px;
-  background: linear-gradient(90deg, #5a391e, #a77942 48%, #422713);
-  box-shadow: 0 2px 4px #241307a8;
+  background: linear-gradient(90deg, var(--book-leather), var(--book-gold) 48%,
+    var(--book-leather-dark));
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--book-leather-dark) 65%,
+    transparent);
 }
 .Book_Frame::before {
   left: -0.3rem;
@@ -101,10 +112,11 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: min(690px, calc(100dvh - 9rem));
-  border: 1px solid #a47d4b;
+  border: 1px solid var(--book-gold);
   border-radius: 0.65rem;
   background: var(--book-paper-dark);
-  box-shadow: 0 0 0 2px #e6c693, 0 3px 0 #b99663, 0 6px 0 #d4ad72;
+  box-shadow: 0 0 0 2px var(--book-paper-dark),
+    0 3px 0 var(--book-gold), 0 6px 0 var(--book-paper-dark);
   overflow: hidden;
 }
 
@@ -115,8 +127,13 @@
   z-index: 2;
   inset: 0 calc(50% - 0.7rem);
   background: linear-gradient(90deg,
-    #70492575, #9c714267 12%, #fff2d079 50%, #69411d55 90%, #55351578);
-  box-shadow: 0 0 1.2rem #704b2450;
+    color-mix(in srgb, var(--book-leather) 45%, transparent),
+    color-mix(in srgb, var(--book-gold) 40%, transparent) 12%,
+    color-mix(in srgb, var(--book-cream) 48%, transparent) 50%,
+    color-mix(in srgb, var(--book-leather) 35%, transparent) 90%,
+    color-mix(in srgb, var(--book-leather-dark) 47%, transparent));
+  box-shadow: 0 0 1.2rem color-mix(in srgb, var(--book-leather) 30%,
+    transparent);
 }
 
 .Book_Page {
@@ -124,24 +141,29 @@
   min-width: 0;
   padding: clamp(1.2rem, 3vw, 2.6rem);
   background:
-    radial-gradient(ellipse at 20% 18%, #fff7df 0, transparent 58%),
-    radial-gradient(ellipse at 96% 92%, #c49c685c 0, transparent 43%),
-    repeating-linear-gradient(2deg, #ffffff0b 0 2px, #6c4f2410 2px 3px),
-    linear-gradient(110deg, #e6c99b, var(--book-paper-light) 14% 87%, #d4b27f);
-  box-shadow: inset 0 0 18px #8e653a63;
+    radial-gradient(ellipse at 20% 18%, var(--book-cream) 0, transparent 58%),
+    radial-gradient(ellipse at 96% 92%,
+    color-mix(in srgb, var(--book-gold) 36%, transparent) 0, transparent 43%),
+    repeating-linear-gradient(2deg,
+    color-mix(in srgb, var(--book-cream) 5%, transparent) 0 2px,
+    color-mix(in srgb, var(--book-leather) 6%, transparent) 2px 3px),
+    linear-gradient(110deg, var(--book-paper-dark),
+    var(--book-paper-light) 14% 87%, var(--book-paper-dark));
+  box-shadow: inset 0 0 18px color-mix(in srgb, var(--book-leather) 39%,
+    transparent);
 }
 
 .Book_Page:first-child {
-  border-right: 1px solid #967748;
+  border-right: 1px solid var(--book-gold);
 }
 .Book_Page:last-child {
-  border-left: 1px solid #b6986b;
+  border-left: 1px solid var(--book-line);
 }
 .Book_Page::before,
 .Book_Page::after {
   content: '❧';
   position: absolute;
-  color: #8d906a9e;
+  color: color-mix(in srgb, var(--book-green-light) 62%, transparent);
   font-size: 2rem;
   line-height: 1;
 }
@@ -173,7 +195,7 @@
   content: '✥';
   flex: 1;
   border-bottom: 1px solid var(--book-line);
-  color: #81855c;
+  color: var(--book-green-light);
   font-size: 1rem;
   line-height: 0.7;
   text-align: right;
@@ -195,7 +217,7 @@
   height: 1px;
   margin: 1rem 0;
   background: var(--book-line);
-  box-shadow: 0 1px 0 #fff4d9;
+  box-shadow: 0 1px 0 var(--book-cream);
 }
 .Book_Rule::after {
   content: '✥';
@@ -204,7 +226,7 @@
   margin: auto;
   padding: 0 0.35rem;
   background: var(--book-paper);
-  color: #828764;
+  color: var(--book-green-light);
   line-height: 0.5;
 }
 
@@ -233,10 +255,14 @@
   width: 100%;
   min-height: 3.6rem;
   padding: 0.2rem;
-  border: 1px solid #a99472;
+  border: 1px solid var(--book-line);
   border-radius: 0.3rem;
-  background: linear-gradient(145deg, #eee0bf8c, #b99b7370);
-  box-shadow: inset 0 0 0 2px #f9eac8a3, inset 0 0 0 3px #aa926d94;
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--book-paper) 55%, transparent),
+    color-mix(in srgb, var(--book-line) 44%, transparent));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--book-paper-light) 64%,
+    transparent),
+    inset 0 0 0 3px color-mix(in srgb, var(--book-line) 58%, transparent);
   cursor: pointer;
 }
 .Book_Tile:not(button) {
@@ -254,9 +280,9 @@
 .Book_Tile:hover,
 .Book_Tile[aria-pressed='true'] {
   border-color: var(--book-rare);
-  outline: 2px solid #6c9ce1;
+  outline: 2px solid var(--book-focus);
   outline-offset: 0;
-  background: #dce6eac2;
+  background: color-mix(in srgb, var(--book-rare) 14%, var(--book-paper-light));
 }
 .Book_Tier {
   position: absolute;
@@ -264,8 +290,8 @@
   bottom: 0.15rem;
   padding: 0.02rem 0.2rem;
   border-radius: 0.15rem;
-  background: #595650;
-  color: #fff9ea;
+  background: var(--book-badge);
+  color: var(--book-cream);
   font-size: 0.72rem;
   line-height: 1.1;
 }
@@ -288,10 +314,11 @@
   place-items: center;
   min-height: 10rem;
   padding: 0.4rem;
-  border: 2px double #a48b62;
+  border: 2px double var(--book-line);
   border-radius: 0.5rem;
-  background: #f2e6c68c;
-  box-shadow: inset 0 0 0 4px #e9d7ad, inset 0 0 0 5px #bba277;
+  background: color-mix(in srgb, var(--book-paper-light) 55%, transparent);
+  box-shadow: inset 0 0 0 4px var(--book-paper),
+    inset 0 0 0 5px var(--book-line);
 }
 .Book_Picture .Sprite {
   width: 8rem;
@@ -315,25 +342,26 @@
 .Book_Badge {
   padding: 0.15rem 0.55rem;
   border-radius: 0.2rem;
-  background: #575650;
-  color: #fff8e7;
+  background: var(--book-badge);
+  color: var(--book-cream);
   font-size: 0.85rem;
 }
 .Book_Badge-rare {
-  background: #8eabd2;
-  color: #172839;
+  background: color-mix(in srgb, var(--book-rare) 65%, var(--book-paper-light));
+  color: var(--book-ink);
 }
 .Book_Badge-uncommon {
-  background: #88a46d;
-  color: #152a17;
+  background: color-mix(in srgb, var(--book-green-light) 75%,
+    var(--book-paper-light));
+  color: var(--book-ink);
 }
 
 .Book_Card {
   padding: 0.55rem 0.75rem;
-  border: 1px solid #bba581;
+  border: 1px solid var(--book-line);
   border-radius: 0.3rem;
-  background: #e4d4b48c;
-  box-shadow: inset 0 1px 0 #fff2d5;
+  background: color-mix(in srgb, var(--book-paper) 55%, transparent);
+  box-shadow: inset 0 1px 0 var(--book-cream);
 }
 .Book_Stats {
   display: grid;
@@ -347,7 +375,7 @@
   font-size: 1.08rem;
 }
 .Book_Stat + .Book_Stat {
-  border-top: 1px solid #ad967653;
+  border-top: 1px solid color-mix(in srgb, var(--book-line) 33%, transparent);
   padding-top: 0.4rem;
 }
 .Book_Stat > :first-child {
@@ -368,7 +396,7 @@
   color: var(--book-good);
 }
 .Book_Change-down {
-  color: #a74832;
+  color: var(--book-alert);
 }
 .Book_Foot {
   margin-top: 1.1rem;
@@ -379,11 +407,14 @@
   min-height: 3.4rem;
   margin: 0.85rem auto 0;
   padding: 0.5rem 1.3rem;
-  border: 2px solid #2a4528;
+  border: 2px solid var(--book-green);
   border-radius: 999px;
-  background: linear-gradient(#68824d, #334f2c 55%, #294527);
-  box-shadow: inset 0 0 0 2px #8fa96a, 0 3px 0 #27371c, 0 5px 9px #49371e69;
-  color: #fff4d8;
+  background: linear-gradient(var(--book-green-light), var(--book-green) 55%,
+    color-mix(in srgb, var(--book-green) 75%, var(--book-leather-dark)));
+  box-shadow: inset 0 0 0 2px var(--book-green-light),
+    0 3px 0 var(--book-green),
+    0 5px 9px color-mix(in srgb, var(--book-leather) 40%, transparent);
+  color: var(--book-cream);
   cursor: pointer;
   font-size: 1.45rem;
 }
@@ -392,7 +423,8 @@
 }
 .Book_Action:active {
   transform: translateY(2px);
-  box-shadow: inset 0 0 0 2px #8fa96a, 0 1px 0 #27371c;
+  box-shadow: inset 0 0 0 2px var(--book-green-light),
+    0 1px 0 var(--book-green);
 }
 .Book_Action:disabled {
   opacity: 0.55;
@@ -403,12 +435,12 @@
   padding: 0.3rem 0.8rem;
   border: 1px solid var(--book-line);
   border-radius: 0.3rem;
-  background: #ddc9a0;
+  background: var(--book-paper-dark);
   cursor: pointer;
 }
 .Book_Pill[aria-pressed='true'] {
   background: var(--book-green);
-  color: #fff4d9;
+  color: var(--book-cream);
 }
 .Book_Note {
   color: var(--book-muted);
@@ -429,15 +461,16 @@
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--book-line);
   border-radius: 0.3rem;
-  background: #ead9b5b5;
+  background: color-mix(in srgb, var(--book-paper) 70%, transparent);
   color: var(--book-ink);
   cursor: pointer;
   text-align: left;
 }
 .Book_ListButton:hover,
 .Book_ListButton[aria-pressed='true'] {
-  background: #d3dcb99c;
-  border-color: #667752;
+  background: color-mix(in srgb, var(--book-green-light) 35%,
+    var(--book-paper-light));
+  border-color: var(--book-green-light);
 }
 .Book_ListButton small {
   display: block;
@@ -456,8 +489,8 @@
 .Book_Quote {
   margin: 1rem 0;
   padding: 0.7rem 1rem;
-  border-left: 3px solid #829068;
-  background: #dbc89f8a;
+  border-left: 3px solid var(--book-green-light);
+  background: color-mix(in srgb, var(--book-paper-dark) 54%, transparent);
   color: var(--book-muted);
   font-style: italic;
 }
@@ -476,7 +509,8 @@
   align-items: center;
   gap: 0.4rem;
   padding-bottom: 0.35rem;
-  border-bottom: 1px solid #aa946f70;
+  border-bottom: 1px solid color-mix(in srgb, var(--book-line) 44%,
+    transparent);
 }
 .Book_Need .Sprite {
   width: 1.8rem;
@@ -504,7 +538,7 @@
     padding: 0.4rem 0.8rem;
     font-size: 0.98rem;
   }
-  .Book_Tab[aria-selected='true'] {
+  .Book_Tab[aria-current='page'] {
     min-height: 3.4rem;
   }
   .Book_Frame {

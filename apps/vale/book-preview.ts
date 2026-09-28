@@ -293,7 +293,8 @@ let bagPages = () => {
         }">(${delta})</span></span></div>`
       ).join('')
     }</div>
-       <button class=Book_Action type=button>Equip</button>
+       <button class=Book_Action data-preview=equip type=button>Equip</button>
+       <p class=Book_PreviewResponse role=status></p>
        <p class="Book_Note Book_Foot">${
       glyph('lock')
     } Item level is the level needed to wear this piece.</p>
@@ -324,9 +325,8 @@ let journalPages = () => {
       ).join('')
     }</ol>
       <div class=Book_Rule></div><p class=Book_Note>Pin a quest in the full game to keep its next step beside the trail.</p>
-      <button class=Book_Action type=button>Pin quest</button>${
-      turns('right')
-    }`,
+      <button class=Book_Action data-preview=pin type=button>Pin quest</button>
+      <p class=Book_PreviewResponse role=status></p>${turns('right')}`,
   ]
 }
 let craftPages = () => {
@@ -369,7 +369,8 @@ let craftPages = () => {
         }<span>${name}</span><span>${count}</span></div>`
       ).join('')
     }</div>
-      <button class=Book_Action type=button>Craft</button>
+      <button class=Book_Action data-preview=craft type=button>Craft</button>
+      <p class=Book_PreviewResponse role=status></p>
       <p class="Book_Note Book_Foot">The item level and stats roll when crafted. This preview shows their range.</p>
       ${turns('right')}`,
   ]
@@ -387,9 +388,9 @@ let draw = () => {
       ['journal', 'Journal', 'journal'],
       ['craft', 'Craft', 'anvil'],
     ] as const).map(([id, name, symbol]) =>
-      `<button class=Book_Tab data-screen=${id} role=tab aria-selected="${
-        screen == id
-      }">
+      `<button class=Book_Tab data-screen=${id} ${
+        screen == id ? 'aria-current=page' : ''
+      }>
       ${glyph(symbol)}${name}</button>`
     ).join('')
   }</nav>
@@ -400,6 +401,16 @@ let draw = () => {
 root.addEventListener('click', (event) => {
   let button = (event.target as Element).closest<HTMLButtonElement>('button')
   if (!button) return
+  if (button.dataset.preview) {
+    let message = {
+      equip: `Preview only — ${items[selected].name} was not equipped.`,
+      pin: 'Preview only — the quest was not pinned.',
+      craft: 'Preview only — no item was crafted.',
+    }[button.dataset.preview]
+    let status = button.parentElement?.querySelector('.Book_PreviewResponse')
+    if (status) status.textContent = message ?? 'Preview only.'
+    return
+  }
   let {
     screen: next,
     page: nextPage,
@@ -408,6 +419,9 @@ root.addEventListener('click', (event) => {
     recipe: nextRecipe,
     tier: nextTier,
   } = button.dataset
+  let itemButton = item && Number(item) >= 0
+    ? [...root.querySelectorAll(`[data-item="${item}"]`)].indexOf(button)
+    : 0
   if (next) {
     screen = next as Screen
     page = 'left'
@@ -430,6 +444,27 @@ root.addEventListener('click', (event) => {
     recipe = recipes.findIndex((x) => x.tier == tier)
     page = 'left'
   }
+  if (!next && !nextPage && !item && !nextQuest && !nextRecipe && !nextTier) {
+    return
+  }
   draw()
+  let mobile = matchMedia('(max-width: 760px)').matches
+  let focus = next
+    ? root.querySelector<HTMLElement>(`[data-screen="${next}"]`)
+    : nextTier
+    ? root.querySelector<HTMLElement>(`[data-tier="${nextTier}"]`)
+    : nextPage || (mobile && (item || nextQuest || nextRecipe))
+    ? root.querySelector<HTMLElement>(
+      `.Book_Page:${page == 'left' ? 'first' : 'last'}-child h1`,
+    )
+    : item
+    ? root.querySelectorAll<HTMLElement>(`[data-item="${item}"]`)[itemButton]
+    : nextQuest
+    ? root.querySelector<HTMLElement>(`[data-quest="${nextQuest}"]`)
+    : root.querySelector<HTMLElement>(`[data-recipe="${nextRecipe}"]`)
+  if (focus) {
+    if (!(focus instanceof HTMLButtonElement)) focus.tabIndex = -1
+    focus.focus()
+  }
 })
 draw()
