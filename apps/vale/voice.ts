@@ -11,31 +11,34 @@ export let FAR = 34
 // Where a voice starts to fade.
 let FADE = 20
 
-/** How the engine fades a voice, under `loud`: whole out to 3 m, and halving
- * with each doubling of the distance beyond, as sound does in the open. Talk
- * is at full voice at talking distance, however gently the vale's other
- * sounds are heard up close (ears.ts `FALLOFF`). */
+/** Spatialize speech without an additional distance fade. `loud` owns the
+ * 20–30 m voice fade: an inverse PannerNode here used to multiply it by
+ * another 3/d, making a voice at 20 m only 15% of its intended level.
+ * HRTF still places speakers around the listener. */
 export let TALK = {
-  pan: { ...FALLOFF.pan, refDistance: 3, rolloffFactor: 1 },
+  pan: {
+    ...FALLOFF.pan,
+    distanceModel: 'inverse',
+    refDistance: 1,
+    rolloffFactor: 0,
+  },
   near: 1,
 } satisfies Falloff
 
-/**
- * How loud a voice from `them` is to `me`, before the engine's own falloff:
- * whole out to 20 m and gone at earshot, and half as loud from behind the
- * speaker as from in front.
+/** Level delivered to a listener. Whole through 20 m, then fading to zero
+ * at 30 m; behind the speaker it is half as loud as in front. The panner
+ * supplies direction only, not an additional attenuation.
  *
  * ```ts
- * import { assertEquals } from '@std/assert'
+ * import { assert, assertEquals } from '@std/assert'
  * let at = (x: number, z: number, yaw = 0) =>
  *   ({ x, y: 0, z, vy: 0, yaw, speed: 0, gait: 'idle' })
- * // Facing +z, toward a listener 5 m ahead.
  * assertEquals(loud(at(0, 0), at(0, 5)), 1)
- * // The same, from behind.
  * assertEquals(loud(at(0, 0), at(0, -5)), 0.5)
- * // Ahead, halfway through the fade, and past earshot.
+ * assertEquals(loud(at(0, 0), at(0, 20)), 1)
  * assertEquals(loud(at(0, 0), at(0, 25)), 0.5)
- * assertEquals(loud(at(0, 0), at(0, 31)), 0)
+ * assert(loud(at(0, 0), at(0, 29)) > 0)
+ * assertEquals(loud(at(0, 0), at(0, 30)), 0)
  * ```
  */
 export let loud = (them: Body, me: Body) => {
