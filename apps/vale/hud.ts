@@ -75,10 +75,50 @@ export type Talk = {
   have: number
   greets: string
   name: string
+  /** a line still shown when the villager has a quest on offer */
+  note?: string | null
+  /** another page the villager invites this hero to visit */
+  link?: { href: string; label: string } | null
   /** they hear what is said beside them, and answer (village.ts) */
   hears?: boolean
   /** how their feeling shows, as in "looks tired" (villagers.ts) */
   looks?: string | null
+}
+
+/** The words and choices of a villager, including a note beside a quest. */
+export let talkHtml = (t: Talk): string => {
+  let q = t.quest
+  let html = ''
+  let act = ''
+  if (!q) html = `<p>${esc(t.greets)}</p>`
+  else if (t.state == 'open') {
+    html = `<h3>${esc(q.title)}</h3><p>${
+      esc(q.body)
+    }</p><p class=Talk_Reward>Reward: ${q.xp} xp${
+      q.gift ? `, ${esc(ITEMS[q.gift]?.name ?? q.gift)}` : ''
+    }</p>`
+    act = '<button class="Btn Btn-go" data-do=accept>I’ll do it</button>'
+  } else if (t.have >= q.count) {
+    html = `<h3>${esc(q.title)}</h3><p>You did it! The vale owes you one.</p>`
+    act = '<button class="Btn Btn-go" data-do=hand>Hand it in</button>'
+  } else {
+    html = `<h3>${esc(q.title)}</h3><p>${
+      esc(q.body)
+    }</p><p class=Talk_Reward>${t.have} / ${q.count} so far.</p>`
+  }
+  if (q && t.note) html += `<p class=Talk_Hint>${esc(t.note)}</p>`
+  if (t.hears) {
+    html += `<p class=Talk_Hint>${
+      t.looks ? `${esc(t.name)} ${esc(t.looks)}. ` : ''
+    }Say something, and ${esc(t.name)} will answer.</p>`
+  }
+  return `<div class=Talk_Who>${
+    esc(t.name)
+  }</div><div class=Talk_Body>${html}</div><div class=Talk_Acts>${act}${
+    t.link
+      ? `<a class=Btn href="${esc(t.link.href)}">${esc(t.link.label)}</a>`
+      : ''
+  }<button class=Btn data-do=close>Farewell</button></div>`
 }
 
 /** The time of day, as the glass shows it. */
@@ -447,35 +487,7 @@ export let hud = (
     talk: (t: Talk | null, accept: () => void, handIn: () => void) => {
       talk.hidden = !t
       if (!t) return
-      let q = t.quest
-      let html = ''
-      let act = ''
-      if (!q) html = `<p>${esc(t.greets)}</p>`
-      else if (t.state == 'open') {
-        html = `<h3>${esc(q.title)}</h3><p>${
-          esc(q.body)
-        }</p><p class=Talk_Reward>Reward: ${q.xp} xp${
-          q.gift ? `, ${esc(ITEMS[q.gift]?.name ?? q.gift)}` : ''
-        }</p>`
-        act = '<button class="Btn Btn-go" data-do=accept>I’ll do it</button>'
-      } else if (t.have >= q.count) {
-        html = `<h3>${
-          esc(q.title)
-        }</h3><p>You did it! The vale owes you one.</p>`
-        act = '<button class="Btn Btn-go" data-do=hand>Hand it in</button>'
-      } else {
-        html = `<h3>${esc(q.title)}</h3><p>${
-          esc(q.body)
-        }</p><p class=Talk_Reward>${t.have} / ${q.count} so far.</p>`
-      }
-      if (t.hears) {
-        html += `<p class=Talk_Hint>${
-          t.looks ? `${esc(t.name)} ${esc(t.looks)}. ` : ''
-        }Say something, and ${esc(t.name)} will answer.</p>`
-      }
-      talk.innerHTML = `<div class=Talk_Who>${
-        esc(t.name)
-      }</div><div class=Talk_Body>${html}</div><div class=Talk_Acts>${act}<button class=Btn data-do=close>Farewell</button></div>`
+      talk.innerHTML = talkHtml(t)
       talk.querySelectorAll<HTMLButtonElement>('button').forEach((b) =>
         b.addEventListener('click', () => {
           if (b.dataset.do == 'accept') accept()

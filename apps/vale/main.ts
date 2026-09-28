@@ -697,6 +697,10 @@ let talkTo = async () => {
       have: next?.have ?? 0,
       greets,
       name: giver.name,
+      note: giver.id == 'pip' ? greets : null,
+      link: giver.id == 'pip'
+        ? { href: '/village-tasks/', label: 'Village Tasks' }
+        : null,
       hears: !!folk.near(),
       looks: folk.looks(giver.id),
     },

@@ -67,7 +67,7 @@ Deno.test('a task completed in a sibling app changes Pip for one Vale hero', asy
       pip.entity.eid,
     )
     assertEquals((pip.doc as { title: string }).title, 'Pip')
-    let done = async (player: string) =>
+    let done = (player: string) =>
       completion((filter) => list.get(filter), player)
     assertEquals(await done(hero), false)
     let tick = {

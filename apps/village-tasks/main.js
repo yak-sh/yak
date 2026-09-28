@@ -1,8 +1,12 @@
 // The village task page reads its own rows and Vale's villager and hero rows
 // through the two documented page stores. A completion is about the hero Vale
 // selected in this tab; the page does not own or copy Vale's game state.
-import { apply, me, query, store, subscribe } from './api/client.js'
 import { completed, completionEid } from './state.js'
+
+// The platform serves this module beside the page; it is absent from the repo.
+let { apply, me, query, store, subscribe } = await import(
+  new URL('./api/client.js', import.meta.url).href
+)
 
 let vale = store('/vale/api/')
 let list = document.querySelector('.Tasks')
@@ -52,9 +56,7 @@ let draw = () => {
     }</button>
     </article>`
   }).join('') + (error ? `<p class=Status role=alert>${esc(error)}</p>` : '') +
-    (!writable
-      ? '<p class=Status>This list is read-only for you.</p>'
-      : '')
+    (!writable ? '<p class=Status>This list is read-only for you.</p>' : '')
 }
 
 let finish = async (eid) => {
