@@ -1,0 +1,35 @@
+{
+  "land": "reedmarsh",
+  "song": 1,
+  "sha256": "7a5d7414ab3e90719ea28a73229d181ff85e0865e677287efdc67733439b096f",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Reedmarsh: golden reeds, mirror pools, a stilt village and low woods in a warm mist. A buoyant reed-flute melody with light pizzicato strings. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571389-pK3XotcfI5uyb1Cu3WWd",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 173.04,
+    "integrated_lufs": -11.09,
+    "true_peak_dbfs": 0.35,
+    "loudness_range_lu": 11.5,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

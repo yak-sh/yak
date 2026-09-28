@@ -1,0 +1,35 @@
+{
+  "land": "mirewood",
+  "song": 2,
+  "sha256": "f2725333f4958104b6f6b209810d9a243f9e54271de8bfe675f7052b7bbec276",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Mirewood: drowned trees and dark pools in a green, firefly-lit mire beneath heavy haze. A slow, mysterious melody with muted strings and glimmers of harp. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571421-xch57sCYdec8kR3iOv7i",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 180.66,
+    "integrated_lufs": -11.81,
+    "true_peak_dbfs": -0.08,
+    "loudness_range_lu": 6.6,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "land": "fenhollow",
+  "song": 1,
+  "sha256": "6ed46c68f67fd108730cd8b072634cbd7df36bcfde1645d9c032aa1aedadda5a",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Fenhollow: peat fen, pale pools and an old archaeological dig under a soft grey sky. A curious, measured melody with warm viola and quiet flute. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 1 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571453-mjdQ5Gl0huTgeMLGw6HI",
+    "attempt": 2
+  },
+  "audit": {
+    "duration_seconds": 175.23,
+    "integrated_lufs": -11.66,
+    "true_peak_dbfs": -0.01,
+    "loudness_range_lu": 8.5,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

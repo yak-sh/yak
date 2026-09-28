@@ -1,0 +1,35 @@
+{
+  "land": "shellstrand",
+  "song": 2,
+  "sha256": "21512d4cf567b8bb40cebbea1203b60e35b01746ce1d26389b273f3539cf146e",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Shellstrand: pink shell beaches and small green isles in clear turquoise shallows, sea thrift beneath a pale blue sky. A calm ebb-and-flow melody with harp and warm bowed strings. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571364-x8J19y9gjw0gpomcBmMy",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 176.59,
+    "integrated_lufs": -11.49,
+    "true_peak_dbfs": -0.03,
+    "loudness_range_lu": 8.6,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "land": "stormhead",
+  "song": 2,
+  "sha256": "3951f5b045b059864f7a5ad6ec71a0b0a3a96c3a6e9fe26c9846d7b0b9416988",
+  "model": "google/lyria-3-pro-preview",
+  "provider": "openrouter",
+  "prompt": "Create a full-length instrumental fantasy game soundtrack song for Stormhead: a rain-lashed headland, dark surf, wind-bent moor and a lone beacon above slate cliffs. A watchful, weathered theme that opens into a hopeful flute refrain. Acoustic strings, soft flute, gentle hand percussion, memorable melodic theme, natural dynamics and a satisfying ending. No vocals, singing, speech, chanting, or spoken words. This is song 2 of two for this land; make it distinct and complete.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "modalities": [
+      "text",
+      "audio"
+    ],
+    "audio": {
+      "format": "mp3"
+    },
+    "stream": true,
+    "observed_output": "audio/mpeg (MP3)"
+  },
+  "generation": {
+    "response_id": "gen-1790571364-ok3yCtIfx7t43frPnPGZ",
+    "attempt": 1
+  },
+  "audit": {
+    "duration_seconds": 180.82,
+    "integrated_lufs": -11.58,
+    "true_peak_dbfs": 0.25,
+    "loudness_range_lu": 10.9,
+    "decoder_errors": 0,
+    "max_interior_silence_seconds": 0,
+    "listening_model": "google/gemini-3.1-flash-lite",
+    "vocals_reported": false,
+    "defects_reported": false
+  }
+}

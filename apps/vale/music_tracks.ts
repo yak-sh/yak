@@ -1,5 +1,5 @@
 // Songs are blobs in the vale's store, named by the SHA-256 of their bytes.
-// The first ten lands follow levels.ts's order.
+// The lands follow levels.ts's order.
 export let TRACKS: Record<string, [string, string]> = {
   mossvale: [
     'e73989cde1db424e2e2ed5f0529a72ec92b6d3837f86e824d2d66af84ea6ee04',
@@ -40,5 +40,29 @@ export let TRACKS: Record<string, [string, string]> = {
   saltreach: [
     '95676f1da604d4159aa5eaaface72b667d64cf855d9c889a22acc4de4f368c3c',
     '5d736443654bc188b6a7c7edbe15308f874b07419901ff1673250bd2107d49f8',
+  ],
+  shellstrand: [
+    'f295a37d678ccc810f8c6aedfa4222191debb74dcd7bc26614ddc8bcf8c172d5',
+    '21512d4cf567b8bb40cebbea1203b60e35b01746ce1d26389b273f3539cf146e',
+  ],
+  stormhead: [
+    '9d555423e937ff6dc76b2cb794eeb21d7f5b450fabc9fe14fd62a6001b81281c',
+    '3951f5b045b059864f7a5ad6ec71a0b0a3a96c3a6e9fe26c9846d7b0b9416988',
+  ],
+  reedmarsh: [
+    '7a5d7414ab3e90719ea28a73229d181ff85e0865e677287efdc67733439b096f',
+    '0e5d68daa8a44f25951a28927e551ce6ca647f476bfb2e403a4e8f6ba77ad1e9',
+  ],
+  mirewood: [
+    '6923cd9784c3349b1b9b6f8b6c9c3064ec3cab46b3ddb313f24cdcf3a0624b5f',
+    'f2725333f4958104b6f6b209810d9a243f9e54271de8bfe675f7052b7bbec276',
+  ],
+  fenhollow: [
+    '6ed46c68f67fd108730cd8b072634cbd7df36bcfde1645d9c032aa1aedadda5a',
+    '8394ce58682935ff193167910e1647d817a25b82b53d5240f7678cf0d291c6cf',
+  ],
+  sunkenkirk: [
+    '915c3a133a08f48b97f821e1f68105aeab4ade6eb0127e0522c0320b09d25617',
+    '10fec26c13083421bf093b6912510c00a38a433f50c7df2d0ce40eae1aa4f049',
   ],
 }
