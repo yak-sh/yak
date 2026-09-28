@@ -2,7 +2,7 @@
 // (items.ts `look`), as the world draws it: seen from a little above, its top
 // lit, its sides in shade, metal shining across each face, and a dark line
 // round it. Each look says how it is best seen (items.ts `View`): a boot in
-// profile, a chestplate from the front, a sword lying corner to corner. Each
+// profile, a chestplate from the front, a sword chopping corner to corner. Each
 // is drawn the first time it is asked for and kept, so the pack, the crafting
 // and the toasts show what the hero holds.
 import type { Box } from './boxes.ts'
@@ -19,12 +19,14 @@ export type Face = { at: P[]; rgb: number; metal: boolean }
 // Where each view stands, in degrees: turned `yaw` round from the look's
 // front (+z) toward its right side (+x), looking down `pitch`; a picture that
 // `lean`s is turned that far after, so a long thing lies corner to corner.
+// `chop` turns a weapon a quarter turn around its long axis from `lying`.
 let VIEWS: Record<View, { yaw: number; pitch: number; lean?: number }> = {
   corner: { yaw: 45, pitch: 35.26 },
   front: { yaw: 22, pitch: 18 },
   side: { yaw: 68, pitch: 18 },
   top: { yaw: 22, pitch: 58 },
   lying: { yaw: 45, pitch: 35.26, lean: 45 },
+  chop: { yaw: 135, pitch: 35.26, lean: 45 },
 }
 
 // A point of a model as a view sees it: how far right, how far up, and how
@@ -116,6 +118,16 @@ let order = (look: Box[], see: (v: Vec) => Vec): Box[] => {
  * let pole = faces([[[0, 0, 0], [0.1, 2, 0.1], 0x808080]], 64, 4, 'lying')
  * let foot = pole[0].at[0]
  * assertEquals(foot[0] < 32 && foot[1] > 32, true)
+ * // turning around the long axis sends a blade's edge down, not across
+ * let edge: Box[] = [[[0, 0, 0], [0.03, 0.03, 0.6], 0x808080]]
+ * let sweep = (v: View) => {
+ *   let fs = faces(edge, 64, 4, v)
+ *   return [span(fs, 0), span(fs, 1)]
+ * }
+ * let [across, down] = sweep('lying')
+ * assertEquals(across > down, true)
+ * let chopped = sweep('chop')
+ * assertEquals(chopped[1] > chopped[0], true)
  * // a plate standing face on is wide from the front and thin from the side
  * let plate: Box[] = [[[0, 0, 0], [1, 1, 0.1], 0x808080]]
  * let wide = (v: View) => span(faces(plate, 64, 4, v), 0)

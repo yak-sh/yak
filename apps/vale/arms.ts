@@ -325,12 +325,12 @@ let pair = (apart: number, ahead: number, one: (x: number) => Box[]) =>
 
 // How each kind's picture sees it (sprites.ts), when not from its corner.
 let VIEWS: Record<string, View> = {
-  sword: 'lying',
-  axe: 'lying',
-  hammer: 'lying',
-  dagger: 'lying',
-  bow: 'lying',
-  staff: 'lying',
+  sword: 'chop',
+  axe: 'chop',
+  hammer: 'chop',
+  dagger: 'chop',
+  bow: 'chop',
+  staff: 'chop',
   torch: 'lying',
   shield: 'front',
   helm: 'front',

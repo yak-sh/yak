@@ -13,9 +13,9 @@ export type { Box } from './boxes.ts'
 /** How a thing's picture sees it (sprites.ts), its front toward +z: from a
  * corner above, the most of it at once; from the `front`, for what is worn
  * on a chest or a head; from the `side`, for a boot or a fish; from the
- * `top`, for what lies flat; `lying` corner to corner, for a blade or a
- * staff. */
-export type View = 'corner' | 'front' | 'side' | 'top' | 'lying'
+ * `top`, for what lies flat; `lying` corner to corner; `chop` turns a weapon
+ * around its long axis so its edge points down the picture. */
+export type View = 'corner' | 'front' | 'side' | 'top' | 'lying' | 'chop'
 
 export type Thing = {
   name: string
@@ -186,7 +186,7 @@ export let ITEMS: Record<string, Thing> = {
   blade5: {
     name: 'Skyspear',
     ...wield('staff', 4, 1.1),
-    view: 'lying',
+    view: 'chop',
     look: [
       [[-0.022, 0, -0.022], [0.044, 0.96, 0.044], 0xe8dcc0],
       [[-0.1, 0.9, -0.02], [0.2, 0.03, 0.04], 0x9ad8ff],
