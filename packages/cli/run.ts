@@ -47,8 +47,8 @@ export type Ctx = {
   /** The config file naming the graph this command opens, in this process.
    * Absent where the command named an MCP server instead ({@link aimed}). */
   config?: string
-  /** Whether the graph this command opens runs its duties — false under
-   * `--no-duties`, which takes no lease and runs none of them. */
+  /** Whether this command may run duties if it explicitly starts them —
+   * false under `--no-duties`, which takes no lease and runs none. */
   duties: boolean
   json: boolean
   /** Whether an answer is held in the terminal (@yaks/tui) rather than

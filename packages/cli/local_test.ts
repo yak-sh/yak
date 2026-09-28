@@ -1,55 +1,83 @@
-// Which duty roles a command hands to a thread of its own: the ones no live
-// process is serving.
+// A command can read a graph that owes effects and leave those runs for the
+// process serving duties. The CLI closes and exits without starting a worker.
 
-import { assertEquals } from '@std/assert'
-import { type Graph, graph } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
-import { effectDoc, POOL, take } from '@yaks/effects'
-import { dutiesOf, rolesOf, unserved } from './local.ts'
+import { assert, assertEquals } from '@std/assert'
+import { detached } from '@yaks/graph'
+import { compose, read } from './host.ts'
 
-let pooled = loadVocab([effectDoc])
-let config = { plugins: ['@yaks/wake', '@yaks/doc', { use: '@yaks/mail' }] }
-// The plugins here with a `./service`.
-let has = (plugin: string) => plugin != '@yaks/doc'
-let NOW = Date.parse('2026-09-25T12:00:00Z')
+Deno.test('a graph read exits and leaves owed effects unclaimed', async () => {
+  let dir = await Deno.makeTempDir()
+  let file = `${dir}/yak.json`
+  await Deno.writeTextFile(
+    file,
+    JSON.stringify({
+      db: 'yak.db',
+      plugins: ['@yaks/effects', '@yaks/process'],
+    }),
+  )
+  try {
+    let host = await compose(read(file), ['graph'])
+    try {
+      await detached(host.storage).patch([{
+        entity: { eid: 'owed' },
+        effect: {
+          handler: 'slow',
+          target: 'owed',
+          comp: 'effect',
+          kind: 'created',
+          state: 'pending',
+          attempts: 0,
+        },
+      }])
+    } finally {
+      await host.close()
+    }
 
-// A graph, with the leases named held by `server` until a minute from now, or
-// held and lapsed where the name is prefixed `-`.
-let leased = async (...names: string[]) => {
-  let g = graph({ storage: ram(pooled), vocab: pooled })
-  for (let name of names) {
-    let gone = name.startsWith('-')
-    await take(g, gone ? name.slice(1) : name, {
-      holder: 'server',
-      now: () => gone ? NOW - 120_000 : NOW,
-    })
+    let line = new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        '--config',
+        new URL('../../deno.json', import.meta.url)
+          .pathname,
+        new URL('./yak.ts', import.meta.url).pathname,
+        'graph',
+        'show',
+        'owed',
+        '--config',
+        file,
+        '--json',
+      ],
+      stdout: 'piped',
+      stderr: 'piped',
+    }).spawn()
+    let timedOut = false
+    let deadline = setTimeout(() => {
+      timedOut = true
+      line.kill('SIGKILL')
+    }, 5000)
+    let result
+    try {
+      result = await line.output()
+    } finally {
+      clearTimeout(deadline)
+    }
+    assert(!timedOut, 'graph show did not exit after answering')
+    assertEquals(result.code, 0, new TextDecoder().decode(result.stderr))
+    assert(new TextDecoder().decode(result.stdout).includes('owed'))
+
+    let after = await compose(read(file), ['graph'])
+    try {
+      let [row] = await after.graph.read('.effect')
+      let effect = row.effect
+      assert(effect && typeof effect == 'object')
+      assertEquals('state' in effect && effect.state, 'pending')
+      assertEquals('attempts' in effect && effect.attempts, 0)
+      assert(!('lease_owner' in effect) || effect.lease_owner == null)
+    } finally {
+      await after.close()
+    }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
   }
-  return g
-}
-
-let idle = async (names: string[], mine: string[] = [], g?: Graph) => {
-  let at = g ?? await leased(...names)
-  return unserved(at, dutiesOf(at.vocab, config, mine, has), 'me', NOW)
-}
-
-Deno.test('a duty role nobody live is serving is the thread’s to take', async () => {
-  let all = ['effects', '@yaks/wake', '@yaks/mail']
-  assertEquals(await idle([]), all)
-  assertEquals(await idle([`${POOL}/server`]), ['@yaks/wake', '@yaks/mail'])
-  assertEquals(await idle(['@yaks/mail', '-@yaks/wake']), [
-    'effects',
-    '@yaks/wake',
-  ])
-  // What this process serves itself is not handed on.
-  assertEquals(await idle([], ['@yaks/wake']), ['effects', '@yaks/mail'])
-})
-
-Deno.test('a graph keeping no pool has no pool to hand on', async () => {
-  let bare = loadVocab([{ $defs: {} }])
-  let g = graph({ storage: ram(bare), vocab: bare })
-  assertEquals(await idle([], [], g), ['@yaks/wake', '@yaks/mail'])
-  // …so its effects run where they are committed.
-  assertEquals(rolesOf({}, false), ['graph', 'effects'])
-  assertEquals(rolesOf({ roles: ['web'] }, true), ['graph', 'web'])
 })

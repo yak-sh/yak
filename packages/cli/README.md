@@ -338,7 +338,7 @@ await host.duties() // Run until the host shuts down.
 await host.duties(AbortSignal.abort()) // Run one pass, then release leases.
 ```
 
-A `yak` command that opens a graph runs its duties in a thread of its own
+A host that stays up runs its duties in a thread of its own
 ([`thread.ts`](./thread.ts), [`worker.ts`](./worker.ts)), so the thread that
 runs the command and draws its answer never waits on them. The thread composes
 the same config for the duty roles as a host of its own, under a name the
@@ -347,23 +347,17 @@ leases and claims name that row. A thread ended where it stands, or one that
 fails, writes no ending and its pid lives on, so the process writes its ending
 for it (`Host.end`): its calls interrupted, its leases released, its `exit`
 stamped, and nobody waits out what it held. Once the command's host is open, the
-process asks which duty roles no live process is serving
-([`local.ts`](./local.ts) `unserved`). A one-shot command starts the thread only
-when one of them is idle, for one pass of each on the way in, and closes it with
-one last pass over the pool, for what the command itself wrote; where a process
-that stays up is serving them, the command leaves its runs written down for it.
-The `serve` tool asks for the long-running form, which starts the thread
-whatever the leases say, since a holder that dies later is one it has to take
-over from. The thread takes the leases and the pool settles who does what. A
-live process renews its lease; another process can take over after the lease
-expires or is released.
+process plans its duty roles but leaves the thread unstarted. The `serve` tool
+starts it through `host.duties()` for as long as it listens; a one-shot command
+leaves the effects it owes written down for a host that stays up. The thread
+takes the leases and the pool settles who does what. A live process renews its
+lease; another process can take over after the lease expires or is released.
 
-`yak --no-duties` (config `duties: false`) turns them off for one process: it
-takes no lease, works no effects, and runs neither the services nor the start-up
-passes `@yaks/session` and `@yaks/spawn` hold a lease for; what it commits is
-left written down for a process that does. A one-shot command then only runs its
-tool, and `yak --no-duties serve` answers requests while another process, or
-none, does the duties.
+`yak --no-duties` (config `duties: false`) turns them off for a host that stays
+up: it takes no lease, works no effects, and runs neither the services nor the
+start-up passes `@yaks/session` and `@yaks/spawn` hold a lease for; what it
+commits is left written down for another host. `yak --no-duties serve` answers
+requests while another process, or none, does the duties.
 
 `close()` first aborts `host.stopping`, closes the duty thread, lets the effects
 it started finish and leaves the pool, ends every call its runner is still

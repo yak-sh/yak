@@ -863,7 +863,7 @@ Deno.test('a process coming up owes again what a declared sweep selects', async 
   }
 })
 
-Deno.test('the pass a one-shot line makes runs the retries that are due', async () => {
+Deno.test('an explicit pass runs the retries that are due', async () => {
   let ran: string[] = []
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
@@ -876,7 +876,7 @@ Deno.test('the pass a one-shot line makes runs the retries that are due', async 
     }),
   )
   try {
-    // A line joins the pool on its way in, so what it writes it runs.
+    // A host explicitly joins the pool, so what it writes it runs.
     await host.duties(AbortSignal.abort())
     await host.graph.apply([{ entity: { eid: 'b1' }, book: { title: 'One' } }])
     await host.fx.idle()
@@ -901,8 +901,7 @@ Deno.test('the pass a one-shot line makes runs the retries that are due', async 
       },
     }])
     ran.length = 0
-    // One pass and out: a line passing through does what nobody is doing,
-    // and what is owed is part of it.
+    // One pass and out: the host works what is owed, then leaves the pool.
     await host.duties(AbortSignal.abort())
     assertEquals(ran, ['b1'])
     assertEquals(
@@ -1075,8 +1074,8 @@ Deno.test('a signal that has already aborted is one pass and out', async () => {
     }),
   )
   try {
-    // A one-shot line on its way in: it drains what is overdue and returns,
-    // rather than holding a clock nobody asked it to hold.
+    // An explicit pass drains what is overdue and returns without holding
+    // a clock beyond that pass.
     await host.duties(AbortSignal.abort())
     assertEquals(passes, 1)
   } finally {

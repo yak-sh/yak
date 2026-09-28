@@ -22,18 +22,17 @@
 // a tool an agent requested is identical, and the rules, the post-commit
 // effects and the attribution are one set for both.
 //
-// The effect pool and the plugins' services are never this thread's. Where no
-// process that stays up is running them, a thread of this process takes them
-// (./thread.ts), so the command and the answer it draws are never waiting on a
-// letter being sent; where one is, this process never imports their code.
+// The effect pool and the plugins' services are never this thread's. A host
+// that stays up explicitly starts them through `host.duties()` (./thread.ts),
+// so a command passing through never claims work it cannot finish.
 //
 // This module is imported only by a command that named a config, because
 // importing it pulls in the graph and every plugin's words — a cost `yak login`
 // on a machine with no graph should not pay.
 
-import { type Actor, type Eid, type Graph, offered } from '@yaks/graph'
+import { type Actor, offered } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { EFFECT, held, type Lease, working } from '@yaks/effects'
+import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
 import { registry, show, terminal } from './answer.ts'
 import { type Config, exported, read, used } from './config.ts'
@@ -62,7 +61,7 @@ let asides = new Set<Aside>()
 /**
  * The roles a command's own thread serves: the graph, and whatever its tool
  * declares it needs — `serve` answers HTTP, so it serves `web`. The effect
- * pool and the plugins' services are not among them ({@link unserved}); the
+ * pool and the plugins' services are not among them ({@link dutiesOf}); the
  * one exception is a graph that keeps no pool (`pooled` false), whose effects
  * can only run where they were committed.
  *
@@ -91,41 +90,10 @@ export let dutiesOf = (
     ...(config.plugins ?? []).map(used).filter((p) => has(p, 'service')),
   ].filter((r) => !mine.includes(r))
 
-// Whether a lease is held, right now, by a process other than this one.
-let taken = (lease: Lease | undefined, me: Eid, now: number): boolean =>
-  !!lease?.holder && lease.holder != me &&
-  Date.parse(String(lease.until)) > now
-
-/** The duty roles no live process is serving: the effect pool where no
- * process that stays up is working it (@yaks/effects `working`), and each
- * service whose lease nobody live holds. A holder known to have ended without
- * letting go (`gone`) serves nothing. */
-export let unserved = async (
-  g: Graph,
-  roles: readonly Role[],
-  me: Eid,
-  now: number = Date.now(),
-  gone?: (holder: Eid) => boolean | Promise<boolean>,
-): Promise<Role[]> => {
-  let busy = await Promise.all(
-    roles.map(async (r) => {
-      if (r == 'effects') return await working(g, { except: me, now, gone })
-      let lease = await held(g, r)
-      return taken(lease, me, now) && !await gone?.(lease!.holder as Eid)
-    }),
-  )
-  return roles.filter((_, i) => !busy[i])
-}
-
 // The graph a command opens: composed for its own roles, with its duty roles
-// handed to a thread beside it. Where one of them is idle, the thread starts
-// now and runs one pass of each idle one on the way in — beside the command,
-// never ahead of it, and never on a role another process is serving, which
-// would only be a second writer waiting on the same lock; where all are
-// served, it starts only if the process asks for its duties to go on
-// (`serve`). A command passing through is not a lesser kind of process: on a
-// machine where nobody runs a server it is the only one there is, and a graph
-// must not require one.
+// planned in a thread beside it. Only a host explicitly serving duties starts
+// that thread. Every commit still records the effects it owes for a worker to
+// claim, whether this command or another process wrote it.
 let open = async (
   path: string,
   roles: Role[],
@@ -160,30 +128,19 @@ let open = async (
     reader,
   })
   try {
-    let duties = dutiesOf(host.vocab, config, roles)
-    aside.plan({ config: path, roles: duties })
-    let idle = await unserved(
-      host.graph,
-      duties,
-      host.me,
-      Date.now(),
-      host.gone,
-    )
-    if (idle.length) aside.start(idle)
+    aside.plan({ config: path, roles: dutiesOf(host.vocab, config, roles) })
   } catch (error) {
     await host.close()
     await reader?.close()
     throw error
   }
-  void host.duties(AbortSignal.abort())
   return withReader(host)
 }
 
 /** The graph a config names, open for the roles a command's own thread serves,
- * with a thread doing what is overdue on it beside the command — unless
- * `duties` is false (`--no-duties`), which leaves every duty to another
- * process. Assembled once per config path and roles; {@link close} closes it
- * when the command is done. */
+ * with duties available to a host that explicitly starts them. `duties: false`
+ * (`--no-duties`) disables them. Assembled once per config path and roles;
+ * {@link close} closes it when the command is done. */
 export let opened = (
   path: string,
   roles: Role[],

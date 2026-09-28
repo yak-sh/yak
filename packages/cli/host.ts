@@ -23,9 +23,9 @@
  * role @yaks/api's `serve` declares. A `yak` command serves commands and
  * rendering, which are its own (./run.ts, ./answer.ts), and reaches the graph
  * either through a server or by composing the graph role here itself
- * (local.ts), with the duty roles composed again in a thread of the same
- * process (./thread.ts, ./worker.ts), a host of its own. A role this process
- * does not serve costs it nothing: its facets
+ * (local.ts). A host that stays up explicitly starts duty roles in a thread
+ * of the same process (./thread.ts, ./worker.ts), a host of its own. A role
+ * this process does not serve costs it nothing: its facets
  * are never imported, so a command that opens the graph to read it never loads
  * a line of HTTP, and a process that serves no `web` never asks a plugin for a
  * route.
@@ -191,10 +191,9 @@ export type Host = {
    *
    * Runs until `signal` aborts; left out, that signal is this host's own, so
    * it stops with {@link Served.close}. Pass an already-aborted signal for one
-   * pass each and no waiting, which is what a one-shot command does on its way
-   * in, and the live form is what a process that stays up calls. `only`
-   * narrows them to those duty roles: a pass over the ones nobody else is
-   * serving. */
+   * pass each and no waiting. A command passing through never starts duties;
+   * a host that stays up calls the live form. `only` narrows a pass to the
+   * named duty roles. */
   duties: (signal?: AbortSignal, only?: readonly Role[]) => Promise<void>
   /** What {@link Served.close} would have written for a process or a thread
    * that will not write it itself: its calls ended as interrupted, saying
