@@ -4,10 +4,10 @@
 // what was pressed since the last frame, and how far the view was dragged.
 
 export type Intent = {
-  /** right and forward, relative to the camera, at most 1 long */
+  /** right and forward axes, at most 1 long */
   move: [number, number]
-  /** phone stick: horizontal steering and forward/back, in hero space */
-  stick?: [number, number]
+  /** horizontal turn and forward/back, in hero space */
+  steer?: [number, number]
   jump: boolean
   strike: boolean
   /** the ability asked for, by its slot on the bar, 1 to 3, or 0 */
@@ -85,6 +85,41 @@ let AXES: Record<string, [number, number]> = {
   ArrowRight: [1, 0],
 }
 
+/** A/D and the arrow keys either strafe or steer the hero. Touch always
+ * steers. The two axes are normalised together so diagonals are no faster.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(movement(['KeyA'], true), {
+ *   move: [-1, 0], steer: undefined,
+ * })
+ * assertEquals(movement(['KeyA'], false), {
+ *   move: [-1, 0], steer: [-1, 0],
+ * })
+ * assertEquals(movement([], true, [1, 0]), {
+ *   move: [1, 0], steer: [1, 0],
+ * })
+ * ```
+ */
+export let movement = (
+  held: Iterable<string>,
+  strafe: boolean,
+  stick?: [number, number],
+): Pick<Intent, 'move' | 'steer'> => {
+  let x = 0, y = 0
+  for (let code of held) {
+    let a = AXES[code]
+    if (a) [x, y] = [x + a[0], y + a[1]]
+  }
+  if (stick) [x, y] = [x + stick[0], y + stick[1]]
+  let len = Math.hypot(x, y)
+  if (len > 1) [x, y] = [x / len, y / len]
+  return {
+    move: [x, y],
+    steer: stick ?? (!strafe ? [x, y] : undefined),
+  }
+}
+
 let STICK = 56
 
 /** Listen on `stage` and the window. `busy` says when the keyboard belongs
@@ -101,8 +136,10 @@ export let listen = (
   let looked = false
   let zoom = 0
   let swapped = false
+  let strafe = true
   try {
     swapped = localStorage.getItem('mossvale.drag.swap') == '1'
+    strafe = localStorage.getItem('mossvale.keys.strafe') != '0'
   } catch { /* this page keeps its setting */ }
   let isLook = (button: number, type: string) =>
     type != 'touch' && button == (swapped ? 0 : 2)
@@ -226,20 +263,21 @@ export let listen = (
         localStorage.setItem('mossvale.drag.swap', swapped ? '1' : '0')
       } catch { /* this page keeps its setting */ }
     },
+    strafes: () => strafe,
+    strafe: () => {
+      strafe = !strafe
+      try {
+        localStorage.setItem('mossvale.keys.strafe', strafe ? '1' : '0')
+      } catch { /* this page keeps its setting */ }
+    },
     read: (): Intent => {
-      let x = 0, y = 0
-      if (!busy()) {
-        for (let code of held) {
-          let a = AXES[code]
-          if (a) [x, y] = [x + a[0], y + a[1]]
-        }
-      }
-      if (stick) [x, y] = [x + stick.dx, y - stick.dy]
-      let len = Math.hypot(x, y)
-      if (len > 1) [x, y] = [x / len, y / len]
+      let axes = movement(
+        busy() ? [] : held,
+        strafe,
+        stick ? [stick.dx, -stick.dy] : undefined,
+      )
       let out: Intent = {
-        move: [x, y],
-        stick: stick ? [stick.dx, -stick.dy] : undefined,
+        ...axes,
         jump: pressed.has('jump') || (!busy() && held.has('Space')),
         strike: pressed.has('strike'),
         ability: [1, 2, 3].find((n) => pressed.has(`ability${n}` as Action)) ??

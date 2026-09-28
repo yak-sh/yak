@@ -21,6 +21,8 @@ export type Settings = {
   follow: () => void
   swapped: () => boolean
   swap: () => void
+  strafes: () => boolean
+  strafe: () => void
 }
 
 // Each key and what it does, the actions' keys read from input.ts.
@@ -42,9 +44,10 @@ let DOES: [Action, string][] = [
 let kbd = (keys: string[]) =>
   keys.map((k) => `<kbd class=Key>${k}</kbd>`).join(' ')
 
-let keys = (swapped: boolean) =>
+let keys = (swapped: boolean, strafes: boolean) =>
   [
-    [kbd(['W', 'A', 'S', 'D']), 'Move'],
+    [kbd(['W', 'S', '↑', '↓']), 'Walk forward or back'],
+    [kbd(['A', 'D', '←', '→']), strafes ? 'Strafe' : 'Turn'],
     [swapped ? 'right drag' : 'left drag', 'Steer the camera while moving'],
     [swapped ? 'left drag' : 'right drag', 'Look without turning your hero'],
     [`wheel`, 'Nearer or further'],
@@ -76,7 +79,11 @@ export let menu = (panel: Panel, o: Settings) => {
     if (act == 'music') o.music.toggle()
     if (act == 'follow') o.follow()
     if (act == 'swap') o.swap()
-    if (act == 'sound' || act == 'music' || act == 'follow' || act == 'swap') {
+    if (act == 'strafe') o.strafe()
+    if (
+      act == 'sound' || act == 'music' || act == 'follow' || act == 'swap' ||
+      act == 'strafe'
+    ) {
       was = ''
     }
   })
@@ -98,8 +105,9 @@ export let menu = (panel: Panel, o: Settings) => {
     show: () => {
       if (!panel.open) return
       let sound = !o.muted(), follows = o.follows(), swapped = o.swapped()
+      let strafes = o.strafes()
       let playing = !o.music.muted
-      let key = `${sound} ${playing} ${follows} ${swapped}`
+      let key = `${sound} ${playing} ${follows} ${swapped} ${strafes}`
       if (key == was) return
       was = key
       let volume = Math.round(o.music.level * 100)
@@ -136,9 +144,15 @@ export let menu = (panel: Panel, o: Settings) => {
             ? 'Right drag steers; left drag looks'
             : 'Left drag steers; right drag looks',
         ) +
+        toggle(
+          'strafe',
+          strafes,
+          glyph('footprints'),
+          strafes ? 'A/D strafes' : 'A/D turns',
+        ) +
         `<h3 class=Menu_Head>Touch</h3><dl class="Menu_Keys Menu_Keys-touch">${TOUCH}</dl>` +
         `<h3 class=Menu_Head>Keys</h3><dl class="Menu_Keys Menu_Keys-keys">${
-          keys(swapped)
+          keys(swapped, strafes)
         }</dl>` +
         `</div>`
       panel.body.innerHTML = html

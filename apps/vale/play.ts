@@ -847,11 +847,17 @@ export let game = (
         }
       } else {
         let [mx, my] = intent.move
-        let push = {
-          x: Math.cos(look) * mx - Math.sin(look) * my,
-          z: -Math.sin(look) * mx - Math.cos(look) * my,
-          jump: intent.jump,
-        }
+        let push = intent.steer
+          ? {
+            x: Math.sin(body.yaw) * intent.steer[1],
+            z: Math.cos(body.yaw) * intent.steer[1],
+            jump: intent.jump,
+          }
+          : {
+            x: Math.cos(look) * mx - Math.sin(look) * my,
+            z: -Math.sin(look) * mx - Math.cos(look) * my,
+            jump: intent.jump,
+          }
         // A dodge rolls the way I am going, or back from where I face when I
         // am still, facing the same way throughout, and cuts short a blow or
         // an ability not yet landed.
@@ -895,11 +901,11 @@ export let game = (
           ) dash = null
           body = { ...n, yaw: body.yaw }
         } else {
-          body = intent.stick
+          body = intent.steer
             ? steerStep(
               v,
               body,
-              intent.stick,
+              intent.steer,
               dt,
               SPEED * (1 + s.kit.speed),
               intent.jump,

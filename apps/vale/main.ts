@@ -239,6 +239,8 @@ let settings = menu(h.panels.menu, {
   follow: () => hands.press('follow'),
   swapped: hands.swapped,
   swap: hands.swap,
+  strafes: hands.strafes,
+  strafe: hands.strafe,
 })
 
 // Who is playing: one of your heroes, or a new one made at the gate.
