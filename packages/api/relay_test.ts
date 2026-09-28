@@ -269,6 +269,114 @@ Deno.test('sustained peer movement does not resend stored data to existing membe
   assertEquals(watcher.take().at(-1)?.bundles?.[0].book, { price: 13 })
 })
 
+Deno.test('peer movement reads storage once until a commit or release', () => {
+  let graph = shop()
+  graph.apply([
+    { entity: { eid: 'b1' }, book: { price: 12 }, doc: { title: 'first' } },
+    { entity: { eid: 'b2' }, doc: { title: 'other' } },
+  ])
+  let reads = 0
+  let spy: Graph = {
+    ...graph,
+    get: (ids) => (reads++, graph.get(ids)),
+    read: (q, opts) => (reads++, graph.read(q, opts)),
+  }
+  let subs = subscriptions(spy)
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'near', '(.book.price<20|.doc&.browsing.x<10)&*')
+  subs.open(watcher.to, 'count', '(.book.price<20|.doc&.browsing.x<10)&.count')
+  watcher.take()
+  reads = 0
+
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 1 } }])
+  assertEquals(reads, 1)
+  watcher.take()
+  for (let x = 2; x < 102; x++) {
+    subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x } }])
+    watcher.take()
+  }
+  assertEquals(reads, 1)
+
+  spy.apply([{ entity: { eid: 'b1' }, book: { price: 30 } }])
+  let committed = watcher.take()
+  assertEquals(committed.find((f) => f.id == 'near')?.gone, ['b1'])
+  assertEquals(committed.find((f) => f.id == 'count'), {
+    id: 'count',
+    count: 0,
+  })
+  reads = 0
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 3 } }])
+  assertEquals(reads, 0) // both caches refreshed during the commit
+  let joined = watcher.take()
+  assertEquals(joined.find((f) => f.id == 'near')?.bundles?.[0].book, {
+    price: 30,
+  })
+  assertEquals(joined.find((f) => f.id == 'count'), {
+    id: 'count',
+    count: 1,
+  })
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: null }])
+  assertEquals(reads, 0)
+  watcher.take()
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 4 } }])
+  assertEquals(reads, 1) // a new held lifetime reads its durable row
+})
+
+Deno.test('peer-only rows keep a missing durable candidate until expiry', () => {
+  let clock = stopped(), graph = shop()
+  let reads = 0
+  let spy: Graph = {
+    ...graph,
+    get: (ids) => (reads++, graph.get(ids)),
+  }
+  let subs = subscriptions(spy, { timer: clock.timer })
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'near', '.typing.who=ada')
+  watcher.take()
+  subs.relay(writer.to, [{
+    entity: { eid: 'visitor' },
+    typing: { who: 'ada' },
+  }])
+  assertEquals(reads, 1)
+  assertEquals(watcher.take()[0].bundles, [{ entity: { eid: 'visitor' } }])
+  for (let i = 0; i < 20; i++) {
+    subs.relay(writer.to, [{
+      entity: { eid: 'visitor' },
+      typing: { who: 'ada' },
+    }])
+    watcher.take()
+  }
+  assertEquals(reads, 1)
+  clock.tick(5001)
+  assertEquals(watcher.take().at(-1)?.gone, ['visitor'])
+  subs.relay(writer.to, [{
+    entity: { eid: 'visitor' },
+    typing: { who: 'ada' },
+  }])
+  assertEquals(reads, 2)
+})
+
+Deno.test('commits replace a cached missing row while its peer value lives', () => {
+  let graph = shop(), subs = subscriptions(graph)
+  let writer = ear(), watcher = ear()
+  subs.open(watcher.to, 'near', '.book&.browsing.x<10')
+  watcher.take()
+  subs.relay(writer.to, [{
+    entity: { eid: 'b1' },
+    browsing: { x: 2 },
+  }])
+  assertEquals(watcher.take(), [])
+
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let [joined] = watcher.take()
+  assertEquals(joined.bundles?.[0].book, { price: 12 })
+  assertEquals(joined.relay?.[0].browsing, { x: 2 })
+  graph.apply([{ entity: { eid: 'b1' }, $delete: true }])
+  assertEquals(watcher.take()[0].gone, ['b1'])
+  subs.relay(writer.to, [{ entity: { eid: 'b1' }, browsing: { x: 3 } }])
+  assertEquals(watcher.take(), [])
+})
+
 Deno.test('durable commits recheck a row beside its held peer value', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
@@ -373,7 +481,6 @@ Deno.test('async peer reads keep successive membership moves in order', async ()
   release.shift()!()
   await first
   await Promise.resolve()
-  release.shift()!()
   await second
   await last
   let heard = watcher.take()

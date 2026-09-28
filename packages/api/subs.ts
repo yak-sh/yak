@@ -138,6 +138,7 @@ type Sub = {
   peer: boolean
   /** the durable rows that may match a query reading peers */
   durable?: And | null
+  candidates?: Bundle[] | Promise<Bundle[]>
   /** the components its rows carry, or `null` for every one (@yaks/graph
    * `wanted`), so a pushed bundle is cut the way the first answer was */
   want?: Set<string> | null
@@ -253,6 +254,10 @@ export let subscriptions = (graph: Graph, opts: {
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
   let durableNet = net<Sub>(graph.vocab)
   let peerNet = net<Sub>(graph.vocab)
+  // Keep storage rows only while a peer value makes their entity relevant.
+  // A missing row is cached too: a peer-only entity must not hit storage on
+  // every movement.
+  let peerRows = new Map<Eid, Bundle | null>()
   let network = (sub: Sub) => sub.peer ? peerNet : durableNet
   let peerComp = (name: string) => syncOf(graph.vocab, name) == 'peers'
   let pendingWork: Promise<void> | undefined
@@ -455,15 +460,21 @@ export let subscriptions = (graph: Graph, opts: {
       for (let s of raw) s.sink({ id: s.id, bundles: batch })
     }
     let queries = subs.filter((s) => !s.raw)
-    if (!queries.length) return
+    for (let s of queries) if (s.peer) s.candidates = undefined
+    let touched = [...new Set(applied.map((b) => b.entity.eid))]
+    if (!queries.length && !touched.some((eid) => peerRows.has(eid))) return
     let reads = new Map<string, Bundle[] | Promise<Bundle[]>>()
     let load = (q: string) => {
       let got = reads.get(q)
       if (!got) reads.set(q, got = graph.read(q, { durable: true }))
       return got
     }
-    let touched = [...new Set(applied.map((b) => b.entity.eid))]
     return then(graph.get(touched), (now) => {
+      let changed = new Map(now.map((b) => [b.entity.eid, b]))
+      for (let eid of touched) {
+        if (peerRows.has(eid)) peerRows.set(eid, changed.get(eid) ?? null)
+      }
+      if (!queries.length) return
       let touch = touches(applied, now)
       let routing = new Map([
         ...route(now, touched, durableNet),
@@ -586,17 +597,28 @@ export let subscriptions = (graph: Graph, opts: {
     }
     return out
   }
+  let durableRows = (ids: Eid[]): Bundle[] | Promise<Bundle[]> => {
+    let missing = ids.filter((eid) => !peerRows.has(eid))
+    let collect = () => ids.flatMap((eid) => peerRows.get(eid) ?? [])
+    if (!missing.length) return collect()
+    return then(graph.get(missing), (rows) => {
+      let found = new Map(rows.map((b) => [b.entity.eid, b]))
+      for (let eid of missing) peerRows.set(eid, found.get(eid) ?? null)
+      return collect()
+    })
+  }
   let source = (sub: Sub): Bundle[] | Promise<Bundle[]> => {
     let values = peers.values()
     let ids = [...new Set(values.map((b) => b.entity.eid))]
-    let candidates = sub.durable
-      ? graph.read(sub.durable, { durable: true })
-      : []
+    let candidates = sub.candidates ??
+      (sub.candidates = sub.durable
+        ? graph.read(sub.durable, { durable: true })
+        : [])
     return then(
       candidates,
       (rows) =>
         then(
-          ids.length ? graph.get(ids) : [],
+          durableRows(ids),
           (held) => overlay([...rows, ...held], values),
         ),
     )
@@ -614,15 +636,24 @@ export let subscriptions = (graph: Graph, opts: {
     // Old members hear the patch that moved a row out; new members receive
     // its full held value in the membership frame below.
     cast(bundles, except)
-    if (!all().some((s) => s.peer)) return
     let touched = [...new Set(bundles.map((b) => b.entity.eid))]
-    return then(graph.get(touched), (rows) => {
+    let values = peers.values((eid) => touched.includes(eid))
+    let active = new Set(values.map((b) => b.entity.eid))
+    let release = () => {
+      for (let eid of touched) if (!active.has(eid)) peerRows.delete(eid)
+    }
+    if (!all().some((s) => s.peer)) {
+      release()
+      return
+    }
+    return then(durableRows(touched), (rows) => {
       let routing = route(
-        overlay(rows, peers.values((eid) => touched.includes(eid))),
+        overlay(rows, values),
         touched,
         peerNet,
         true,
       )
+      release()
       return then(
         over(
           all().filter((s) => s.peer),
