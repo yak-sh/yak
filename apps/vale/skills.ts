@@ -296,7 +296,8 @@ export let SKILLS: Record<string, Skill> = {
   focus: {
     name: 'Focus',
     icon: 'wand',
-    says: 'Staves hit 12% harder.',
+    says:
+      'With a staff equipped, strikes and damaging abilities deal 12% more damage.',
     discipline: 'arcana',
     row: 1,
     boon: { force: 0.12 },
