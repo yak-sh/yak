@@ -24,7 +24,7 @@ export {
   type Finding,
   type Level,
 } from './check.ts'
-export { CallError } from './args.ts'
+export { CallError, parsed } from './args.ts'
 export {
   answerOf,
   faulted,

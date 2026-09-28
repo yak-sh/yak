@@ -1,5 +1,5 @@
 // The commands an app declares (T-32685, T-34541): the tool entries of the
-// `vocab.json` a deploy handed its store (lib/tools.ts) and the two tools each word it holds is
+// `vocab.json` a deploy handed its store (@yaks/tools/declared) and the two tools each word it holds is
 // worth (kinds.ts), read back here and run through the platform's `command`
 // tool. tools.ts owns the tools the platform has; this owns the verbs a
 // person's own app grew.
@@ -28,25 +28,19 @@
 // in is reachable on the web and not here, because a call names an app by slug
 // and has no space to resolve it against — the door would have to remember
 // which apps this session has opened, and it remembers nothing (mcp.ts).
-import {
-  type App,
-  appStore,
-  type Directory,
-  type Space,
-  storeName,
-} from './directory.ts'
+import { type App, type Directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
-import { filled, schemaOf, type ToolDef, type Tools } from './lib/tools.ts'
+import { commandAt, toolsOf } from './app-command.ts'
+export { toolsOf } from './app-command.ts'
+import { schemaOf, type ToolDef } from '@yaks/tools/declared'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import { refuse } from './tool.ts'
 import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
-import { recall } from './lib/hops.ts'
 import { told } from './stream.ts'
-import { commandWorker } from './dispatch.ts'
 
 /** One app, as a command names it: `recipes`, or `yourname/recipes` where two
  * spaces spell one slug. */
@@ -55,22 +49,6 @@ export let at = (space: Space, app: App) => `${space.slug}/${app.slug}`
 // What one app declares, as its store last accepted it: read once per request
 // until the store is written to (hops.ts `recall`), since the listing, the
 // roster and a call each ask it.
-export let toolsOf = async (
-  env: Env,
-  space: Space,
-  app: App,
-): Promise<Tools> => {
-  let name = storeName(space, app)
-  return JSON.parse(
-    await recall(name, '/tools', async () => {
-      let r = await appStore(env.STORE, space, app)('/tools')
-      if (r.ok) return await r.text()
-      await r.body?.cancel()
-      return '{}'
-    }),
-  )
-}
-
 // Every app this caller can reach, with the space it is in — the walk both
 // the listing and a call resolve through. Two apps in two spaces can share a
 // slug, and then one name means two things: the first is the one that
@@ -176,63 +154,19 @@ export let runCommand = async (
     )
   }
   let { space, app, tool } = found[0]
-  return { ...await ran(ctx, space, app, name, tool, args), space }
-}
-
-// The act itself: the template filled, sent the page's way, and answered as
-// one sentence with the rows under it — and the same rows, or the ids a write
-// minted, as data, which is what a program reads.
-let ran = async (
-  ctx: Ctx,
-  space: Space,
-  app: App,
-  name: string,
-  tool: ToolDef,
-  args: Record<string, unknown>,
-): Promise<Out> => {
-  let act = filled(tool, args)
-  if (act.worker != null) {
-    let res = await commandWorker(
+  let who = await whoIn(ctx, space)
+  return {
+    ...await commandAt(
       ctx.env,
       space,
       app,
-      await whoIn(ctx, space),
-      act.worker,
-      act.args ?? {},
-    )
-    let answer = await res.text()
-    return {
-      text: `${name}: ${answer || 'done'} in ${at(space, app)}`,
-      value: { answer },
-    }
-  }
-  let door = acting(ctx.env, space, app, await whoIn(ctx, space))
-  if (act.query != null) {
-    let rows = await door.query(act.query) as unknown[]
-    let n = Array.isArray(rows) ? rows.length : 1
-    return {
-      text: `${name}: ${
-        Array.isArray(rows) ? `${n} ${n == 1 ? 'row' : 'rows'}` : 'answered'
-      } in ${at(space, app)}\n\n${JSON.stringify(rows, null, 2)}`,
-      value: { rows },
-    }
-  }
-  let out = await door.apply(
-    Array.isArray(act.apply)
-      ? { entities: act.apply }
-      : { entities: [act.apply] },
-  )
-  // The entities this call wrote, by the alias the template minted them at
-  // where it had one — an app's page reads a row back by eid, and so does the
-  // agent's next call (tools.ts `wrote` says the same thing in words).
-  let aliases = out.aliases
-  let ids = out.entities
-  let said = Object.entries(aliases).map(([alias, eid]) => `${alias}=${eid}`)
-  return {
-    text: `${name}: wrote ${ids.length} ${
-      ids.length == 1 ? 'entity' : 'entities'
-    } in ${at(space, app)}${said.length ? `: ${said.join(', ')}` : ''}`,
-    value: { entities: ids, aliases },
+      who,
+      name,
+      tool,
+      args,
+      acting(ctx.env, space, app, who),
+    ),
+    space,
   }
 }
 

@@ -36,7 +36,7 @@ import { responses as openrouter } from '@yaks/openrouter'
 import { appStore, type Directory, directoryOf } from './directory.ts'
 import { ctxOf } from './connections.ts'
 import { blobPrefix } from './blob-key.ts'
-import { filled, schemaOf } from './lib/tools.ts'
+import { filled, schemaOf } from '@yaks/tools/declared'
 import { metered } from './meter.ts'
 import { outbound } from './outbound.ts'
 import { caught } from './sentry.ts'
@@ -240,7 +240,7 @@ let asker = (ctx?: ToolContext): string | null => {
 
 /**
  * The commands an app marks `"model": true`, as the tools its models may call
- * (lib/tools.ts). A command runs as the person who asked for the turn, held to
+ * (@yaks/tools/declared). A command runs as the person who asked for the turn, held to
  * what they may write here: a model can do what they could do on the page, and
  * never more. Its `$session` is the transcript the turn is in, and what it
  * writes names that transcript as `created.via`, which no page can. A query answers

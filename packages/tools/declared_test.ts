@@ -3,7 +3,7 @@
 // arguments do to a template. The kernel half — the same file through
 // app_deploy and a call at the MCP door — is in workers/yak/mcp_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
-import { filled, parseTools, schemaOf, viewsOf } from './tools.ts'
+import { filled, parseTools, schemaOf, viewsOf } from '@yaks/tools/declared'
 
 // The components the app's store knows, which a template may write.
 let runs = ['jog']

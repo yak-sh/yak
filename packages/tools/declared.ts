@@ -57,7 +57,7 @@
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
 import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
-import { CallError } from '@yaks/tools'
+import { CallError } from './args.ts'
 
 /** One argument's JSON Schema. */
 export type Arg = Record<string, unknown>
@@ -372,7 +372,9 @@ let needed = (tool: ToolDef) => tool.required ?? []
 
 // The tool's arguments as one JSON Schema object, which is what a host shows
 // the model and what a store's runner checks a call against (@yaks/tools).
-export let schemaOf = (tool: ToolDef) => ({
+export let schemaOf = (
+  tool: ToolDef,
+): { type: 'object'; properties: Record<string, Arg>; required: string[] } => ({
   type: 'object' as const,
   properties: tool.input,
   required: needed(tool),
@@ -545,6 +547,25 @@ export let filled = (
   }
 }
 
+/** Fill one declared command and hand its act to the caller's effect boundary. */
+export let invoke = <T>(
+  tool: ToolDef,
+  args: Record<string, unknown>,
+  acts: {
+    apply: (bundles: Bundle[]) => T | Promise<T>
+    query: (line: string) => T | Promise<T>
+    worker: (path: string, args: Record<string, unknown>) => T | Promise<T>
+  },
+  context: Context = {},
+): T | Promise<T> => {
+  let act = filled(tool, args, context)
+  if (act.worker != null) return acts.worker(act.worker, act.args ?? {})
+  if (act.query != null) return acts.query(act.query)
+  return acts.apply(
+    (Array.isArray(act.apply) ? act.apply : [act.apply]) as Bundle[],
+  )
+}
+
 /**
  * An app's declared commands as TOOLS a graph can run itself (T-37605): the
  * declaration from the manifest, and a `run` that fills the template and hands
@@ -556,10 +577,8 @@ export let filled = (
  * reads rows the runner keeps its hands off. A `worker` calls the app's own
  * code through the host's scoped dispatch door.
  *
- * This is the same template language the kernel's `command` tool fills
- * (workers/yak/declared.ts `ran`); what differs is where the filled act goes —
- * there, through the app's own HTTP doors; here, straight into the store that
- * declared it.
+ * `invoke` also fills commands for a page or connector. Their hosts supply
+ * the acts that reach the store or the app's worker.
  */
 export let commands = (
   said: Tools,
@@ -574,13 +593,13 @@ export let commands = (
     description: def.description,
     inputSchema: schemaOf(def),
     readOnly: def.query != null,
-    run: (call: Bundle, graph: Graph) => {
-      let act = filled(def, argsOf(call))
-      if (act.worker != null) {
-        if (!worker) throw new Error('app worker is unavailable')
-        return worker(act.worker, act.args ?? {}, call)
-      }
-      if (act.query != null) return graph.read(act.query)
-      return (Array.isArray(act.apply) ? act.apply : [act.apply]) as Bundle[]
-    },
+    run: (call: Bundle, graph: Graph) =>
+      invoke(def, argsOf(call), {
+        worker: (path, args) => {
+          if (!worker) throw new Error('app worker is unavailable')
+          return worker(path, args, call)
+        },
+        query: (line) => graph.read(line),
+        apply: (bundles) => bundles,
+      }),
   }))

@@ -5,6 +5,12 @@ graph. A tool is a named function that receives graph data and validated
 arguments, then returns graph patches. The package records the request,
 execution state, result, elapsed time, and any failure.
 
+For app-declared commands, `@yaks/tools/declared` parses `tool: true` entries,
+fills their arguments, and invokes the host's apply, query, or worker effect.
+`@yaks/tools/routes` contributes `POST /command` when the host supplies a
+caller-scoped `command(name, args)` function. The host resolves the app and
+authorizes the caller; [@yaks/api](../api/README.md) serves the route.
+
 ```sh
 deno add jsr:@yaks/tools
 ```

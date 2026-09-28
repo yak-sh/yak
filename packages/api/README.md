@@ -272,6 +272,10 @@ plugins would have added are never asked for ([@yaks/cli](../cli/README.md)).
 `/mcp` is one of those routes, contributed by [@yaks/mcp](../mcp/README.md) when
 a config lists that package too.
 
+This package serves and composes routes; each feature package owns its own
+endpoint in `<package>/routes`. For example, [@yaks/tools](../tools/README.md)
+owns the command route, while `@yaks/api` hosts it alongside the graph doors.
+
 [`vocab.json`](./vocab.json) declares one tool, `serve`, and
 [`tools.ts`](./tools.ts) implements it: it binds a TCP port and answers with
 that handler. So a config listing `@yaks/api` is a config whose graph can be

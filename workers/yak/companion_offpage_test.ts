@@ -8,7 +8,7 @@ import { appStore, storeName } from './directory.ts'
 import { runCommand } from './declared.ts'
 import { commandWorker, granted } from './dispatch.ts'
 import { Store } from './graph.ts'
-import { parseTools } from './lib/tools.ts'
+import { parseTools } from '@yaks/tools/declared'
 import { ADA, ADA_OWNS, platform, seeded } from './serving-probe.ts'
 import type { Dispatch } from './door.ts'
 

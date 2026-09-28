@@ -1403,7 +1403,7 @@ export let OPENS: Record<string, string> = {
  * each {@link OPENS}: who may spend the owner's account budget through the app.
  *
  * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
- * component: it is left out here and read by lib/tools.ts `parseTools`, so a
+ * component: it is left out here and read by @yaks/tools/declared `parseTools`, so a
  * store's vocabulary holds components alone.
  */
 export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {

@@ -39,7 +39,7 @@ import type { Objects } from '@yaks/blob'
 import { r2Objects } from './lib/objects.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
-import { parseTools, TOOLS_EXAMPLE, viewsOf } from './lib/tools.ts'
+import { parseTools, TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
 import type { Bundle } from '@yaks/graph'
 import { VERSION } from './seo.ts'
 import {
@@ -1910,7 +1910,7 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
 // an agent chooses one (guide.ts `brief`).
 // One command's arguments, as a signature a model reads: the required ones,
 // then the optional ones marked `?`. It is the same JSON Schema `command`
-// takes in `args` (lib/tools.ts `schemaOf`), said the short way; the schema
+// takes in `args` (@yaks/tools/declared `schemaOf`), said the short way; the schema
 // itself rides in the answer's data.
 let argsOf = (input: unknown) => {
   let s = (input ?? {}) as {

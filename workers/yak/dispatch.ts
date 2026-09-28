@@ -65,7 +65,7 @@ import {
   WORKER,
   WRAPPER,
 } from './wrangler_app.ts'
-import { refuse } from './tool.ts'
+import { refuse, rejected } from './tool.ts'
 import { modules } from '@yaks/esbuild'
 export { WORKER } from './wrangler_app.ts'
 
@@ -497,7 +497,10 @@ export let commandWorker = async (
   let res = await called(env, space, app, req, who, call, at, source)
   if (!res) throw new Error('app worker is unavailable')
   if (!res.ok) {
-    throw new Error(`app worker answered ${res.status}: ${await res.text()}`)
+    throw rejected(
+      res.status,
+      `app worker answered ${res.status}: ${await res.text()}`,
+    )
   }
   return res
 }

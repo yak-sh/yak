@@ -105,6 +105,8 @@ import { DAYS, NOT_ON, type Stats, statsOf } from './views.ts'
 import { answered, watched } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { refuse } from './tool.ts'
+import { routes as commandRoutes } from '@yaks/tools/routes'
+import { commandIn } from './app-command.ts'
 import { source, tooMany, within } from './rate.ts'
 import {
   bearerOf,
@@ -843,7 +845,7 @@ type Wrote = { entities: string[]; aliases: Record<string, string> }
 
 // The app's two acts, as one person: what a page does through the doors
 // below, without a page. An app's own MCP tools are templates over exactly
-// these (lib/tools.ts, T-32685), so a tool call goes the page's way — the
+// these (@yaks/tools/declared, T-32685), so a tool call goes the page's way — the
 // app's `access` decides it, the vouched headers name the writer, the listing
 // rule shapes the answer — and a refusal is the sentence a page would read.
 // Anything a tool can do here, the person calling it could do on the page.
@@ -950,6 +952,22 @@ let api = async (
     )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
+  if (path == '/command') {
+    if (!mayRead) return refused('not_a_reader')
+    let [route] = commandRoutes({
+      command: (name, args) =>
+        commandIn(
+          env,
+          space,
+          app,
+          who,
+          name,
+          args,
+          acting(env, space, app, who),
+        ),
+    })
+    return route.handle(req)
+  }
   // Who is looking, before the first write (T-32679). A page could only learn
   // this from a refusal, which is too late twice over: on an `open` app a
   // signed-out write has no `created.by`, so the page must ask a guest their

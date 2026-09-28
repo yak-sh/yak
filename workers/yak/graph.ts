@@ -150,7 +150,7 @@ import {
 import { parse } from '@yaks/query'
 import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { reconcile, type Runner, runner } from '@yaks/tools'
-import { commands, type Tools } from './lib/tools.ts'
+import { commands, type Tools } from '@yaks/tools/declared'
 import { rouse, soonest, tick, type Ticked, wakes } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import {

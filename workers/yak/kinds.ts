@@ -4,7 +4,7 @@
 // discovers there is somewhere to put a recipe the way it discovers anything
 // else here: by asking `commands` what the apps in reach can do.
 //
-// Nothing new answers them. They are ordinary declared tools (lib/tools.ts
+// Nothing new answers them. They are ordinary declared tools (@yaks/tools/declared
 // ToolDef), planted in the app's store beside the ones its vocab.json declares
 // and listed, called, titled and described through the one seam (declared.ts) — so
 // `readOnly` on the find and the app's title and address on the description
@@ -18,7 +18,7 @@
 // A redeploy regenerates them from the manifest as it then reads, so a property
 // added to a kind is an argument added to its two tools.
 import { jsonb, type PropSchema, type VocabDoc } from '@yaks/vocab'
-import type { Arg, ToolDef, Tools } from './lib/tools.ts'
+import type { Arg, ToolDef, Tools } from '@yaks/tools/declared'
 
 // What an argument takes from the property it fills: the type the column
 // holds, what an object or a list holds, and the words saying what it is.
@@ -67,7 +67,7 @@ let bound = (props: Record<string, Arg>) =>
 // properties. Only the title is required — an agent writes what it was told and
 // leaves the rest of the row empty, the way the app's own form does, and a
 // property nobody named is dropped from the bundle rather than written as the
-// word `undefined` (lib/tools.ts `filled`).
+// word `undefined` (@yaks/tools/declared `filled`).
 //
 // A kind declaring a property `title` or `body` of its own shares the variable
 // with `doc`: one argument, written both places, which is what a person asking

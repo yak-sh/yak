@@ -27,7 +27,7 @@ import {
   unsaid,
 } from './vocab.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
-import { parseTools } from './lib/tools.ts'
+import { parseTools } from '@yaks/tools/declared'
 
 // A manifest in the one form, without every test saying `$defs` and
 // `properties` around it. The properties are written as they are declared.

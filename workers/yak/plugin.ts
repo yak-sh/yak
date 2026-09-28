@@ -57,7 +57,7 @@ import type { Bindings } from './graph.ts'
 import type { Page } from './guide.ts'
 import type { Who } from './session.ts'
 import type { Tool } from './tool.ts'
-import type { Tools } from './lib/tools.ts'
+import type { Tools } from '@yaks/tools/declared'
 import { caught } from './sentry.ts'
 
 /**
@@ -169,7 +169,7 @@ export type Stored = {
     via?: string,
   ) => Promise<Bundle[]>
   /** the app's own commands, as its manifest declares them now
-   * (lib/tools.ts) */
+   * (@yaks/tools/declared) */
   commands: () => Tools
   /** a failure noted in the app's break log and reported, never thrown */
   broke: (what: string, error: unknown) => void

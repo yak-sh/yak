@@ -128,7 +128,7 @@ export let documented = (held: string): string | null => {
 
 /**
  * A tools manifest with each `{{arg}}` hole written as the `$arg` variable it
- * became (c0ca24d4). A deploy refuses the hole (lib/tools.ts `parseTools`),
+ * became (c0ca24d4). A deploy refuses the hole (@yaks/tools/declared `parseTools`),
  * but a store that last accepted a manifest before then remembers it in its
  * tools slot, and is rewritten at its next open (graph.ts `#reshaping`).
  * `null` where there is nothing to do. The names a hole can hold never need
@@ -140,7 +140,7 @@ export let unholed = (held: string): string | null => {
 }
 
 /** The five words a tool's argument was once written as, and the JSON Schema
- * each was shown to a host as (lib/tools.ts `schemaOf` before T-38021) —
+ * each was shown to a host as (@yaks/tools/declared `schemaOf` before T-38021) —
  * frozen here for the same reason {@link WAS} is. */
 let ARGS: Record<string, Record<string, unknown>> = {
   text: { type: 'string' },
