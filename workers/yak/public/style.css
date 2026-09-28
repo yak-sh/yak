@@ -541,6 +541,13 @@
     max-width: 36rem;
   }
 
+  .Hello_Kicker {
+    color: var(--accent);
+    font-size: var(--small);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+
   .Hello_Yak {
     width: 4rem;
   }
@@ -568,8 +575,41 @@
     font-weight: 700;
   }
 
-  .Demo .Window_Frame {
-    height: 24rem;
+  .Demo_Shot {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    color: var(--on-accent);
+  }
+
+  .Demo_Shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    object-position: center top;
+  }
+
+  .Demo_Play {
+    position: absolute;
+    inset: auto auto 1rem 1rem;
+    padding: 0.55rem 0.9rem;
+    border-radius: var(--pill);
+    background: var(--accent);
+    color: var(--on-accent);
+    font-weight: 800;
+    box-shadow: 0 0.2rem 0.8rem #0004;
+  }
+
+  .Demo_Shot:hover .Demo_Play {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 35rem) {
+    .Demo_Shot img {
+      aspect-ratio: 5 / 4;
+    }
   }
 
   @media (min-width: 60rem) {
