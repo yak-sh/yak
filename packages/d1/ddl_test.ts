@@ -76,7 +76,7 @@ Deno.test('a d1 install removes empty old columns but keeps written ones', async
   assertEquals((await has('used')).results.length, 1)
 })
 
-Deno.test('a d1 install resolves stored eids when a property becomes a reference', async () => {
+Deno.test('a d1 look survives reference upgrades and rollbacks', async () => {
   let words = (ref: boolean) =>
     loadVocab({
       $defs: {
@@ -104,6 +104,14 @@ Deno.test('a d1 install resolves stored eids when a property becomes a reference
   let after = storage(db, words(true))
   await after.install()
   assertEquals((await after.read('.look&*'))[0].look, { player: 'hero' })
+  assertEquals((await after.read('.look.player.seen.level=vale&*'))[0].look, {
+    player: 'hero',
+  })
+  await before.install()
+  assertEquals((await before.read('.look.player=hero&*'))[0].look, {
+    player: 'hero',
+  })
+  await after.install()
   assertEquals((await after.read('.look.player.seen.level=vale&*'))[0].look, {
     player: 'hero',
   })

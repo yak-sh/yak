@@ -3,7 +3,9 @@ import { type Frame, type Sink, subscriptions } from '@yaks/api'
 import { graph } from '@yaks/graph'
 import { matcher } from '@yaks/match'
 import { ram } from '@yaks/ram'
+import { storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
+import { mem, spy } from '../../packages/sqlite/testing.ts'
 import { areaOf, looksOf, placeOf, REACH } from './area.ts'
 import words from './vocab.json' with { type: 'json' }
 
@@ -58,12 +60,17 @@ Deno.test('a nearby creature reaches another page without a stored row', () => {
 
 Deno.test('a crowded area keeps its looks as heroes move and restyle', () => {
   let vocab = loadVocab([words])
-  let g = graph({ storage: ram(vocab), vocab })
+  let db = spy(mem(), (_, params) => {
+    if (params.length > 100) throw new Error('too many SQL variables')
+  })
+  let store = storage(db, vocab)
+  store.install()
+  let g = graph({ storage: store, vocab })
   let subs = subscriptions(g)
   let heard: Frame[] = []
   let writer: Sink = () => {}
   let watcher: Sink = (frame) => heard.push(frame)
-  let heroes = Array.from({ length: 32 }, (_, i) => `hero-${i}`)
+  let heroes = Array.from({ length: 150 }, (_, i) => `hero-${i}`)
   g.apply(heroes.flatMap((eid) => [
     { entity: { eid }, player: {} },
     { entity: { eid: `look-${eid}` }, look: { player: eid, name: eid } },

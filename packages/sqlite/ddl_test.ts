@@ -47,7 +47,7 @@ let lookWords = (ref = false) =>
     },
   })
 
-Deno.test('a stored eid becomes a reference without losing its look row', () => {
+Deno.test('a look survives reference upgrades and rollbacks', () => {
   let d = mem(), old = lookWords(), next = lookWords(true)
   let before = storage(d, old)
   before.install()
@@ -62,6 +62,17 @@ Deno.test('a stored eid becomes a reference without losing its look row', () => 
     entity: { eid: 'face' },
     look: { player: 'hero', name: 'Ada' },
   }])
+  let rolled = storage(d, old)
+  rolled.install()
+  assertEquals(rolled.read('.look.player=hero&*')[0].look, {
+    player: 'hero',
+    name: 'Ada',
+  })
+  after.install()
+  assertEquals(after.read('.look.player.seen.level=vale&*')[0].look, {
+    player: 'hero',
+    name: 'Ada',
+  })
 })
 
 Deno.test('an orphan scalar eid refuses conversion and keeps its bytes', () => {

@@ -76,6 +76,19 @@ Deno.test('an app deploy turns stored player eids into queryable look references
     APP,
   )
   assertEquals(look.look, { player: ONE, name: 'Ada' })
+
+  assertEquals((await deploy(false)).status, 200)
+  let [rolled] = await newer(ctx, 'ada/vale').query(
+    `.look.player=${ONE}&*`,
+    APP,
+  )
+  assertEquals(rolled.look, { player: ONE, name: 'Ada' })
+  assertEquals((await deploy(true)).status, 200)
+  let [restored] = await newer(ctx, 'ada/vale').query(
+    '.look.player.seen.level=vale&*',
+    APP,
+  )
+  assertEquals(restored.look, { player: ONE, name: 'Ada' })
 })
 
 // A Store over the object, as a new incarnation, driven through its own doors.

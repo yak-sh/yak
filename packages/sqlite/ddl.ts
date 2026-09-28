@@ -359,34 +359,40 @@ let comps = (vocab: Vocab, was: Standing): string[] =>
 // the two things only a rebuild changes: which columns are keyed to another
 // table, and what each column checks. A column the table lacks is `grown`'s,
 // and arrives with its check.
-let fits = (t: Stood, fresh: CreateTable, refs: string[]): boolean => {
+let fits = (t: Stood, fresh: CreateTable, changes: number): boolean => {
   let keyed = fresh.cols.filter((c) => c.ref).map((c) => c.name)
   let checked = checks(render(fresh).sql)
   let names = ['', ...t.cols.map((r) => String(r.name).toLowerCase())]
   return keyed.length == t.keys.length &&
     keyed.every((c) => t.keys.includes(c)) &&
-    !refs.length &&
+    !changes &&
     names.every((n) => (t.checks[n] ?? '') == (checked[n] ?? ''))
 }
 
-// A scalar eid becomes an integer reference when its vocabulary learns the
-// relation. The existing values need resolving through the entity spine.
+// An eid and its integer reference are two storage forms for one entity.
+// Versions of an app can move in either direction, so resolve through the
+// entity spine whenever its vocabulary changes that relation.
 let converted = (
-  vocab: Vocab,
-  comp: string,
   t: Stood,
   fresh: CreateTable,
-): string[] =>
+): { name: string; from: string; to: string }[] =>
   fresh.cols.flatMap((c) => {
     let old = t.cols.find((r) => r.name == c.name)
-    return vocab.prop(comp, c.name)?.category == 'ref' &&
-        c.type == 'integer' && String(old?.type).toLowerCase() == 'text'
-      ? [c.name]
-      : []
+    let type = String(old?.type).toLowerCase()
+    if (c.ref && c.type == 'integer' && type == 'text') {
+      return [{ name: c.name, from: 'eid', to: 'id' }]
+    }
+    if (
+      !c.ref && c.type == 'text' && type == 'integer' &&
+      t.keys.includes(c.name)
+    ) {
+      return [{ name: c.name, from: 'id', to: 'eid' }]
+    }
+    return []
   })
 
-/** Existing scalar eids that cannot become references. A failed conversion
- * must leave its old column untouched rather than turn a missing eid into null. */
+/** Values that cannot resolve through the entity spine. A failed conversion
+ * must leave its old column untouched rather than turn a missing id into null. */
 export let unresolved = (
   vocab: Vocab,
   was: Standing,
@@ -394,22 +400,22 @@ export let unresolved = (
   Object.fromEntries(
     comps(vocab, was).flatMap((comp) => {
       let fresh = tableDdl(vocab, comp)
-      let names = converted(vocab, comp, was[comp], fresh)
-      return names.length
+      let changes = converted(was[comp], fresh)
+      return changes.length
         ? [[
           comp,
-          names.map((name) =>
+          changes.map(({ name, from, to }) =>
             select({
               cols: [col(name, comp)],
               from: table(comp),
               joins: [left(
                 table('entity', '__ref'),
                 eq(
-                  col('eid', '__ref'),
+                  col(from, '__ref'),
                   col(name, comp),
                 ),
               )],
-              where: and(notNull(col(name, comp)), isNull(col('id', '__ref'))),
+              where: and(notNull(col(name, comp)), isNull(col(to, '__ref'))),
               limit: lit(1),
             })
           ),
@@ -484,14 +490,14 @@ export let refit = (
           type: String(r.type ?? '') || undefined,
         }))
       let fresh = tableDdl(vocab, comp, comp, extra)
-      let refs = converted(vocab, comp, t, fresh)
-      if (fits(t, fresh, refs) && !empty[comp]?.length) return []
+      let refs = converted(t, fresh)
+      if (fits(t, fresh, refs.length) && !empty[comp]?.length) return []
       let old = t.cols.map((r) => String(r.name))
       let cols = fresh.cols.map((r) => r.name).filter((name) =>
         old.includes(name)
       )
       let aside = `${comp}__refit`
-      let changed = new Set(refs)
+      let changed = new Map(refs.map((r) => [r.name, r]))
       let copy = (into: string, from: string, names: string[]): Stmt => ({
         t: 'insert',
         into,
@@ -500,9 +506,9 @@ export let refit = (
           cols: names.map((c) =>
             from == aside && changed.has(c)
               ? sub(select({
-                cols: [col('id')],
+                cols: [col(changed.get(c)!.to)],
                 from: table('entity'),
-                where: eq(col('eid'), col(c, aside)),
+                where: eq(col(changed.get(c)!.from), col(c, aside)),
               }))
               : col(c)
           ),
