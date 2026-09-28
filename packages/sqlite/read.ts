@@ -15,12 +15,10 @@ import type { Prop, Vocab } from '@yaks/vocab'
 import {
   among,
   and,
-  ARMS,
   as,
   type BindOpts,
   col,
   compile,
-  type Compound,
   cross,
   DEEP,
   type Derived,
@@ -30,6 +28,7 @@ import {
   eq,
   exists,
   type Expr,
+  from,
   type Join,
   join,
   left,
@@ -42,7 +41,6 @@ import {
   type Select,
   select,
   table,
-  unionAll,
   val,
 } from '@yaks/sql'
 import type { Bundle, Comp } from './bundle.ts'
@@ -241,15 +239,18 @@ export let spine = (vocab: Vocab, which: Expr): Select => {
   })
 }
 
-// Which of `names` hold a row for any of `owners`: one arm per table, each
-// answering its own name. Globally empty tables short-circuit before the
-// owners are walked, where there is more than one to walk.
-let probe = (names: string[], owners: number[]): Compound => ({
-  ...unionAll(
-    ...names.map((c) =>
-      select({
-        cols: [as(lit(c), 'name')],
-        where: and(
+// Which tables hold a row for any owner. VALUES has no compound-SELECT arm
+// limit, so a wide sparse vocabulary still takes one presence statement.
+// Globally empty tables short-circuit before the owners are walked.
+let probe = (names: string[], owners: number[]): Select =>
+  select({
+    with: [{ name: 'owners', q: each(owners), materialized: true }],
+    cols: [as(col('column1', 'worn'), 'name')],
+    from: from({
+      t: 'values',
+      rows: names.map((c) => [
+        lit(c),
+        and(
           ...(owners.length > 1
             ? [exists(select({ cols: [lit(1)], from: table(c) }))]
             : []),
@@ -260,11 +261,10 @@ let probe = (names: string[], owners: number[]): Compound => ({
             where: eq(col('entity', c), col('value', 'owners')),
           })),
         ),
-      })
-    ),
-  ),
-  with: [{ name: 'owners', q: each(owners), materialized: true }],
-})
+      ]),
+    }, 'worn'),
+    where: eq(col('column2', 'worn'), lit(true)),
+  })
 
 /**
  * Identity, not search: these entities as they stand. A tombstoned one comes
@@ -338,27 +338,13 @@ export let get = (
         else compOwners.set(comp, [...group])
       }
     }
-    // Compatibility only: non-opt-in stores and raw, not-yet-backfilled rows
-    // have no descriptor. A wide vocabulary is usually sparse. Ask which tables
-    // have rows in
-    // this set before projecting their columns; empty component tables need no
-    // joins
-    // or driver round trip. Short-circuit globally empty tables before walking
-    // the owners: otherwise each empty component table costs 4096 fruitless
-    // index probes
-    // per chunk in a wide read. This is a live existence check, not a cached
-    // census that could miss a newly populated table on this or another handle.
-    // One owner already costs only one lookup; it needs no extra table probe.
-    // Every membership probe uses the same bound owner set.
-    let present: string[] = []
-    // One arm per table, cut to what this engine's compound SELECT carries
-    // (`Driver.arms`): workerd refuses a sixth term where an embedded SQLite
-    // takes hundreds, so a probe sized for the latter is a broken read on a
-    // Durable Object rather than a slow one.
-    let wide = driver.arms ?? ARMS
-    for (let j = 0; owners.length && j < names.length; j += wide) {
+    // Unclassified rows have no descriptor. Probe their worn tables once;
+    // a named component read can ask those tables directly. The live probe
+    // sees a component added or removed by another writer on the next read.
+    let present: string[] = comps && owners.length ? names : []
+    if (!comps && owners.length && names.length) {
       present.push(
-        ...driver.query(probe(names.slice(j, j + wide), owners))
+        ...driver.query(probe(names, owners))
           .map((r) => String(r.name)),
       )
     }

@@ -70,8 +70,7 @@ import {
   tabled,
 } from './ddl.ts'
 import { epoch, installed, meta, SCHEMA } from './meta.ts'
-import { doom, read, rows } from './read.ts'
-import { keyed } from './keyed.ts'
+import { doom, get, read, rows } from './read.ts'
 import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
@@ -277,7 +276,8 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
-  let identity = keyed(driver, vocab, base)
+  let identity = (eids: string[], comps?: string[]) =>
+    get(driver, vocab, eids, base, comps)
   let report = base.report ?? logged
   let tx: Tx = {
     read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),

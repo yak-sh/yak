@@ -1,10 +1,10 @@
 import { assert, assertEquals } from '@std/assert'
-import { type BindOpts, lit } from '@yaks/sql'
+import { type BindOpts, insert, lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { mem, seed, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
 
-Deno.test('transaction keyed gather shares whole-set projections, observes writes and rollback', () => {
+Deno.test('transaction gather observes writes and rollback', () => {
   let driver = mem()
   let opts: BindOpts = {
     derived: { 'doc.body': { tag: 'text', expr: () => lit('hydrated body') } },
@@ -41,7 +41,7 @@ Deno.test('transaction keyed gather shares whole-set projections, observes write
   )
 })
 
-Deno.test('singleton gather probes indexed owners, bounds wide vocab and retains real present properties', () => {
+Deno.test('singleton gather reads a wide sparse vocabulary in one probe', () => {
   let vocab = loadVocab({
     $defs: {
       entity: {
@@ -80,9 +80,7 @@ Deno.test('singleton gather probes indexed owners, bounds wide vocab and retains
     tag0: {},
     tag404: {},
   }])
-  assertEquals(queries.length, 6) // spine + two presence chunks + three facets
-  assert(queries.every((sql) => !sql.includes('json_each')))
-  assertEquals(queries.filter((sql) => sql.includes('union all')).length, 2)
+  assertEquals(queries.length, 5) // spine + presence + three facets
   // A new facet is visible immediately: only SQL shapes are cached, not rows
   // or presence. An absent entity must not be cached across a later birth.
   seed(s, [{ entity: { eid: 'sparse' }, tag1: {} }])
@@ -119,7 +117,6 @@ Deno.test('projected identities read only named facets and preserve projection/r
     product: whole.product,
   }])
   assertEquals(queries.length, 2)
-  assert(queries.every((sql) => !sql.includes('union all')))
   assertEquals(s.tx((tx) => tx.get(['p'], ['doc']))[0].doc, whole.doc)
   assertEquals(s.tx((tx) => tx.get(['p'], ['review']))[0].review, undefined)
   assertEquals(s.tx((tx) => tx.get(['absent'], ['doc'])), [])
@@ -141,4 +138,50 @@ Deno.test('projected identities read only named facets and preserve projection/r
     s.tx((tx) => tx.get(['p'], ['product']))[0].product,
     whole.product,
   )
+})
+
+Deno.test('whole reads scale with worn components across one or 100 hits', () => {
+  let name = (i: number) =>
+    `facet${String.fromCharCode(97 + Math.floor(i / 26))}${
+      String.fromCharCode(97 + i % 26)
+    }`
+  let first = name(0)
+  let last = name(39)
+  let vocab = loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object', wire: false },
+      ...Object.fromEntries(Array.from({ length: 40 }, (_, i) => [
+        name(i),
+        { component: true, type: 'object' },
+      ])),
+    },
+  })
+  let queries: string[] = []
+  let driver = spy(
+    { ...mem(), arms: undefined },
+    (sql) => void (unit(sql) || queries.push(sql)),
+  )
+  let s = storage(driver, vocab, { number: false })
+  s.install()
+  let ids = Array.from({ length: 100 }, (_, i) => `owner-${i}`)
+  driver.query(insert(
+    'entity',
+    ...ids.map((eid, i) => ({
+      id: i + 1,
+      eid,
+    })),
+  ))
+  driver.query(insert(first, ...ids.map((_, i) => ({ entity: i + 1 }))))
+  driver.query(insert(last, { entity: 1 }))
+
+  queries.length = 0
+  assertEquals(s.read(`.${first}`).length, 100)
+  assertEquals(queries.length, 5) // filter + spine + probe + two facets
+  queries.length = 0
+  assertEquals(s.get(['owner-0'])[0][last], {})
+  assertEquals(queries.length, 4) // spine + probe + two facets
+  queries.length = 0
+  assertEquals(s.read(`.${first}`, {}, [first]).length, 100)
+  assertEquals(queries.length, 3) // filter + spine + named facet
+  assert(queries.every((sql) => !sql.includes(last)))
 })

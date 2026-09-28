@@ -77,7 +77,7 @@ import {
 } from '@yaks/sql'
 import { componentTables } from './physical.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
-import { keyed } from './keyed.ts'
+import { get } from './read.ts'
 
 // The owner's integer id, as a subquery. Every write keys to it, so an entity
 // minted earlier in the same unit of work resolves without a second question.
@@ -483,7 +483,7 @@ export let patch = (
     return k && !k.dead && k.num == null && take(eid) !== false
   })
   if (pointed.length) {
-    for (let b of keyed(driver, vocab, {})(pointed)) {
+    for (let b of get(driver, vocab, pointed)) {
       let n = take(b.entity.eid)
       if (n === false || comps(b).length) continue
       let e = minted(driver.query(numberSql(b.entity.eid, n)))

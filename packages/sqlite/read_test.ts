@@ -230,18 +230,15 @@ Deno.test('a store with no number in its vocabulary shows none it has', () => {
     entity: { eid: 'was-numbered' },
     sample: { present: 'stored' },
   }])
-  // The keyed read of one entity is the same answer (keyed.ts).
+  // The identity read of one entity is the same answer.
   assertEquals(s.tx((tx) => tx.get(['was-numbered']))[0].entity, {
     eid: 'was-numbered',
   })
 })
 
-Deno.test("a driver that declares no compound width is probed within workerd's", () => {
-  // Workerd — the SQLite under a Durable Object — carries five terms in a
-  // compound SELECT and answers a sixth with `too many terms in compound
-  // select`, which is what stopped every yaks.app space. A driver says what its
-  // engine carries (`Driver.arms`); one that says nothing is cut to ARMS, so a
-  // vocabulary wider than the cap is more statements and never a refused one.
+Deno.test('a wide gather avoids compound SELECT limits', () => {
+  // Workerd refuses a sixth compound SELECT arm. Presence is one VALUES
+  // statement even on a driver that reports no compound width.
   let asked: string[] = []
   let driver = spy({ ...mem(), arms: undefined }, (sql) => void asked.push(sql))
   let vocab = loadVocab({
@@ -274,8 +271,7 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
     { entity: { eid: 'b' }, facet7: { value: 'middle' } },
   ])
   asked.length = 0
-  // One eid takes the keyed probe (keyed.ts), several take the set gather
-  // (read.ts `get`). Both walk the whole vocabulary, and both must fit.
+  // One or several eids take the same set gather.
   assertEquals(s.tx((tx) => tx.get(['a'])), [{
     entity: { eid: 'a', num: 1 },
     facet0: { value: 'first' },
@@ -286,10 +282,9 @@ Deno.test("a driver that declares no compound width is probed within workerd's",
     'b',
   ])
   assertEquals(s.tx((tx) => tx.get(['a', 'b']))[1].facet7, { value: 'middle' })
-  assert(asked.length > 1, 'a wide vocabulary is probed in several statements')
   for (let sql of asked) {
     let terms = sql.split(/\bunion\b/i).length
-    assert(terms <= ARMS, `${terms} terms in a compound SELECT:\n${sql}`)
+    assert(terms <= ARMS, `${terms} compound terms:\n${sql}`)
   }
 })
 
