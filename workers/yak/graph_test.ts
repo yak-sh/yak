@@ -515,6 +515,29 @@ Deno.test('a subscription asking `*` answers what /query answers', async () => {
     owner,
   )).json() as Bundle[]
   assertEquals(read, spoken(pushed.bundles, pushed))
+
+  // A later byline keeps the person's current name after an earlier frame
+  // has already asked for it.
+  let renamed = await post(store, '/apply', [{
+    entity: { eid: ADA },
+    doc: { title: 'Adele' },
+  }], owner)
+  assertEquals(renamed.status, 200)
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 12 },
+  }], owner)
+  let changed = ws.sent.at(-1) as Frame & Names
+  assertEquals(changed.names, { [ADA]: 'Adele' })
+  let queried = await (await get(
+    store,
+    `/query?q=${encodeURIComponent(line)}`,
+    owner,
+  )).json() as Bundle[]
+  assertEquals(
+    (queried[0].created as { by: { name: string } }).by.name,
+    'Adele',
+  )
 })
 
 Deno.test('a woken object serves the same app, and the same sockets', async () => {

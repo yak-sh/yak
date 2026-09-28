@@ -547,6 +547,7 @@ export class Store {
   // The object's SQLite, as the driver every statement here runs through.
   #sql!: Driver
   #profile: ReturnType<typeof profile> | null = null
+  #people = new Map<string, string | null>()
   #live!: Sockets
   #route!: Handler
   #auth!: Authenticate
@@ -671,6 +672,7 @@ export class Store {
 
   #build() {
     let ctx = this.#ctx
+    this.#people.clear()
     // Which words this object speaks is a question of which object it is
     // (`vocabOfStore`). One store on the platform is the directory (the meta
     // space, T-33814); one is the git object graph (D-34943); every other
@@ -840,6 +842,15 @@ export class Store {
         // A sleeping wake armed by the write that makes its `while` hold
         // (`#rouse`), in every store.
         { name: 'yak/rouse', hooks: { effect: this.#rouse } },
+        {
+          name: 'yak/names',
+          hooks: {
+            effect: (bundles) => {
+              for (let b of bundles) this.#people.delete(b.entity.eid)
+              return bundles
+            },
+          },
+        },
         // Last, so the answer a keyed write keeps is the batch as every other
         // commit hook left it (`#logging`).
         this.#logging,
@@ -1996,11 +2007,18 @@ export class Store {
       (comp, prop) => at.has(`${comp}.${prop}`),
     )
     if (!eids.length) return { refs, names: {} }
-    return then(this.#graph.get(eids, ['person', 'doc']), (found) => {
-      let names: Record<string, string> = {}
+    let missing = eids.filter((eid) => !this.#people.has(eid))
+    let read = missing.length ? this.#graph.get(missing, ['person', 'doc']) : []
+    return then(read, (found) => {
+      for (let eid of missing) this.#people.set(eid, null)
       for (let b of found) {
         let title = (b.doc as { title?: string } | undefined)?.title
-        if (b.person && title) names[b.entity.eid] = title
+        if (b.person && title) this.#people.set(b.entity.eid, title)
+      }
+      let names: Record<string, string> = {}
+      for (let eid of eids) {
+        let name = this.#people.get(eid)
+        if (name) names[eid] = name
       }
       return { refs, names }
     })
