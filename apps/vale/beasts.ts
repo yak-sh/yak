@@ -7,8 +7,8 @@
 // existing ones will do, is one more file in bodies/.
 //
 // Where it lives is by the kind of place (`haunts`) and by its level: every
-// level whose danger it suits (homes.ts `suits`, two creature levels for each
-// road from home) and that has a place of that kind (levels.ts) grows that
+// land whose habitat it suits (homes.ts `suits`) and that has a place of that
+// kind (levels.ts) grows that
 // many of it around each one, or around the share of them its odds pick, so
 // a new creature appears wherever it belongs without any level naming it.
 import { DEEP } from './beasts/deep.ts'

@@ -23,6 +23,9 @@
 // levels/ names it: every land has someone with something to ask, and each
 // land's first ask is open to anyone who walks in.
 
+import { landLevel } from './danger.ts'
+import { HOPS } from './levels.ts'
+import { need } from './progress.ts'
 import * as vale from './quests/vale.ts'
 import * as marsh from './quests/marsh.ts'
 import * as coast from './quests/coast.ts'
@@ -102,3 +105,14 @@ export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
  * ```
  */
 export let QUESTS: Quest[] = LANDS.flatMap((l) => l.quests)
+
+/** A new completion is worth the same share of a level as the quest was on
+ * the old twenty-level scale. Saved completions keep their original award. */
+export let questXp = (q: Quest): number => {
+  let level = q.level ?? GIVERS.find((g) => g.id == q.giver)?.level ?? ''
+  let hops = HOPS[level] ?? 0
+  let old = 2 * hops + 2
+  let now = Math.min(60, landLevel(hops) + 1)
+  let step = (lvl: number) => need(lvl + 1) - need(lvl)
+  return Math.round(q.xp * step(now) / step(old))
+}

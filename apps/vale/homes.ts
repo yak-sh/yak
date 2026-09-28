@@ -20,9 +20,8 @@ import { rise, SHORE, type Spot, steep, vale, wallsNear } from './terrain.ts'
  * haunts. */
 export type Den = { kind: string; haunt: Haunt; name: string; place: Place }
 
-/** Whether a creature belongs in a level `hops` roads from home: the
- * danger climbs two creature levels a hop, from 1 to 5 at home to 15 to 21
- * eight hops out, and a boss may stand four above the rest.
+/** Whether a species belongs in a land `hops` roads from home. Its native
+ * level selects a habitat here; danger.ts gives each encounter its level.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

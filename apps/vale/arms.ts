@@ -105,16 +105,20 @@ export let HANDLES: Record<string, Handle> = {
   },
 }
 
-/** The tier of what a creature of level `lvl` leaves, or of the country it
- * lives in: four levels to a tier, to the fifth.
+/** Five material tiers span the sixty levels of the vale. A tier names the
+ * material and recipes of a piece; level says how dangerous a creature is.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals([1, 4, 5, 12, 13, 20].map(tierOf), [1, 1, 2, 3, 4, 5])
+ * assertEquals([1, 12, 13, 24, 25, 60].map(tierOf), [1, 1, 2, 2, 3, 5])
  * ```
  */
 export let tierOf = (lvl: number): number =>
-  Math.max(1, Math.min(5, Math.ceil(lvl / 4)))
+  Math.max(1, Math.min(5, Math.ceil(lvl / 12)))
+
+/** A material tier as it appears on equipment and at stations. */
+export let tierName = (tier: number): string =>
+  ['I', 'II', 'III', 'IV', 'V'][tier - 1] ?? String(tier)
 
 // What each tier is made of, and its colours.
 let METAL = ['Copper', 'Iron', 'Steel', 'Glimmer', 'Cinder']

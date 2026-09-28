@@ -20,7 +20,7 @@ import {
   STUFF,
   stuffName,
 } from './craft.ts'
-import { SLOTS, sortOf } from './arms.ts'
+import { SLOTS, sortOf, tierName } from './arms.ts'
 import { sortLine, step, trying } from './compare.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
@@ -187,7 +187,7 @@ export let station = (panel: Panel, acts: Acts) => {
       ? ''
       : t.heals
       ? `Drink it to mend ${t.heals} (Q)`
-      : `${sortOf(t)} · tier ${r.tier}`
+      : `${sortOf(t)} · tier ${tierName(r.tier)}`
     let button = !able(r, trades[r.at].lvl)
       ? `<span class=Pack_Hint>Requires ${trade.name} ${least(r.tier)}</span>`
       : making
@@ -218,7 +218,7 @@ export let station = (panel: Panel, acts: Acts) => {
           !up && n == tier ? ' Pack_Tile-on' : ''
         }" data-tier=${n}><span>${
           mine.lvl >= least(n) ? '' : glyphText('lock')
-        }${n}</span></button>`
+        }${tierName(n)}</span></button>`
       ).join('') +
       (Object.values(RECIPES).some((r) => r.at == c && ITEMS[r.makes]?.slot)
         ? `<button class="Pack_Tile Craft_Up${

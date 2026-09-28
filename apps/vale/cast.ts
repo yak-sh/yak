@@ -16,6 +16,7 @@
 import * as THREE from 'three'
 import { ABILITIES } from './abilities.ts'
 import { BEASTS } from './beasts.ts'
+import { skull } from './danger.ts'
 import {
   type Act,
   beast,
@@ -589,7 +590,9 @@ export let cast = (
           plates.plate(
             m.eid,
             head(a, 0.15),
-            `<span><b>${esc(b.name)}</b> <em>${b.lvl}</em></span>${
+            `<span><b>${esc(b.name)}</b> <em${
+              skull(m.lvl, f.sheet.lvl) ? ' class=Plate_Danger' : ''
+            }>${skull(m.lvl, f.sheet.lvl) ? '☠' : m.lvl}</em></span>${
               bar(m.hp / m.most, 'Plate_Bar-foe')
             }`,
             `Plate Plate-foe${b.boss ? ' Plate-boss' : ''}`,

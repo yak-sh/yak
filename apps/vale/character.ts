@@ -87,6 +87,7 @@ export let character = (tab: Page, acts: Acts) => {
       was = [s]
       let n = numbers(s, s.worn)
       let from = need(s.lvl), to = need(s.lvl + 1)
+      let xp = s.lvl == 60 ? 'Max level' : `${s.xp - from} / ${to - from} xp`
       let nums =
         LINES.filter((l) => (l.k != 'speed' && l.k != 'twin') || n[l.k])
           .map((l) => `<span class=Pack_Num>${said(l, n[l.k])}</span>`).join(
@@ -101,9 +102,7 @@ export let character = (tab: Page, acts: Acts) => {
         ).join('')
       who.innerHTML = `<b class=Character_Name>${
         esc(s.name)
-      }</b><span class=Character_Level><span class=Badge>Level ${s.lvl}</span><small>${
-        s.xp - from
-      } / ${to - from} xp</small></span><div class=Pack_Nums>${nums}</div>`
+      }</b><span class=Character_Level><span class=Badge>Level ${s.lvl}</span><small>${xp}</small></span><div class=Pack_Nums>${nums}</div>`
     },
   }
 }

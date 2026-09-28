@@ -129,14 +129,14 @@ export let pick = (odds: number[], r: number): Rarity => {
  * let r = stream(7), n = 10000
  * let seen = Object.fromEntries(RARITIES.map((x) => [x, 0]))
  * for (let i = 0; i < n; i++) seen[dropped(r(), 12)]++
- * let odds = oddsOf(11 / 19)
+ * let odds = oddsOf(11 / 59)
  * RARITIES.forEach((x, i) =>
  *   assertAlmostEquals(seen[x] / n, odds[i], 0.006 + odds[i] * 0.08)
  * )
  * ```
  */
 export let dropped = (r: number, lvl: number, boss = false, find = 0) =>
-  pick(oddsOf((lvl - 1) / 19, boss, find), r)
+  pick(oddsOf((lvl - 1) / 59, boss, find), r)
 
 /** The rarity of a piece made by a hero whose trade is at `lvl`, following
  * a recipe that asks `least` of it: likelier fine the further past it they

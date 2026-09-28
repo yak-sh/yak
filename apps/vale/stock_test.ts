@@ -135,10 +135,10 @@ Deno.test('a hand-in counts once, from the person who made the hero', () => {
 })
 
 Deno.test('what a deal set aside is free again if it is never handed in', () => {
-  // Wren's staff, for the Thornback and a sword to replace it.
-  let staff = deal(0, '1 staff2', '1 thornback, 1 sword2')
+  // Wren's fine staff, for repeated dangerous work and a rare stone.
+  let staff = deal(0, '1 staff2', '7 thornback, 1 toadstone')
   let holds = (now: number, hands: Reply[] = []) =>
-    book([staff], hands, now, ['staff2', 'sword2']).holds
+    book([staff], hands, now, ['staff2', 'toadstone']).holds
   assertEquals(holds(1), [0, 0])
   // An offer nobody agreed to lapses soon; one agreed to stands a day.
   assertEquals(holds(OFFER / MIN + 1), [1, 0])
@@ -181,10 +181,9 @@ Deno.test('a deal asks only for what the land has', () => {
 
 Deno.test('a deal gives about what its ask is worth, and precious things only for much', () => {
   let asks = [
-    // The staff for the Thornback alone is too much; with a stone to boot,
-    // it is fair.
-    deal(0, '1 staff2', '1 thornback'),
-    deal(1, '1 staff2', '1 thornback, 1 toadstone', 'bob', 'rook'),
+    // The staff asks for many hard fights; the stone makes the offer fair.
+    deal(0, '1 staff2', '7 thornback'),
+    deal(1, '1 staff2', '7 thornback, 1 toadstone', 'bob', 'rook'),
     // Never for nothing: a plain rack sword is worth nothing.
     deal(2, '1 ring1', '1 sword1', 'cat', 'cat'),
   ]
@@ -241,7 +240,7 @@ Deno.test('a job holds to what the villager holds, the land has, and its worth',
     ].flat(),
     ['void', 'void', 'void', 'void'],
   )
-  assertEquals(one('1 staff2', '1 thornback, 1 toadstone'), ['open'])
+  assertEquals(one('1 staff2', '7 thornback, 1 toadstone'), ['open'])
 })
 
 Deno.test('a villager posts now and then, and a board holds a few jobs', () => {

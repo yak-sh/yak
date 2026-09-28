@@ -5,7 +5,9 @@
 // fight, carry and do is data of its own: beasts.ts, items.ts, quests.ts.
 import { spoil, tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
+import type { Beast } from './beasts.ts'
 import type { Quest } from './quests.ts'
+import { need, power } from './progress.ts'
 import { hashOf, noise, stream } from './rand.ts'
 import { dropped, type Rarity } from './rarity.ts'
 
@@ -21,17 +23,16 @@ import { dropped, type Rarity } from './rarity.ts'
  * assertEquals(need(1), 0)
  * assertEquals(levelOf(need(4)), 4)
  * assertEquals(levelOf(need(4) - 1), 3)
+ * assertEquals(levelOf(need(61)), 60)
  * ```
  */
-export let need = (lvl: number): number => Math.round(80 * (lvl - 1) ** 2.4)
+export { maxHp, need, power } from './progress.ts'
 
 export let levelOf = (xp: number): number => {
   let l = 1
-  while (xp >= need(l + 1)) l++
+  while (l < 60 && xp >= need(l + 1)) l++
   return l
 }
-
-export let maxHp = (lvl: number): number => 90 + lvl * 16
 
 /** The damage one blow does, before the dice: more for a higher level, and
  * `dmg` times that for the weapon it is struck with (arms.ts).
@@ -45,29 +46,29 @@ export let maxHp = (lvl: number): number => 90 + lvl * 16
  * import { assert } from '@std/assert'
  * import { tierOf } from './arms.ts'
  * import { BEASTS } from './beasts.ts'
+ * import { foeAt } from './danger.ts'
  * import { ITEMS } from './items.ts'
  * let plate = (t: number) => ['helm', 'cuirass', 'greaves'].map((n) => ITEMS[n + t])
- * for (let b of Object.values(BEASTS).filter((b) => !b.boss)) {
+ * for (let raw of Object.values(BEASTS).filter((b) => !b.boss)) {
+ *   let b = foeAt(raw, Math.min(8, Math.floor((raw.lvl - 1) / 2)))
  *   let t = tierOf(b.lvl)
  *   let blows = b.hp / power(b.lvl, ITEMS[`sword${t}`].dmg)
  *   assert(blows > 1 && blows < 12, `${b.name}: ${blows} blows`)
  *   let armour = plate(t).reduce((n, p) => n + p.armour!, 0)
  *   let hp = plate(t).reduce((n, p) => n + p.hp!, maxHp(b.lvl))
- *   assert(hp / through(b.dmg, armour) > 1.4 * maxHp(b.lvl) / b.dmg, b.name)
+ *   assert(hp / through(b.dmg, armour) > 1.2 * maxHp(b.lvl) / b.dmg, b.name)
  * }
  * ```
  */
-export let power = (lvl: number, dmg = 1): number => (9 + lvl * 3) * dmg
-
 /** How hard a hero's blow lands, before the dice: their level's power with
  * the blade it is struck with (`dmg`, the first hand's unless said), and
  * whatever their skills and gear add to it (`force`).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals(blowOf(1, { dmg: 2, force: 0.5 }), 36)
+ * assertEquals(blowOf(1, { dmg: 2, force: 0.5 }), 16.5)
  * // A second dagger's blow is as hard as its own blade.
- * assertEquals(blowOf(1, { dmg: 2, force: 0.5 }, 1), 18)
+ * assertEquals(blowOf(1, { dmg: 2, force: 0.5 }, 1), 8.25)
  * ```
  */
 export let blowOf = (
@@ -94,16 +95,25 @@ export let blow = (might: number, roll: number, sure = false, luck = 0) => {
   return { dmg: Math.round(base * (great ? 1.8 : 1)), great }
 }
 
-/** What a bite of `dmg` takes from a hero wearing `armour`: the armour
- * turns that much of it, and never more than three quarters.
+/** Armour turns a share of each bite, without making a foe's weak attacks
+ * harmless. Each point helps, but the next helps less.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals([through(20, 0), through(20, 6), through(20, 30)], [20, 14, 5])
+ * assertEquals([through(20, 0), through(20, 10), through(20, 30)], [20, 13, 8])
  * ```
  */
 export let through = (dmg: number, armour: number): number =>
-  Math.max(Math.ceil(dmg / 4), Math.round(dmg - armour))
+  Math.max(1, Math.round(dmg * 100 / (100 + 5 * armour)))
+
+/** A higher-level creature's bite outruns a hero's defenses; armor and a
+ * matching level bring it back within reach. */
+export let biteOf = (
+  dmg: number,
+  foe: number,
+  hero: number,
+  armour: number,
+): number => through(dmg * 1.15 ** (foe - hero), armour)
 
 export type Slain = {
   creature: string
@@ -111,6 +121,7 @@ export type Slain = {
   kind: string
   at: number
   xp: number
+  lvl?: number
 }
 
 /**
@@ -228,18 +239,20 @@ export type Found = { kind: string; n: number; rarity?: Rarity }
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
+ * import { BEASTS } from './beasts.ts'
+ * import { foeOf } from './danger.ts'
  * import { ITEMS } from './items.ts'
- * assertEquals(lootOf('boar', 'c1', 5, 'p1'), lootOf('boar', 'c1', 5, 'p1'))
+ * assertEquals(lootOf(BEASTS.boar, 'c1', 5, 'p1'), lootOf(BEASTS.boar, 'c1', 5, 'p1'))
  * // The Cinder Wyrm always leaves a piece of the last tier, never plain.
  * for (let fell = 0; fell < 20; fell++) {
- *   let [gear] = lootOf('cinderwyrm', 'c2', fell, 'p1').filter((l) => l.rarity)
+ *   let [gear] = lootOf(foeOf('cinderwyrm', 'maw'), 'c2', fell, 'p1').filter((l) => l.rarity)
  *   assertEquals(ITEMS[gear.kind].tier, 5)
  *   assert(gear.rarity != 'common')
  * }
  * ```
  */
 export let lootOf = (
-  kind: string,
+  beast: Beast,
   creature: string,
   fell: number,
   player: string,
@@ -247,8 +260,7 @@ export let lootOf = (
   find = 0,
 ): Found[] => {
   let r = stream(hashOf(`${creature}:${fell}:${player}`))
-  let beast = BEASTS[kind]
-  let found = (beast?.loot ?? []).flatMap(([item, chance]): Found[] =>
+  let found = beast.loot.flatMap(([item, chance]): Found[] =>
     r() < chance
       ? [{
         kind: item,
@@ -256,7 +268,7 @@ export let lootOf = (
       }]
       : []
   )
-  if (beast && r() < (beast.boss ? 1 : SPOILS)) {
+  if (r() < (beast.boss ? 1 : SPOILS)) {
     let kind = spoil(tierOf(beast.lvl), r, family)
     let rarity = dropped(r(), beast.lvl, beast.boss, find)
     found.push({ kind, n: 1, rarity })
@@ -278,7 +290,7 @@ export let wander = (
   return [home[0] + Math.cos(a) * r, home[1] + Math.sin(a) * r]
 }
 
-export type Entry = { quest: string; step: string; at: number }
+export type Entry = { quest: string; step: string; at: number; xp?: number }
 /** An item row in the bag: its kind, how many, and for a piece of gear, how
  * fine it is (rarity.ts) and how far it is upgraded (upgrade.ts). */
 export type Held = {
@@ -298,6 +310,7 @@ export type Standing = {
   state: 'done' | 'taken' | 'open' | 'locked'
   have: number
   pinned: boolean
+  award?: number
 }
 
 // The latest word, pinned or unpinned, on each quest and deal in a journal,
@@ -369,11 +382,11 @@ export let questsOf = (
   bag: Held[],
 ): Standing[] => {
   let taken = new Map<string, number>()
-  let done = new Set<string>()
+  let done = new Map<string, number | undefined>()
   let words = wordsOf(journal)
   for (let e of journal) {
     if (e.step == 'taken') taken.set(e.quest, e.at)
-    if (e.step == 'done') done.add(e.quest)
+    if (e.step == 'done' && !done.has(e.quest)) done.set(e.quest, e.xp)
   }
   return quests.map((q) => {
     let state: Standing['state'] = done.has(q.id)
@@ -392,6 +405,7 @@ export let questsOf = (
       quest: q,
       state,
       have: Math.min(have, q.count),
+      ...state == 'done' && { award: done.get(q.id) ?? q.xp },
       pinned: state == 'taken'
         ? !(word?.step == 'unpinned' && word.at >= since)
         : state == 'open' && word?.step == 'pinned',
@@ -441,13 +455,17 @@ export let xpOf = (kills: Slain[], quests: Quest[], journal: Entry[]) => {
     ...journal.flatMap((e) => {
       if (e.step != 'done' || done.has(e.quest)) return []
       done.add(e.quest)
-      return [{ at: e.at, xp: reward.get(e.quest) ?? 0 }]
+      return [{ at: e.at, xp: e.xp ?? reward.get(e.quest) ?? 0 }]
     }),
   ]
   let xp = 0
   for (let e of earned.sort((a, b) => a.at - b.at)) {
     xp += e.kill
-      ? worth(e.kill.xp, BEASTS[e.kill.kind]?.lvl ?? 1, levelOf(xp))
+      ? worth(
+        e.kill.xp,
+        e.kill.lvl ?? BEASTS[e.kill.kind]?.lvl ?? 1,
+        levelOf(xp),
+      )
       : e.xp ?? 0
   }
   return xp

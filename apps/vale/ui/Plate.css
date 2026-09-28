@@ -45,6 +45,12 @@
   color: #ffb08a;
 }
 
+.Plate_In .Plate_Danger {
+  color: #ff5e59;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
 .Plate_Bar {
   --fill: var(--ember);
   position: relative;

@@ -16,7 +16,7 @@ import { ITEMS } from './items.ts'
 import { LEVELS, type Spot } from './levels.ts'
 import type { Page } from './panel.ts'
 import type { Sheet } from './play.ts'
-import { GIVERS } from './quests.ts'
+import { GIVERS, questXp } from './quests.ts'
 import { originOf } from './regions.ts'
 import type { Standing } from './rules.ts'
 import { said } from './stock.ts'
@@ -120,7 +120,9 @@ export let quest = (s: Standing): Task => {
     giver: q.giver,
     from: who,
     level: g?.level ?? '',
-    gives: `${q.xp} xp${q.gift ? `, ${ITEMS[q.gift]?.name ?? q.gift}` : ''}`,
+    gives: `${s.award ?? questXp(q)} xp${
+      q.gift ? `, ${ITEMS[q.gift]?.name ?? q.gift}` : ''
+    }`,
     says: q.body,
     state,
     pinned: s.pinned,

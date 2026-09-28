@@ -18,6 +18,7 @@
 // in the order the store took them, so every page reaches the same answer.
 import { tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
+import { foeOf, landLevel } from './danger.ts'
 import { isA } from './features.ts'
 import { LODES } from './gather.ts'
 import { RACK } from './gear.ts'
@@ -112,13 +113,15 @@ export let said = (g: Goods): string =>
 
 let mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1)
 
-// What felling one creature of each tier's country teaches, on average: what
-// a gathered thing of that tier is worth, and, over the odds of one falling, a
-// piece of gear.
+// What felling one creature of each material tier's lands teaches, on
+// average: what a gathered thing or a piece of gear costs to earn.
 let KILL = [1, 2, 3, 4, 5].map((t) =>
   mean(
-    Object.values(BEASTS).filter((b) => !b.boss && tierOf(b.lvl) == t)
-      .map((b) => b.xp),
+    Object.values(LEVELS).flatMap((lv) =>
+      [...new Set(dens(lv).map((d) => d.kind))].map((kind) =>
+        foeOf(kind, lv.id)
+      )
+    ).filter((b) => !b.boss && tierOf(b.lvl) == t).map((b) => b.xp),
   )
 )
 
@@ -164,9 +167,9 @@ export let valueOf = (kind: string): number => {
 export let priceOf = (kind: string): number =>
   Math.round(valueOf(kind) / valueOf('coin'))
 
-/** The level a hero of a land is about, which is what a deed there is worth
- * to: the lands climb two creature levels a road from home. */
-export let lvlOf = (level: string): number => 2 * (HOPS[level] ?? 0) + 2
+/** The level a hero of a land is about, for valuing a deed there. */
+export let lvlOf = (level: string): number =>
+  Math.min(60, landLevel(HOPS[level] ?? 0) + 1)
 
 // The kinds of creature a land grows.
 let bred = (level: string): string[] =>
@@ -207,14 +210,14 @@ let WARES = new Map<string, Set<string>>()
  * ```ts
  * import { assert } from '@std/assert'
  * let vale = wares('mossvale')
- * assert(vale.has('thornback') && vale.has('tusk') && vale.has('sword2'))
+ * assert(vale.has('thornback') && vale.has('tusk') && vale.has('sword1'))
  * assert(!vale.has('frostwolf') && !vale.has('pearl'))
  * ```
  */
 export let wares = (level: string): Set<string> => {
   let had = WARES.get(level)
   if (had) return had
-  let tiers = new Set(bred(level).map((k) => tierOf(BEASTS[k].lvl)))
+  let tiers = new Set(bred(level).map((k) => tierOf(foeOf(k, level).lvl)))
   let gear = Object.keys(ITEMS).filter((k) =>
     ITEMS[k].slot && tiers.has(ITEMS[k].tier ?? 0)
   )
@@ -232,7 +235,9 @@ export let wares = (level: string): Set<string> => {
 // What each land's creatures teach, on average: a gift's measure.
 let taught = (level: string) =>
   mean(
-    bred(level).map((k) => BEASTS[k]).filter((b) => !b.boss).map((b) => b.xp),
+    bred(level).map((k) => foeOf(k, level)).filter((b) => !b.boss).map((b) =>
+      b.xp
+    ),
   )
 
 /** The most a gift from a villager of a land is worth: about what eight of
@@ -252,7 +257,7 @@ export let worthOf = (g: Goods, level: string): number =>
   g.reduce(
     (sum, { kind, n }) =>
       sum + n * (BEASTS[kind]
-          ? worth(BEASTS[kind].xp, BEASTS[kind].lvl, lvlOf(level))
+          ? worth(foeOf(kind, level).xp, foeOf(kind, level).lvl, lvlOf(level))
           : valueOf(kind)),
     0,
   )
@@ -273,7 +278,8 @@ export let wants = (level: string, most = 6) => {
   return {
     creatures: dear(bred(level)),
     things: dear([...yields(level), potion(level)]),
-    tiers: [...new Set(bred(level).map((k) => tierOf(BEASTS[k].lvl)))].sort(),
+    tiers: [...new Set(bred(level).map((k) => tierOf(foeOf(k, level).lvl)))]
+      .sort(),
   }
 }
 

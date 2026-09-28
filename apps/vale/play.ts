@@ -38,6 +38,7 @@ import {
 } from './abilities.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
+import { foeOf } from './danger.ts'
 import { heed } from './gaze.ts'
 import {
   firsts,
@@ -55,8 +56,9 @@ import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
 import { HOME, LEVELS, type Spot } from './levels.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
-import { GIVERS, type Quest, QUESTS } from './quests.ts'
+import { GIVERS, type Quest, QUESTS, questXp } from './quests.ts'
 import {
+  biteOf,
   blow,
   blowOf,
   type Dealing,
@@ -72,7 +74,6 @@ import {
   questsOf,
   type Slain,
   type Standing,
-  through,
   unpinnedOf,
   worth,
   xpOf,
@@ -183,6 +184,8 @@ export type Vitals = { hp: number; max: number; lvl: number }
 export type Mob = {
   eid: string
   kind: string
+  land: string
+  lvl: number
   home: [number, number]
   body: Body
   hp: number
@@ -620,6 +623,7 @@ export let game = (
         kind: str(s.kind),
         at: num(s.at),
         xp: num(s.xp),
+        ...s.lvl != null && { lvl: num(s.lvl) },
       }
     })
     let spent = new Set(used.map((b) => str(comp(b, 'used').item)))
@@ -638,7 +642,12 @@ export let game = (
     })
     let entries = journal.map((b) => {
       let j = comp(b, 'journal')
-      return { quest: str(j.quest), step: str(j.step), at: num(j.at) }
+      return {
+        quest: str(j.quest),
+        step: str(j.step),
+        at: num(j.at),
+        ...j.xp != null && { xp: num(j.xp) },
+      }
     })
     let rows = equip.map((b) => {
       let e = comp(b, 'equip')
@@ -824,14 +833,23 @@ export let game = (
       }
       net.keep({
         entity: { eid: crypto.randomUUID() },
-        journal: { player: me, quest: q.id, step: 'done', at: now },
+        journal: {
+          player: me,
+          quest: q.id,
+          step: 'done',
+          at: now,
+          xp: questXp(q),
+        },
       })
       if (q.gift) keepItem(me, q.gift, 1, now)
       let giver = GIVERS.find((g) => g.id == q.giver)?.name ?? 'They'
       let gift = q.gift
         ? ` ${giver} gives you ${ITEMS[q.gift]?.name ?? q.gift}.`
         : ''
-      return [{ type: 'say', text: `${q.title}: done! +${q.xp} xp.${gift}` }]
+      return [{
+        type: 'say',
+        text: `${q.title}: done! +${questXp(q)} xp.${gift}`,
+      }]
     },
 
     frame: (
@@ -862,7 +880,9 @@ export let game = (
       let down = here?.gait == 'down'
       if (down) body.gait = 'idle'
       let vit = vitals(row)
-      let hp = Math.min(vit?.hp ?? s.max, s.max)
+      let hp = vit?.max && vit.max != s.max
+        ? Math.min(s.max, Math.round(vit.hp * s.max / vit.max))
+        : Math.min(vit?.hp ?? s.max, s.max)
       let mine = fight(row)
       let fought = { ...mine, dealt: mine.dealt.map((d) => ({ ...d })) }
       if (lvlWas && s.lvl > lvlWas) {
@@ -1042,8 +1062,8 @@ export let game = (
       anchor(homes)
       let mobs: Mob[] = []
       for (let h of homes) {
-        let beast = BEASTS[h.kind]
-        if (!beast) continue
+        if (!BEASTS[h.kind]) continue
+        let beast = foeOf(h.kind, h.level)
         let eid = h.eid
         let e = c.ent(eid)
         let home = { x: h.home[0], z: h.home[1] }
@@ -1178,7 +1198,7 @@ export let game = (
           bitten.set(eid, hu.bite)
           let near = dist(mb, body) <= beast.reach + LUNGE
           if (
-            hu.player == me && !down && !fallen && near && !stuck &&
+            hu.player == me && !down && hp > 0 && !fallen && near && !stuck &&
             !sheltered(v, body.x, body.z)
           ) {
             if (rolling) {
@@ -1193,10 +1213,13 @@ export let game = (
               riposte = now
               events.push({ type: 'block', at: at(body, 2) })
             } else {
-              let dmg = through(
+              let dmg = biteOf(
                 Math.round(beast.dmg * (0.85 + Math.random() * 0.3)),
+                beast.lvl,
+                s.lvl,
                 s.kit.armour,
               )
+              dmg = Math.min(dmg, hp + (now < ward.until ? ward.left : 0))
               let soak = now < ward.until ? Math.min(ward.left, dmg) : 0
               if (soak) {
                 ward.left -= soak
@@ -1237,6 +1260,8 @@ export let game = (
         mobs.push({
           eid,
           kind: h.kind,
+          land: h.level,
+          lvl: beast.lvl,
           home: h.home,
           body: mb,
           hp: hpNow,
@@ -1257,7 +1282,7 @@ export let game = (
         let key = `${m.eid}:${life}`
         if (shares.has(key)) return
         shares.add(key)
-        let beast = BEASTS[m.kind]
+        let beast = foeOf(m.kind, m.land)
         net.keep({
           entity: { eid: crypto.randomUUID() },
           slain: {
@@ -1266,6 +1291,7 @@ export let game = (
             kind: m.kind,
             at: when,
             xp: beast.xp,
+            lvl: beast.lvl,
           },
           place: placeOf(...m.home),
         })
@@ -1282,7 +1308,7 @@ export let game = (
           at: at(m.body, beast.size + 1),
         })
         let find = s.kit.powers.find ?? 0
-        lootOf(m.kind, m.eid, when, me, s.kit.family, find).forEach((l, i) => {
+        lootOf(beast, m.eid, when, me, s.kit.family, find).forEach((l, i) => {
           let a = (i / 3) * Math.PI * 2 + Math.random()
           let x = m.body.x + Math.cos(a) * 0.9, z = m.body.z + Math.sin(a) * 0.9
           change.push({
@@ -1308,7 +1334,7 @@ export let game = (
       // A blow landing on a creature: what I have dealt it in this life of
       // it, and, when the blow holds it, until when.
       let land = (m: Mob, dmg: number, great: boolean, held = 0) => {
-        let beast = BEASTS[m.kind]
+        let beast = foeOf(m.kind, m.land)
         let life = fallOf(falls.get(m.eid) ?? [], beast.respawn, now).fell
         let d = fought.dealt.find((d) => d.foe == m.eid && d.life == life)
         if (!d) fought.dealt.push(d = { foe: m.eid, life, dmg: 0, held: 0 })

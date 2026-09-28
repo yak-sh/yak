@@ -135,7 +135,7 @@ export let LEVELS: Record<string, Level> = Object.fromEntries(
 export let HOME = 'mossvale'
 
 /** How many roads each level lies from home, and so how dangerous it is:
- * the creatures that live in it climb with it (homes.ts `suits`).
+ * encounters scale with it (danger.ts `landLevel`).
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

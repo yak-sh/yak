@@ -9,7 +9,7 @@
 // to what they would be (`step`). The pack's card, the compare tip over the
 // bag, and a station's upgrades all say it this way.
 import type { Doer } from './abilities.ts'
-import { type Slot, sortOf } from './arms.ts'
+import { type Slot, sortOf, tierName } from './arms.ts'
 import { hands, kitOf, twins, type Worn } from './gear.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS } from './items.ts'
@@ -163,7 +163,11 @@ export let grown = (a: Piece, b: Piece): string =>
  * its sort, and its tier. */
 export let sortLine = (t: Piece): string =>
   `${t.rarity == 'common' ? '' : `${GRADES[t.rarity].name} · `}${sortOf(t)}${
-    t.tier ? ` · tier ${t.tier}` : ''
+    t.tier
+      ? ` · tier ${tierName(t.tier)} · levels ${12 * (t.tier - 1) + 1}–${
+        12 * t.tier
+      }`
+      : ''
   }`
 
 /** What a piece rolled, each bonus with its glyph, and a legendary's power. */
