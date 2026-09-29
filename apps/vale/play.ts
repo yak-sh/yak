@@ -1320,15 +1320,17 @@ export let game = (
         m.hp = hpOf(m.eid, beast.hp, life, dealing())
         hitAt.set(m.eid, now)
         m.hurt = 0
-        events.push({
-          type: 'hit',
-          eid: m.eid,
-          beast: m.kind,
-          at: at(m.body, beast.size + 0.4),
-          dmg,
-          great,
-          by,
-        })
+        if (dmg > 0) {
+          events.push({
+            type: 'hit',
+            eid: m.eid,
+            beast: m.kind,
+            at: at(m.body, beast.size + 0.4),
+            dmg,
+            great,
+            by,
+          })
+        }
         if (m.hp <= 0) {
           m.down = true
           m.since = now

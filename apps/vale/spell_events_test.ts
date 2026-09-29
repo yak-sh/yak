@@ -1,6 +1,8 @@
 // The combat event boundary keeps an ability with its delayed landing and
 // the start of a step, where the renderer needs them.
 import { assert, assertEquals } from '@std/assert'
+import { useAbilities } from './abilities.ts'
+import { rows } from './abilities_fixture.ts'
 import { homesOf } from './homes.ts'
 import type { Intent } from './input.ts'
 import type { Net } from './net.ts'
@@ -102,4 +104,30 @@ Deno.test('Shadowstep carries its route to the visual effect', () => {
   assertEquals(cast.id, 'shadowstep')
   assert(cast.from)
   assert(Math.hypot(cast.from[0] - cast.at[0], cast.from[2] - cast.at[2]) > 2)
+})
+
+Deno.test('bleed and stun effects need no implicit weapon blow', () => {
+  let events = (effects: unknown[]) => {
+    useAbilities(
+      rows.map((row) =>
+        row.ability_design.kind == 'quake'
+          ? { ...row, ability_design: { ...row.ability_design, effects } }
+          : row
+      ),
+    )
+    let { frame } = encounter('hammer1', 2)
+    frame(10000, { ability: 1 })
+    return [frame(10600), frame(11600)]
+  }
+  try {
+    let [start, later] = events([{ kind: 'bleed', scale: 1 }])
+    assert(!start.some((e) => e.type == 'hit'))
+    assert(later.some((e) => e.type == 'hit' && e.dmg > 0))
+
+    let [held] = events([{ kind: 'stun', ms: 1000 }])
+    assert(held.some((e) => e.type == 'held'))
+    assert(!held.some((e) => e.type == 'hit'))
+  } finally {
+    useAbilities(rows)
+  }
 })
