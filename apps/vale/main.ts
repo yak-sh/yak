@@ -31,7 +31,7 @@ import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
-import { meshed, template } from './grown.ts'
+import { capacity, meshed, template } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { clearHomes } from './homes.ts'
 import { guide, journal, tasksOf } from './journal.ts'
@@ -214,6 +214,7 @@ let roster = partybox(h.panels.party, party, h.toast)
 let w = world(
   v,
   {
+    capacity,
     chunk: (ci, ck, lod) => meshed(VOX * COARSER[lod], ci, ck, lod == 0),
     template,
   },

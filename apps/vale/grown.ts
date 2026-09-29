@@ -12,7 +12,10 @@ import { model } from './props.ts'
 import { vale } from './terrain.ts'
 
 // How many workers mesh at once: a core each, less the page's own, up to four.
-let HANDS = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1))
+export let capacity = Math.max(
+  1,
+  Math.min(4, (navigator.hardwareConcurrency || 2) - 1),
+)
 
 // The workers, started with the first ask, each with how many of its asks
 // are waiting; and each ask still being answered, by its number.
@@ -42,7 +45,7 @@ let broke = (e: unknown) => {
 }
 
 let hands = () =>
-  pool.length ? pool : pool = Array.from({ length: HANDS }, () => {
+  pool.length ? pool : pool = Array.from({ length: capacity }, () => {
     let hand: Hand = {
       w: new Worker(new URL('./grow.ts', import.meta.url), { type: 'module' }),
       load: 0,

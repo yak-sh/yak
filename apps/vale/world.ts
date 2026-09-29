@@ -30,7 +30,7 @@ import { blend } from './regions.ts'
 import { type Building, cutaway } from './solid.ts'
 import { cut, CUTS, geometry, night, sight, soft } from './soft.ts'
 import { day } from './day.ts'
-import { type Want, wanted } from './stream.ts'
+import { COARSER, type Want, wanted } from './stream.ts'
 import {
   adopt,
   buildingOf,
@@ -46,6 +46,7 @@ import {
 /** How the page meshes chunk (ci, ck) at a detail (stream.ts), off its
  * thread. */
 export type Mesher = {
+  capacity: number
   chunk: (ci: number, ck: number, lod: number) => Promise<Chunk>
   template: (
     kind: string,
@@ -93,9 +94,6 @@ export type World = {
 
 // How near a chunk's middle must be for its flowers and grass to be drawn.
 let NEAR = 52
-// How many chunks are asked for at once: enough to keep every worker busy,
-// few enough that the nearest are always asked next.
-let ASKED = 8
 // How near the focus, in metres, every chunk is drawn before the page shows
 // it: the ground a hero stands on and the next few steps round them. The rest
 // streams in while they look.
@@ -359,7 +357,10 @@ export let world = (v: Vale, mesh: Mesher): World => {
     let prepared = buildings.prepare(c.buildings, lod == 0)
     try {
       await prepared.ready
-      if (gone || wants.get(k)?.lod != lod) return
+      if (
+        gone || !wants.has(k) ||
+        (drawn.has(k) && wants.get(k)?.lod != lod)
+      ) return
       if (c.patch.voxel == v.voxel) adopt(v, c.patch)
       // What was drawn in the chunk at another detail keeps its lamps and
       // doors.
@@ -421,15 +422,33 @@ export let world = (v: Vale, mesh: Mesher): World => {
     )
     wants = new Map(list.map((c) => [key(c.ci, c.ck), c]))
     for (let k of drawn.keys()) if (!wants.has(k)) drop(k)
-    let pending = 0
-    for (let { ci, ck, lod } of list) {
+    let missing = list.filter(({ ci, ck }) => !drawn.has(key(ci, ck)))
+    let finer = list.filter(({ ci, ck, lod }) => {
+      let d = drawn.get(key(ci, ck))
+      return d && d.lod != lod
+    })
+    w.pending = missing.length + finer.length
+    let detailing = [...asked].filter((k) => drawn.has(k)).length
+    // Cover the ground round the hero first, and keep one worker available
+    // for new ground while nearby detail catches up. An undrawn chunk keeps
+    // its coarsest mesh until its wanted detail is ready.
+    let near = (c: Want) => c.d < FIRST
+    let order = [
+      ...missing.filter(near),
+      ...finer.filter(near),
+      ...missing.filter((c) => !near(c)),
+      ...finer.filter((c) => !near(c)),
+    ]
+    for (let { ci, ck, lod: want } of order) {
       let k = key(ci, ck)
-      if (drawn.get(k)?.lod == lod) continue
-      pending++
-      if (asked.has(k) || asked.size >= ASKED) continue
+      let covered = drawn.has(k)
+      let lod = covered ? want : COARSER.length - 1
+      if (asked.has(k) || asked.size >= mesh.capacity) continue
+      if (covered && detailing >= Math.max(1, mesh.capacity - 1)) continue
       asked.add(k)
+      if (covered) detailing++
       mesh.chunk(ci, ck, lod).then(async (c) => {
-        if (!gone && wants.get(k)?.lod == lod) await put(c, lod)
+        if (!gone && wants.has(k)) await put(c, lod)
         asked.delete(k)
         stream()
       }).catch((e) => {
@@ -437,7 +456,6 @@ export let world = (v: Vale, mesh: Mesher): World => {
         reportError(e)
       })
     }
-    w.pending = pending
     w.chunks = [0, 0, 0]
     for (let d of drawn.values()) w.chunks[d.lod]++
     settle()

@@ -9,6 +9,29 @@ import { SIZE } from './levels.ts'
 import { out, pack, type Packed } from './mesh.ts'
 import { chunkOf, flat } from './terrain.ts'
 import { world } from './world.ts'
+import { wanted } from './stream.ts'
+
+let bare = (ci: number, ck: number): Chunk => ({
+  ci,
+  ck,
+  solid: pack(out()),
+  roof: null,
+  small: null,
+  buildings: [],
+  patch: {
+    ci,
+    ck,
+    voxel: 1,
+    n: 0,
+    layers: [],
+    top: new Uint8Array(),
+    hue: new Float32Array(),
+    region: new Uint8Array(),
+    other: new Uint8Array(),
+    share: new Uint8Array(),
+    regions: [],
+  },
+})
 
 Deno.test('visible buildings share one mesh and release it when they leave', async () => {
   let v = flat(5), empty = pack(out())
@@ -24,30 +47,15 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
     at: [x, 5, mid],
   }))
   let w = world(v, {
+    capacity: 4,
     chunk: (ci, ck): Promise<Chunk> =>
       Promise.resolve({
-        ci,
-        ck,
+        ...bare(ci, ck),
         solid: empty,
-        roof: null,
-        small: null,
         buildings: ci == chunkOf(mid) && ck == chunkOf(mid) ? placed : [],
         stood: ci == chunkOf(mid) && ck == chunkOf(mid)
           ? [{ prop, step: 1 }]
           : [],
-        patch: {
-          ci,
-          ck,
-          voxel: 1,
-          n: 0,
-          layers: [],
-          top: new Uint8Array(),
-          hue: new Float32Array(),
-          region: new Uint8Array(),
-          other: new Uint8Array(),
-          share: new Uint8Array(),
-          regions: [],
-        },
       }),
     template: () => {
       calls++
@@ -79,5 +87,36 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
   w.tick(0, 0)
   assertEquals(disposed, 1)
   assertEquals(w.props().flatMap((c) => c.stood), [])
+  w.dispose()
+})
+
+Deno.test('new ground draws before detail and keeps a worker free while travelling', async () => {
+  let sent: { ci: number; ck: number; lod: number }[] = []
+  let fine: (() => void)[] = []
+  let w = world(flat(5), {
+    capacity: 4,
+    chunk: (ci, ck, lod) => {
+      sent.push({ ci, ck, lod })
+      return lod == 2
+        ? Promise.resolve(bare(ci, ck))
+        : new Promise((done) => fine.push(() => done(bare(ci, ck))))
+    },
+    template: () => Promise.resolve(pack(out())),
+  })
+  w.focus.set(128, 5, 128)
+  await w.near()
+  let close =
+    wanted(128, 128, w.fog.far, () => undefined).filter((c) => c.d < 24).length
+  assert(w.chunks[2] >= close)
+  assertEquals(sent.slice(0, 4).every((a) => a.lod == 2), true)
+  for (let n = 0; fine.length < 3 && n < 50; n++) await Promise.resolve()
+  assertEquals(fine.length, 3)
+  assertEquals(w.chunks[0], 0)
+  w.focus.set(320, 5, 128)
+  w.tick(0, 0)
+  for (let n = 0; sent.every((a) => a.ci < 19) && n < 50; n++) {
+    await Promise.resolve()
+  }
+  assert(sent.some((a) => a.ci >= 19 && a.lod == 2))
   w.dispose()
 })
