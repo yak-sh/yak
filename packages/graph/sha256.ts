@@ -13,7 +13,7 @@
 
 // The round constants: the first 32 bits of the fractional parts of the cube
 // roots of the first 64 primes.
-let K = new Uint32Array([
+let K = new Int32Array([
   0x428a2f98,
   0x71374491,
   0xb5c0fbcf,
@@ -82,21 +82,58 @@ let K = new Uint32Array([
 
 let rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n))
 
-// The padded message: the bytes, a 1 bit, zeros, and the bit length as a
-// 64-bit big-endian tail, rounded up to whole 64-byte blocks.
-let padded = (bytes: Uint8Array): Uint8Array => {
-  let len = bytes.length
-  let out = new Uint8Array((((len + 8) >> 6) + 1) << 6)
-  out.set(bytes)
+let encoder = new TextEncoder()
+let ASCII = /^\p{ASCII}*$/u
+
+// The buffer a message is padded into, kept between calls up to a size worth
+// keeping; a longer message gets one of its own.
+let kept = new Uint8Array(256)
+
+// The padded message: the string's UTF-8 bytes, a 1 bit, zeros, and the bit
+// length as a 64-bit big-endian tail, rounded up to whole 64-byte blocks. An
+// ASCII string, which nearly every eid and token is, is its own bytes, copied
+// without a trip through the encoder.
+let padded = (input: string): Uint8Array => {
+  let ascii = ASCII.test(input)
+  let bytes = ascii ? null : encoder.encode(input)
+  let len = bytes ? bytes.length : input.length
+  let size = (((len + 8) >> 6) + 1) << 6
+  let out = size <= kept.length ? kept : new Uint8Array(size)
+  if (bytes) out.set(bytes)
+  else for (let i = 0; i < len; i++) out[i] = input.charCodeAt(i)
+  out.fill(0, len, size)
   out[len] = 0x80
   let bits = len * 8
-  let view = new DataView(out.buffer)
-  view.setUint32(out.length - 8, Math.floor(bits / 0x100000000))
-  view.setUint32(out.length - 4, bits >>> 0)
-  return out
+  let hi = Math.floor(bits / 0x100000000), lo = bits >>> 0
+  for (let i = 0; i < 4; i++) {
+    out[size - 8 + i] = hi >>> (24 - 8 * i)
+    out[size - 4 + i] = lo >>> (24 - 8 * i)
+  }
+  return out.subarray(0, size)
 }
 
-let encoder = new TextEncoder()
+// Each byte as two hex digits.
+let HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'))
+
+// The initial hash value: the first 32 bits of the fractional parts of the
+// square roots of the first 8 primes.
+let IV = [
+  0x6a09e667,
+  0xbb67ae85,
+  0x3c6ef372,
+  0xa54ff53a,
+  0x510e527f,
+  0x9b05688c,
+  0x1f83d9ab,
+  0x5be0cd19,
+]
+
+// The state and the message schedule, kept between calls: a digest runs to
+// completion synchronously, so one of each serves every call, and a call
+// allocates nothing per block. Every derived eid and precondition token is a
+// digest, so this loop is on every write's path.
+let h = new Int32Array(8)
+let w = new Int32Array(64)
 
 /**
  * The SHA-256 of a string's UTF-8 bytes, as lowercase hex. Synchronous by
@@ -104,42 +141,39 @@ let encoder = new TextEncoder()
  * must not be forced to become a promise.
  */
 export let sha256 = (input: string): string => {
-  let msg = padded(encoder.encode(input))
-  let h = new Uint32Array([
-    0x6a09e667,
-    0xbb67ae85,
-    0x3c6ef372,
-    0xa54ff53a,
-    0x510e527f,
-    0x9b05688c,
-    0x1f83d9ab,
-    0x5be0cd19,
-  ])
-  let w = new Uint32Array(64)
-  let view = new DataView(msg.buffer)
+  let msg = padded(input)
+  h.set(IV)
   for (let at = 0; at < msg.length; at += 64) {
-    for (let i = 0; i < 16; i++) w[i] = view.getUint32(at + i * 4)
+    for (let i = 0, j = at; i < 16; i++, j += 4) {
+      w[i] = (msg[j] << 24) | (msg[j + 1] << 16) | (msg[j + 2] << 8) |
+        msg[j + 3]
+    }
     for (let i = 16; i < 64; i++) {
       let a = w[i - 15], b = w[i - 2]
       let s0 = rotr(a, 7) ^ rotr(a, 18) ^ (a >>> 3)
       let s1 = rotr(b, 17) ^ rotr(b, 19) ^ (b >>> 10)
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0
+      w[i] = w[i - 16] + s0 + w[i - 7] + s1
     }
-    let [a, b, c, d, e, f, g, hh] = h
+    let a = h[0], b = h[1], c = h[2], d = h[3]
+    let e = h[4], f = h[5], g = h[6], hh = h[7]
     for (let i = 0; i < 64; i++) {
       let S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)
       let ch = (e & f) ^ (~e & g)
-      let t1 = (hh + S1 + ch + K[i] + w[i]) >>> 0
+      let t1 = (hh + S1 + ch + K[i] + w[i]) | 0
       let S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)
       let maj = (a & b) ^ (a & c) ^ (b & c)
-      let t2 = (S0 + maj) >>> 0
-      hh = g, g = f, f = e, e = (d + t1) >>> 0
-      d = c, c = b, b = a, a = (t1 + t2) >>> 0
+      let t2 = (S0 + maj) | 0
+      hh = g, g = f, f = e, e = (d + t1) | 0
+      d = c, c = b, b = a, a = (t1 + t2) | 0
     }
-    let next = [a, b, c, d, e, f, g, hh]
-    for (let i = 0; i < 8; i++) h[i] = (h[i] + next[i]) >>> 0
+    h[0] += a, h[1] += b, h[2] += c, h[3] += d
+    h[4] += e, h[5] += f, h[6] += g, h[7] += hh
   }
   let hex = ''
-  for (let x of h) hex += x.toString(16).padStart(8, '0')
+  for (let i = 0; i < 8; i++) {
+    let x = h[i]
+    hex += HEX[x >>> 24] + HEX[(x >>> 16) & 255] + HEX[(x >>> 8) & 255] +
+      HEX[x & 255]
+  }
   return hex
 }

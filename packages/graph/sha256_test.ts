@@ -24,7 +24,18 @@ test('sha256 matches the published vectors', () => {
 
 test('sha256 matches the platform digest, including multi-byte text', async () => {
   for (
-    let s of ['', 'a', 'the quick brown fox', 'æøå — 日本語', 'x'.repeat(200)]
+    let s of [
+      '',
+      'a',
+      'the quick brown fox',
+      'æøå — 日本語',
+      'x'.repeat(55),
+      'x'.repeat(56),
+      'x'.repeat(200),
+      'æ'.repeat(300),
+      'y'.repeat(1000),
+      'z',
+    ]
   ) {
     let want = hex(
       await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)),
