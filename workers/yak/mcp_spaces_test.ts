@@ -30,6 +30,36 @@ let NOTES = vocabFile({ note: { at: txt } }, {
   },
 })
 
+Deno.test('only a space owner can inspect and retry held store writes', async () => {
+  let k = await kernel()
+  try {
+    let slug = `review${crypto.randomUUID().slice(0, 8)}`
+    let them = await seed(k, [{ slug, apps: ['notes'] }])
+    let owner = connector(k, them.cookie)
+    let guest = await signIn(k, `editor-${slug}@yaks.app`)
+    await owner.tool('member_add', {
+      space: slug,
+      email: guest.email,
+      role: 'editor',
+    })
+    await accepted(k, guest.email, guest.cookie)
+    let editor = connector(k, guest.cookie)
+    for (let name of ['store_writes', 'store_retry']) {
+      let args = { space: slug, app: 'notes', seq: 1 }
+      assertStringIncludes(
+        (await assertRejects(() => editor.tool(name, args), Error)).message,
+        `not the owner of ${slug}`,
+      )
+    }
+    assertStringIncludes(
+      await owner.tool('store_writes', { space: slug, app: 'notes' }),
+      'no kept writes',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
 // A space's front page is a choice (T-32947), and one nobody makes by
 // accident: no app claims the bare hostname by being made first (T-33040), so
 // until app_set(home) says which, that address lists the apps a visitor may

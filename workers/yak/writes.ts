@@ -16,13 +16,15 @@
 // so whichever code wakes the object next can read it.
 //
 // A row is a request as the kernel sent it: its headers (the vouch — who
-// wrote, at what level) and its body. It leaves when its batch commits. A
+// wrote, at what level) and its body. Ordinary unkeyed writes leave when
+// their batch commits; a reviewed retry keeps its body and outcome. A
 // write the store refused on the caller's own input the first time is
 // answered and dropped, as it always was. While the store cannot start, every
-// write waits, and the store replays the log oldest first on its next healthy
+// write waits, and new pending writes replay oldest first on its next healthy
 // wake. A write that fails on a store that started is set aside as `failed`,
 // so the writes behind it go on, and the next incarnation tries it again: a
-// deploy starts one, which is how fixed code reaches it. A replay that the
+// deploy starts one, which is how fixed code reaches it. A reviewed retry
+// stays failed until another explicit retry. A replay that the
 // store now refuses (a `$was` that moved, a property the app no longer
 // declares) is kept as `refused` with the reason and reported, never dropped.
 //
@@ -42,6 +44,7 @@ import {
   type Driver,
   eq,
   gt,
+  isNull,
   lit,
   lt,
   not,
@@ -70,6 +73,9 @@ export let WRITES: CreateTable = {
     { name: 'why', type: 'text' },
     { name: KEY, type: 'text' },
     { name: 'answer', type: 'text' },
+    { name: 'generation', type: 'integer' },
+    { name: 'audit', type: 'integer', notNull: true, default: lit(0) },
+    { name: 'status', type: 'integer' },
   ],
 }
 
@@ -101,6 +107,8 @@ let FAILED = eq(col('state'), lit('failed'))
 let APPLIED = eq(col('state'), lit('applied'))
 let RUNNING = eq(col('state'), lit('running'))
 let INTERRUPTED = eq(col('state'), lit('interrupted'))
+let UNREVIEWED = eq(col('state'), lit('unreviewed'))
+let AUDIT = eq(col('audit'), lit(1))
 let at = (seq: number) => eq(col('seq'), val(seq))
 
 // A reset rolls the graph transaction back, but not this earlier marker. A
@@ -113,11 +121,12 @@ export let started = (db: Driver, seq: number) =>
     where: and(at(seq), PENDING),
   })
 
-// Older code left no running marker. Its one oldest stale pending write is
-// held on a new incarnation too: an unbounded replay can otherwise keep every
-// read behind the same storage reset. Nothing is deleted or applied here.
-export let interrupted = (db: Driver, now = Date.now()) => {
-  db.query({
+// A running marker survives a reset. Older code could leave a pending write
+// after starting it, so every row it left is unreviewed until someone reads
+// the body and deliberately retries. New writes carry a generation and retain
+// ordinary automatic replay while they have not started.
+export let interrupted = (db: Driver) => {
+  let running = db.query({
     t: 'update',
     table: LOG,
     set: {
@@ -127,39 +136,21 @@ export let interrupted = (db: Driver, now = Date.now()) => {
       ),
     },
     where: RUNNING,
+    returning: [col('seq')],
   })
-  let [old] = db.query(select({
-    cols: [col('seq'), col('body')],
-    from: table(LOG),
-    where: and(
-      PENDING,
-      lt(col('at'), val(new Date(now - 60_000).toISOString())),
-    ),
-    order: [col('seq')],
-    limit: lit(1),
-  }))
-  if (!old) return
-  // A small write kept while schema code was broken still auto-recovers.
-  let count = (() => {
-    try {
-      let body = JSON.parse(String(old.body))
-      return Array.isArray(body) ? body.length : 0
-    } catch {
-      return 0
-    }
-  })()
-  if (count < 100) return
-  db.query({
+  let old = db.query({
     t: 'update',
     table: LOG,
     set: {
-      state: lit('interrupted'),
+      state: lit('unreviewed'),
       why: lit(
-        'a large write predates attempt tracking and may have reset the Store; inspect before retrying',
+        'this write predates attempt tracking; inspect before retrying',
       ),
     },
-    where: and(at(Number(old.seq)), PENDING),
+    where: and(PENDING, isNull(col('generation'))),
+    returning: [col('seq')],
   })
+  return { running: running.length, unreviewed: old.length }
 }
 
 /** Kept writes, with the body only when one is named for inspection. */
@@ -171,7 +162,8 @@ export let writes = (db: Driver, seq?: number) =>
       col('state'),
       col('tries'),
       col('why'),
-      ...(seq == null ? [] : [col('body'), col(KEY)]),
+      col('status'),
+      ...(seq == null ? [] : [col('body'), col(KEY), col('answer')]),
     ],
     from: table(LOG),
     where: seq == null ? not(APPLIED) : at(seq),
@@ -179,13 +171,21 @@ export let writes = (db: Driver, seq?: number) =>
     limit: lit(seq == null ? 100 : 1),
   }))
 
-/** Explicitly retry an interrupted write, keeping its body and key. */
+/** Explicitly retry an interrupted or unreviewed write, keeping its body and
+ * key, and keeping its final answer beside them when it commits. */
 export let retry = (db: Driver, seq: number): boolean =>
   db.query({
     t: 'update',
     table: LOG,
-    set: { state: lit('pending'), why: lit(null) },
-    where: and(at(seq), INTERRUPTED),
+    set: {
+      state: lit('pending'),
+      generation: lit(1),
+      audit: lit(1),
+      why: lit(null),
+      answer: lit(null),
+      status: lit(null),
+    },
+    where: and(at(seq), or(INTERRUPTED, UNREVIEWED, and(FAILED, AUDIT))),
     returning: [col('seq')],
   }).length > 0
 
@@ -231,17 +231,18 @@ export let keep = (db: Driver, req: Request, body: string): number => {
   db.query({
     t: 'delete',
     from: LOG,
-    where: and(APPLIED, lt(col('at'), val(gone))),
+    where: and(APPLIED, not(AUDIT), lt(col('at'), val(gone))),
   })
   let [row] = db.query({
     t: 'insert',
     into: LOG,
-    cols: ['at', 'headers', 'body', KEY],
+    cols: ['at', 'headers', 'body', KEY, 'generation'],
     rows: [[
       val(now()),
       val(JSON.stringify([...req.headers])),
       val(body),
       val(req.headers.get(IDEMPOTENCY)),
+      lit(1),
     ]],
     returning: [col('seq')],
   })
@@ -249,12 +250,18 @@ export let keep = (db: Driver, req: Request, body: string): number => {
 }
 
 /** A write the log already holds under an idempotency key. */
-export type Sent = { seq: number; state: string; why: string; answer: string }
+export type Sent = {
+  seq: number
+  state: string
+  why: string
+  answer: string
+  audit: boolean
+}
 
 /** The write a key was first sent with, if the log holds it. */
 export let first = (db: Driver, key: string): Sent | null => {
   let [row] = db.query(select({
-    cols: [col('seq'), col('state'), col('why'), col('answer')],
+    cols: [col('seq'), col('state'), col('why'), col('answer'), col('audit')],
     from: table(LOG),
     where: eq(col(KEY), val(key)),
   }))
@@ -264,23 +271,28 @@ export let first = (db: Driver, key: string): Sent | null => {
       state: String(row.state),
       why: String(row.why ?? ''),
       answer: String(row.answer ?? '[]'),
+      audit: row.audit == 1,
     }
     : null
 }
 
 /** A committed write, in its batch's own transaction: out of the log, or,
  * sent with a key, kept as `applied` with its answer for a resend to be told.
- * An answer too big for a row keeps each entity's identity, which is what a
- * caller reads to learn what its aliases minted. */
+ * An audited retry keeps its original body and full answer permanently. An
+ * ordinary keyed answer too big for a row keeps each entity's identity,
+ * which is what a caller reads to learn what its aliases minted. */
 export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
   let [row] = db.query(select({
-    cols: [col(KEY)],
+    cols: [col(KEY), col('audit')],
     from: table(LOG),
     where: at(seq),
   }))
-  if (row?.[KEY] == null) return done(db, seq)
+  if (row?.[KEY] == null && row?.audit != 1) return done(db, seq)
   let all = answer()
   let text = JSON.stringify(all)
+  if (row.audit == 1 && !fits(text)) {
+    throw new Error(`audited write ${seq} answer exceeds one storage row`)
+  }
   let kept = fits(text) ? text : JSON.stringify(
     all.map(({ entity, $alias }) => ({ entity, $alias })),
   )
@@ -289,9 +301,9 @@ export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
     table: LOG,
     set: {
       state: lit('applied'),
-      at: val(now()),
-      body: lit(''),
+      ...(row.audit == 1 ? {} : { at: val(now()), body: lit('') }),
       answer: val(kept),
+      status: lit(200),
     },
     where: at(seq),
   })
@@ -343,7 +355,7 @@ export let revived = (db: Driver) =>
     t: 'update',
     table: LOG,
     set: { state: lit('pending') },
-    where: FAILED,
+    where: and(FAILED, not(AUDIT)),
   })
 
 /** A replay the store refused: kept, with why, and never replayed again. */
@@ -402,10 +414,13 @@ export class Pending extends Error {
 }
 
 /** What a caller is told when its write is kept but not yet applied. */
-export let parked = (seq: number, why: string): Response =>
+export let parked = (seq: number, why: string, review = false): Response =>
   Response.json({
     error: 'Pending',
-    message: `${why} — the write is kept and will be applied when this ` +
-      'app recovers; do not send it again',
+    message: `${why} — the write is kept and ${
+      review
+        ? 'needs owner review before it can be retried'
+        : 'will be applied when this app recovers'
+    }; do not send it again`,
     pending: seq,
   }, { status: 202 })

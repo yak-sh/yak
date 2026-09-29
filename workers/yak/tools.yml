@@ -349,15 +349,16 @@ store_writes:
   description: >-
     List writes the named app's store still holds, including interrupted
     writes that a storage reset stopped. Name seq to inspect one write's
-    original body and idempotency key in structured output. Only a space
-    owner or editor can inspect these private writes. Nothing is retried.
+    original body and final outcome. Only the space owner can inspect these
+    private writes. Nothing is retried.
 store_retry:
   title: Retry an interrupted store write
   description: >-
-    Explicitly retry one interrupted write by its seq, after inspecting its
-    body and fixing the cause of interruption. The store keeps the original
-    body and idempotency key, and its transaction commits the graph change
-    and write-log outcome together. A reset may interrupt it again.
+    Explicitly retry one interrupted or unreviewed write by its seq, after
+    inspecting its body and fixing the cause of interruption. Only the space
+    owner can retry. The store keeps the original body, idempotency key, and
+    full final outcome together with the graph change. A reset may interrupt
+    it again.
 app_set:
   title: Rename, move or reshare an app
   description: >-

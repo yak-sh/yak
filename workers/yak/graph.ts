@@ -1906,8 +1906,10 @@ export class Store {
     }
     if (was?.state == 'applied') return new Response(was.answer, JSONED)
     if (was?.state == 'refused') return refuse(new Refused(was.why))
-    if (was?.state == 'failed') return parked(seq, was.why)
-    if (was?.state == 'interrupted') return parked(seq, was.why)
+    if (was?.state == 'failed') return parked(seq, was.why, was.audit)
+    if (was?.state == 'interrupted' || was?.state == 'unreviewed') {
+      return parked(seq, was.why, true)
+    }
     if (await this.#ready(request)) {
       return this.#park(seq, this.#refused ?? 'this app could not start')
     }
@@ -2124,7 +2126,7 @@ export class Store {
         return refuse(new Refused('/writes retry needs a positive seq'))
       }
       if (!retry(this.#sql, seq)) {
-        return refuse(new Refused(`write ${seq} is not interrupted`))
+        return refuse(new Refused(`write ${seq} is not held for review`))
       }
       this.#stuck = false
       await this.#drain()

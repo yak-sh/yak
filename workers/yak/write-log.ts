@@ -12,6 +12,8 @@ export type Write = {
   why?: string
   body?: string
   idempotency_key?: string
+  answer?: string
+  status?: number
 }
 
 let asked = async (store: Door, path: string, method = 'GET') => {

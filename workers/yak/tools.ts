@@ -3145,7 +3145,7 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, store } = await inApp(ctx, args, true)
+      let { space, app, store } = await ownsApp(ctx, args)
       let seq = args.seq == null ? undefined : Number(args.seq)
       if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
         throw refuse('arguments', 'seq must be a positive integer')
@@ -3156,7 +3156,10 @@ let OURS: Row[] = [
           ? rows.map((r) =>
             `${r.seq}: ${r.state}, ${r.tries} attempts, ${r.at}${
               r.why ? ` — ${r.why}` : ''
-            }${r.body ? `, ${r.body.length} body characters` : ''}`
+            }${
+              seq == null ? '' : `\nOriginal body:\n${r.body}\n` +
+                `Outcome (${r.status ?? 'pending'}):\n${r.answer ?? ''}`
+            }`
           ).join('\n')
           : `no kept writes in ${space.slug}/${app.slug}`,
         value: { writes: rows },
@@ -3177,7 +3180,7 @@ let OURS: Row[] = [
       required: ['app', 'seq'],
     },
     run: async (ctx, args) => {
-      let { space, app, store } = await inApp(ctx, args, true)
+      let { space, app, store } = await ownsApp(ctx, args)
       let seq = Number(args.seq)
       if (!Number.isSafeInteger(seq) || seq < 1) {
         throw refuse('arguments', 'seq must be a positive integer')

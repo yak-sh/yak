@@ -280,7 +280,7 @@ Deno.test(
       )
       assertStringIncludes(
         await refused(tool, 'store_retry', { space: mine, app, seq: 999 }),
-        'not interrupted',
+        'not held for review',
       )
 
       // ---- a second release, and the first one put back -------------------
