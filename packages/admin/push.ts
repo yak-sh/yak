@@ -25,11 +25,39 @@ export type Target = { app: string; space?: string; title?: string }
 /** A connector call, as ./api.ts `rpc` makes one. */
 export type Ask = (method: string, params?: unknown) => Promise<unknown>
 
+/** A push's current phase, delivered before and after its slow operations. */
+export type PushProgress =
+  | { phase: 'list'; state: 'start' }
+  | { phase: 'list'; state: 'done'; count: number }
+  | { phase: 'create' | 'deploy'; state: 'start' | 'done' }
+  | { phase: 'hash'; state: 'start'; count: number }
+  | {
+    phase: 'hash'
+    state: 'done'
+    count: number
+    changed: number
+    removed: number
+  }
+  | {
+    phase: 'upload'
+    state: 'start' | 'done'
+    done: number
+    total: number
+    batch: number
+  }
+  | {
+    phase: 'delete'
+    state: 'start' | 'done'
+    done: number
+    total: number
+    path: string
+  }
+
 /** How long a push waits for a newly deployed answer contract to arrive. */
 export type PushOptions = {
   wait?: number
   poll?: number
-  progress?: (done: number, total: number) => void
+  progress?: (event: PushProgress) => void
 }
 
 // An app_files write does per-file object-store and hashing work before its
@@ -187,10 +215,14 @@ export let push = async (
   let at = { app: to.app, ...to.space ? { space: to.space } : {} }
   let said: string[] = []
   let held: { held: Map<string, string>; unreleased: boolean }
+  let created = false
+  opts.progress?.({ phase: 'list', state: 'start' })
   try {
     held = await listed(ask, at, opts)
   } catch (e) {
     if (!(e instanceof CallError)) throw e
+    created = true
+    opts.progress?.({ phase: 'create', state: 'start' })
     said.push(
       await call(ask, 'app_new', {
         slug: to.app,
@@ -198,20 +230,60 @@ export let push = async (
         ...to.space ? { space: to.space } : {},
       }),
     )
+    opts.progress?.({ phase: 'create', state: 'done' })
     held = { held: new Map(), unreleased: true }
   }
+  if (!created) {
+    opts.progress?.({ phase: 'list', state: 'done', count: held.held.size })
+  }
+  opts.progress?.({ phase: 'hash', state: 'start', count: files.length })
   let hashes = await Promise.all(files.map(shaOf))
   let changed = files.filter((f, i) => held.held.get(f.path) != hashes[i])
-  let done = 0
-  for (let batch of batches(changed)) {
-    await call(ask, 'app_files', { ...at, files: batch })
-    done += batch.length
-    opts.progress?.(done, changed.length)
-  }
   let keep = new Set(files.map((f) => f.path))
   let gone = [...held.held.keys()].filter((p) => !keep.has(p))
+  opts.progress?.({
+    phase: 'hash',
+    state: 'done',
+    count: files.length,
+    changed: changed.length,
+    removed: gone.length,
+  })
+  let done = 0
+  for (let batch of batches(changed)) {
+    opts.progress?.({
+      phase: 'upload',
+      state: 'start',
+      done,
+      total: changed.length,
+      batch: batch.length,
+    })
+    await call(ask, 'app_files', { ...at, files: batch })
+    done += batch.length
+    opts.progress?.({
+      phase: 'upload',
+      state: 'done',
+      done,
+      total: changed.length,
+      batch: batch.length,
+    })
+  }
+  done = 0
   for (let path of gone) {
+    opts.progress?.({
+      phase: 'delete',
+      state: 'start',
+      done,
+      total: gone.length,
+      path,
+    })
     await call(ask, 'app_files', { ...at, op: 'delete', path })
+    opts.progress?.({
+      phase: 'delete',
+      state: 'done',
+      done: ++done,
+      total: gone.length,
+      path,
+    })
   }
   if (!changed.length && !gone.length && !held.unreleased) {
     return [...said, 'no files changed']
@@ -219,7 +291,9 @@ export let push = async (
   said.push(
     `wrote ${changed.length} file${changed.length == 1 ? '' : 's'}` +
       (gone.length ? `, deleted ${gone.join(', ')}` : ''),
-    await call(ask, 'app_deploy', at),
   )
+  opts.progress?.({ phase: 'deploy', state: 'start' })
+  said.push(await call(ask, 'app_deploy', at))
+  opts.progress?.({ phase: 'deploy', state: 'done' })
   return said
 }

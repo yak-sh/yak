@@ -82,7 +82,7 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
-import { push, read } from './push.ts'
+import { push, type PushProgress, read } from './push.ts'
 import { errors, tail, TOKEN } from './logs.ts'
 import { revert } from './revert.ts'
 
@@ -99,6 +99,37 @@ let json = (v: unknown) => JSON.stringify(v, null, 2)
 
 let out = (line: string) => console.log(line)
 let note = (line: string) => console.error(line)
+
+let pushNote = (p: PushProgress) => {
+  if (p.phase == 'list') {
+    note(
+      p.state == 'start' ? 'listing app files…' : `listed ${p.count} app files`,
+    )
+  } else if (p.phase == 'create') {
+    note(p.state == 'start' ? 'creating app…' : 'created app')
+  } else if (p.phase == 'hash') {
+    note(
+      p.state == 'start'
+        ? `hashing ${p.count} local files…`
+        : `hashed ${p.count} files; ${p.changed} to upload, ` +
+          `${p.removed} to delete`,
+    )
+  } else if (p.phase == 'upload') {
+    note(
+      p.state == 'start'
+        ? `uploading files ${p.done + 1}–${p.done + p.batch}/${p.total}…`
+        : `uploaded ${p.done}/${p.total} files`,
+    )
+  } else if (p.phase == 'delete') {
+    note(
+      p.state == 'start'
+        ? `deleting ${p.path} (${p.done + 1}/${p.total})…`
+        : `deleted ${p.done}/${p.total} files`,
+    )
+  } else {
+    note(p.state == 'start' ? 'deploying app…' : 'deployed app')
+  }
+}
 
 // What a verb says, as the call's answer.
 let said = (call: Bundle, lines: string | string[]): Bundle => ({
@@ -514,12 +545,15 @@ export let runs = (
       let a = argsOf(call)
       let dir = String(a.dir).replace(/\/+$/, '')
       let at = acting(vault, a, keep, host.state)
-      let lines = await push(rpc(at.session), await read(dir), {
+      note(`reading ${dir}…`)
+      let files = await read(dir)
+      note(`read ${files.length} local files`)
+      let lines = await push(rpc(at.session), files, {
         app: word(a, 'app') ?? dir.slice(dir.lastIndexOf('/') + 1),
         space: word(a, 'space'),
         title: word(a, 'title'),
       }, {
-        progress: (done, total) => note(`uploaded ${done}/${total} files`),
+        progress: pushNote,
       })
       return [said(call, lines)]
     }),

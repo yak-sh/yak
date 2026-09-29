@@ -1,7 +1,14 @@
 // A push through a platform that keeps apps in memory: after it, the app holds
 // exactly the directory's files and has been released once.
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Ask, type File, fileOf, push, read } from './push.ts'
+import {
+  type Ask,
+  type File,
+  fileOf,
+  push,
+  type PushProgress,
+  read,
+} from './push.ts'
 
 type Args = Record<string, unknown> & { files?: File[] }
 
@@ -164,16 +171,58 @@ Deno.test('a large directory fits bounded calls before deletion and deploy', asy
     calls.push(op)
     return p.ask(method, params)
   }
-  let progress: number[] = []
+  let progress: PushProgress[] = []
   await push(ask, files, { app: 'mail' }, {
-    progress: (done) => progress.push(done),
+    progress: (event) => progress.push(event),
   })
   assertEquals(p.held('mail'), files.map((f) => f.path).sort())
   assertEquals(p.deployed, ['mail'])
   assertEquals(calls.at(-2), 'delete')
   assertEquals(calls.at(-1), 'app_deploy')
-  assertEquals(progress.at(-1), files.length)
-  assertEquals(progress.length > 1, true)
+  let uploaded = progress.filter((p) =>
+    p.phase == 'upload' && p.state == 'done'
+  )
+  assertEquals(uploaded.at(-1), {
+    phase: 'upload',
+    state: 'done',
+    done: files.length,
+    total: files.length,
+    batch: 8,
+  })
+  assertEquals(uploaded.length > 1, true)
+})
+
+Deno.test('progress marks each remote operation before it waits and after it answers', async () => {
+  let p = platform({ mail: held('old.js') })
+  let events: PushProgress[] = []
+  let ask: Ask = (method, params) => {
+    let { name, arguments: a } = params as { name: string; arguments: Args }
+    let phase = name == 'app_deploy'
+      ? 'deploy'
+      : a.op == 'list'
+      ? 'list'
+      : a.op == 'delete'
+      ? 'delete'
+      : 'upload'
+    assertEquals(events.at(-1)?.phase, phase)
+    assertEquals(events.at(-1)?.state, 'start')
+    return p.ask(method, params)
+  }
+  await push(ask, [file('new.js')], { app: 'mail' }, {
+    progress: (event) => events.push(event),
+  })
+  assertEquals(events.map((e) => `${e.phase}:${e.state}`), [
+    'list:start',
+    'list:done',
+    'hash:start',
+    'hash:done',
+    'upload:start',
+    'upload:done',
+    'delete:start',
+    'delete:done',
+    'deploy:start',
+    'deploy:done',
+  ])
 })
 
 Deno.test('large files are split by request size', async () => {
