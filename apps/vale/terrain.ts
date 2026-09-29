@@ -580,12 +580,15 @@ let detailsOf = (v: Vale, village: Village): Prop[] => {
   let roads = roadsIn(cx - 42, cz - 42, cx + 42, cz + 42, ROAD + 4)
   let lanes = lanesIn(cx - 42, cz - 42, cx + 42, cz + 42, 4)
   let out: Prop[] = []
-  let offPath = (p: Prop) => {
+  let offPath = (p: Prop, apron = false) => {
     let [w, d] = half(p)
     return roads.every((r) => clearOf(r.c, p.x, p.z, w, d, ROAD)) &&
       lanes.every((c) => clearOf(c, p.x, p.z, w, d, 1.4)) &&
       [-1, 0, 1].every((i) =>
-        [-1, 0, 1].every((k) => !street.lay(p.x + i * w, p.z + k * d, 0))
+        [-1, 0, 1].every((k) => {
+          let laid = street.lay(p.x + i * w, p.z + k * d, 0)
+          return apron ? !laid?.path : !laid
+        })
       )
   }
   let clear = (p: Prop) => {
@@ -658,8 +661,9 @@ let detailsOf = (v: Vale, village: Village): Prop[] => {
       turn,
       seed: out.length,
     }
+    // The wall holds the plot lip from the graded apron beside a street.
     if (
-      offPath(p) &&
+      offPath(p, true) &&
       !buildings.some((q) =>
         q != b &&
         x > q.foot[0] - 0.5 && x < q.foot[2] + 0.5 &&
@@ -667,15 +671,16 @@ let detailsOf = (v: Vale, village: Village): Prop[] => {
       )
     ) out.push(p)
   }
+  let lip = 0.7
   for (let b of buildings) {
     let [w, n, e, s] = b.foot
     for (let x = w + 1; x < e - 0.5; x += 2) {
-      wall(b, x, n - 2.2, 0)
-      wall(b, x, s + 2.2, 0)
+      wall(b, x, n - lip, 0)
+      wall(b, x, s + lip, 0)
     }
     for (let z = n + 1; z < s - 0.5; z += 2) {
-      wall(b, w - 2.2, z, 1)
-      wall(b, e + 2.2, z, 1)
+      wall(b, w - lip, z, 1)
+      wall(b, e + lip, z, 1)
     }
   }
   got.set(village.level, out)

@@ -195,7 +195,7 @@ export let VILLAGE: Record<string, Kind> = {
       }],
       [`retaining.${name}`, {
         make: (s: number) => retaining(dress, s),
-        foot: 1.2,
+        span: [2.25, 0.25],
       }],
     ]),
   ) as Record<string, Kind>,
