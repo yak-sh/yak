@@ -542,7 +542,7 @@
           "type": "boolean"
         },
         "validate": {
-          "const": true
+          "type": "boolean"
         },
         "search": {
           "type": "boolean"

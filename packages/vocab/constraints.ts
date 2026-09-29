@@ -10,7 +10,7 @@ export type Factor = number | {
 
 export type Term = {
   each?: string
-  where?: Record<string, string | number | boolean | null>
+  where?: Record<string, string | number | boolean | null | undefined>
   product: Factor[]
 }
 

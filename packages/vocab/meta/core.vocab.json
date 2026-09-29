@@ -86,7 +86,7 @@
     },
     "validate": {
       "description": "true = a graph with the schema admission plugin checks this property's whole JSON Schema on every write, including nested values. Other properties keep the lightweight type check.",
-      "const": true
+      "type": "boolean"
     },
     "constraints": {
       "description": "Numeric bounds over a component's complete row, expressed as a bounded sum of products and checked before a write lands. Each names its computed value, a fixed maximum and a refusal message.",
