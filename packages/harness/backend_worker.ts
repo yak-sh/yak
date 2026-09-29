@@ -33,7 +33,7 @@ let serve = (port: MessagePort) => {
   let subs: ReturnType<typeof subscriptions> | undefined
   let active = new Set<Promise<unknown>>()
   let fake = false
-  let started = Promise.withResolvers<void>()
+  let started = Promise.withResolvers<boolean>()
   let released = Promise.withResolvers<void>()
   let link = portLink(port, {
     report: (error) => diagnostics().report(error, { phase: 'worker-command' }),
@@ -105,7 +105,7 @@ let serve = (port: MessagePort) => {
           ? {
             name: 'fake',
             model: async (req: import('@yaks/model').Request) => {
-              started.resolve()
+              started.resolve(req.onText != null)
               if (typeof options.fake == 'object' && options.fake.deltas) {
                 for (let i = 0; i < options.fake.deltas; i++) {
                   req.onText?.({ index: 0, text: 'x' })

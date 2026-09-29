@@ -26,8 +26,14 @@ Deno.test('streaming defaults on; explicit options override the environment', ()
 const streamAs = (value: string | undefined) => (name: string) =>
   name == 'HARNESS_STREAM' ? value : Deno.env.get(name)
 
-Deno.test('default inline streaming admits an ask for a model without deltas; opt-out keeps legacy path', async () => {
-  for (const options of [{}, { stream: false }, { streaming: false }]) {
+Deno.test('local streaming options control the model text callback', async () => {
+  for (
+    const [options, expected] of [
+      [{}, true],
+      [{ stream: false }, false],
+      [{ streaming: false }, false],
+    ] as const
+  ) {
     const h = await harness()
     let observed = false
     const a = local({
@@ -35,19 +41,19 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
       h,
       env: streamAs(undefined),
       ...options,
-      model: async () => {
-        observed = (await h.g.read('.ask&*')).length > 0
-        return {
+      model: (req) => {
+        observed = req.onText != null
+        return Promise.resolve({
           id: 'reply',
           model: 'fake',
-          items: [{ kind: 'assistant', text: 'done' }],
-        }
+          items: [{ kind: 'assistant' as const, text: 'done' }],
+        })
       },
     })
     try {
       const id = await a.start('hello')
       await a.idle(id)
-      assertEquals(observed, !('stream' in options || 'streaming' in options))
+      assertEquals(observed, expected)
       assertEquals(
         ((await a.transcript(id)).at(-1)?.content as Comp)?.body,
         'done',
@@ -80,7 +86,7 @@ Deno.test('default inline streaming admits an ask for a model without deltas; op
   }
 })
 
-Deno.test('worker resolves streaming environment and explicit opt-out before cloning configuration', async () => {
+Deno.test('worker streaming options reach the model request', async () => {
   for (
     const [value, options, expected] of [
       [undefined, {}, true],
@@ -99,9 +105,13 @@ Deno.test('worker resolves streaming environment and explicit opt-out before clo
     })
     try {
       const id = await a.agent.start('hello')
+      assertEquals(await a.testing!.started(), expected)
       await a.idle(id)
       const entries = await a.agent.transcript(id)
-      assertEquals(entries.some((b) => b.attempt), expected)
+      assertEquals(
+        entries.some((b) => (b.content as Comp)?.body == 'ok'),
+        true,
+      )
     } finally {
       await a.close()
     }
