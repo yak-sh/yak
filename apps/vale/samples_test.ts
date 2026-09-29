@@ -62,8 +62,8 @@ Deno.test('hosted audio outputs supply clips without replacing the listening set
         built: { artifact: 'water-blob', media_type: 'audio/mpeg' },
       },
       {
-        doc: { title: 'campfire' },
-        built: { artifact: 'new-fire', media_type: 'audio/mpeg' },
+        doc: { title: 'forge' },
+        built: { artifact: 'new-forge', media_type: 'audio/mpeg' },
       },
       {
         doc: { title: 'letter' },

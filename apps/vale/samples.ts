@@ -2,7 +2,6 @@
 // here; hosted builders supply the rest through their output rows. A missing
 // or undecodable blob leaves the procedural voice in place.
 export let SAMPLES: Record<string, string> = {
-  campfire: '92e3de164ac57f9806a300a9e50f0f48568f7f3fd3c65064c6729c5a7eb3b204',
   forge: '579c76352d873716929daf518eebd007471c463d67f1ac237310ffbf39b37248',
   hammer: '410000827723e43c197861e59ee1045fead0f8ec34503e1f80294a3bfbd41c35',
   sword: 'fa331f1e59bd6e42fadbe184c5f6c424640d57103ad93aa3de1e5e26e534e0d5',

@@ -253,18 +253,17 @@ let keep = (
 
 // A level's own sound, looping, faded in, and faded out when it ends.
 let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
-  let name = kind == 'fire' ? 'campfire' : kind
-  let ready = loaded(c, name)
-  let b = ready
-    ? kind == 'fire' || kind == 'forge' ? ready : looping(c, ready)
-    : loops![kind]
+  // The village fire keeps its own crackles; its recording adds a rush.
+  let name = kind == 'fire' ? null : kind
+  let ready = name ? loaded(c, name) : undefined
+  let b = ready ? kind == 'forge' ? ready : looping(c, ready) : loops![kind]
   let s = new AudioBufferSourceNode(c, { buffer: b, loop: true })
   let g = c.createGain()
   let sourceGain = c.createGain()
   g.gain.setValueAtTime(0, c.currentTime)
   g.gain.linearRampToValueAtTime(LOOP[kind].loud, c.currentTime + 1.5)
   // Fire is a persistent source; duck its own bus, not the voice bus.
-  let fire = name ? c.createGain() : null
+  let fire = kind == 'fire' || kind == 'forge' ? c.createGain() : null
   if (fire) {
     fire.gain.value = fireLevel(voiceDucking)
     g.connect(fire).connect(into)
@@ -273,12 +272,12 @@ let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
   s.connect(sourceGain).connect(g)
   s.start(c.currentTime, Math.random() * b.duration)
   let stopped = false
-  if (!ready) {
+  if (name && !ready) {
     void load(c, name).then((next) => {
       if (!next || stopped) return
       let old = s, oldGain = sourceGain, at = c.currentTime
       s = new AudioBufferSourceNode(c, {
-        buffer: kind == 'fire' || kind == 'forge' ? next : looping(c, next),
+        buffer: kind == 'forge' ? next : looping(c, next),
         loop: true,
       })
       sourceGain = c.createGain()
