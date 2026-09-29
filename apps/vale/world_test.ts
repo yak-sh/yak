@@ -245,6 +245,12 @@ Deno.test('a scoped design edit replaces its chunk and keeps its neighbour', asy
   assert(at(8, 8) != first)
   assertEquals(at(7, 8), other)
   assertEquals(calls, ['8 8'])
+  w.focus.set(1000, 5, 1000)
+  w.tick(0, 0)
+  assertEquals(at(8, 8), undefined)
+  w.focus.set(128, 5, 128)
+  await w.near()
+  assert(at(8, 8))
   w.dispose()
 })
 

@@ -465,6 +465,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
     )
     wants = new Map(list.map((c) => [key(c.ci, c.ck), c]))
     for (let k of drawn.keys()) if (!wants.has(k)) drop(k)
+    // A departed chunk keeps its generation only while an old ask can still
+    // answer. Replacements stay wanted, including while their mesh is old.
+    for (let k of generations.keys()) {
+      if (!wants.has(k) && !asked.has(k)) generations.delete(k)
+    }
     let missing = list.filter(({ ci, ck }) => !drawn.has(key(ci, ck)))
     let replace = list.filter(({ ci, ck, lod }) => {
       let d = drawn.get(key(ci, ck))
