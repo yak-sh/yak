@@ -84,12 +84,12 @@ export let fixture = (
 // ---------------------------------------------------------------------------
 // Repositories on disk.
 //
-// Every git command is a process of a few milliseconds, so a repository that
-// each test in a file would build the same way is built once, the first time a
-// test asks, and every test gets a copy of its own. Copying is plain file
-// system calls, no git: a linked worktree `build` adds is made with
-// `--relative-paths`, which is how Git lets a repository move, or the copy's
-// worktree would still name the original's.
+// Every git command is a process of its own, so a repository that each test in
+// a file would build the same way is built once, the first time a test asks,
+// and every test gets a copy of its own. Copying is plain file system calls, no
+// git, so whatever `build` links by path it names relative to the repository —
+// a linked worktree made with `--relative-paths`, a remote as `../origin.git`
+// — or the copy's would still name the original's.
 
 let dec = new TextDecoder()
 
@@ -111,7 +111,7 @@ export let git = async (cwd: string, ...args: string[]): Promise<string> => {
 }
 
 /** A fresh scratch directory, by its canonical path. */
-export let scratch = (): string =>
+let scratch = (): string =>
   Deno.realPathSync(Deno.makeTempDirSync({ prefix: 'yaks-git-' }))
 
 let copy = (from: string, to: string) => {

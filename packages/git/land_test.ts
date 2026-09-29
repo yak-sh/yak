@@ -5,7 +5,7 @@
 // needed except the two publish cases, which wire a real bare upstream.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { land, reverts } from './land.ts'
+import { land, reverts, run } from './land.ts'
 import { runs } from './tools.ts'
 import { git as command, template } from './testing.ts'
 import { CallError } from '@yaks/tools'
@@ -111,24 +111,15 @@ let mainCommits = async (r: Repo, file: string, body: string, msg: string) => {
 
 // A bare remote wired as `main`'s real upstream — a genuine push establishes
 // both the tracking config `@{u}` reads and the remote-tracking ref, which a
-// config-only stub cannot fake. `reachable: false` then breaks the remote's URL
-// (tracking survives; connecting to it does not), the shape the refusal wants.
-let withUpstream = async (r: Repo, reachable = true) => {
-  let bare = `${r.root}/origin.git`
-  await command(r.root, 'init', '--bare', '--initial-branch=main', bare)
-  await command(r.repo, 'remote', 'add', 'origin', bare)
+// config-only stub cannot fake. Its URL is relative to the checkout, so a copy
+// pushes to its own.
+let tracked = repo(async (r) => {
+  await base(r.root)
+  await command(r.root, 'init', '--bare', '--initial-branch=main', 'origin.git')
+  await command(r.repo, 'remote', 'add', 'origin', '../origin.git')
   await command(r.repo, 'push', '-q', '-u', 'origin', 'main')
-  if (!reachable) {
-    await command(
-      r.repo,
-      'remote',
-      'set-url',
-      'origin',
-      `${r.root}/missing.git`,
-    )
-  }
-  return bare
-}
+})
+let origin = (r: Repo) => `${r.root}/origin.git`
 
 let quiet = { write: () => {} }
 
@@ -368,12 +359,14 @@ test(
 test(
   'a landing publishes to the base branch upstream when it has one',
   async () => {
-    let r = await setup()
+    let r = await tracked()
     try {
-      let bare = await withUpstream(r)
       let outcome = await land({ cwd: r.tree, ...quiet })
       assert('landed' in outcome)
-      assertEquals(await command(bare, 'rev-parse', 'main'), outcome.landed)
+      assertEquals(
+        await command(origin(r), 'rev-parse', 'main'),
+        outcome.landed,
+      )
     } finally {
       Deno.removeSync(r.root, { recursive: true })
     }
@@ -398,9 +391,10 @@ test('land does not publish when the base has no upstream', async () => {
 test(
   'a publish refusal lands anyway — publishing is best-effort, never a failed land',
   async () => {
-    let r = await setup()
+    let r = await tracked()
     try {
-      await withUpstream(r, false)
+      // Tracking survives a broken URL; connecting to it does not.
+      await command(r.repo, 'remote', 'set-url', 'origin', '../missing.git')
       let warned = ''
       let outcome = await land({
         cwd: r.tree,
@@ -455,31 +449,22 @@ test('a detached worktree is refused, a failing git is a fault', async () => {
 })
 
 test('a transiently failing push publishes on the retry', async () => {
-  let r = await setup()
+  let r = await tracked()
   try {
-    let bare = await withUpstream(r)
     let pushes = 0
-    let real = async (args: string[], cwd: string) => {
-      if (args[0] == 'push' && ++pushes == 1) {
-        return { ok: false, code: 1, out: '', err: 'transient spawn blip' }
-      }
-      let out = await new Deno.Command('git', {
-        args,
-        cwd,
-        stdout: 'piped' as const,
-        stderr: 'piped' as const,
-      }).output()
-      return {
-        ok: out.success,
-        code: out.code,
-        out: new TextDecoder().decode(out.stdout),
-        err: new TextDecoder().decode(out.stderr),
-      }
-    }
+    let blip = (args: string[], cwd: string) =>
+      args[0] == 'push' && ++pushes == 1
+        ? Promise.resolve({
+          ok: false,
+          code: 1,
+          out: '',
+          err: 'transient spawn blip',
+        })
+        : run(args, cwd)
     let warned = ''
     let outcome = await land({
       cwd: r.tree,
-      run: real,
+      run: blip,
       write: (text, error) => {
         if (error && text.includes('publish')) warned = text
       },
@@ -487,7 +472,7 @@ test('a transiently failing push publishes on the retry', async () => {
     assert('landed' in outcome)
     assertEquals(pushes, 2)
     assertEquals(warned, '')
-    assertEquals(await command(bare, 'rev-parse', 'main'), outcome.landed)
+    assertEquals(await command(origin(r), 'rev-parse', 'main'), outcome.landed)
   } finally {
     Deno.removeSync(r.root, { recursive: true })
   }

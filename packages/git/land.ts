@@ -217,7 +217,7 @@ export let reverts = async (
   )
   if (!adds.size) return []
   let changed = [...adds.keys()]
-  // The rest needs nothing from itself, so it is asked at once: what the
+  // Three reads that need nothing from each other, asked at once: what the
   // branch's commits touch, what the base's history held, and the landing
   // tree. `--no-renames` as the diff above: a move names both paths, or the
   // old one reads as the rebase's.
