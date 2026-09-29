@@ -200,6 +200,7 @@ export let fault = async (
 
 type Broke = {
   at?: string
+  code?: string
   message?: string
   stack?: string | null
   request?: string
@@ -212,6 +213,7 @@ type Hit = {
   // directory numbers its own, and the same line reads both.
   entity: { eid: string; num?: number | null }
   doc?: { title?: string }
+  content?: { body?: string }
   exception?: Broke
   error?: Broke
 }
@@ -241,10 +243,10 @@ export let line = ({ app, hit }: Seen) => {
   let e = broke(hit)
   let id = idOf(hit)
   let facet = hit.exception ? 'exception' : 'error'
-  let where = spot(e.stack) || e.request || hit.doc?.title || ''
+  let where = spot(e.stack) || e.request || hit.doc?.title || e.code || ''
   return `- ${id} ${e.at ?? ''} ${facet} ${app.slug}${
     e.version ? ` v${e.version}` : ''
-  }: ${where} — ${e.message ?? ''}`
+  }: ${where} — ${e.message || hit.content?.body || ''}`
 }
 
 // The place in a stack a person opens to fix it. A break reported from a
@@ -315,7 +317,7 @@ export let openIn = async (
   try {
     let found = await Promise.all(
       ['exception', 'error'].map(async (facet) =>
-        (await at.query(`.${facet}&?doc&!archived${seen}`))
+        (await at.query(`.${facet}&?doc&?content&!archived${seen}`))
           .map((b) => ({ kind: facet, ...b }) as unknown as Hit)
       ),
     )

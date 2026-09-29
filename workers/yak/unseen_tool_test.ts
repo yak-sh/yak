@@ -29,3 +29,28 @@ Deno.test('app_errors lists a break whose stored stack is null', async () => {
   )
   assertStringIncludes(listed.text, 'page /cookbook/ — failed before a stack')
 })
+
+Deno.test('app_errors shows a session error from its content', async () => {
+  using p = platform()
+  let { env } = p
+  let { dir, space, app } = await seeded(env)
+  let store = metaOf(appStore(env.STORE, space, app))
+  await store.apply([
+    { entity: { eid: 'session-1' }, session: { id: 'one' } },
+    {
+      entity: { eid: '$error' },
+      entry: { session: 'session-1', seq: 1 },
+      error: { code: 'http_400' },
+      content: { body: 'OpenRouter speech request failed (400)' },
+    },
+  ], KERNEL)
+  let listed = await call(
+    { env, dir, person: ADA },
+    'app_errors',
+    { space: 'ada', app: 'cookbook' },
+  )
+  assertStringIncludes(
+    listed.text,
+    'http_400 — OpenRouter speech request failed (400)',
+  )
+})

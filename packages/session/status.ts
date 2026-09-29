@@ -18,7 +18,8 @@
 //   output        → settled   the turn returned prose and asked for nothing
 //   stop          → stopped   nothing may be done
 //   exception     → failed    the runner could not continue past it
-//   error         → failed once the last RETRIES entries are all errors,
+//   model error   → failed after one completed provider attempt
+//   other error   → failed once the last RETRIES entries are all errors,
 //                   else pending (the runner retries)
 //   error `limit` → failed    a ceiling refused it, and asking again would
 //                   meet the same ceiling; new input asks afresh
@@ -55,6 +56,7 @@ import {
   isNull,
   join,
   lit,
+  lt,
   not,
   or,
   select,
@@ -187,11 +189,19 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (all.some((b) => (b.attempt as Comp | undefined)?.state == 'inflight')) {
     return 'running'
   }
-  if (kind == 'error' && (newest.error as Comp)?.code == 'interrupted') {
-    const ask = newestAsk(all)
+  let afterAsk = () => {
+    let ask = newestAsk(all)
     return ask && all.some((b) => seqOf(b) > seqOf(ask) && kindOf(b) == 'input')
       ? 'pending'
       : 'failed'
+  }
+  let prior = all.at(-2)
+  if (
+    kind == 'error' && prior?.ask &&
+    (prior.attempt as Comp | undefined)?.state == 'completed'
+  ) return afterAsk()
+  if (kind == 'error' && (newest.error as Comp)?.code == 'interrupted') {
+    return afterAsk()
   }
   if (kind == 'error' && (newest.error as Comp)?.code == LIMIT) return 'failed'
   if (kind == 'error') {
@@ -425,6 +435,17 @@ export let sessionStatus = {
       from: table('entry'),
       where: eq(col('entity'), ask),
     }))
+    let prior = sub(select({
+      cols: [col('entity', 'p')],
+      from: table('entry', 'p'),
+      where: and(
+        mine('p'),
+        lacks('notice', col('entity', 'p')),
+        lt(col('seq', 'p'), col('seq', 'n')),
+      ),
+      order: [desc(col('seq', 'p'))],
+      limit: lit(1),
+    }))
     return iff(
       has('session', owner, eq(col('ended', 'k'), lit(true))),
       lit('stopped'),
@@ -438,6 +459,18 @@ export let sessionStatus = {
               [wears(EXCEPTION), lit('failed')],
               [inflight, lit('running')],
               [queued, lit('queued')],
+              [
+                and(
+                  wears(ERROR),
+                  has(ASK, prior),
+                  has(
+                    'attempt',
+                    prior,
+                    eq(col('state', 'k'), lit('completed')),
+                  ),
+                ),
+                iff(input(asked), lit('pending'), lit('failed')),
+              ],
               [
                 wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
                 iff(input(asked), lit('pending'), lit('failed')),

@@ -38,6 +38,27 @@ let said = (n: number, source: string) =>
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
+  ['completed provider refusal is terminal', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(3, {
+      error: { code: 'http_400' },
+      content: { body: 'OpenRouter speech request failed (400)' },
+    }),
+  ], 'failed'],
+  ['new input during a refused ask still needs an answer', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    input(3),
+    entry(4, { error: { code: 'http_400' } }),
+  ], 'pending'],
+  ['a later error after a new input keeps its retry allowance', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    said(3, 'e2'),
+    input(4),
+    entry(5, { error: { code: 'no_model' } }),
+  ], 'pending'],
   ['three refused asks exhaust the retry bound', [
     request(1),
     entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),

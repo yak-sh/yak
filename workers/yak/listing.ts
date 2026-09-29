@@ -21,8 +21,8 @@ export let STAMPS = ['created', 'updated', 'notified', 'opened', 'quarantined']
 
 // The kernel's own rows about the app, which nobody saved: a break the
 // platform wrote down (unseen.ts `noted`) and a failure it expected. They are
-// read through `app_errors`, not through a listing, so a listing leaves them
-// out unless the filter names one — the deliberate opt-in src/query.ts
+// read through `app_errors`, or through their transcript or address, so an
+// ordinary listing leaves them out unless the filter names one — the opt-in
 // `selected()` asks for the store's blob rows. Asking for the stamps is not
 // asking for these: `.created` alone dragged every exception into a person's
 // list of their own rows (C-32607 item 4).
@@ -59,7 +59,9 @@ export let names = (line: string, word: string) =>
 // every platform word.
 export let asking = (line: string, words: string[] = PLATFORM) => {
   if (!line.replace(/^[?&]+/, '') || line.includes('id=')) return line
-  let screen = words.filter((k) => !names(line, k)).map((k) => `!${k}`)
+  let screen = words.filter((k) =>
+    !names(line, k) && !(k == 'error' && names(line, 'entry'))
+  ).map((k) => `!${k}`)
   return screen.length ? `${line}&${screen.join('&')}` : line
 }
 
@@ -69,7 +71,11 @@ export let listed = (rows: Row[], asked: string): Row[] => {
   let out: Row[] = []
   for (let row of rows) {
     let kernel = KERNEL.filter((k) => k in row)
-    if (kernel.length && !kernel.some((k) => names(asked, k))) continue
+    if (
+      kernel.length && !kernel.some((k) => names(asked, k)) &&
+      !asked.includes('id=') &&
+      !(row.entry && names(asked, 'entry') && kernel.every((k) => k == 'error'))
+    ) continue
     let kept = Object.fromEntries(
       Object.entries(row).filter(([k]) => !hidden.includes(k)),
     )

@@ -1,7 +1,7 @@
 import type { Comp } from '@yaks/graph'
 // The runner's step over a fake model, on @yaks/ram: an input is asked, a tool
 // call is run, the transcript settles; a stop is obeyed; a fork continues from
-// its anchor with only what followed; errors retry to the bound and then stop;
+// its anchor with only what followed; failed provider asks stop;
 // and the same steps run themselves as `session_run`.
 
 import { assertEquals } from '@std/assert'
@@ -542,21 +542,53 @@ Deno.test('an over-budget media transcript without a summarizer never asks for a
   assertEquals((await transcript(g, ids.s)).some((b) => !!b.checkpoint), false)
 })
 
-Deno.test('errors retry to the bound, then the transcript is failed', async () => {
+Deno.test('a refused model ask ends without another provider call', async () => {
   let g = world()
   let { model, asked } = scripted([])
   let deps = { model, tools: [echo], mint }
   assertEquals(await rest(g, ids.s, deps), 'failed')
-  assertEquals(asked.length, 3)
+  assertEquals(asked.length, 1)
   assertEquals(await kinds(g, ids.s), [
     'input',
     'ask',
     'error',
-    'ask',
-    'error',
-    'ask',
-    'error',
   ])
+})
+
+Deno.test('an audio provider refusal keeps its cause and makes one ask', async () => {
+  let g = world(), calls = 0
+  await g.apply([{
+    entity: { eid: ids.m },
+    model: { modalities: ['audio'] },
+  }])
+  let model: Model = () => {
+    calls++
+    throw new ModelError('http_400', 'OpenRouter speech request failed (400)')
+  }
+  assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
+  let entries = await transcript(g, ids.s)
+  assertEquals(calls, 1)
+  assertEquals(entries.map(kindOf), ['input', 'ask', 'error'])
+  assertEquals((entries.at(-1)?.error as Comp).code, 'http_400')
+  assertEquals(
+    textOf(entries.at(-1)!),
+    'OpenRouter speech request failed (400)',
+  )
+})
+
+Deno.test('a retryable audio failure never resends an ambiguous request', async () => {
+  let g = world(), calls = 0
+  await g.apply([{
+    entity: { eid: ids.m },
+    model: { modalities: ['audio'] },
+  }])
+  let model: Model = () => {
+    calls++
+    throw new ModelError('http_503', 'provider unavailable', { after: 0 })
+  }
+  assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
+  assertEquals(calls, 1)
+  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
 })
 
 Deno.test('a transient model failure retries before a streaming reply is visible', async () => {

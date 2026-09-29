@@ -49,6 +49,21 @@ Deno.test("the kernel's own rows are not the person's", () => {
   ])
 })
 
+Deno.test('a session query and an eid include its error entry', () => {
+  let error = {
+    kind: 'entry',
+    entity: { eid: 'failure' },
+    entry: { session: 'heal', seq: 3 },
+    error: { code: 'http_400' },
+    content: { body: 'OpenRouter speech request failed (400)' },
+  }
+  let body = JSON.stringify([error])
+  assertEquals(asking('.entry.session=heal', ['error']), '.entry.session=heal')
+  assertEquals(rows(listing(body, '.entry.session=heal&*')), [error])
+  assertEquals(rows(listing(body, '.eid=failure&*')), [error])
+  assertEquals(rows(listing(body, '.content')), [])
+})
+
 // A page's own ask carries the screen, so a `.count` counts what the list
 // beside it lists — a person the store minted wears a `doc` title now, and
 // would otherwise be one more recipe (T-32627).

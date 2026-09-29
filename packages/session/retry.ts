@@ -1,5 +1,6 @@
 // Retry a model request only while its answer is still private. The provider
 // classifies recoverable failures; the runner owns how long to keep trying.
+// An audio request may have generated paid media even when its reply was lost.
 
 import { type Model, ModelError, type Reply, type Request } from '@yaks/model'
 
@@ -55,6 +56,7 @@ export let ask = async (
     } catch (error) {
       if (
         !(error instanceof ModelError) || !error.retry || exposed ||
+        request.modalities?.includes('audio') ||
         signal?.aborted
       ) throw error
       if (attempt >= 3) {
