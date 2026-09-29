@@ -18,6 +18,7 @@ import { chipOf, GATHER, type Look } from './gather.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, meshed, type Thing } from './items.ts'
 import { LIFT } from './laid.ts'
+import { nodeGlow } from './node_glow.ts'
 import { type Box, cuboids } from './boxes.ts'
 import { baseline, type ChunkProps, natureMesh } from './nature_mesh.ts'
 import {
@@ -282,6 +283,7 @@ export let nodes = (
     return g
   }
   let drawn = new Map<string, Drawn>()
+  let light = nodeGlow(scene, glow, phone)
   let naturalWas = new Map<string, boolean>()
   let wild = new Map<
     string,
@@ -434,6 +436,7 @@ export let nodes = (
         stepped.clear()
       }
       let natural = new Map<string, Seen[]>()
+      light.begin(job.nodes)
       let naturalSeen = new Set<string>()
       let byChunk = new Map(chunks.map((c) => [`${c.ci} ${c.ck}`, c]))
       for (let d of drawn.values()) d.seen = false
@@ -466,23 +469,7 @@ export let nodes = (
             topple(fall, v3(n.at), hero, geo)
           }
           naturalWas.set(n.eid, !n.spent)
-          if (
-            !n.spent && n.rarity != 'common' && n.near < 30 &&
-            Math.random() < dt * 2
-          ) {
-            glow.emit(
-              v3(n.at, 0.5 + Math.random() * 1.5),
-              GRADES[n.rarity].light,
-              1,
-              {
-                speed: 0.2,
-                up: 0.6,
-                life: 0.8,
-                size: 0.08,
-                fall: 0,
-              },
-            )
-          }
+          light.show(n, v3(n.at), dt, t)
           plate(n, job)
           continue
         }
@@ -537,23 +524,7 @@ export let nodes = (
             w.scale.y *= 1 - 0.12 * d.shake * Math.abs(Math.sin(t * 30))
           }
         }
-        if (
-          w && n.rarity != 'common' && n.near < 30 &&
-          Math.random() < dt * 2
-        ) {
-          glow.emit(
-            v3(n.at, 0.5 + Math.random() * 1.5),
-            GRADES[n.rarity].light,
-            1,
-            {
-              speed: 0.2,
-              up: 0.6,
-              life: 0.8,
-              size: 0.08,
-              fall: 0,
-            },
-          )
-        }
+        light.show(n, d.group.position, dt, t)
         // A shoal: rings spreading, faster while it is fished, and now and
         // then a fish leaping out.
         let { rings, fish } = d.whole ?? {}
@@ -674,12 +645,14 @@ export let nodes = (
         scene.remove(d.group)
         drawn.delete(eid)
       }
+      light.end()
     },
     /** keep the camera's sight of the hero clear (world.ts `see`) */
     see: (from: THREE.Vector3, feet: THREE.Vector3, tall: number) =>
       sight(mat, from, feet, tall),
     /** let the GPU go of what the nodes drew */
     dispose: () => {
+      light.dispose()
       for (let batch of wild.values()) {
         batch.mesh.removeFromParent()
         batch.mesh.geometry.dispose()

@@ -115,3 +115,103 @@ Deno.test('gathered trees topple, lose their plates, and return on respawn', () 
   assertEquals(falls().length, 1)
   view.dispose()
 })
+
+Deno.test('rare resources keep visible rarity light before their plates appear', () => {
+  let seen = (x: number, rarity: Seen['rarity']): Seen => {
+    let prop: Prop = { kind: 'oak', x, z: 7, seed: x, natural: true }
+    return {
+      eid: naturalEid(prop),
+      kind: 'oak',
+      lode: LODES.oak,
+      name: 'Oak',
+      at: [x, 5, 7],
+      life: 0,
+      spent: false,
+      near: 18,
+      rarity,
+      prop,
+    }
+  }
+  let rare = seen(5, 'rare'), legendary = seen(9, 'legendary')
+  let job: Job = {
+    nodes: [rare, legendary, seen(13, 'common')],
+    near: null,
+    bench: null,
+    board: null,
+    doing: null,
+    trades: tradesOf([]),
+    events: [],
+  }
+  let labels: string[] = [], particles = 0
+  let scene = new THREE.Scene()
+  let view = nodes(
+    scene,
+    flat(5, [], []),
+    { plate: (key: string) => labels.push(key) },
+    { emit: () => particles++ },
+    false,
+  )
+  let lights = () =>
+    scene.children.filter((o): o is THREE.Sprite => o instanceof THREE.Sprite)
+  let tick = () => view.tick(job, [0, 5, 0], 0)
+
+  tick()
+  assertEquals(labels, [])
+  assertEquals(particles, 0)
+  assertEquals(lights().length, 2)
+  assert(lights()[0].scale.x < lights()[1].scale.x)
+  assert(
+    lights()[0].material.color.getHex() !=
+      lights()[1].material.color.getHex(),
+  )
+  tick()
+  assertEquals(lights().length, 2)
+  rare.spent = true
+  tick()
+  assertEquals(lights().length, 1)
+  legendary.near = 60
+  tick()
+  assertEquals(lights().length, 0)
+  view.dispose()
+})
+
+Deno.test('resource light stays bounded on phones', () => {
+  let job: Job = {
+    nodes: Array.from({ length: 25 }, (_, i): Seen => {
+      let prop: Prop = { kind: 'oak', x: i, z: 7, seed: i, natural: true }
+      return {
+        eid: naturalEid(prop),
+        kind: 'oak',
+        lode: LODES.oak,
+        name: 'Oak',
+        at: [i, 5, 7],
+        life: 0,
+        spent: false,
+        near: 10 + i,
+        rarity: 'epic',
+        prop,
+      }
+    }),
+    near: null,
+    bench: null,
+    board: null,
+    doing: null,
+    trades: tradesOf([]),
+    events: [],
+  }
+  let scene = new THREE.Scene()
+  let view = nodes(
+    scene,
+    flat(5, [], []),
+    { plate: () => {} },
+    { emit: () => {} },
+    true,
+  )
+  view.tick(job, [0, 5, 0], 0)
+  let lights = scene.children.filter((o) => o instanceof THREE.Sprite)
+  assert(lights.length <= 12)
+  assert(lights.some((o) => o.position.x == 0))
+  assert(!lights.some((o) => o.position.x == 24))
+  view.dispose()
+  assertEquals(scene.children, [])
+})
