@@ -154,12 +154,14 @@ let byArchetype = (
   let ids = ctx.archetypes(predicate)
   if (!ids) return null
   let key = ctx.d.archetype(owner)
-  let sql = ids.length ? `${key} in (${ids.map(() => '?').join(', ')})` : '0'
+  // A catalog can hold more matching archetypes than a host can bind in one
+  // statement. The dialect's set lookup binds the whole list once.
+  let set = ids.length ? ctx.d.among(key, [...ids]) : { sql: '0', params: [] }
   // A dereference that resolved to no entity has no components, so a test for
   // the absence of one succeeds. An ordinary owner — the row being selected, or
   // a child row — always exists.
-  if (missing) sql = `(${key} is null or ${sql})`
-  return cond({ sql, params: [...ids] })
+  let sql = missing ? `(${key} is null or ${set.sql})` : set.sql
+  return cond({ sql, params: set.params })
 }
 
 // The two halves of the extension point. `claims` reports whether any

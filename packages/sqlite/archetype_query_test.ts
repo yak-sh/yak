@@ -4,7 +4,7 @@ import { graph } from '@yaks/graph'
 import { compile, type Driver, render } from '@yaks/sql'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { mem, shop } from './testing.ts'
+import { mem, shop, spy } from './testing.ts'
 import { backfill, rows, storage } from './mod.ts'
 import { open, type Opened } from './db.ts'
 
@@ -60,6 +60,38 @@ Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, r
   let bool = and(or(present('doc'), present('product')), absent('marker'))
   let old = compile(bool, vocab)
   assertEquals(rows(driver, vocab, bool), driver.query(old))
+})
+
+Deno.test('a wide archetype catalog still answers a component query', () => {
+  let flags = Object.fromEntries(
+    Array.from({ length: 7 }, (_, i) => [
+      `flag${i}`,
+      { component: true, type: 'object', properties: {} },
+    ]),
+  )
+  let v = loadVocab([...shop.docs, archetypeDoc, {
+    $defs: {
+      ...flags,
+      excluded: { component: true, type: 'object', properties: {} },
+    },
+  }])
+  let db = spy(mem(), (_, params) => {
+    if (params.length > 100) throw new Error('too many SQL variables')
+  })
+  let s = storage(db, v)
+  s.install()
+  let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
+  g.apply(Array.from({ length: 120 }, (_, i) => ({
+    entity: { eid: `doc-${i}` },
+    doc: {},
+    ...Object.fromEntries(
+      Array.from(
+        { length: 7 },
+        (_, bit) => i & (1 << bit) ? [[`flag${bit}`, {}]] : [],
+      ).flat(),
+    ),
+  })))
+  assertEquals(s.rows('.doc !excluded .count')[0]?.n, 120)
 })
 
 Deno.test('archetype query/gather see new sets, rollback and reused descriptor ids', () => {
