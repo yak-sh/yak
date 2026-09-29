@@ -8,6 +8,8 @@ import { current, output, run, selected } from './build.ts'
 import { key } from './key.ts'
 import { render } from './model.ts'
 import { runs } from './tools.ts'
+import { builderDoc } from './vocab.ts'
+import { loadTools } from '@yaks/graph/tools'
 
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
@@ -291,7 +293,10 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
   await g.apply([source('a'), builder()])
   let primary = run(ids.builder, ['a'])
   await drive(g, runner, primary)
-  let [said] = await runs({ vocab }).builder_build(
+  // The tool as a host loads it: through its declaration in the vocabulary.
+  let [build] = loadTools(builderDoc, runs({ vocab }))
+    .filter((t) => t.name == 'builder_build')
+  let [said] = await build.run(
     {
       entity: { eid: 'ask' },
       call: {
