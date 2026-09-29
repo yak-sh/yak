@@ -446,13 +446,15 @@ may. That makes an import two calls and nothing transcribed:
 `store_load` puts them in the store, reporting the files it read and how many
 entities it wrote.
 
-One call writes at most 2,000 entities, or 1.9 MB of them, because a store
-answers nothing else while it writes one batch. A bigger load is refused before
-anything is written, and loads in parts instead: the same call with `part: 1`,
-then `part: 2`, and so on. Each part is its own batch, written whole or not at
-all, and each answer names the next part. An alias like `$here` resolves within
-its own part only; a row that later parts point at wants an `alias{name}`, which
-resolves across calls.
+A store answers nothing else while it writes one batch, so a batch holds at most
+2,000 entities, or 1.9 MB of them. A bigger load is written in parts of that
+size, one after another, each its own batch, written whole or not at all. An
+alias like `$here` resolves within its own part only; a row that later parts
+point at wants an `alias{name}`, which resolves across parts. If a part is
+refused, the parts before it stay written and the refusal says which went in;
+fix the file and call again with the `part:` it names to go on from there. A
+call that has written for a minute stops between parts the same way, and its
+answer names the part that goes on.
 
 Most data a person already has is a spreadsheet, and a `.csv` is the same call
 with one more argument: a spreadsheet does not state what a row is, so `as`

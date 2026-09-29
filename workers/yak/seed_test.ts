@@ -16,12 +16,14 @@ import {
   asked,
   load,
   loaded,
+  loadParts,
   PART,
   parts,
   seedy,
   sow,
   type Sown,
   sown,
+  STINT,
 } from './seed.ts'
 import { fits, ROOM } from './writes.ts'
 
@@ -214,6 +216,48 @@ Deno.test('a load is cut into parts a store writes whole', () => {
   assertEquals(cut(rows(PART + 1)), 2)
   assertEquals(cut(rows(3, 'x'.repeat(ROOM * 0.4))), 2)
   assertEquals(cut(rows(2, 'x'.repeat(ROOM))), 2)
+})
+
+// A load of several parts, as one call writes it: each part its own batch, in
+// order, from where the caller said to start.
+let three = [
+  [{ file: 'a.json', index: 0, bundle: one('$a', 'A') }],
+  [{ file: 'a.json', index: 1, bundle: one('$b', 'B') }],
+  [{ file: 'a.json', index: 2, bundle: one('$c', 'C') }],
+]
+let titles = (batches: { batch: Bundle[]; check: boolean }[]) =>
+  batches.filter((b) => !b.check).map((b) =>
+    b.batch.map((x) => (x.doc as { title: string }).title).join()
+  )
+
+Deno.test('a load of several parts is written a part per batch', async () => {
+  let { asked, apply } = door()
+  let { wrote, last } = await loadParts(three, 1, apply)
+  assertEquals(titles(asked), ['A', 'B', 'C'])
+  assertEquals([wrote.length, last], [3, 3])
+  let again = door()
+  assertEquals((await loadParts(three, 2, again.apply)).last, 3)
+  assertEquals(titles(again.asked), ['B', 'C'])
+})
+
+Deno.test('a refused part says what was written and where to go on', async () => {
+  let { asked, apply } = door((b) =>
+    b.some((x) => x.entity.eid == '$b') ? 'no B' : null
+  )
+  let why = (await assertRejects(() => loadParts(three, 1, apply), Error))
+    .message
+  assertStringIncludes(why, 'a.json[1] was refused: no B')
+  assertStringIncludes(why, 'part 1 of 3 (1 of its entities) went in')
+  assertStringIncludes(why, 'part: 2 goes on')
+  assertEquals(titles(asked), ['A', 'B'])
+})
+
+Deno.test('a call stops between parts once its stint is spent', async () => {
+  let { asked, apply } = door()
+  let clock = [0, STINT + 1]
+  let { last } = await loadParts(three, 1, apply, () => clock.shift() ?? 1e9)
+  assertEquals(last, 1)
+  assertEquals(titles(asked), ['A'])
 })
 
 Deno.test('a seed bigger than one part refuses and writes nothing', async () => {

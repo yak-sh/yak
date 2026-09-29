@@ -371,10 +371,10 @@ Deno.test('store_load reads a CSV as rows of one component', async () => {
 })
 
 // A store answers nothing else while it writes a batch, and the runtime resets
-// one that writes too long, so no call writes more than a part (seed.ts
-// `parts`). A bigger load asked for whole is refused before any of it is
-// written; a part at a time, each whole, all of it lands.
-Deno.test('store_load writes a load too big for one call a part at a time', async () => {
+// one that writes too long, so no batch is bigger than a part (seed.ts
+// `parts`). A load bigger than that is written a part at a time, each whole,
+// and all of it lands from the call a caller already knows how to make.
+Deno.test('store_load writes a load too big for one batch a part at a time', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -399,16 +399,13 @@ Deno.test('store_load writes a load too big for one call a part at a time', asyn
       agent.tool('store_load', { ...app, path: 'data', as: 'doc', part })
     let held = async () =>
       JSON.parse(await agent.tool('graph_query', { q: '.doc&.count' })).count
-    let why = (await assertRejects(() => load(), Error)).message
-    assertStringIncludes(why, 'holds 3 entities')
-    assertStringIncludes(why, 'nothing was written')
-    assertStringIncludes(why, 'part: 2')
-    assertEquals(await held(), 0)
-    let first = await load(1)
-    assertStringIncludes(first, 'loaded 2 entities into')
-    assertStringIncludes(first, 'part: 2 loads the next')
-    assertStringIncludes(await load(2), 'loaded 1 entity into')
+    let whole = await load()
+    assertStringIncludes(whole, 'loaded 3 entities into')
+    assertStringIncludes(whole, 'in 2 parts')
     assertEquals(await held(), 3)
+    // Where an answer said a load goes on, it goes on from there.
+    assertStringIncludes(await load(2), 'loaded 1 entity into')
+    assertEquals(await held(), 4)
     assertStringIncludes(
       (await assertRejects(() => load(3), Error)).message,
       'is 2 parts',

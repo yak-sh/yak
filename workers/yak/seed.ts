@@ -32,12 +32,13 @@
 // writes one: the runtime resets a Durable Object whose write outlasts its
 // storage timeout, taking every request in flight with it. So a batch is never
 // bigger than a part (`parts`). A seed is one part at most; a load bigger than
-// one is written a part per call, each whole or not at all.
+// one is written a part per batch, each whole or not at all.
 import type { Bundle } from '@yaks/graph'
+import { CallError } from '@yaks/tools'
 import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
 import { refuse } from './tool.ts'
-import { ROOM } from './writes.ts'
+import { Pending, ROOM } from './writes.ts'
 
 /** What a seed is written in: YAML first — the warm path (M-34605) — then
  * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
@@ -210,6 +211,75 @@ export let load = async (all: Sown[], apply: Applying): Promise<Sown[]> => {
     'arguments',
     `${at(await blamed(all, apply, no))} was refused: ${no}`,
   )
+}
+
+/** How long one call goes on writing parts: the wait a tool call is given
+ * elsewhere on the platform (sandbox_wait). A load that outlasts it stops
+ * between parts and says where it goes on. */
+export let STINT = 60_000
+
+/** What a call wrote of a load cut into parts: the bundles, and the last part
+ * written, counting from 1. */
+export type Wrote = { wrote: Sown[]; last: number }
+
+/** Parts `from` to `last`, as an answer says them.
+ *
+ * ```ts
+ * span(2, 2) // 'part 2'
+ * span(1, 3) // 'parts 1–3'
+ * ```
+ */
+export let span = (from: number, last: number) =>
+  from == last ? `part ${from}` : `parts ${from}–${last}`
+
+/**
+ * The parts of a load from part `from` on, each one batch, in order, until all
+ * are written or {@link STINT} has passed — checked between parts, so a call
+ * writes one part at least. A part is whole or not at all; the load is not,
+ * once it is more than one. So a part that fails says what its predecessors
+ * in this call already wrote, and where the load goes on: from the refused
+ * part once the file is fixed, or from the part after one the store kept to
+ * apply later (writes.ts `Pending`).
+ */
+export let loadParts = async (
+  cut: Sown[][],
+  from: number,
+  apply: Applying,
+  now = Date.now,
+): Promise<Wrote> => {
+  let until = now() + STINT
+  let wrote: Sown[] = []
+  let last = from - 1
+  for (let part of cut.slice(from - 1)) {
+    if (last >= from && now() > until) break
+    let n = last + 1
+    try {
+      wrote.push(...await load(part, apply))
+    } catch (e) {
+      // What this call wrote before part n, and where the load goes on: words
+      // a load of one part, which is one batch as it always was, never needs.
+      let said = (on: string | false) => {
+        let words = [
+          last >= from &&
+          `${span(from, last)} of ${cut.length} (${wrote.length} of its ` +
+            `entities) went in before part ${n}`,
+          on,
+        ].filter(Boolean)
+        return cut.length > 1 && words.length ? ` — ${words.join('; ')}` : ''
+      }
+      if (e instanceof Pending) {
+        throw new Pending(
+          e.message + said(n < cut.length && `part: ${n + 1} goes on after it`),
+        )
+      }
+      if (e instanceof CallError) {
+        throw refuse(e.code, e.message + said(`fix it and part: ${n} goes on`))
+      }
+      throw e
+    }
+    last = n
+  }
+  return { wrote, last }
 }
 
 /** The app's seed applied, once — the whole of it as one batch, so a seed is

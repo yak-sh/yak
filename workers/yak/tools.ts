@@ -199,13 +199,13 @@ import type { Door } from './door.ts'
 import {
   type Applying,
   asked,
-  CARRIES,
-  load,
   loaded,
+  loadParts,
   parts,
   seedy,
   sow,
   type Sown,
+  span,
   type Text,
 } from './seed.ts'
 import { Pending, said as sentence } from './writes.ts'
@@ -744,30 +744,6 @@ let applying =
       body: JSON.stringify(batch),
     }, head)
   }
-
-// The part of a load one store_load call writes (seed.ts `parts`), counting
-// from 1, or the whole load where it is one part and none was named. One call
-// is one transaction, so a load bigger than a part named without one is
-// refused before anything is written: a batch the store cannot finish in time
-// resets it, for everyone using the app.
-let partOf = (cut: Sown[][], n: number, path: string): Sown[] => {
-  if (n > Math.max(cut.length, 1)) {
-    throw refuse(
-      'arguments',
-      `part: ${n} — ${path} is ${cut.length} part${cut.length == 1 ? '' : 's'}`,
-    )
-  }
-  if (!n && cut.length > 1) {
-    throw refuse(
-      'limit',
-      `${path} holds ${cut.flat().length} entities, more than one call ` +
-        `writes (${CARRIES}), so nothing was written. It loads in ` +
-        `${cut.length} parts, each whole or not at all: call store_load ` +
-        `again with part: 1, then part: 2, up to part: ${cut.length}`,
-    )
-  }
-  return cut[Math.max(n, 1) - 1] ?? []
-}
 
 // `map {header: property}` as one argument: its shape, checked once, so a model
 // that sent a list or a nested object hears that rather than a header that
@@ -2939,9 +2915,9 @@ let OURS: Row[] = [
           type: 'integer',
           minimum: 1,
           description:
-            'which part of a load too big for one call to write, counting ' +
-            'from 1; each part is written whole or not at all, and the ' +
-            'answer names the next',
+            'where a load written in parts goes on, counting from 1: the ' +
+            'part an earlier answer named. Leave it out to start at the ' +
+            'beginning',
         },
       },
       required: ['app', 'path'],
@@ -2949,8 +2925,8 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who, store } = await inApp(ctx, args, true)
       let path = text(args.path, 'path')
-      let n = args.part == null ? 0 : Number(args.part)
-      if (args.part != null && !(Number.isSafeInteger(n) && n >= 1)) {
+      let from = args.part == null ? 1 : Number(args.part)
+      if (!(Number.isSafeInteger(from) && from >= 1)) {
         throw refuse('arguments', `part: ${args.part} — a whole number from 1`)
       }
       let blobs = r2Objects(ctx.env.BLOBS)
@@ -2979,16 +2955,30 @@ let OURS: Row[] = [
           ctx.env,
         ),
       ))
-      let all = await load(
-        partOf(cut, n, path),
+      if (from > Math.max(cut.length, 1)) {
+        throw refuse(
+          'arguments',
+          `part: ${from} — ${path} is ${cut.length} part${
+            cut.length == 1 ? '' : 's'
+          }`,
+        )
+      }
+      // One batch is one transaction, and a store answers nothing else while
+      // it writes one, so a load bigger than a part is written a part at a
+      // time (seed.ts `parts`, `loadParts`), and the answer says so.
+      let { wrote: all, last } = await loadParts(
+        cut,
+        from,
         applying(store, await byCaller(ctx, who)),
       )
       let names = [...new Set(all.map((s) => s.file))]
-      let of = !n
+      let of = cut.length < 2
         ? ''
-        : ` — part ${n} of ${cut.length}${
-          n < cut.length ? `; part: ${n + 1} loads the next` : ''
-        }`
+        : last < cut.length
+        ? ` — ${span(from, last)} of ${cut.length}; part: ${last + 1} goes on`
+        : from == 1
+        ? `, in ${cut.length} parts`
+        : ` — ${span(from, last)} of ${cut.length}, the rest of it`
       return {
         text: `loaded ${all.length} ${
           all.length == 1 ? 'entity' : 'entities'
