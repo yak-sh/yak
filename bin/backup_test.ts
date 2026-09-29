@@ -1,6 +1,6 @@
 // Backups use private SQLite paths, so a failed or concurrent run cannot
 // replace a database another reader or restore verifier still has open.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { at, fn, insert, lit, type Stmt } from '@yaks/sql'
@@ -14,99 +14,136 @@ let run = async (cmd: string, args: string[], cwd: string) => {
   return decode(out.stdout)
 }
 
+// A searched component, indexed the way @yaks/fts indexes one: an
+// external-content FTS5 mirror plus the trigger that keeps it. Named after no
+// index the script ever hard-coded, because that is the failure — a new index
+// (mail_fts, 5db8be2b) that a list of names could not know about.
+let fresh = at('new')
+let schema: Stmt[] = [
+  {
+    t: 'create table',
+    name: 'entity',
+    cols: [{ name: 'id', type: 'integer', pk: true }],
+  },
+  {
+    t: 'create table',
+    name: 'note',
+    cols: [
+      { name: 'entity', type: 'integer', pk: true },
+      { name: 'body', type: 'text' },
+    ],
+  },
+  {
+    t: 'create virtual table',
+    name: 'note_fts',
+    using: 'fts5',
+    args: ['body', ['content', 'note'], ['content_rowid', 'entity']],
+  },
+  {
+    t: 'create trigger',
+    name: 'note_fts_insert',
+    timing: 'after',
+    event: 'insert',
+    on: 'note',
+    body: [{
+      t: 'insert',
+      into: 'note_fts',
+      cols: ['rowid', 'body'],
+      rows: [[fresh('entity'), fn('coalesce', fresh('body'), lit(''))]],
+    }],
+  },
+]
+
+// The schema in a WAL database, made once: a new file's switch into WAL costs
+// the disk its syncs, and a copy of one already switched costs none.
+let made: Promise<string> | undefined
+let template = () =>
+  made ??= Deno.makeTempDir({ prefix: 'yak-backup-template-' }).then((d) => {
+    let db = open(`${d}/yak.db`)
+    for (let s of schema) db.query(s)
+    db.close()
+    return `${d}/yak.db`
+  })
+
 let fixture = async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-backup-' })
   await run('git', ['init', '-q'], dir)
   await Deno.writeTextFile(`${dir}/.gitignore`, '*.db\n*.db-*\n')
   await Deno.mkdir(`${dir}/snap`)
   let opened: Opened[] = []
-  let database = (path: string) => {
+  let database = async (path: string) => {
+    await Deno.copyFile(await template(), `${dir}/${path}`)
     let db = open(`${dir}/${path}`)
     opened.push(db)
-    db.query({ t: 'pragma', name: 'journal_mode', value: 'wal' })
-    db.query({
-      t: 'create table',
-      name: 'entity',
-      cols: [{ name: 'id', type: 'integer', pk: true }],
-    })
-    db.query(insert('entity', { id: 1 }))
     return db
   }
-  let db = database('yak.db')
-  // A searched component, indexed the way @yaks/fts indexes one: an
-  // external-content FTS5 mirror plus the trigger that keeps it. Named after
-  // no index the script ever hard-coded, because that is the failure — a new
-  // index (mail_fts, 5db8be2b) that a list of names could not know about.
-  let fresh = at('new')
-  for (
-    let s of [
-      {
-        t: 'create table',
-        name: 'note',
-        cols: [
-          { name: 'entity', type: 'integer', pk: true },
-          { name: 'body', type: 'text' },
-        ],
-      },
-      {
-        t: 'create virtual table',
-        name: 'note_fts',
-        using: 'fts5',
-        args: ['body', ['content', 'note'], ['content_rowid', 'entity']],
-      },
-      {
-        t: 'create trigger',
-        name: 'note_fts_insert',
-        timing: 'after',
-        event: 'insert',
-        on: 'note',
-        body: [{
-          t: 'insert',
-          into: 'note_fts',
-          cols: ['rowid', 'body'],
-          rows: [[
-            fresh('entity'),
-            fn('coalesce', fresh('body'), lit('')),
-          ]],
-        }],
-      },
-      insert('note', { entity: 1, body: 'the words the index holds' }),
-    ] satisfies Stmt[]
-  ) db.query(s)
+  // The rows are commits still in the WAL when the backup runs.
+  let db = await database('yak.db')
+  db.query(insert('entity', { id: 1 }))
+  db.query(insert('note', { entity: 1, body: 'the words the index holds' }))
   // Previous versions used these public names. Another process may still
   // hold either open; a new backup has no ownership of those files.
-  database('snap/yak.db')
-  database('snap/.verify.db')
+  await database('snap/yak.db')
+  await database('snap/.verify.db')
+  // Unbounded unless asked: timeout(1) can take a tenth of a second to see
+  // its command end, and a test waits behind nothing.
+  let command = (snapshotDir: string, bound: string, io = {}) =>
+    new Deno.Command(script, {
+      env: {
+        YAK_DATA: dir,
+        YAK_BACKUP_BOUND: bound,
+        YAK_BACKUP_TIMEOUT: '30',
+        YAK_BACKUP_SNAPSHOT_DIR: snapshotDir,
+      },
+      ...io,
+    })
+  let release = () => {
+    for (let db of opened.splice(0)) db.close()
+  }
   return {
     dir,
     db,
-    backup: (timeout = '30', snapshotDir = '') =>
-      new Deno.Command(script, {
-        env: {
-          YAK_DATA: dir,
-          YAK_BACKUP_BOUND: '',
-          YAK_BACKUP_TIMEOUT: timeout,
-          YAK_BACKUP_SNAPSHOT_DIR: snapshotDir,
-        },
-      }).output(),
+    backup: (snapshotDir = '') => command(snapshotDir, '1').output(),
+    // A bounded run to signal, with nothing to read back but how it ended.
+    start: () => command('', '', { stdout: 'null', stderr: 'null' }).spawn(),
+    release,
     close: async () => {
-      for (let db of opened) db.close()
+      release()
       await Deno.remove(dir, { recursive: true })
     },
   }
 }
 
+// What the fixture holds open while a backup runs.
+let held = ['yak.db', 'snap/yak.db', 'snap/.verify.db']
+
+// The first two tests read one run with every default: a backup is a few dozen
+// processes, and neither test changes what the other reads. Its directory is
+// the run's scratch, and the first test lets go of its databases.
+let backedUp = async () => {
+  let f = await fixture()
+  let inodes = held.map((p) => Deno.statSync(`${f.dir}/${p}`).ino)
+  return { f, inodes, out: await f.backup() }
+}
+let defaults: ReturnType<typeof backedUp> | undefined
+let once = () => defaults ??= backedUp()
+
+// A process blocked on a lock is listed in /proc/locks as `->` against the
+// locked file's inode, which is how flock(1) waits.
+let waiting = (path: string) => {
+  let ino = Deno.statSync(path).ino
+  return Deno.readTextFileSync('/proc/locks').split('\n')
+    .some((l) => l.includes('->') && l.includes(`:${ino} `))
+}
+
 test(
   'backup snapshots WAL commits and leaves existing SQLite files attached',
   async () => {
-    let f = await fixture()
+    let { f, inodes, out } = await once()
     try {
-      let paths = ['yak.db', 'snap/yak.db', 'snap/.verify.db']
-      let inodes = paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino)
-      let out = await f.backup()
       assert(out.success, decode(out.stderr))
       assert(decode(out.stdout).includes('backup: snapshot in /dev/shm'))
-      assertEquals(paths.map((p) => Deno.statSync(`${f.dir}/${p}`).ino), inodes)
+      assertEquals(held.map((p) => Deno.statSync(`${f.dir}/${p}`).ino), inodes)
       assertEquals(f.db.query({ t: 'pragma', name: 'integrity_check' }), [{
         integrity_check: 'ok',
       }])
@@ -141,7 +178,7 @@ test(
         .filter((e) => e.isDirectory && e.name.startsWith('yak-backup.'))
       assertEquals(pending, [])
     } finally {
-      await f.close()
+      f.release()
     }
   },
 )
@@ -155,27 +192,18 @@ test(
 test(
   'the dump defines each FTS5 index and dumps none of its rows',
   async () => {
-    let f = await fixture()
-    try {
-      let out = await f.backup()
-      assert(out.success, decode(out.stderr))
-      let schema = await run('git', ['show', 'HEAD:snap/schema.sql'], f.dir)
-      assert(schema.includes('CREATE VIRTUAL TABLE "note_fts"'), schema)
-      assert(schema.includes('CREATE TRIGGER "note_fts_insert"'), schema)
-      assert(!/CREATE TABLE ['"]?note_fts_/.test(schema), schema)
-      let sql = await run(
-        'zstd',
-        ['-dcq', 'snap/graph.sql.part.000.zst'],
-        f.dir,
-      )
-      assert(!sql.includes('note_fts'), sql)
-      assert(
-        sql.includes("INSERT INTO note VALUES(1,'the words the index holds');"),
-        sql,
-      )
-    } finally {
-      await f.close()
-    }
+    let { f, out } = await once()
+    assert(out.success, decode(out.stderr))
+    let schema = await run('git', ['show', 'HEAD:snap/schema.sql'], f.dir)
+    assert(schema.includes('CREATE VIRTUAL TABLE "note_fts"'), schema)
+    assert(schema.includes('CREATE TRIGGER "note_fts_insert"'), schema)
+    assert(!/CREATE TABLE ['"]?note_fts_/.test(schema), schema)
+    let sql = await run('zstd', ['-dcq', 'snap/graph.sql.part.000.zst'], f.dir)
+    assert(!sql.includes('note_fts'), sql)
+    assert(
+      sql.includes("INSERT INTO note VALUES(1,'the words the index holds');"),
+      sql,
+    )
   },
 )
 
@@ -183,7 +211,7 @@ test('a separate snapshot directory is private and cleaned', async () => {
   let f = await fixture()
   let scratch = await Deno.makeTempDir({ prefix: 'yak-snapshot-' })
   try {
-    let out = await f.backup('30', scratch)
+    let out = await f.backup(scratch)
     assert(out.success, decode(out.stderr))
     assert(decode(out.stdout).includes(`backup: snapshot in ${scratch}`))
     assertEquals([...Deno.readDirSync(scratch)], [])
@@ -257,15 +285,18 @@ test(
   'a backup timing out on the lock cannot remove the active verifier database',
   async () => {
     let f = await fixture()
-    let lock = await Deno.open(`${f.dir}/.git/yak-backup.lock`, {
-      create: true,
-      write: true,
-    })
+    let path = `${f.dir}/.git/yak-backup.lock`
+    let lock = await Deno.open(path, { create: true, write: true })
     await lock.lock()
     try {
       let before = Deno.statSync(`${f.dir}/snap/.verify.db`).ino
-      let out = await f.backup('0.2')
-      assertEquals(out.code, 124)
+      let backup = f.start()
+      await until(() => waiting(path), {
+        label: 'the backup to wait on the lock',
+      })
+      // SIGALRM is timeout(1)'s own deadline: its time runs out now.
+      backup.kill('SIGALRM')
+      assertEquals((await backup.status).code, 124)
       assertEquals(Deno.statSync(`${f.dir}/snap/.verify.db`).ino, before)
     } finally {
       await lock.unlock()

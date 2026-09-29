@@ -146,8 +146,11 @@ sq yak.db "PRAGMA quick_check;" | grep -qx ok || {
 # run covers ungraceful exits (crash/kill) that never reach the drain.
 sq yak.db "PRAGMA optimize;"
 
+# VACUUM INTO writes with the syncs of the connection that runs it. The
+# snapshot is deleted once dumped, so this one connection, which writes nothing
+# to yak.db, turns them off.
 quoted=$(printf '%s' "$snapshot" | sed "s/'/''/g")
-sq yak.db "VACUUM INTO '$quoted'"
+sq yak.db "PRAGMA synchronous=OFF; VACUUM INTO '$quoted'"
 sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
   echo "backup: snapshot failed integrity_check" >&2
   exit 1
@@ -257,13 +260,19 @@ dump_data() {
 # glob 'sqlite_stat*', not a blanket 'sqlite_%': sqlite_autoindex_* already
 # fall out on `sql is not null`, and were AUTOINCREMENT ever added its
 # sqlite_sequence counters would matter for restore — leave that door shut.
-sqlite3 -batch -init /dev/null "$snapshot" \
-  "select sql || ';' from sqlite_master
-   where sql is not null and not (type = 'table'
-     and (name in ($shadows)
-       or name glob 'vector0_*' or name = '_sqliteai_vector'
-       or name glob 'sqlite_stat*'))
-   order by rowid" > "$work/schema.sql"
+# One transaction, like the data files: each bare CREATE commits, and every
+# commit is an fsync, which is some 380 of them for this graph's schema.
+{
+  echo 'BEGIN TRANSACTION;'
+  sqlite3 -batch -init /dev/null "$snapshot" \
+    "select sql || ';' from sqlite_master
+     where sql is not null and not (type = 'table'
+       and (name in ($shadows)
+         or name glob 'vector0_*' or name = '_sqliteai_vector'
+         or name glob 'sqlite_stat*'))
+     order by rowid"
+  echo 'COMMIT;'
+} > "$work/schema.sql"
 journal="name in ('journal_tx', 'journal_change', 'journal_field')"
 
 # SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
@@ -334,9 +343,10 @@ mkfifo "$fifo"
 restore_dump > "$fifo" &
 writer=$!
 # Keep more index pages in memory while replaying; the 64 MiB cache reduced
-# scratch restore time without changing the dump or its proof.
+# scratch restore time without changing the dump or its proof. The probe is
+# deleted once counted, so none of its commits needs to wait on the disk.
 if ! sqlite3 -batch -init /dev/null -cmd 'PRAGMA cache_size=-65536;' \
-  "$probe" < "$fifo"; then
+  -cmd 'PRAGMA synchronous=OFF;' "$probe" < "$fifo"; then
   kill "$writer" 2>/dev/null || true
   wait "$writer" 2>/dev/null || true
   echo "backup: dump did not load back" >&2
