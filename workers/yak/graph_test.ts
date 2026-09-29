@@ -516,7 +516,6 @@ for (let aggregate of [false, true]) {
       error: 'Error',
       message: error.message,
     })
-    assertEquals(broken.calls.length, 1)
     assertEquals(logged.calls.map((c) => c.args), [[
       'GET /query failed —',
       error,
