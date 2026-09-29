@@ -57,16 +57,18 @@ export let realtimeOf = (env: Partial<Env>): Realtime | null =>
 // The app's store as the kernel reads and writes it: the `sfu` rows are the
 // platform's own, written by nobody else.
 let kept = (door: Door): Store => {
-  let meta = metaOf((path, init, sent) =>
-    door(path, init, { ...KERNEL, ...sent })
-  )
+  let meta = metaOf(door, KERNEL)
   return { read: meta.query, write: (bundles) => meta.apply(bundles, KERNEL) }
 }
 
 // Whether the app's own manifest opens its voice to visitors.
-let opened = async (door: Door) => {
-  let r = await door('/vocab', {}, KERNEL)
-  return r.ok && (await r.json() as { rtc?: string }).rtc == 'open'
+let opened = (door: Door) => {
+  return door.consume(
+    '/vocab',
+    async (r) => r.ok && (await r.json() as { rtc?: string }).rtc == 'open',
+    {},
+    KERNEL,
+  )
 }
 
 /** ./api/rtc/*: the door, for whoever may use it. */

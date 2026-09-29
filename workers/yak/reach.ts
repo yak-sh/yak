@@ -124,13 +124,15 @@ async (line: string) => {
   let asked = bare(line)
   let mine = at(r) == META_STORE ? asked : asking(asked, SCREEN)
   let door = appStore(env.STORE, r.space, r.app, env)
-  let res = await door(
+  let bundles = await door.consume(
     `/query?q=${encodeURIComponent(mine)}${live ? '&live=1' : ''}`,
+    async (res) => {
+      if (!res.ok) throw rejected(res.status, await told(res))
+      return await res.json()
+    },
     {},
     vouched(r.who),
   )
-  if (!res.ok) throw rejected(res.status, await told(res))
-  let bundles = await res.json()
   return Array.isArray(bundles)
     ? listed(bundles as Row[], said ?? asked) as Bundle[]
     : bundles
@@ -701,11 +703,12 @@ export let vocabAt = async (
 ): Promise<VocabDoc> => {
   if (at({ space, app }) == META_STORE) return PLATFORM_WORDS
   let name = storeName(space, app)
-  let said = await recall(name, '/vocab', async () => {
-    let res = await appStore(env.STORE, space, app)('/vocab')
-    if (res.ok) return await res.text()
-    await res.body?.cancel()
-    return '{}'
+  let said = await recall(name, '/vocab', () => {
+    return appStore(env.STORE, space, app).consume('/vocab', async (res) => {
+      if (res.ok) return await res.text()
+      await res.body?.cancel()
+      return '{}'
+    })
   })
   return meant(JSON.parse(said))
 }
@@ -835,7 +838,7 @@ type Part = { r: Reach; entities: Bundle[] }
 // what lets a batch spanning two stores be admitted everywhere before either
 // keeps it. The access rule is the page's: an owner or editor writes, and so
 // does anyone at all when the app is open.
-let sent = async (
+let sent = (
   env: Env,
   part: Part,
   check: boolean,
@@ -846,17 +849,18 @@ let sent = async (
     throw refuse('access', `not a writer of ${at(r)}`)
   }
   let door = appStore(env.STORE, r.space, r.app, env)
-  let res = await door(`/apply${check ? '?check=1' : ''}`, {
+  return door.consume(`/apply${check ? '?check=1' : ''}`, async (res) => {
+    // A write the store's log kept (writes.ts) lands later, in order: the
+    // agent is told so rather than that it failed, so it does not send it twice.
+    if (res.status == 202) {
+      throw refuse('unavailable', `${at(r)}: ${await told(res)}`)
+    }
+    if (!res.ok) throw rejected(res.status, `${at(r)}: ${await told(res)}`)
+    return await res.json() as Bundle[]
+  }, {
     method: 'POST',
     body: JSON.stringify(part.entities),
   }, { ...vouched(r.who), ...headers })
-  // A write the store's log kept (writes.ts) lands later, in order: the
-  // agent is told so rather than that it failed, so it does not send it twice.
-  if (res.status == 202) {
-    throw refuse('unavailable', `${at(r)}: ${await told(res)}`)
-  }
-  if (!res.ok) throw rejected(res.status, `${at(r)}: ${await told(res)}`)
-  return await res.json() as Bundle[]
 }
 
 // The batch, split by component into one part per store.

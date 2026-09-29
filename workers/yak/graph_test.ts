@@ -23,7 +23,7 @@ import type { Frame } from '@yaks/api'
 import { type Bundle, type Rule, sha256 } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { doorOf, PLATFORM_STORE } from './door.ts'
 import { grantEid, Store } from './graph.ts'
 import { metaOf } from './meta.ts'
 import type { Plugin } from './plugin.ts'
@@ -552,7 +552,15 @@ Deno.test('a malformed query is a 400 to the caller, not a failure', async () =>
     // And a door reading the store (apps.ts `/api/query`) hands the caller
     // that sentence as it came, not the envelope it travelled in.
     let e = await assertRejects(
-      () => metaOf((path) => get(store, path, owner)).query(q),
+      () =>
+        metaOf(
+          doorOf((req) =>
+            get(
+              store,
+              new URL(req.url).pathname + new URL(req.url).search,
+              owner,
+            ), 'test'),
+        ).query(q),
       Error,
     )
     assertEquals(

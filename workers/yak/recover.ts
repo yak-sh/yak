@@ -82,20 +82,26 @@ export let moment = (said: string, now = Date.now()): Date => {
 // The kernel flag rides on every one of these: `/restore` is not a route a
 // client is answered at (graph.ts), and door.ts strips the flag off anything
 // it is handed, so this is the only way it can ever be set.
-let asked = async (store: Door, path: string, init?: RequestInit) => {
-  let r = await store(path, init, KERNEL)
-  let body = await r.text()
-  if (!r.ok) {
-    let said = (() => {
-      try {
-        return (JSON.parse(body) as { message?: string }).message
-      } catch {
-        return ''
+let asked = (store: Door, path: string, init?: RequestInit) => {
+  return store.consume(
+    path,
+    async (r) => {
+      let body = await r.text()
+      if (!r.ok) {
+        let said = (() => {
+          try {
+            return (JSON.parse(body) as { message?: string }).message
+          } catch {
+            return ''
+          }
+        })()
+        throw rejected(r.status, said || body)
       }
-    })()
-    throw rejected(r.status, said || body)
-  }
-  return JSON.parse(body) as { from: string; to: string; undo?: string }
+      return JSON.parse(body) as { from: string; to: string; undo?: string }
+    },
+    init,
+    KERNEL,
+  )
 }
 
 /** Where a store stands right now: the bookmark that is its way back. Asking

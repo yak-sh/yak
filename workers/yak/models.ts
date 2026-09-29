@@ -381,8 +381,10 @@ let run: Answer = async (
   if (!edits(mode(app.access), who.role)) return refuse()
   let body = await req.text()
   if (!writes(who.role)) {
-    let manifest = await appStore(env.STORE, space, app, env)('/vocab')
-      .then((r) => r.json() as Promise<VocabDoc>)
+    let manifest = await appStore(env.STORE, space, app, env).consume(
+      '/vocab',
+      (r) => r.json() as Promise<VocabDoc>,
+    )
     if (manifest.models != 'open') {
       return who.person
         ? json(

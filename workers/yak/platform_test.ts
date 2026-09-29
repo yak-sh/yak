@@ -23,7 +23,7 @@ import { directory, META, over, storeName } from './directory.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { mint, personOf, spend } from './signin.ts'
-import { type Door, PLATFORM_STORE } from './door.ts'
+import { doorOf, PLATFORM_STORE } from './door.ts'
 import { noted } from './unseen.ts'
 import { named } from './testing.ts'
 
@@ -41,12 +41,7 @@ let state = () => {
 // over it, and the part's door and typed client on top of that.
 let platform = () => {
   let store = new Store(state())
-  let door: Door = (path, init = {}, headers = {}) => {
-    let req = new Request(`http://store${path}`, init)
-    for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
-    req.headers.set('x-store', PLATFORM_STORE)
-    return Promise.resolve(store.fetch(req))
-  }
+  let door = doorOf((req) => Promise.resolve(store.fetch(req)), PLATFORM_STORE)
   let at = metaOf(door)
   return { at, dir: directory({ fetch: over(at) }, true) }
 }

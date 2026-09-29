@@ -4,6 +4,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { doorOf, evicted, type Namespace, storeOf } from './door.ts'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
+import { metaOf } from './meta.ts'
 
 Deno.test('a request sums statement counts from each store response', async () => {
   let tally = new Map<string, number>()
@@ -126,4 +127,85 @@ Deno.test('an eviction a store answers is sent again; another 500 is its answer'
   let no = await storeOf(broke, 'jeff')('/query')
   assertEquals([no.status, (await no.json()).message], [500, 'boot failed'])
   assertEquals(broke.seen.length, 1)
+})
+
+let brokenBody = (error: Error) => {
+  let sent = false
+  return new Response(
+    new ReadableStream({
+      pull(controller) {
+        if (sent) controller.error(error)
+        else {
+          sent = true
+          controller.enqueue(new TextEncoder().encode('{"partial":'))
+        }
+      },
+    }),
+  )
+}
+
+Deno.test('a Store read retries a failed body, even after receiving bytes', async () => {
+  let attempts = 0
+  let store = storeOf({
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: () =>
+        Promise.resolve(
+          ++attempts == 1
+            ? brokenBody(new Error('internal error; reference = abc123'))
+            : Response.json([{ entity: { eid: 'kept' }, recipe: {} }]),
+        ),
+    }),
+  }, 'recipes')
+  assertEquals(await metaOf(store).query('.recipe'), [{
+    entity: { eid: 'kept' },
+    recipe: {},
+  }])
+  assertEquals(attempts, 2)
+})
+
+Deno.test('a Store write retries a failed body with the same key and body', async () => {
+  let seen: [string, string | null][] = []
+  let store = storeOf({
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: async (req) => {
+        seen.push([await req.text(), req.headers.get('idempotency-key')])
+        return seen.length == 1
+          ? brokenBody(flagged())
+          : Response.json({ saved: true })
+      },
+    }),
+  }, 'recipes')
+  assertEquals(
+    await store.consume('/apply', (r) => r.json(), {
+      method: 'POST',
+      body: '[1]',
+    }),
+    { saved: true },
+  )
+  assertEquals(seen.length, 2)
+  assertEquals(seen[0], seen[1])
+})
+
+Deno.test('an opaque body failure does not replay a Store write', async () => {
+  let attempts = 0
+  let store = storeOf({
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: () => {
+        attempts++
+        return Promise.resolve(
+          brokenBody(new Error('internal error; reference = abc123')),
+        )
+      },
+    }),
+  }, 'recipes')
+  await assertRejects(() =>
+    store.consume('/apply', (r) => r.json(), {
+      method: 'POST',
+      body: '[1]',
+    })
+  )
+  assertEquals(attempts, 1)
 })

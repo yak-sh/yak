@@ -65,31 +65,39 @@ let refusal = (text: string): { error?: string; message: string } | null => {
  * and at every app alike — {@link meta} is it aimed at `yak/platform`, and
  * unseen.ts aims it at one app's own store.
  */
-export let metaOf = (store: Door): Meta => ({
-  query: async (line, opts) => {
-    let r = await store(
+export let metaOf = (
+  store: Door,
+  base: Record<string, string> = {},
+): Meta => ({
+  query: (line, opts) => {
+    return store.consume(
       `/query?q=${encodeURIComponent(line)}${opts?.live ? '&live=1' : ''}`,
+      async (r) => {
+        if (!r.ok) throw await answered(r)
+        return await r.json() as Bundle[]
+      },
+      {},
+      base,
     )
-    if (!r.ok) throw await answered(r)
-    return await r.json() as Bundle[]
   },
-  apply: async (bundles, headers = {}) => {
-    let r = await store('/apply', {
+  apply: (bundles, headers = {}) => {
+    return store.consume('/apply', async (r) => {
+      // A precondition that no longer holds (409, @yaks/api refuse.ts) comes
+      // back as the graph's own `Stale`, so a caller that wrote on `$was` can
+      // tell "read again" from a failure.
+      if (r.status == 409) {
+        let s = await r.json() as Stale
+        throw new Stale(s.eid, s.comp, s.prop, s.current)
+      }
+      // Kept by the store's write log and applied later (writes.ts): the
+      // batch as applied does not exist yet, so there is nothing to return.
+      if (r.status == 202) throw new Pending(await said(r))
+      if (!r.ok) throw await answered(r)
+      return await r.json() as Bundle[]
+    }, {
       method: 'POST',
       body: JSON.stringify(bundles),
-    }, headers)
-    // A precondition that no longer holds (409, @yaks/api refuse.ts) comes
-    // back as the graph's own `Stale`, so a caller that wrote on `$was` can
-    // tell "read again" from a failure.
-    if (r.status == 409) {
-      let s = await r.json() as Stale
-      throw new Stale(s.eid, s.comp, s.prop, s.current)
-    }
-    // Kept by the store's write log and applied later (writes.ts): the
-    // batch as applied does not exist yet, so there is nothing to return.
-    if (r.status == 202) throw new Pending(await said(r))
-    if (!r.ok) throw await answered(r)
-    return await r.json() as Bundle[]
+    }, { ...base, ...headers })
   },
 })
 

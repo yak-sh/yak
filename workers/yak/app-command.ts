@@ -36,11 +36,12 @@ export let toolsOf = async (
 ): Promise<Tools> => {
   let name = storeName(space, app)
   return JSON.parse(
-    await recall(name, '/tools', async () => {
-      let r = await appStore(env.STORE, space, app)('/tools')
-      if (r.ok) return await r.text()
-      await r.body?.cancel()
-      return '{}'
+    await recall(name, '/tools', () => {
+      return appStore(env.STORE, space, app).consume('/tools', async (r) => {
+        if (r.ok) return await r.text()
+        await r.body?.cancel()
+        return '{}'
+      })
     }),
   )
 }

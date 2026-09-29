@@ -89,12 +89,21 @@ export type Namespace = {
 // kernel builds the name; a client never names a store. An incoming Request
 // may be the init: that is how a socket upgrade reaches the object with its
 // `Upgrade` header on it, since the header a route adds rides beside it.
-export type Door = (
-  path: string,
-  init?: RequestInit | Request,
-  headers?: Record<string, string>,
-  options?: { replayable?: boolean },
-) => Promise<Response>
+export type Door = {
+  (
+    path: string,
+    init?: RequestInit | Request,
+    headers?: Record<string, string>,
+    options?: { replayable?: boolean },
+  ): Promise<Response>
+  consume<T>(
+    path: string,
+    read: (response: Response) => T | Promise<T>,
+    init?: RequestInit | Request,
+    headers?: Record<string, string>,
+    options?: { replayable?: boolean },
+  ): Promise<T>
+}
 
 // The statement only the kernel may make, and therefore the set every request
 // to a store is scrubbed of before the kernel makes it. An init that is a
@@ -156,29 +165,42 @@ export let doorOf = (
   send: (req: Request) => Promise<Response>,
   name: string,
   app?: Served,
-): Door =>
-(path, init = {}, headers = {}) => {
-  let req = new Request(`http://store${path}`, init)
-  for (let h of VOUCH) req.headers.delete(h)
-  for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
-  req.headers.set('x-store', name)
-  if (app) {
-    req.headers.set('x-yak-app', app.eid)
-    if (app.access) req.headers.set('x-yak-access', app.access)
-    if (app.mail) req.headers.set('x-yak-mail', app.mail)
-    if (app.release != null) {
-      req.headers.set('x-yak-release', String(app.release))
+): Door => {
+  let ask = (
+    path: string,
+    init: RequestInit | Request = {},
+    headers: Record<string, string> = {},
+  ) => {
+    let req = new Request(`http://store${path}`, init)
+    for (let h of VOUCH) req.headers.delete(h)
+    for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
+    req.headers.set('x-store', name)
+    if (app) {
+      req.headers.set('x-yak-app', app.eid)
+      if (app.access) req.headers.set('x-yak-access', app.access)
+      if (app.mail) req.headers.set('x-yak-mail', app.mail)
+      if (app.release != null) {
+        req.headers.set('x-yak-release', String(app.release))
+      }
+      if (app.base != null) {
+        req.headers.set('x-yak-base-release', String(app.base))
+      }
     }
-    if (app.base != null) {
-      req.headers.set('x-yak-base-release', String(app.base))
-    }
+    hop('hops')
+    // And the one place a write to a store is seen, whichever door made it: a
+    // read this request remembers is never answered from before it (hops.ts
+    // `writing`, directory.ts `directory`).
+    let read = req.method == 'GET' || req.method == 'HEAD'
+    return metered(() => read ? send(req) : writing(name, () => send(req)))
   }
-  hop('hops')
-  // And the one place a write to a store is seen, whichever door made it: a
-  // read this request remembers is never answered from before it (hops.ts
-  // `writing`, directory.ts `directory`).
-  let read = req.method == 'GET' || req.method == 'HEAD'
-  return metered(() => read ? send(req) : writing(name, () => send(req)))
+  return Object.assign(ask, {
+    consume: <T>(
+      path: string,
+      read: (response: Response) => T | Promise<T>,
+      init: RequestInit | Request = {},
+      headers: Record<string, string> = {},
+    ) => ask(path, init, headers).then(read),
+  })
 }
 
 // The runtime evicts an object out from under a request during a deploy or a
@@ -210,16 +232,16 @@ export let thrown = async (r: Response): Promise<Response> => {
   return r
 }
 
-/** Retry one evicted call, rebuilding its request and taking a fresh stub in
- * `send`. A second failure propagates unchanged. */
+/** Retry one replayable call. A second failure propagates unchanged. */
 export let retryOnce = async <T>(
   send: () => T | Promise<T>,
   replayable = true,
+  retry: (error: unknown) => boolean = evicted,
 ): Promise<T> => {
   try {
     return await send()
   } catch (e) {
-    if (!evicted(e) || !replayable) throw e
+    if (!retry(e) || !replayable) throw e
     return send()
   }
 }
@@ -250,11 +272,41 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
     name,
     app,
   )
-  return (path, init = {}, headers = {}, options = {}) => {
+  let ask = <T>(
+    path: string,
+    read: (response: Response) => T | Promise<T>,
+    init: RequestInit | Request = {},
+    headers: Record<string, string> = {},
+    consuming = false,
+    options: { replayable?: boolean } = {},
+  ) => {
     let once = { ...headers, [IDEMPOTENCY]: crypto.randomUUID() }
+    let method = init instanceof Request ? init.method : init.method ?? 'GET'
+    let safe = method == 'GET' || method == 'HEAD'
     return retryOnce(
-      async () => thrown(await door(path, init, once)),
+      async () => read(await thrown(await door(path, init, once))),
       rebuildable(init) && options.replayable !== false,
+      (e) =>
+        evicted(e) ||
+        (consuming && safe && e instanceof Error &&
+          /^internal error; reference = [a-z0-9]+$/i.test(e.message)),
     )
   }
+  let send = (
+    path: string,
+    init: RequestInit | Request = {},
+    headers: Record<string, string> = {},
+    options: { replayable?: boolean } = {},
+  ) => ask(path, (response) => response, init, headers, false, options)
+  // A body can fail after the runtime answered 200. Keep consuming it inside
+  // the same replay as the fetch, so a retry gets a fresh stub and the same
+  // idempotency key. A caller streaming a socket or bytes keeps using `send`.
+  let consume = <T>(
+    path: string,
+    read: (response: Response) => T | Promise<T>,
+    init: RequestInit | Request = {},
+    headers: Record<string, string> = {},
+    options: { replayable?: boolean } = {},
+  ) => ask(path, read, init, headers, true, options)
+  return Object.assign(send, { consume })
 }

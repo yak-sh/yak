@@ -286,10 +286,7 @@ let appsOf = (env: Env, space: Space) =>
 let graphAt = (env: Env, space: Space, app: App, who: Who) => {
   let store = appStore(env.STORE, space, app, env)
   return {
-    query: (line: string) =>
-      metaOf((path, init, headers) =>
-        store(path, init, { ...vouched(who), ...headers })
-      ).query(line),
+    query: (line: string) => metaOf(store, vouched(who)).query(line),
     mark: (hits: Hit[], mark: 'notified' | 'archived') =>
       metaOf(store).apply(
         hits.map((h) => ({ entity: { eid: h.entity.eid }, [mark]: {} })),

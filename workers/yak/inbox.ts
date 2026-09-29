@@ -204,13 +204,10 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
     ...(signed == null ? {} : { verified: signed }),
   })
   let store = appStore(env.STORE, space, app, env)
-  let graph = metaOf((path, init, sent) =>
-    store(path, init, {
-      'x-yak-person': app.eid,
-      'x-yak-role': 'editor',
-      ...sent,
-    })
-  )
+  let graph = metaOf(store, {
+    'x-yak-person': app.eid,
+    'x-yak-role': 'editor',
+  })
   await metaOf(store).apply([
     ...letter,
     ...(await carried(env, space, app, graph, mail, eid)),

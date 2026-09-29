@@ -840,7 +840,7 @@ let inApp = async (env: Env, space: Space, slug: string) => {
 let asApp = (env: Env, space: Space, app: App) => {
   let store = appStore(env.STORE, space, app, env)
   let who = { ...KERNEL, 'x-yak-person': app.eid, 'x-yak-role': 'editor' }
-  return metaOf((path, init, sent) => store(path, init, { ...who, ...sent }))
+  return metaOf(store, who)
 }
 
 /**

@@ -653,13 +653,17 @@ let vocabs = async (ctx: Ctx, space: Space, app?: App) => {
   // component names for apps that are serving in the space.
   let all = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
   if (app && !all.some((a) => a.eid == app.eid)) all = [...all, app]
-  let read = await Promise.all(all.map(async (one) => {
-    let r = await appStore(ctx.env.STORE, space, one)('/vocab')
-    if (!r.ok) {
-      await r.body?.cancel()
-      return [one.slug, {} as VocabDoc] as const
-    }
-    return [one.slug, meant(await r.json())] as const
+  let read = await Promise.all(all.map((one) => {
+    return appStore(ctx.env.STORE, space, one).consume(
+      '/vocab',
+      async (r) => {
+        if (!r.ok) {
+          await r.body?.cancel()
+          return [one.slug, {} as VocabDoc] as const
+        }
+        return [one.slug, meant(await r.json())] as const
+      },
+    )
   }))
   return new Map(read)
 }
@@ -731,19 +735,19 @@ let texts = (
 // `check` is @yaks/api's dry run — every phase, then a rollback — which is how
 // the refused bundle is found (seed.ts `blamed`).
 let applying =
-  (store: Door, head: Record<string, string>): Applying =>
-  async (batch, check) => {
-    let r = await store(`/apply${check ? '?check=1' : ''}`, {
+  (store: Door, head: Record<string, string>): Applying => (batch, check) => {
+    return store.consume(`/apply${check ? '?check=1' : ''}`, async (r) => {
+      let body = await r.text()
+      if (r.ok) return null
+      try {
+        return (JSON.parse(body) as { message?: string }).message ?? body
+      } catch {
+        return body
+      }
+    }, {
       method: 'POST',
       body: JSON.stringify(batch),
     }, head)
-    let body = await r.text()
-    if (r.ok) return null
-    try {
-      return (JSON.parse(body) as { message?: string }).message ?? body
-    } catch {
-      return body
-    }
   }
 
 // `map {header: property}` as one argument: its shape, checked once, so a model
@@ -774,7 +778,7 @@ let sheetOf = async (
   map?: Record<string, string>,
   env: Pick<Env, 'APEX'> = {},
 ): Promise<Sheet> => {
-  let mine = wordsOf(appDoc(await answer(await store('/vocab'))))
+  let mine = wordsOf(appDoc(await answer(store, '/vocab')))
   let words: Record<string, Props> = {}
   for (let doc of coreDocs) Object.assign(words, wordsOf(doc))
   Object.assign(words, mine)
@@ -816,8 +820,10 @@ let fits = async (
     unsaid(appDoc(source, file), said.get(app.slug), file),
     homes,
   )
-  let r = await store('/vocab')
-  let mine = r.ok ? meant(await r.json()) : {}
+  let mine = await store.consume(
+    '/vocab',
+    async (r) => r.ok ? meant(await r.json()) : {},
+  )
   grew(mine, split.mine)
 }
 
@@ -870,7 +876,7 @@ let published = async (
   let version = (app.version ?? 0) + 1
   // Read the serving release before preparing the next one. This also gives
   // a store first reached during a deploy the declaration to keep on failure.
-  await answer(await store('/vocab'))
+  await answer(store, '/vocab')
   let draft = draftStore(ctx.env.STORE, space, app, String(version))
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
@@ -968,7 +974,7 @@ let published = async (
     split.mine = { ...split.mine, $defs: defs }
   }
   let oldUses: Record<string, string> = JSON.parse(
-    await answer(await store('/uses')),
+    await answer(store, '/uses'),
   )
   let retired: Record<string, Record<string, string[]>> = {}
   if (Object.keys(oldUses).length) {
@@ -1020,21 +1026,27 @@ let published = async (
     }
     let whole: VocabDoc = { ...was, $defs: defs }
     let release = crypto.randomUUID()
-    await answer(await appStore(ctx.env.STORE, space, home)('/vocab'))
+    await answer(appStore(ctx.env.STORE, space, home), '/vocab')
     await answer(
-      await draftStore(ctx.env.STORE, space, home, release)('/vocab', {
+      draftStore(ctx.env.STORE, space, home, release),
+      '/vocab',
+      {
         method: 'POST',
         body: JSON.stringify(whole),
-      }, vouched(who)),
+      },
+      vouched(who),
     )
     staged.push({ app: home, release })
   }
   let mine = JSON.parse(
     await answer(
-      await draft('/vocab', {
+      draft,
+      '/vocab',
+      {
         method: 'POST',
         body: JSON.stringify(split.mine),
-      }, vouched(who)),
+      },
+      vouched(who),
     ),
   )
   planted = mine.comps ?? []
@@ -1042,10 +1054,13 @@ let published = async (
   added = [...added, ...(mine.added ?? [])]
   kept = mine.kept ?? []
   await answer(
-    await draft('/uses', {
+    draft,
+    '/uses',
+    {
       method: 'POST',
       body: JSON.stringify(uses),
-    }, vouched(who)),
+    },
+    vouched(who),
   )
   vocabTook('vocab')
   // And the data the app comes with (seed.ts, T-34327), after the words it is
@@ -1104,8 +1119,8 @@ let published = async (
   // core every app's store plants, the app's own, and the ones it borrows.
   let words = [
     ...componentsOf(coreDocs),
-    ...componentsOf([appDoc(JSON.parse(await answer(await draft('/vocab'))))]),
-    ...Object.keys(JSON.parse(await answer(await draft('/uses')))),
+    ...componentsOf([appDoc(JSON.parse(await answer(draft, '/vocab')))]),
+    ...Object.keys(JSON.parse(await answer(draft, '/uses'))),
   ]
   // And the two tools every kind this app declares is worth (kinds.ts,
   // T-34513), beside whatever the manifest said: an app that declared a recipe
@@ -1118,10 +1133,13 @@ let published = async (
   )
   let tooled = JSON.parse(
     await answer(
-      await draft('/tools', {
+      draft,
+      '/tools',
+      {
         method: 'POST',
         body: JSON.stringify(checked),
-      }, vouched(who)),
+      },
+      vouched(who),
     ),
   )
   let declared: string[] = tooled.tools ?? []
@@ -1374,11 +1392,22 @@ export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
   return each.flat()
 }
 
-let answer = async (r: Response) => {
-  let body = await r.text()
-  if (!r.ok) throw rejected(r.status, body)
-  return body
-}
+let answer = (
+  store: Door,
+  path: string,
+  init?: RequestInit | Request,
+  headers?: Record<string, string>,
+) =>
+  store.consume(
+    path,
+    async (r) => {
+      let body = await r.text()
+      if (!r.ok) throw rejected(r.status, body)
+      return body
+    },
+    init,
+    headers,
+  )
 
 // A file's key: its source prefix, then its app-relative path.
 let fileKey = (space: Space, app: App, path: string) =>

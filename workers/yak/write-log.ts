@@ -16,20 +16,30 @@ export type Write = {
   status?: number
 }
 
-let asked = async (
+let asked = (
   store: Door,
   path: string,
   method = 'GET',
   replayable = true,
 ) => {
-  let r = await store(path, { method }, KERNEL, { replayable })
-  let body = await r.json() as Write[] | { writes: Write[]; seq: number } | {
-    message?: string
-  }
-  if (!r.ok) {
-    throw rejected(r.status, 'message' in body ? body.message ?? '' : '')
-  }
-  return body
+  return store.consume(
+    path,
+    async (r) => {
+      let body = await r.json() as
+        | Write[]
+        | { writes: Write[]; seq: number }
+        | {
+          message?: string
+        }
+      if (!r.ok) {
+        throw rejected(r.status, 'message' in body ? body.message ?? '' : '')
+      }
+      return body
+    },
+    { method },
+    KERNEL,
+    { replayable },
+  )
 }
 
 export let inspect = async (store: Door, seq?: number): Promise<Write[]> =>

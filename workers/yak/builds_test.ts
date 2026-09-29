@@ -5,7 +5,7 @@ import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { broke, BuildFailed, builds, type Built, rebuild } from './builds.ts'
 import type { Env } from './env.ts'
-import { type Door, PLATFORM_STORE } from './door.ts'
+import { doorOf, PLATFORM_STORE } from './door.ts'
 import { Store } from './graph.ts'
 import { metaOf } from './meta.ts'
 
@@ -54,12 +54,7 @@ let meta = () => {
     acceptWebSocket: () => {},
     getWebSockets: () => [] as Wire[],
   })
-  let door: Door = (path, init = {}, headers = {}) => {
-    let req = new Request(`http://store${path}`, init)
-    for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
-    req.headers.set('x-store', PLATFORM_STORE)
-    return Promise.resolve(store.fetch(req))
-  }
+  let door = doorOf((req) => Promise.resolve(store.fetch(req)), PLATFORM_STORE)
   return metaOf(door)
 }
 

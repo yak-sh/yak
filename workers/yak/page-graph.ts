@@ -13,14 +13,17 @@ import { caught } from './sentry.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import { mode, reads } from '@yaks/member'
 
-export let usesOf = async (env: Env, space: Space, app: App) => {
-  if (sandboxed(app)) return {} as Record<string, string>
-  let r = await appStore(env.STORE, space, app)('/uses')
-  if (!r.ok) {
-    await r.body?.cancel()
-    return {} as Record<string, string>
+export let usesOf = (env: Env, space: Space, app: App) => {
+  if (sandboxed(app)) {
+    return Promise.resolve({} as Record<string, string>)
   }
-  return await r.json() as Record<string, string>
+  return appStore(env.STORE, space, app).consume('/uses', async (r) => {
+    if (!r.ok) {
+      await r.body?.cancel()
+      return {} as Record<string, string>
+    }
+    return await r.json() as Record<string, string>
+  })
 }
 
 let appsAt = async (env: Env, space: Space, slugs: string[]) => {
@@ -52,9 +55,7 @@ export let reading = async (
   if (names.some((name) => uses[name])) return read(env, reach, asked, live)
   let { space, app, who } = reach[0]
   let store = appStore(env.STORE, space, app, env)
-  let rows = await metaOf((path, init, headers) =>
-    store(path, init, { ...vouched(who), ...headers })
-  ).query(asked, { live })
+  let rows = await metaOf(store, vouched(who)).query(asked, { live })
   return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
 }
 
@@ -78,16 +79,24 @@ export let vocabulary = async (
 ) => {
   let { uses, reach } = await sources(env, space, app, who)
   let store = appStore(env.STORE, space, app, env)
-  let response = await store('/vocab.json', {}, vouched(who))
-  if (!response.ok) {
-    caught(await answered(response.clone()), {
-      request: 'GET /api/vocab.json',
-      space: space.slug,
-      app: app.slug,
-    })
-    return response
-  }
-  let docs = await response.json() as VocabDoc[]
+  let result = await store.consume(
+    '/vocab.json',
+    async (response) => {
+      if (response.ok) return { docs: await response.json() as VocabDoc[] }
+      let body = await response.text()
+      let failed = new Response(body, response)
+      caught(await answered(failed.clone()), {
+        request: 'GET /api/vocab.json',
+        space: space.slug,
+        app: app.slug,
+      })
+      return { failed }
+    },
+    {},
+    vouched(who),
+  )
+  if (result.failed) return result.failed
+  let docs = result.docs!
   let borrowed = await Promise.all(
     reach.slice(1).map(async ({ app: home }) => {
       let doc = await vocabAt(env, space, home)

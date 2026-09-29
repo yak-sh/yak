@@ -1020,9 +1020,7 @@ let took = async (
     bytes: bytes.byteLength,
   }])
   if (stopped) return json(413, 'space_full', stopped)
-  let graph = metaOf((path, init, sent) =>
-    store(path, init, { ...headers, ...sent })
-  )
+  let graph = metaOf(store, headers)
   let file = await filed(
     env,
     space,
@@ -1061,9 +1059,7 @@ let gave = async (
   let address = addressed(path)
   if (!address) return json(404, 'no_such_file')
   let { sha, eid } = address
-  let graph = metaOf((path, init, sent) =>
-    store(path, init, { ...headers, ...sent })
-  )
+  let graph = metaOf(store, headers)
   let blobs = r2Objects(env.BLOBS)
   if (!eid) {
     let current = async () => {
@@ -1402,18 +1398,17 @@ let api = async (
     return buying(
       env,
       { space, app: app.slug, root: urlOf(space, app) },
-      async (line) =>
-        await metaOf((to, init, sent) =>
-          store(to, init, { ...headers, ...sent })
-        ).query(line) as Product[],
+      async (line) => await metaOf(store, headers).query(line) as Product[],
       body,
     )
   }
   if (path == '/graph') {
-    let r = await (await store('/graph', {}, headers)).json() as Record<
-      string,
-      unknown
-    >
+    let r = await store.consume(
+      '/graph',
+      (res) => res.json() as Promise<Record<string, unknown>>,
+      {},
+      headers,
+    )
     return Response.json({ ...r, person: who.person, role: who.role })
   }
   // The vocabulary a page's local graph loads: this store's words and the
@@ -2421,13 +2416,16 @@ let storing = async (
   at: string,
 ) => {
   if (!who.person) return stored(at, {}, false)
-  let r = await appStore(env.STORE, space, app, env)(
+  let keys = await appStore(env.STORE, space, app, env).consume(
     '/storage',
+    async (r) => {
+      if (r.ok) return await r.json() as Record<string, string>
+      await r.body?.cancel()
+      return {}
+    },
     {},
     vouched(who),
   )
-  let keys = r.ok ? await r.json() as Record<string, string> : {}
-  if (!r.ok) await r.body?.cancel()
   return stored(at, keys, true)
 }
 
