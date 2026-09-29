@@ -55,17 +55,23 @@ export let running = (pid: number) => {
 }
 
 /**
- * Remove the run directories of runs that are gone. A run killed outright
- * never reaches its own cleanup; its pid is the receipt that says so.
+ * Remove the run directories of runs that are gone, among the base's
+ * `tasks-*` entries (read here unless the caller already has them). A run
+ * killed outright never reaches its own cleanup; its pid is the receipt that
+ * says so.
  */
-export let sweep = (base: string, alive = running) => {
+export let sweep = (
+  base: string,
+  alive = running,
+  names: Set<string> = tasksEntries(base),
+) => {
   let gone: string[] = []
-  for (let e of Deno.readDirSync(base)) {
-    let owner = /^tasks-run-(\d+)$/.exec(e.name)
+  for (let name of names) {
+    let owner = /^tasks-run-(\d+)$/.exec(name)
     if (!owner || alive(Number(owner[1]))) continue
     try {
-      Deno.removeSync(`${base}/${e.name}`, { recursive: true })
-      gone.push(e.name)
+      Deno.removeSync(`${base}/${name}`, { recursive: true })
+      gone.push(name)
     } catch {
       // Another runner's sweep won the race, or the dir is not ours to remove.
     }
@@ -82,22 +88,29 @@ export let strays = (base: string, before: Set<string>) =>
     .filter((name) => !before.has(name) && !name.startsWith('tasks-run-'))
     .sort()
 
-if (import.meta.main) {
-  if (!Deno.args.length) {
-    console.error('usage: scratch.ts <command> [args...]')
-    Deno.exit(2)
-  }
-  let env = Deno.env.toObject()
+/**
+ * Run a command in a run directory of its own under the base `env` names,
+ * with `env` as its whole environment, and remove the directory once the
+ * command ends. A `tasks-*` entry that appeared beside it is reported on
+ * `say`. Answers the exit code the run ends with.
+ */
+export let scratch = async (
+  argv: string[],
+  env: Record<string, string> = Deno.env.toObject(),
+  say: (line: string) => void = console.error,
+): Promise<number> => {
   let base = tmpBase(env)
   let mine = ours(env)
-  sweep(base)
+  // One read of the base serves both: a shared /tmp holds thousands of entries.
+  let before = tasksEntries(base)
+  sweep(base, running, before)
   let dir = `${base}/tasks-run-${Deno.pid}`
   Deno.mkdirSync(dir, { recursive: true })
-  let before = tasksEntries(base)
 
-  let child = new Deno.Command(Deno.args[0], {
-    args: Deno.args.slice(1),
-    env: { TMPDIR: dir, HARNESS_HOME: `${dir}/harness` },
+  let child = new Deno.Command(argv[0], {
+    args: argv.slice(1),
+    clearEnv: true,
+    env: { ...env, TMPDIR: dir, HARNESS_HOME: `${dir}/harness` },
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
@@ -134,16 +147,16 @@ if (import.meta.main) {
   }
 
   let leaked = strays(base, before)
-  if (held) console.error(`could not remove ${dir}: ${held}`)
+  if (held) say(`could not remove ${dir}: ${held}`)
   if (leaked.length) {
     let many = `${leaked.length} temp entr${leaked.length == 1 ? 'y' : 'ies'}`
-    console.error(
+    say(
       `\n─── ${many} ${
         mine ? 'leaked outside' : 'appeared beside'
       } the run directory ───`,
     )
-    for (let name of leaked) console.error(`  ${base}/${name}`)
-    console.error(
+    for (let name of leaked) say(`  ${base}/${name}`)
+    say(
       mine
         ? 'Mint scratch under TMPDIR (Deno.makeTempDir does), never a literal /tmp.'
         : `Not failing: ${base} is shared, so these may be another run's.\n` +
@@ -152,6 +165,14 @@ if (import.meta.main) {
   }
 
   let signal = raise ?? status.signal
-  if (signal) Deno.exit(signal == 'SIGINT' ? 130 : 143)
-  Deno.exit(status.code || (held || (mine && leaked.length) ? 1 : 0))
+  if (signal) return signal == 'SIGINT' ? 130 : 143
+  return status.code || (held || (mine && leaked.length) ? 1 : 0)
+}
+
+if (import.meta.main) {
+  if (!Deno.args.length) {
+    console.error('usage: scratch.ts <command> [args...]')
+    Deno.exit(2)
+  }
+  Deno.exit(await scratch(Deno.args))
 }

@@ -3,6 +3,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
   ours,
   running,
+  scratch,
   strays,
   sweep,
   tasksEntries,
@@ -67,15 +68,10 @@ test('this very process is running; pid 0 names no process', () => {
 // is exactly the spawn site writing past TMPDIR that the guard is for.
 let leaks = async (base: string, env: Record<string, string>) => {
   let stray = `${base}/tasks-e2e-${crypto.randomUUID().slice(0, 8)}`
+  let said: string[] = []
   try {
-    let out = await new Deno.Command(Deno.execPath(), {
-      args: ['run', '-A', import.meta.dirname + '/scratch.ts', 'mkdir', stray],
-      env,
-      clearEnv: true,
-      stderr: 'piped',
-      stdout: 'null',
-    }).output()
-    return [out.code, new TextDecoder().decode(out.stderr)] as const
+    let code = await scratch(['mkdir', stray], env, (l) => said.push(l))
+    return [code, said.join('\n')] as const
   } finally {
     try {
       Deno.removeSync(stray, { recursive: true })
@@ -86,12 +82,9 @@ let leaks = async (base: string, env: Record<string, string>) => {
 test(
   'a stray fails a named base and only warns on the shared one',
   async () => {
-    // clearEnv is the only way to unset TMPDIR for a child, so the few names
-    // the child still needs are carried across by hand — DENO_DIR among them,
-    // or the run would build a second module cache under HOME.
-    let home = Object.fromEntries(
-      ['HOME', 'PATH', 'DENO_DIR'].map((k) => [k, Deno.env.get(k) ?? '']),
-    )
+    // The run's environment is the whole of its child's, so the one name
+    // mkdir needs is carried across by hand.
+    let home = { PATH: Deno.env.get('PATH') ?? '' }
     let dir = Deno.makeTempDirSync({ prefix: 'scratch-e2e-' })
     try {
       let [code, err] = await leaks(dir, { ...home, TMPDIR: dir })
