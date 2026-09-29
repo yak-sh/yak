@@ -33,6 +33,9 @@ import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 import {
   type Blend,
   blend,
+  borderOf,
+  boundariesIn,
+  boundaryAt,
   lie,
   pick,
   type Placed,
@@ -287,9 +290,29 @@ let BARE = new Set([
 ])
 
 // The ground's smooth height where the places `near` and the `roads` may
-// reach: the lie of the land, eased into each road's bed.
-let rising = (near: Placed[], roads: Road[]) => (x: number, z: number) => {
+// reach: the lie of the land, shaped by its border, then eased into each
+// road's bed. The road leaves a broad pass through a ridge and a dry ford
+// across a river, so the land remains walkable on either side.
+let rising = (
+  near: Placed[],
+  roads: Road[],
+  boundary = boundaryAt,
+) =>
+(x: number, z: number) => {
   let h = lie(x, z, near)
+  let border = boundary(x, z)
+  if (border.ridge > 0) {
+    let pass = 0
+    for (let r of roads) {
+      if (!close(r.c, x, z, ROAD + EASE + 8)) continue
+      let d = off(r.c, x, z, along(r.c, x, z))
+      pass = Math.max(pass, 1 - smooth(ROAD + EASE, ROAD + EASE + 8, d))
+    }
+    h += border.ridge * (8 + fbm(x / 11, z / 11, 89, 3) * 5) * (1 - pass)
+  }
+  if (border.river > 0) {
+    h = lerp(h, Math.min(h, WATER - 1.1), border.river)
+  }
   for (let r of roads) {
     if (!close(r.c, x, z, ROAD + EASE)) continue
     let t = along(r.c, x, z), d = off(r.c, x, z, t)
@@ -668,7 +691,11 @@ let area = (v: Vale, x0: number, z0: number, x1: number, z1: number, m = 2) => {
     built,
     villages,
     streets,
-    height: rising(near, roads),
+    height: rising(
+      near,
+      roads,
+      boundariesIn(x0 - m, z0 - m, x1 + m, z1 + m),
+    ),
   }
 }
 
@@ -829,6 +856,7 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
         dist(x, z, v.at) <
           4.75 + rand(gi, gk, 5 + LEVELS[v.level].seed * 101) * 0.75
       )
+      let border = borderOf(b)
       top[j] = c * V >= 19
         ? Top.snow
         : slope >= 3
@@ -836,7 +864,10 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
         : c * V <= SHORE
         ? most?.shore ?? Top.sand
         : paved || toRoad(a.roads, x, z) < ROAD || toLane(a.lanes, x, z) < 0.85
-        ? Top.path
+        ? border.kind == 'river' && border.strength > 0.4 &&
+            toRoad(a.roads, x, z) < ROAD
+          ? Top.stone
+          : Top.path
         : cover(w, fbm(x / 3, z / 3, 11, 2), x, z)
     }
   }

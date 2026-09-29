@@ -16,7 +16,7 @@
 // level lies in the nearest.
 import { type Feature, FEATURES } from './features.ts'
 import { LEVELS, SIZE, type Spot } from './levels.ts'
-import { fbm, lerp, smooth } from './rand.ts'
+import { fbm, hashOf, lerp, smooth } from './rand.ts'
 
 /** A place of a level where it lies in the world: its level, its name, its
  * kind, its feature, and its middle in metres; its shape's noise salt; and
@@ -235,6 +235,81 @@ let EDGE = 24
 /** The region a point lies in (`a`), the nearest other (`b`), and how much
  * of the point is `a`'s: 1 well inside it, falling to 0.5 at the border. */
 export type Blend = { a: string; b: string; t: number }
+
+/** The shape shared by two lands at their border. The pair, rather than the
+ * side one approaches from, decides its kind. */
+export type Border = { kind: 'open' | 'ridge' | 'river'; strength: number }
+let borders = new Map<string, Border['kind']>()
+export let borderOf = ({ a, b, t }: Blend): Border => {
+  if (!b || t >= 1) return { kind: 'open', strength: 0 }
+  let key = [a, b].sort().join('/')
+  let kind = borders.get(key)
+  if (!kind) {
+    let roll = hashOf(key) % 4
+    borders.set(key, kind = roll == 0 ? 'river' : roll < 3 ? 'ridge' : 'open')
+  }
+  return { kind, strength: smooth(1, 0.5, t) }
+}
+
+// Heights ask about a border at every voxel corner. Sample it on the world's
+// metre grid and blend between samples, so finer voxels do not repeat the
+// search for nearby sites. The grid is global, not a chunk's, so seams agree.
+export type Boundary = { ridge: number; river: number }
+let boundaryGrid = new Map<string, Boundary>()
+let sampleBoundary = (x: number, z: number): Boundary => {
+  let key = `${x} ${z}`
+  let got = boundaryGrid.get(key)
+  if (got) return got
+  let { kind, strength } = borderOf(blend(x, z))
+  if (boundaryGrid.size >= 32768) boundaryGrid.clear()
+  boundaryGrid.set(
+    key,
+    got = {
+      ridge: kind == 'ridge' ? strength : 0,
+      river: kind == 'river' ? strength : 0,
+    },
+  )
+  return got
+}
+export let boundaryAt = (x: number, z: number): Boundary => {
+  let i = Math.floor(x), k = Math.floor(z), u = x - i, v = z - k
+  let a = sampleBoundary(i, k), b = sampleBoundary(i + 1, k)
+  let c = sampleBoundary(i, k + 1), d = sampleBoundary(i + 1, k + 1)
+  return {
+    ridge: lerp(lerp(a.ridge, b.ridge, u), lerp(c.ridge, d.ridge, u), v),
+    river: lerp(lerp(a.river, b.river, u), lerp(c.river, d.river, u), v),
+  }
+}
+
+/** Boundary heights across a box, sampled once on the world's metre grid. */
+export let boundariesIn = (x0: number, z0: number, x1: number, z1: number) => {
+  let ix = Math.floor(x0), iz = Math.floor(z0)
+  let width = Math.ceil(x1) - ix + 2, depth = Math.ceil(z1) - iz + 2
+  let ridge = new Float32Array(width * depth)
+  let river = new Float32Array(width * depth)
+  for (let k = 0; k < depth; k++) {
+    for (let i = 0; i < width; i++) {
+      let b = sampleBoundary(ix + i, iz + k)
+      let j = i + k * width
+      ridge[j] = b.ridge
+      river[j] = b.river
+    }
+  }
+  return (x: number, z: number): Boundary => {
+    let i = Math.floor(x) - ix, k = Math.floor(z) - iz
+    if (i < 0 || k < 0 || i + 1 >= width || k + 1 >= depth) {
+      return boundaryAt(x, z)
+    }
+    let u = x - Math.floor(x), v = z - Math.floor(z)
+    let interp = (xs: Float32Array) =>
+      lerp(
+        lerp(xs[i + k * width], xs[i + 1 + k * width], u),
+        lerp(xs[i + (k + 1) * width], xs[i + 1 + (k + 1) * width], u),
+        v,
+      )
+    return { ridge: interp(ridge), river: interp(river) }
+  }
+}
 
 /** Which region (x, z) lies in, and how near its border.
  *
