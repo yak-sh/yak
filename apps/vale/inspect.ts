@@ -2,7 +2,8 @@
 // for only the related rows this account needs; this file only reads them.
 import type { Bundle } from './net.ts'
 import { comp, num, str } from './bundle.ts'
-import { LEVELS } from './levels.ts'
+import { levelOf } from './levels.ts'
+import { type Place, placeOf } from './place.ts'
 
 type Related = {
   look?: Bundle
@@ -10,19 +11,14 @@ type Related = {
   going?: Bundle
   objective?: Bundle
   progress?: number
+  at?: Place
 }
 
 let say = (text: string) =>
   text.replace(/[\p{Cc}\p{Cf}]/gu, '').replace(/[\\`*_{}\[\]<>|]/g, '\\$&')
-let land = (id: string) => LEVELS[id]?.name ?? id
-let point = (p: Record<string, unknown>) =>
-  Number.isFinite(p.x) && Number.isFinite(p.z)
-    ? `(${Math.round(num(p.x))}, ${Math.round(num(p.z))})`
-    : ''
-let location = (p: Record<string, unknown>, when: string) =>
-  str(p.level) && point(p)
-    ? `- ${when}: ${say(land(str(p.level)))} ${point(p)}`
-    : ''
+let land = (id: string) => levelOf(id)?.name ?? id
+let location = (p: Place | null, when: string) =>
+  p ? `- ${when}: ${say(land(p.level))} (${p.x}, ${p.z})` : ''
 let heading = (name: string, kind: string, id: string) =>
   `### ${say(name)}\n${kind} \`${id}\``
 
@@ -31,7 +27,7 @@ export let inspectOf = (
   target: { level: string } | { row: Bundle; related?: Related },
 ): string => {
   if ('level' in target) {
-    let lv = LEVELS[target.level]
+    let lv = levelOf(target.level)
     if (!lv) return 'No such land.'
     let roads = Object.entries(lv.roads).map(([side, to]) =>
       `${side} to ${land(to)}`
@@ -43,10 +39,12 @@ export let inspectOf = (
   }
   let { row, related = {} } = target
   let id = row.entity.eid
-  let live = comp(related.live, 'position')
-  let pos = Object.keys(live).length ? live : comp(row, 'position')
-  let current = location(pos, 'Position now')
-  let saved = current ? '' : location(comp(row, 'seen'), 'Last seen')
+  let at = related.at ?? placeOf(related.live, 'position') ??
+    placeOf(row, 'position')
+  let current = location(at, 'Position now')
+  let saved = current
+    ? ''
+    : location(placeOf(row, 'seen'), 'Last saved position')
   if (row.player) {
     let name = str(comp(related.look, 'look').name, 'Wanderer')
     let objective = comp(related.objective, 'directive')
@@ -83,7 +81,7 @@ export let inspectOf = (
       `- Hero: \`${str(d.player)}\``,
       `- ${say(str(d.goal))}: ${related.progress ?? 0}/${num(d.count)}`,
       str(c.status) ? `- Status: ${say(str(c.status))}` : '',
-      point(c) ? `- Position: ${point(c)}` : '',
+      location(placeOf(row, 'companion'), 'Companion position'),
     ].filter(Boolean).join('\n')
   }
   if (row.item) {
@@ -94,7 +92,7 @@ export let inspectOf = (
       `- Rarity: ${say(str(item.rarity, 'common'))}`,
     ].filter(Boolean).join('\n')
   }
-  if (point(pos)) {
+  if (at) {
     return [heading('World target', 'Entity', id), current].filter(Boolean)
       .join('\n')
   }

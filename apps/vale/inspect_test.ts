@@ -3,6 +3,7 @@
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from './net.ts'
 import { inspectOf } from './inspect.ts'
+import { arriveOf } from './ways.ts'
 
 let row = (eid: string, more: Record<string, unknown> = {}): Bundle => ({
   entity: { eid },
@@ -10,6 +11,7 @@ let row = (eid: string, more: Record<string, unknown> = {}): Bundle => ({
 })
 
 Deno.test('inspect prefers live position and summarizes a hero objective', () => {
+  let [x, z] = arriveOf('tombsands')
   let hero = row('hero', {
     player: {},
     seen: { level: 'mossvale', x: 1, z: 2 },
@@ -20,7 +22,7 @@ Deno.test('inspect prefers live position and summarizes a hero objective', () =>
     related: {
       look: row('look', { look: { name: 'Bramble', player: 'hero' } }),
       live: row('hero', {
-        position: { level: 'tombsands', x: 123.4, z: 456.8 },
+        position: { level: 'tombsands', x, z },
       }),
       objective: row('ask', {
         directive: { player: 'hero', goal: 'wood', count: 5 },
@@ -30,10 +32,10 @@ Deno.test('inspect prefers live position and summarizes a hero objective', () =>
   })
   assertStringIncludes(text, 'Bramble')
   assertStringIncludes(text, 'Hero `hero`')
-  assertStringIncludes(text, 'Tombsands (123, 457)')
+  assertStringIncludes(text, `Tombsands (${x}, ${z})`)
   assertStringIncludes(text, 'Companion: wood 2/5')
   assertEquals(text.includes('private-account'), false)
-  assertEquals(text.includes('Last seen'), false)
+  assertEquals(text.includes('Last saved position'), false)
 })
 
 Deno.test('inspect describes a villager, objective, item, and land', () => {
@@ -56,6 +58,7 @@ Deno.test('inspect describes a villager, objective, item, and land', () => {
   })
   assertStringIncludes(objective, 'wood: 1/4')
   assertStringIncludes(objective, 'Status: walking')
+  assertStringIncludes(objective, 'Companion position: Mossvale (10, 20)')
   let item = inspectOf({
     row: row('sword', {
       item: { kind: 'sword', rarity: 'rare', owner: 'hero' },
@@ -69,15 +72,15 @@ Deno.test('inspect reports saved heroes and live-only world targets', () => {
   let saved = inspectOf({
     row: row('hero', {
       player: {},
-      seen: { level: 'mossvale', x: 8, z: 9 },
+      seen: { level: 'mossvale', x: 10, z: 20 },
     }),
   })
-  assertStringIncludes(saved, 'Last seen: Mossvale (8, 9)')
+  assertStringIncludes(saved, 'Last saved position: Mossvale (10, 20)')
   let creature = inspectOf({
     row: row('creature', {
-      position: { level: 'tombsands', x: 11, z: 12 },
+      position: { level: 'mossvale', x: 10, z: 20 },
     }),
   })
   assertStringIncludes(creature, 'World target')
-  assertStringIncludes(creature, 'Position now: Tombsands (11, 12)')
+  assertStringIncludes(creature, 'Position now: Mossvale (10, 20)')
 })

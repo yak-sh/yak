@@ -9,6 +9,8 @@ import { resolveTarget } from './target.ts'
 import { GIVERS } from './quests.ts'
 import { decided, where as villagerWhere } from './villagers.ts'
 import { eidOf } from './villager-id.ts'
+import { inspectOf } from './inspect.ts'
+import { objectiveOf } from './companion.ts'
 
 let read = async (door, line, live = false) => {
   let search = live
@@ -171,6 +173,85 @@ let targetPlace = async (env, v, eid) => {
   return placeOf({ companion: { x, z } }, 'companion')
 }
 
+let inspect = async (req, env, v) => {
+  if (req.headers.get('x-yak-role') != 'owner') {
+    return new Response('Only the app owner can inspect an entity.', {
+      status: 403,
+    })
+  }
+  let args = await req.json().catch(() => null)
+  if (typeof args?.target != 'string' || !args.target.trim()) {
+    return new Response('Pass a land, name, or entity id.', { status: 400 })
+  }
+  let to
+  try {
+    to = await resolveTarget(args.target, (line) => read(env.STORE, line))
+  } catch (e) {
+    return new Response(e.message, { status: 400 })
+  }
+  if (!to) {
+    return new Response('No land or entity has that name.', {
+      status: 404,
+    })
+  }
+  if ('level' in to) return new Response(inspectOf(to))
+
+  let id = to.eid
+  let [stored] = await read(env.STORE, `.eid=${JSON.stringify(id)}&?created`)
+  let at = await targetPlace(env, v, id)
+  let giver = GIVERS.find((g) => eidOf(g.id) == id)
+  let row = stored ?? (giver
+    ? {
+      entity: { eid: id },
+      doc: { title: giver.name },
+      villager: { id: giver.id, level: giver.level, home: giver.place },
+    }
+    : at
+    ? { entity: { eid: id }, position: at }
+    : null)
+  if (!row) {
+    return new Response('No inspectable entity has that id.', {
+      status: 404,
+    })
+  }
+  let related = { at }
+  if (row.player) {
+    let [looks, directives] = await Promise.all([
+      read(
+        env.STORE,
+        `.look.player=${JSON.stringify(id)}&.order=-look.at&.limit=1`,
+      ),
+      read(
+        env.STORE,
+        `.directive.player=${
+          JSON.stringify(id)
+        }&?created&?companion&.order=-created.at&.limit=10`,
+      ),
+    ])
+    related.look = looks[0]
+    let objective = objectiveOf(row, directives)
+    related.objective = directives.find((d) => d.entity.eid == objective?.eid)
+  }
+  if (row.villager) {
+    let choices = await read(
+      env.STORE,
+      `.going.villager=${
+        JSON.stringify(id)
+      }&?created&.order=-created.at&.limit=10`,
+    )
+    related.going = choices.find((c) => c.created?.via == id)
+  }
+  let objective = row.directive ? row : related.objective
+  if (objective) {
+    let gathered = await read(
+      env.STORE,
+      `.gathered.directive=${JSON.stringify(objective.entity.eid)}`,
+    )
+    related.progress = gathered.length
+  }
+  return new Response(inspectOf({ row, related }))
+}
+
 let teleport = async (req, env, v) => {
   if (req.headers.get('x-yak-role') != 'owner') {
     return new Response('Only the app owner can teleport a hero.', {
@@ -254,6 +335,9 @@ export let workerOf = (v) => ({
     }
     if (req.method == 'POST' && path.endsWith('/where')) {
       return where(req, env)
+    }
+    if (req.method == 'POST' && path.endsWith('/inspect')) {
+      return inspect(req, env, v)
     }
     return new Response('Not found', { status: 404 })
   },

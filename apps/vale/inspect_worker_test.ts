@@ -1,0 +1,69 @@
+// An admin sees a short command answer from stored and live rows; other
+// visitors cannot use the store-backed inspection door.
+import { assertEquals, assertStringIncludes } from '@std/assert'
+import { flat } from './terrain.ts'
+import { workerOf } from './worker.js'
+
+let HERO = '01234567-89ab-cdef-0123-456789abcdef'
+let hero = {
+  entity: { eid: HERO },
+  player: {},
+  created: { by: 'owner-person' },
+  seen: { level: 'mossvale', x: 10, z: 20 },
+}
+let look = {
+  entity: { eid: 'look' },
+  look: { player: HERO, name: 'Bramble', at: 1 },
+}
+let ask = {
+  entity: { eid: 'ask' },
+  directive: { player: HERO, goal: 'wood', count: 4 },
+  created: { by: 'owner-person', at: '2026-09-28T00:00:00Z' },
+  companion: { status: 'walking', x: 10, z: 20 },
+}
+
+Deno.test('inspect worker checks owner and reads live hero state', async () => {
+  let reads: string[] = []
+  let env = {
+    STORE: {
+      fetch: (path: string) => {
+        let url = new URL(path, 'https://store.test/')
+        let line = url.searchParams.get('q') ?? ''
+        reads.push(line)
+        let rows = url.searchParams.has('live')
+          ? [{
+            entity: { eid: HERO },
+            position: { level: 'mossvale', x: 10, z: 20 },
+          }]
+          : line.startsWith('.look.name~=') ||
+              line.startsWith('.look.player=')
+          ? [look]
+          : line.startsWith('.directive.player=')
+          ? [ask]
+          : line.startsWith('.gathered.directive=')
+          ? [{ entity: { eid: 'log' }, gathered: { directive: 'ask' } }]
+          : line.startsWith('.eid=')
+          ? [hero]
+          : []
+        return Promise.resolve(Response.json(rows))
+      },
+    },
+  }
+  let worker = workerOf(flat(5))
+  let request = (role: string) =>
+    new Request('https://yourname.yaks.app/vale/inspect', {
+      method: 'POST',
+      headers: { 'x-yak-role': role, 'content-type': 'application/json' },
+      body: JSON.stringify({ target: 'Bramble' }),
+    })
+  let refused = await worker.fetch(request('viewer'), env)
+  assertEquals(refused.status, 403)
+  assertEquals(reads, [])
+  let result = await worker.fetch(request('owner'), env)
+  assertEquals(result.status, 200)
+  let text = await result.text()
+  assertStringIncludes(text, 'Hero `' + HERO + '`')
+  assertStringIncludes(text, 'Position now: Mossvale (10, 20)')
+  assertStringIncludes(text, 'Companion: wood 1/4')
+  assertEquals(text.includes('owner-person'), false)
+})
