@@ -19,7 +19,8 @@ let host = () => {
       if (type == 'message') heard.push(fn)
     },
   }
-  let say = (f: Frame) => {
+  // One message: a frame, or several batched under one acknowledgement.
+  let say = (f: Frame | { frames: Frame[]; ack?: string }) => {
     for (let fn of heard) {
       fn({ data: JSON.stringify(f) } as Event & { data: string })
     }
@@ -72,6 +73,25 @@ test('a frame lands in the box and is reported to every name, first as a reset',
   await say({ id, bundles: [row('x', 'Two')] })
   assertEquals(frames[1][2], false)
   assertEquals(c.box.ent('x')?.doc, { title: 'Two' })
+})
+
+test('frames the host batches into one message are each reported', async () => {
+  let { c, frames, sent, say } = replica()
+  c.open('a', '.doc')
+  c.open('t', '.task&.tally=task.status')
+  let [doc, tally] = sent.map((m) => String(m.id))
+  await say({
+    frames: [
+      { id: doc, bundles: [row('x', 'One')] },
+      { id: tally, tally: { open: 2 } },
+    ],
+    ack: 'k1',
+  })
+  assertEquals(c.box.ent('x')?.doc, { title: 'One' })
+  assertEquals(frames.map(([subs, f]) => [subs, f.tally]), [
+    [['a'], undefined],
+    [['t'], { open: 2 }],
+  ])
 })
 
 test('a derived value wider than its enum still lands', async () => {

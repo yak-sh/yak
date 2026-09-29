@@ -94,16 +94,26 @@ export let liveClient = (opts: {
     close: () => s.close(),
     addEventListener: (type, fn) => {
       if (type != 'message') return s.addEventListener(type, fn)
+      // A message is one frame, or several the host batched for one
+      // acknowledgement (@yaks/sync `frames`); each is reported alike.
       let land = (e: Event & { data?: unknown }) => {
-        let f = JSON.parse(String(e.data)) as Frame
-        let line = f.id ? lines.get(f.id) : undefined
+        let packet = JSON.parse(String(e.data)) as Frame | { frames: Frame[] }
+        let frames = 'frames' in packet ? packet.frames : [packet]
+        let lined = frames.map((f) => ({
+          f,
+          line: f.id ? lines.get(f.id) : undefined,
+        }))
         // Taken back before the box hears it, so the unready it reports
         // reads as no answer.
-        if (line && f.refused) answered.delete(line)
+        for (let { f, line } of lined) {
+          if (line && f.refused) answered.delete(line)
+        }
         fn(e)
-        if (!line) return
-        let reset = !f.refused && (fresh.delete(f.id) || !!f.reset)
-        opts.frame([...named.get(line) ?? []], f, reset)
+        for (let { f, line } of lined) {
+          if (!line) continue
+          let reset = !f.refused && (fresh.delete(f.id) || !!f.reset)
+          opts.frame([...named.get(line) ?? []], f, reset)
+        }
       }
       deliver = land
       // Frames land in batches (T-37445): every frame the socket has carried
