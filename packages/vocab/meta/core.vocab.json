@@ -133,6 +133,11 @@
       "type": "boolean",
       "default": true
     },
+    "embed": {
+      "description": "false = an entity wearing this component is never embedded (@yaks/embedding): it stays found by its words, and no vector is made of it. For what is noise to a search by meaning, like a tool's output. Default true.",
+      "type": "boolean",
+      "default": true
+    },
     "bare": {
       "description": "false = this property (or every property of this component) never claims its bare filter name; it is reached qualified only (.comp.prop). Use it for a property that should only be queried explicitly — a large log partition, or a name another component already claims.",
       "type": "boolean",

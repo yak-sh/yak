@@ -30,6 +30,7 @@
     },
     "result": {
       "component": true,
+      "embed": false,
       "type": "object",
       "description": "What a tool returned, and how long the call took.",
       "properties": {

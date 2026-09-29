@@ -239,3 +239,38 @@ test('text found through another component counts only while that one is worn', 
     [2, 3],
   )
 })
+
+test('an entity wearing an embed: false component gets no vector', async () => {
+  let quiet = loadVocab({
+    $defs: {
+      entity: { component: true, type: 'object', properties: {} },
+      say: {
+        component: true,
+        type: 'object',
+        properties: { words: { type: 'string', search: true } },
+      },
+      output: { component: true, type: 'object', embed: false, properties: {} },
+    },
+  })
+  let db = mem()
+  let key = { name: 'entity', type: 'integer', pk: true }
+  for (
+    let stmt of [
+      SPINE,
+      raised('tombstone', key, prose('deleted_at')),
+      raised('say', key, prose('words')),
+      raised('output', key),
+      ...schema(),
+    ]
+  ) db.query(stmt)
+  for (let id of [1, 2]) {
+    db.query(insert('entity', { id, eid: `e-${id}` }))
+    db.query(insert('say', { entity: id, words: 'the dragon woke' }))
+  }
+  db.query(insert('output', { entity: 2 }))
+  await sweep(db, fields(quiet, searched), embedder)
+  assertEquals(
+    scan(db, TABLE, undefined, ['entity']).map((r) => r.entity),
+    [1],
+  )
+})

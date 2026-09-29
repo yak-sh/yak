@@ -78,6 +78,7 @@ component table needs on top:
 | `identity`  | both  | derive the entity's id from this. comp: `["space","slug"]`              |
 | `kind`      | comp  | this component names a display kind                                     |
 | `before`    | comp  | kinds this kind sorts before (feeds the derived kindOrder)              |
+| `embed`     | comp  | `false` = an entity wearing it is never embedded (still found by words) |
 | `wire`      | comp  | `false` = a component clients read but cannot write                     |
 | `sync`      | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
 | `durable`   | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |

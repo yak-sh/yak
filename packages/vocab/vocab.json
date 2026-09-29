@@ -48,6 +48,10 @@
           "type": "boolean",
           "description": "false = clients read it and never write it"
         },
+        "embed": {
+          "type": "boolean",
+          "description": "false = an entity wearing it is never embedded: no vector is made of it"
+        },
         "bare": {
           "type": "boolean",
           "description": "false = its properties are reached by their qualified names only"

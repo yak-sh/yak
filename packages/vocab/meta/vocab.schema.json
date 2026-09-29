@@ -263,6 +263,9 @@
         "wire": {
           "type": "boolean"
         },
+        "embed": {
+          "type": "boolean"
+        },
         "computed": {
           "type": "boolean"
         },

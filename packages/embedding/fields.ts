@@ -21,11 +21,13 @@ import {
   type Derived,
   each,
   eq,
+  exists,
   type Expr,
   fn,
   join,
   lit,
   ne,
+  not,
   type Query,
   select,
   table,
@@ -44,6 +46,8 @@ export type Field = {
   comp: string
   prop: string
   on?: string
+  /** components whose wearers are never embedded (vocabulary `embed: false`) */
+  not?: string[]
   text?: (stored: Expr) => Expr
 }
 
@@ -88,20 +92,38 @@ export let fields = (vocab: Vocab, pick: Pick = textual): Field[] => [
     vocab.props(comp)
       .map((prop) => vocab.prop(comp, prop)!)
       .filter(pick)
-      .map((c) => ({ comp, prop: c.prop }))
+      .map((c) => ({ comp, prop: c.prop, ...unembedded(vocab) }))
   ),
   ...vocab.all.flatMap((on) =>
     (vocab.comp(on)?.search ?? []).map((name) => {
       let [comp, prop] = name.split('.')
-      return { comp, prop, on }
+      return { comp, prop, on, ...unembedded(vocab) }
     })
   ),
 ]
+
+/** What keeps an entity from being embedded: the components the vocabulary
+ * marks `embed: false`, as the `not` of a field (none, no key). */
+export let unembedded = (vocab: Vocab): { not?: string[] } => {
+  let not = vocab.all.filter((comp) => vocab.comp(comp)?.embed === false)
+  return not.length ? { not } : {}
+}
 
 // SQLite's trim() strips spaces only, so the whitespace that makes a text
 // "empty" has to be listed. One rule, written once: a field's text counts when
 // it holds something other than these characters.
 let WS = ' \t\n\r\v\f'
+
+// The condition that leaves out entities wearing a component marked
+// `embed: false`.
+let allowed = (f: Field): Expr[] =>
+  (f.not ?? []).map((comp) =>
+    not(exists(select({
+      cols: [lit(1)],
+      from: table(comp, 'x'),
+      where: eq(col('entity', 'x'), col('entity', 'c')),
+    })))
+  )
 
 // The join that scopes a field to the entities wearing `on`.
 let scope = (f: Field) =>
@@ -131,9 +153,11 @@ export let pieces = (fields: Field[], owners?: number[]): Query | null =>
         ],
         from: table(f.comp, 'c'),
         joins: scope(f),
-        where: owners
-          ? and(some, among(col('entity', 'c'), each(owners)))
-          : some,
+        where: and(
+          some,
+          ...allowed(f),
+          ...owners ? [among(col('entity', 'c'), each(owners))] : [],
+        ),
       })
     }))
     : null
@@ -150,6 +174,7 @@ export let wearers = (fields: Field[]): Query | null =>
         cols: [col('entity', 'c')],
         from: table(f.comp, 'c'),
         joins: scope(f),
+        where: and(...allowed(f)),
       })
     ))
     : null

@@ -38,7 +38,7 @@ import type { Vocab } from '@yaks/vocab'
 import { type Model2Vec, model2vec } from '@yaks/model2vec'
 import type { Embedder } from './embedder.ts'
 import { hashEmbedder } from './embedder.ts'
-import { type Field, fields, searched } from './fields.ts'
+import { type Field, fields, searched, unembedded } from './fields.ts'
 import { type Remote, remote, space } from './remote.ts'
 
 /** An embedder, as a config names one. */
@@ -139,7 +139,7 @@ export let chosen = (vocab: Vocab, options: Options): Field[] => {
         }, which is not a declared comp.prop`,
       )
     }
-    return { comp, prop }
+    return { comp, prop, ...unembedded(vocab) }
   })
 }
 
