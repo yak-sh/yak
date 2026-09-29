@@ -55,7 +55,7 @@ let str = (c: unknown, k: string): string => {
 // builder with nothing to do right now, which is ordinary and not an error.
 let stir = (o: Open): Handler => (event, tx, write) =>
   then(
-    decide(o, event.entity.eid, tx, (o.now ?? clock)(), true, true),
+    decide(o, event.entity.eid, tx, (o.now ?? clock)(), true, 'automatic'),
     (v) => v?.build ? write(v.build) : undefined,
   )
 

@@ -17,7 +17,7 @@ import type { Vocab } from '@yaks/vocab'
 import { BODY, DOC } from '@yaks/doc'
 import { link } from '@yaks/edge'
 import { content } from '@yaks/kernel'
-import { statusOf } from '@yaks/session'
+import { kindOf, ordered, statusOf } from '@yaks/session'
 import { next } from '@yaks/wake'
 import { type Input, key } from './key.ts'
 
@@ -216,14 +216,14 @@ export let build = (
   ]
 }
 
-/** Start a run only when its key differs from the last one. */
+/** Start a changed key, or retry a failed key when its caller may do so. */
 export let decide = (
   o: Open,
   eid: Eid,
   tx: Tx,
   at: string,
   scheduled = true,
-  retryFailed = false,
+  retry: 'automatic' | 'explicit' | null = null,
 ): Verdict | undefined | Promise<Verdict | undefined> =>
   then(tx.get([eid]), ([it]) => {
     let b = comp(it, BUILDER)
@@ -237,11 +237,18 @@ export let decide = (
           let session = str(prior, 'session')
           let same = str(prior, 'key') == p.key
           if (!same) return { plan: p, build: build(p, o, at, prior) }
-          if (!session || !retryFailed) return { plan: p }
-          return then(tx.read(`.entry.session=${session}&*`), (entries) =>
-            statusOf(entries) == 'failed'
+          if (!session || !retry) return { plan: p }
+          return then(tx.read(`.entry.session=${session}&*`), (entries) => {
+            let newest = ordered(entries).filter((b) => !b.notice).at(-1)
+            // An interrupted request may have reached a paid provider. Only
+            // builder_build may decide to ask for it again.
+            let interrupted = newest && kindOf(newest) == 'error' &&
+              (newest.error as Comp)?.code == 'interrupted'
+            return statusOf(entries) == 'failed' &&
+                (retry == 'explicit' || !interrupted)
               ? { plan: p, build: build(p, o, at, prior) }
-              : { plan: p })
+              : { plan: p }
+          })
         }),
     )
   })

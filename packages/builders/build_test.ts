@@ -11,7 +11,7 @@ import { status } from '@yaks/kernel'
 import { effectsIn } from '@yaks/vocab'
 import { counter, ids, noon, shop, workshop } from './testing.ts'
 import { type Desk, type Open, output, run } from './build.ts'
-import { effects, watches } from './effects.ts'
+import { effects, opening, watches } from './effects.ts'
 import { runs } from './tools.ts'
 import { content, key } from './key.ts'
 import { parse } from './answer.ts'
@@ -212,6 +212,35 @@ Deno.test('moving a failed builder floor due retries its session', async () => {
   let after = comp(await one(g, run(ids.builder)), 'build')
   assertEquals(after?.key, before?.key)
   assertNotEquals(after?.session, before?.session)
+  assertEquals(await sessions(g), 2)
+})
+
+Deno.test('a startup sweep leaves an interrupted immediate builder for explicit retry', async () => {
+  let { g, vocab } = await shop({ desk: scribe, now: noon, eid: counter() })
+  await g.apply([immediate()])
+  let before = comp(await one(g, run(ids.builder)), 'build')
+  await g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: before?.session, seq: 2 },
+    error: { code: 'interrupted' },
+    content: { body: 'The previous request may have completed.' },
+  }])
+
+  let opened: Bundle[] = []
+  await g.storage.tx((tx) =>
+    opening({ desk: scribe, vocab, now: noon })(
+      { kind: 'matched', name: 'builder', entity: { eid: ids.builder } },
+      tx,
+      (bundles) => {
+        opened.push(...bundles)
+        return bundles
+      },
+    )
+  )
+  assertEquals(opened, [])
+  assertEquals(await sessions(g), 1)
+
+  await demand(g, { builder: ids.builder })
   assertEquals(await sessions(g), 2)
 })
 
