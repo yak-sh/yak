@@ -1,9 +1,9 @@
 # Sound generation provenance
 
-Each JSON file names a WAV blob in the Vale store by its SHA-256 hash. It
-records the exact Seed Audio request prompt, model, endpoint and format, plus
-the deterministic trim or overlap crossfade used to make the game asset.
-`../samples.ts` selects the five recorded sounds heard in the app. The village
-fire uses procedural crackles; its trial recording remains here for provenance.
-The WAV bytes stay in the blob store. Ambient recordings are crossfaded into
-seamless loops.
+Each JSON file names a sound blob in the Vale store by its SHA-256 hash and
+records the exact Seed Audio request prompt, model, endpoint and format. The
+listening set was processed into WAV; hosted builders keep the MP3 they receive.
+`../samples.ts` selects the five pinned recordings and reads hosted builder
+outputs for the rest. The village fire uses procedural crackles; its trial
+recording remains here for provenance. Ambient recordings are crossfaded into
+seamless loops when played.

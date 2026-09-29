@@ -1,0 +1,18 @@
+{
+  "sound": "surf",
+  "sha256": "96dbe5685367b2eb92e5649c01508c795edefd80616fda2dcae5a639c26ac484",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: About eight seconds of ocean shore ambience: rolling waves swell, break gently in scattered sprays, and draw back across wet sand. Continuous natural bed. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790645738-JUOTvzbmrBnws1eesUK6"
+  },
+  "playback": {
+    "loop": true
+  }
+}
