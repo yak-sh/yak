@@ -38,10 +38,15 @@ let doc: VocabDoc = {
       type: 'object',
       properties: { verdict: { type: 'string' } },
     },
-    // Where the persona files go: @yaks/project's project and its repo,
-    // @yaks/git's repository and worktree, @yaks/kernel's archived, and a
-    // name @yaks/alias keeps as a key.
+    // Where the persona files go: @yaks/project's project, the filing that
+    // makes one a sub-project, and its repo, @yaks/git's repository and
+    // worktree, @yaks/kernel's archived, and a name @yaks/alias keeps as a key.
     project: { component: true, type: 'object', kind: true, prefix: 'P' },
+    filed: {
+      component: true,
+      type: 'object',
+      properties: { project: { type: 'string' } },
+    },
     repo: {
       component: true,
       type: 'object',
@@ -134,6 +139,25 @@ export let fleet = (root: string): Graph => {
     link('n1', 'contains', 'm1'),
     link('n2', 'contains', 'm1'),
     link('n2', 'contains', 'm2'),
+  ])
+  return g
+}
+
+/** {@link fleet}, with a sub-project s1 under p1 and no checkout of its own,
+ * whose common persona n3 named `sub` carries m3, a task t1 filed under it, and
+ * a sub-project s2 with no persona, whose task is t2. */
+export let nested = (root: string): Graph => {
+  let g = fleet(root)
+  g.apply([
+    { entity: { eid: 's1' }, project: {}, filed: { project: 'p1' } },
+    { entity: { eid: 's2' }, project: {}, filed: { project: 'p1' } },
+    { ...voiced('n3', 'Sub', 'for the sub'), persona: { home: 's1' } },
+    { entity: { eid: 'k3' }, key: { of: 'n3', value: 'sub' }, alias: {} },
+    memory('m3', 'three', 'third'),
+    link('s1', 'contains', 'n3'),
+    link('n3', 'contains', 'm3'),
+    { entity: { eid: 't1' }, filed: { project: 's1' } },
+    { entity: { eid: 't2' }, filed: { project: 's2' } },
   ])
   return g
 }

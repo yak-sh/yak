@@ -42,7 +42,7 @@ export let owing = async (
   let path = (tree?.worktree as Comp | undefined)?.path
   let owes = path == null && !persona
     ? undefined
-    : await owed(g, String(path ?? ''), files.map((f) => f.body), persona)
+    : await owed(g, String(path ?? ''), files.map((f) => f.body), { persona })
   return owes ? [await snapshot(owes.text, owes.source)] : []
 }
 export let sessionCwd = async (g: Graph, session: string, fallback: string) => {

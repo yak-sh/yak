@@ -1161,7 +1161,13 @@ let reads = (c: Comps, comp: string, prop: string): unknown[] => {
 
 // The values a row must carry to satisfy the query's scalar equalities on
 // one component — what a board drop patches, so a dropped task JOINS the
-// board it landed on. Lists, ranges and comparisons pin nothing down.
+// board it landed on. Lists, ranges and comparisons pin nothing down. A walk
+// toward a target along one reference column is met by pointing that column
+// at the target, so a task dropped on a board of everything under a project
+// (`.filed.project->P-19`) is filed under the project itself.
+let adopted = (p: Pred): Hop | undefined =>
+  p.op == REACHES && p.reach?.dir == '->' ? p.reach.via : undefined
+
 export function adopt(
   preds: Pred[],
 ): Record<string, Record<string, string | number>>
@@ -1172,7 +1178,8 @@ export function adopt(
 export function adopt(preds: Pred[], comp?: string) {
   if (comp == null) {
     let grouped: Record<string, Record<string, string | number>> = {}
-    for (let name of new Set(preds.map((p) => p.comp).filter(Boolean))) {
+    let names = preds.map((p) => adopted(p)?.comp ?? p.comp)
+    for (let name of new Set(names.filter(Boolean))) {
       let values = adopt(preds, name)
       if (Object.keys(values).length) grouped[name] = values
     }
@@ -1180,6 +1187,11 @@ export function adopt(preds: Pred[], comp?: string) {
   }
   let out: Record<string, string | number> = {}
   for (let p of preds) {
+    let via = adopted(p)
+    if (via) {
+      if (via.comp == comp) out[via.prop] = p.value
+      continue
+    }
     if (
       p.comp != comp || !p.prop || p.at?.length || p.op != '' || p.value == ''
     ) continue

@@ -1,5 +1,6 @@
+import './testing.ts'
 import { assertEquals } from '@std/assert'
-import { pageRanked, parseQuery, windowOf } from './query.ts'
+import { adopt, pageRanked, parseQuery, windowOf } from './query.ts'
 
 Deno.test('a web query pages past an entity without a number', () => {
   let win = windowOf(parseQuery('.limit=2&.after=child:abc'))
@@ -12,4 +13,11 @@ Deno.test('a web query pages past an entity without a number', () => {
     ], win).map((row) => row.eid),
     ['last'],
   )
+})
+
+Deno.test('a drop on a board of everything under a project files it there', () => {
+  assertEquals(adopt(parseQuery('.filed.project->p1&.filed.priority=2')), {
+    filed: { project: 'p1', priority: 2 },
+  })
+  assertEquals(adopt(parseQuery('.filed.project<-p1')), {})
 })

@@ -102,12 +102,14 @@ A harness started in a checkout reads its instructions from files, so each
 project's personas are written into its checkout:
 
 - the persona the project `contains` is `.tasks/AGENTS.md`, which the
-  repository's `CLAUDE.md` and `AGENTS.md` link to;
-- every other persona whose `home` is the project is
-  `.tasks/personas/<name>.md`, which a `.claude/agents/<name>.md` links to.
-  `<name>` is the persona's [@yaks/alias](../alias) name, or its id. The file
-  opens with the frontmatter a Claude agent file needs (`name`, `description`),
-  and leaves out what `AGENTS.md` already says, since the two are read together.
+  repository's `CLAUDE.md` and `AGENTS.md` link to (for a sub-project with a
+  checkout of its own, folded with the common personas above it);
+- every other persona whose `home` is the project, or a sub-project landing in
+  its checkout (below), is `.tasks/personas/<name>.md`, which a
+  `.claude/agents/<name>.md` links to. `<name>` is the persona's
+  [@yaks/alias](../alias) name, or its id. The file opens with the frontmatter a
+  Claude agent file needs (`name`, `description`), and leaves out what
+  `AGENTS.md` already says, since the two are read together.
 
 Each file is `voice`'s text under a line naming the persona it was generated
 from. The checkout is the main worktree of the project's
@@ -153,18 +155,31 @@ rendering), unless one of `files` (the text of each instruction file the agent's
 provider reads there) is exactly that persona's file: the same banner and the
 same text the persona files would write now. A stale file, or another
 repository's, leaves the persona owed. The harness gives it through the
-provider's own instruction mechanism and the provider still reads its files.
-Pass a fourth argument, a persona id or registered name, to choose that persona
-instead of the checkout's common one. An unknown persona is refused.
+provider's own instruction mechanism and the provider still reads its files. A
+fourth argument says who the agent is: `{ persona }`, a persona id or registered
+name, chooses that persona instead of the checkout's common one (an unknown
+persona is refused); `{ work }`, the task or project the agent works on, makes
+it the common persona of the work's lineage, less what a file there already says
+of the checkout's.
+
+## Sub-projects
+
+A sub-project ([@yaks/project](../project)) hears every common persona along its
+lineage: its own first, if it has one, then each project's above it, folded into
+one document with nothing said twice. One without a persona of its own hears its
+parent's. One without a `repo` of its own lands in its nearest ancestor's
+checkout, so its personas, its common one included, are written there as
+specialists, each saying its home's common persona beside the checkout's
+`AGENTS.md`.
 
 ## Exports
 
-| subpath     | what it provides                                                          |
-| ----------- | ------------------------------------------------------------------------- |
-| `.`         | `wear`, `voice`, `owed`, the component names, and the vocabulary document |
-| `./vocab`   | the component declarations alone                                          |
-| `./tools`   | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes |
-| `./effects` | `effects(host, {files})` — keeps the persona files current                |
+| subpath     | what it provides                                                                    |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `.`         | `wear`, `voice`, `owed`, `common`, the component names, and the vocabulary document |
+| `./vocab`   | the component declarations alone                                                    |
+| `./tools`   | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes           |
+| `./effects` | `effects(host, {files})` — keeps the persona files current                          |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation

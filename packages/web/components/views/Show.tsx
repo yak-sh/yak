@@ -434,11 +434,11 @@ export let Boards = ({ e }: { e: Ent }) => {
   )
 }
 
-// The tasks homed here — every task whose project names this entity.
-// Open work only, board-ordered (status column, then rank): the project
-// page is a working view; the full history lives on its boards.
+// The tasks homed here — every task filed under this project or one of its
+// sub-projects. Open work only, board-ordered (status column, then rank): the
+// project page is a working view; the full history lives on its boards.
 export let Tasks = ({ e }: { e: Ent }) => {
-  let ids = useQueryEids(`.filed.project=${e.eid}&.task&.task.status=open,wip`)
+  let ids = useQueryEids(`.filed.project->${e.eid}&.task&.task.status=open,wip`)
     .map(ent)
     .sort((a, b) =>
       statuses.findIndex((s) => s == statusOf(a)) -

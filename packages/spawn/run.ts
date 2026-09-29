@@ -21,12 +21,12 @@
 //    and no `launch` property: the transaction that writes that entry is the
 //    request, and ./effects.ts is what answers it.
 //
-// A run starts with its selected persona, or the one its checkout's repository
-// carries by default (@yaks/persona `owed`). It goes through the provider's
-// instruction flag,
-// unless the instruction file the provider reads there already says it: a
-// run's own worktree has the repository's AGENTS.md link but not the ignored
-// directory it points into. What it was given is snapshotted into its
+// A run starts with its selected persona, or else the common persona of the
+// work it holds a claim on, which for a sub-project's task is its own and each
+// one above it (@yaks/persona `owed`). It goes through the provider's
+// instruction flag, unless the instruction file the provider reads there
+// already says it: a run's own worktree has the repository's AGENTS.md link but
+// not the ignored directory it points into. What it was given is snapshotted into its
 // transcript as an instruction entry (@yaks/context), the same record a
 // session the harness opens carries.
 //
@@ -38,7 +38,7 @@
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
-import { type Reader, SESSION, sessionEnv } from '@yaks/session'
+import { CLAIM, type Reader, SESSION, sessionEnv } from '@yaks/session'
 import { pull, type Tail, tail } from '@yaks/session/tail'
 import {
   clean,
@@ -275,12 +275,12 @@ let given = async (
 ): Promise<string | undefined> => {
   let found = adapter.file ? await text(`${checkout}/${adapter.file}`) : null
   let selected = comp(await one(g, session), SESSION)?.persona
-  let owes = await owed(
-    g,
-    checkout,
-    found == null ? [] : [found],
-    selected == null ? undefined : String(selected),
-  )
+  let [work] = (await g.read(`.${CLAIM}.session=${JSON.stringify(session)}`))
+    .map((b) => b.entity.eid).sort()
+  let owes = await owed(g, checkout, found == null ? [] : [found], {
+    persona: selected == null ? undefined : String(selected),
+    work,
+  })
   if (!owes) return undefined
   if (g.vocab.comp('prompt')) {
     let s = await snapshot(owes.text, owes.source)

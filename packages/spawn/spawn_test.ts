@@ -5,7 +5,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
-import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { effectDoc, type Effects, effects, POOL, take } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
@@ -71,21 +71,13 @@ Deno.test('the request starts the provider, and what it printed is the transcrip
   }
 })
 
-Deno.test('the chosen persona reaches a managed provider', async () => {
+// The persona a run starts with: the instruction its provider was given.
+let persona = async (...rows: Bundle[]) => {
   let { g } = tracked()
   let where = dir()
-  let persona = crypto.randomUUID()
   let given: string | undefined
   try {
-    await g.apply([
-      ...asking('S1', 'E1', 'do the thing'),
-      {
-        entity: { eid: persona },
-        doc: { title: 'Operator', body: 'Keep the graph true.' },
-        persona: {},
-      },
-      { entity: { eid: 'S1' }, session: { persona } },
-    ])
+    await g.apply([...asking('S1', 'E1', 'do the thing'), ...rows])
     await start(g, 'S1', {
       cwd: where,
       dir: where,
@@ -99,14 +91,43 @@ Deno.test('the chosen persona reaches a managed provider', async () => {
         },
       },
     })
-    assert(given?.includes('Keep the graph true.'))
     await until(
       async () => comp((await g.get(['S1']))[0], 'exit'),
       'the managed provider to exit',
     )
+    return given
   } finally {
     Deno.removeSync(where, { recursive: true })
   }
+}
+
+let voiced = (eid: string, body: string, home?: string): Bundle => ({
+  entity: { eid },
+  doc: { title: eid, body },
+  persona: home ? { home } : {},
+})
+
+Deno.test('the chosen persona reaches a managed provider', async () => {
+  let given = await persona(voiced('N1', 'Keep the graph true.'), {
+    entity: { eid: 'S1' },
+    session: { persona: 'N1' },
+  })
+  assert(given?.includes('Keep the graph true.'))
+})
+
+Deno.test("a run on a sub-project's task hears each common persona above it", async () => {
+  let given = await persona(
+    { entity: { eid: 'P1' }, project: {} },
+    { entity: { eid: 'P2' }, project: {}, filed: { project: 'P1' } },
+    voiced('N1', 'Keep the graph true.', 'P1'),
+    voiced('N2', 'Mind the platform.', 'P2'),
+    link('P1', 'contains', 'N1'),
+    link('P2', 'contains', 'N2'),
+    { entity: { eid: 'T1' }, task: {}, filed: { project: 'P2' } },
+    { entity: { eid: 'T1' }, claim: { session: 'S1' } },
+  )
+  assert(given?.includes('Mind the platform.'), given)
+  assert(given?.includes('Keep the graph true.'), given)
 })
 
 Deno.test('a request made beside a server is started by the server, not the command', async () => {

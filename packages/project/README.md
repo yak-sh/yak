@@ -17,7 +17,8 @@ deno add jsr:@yaks/project
   separate from being a task so that a task can have none. `priority` orders a
   queue (lower is more urgent) and `domain` names the area of work.
   `filed.project` is a reference declared `death: detach`, so deleting a project
-  removes that reference instead of deleting the tasks.
+  removes that reference instead of deleting the tasks. A project filed under
+  another project is its sub-project (below).
 - `board{query}` — a saved filter over the portfolio. A board is its query.
   Membership is never stored — there is no row saying this task is on that board
   — so a board is always current, and a task that starts matching is on it with
@@ -34,7 +35,28 @@ deno add jsr:@yaks/project
   its source: which repository the work is in, which branch it branches from and
   lands into, the command a change must pass first (`gate`), and whether landing
   also pushes. The repository, its checkouts and its remote are
-  [@yaks/git](../git)'s.
+  [@yaks/git](../git)'s. A sub-project without a `repo` lands through the
+  nearest project above it that has one.
+
+## Sub-projects
+
+A project filed under another project is its sub-project: its parent is its own
+`filed.project`, the property that files a task under it. A property holds one
+value, so a project has at most one parent. Everything under a project, at any
+depth, is one walk in the query grammar:
+
+- `.filed.project->P-19` — what is filed under P-19, its sub-projects, what is
+  filed under those, and so on down;
+- `.task .filed.project->P-19` — the tasks among them, which is what a board
+  rolling up a project's work says;
+- `.filed.project=P-19` — only what is filed directly under it.
+
+`lineage(g, eid)` reads the other way: the projects an entity is under, nearest
+first — the entity itself when it is a project, then each `filed.project` above
+it. It is how a sub-project finds the `repo` it lands through and the common
+personas its agents are owed ([@yaks/persona](../persona)). The plugin refuses a
+project filed under itself or under a project already under it, so the projects
+form a tree.
 
 ## Checking a board's query
 
@@ -105,8 +127,9 @@ await g.apply([
 ```
 
 - `@yaks/project`: `projectDoc`, `PROJECT`, `FILED`, `BOARD`, `VENTURE`,
-  `projects(vocab, marks?)`, `guarding(vocab, marks?)`, and
-  `unroutable(query, vocab, marks?)` (a diagnostic string or `null`).
+  `projects(vocab, marks?)`, `guarding(vocab, marks?)`,
+  `unroutable(query, vocab, marks?)` (a diagnostic string or `null`),
+  `lineage(g, eid)`, and `nesting` (the hook keeping projects a tree).
 - `@yaks/project/vocab`: schema documents in `docs`.
 - `@yaks/project/rules`: `rules(host)` supplies the validation plugin.
 - `@yaks/project/tools`: `runs(host, options)` supplies the two checks above;

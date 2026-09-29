@@ -3,8 +3,8 @@
 // The store is @yaks/ram: a Map holding the bundles, with the same `apply()`
 // and the same query grammar as a database, so a test needs no file and no
 // schema. The vocabulary is every component a managed session touches — the
-// session's, the process's, and the provider and model entities a request
-// names.
+// session's, the process's, the provider and model entities a request names,
+// and the task and project whose persona a run is owed.
 
 import { type Graph, graph, identityEid } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
@@ -14,6 +14,8 @@ import { effects } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { docDoc } from '@yaks/doc'
 import { personaDoc } from '@yaks/persona'
+import { projectDoc } from '@yaks/project'
+import { taskDoc } from '@yaks/task'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc, processes } from '@yaks/process'
@@ -31,6 +33,8 @@ export let host: Vocab = loadVocab(
     edgeDoc,
     docDoc,
     personaDoc,
+    projectDoc,
+    taskDoc,
     spawnDoc,
   ],
   [edgeKeywords],

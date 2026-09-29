@@ -2,16 +2,18 @@
 // a harness started there finds them. The persona a project `contains` is
 // `.tasks/AGENTS.md`, which a repository's CLAUDE.md and AGENTS.md link to,
 // and every other persona whose `home` is the project is
-// `.tasks/personas/<name>.md`, which a `.claude/agents/<name>.md` links to.
+// `.tasks/personas/<name>.md`, which a `.claude/agents/<name>.md` links to. A
+// sub-project without a checkout of its own lands in its nearest ancestor's,
+// so its personas, its common one included, are specialists there.
 //
 // The text is {@link voice}'s. A file adds only what being a file needs: a line
 // saying where to edit it, and, for a specialist, the frontmatter a Claude
 // agent file has to open with (without `name` and `description` first, claude
-// reports the agent as not found). A specialist is read beside AGENTS.md, so
-// what the common persona already says is left out of it rather than said
-// twice. Which persona is a project's common one, and the text of its file,
-// are ./owed.ts's, the same answers a harness asks for an agent's own
-// checkout.
+// reports the agent as not found). A specialist says its home's common persona
+// too, and is read beside AGENTS.md, so what AGENTS.md already says is left out
+// of it rather than said twice. Which persona is a project's common one, and
+// the text of its file, are ./owed.ts's, the same answers a harness asks for an
+// agent's own checkout.
 //
 // A write-only @yaks/mirror binding: the graph owns these files. A hand edit
 // is put back, and one made while the graph also moved is a conflict, left as
@@ -30,10 +32,11 @@ import { and, eq, type Input, list, present } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
+import { lineage } from '@yaks/project'
 import { PERSONA } from './comp.ts'
 import { voice, type Worn } from './voice.ts'
-import { wear } from './worn.ts'
-import { banner, commons, projection } from './owed.ts'
+import { beside, fold, wear } from './worn.ts'
+import { banner, common, projection } from './owed.ts'
 
 /** One file the graph says a checkout holds. */
 export type File = { path: string; text: string }
@@ -104,19 +107,6 @@ let names = async (g: Graph, eids: Eid[]): Promise<Map<Eid, string>> => {
 let slug = (name: string): string =>
   name.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
 
-// A specialist without what AGENTS.md already says: a document included there
-// is dropped here in both forms, one only named there loses only its name
-// here, since including it in full still earns its place.
-let beside = (w: Worn, common: Worn): Worn => {
-  let carried = new Set([common.persona, ...common.carries].map(eidOf))
-  let named = new Set([...carried, ...common.names.map(eidOf)])
-  return {
-    persona: w.persona,
-    carries: w.carries.filter((b) => !carried.has(eidOf(b))),
-    names: w.names.filter((b) => !named.has(eidOf(b))),
-  }
-}
-
 /** What the persona files are: each file's path and text, the `.tasks`
  * directories they are written into (where a file the graph no longer says is
  * found), and every entity a file says something about. */
@@ -131,37 +121,50 @@ export let personaFiles = async (g: Graph): Promise<Files> => {
   let id = human(g.vocab)
   let render = voice(g.vocab)
   let wearing = wear(g.storage, g.vocab)
-  let worn = async (eid: Eid): Promise<Worn | undefined> => {
-    let w = await wearing(eid)
-    for (let b of w ? [w.persona, ...w.carries, ...w.names] : []) {
-      said.add(eidOf(b))
-    }
+  let heard = (w: Worn): Worn => {
+    for (let b of [w.persona, ...w.carries, ...w.names]) said.add(eidOf(b))
     return w
   }
+  // Each project's common persona along its lineage, read once a pass.
+  let shared = new Map<Eid, Worn | undefined>()
+  let everyone = async (project: Eid) => {
+    if (!shared.has(project)) {
+      let w = await common(g, project)
+      shared.set(project, w && heard(w))
+    }
+    return shared.get(project)
+  }
   let personas = await g.storage.read(and(present(PERSONA)))
-  let bases = await commons(g, [...homes.keys()])
   let named = await names(g, personas.map(eidOf))
+  // The checkout each home lands in: the nearest project along its lineage
+  // that has one, so a sub-project's personas are written into its parent's.
+  let lands = new Map<Eid, Eid | undefined>()
+  for (let home of new Set(personas.map((p) => str(comp(p, PERSONA).home)))) {
+    if (!home) continue
+    let line = (await lineage(g, home)).map(eidOf)
+    lands.set(home, line.find((p) => homes.has(p)))
+  }
   let head = banner(g.vocab)
-  let common = projection(g.vocab)
+  let agents = projection(g.vocab)
   for (let [project, root] of homes) {
     let dir = `${root}/.tasks`
-    let base = bases.get(project)
-    let everyone = base && await worn(eidOf(base))
-    if (everyone) {
-      files.push({ path: `${dir}/AGENTS.md`, text: common(everyone) })
-    }
+    let base = await everyone(project)
+    if (base) files.push({ path: `${dir}/AGENTS.md`, text: agents(base) })
     for (let p of personas) {
-      if (comp(p, PERSONA).home != project || eidOf(p) == base?.entity.eid) {
+      let home = str(comp(p, PERSONA).home)
+      if (lands.get(home) != project || eidOf(p) == base?.persona.entity.eid) {
         continue
       }
-      let w = await worn(eidOf(p))
+      let w = await wearing(eidOf(p))
       if (!w) continue
+      let own = await everyone(home)
+      let whole = heard(own ? fold(w, own) : w)
       let name = slug(named.get(eidOf(p)) ?? id(p))
       let title = str(comp(p, DOC)[TITLE])
       files.push({
         path: `${dir}/personas/${name}.md`,
         text: `---\nname: ${name}\ndescription: ${JSON.stringify(title)}\n` +
-          `---\n${head(p)}\n\n${render(everyone ? beside(w, everyone) : w)}`,
+          `---\n${head(p)}\n\n${render(base ? beside(whole, base) : whole)}`,
       })
     }
   }

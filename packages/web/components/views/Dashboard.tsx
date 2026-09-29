@@ -107,8 +107,9 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let roles = useQueryResult(`.role.scope=${e.eid}`)
   // This facet paints eight rows, so stream only its eight warmest. Fetching
   // every task in every project card made the root canvas discard megabytes.
+  // Its sub-projects' tasks are its own.
   let tasks = useQueryResult(
-    `.filed.project=${e.eid}&.order=hot&.limit=${CAP}`,
+    `.task&.filed.project->${e.eid}&.order=hot&.limit=${CAP}`,
   )
   let unread = useInboxCount(e.eid)
   return (

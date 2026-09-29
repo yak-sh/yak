@@ -4,7 +4,7 @@
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { memo, sync } from '@yaks/mirror'
-import { checkout, fleet } from './testing.ts'
+import { checkout, fleet, nested } from './testing.ts'
 import { personaFiles, personaMirror } from './files.ts'
 
 let then = (g: Graph, ...batch: Bundle[]): Graph => (g.apply(batch), g)
@@ -27,6 +27,17 @@ Deno.test('the common persona is AGENTS.md; a specialist says only what it adds'
     coder,
   )
   assert(coder.includes('second') && !coder.includes('first'), coder)
+})
+
+Deno.test("a sub-project's personas are specialists in its parent's checkout", async () => {
+  let by = await texts(nested('/r'))
+  assertEquals(
+    by.get('/r/.tasks/AGENTS.md'),
+    (await texts(fleet('/r'))).get('/r/.tasks/AGENTS.md'),
+  )
+  let sub = by.get('/r/.tasks/personas/sub.md')!
+  assert(sub.includes('for the sub') && sub.includes('third'), sub)
+  assert(!sub.includes('first'), sub)
 })
 
 Deno.test('what the files say is every persona and document in them', async () => {

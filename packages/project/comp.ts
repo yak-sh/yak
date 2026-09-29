@@ -12,7 +12,8 @@
 // is still a task, and the filing is the optional component that puts one in a
 // portfolio. `filed.project` is declared `death: detach`: deleting a project
 // frees its tasks rather than deleting them, because they are not about the
-// project, they were only filed under it.
+// project, they were only filed under it. A project filed under another is its
+// sub-project, and is freed the same way (./tree.ts).
 //
 // A board is its query. `board{query}` holds a filter, and membership is never
 // stored — there is no row saying this task is on that board. So a board is

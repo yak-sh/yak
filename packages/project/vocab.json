@@ -25,7 +25,7 @@
     "filed": {
       "component": true,
       "type": "object",
-      "description": "optional portfolio filing, separate from being a task",
+      "description": "optional portfolio filing, separate from being a task; a project filed under another project is its sub-project",
       "properties": {
         "priority": {
           "type": "number",
@@ -36,7 +36,7 @@
           "type": "string",
           "ref": "project",
           "death": "detach",
-          "description": "what it is filed under; deleting the project frees the task rather than taking it along"
+          "description": "what it is filed under, which for a project is its parent; deleting the project frees what was filed under it rather than taking it along"
         },
         "assignee": {
           "type": "string",
@@ -58,7 +58,7 @@
       "before": ["board", "email", "role"],
       "prefix": "P",
       "by_name": true,
-      "description": "something tasks are grouped under",
+      "description": "something tasks are grouped under; filed under another project, it is that project's sub-project",
       "properties": {
         "color": {
           "type": "string"
@@ -88,7 +88,7 @@
           "description": "whether landing also pushes"
         }
       },
-      "description": "a project's landing policy for its source: which repository it is in, what work branches from, and how a change is proven and published"
+      "description": "a project's landing policy for its source: which repository it is in, what work branches from, and how a change is proven and published. A sub-project without one lands through the nearest project above it that has one"
     },
     "venture": {
       "component": true,

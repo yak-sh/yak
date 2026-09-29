@@ -23,6 +23,10 @@
 // This walks level by level rather than recursing, so an embedded store
 // answers the whole read synchronously and a remote one needs exactly one
 // chain of calls (@yaks/edge's `reach` walks the same way).
+//
+// Two sets of what personas say combine the same way: {@link fold} says
+// several as one, the way a sub-project's agents hear every common persona
+// above them, and {@link beside} leaves out what another file already says.
 
 import { and, eq, type Input, list, present } from '@yaks/query'
 import {
@@ -169,4 +173,46 @@ export let wear = (
         },
       )
     })
+}
+
+let eidOf = (b: Bundle): Eid => b.entity.eid
+
+/**
+ * Several personas said as one: the first leads, and each after it is
+ * included the way a persona it contained would be — its text as a document,
+ * then the documents it includes — with nothing said twice. How a sub-project's
+ * agents hear the common persona of every project above theirs.
+ */
+export let fold = (head: Worn, ...more: Worn[]): Worn => {
+  let lead = eidOf(head.persona)
+  let carries = new Map(head.carries.map((b) => [eidOf(b), b]))
+  let names = new Map(head.names.map((b) => [eidOf(b), b]))
+  for (let w of more) {
+    for (let b of [w.persona, ...w.carries]) {
+      if (eidOf(b) != lead && !carries.has(eidOf(b))) carries.set(eidOf(b), b)
+    }
+    for (let b of w.names) if (!names.has(eidOf(b))) names.set(eidOf(b), b)
+  }
+  for (let id of [lead, ...carries.keys()]) names.delete(id)
+  return {
+    persona: head.persona,
+    carries: [...carries.values()],
+    names: [...names.values()],
+  }
+}
+
+/**
+ * What `w` says that `said` does not: a document `said` includes is dropped in
+ * both forms, and one it only names loses only its name, since including it in
+ * full still earns its place. `w` keeps its own lead. How a file read beside
+ * another avoids saying anything twice.
+ */
+export let beside = (w: Worn, said: Worn): Worn => {
+  let carried = new Set([said.persona, ...said.carries].map(eidOf))
+  let named = new Set([...carried, ...said.names.map(eidOf)])
+  return {
+    persona: w.persona,
+    carries: w.carries.filter((b) => !carried.has(eidOf(b))),
+    names: w.names.filter((b) => !named.has(eidOf(b))),
+  }
 }

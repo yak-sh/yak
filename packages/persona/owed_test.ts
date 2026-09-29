@@ -1,10 +1,10 @@
 // What an agent in a checkout is owed of its persona, given the instruction
 // files its provider reads there.
 
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { human } from '@yaks/id'
-import { fleet } from './testing.ts'
+import { fleet, nested } from './testing.ts'
 import { personaFiles } from './files.ts'
 import { voice } from './voice.ts'
 import { wear } from './worn.ts'
@@ -56,16 +56,40 @@ Deno.test('a chosen persona is omitted when its file says it', async () => {
   let g = fleet('/r')
   let worn = (await wear(g.storage, g.vocab)('n2'))!
   assertEquals(
-    (await owed(g, '/elsewhere', [], 'n2'))?.text,
+    (await owed(g, '/elsewhere', [], { persona: 'n2' }))?.text,
     await spoken(g, 'n2'),
   )
   assertEquals(
-    await owed(g, '/r', [projection(g.vocab)(worn)], 'n2'),
+    await owed(g, '/r', [projection(g.vocab)(worn)], { persona: 'n2' }),
     undefined,
   )
   await assertRejects(
-    () => owed(g, '/r', [], 'missing'),
+    () => owed(g, '/r', [], { persona: 'missing' }),
     Error,
     'no persona called missing',
+  )
+})
+
+Deno.test("a sub-project's agent hears its own common persona and its parent's", async () => {
+  let g = nested('/r')
+  let owes = await owed(g, '/r/agent', [], { work: 't1' })
+  assertEquals(owes?.source, await id(g, 'n3'))
+  for (let said of ['for the sub', 'third', 'for everyone', 'first']) {
+    assert(owes?.text.includes(said), said)
+  }
+  // Where the file already says the parent's, only what the sub-project adds.
+  let rest = (await owed(g, '/r', [await agentsMd(g)], { work: 't1' }))?.text
+  assert(rest?.includes('third') && !rest.includes('first'), rest)
+})
+
+Deno.test("a sub-project with no persona of its own hears its parent's", async () => {
+  let g = nested('/r')
+  assertEquals(
+    (await owed(g, '/r/agent', [], { work: 't2' }))?.text,
+    await spoken(g, 'n1'),
+  )
+  assertEquals(
+    await owed(g, '/r', [await agentsMd(g)], { work: 't2' }),
+    undefined,
   )
 })
