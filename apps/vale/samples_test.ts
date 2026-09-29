@@ -55,21 +55,113 @@ Deno.test('sound samples retry a missing blob and share a successful load', asyn
 })
 
 Deno.test('hosted audio outputs supply clips without replacing the listening set', () => {
+  let builds = [
+    {
+      entity: { eid: 'water-build' },
+      build: {
+        match: '["water"]',
+        key: 'current',
+        variant: 'main',
+        stale: false,
+      },
+    },
+    {
+      entity: { eid: 'forge-build' },
+      build: {
+        match: '["forge"]',
+        key: 'current',
+        variant: 'main',
+        stale: false,
+      },
+    },
+    {
+      entity: { eid: 'letter-build' },
+      build: {
+        match: '["letter"]',
+        key: 'current',
+        variant: 'main',
+        stale: false,
+      },
+    },
+    {
+      entity: { eid: 'old-build' },
+      build: { match: '["old"]', key: 'new', variant: 'main', stale: false },
+    },
+    {
+      entity: { eid: 'stale-build' },
+      build: { match: '["stale"]', key: 'same', variant: 'main', stale: true },
+    },
+    {
+      entity: { eid: 'shadow-build' },
+      build: {
+        match: '["shadow"]',
+        key: 'same',
+        variant: 'shadow:test',
+        stale: false,
+      },
+    },
+  ]
+  let sounds = ['water', 'forge', 'letter', 'old', 'stale', 'shadow']
+    .map((name) => ({ entity: { eid: name }, sfx: { name } }))
+  let artifacts = [
+    ['water-blob', 'audio/mpeg'],
+    ['new-forge', 'audio/mpeg'],
+    ['not-a-sound', 'text/plain'],
+    ['old-blob', 'audio/mpeg'],
+    ['stale-blob', 'audio/mpeg'],
+    ['shadow-blob', 'audio/mpeg'],
+  ].map(([address, media_type]) => ({
+    entity: { eid: address },
+    artifact: { address, media_type },
+  }))
   assertEquals(
-    catalog([
-      {
-        doc: { title: 'water' },
-        built: { artifact: 'water-blob', media_type: 'audio/mpeg' },
-      },
-      {
-        doc: { title: 'forge' },
-        built: { artifact: 'new-forge', media_type: 'audio/mpeg' },
-      },
-      {
-        doc: { title: 'letter' },
-        built: { artifact: 'not-a-sound', media_type: 'text/plain' },
-      },
-    ]),
+    catalog(
+      [
+        {
+          entity: { eid: 'water-output' },
+          built: {
+            build: 'water-build',
+            key: 'current',
+            artifact: 'water-blob',
+          },
+        },
+        {
+          entity: { eid: 'forge-output' },
+          built: {
+            build: 'forge-build',
+            key: 'current',
+            artifact: 'new-forge',
+          },
+        },
+        {
+          entity: { eid: 'letter-output' },
+          built: {
+            build: 'letter-build',
+            key: 'current',
+            artifact: 'not-a-sound',
+          },
+        },
+        {
+          entity: { eid: 'old-output' },
+          built: { build: 'old-build', key: 'old', artifact: 'old-blob' },
+        },
+        {
+          entity: { eid: 'stale-output' },
+          built: { build: 'stale-build', key: 'same', artifact: 'stale-blob' },
+        },
+        {
+          entity: { eid: 'shadow-output' },
+          built: {
+            build: 'shadow-build',
+            key: 'same',
+            artifact: 'shadow-blob',
+          },
+        },
+      ],
+      builds,
+      sounds,
+      artifacts,
+    ),
     { water: 'water-blob' },
   )
 })

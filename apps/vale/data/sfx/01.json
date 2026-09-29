@@ -17,19 +17,20 @@
   },
   {
     "entity": {
-      "eid": "$builder-water"
-    },
-    "alias": {
-      "name": "sfx-builder:water"
+      "eid": "5914ddc9-63b3-49bb-bf27-7ed74e327353"
     },
     "doc": {
-      "title": "water sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
+      "title": "Vale sound builder"
+    },
+    "content": {
+      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\n$description"
+    },
+    "using": {
+      "model": "1ebeb786-990b-83b1-abd7-2a195e980796"
     },
     "builder": {
-      "query": ".sfx.name=water",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
+      "query": "$sfx .sfx, doc.body=$description",
+      "to": "5663fa91-2d32-8dd0-82d1-95402b2e82c4",
       "immediate": true
     }
   }

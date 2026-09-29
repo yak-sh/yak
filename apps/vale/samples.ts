@@ -9,20 +9,41 @@ export let SAMPLES: Record<string, string> = {
   wolf: 'd5a019cc0df66f1cc3e2ca5a049235b12678f78595d7fd0759058623a1b3911c',
 }
 
-type Built = {
-  doc?: { title?: string }
-  built?: { artifact?: string; media_type?: string }
+type Row = { entity: { eid: string } }
+type Built = Row & { built: { build: string; key: string; artifact?: string } }
+type Build = Row & {
+  build: { match: string; key: string; variant: string; stale?: boolean }
+}
+type Sound = Row & { sfx: { name: string } }
+type Artifact = Row & {
+  artifact: { address: string; media_type: string }
 }
 
-/** The names and blob addresses a builder has finished. */
-export let catalog = (rows: Built[]): Record<string, string> =>
-  Object.fromEntries(rows.flatMap((row) => {
-    let name = row.doc?.title, hash = row.built?.artifact
-    return name && hash && row.built?.media_type?.startsWith('audio/') &&
-        !(name in SAMPLES && PINNED.has(name))
-      ? [[name, hash]]
+/** Current sound outputs, named by the sfx each build matched. */
+export let catalog = (
+  outputs: Built[],
+  builds: Build[],
+  sounds: Sound[],
+  artifacts: Artifact[],
+): Record<string, string> => {
+  let runs = new Map(builds.map((row) => [row.entity.eid, row.build]))
+  let names = new Map(sounds.map((row) => [row.entity.eid, row.sfx.name]))
+  let blobs = new Map(artifacts.map((row) => [row.entity.eid, row.artifact]))
+  return Object.fromEntries(outputs.flatMap((row) => {
+    let run = runs.get(row.built.build)
+    if (
+      !run || run.stale || run.variant != 'main' ||
+      run.key != row.built.key
+    ) return []
+    let [eid] = JSON.parse(run.match) as string[]
+    let name = names.get(eid)
+    let blob = blobs.get(row.built.artifact ?? '')
+    return name && blob?.media_type.startsWith('audio/') &&
+        !PINNED.has(name)
+      ? [[name, blob.address]]
       : []
   }))
+}
 
 let PINNED = new Set(Object.keys(SAMPLES))
 let waiting = new Map<string, Set<(hash: string) => void>>()
@@ -33,12 +54,40 @@ export let watch = () => {
   if (watching) return watching
   watching = import(new URL('api/client.js', document.baseURI).href)
     .then(({ subscribe }) => {
-      subscribe('.built.variant=main&.built.artifact&?doc', (rows: Built[]) => {
-        for (let [name, hash] of Object.entries(catalog(rows))) {
+      let outputs: Built[] = [], builds: Build[] = []
+      let sounds: Sound[] = [], artifacts: Artifact[] = []
+      let seen = new Set<string>()
+      let refresh = () => {
+        if (seen.size != 4) return
+        let current = catalog(outputs, builds, sounds, artifacts)
+        for (let name of Object.keys(SAMPLES)) {
+          if (!PINNED.has(name) && !(name in current)) delete SAMPLES[name]
+        }
+        for (let [name, hash] of Object.entries(current)) {
           SAMPLES[name] = hash
           for (let ready of waiting.get(name) ?? []) ready(hash)
           waiting.delete(name)
         }
+      }
+      subscribe('.built&.built.artifact', (rows: Built[]) => {
+        outputs = rows
+        seen.add('built')
+        refresh()
+      })
+      subscribe('.build', (rows: Build[]) => {
+        builds = rows
+        seen.add('build')
+        refresh()
+      })
+      subscribe('.sfx', (rows: Sound[]) => {
+        sounds = rows
+        seen.add('sfx')
+        refresh()
+      })
+      subscribe('.artifact', (rows: Artifact[]) => {
+        artifacts = rows
+        seen.add('artifact')
+        refresh()
       })
     })
     .catch((error) => {

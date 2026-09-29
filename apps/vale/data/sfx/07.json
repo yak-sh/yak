@@ -17,24 +17,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-step-quadruped"
-    },
-    "alias": {
-      "name": "sfx-builder:step-quadruped"
-    },
-    "doc": {
-      "title": "step-quadruped sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-quadruped",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$step-crawler"
     },
     "alias": {
@@ -47,24 +29,6 @@
     "sfx": {
       "name": "step-crawler",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-step-crawler"
-    },
-    "alias": {
-      "name": "sfx-builder:step-crawler"
-    },
-    "doc": {
-      "title": "step-crawler sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-crawler",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -85,24 +49,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-step-hopper"
-    },
-    "alias": {
-      "name": "sfx-builder:step-hopper"
-    },
-    "doc": {
-      "title": "step-hopper sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-hopper",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$step-slime"
     },
     "alias": {
@@ -115,24 +61,6 @@
     "sfx": {
       "name": "step-slime",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-step-slime"
-    },
-    "alias": {
-      "name": "sfx-builder:step-slime"
-    },
-    "doc": {
-      "title": "step-slime sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-slime",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -153,24 +81,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-step-crag"
-    },
-    "alias": {
-      "name": "sfx-builder:step-crag"
-    },
-    "doc": {
-      "title": "step-crag sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-crag",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$step-bird"
     },
     "alias": {
@@ -187,24 +97,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-step-bird"
-    },
-    "alias": {
-      "name": "sfx-builder:step-bird"
-    },
-    "doc": {
-      "title": "step-bird sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-bird",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$step-wisp"
     },
     "alias": {
@@ -217,24 +109,6 @@
     "sfx": {
       "name": "step-wisp",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-step-wisp"
-    },
-    "alias": {
-      "name": "sfx-builder:step-wisp"
-    },
-    "doc": {
-      "title": "step-wisp sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-wisp",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   }
 ]

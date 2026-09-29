@@ -17,24 +17,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-surf"
-    },
-    "alias": {
-      "name": "sfx-builder:surf"
-    },
-    "doc": {
-      "title": "surf sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=surf",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$marsh"
     },
     "alias": {
@@ -47,24 +29,6 @@
     "sfx": {
       "name": "marsh",
       "loop": true
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-marsh"
-    },
-    "alias": {
-      "name": "sfx-builder:marsh"
-    },
-    "doc": {
-      "title": "marsh sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=marsh",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -85,24 +49,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-frog"
-    },
-    "alias": {
-      "name": "sfx-builder:frog"
-    },
-    "doc": {
-      "title": "frog sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=frog",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$hit"
     },
     "alias": {
@@ -115,24 +61,6 @@
     "sfx": {
       "name": "hit",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-hit"
-    },
-    "alias": {
-      "name": "sfx-builder:hit"
-    },
-    "doc": {
-      "title": "hit sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=hit",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -153,24 +81,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-hit-great"
-    },
-    "alias": {
-      "name": "sfx-builder:hit-great"
-    },
-    "doc": {
-      "title": "hit-great sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=hit-great",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$struck"
     },
     "alias": {
@@ -187,24 +97,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-struck"
-    },
-    "alias": {
-      "name": "sfx-builder:struck"
-    },
-    "doc": {
-      "title": "struck sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=struck",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$swing"
     },
     "alias": {
@@ -217,24 +109,6 @@
     "sfx": {
       "name": "swing",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-swing"
-    },
-    "alias": {
-      "name": "sfx-builder:swing"
-    },
-    "doc": {
-      "title": "swing sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=swing",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   }
 ]

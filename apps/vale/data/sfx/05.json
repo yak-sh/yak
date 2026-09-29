@@ -17,24 +17,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-stroke-fish"
-    },
-    "alias": {
-      "name": "sfx-builder:stroke-fish"
-    },
-    "doc": {
-      "title": "stroke-fish sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=stroke-fish",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$stroke-bench"
     },
     "alias": {
@@ -47,24 +29,6 @@
     "sfx": {
       "name": "stroke-bench",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-stroke-bench"
-    },
-    "alias": {
-      "name": "sfx-builder:stroke-bench"
-    },
-    "doc": {
-      "title": "stroke-bench sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=stroke-bench",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -85,24 +49,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-stroke-cauldron"
-    },
-    "alias": {
-      "name": "sfx-builder:stroke-cauldron"
-    },
-    "doc": {
-      "title": "stroke-cauldron sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=stroke-cauldron",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$stroke-loom"
     },
     "alias": {
@@ -115,24 +61,6 @@
     "sfx": {
       "name": "stroke-loom",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-stroke-loom"
-    },
-    "alias": {
-      "name": "sfx-builder:stroke-loom"
-    },
-    "doc": {
-      "title": "stroke-loom sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=stroke-loom",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -153,24 +81,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-done-wood"
-    },
-    "alias": {
-      "name": "sfx-builder:done-wood"
-    },
-    "doc": {
-      "title": "done-wood sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=done-wood",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$done-ore"
     },
     "alias": {
@@ -187,24 +97,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-done-ore"
-    },
-    "alias": {
-      "name": "sfx-builder:done-ore"
-    },
-    "doc": {
-      "title": "done-ore sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=done-ore",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$done-herb"
     },
     "alias": {
@@ -217,24 +109,6 @@
     "sfx": {
       "name": "done-herb",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-done-herb"
-    },
-    "alias": {
-      "name": "sfx-builder:done-herb"
-    },
-    "doc": {
-      "title": "done-herb sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=done-herb",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   }
 ]

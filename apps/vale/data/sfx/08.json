@@ -17,24 +17,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-step-serpent"
-    },
-    "alias": {
-      "name": "sfx-builder:step-serpent"
-    },
-    "doc": {
-      "title": "step-serpent sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-serpent",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$step-flier"
     },
     "alias": {
@@ -47,24 +29,6 @@
     "sfx": {
       "name": "step-flier",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-step-flier"
-    },
-    "alias": {
-      "name": "sfx-builder:step-flier"
-    },
-    "doc": {
-      "title": "step-flier sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=step-flier",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -85,24 +49,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-cry-biped"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-biped"
-    },
-    "doc": {
-      "title": "cry-biped sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-biped",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$cry-quadruped"
     },
     "alias": {
@@ -115,24 +61,6 @@
     "sfx": {
       "name": "cry-quadruped",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-cry-quadruped"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-quadruped"
-    },
-    "doc": {
-      "title": "cry-quadruped sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-quadruped",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -153,24 +81,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-cry-crawler"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-crawler"
-    },
-    "doc": {
-      "title": "cry-crawler sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-crawler",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$cry-hopper"
     },
     "alias": {
@@ -187,24 +97,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-cry-hopper"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-hopper"
-    },
-    "doc": {
-      "title": "cry-hopper sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-hopper",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$cry-slime"
     },
     "alias": {
@@ -217,24 +109,6 @@
     "sfx": {
       "name": "cry-slime",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-cry-slime"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-slime"
-    },
-    "doc": {
-      "title": "cry-slime sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-slime",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   }
 ]

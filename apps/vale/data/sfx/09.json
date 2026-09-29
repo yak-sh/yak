@@ -17,24 +17,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-cry-crag"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-crag"
-    },
-    "doc": {
-      "title": "cry-crag sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-crag",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$cry-bird"
     },
     "alias": {
@@ -47,24 +29,6 @@
     "sfx": {
       "name": "cry-bird",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-cry-bird"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-bird"
-    },
-    "doc": {
-      "title": "cry-bird sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-bird",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   },
   {
@@ -85,24 +49,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-cry-wisp"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-wisp"
-    },
-    "doc": {
-      "title": "cry-wisp sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-wisp",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$cry-serpent"
     },
     "alias": {
@@ -119,24 +65,6 @@
   },
   {
     "entity": {
-      "eid": "$builder-cry-serpent"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-serpent"
-    },
-    "doc": {
-      "title": "cry-serpent sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-serpent",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
-    }
-  },
-  {
-    "entity": {
       "eid": "$cry-flier"
     },
     "alias": {
@@ -149,24 +77,6 @@
     "sfx": {
       "name": "cry-flier",
       "loop": false
-    }
-  },
-  {
-    "entity": {
-      "eid": "$builder-cry-flier"
-    },
-    "alias": {
-      "name": "sfx-builder:cry-flier"
-    },
-    "doc": {
-      "title": "cry-flier sound",
-      "body": "Generate one isolated game sound effect. Follow the description. No speech, words, or music."
-    },
-    "builder": {
-      "query": ".sfx.name=cry-flier",
-      "model": "bytedance-seed/seed-audio-1-0",
-      "format": "artifact",
-      "immediate": true
     }
   }
 ]

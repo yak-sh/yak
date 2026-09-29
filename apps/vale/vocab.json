@@ -564,7 +564,7 @@
       "type": "object",
       "floor": "editor",
       "unique": [["name"]],
-      "description": "The description of one sound Vale needs. Its own builder reads this row and cites it in the generated recording.",
+      "description": "The description of one sound Vale needs. The shared sound builder reads this row and cites it in the generated recording.",
       "properties": {
         "name": { "type": "string", "index": true },
         "loop": { "type": "boolean" }
