@@ -115,6 +115,10 @@ Deno.test('a new release serves its files beside the old cached release', async 
   files.held.set(`${old}/app.css`, bytes('old'))
   files.held.set(`${next}/app.css`, bytes('new'))
   files.held.set(`${next}/added.css`, bytes('added'))
+  files.held.set(`${old}/main.ts`, bytes('let n: number = 1'))
+  files.held.set(`${old}/esbuild/main.ts`, bytes('compiled old'))
+  files.held.set(`${next}/main.ts`, bytes('let n: number = 2'))
+  files.held.set(`${next}/esbuild/main.ts`, bytes('compiled next release'))
   let cache = new Map<string, Response>()
   let misses = 0
   env.FILES = {
@@ -130,18 +134,45 @@ Deno.test('a new release serves its files beside the old cached release', async 
   let serving = (source: string) =>
     stamp(env, { entities: [{ entity: { eid: app.eid }, app: { source } }] })
   let read = (path: string) => apps.fetch(visit(`/cookbook/${path}`), env)
+  let script = async (body: string) => {
+    let get = await read('main.ts')
+    let head = await apps.fetch(
+      visit('/cookbook/main.ts', { method: 'HEAD' }),
+      env,
+    )
+    assertEquals(await get.text(), body)
+    assertEquals(head.status, get.status)
+    assertEquals(
+      head.headers.get('content-type'),
+      get.headers.get('content-type'),
+    )
+    assertEquals(
+      head.headers.get('content-type'),
+      'text/javascript; charset=utf-8',
+    )
+    assertEquals(
+      head.headers.get('content-length'),
+      get.headers.get('content-length'),
+    )
+    assertEquals(head.headers.get('etag'), get.headers.get('etag'))
+    assertEquals(await head.text(), '')
+  }
 
   await serving(old)
+  await script('compiled old')
   assertEquals(await (await read('app.css')).text(), 'old')
   assertEquals(await (await read('app.css')).text(), 'old')
   assertEquals((await read('added.css')).status, 404)
   assertEquals((await read('added.css')).status, 404)
   await serving(next)
+  await script('compiled next release')
   assertEquals(await (await read('app.css')).text(), 'new')
   assertEquals(await (await read('app.css')).text(), 'new')
   assertEquals(await (await read('added.css')).text(), 'added')
   assertEquals(await (await read('added.css')).text(), 'added')
-  assertEquals(misses, 4)
+  await serving(old)
+  await script('compiled old')
+  assertEquals(misses, 6)
 })
 
 Deno.test('an app worker query can read a connected peer position', async () => {
