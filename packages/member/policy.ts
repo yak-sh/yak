@@ -68,9 +68,11 @@ export type Policy = {
 let of = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 
-/** The app's access mode, read through a transaction. */
+/** The app's access mode, read through a transaction: its `access` and
+ * nothing else, since this runs on every request and a whole read of an
+ * entity can ask every table the vocabulary has. */
 export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
-  then(tx.get([app]), ([b]) => mode(of(b, ACCESS)?.mode))
+  then(tx.get([app], [ACCESS]), ([b]) => mode(of(b, ACCESS)?.mode))
 
 /**
  * Everything filed about this principal: their membership rows, their grants.
@@ -103,7 +105,7 @@ export let levelOn = (
   where: Where = {},
 ): Level | null | Promise<Level | null> => {
   if (!who) return null
-  return then(tx.get([who]), ([self]) => {
+  return then(tx.get([who], [GRANT]), ([self]) => {
     // A share link's bearer is the grant they opened.
     let own = of(self, GRANT)
     if (own && own.app == app) return level(own.access)
