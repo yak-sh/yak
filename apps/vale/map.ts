@@ -20,7 +20,7 @@ import { arriveOf, roadsOf } from './ways.ts'
 import type { Seen } from './work.ts'
 import { fireNear } from './fires.ts'
 import { villageOf } from './terrain.ts'
-import { REACH, revealed } from './explore.ts'
+import { mapped, REACH, revealed } from './explore.ts'
 
 // How far past the region's cell the map shows, in metres, and how many
 // metres a pixel of its chart is.
@@ -96,9 +96,6 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let box: Box = [0, 0, SIZE]
   let was = ''
   let fogWas: ReadonlyArray<Spot> | null = null
-  let fogCells: ReadonlyArray<Spot> | null = null
-  let fogAt: Spot = [NaN, NaN]
-  let points: Spot[] = []
   let local: Spot[] = []
   let localWas: ReadonlyArray<Spot> | null = null
   let choicesWas = ''
@@ -109,7 +106,6 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     panel.head(esc(LEVELS[id]?.name ?? id))
     was = ''
     fogWas = null
-    fogCells = null
     localWas = null
     fog.width = fog.height = Math.round(box[2] / M)
     charted(...box, M).then((px) => {
@@ -162,21 +158,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       draw(f.level)
       if (localWas != explored) {
         localWas = explored
-        local = explored.filter(([x, z]) =>
-          x + REACH >= box[0] && x - REACH <= box[0] + box[2] &&
-          z + REACH >= box[1] && z - REACH <= box[1] + box[2]
-        )
+        local = mapped(explored, box)
       }
-      if (
-        fogCells != explored ||
-        Math.hypot(f.body.x - fogAt[0], f.body.z - fogAt[1]) >= 2
-      ) {
-        fogCells = explored
-        fogAt = [f.body.x, f.body.z]
-        points = [...local, fogAt]
-      }
-      uncover(points)
-      let visible = (x: number, z: number) => revealed([x, z], points)
+      uncover(local)
+      let visible = (x: number, z: number) => revealed([x, z], local)
       let here = f.down ? null : fireNear(f.body.x, f.body.z)
       near = !!here
       known = new Set(visited)

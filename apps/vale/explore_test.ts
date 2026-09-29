@@ -1,6 +1,6 @@
 // Walking uncovers the chart for one hero, and the store restores that ground.
 import { assertEquals } from '@std/assert'
-import { exploration, exploredOf, revealed } from './explore.ts'
+import { exploration, exploredOf, mapped, revealed } from './explore.ts'
 import type { Bundle, Me } from './net.ts'
 
 Deno.test('a hero uncovers nearby ground once and keeps it across sessions', () => {
@@ -61,6 +61,19 @@ Deno.test('a hero uncovers nearby ground once and keeps it across sessions', () 
     again.tick({ body: { x: 101, z: 101 }, down: false })
     assertEquals(again.known(), [[110, 110]])
     assertEquals(writes.length, 1)
+
+    // The open chart uses only accumulated discoveries. Its coverage grows
+    // when another cell is reached and never recedes with the moving hero.
+    let chart = () => mapped(again.known(), [0, 0, 256])
+    let ground: [number, number] = [150, 110]
+    assertEquals(revealed([119, 119], chart()), true)
+    assertEquals(revealed(ground, chart()), false)
+    again.tick({ body: { x: 121, z: 110 }, down: false })
+    assertEquals(revealed(ground, chart()), true)
+    again.tick({ body: { x: 139, z: 110 }, down: false })
+    assertEquals(revealed(ground, chart()), true)
+    again.tick({ body: { x: 141, z: 110 }, down: false })
+    assertEquals(revealed(ground, chart()), true)
   } finally {
     if (previous) {
       Object.defineProperty(globalThis, 'sessionStorage', previous)

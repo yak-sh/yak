@@ -69,6 +69,18 @@ export let revealed = (at: Spot, around: Iterable<Spot>): boolean => {
   return false
 }
 
+/** Discovered circles that can touch the square chart on show. A moving
+ * hero adds a cell through `tick`, so the chart never needs a temporary
+ * circle that would vanish on their next step. */
+export let mapped = (
+  explored: ReadonlyArray<Spot>,
+  [x0, z0, size]: [number, number, number],
+): Spot[] =>
+  explored.filter(([x, z]) =>
+    x + REACH >= x0 && x - REACH <= x0 + size &&
+    z + REACH >= z0 && z - REACH <= z0 + size
+  )
+
 /** Record the cells this hero walks through and expose them to the map. */
 export let exploration = (net: Store) => {
   let me: Me | null = null
