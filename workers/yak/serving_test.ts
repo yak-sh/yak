@@ -1413,22 +1413,17 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   assertEquals((await (await asAda('/api/query?.person')).json()).length, 0)
 })
 
-// Inside an app's worker's own call, Cloudflare refuses the hop to the cache
-// in front of `Files` (apps.ts `reachable`); the worker still gets its bytes.
-Deno.test("an app's worker reads its own page and upload where the cache refuses it", async () => {
-  let env: Env
-  let photo = ''
-  using k = await router((req) =>
-    apps.fetch(
-      new Request(
-        visit(new URL(req.url).pathname == '/photo' ? photo : '/index.html'),
-        { headers: { 'x-yak-grant': req.headers.get('x-yak-grant') ?? '' } },
-      ),
-      env,
-    )
+// Where Cloudflare refuses the hop to the cache in front of `Files`, as it
+// does inside an app worker's own call (files.ts `door`), the page and the
+// upload are still served, whoever asks.
+Deno.test('a page and an upload are served where the cache hop is refused', async () => {
+  using scenario = platform()
+  let { env, files } = scenario
+  await seeded(env)
+  files.held.set(
+    'ada/cookbook/index.html',
+    new TextEncoder().encode('<!doctype html><body>the page</body>'),
   )
-  env = k.env
-  k.put('ada/cookbook/index.html', '<!doctype html><body>the page</body>')
   let body = new Uint8Array([1, 2, 3])
   let upload = await apps.fetch(
     visit('/cookbook/api/blob', {
@@ -1441,7 +1436,7 @@ Deno.test("an app's worker reads its own page and upload where the cache refuses
     }),
     env,
   )
-  photo = (await upload.json()).url
+  let photo: string = (await upload.json()).url
   env.FILES = {
     fetch: () =>
       Promise.reject(
@@ -1451,10 +1446,10 @@ Deno.test("an app's worker reads its own page and upload where the cache refuses
         ),
       ),
   }
-  let page = await k.at('/card')
+  let page = await apps.fetch(visit('/cookbook/'), env)
   assertEquals(page.status, 200)
   assertStringIncludes(await page.text(), 'the page')
-  let got = await k.at('/photo')
+  let got = await apps.fetch(visit(photo), env)
   assertEquals(got.status, 200)
   assertEquals(new Uint8Array(await got.arrayBuffer()), body)
 })

@@ -19,7 +19,7 @@ import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
 import { blobAt, immutable } from './cache.ts'
 import { releaseFiles } from './release.ts'
-import { bound, type Env } from './env.ts'
+import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { parse, WORKER } from './wrangler_app.ts'
 
@@ -81,6 +81,26 @@ let mainOf = async (blobs: Objects, prefix: string) => {
   return parse(new TextDecoder().decode(config)).config.main ?? WORKER
 }
 
+// The gateway's way in: the `FILES` binding, so Cloudflare's cache answers
+// what it holds, or this module in-process where there is no binding. Not
+// every invocation may take that hop. Inside an app worker's own call to the
+// kernel (its KERNEL binding, dispatch.ts) Cloudflare refuses it with
+// `DataCloneError: This ServiceStub cannot be serialized` (T-44804), and no
+// header the gateway reads is sure to say it is in one: app code holds the
+// binding itself. So the refusal is the answer: the same bytes, read
+// in-process, uncached.
+export let door = (env: Env): Fetcher => ({
+  fetch: async (req) => {
+    if (!env.FILES) return fetch(req, env)
+    try {
+      return await env.FILES.fetch(req)
+    } catch (e) {
+      if ((e as Error | null)?.name != 'DataCloneError') throw e
+      return fetch(req, env)
+    }
+  },
+})
+
 // The gateway calls this only after checking access and resolving the blob's
 // metadata. Range stays a request header: Workers Caching removes it on a
 // miss, keeps the full 200 response, and slices a 206 from that one entry.
@@ -92,7 +112,7 @@ export let blobBytes = (
   range?: string | null,
   method = 'GET',
 ) =>
-  bound(env.FILES, fetch, env).fetch(
+  door(env).fetch(
     new Request(blobAt(app.eid, sha), {
       method,
       headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },

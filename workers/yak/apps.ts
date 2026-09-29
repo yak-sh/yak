@@ -519,9 +519,7 @@ let unchanged = (req: Request, etag: string) =>
 // file, and whether this person may have it was decided by `served()` before
 // we got here.
 //
-// Absent the binding (under `deno test`, and for an app's worker's own
-// request, `reachable`) `bound` calls the module in-process: the same bytes,
-// no cache.
+// Where the hop cannot be taken, `files.door` reads the same bytes in-process.
 let bytes = (
   env: Env,
   app: App,
@@ -540,7 +538,7 @@ let bytes = (
   // GETs still fill and read the shared full-file cache.
   return range || method == 'HEAD'
     ? files.fetch(req, env)
-    : bound(env.FILES, files.fetch, env).fetch(req)
+    : files.door(env).fetch(req)
 }
 
 let media = async (
@@ -1983,24 +1981,12 @@ let firstly = async (
   return page && { page, app: home }
 }
 
-// An app's worker asks for its own files through its KERNEL binding
-// (dispatch.ts `bearing`), and that call runs inside the worker's dispatched
-// one, where Cloudflare will not send it on to the cache in front of `Files`:
-// the hop throws `DataCloneError: This ServiceStub cannot be serialized`
-// (T-44804). So such a request's env holds no FILES binding, and `bound`
-// (env.ts) reads the bucket in-process, as it does wherever the binding is
-// absent: the same bytes, uncached.
-let reachable = (req: Request, env: Env): Env =>
-  bearing(req) ? { ...env, FILES: undefined } : env
-
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let c = clock()
   // Inside `counting`, so every store hop and bucket op the chain below makes
   // is counted on this request's own tally (hops.ts) and reported beside the
   // stages it took.
-  return c.counting(async () =>
-    timed(await served(req, reachable(req, env), c), c)
-  )
+  return c.counting(async () => timed(await served(req, env, c), c))
 }
 
 // Serving an app, with the stopwatch running (timing.ts): every stage below
