@@ -1,8 +1,9 @@
 // The query field (@yaks/filter), bound to this page. Every query typed here
-// (a card's filter bar, the search palette, the command line, a board's query)
-// is a field in `front`, the page's own graph: a local @yaks/client over RAM
-// that no server hears of. Anything on the page reads what is typed in one by
-// reading its row.
+// (a card's filter bar, the search palette, the command line, a board's query,
+// the inspector's bar) is a field in `front`, the page's own graph: a local
+// @yaks/client over RAM that no server hears of, where the inspector
+// (@yaks/inspect) keeps its state too. Anything on the page reads what is
+// typed in one by reading its row.
 //
 // What a field cannot know is supplied here, once: the vocabulary the host
 // taught this page (read when a field completes, since it is learned after
@@ -12,7 +13,8 @@
 // card. The terminal binds the same fields with the list in the flow.
 import { client } from '@yaks/client'
 import { filters, type Float } from '@yaks/filter'
-import { docs } from '@yaks/filter/vocab'
+import { docs as filterDocs } from '@yaks/filter/vocab'
+import { docs as inspectDocs } from '@yaks/inspect/vocab'
 import type { Cand, Source } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { cache, type Comps } from '../live.ts'
@@ -22,7 +24,7 @@ import { Overlay } from './overlay.tsx'
 import { wellOf, wells } from './wells.ts'
 
 /** The page's own graph. */
-export let front = client(loadVocab(docs), [], {
+export let front = client(loadVocab([...filterDocs, ...inspectDocs]), [], {
   vault: false,
   wireVault: false,
 })

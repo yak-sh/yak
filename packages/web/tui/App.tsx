@@ -2,8 +2,9 @@
 // below this file is shared with the web — same cache, same registry, same
 // mode signal. Only Board and the task Full are overridden (columns become
 // a nested list, the body reads as raw markdown); Dot, Id, Dependency and
-// Debug.Tile render through the very same components the browser uses,
-// painted as lines instead of CSS.
+// Tile render through the very same components the browser uses, painted as
+// lines instead of CSS. The inspector's map is a step of the trail of its
+// own (`:inspect`), its bar the same query field the browser's is.
 import { signal } from '@preact/signals'
 import { parse } from '@yaks/query'
 import { edit as editLine, touch } from '@yaks/tui'
@@ -27,6 +28,7 @@ import {
   problem,
   queryEids,
   repoUrl,
+  resolveEid,
   rows as graph,
   send,
   statuses,
@@ -53,6 +55,9 @@ import { spawnOf } from '../components/Run.tsx'
 import { useQuery } from '../components/useQuery.ts'
 import { navigationQuery, navigationView } from '../navigation.ts'
 import { Guide } from '@yaks/ui'
+import { MAP, ran } from '@yaks/inspect'
+import { inspectorOf } from '../components/inspect.tsx'
+import { front } from '../components/fields.tsx'
 import { bind } from '../components/fields.tsx'
 import { filterField, usePassOf } from '../components/Filter.tsx'
 import { useHits } from '../components/hits.ts'
@@ -189,20 +194,40 @@ let cycle = (d: number) => {
   jump(0) // another view is other content — land at its top, not mid-pane
 }
 
-// What the cursor line points at: the entity its link names. Absent on a
-// line that is only prose, which is why `l` there does nothing.
+// What the cursor line points at: the entity its link names, in the view it
+// asks for. Absent on a line that is only prose, which is why `l` there does
+// nothing, and until the server has said which entity a short handle
+// (`#3b5bc70420`) names, when it is followed once it has.
 let pointed = () => {
   let href = link(root, spot())
-  return href?.startsWith('/')
-    ? eidOf(decodeURIComponent(href.slice(1)))
-    : undefined
+  if (!href?.startsWith('/')) return undefined
+  let url = new URL(href, 'http://x')
+  if (url.pathname == '/inspect') {
+    let q = url.searchParams.get('q')
+    if (q != null) mapQuery(q)
+    return MAP
+  }
+  let id = decodeURIComponent(url.pathname.slice(1))
+  let v = url.searchParams.get('v')
+  let seen = (eid: string) => {
+    if (v) views.value = { ...views.value, [eid]: v }
+    return eid
+  }
+  let eid = eidOf(id)
+  if (!eid) resolveEid(id).then((found) => found && step(seen(found)))
+  return eid && seen(eid)
+}
+
+// One step further along the trail, unless it is already there.
+let step = (eid: string): boolean => {
+  if (trail.value.at(-1) == eid) return false
+  trail.value = [...trail.value, eid]
+  return true
 }
 
 let enter = (): boolean => {
   let s = trail.value.length ? pointed() : selected()
-  if (!s || trail.value.at(-1) == s) return false
-  trail.value = [...trail.value, s]
-  return true
+  return !!s && step(s)
 }
 
 let back = () => {
@@ -307,7 +332,7 @@ let vert = (d: number) => {
 }
 
 // The Board override: columns as a nested list, the selection inverted.
-// Each row is the same Debug.Tile the web's inspector uses.
+// Each row is the same Tile the web's lists use.
 let TuiBoard = ({ e }: { e: Ent }) => (
   <div class='TBoard'>
     {statuses.map((s, ci) => (
@@ -321,7 +346,7 @@ let TuiBoard = ({ e }: { e: Ent }) => (
               ? 'TRow TRow-on'
               : 'TRow'}
           >
-            <Entity eid={k.eid} view='Debug.Tile' />
+            <Entity eid={k.eid} view='Tile' />
           </div>
         ))}
       </div>
@@ -426,7 +451,21 @@ let open: Command = {
     return {}
   },
 }
-let local: Record<string, Command> = { q: bye, quit: bye, ui: open }
+let inspect: Command = {
+  args: [],
+  about: 'the inspector: every component, archetype and package, and a query',
+  run: (rest) => {
+    if (rest.trim()) mapQuery(rest.trim())
+    if (trail.value.at(-1) != MAP) trail.value = [...trail.value, MAP]
+    return {}
+  },
+}
+let local: Record<string, Command> = {
+  q: bye,
+  quit: bye,
+  ui: open,
+  inspect,
+}
 
 // :fix in the TUI is the web's spawn (Run.tsx spawnOf); no canvas here, so
 // the session is a lone graph write.
@@ -498,6 +537,7 @@ export let key = (k: string) => {
   }
   if (searching.value) return searchKey(k)
   if (filtering.value) return filterKey(k)
+  if (mapping.value) return mapKey(k)
   if (guide.value != null && mode.value == 'normal' && k != ':') {
     if (k == 'j') jump(guide.value + 1)
     else if (k == 'k') jump(guide.value - 1)
@@ -533,6 +573,9 @@ export let key = (k: string) => {
     mode.value = 'command'
   } else if (k == '/') {
     searching.value = true
+    mode.value = 'insert'
+  } else if (k == 'f' && trail.value.at(-1) == MAP) {
+    mapping.value = true
     mode.value = 'insert'
   } else if (k == 'f' && !trail.value.length && boardEid()) {
     filtering.value = true
@@ -589,6 +632,26 @@ let filterKey = (k: string) => {
     mode.value = 'normal'
   } else if (k == '\x1b[B') vert(1)
   else if (k == '\x1b[A') vert(-1)
+}
+
+// The inspector's map: `f` types into its bar, Enter runs the line in its
+// Query listing, Escape leaves the bar. Its pages are the web's, painted.
+let mapping = signal(false)
+let tuiInspector = inspectorOf(fields, () => ({ active: mapping.value }))
+
+// A query run on the map, as the address `?q=` runs it in a browser.
+let mapQuery = (q: string) => {
+  fields.set(MAP, q)
+  front.mutate(ran(q))
+}
+
+let mapKey = (k: string) => {
+  if (fieldKey(MAP, k)) return
+  if (k == '\r') mapQuery(fields.text(MAP))
+  if (k == '\x1b' || k == '\r') {
+    mapping.value = false
+    mode.value = 'normal'
+  }
 }
 
 export let TSearch = () => {
@@ -724,11 +787,11 @@ export let App = () => {
   // The entered entity is held for as long as it is on screen — it carries the
   // edges the refs list paints (T-22371), which used to ride the boot as the
   // graph's whole edge table.
-  useEntity(here)
+  useEntity(here == MAP ? undefined : here)
   // The trail persists across runs; entities don't have to. Drop any
   // entries the graph no longer knows (deleted while we were away).
-  if (here && !cache.value[here]) {
-    trail.value = trail.value.filter((eid) => cache.value[eid])
+  if (here && here != MAP && !cache.value[here]) {
+    trail.value = trail.value.filter((eid) => eid == MAP || cache.value[eid])
     here = trail.value.at(-1)
   }
   let crumbs = [
@@ -737,6 +800,7 @@ export let App = () => {
     // paint anyway, the way `?v=` rides the URL — otherwise there is no
     // way to tell which of two look-alike panes you are on
     ...trail.value.map((eid) => {
+      if (eid == MAP) return 'inspect'
       let e = ent(eid)
       let v = views.value[eid]
       return idOf(e) + (v && v != resolve(e).view ? ` · ${v}` : '')
@@ -753,6 +817,8 @@ export let App = () => {
         ? <Guide />
         : navigationOpen.value
         ? <TNavigation />
+        : here == MAP
+        ? <tuiInspector.InspectMap />
         : here
         ? <Entity eid={here} view={views.value[here]} />
         : p && (

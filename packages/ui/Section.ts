@@ -4,7 +4,7 @@
  * `Count` of what the section holds and a `Note`, all inside `Title`. A
  * section that folds starts its title with a `Fold`, `Fold-open` while its
  * body shows; what a press on it does, and whether the body is drawn, are the
- * caller's.
+ * caller's. A `Note-refused` says what went wrong there.
  *
  * @module
  */
@@ -35,6 +35,7 @@ export let sheet = (c: Colors): Sheet => ({
   Section_Title: { fg: c.green },
   Section_Count: { fg: c.dim },
   Section_Note: { fg: c.dim },
+  'Section_Note-refused': { fg: c.red },
   Section_Fold: { glyph: '▸', fg: c.dim },
   'Section_Fold-open': { glyph: '▾' },
 })
@@ -56,6 +57,14 @@ export let specimens = (): Specimen[] => [
         h(Note, {}, 'declared by @yaks/task'),
       ),
       h('p', null, 'What the section holds.'),
+    ),
+  ],
+  [
+    'Section, Title, Note-refused',
+    h(
+      Section,
+      {},
+      h(Title, {}, 'Links', h(Note, { mod: 'refused' }, "no entity 'T-0'")),
     ),
   ],
   [

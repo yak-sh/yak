@@ -65,7 +65,7 @@ test('every id letter the vocabulary uses has a route, in both cases', () => {
       '/T',
       '/%23abc123',
       '/D-3',
-      '/admin/task',
+      '/inspect',
     ]
   ) {
     assertEquals(reached(path)?.method, 'GET', path)

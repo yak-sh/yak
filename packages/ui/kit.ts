@@ -13,6 +13,7 @@ import * as button from './Button.ts'
 import * as chip from './Chip.ts'
 import * as crumbs from './Crumbs.ts'
 import * as dot from './Dot.ts'
+import * as edit from './Edit.ts'
 import * as field from './Field.ts'
 import * as id from './Id.ts'
 import * as menu from './Menu.ts'
@@ -47,6 +48,7 @@ export let kit: Record<string, Kit> = {
   Section: section,
   Timeline: timeline,
   Crumbs: crumbs,
+  Edit: edit,
 }
 
 /** What @yaks/tui's painter dresses the kit with, in `theme`'s colours. */

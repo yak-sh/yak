@@ -236,7 +236,7 @@ let MailField = (
 )
 
 // A letter says its envelope and receipt before its prose. Transport ids
-// remain in Debug; Full carries the fields used to read and trust it.
+// remain in the inspector; Full carries the fields used to read and trust it.
 export let Mail = ({ e }: { e: Ent }) => {
   let m = e.mail
   if (!m) return null

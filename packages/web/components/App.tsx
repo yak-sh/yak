@@ -10,7 +10,7 @@ import {
   row,
   serverName,
 } from '../live.ts'
-import { Admin } from './Admin.tsx'
+import { InspectMap } from './inspect.tsx'
 import { block, Id, Tabs } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
@@ -130,7 +130,7 @@ let Crumbs = () => {
 // statusbar keeps the floor.
 export let App = () => {
   // `/` raises the search palette over ANY root — canvas, doc, board,
-  // admin. The shell owns the hotkey and the one <Search> mount so a
+  // the inspector's map. The shell owns the hotkey and the one <Search> mount so a
   // fullscreened card can search; a pick opens the hit as the root in its
   // default view.
   useEffect(() => {
@@ -149,10 +149,10 @@ export let App = () => {
   // Hold a route sub for the fullscreen root while it's this one — under a
   // partial cache an entity reached by direct URL is in no
   // defining set, so this is what loads it; a no-op under a whole-graph cache.
-  // Computed before the /admin early return so the hook order stays stable.
-  let rootEid = route.value.startsWith('/admin')
-    ? undefined
-    : screenTarget()?.eid
+  // Computed before the /inspect early return so the hook order stays stable.
+  let at = new URL(route.value, 'http://x')
+  let mapped = at.pathname == '/inspect'
+  let rootEid = mapped ? undefined : screenTarget()?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
   // `/` on a graph that has answered it holds no canvas makes the first, so a
   // new graph opens on a canvas rather than a 404 (live.ts `makeHome`).
@@ -160,9 +160,10 @@ export let App = () => {
   useEffect(() => bare ? makeHome() : undefined, [bare])
   let goto = (t: string) => navigate(entityPath(idOf(ent(t))))
 
-  // The census rides beside the canvas: /admin* swaps the body wholesale;
-  // the bar keeps only the brand (the sidebar is the navigation there).
-  if (route.value.startsWith('/admin')) {
+  // The inspector's map rides beside the canvas: /inspect swaps the body
+  // wholesale; the bar keeps only the brand (the sidebar is the navigation
+  // there), and `?q=` is the query in its bar.
+  if (mapped) {
     return (
       <Frame
         onPointerDown={() => {
@@ -175,8 +176,8 @@ export let App = () => {
             <NavigationToggle />
             <Brand href='/'>Tasks</Brand>
           </Bar>
-          <Body mod='admin'>
-            <Admin />
+          <Body mod='inspect'>
+            <InspectMap query={at.searchParams.get('q') ?? undefined} />
           </Body>
           <Status />
         </Main>
@@ -260,9 +261,9 @@ export let App = () => {
             ))}
             <Tab
               type='button'
-              aria-label='Admin'
-              data-tip='Admin'
-              onClick={() => navigate('/admin')}
+              aria-label='Inspect'
+              data-tip='Inspect'
+              onClick={() => navigate('/inspect')}
             >
               <Icon name='table' />
             </Tab>

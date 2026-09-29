@@ -62,12 +62,7 @@ import { BoardList, List, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { Inline, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
-import {
-  Debug,
-  DebugAnyItem,
-  DebugTaskItem,
-  ProjectDebug,
-} from './views/Debug.tsx'
+import { Inspect } from './inspect.tsx'
 import { Json } from './views/Json.tsx'
 import { Md, mdText } from './views/Md.tsx'
 import { Web } from './views/Web.tsx'
@@ -199,11 +194,7 @@ define([
   { view: 'Full', match: parse('.entry .call .bash'), Render: CommandFull },
   { view: 'Full', match: parse('.entry .result'), Render: ResultFull },
   { view: 'Full', match: parse('.entry .content'), Render: MessageFull },
-  {
-    view: 'Entry.Debug',
-    match: parse('.entry'),
-    Render: ({ e }) => <Debug e={e} tabs={false} />,
-  },
+  { view: 'Entry.Inspect', match: parse('.entry'), Render: Inspect },
   // The sections — Full's legos, internal views like Inline and Dependency.
   // Catch-all matchers on purpose: each renders nothing when its data is
   // absent, and a specialized look for an entity shape is a higher-
@@ -249,10 +240,9 @@ define([
       text: (e) => JSON.stringify(e, null, 2),
     },
   },
-  { view: 'Debug', match: parse('.project'), Render: ProjectDebug },
-  { view: 'Debug', match: and(), Render: Debug },
-  { view: 'Debug.Tile', match: parse('.task'), Render: DebugTaskItem },
-  { view: 'Debug.Tile', match: and(), Render: DebugAnyItem },
+  // The inspector (@yaks/inspect): every value, link and change of anything,
+  // written in place.
+  { view: 'Inspect', match: and(), Render: Inspect },
   { view: 'Inline', match: parse('.doc .task'), Render: TaskInline },
   { view: 'Inline', match: and(), Render: Inline },
   { view: 'Dependency', match: and(), Render: Dependency },
@@ -275,7 +265,7 @@ define([
   'Full',
   'Web',
   'Media',
-  'Debug',
+  'Inspect',
 ])
 
 // The context-menu verbs, contributed per component (union — see

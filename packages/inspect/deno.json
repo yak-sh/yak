@@ -1,0 +1,25 @@
+{
+  "name": "@yaks/inspect",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./views": "./views.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "The inspector: a graph's data model, its values and how they flow, as pages and listings built of @yaks/ui for a browser and a terminal, with feedback left in place; its own state in the page's own graph.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
+    "linkedom": "npm:linkedom@^0.18.12"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./testing.ts",
+      "./browser.json"
+    ]
+  }
+}

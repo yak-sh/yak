@@ -163,6 +163,7 @@
     "./packages/tui",
     "./packages/ui",
     "./packages/filter",
+    "./packages/inspect",
     "./packages/context",
     "./packages/mcp-client",
     "./packages/kernel",

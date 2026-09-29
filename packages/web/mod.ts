@@ -1,6 +1,6 @@
 /**
  * @yaks/web — the web door: a graph's canvas, cards, boards and editing in a
- * browser. A host whose config names this package answers `/`, `/admin` and
+ * browser. A host whose config names this package answers `/`, `/inspect` and
  * every entity's id (`/T-9`) with the app, served beside @yaks/api's doors,
  * which it reads and writes through @yaks/client.
  *

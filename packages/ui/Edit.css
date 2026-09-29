@@ -1,0 +1,38 @@
+/* A value where it can be changed: a control that reads as the value it
+   holds, with a hairline under it to say it can be typed over, and the
+   border's colour once it has the keyboard. The read-only value is plain. */
+.Edit {
+  font: inherit;
+  color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+:is(input, select, textarea).Edit {
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--border2);
+  border-radius: 0;
+  outline: 0;
+  padding: 1px 0;
+  width: 100%;
+  max-width: 40em;
+}
+:is(input, select, textarea).Edit:focus {
+  border-bottom: 1px solid var(--accent);
+}
+input[type=checkbox].Edit {
+  width: auto;
+  accent-color: var(--accent);
+}
+textarea.Edit {
+  font-family: var(--mono);
+  font-size: 11px;
+  min-height: 3lh;
+  resize: vertical;
+  field-sizing: content;
+}
+select.Edit option {
+  background: var(--card);
+  color: var(--text);
+}

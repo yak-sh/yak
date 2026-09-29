@@ -317,7 +317,7 @@ let kept = (): Where => {
 }
 
 // Every landing writes it — both route writers above, plus boot. A route
-// that resolves to nothing (/admin, a 404) leaves the memory alone:
+// that resolves to nothing (/inspect, a 404) leaves the memory alone:
 // chrome and dead ends are not places you were.
 let keep = () => {
   let t = screenTarget()

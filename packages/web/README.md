@@ -31,7 +31,7 @@ The routes facet (`@yaks/web/routes`, routes.ts) answers:
 
 | path                                    | serves                                    |
 | --------------------------------------- | ----------------------------------------- |
-| `/`, `/admin`, `/admin/*`               | the page (index.html)                     |
+| `/`, `/inspect`                         | the page (index.html)                     |
 | `/<letter>-*`, `/<letter>%23*`, `/%23*` | the page, for each id letter in use       |
 | `/web/app.js`                           | main.tsx, built by `deno bundle` at start |
 | `/web/styles.css`                       | @yaks/ui's stylesheet, then styles.css    |

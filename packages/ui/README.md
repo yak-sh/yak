@@ -54,6 +54,7 @@ follow (web's nav.tsx listens for it).
 | `Section`  | `Title`, `Count`, `Note`, `Fold`       | `Fold-open`                                                                                                                             |
 | `Timeline` | `Item`, `When`, `Who`, `What`          |                                                                                                                                         |
 | `Crumbs`   | `Item`                                 | `Item-here`                                                                                                                             |
+| `Edit`     | a value where it can be changed        | the class @yaks/render's editors put on each control; `Edit` itself is the read-only value                                              |
 
 A variant for a pseudo-class (`hover`) lets the style guide show that state.
 

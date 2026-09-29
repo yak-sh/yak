@@ -1,0 +1,26 @@
+{
+  "_": "The browser gate: @yaks/inspect's front door, the views web's page and the terminal draw, must type-check with only the web platform in scope.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/archetype": "../archetype/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/preact": "../preact/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/render": "../render/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/tui/theme": "../tui/theme.ts",
+    "@yaks/ui": "../ui/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks"
+  }
+}

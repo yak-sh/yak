@@ -28,6 +28,9 @@
 .Section_Count {
   font-variant-numeric: tabular-nums;
 }
+.Section_Note-refused {
+  color: var(--red);
+}
 /* The caret a folding section turns: sideways shut, down open. */
 .Section_Fold {
   font: inherit;

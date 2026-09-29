@@ -1,0 +1,107 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "inspect",
+  "description": "The inspector's own state, in a page's own graph: never synced, gone with the page.",
+  "$defs": {
+    "map": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "the inspector's map: the listings it shows under its query bar, in order; what is typed in the bar is the same entity's `filter` (@yaks/filter)",
+      "properties": {
+        "listings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the eids of its listings, in the order they show"
+        }
+      }
+    },
+    "listing": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "one listing on the inspector's map: a saved query, drawn as its rows",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "what the listing is called"
+        },
+        "query": {
+          "type": "string",
+          "description": "the saved query its rows are"
+        },
+        "of": {
+          "type": "string",
+          "enum": [
+            "query",
+            "components",
+            "archetypes",
+            "packages",
+            "relations"
+          ],
+          "description": "what its rows are, which says how they are drawn and what else is asked beside them"
+        },
+        "open": {
+          "type": "boolean",
+          "description": "its rows are shown, not folded away"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "how many rows it shows before saying how many more there are"
+        }
+      }
+    },
+    "section": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "one section of an inspector page, open or folded; its id is the page's entity and the section's view, `<eid> <view>`",
+      "properties": {
+        "open": {
+          "type": "boolean",
+          "description": "its body is shown and its queries asked"
+        },
+        "said": {
+          "type": "string",
+          "description": "why the graph refused its last write, until the next one lands"
+        }
+      }
+    },
+    "lens": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "how an entity's inspector page shows it; its id is the entity's",
+      "properties": {
+        "view": {
+          "type": "string",
+          "description": "the view its body is drawn as: `Inspect.Sections` (its parts, section by section) or another the registry offers it (`Inspect.JSON`)"
+        },
+        "armed": {
+          "type": "boolean",
+          "description": "deleting it was pressed once, and a second press deletes it"
+        }
+      }
+    },
+    "trail": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "the way the inspector came to what it shows: the entities drilled through, oldest first",
+      "properties": {
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the eids of the pages visited, the last one the page shown"
+        }
+      }
+    }
+  }
+}

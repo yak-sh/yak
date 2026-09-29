@@ -7,7 +7,8 @@
  *
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
- *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Crumbs`:
+ *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Crumbs`,
+ *   `Edit`:
  *   the parts.
  * - `everforest`: the first theme; `stylesheet(theme)` dresses a browser,
  *   `sheet(theme)` a terminal (kit.ts).
@@ -28,6 +29,7 @@ export { Choices } from './Choices.ts'
 export { Button } from './Button.ts'
 export { Chip, hues } from './Chip.ts'
 export { Crumbs } from './Crumbs.ts'
+export { Edit } from './Edit.ts'
 export { Pairs } from './Pairs.ts'
 export { Rows } from './Rows.ts'
 export { Section } from './Section.ts'

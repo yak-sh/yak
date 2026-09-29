@@ -2338,7 +2338,7 @@ export let rowsSub = (eids: string[]) => {
 // rides always), a status and a title. That is what a requires-tree needs, and
 // it is why no card has to subscribe to its blockers: the peer projection is a
 // read of two columns, not a membership. Every consumer of `relations()` — Show's
-// requires/contains/reads lists, Relate, Debug, the Meta tally, the TUI's refs —
+// requires/contains/reads lists, Relate, the Meta tally, the TUI's refs —
 // is fed from here now that the graph's whole edge table no longer rides the boot.
 //
 // And it says HOW MANY (T-33752). A card renders a list of sentences, not a
@@ -2974,6 +2974,25 @@ export let dropAgg = (name: string) => {
   if (!set || --set.n > 0) return
   aggSets.delete(name)
   dropBoard(name)
+}
+
+// An aggregate asked once, for a view's lifetime: its answer lands in its set
+// and the line closes, so an aggregate that reads every entity (a census) is
+// not evaluated again after every commit. Released by dropAgg like any other.
+export let holdAggOnce = (name: string, line: string): AggSet => {
+  let set = aggSet(name, line)
+  if (!set.n++) oneShot(name, line, () => {}, () => {})
+  return set
+}
+
+// A held aggregate's answer as it stands: whether it has landed, and each
+// value's count (`.count` answers under the empty value). Read in a render, a
+// new answer repaints it; undefined for a name nobody holds.
+export let aggRead = (
+  name: string,
+): { live: boolean; map: Record<string, number> } | undefined => {
+  let set = aggSets.get(name)
+  return set && { live: set.live.value, map: set.map.value }
 }
 
 // One aggregate value for a view that owns the corresponding hold. Undefined

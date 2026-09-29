@@ -28,8 +28,10 @@ export let Tile:
     },
   )
 
-/** The id and the kind are dim beside the title; a count stands out. */
+/** The id and the kind are dim beside the title; a count stands out. A tile
+ * is a line of its own even as a link, so its parts stand apart. */
 export let sheet = (c: Colors): Sheet => ({
+  Tile: { block: true },
   Tile_Id: { fg: c.dim },
   Tile_Kind: { fg: c.dim },
   Tile_Note: { fg: c.muted },

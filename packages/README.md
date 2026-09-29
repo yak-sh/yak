@@ -143,15 +143,22 @@ grouped approximately by function, **not** by dependency order.
   console app is made of — a scrolling transcript, a multi-line input box, and a
   frame with a sidebar of pluggable panels.
 - **[@yaks/ui](./ui)** — the UI components: display-only parts with semantic
-  variants (`Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`)
-  built with `el` and `block`, each a Preact component, a CSS file and terminal
-  sheet entries, so it paints in a browser and in @yaks/tui alike. Themes
-  (Everforest first), and the style guide at `/ui`.
+  variants (`Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`,
+  `Button`, `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
+  `Crumbs`, `Edit`) built with `el` and `block`, each a Preact component, a CSS
+  file and terminal sheet entries, so it paints in a browser and in @yaks/tui
+  alike. Themes (Everforest first), and the style guide at `/ui`.
 - **[@yaks/filter](./filter)** — the query field: completion wherever a query is
   typed, in a browser and in a terminal. A domain component built of @yaks/ui's
   `Field` and `Choices`, its state the `filter` component in the page's own
   graph, its actions patches to it, completing through @yaks/query `complete`
   from a vocabulary and a data source the host supplies.
+- **[@yaks/inspect](./inspect)** — the inspector: a graph's data model, its
+  values and how they flow, as pages and listings of @yaks/ui parts in a browser
+  (`/inspect`) and a terminal (`:inspect`). Its views are selected through
+  @yaks/render, ask for the queries they need as data, write edits out as
+  bundles, keep their own state in the page's own graph, and take feedback on
+  any part as an open task aimed at it.
 - **[@yaks/ram](./ram)** — Implement graph storage with a synchronous in-memory
   `Map` and @yaks/match queries, suitable for browsers and tests. Shared
   operations are tested against SQLite, but RAM does not support every SQL query

@@ -390,7 +390,7 @@ let icon = (view: string) =>
     ? 'hash'
     : view == 'JSON'
     ? 'braces'
-    : 'bug'
+    : 'scan-search'
 
 // Entry rows are not cards, but expansion has the same view choice at its
 // top-right edge. Qualifying the ask keeps this lens in the entry vocabulary.
@@ -401,7 +401,7 @@ export let EntryLens = ({ eid }: { eid: string }) => {
   let pair = call ? [call, e] : out ? [e, out] : [e]
   let full = resolve(e, 'Entry.Full').view != 'JSON'
   let markdown = resolve(e, 'Entry.Markdown').view != 'JSON'
-  let views = [full && 'Full', markdown && 'Markdown', 'JSON', 'Debug']
+  let views = [full && 'Full', markdown && 'Markdown', 'JSON', 'Inspect']
     .filter(Boolean) as string[]
   let [view, setView] = useState(views[0])
   return (
