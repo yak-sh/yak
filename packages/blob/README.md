@@ -236,18 +236,19 @@ signatures (`image/png`, `image/jpeg`, `image/gif`, `image/webp`), and
 
 `served(bytes, { mime?, name?, etag? }, request)` creates a byte-range capable
 HTTP response with `x-content-type-options: nosniff` and an optional inline
-filename disposition. Documents keep `content-security-policy: sandbox;
-script-src 'none'`; audio and video keep their origin with `script-src 'none'`
-so a browser's native player can fetch them.
-The response can be cached but revalidates because its mime and name may change
-while the bytes keep their address. `validator(address, meta)` makes the ETag
-for those bytes and metadata. Scripts are blocked; the policy does not mean an
-HTML or SVG document cannot render. `ranged(bytes, request, headers)` serves the
-same byte-range behavior when a caller supplies its own response headers.
+filename disposition. Documents keep
+`content-security-policy: sandbox;
+script-src 'none'`; audio and video keep
+their origin with `script-src 'none'` so a browser's native player can fetch
+them. The response can be cached but revalidates because its mime and name may
+change while the bytes keep their address. `validator(address, meta)` makes the
+ETag for those bytes and metadata. Scripts are blocked; the policy does not mean
+an HTML or SVG document cannot render. `ranged(bytes, request, headers)` serves
+the same byte-range behavior when a caller supplies its own response headers.
 `servedOpen` and `rangedOpen` accept an opened object and stream the selected
-span without loading the whole file; conditional responses and HEAD need no
-body read.
-`mimeOf(name)` gives deployed files and named uploads one media type lookup.
+span without loading the whole file; conditional responses and HEAD need no body
+read. `mimeOf(name)` gives deployed files and named uploads one media type
+lookup.
 
 `artifactDoc` declares `artifact { address, media_type, size }` and an
 `attachment` component referencing an artifact. An attachment can also record
