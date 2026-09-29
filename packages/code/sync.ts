@@ -15,6 +15,9 @@
 // is gone has its components cleared instead: the entity stays, empty, and a
 // later read fills it in.
 // Import links are cleared the same way, with @yaks/edge's `unlink`.
+//
+// A package's own vocab.json is read into the components it declares as well
+// (./declared.ts), where the graph holds them.
 
 import {
   type Bundle,
@@ -28,6 +31,8 @@ import type { Actor } from '@yaks/graph'
 import { link, unlink } from '@yaks/edge'
 import type { Binding } from '@yaks/mirror'
 import { blobOf } from '@yaks/mirror'
+import type { VocabDoc } from '@yaks/vocab'
+import { declared, type Said } from './declared.ts'
 import {
   type DocNode,
   exportsOf,
@@ -77,11 +82,11 @@ export let checkout = async (
   return { root, common }
 }
 
-/** Which tracked files are code: TS/JS modules, markdown and package
- * manifests, outside any `vendor` directory. */
+/** Which tracked files are code: TS/JS modules, markdown, package manifests
+ * and vocabularies, outside any `vendor` directory. */
 export let covered = (path: string): boolean =>
   !/(^|\/)(vendor|node_modules)\//.test(path) &&
-  (isCode(path) || isMarkdown(path) || /(^|\/)deno\.json$/.test(path))
+  (isCode(path) || isMarkdown(path) || /(^|\/)(deno|vocab)\.json$/.test(path))
 
 /**
  * The exports of many modules at once. `deno doc` refuses a whole batch when
@@ -125,7 +130,11 @@ export type Read = {
   symbols: number
   imports: number
   packages: number
+  /** the packages whose vocab.json was read into the components it declares */
+  vocabularies: number
   refused: string[]
+  /** the vocab.json files that are not JSON, left as they were last read */
+  unparsed: string[]
 }
 
 /** The biggest change one transaction carries. */
@@ -152,7 +161,11 @@ export let codeMirror = async (
   let repository = ids('repository', { common })
   let apply = async (change: Bundle[]) => {
     for (let i = 0; i < change.length; i += BATCH) {
-      await g.apply(signed(change.slice(i, i + BATCH), opts.actor ?? null))
+      // Trusted: what a package declares is written by this reading of it,
+      // never by a client (@yaks/vocab's rows are `wire: false`).
+      await g.apply(signed(change.slice(i, i + BATCH), opts.actor ?? null), {
+        trusted: true,
+      })
     }
   }
   await apply([{ entity: { eid: repository }, repository: { common } }])
@@ -182,8 +195,12 @@ export let codeMirror = async (
     symbols: 0,
     imports: 0,
     packages: 0,
+    vocabularies: 0,
     refused: [],
+    unparsed: [],
   }
+  // Where the graph holds what a vocabulary declares (@yaks/vocab composed).
+  let describes = !!g.vocab.comp('_comp')
 
   let read = async (paths: string[], gone: string[]) => {
     let here = paths.filter((p) => !gone.includes(p))
@@ -217,6 +234,18 @@ export let codeMirror = async (
       let p = owner(path, pkgs)
       return p ? packageOf(p.name) : null
     }
+    // The package a path is the own vocabulary of: `vocab.json` beside a
+    // manifest that names one, now or when it was last read.
+    let vocabOf = (path: string): string | undefined => {
+      if (!describes || !/(^|\/)vocab\.json$/.test(path)) return
+      let at = path.replace(/vocab\.json$/, 'deno.json')
+      let was = wasPkgs.find((b) =>
+        comp(b, 'package')?.manifest == moduleOf(at)
+      )
+      return pkgs.find((p) => p.path == at)?.name ??
+        (was ? str(comp(was, 'package')?.name) : undefined)
+    }
+    let vocabs: Said[] = []
 
     // The exports and imports each module had, so what it no longer has is
     // cleared rather than left behind.
@@ -232,11 +261,21 @@ export let codeMirror = async (
       let m = moduleOf(path)
       if (gone.includes(path)) {
         change.push({ entity: { eid: m }, file: null, module: null, doc: null })
+        let pkg = vocabOf(path)
+        if (pkg) vocabs.push({ pkg })
         continue
       }
       let body = text(path)
       let md = isMarkdown(path) ? markdown(path, body) : undefined
       said.modules++
+      let pkg = vocabOf(path)
+      if (pkg) {
+        try {
+          vocabs.push({ pkg, doc: JSON.parse(body) as VocabDoc })
+        } catch {
+          said.unparsed.push(path)
+        }
+      }
       change.push({
         entity: { eid: m },
         file: { path, repository },
@@ -286,6 +325,8 @@ export let codeMirror = async (
         }
       }
     }
+    said.vocabularies += vocabs.filter((v) => v.doc).length
+    later.push(...await declared(g, (name, c) => ids(name, c), vocabs))
     await apply([...change, ...later])
   }
 

@@ -22,6 +22,14 @@ symbol{module, name, kind, line}   one per export; id from module + name
 imports                            @yaks/edge relation: module → module
 ```
 
+Where the config also lists `@yaks/vocab`, a package's own `vocab.json` (beside
+its `deno.json`) is read into the components it declares, as
+[@yaks/vocab](../vocab/README.md#a-vocabulary-as-entities)'s `_comp`, `_prop`
+and `_before` entities, each file on its own. `package` on each row names the
+package that declares it, so `._prop.package=@yaks/id` lists every property
+@yaks/id declares, on its own components and on the ones it extends. A row a
+package stops declaring is cleared like a gone export.
+
 Each one's text is in `doc`: a package's description, a module's opening comment
 (the `/** */` block or the run of `//` lines it starts with), the whole of a
 markdown file, and an export's doc comment. `doc` is what full-text search and

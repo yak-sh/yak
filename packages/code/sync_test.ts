@@ -8,7 +8,7 @@ import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { gitDoc } from '@yaks/git'
 import { sync } from '@yaks/mirror'
 import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, metaDoc } from '@yaks/vocab'
 import { codeDoc } from './vocab.ts'
 import { codeMirror } from './sync.ts'
 
@@ -24,7 +24,7 @@ let entity = {
 }
 
 let fixture = () => {
-  let vocab = loadVocab([entity, edgeDoc, gitDoc, docDoc, codeDoc], [
+  let vocab = loadVocab([entity, edgeDoc, gitDoc, docDoc, codeDoc, metaDoc], [
     edgeKeywords,
   ])
   return graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
@@ -106,6 +106,64 @@ Deno.test(
       (await g.read('.symbol.name=add'))[0].entity.eid,
       was.entity.eid,
     )
+    Deno.removeSync(dir, { recursive: true })
+  },
+)
+
+Deno.test(
+  'code sync reads what each package declares, and clears what it stops declaring',
+  async () => {
+    let dir = Deno.makeTempDirSync()
+    await git(dir, 'init', '-q')
+    let vocab = ($defs: Record<string, unknown>) => JSON.stringify({ $defs })
+    let note = (properties: Record<string, unknown>, before = ['doc']) => ({
+      component: true,
+      type: 'object',
+      kind: true,
+      before,
+      properties,
+    })
+    Deno.mkdirSync(`${dir}/q`)
+    write(dir, {
+      'deno.json': '{"name": "@t/p"}',
+      'vocab.json': vocab({
+        note: note({ a: { type: 'string' }, b: { type: 'number' } }),
+      }),
+      'q/deno.json': '{"name": "@t/q"}',
+      'q/vocab.json': vocab({
+        note: {
+          component: true,
+          extends: true,
+          properties: { c: { type: 'boolean' } },
+        },
+      }),
+    })
+    await commit(dir)
+    let g = fixture()
+    let pass = async () => sync((await codeMirror(g, dir)).binding)
+    let titles = async (q: string) =>
+      (await g.read(`${q} ?doc`)).map((b) => (b.doc as Comp).title).sort()
+
+    await pass()
+    assertEquals(await titles('._comp'), ['note'])
+    assertEquals(await titles('._prop'), ['note.a', 'note.b', 'note.c'])
+    assertEquals((await g.read('._before')).length, 1)
+
+    // A property and a `before` the file stops saying are cleared; the other
+    // package's property stays on the component.
+    write(dir, {
+      'vocab.json': vocab({ note: note({ a: { type: 'string' } }, []) }),
+    })
+    await commit(dir)
+    await pass()
+    assertEquals(await titles('._prop'), ['note.a', 'note.c'])
+    assertEquals((await g.read('._before')).length, 0)
+
+    // A vocabulary that is gone takes what it declared with it.
+    write(dir, { 'q/vocab.json': null })
+    await commit(dir)
+    await pass()
+    assertEquals(await titles('._prop'), ['note.a'])
     Deno.removeSync(dir, { recursive: true })
   },
 )

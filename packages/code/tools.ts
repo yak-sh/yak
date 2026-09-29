@@ -41,10 +41,14 @@ export let codeSync = async (
   let gone = done.read.length - said.modules
   return [
     `${root}: read ${said.modules} files (${said.symbols} exports, ` +
-    `${said.imports} imports, ${said.packages} packages)` +
+    `${said.imports} imports, ${said.packages} packages, ` +
+    `${said.vocabularies} vocabularies)` +
     (gone ? `, cleared ${gone} gone` : '') + ` in ${ms} ms.`,
     ...said.refused.length
       ? [`deno doc could not read the exports of: ${said.refused.join(', ')}`]
+      : [],
+    ...said.unparsed.length
+      ? [`not JSON, so left as last read: ${said.unparsed.join(', ')}`]
       : [],
   ].join('\n')
 }
