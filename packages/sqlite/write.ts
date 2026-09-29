@@ -68,7 +68,6 @@ import {
   type Param,
   type Row,
   select,
-  type Stmt,
   sub,
   table,
   type Update,
@@ -343,21 +342,37 @@ let patchOne = (
 export let unburySql = (eid: string): Delete => dropSql(eid, TOMBSTONE)
 
 /**
- * The statements that remove one entity: every component row it has, then the
- * tombstone that marks its identity deleted. Components go in reverse
- * declaration order, so a dependent is gone before what it references and no
- * foreign key blocks the delete. The tombstone is an INSERT…select, so an eid
- * no entity uses tombstones nothing.
+ * The statements that remove a set of entities: one delete per component
+ * table, then one tombstone insert for the set. A list of any length rides as
+ * one JSON parameter, so a wide vocabulary and a large batch do not multiply
+ * storage operations by one another. Tables arrive in declaration order and
+ * are cleared in reverse; an eid no entity uses tombstones nothing.
  */
-export let removeSql = (v: Vocab, entity: Entity, at: string): Write[] => [
-  ...[...v.all].reverse()
-    .filter((comp) => comp != 'entity')
-    .map((comp) => dropSql(entity.eid, comp)),
-  bury(entity.eid, at),
-]
+export let removeSql = (
+  tables: string[],
+  entities: Entity[],
+  at: string,
+): Write[] => {
+  if (!entities.length) return []
+  let ids = select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: among(col('eid'), each(entities.map((e) => e.eid))),
+  })
+  return [
+    ...tables.toReversed()
+      .filter((comp) => comp != 'entity' && comp != TOMBSTONE)
+      .map((comp): Delete => ({
+        t: 'delete',
+        from: comp,
+        where: among(col('entity'), ids),
+      })),
+    bury(ids, at),
+  ]
+}
 
-// The tombstone an entity's removal ends with.
-let bury = (eid: string, at: string): Insert => ({
+// The tombstone an entity set's removal ends with.
+let bury = (ids: ReturnType<typeof select>, at: string): Insert => ({
   t: 'insert',
   or: 'ignore',
   into: 'tombstone',
@@ -365,7 +380,7 @@ let bury = (eid: string, at: string): Insert => ({
   q: select({
     cols: [col('id'), val(at)],
     from: table('entity'),
-    where: eq(col('eid'), val(eid)),
+    where: among(col('id'), ids),
   }),
 })
 
@@ -557,16 +572,8 @@ export let remove = (
   let now = new Date().toISOString()
   // With table-based identities enabled, deletion must honor that same
   // physical set even when this writer has a narrower vocabulary.
-  let physical = vocab.comp('archetype') ? componentTables(driver) : undefined
-  for (let e of entities) {
-    let statements: Stmt[] = physical
-      ? [
-        ...physical.filter((n) => n != 'tombstone').map((n) =>
-          dropSql(e.eid, n)
-        ),
-        bury(e.eid, now),
-      ]
-      : removeSql(vocab, e, now)
-    for (let s of statements) effect(driver, s)
-  }
+  let tables = vocab.comp('archetype')
+    ? componentTables(driver)
+    : [...vocab.all]
+  for (let s of removeSql(tables, entities, now)) effect(driver, s)
 }

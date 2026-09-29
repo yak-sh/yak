@@ -503,10 +503,11 @@ export let storage = <S extends Prepared<S>>(
         // read sees them as dead; `doom` has usually named them already.
         await learn(entities.map((e) => e.eid))
         let now = new Date().toISOString()
+        let found: Entity[] = []
         for (let e of entities) {
           let spine = known.get(e.eid)
           if (!spine) continue
-          pending.push(...removeSql(vocab, e, now))
+          found.push(e)
           known.set(e.eid, { ...spine, dead: true })
           // Its identity as this transaction knows it: the bundle when one was
           // read, else the spine `doom` or `learn` named — a tombstone still
@@ -515,6 +516,7 @@ export let storage = <S extends Prepared<S>>(
             { eid: e.eid, ...(spine.num == null ? {} : { num: spine.num }) }
           dirty.set(e.eid, tombstoned(entity))
         }
+        pending.push(...removeSql([...vocab.all], found, now))
       },
     }
 

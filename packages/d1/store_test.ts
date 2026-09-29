@@ -24,6 +24,20 @@ Deno.test('a store reads back what it wrote', async () => {
   assertEquals(titles(await s.read('.kind=doc')), ['Dune'])
 })
 
+Deno.test('a batch delete clears its components and keeps tombstones', async () => {
+  let s = await store()
+  let g = graph({ storage: s, vocab: shop })
+  let ids = Array.from({ length: 25 }, (_, i) => `book-${i}`)
+  await g.apply(ids.map((eid) => ({
+    entity: { eid },
+    doc: { title: eid },
+  })))
+  await g.apply(ids.map((eid) => ({ entity: { eid }, $delete: true })))
+  assertEquals(await s.read('.doc'), [])
+  let dead = await s.tx((tx) => tx.get(ids))
+  assertEquals(dead.filter((b) => b.tombstone != null).length, ids.length)
+})
+
 Deno.test('an object and an array come back as the values written', async () => {
   let s = await store(kitchen)
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))

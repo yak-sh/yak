@@ -229,6 +229,63 @@ Deno.test('a Store checks a large delete as one batch', async () => {
   assertEquals(await still.json(), { count: ids.length })
 })
 
+Deno.test('a Store commits a large delete within its operation budget', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  let budget = false
+  let calls = 0
+  ctx.storage.sql.exec = (sql, ...params) => {
+    if (budget && ++calls > 1500) {
+      throw new Error('storage operation exceeded timeout')
+    }
+    return exec(sql, ...params)
+  }
+  let store = await cookbook(
+    ctx,
+    JSON.stringify({
+      $defs: {
+        recipe: {
+          component: true,
+          properties: { serves: { type: 'number' } },
+        },
+        move: {
+          component: true,
+          properties: {
+            reach: { type: 'number', minimum: 0, validate: true },
+          },
+        },
+      },
+    }),
+  )
+  let ids = Array.from({ length: 307 }, () => crypto.randomUUID())
+  let seed = await post(
+    store,
+    '/apply',
+    ids.map((eid, i) => ({
+      entity: { eid },
+      recipe: { serves: i },
+    })),
+    owner,
+  )
+  assertEquals(seed.status, 200, await seed.text())
+
+  budget = true
+  let deleted = await post(
+    store,
+    '/apply',
+    ids.map((eid) => ({
+      entity: { eid },
+      $delete: true,
+    })),
+    owner,
+  )
+  budget = false
+  assertEquals(deleted.status, 200, await deleted.text())
+  let remaining = await get(store, '/query?q=.recipe%26.count', owner)
+  assertEquals(await remaining.json(), { count: 0 })
+})
+
 Deno.test('an app store admits only values matching opted-in nested schemas', async () => {
   let ctx = state()
   using _db = ctx.storage

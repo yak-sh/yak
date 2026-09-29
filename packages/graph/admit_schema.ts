@@ -115,8 +115,13 @@ export let admitSchema = (vocab: Vocab): Plugin => {
       return bundles
     })
   }
+  let skip: WriteHook = (bundles) => bundles
+  skip.independent = true
   return {
     name: 'schema',
-    beforeWrite: () => check,
+    beforeWrite: (bundles) =>
+      bundles.some((b) => comps(b).some(([name]) => names.has(name)))
+        ? check
+        : skip,
   }
 }
