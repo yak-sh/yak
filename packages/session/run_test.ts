@@ -184,7 +184,15 @@ test('a run longer than its lease keeps the transcript, renewed while it goes', 
   await a.g.apply(ask('s1'))
   let first = settle(a.g, 's1', a.r)
   await until(() => asked.length == 1)
-  await new Promise((go) => setTimeout(go, 150)) // past two holds
+  // Past the hold `a` first took, and renewed beyond it.
+  let lease = async () =>
+    ((await a.g.get([leaseEid(`${RUN}/s1`)]))[0]?.[LEASE] as
+      | { until: string }
+      | undefined)?.until
+  let taken = await until(lease)
+  await until(async () =>
+    Date.now() > Date.parse(taken) && await lease() != taken
+  )
   await settle(b.g, 's1', b.r) // still `a`'s: left to it
   open()
   await first

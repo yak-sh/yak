@@ -261,18 +261,48 @@ let store = (): Graph => {
   return g
 }
 
+// One shape's transcript under eids of its own, every reference among them
+// renamed too, so all the shapes share one store as sessions side by side.
+let apart = (name: string, entries: Bundle[]): Bundle[] => {
+  let eids = new Set([S, ...entries.map((b) => b.entity.eid)])
+  let own = (v: unknown): unknown =>
+    typeof v == 'string'
+      ? eids.has(v) ? `${name}/${v}` : v
+      : Array.isArray(v)
+      ? v.map(own)
+      : v && typeof v == 'object'
+      ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, own(x)]))
+      : v
+  return [{ entity: { eid: S }, session: { id: name } }, ...entries]
+    .map((b) => own(b) as Bundle)
+}
+
 test('the SQL view answers the same word as the rule', () => {
-  for (let [name, entries, want] of shapes) {
-    let g = store()
-    if (entries.length) g.apply(entries, { trusted: true })
-    let [s] = g.read(`.session.status=${want}`) as Bundle[]
-    assertEquals(s?.entity.eid, S, `${name} filters as ${want}`)
-    let [read] = g.read(`.session.id=one`) as Bundle[]
-    // The two words this package owns. A host composing its own properties onto
-    // `session` (the fleet does) reads those beside them, and they are its.
-    let { id, status } = read.session as { id: string; status: string }
-    assertEquals({ id, status }, { id: 'one', status: want }, `${name} reads`)
+  let g = store()
+  g.apply(shapes.flatMap(([name, entries]) => apart(name, entries)), {
+    trusted: true,
+  })
+  let want = Object.fromEntries(shapes.map(([name, , w]) => [name, w]))
+  // Each word filters exactly the transcripts in that shape.
+  for (let word of new Set(Object.values(want))) {
+    let found = (g.read(`.session.status=${word}`) as Bundle[])
+      .map((b) => (b.session as { id: string }).id).filter((id) => id != 'one')
+    assertEquals(
+      found.sort(),
+      shapes.filter(([, , w]) => w == word).map(([name]) => name).sort(),
+      `filters as ${word}`,
+    )
   }
+  // The two words this package owns. A host composing its own properties onto
+  // `session` (the fleet does) reads those beside them, and they are its.
+  let read = Object.fromEntries(
+    (g.read('.session') as Bundle[]).map((b) => {
+      let { id, status } = b.session as { id: string; status: string }
+      return [id, status]
+    }),
+  )
+  delete read.one
+  assertEquals(read, want)
 })
 
 // The status is computed from the entries, and an entity that is not a session
