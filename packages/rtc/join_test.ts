@@ -39,17 +39,31 @@ class Peer {
   }
 }
 
+// The browser a call runs in, stood in for one test: `document` and
+// `RTCPeerConnection` installed, and put back as they were, absent included.
+// Defining the old value back instead leaves a read-only global that every
+// later test sharing the runtime fails to assign.
+let browser = () => {
+  let stand = {
+    document: { baseURI: 'https://example.test/vale/' },
+    RTCPeerConnection: Peer,
+  }
+  let was = Object.keys(stand).map((name) =>
+    [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const
+  )
+  for (let [name, value] of Object.entries(stand)) {
+    Object.defineProperty(globalThis, name, { configurable: true, value })
+  }
+  return () => {
+    for (let [name, prior] of was) {
+      if (prior) Object.defineProperty(globalThis, name, prior)
+      else Reflect.deleteProperty(globalThis, name)
+    }
+  }
+}
+
 Deno.test('stalled reconnect cannot delay unpublication or leave; cannot resurrect an old session', async () => {
-  const originalDocument = globalThis.document
-  const originalPeer = globalThis.RTCPeerConnection
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: { baseURI: 'https://example.test/vale/' },
-  })
-  Object.defineProperty(globalThis, 'RTCPeerConnection', {
-    configurable: true,
-    value: Peer,
-  })
+  let restore = browser()
   let block: ((response: Response) => void) | null = null
   let sessions = 0
   let stalled = false
@@ -117,28 +131,12 @@ Deno.test('stalled reconnect cannot delay unpublication or leave; cannot resurre
     assertEquals(call.state, 'left')
     assertEquals(sessions, 1)
   } finally {
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: originalDocument,
-    })
-    Object.defineProperty(globalThis, 'RTCPeerConnection', {
-      configurable: true,
-      value: originalPeer,
-    })
+    restore()
   }
 })
 
 Deno.test('rejected initial presence write closes the connection without a call handle', async () => {
-  const oldDocument = globalThis.document
-  const oldPeer = globalThis.RTCPeerConnection
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: { baseURI: 'https://example.test/vale/' },
-  })
-  Object.defineProperty(globalThis, 'RTCPeerConnection', {
-    configurable: true,
-    value: Peer,
-  })
+  let restore = browser()
   try {
     let failed = false
     try {
@@ -162,28 +160,12 @@ Deno.test('rejected initial presence write closes the connection without a call 
     assert(failed)
     assertEquals(Peer.peers.at(-1)?.connectionState, 'closed')
   } finally {
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: oldDocument,
-    })
-    Object.defineProperty(globalThis, 'RTCPeerConnection', {
-      configurable: true,
-      value: oldPeer,
-    })
+    restore()
   }
 })
 
 Deno.test('rejected asynchronous presence write detaches sender instead of stranding a publication', async () => {
-  const oldDocument = globalThis.document
-  const oldPeer = globalThis.RTCPeerConnection
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: { baseURI: 'https://example.test/vale/' },
-  })
-  Object.defineProperty(globalThis, 'RTCPeerConnection', {
-    configurable: true,
-    value: Peer,
-  })
+  let restore = browser()
   let rejectWrite = false
   let call: Awaited<ReturnType<typeof join>> | null = null
   try {
@@ -219,28 +201,12 @@ Deno.test('rejected asynchronous presence write detaches sender instead of stran
     assertEquals(await call.diagnose(), null)
   } finally {
     await call?.leave()
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: oldDocument,
-    })
-    Object.defineProperty(globalThis, 'RTCPeerConnection', {
-      configurable: true,
-      value: oldPeer,
-    })
+    restore()
   }
 })
 
 Deno.test('same-hero replacement waits for old asynchronous clear before new presence', async () => {
-  const oldDocument = globalThis.document
-  const oldPeer = globalThis.RTCPeerConnection
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: { baseURI: 'https://example.test/vale/' },
-  })
-  Object.defineProperty(globalThis, 'RTCPeerConnection', {
-    configurable: true,
-    value: Peer,
-  })
+  let restore = browser()
   let writes: (Bundle['rtc'])[] = []
   let release: (() => void) | null = null
   let delayed = false
@@ -295,13 +261,6 @@ Deno.test('same-hero replacement waits for old asynchronous clear before new pre
     clear?.()
     await second?.leave()
     await first?.leave()
-    Object.defineProperty(globalThis, 'document', {
-      configurable: true,
-      value: oldDocument,
-    })
-    Object.defineProperty(globalThis, 'RTCPeerConnection', {
-      configurable: true,
-      value: oldPeer,
-    })
+    restore()
   }
 })
