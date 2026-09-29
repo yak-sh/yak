@@ -299,7 +299,9 @@ export let holding = async <T = void>(
         beating = false
       }
     }
-    let beat = setInterval(renew, Math.max(50, Math.floor(hold / 3)))
+    // A third of the hold, however short: a renewal later than the hold would
+    // let the lease lapse under work still running.
+    let beat = setInterval(renew, Math.max(1, Math.floor(hold / 3)))
     try {
       out = await work(AbortSignal.any([signal, lost.signal]))
     } finally {
