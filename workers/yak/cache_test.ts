@@ -43,7 +43,7 @@ Deno.test('a cached file is held indefinitely and can be purged', () => {
   assertStringIncludes(keep['cache-control'], 'public')
   // A year in the shared cache, because the answer to "how long" is the purge,
   // not the clock.
-  assertStringIncludes(keep['cache-control'], 's-maxage=31536000')
+  assertStringIncludes(keep['cache-control'], 'max-age=31536000')
   assertStringIncludes(keep['cache-control'], 'stale-while-revalidate=')
   assertEquals(keep['cache-tag'], `a:${A}`)
 })

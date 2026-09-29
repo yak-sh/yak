@@ -53,10 +53,11 @@ let SWR = 86400
 // What the inner entrypoint says about the bytes it is answering. Only `Files`
 // sends this, and `Files` is reachable only through the service binding, so
 // nothing a person or an app can address ever wears it.
+// Cloudflare disables stale-while-revalidate when s-maxage is present.
 import { type Host, url } from './host.ts'
 import { caught } from './sentry.ts'
 export let keepable = (tags: string[]) => ({
-  'cache-control': `public, s-maxage=${YEAR}, stale-while-revalidate=${SWR}`,
+  'cache-control': `public, max-age=${YEAR}, stale-while-revalidate=${SWR}`,
   'cache-tag': tags.join(','),
 })
 
