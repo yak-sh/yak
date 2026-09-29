@@ -4,10 +4,17 @@
 // A road wobbles as a trodden way does; its bed is the lie of the land along it
 // (regions.ts), evened out, cut down where it would climb too steeply, and
 // never under water, so it is a causeway over a lake. A signpost stands
-// beside each end, naming where it leads. Pure numbers from the levels' rows,
-// laid once and kept, the same on every page and in every chunk.
+// beside each end, naming where it leads. Authored routes stay fixed; beyond
+// them, neighbouring cells join by deterministic roads grown when nearby.
 import { isA } from './features.ts'
-import { LEVELS, type Side, SIZE, type Spot } from './levels.ts'
+import {
+  levelAt,
+  levelOf,
+  LEVELS,
+  type Side,
+  SIZE,
+  type Spot,
+} from './levels.ts'
 import { lie } from './regions.ts'
 import { clamp, fbm, lerp } from './rand.ts'
 
@@ -149,14 +156,24 @@ export type Road = {
 
 /** Where a hero arrives in a level, in world metres: one of its places. */
 export let arriveOf = (id: string): Spot => {
-  let lv = LEVELS[id]
+  let lv = levelOf(id)!
   let [x, z] = lv.places[lv.arrive].at
   return [lv.cell[0] * SIZE + x, lv.cell[1] * SIZE + z]
 }
 
 let sideTo = (from: string, to: string) =>
-  (Object.entries(LEVELS[from].roads) as [Side, string][])
-    .find(([, id]) => id == to)![0]
+  (Object.entries(levelOf(from)!.roads) as [Side, string][])
+    .find(([, id]) => id == to)?.[0] ??
+    (() => {
+      let [ax, az] = levelOf(from)!.cell, [bx, bz] = levelOf(to)!.cell
+      return (bx > ax
+        ? 'east'
+        : bx < ax
+        ? 'west'
+        : bz > az
+        ? 'south'
+        : 'north') as Side
+    })()
 
 let snap = (x: number) => (Math.floor(x / 0.5) + 0.5) * 0.5
 
@@ -190,10 +207,11 @@ let post = (
 // The road between two levels' arrivals: its course, its bed graded along
 // it, and a signpost at each end.
 let road = (from: string, to: string): Road => {
-  let s = (LEVELS[from].seed + LEVELS[to].seed) * 101
+  let a = levelOf(from)!, b = levelOf(to)!
+  let s = (a.seed + b.seed) * 101
   let whole = course(arriveOf(from), arriveOf(to), s)
   let village = (id: string) =>
-    isA(LEVELS[id].places[LEVELS[id].arrive].kind, 'village')
+    isA(levelOf(id)!.places[levelOf(id)!.arrive].kind, 'village')
   let lo = village(from) ? VILLAGE_REACH : 0
   let hi = whole.xs.length - 1 - (village(to) ? VILLAGE_REACH : 0)
   let c = part(whole, lo, hi + 1)
@@ -230,6 +248,28 @@ let ROADS = () =>
     )
   )
 
+let frontierRoads = new Map<string, Road>()
+let frontierRoad = (a: string, b: string): Road => {
+  let [from, to] = [a, b].sort()
+  let key = `${from}/${to}`
+  let got = frontierRoads.get(key)
+  if (got) return got
+  if (frontierRoads.size >= 128) {
+    frontierRoads.delete(frontierRoads.keys().next().value!)
+  }
+  frontierRoads.set(key, got = road(from, to))
+  return got
+}
+let neighbours = (id: string): Road[] => {
+  let lv = levelOf(id)
+  if (!lv) return []
+  let [gx, gz] = lv.cell
+  return [[gx - 1, gz], [gx + 1, gz], [gx, gz - 1], [gx, gz + 1]]
+    .map(([x, z]) => levelAt(x, z))
+    .filter((to) => !LEVELS[id] || !LEVELS[to.id])
+    .map((to) => frontierRoad(id, to.id))
+}
+
 /** The height of a road's bed `t` of the way along it, in metres. */
 export let bedAt = ({ bed }: Road, t: number) => {
   let f = t * (bed.length - 1)
@@ -255,9 +295,18 @@ export let roadsIn = (
   z1: number,
   r: number,
 ): Road[] =>
-  ROADS().filter(({ c: { box } }) =>
-    box[0] - r < x1 && box[2] + r > x0 && box[1] - r < z1 && box[3] + r > z0
-  )
+  [
+    ...ROADS(),
+    ...new Map(
+      levelsIn(x0 - r, z0 - r, x1 + r, z1 + r).flatMap((lv) =>
+        neighbours(lv.id)
+      )
+        .map((road) => [`${road.from}/${road.to}`, road]),
+    ).values(),
+  ]
+    .filter(({ c: { box } }) =>
+      box[0] - r < x1 && box[2] + r > x0 && box[1] - r < z1 && box[3] + r > z0
+    )
 
 /** Every signpost within `r` metres of (x, z). */
 export let signsNear = (x: number, z: number, r: number): Sign[] =>
@@ -266,21 +315,26 @@ export let signsNear = (x: number, z: number, r: number): Sign[] =>
   )
 
 /** The roads out of a level. */
-export let roadsOf = (id: string): Road[] =>
-  ROADS().filter((r) => r.from == id || r.to == id)
+export let roadsOf = (
+  id: string,
+): Road[] => [
+  ...ROADS().filter((r) => r.from == id || r.to == id),
+  ...neighbours(id),
+]
 
 // Each level's lanes, from its village out to each of its places.
 let paths = new Map<string, Course[]>()
 let villageLanes = (id: string): Course[] => {
   let got = paths.get(id)
   if (got) return got
-  let lv = LEVELS[id]
+  let lv = levelOf(id)!
   let [ox, oz] = [lv.cell[0] * SIZE, lv.cell[1] * SIZE]
   let world = (at: Spot): Spot => [ox + at[0], oz + at[1]]
   let home = Object.values(lv.places).find((p) => isA(p.kind, 'village'))
   got = !home ? [] : Object.values(lv.places)
     .filter((p) => norm(p.at[0] - home.at[0], p.at[1] - home.at[1]) >= 12)
     .map((p) => course(world(home.at), world(p.at), lv.seed * 101))
+  if (paths.size >= 128) paths.delete(paths.keys().next().value!)
   paths.set(id, got)
   return got
 }
@@ -300,6 +354,7 @@ let lanesOf = (id: string): Course[] => {
   got = villageLanes(id).flatMap((c) =>
     c.xs.length > VILLAGE_REACH + 1 ? [part(c, VILLAGE_REACH)] : []
   )
+  if (outer.size >= 128) outer.delete(outer.keys().next().value!)
   outer.set(id, got)
   return got
 }
@@ -308,9 +363,11 @@ let lanesOf = (id: string): Course[] => {
 let levelsIn = (x0: number, z0: number, x1: number, z1: number) => {
   let [gx0, gz0] = [Math.floor(x0 / SIZE) - 1, Math.floor(z0 / SIZE) - 1]
   let [gx1, gz1] = [Math.floor(x1 / SIZE) + 1, Math.floor(z1 / SIZE) + 1]
-  return Object.values(LEVELS).filter(({ cell: [gx, gz] }) =>
-    gx >= gx0 && gx <= gx1 && gz >= gz0 && gz <= gz1
-  )
+  let out = []
+  for (let gz = gz0; gz <= gz1; gz++) {
+    for (let gx = gx0; gx <= gx1; gx++) out.push(levelAt(gx, gz))
+  }
+  return out
 }
 
 /** The lanes that may pass within `r` metres of the box from (x0, z0) to

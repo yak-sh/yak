@@ -3,13 +3,14 @@ import { assertEquals } from '@std/assert'
 import { LEVELS, SIZE } from './levels.ts'
 import { pan, place, view, WORLD, zoom, ZOOMS } from './mapview.ts'
 
-Deno.test('the map opens near the hero and zooms out to every land', () => {
+Deno.test('the map opens near the hero and zooms out around their position', () => {
   let near = view([100, 120])
   assertEquals(near[2], ZOOMS[0])
   assertEquals(place(near, [100, 120]), [0.5, 0.5])
   let whole = near
   for (let i = 1; i < ZOOMS.length; i++) whole = zoom(whole, 1)
-  assertEquals(whole, WORLD)
+  assertEquals(whole[2], WORLD[2])
+  assertEquals(place(whole, [100, 120]), [0.5, 0.5])
   for (let lv of Object.values(LEVELS)) {
     let [x, z] = lv.cell.map((n) => n * SIZE)
     let [u, v] = place(WORLD, [x, z])

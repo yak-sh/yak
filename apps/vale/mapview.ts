@@ -12,7 +12,7 @@ let north = Math.min(...cells.map(([, z]) => z)) * SIZE
 let south = (Math.max(...cells.map(([, z]) => z)) + 1) * SIZE
 let side = Math.max(east - west, south - north)
 
-/** The whole known world in one square, centred on its lands. */
+/** The authored lands in one square. The same scale frames nearby frontier. */
 export let WORLD: Box = [
   (west + east - side) / 2,
   (north + south - side) / 2,
@@ -20,10 +20,10 @@ export let WORLD: Box = [
 ]
 export let ZOOMS = [...[320, 640, 1280, 2560].filter((n) => n < side), side]
 
-/** A square centred near `at`, kept inside the world. */
+/** A square centred near `at` in the unbounded world. */
 export let view = (at: Spot, size = ZOOMS[0]): Box => [
-  clamp(Math.round(at[0] - size / 2), WORLD[0], WORLD[0] + WORLD[2] - size),
-  clamp(Math.round(at[1] - size / 2), WORLD[1], WORLD[1] + WORLD[2] - size),
+  Math.round(at[0] - size / 2),
+  Math.round(at[1] - size / 2),
   size,
 ]
 

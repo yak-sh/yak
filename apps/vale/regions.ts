@@ -12,10 +12,10 @@
 // shape stops mattering, found by trying the shape, so a kind of place written
 // anywhere in features/ needs no reach of its own. Everything here is a pure
 // function of where a point is, so a chunk grown alone agrees with its
-// neighbours, and every page with every other. A point far out past the last
-// level lies in the nearest.
+// neighbours, and every page with every other. Far beyond the authored lands,
+// every lattice cell grows another named region.
 import { type Feature, FEATURES } from './features.ts'
-import { LEVELS, SIZE, type Spot } from './levels.ts'
+import { levelAt, levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
 import { fbm, hashOf, lerp, smooth } from './rand.ts'
 
 /** A place of a level where it lies in the world: its level, its name, its
@@ -78,11 +78,11 @@ let reachOf = (kind: string): [number, number] => {
  * ```
  */
 export let originOf = (id: string): Spot => {
-  let [gx, gz] = LEVELS[id]?.cell ?? [0, 0]
+  let [gx, gz] = levelOf(id)?.cell ?? [0, 0]
   return [gx * SIZE, gz * SIZE]
 }
 
-/** Every place of every level, in the order they shape the ground: those
+/** Every place of the authored levels, in the order they shape the ground: those
  * that flatten what the others raised (features.ts `last`) after the rest. */
 export let PLACES: Placed[] = ((): Placed[] => {
   let all = Object.values(LEVELS).flatMap((lv) => {
@@ -107,9 +107,35 @@ export let PLACES: Placed[] = ((): Placed[] => {
   ].map((p, order) => ({ ...p, order }))
 })()
 
+let grown = new Map<string, Placed[]>()
+let grownPlaces = (gx: number, gz: number): Placed[] => {
+  let lv = levelAt(gx, gz)
+  if (LEVELS[lv.id]) return []
+  let got = grown.get(lv.id)
+  if (got) return got
+  if (grown.size >= 256) grown.delete(grown.keys().next().value!)
+  got = Object.entries(lv.places).map(([name, p], order) => ({
+    level: lv.id,
+    name,
+    kind: p.kind,
+    f: FEATURES[p.kind],
+    at: [gx * SIZE + p.at[0], gz * SIZE + p.at[1]] as Spot,
+    s: lv.seed * 101,
+    reach: reachOf(p.kind)[0],
+    holds: reachOf(p.kind)[1],
+    order: PLACES.length + order,
+  }))
+  grown.set(lv.id, got)
+  return got
+}
+
 /** A level's places, in world metres. */
-export let placesOf = (id: string): Placed[] =>
-  PLACES.filter((p) => p.level == id)
+export let placesOf = (id: string): Placed[] => {
+  let lv = levelOf(id)
+  return lv && !LEVELS[id]
+    ? grownPlaces(...lv.cell)
+    : PLACES.filter((p) => p.level == id)
+}
 
 /** Where a place of a level lies, in world metres.
  *
@@ -121,7 +147,7 @@ export let placesOf = (id: string): Placed[] =>
  * ```
  */
 export let spotOf = (id: string, place: string): Spot | undefined => {
-  let p = LEVELS[id]?.places[place]
+  let p = levelOf(id)?.places[place]
   if (!p) return undefined
   let [ox, oz] = originOf(id)
   return [ox + p.at[0], oz + p.at[1]]
@@ -140,12 +166,20 @@ let reachingIn = (gx: number, gz: number): Placed[] => {
   let key = `${gx} ${gz}`
   let got = reaching.get(key)
   if (got) return got
-  got = PLACES.filter((p) => {
+  let candidates = [
+    ...PLACES,
+    ...Array.from(
+      { length: 25 },
+      (_, j) => grownPlaces(gx + j % 5 - 2, gz + Math.floor(j / 5) - 2),
+    ).flat(),
+  ]
+  got = candidates.filter((p) => {
     let r = Math.max(p.reach, p.holds)
     let dx = Math.max(gx * SIZE - p.at[0], 0, p.at[0] - (gx + 1) * SIZE)
     let dz = Math.max(gz * SIZE - p.at[1], 0, p.at[1] - (gz + 1) * SIZE)
     return norm(dx, dz) < r
   })
+  if (reaching.size >= 512) reaching.delete(reaching.keys().next().value!)
   reaching.set(key, got)
   return got
 }
@@ -204,7 +238,7 @@ export let lie = (
   return h
 }
 
-// Where a region's ground is decided: the middle of its level's cell, and
+// Where an authored region's ground is decided: the middle of its cell, and
 // each of its places, by the cell of the lattice they lie in.
 type Site = { level: string; x: number; z: number }
 let SITES: Site[] = Object.values(LEVELS).flatMap((lv) => {
@@ -222,6 +256,20 @@ let sited = new Map<string, Site[]>()
 for (let s of SITES) {
   let key = `${cellOf(s.x)} ${cellOf(s.z)}`
   sited.set(key, [...sited.get(key) ?? [], s])
+}
+let sitesIn = (gx: number, gz: number): Site[] => {
+  let lv = levelAt(gx, gz)
+  let known = sited.get(`${gx} ${gz}`) ?? []
+  if (LEVELS[lv.id]) return known
+  return [
+    ...known,
+    { level: lv.id, x: (gx + 0.5) * SIZE, z: (gz + 0.5) * SIZE },
+    ...Object.values(lv.places).map((p) => ({
+      level: lv.id,
+      x: gx * SIZE + p.at[0],
+      z: gz * SIZE + p.at[1],
+    })),
+  ]
 }
 
 // How far noise pushes the ground about before a border is decided, at most,
@@ -320,8 +368,8 @@ export let boundariesIn = (x0: number, z0: number, x1: number, z1: number) => {
  * assertEquals(blend(128, 128).a, 'mossvale')
  * assertEquals(blend(-128, 128).a, 'birchmere')
  * assertEquals(blend(128, 128).t, 1)
- * // Far out past every level, still a level's.
- * assert(LEVELS[blend(5000, 64).a])
+ * // Far out past every authored level, still a named land.
+ * assert(levelOf(blend(5000, 64).a))
  * ```
  */
 export let blend = (x: number, z: number): Blend => {
@@ -336,14 +384,13 @@ export let blend = (x: number, z: number): Blend => {
     } else if (d < d2 && s.level != a) [d2, b] = [d, s.level]
   }
   let gx = cellOf(wx), gz = cellOf(wz)
-  for (let k = gz - 2; k <= gz + 2; k++) {
-    for (let i = gx - 2; i <= gx + 2; i++) {
-      for (let s of sited.get(`${i} ${k}`) ?? []) see(s)
+  for (let k = gz - 1; k <= gz + 1; k++) {
+    for (let i = gx - 1; i <= gx + 1; i++) {
+      for (let s of sitesIn(i, k)) see(s)
     }
   }
   // A site further out than the cells looked at is two cells off at least:
   // look at every one when the two nearest found are further than that.
-  if (d2 > 2 * SIZE) SITES.forEach(see)
   return { a, b, t: 0.5 + 0.5 * smooth(0, EDGE, d2 - d1) }
 }
 
@@ -361,7 +408,14 @@ export let levelsNear = (x: number, z: number, r: number): string[] => {
       Math.max(gx * SIZE - x, 0, x - (gx + 1) * SIZE),
       Math.max(gz * SIZE - z, 0, z - (gz + 1) * SIZE),
     )
-  return Object.values(LEVELS).filter((lv) => gap(lv.cell) < r)
+  let all = []
+  for (let gz = cellOf(z - r); gz <= cellOf(z + r); gz++) {
+    for (let gx = cellOf(x - r); gx <= cellOf(x + r); gx++) {
+      let lv = levelAt(gx, gz)
+      if (gap(lv.cell) < r) all.push(lv)
+    }
+  }
+  return all
     .sort((a, b) => gap(a.cell) - gap(b.cell)).map((lv) => lv.id)
 }
 
@@ -377,6 +431,7 @@ export let nearby = <T>(make: (id: string) => T[]) => {
       let got = made.get(id)
       if (!got && !fresh) {
         fresh = true
+        if (made.size >= 64) made.delete(made.keys().next().value!)
         made.set(id, got = make(id))
       }
       return got ?? []

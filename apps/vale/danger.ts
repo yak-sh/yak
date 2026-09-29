@@ -4,7 +4,7 @@
 // each land asks a stronger hero to cross it.
 import { GRADE, tierOf } from './arms.ts'
 import { type Beast, BEASTS } from './beasts.ts'
-import { HOPS } from './levels.ts'
+import { hopsOf } from './levels.ts'
 import { maxHp, need, power } from './progress.ts'
 
 export let landLevel = (hops: number): number => Math.min(60, 1 + 7 * hops)
@@ -49,7 +49,8 @@ export let foeOf = (kind: string, level: string): Beast => {
   let key = `${kind}:${level}`
   let found = cache.get(key)
   if (found) return found
-  let beast = foeAt(BEASTS[kind], HOPS[level] ?? 0)
+  let beast = foeAt(BEASTS[kind], hopsOf(level))
+  if (cache.size >= 256) cache.delete(cache.keys().next().value!)
   cache.set(key, beast)
   return beast
 }

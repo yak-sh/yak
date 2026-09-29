@@ -2,7 +2,7 @@
 // point, adjusted onto safe ground; coordinates must themselves be walkable.
 // The worker validates the request before keeping it, and the page checks it
 // again before moving a hero.
-import { LEVELS, SIZE } from './levels.ts'
+import { levelOf, SIZE } from './levels.ts'
 import { comp, num, str } from './bundle.ts'
 import type { Bundle } from './net.ts'
 import { regionOf } from './regions.ts'
@@ -26,9 +26,8 @@ export let resumed = (
     : null
 }
 
-let cells = new Set(Object.values(LEVELS).map((l) => l.cell.join(',')))
 let inWorld = (x: number, z: number) =>
-  cells.has(`${Math.floor(x / SIZE)},${Math.floor(z / SIZE)}`)
+  Math.max(Math.abs(x), Math.abs(z)) < 100000 * SIZE
 
 let safe = (v: Vale, level: string, x: number, z: number) =>
   regionOf(x, z) == level && !!resumed(v, { x, z, yaw: 0 })
@@ -37,7 +36,7 @@ let safe = (v: Vale, level: string, x: number, z: number) =>
 export let destinationOf = (v: Vale, target: Target): Destination => {
   if ('level' in target) {
     let { level } = target
-    if (!Object.hasOwn(LEVELS, level)) {
+    if (!levelOf(level)) {
       throw new Error(`Unknown land: ${level}.`)
     }
     let [x, z] = arriveOf(level)
@@ -57,11 +56,11 @@ export let destinationOf = (v: Vale, target: Target): Destination => {
         }
       }
     }
-    throw new Error(`${LEVELS[level].name} has no safe arrival point.`)
+    throw new Error(`${levelOf(level)!.name} has no safe arrival point.`)
   }
   let { x, z } = target
   if (!Number.isFinite(x) || !Number.isFinite(z) || !inWorld(x, z)) {
-    throw new Error('Coordinates must be finite world metres in a known land.')
+    throw new Error('Coordinates must be finite world metres.')
   }
   let level = regionOf(x, z)
   if (!safe(v, level, x, z)) {

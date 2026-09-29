@@ -47,7 +47,7 @@ import { papers } from './papers.ts'
 import { ITEMS } from './items.ts'
 import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
-import { HOME, LEVELS, type Spot } from './levels.ts'
+import { HOME, levelOf, LEVELS, type Spot } from './levels.ts'
 import { connect, type Hero, type Me } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { FOES } from './soft.ts'
@@ -629,7 +629,7 @@ let react = (e: Event, heroAt: THREE.Vector3) => {
   } else if (e.type == 'faint') sound.fall(net.hero)
   else if (e.type == 'rise') h.toast('Back on your feet, by the fire.')
   else if (e.type == 'travel') {
-    h.toast(`${LEVELS[e.to]?.name ?? e.to}`, 'Toast-big')
+    h.toast(`${levelOf(e.to)?.name ?? e.to}`, 'Toast-big')
     sound.quest()
   } else if (e.type == 'say') h.toast(e.text)
   else if (e.type == 'wear') {

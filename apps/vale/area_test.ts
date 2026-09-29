@@ -36,6 +36,18 @@ Deno.test('a page sees nearby world rows and moving heroes', () => {
   ])
 })
 
+Deno.test('an area query finds stored rows in generated regions', () => {
+  let x = 5 * 256 + 128, z = 128
+  let select = matcher(areaOf(x, z, REACH).query, loadVocab([words]))
+  let row = (eid: string, px: number, pz: number) => ({
+    entity: { eid },
+    slain: { creature: 'hare-1', by: 'hero-1' },
+    place: placeOf(px, pz),
+  })
+  assertEquals(select([row('near', x + 3, z), row('far', x + 500, z)])
+    .map((b) => b.entity.eid), ['near'])
+})
+
 Deno.test('a nearby creature reaches another page without a stored row', () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })

@@ -49,7 +49,7 @@ import { homesNear } from './homes.ts'
 import { publish, pulses, replay } from './combat.ts'
 import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
-import { HOME, LEVELS, type Spot } from './levels.ts'
+import { HOME, type Spot } from './levels.ts'
 import { type Bundle, comp, type Net, num, str } from './net.ts'
 import { GIVERS, type Quest, QUESTS, questXp } from './quests.ts'
 import {
@@ -1713,7 +1713,7 @@ export let game = (
 
       // Into another region: its name, as the hero comes into it.
       let level = regionOf(body.x, body.z)
-      if (was && level != was && LEVELS[level]) {
+      if (was && level != was) {
         events.push({ type: 'travel', to: level })
       }
       was = level

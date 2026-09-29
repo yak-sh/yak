@@ -21,7 +21,7 @@ import { type Fire, flames } from './flames.ts'
 import { paletteOf } from './ground.ts'
 import { halo as glowTexture } from './halo.ts'
 import { instances } from './instances.ts'
-import { LEVELS, SIZE, type Spot } from './levels.ts'
+import { levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
 import type { ChunkProps } from './nature_mesh.ts'
 import type { Packed, Vec } from './mesh.ts'
 import { KINDS } from './props.ts'
@@ -531,14 +531,14 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // The look at the focus: each of the two regions' own, blended.
   let looks = () => {
     let b = blend(focus.x, focus.z)
-    let la = LEVELS[b.a]?.look ?? {}, lb = LEVELS[b.b]?.look ?? la
+    let la = levelOf(b.a)?.look ?? {}, lb = levelOf(b.b)?.look ?? la
     let haze = lerp(lb.haze ?? 1, la.haze ?? 1, b.t)
     fog.near = 40 / haze
     fog.far = 110 / haze
     leans.set(lb.sky ?? 0xffffff).lerp(new THREE.Color(la.sky ?? 0xffffff), b.t)
     lean = lerp(lb.tint ?? 0, la.tint ?? 0, b.t)
-    let wa = paletteOf(LEVELS[b.a] ?? LEVELS.mossvale).water
-    let wb = paletteOf(LEVELS[b.b] ?? LEVELS.mossvale).water
+    let wa = paletteOf(levelOf(b.a) ?? LEVELS.mossvale).water
+    let wb = paletteOf(levelOf(b.b) ?? LEVELS.mossvale).water
     ;(['deep', 'shallow', 'sheen'] as const).forEach((u, i) =>
       waterMat.uniforms[u].value.set(wb[i]).lerp(new THREE.Color(wa[i]), b.t)
     )

@@ -13,7 +13,7 @@ import type { View } from './deals.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
-import { LEVELS, type Spot } from './levels.ts'
+import { levelOf, type Spot } from './levels.ts'
 import type { Page } from './panel.ts'
 import type { Sheet } from './play.ts'
 import { GIVERS, questXp } from './quests.ts'
@@ -57,7 +57,7 @@ export type Task = {
 }
 
 let giverOf = (id: string) => GIVERS.find((g) => g.id == id)
-let nameOf = (level: string) => LEVELS[level]?.name ?? level
+let nameOf = (level: string) => levelOf(level)?.name ?? level
 
 // Going back to whoever asked, done once it is handed in.
 let back = (giver: string, done: boolean): Step => {
@@ -193,7 +193,7 @@ let haunts = (level: string, kind: string, fell: boolean): Spot[] => {
   let [ox, oz] = originOf(level)
   spots = [
     ...new Map(
-      dens(LEVELS[level]).filter((d) => holds(d.kind)).map((
+      dens(levelOf(level)!).filter((d) => holds(d.kind)).map((
         d,
       ): [string, Spot] => [d.name, [ox + d.place.at[0], oz + d.place.at[1]]]),
     ).values(),

@@ -9,7 +9,7 @@
 // generated slot, so no page has to be told what another grew.
 import { type Beast, BEASTS, type Haunt } from './beasts.ts'
 import { isA } from './features.ts'
-import { HOPS, type Level, LEVELS, type Place } from './levels.ts'
+import { hopsOf, type Level, levelOf, type Place } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
 import { nearby, originOf, regionOf } from './regions.ts'
 import { RADIUS, sheltered } from './sim.ts'
@@ -54,7 +54,7 @@ export let suits = (b: Beast, hops: number): boolean =>
  */
 export let dens = (lv: Level): Den[] =>
   Object.entries(BEASTS).flatMap(([kind, beast]) =>
-    !suits(beast, HOPS[lv.id] ?? 0)
+    !suits(beast, lv.habitat ?? hopsOf(lv.id))
       ? []
       : beast.haunts.flatMap((haunt) =>
         Object.entries(lv.places).flatMap(([name, place]) =>
@@ -85,7 +85,7 @@ let listed = new Map<string, Home[]>()
 export let homesOf = (id: string): Home[] => {
   let got = listed.get(id)
   if (got) return got
-  let lv = LEVELS[id], v = vale(), [ox, oz] = originOf(id)
+  let lv = levelOf(id)!, v = vale(), [ox, oz] = originOf(id)
   let blocked = (x: number, z: number) =>
     wallsNear(v, x, z).some((w) => Math.hypot(w.x - x, w.z - z) < w.r + 1.5)
   let places = Object.values(lv.places).map((p) => ({
@@ -177,6 +177,7 @@ export let homesOf = (id: string): Home[] => {
     let at = byEid.get(h.eid)
     return at ? [at] : []
   })
+  if (listed.size >= 64) listed.delete(listed.keys().next().value!)
   listed.set(id, homes)
   return homes
 }

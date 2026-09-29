@@ -33,7 +33,7 @@ import { focus, type Gaze, gaze, neck } from './gaze.ts'
 import { type Hand, handOf, kitOf } from './gear.ts'
 import { ITEMS, meshed, onGround } from './items.ts'
 import { laid } from './laid.ts'
-import { LEVELS } from './levels.ts'
+import { levelOf } from './levels.ts'
 import { pack } from './mesh.ts'
 import type { Drop, Frame } from './play.ts'
 import { GRADES, type Rarity } from './rarity.ts'
@@ -688,7 +688,7 @@ export let cast = (
           `road:${r.level}:${r.to}`,
           at.set(x, groundAt(v, x, z) + 3.4, z),
           `${r.side[0].toUpperCase() + r.side.slice(1)} road to <b>${
-            esc(LEVELS[r.to]?.name ?? r.to)
+            esc(levelOf(r.to)?.name ?? r.to)
           }</b>`,
           'Plate Plate-npc',
         )

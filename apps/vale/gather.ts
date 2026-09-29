@@ -8,7 +8,7 @@
 // (trades.ts) are counted from the gathered rows on their items: each is xp in
 // its node's trade. A low trade level makes harder nodes slow and less useful.
 import { isA } from './features.ts'
-import { HOPS, LEVELS } from './levels.ts'
+import { hopsOf, levelOf } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
 import { fallOf } from './rules.ts'
 import { type Natural, NATURE } from './nature.ts'
@@ -484,7 +484,7 @@ let placed = new Map<string, Node[]>()
 export let nodesOf = (id: string): Node[] => {
   let got = placed.get(id)
   if (got) return got
-  let lv = LEVELS[id], hops = HOPS[id] ?? 0, v = vale()
+  let lv = levelOf(id)!, hops = Math.min(8, hopsOf(id)), v = vale()
   let [ox, oz] = originOf(id)
   let places = Object.entries(lv.places).map(([name, p]) => ({
     name,
@@ -546,6 +546,7 @@ export let nodesOf = (id: string): Node[] => {
       }
     }
   }
+  if (placed.size >= 64) placed.delete(placed.keys().next().value!)
   placed.set(id, out)
   return out
 }

@@ -10,7 +10,7 @@
 // hang a skirt a few metres down, so a neighbour drawn at a coarser voxel
 // (stream.ts) never shows a crack between them.
 import { Top } from './features.ts'
-import { type Level, LEVELS } from './levels.ts'
+import { type Level, levelOf, LEVELS } from './levels.ts'
 import { type Out, quad, rgb, type Vec } from './mesh.ts'
 import { NONE, type Patch } from './terrain.ts'
 
@@ -124,7 +124,7 @@ let drift = ([r, g, b]: Vec, hue: number): Vec => {
  * corner. */
 export let groundChunk = (p: Patch, o: Out, roof = o) => {
   let V = p.voxel, N = p.n, C = N - 2
-  let pals = p.regions.map((id) => paletteOf(LEVELS[id] ?? LEVELS.mossvale))
+  let pals = p.regions.map((id) => paletteOf(levelOf(id) ?? LEVELS.mossvale))
   // Column (i, k) of the chunk, from -1 to C, as its patch has it.
   let H = (i: number, k: number) => p.layers[0][i + 1 + (k + 1) * N]
   let R = (i: number, k: number) => p.layers[1]?.[i + 1 + (k + 1) * N] ?? NONE

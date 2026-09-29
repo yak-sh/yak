@@ -12,9 +12,10 @@
 // Roads join levels next to each other: each runs from where a hero arrives in
 // the one to where they arrive in the other, and a level's road on a side
 // leads to the level in the cell that way. Every level is reached from
-// Mossvale, and the further from it by road, the wilder. A new level is a row
-// in its land's file under levels/.
+// Mossvale, and the further from it by road, the wilder. The first 40 levels
+// are rows under levels/; frontier.ts grows the rest from their cells.
 import type { Top } from './features.ts'
+import { frontier, frontierCell, frontierId } from './frontier.ts'
 import { COAST } from './levels/coast.ts'
 import { DEEP } from './levels/deep.ts'
 import { FIRE } from './levels/fire.ts'
@@ -59,6 +60,8 @@ export type Level = {
   places: Record<string, Place>
   /** the level each side's road leads to */
   roads: Partial<Record<Side, string>>
+  /** the authored family's wildlife band, when distance sets danger alone */
+  habitat?: number
   /** the kind of place the land is where none of its places holds, up to
    * the mountains at its rim: what covers it, grows and lies on it; grass,
    * oaks, pines and rock if none */
@@ -154,3 +157,35 @@ export let HOPS: Record<string, number> = ((hops: Record<string, number>) => {
   }
   return hops
 })({ [HOME]: 0 })
+
+let cells = new Map(Object.values(LEVELS).map((lv) => [lv.cell.join(','), lv]))
+let grown = new Map<string, Level>()
+
+/** The named land in a cell, authored or grown from its coordinates. */
+export let levelAt = (gx: number, gz: number): Level => {
+  let key = `${gx},${gz}`
+  let known = cells.get(key)
+  if (known) return known
+  let got = grown.get(key)
+  if (got) return got
+  if (grown.size >= 256) grown.delete(grown.keys().next().value!)
+  got = frontier(gx, gz, LEVELS, HOPS)
+  grown.set(key, got)
+  return got
+}
+
+/** Resolve a land id without requiring an ever-growing table of regions. */
+export let levelOf = (id: string): Level | undefined => {
+  let cell = frontierCell(id)
+  return LEVELS[id] ??
+    (cell && frontierId(...cell) == id && !cells.has(cell.join(','))
+      ? levelAt(...cell)
+      : undefined)
+}
+
+/** Encounter distance from Mossvale, retaining authored roads' difficulty. */
+export let hopsOf = (id: string): number => {
+  if (HOPS[id] != undefined) return HOPS[id]
+  let cell = frontierCell(id)
+  return cell ? Math.max(1, Math.ceil(Math.hypot(...cell) * 1.5)) : 0
+}

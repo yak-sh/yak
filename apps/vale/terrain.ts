@@ -28,7 +28,7 @@ import { dressed } from './buildings.ts'
 import { caveAt } from './caves.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
 import { NATURE } from './nature.ts'
-import { LEVELS, SIZE, type Spot } from './levels.ts'
+import { levelAt, levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
 import { bulk, halfOf, KINDS, raisedOf } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 import {
@@ -263,7 +263,7 @@ let weigh = (w: Hold, by: (f: Feature) => number | undefined) => {
 
 // The wild of a point's region, of the two it blends with the one `roll`
 // picks.
-let wildOf = (b: Blend, roll: number) => LEVELS[pick(b, roll)]?.wild
+let wildOf = (b: Blend, roll: number) => levelOf(pick(b, roll))?.wild
 
 // What grows underfoot where no place says: flowers and grass on green
 // ground. Nothing does on these tops unless a place asks for it.
@@ -472,6 +472,7 @@ export let builtOf = (id: string): Prop[] => {
       true,
     ))
   }
+  if (raised.size >= 128) raised.delete(raised.keys().next().value!)
   raised.set(id, built)
   return built
 }
@@ -494,13 +495,30 @@ let BUILT = Math.ceil(
 )
 
 /** What is built within the box from (x0, z0) to (x1, z1), in metres. */
-export let builtIn = (x0: number, z0: number, x1: number, z1: number): Prop[] =>
-  Object.values(LEVELS).filter(({ cell: [gx, gz] }) =>
-    gx * SIZE < x1 + BUILT && (gx + 1) * SIZE > x0 - BUILT &&
-    gz * SIZE < z1 + BUILT && (gz + 1) * SIZE > z0 - BUILT
-  ).flatMap((lv) =>
-    builtOf(lv.id).filter((p) => p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1)
-  )
+export let builtIn = (
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+): Prop[] => {
+  let out: Prop[] = []
+  for (
+    let gz = Math.floor((z0 - BUILT) / SIZE);
+    gz <= Math.floor((z1 + BUILT) / SIZE);
+    gz++
+  ) {
+    for (
+      let gx = Math.floor((x0 - BUILT) / SIZE);
+      gx <= Math.floor((x1 + BUILT) / SIZE);
+      gx++
+    ) {
+      for (let p of builtOf(levelAt(gx, gz).id)) {
+        if (p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1) out.push(p)
+      }
+    }
+  }
+  return out
+}
 
 /** What is built within `r` metres of (x, z). */
 export let builtNear = (x: number, z: number, r: number): Prop[] =>
@@ -856,7 +874,7 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
       let most = w.fs[lead(w, 0.42)]
       let paved = a.villages.some((v) =>
         dist(x, z, v.at) <
-          4.75 + rand(gi, gk, 5 + LEVELS[v.level].seed * 101) * 0.75
+          4.75 + rand(gi, gk, 5 + levelOf(v.level)!.seed * 101) * 0.75
       )
       let border = borderOf(b)
       top[j] = c * V >= 19

@@ -24,7 +24,7 @@ import { LODES } from './gather.ts'
 import { RACK } from './gear.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
-import { HOPS, LEVELS } from './levels.ts'
+import { hopsOf, levelOf, LEVELS } from './levels.ts'
 import type { Giver } from './quests.ts'
 import { hashOf, stream } from './rand.ts'
 import { RARITIES } from './rarity.ts'
@@ -169,16 +169,16 @@ export let priceOf = (kind: string): number =>
 
 /** The level a hero of a land is about, for valuing a deed there. */
 export let lvlOf = (level: string): number =>
-  Math.min(60, landLevel(HOPS[level] ?? 0) + 1)
+  Math.min(60, landLevel(hopsOf(level)) + 1)
 
 // The kinds of creature a land grows.
 let bred = (level: string): string[] =>
-  LEVELS[level] ? [...new Set(dens(LEVELS[level]).map((d) => d.kind))] : []
+  levelOf(level) ? [...new Set(dens(levelOf(level)!).map((d) => d.kind))] : []
 
 // What a land's creatures leave, and what its nodes give.
 let found = (level: string): string[] => {
-  let hops = HOPS[level] ?? 0
-  let places = Object.values(LEVELS[level]?.places ?? {})
+  let hops = Math.min(8, hopsOf(level))
+  let places = Object.values(levelOf(level)?.places ?? {})
   let gathered = Object.values(LODES).filter((l) =>
     hops >= l.hops[0] && hops <= l.hops[1] &&
     places.some((p) => l.near.some((near) => isA(p.kind, near)))

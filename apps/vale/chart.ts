@@ -5,7 +5,7 @@
 // and a faint line where one region meets the next. Pure, so a worker paints
 // the map's (grow.ts) and a script paints the whole world.
 import { paletteOf } from './ground.ts'
-import { LEVELS } from './levels.ts'
+import { levelOf } from './levels.ts'
 import { bulk, KINDS } from './props.ts'
 import { clamp } from './rand.ts'
 import { CHUNK, patchOf, vale, WATER } from './terrain.ts'
@@ -70,7 +70,7 @@ export let chart = (
     for (let i = 0; i < N; i++) {
       let { p, j } = col(i, k), h = H(i, k), at = i + k * N
       let id = p.regions[p.region[j]]
-      let pal = paletteOf(LEVELS[id])
+      let pal = paletteOf(levelOf(id)!)
       regions[at] = id
       if (h <= WATER) {
         let [deep, shallow] = pal.water.map(bytes)
@@ -84,7 +84,9 @@ export let chart = (
         (2 * m)
       let own = bytes(pal.tops[p.top[j]])
       let s = 0.5 + p.share[j] / 510
-      let next = bytes(paletteOf(LEVELS[p.regions[p.other[j]]]).tops[p.top[j]])
+      let next = bytes(
+        paletteOf(levelOf(p.regions[p.other[j]])!).tops[p.top[j]],
+      )
       put(
         at,
         own.map((c, n) => c * s + next[n] * (1 - s)),

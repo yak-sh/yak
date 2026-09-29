@@ -1,5 +1,6 @@
-// A map of the world, north up: it opens near the hero and zooms out to all
-// its lands. Nearby ground is charted off the page's thread (chart.ts); at
+// A map of the world, north up: it opens near the hero and zooms out to a
+// broad view that can pan through generated country. Nearby ground is charted
+// off the page's thread (chart.ts); at
 // world scale, the land palette gives an immediate overview. Over it,
 // who is where, written only while it is open: the hero's arrow, the other
 // players, the people with a quest, the nodes to gather (work.ts), coloured
@@ -11,7 +12,14 @@ import { Top } from './features.ts'
 import { glyph } from './glyphs.ts'
 import { paletteOf } from './ground.ts'
 import type { Mark } from './journal.ts'
-import { LEVELS, type Side, SIZE, type Spot } from './levels.ts'
+import {
+  levelAt,
+  levelOf,
+  LEVELS,
+  type Side,
+  SIZE,
+  type Spot,
+} from './levels.ts'
 import { type Box, pan, place, view, WORLD, zoom } from './mapview.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
@@ -94,7 +102,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
 
   // The view is a square of world metres. The ground may lag a drag or zoom;
   // its last chart is transformed until the next one has been painted.
-  let box = WORLD
+  let box = view([0, 0], WORLD[2])
   let drawn = box
   let shown = ''
   let openWas = false
@@ -132,19 +140,25 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let overview = () => {
     ctx.fillStyle = '#30382d'
     ctx.fillRect(0, 0, 320, 320)
-    for (let lv of Object.values(LEVELS)) {
-      let [ox, oz] = originOf(lv.id)
-      let [u, v] = place(box, [ox, oz])
-      let side = SIZE / box[2] * 320
-      if (u > 1 || v > 1 || u + side / 320 < 0 || v + side / 320 < 0) {
-        continue
+    let gx0 = Math.floor(box[0] / SIZE), gz0 = Math.floor(box[1] / SIZE)
+    let gx1 = Math.floor((box[0] + box[2]) / SIZE)
+    let gz1 = Math.floor((box[1] + box[2]) / SIZE)
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        let lv = levelAt(gx, gz)
+        let [ox, oz] = [gx * SIZE, gz * SIZE]
+        let [u, v] = place(box, [ox, oz])
+        let side = SIZE / box[2] * 320
+        if (u > 1 || v > 1 || u + side / 320 < 0 || v + side / 320 < 0) {
+          continue
+        }
+        let colors = paletteOf(lv).tops
+        let color = Object.values(lv.look?.ground ?? {})[0] ?? colors[Top.grass]
+        ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`
+        ctx.fillRect(u * 320, v * 320, side, side)
+        ctx.strokeStyle = 'rgba(35, 40, 32, 0.3)'
+        ctx.strokeRect(u * 320, v * 320, side, side)
       }
-      let colors = paletteOf(lv).tops
-      let color = Object.values(lv.look?.ground ?? {})[0] ?? colors[Top.grass]
-      ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`
-      ctx.fillRect(u * 320, v * 320, side, side)
-      ctx.strokeStyle = 'rgba(35, 40, 32, 0.3)'
-      ctx.strokeRect(u * 320, v * 320, side, side)
     }
     let roads = new Set<string>()
     ctx.strokeStyle = '#c1a371'
@@ -168,6 +182,23 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         ctx.stroke()
       }
     }
+    // At this scale a line between arrivals is enough to show the paths in
+    // generated country, without building every detailed road for the map.
+    for (let gz = gz0; gz <= gz1; gz++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        let a = levelAt(gx, gz)
+        for (let [dx, dz] of [[1, 0], [0, 1]]) {
+          let b = levelAt(gx + dx, gz + dz)
+          if (LEVELS[a.id] && LEVELS[b.id]) continue
+          let [u, v] = place(box, arriveOf(a.id))
+          let [w, q] = place(box, arriveOf(b.id))
+          ctx.beginPath()
+          ctx.moveTo(u * 320, v * 320)
+          ctx.lineTo(w * 320, q * 320)
+          ctx.stroke()
+        }
+      }
+    }
   }
   let draw = () => {
     let id = key()
@@ -181,7 +212,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       return
     }
     overview()
-    // The 2,560 m chart takes seconds even off-thread. At world scale, the
+    // The broad chart takes seconds even off-thread. At world scale, the
     // overview is the useful detail: discovered places and the roads to them.
     if (box[2] == WORLD[2]) return
     let m = box[2] / 320
@@ -240,7 +271,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       action == 'here'
         ? view(hero)
         : action == 'world'
-        ? WORLD
+        ? view(hero, WORLD[2])
         : zoom(box, action == 'in' ? -1 : 1),
     )
     draw()
@@ -302,15 +333,17 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         return
       }
       hero = [f.body.x, f.body.z]
-      if (!openWas || levelWas != f.level) {
+      if (!openWas) {
         openWas = true
-        levelWas = f.level
         setView(view(hero))
-        panel.head(esc(LEVELS[f.level]?.name ?? f.level))
+      }
+      if (levelWas != f.level) {
+        levelWas = f.level
+        panel.head(esc(levelOf(f.level)?.name ?? f.level))
       }
       if (!drag && pending == undefined) draw()
       scale.textContent = box[2] == WORLD[2]
-        ? 'Whole world'
+        ? `${box[2]} m across`
         : `${box[2]} m across`
       if (localWas != explored || boxWas != key()) {
         localWas = explored
@@ -341,13 +374,13 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       known = new Set(visited)
       let destinations = [...visited].filter((id) =>
         id != here?.level && !!villageOf(id)
-      ).sort((a, b) => LEVELS[a].name.localeCompare(LEVELS[b].name))
+      ).sort((a, b) => levelOf(a)!.name.localeCompare(levelOf(b)!.name))
       let choicesHtml = here
         ? `<b>Travel by fire</b><span>Choose a village fire you have found.</span><div class=Map_Fires>${
           destinations.length
             ? destinations.map((id) =>
               `<button class="Btn Btn-small" data-fire="${esc(id)}">${
-                esc(LEVELS[id].name)
+                esc(levelOf(id)!.name)
               }</button>`
             ).join('')
             : '<span>Explore to find another village fire.</span>'
@@ -364,7 +397,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         return fire && visible(...fire.at)
           ? [
             `<i class=Map_Fire style="${at(...fire.at)}"${
-              tipped({ name: `${LEVELS[id].name} fire` })
+              tipped({ name: `${levelOf(id)!.name} fire` })
             }>${glyph('flame')}</i>`,
           ]
           : []
@@ -372,8 +405,8 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         (box[2] > 320
           ? labels.filter(({ at: p }) => visible(...p)).map(({ id, at: p }) =>
             `<span class=Map_Region style="${at(...p)}"${
-              tipped({ name: LEVELS[id].name })
-            }>${esc(LEVELS[id].name)}</span>`
+              tipped({ name: levelOf(id)!.name })
+            }>${esc(levelOf(id)!.name)}</span>`
           ).join('')
           : '') +
         goals.filter((g) => visible(...g.at)).map((g) =>
@@ -393,7 +426,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         (box[2] == 320 ? exits(f.level) : []).filter((r) => visible(...r.at))
           .map((r) =>
             `<span class="Map_Road Map_Road-${r.side}" style="${at(...r.at)}">${
-              esc(LEVELS[r.to]?.name ?? r.to)
+              esc(levelOf(r.to)?.name ?? r.to)
             }</span>`
           ).join('') +
         f.givers.filter((g) => box[2] <= 640 && visible(g.x, g.z)).map((g) =>
