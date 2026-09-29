@@ -2,7 +2,7 @@
 // current look wins over an older name; an ambiguous name needs an eid.
 import type { Bundle } from './net.ts'
 import { comp } from './bundle.ts'
-import { LEVELS } from './levels.ts'
+import { levelOf, LEVELS } from './levels.ts'
 import { GIVERS } from './quests.ts'
 import { eidOf } from './villager-id.ts'
 
@@ -22,6 +22,8 @@ export let resolveTarget = async (
 ): Promise<Target | null> => {
   let wanted = nameOf(input.trim())
   if (!wanted) return null
+  let grown = levelOf(input.trim())
+  if (grown) return { level: grown.id }
   let land = Object.values(LEVELS).find((l) =>
     wanted == nameOf(l.id) || wanted == nameOf(l.name)
   )

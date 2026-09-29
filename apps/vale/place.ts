@@ -1,7 +1,7 @@
 // A position answered by the game's live relay or by its saved `seen` row.
 // The two sources have the same coordinates, but only `seen` survives a
 // disconnected page.
-import { LEVELS } from './levels.ts'
+import { levelOf } from './levels.ts'
 import { regionOf } from './regions.ts'
 
 export type Place = {
@@ -25,7 +25,7 @@ export let placeOf = (
     level = regionOf(x, z)
   }
   if (
-    typeof level != 'string' || !Object.hasOwn(LEVELS, level) ||
+    typeof level != 'string' || !levelOf(level) ||
     typeof x != 'number' || !Number.isFinite(x) ||
     typeof z != 'number' || !Number.isFinite(z) ||
     regionOf(x, z) != level
@@ -36,6 +36,6 @@ export let placeOf = (
 
 export let placeText = (place: Place, source: 'live' | 'saved'): string =>
   `${source == 'live' ? 'Live position' : 'Last saved position'}: **${
-    LEVELS[place.level].name
+    levelOf(place.level)?.name ?? place.level
   }** (${place.level}), x ${place.x}, z ${place.z}` +
   (place.at ? `, ${new Date(place.at).toISOString()}` : '')

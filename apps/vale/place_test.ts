@@ -1,6 +1,12 @@
 // A command sees a live position when a page is playing, then the saved place.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { flat } from './terrain.ts'
+import { placeOf } from './place.ts'
+
+Deno.test('a connected position can name a generated land', () => {
+  let where = { level: 'frontier_20_20', x: 5248, z: 5248 }
+  assertEquals(placeOf({ position: where }, 'position'), where)
+})
 import { workerOf } from './worker.js'
 
 Deno.test('where returns a live position, then the saved spot, to its owner', async () => {

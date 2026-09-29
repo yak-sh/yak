@@ -32,6 +32,9 @@ Deno.test('command target names choose lands, villagers, and current heroes', as
   assertEquals(await resolveTarget('Tomb Sands', query), {
     level: 'tombsands',
   })
+  assertEquals(await resolveTarget('frontier_20_20', query), {
+    level: 'frontier_20_20',
+  })
   assertEquals(await resolveTarget('Elder Wren', query), {
     eid: eidOf('wren'),
   })
