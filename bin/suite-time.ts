@@ -236,11 +236,32 @@ export async function timed(command: string, args: string[]): Promise<Sample> {
   }
 }
 
+/** The suite a run times: its name, and whatever a `deno task` run was
+ * handed past its own task. A run narrowed to a path or a platform times less
+ * than the whole suite, so it is a suite of its own, and never banks its time
+ * as the whole suite's floor nor is judged against it.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(suiteOf('test', 'deno', ['task', 'test:run']), 'test')
+ * assertEquals(
+ *   suiteOf('test', 'deno', ['task', 'test:run', '--only=deno', 'workers']),
+ *   'test --only=deno workers',
+ * )
+ * assertEquals(suiteOf('ci/tests', 'bash', ['-c', 'x']), 'ci/tests')
+ * ```
+ */
+export let suiteOf = (name: string, command: string, args: string[]) =>
+  command == 'deno' && args[0] == 'task' && args.length > 2
+    ? [name, ...args.slice(2)].join(' ')
+    : name
+
 if (import.meta.main) {
   let [name, command, ...args] = Deno.args
   // CI's custom shell supplies the step name via env, and a script path as {0}.
   if (name === '--ci') name = `ci/${Deno.env.get('SUITE_STEP') ?? 'unknown'}`
   else if (Deno.env.get('GITHUB_ACTIONS') === 'true') name = `ci/suite/${name}`
+  name = suiteOf(name, command, args)
   if (!name || !command) {
     throw new Error('usage: suite-time.ts NAME COMMAND [ARGS...]')
   }
