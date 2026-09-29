@@ -97,6 +97,7 @@ export let chatbox = (
 
   let me: Me | null = null
   let speaks = () => !!me?.person && me.writes
+  let commands: ReturnType<Net['commands']> | null = null
 
   // What the store holds: the lines said in this level, newest first, and
   // who made each hero, which the rule asks.
@@ -219,14 +220,20 @@ export let chatbox = (
   // The opener keeps the line's focus, so a second tap folds it away.
   opener.addEventListener('pointerdown', (e) => e.preventDefault())
   opener.addEventListener('click', () => open ? hide() : show())
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault()
     let text = clean(input.value)
     input.value = ''
-    let parsed = slash(text, {
-      person: me?.person ?? null,
-      role: me?.role ?? null,
-    })
+    let parsed
+    try {
+      parsed = text.startsWith('/')
+        ? slash(text, await (commands ??= net.commands()))
+        : null
+    } catch (e) {
+      commands = null
+      notice(e instanceof Error ? e.message : 'Commands unavailable.')
+      return
+    }
     if (parsed) {
       if ('error' in parsed) notice(parsed.error)
       else if ('help' in parsed) {

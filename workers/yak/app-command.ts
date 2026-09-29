@@ -32,6 +32,27 @@ export let toolsOf = async (
   )
 }
 
+/** Commands this page caller can discover, with only the fields a page needs
+ * to present and fill one. Access is decided here, beside commandIn. */
+export let commandsIn = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+) =>
+  Object.fromEntries(
+    Object.entries(await toolsOf(env, space, app))
+      .filter(([, tool]) =>
+        tool.discoverable !== false && mayCall(tool.floor, who.person, who.role)
+      )
+      .map(([name, tool]) => [name, {
+        description: tool.description,
+        input: tool.input,
+        required: tool.required,
+        model: tool.model,
+      }]),
+  )
+
 export let commandAt = async (
   env: Env,
   space: Space,

@@ -1,38 +1,21 @@
-// Chat's slash form is an adapter for this app's declared commands. It reads
-// their names and argument types from vocab.json; the app command door checks
-// access and runs them exactly as it does for an agent.
-import words from './vocab.json' with { type: 'json' }
-import { mayCall } from '@yaks/tools/access'
+// Chat's slash form reads the commands this caller may discover from the app
+// door. That door owns the access rule and runs the command after this parses it.
 
 type Arg = { type?: string; enum?: unknown[]; description?: string }
 type Tool = {
-  tool?: boolean
   description?: string
   input?: Record<string, Arg>
   required?: string[]
-  floor?: string
-  discoverable?: boolean
   model?: boolean
 }
-let tools: Record<string, Tool> = {}
-for (let [name, def] of Object.entries(words.$defs)) {
-  if ('tool' in def && def.tool === true) tools[name] = def
-}
+export type Tools = Record<string, Tool>
 
 export type Command = {
   name: string
   args: Record<string, string | number | boolean>
 }
 export type Slash = { command: Command } | { error: string } | { help: string }
-export type Caller = { person: string | null; role: string | null }
-
-let seen = (tool: Tool, caller: Caller) => {
-  let floor = tool.floor
-  return tool.discoverable !== false && tool.model !== true &&
-    (!floor ||
-      (floor == 'person' || floor == 'editor' || floor == 'owner') &&
-        mayCall(floor, caller.person, caller.role))
-}
+let seen = (tool: Tool) => tool.model !== true
 
 let shape = (arg: Arg) =>
   arg.type == 'boolean' ? 'on|off' : arg.enum?.join('|') || arg.type || 'value'
@@ -46,10 +29,10 @@ let usage = (name: string, tool: Tool) => {
   return `/${name}${args.length ? ` ${args.join(' ')}` : ''}`
 }
 
-let help = (name: string | undefined, caller: Caller) => {
+let help = (name: string | undefined, tools: Tools) => {
   if (name) {
     let tool = tools[name]
-    if (!tool || !seen(tool, caller)) {
+    if (!tool || !seen(tool)) {
       return { error: `No available command /${name}.` }
     }
     let args = Object.entries(tool.input ?? {})
@@ -65,7 +48,7 @@ let help = (name: string | undefined, caller: Caller) => {
         }`,
     }
   }
-  let listed = Object.entries(tools).filter(([, tool]) => seen(tool, caller))
+  let listed = Object.entries(tools).filter(([, tool]) => seen(tool))
   return {
     help: `**Commands**\n\n${
       listed.map(([name, tool]) =>
@@ -127,7 +110,7 @@ let tokens = (line: string): string[] | null => {
 /** A declared app command, a usage error, or null for ordinary chat. */
 export let slash = (
   text: string,
-  caller: Caller = { person: null, role: null },
+  tools: Tools,
 ): Slash | null => {
   if (!text.startsWith('/')) return null
   let parts = tokens(text.slice(1).trim())
@@ -136,10 +119,10 @@ export let slash = (
   let name = word?.toLowerCase() ?? ''
   if (name == 'help') {
     if (argsIn.length > 1) return { error: 'Use /help <command>.' }
-    return help(argsIn[0]?.replace(/^\//, '').toLowerCase(), caller)
+    return help(argsIn[0]?.replace(/^\//, '').toLowerCase(), tools)
   }
   let tool = tools[name]
-  if (!tool || !seen(tool, caller)) {
+  if (!tool || !seen(tool)) {
     return { error: `Unknown command: /${name}. Try /help.` }
   }
   let inputs = tool.input ?? {}

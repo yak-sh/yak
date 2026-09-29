@@ -20,6 +20,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
 import { groupOf } from './party-state.ts'
+import type { Tools } from './slash.ts'
 import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
@@ -380,6 +381,12 @@ export let connect = (base: URL) => {
     gathered: (): Bundle[] => join('gathered', rows('gathered'), 'gathered'),
     keep,
     command,
+    /** The commands this caller may discover, as the app door decides. */
+    commands: async (): Promise<Tools> => {
+      let r = await fetch(new URL('commands', base))
+      if (!r.ok) throw new Error(`Commands unavailable (${r.status})`)
+      return await r.json()
+    },
     /** send what is waiting, if the pace allows */
     tick: () => {
       if (waiting.length && Date.now() - last >= PACE) flush()

@@ -113,7 +113,7 @@ import { answered, watched } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { refuse } from './tool.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
-import { commandIn } from './app-command.ts'
+import { commandIn, commandsIn } from './app-command.ts'
 import { source, tooMany, within } from './rate.ts'
 import {
   bearerOf,
@@ -1022,6 +1022,11 @@ let api = async (
     )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
+  if (path == '/commands') {
+    if (req.method != 'GET') return json(405, 'method_not_allowed')
+    if (!mayRead) return refused('not_a_reader')
+    return Response.json(await commandsIn(env, space, app, who))
+  }
   if (path == '/command') {
     if (!mayRead) return refused('not_a_reader')
     let [route] = commandRoutes({

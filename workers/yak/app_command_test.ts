@@ -72,6 +72,27 @@ Deno.test('a page invokes declared commands as its owner; the command door refus
     )
     return { status: res.status, body: await res.json() }
   }
+  let commands = async (cookie: string) => {
+    let res = await apps.fetch(
+      visit('/cookbook/api/commands', { headers: { cookie } }),
+      env,
+    )
+    assertEquals(res.status, 200)
+    return await res.json()
+  }
+  let ownerTools = await commands(await as(ADA))
+  assertEquals(ownerTools.note, {
+    description: 'Keep a note',
+    input: { title: { type: 'string' } },
+    required: ['title'],
+  })
+  assertEquals(
+    ownerTools.owner_word?.description,
+    'Ask the app owner for a word',
+  )
+  let editorTools = await commands(await as(ELI))
+  assertEquals(editorTools.note?.description, 'Keep a note')
+  assertEquals(editorTools.owner_word, undefined)
 
   let made = await post(await as(ADA), 'note', { title: 'A page note' })
   assertEquals(made.status, 200)

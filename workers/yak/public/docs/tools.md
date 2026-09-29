@@ -119,6 +119,12 @@ name.
 goes beside them only where two apps you can reach have a command of the same
 name.
 
+An app page can ask `GET ./api/commands` for its own commands. The response is
+an object keyed by command name, with each command's `description`, `input`,
+`required` and `model` fields. It includes only commands this visitor may
+discover and call, using the same access rule as `POST ./api/command`. A page
+can use it to build its own command menu without copying that access rule.
+
 **The tool list has to be fixed.** A directory such as OpenAI's snapshots
 `tools/list` the day a connector is submitted and serves that snapshot forever —
 only `tools/call` ever reaches the live server

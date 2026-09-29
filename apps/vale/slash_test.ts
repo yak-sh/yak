@@ -1,9 +1,12 @@
 // Chat's slash form calls the commands declared by the app, with typed args.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slash as parse } from './slash.ts'
+import words from './vocab.json' with { type: 'json' }
 
-let owner = { person: 'hero', role: 'owner' }
-let slash = (text: string) => parse(text, owner)
+let all = Object.fromEntries(
+  Object.entries(words.$defs).filter(([, def]) => 'tool' in def && def.tool),
+)
+let slash = (text: string) => parse(text, all)
 
 Deno.test('slash adapts declared app commands and leaves chat alone', () => {
   assertEquals(slash('hello /damage on'), null)
@@ -59,8 +62,8 @@ Deno.test('slash adapts declared app commands and leaves chat alone', () => {
 })
 
 Deno.test('help uses declared commands and omits NPC model tools', () => {
-  let player = { person: 'hero', role: null }
-  let answer = parse('/help', player)
+  let available = { gather_wood: all.gather_wood, where: all.where }
+  let answer = parse('/help', available)
   if (!answer || !('help' in answer)) throw new Error('help missing')
   assertStringIncludes(answer.help, '/gather_wood')
   assertStringIncludes(answer.help, '/where')
@@ -68,14 +71,14 @@ Deno.test('help uses declared commands and omits NPC model tools', () => {
   assertEquals(answer.help.includes('/damage'), false)
   assertEquals(answer.help.includes('/think'), false)
   assertEquals(answer.help.includes('/tell'), false)
-  let detail = parse('/help gather_wood', player)
+  let detail = parse('/help gather_wood', available)
   if (!detail || !('help' in detail)) throw new Error('detail missing')
   assertStringIncludes(detail.help, '/gather_wood')
   assertStringIncludes(detail.help, 'count')
-  assertEquals(parse('/help teleport', player), {
+  assertEquals(parse('/help teleport', available), {
     error: 'No available command /teleport.',
   })
-  assertEquals(parse('/teleport tombsands', player), {
+  assertEquals(parse('/teleport tombsands', available), {
     error: 'Unknown command: /teleport. Try /help.',
   })
   let admin = slash('/help')
