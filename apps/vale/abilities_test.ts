@@ -125,19 +125,22 @@ Deno.test('Store admits an invented ability only within its effect budget', asyn
   await g.apply(row('small', [{ kind: 'damage', scale: 1 }]))
   assertEquals((await g.read('.ability_design')).length, 1)
   await assertRejects(
-    () => g.apply(row('giant', [{ kind: 'damage', scale: 10 }])),
+    async () => await g.apply(row('giant', [{ kind: 'damage', scale: 10 }])),
     Error,
     'power budget',
   )
   await assertRejects(
-    () =>
-      g.apply(row('double', [
+    async () =>
+      await g.apply(row('double', [
         { kind: 'damage', scale: 1 },
         { kind: 'damage', scale: 1 },
       ])),
   )
-  await assertRejects(() =>
-    g.apply([{
+  let strange = row('strange', [{ kind: 'damage', scale: 1 }])
+  strange[0].ability_design.shape = 'sphere'
+  await assertRejects(async () => await g.apply(strange))
+  await assertRejects(async () =>
+    await g.apply([{
       entity: { eid: uuidOf('mossvale/ability/empty') },
       ability_design: {
         kind: 'empty',
