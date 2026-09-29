@@ -11,6 +11,9 @@ export let EDGE = 56
 let SIDE = EDGE * 2 + 1
 let count = SIDE * SIDE
 let NEXT = [1, -1, SIDE, -SIDE]
+// The cells round a cell, east, south, west and north; and east and south.
+let AROUND: Spot[] = [[1, 0], [0, 1], [-1, 0], [0, -1]]
+let AHEAD = [1, SIDE]
 let index = (i: number, k: number) => i + EDGE + (k + EDGE) * SIDE
 let point = (j: number): Spot => [j % SIDE - EDGE, Math.floor(j / SIDE) - EDGE]
 let inside = (i: number, k: number) =>
@@ -87,7 +90,7 @@ export let streets = (
     for (let j of queue) {
       let [i, k] = point(j)
       cells.set(j, rise(at[0] + i, at[1] + k))
-      for (let [di, dk] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      for (let [di, dk] of AROUND) {
         let a = i + di, b = k + dk, next = index(a, b)
         if (a * a + b * b > 36 || seen.has(next) || blocked[next]) continue
         seen.add(next), queue.push(next)
@@ -129,7 +132,7 @@ export let streets = (
         end = j
         break
       }
-      for (let [di, dk] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+      for (let [di, dk] of AROUND) {
         let a = u + di, c = v + dk
         if (!inside(a, c)) continue
         let next = index(a, c)
@@ -175,8 +178,9 @@ export let streets = (
   for (let pass = 0; pass < 400; pass++) {
     let moved = false
     for (let j of order) {
-      for (let next of [j + 1, j + SIDE]) {
-        if (next == j + 1 && j % SIDE == SIDE - 1) continue
+      for (let d of AHEAD) {
+        let next = j + d
+        if (d == 1 && j % SIDE == SIDE - 1) continue
         let y = ys[j], other = ys[next]
         if (Number.isNaN(other) || Math.abs(other - y) <= 0.48) continue
         let excess = Math.abs(other - y) - 0.48
