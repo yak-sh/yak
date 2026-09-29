@@ -2,6 +2,7 @@
 // visitors cannot use the store-backed inspection door.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { flat } from './terrain.ts'
+import { eidOf } from './villager-id.ts'
 import { workerOf } from './worker.js'
 
 let HERO = '01234567-89ab-cdef-0123-456789abcdef'
@@ -21,6 +22,12 @@ let ask = {
   created: { by: 'owner-person', at: '2026-09-28T00:00:00Z' },
   companion: { status: 'walking', x: 10, z: 20 },
 }
+let project = (row: Record<string, unknown>, line: string) =>
+  Object.fromEntries(
+    Object.entries(row).filter(([name]) =>
+      name == 'entity' || line.includes(`?${name}`) || line.includes(`.${name}`)
+    ),
+  )
 
 Deno.test('inspect worker checks owner and reads live hero state', async () => {
   let reads: string[] = []
@@ -43,7 +50,7 @@ Deno.test('inspect worker checks owner and reads live hero state', async () => {
           : line.startsWith('.gathered.directive=')
           ? [{ entity: { eid: 'log' }, gathered: { directive: 'ask' } }]
           : line.startsWith('.eid=')
-          ? [hero]
+          ? [project(hero, line)]
           : []
         return Promise.resolve(Response.json(rows))
       },
@@ -70,7 +77,22 @@ Deno.test('inspect worker checks owner and reads live hero state', async () => {
 
 Deno.test('inspect worker resolves land and villager names', async () => {
   let worker = workerOf(flat(5))
-  let env = { STORE: { fetch: () => Promise.resolve(Response.json([])) } }
+  let elder = {
+    entity: { eid: eidOf('wren') },
+    doc: { title: 'Elder Wren' },
+    villager: { id: 'wren', level: 'mossvale', home: 'oak grove' },
+  }
+  let env = {
+    STORE: {
+      fetch: (path: string) => {
+        let line = new URL(path, 'https://store.test/').searchParams.get('q') ??
+          ''
+        return Promise.resolve(Response.json(
+          line.startsWith('.eid=') ? [project(elder, line)] : [],
+        ))
+      },
+    },
+  }
   let ask = (target: string) =>
     worker.fetch(
       new Request('https://yourname.yaks.app/vale/inspect', {

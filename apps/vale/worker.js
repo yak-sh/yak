@@ -197,7 +197,11 @@ let inspect = async (req, env, v) => {
   if ('level' in to) return new Response(inspectOf(to))
 
   let id = to.eid
-  let [stored] = await read(env.STORE, `.eid=${JSON.stringify(id)}&?created`)
+  let [stored] = await read(
+    env.STORE,
+    `.eid=${JSON.stringify(id)}` +
+      '&?player&?villager&?directive&?item&?position&?seen&?companion&?doc&?created',
+  )
   let at = await targetPlace(env, v, id)
   let giver = GIVERS.find((g) => eidOf(g.id) == id)
   let row = stored ?? (giver
