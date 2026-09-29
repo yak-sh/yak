@@ -150,7 +150,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
   // — named after the child — so a child that merely inherited its parent's
   // home is not mistaken for the owner of it, and one without a checkout of
   // its own finds nothing there.
-  collecting(
+  let collected = collecting(
     h.g,
     h.fx,
     (error, session) => report(error, { phase: 'worktree', session }),
@@ -211,6 +211,9 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     },
     release: async () => {
       await auth.close()
+      // The effects have stopped, so no removal starts after this; the ones
+      // under way read the graph, which closes once this returns.
+      await collected()
       await diagnostics().drain()
       detach()
     },

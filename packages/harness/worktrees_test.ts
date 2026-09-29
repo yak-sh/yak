@@ -268,7 +268,7 @@ test('a child that is over hands its checkout back, and gets it again on resume'
   // checkouts go until this one puts it back.
   let h = await harness()
   let failed: unknown[] = []
-  collecting(h.g, h.fx, (error) => failed.push(error), f.root)
+  let collected = collecting(h.g, h.fx, (error) => failed.push(error), f.root)
   try {
     let path = await f.cut('child-one')
     assertEquals(cutFor('child:one', f.root), path)
@@ -300,6 +300,7 @@ test('a child that is over hands its checkout back, and gets it again on resume'
     assertEquals(await f.branches(), 'main\nparent\ntask-child-one')
     assertEquals(failed, [])
   } finally {
+    await collected()
     h.close()
     await f.free()
   }

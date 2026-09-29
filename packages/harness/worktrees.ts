@@ -86,18 +86,25 @@ export let collect = async (
  * is over, however that ending arrived — a `stop` entry in the transcript, the
  * exit of the process behind it, or the pool letting go of a child. Three
  * handlers, one test, so none of them can remove the worktree of a session that
- * is still running. */
+ * is still running. Returns what waits for the removals still under way, for
+ * whoever closes the graph once the handlers have stopped. */
 export let collecting = (
   g: Graph,
   fx: Effects,
   report: (error: unknown, session: Eid) => void,
   dir: string,
-): void => {
-  // Never awaited: a `git worktree remove` must not hold open the transaction
-  // that ended the session, and whatever a crash leaves behind is for the
-  // startup sweep to find.
-  let at = (session: Eid) =>
-    void collect(g, session, dir).catch((error) => report(error, session))
+): () => Promise<void> => {
+  // Never awaited by the handler: a `git worktree remove` must not hold open
+  // the transaction that ended the session, and whatever a crash leaves behind
+  // is for the startup sweep to find.
+  let running = new Set<Promise<void>>()
+  let at = (session: Eid) => {
+    let done = collect(g, session, dir).then(
+      () => {},
+      (error) => report(error, session),
+    ).finally(() => running.delete(done))
+    running.add(done)
+  }
   fx.created('stop', async (e) => {
     let session = ((await row(g, e.entity.eid))?.entry as Comp | undefined)
       ?.session
@@ -109,6 +116,7 @@ export let collecting = (
   fx.changed('dispatch', 'state', (e) => {
     if (e.comp?.state == 'settled') at(e.entity.eid)
   })
+  return async () => void await Promise.all(running)
 }
 
 /** The worktrees these sessions are still using — never swept. Both halves are
