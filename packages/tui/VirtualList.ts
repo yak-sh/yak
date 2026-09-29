@@ -86,10 +86,11 @@ export class VirtualWindow<T extends VirtualItem> {
       ? this.indices.get(this.anchor.id) ?? this.oldIndex
       : 0
     // Keep bounded ordering metadata across overlapping loaded pages for selection.
+    // Membership is by Set: a list of thousands updates in linear time.
     const nextIds = items.map((item) => item.id)
-    const firstOverlap = nextIds.findIndex((id) =>
-      this.retainedOrder.includes(id)
-    )
+    const next = new Set(nextIds)
+    const retained = new Set(this.retainedOrder)
+    const firstOverlap = nextIds.findIndex((id) => retained.has(id))
     if (firstOverlap < 0) this.retainedOrder = nextIds
     else {
       const oldAt = this.retainedOrder.indexOf(nextIds[firstOverlap])
@@ -97,9 +98,7 @@ export class VirtualWindow<T extends VirtualItem> {
         ...new Set([
           ...this.retainedOrder.slice(0, oldAt),
           ...nextIds,
-          ...this.retainedOrder.slice(oldAt).filter((id) =>
-            !nextIds.includes(id)
-          ),
+          ...this.retainedOrder.slice(oldAt).filter((id) => !next.has(id)),
         ]),
       ]
       if (this.retainedOrder.length > 512) {
