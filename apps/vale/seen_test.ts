@@ -1,9 +1,10 @@
 // A tab that returns after the land grows keeps its hero's saved world spot.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { recall, sighting } from './seen.ts'
 import type { Bundle, Net } from './net.ts'
 
-Deno.test('a tab carries its last seen hero into the larger land', () => {
+test('a tab carries its last seen hero into the larger land', () => {
   let previous = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')
   let entries = new Map<string, string>()
   let storage = {
@@ -43,7 +44,7 @@ Deno.test('a tab carries its last seen hero into the larger land', () => {
   }
 })
 
-Deno.test('later sightings keep a tab’s teleport acknowledgment', () => {
+test('later sightings keep a tab’s teleport acknowledgment', () => {
   let now = 1000
   let kept: Bundle[] = []
   let net = {

@@ -6,6 +6,7 @@
 // The vocabulary is @yaks/sqlite's shop fixture, so both test files in this
 // package — and the adapter they hold against each other — speak one domain.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -30,7 +31,7 @@ let at = (s: Store, eid: string) => s.tx((tx) => tx.get([eid]))[0]
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? {}) as Record<string, unknown>
 
-Deno.test('a patch mints identity in first-touch order and says what it minted', () => {
+test('a patch mints identity in first-touch order and says what it minted', () => {
   let s = shopRam()
   let born = put(
     s,
@@ -42,7 +43,7 @@ Deno.test('a patch mints identity in first-touch order and says what it minted',
   assertEquals(at(s, 'p1').entity, { eid: 'p1', num: 1 })
 })
 
-Deno.test('a patch touches only the properties it names; null clears one', () => {
+test('a patch touches only the properties it names; null clears one', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, product: { price: 12, status: 'live' } })
   put(s, { entity: { eid: 'p1' }, product: { price: 9 } })
@@ -51,7 +52,7 @@ Deno.test('a patch touches only the properties it names; null clears one', () =>
   assertEquals(comp(at(s, 'p1'), 'product'), { price: 9, status: null })
 })
 
-Deno.test('a null component drops it, the entity survives', () => {
+test('a null component drops it, the entity survives', () => {
   let s = shopRam()
   put(s, {
     entity: { eid: 'p1' },
@@ -63,7 +64,7 @@ Deno.test('a null component drops it, the entity survives', () => {
   assertEquals(comp(at(s, 'p1'), 'doc').title, 'Mug')
 })
 
-Deno.test('a reference names an entity the batch mints, in any order', () => {
+test('a reference names an entity the batch mints, in any order', () => {
   let s = shopRam()
   let born = put(s, {
     entity: { eid: 'r1' },
@@ -74,7 +75,7 @@ Deno.test('a reference names an entity the batch mints, in any order', () => {
   assertEquals(at(s, 'p1'), { entity: { eid: 'p1' } })
 })
 
-Deno.test('a removed entity is tombstoned, and takes no patch after', () => {
+test('a removed entity is tombstoned, and takes no patch after', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
@@ -89,7 +90,7 @@ Deno.test('a removed entity is tombstoned, and takes no patch after', () => {
   assertEquals(s.read('.kind=doc'), [])
 })
 
-Deno.test('a revived entity keeps its identity and takes patches again', () => {
+test('a revived entity keeps its identity and takes patches again', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
@@ -102,7 +103,7 @@ Deno.test('a revived entity keeps its identity and takes patches again', () => {
   })
 })
 
-Deno.test('a read is the query grammar, answered from the map', () => {
+test('a read is the query grammar, answered from the map', () => {
   let s = shopRam()
   put(
     s,
@@ -122,7 +123,7 @@ Deno.test('a read is the query grammar, answered from the map', () => {
 // A read through the store's indexes selects what a scan of the same bundles
 // selects, for every line of the grammar the in-memory evaluator is held to
 // (@yaks/match's parity with @yaks/sqlite).
-Deno.test('an indexed read answers every query the way a scan does', () => {
+test('an indexed read answers every query the way a scan does', () => {
   let s = ram(books, { number: true, now: NOW })
   s.tx((tx) => tx.patch(corpus))
   s.tx((tx) => tx.remove([{ eid: DEAD }]))
@@ -136,7 +137,7 @@ Deno.test('an indexed read answers every query the way a scan does', () => {
   }
 })
 
-Deno.test('a read by value follows the value through writes and a rollback', () => {
+test('a read by value follows the value through writes and a rollback', () => {
   let s = shopRam()
   let live = () => s.read('.status=live').map((b) => b.entity.eid)
   put(s, { entity: { eid: 'p1' }, product: { status: 'live' } })
@@ -157,7 +158,7 @@ Deno.test('a read by value follows the value through writes and a rollback', () 
   assertEquals(s.read('.status=sold').map((b) => b.entity.eid), ['p1'])
 })
 
-Deno.test('a range of numbers follows each value through writes and a rollback', () => {
+test('a range of numbers follows each value through writes and a rollback', () => {
   let s = shopRam()
   let cheap = () => s.read('.price=0..9').map((b) => b.entity.eid)
   let under = () => s.read('.price<=9.5').map((b) => b.entity.eid)
@@ -181,7 +182,7 @@ Deno.test('a range of numbers follows each value through writes and a rollback',
   assertEquals(under(), ['p1'])
 })
 
-Deno.test('a throwing transaction leaves the map exactly as it was', () => {
+test('a throwing transaction leaves the map exactly as it was', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, product: { price: 12 } })
   let before = s.read('')
@@ -203,7 +204,7 @@ Deno.test('a throwing transaction leaves the map exactly as it was', () => {
   }])
 })
 
-Deno.test('a nested transaction rolls back to where it opened', () => {
+test('a nested transaction rolls back to where it opened', () => {
   let s = shopRam()
   s.tx((tx) => {
     tx.patch([{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
@@ -219,7 +220,7 @@ Deno.test('a nested transaction rolls back to where it opened', () => {
   assertEquals(at(s, 'p2'), undefined)
 })
 
-Deno.test('an outer rollback undoes what an inner transaction committed', () => {
+test('an outer rollback undoes what an inner transaction committed', () => {
   let s = shopRam()
   assertThrows(() =>
     s.tx(() => {
@@ -230,7 +231,7 @@ Deno.test('an outer rollback undoes what an inner transaction committed', () => 
   assertEquals(at(s, 'p1'), undefined)
 })
 
-Deno.test('a mirror holds only the number it is told, never a guess', () => {
+test('a mirror holds only the number it is told, never a guess', () => {
   let s = shopRam({ adopt: true })
   // Until it is told, it has none: a guess could be another entity's number.
   put(s, { entity: { eid: 'p1' }, doc: { title: 'Mug' } })
@@ -242,19 +243,19 @@ Deno.test('a mirror holds only the number it is told, never a guess', () => {
   assertEquals(at(s, 'p2').entity, { eid: 'p2' })
 })
 
-Deno.test('a store nobody mirrors keeps its own numbering', () => {
+test('a store nobody mirrors keeps its own numbering', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1', num: 7 }, doc: { title: 'Mug' } })
   assertEquals(at(s, 'p1').entity.num, 1)
 })
 
-Deno.test('a map has no schema: install does nothing', () => {
+test('a map has no schema: install does nothing', () => {
   // and a Store is a Storage — the seam @yaks/graph applies changes through
   let s: Storage = shopRam()
   assertEquals(s.install(), undefined)
 })
 
-Deno.test('a mirror adopts an explicit unnumbered spine', () => {
+test('a mirror adopts an explicit unnumbered spine', () => {
   let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'blob', num: null }, doc: {} })
   assertEquals(at(s, 'blob').entity, { eid: 'blob', num: null })
@@ -262,7 +263,7 @@ Deno.test('a mirror adopts an explicit unnumbered spine', () => {
   assertEquals(at(s, 'blob').entity.num, null)
 })
 
-Deno.test('physical eviction reserves identity and rolls back with nested transactions', () => {
+test('physical eviction reserves identity and rolls back with nested transactions', () => {
   let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'p1', num: 90 }, doc: { title: 'payload' } })
   assertThrows(() =>
@@ -300,7 +301,7 @@ Deno.test('physical eviction reserves identity and rolls back with nested transa
   assertEquals(at(s, 'p1').tombstone, {})
 })
 
-Deno.test('a real delete after payload eviction still makes death permanent', () => {
+test('a real delete after payload eviction still makes death permanent', () => {
   let s = shopRam()
   put(s, { entity: { eid: 'p1' }, doc: { title: 'live' } })
   s.tx((tx) => tx.evict(['p1']))
@@ -312,7 +313,7 @@ Deno.test('a real delete after payload eviction still makes death permanent', ()
 
 // A property the vocabulary declares but never stores is answered by the rule
 // the store is handed, and refused by name without one.
-Deno.test('a computed property is read through the rule the store is given', () => {
+test('a computed property is read through the rule the store is given', () => {
   let vocab = loadVocab({
     $defs: {
       lamp: {

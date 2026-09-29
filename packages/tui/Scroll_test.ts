@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Key } from './input.ts'
@@ -22,17 +23,17 @@ let table: [Key, number, number | null][] = [
   [{ name: 'char', text: 'j' }, 0, null],
 ]
 
-Deno.test('every scroll key is one row of a table', () => {
+test('every scroll key is one row of a table', () => {
   for (let [key, top, want] of table) {
     assertEquals(scrolled(top, key, v), want, `${key.name}@${top}`)
   }
 })
 
-Deno.test('a short region never scrolls', () => {
+test('a short region never scrolls', () => {
   assertEquals(scrolled(0, { name: 'pagedown' }, { total: 3, height: 10 }), 0)
 })
 
-Deno.test('the window follows new content, and holds still once scrolled', async () => {
+test('the window follows new content, and holds still once scrolled', async () => {
   let lines = Array.from({ length: 30 }, (_, i) => `line ${i}`)
   let App = () =>
     h(

@@ -1,9 +1,10 @@
 // The probe relay is a browser origin: every HTTP request, including one
 // after keep-alive, reaches the same app and person.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { relay } from './probe.ts'
 
-Deno.test('relay keeps the app and person across browser requests', async () => {
+test('relay keeps the app and person across browser requests', async () => {
   let upstream = Deno.serve(
     { hostname: '127.0.0.1', port: 0, onListen: () => {} },
     async (req) =>

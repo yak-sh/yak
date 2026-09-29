@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { bus } from './bus.ts'
 
-Deno.test('sound levels resume from storage and persist independently', () => {
+test('sound levels resume from storage and persist independently', () => {
   let values = new Map([['mossvale.music.level', '0.35']])
   let storage = {
     getItem: (key: string) => values.get(key) ?? null,
@@ -19,7 +20,7 @@ Deno.test('sound levels resume from storage and persist independently', () => {
   assertEquals(bus('music', 0.7, storage).level, 0.8)
 })
 
-Deno.test('volume controls stay between silence and full level', () => {
+test('volume controls stay between silence and full level', () => {
   let storage = {
     getItem: () => 'invalid',
     setItem: () => {},

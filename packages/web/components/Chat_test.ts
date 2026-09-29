@@ -1,5 +1,6 @@
 // The chat's first write is one atomic move: retire the selected binding,
 // spawn the replacement Session on the first prompt, and bind it.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import { h } from 'preact'
@@ -7,7 +8,7 @@ import { cache, ent, useRoute } from '../live.ts'
 import { mount } from './mount.ts'
 import { chatChanges, chatPlan, ReferenceList, Starter } from './Chat.tsx'
 
-Deno.test('chatChanges spawns a taskless session and rebinds the chat', () => {
+test('chatChanges spawns a taskless session and rebinds the chat', () => {
   let got = chatChanges(
     'old',
     'next',
@@ -27,7 +28,7 @@ Deno.test('chatChanges spawns a taskless session and rebinds the chat', () => {
   ])
 })
 
-Deno.test('chatPlan picks a graph-native provider', () => {
+test('chatPlan picks a graph-native provider', () => {
   let ps = [
     {
       name: 'codex',
@@ -49,7 +50,7 @@ Deno.test('chatPlan picks a graph-native provider', () => {
   )
 })
 
-Deno.test('chat references mount the entity List.Tile renderer', () => {
+test('chat references mount the entity List.Tile renderer', () => {
   cache.value = {
     target: {
       entity: { eid: 'target', num: 7 },
@@ -74,7 +75,7 @@ Deno.test('chat references mount the entity List.Tile renderer', () => {
   }
 })
 
-Deno.test('a new chat reuses the composer input with a terse prompt', () => {
+test('a new chat reuses the composer input with a terse prompt', () => {
   cache.value = {
     target: {
       entity: { eid: 'target', num: 7 },
@@ -96,7 +97,7 @@ Deno.test('a new chat reuses the composer input with a terse prompt', () => {
 
 // T-37445: the referencing sessions ride the citation answer as peers, so the
 // held list opens no rows sub of its own; an unheld list still does.
-Deno.test('a held reference list asks for no rows of its own', async () => {
+test('a held reference list asks for no rows of its own', async () => {
   let sent: Record<string, unknown>[] = []
   let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
   let peer = 'c0000000-0000-4000-8000-000000000001'

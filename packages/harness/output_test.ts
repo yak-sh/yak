@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { outputView } from '@yaks/context'
 import { valueTools } from '@yaks/blob'
@@ -6,7 +7,7 @@ import { harnessTools } from './tools.ts'
 import type { Request } from '@yaks/model'
 import { harness, repo } from './testing.ts'
 
-Deno.test('large outputs snapshot transparently, survive reopen and source mutation', async () => {
+test('large outputs snapshot transparently, survive reopen and source mutation', async () => {
   const dir = Deno.makeTempDirSync()
   const path = dir + '/test.db'
   let h = await harness(path)
@@ -64,7 +65,7 @@ Deno.test('large outputs snapshot transparently, survive reopen and source mutat
   }
 })
 
-Deno.test('generic text inspection reads doc and content with reader authorization', async () => {
+test('generic text inspection reads doc and content with reader authorization', async () => {
   const h = await harness()
   try {
     await h.g.apply([{
@@ -95,7 +96,7 @@ Deno.test('generic text inspection reads doc and content with reader authorizati
   }
 })
 
-Deno.test('model receives bounded tool result, UI keeps original and prompt/user stay intact', async () => {
+test('model receives bounded tool result, UI keeps original and prompt/user stay intact', async () => {
   const h = await harness()
   const requests: Request[] = []
   const text = 'TOOL '.repeat(30000)
@@ -144,7 +145,7 @@ Deno.test('model receives bounded tool result, UI keeps original and prompt/user
   }
 })
 
-Deno.test('fork projections reuse snapshots and escaped reads stay bounded', async () => {
+test('fork projections reuse snapshots and escaped reads stay bounded', async () => {
   const h = await harness()
   try {
     const text = '😀'.repeat(20000)

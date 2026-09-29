@@ -1,6 +1,7 @@
 // Admission's three answers: drop, refuse, or let through — one test per rule,
 // because which mistakes are loud is the whole design of this phase.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { admit, Refused } from './admit.ts'
 import { loadVocab } from '@yaks/vocab'
@@ -9,7 +10,7 @@ import { books } from './testing.ts'
 let one = (b: Record<string, unknown>, trusted = false) =>
   admit([b as never], books, trusted)
 
-Deno.test('an unknown component refuses the batch, naming it', () => {
+test('an unknown component refuses the batch, naming it', () => {
   assertThrows(
     () =>
       one({
@@ -22,7 +23,7 @@ Deno.test('an unknown component refuses the batch, naming it', () => {
   )
 })
 
-Deno.test('an unknown property on a known component refuses the batch', () => {
+test('an unknown property on a known component refuses the batch', () => {
   assertThrows(
     () => one({ entity: { eid: 'b1' }, book: { pagez: 3 } }),
     Refused,
@@ -30,7 +31,7 @@ Deno.test('an unknown property on a known component refuses the batch', () => {
   )
 })
 
-Deno.test('a name every object inherits is still unknown', () => {
+test('a name every object inherits is still unknown', () => {
   assertThrows(
     () => one({ entity: { eid: 'b1' }, book: { constructor: 3 } }),
     Refused,
@@ -43,18 +44,18 @@ Deno.test('a name every object inherits is still unknown', () => {
   )
 })
 
-Deno.test('a server-owned property is dropped, and admitted when trusted', () => {
+test('a server-owned property is dropped, and admitted when trusted', () => {
   let [out] = one({ entity: { eid: 'b1' }, created: { at: 'now' }, doc: {} })
   assertEquals(out.created, undefined)
   let [ok] = one({ entity: { eid: 'b1' }, created: { at: 'now' } }, true)
   assertEquals(ok.created, { at: 'now' })
 })
 
-Deno.test('a bundle of nothing but server-owned properties leaves the batch', () => {
+test('a bundle of nothing but server-owned properties leaves the batch', () => {
   assertEquals(one({ entity: { eid: 'b1' }, created: { at: 'now' } }), [])
 })
 
-Deno.test('a component sent with only computed properties is still there', () => {
+test('a component sent with only computed properties is still there', () => {
   let tasks = loadVocab({
     $defs: {
       task: {
@@ -72,11 +73,11 @@ Deno.test('a component sent with only computed properties is still there', () =>
   assertEquals(admit([sent], tasks), [{ entity: { eid: 't1' }, task: {} }])
 })
 
-Deno.test('a bare touch names an entity and asks for nothing', () => {
+test('a bare touch names an entity and asks for nothing', () => {
   assertEquals(one({ entity: { eid: 'b1' } }), [{ entity: { eid: 'b1' } }])
 })
 
-Deno.test('a value the vocabulary cannot hold refuses the batch', () => {
+test('a value the vocabulary cannot hold refuses the batch', () => {
   assertThrows(
     () => one({ entity: { eid: 'b1' }, book: { status: 'shipped' } }),
     Refused,
@@ -89,7 +90,7 @@ Deno.test('a value the vocabulary cannot hold refuses the batch', () => {
   )
 })
 
-Deno.test('a null component, a null property and a bare tag all pass', () => {
+test('a null component, a null property and a bare tag all pass', () => {
   let [out] = one({
     entity: { eid: 'b1' },
     book: { publisher: null },
@@ -101,7 +102,7 @@ Deno.test('a null component, a null property and a bare tag all pass', () => {
   assertEquals(out.bookmark, {})
 })
 
-Deno.test('a delete survives even when its components were all dropped', () => {
+test('a delete survives even when its components were all dropped', () => {
   let [out] = one({
     entity: { eid: 'b1' },
     $delete: true,
@@ -110,7 +111,7 @@ Deno.test('a delete survives even when its components were all dropped', () => {
   assertEquals(out.$delete, true)
 })
 
-Deno.test('the reserved keys ride through untouched', () => {
+test('the reserved keys ride through untouched', () => {
   let was = { doc: { title: 'abc' } }
   let [out] = one({ entity: { eid: 'b1' }, doc: { title: 'x' }, $was: was })
   assertEquals(out.$was, was)

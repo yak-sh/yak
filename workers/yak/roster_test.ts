@@ -44,6 +44,7 @@
 //   either: a purchase against a deployed kernel would be a real
 //   purchase, so `space_sell` and `domain_attach` are called there for the
 //   refusal a free space gets, which is their other answer and worth holding.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import {
   attached,
@@ -111,7 +112,7 @@ let refused = async (
   }
 }
 
-Deno.test(
+test(
   'every tool the connector lists is called, and one with no call fails this',
   async () => {
     // Cloudflare's custom hostnames are stood in for even in memory: a

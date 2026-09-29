@@ -1,6 +1,7 @@
 // The board guard: a query that would quietly match nothing is refused at the
 // door, and everything else lands.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph'
 import { unroutable } from './guard.ts'
@@ -13,7 +14,7 @@ let board = (query: string) => [{
   board: { query },
 }]
 
-Deno.test('a query that routes is fine', () => {
+test('a query that routes is fine', () => {
   for (
     let q of [
       '.status=open',
@@ -30,13 +31,13 @@ Deno.test('a query that routes is fine', () => {
   ) assertEquals(unroutable(q, team), null, q)
 })
 
-Deno.test('a property the vocabulary does not know is refused', () => {
+test('a property the vocabulary does not know is refused', () => {
   // the typo that is otherwise invisible forever
   let why = unroutable('.staus=open', team)
   assertEquals(typeof why, 'string')
 })
 
-Deno.test('a status outside the closed set is refused, by name', () => {
+test('a status outside the closed set is refused, by name', () => {
   let why = unroutable('.status=complete', team)
   assertEquals(
     why,
@@ -46,7 +47,7 @@ Deno.test('a status outside the closed set is refused, by name', () => {
   assertEquals(typeof unroutable('.status=open,finished', team), 'string')
 })
 
-Deno.test("the ladder is the vocabulary's, unless marks name one", () => {
+test("the ladder is the vocabulary's, unless marks name one", () => {
   // Naming nothing reads @yaks/task's `statuses` — every word a status can be,
   // the rung a host that leases its tasks adds included — so a board filtering
   // on `wip` routes without @yaks/project being told about leases.
@@ -64,7 +65,7 @@ Deno.test("the ladder is the vocabulary's, unless marks name one", () => {
   )
 })
 
-Deno.test('the graph refuses the bad board and keeps the good one', () => {
+test('the graph refuses the bad board and keeps the good one', () => {
   let { g } = teamGraph()
   g.install()
   g.apply(board('.status=open'))
@@ -76,7 +77,7 @@ Deno.test('the graph refuses the bad board and keeps the good one', () => {
   assertEquals(after[0].board?.query, '.status=open')
 })
 
-Deno.test('dropping a board states no query and is never refused', () => {
+test('dropping a board states no query and is never refused', () => {
   let { g } = teamGraph()
   g.install()
   g.apply(board('.status=open'))
@@ -84,13 +85,13 @@ Deno.test('dropping a board states no query and is never refused', () => {
   assertEquals((g.read('.board&*') as unknown[]).length, 0)
 })
 
-Deno.test('qualified filing properties no longer belong to task', () => {
+test('qualified filing properties no longer belong to task', () => {
   for (let prop of ['project', 'priority', 'domain', 'assignee']) {
     assertEquals(typeof unroutable(`.task.${prop}=x`, team), 'string')
   }
 })
 
-Deno.test('a bare microtask stores presence, never a supplied status', () => {
+test('a bare microtask stores presence, never a supplied status', () => {
   let { g } = teamGraph()
   g.install()
   g.apply([{
@@ -104,7 +105,7 @@ Deno.test('a bare microtask stores presence, never a supplied status', () => {
   assertEquals(b.filed, undefined)
 })
 
-Deno.test('filing stores separately and a bare priority query orders filed tasks', () => {
+test('filing stores separately and a bare priority query orders filed tasks', () => {
   let { g } = teamGraph()
   g.install()
   g.apply([

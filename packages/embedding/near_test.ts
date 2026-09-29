@@ -1,6 +1,7 @@
 // The ranking: who is nearest, how far the answer reaches, and what a grave or
 // a moved model does to it.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   among,
@@ -23,19 +24,19 @@ let names = (db: Awaited<ReturnType<typeof stocked>>, of: string, n = 8) =>
   nearest(db, vectorOf(db, of, model)!, { model, limit: n, without: of })
     .map((h) => h.entity)
 
-Deno.test('the two dragon books are each other, the memoir is not', async () => {
+test('the two dragon books are each other, the memoir is not', async () => {
   let db = await stocked()
   let close = names(db, 'book-1')
   assertEquals(close[0], 'book-2')
   assert(close.indexOf('book-3') > close.indexOf('review-4'))
 })
 
-Deno.test('nothing is its own neighbour', async () => {
+test('nothing is its own neighbour', async () => {
   let db = await stocked()
   assert(!names(db, 'book-1').includes('book-1'))
 })
 
-Deno.test('a limit bounds the answer, a floor raises the bar', async () => {
+test('a limit bounds the answer, a floor raises the bar', async () => {
   let db = await stocked()
   assertEquals(names(db, 'book-1', 1).length, 1)
   let q = vectorOf(db, 'book-1', model)!
@@ -44,7 +45,7 @@ Deno.test('a limit bounds the answer, a floor raises the bar', async () => {
   ])
 })
 
-Deno.test('a neighbour carries the integer id its rows key on', async () => {
+test('a neighbour carries the integer id its rows key on', async () => {
   let db = await stocked()
   let [first] = nearest(db, vectorOf(db, 'book-1', model)!, {
     model,
@@ -56,7 +57,7 @@ Deno.test('a neighbour carries the integer id its rows key on', async () => {
   assert(first.similarity > 0.8 && first.similarity < 1)
 })
 
-Deno.test('a grave stops being a neighbour before the sweep prunes it', async () => {
+test('a grave stops being a neighbour before the sweep prunes it', async () => {
   let db = await stocked()
   bury(db, 2)
   assert(!names(db, 'book-1').includes('book-2'))
@@ -64,7 +65,7 @@ Deno.test('a grave stops being a neighbour before the sweep prunes it', async ()
   assertEquals(tally(db, TABLE), 4)
 })
 
-Deno.test('a screen decides what "nearest" is nearest among', async () => {
+test('a screen decides what "nearest" is nearest among', async () => {
   let db = await stocked()
   let q = vectorOf(db, 'book-1', model)!
   let within = render(select({
@@ -79,18 +80,18 @@ Deno.test('a screen decides what "nearest" is nearest among', async () => {
   )
 })
 
-Deno.test('another model is another space, and it is empty', async () => {
+test('another model is another space, and it is empty', async () => {
   let db = await stocked()
   assertEquals(vectorOf(db, 'book-1', 'other'), null)
   assertEquals(nearest(db, new Float32Array(64), { model: 'other' }), [])
 })
 
-Deno.test('an entity with no vector has none to anchor on', async () => {
+test('an entity with no vector has none to anchor on', async () => {
   let db = await stocked()
   assertEquals(vectorOf(db, 'nobody', model), null)
 })
 
-Deno.test('a bounded scan keeps the nearest across more than one screen', () => {
+test('a bounded scan keeps the nearest across more than one screen', () => {
   let db = shelf()
   let model = 'rank-test'
   // Ties straddle the heap boundary; an earlier row wins just as in a stable
@@ -123,7 +124,7 @@ Deno.test('a bounded scan keeps the nearest across more than one screen', () => 
   assertEquals(nearest(db, query, { model, limit: 0 }), [])
 })
 
-Deno.test('an unaligned blob still ranks and returns its neighbour', () => {
+test('an unaligned blob still ranks and returns its neighbour', () => {
   let db = shelf()
   db.query(insert('entity', { id: 10, eid: 'rank-10' }))
   db.query(insert(TABLE, {

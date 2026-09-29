@@ -1,5 +1,6 @@
 // The check: a run left for a person, and a run nobody is working.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
@@ -29,19 +30,19 @@ let pooled = async (...rows: Record<string, unknown>[]) => {
   return g
 }
 
-Deno.test('a pool whose runs all landed is nothing to report', async () => {
+test('a pool whose runs all landed is nothing to report', async () => {
   let g = await pooled({ state: 'done', at: ago(90) })
   assertEquals((await checkup(g, pooledBlog)).level, undefined)
 })
 
-Deno.test('a run that spent its attempts is a fail', async () => {
+test('a run that spent its attempts is a fail', async () => {
   let g = await pooled({ state: 'failed', at: ago(90) })
   let said = await checkup(g, pooledBlog)
   assertEquals(said.level, 'fail')
   assert(said.body.includes('left for a person'), said.body)
 })
 
-Deno.test('a run pending past the cutoff is a warn, a fresh one is not', async () => {
+test('a run pending past the cutoff is a warn, a fresh one is not', async () => {
   let g = await pooled({ state: 'pending', at: ago(90) })
   let said = await checkup(g, pooledBlog)
   assertEquals(said.level, 'warn')
@@ -55,7 +56,7 @@ Deno.test('a run pending past the cutoff is a warn, a fresh one is not', async (
   )
 })
 
-Deno.test('a graph that keeps no pool has nothing to be behind on', async () => {
+test('a graph that keeps no pool has nothing to be behind on', async () => {
   let said = await checkup(blogGraph(), blog)
   assertEquals(said.level, undefined)
   assert(said.body.endsWith('— nothing to report'), said.body)

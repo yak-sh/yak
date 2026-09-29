@@ -1,7 +1,7 @@
 // A caught defect must leave the workerd invocation through the SDK wrapper's
 // waitUntil flush. The probe's DSN is a local capture endpoint, never Sentry.
 import { assertEquals } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { workerd } from './probe.ts'
 
 let events = async (log: string) =>
@@ -19,7 +19,7 @@ let events = async (log: string) =>
 // frames do (socket_workerd_test.ts), not the bound of an idle process.
 let SENT = 15_000
 
-Deno.test('a caught 500 reaches Sentry through the workerd wrapper', async () => {
+test('a caught 500 reaches Sentry through the workerd wrapper', async () => {
   let k = workerd()
   let id = crypto.randomUUID()
   let response = await fetch(`${k.base}/__sentry/${id}`)
@@ -37,7 +37,7 @@ Deno.test('a caught 500 reaches Sentry through the workerd wrapper', async () =>
   assertEquals(event.exception.values[0].value, 'sentry probe')
 })
 
-Deno.test('a caught Durable Object failure reaches Sentry', async () => {
+test('a caught Durable Object failure reaches Sentry', async () => {
   let k = workerd()
   let id = crypto.randomUUID()
   let response = await fetch(`${k.base}/__sentry/do/${id}`)
@@ -55,7 +55,7 @@ Deno.test('a caught Durable Object failure reaches Sentry', async () => {
   assertEquals(event.exception.values[0].value, 'durable object sentry probe')
 })
 
-Deno.test('the kernel sends a caught failure through its deployed wrapper', async () => {
+test('the kernel sends a caught failure through its deployed wrapper', async () => {
   let k = workerd()
   let host = `sentry-probe-${crypto.randomUUID()}.example`
   let response = await k.at(host, '/')

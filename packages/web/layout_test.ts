@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { type Change, type Pane } from './types.ts'
@@ -34,12 +35,12 @@ let row = [
   p('c', 'r', { size: 1, order: 2 }),
 ]
 
-Deno.test('kids sorts by order, eid breaking ties', () => {
+test('kids sorts by order, eid breaking ties', () => {
   let tied = [p('z', 'r', { order: 1 }), p('y', 'r', { order: 1 }), p('x', 'r')]
   assertEquals(kids(tied, 'r').map((k) => k.eid), ['x', 'y', 'z'])
 })
 
-Deno.test('split along the dir is one empty sibling, ordered between', () => {
+test('split along the dir is one empty sibling, ordered between', () => {
   let batch = split(row, 'a', 'h')
   assertEquals(batch.length, 1)
   let born = comps(batch)[0]
@@ -49,11 +50,11 @@ Deno.test('split along the dir is one empty sibling, ordered between', () => {
   assertEquals(born.content, undefined) // empty: it renders the palette
 })
 
-Deno.test('split at the end orders past the last sibling', () => {
+test('split at the end orders past the last sibling', () => {
   assertEquals(comps(split(row, 'c', 'h'))[0].order, 3)
 })
 
-Deno.test('split across nests: the pane becomes the container', () => {
+test('split across nests: the pane becomes the container', () => {
   let batch = split(row, 'a', 'v')
   assertEquals(batch.length, 3)
   let [turn, moved, empty] = batch.map((c) => c.comp!)
@@ -65,7 +66,7 @@ Deno.test('split across nests: the pane becomes the container', () => {
   assertEquals([moved.order, empty.order], [0, 1])
 })
 
-Deno.test('split a container across hoists its kids under an intermediate', () => {
+test('split a container across hoists its kids under an intermediate', () => {
   let batch = split(row, 'r', 'v')
   let reparented = batch.filter((c) =>
     ['a', 'b', 'c'].includes(c.eid) && c.comp?.parent
@@ -76,11 +77,11 @@ Deno.test('split a container across hoists its kids under an intermediate', () =
   assertEquals(reparented.every((c) => c.comp!.parent == mid.eid), true)
 })
 
-Deno.test('close is one delete when siblings remain — weights renormalize, no splice', () => {
+test('close is one delete when siblings remain — weights renormalize, no splice', () => {
   assertEquals(close(row, 'b'), [{ eid: 'b', name: 'entity', comp: null }])
 })
 
-Deno.test('close collapsing to a leaf survivor hoists content into the parent', () => {
+test('close collapsing to a leaf survivor hoists content into the parent', () => {
   let pair = [
     p('r', undefined, { dir: 'h' }),
     p('a', 'r', { order: 0, content: 'T1', view: 'Full' }),
@@ -94,7 +95,7 @@ Deno.test('close collapsing to a leaf survivor hoists content into the parent', 
   assertEquals(batch.at(1)!.eid, 'r')
 })
 
-Deno.test('close collapsing to a container survivor hoists dir and children', () => {
+test('close collapsing to a container survivor hoists dir and children', () => {
   let tree = [
     p('r', undefined, { dir: 'h' }),
     p('a', 'r', { order: 0 }),
@@ -114,13 +115,13 @@ Deno.test('close collapsing to a container survivor hoists dir and children', ()
   assertEquals(deads(batch), ['a', 's'])
 })
 
-Deno.test('close on the root clears it — a layout always has a pane', () => {
+test('close on the root clears it — a layout always has a pane', () => {
   let batch = close(row, 'r')
   assertEquals(deads(batch), ['a', 'b', 'c'])
   assertEquals(comps(batch), [{ dir: null, content: null, view: null }])
 })
 
-Deno.test('resize transfers weight between siblings and clamps at the floor', () => {
+test('resize transfers weight between siblings and clamps at the floor', () => {
   assertEquals(comps(resize(row, 'a', 'b', 0.5)), [{ size: 1.5 }, {
     size: 0.5,
   }])
@@ -130,7 +131,7 @@ Deno.test('resize transfers weight between siblings and clamps at the floor', ()
   assertEquals(resize(row, 'a', 'x', 1), []) // strangers don't resize
 })
 
-Deno.test('setContent fills a leaf; swap exchanges two', () => {
+test('setContent fills a leaf; swap exchanges two', () => {
   assertEquals(comps(setContent(row, 'c', 'T9', 'Board')), [
     { content: 'T9', view: 'Board' },
   ])
@@ -140,7 +141,7 @@ Deno.test('setContent fills a leaf; swap exchanges two', () => {
   ])
 })
 
-Deno.test('mintLayout: one leaf is the root; many make an h-row of equals', () => {
+test('mintLayout: one leaf is the root; many make an h-row of equals', () => {
   let solo = mintLayout('desk')
   assertEquals(comps(solo.changes, 'doc'), [{ title: 'desk', body: '' }])
   assertEquals(comps(solo.changes).length, 1) // the root leaf, empty

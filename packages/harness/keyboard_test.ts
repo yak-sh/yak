@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import {
@@ -13,7 +14,7 @@ import { Keyboard } from './keyboard.ts'
 import { useKeys } from '../tui/screen.ts'
 import type { Key } from '@yaks/tui'
 
-Deno.test('controlled NORMAL routing preserves draft, selects sources, and hides help in INSERT', async () => {
+test('controlled NORMAL routing preserves draft, selects sources, and hides help in INSERT', async () => {
   let f = frontend(), sent: string[] = [], actions: string[] = []
   let items = Array.from(
     { length: 1000 },
@@ -100,7 +101,7 @@ Deno.test('controlled NORMAL routing preserves draft, selects sources, and hides
   }
 })
 
-Deno.test('NORMAL sidebar commands use the same session actions and INSERT remains literal', async () => {
+test('NORMAL sidebar commands use the same session actions and INSERT remains literal', async () => {
   const { App } = await import('./app.ts')
   let f = frontend(), sent: string[] = []
   let sessions = [
@@ -162,7 +163,7 @@ Deno.test('NORMAL sidebar commands use the same session actions and INSERT remai
   }
 })
 
-Deno.test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a private recovery yank', async () => {
+test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a private recovery yank', async () => {
   let { setClipboard } = await import('../tui/visual.ts')
   let { osc52 } = await import('../tui/paint.ts')
   let f = frontend()
@@ -227,7 +228,7 @@ Deno.test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a pri
   }
 })
 
-Deno.test('NORMAL registry routes spatial focus and contextual movement without editing the draft', async () => {
+test('NORMAL registry routes spatial focus and contextual movement without editing the draft', async () => {
   let f = frontend(), transcript: Key[] = [], sidebar: Key[] = []
   let Target = () => {
     useKeys((key) => {
@@ -289,7 +290,7 @@ Deno.test('NORMAL registry routes spatial focus and contextual movement without 
   }
 })
 
-Deno.test('Alt+p restores local yank into the draft without sending', async () => {
+test('Alt+p restores local yank into the draft without sending', async () => {
   const f = frontend()
   const ui = await mount(
     () =>

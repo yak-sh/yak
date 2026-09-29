@@ -5,6 +5,7 @@
 // So every case here runs over a storage that tallies its own doors, and
 // asserts the tally.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage, Tx } from './mod.ts'
 import { about, graph } from './mod.ts'
@@ -47,7 +48,7 @@ let shelf: Bundle[] = [
   { entity: { eid: 'm1' }, bookmark: { of: 'b1' } },
 ]
 
-Deno.test('a batch reads the storage once, whatever the hooks ask', () => {
+test('a batch reads the storage once, whatever the hooks ask', () => {
   let { n, storage } = tally(memory())
   // A hook that reads every entity in the batch, twice, the way a guard and a
   // journal both would.
@@ -70,7 +71,7 @@ Deno.test('a batch reads the storage once, whatever the hooks ask', () => {
   assertEquals(n, { get: 1, read: 0 })
 })
 
-Deno.test('what a wants forgot is read from the storage, and kept', () => {
+test('what a wants forgot is read from the storage, and kept', () => {
   let { n, storage } = tally(memory())
   let g = graph({ storage, vocab: books })
   g.apply(shelf)
@@ -97,7 +98,7 @@ Deno.test('what a wants forgot is read from the storage, and kept', () => {
   assertEquals((seen[0].doc as { title: string }).title, 'Chilton')
 })
 
-Deno.test('about answers backwards, narrowed to the components asked', () => {
+test('about answers backwards, narrowed to the components asked', () => {
   let { n, storage } = tally(memory())
   let g = graph({ storage, vocab: books })
   g.apply(shelf)
@@ -125,7 +126,7 @@ Deno.test('about answers backwards, narrowed to the components asked', () => {
   assertEquals(n.read, 2)
 })
 
-Deno.test('a hook reads what the hook before it wrote', () => {
+test('a hook reads what the hook before it wrote', () => {
   let { storage } = tally(memory())
   let g = graph({ storage, vocab: books })
   g.apply(shelf)
@@ -160,7 +161,7 @@ Deno.test('a hook reads what the hook before it wrote', () => {
   assertEquals(read, 'Emma')
 })
 
-Deno.test('a delete reads backwards once per rung, not once per property', () => {
+test('a delete reads backwards once per rung, not once per property', () => {
   let { n, storage } = tally(memory())
   let g = graph({ storage, vocab: books })
   g.apply(shelf)
@@ -177,7 +178,7 @@ Deno.test('a delete reads backwards once per rung, not once per property', () =>
   assertEquals(n.read, 2)
 })
 
-Deno.test('a named-only gather never enumerates reverse reference properties', () => {
+test('a named-only gather never enumerates reverse reference properties', () => {
   let scans = 0
   let vocab = {
     ...books,

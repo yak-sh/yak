@@ -1,6 +1,7 @@
 // Names over a small bookstore vocabulary: an author and a shelf answer to a
 // name, a review does not — its title is a sentence, not a handle.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { extendMeta, loadVocab, type VocabDoc } from '@yaks/vocab'
 import { nameKeywords, NAMES_URI } from './keywords.ts'
@@ -46,54 +47,54 @@ let review = { comps: { review: {}, doc: { title: 'Ursula at her best' } } }
 let fiction = { comps: { shelf: { label: 'Fiction' } } }
 let shelf = [leguin, review, fiction]
 
-Deno.test('the vocabulary says which components answer to a name', () => {
+test('the vocabulary says which components answer to a name', () => {
   assertEquals(named(v), {
     author: { comp: 'doc', prop: 'title' }, // the default name property
     shelf: { comp: 'shelf', prop: 'label' }, // its own, by declaration
   })
 })
 
-Deno.test('a name is read only off an entity that has one', () => {
+test('a name is read only off an entity that has one', () => {
   assertEquals(name(leguin), 'Ursula Le Guin')
   assertEquals(name(fiction), 'Fiction')
   assertEquals(name(review), undefined) // a title, but not a name
   assertEquals(name({ comps: { author: {} } }), undefined) // named, unnamed
 })
 
-Deno.test('an exact name resolves, whatever the case or punctuation', () => {
+test('an exact name resolves, whatever the case or punctuation', () => {
   for (let typed of ['Ursula Le Guin', 'ursula le guin', 'ursula-le-guin']) {
     assertEquals(byName(typed, shelf), leguin, typed)
   }
   assertEquals(byName('fiction', shelf), fiction)
 })
 
-Deno.test('a name typed the way people type it still lands', () => {
+test('a name typed the way people type it still lands', () => {
   assertEquals(byName('ursula', shelf), leguin) // the first word
   assertEquals(byName('le guin', shelf), leguin) // most of the name
   assertEquals(byName('leguin', shelf), leguin) // …spelled together
   assertEquals(byName('fictoin', shelf), fiction) // a typo
 })
 
-Deno.test('a word that names nothing resolves to nothing', () => {
+test('a word that names nothing resolves to nothing', () => {
   assertEquals(byName('dickens', shelf), undefined)
   assertEquals(byName('', shelf), undefined)
   // prose is never reached, not even by its own opening word
   assertEquals(byName('best', shelf), undefined)
 })
 
-Deno.test('exact-only resolution is one option away', () => {
+test('exact-only resolution is one option away', () => {
   let exact = resolve(v, { close: 1 })
   assertEquals(exact('Ursula Le Guin', shelf), leguin)
   assertEquals(exact('ursula', shelf), undefined)
 })
 
-Deno.test('the name property is the vocabulary’s, and a missing one refuses', () => {
+test('the name property is the vocabulary’s, and a missing one refuses', () => {
   let byLabel = nameOf(v, { prop: 'body' })
   assertEquals(byLabel(leguin), undefined) // the author's doc has no body
   assertThrows(() => named(v, { prop: 'nonsense' }), Error, 'unknown prop')
 })
 
-Deno.test('the keyword is registered, so the loader carries it', () => {
+test('the keyword is registered, so the loader carries it', () => {
   assertEquals(v.comp('author')?.keywords, { by_name: true })
   assertEquals(v.comp('review')?.keywords, {})
   // without the registration the vocabulary answers nothing about names

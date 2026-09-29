@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph, type Storage, type Tx } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -5,7 +6,7 @@ import { loadVocab } from '@yaks/vocab'
 import { archetypeDoc, archetypes, eidOf } from './mod.ts'
 
 for (let async of [false, true]) {
-  Deno.test(`archetype: RAM plugin, async=${async}, transaction rollback`, async () => {
+  test(`archetype: RAM plugin, async=${async}, transaction rollback`, async () => {
     let vocab = loadVocab([archetypeDoc, {
       $defs: {
         note: {

@@ -2,6 +2,7 @@
 // reference reads back as the eid it points at, bare words require an extension,
 // and an aggregate comes back as raw rows.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { gather } from '@yaks/graph'
 import { and, eq, or } from '@yaks/query'
@@ -15,7 +16,7 @@ import { storage } from './mod.ts'
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 let eids = (bs: Bundle[]): string[] => bs.map((b) => b.entity.eid).sort()
 
-Deno.test('a scalar filter selects the matching entities', () => {
+test('a scalar filter selects the matching entities', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'p1' }, product: { price: 10 } },
@@ -27,7 +28,7 @@ Deno.test('a scalar filter selects the matching entities', () => {
 
 // A Durable Object's SQLite binds at most 100 parameters per statement, and an
 // any-of list is as long as its caller made it.
-Deno.test('an any-of list past 100 values binds under the Durable Object limit', () => {
+test('an any-of list past 100 values binds under the Durable Object limit', () => {
   let s = storage(
     spy(mem(), (_, params) => {
       if (params.length > 100) throw new Error('too many SQL variables')
@@ -44,7 +45,7 @@ Deno.test('an any-of list past 100 values binds under the Durable Object limit',
   assertEquals(eids(s.read(`.price=3,x,1,${many}`)), ['p1', 'p3'])
 })
 
-Deno.test('a reference reads back as the target eid', () => {
+test('a reference reads back as the target eid', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
@@ -54,7 +55,7 @@ Deno.test('a reference reads back as the target eid', () => {
   assertEquals(eids(s.read('.product.maker')), ['p1'])
 })
 
-Deno.test('a reference-deref path filters through the target', () => {
+test('a reference-deref path filters through the target', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
@@ -65,7 +66,7 @@ Deno.test('a reference-deref path filters through the target', () => {
   assertEquals(eids(s.read('.product.maker.doc.title~=acme')), ['p1'])
 })
 
-Deno.test('a reverse child property presence tests the child', () => {
+test('a reverse child property presence tests the child', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'p1' }, product: { price: 1 } },
@@ -76,12 +77,12 @@ Deno.test('a reverse child property presence tests the child', () => {
   assertEquals(eids(s.read('.reviews.title')), ['p1'])
 })
 
-Deno.test('a bare-word query requires an explicitly registered extension', () => {
+test('a bare-word query requires an explicitly registered extension', () => {
   let s = store()
   assertThrows(() => s.read('mug'), Unsupported)
 })
 
-Deno.test('the kind scope selects the most specific kind', () => {
+test('the kind scope selects the most specific kind', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'p1' }, doc: { title: 'Mug' }, product: { price: 1 } },
@@ -91,7 +92,7 @@ Deno.test('the kind scope selects the most specific kind', () => {
   assertEquals(eids(s.read('.kind=doc')), ['d1'])
 })
 
-Deno.test('rows() hands back an aggregate shape verbatim', () => {
+test('rows() hands back an aggregate shape verbatim', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'p1' }, product: { status: 'live' } },
@@ -101,7 +102,7 @@ Deno.test('rows() hands back an aggregate shape verbatim', () => {
   assertEquals(Number(s.rows('.status=live&.count')[0].n), 2)
 })
 
-Deno.test('the newest-first window pages a prefix', () => {
+test('the newest-first window pages a prefix', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'p1' }, product: { price: 1 } },
@@ -115,7 +116,7 @@ Deno.test('the newest-first window pages a prefix', () => {
   )
 })
 
-Deno.test('a gathered bundle carries the entity number storage minted', () => {
+test('a gathered bundle carries the entity number storage minted', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'p1' }, product: { price: 1 } },
@@ -124,7 +125,7 @@ Deno.test('a gathered bundle carries the entity number storage minted', () => {
   assertEquals(s.read('.price=2')[0].entity, { eid: 'p2', num: 2 })
 })
 
-Deno.test('whole-set gathers are bounded by vocabulary, not the 1000 entities; get preserves identity order', () => {
+test('whole-set gathers are bounded by vocabulary, not the 1000 entities; get preserves identity order', () => {
   let queries = 0
   let s = storage(spy(mem(), () => void queries++), vocab)
   s.install()
@@ -150,7 +151,7 @@ Deno.test('whole-set gathers are bounded by vocabulary, not the 1000 entities; g
   assertEquals(dead.product, undefined)
 })
 
-Deno.test('wide sparse gathers cross owner and vocabulary chunks without stale occupancy', () => {
+test('wide sparse gathers cross owner and vocabulary chunks without stale occupancy', () => {
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
@@ -191,7 +192,7 @@ Deno.test('wide sparse gathers cross owner and vocabulary chunks without stale o
   assertEquals(s.tx((tx) => tx.get(ids.slice(0, 2)))[0].facet0, undefined)
 })
 
-Deno.test('numeric gather ownership stays internal; present is an ordinary property', () => {
+test('numeric gather ownership stays internal; present is an ordinary property', () => {
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
@@ -229,7 +230,7 @@ Deno.test('numeric gather ownership stays internal; present is an ordinary prope
 // plugin was opt in (T-37831). One shape: what the vocabulary declares is what
 // a row comes back wearing, so the same store cannot answer a number for an
 // old row and none for a new one.
-Deno.test('a store with no number in its vocabulary shows none it has', () => {
+test('a store with no number in its vocabulary shows none it has', () => {
   let driver = mem()
   let vocab = loadVocab({
     $defs: {
@@ -255,7 +256,7 @@ Deno.test('a store with no number in its vocabulary shows none it has', () => {
   })
 })
 
-Deno.test('a wide gather avoids compound SELECT limits', () => {
+test('a wide gather avoids compound SELECT limits', () => {
   // Workerd refuses a sixth compound SELECT arm. Presence is one VALUES
   // statement even on a driver that reports no compound width.
   let asked: string[] = []
@@ -307,7 +308,7 @@ Deno.test('a wide gather avoids compound SELECT limits', () => {
   }
 })
 
-Deno.test('a reverse read binds one value per property, however many it asks about', async () => {
+test('a reverse read binds one value per property, however many it asks about', async () => {
   // A Durable Object's SQLite binds 100 values a statement and refuses the
   // 101st, which is what erasing a space met: the gather's read of everything
   // pointing at what a delete took bound one per property per entity.
@@ -332,7 +333,7 @@ Deno.test('a reverse read binds one value per property, however many it asks abo
   assertEquals(snap.near.get('product.maker m0'), [])
 })
 
-Deno.test('a disjunction longer than SQLite nests expressions reads', () => {
+test('a disjunction longer than SQLite nests expressions reads', () => {
   let s = store()
   seed(s, [
     { entity: { eid: 'm1' }, doc: { title: 'Acme' } },

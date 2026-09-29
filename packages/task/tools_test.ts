@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -18,7 +19,7 @@ let asked = (args: Record<string, unknown>): [Bundle, Graph] => [
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
-Deno.test('every task tool is declared and implemented', () => {
+test('every task tool is declared and implemented', () => {
   assertEquals(loadTools(taskDoc, tools).map((t) => t.name).sort(), [
     'task_list',
     'task_new',
@@ -26,7 +27,7 @@ Deno.test('every task tool is declared and implemented', () => {
   ])
 })
 
-Deno.test('a new task is task{} plus the words, filed where the line said', async () => {
+test('a new task is task{} plus the words, filed where the line said', async () => {
   let [said] = await tools.task_new!(
     ...asked({ title: 'ship it', project: 'p19', priority: 2 }),
   ) as Bundle[]
@@ -35,20 +36,20 @@ Deno.test('a new task is task{} plus the words, filed where the line said', asyn
   assertEquals(comp(said, 'filed'), { project: 'p19', priority: 2 })
 })
 
-Deno.test('a task nobody filed wears no filing', async () => {
+test('a task nobody filed wears no filing', async () => {
   let [said] = await tools.task_new!(
     ...asked({ title: 'a microtask' }),
   ) as Bundle[]
   assertEquals(Object.keys(said).sort(), ['doc', 'entity', 'task'])
 })
 
-Deno.test('a listing always says .task, and open unless told otherwise', () => {
+test('a listing always says .task, and open unless told otherwise', () => {
   assertEquals(listing(), '.task&.task.status=open&*')
   assertEquals(listing('.filed.project=P-19'), '.task&.filed.project=P-19&*')
   assertEquals(listing('hobbit', 5), '.task&hobbit&.limit=5&*')
 })
 
-Deno.test('a listing of alternatives lists only tasks', async () => {
+test('a listing of alternatives lists only tasks', async () => {
   let { g } = teamGraph()
   await g.apply([
     { entity: { eid: 't' }, task: {}, doc: { title: 'fig' } },
@@ -61,7 +62,7 @@ Deno.test('a listing of alternatives lists only tasks', async () => {
   assertEquals(found.map((b) => b.entity.eid), ['t'])
 })
 
-Deno.test('a status is the marks that mean it', async () => {
+test('a status is the marks that mean it', async () => {
   let { g } = teamGraph()
   await g.apply([{ entity: { eid: 't' }, task: {}, doc: { title: 'a task' } }])
   let move = async (status: string) => {
@@ -76,7 +77,7 @@ Deno.test('a status is the marks that mean it', async () => {
   assertEquals(await move('open'), 'open')
 })
 
-Deno.test('what the line left out is left alone', async () => {
+test('what the line left out is left alone', async () => {
   let { g } = teamGraph()
   await g.apply([{
     entity: { eid: 't' },

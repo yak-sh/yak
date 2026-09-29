@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { voiceMeter } from './voice-meter.ts'
 
-Deno.test('the waveform and talking state follow audio samples, not a voice flag', () => {
+test('the waveform and talking state follow audio samples, not a voice flag', () => {
   let data = new Uint8Array(256).fill(128)
   let analyser = {
     fftSize: data.length,

@@ -1,6 +1,7 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { instructionFiles } from './host.ts'
-Deno.test('generated files remain disk snapshots, aliases dedupe, invalid reads fail', async () => {
+test('generated files remain disk snapshots, aliases dedupe, invalid reads fail', async () => {
   let dir = Deno.makeTempDirSync()
   try {
     Deno.mkdirSync(dir + '/.agents')

@@ -1,5 +1,6 @@
 // The checks: a board whose query stopped routing, and work no project holds.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
@@ -33,7 +34,7 @@ let seeded = async (...bundles: Bundle[]) => {
   return g
 }
 
-Deno.test('a board that still routes is nothing to report', async () => {
+test('a board that still routes is nothing to report', async () => {
   let said = await checkup(
     'board_check',
     await seeded({ entity: { eid: 'b1' }, board: { query: '.status=open' } }),
@@ -42,7 +43,7 @@ Deno.test('a board that still routes is nothing to report', async () => {
   assert(said.body.endsWith('— nothing to report'), said.body)
 })
 
-Deno.test('a board whose query no longer routes is a fail', async () => {
+test('a board whose query no longer routes is a fail', async () => {
   let said = await checkup(
     'board_check',
     await seeded({ entity: { eid: 'b1' }, board: { query: '.staus=open' } }),
@@ -52,7 +53,7 @@ Deno.test('a board whose query no longer routes is a fail', async () => {
   assert(said.body.includes('.staus=open'), said.body)
 })
 
-Deno.test('governed work under a project, directly or by containment', async () => {
+test('governed work under a project, directly or by containment', async () => {
   let said = await checkup(
     'project_check',
     await seeded(
@@ -65,7 +66,7 @@ Deno.test('governed work under a project, directly or by containment', async () 
   assertEquals(said.level, undefined)
 })
 
-Deno.test('a task no project reaches is a fail', async () => {
+test('a task no project reaches is a fail', async () => {
   let said = await checkup(
     'project_check',
     await seeded(

@@ -1,5 +1,6 @@
 // Entry renderer tests hold specialization, truncation, and the expanded
 // view picker without a server or session transcript.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
@@ -60,7 +61,7 @@ let rows = () => {
   }
 }
 
-Deno.test('entry registry specializes command and result faces', () => {
+test('entry registry specializes command and result faces', () => {
   rows()
   let [call, answer] = Object.keys(cache.value)
   assertEquals(resolve(ent(call), 'Entry.Summary').Render, CommandSummary)
@@ -71,7 +72,7 @@ Deno.test('entry registry specializes command and result faces', () => {
   cache.value = {}
 })
 
-Deno.test('command and output summaries show one line and a more control', () =>
+test('command and output summaries show one line and a more control', () =>
   withDom((root) => {
     rows()
     let [call, answer] = Object.keys(cache.value)
@@ -93,7 +94,7 @@ Deno.test('command and output summaries show one line and a more control', () =>
     assertEquals(root.querySelector('.Entry-fail'), null)
   }))
 
-Deno.test('open summaries grow their own content in place, no second card', () =>
+test('open summaries grow their own content in place, no second card', () =>
   withDom((root) => {
     rows()
     let [call, answer] = Object.keys(cache.value)
@@ -123,7 +124,7 @@ Deno.test('open summaries grow their own content in place, no second card', () =
     assertEquals(root.querySelector('.Entry_Err')?.textContent, 'warning\nmore')
   }))
 
-Deno.test('generic entry summaries are metadata variants', () =>
+test('generic entry summaries are metadata variants', () =>
   withDom((root) => {
     let e = {
       eid: '00000000-0000-4000-8000-000000000004',
@@ -135,7 +136,7 @@ Deno.test('generic entry summaries are metadata variants', () =>
     assertEquals(root.querySelector('.Entry_Meta'), null)
   }))
 
-Deno.test('message summaries preserve who spoke', () =>
+test('message summaries preserve who spoke', () =>
   withDom((root) => {
     let entry = { session: '00000000-0000-4000-8000-000000000001', seq: 3 }
     let e = {
@@ -156,7 +157,7 @@ Deno.test('message summaries preserve who spoke', () =>
     )
   }))
 
-Deno.test('session prompts are collapsed persona entries', () =>
+test('session prompts are collapsed persona entries', () =>
   withDom((root) => {
     let e: Ent = {
       eid: 'prompt',
@@ -178,7 +179,7 @@ Deno.test('session prompts are collapsed persona entries', () =>
     )
   }))
 
-Deno.test('normalized tools and shell calls share compact entry rows', () =>
+test('normalized tools and shell calls share compact entry rows', () =>
   withDom((root) => {
     render(
       <EntryBody
@@ -212,7 +213,7 @@ Deno.test('normalized tools and shell calls share compact entry rows', () =>
     assertEquals(root.querySelector('.Entry-pending') != null, true)
   }))
 
-Deno.test('tool results settle their call row instead of adding a row', () => {
+test('tool results settle their call row instead of adding a row', () => {
   rows()
   let [call, answer] = Object.keys(cache.value)
   let merged = mergeTools([
@@ -240,7 +241,7 @@ Deno.test('tool results settle their call row instead of adding a row', () => {
   cache.value = {}
 })
 
-Deno.test('normalized user messages render as entry markdown', () =>
+test('normalized user messages render as entry markdown', () =>
   withDom((root) => {
     render(
       <EntryBody
@@ -255,7 +256,7 @@ Deno.test('normalized user messages render as entry markdown', () =>
     assertEquals(root.querySelector('.Entry-user strong')?.textContent, 'hello')
   }))
 
-Deno.test('expanded entries offer only specifically rendered faces', () =>
+test('expanded entries offer only specifically rendered faces', () =>
   withDom((root) => {
     rows()
     let [, answer] = Object.keys(cache.value)

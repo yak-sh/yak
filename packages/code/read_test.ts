@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   exportsOf,
@@ -10,7 +11,7 @@ import {
   specifiers,
 } from './read.ts'
 
-Deno.test('header: a // paragraph, a /** */ block, and no header at all', () => {
+test('header: a // paragraph, a /** */ block, and no header at all', () => {
   let cases: [string, string][] = [
     [
       '// Owns the store.\n//\n// Nothing else.\nlet x = 1',
@@ -27,7 +28,7 @@ Deno.test('header: a // paragraph, a /** */ block, and no header at all', () => 
   for (let [text, want] of cases) assertEquals(header(text), want, text)
 })
 
-Deno.test('specifiers: statements at the start of a line, never quoted ones', () => {
+test('specifiers: statements at the start of a line, never quoted ones', () => {
   let text = [
     "import { a } from './a.ts'",
     "import type { B } from '../b.ts'",
@@ -64,14 +65,14 @@ let root = manifest(
   JSON.stringify({ name: 'tasks', exports: './src/mod.ts' }),
 )!
 
-Deno.test('manifest: a named package, and nothing for an unnamed one', () => {
+test('manifest: a named package, and nothing for an unnamed one', () => {
   assertEquals(git.dir, 'packages/git')
   assertEquals(root.exports, { '.': './src/mod.ts' })
   assertEquals(manifest('a/deno.json', '{"tasks": {}}'), undefined)
   assertEquals(manifest('a/deno.json', 'not json'), undefined)
 })
 
-Deno.test('resolve and owner: relative paths, workspace names, and the nearest manifest', () => {
+test('resolve and owner: relative paths, workspace names, and the nearest manifest', () => {
   let pkgs: Manifest[] = [git, root]
   assertEquals(resolve('./b.ts', 'src/a.ts', pkgs), 'src/b.ts')
   assertEquals(resolve('../x/y.ts', 'src/a/b.ts', pkgs), 'src/x/y.ts')
@@ -86,7 +87,7 @@ Deno.test('resolve and owner: relative paths, workspace names, and the nearest m
   assertEquals(owner('src/db.ts', pkgs)?.name, 'tasks')
 })
 
-Deno.test('markdown: frontmatter title, first heading, or the file name', () => {
+test('markdown: frontmatter title, first heading, or the file name', () => {
   assertEquals(markdown('a/README.md', '# Hello\n\nBody'), {
     title: 'Hello',
     body: '# Hello\n\nBody',
@@ -98,7 +99,7 @@ Deno.test('markdown: frontmatter title, first heading, or the file name', () => 
   assertEquals(markdown('docs/notes.md', 'plain').title, 'notes.md')
 })
 
-Deno.test('exportsOf: own exports once each, never a re-export', () => {
+test('exportsOf: own exports once each, never a re-export', () => {
   let url = 'file:///r/a.ts'
   let decl = (filename: string, kind: string, line: number, doc?: string) => ({
     location: { filename, line },

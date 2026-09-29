@@ -1,6 +1,7 @@
 // The read side: what each mode says to an owner, a granted member, a member
 // with nothing, and a stranger.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Storage } from '@yaks/graph'
 import { policy } from './policy.ts'
@@ -23,12 +24,12 @@ let writes = (s: Storage, app: string) =>
     ) => [who, may(s).canWrite(ids[who], app)]),
   )
 
-Deno.test('a thing that never said is public', () => {
+test('a thing that never said is public', () => {
   let s = store()
   assertEquals(may(s).modeOf(ids.list), 'public')
 })
 
-Deno.test('public: anyone reads, only owner and editor write', () => {
+test('public: anyone reads, only owner and editor write', () => {
   let s = store()
   setMode(s, ids.list, 'public')
   assertEquals(reads(s, ids.list), {
@@ -45,7 +46,7 @@ Deno.test('public: anyone reads, only owner and editor write', () => {
   })
 })
 
-Deno.test('open: anyone reads and anyone writes, nobody included', () => {
+test('open: anyone reads and anyone writes, nobody included', () => {
   let s = store()
   setMode(s, ids.list, 'open')
   assertEquals(reads(s, ids.list), {
@@ -64,7 +65,7 @@ Deno.test('open: anyone reads and anyone writes, nobody included', () => {
   assertEquals(may(s).canWrite(null, ids.list), true)
 })
 
-Deno.test('private: only someone holding a level sees it at all', () => {
+test('private: only someone holding a level sees it at all', () => {
   let s = store()
   setMode(s, ids.list, 'private')
   // Mo is only a viewer — a viewer still reads a private thing.
@@ -83,7 +84,7 @@ Deno.test('private: only someone holding a level sees it at all', () => {
   })
 })
 
-Deno.test('a member with no grant reaches a private thing like a stranger', () => {
+test('a member with no grant reaches a private thing like a stranger', () => {
   let s = store()
   setMode(s, ids.notes, 'private')
   // Nobody was granted the notes; only the club's owner gets in.
@@ -95,13 +96,13 @@ Deno.test('a member with no grant reaches a private thing like a stranger', () =
   })
 })
 
-Deno.test('the space owner is an implicit owner of everything in it', () => {
+test('the space owner is an implicit owner of everything in it', () => {
   let s = store()
   assertEquals(may(s).levelOf(ids.dana, ids.notes), 'owner')
   assertEquals(may(s).levelOf(ids.raj, ids.notes), null)
 })
 
-Deno.test('a grant admits a non-member', () => {
+test('a grant admits a non-member', () => {
   let s = store()
   setMode(s, ids.notes, 'private')
   assertEquals(may(s).canRead(ids.kim, ids.notes), false)
@@ -111,7 +112,7 @@ Deno.test('a grant admits a non-member', () => {
   assertEquals(may(s).canWrite(ids.kim, ids.notes), true)
 })
 
-Deno.test('a share link’s bearer acts as the grant they opened', () => {
+test('a share link’s bearer acts as the grant they opened', () => {
   let s = store()
   setMode(s, ids.notes, 'private')
   grant(s, 'share', { app: ids.notes, token: 'x7v2', access: 'viewer' })
@@ -123,7 +124,7 @@ Deno.test('a share link’s bearer acts as the grant they opened', () => {
   assertEquals(may(s).levelOf('share', ids.list), null)
 })
 
-Deno.test('without a space, only grants speak', () => {
+test('without a space, only grants speak', () => {
   let s = store()
   let bare = policy(s)
   assertEquals(bare.levelOf(ids.dana, ids.notes), null)

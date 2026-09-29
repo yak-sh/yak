@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { graphMCP } from './mcp_registry.ts'
@@ -6,7 +7,7 @@ import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
 import { harness, repo } from './testing.ts'
 
-Deno.test('graph MCP definitions persist; rename keeps identity, edits and removal affect next discovery', async () => {
+test('graph MCP definitions persist; rename keeps identity, edits and removal affect next discovery', async () => {
   const f = fixture()
   const server = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -81,7 +82,7 @@ Deno.test('graph MCP definitions persist; rename keeps identity, edits and remov
   }
 })
 
-Deno.test('bad MCP definitions and transport failures do not block other servers and are visible in authorization panel', async () => {
+test('bad MCP definitions and transport failures do not block other servers and are visible in authorization panel', async () => {
   const f = fixture()
   const server = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -130,7 +131,7 @@ Deno.test('bad MCP definitions and transport failures do not block other servers
   }
 })
 
-Deno.test('an already-running agent discovers graph additions on its next ask and hides disabled tools', async () => {
+test('an already-running agent discovers graph additions on its next ask and hides disabled tools', async () => {
   const { local } = await import('./local.ts')
   const f = fixture()
   const server = Deno.serve(
@@ -184,7 +185,7 @@ Deno.test('an already-running agent discovers graph additions on its next ask an
   }
 })
 
-Deno.test('reconfiguration changes tool identity without retargeting previously issued calls', async () => {
+test('reconfiguration changes tool identity without retargeting previously issued calls', async () => {
   const a = fixture(), b = fixture()
   const one = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -222,7 +223,7 @@ Deno.test('reconfiguration changes tool identity without retargeting previously 
   }
 })
 
-Deno.test('graph MCP namespace collisions fail explicitly without opening duplicate connections', async () => {
+test('graph MCP namespace collisions fail explicitly without opening duplicate connections', async () => {
   const h = await harness(), registry = graphMCP(h, signins(h))
   try {
     await h.g.apply(['yaks.app', 'yaks_app'].map((name) => ({
@@ -240,7 +241,7 @@ Deno.test('graph MCP namespace collisions fail explicitly without opening duplic
   }
 })
 
-Deno.test('issued calls keep their handler when another ask refreshes the same public name', async () => {
+test('issued calls keep their handler when another ask refreshes the same public name', async () => {
   const first = fixture(), second = fixture()
   const one = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },

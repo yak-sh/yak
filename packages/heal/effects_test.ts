@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   type Bundle,
@@ -89,7 +90,7 @@ let fail = async (g: Graph, message: string, on = `s${++n}`) => {
 let bugs = async (g: Graph) => await g.read('.bug&*')
 let fixers = async (g: Graph) => await g.read('.fixer&*')
 
-Deno.test('a failure files one open task about it, under its project', async () => {
+test('a failure files one open task about it, under its project', async () => {
   let g = await host({ provider: undefined })
   let on = await fail(g, 'no such table: bug')
   let [bug] = await bugs(g)
@@ -109,7 +110,7 @@ Deno.test('a failure files one open task about it, under its project', async () 
   assertEquals(comp(there, 'filed')?.project, 'venture')
 })
 
-Deno.test('a storm counts on one task instead of filing more', async () => {
+test('a storm counts on one task instead of filing more', async () => {
   let g = await host({ provider: undefined })
   await fail(g, 'lock held by S-1 at /a/b.ts:3:4')
   let twice = await fail(g, 'lock held by S-99 at /c.ts:1:1')
@@ -132,7 +133,7 @@ Deno.test('a storm counts on one task instead of filing more', async () => {
   assertEquals(comp(again, 'bug')?.hits, 2)
 })
 
-Deno.test('a transient, an empty message and an expected error file nothing', async () => {
+test('a transient, an empty message and an expected error file nothing', async () => {
   let g = await host({ provider: undefined })
   await fail(g, 'fetch timed out')
   await fail(g, '  ')
@@ -142,7 +143,7 @@ Deno.test('a transient, an empty message and an expected error file nothing', as
   assertEquals((await bugs(g)).length, 0)
 })
 
-Deno.test('a new bug starts one fixer holding it', async () => {
+test('a new bug starts one fixer holding it', async () => {
   let g = await host({ effort: 'high' })
   await fail(g, 'exit 127: codex not found')
   let [bug] = await bugs(g)
@@ -161,14 +162,14 @@ Deno.test('a new bug starts one fixer holding it', async () => {
   assert(String(comp(ask, 'content')?.body).includes('codex not found'))
 })
 
-Deno.test('off: no provider files and starts nothing', async () => {
+test('off: no provider files and starts nothing', async () => {
   let g = await host({ provider: undefined })
   await fail(g, 'boom')
   assertEquals((await bugs(g)).length, 1)
   assertEquals((await fixers(g)).length, 0)
 })
 
-Deno.test('muted: nofix on the project, or on home for all', async () => {
+test('muted: nofix on the project, or on home for all', async () => {
   for (let muted of ['venture', 'home']) {
     let g = await host()
     await g.apply([{ entity: { eid: muted }, nofix: {} }], { trusted: true })
@@ -180,7 +181,7 @@ Deno.test('muted: nofix on the project, or on home for all', async () => {
   }
 })
 
-Deno.test('at cap: the bug waits, and starts when a fixer exits', async () => {
+test('at cap: the bug waits, and starts when a fixer exits', async () => {
   let g = await host({ cap: 1 })
   await fail(g, 'first')
   await fail(g, 'second')
@@ -194,7 +195,7 @@ Deno.test('at cap: the bug waits, and starts when a fixer exits', async () => {
   assertEquals((await fixers(g)).length, 2)
 })
 
-Deno.test('cooling down: a fault fixed a moment ago starts no second fixer', async () => {
+test('cooling down: a fault fixed a moment ago starts no second fixer', async () => {
   let g = await host()
   await fail(g, 'flaky write')
   let [bug] = await bugs(g)
@@ -215,7 +216,7 @@ Deno.test('cooling down: a fault fixed a moment ago starts no second fixer', asy
   assertEquals((await fixers(quick)).length, 2)
 })
 
-Deno.test('the boot sweep finds the open bugs nobody holds', async () => {
+test('the boot sweep finds the open bugs nobody holds', async () => {
   let g = await host({ provider: undefined })
   await fail(g, 'one')
   await fail(g, 'two')

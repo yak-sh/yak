@@ -2,6 +2,7 @@
 // through Preact + linkedom, so they import the heavy Admin.tsx and cannot hit
 // the 1ms budget. The PURE census-derivation tests moved to admin_logic_test.ts
 // (light imports, sub-ms); keep only the render tests here.
+import { test } from '@yaks/testing'
 import { until } from '../testing.ts'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
@@ -34,7 +35,7 @@ let stubFetch = () => {
 let settle = (root: Element, sel = '.Admin_Cell') =>
   until(() => root.querySelector(sel), { label: sel })
 
-Deno.test('the index shows the component description from its vocabulary', async () => {
+test('the index shows the component description from its vocabulary', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -71,7 +72,7 @@ Deno.test('the index shows the component description from its vocabulary', async
   }
 })
 
-Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
+test('the index is a typed grid and grid mode is bare tiles', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -130,7 +131,7 @@ Deno.test('the index is a typed grid and grid mode is bare tiles', async () => {
   }
 })
 
-Deno.test('facet pages list their carriers without widening task', async () => {
+test('facet pages list their carriers without widening task', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -189,7 +190,7 @@ Deno.test('facet pages list their carriers without widening task', async () => {
   }
 })
 
-Deno.test('an admin query deep link filters the index', async () => {
+test('an admin query deep link filters the index', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -242,7 +243,7 @@ Deno.test('an admin query deep link filters the index', async () => {
   }
 })
 
-Deno.test('a refused direct query replaces partial rows with retry', async () => {
+test('a refused direct query replaces partial rows with retry', async () => {
   let priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

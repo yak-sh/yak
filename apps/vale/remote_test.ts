@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import { follow, type Motion, type Remote } from './remote.ts'
 
@@ -23,7 +24,7 @@ let walk = (arrives: number[]) => {
   return points
 }
 
-Deno.test('a peer walking at relay pace keeps moving between packets', () => {
+test('a peer walking at relay pace keeps moving between packets', () => {
   let points = walk(Array.from({ length: 13 }, (_, i) => i * 100))
   // A ten-Hz relay should look like a walk at sixty-Hz, not ten short dashes.
   for (let i = 8; i < points.length; i++) {
@@ -33,7 +34,7 @@ Deno.test('a peer walking at relay pace keeps moving between packets', () => {
   assert(points.at(-1)! > 5)
 })
 
-Deno.test('a delayed update does not make a walking peer stop or jump', () => {
+test('a delayed update does not make a walking peer stop or jump', () => {
   let points = walk([0, 100, 200, 1000, 1100, 1200])
   assert(points[35] > points[20] + 1)
   assert(points[45] > points[35])
@@ -43,7 +44,7 @@ Deno.test('a delayed update does not make a walking peer stop or jump', () => {
   }
 })
 
-Deno.test('a stop and a campfire teleport do not keep old momentum', () => {
+test('a stop and a campfire teleport do not keep old momentum', () => {
   let moving = follow(null, body(0), 0, 0.02)
   moving = follow(moving, body(1), 200, 0.02)
   let stopped = follow(moving, body(1, 0, 'idle'), 220, 0.02)

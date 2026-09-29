@@ -1,4 +1,5 @@
 // A card's reactive style follows graph moves and its narrow stacking signal.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { computed, signal } from '@preact/signals'
 import { assertEquals } from '@std/assert'
@@ -17,7 +18,7 @@ let pin = (x: number, y: number, z: number) => ({
   z,
 })
 
-Deno.test('card style follows moved coordinates without a z change', () => {
+test('card style follows moved coordinates without a z change', () => {
   cache.value = {
     'card-style': {
       pin: pin(10, 20, 1),

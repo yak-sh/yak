@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { Usage } from './args.ts'
 import { aimed } from './run.ts'
@@ -7,7 +8,7 @@ import { configPath, OWN_CONFIG } from './config.ts'
 // every test running beside this one, so none is ever set.
 let envOf = (vars: Record<string, string>) => (name: string) => vars[name]
 
-Deno.test('a line says where it runs: a config it opens, or a door it talks to', () => {
+test('a line says where it runs: a config it opens, or a door it talks to', () => {
   // A home with no graph of its own, so a case that means "nothing said" is
   // not answered by the box this test runs on.
   let bare = Deno.makeTempDirSync()
@@ -55,7 +56,7 @@ Deno.test('a line says where it runs: a config it opens, or a door it talks to',
   Deno.removeSync(bare)
 })
 
-Deno.test('a box that keeps a graph of its own is where a bare line runs', () => {
+test('a box that keeps a graph of its own is where a bare line runs', () => {
   let home = Deno.makeTempDirSync()
   let own = `${home}/${OWN_CONFIG}`
   let env = envOf({ HOME: home })

@@ -3,6 +3,7 @@
 // furniture an engine or a model reads — title, description, canonical, Open
 // Graph, JSON-LD — against the lists seo.ts builds `/sitemap.xml`,
 // `/robots.txt` and `/llms.txt` from (T-34288).
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { REPLY_TO } from './mail.ts'
@@ -46,7 +47,7 @@ let pages = [
 
 let branded = [...pages, 'style-guide.html']
 
-Deno.test('every page wears the raster yak', () => {
+test('every page wears the raster yak', () => {
   for (let page of branded) {
     let html = read(page)
     // A page in a subdirectory names the site's own files from the root.
@@ -74,7 +75,7 @@ let png = (name: string, width: number, height: number, kind = 6) => {
   assertEquals(bytes[25], kind, `${name} has the wrong color type`)
 }
 
-Deno.test('the yak exports have their intended sizes and transparency', () => {
+test('the yak exports have their intended sizes and transparency', () => {
   // The opaque share card is not the yak alone: 1200×630 is what
   // every unfurler crops to, and og.svg beside it is what it is drawn from.
   png('og.png', 1200, 630, 2)
@@ -90,7 +91,7 @@ Deno.test('the yak exports have their intended sizes and transparency', () => {
 // exist, and the SVG carries its own bytes — an `<img>` loads nothing a
 // referenced SVG points at, so an external `href` here would render an empty
 // tile in every client that reads it.
-Deno.test('the connector icon is square, self-contained and on the ground', () => {
+test('the connector icon is square, self-contained and on the ground', () => {
   png('connector-512.png', 512, 512, 2)
   let svg = read('connector.svg').replace(/<!--[^]*?-->/g, '')
   assertStringIncludes(svg, 'viewBox="0 0 512 512"')
@@ -125,7 +126,7 @@ let FOOT = [
   '/cookies',
 ]
 
-Deno.test('every jump names a section on its own page', () => {
+test('every jump names a section on its own page', () => {
   for (let page of branded) {
     let html = read(page)
     let ids = new Set(
@@ -139,7 +140,7 @@ Deno.test('every jump names a section on its own page', () => {
   }
 })
 
-Deno.test('the style guide demonstrates every shared component', () => {
+test('the style guide demonstrates every shared component', () => {
   let css = read('style.css').replace(/\/\*[\s\S]*?\*\//g, '')
     .split('@layer components {')[1].split('@layer sections {')[0]
   let components = new Set(
@@ -159,7 +160,7 @@ Deno.test('the style guide demonstrates every shared component', () => {
 // that appears on one page and not the next is how a visitor loses the thread
 // (T-33643). The current page marks itself with aria-current and nothing else,
 // so the set of destinations is identical everywhere.
-Deno.test('every page carries the same four nav links', () => {
+test('every page carries the same four nav links', () => {
   let want = ['/#how', '/pricing', '/docs', '/login']
   for (let page of branded) {
     let nav = read(page).split('<nav class="Nav"')[1]?.split('</nav>')[0] ?? ''
@@ -177,7 +178,7 @@ Deno.test('every page carries the same four nav links', () => {
 // on its own <body>. A frame class left on a <main> is exactly the bug this
 // replaced — it sized the document and left the furniture around it at some
 // other width — so the mains carry the frame and nothing else.
-Deno.test('the frame is asked for on the body, above what it frames', () => {
+test('the frame is asked for on the body, above what it frames', () => {
   let css = read('style.css')
   assertStringIncludes(css, '  .Top,\n  .Page,\n  .Foot {\n    width: min(')
   assert(!css.includes('.Top-home'), 'the header still has a width of its own')
@@ -202,7 +203,7 @@ Deno.test('the frame is asked for on the body, above what it frames', () => {
 // "100 emails a month" of a platform that could not send one at all.
 let flat = (html: string) => html.replace(/\s+/g, ' ')
 
-Deno.test('the plan pages carry the email allowance the code enforces', () => {
+test('the plan pages carry the email allowance the code enforces', () => {
   let free = `${LETTERS.free} emails a month`
   let plus = `${LETTERS.plus.toLocaleString('en-US')} emails a month`
   // The technical page is markdown and says the same two numbers, which is
@@ -215,7 +216,7 @@ Deno.test('the plan pages carry the email allowance the code enforces', () => {
   }
 })
 
-Deno.test('the plan cards and Plus offer carry the meter allowances', () => {
+test('the plan cards and Plus offer carry the meter allowances', () => {
   let allowances = (tier: 'free' | 'plus') => {
     let limits = tier == 'plus' ? PLUS : FREE
     return [
@@ -249,7 +250,7 @@ Deno.test('the plan cards and Plus offer carry the meter allowances', () => {
   }
 })
 
-Deno.test('every footer link names a page that is there', () => {
+test('every footer link names a page that is there', () => {
   for (let page of branded) {
     let foot = parseHTML(read(page)).document.querySelector('body > footer')
       ?.outerHTML ?? ''
@@ -273,7 +274,7 @@ let pathOf = (page: string) =>
 // and the page reads them from there. Everything the file pages are held to —
 // canonical, Open Graph, one h1, a place in the sitemap and in llms.txt — it is
 // held to here, against the page it actually serves.
-Deno.test('the gallery is a page of this site, drawn rather than filed', async () => {
+test('the gallery is a page of this site, drawn rather than filed', async () => {
   assert(!SITE.includes(GALLERY.path), 'the gallery is not a file in public/')
   assertEquals(RENDERED.map((p) => p.path), [
     '/gallery',
@@ -313,7 +314,7 @@ Deno.test('the gallery is a page of this site, drawn rather than filed', async (
 
 // The rename is a rename: the link text and the address both moved, and a
 // page still saying the old one would be a page pointing at a 301 (T-37752).
-Deno.test('no page still says Technical, or links /technical', () => {
+test('no page still says Technical, or links /technical', () => {
   for (let page of branded) {
     let html = read(page)
     assertEquals(html.includes('href="/technical"'), false, page)
@@ -321,7 +322,7 @@ Deno.test('no page still says Technical, or links /technical', () => {
   }
 })
 
-Deno.test('the sitemap and the pages on disk are one list', () => {
+test('the sitemap and the pages on disk are one list', () => {
   assertEquals(SITE.map(fileAt).sort(), [...pages].sort())
   // The style guide is public and deliberately not in it, so it says noindex
   // for itself rather than being quietly absent.
@@ -332,7 +333,7 @@ Deno.test('the sitemap and the pages on disk are one list', () => {
   )
 })
 
-Deno.test('every page carries the head an engine reads', () => {
+test('every page carries the head an engine reads', () => {
   let titles: string[] = []
   for (let page of branded) {
     let html = read(page)
@@ -365,7 +366,7 @@ Deno.test('every page carries the head an engine reads', () => {
   assertEquals(new Set(titles).size, titles.length, 'two pages share a title')
 })
 
-Deno.test('every public page hands a stranger sign-in, never /connect', () => {
+test('every public page hands a stranger sign-in, never /connect', () => {
   for (let page of branded) {
     let body = read(page).split('</head>')[1] ?? ''
     assert(!body.includes('href="/connect"'), `${page} points at /connect`)
@@ -381,7 +382,7 @@ Deno.test('every public page hands a stranger sign-in, never /connect', () => {
   ], 'a home-page door misses sign-in')
 })
 
-Deno.test('an assistant name is escaped on the sign-in page', async () => {
+test('an assistant name is escaped on the sign-in page', async () => {
   let html = await askEmail(null, null, 'A & B').text()
   assertStringIncludes(html, 'A &amp; B')
   assertEquals(html.includes('A & B'), false)
@@ -404,7 +405,7 @@ let balanced = (xml: string) => {
   return stack.length == 0
 }
 
-Deno.test('the sitemap lists every address, and parses', () => {
+test('the sitemap lists every address, and parses', () => {
   let when = '2026-09-05T19:00:00.000Z'
   let xml = sitemap(when)
   assert(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>\n'))
@@ -437,7 +438,7 @@ Deno.test('the sitemap lists every address, and parses', () => {
   assert(!sitemap(null).includes('lastmod'))
 })
 
-Deno.test('robots names every crawler and points at the sitemap', () => {
+test('robots names every crawler and points at the sitemap', () => {
   let groups = new Map<string, string[]>()
   let agent = ''
   let sitemaps: string[] = []
@@ -465,7 +466,7 @@ Deno.test('robots names every crawler and points at the sitemap', () => {
   assertEquals(sitemaps, ['https://yaks.app/sitemap.xml'])
 })
 
-Deno.test('llms.txt links every page and every guide page', () => {
+test('llms.txt links every page and every guide page', () => {
   let site = [
     ...SITE.map((path) => ({
       url: `https://yaks.app${path}`,
@@ -495,7 +496,7 @@ let ld = (html: string): any[] =>
   )]
     .map((m) => JSON.parse(m[1]))
 
-Deno.test('the home page describes itself at the prices the code charges', () => {
+test('the home page describes itself at the prices the code charges', () => {
   let [doc] = ld(read('index.html'))
   assertEquals(doc['@context'], 'https://schema.org')
   // deno-lint-ignore no-explicit-any
@@ -520,7 +521,7 @@ Deno.test('the home page describes itself at the prices the code charges', () =>
   assertEquals(offers.plus.priceSpecification.valueAddedTaxIncluded, true)
 })
 
-Deno.test('the plan pages quote the price the offer names', () => {
+test('the plan pages quote the price the offer names', () => {
   for (let page of ['index.html', 'pricing.html']) {
     assertStringIncludes(flat(read(page)), `$${PRICE.plus} a month`)
   }
@@ -530,7 +531,7 @@ Deno.test('the plan pages quote the price the offer names', () => {
 // T-34554), so the page is held to the rate rather than to a number: whatever
 // the owner sets, the sentence a reader gets says that. The file's own copy is
 // the fallback, and the splice is what makes it current.
-Deno.test('the pages quote the selling fee the code charges', () => {
+test('the pages quote the selling fee the code charges', () => {
   let bps = 250
   assertStringIncludes(
     flat(quoted(read('pricing.html'), bps)),
@@ -554,7 +555,7 @@ Deno.test('the pages quote the selling fee the code charges', () => {
 // Stripe collects the requirements, Stripe's own dashboard). A terms page that
 // drifted from those would be a page claiming a liability split the integration
 // does not have.
-Deno.test('the terms say who the merchant is, and what follows from it', () => {
+test('the terms say who the merchant is, and what follows from it', () => {
   let html = flat(read('terms.html'))
   assertStringIncludes(html, 'you are the merchant')
   // The disclosure Stripe requires of a platform, with both agreements linked.
@@ -587,7 +588,7 @@ Deno.test('the terms say who the merchant is, and what follows from it', () => {
 // claims, so they must not carry a second copy of the number: it said the
 // place "costs nothing" for two days after checkout shipped (T-34355). No
 // figure at all on that page, and a link to the one that has it.
-Deno.test('the terms leave every price to the pricing page', () => {
+test('the terms leave every price to the pricing page', () => {
   let html = flat(read('terms.html'))
   assert(!/\$\s?\d/.test(html), 'the terms quote a price of their own')
   assertStringIncludes(html, '<a href="/pricing">')
@@ -606,7 +607,7 @@ Deno.test('the terms leave every price to the pricing page', () => {
 // "This page is the whole list", so everything the code sends off this box is
 // named on it (T-34352). Each line below is one recipient in the code, and the
 // address is read out of mail.ts rather than typed here.
-Deno.test('the privacy policy names everywhere the code sends something', () => {
+test('the privacy policy names everywhere the code sends something', () => {
   let html = flat(read('privacy.html')).toLowerCase()
   // The feedback tool's letter: the words, who sent them, and where it goes
   // (tools.ts `feedback` → mail.ts REPLY_TO and graph).
@@ -634,14 +635,14 @@ Deno.test('the privacy policy names everywhere the code sends something', () => 
 // Where a security problem goes, said on the page a person reads as well as
 // in the file a scanner fetches (seo.ts `security`), because a researcher who
 // lands on the help page should not have to guess the address.
-Deno.test('the help page says where to report a security problem', () => {
+test('the help page says where to report a security problem', () => {
   let html = flat(read('help.html'))
   assertStringIncludes(html, 'Found a security problem? Email')
   assertStringIncludes(html, `mailto:${REPLY_TO}`)
   assertStringIncludes(security(new Date()), `Contact: mailto:${REPLY_TO}`)
 })
 
-Deno.test('the help page answers its own questions in JSON-LD', () => {
+test('the help page answers its own questions in JSON-LD', () => {
   let html = read('help.html')
   let [faq] = ld(html)
   assertEquals(faq['@type'], 'FAQPage')
@@ -683,7 +684,7 @@ let page = () =>
     plan: { plus: false, ends: '', known: false },
   }).text()
 
-Deno.test('the connect page teaches one agent at a time', async () => {
+test('the connect page teaches one agent at a time', async () => {
   let html = await page()
   assertEquals(
     [...html.matchAll(/<label class="Tabs_Tab" for="tab-([a-z-]+)">/g)]
@@ -736,7 +737,7 @@ Deno.test('the connect page teaches one agent at a time', async () => {
   ) assertStringIncludes(html, value)
 })
 
-Deno.test('each connector form gets only the fields it asks for', async () => {
+test('each connector form gets only the fields it asks for', async () => {
   let html = await page()
   let chatgpt = panel(html, 'chatgpt')
   for (let field of ['Connection', 'Name', 'Description', 'Icon']) {
@@ -760,7 +761,7 @@ Deno.test('each connector form gets only the fields it asks for', async () => {
   assertEquals(panel(html, 'cursor').includes('<dl class="Fields">'), false)
 })
 
-Deno.test('ChatGPT gets a downloadable icon within its upload limit', async () => {
+test('ChatGPT gets a downloadable icon within its upload limit', async () => {
   let html = panel(await page(), 'chatgpt')
   let href = `${SITE_URL}/yaks-app.png`
   assertEquals(count(html, `href="${href}" download="yaks-app.png"`), 2)
@@ -777,7 +778,7 @@ Deno.test('ChatGPT gets a downloadable icon within its upload limit', async () =
   assert(icon.size < 10_000, `yaks-app.png is ${icon.size} bytes`)
 })
 
-Deno.test('the signed-in plan copy derives both tiers from the meter', async () => {
+test('the signed-in plan copy derives both tiers from the meter', async () => {
   for (let plus of [false, true]) {
     let limits = plus ? PLUS : FREE
     let html = flat(
@@ -796,7 +797,7 @@ Deno.test('the signed-in plan copy derives both tiers from the meter', async () 
   }
 })
 
-Deno.test('pricing cards offer signup and omit build quotas', () => {
+test('pricing cards offer signup and omit build quotas', () => {
   for (let page of ['index.html', 'pricing.html']) {
     let { document } = parseHTML(read(page))
     let cards = [...document.querySelectorAll('.Plan')]

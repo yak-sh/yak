@@ -1,5 +1,6 @@
 // The Responses client against scripted SSE: provider drift and secret
 // boundaries are transport facts, so every case stops before runner logic.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   ResponseEvent,
@@ -52,7 +53,7 @@ let auth = (
   refresh,
 })
 
-Deno.test('responses keeps completed items, replay state, usage, and deltas', async () => {
+test('responses keeps completed items, replay state, usage, and deltas', async () => {
   let init: RequestInit | undefined
   let streamed: string[] = []
   let client = responses({
@@ -149,7 +150,7 @@ Deno.test('responses keeps completed items, replay state, usage, and deltas', as
   assertEquals(out.limits, { 'x-ratelimit-remaining-requests': '9' })
 })
 
-Deno.test('responses round trips a correlated function result without provider state', async () => {
+test('responses round trips a correlated function result without provider state', async () => {
   let bodies: Record<string, unknown>[] = []
   let call = {
     type: 'function_call',
@@ -197,7 +198,7 @@ Deno.test('responses round trips a correlated function result without provider s
   assertEquals('previous_response_id' in bodies[1], false)
 })
 
-Deno.test('responses retains well-formed unknown events and items by name', async () => {
+test('responses retains well-formed unknown events and items by name', async () => {
   let future = { type: 'response.future.delta', payload: { x: 1 } }
   let item = { type: 'future_item', payload: { y: 2 } }
   let client = responses({
@@ -218,7 +219,7 @@ Deno.test('responses retains well-formed unknown events and items by name', asyn
   assertEquals(out.items, [item])
 })
 
-Deno.test('responses rejects malformed stream data and missing item types', async () => {
+test('responses rejects malformed stream data and missing item types', async () => {
   let malformed = responses({
     credentials: auth(),
     fetch: () => Promise.resolve(new Response('data: {no}\n\n')),
@@ -247,7 +248,7 @@ Deno.test('responses rejects malformed stream data and missing item types', asyn
   )
 })
 
-Deno.test('responses scrubs failed-stream evidence and credential errors', async () => {
+test('responses scrubs failed-stream evidence and credential errors', async () => {
   let failed = responses({
     credentials: auth(),
     fetch: () =>
@@ -344,7 +345,7 @@ Deno.test('responses scrubs failed-stream evidence and credential errors', async
   )
 })
 
-Deno.test('responses preserves an incomplete reason', async () => {
+test('responses preserves an incomplete reason', async () => {
   let client = responses({
     credentials: auth(),
     fetch: () =>
@@ -363,7 +364,7 @@ Deno.test('responses preserves an incomplete reason', async () => {
   assertEquals(error.code, 'max_output_tokens')
 })
 
-Deno.test('responses refreshes once on 401 and never returns credentials', async () => {
+test('responses refreshes once on 401 and never returns credentials', async () => {
   let calls = 0
   let refreshed = 0
   let observed: ResponseEvent[] = []
@@ -428,7 +429,7 @@ Deno.test('responses refreshes once on 401 and never returns credentials', async
   )
 })
 
-Deno.test('responses names 429 limits after bounded retries without echoing secrets', async () => {
+test('responses names 429 limits after bounded retries without echoing secrets', async () => {
   let calls = 0
   let client = responses({
     credentials: auth(),
@@ -466,7 +467,7 @@ Deno.test('responses names 429 limits after bounded retries without echoing secr
   assertEquals(JSON.stringify(error).includes('private-trace'), false)
 })
 
-Deno.test('responses carries a 400 body reason into the fault message', async () => {
+test('responses carries a 400 body reason into the fault message', async () => {
   // The poisoned-session 400: the machine `code` is null, the class lives in
   // `type`, and the whole complaint lives in `message`. The stamp keeps only
   // .message, so the reason must ride there or the failure is
@@ -501,7 +502,7 @@ Deno.test('responses carries a 400 body reason into the fault message', async ()
   assertEquals(JSON.stringify(error).includes('acct-1'), false)
 })
 
-Deno.test('responses retries bounded server failures before reading events', async () => {
+test('responses retries bounded server failures before reading events', async () => {
   let calls = 0
   let pauses: number[] = []
   let client = responses({
@@ -525,7 +526,7 @@ Deno.test('responses retries bounded server failures before reading events', asy
   assertEquals(pauses, [1000, 4000])
 })
 
-Deno.test('responses retries a network interruption with bounded evidence', async () => {
+test('responses retries a network interruption with bounded evidence', async () => {
   let calls = 0
   let client = responses({
     credentials: auth(),
@@ -558,7 +559,7 @@ Deno.test('responses retries a network interruption with bounded evidence', asyn
   assertEquals(JSON.stringify(error).includes('acct-1'), false)
 })
 
-Deno.test('responses aborts an active stream without retrying', async () => {
+test('responses aborts an active stream without retrying', async () => {
   let controller = new AbortController()
   let calls = 0
   let client = responses({
@@ -604,7 +605,7 @@ let hang = (init?: RequestInit) =>
     },
   })
 
-Deno.test('responses fails a connect that never returns a response', async () => {
+test('responses fails a connect that never returns a response', async () => {
   let client = responses({
     credentials: auth(),
     // A stall is transient now (retry_test), so these measure the fault.
@@ -622,7 +623,7 @@ Deno.test('responses fails a connect that never returns a response', async () =>
   assertEquals(error.message, 'responses: transport stalled')
 })
 
-Deno.test('responses fails a stream that stalls after connecting', async () => {
+test('responses fails a stream that stalls after connecting', async () => {
   let client = responses({
     credentials: auth(),
     // A stall is transient now (retry_test), so these measure the fault.
@@ -636,7 +637,7 @@ Deno.test('responses fails a stream that stalls after connecting', async () => {
   assertEquals(error.message, 'responses: stream stalled')
 })
 
-Deno.test('reach counts any HTTP answer as connected and names the endpoint', async () => {
+test('reach counts any HTTP answer as connected and names the endpoint', async () => {
   let seen: { url: string; init?: RequestInit } | undefined
   let client = responses({
     credentials: auth(),
@@ -657,7 +658,7 @@ Deno.test('reach counts any HTTP answer as connected and names the endpoint', as
   )
 })
 
-Deno.test('reach reads a network failure as unreachable', async () => {
+test('reach reads a network failure as unreachable', async () => {
   let client = responses({
     credentials: auth(),
     fetch: () => Promise.reject(new Error('secret-old getaddrinfo ENOTFOUND')),
@@ -665,7 +666,7 @@ Deno.test('reach reads a network failure as unreachable', async () => {
   assertEquals(await client.reach(), false)
 })
 
-Deno.test('reach is unreachable without a credential', async () => {
+test('reach is unreachable without a credential', async () => {
   let calls = 0
   let client = responses({
     credentials: { get: () => Promise.reject(new Error('signed out')) },
@@ -678,7 +679,7 @@ Deno.test('reach is unreachable without a credential', async () => {
   assertEquals(calls, 0)
 })
 
-Deno.test('responses keeps a caller stop distinct from a stall', async () => {
+test('responses keeps a caller stop distinct from a stall', async () => {
   let controller = new AbortController()
   let client = responses({
     credentials: auth(),
@@ -697,7 +698,7 @@ Deno.test('responses keeps a caller stop distinct from a stall', async () => {
   await assertRejects(() => run, DOMException, 'aborted')
 })
 
-Deno.test('redaction is opt-in and remembers credentials across runs', async () => {
+test('redaction is opt-in and remembers credentials across runs', async () => {
   for (let redact of [false, true]) {
     let turn = 0
     let observed: ResponseEvent[] = []
@@ -726,7 +727,7 @@ Deno.test('redaction is opt-in and remembers credentials across runs', async () 
   }
 })
 
-Deno.test('a second 401 fails without refreshing again and keeps the request id', async () => {
+test('a second 401 fails without refreshing again and keeps the request id', async () => {
   let refreshed = 0
   let ids: (string | null)[] = []
   let client = transport({
@@ -751,7 +752,7 @@ Deno.test('a second 401 fails without refreshing again and keeps the request id'
   assertEquals(ids, ['stable-id', 'stable-id'])
 })
 
-Deno.test('watchdog bounds both a missing first frame and a stalled HTTP error body', async () => {
+test('watchdog bounds both a missing first frame and a stalled HTTP error body', async () => {
   for (let status of [200, 400]) {
     let client = transport({
       credentials: auth(),

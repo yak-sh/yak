@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { transport } from './mod.ts'
 
-Deno.test('watchdog resets on each frame, distinguishes caller stop, and clears its timer', async () => {
+test('watchdog resets on each frame, distinguishes caller stop, and clears its timer', async () => {
   using time = new FakeTime()
   let stream!: ReadableStreamDefaultController<Uint8Array>
   let signal!: AbortSignal

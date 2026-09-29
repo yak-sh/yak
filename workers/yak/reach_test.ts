@@ -6,6 +6,7 @@
 // kernel named. What is under test is the composition — the merge by eid, the
 // order settled after it, and the dry run that keeps a refused half-batch from
 // landing anywhere.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, identityEid } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
@@ -97,7 +98,7 @@ let deploy = async (env: Env, r: Reach, manifest: Record<string, unknown>) => {
   await res.body?.cancel()
 }
 
-Deno.test('the app version selects its store declarations after preparation', async () => {
+test('the app version selects its store declarations after preparation', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('release-switch')
   let page = app('page', here.eid)
@@ -174,7 +175,7 @@ Deno.test('the app version selects its store declarations after preparation', as
   assertEquals((await apply(2)).status, 200)
 })
 
-Deno.test('the first release serves the vocabulary it prepared', async () => {
+test('the first release serves the vocabulary it prepared', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('first-release')
   let page = { ...app('page', here.eid), version: 0 }
@@ -201,7 +202,7 @@ Deno.test('the first release serves the vocabulary it prepared', async () => {
   )
 })
 
-Deno.test('a refused draft leaves the serving app store usable', async () => {
+test('a refused draft leaves the serving app store usable', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('refused-release')
   let page = app('page', here.eid)
@@ -268,7 +269,7 @@ let widget = (identity: string[]) => ({
 let put = (door: ReturnType<typeof appStore>, path: string, body: unknown) =>
   door(path, { method: 'POST', body: JSON.stringify(body) }, vouched(owner))
 
-Deno.test('a changed draft identity leaves serving reads and writes alone', async () => {
+test('a changed draft identity leaves serving reads and writes alone', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('draft-identity')
   let page = app('page', here.eid)
@@ -306,7 +307,7 @@ Deno.test('a changed draft identity leaves serving reads and writes alone', asyn
   assertEquals(rows.length, 3)
 })
 
-Deno.test('a changed identity replaces its index when the release moves', async () => {
+test('a changed identity replaces its index when the release moves', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('released-identity')
   let page = app('page', here.eid)
@@ -338,7 +339,7 @@ Deno.test('a changed identity replaces its index when the release moves', async 
   assertEquals(rows.length, 2)
 })
 
-Deno.test('a candidate seed waits for release and lands once', async () => {
+test('a candidate seed waits for release and lands once', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('candidate-seed')
   let page = app('page', here.eid)
@@ -402,7 +403,7 @@ Deno.test('a candidate seed waits for release and lands once', async () => {
   ])
 })
 
-Deno.test('a first release seeds its candidate words', async () => {
+test('a first release seeds its candidate words', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('first-seed')
   let page = { ...app('page', here.eid), version: 0 }
@@ -468,7 +469,7 @@ let bundles = (out: unknown) => out as Bundle[]
 let comp = (b: Bundle, name: string) =>
   (b[name] ?? {}) as Record<string, unknown>
 
-Deno.test('a spanning read merges the two stores into one bundle per eid', async () => {
+test('a spanning read merges the two stores into one bundle per eid', async () => {
   let { env, reach } = await where()
   let dune = eid()
   await written(env, reach, undefined, [
@@ -497,7 +498,7 @@ Deno.test('a spanning read merges the two stores into one bundle per eid', async
   )
 })
 
-Deno.test('an order holds across the merge, and its window cuts after it', async () => {
+test('an order holds across the merge, and its window cuts after it', async () => {
   let { env, reach } = await where()
   // Three books, each with a loan, written newest-last. The pages ascend the
   // opposite way from the creation order, so an answer in creation order and
@@ -550,7 +551,7 @@ Deno.test('an order holds across the merge, and its window cuts after it', async
   )
 })
 
-Deno.test('a batch refused by one store lands in neither', async () => {
+test('a batch refused by one store lands in neither', async () => {
   let { env, reach } = await where()
   let dune = eid()
   await written(env, reach, undefined, [
@@ -577,7 +578,7 @@ Deno.test('a batch refused by one store lands in neither', async () => {
 // that writes the part — it is what tells a store's mint phase an id this door
 // picked from one the caller wrote down. Dropped in the split, a named row
 // written twice was refused as a clash instead of patching its holder.
-Deno.test('a name written twice through the door is one entity', async () => {
+test('a name written twice through the door is one entity', async () => {
   let { env, reach } = await where()
   let seed = async (pages: number) => {
     let out = await written(env, reach, reach[0], [{
@@ -594,7 +595,7 @@ Deno.test('a name written twice through the door is one entity', async () => {
   assertEquals(comp(all[0], 'book').pages, 500)
 })
 
-Deno.test('a declared identity is minted before the door hands it to a store', async () => {
+test('a declared identity is minted before the door hands it to a store', async () => {
   let { env, reach } = await where()
   let out = await written(env, reach, reach[0], [{
     entity: { eid: '$catalog' },
@@ -609,7 +610,7 @@ Deno.test('a declared identity is minted before the door hands it to a store', a
   )
 })
 
-Deno.test('the space speaks one vocabulary, and a word nobody declares is the platform’s', async () => {
+test('the space speaks one vocabulary, and a word nobody declares is the platform’s', async () => {
   let { env, reach } = await where()
   let one = eid()
   // `doc` is nobody's own word, so it rides with the app whose word is in the

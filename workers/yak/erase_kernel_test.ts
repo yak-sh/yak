@@ -4,7 +4,7 @@
 // erase gives back. The pure seams are erase_test.ts's.
 
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { ticket } from './erase.ts'
 import type { Space } from './directory.ts'
 import {
@@ -37,7 +37,7 @@ let space = (over: Partial<Space> = {}): Space => ({
 // `forever` end to end (T-34431): the one path that still erases a space on
 // the spot, and therefore the one that still gives the name back. The default
 // path — the trash — is mcp_test.ts's, through the same letter.
-Deno.test('a space erased: the letter, the act, and the name back', async () => {
+test('a space erased: the letter, the act, and the name back', async () => {
   let k = await kernel()
   try {
     // A person with a space, an app with files and data in it, and a second
@@ -144,7 +144,7 @@ Deno.test('a space erased: the letter, the act, and the name back', async () => 
   }
 })
 
-Deno.test('an erased space gives its domain back', async () => {
+test('an erased space gives its domain back', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'domainlab20', apps: ['shop'] }])

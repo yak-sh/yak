@@ -1,4 +1,5 @@
 // Large board columns stay bounded until the operator asks for their tail.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { act } from 'preact/test-utils'
@@ -22,7 +23,7 @@ let { mount } = await import('../mount.ts')
 let { tick, until } = await import('../../testing.ts')
 let { drop } = await import('../drafts.ts')
 
-Deno.test('board columns request a projected, priority-ordered screenful', () => {
+test('board columns request a projected, priority-ordered screenful', () => {
   let q = columnLine('.task', 'open', 8)
   assertEquals(windowOf(parseQuery(q)), { limit: 8 })
   assertEquals(orderOf(parseQuery(q)), 'priority')
@@ -38,7 +39,7 @@ Deno.test('board columns request a projected, priority-ordered screenful', () =>
   assertEquals(columnLine('', 'open', 8), '')
 })
 
-Deno.test('quick-add previews empty facets and ordinary properties', async () => {
+test('quick-add previews empty facets and ordinary properties', async () => {
   let key = `test:quick-add:${crypto.randomUUID()}`
   let mounted = mount(
     <QuickAdd dkey={key} file={() => true} close={() => {}} />,
@@ -74,7 +75,7 @@ let task = (n: number): Bundle => ({
 })
 let read = reader(Array.from({ length: 24 }, (_, i) => task(i + 1)))
 
-Deno.test('a column grows by appending, and keeps its rows while it loads', async () => {
+test('a column grows by appending, and keeps its rows while it loads', async () => {
   let prior = config.host
   config.host = 'browser.test'
   cache.value = {}

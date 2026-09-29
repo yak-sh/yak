@@ -1,11 +1,12 @@
 // The menu lets a player compare ground detail at a deliberate reload, with
 // the selected size and its cost visible before applying it.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { menu, type Settings } from './menu.ts'
 import type { Panel } from './panel.ts'
 
-Deno.test('voxel slider shows a choice before applying it', () => {
+test('voxel slider shows a choice before applying it', () => {
   let { document, window } = parseHTML('<html><body></body></html>')
   let element = globalThis.Element, inputElement = globalThis.HTMLInputElement
   Object.assign(globalThis, {

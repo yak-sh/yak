@@ -1,5 +1,6 @@
 // The Debug inspector exposes every component and gives its editing controls
 // the same component vocabulary as its stored rows.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -12,7 +13,7 @@ import { applicable } from '../registry.ts'
 // Each case imports Entity.tsx — the whole component registry — and mounts a
 // Debug view through preact; the first pays that registry import (and hljs to
 // render the Markdown/JSON tabs), the rest the mount.
-Deno.test('raw formats are nested under Debug', async () => {
+test('raw formats are nested under Debug', async () => {
   await import('../Entity.tsx')
   let { DebugTabs } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -73,7 +74,7 @@ Deno.test('raw formats are nested under Debug', async () => {
   }
 })
 
-Deno.test('addable components keep their component tones', async () => {
+test('addable components keep their component tones', async () => {
   await import('../Entity.tsx')
   let { AddComp } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -109,7 +110,7 @@ Deno.test('addable components keep their component tones', async () => {
   }
 })
 
-Deno.test('a reference reads as one association row, eid and all', async () => {
+test('a reference reads as one association row, eid and all', async () => {
   await import('../Entity.tsx')
   let { Debug } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -157,7 +158,7 @@ Deno.test('a reference reads as one association row, eid and all', async () => {
   }
 })
 
-Deno.test('project backlinks omit attribution and cap associations', async () => {
+test('project backlinks omit attribution and cap associations', async () => {
   await import('../Entity.tsx')
   let { ProjectDebug } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')

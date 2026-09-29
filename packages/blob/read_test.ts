@@ -1,5 +1,6 @@
 // A component called doc is ordinary storage too. No adapter-owned doc_value
 // view participates: the registry is the sole truth for a swapped read.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
@@ -9,7 +10,7 @@ import { mem } from './testing.ts'
 import { blobKeywords } from './keywords.ts'
 import { blobRead, blobSchema } from './sqlite.ts'
 
-Deno.test('doc predicates, paths, projections and bundles resolve the same blob', () => {
+test('doc predicates, paths, projections and bundles resolve the same blob', () => {
   let vocab = loadVocab({
     $defs: {
       entity: {

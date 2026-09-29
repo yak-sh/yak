@@ -6,6 +6,7 @@
 // rehearses that batch without keeping a row of it. So this is the tree the
 // tool used to write, rehearsed, landed, and refused.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
@@ -60,7 +61,7 @@ let plan = (): Bundle[] => [
 let by = (said: Bundle[], alias: string): Bundle =>
   said.find((b) => b.$alias == alias)!
 
-Deno.test('a dry run of a plan answers its ids and writes none of it', async () => {
+test('a dry run of a plan answers its ids and writes none of it', async () => {
   let g = await rooted()
   let said = await g.apply(plan(), { check: true })
   // Every alias was resolved —
@@ -81,7 +82,7 @@ Deno.test('a dry run of a plan answers its ids and writes none of it', async () 
   assertEquals((await g.read('.edge')).length, 0)
 })
 
-Deno.test('the same batch, for real, lands the whole tree at once', async () => {
+test('the same batch, for real, lands the whole tree at once', async () => {
   let g = await rooted()
   await g.apply(plan())
   assertEquals((await g.read('.task')).length, 3)
@@ -93,7 +94,7 @@ Deno.test('the same batch, for real, lands the whole tree at once', async () => 
   )
 })
 
-Deno.test('what a real run refuses, a dry run refuses the same way', async () => {
+test('what a real run refuses, a dry run refuses the same way', async () => {
   let g = await rooted()
   // A property the vocabulary does not declare, named in the refusal.
   let alien: Bundle[] = [

@@ -12,7 +12,7 @@ import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { feed, reply } from './bus.ts'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
@@ -68,7 +68,7 @@ let fresh = async (
   return g
 }
 
-Deno.test('native bus delivery appends input and marks the item once', async () => {
+test('native bus delivery appends input and marks the item once', async () => {
   let wakes: string[] = []
   let g = await fresh(undefined, (eid) => wakes.push(eid))
   wakes.length = 0
@@ -94,7 +94,7 @@ Deno.test('native bus delivery appends input and marks the item once', async () 
   assertEquals((await g.read('.entry.session=native')).length, 3)
 })
 
-Deno.test('SQLite finds the same addressed comment and knock', async () => {
+test('SQLite finds the same addressed comment and knock', async () => {
   let store = storage(mem(), vocab)
   store.install()
   let g = await fresh(store)
@@ -105,7 +105,7 @@ Deno.test('SQLite finds the same addressed comment and knock', async () => {
   )
 })
 
-Deno.test('an outside caller receives what was addressed to its session once', async () => {
+test('an outside caller receives what was addressed to its session once', async () => {
   let g = await fresh()
   let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
   let first = await reply(g, call)
@@ -118,7 +118,7 @@ Deno.test('an outside caller receives what was addressed to its session once', a
   assertEquals(await reply(g, call), [])
 })
 
-Deno.test('the session duty delivers without a Claude transcript directory', async () => {
+test('the session duty delivers without a Claude transcript directory', async () => {
   let g = await fresh()
   let stop = new AbortController()
   let run = service({ graph: g }, { transcripts: '' }, stop.signal)

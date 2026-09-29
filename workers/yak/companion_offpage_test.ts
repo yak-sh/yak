@@ -1,5 +1,6 @@
 // A Vale objective, from the person's command through the app Store's wake
 // and worker, while no page runs. Only Jev's outside answer is scripted.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { flat } from '../../apps/vale/terrain.ts'
@@ -17,7 +18,7 @@ let SECOND = 'b0000000-0000-4000-8000-000000000002'
 let read = (door: ReturnType<typeof appStore>, line: string, who = ADA_OWNS) =>
   door(`/query?q=${encodeURIComponent(line)}`, {}, who).then((r) => r.json())
 
-Deno.test('a companion works off-page across pause, restart and retry', async () => {
+test('a companion works off-page across pause, restart and retry', async () => {
   using time = new FakeTime('2026-09-28T00:00:00.000Z')
   using p = platform()
   let k = await seeded(p.env)

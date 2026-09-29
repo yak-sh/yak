@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -22,7 +23,7 @@ import { PROMPTS } from './prompts.ts'
 import { sha256 } from './versions.ts'
 import { facing, GUIDE, minted } from './mcp-probe.ts'
 
-Deno.test(
+test(
   'the connector: tools, a space made, an app served, errors seen',
   async () => {
     let k = await kernel()

@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { install, onPaint, TElement, touch, TText } from './dom.ts'
 
 let tick = () => Promise.resolve()
 
-Deno.test('a mutation dirties the tree and one paint answers many touches', async () => {
+test('a mutation dirties the tree and one paint answers many touches', async () => {
   let painted = 0
   onPaint(() => painted++)
   let el = new TElement('div')
@@ -16,7 +17,7 @@ Deno.test('a mutation dirties the tree and one paint answers many touches', asyn
   onPaint(() => {})
 })
 
-Deno.test('elements hold children, attributes and class', () => {
+test('elements hold children, attributes and class', () => {
   let el = new TElement('div')
   let a = new TText('a'), b = new TText('b')
   el.appendChild(a)
@@ -34,7 +35,7 @@ Deno.test('elements hold children, attributes and class', () => {
   assertEquals(el.attr('scroll'), undefined)
 })
 
-Deno.test('install swaps the document and free puts back what was there', () => {
+test('install swaps the document and free puts back what was there', () => {
   let prior = { marker: true }
   Object.defineProperty(globalThis, 'document', {
     value: prior,

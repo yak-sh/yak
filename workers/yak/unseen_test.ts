@@ -3,6 +3,7 @@
 // which break, which file a break happened in, and what the rider is quiet
 // about. The end-to-end half — a page reporting itself, the mark landing in
 // the app's store — is serving_test.ts and report_test.ts.
+import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 import { line, named, past } from './unseen.ts'
 
@@ -20,7 +21,7 @@ let broke = (
 // The words a caller may say, against a break on v2 at noon on the 14th.
 let hit = broke({ at: '2026-08-14T12:00:00.000Z', version: 2 })
 
-Deno.test('named: an id, either form', () => {
+test('named: an id, either form', () => {
   assert(named('E-84', hit))
   assert(named(E, hit))
   assert(!named('E-85', hit))
@@ -37,14 +38,14 @@ let unnumbered = {
   entity: { eid: E },
 }
 
-Deno.test('named: an unnumbered break answers to its short handle', () => {
+test('named: an unnumbered break answers to its short handle', () => {
   assert(named('#e000000000', unnumbered))
   assert(!named('E#e000000000', unnumbered))
   assert(named(E, unnumbered))
   assert(!named('E-84', unnumbered))
 })
 
-Deno.test('line: an app entity is named by its short handle', () => {
+test('line: an app entity is named by its short handle', () => {
   let said = line({
     app: { eid: 'a1', slug: 'recipes' } as never,
     hit: unnumbered,
@@ -52,7 +53,7 @@ Deno.test('line: an app entity is named by its short handle', () => {
   assert(said.startsWith('- #e000000000 '), said)
 })
 
-Deno.test('named: a version bound is up to AND including', () => {
+test('named: a version bound is up to AND including', () => {
   assert(named('v2', hit))
   assert(named('v3', hit))
   assert(!named('v1', hit))
@@ -61,7 +62,7 @@ Deno.test('named: a version bound is up to AND including', () => {
   assert(named('v1', broke({ version: null })))
 })
 
-Deno.test('named: a day means the end of it, an instant itself', () => {
+test('named: a day means the end of it, an instant itself', () => {
   assert(named('2026-08-14', hit))
   assert(named('2026-08-15', hit))
   assert(!named('2026-08-13', hit))
@@ -71,13 +72,13 @@ Deno.test('named: a day means the end of it, an instant itself', () => {
   assert(named('2026-01-01', broke({ version: 2 })))
 })
 
-Deno.test('named: all, and nothing else sweeping', () => {
+test('named: all, and nothing else sweeping', () => {
   assert(named('all', hit))
   assert(!named('everything', hit))
   assert(!named('', hit))
 })
 
-Deno.test('past: what the rider is quiet about', () => {
+test('past: what the rider is quiet about', () => {
   // News: it happened on what the app is serving now.
   assert(!past({ version: 2 }, hit))
   // A release replaced the code that made it.

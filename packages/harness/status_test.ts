@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { resolve } from '@yaks/render'
 import type { Bundle } from '@yaks/graph'
 import { statusBundle, statusViews, statusVocab } from './status.ts'
 
-Deno.test('sidebar indicator queries cover states and owner joins', () => {
+test('sidebar indicator queries cover states and owner joins', () => {
   let cases: [Bundle, string, string][] = []
   for (
     let [status, glyph, color] of [
@@ -54,7 +55,7 @@ Deno.test('sidebar indicator queries cover states and owner joins', () => {
   }
 })
 
-Deno.test('status indicators paint colored single-column glyphs in the sidebar', async () => {
+test('status indicators paint colored single-column glyphs in the sidebar', async () => {
   let { h } = await import('preact')
   let { mount } = await import('../tui/testing.ts')
   let { panels } = await import('./panels.ts')

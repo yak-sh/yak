@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import type { Bundle, Comp, Graph, Tool } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
@@ -64,7 +65,7 @@ let drive = async (
   await r.due(pending.at(-1)!.entity.eid)
 }
 
-Deno.test('outer query bindings make independent builds and tool calls', async () => {
+test('outer query bindings make independent builds and tool calls', async () => {
   let { g, runner } = await shop({}, [], [code()])
   await g.apply([source('a'), source('b'), builder()])
   let a = run(ids.builder, ['a'])
@@ -86,7 +87,7 @@ Deno.test('outer query bindings make independent builds and tool calls', async (
   assert(cited?.cites)
 })
 
-Deno.test('nested collection changes the key but retains the build and output', async () => {
+test('nested collection changes the key but retains the build and output', async () => {
   let notes = {
     $defs: {
       note: {
@@ -122,7 +123,7 @@ Deno.test('nested collection changes the key but retains the build and output', 
   assertNotEquals(comp(await one(g, build), 'build')?.key, withNote)
 })
 
-Deno.test('vanished bindings preserve history and returning bindings reuse it', async () => {
+test('vanished bindings preserve history and returning bindings reuse it', async () => {
   let { g, runner } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
   let build = run(ids.builder, ['a'])
@@ -148,7 +149,7 @@ Deno.test('vanished bindings preserve history and returning bindings reuse it', 
   ))
 })
 
-Deno.test('a code tool can return an artifact output without owning built rows', async () => {
+test('a code tool can return an artifact output without owning built rows', async () => {
   let artifact = 'a-artifact'
   let media: Tool = {
     ...code(),
@@ -180,7 +181,7 @@ Deno.test('a code tool can return an artifact output without owning built rows',
   assert((await one(g, edgeEid(output(build, 'icon'), 'cites', 'a')))?.cites)
 })
 
-Deno.test('tool revision and input content change a key once each', async () => {
+test('tool revision and input content change a key once each', async () => {
   let { g } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
   let build = run(ids.builder, ['a'])
@@ -194,7 +195,7 @@ Deno.test('tool revision and input content change a key once each', async () => 
   assertNotEquals(comp(await one(g, build), 'build')?.key, second)
 })
 
-Deno.test('selected content, definition edits and removed matches reconcile', async () => {
+test('selected content, definition edits and removed matches reconcile', async () => {
   let { g } = await shop({}, [], [code()])
   await g.apply([source('a'), source('b'), builder()])
   let a = run(ids.builder, ['a'])
@@ -220,7 +221,7 @@ Deno.test('selected content, definition edits and removed matches reconcile', as
   )
 })
 
-Deno.test('unrelated changes read a bounded number of rows with many builders', async () => {
+test('unrelated changes read a bounded number of rows with many builders', async () => {
   let { g, failed } = await shop({}, [], [code()])
   let many = Array.from({ length: 32 }, (_, i): Bundle => ({
     entity: { eid: `builder-${i}` },
@@ -244,7 +245,7 @@ Deno.test('unrelated changes read a bounded number of rows with many builders', 
   console.log(`32 builders, unrelated graph change: ${count} rows read`)
 })
 
-Deno.test('an authored using value and its admitted form have one key', async () => {
+test('an authored using value and its admitted form have one key', async () => {
   let { g, vocab } = await shop({}, [], [code()])
   let authored = { ...builder(), using: { model: ids.model } }
   await g.apply([source('a'), authored])
@@ -259,7 +260,7 @@ Deno.test('an authored using value and its admitted form have one key', async ()
   )
 })
 
-Deno.test('a malformed output cannot write and leaves its build retryable', async () => {
+test('a malformed output cannot write and leaves its build retryable', async () => {
   let bad: Tool = {
     ...code(),
     run: (call) => [{
@@ -285,7 +286,7 @@ Deno.test('a malformed output cannot write and leaves its build retryable', asyn
   assert(failed.length > 0)
 })
 
-Deno.test('shadow builds have distinct ids and cannot feed another builder', async () => {
+test('shadow builds have distinct ids and cannot feed another builder', async () => {
   let { g, runner, vocab } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])
   let primary = run(ids.builder, ['a'])
@@ -327,7 +328,7 @@ Deno.test('shadow builds have distinct ids and cannot feed another builder', asy
   ])
 })
 
-Deno.test('a failed model turn leaves its key retryable without another call', async () => {
+test('a failed model turn leaves its key retryable without another call', async () => {
   let { g, runner } = await shop()
   await g.apply([source('a'), {
     ...builder('$s .doc.title=Source', toolEid('builder_model')),
@@ -346,7 +347,7 @@ Deno.test('a failed model turn leaves its key retryable without another call', a
   assertEquals((await calls(g, build)).length, 1)
 })
 
-Deno.test('model tool opens a session using content.body, then adapts its reply', async () => {
+test('model tool opens a session using content.body, then adapts its reply', async () => {
   let { g, runner } = await shop()
   await g.apply([source('a'), {
     ...builder(
@@ -382,7 +383,7 @@ Deno.test('model tool opens a session using content.body, then adapts its reply'
   assertEquals(comp(await one(g, output(build)), 'doc')?.body, 'From model')
 })
 
-Deno.test("a build's cost sums what its calls said and its sessions spent", async () => {
+test("a build's cost sums what its calls said and its sessions spent", async () => {
   let paid: Tool = {
     ...code(),
     run: (call) => {
@@ -427,7 +428,7 @@ Deno.test("a build's cost sums what its calls said and its sessions spent", asyn
   assertEquals(comp(await one(m, modeled), 'build')?.cost, 0.125)
 })
 
-Deno.test('template substitution reads variables in nested bindings', () => {
+test('template substitution reads variables in nested bindings', () => {
   assertEquals(
     render('$s: $n and $$', {
       entities: ['a'],

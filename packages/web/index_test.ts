@@ -1,12 +1,13 @@
 // The derived index (index.ts): the reverse
 // {eid} index and edge endpoints maintain incrementally, and anchor() picks the
 // smallest candidate set for a query. Pure — no cache, no DOM.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { anchor, emptyIndex, indexAll, reindex, reindexEdge } from './index.ts'
 import { parseQuery } from './query.ts'
 import { assertEquals } from '@std/assert'
 
-Deno.test('reindex builds and maintains the reverse {eid} index', () => {
+test('reindex builds and maintains the reverse {eid} index', () => {
   let ix = emptyIndex()
   reindex(ix, 'w1', undefined, { wake: {}, deliver: { to: 's1' } })
   reindex(ix, 'w2', undefined, { wake: {}, deliver: { to: 's1' } })
@@ -29,7 +30,7 @@ Deno.test('reindex builds and maintains the reverse {eid} index', () => {
   assertEquals(ix.byComp.get('wake'), new Set(['w1', 'w3']))
 })
 
-Deno.test('reindexEdge indexes edge triples by both endpoints', () => {
+test('reindexEdge indexes edge triples by both endpoints', () => {
   let ix = emptyIndex()
   let d = { parent: 'a', type: 'requires' as const, child: 'b' }
   reindexEdge(ix, d, false)
@@ -46,7 +47,7 @@ Deno.test('reindexEdge indexes edge triples by both endpoints', () => {
   assertEquals(ix.byParent.get('a')?.length, 1)
 })
 
-Deno.test('anchor picks the reverse-index set for an eid-ref equality', () => {
+test('anchor picks the reverse-index set for an eid-ref equality', () => {
   let ix = emptyIndex()
   indexAll(ix, {
     w1: { wake: {}, deliver: { to: 's1' } },
@@ -61,7 +62,7 @@ Deno.test('anchor picks the reverse-index set for an eid-ref equality', () => {
   assertEquals(anchor(ix, parseQuery('.mail')), new Set())
 })
 
-Deno.test('anchor falls back to component presence, and to nothing', () => {
+test('anchor falls back to component presence, and to nothing', () => {
   let ix = emptyIndex()
   indexAll(ix, {
     t1: { task: {} },
@@ -77,7 +78,7 @@ Deno.test('anchor falls back to component presence, and to nothing', () => {
   assertEquals(anchor(ix, parseQuery('!delivered')), undefined)
 })
 
-Deno.test('anchor unions the reverse index for a .refs= backlink lookup', () => {
+test('anchor unions the reverse index for a .refs= backlink lookup', () => {
   let ix = emptyIndex()
   indexAll(ix, {
     // three referrers of t1 through THREE different {eid} columns...
@@ -97,7 +98,7 @@ Deno.test('anchor unions the reverse index for a .refs= backlink lookup', () => 
   assertEquals(anchor(ix, parseQuery('.refs')), undefined)
 })
 
-Deno.test('anchor narrows a multi-hop path to its NEAR component', () => {
+test('anchor narrows a multi-hop path to its NEAR component', () => {
   let ix = emptyIndex()
   indexAll(ix, {
     c1: { comment: { target: 't1' } },

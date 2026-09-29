@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import { taskEntry, transcript } from '@yaks/session'
@@ -6,7 +7,7 @@ import { harness, scratchRepo } from './testing.ts'
 
 let M = identityEid('model', ['fake'])
 
-Deno.test('taskEntry atomically mints bare work, contains it, and spawns with inherited settings', async () => {
+test('taskEntry atomically mints bare work, contains it, and spawns with inherited settings', async () => {
   let h = await harness()
   try {
     await h.g.apply([
@@ -58,7 +59,7 @@ Deno.test('taskEntry atomically mints bare work, contains it, and spawns with in
   }
 })
 
-Deno.test('taskEntry rejects invalid inputs and durably accepts concurrent queued tasks', async () => {
+test('taskEntry rejects invalid inputs and durably accepts concurrent queued tasks', async () => {
   let h = await harness()
   try {
     await h.g.apply([{ entity: { eid: 'p' }, session: { id: 'parent' } }])
@@ -82,7 +83,7 @@ Deno.test('taskEntry rejects invalid inputs and durably accepts concurrent queue
   }
 })
 
-Deno.test('Agent.taskEntry honors agent limits', async () => {
+test('Agent.taskEntry honors agent limits', async () => {
   let r = await scratchRepo()
   let a = local({
     h: await harness(),
@@ -114,7 +115,7 @@ Deno.test('Agent.taskEntry honors agent limits', async () => {
   }
 })
 
-Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion is idempotent', async () => {
+test('auto-task notice is lazy, reaches next ask, and contextual completion is idempotent', async () => {
   let requests: string[] = []
   let release!: () => void
   let waiting = new Promise<void>((resolve) => release = resolve)
@@ -205,7 +206,7 @@ Deno.test('auto-task notice is lazy, reaches next ask, and contextual completion
   }
 })
 
-Deno.test('taskEntry references the stable prefix without copying later inputs', async () => {
+test('taskEntry references the stable prefix without copying later inputs', async () => {
   let h = await harness()
   try {
     await h.g.apply([
@@ -265,7 +266,7 @@ Deno.test('taskEntry references the stable prefix without copying later inputs',
   }
 })
 
-Deno.test('taskEntry inherits completed output and tool results with recent inputs', async () => {
+test('taskEntry inherits completed output and tool results with recent inputs', async () => {
   let h = await harness()
   try {
     await h.g.apply([
@@ -315,7 +316,7 @@ Deno.test('taskEntry inherits completed output and tool results with recent inpu
   }
 })
 
-Deno.test('terminal attempts do not pin task forks to an old prefix', async () => {
+test('terminal attempts do not pin task forks to an old prefix', async () => {
   for (let state of ['interrupted', 'completed']) {
     let h = await harness()
     try {

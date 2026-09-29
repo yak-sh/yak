@@ -1,5 +1,6 @@
 // SQLite/runner integration tests; the fast-tier runner does not collect
 // packages. Deferred fake replies exercise concurrency without network calls.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Model, Reply, Request } from '@yaks/model'
@@ -31,7 +32,7 @@ let finish = async (a: Local, parent: string) => {
 }
 
 for (let kind of ['fork', 'spawn']) {
-  Deno.test(`${kind}: concurrent child, lineage, prefix, settings, delivery and parent reaction`, async () => {
+  test(`${kind}: concurrent child, lineage, prefix, settings, delivery and parent reaction`, async () => {
     let directory = Deno.makeTempDirSync()
     Deno.writeTextFileSync(directory + '/AGENTS.md', 'shared snapshot')
     let childAsked = deferred<Request>()
@@ -108,7 +109,7 @@ for (let kind of ['fork', 'spawn']) {
   })
 }
 
-Deno.test('wait resolves while child completion waits behind the parent tool', async () => {
+test('wait resolves while child completion waits behind the parent tool', async () => {
   let childAsked = deferred<void>()
   let waiting = deferred<void>()
   let childReply = deferred<Reply>()
@@ -148,7 +149,7 @@ Deno.test('wait resolves while child completion waits behind the parent tool', a
   await a.close()
 })
 
-Deno.test('child capacity queues without rejection; root starts retain their separate guard', async () => {
+test('child capacity queues without rejection; root starts retain their separate guard', async () => {
   let pending = deferred<Reply>()
   let childAsked = deferred<void>()
   let h = await harness()
@@ -202,7 +203,7 @@ Deno.test('child capacity queues without rejection; root starts retain their sep
   await a.close()
 })
 
-Deno.test('completion answers an open delegation call; wait rejects foreign children and times out', async () => {
+test('completion answers an open delegation call; wait rejects foreign children and times out', async () => {
   let h = await harness()
   h.g.apply(seed())
   let entries: Bundle[] = [
@@ -272,7 +273,7 @@ Deno.test('completion answers an open delegation call; wait rejects foreign chil
   h.close()
 })
 
-Deno.test('tool admission serializes competing parents, replays a call once, and frees settled slots', async () => {
+test('tool admission serializes competing parents, replays a call once, and frees settled slots', async () => {
   let h = await harness()
   h.g.apply([
     ...seed(),
@@ -308,7 +309,7 @@ Deno.test('tool admission serializes competing parents, replays a call once, and
   h.close()
 })
 
-Deno.test('child completion is queued behind an in-flight parent ask without colliding seqs', async () => {
+test('child completion is queued behind an in-flight parent ask without colliding seqs', async () => {
   let childReply = deferred<Reply>()
   let parentReply = deferred<Reply>()
   let parentAsked = deferred<void>()

@@ -3,6 +3,7 @@
 // moved fast-forwards; a base that moved makes land rebase and return without
 // merging, so a second land fast-forwards cleanly. No gate runs. No remote is
 // needed except the two publish cases, which wire a real bare upstream.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land, reverts } from './land.ts'
 import { runs } from './tools.ts'
@@ -108,7 +109,7 @@ let withUpstream = async (r: Repo, reachable = true) => {
 
 let quiet = { write: () => {} }
 
-Deno.test(
+test(
   'land fast-forwards a branch whose base has not moved — no graph, no rebase',
   async () => {
     let r = await setup()
@@ -133,7 +134,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'the `land` tool answers the sha; a divergence is a refusal',
   async () => {
     let r = await setup()
@@ -163,7 +164,7 @@ Deno.test(
   },
 )
 
-Deno.test('a dirty worktree is a tool refusal, not an exception', async () => {
+test('a dirty worktree is a tool refusal, not an exception', async () => {
   let r = await setup()
   try {
     Deno.writeTextFileSync(`${r.tree}/scratch.txt`, 'not committed\n')
@@ -183,7 +184,7 @@ Deno.test('a dirty worktree is a tool refusal, not an exception', async () => {
   }
 })
 
-Deno.test(
+test(
   'landing leaves the checkout holding the work it landed, dirt untouched',
   async () => {
     let r = await setup()
@@ -213,7 +214,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'a moved base makes land rebase and RETURN without merging; a second land fast-forwards',
   async () => {
     let r = await setup()
@@ -252,7 +253,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   "a rebase conflict returns with git's conflict output, leaving the rebase to resolve",
   async () => {
     let r = await setup()
@@ -279,7 +280,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'local changes the landing would overwrite are a tool refusal, never an exception',
   async () => {
     let r = await setup()
@@ -315,7 +316,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'land refuses to run in the shared checkout, not a linked worktree',
   async () => {
     let r = await setup()
@@ -331,7 +332,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'a landing publishes to the base branch upstream when it has one',
   async () => {
     let r = await setup()
@@ -346,7 +347,7 @@ Deno.test(
   },
 )
 
-Deno.test('land does not publish when the base has no upstream', async () => {
+test('land does not publish when the base has no upstream', async () => {
   let r = await setup()
   try {
     let outcome = await land({ cwd: r.tree, ...quiet })
@@ -361,7 +362,7 @@ Deno.test('land does not publish when the base has no upstream', async () => {
   }
 })
 
-Deno.test(
+test(
   'a publish refusal lands anyway — publishing is best-effort, never a failed land',
   async () => {
     let r = await setup()
@@ -385,7 +386,7 @@ Deno.test(
 
 // Exercise the real shared seam: a deleted cwd rejects at spawn, but land
 // receives a failed run and labels the operation rather than leaking ENOENT.
-Deno.test('a spawn-level failure is a failed result, never a crash', async () => {
+test('a spawn-level failure is a failed result, never a crash', async () => {
   let cwd = Deno.makeTempDirSync({ prefix: 'yaks-land-gone-' })
   Deno.removeSync(cwd)
   await assertRejects(
@@ -409,7 +410,7 @@ let answering = (fails: string, code = 128) => (args: string[]) => {
   return Promise.resolve({ ...ok, out: '' })
 }
 
-Deno.test('a detached worktree is refused, a failing git is a fault', async () => {
+test('a detached worktree is refused, a failing git is a fault', async () => {
   let at = (fails: string, code?: number) =>
     land({ ...quiet, cwd: '/t', run: answering(fails, code) })
   let e = await assertRejects(() => at('symbolic-ref', 1))
@@ -420,7 +421,7 @@ Deno.test('a detached worktree is refused, a failing git is a fault', async () =
   }
 })
 
-Deno.test('a transiently failing push publishes on the retry', async () => {
+test('a transiently failing push publishes on the retry', async () => {
   let r = await setup()
   try {
     let bare = await withUpstream(r)
@@ -491,7 +492,7 @@ let asking = (r: {
   throw new Error(`the guard asked something unexpected: ${said}`)
 }
 
-Deno.test('a clean rebase reverts nothing', async () => {
+test('a clean rebase reverts nothing', async () => {
   let found = await reverts(
     asking({
       changed: ['a.ts'],
@@ -504,7 +505,7 @@ Deno.test('a clean rebase reverts nothing', async () => {
   assertEquals(found, [])
 })
 
-Deno.test("a file no branch commit touches is the rebase's own doing", async () => {
+test("a file no branch commit touches is the rebase's own doing", async () => {
   let found = await reverts(
     asking({
       changed: ['a.ts', 'merged.ts'],
@@ -517,7 +518,7 @@ Deno.test("a file no branch commit touches is the rebase's own doing", async () 
   assertEquals(found, [{ file: 'merged.ts', rewound: false }])
 })
 
-Deno.test('a blob the base already moved past is a rewind', async () => {
+test('a blob the base already moved past is a rewind', async () => {
   let found = await reverts(
     asking({
       changed: ['a.ts'],
@@ -532,7 +533,7 @@ Deno.test('a blob the base already moved past is a rewind', async () => {
 
 // The same blob, reached by taking lines away: deleting what the base added
 // lands the file at what it held before, and adds back nothing.
-Deno.test('a diff that adds no line is a deletion, not a rewind', async () => {
+test('a diff that adds no line is a deletion, not a rewind', async () => {
   let found = await reverts(
     asking({
       changed: [['a.ts', 0]],
@@ -547,7 +548,7 @@ Deno.test('a diff that adds no line is a deletion, not a rewind', async () => {
 
 // A binary file's added lines are unknowable (`-`), so the guard keeps reading
 // it as content added: a rewind refused is recoverable, a rewind landed is not.
-Deno.test(
+test(
   'a binary file that lands at an old blob is still a rewind',
   async () => {
     let found = await reverts(
@@ -583,7 +584,7 @@ let stale = async (r: Repo) => {
 
 // A move deletes the old path in the landing diff; the branch's own log must
 // say so too, not only name the new path, or every rename reads as the rebase's.
-Deno.test('a file the branch moves is the branch', async () => {
+test('a file the branch moves is the branch', async () => {
   let r = await setup()
   try {
     await command(r.tree, 'mv', 'base.txt', 'moved.txt')
@@ -595,7 +596,7 @@ Deno.test('a file the branch moves is the branch', async () => {
   }
 })
 
-Deno.test('land refuses a rebase that rewound a file past the base', async () => {
+test('land refuses a rebase that rewound a file past the base', async () => {
   let r = await setup()
   try {
     await stale(r)
@@ -610,7 +611,7 @@ Deno.test('land refuses a rebase that rewound a file past the base', async () =>
   }
 })
 
-Deno.test('--allow-revert lands the rewind, with a warning', async () => {
+test('--allow-revert lands the rewind, with a warning', async () => {
   let r = await setup()
   try {
     await stale(r)
@@ -628,7 +629,7 @@ Deno.test('--allow-revert lands the rewind, with a warning', async () => {
   }
 })
 
-Deno.test('a clean rebase still lands', async () => {
+test('a clean rebase still lands', async () => {
   let r = await setup()
   try {
     await rivalLands(r, 'other.txt', 'rival\n')
@@ -650,7 +651,7 @@ Deno.test('a clean rebase still lands', async () => {
 // past — but the branch's diff adds not one line, and a hunk that only takes
 // lines away reintroduces nothing. Deleting is the whole point of some
 // branches; the guard must not read one as a revert.
-Deno.test('a pure deletion of content main added still lands', async () => {
+test('a pure deletion of content main added still lands', async () => {
   let r = await setup()
   try {
     await mainCommits(r, 'tools.txt', 'core\n', 'the tools')
@@ -672,7 +673,7 @@ Deno.test('a pure deletion of content main added still lands', async () => {
 // The other side of that coin: main removed a line after the branch forked,
 // and a stale rebase's resolution puts it back. Those are added lines matching
 // content the base deleted — the revert the guard exists for.
-Deno.test('a rebase that re-adds a line main removed is still refused', async () => {
+test('a rebase that re-adds a line main removed is still refused', async () => {
   let r = await setup()
   try {
     await mainCommits(r, 'list.txt', 'keep\ndrop\n', 'the list')

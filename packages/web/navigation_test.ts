@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import {
@@ -20,7 +21,7 @@ let entity = (favorite = false): Ent => ({
   kids: [],
 })
 
-Deno.test('navigation uses one facet query and reversible favorite write', () => {
+test('navigation uses one facet query and reversible favorite write', () => {
   let plain = entity()
   let favorite = entity(true)
   assertEquals(navigationQuery, '.favorite')

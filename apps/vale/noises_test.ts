@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { seedBeasts } from './beasts_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
@@ -11,7 +12,7 @@ seedThemes()
 seedBuildings()
 seedBeasts()
 
-Deno.test('village fire is near the square but not beyond surrounding buildings', () => {
+test('village fire is near the square but not beyond surrounding buildings', () => {
   // The fire loop uses NEAR's exponential panner: by the outer homes its
   // gain is a small fraction of what is heard beside the hearth.
   let { refDistance, rolloffFactor, distanceModel } = NEAR.pan
@@ -36,7 +37,7 @@ Deno.test('village fire is near the square but not beyond surrounding buildings'
   }
 })
 
-Deno.test('a wolf bite keeps its kind for the recorded cry', () => {
+test('a wolf bite keeps its kind for the recorded cry', () => {
   let body = { x: 0, y: 5, z: 0, vy: 0, yaw: 0, speed: 0, gait: 'idle' }
   let scene = (kind: string, bite: number) => ({
     body,

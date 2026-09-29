@@ -4,10 +4,11 @@
 // or a sentence that only reads when every argument was given is the whole
 // failure. The door's own shape — the -32602s, the message envelope — is held
 // through the kernel by mcp_test.ts.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { IDEAS, missing, promptOf, PROMPTS } from './prompts.ts'
 
-Deno.test('a prompt is pickable by name, once', () => {
+test('a prompt is pickable by name, once', () => {
   let names = PROMPTS.map((p) => p.name)
   assertEquals(new Set(names).size, names.length)
   for (let p of PROMPTS) {
@@ -18,7 +19,7 @@ Deno.test('a prompt is pickable by name, once', () => {
 })
 
 // Picked bare, no optional argument leaves a template hole in the message.
-Deno.test('a prompt reads with nothing filled in', () => {
+test('a prompt reads with nothing filled in', () => {
   for (let p of PROMPTS) {
     for (let made of [null, [], [{ title: 'Chores', url: 'https://x/c/' }]]) {
       let said = p.say(
@@ -35,7 +36,7 @@ Deno.test('a prompt reads with nothing filled in', () => {
   }
 })
 
-Deno.test('what the person filled in is what the message says', () => {
+test('what the person filled in is what the message says', () => {
   let make = promptOf('make')!
   assert(make.say({ what: 'a chore board' }, []).includes('a chore board'))
   let fix = promptOf('fix')!
@@ -54,7 +55,7 @@ Deno.test('what the person filled in is what the message says', () => {
   )
 })
 
-Deno.test('a required argument is named when it is missing', () => {
+test('a required argument is named when it is missing', () => {
   let make = promptOf('make')!
   assertEquals(missing(make, {}), ['what'])
   assertEquals(missing(make, { what: '   ' }), ['what'])
@@ -65,7 +66,7 @@ Deno.test('a required argument is named when it is missing', () => {
 // The ideas door (T-34557) says where the person stands, three ways: their own
 // apps to build on, the first-app line, and — signed out — where signing in is,
 // since that is what turns an idea into an app.
-Deno.test('the ideas prompt says where the person stands', () => {
+test('the ideas prompt says where the person stands', () => {
   let mine = IDEAS.say({}, [
     { title: 'Recipes', url: 'https://jeff.yaks.app/recipes/' },
     { title: 'Chores', url: 'https://jeff.yaks.app/chores/' },

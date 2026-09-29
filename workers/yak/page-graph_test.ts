@@ -1,11 +1,12 @@
 // A page's vocabulary door passes a Store refusal through to its caller.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type App, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { vocabulary } from './page-graph.ts'
 import type { Who } from './session.ts'
 
-Deno.test('page vocabulary preserves a Store refusal', async () => {
+test('page vocabulary preserves a Store refusal', async () => {
   let failed = { error: 'Refused', message: 'schema held' }
   let env = {
     STORE: {

@@ -1,6 +1,7 @@
 // A schema admission plugin reads a property's declaration from the document
 // that owns it, including an extension of a component declared elsewhere.
 
+import { test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { Refused } from './admit.ts'
@@ -8,7 +9,7 @@ import { admitSchema } from './admit_schema.ts'
 import { graph } from './graph.ts'
 import { memory } from './testing.ts'
 
-Deno.test('schema admission validates an extension property', async () => {
+test('schema admission validates an extension property', async () => {
   let vocab = loadVocab([
     {
       $defs: {

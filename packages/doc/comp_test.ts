@@ -2,6 +2,7 @@
 // rather than a detail — `store` is named, never interpreted, so the document
 // loads the same with and without @yaks/blob.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { blobKeywords } from '@yaks/blob'
@@ -11,26 +12,26 @@ import { docs } from './plugin.ts'
 let plain = loadVocab([docDoc])
 let addressed = loadVocab([docDoc], [blobKeywords])
 
-Deno.test('the document loads on its own, and ships one component', () => {
+test('the document loads on its own, and ships one component', () => {
   assertEquals(plain.all, [DOC])
   assertEquals(plain.props(DOC), [TITLE, BODY])
   assertEquals(plain.comp(DOC)!.writable, [TITLE, BODY])
   assertEquals(plain.comp(DOC)!.stamped, [])
 })
 
-Deno.test('doc is a kind, ordered against nothing it does not ship', () => {
+test('doc is a kind, ordered against nothing it does not ship', () => {
   assertEquals(plain.kinds, [DOC])
   assertEquals(plain.comp(DOC)!.before, [])
 })
 
-Deno.test('both properties are text, and both route bare', () => {
+test('both properties are text, and both route bare', () => {
   for (let prop of [TITLE, BODY]) {
     assertEquals(plain.prop(DOC, prop)!.category, 'scalar')
     assertEquals(plain.route(prop), { comp: DOC, prop })
   }
 })
 
-Deno.test('store is carried only by whoever registered the keyword', () => {
+test('store is carried only by whoever registered the keyword', () => {
   assertEquals(plain.prop(DOC, BODY)!.keywords.store, undefined)
   assertEquals(addressed.prop(DOC, BODY)!.keywords.store, 'blob')
   // and it is an ordinary text property either way — where the value lives is
@@ -41,7 +42,7 @@ Deno.test('store is carried only by whoever registered the keyword', () => {
   }
 })
 
-Deno.test('the plugin is the vocabulary and a name', () => {
+test('the plugin is the vocabulary and a name', () => {
   let p = docs()
   assertEquals(p.name, '@yaks/doc')
   assertEquals(p.vocab, [docDoc])

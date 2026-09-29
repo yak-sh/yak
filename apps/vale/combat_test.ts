@@ -1,9 +1,10 @@
 // A receiver plays every nearby combat visual once, even when several arrive
 // in one fight update or the sender's connection starts a new sequence.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type PeerEvent, publish, replay } from './combat.ts'
 
-Deno.test('nearby combat events survive a coalesced fight update', () => {
+test('nearby combat events survive a coalesced fight update', () => {
   let now = 10000
   let cast: PeerEvent = {
     type: 'ability',

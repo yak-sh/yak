@@ -2,6 +2,7 @@
 // doors, and the capture. `compose` over the real subpaths, so what is checked
 // here is the plugin a config would name.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { compose, type Served } from '@yaks/cli/host'
@@ -42,7 +43,7 @@ let witness = (h: Served, body: unknown) =>
 let TAB = '<title>Weather</title><p>rain</p>' +
   '<img src="https://cdn.example/x.png"><script>fetch("//elsewhere")</script>'
 
-Deno.test('POST /page witnesses a page, bytes and all', async () => {
+test('POST /page witnesses a page, bytes and all', async () => {
   let h = await host()
   try {
     let said = await witness(h, {
@@ -67,7 +68,7 @@ Deno.test('POST /page witnesses a page, bytes and all', async () => {
   }
 })
 
-Deno.test('witnessing one page twice is one entity', async () => {
+test('witnessing one page twice is one entity', async () => {
   let h = await host()
   try {
     await witness(h, { url: 'https://example.com/w', title: 'One' })
@@ -81,7 +82,7 @@ Deno.test('witnessing one page twice is one entity', async () => {
   }
 })
 
-Deno.test('POST /page refuses what is not a page', async () => {
+test('POST /page refuses what is not a page', async () => {
   let h = await host()
   try {
     assertEquals((await witness(h, { url: 'file:///tmp/x' })).status, 400)
@@ -91,7 +92,7 @@ Deno.test('POST /page refuses what is not a page', async () => {
   }
 })
 
-Deno.test('GET /page/<eid> answers the frozen document, fenced and dated', async () => {
+test('GET /page/<eid> answers the frozen document, fenced and dated', async () => {
   let h = await host()
   try {
     await witness(h, { url: 'https://example.com/w', html: TAB })
@@ -131,7 +132,7 @@ Deno.test('GET /page/<eid> answers the frozen document, fenced and dated', async
   }
 })
 
-Deno.test('a page witnessed by its address alone is fetched after the commit', async () => {
+test('a page witnessed by its address alone is fetched after the commit', async () => {
   let h = await host()
   try {
     let asked: string[] = []
@@ -160,7 +161,7 @@ Deno.test('a page witnessed by its address alone is fetched after the commit', a
   }
 })
 
-Deno.test('a page that already has bytes is not fetched again', async () => {
+test('a page that already has bytes is not fetched again', async () => {
   let h = await host()
   try {
     let asked: string[] = []

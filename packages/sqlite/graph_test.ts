@@ -3,6 +3,7 @@
 // stores. These hold the seam where the two meet — including the death words,
 // which used to be SQL in here and are now a rule read off the vocabulary.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph, isPromise, Stale, token } from '@yaks/graph'
 import { storage } from './mod.ts'
@@ -16,7 +17,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let one = (g: ReturnType<typeof shopGraph>, q: string) =>
   (g.read(q) as Bundle[])[0]
 
-Deno.test('a projected read fetches only the components it returns', () => {
+test('a projected read fetches only the components it returns', () => {
   let seen: string[] = []
   let driver = spy(mem(), (sql) => void seen.push(sql))
   let s = storage(driver, shop)
@@ -40,7 +41,7 @@ Deno.test('a projected read fetches only the components it returns', () => {
   assert(seen.some((sql) => sql.includes('from "doc"')))
 })
 
-Deno.test('an optional component keeps its name beside a property with that name', () => {
+test('an optional component keeps its name beside a property with that name', () => {
   let g = shopGraph()
   g.apply([
     {
@@ -65,7 +66,7 @@ Deno.test('an optional component keeps its name beside a property with that name
   assertEquals(found[0].doc, undefined)
 })
 
-Deno.test('apply lands a batch and stamps it, synchronously', () => {
+test('apply lands a batch and stamps it, synchronously', () => {
   let g = shopGraph()
   let out = sync(g.apply(
     [{
@@ -84,7 +85,7 @@ Deno.test('apply lands a batch and stamps it, synchronously', () => {
   )
 })
 
-Deno.test('a reference to nothing brings nothing into being', () => {
+test('a reference to nothing brings nothing into being', () => {
   let g = shopGraph()
   let out = sync(g.apply([
     { entity: { eid: 'p1' }, product: { price: 1, maker: 'm1' } },
@@ -98,7 +99,7 @@ Deno.test('a reference to nothing brings nothing into being', () => {
   assert(out[0].created)
 })
 
-Deno.test('admission refuses an unknown property through the whole stack', () => {
+test('admission refuses an unknown property through the whole stack', () => {
   let g = shopGraph()
   assertThrows(
     () => sync(g.apply([{ entity: { eid: 'p1' }, product: { pricee: 1 } }])),
@@ -107,7 +108,7 @@ Deno.test('admission refuses an unknown property through the whole stack', () =>
   )
 })
 
-Deno.test('a $was guard reads through the transaction', () => {
+test('a $was guard reads through the transaction', () => {
   let g = shopGraph()
   sync(g.apply([{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }]))
   sync(g.apply([{
@@ -130,7 +131,7 @@ Deno.test('a $was guard reads through the transaction', () => {
   )
 })
 
-Deno.test('a cascade reference pulls its owner into the grave', () => {
+test('a cascade reference pulls its owner into the grave', () => {
   let g = shopGraph()
   sync(g.apply([
     { entity: { eid: 'p1' }, product: { price: 12 } },
@@ -143,7 +144,7 @@ Deno.test('a cascade reference pulls its owner into the grave', () => {
   assertEquals(g.read('.kind=product&*'), [])
 })
 
-Deno.test('a detach reference is nulled when its target dies', () => {
+test('a detach reference is nulled when its target dies', () => {
   let g = shopGraph()
   sync(g.apply([
     { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
@@ -158,7 +159,7 @@ Deno.test('a detach reference is nulled when its target dies', () => {
   assertEquals((p.product as Record<string, unknown>).maker, null)
 })
 
-Deno.test('a release reference drops its row, its owner lives', () => {
+test('a release reference drops its row, its owner lives', () => {
   let g = shopGraph()
   sync(g.apply([
     { entity: { eid: 'u1' }, doc: { title: 'Reader' } },
@@ -171,7 +172,7 @@ Deno.test('a release reference drops its row, its owner lives', () => {
   assertEquals(u.bookmark, undefined)
 })
 
-Deno.test('a refused batch leaves the database as it was', () => {
+test('a refused batch leaves the database as it was', () => {
   let g = shopGraph()
   sync(g.apply([{ entity: { eid: 'p1' }, product: { price: 12 } }]))
   assertThrows(() =>

@@ -4,6 +4,7 @@
 // colour, the two Apple words — and the manifest generated for an app that
 // wrote none (apps.ts, T-34493, T-33055). The serving half — which bytes
 // answer `icon.png` and `manifest.webmanifest` — is serving_test.ts.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { App } from './directory.ts'
 import {
@@ -28,7 +29,7 @@ let app = (
   theme: App['theme'] = null,
 ) => ({ eid: 'e', slug: 'cookbook', title, theme } as unknown as App)
 
-Deno.test('a page with none of the five tags is given all of them, in its head', () => {
+test('a page with none of the five tags is given all of them, in its head', () => {
   let out = pinned(
     '/cookbook/',
     page('<title>Cookbook</title>'),
@@ -43,7 +44,7 @@ Deno.test('a page with none of the five tags is given all of them, in its head',
   assert(out.indexOf(ICON) < out.indexOf('</head>'), out)
 })
 
-Deno.test('a page that declares one is given only the other four', () => {
+test('a page that declares one is given only the other four', () => {
   let mine = '<link rel="apple-touch-icon" href="logo.png">'
   let one = pinned('/cookbook/', page(mine), app('Cookbook'))
   assert(one.includes(mine), one)
@@ -58,7 +59,7 @@ Deno.test('a page that declares one is given only the other four', () => {
   assert(two.includes(ICON), two)
 })
 
-Deno.test('a page naming its own theme-color or Apple tags keeps them, untouched', () => {
+test('a page naming its own theme-color or Apple tags keeps them, untouched', () => {
   let mine = '<meta name="theme-color" content="#1b3a2f">'
   let out = pinned('/cookbook/', page(mine), app('Cookbook'))
   assert(out.includes(mine), out)
@@ -75,7 +76,7 @@ Deno.test('a page naming its own theme-color or Apple tags keeps them, untouched
   assert(!two.includes(STATUS_BAR), two)
 })
 
-Deno.test('a page that declares all five is untouched', () => {
+test('a page that declares all five is untouched', () => {
   let mine = '<link rel="apple-touch-icon-precomposed" href="logo.png">' +
     "<link rel='manifest' href='app.webmanifest'>" +
     '<meta name="theme-color" content="#000">' +
@@ -87,7 +88,7 @@ Deno.test('a page that declares all five is untouched', () => {
   assert(pinned('/cookbook/', page(other), app('Cookbook')).includes(MANIFEST))
 })
 
-Deno.test('a page with no head at all still gets its tags', () => {
+test('a page with no head at all still gets its tags', () => {
   let out = pinned('/', '<!doctype html><p>hi', app('Cookbook'))
   assert(out.startsWith('<!doctype html><link rel="apple-touch-icon"'), out)
   assert(out.includes('href="/manifest.webmanifest"'), out)
@@ -95,7 +96,7 @@ Deno.test('a page with no head at all still gets its tags', () => {
   assert(based('/', out).startsWith('<!doctype html><base href="/">'), out)
 })
 
-Deno.test("the app's own theme colour is what the injected meta and the manifest both wear", () => {
+test("the app's own theme colour is what the injected meta and the manifest both wear", () => {
   let mine = app('Cookbook', { themeColor: '#1b3a2f', backgroundColor: '#fff' })
   let out = pinned('/cookbook/', page('<title>x</title>'), mine)
   assert(out.includes('<meta name="theme-color" content="#1b3a2f">'), out)
@@ -105,7 +106,7 @@ Deno.test("the app's own theme colour is what the injected meta and the manifest
   assertEquals(m.background_color, '#fff')
 })
 
-Deno.test('a hostile stored colour is refused at injection, wearing the platform instead', () => {
+test('a hostile stored colour is refused at injection, wearing the platform instead', () => {
   // The generic graph_apply tier can set `theme` past app_set's validator, so
   // a value carrying a quote, angle bracket or script must never reach the head
   // or the manifest — it falls back to the platform colour.
@@ -121,7 +122,7 @@ Deno.test('a hostile stored colour is refused at injection, wearing the platform
   assertEquals(m.background_color, PLATFORM_BACKGROUND)
 })
 
-Deno.test('the generated manifest names the app, its root, its icon and its colours', () => {
+test('the generated manifest names the app, its root, its icon and its colours', () => {
   let m = manifesting(app('Cookbook'), '/cookbook/')
   assertEquals(m.name, 'Cookbook')
   assertEquals(m.short_name, 'Cookbook')
@@ -137,7 +138,7 @@ Deno.test('the generated manifest names the app, its root, its icon and its colo
   ])
 })
 
-Deno.test('an app with no title is named by its slug', () => {
+test('an app with no title is named by its slug', () => {
   let m = manifesting(app(''), '/')
   assertEquals(m.name, 'cookbook')
   assertEquals(m.icons[0].src, '/icon.png')

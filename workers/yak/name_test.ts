@@ -11,6 +11,7 @@
 // dropped into public/, a tool added to TOOLS, a letter written in a module
 // that does not exist yet — each is covered the day it lands, and a leak fails
 // here instead of reaching somebody's screen.
+import { test } from '@yaks/testing'
 import { assert, assertStringIncludes } from '@std/assert'
 import { core } from '@yaks/mcp'
 import { INSTRUCTIONS, PAGES, UNDO } from './guide.ts'
@@ -75,7 +76,7 @@ let roots = [
   '../../packages/admin/',
 ]
 
-Deno.test('nothing served or written here calls the place Yaks', () => {
+test('nothing served or written here calls the place Yaks', () => {
   let seen = 0
   for (let root of roots) {
     for (let [path, text] of walk(new URL(root, import.meta.url))) {
@@ -93,7 +94,7 @@ Deno.test('nothing served or written here calls the place Yaks', () => {
 // stringify drops the `run`, the only part of it nobody reads. Signed out the
 // roster is the same list wearing a different `security` (anon.ts `barred`),
 // so this walk is both doors.
-Deno.test('nothing the connector says calls the place Yaks', () => {
+test('nothing the connector says calls the place Yaks', () => {
   leak('INSTRUCTIONS', INSTRUCTIONS)
   leak('CONNECTOR', JSON.stringify(CONNECTOR))
   leak('guide PAGES', JSON.stringify(PAGES))
@@ -115,7 +116,7 @@ Deno.test('nothing the connector says calls the place Yaks', () => {
 
 // And it says the name outright, because saying only the address is what left
 // an agent guessing at it.
-Deno.test('the instructions teach the spelling', () => {
+test('the instructions teach the spelling', () => {
   assertStringIncludes(INSTRUCTIONS, 'This is yaks.app')
   assertStringIncludes(INSTRUCTIONS, 'lowercase, with the .app')
   assertStringIncludes(INSTRUCTIONS, 'An app built on yaks.app is a yaks app')

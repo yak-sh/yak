@@ -2,6 +2,7 @@
 // owner's takes a named flag. Everything below is that rule, plus where the
 // accounts are read from: the sessions a vault keeps, and the remembered
 // default beside the bearer.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { ramVault, secretEid } from '@yaks/secrets'
 import { ADMIN } from '../../workers/yak/lib/bots.ts'
@@ -29,13 +30,13 @@ let bot = (name: string, session = 'tok'): Account => ({
 let jeff: Account = { address: 'jeff@yak.sh', session: 'tok', name: 'jeff' }
 let admin: Account = { address: ADMIN, session: 'tok', name: 'admin' }
 
-Deno.test('an address is what makes an account a throwaway', () => {
+test('an address is what makes an account a throwaway', () => {
   assertEquals(isTest(bot('probe')), true)
   assertEquals(isTest(jeff), false)
   assertStringIncludes(throwaway(), '@bot.yak.sh')
 })
 
-Deno.test('no chain of defaults reaches an owner account', () => {
+test('no chain of defaults reaches an owner account', () => {
   let all = [bot('probe'), jeff]
   // current names the owner's? still the throwaway.
   assertEquals(pick(all, { current: 'jeff' }).address, 'probe@bot.yak.sh')
@@ -48,7 +49,7 @@ Deno.test('no chain of defaults reaches an owner account', () => {
   assertEquals(pick(all, { owner: true }).address, 'jeff@yak.sh')
 })
 
-Deno.test('with no throwaway signed in, the answer is how to mint one', () => {
+test('with no throwaway signed in, the answer is how to mint one', () => {
   let no = assertThrows(() => pick([jeff], {}), Refused)
   assertStringIncludes((no as Error).message, 'yak admin throwaway')
   let many = assertThrows(
@@ -62,7 +63,7 @@ Deno.test('with no throwaway signed in, the answer is how to mint one', () => {
 // The platform's admin wears a bot address so its sign-in codes land in the
 // graph, and is a throwaway in nobody's eyes: its own flag reaches it, no
 // default does, and `--owner` never lands on it either (D-35373).
-Deno.test('the admin is neither a throwaway nor anybody’s own', () => {
+test('the admin is neither a throwaway nor anybody’s own', () => {
   assertEquals(isAdmin(admin), true)
   assertEquals(isTest(admin), false)
   assertEquals(isAdmin(bot('probe')), false)
@@ -88,7 +89,7 @@ Deno.test('the admin is neither a throwaway nor anybody’s own', () => {
   assertStringIncludes((none as Error).message, 'yak admin login')
 })
 
-Deno.test('an owner account is never made the remembered default', () => {
+test('an owner account is never made the remembered default', () => {
   assertEquals(usable(bot('probe')).name, 'probe')
   assertThrows(() => usable(jeff), Refused)
   assertStringIncludes(
@@ -97,7 +98,7 @@ Deno.test('an owner account is never made the remembered default', () => {
   )
 })
 
-Deno.test('acting as the owner is marked, and no session is ever printed', () => {
+test('acting as the owner is marked, and no session is ever printed', () => {
   assertStringIncludes(banner(jeff), 'OWNER ACCOUNT')
   assertStringIncludes(banner(jeff), 'jeff@yak.sh')
   assertStringIncludes(banner(admin), 'ADMIN ACCOUNT')
@@ -113,7 +114,7 @@ Deno.test('acting as the owner is marked, and no session is ever printed', () =>
 // What the vault keeps under a session's name is an account. Any other secret
 // beside it is not, and neither is a session bound to 1Password rather than
 // held: nothing here can read one on the spot.
-Deno.test('the vault’s sessions read back as accounts', () => {
+test('the vault’s sessions read back as accounts', () => {
   let vault = ramVault()
   let keep = (name: string, value?: string) =>
     vault.seal(secretEid(name), { name, handle: 'h', value })
@@ -128,7 +129,7 @@ Deno.test('the vault’s sessions read back as accounts', () => {
 })
 
 // One address signs in on each zone, and neither session is the other's.
-Deno.test('a session is kept per zone', () => {
+test('a session is kept per zone', () => {
   let vault = ramVault()
   let keep = (name: string, value: string) =>
     vault.seal(secretEid(name), { name, handle: 'h', value })
@@ -139,7 +140,7 @@ Deno.test('a session is kept per zone', () => {
   assertEquals(held('yaks.fyi'), ['fyi.token'])
 })
 
-Deno.test('the remembered default is written, read and forgotten', () => {
+test('the remembered default is written, read and forgotten', () => {
   let home = Deno.makeTempDirSync()
   let dir = `${home}/yaks`
   try {

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   author,
@@ -14,7 +15,7 @@ let got = (headers: Record<string, string>, from = 'bounces@relay.example') =>
     headers: { get: (n: string) => headers[n.toLowerCase()] ?? null },
   }) as Received
 
-Deno.test('author: the From header, not the envelope bounce address', () => {
+test('author: the From header, not the envelope bounce address', () => {
   assertEquals(
     author(got({ from: 'Ana <ana@books.example>' })),
     'ana@books.example',
@@ -23,7 +24,7 @@ Deno.test('author: the From header, not the envelope bounce address', () => {
   assertEquals(author(got({})), 'bounces@relay.example')
 })
 
-Deno.test('messageId: unbracketed, or empty', () => {
+test('messageId: unbracketed, or empty', () => {
   assertEquals(
     messageId(got({ 'message-id': '<a1@x.example>' })),
     'a1@x.example',
@@ -31,7 +32,7 @@ Deno.test('messageId: unbracketed, or empty', () => {
   assertEquals(messageId(got({})), '')
 })
 
-Deno.test('inbound: one letter, as it arrived', () => {
+test('inbound: one letter, as it arrived', () => {
   let bundles = inbound(
     got({
       from: 'Ana <ana@books.example>',
@@ -54,7 +55,7 @@ Deno.test('inbound: one letter, as it arrived', () => {
   }])
 })
 
-Deno.test('verdict: the DKIM line, and the difference between failed and unasked', () => {
+test('verdict: the DKIM line, and the difference between failed and unasked', () => {
   let head = (v: string | null) => ({ get: () => v })
   assertEquals(
     verdict(head('mx.example; dkim=pass header.i=@books.example; spf=pass')),
@@ -65,7 +66,7 @@ Deno.test('verdict: the DKIM line, and the difference between failed and unasked
   assertEquals(verdict(head(null)), null)
 })
 
-Deno.test('inbound: an unsigned letter is recorded, never dropped', () => {
+test('inbound: an unsigned letter is recorded, never dropped', () => {
   let [b] = inbound(got({ subject: 'hi' }), { eid: 'e-3', verified: false })
   assertEquals((b.mail as Record<string, unknown>).verified, false)
   assertEquals(
@@ -75,7 +76,7 @@ Deno.test('inbound: an unsigned letter is recorded, never dropped', () => {
   )
 })
 
-Deno.test('inbound: a letter with no subject still has one, and never asks to go', () => {
+test('inbound: a letter with no subject still has one, and never asks to go', () => {
   let [b] = inbound(got({}), { eid: 'e-2', at: 'now' })
   assertEquals((b.doc as Record<string, unknown>).title, '(no subject)')
   assertEquals(b.deliver, undefined)

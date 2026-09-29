@@ -1,6 +1,7 @@
 // The mark: set by every write to the vectors, cleared only by a rebuild, and
 // readable without any index in the process.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { by, col, eq, lit, NOW, type Stmt, val } from '@yaks/sql'
 import { objects } from '@yaks/sqlite'
@@ -11,11 +12,11 @@ import { sweep } from './sweep.ts'
 import { clean, dirty, mark, state } from './mark.ts'
 import { embedder, mem, shelf, shop, stocked } from './testing.ts'
 
-Deno.test('a fresh mark is dirty: an index never built is owed one', () => {
+test('a fresh mark is dirty: an index never built is owed one', () => {
   assertEquals(dirty(shelf()), true)
 })
 
-Deno.test('a rebuild cleans it and the next write sets it again', async () => {
+test('a rebuild cleans it and the next write sets it again', async () => {
   let db = await stocked()
   clean(db)
   assertEquals(dirty(db), false)
@@ -35,14 +36,14 @@ Deno.test('a rebuild cleans it and the next write sets it again', async () => {
   assertEquals(dirty(db), true)
 })
 
-Deno.test('mark() sets it by hand', async () => {
+test('mark() sets it by hand', async () => {
   let db = await stocked()
   clean(db)
   mark(db)
   assertEquals(dirty(db), true)
 })
 
-Deno.test('state() reports the mark beside the corpus', async () => {
+test('state() reports the mark beside the corpus', async () => {
   let db = await stocked()
   let s = state(db)
   assertEquals([s.dirty, s.rows, typeof s.newest], [true, 4, 'string'])
@@ -102,7 +103,7 @@ let PRIOR: Stmt[] = [
   dirtied('embedding_index_ad', 'delete'),
 ]
 
-Deno.test('install adopts prior tables unchanged, adding only its index and queue', () => {
+test('install adopts prior tables unchanged, adding only its index and queue', () => {
   let db = mem()
   for (let stmt of PRIOR) db.query(stmt)
   let master = () => objects(db)

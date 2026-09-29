@@ -1,4 +1,5 @@
 // The scalar language: each PropType has one stored value and one face.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
@@ -21,7 +22,7 @@ let p = (name: string, type: PropType): Prop => ({
 let parse = (name: string, type: PropType, value: unknown) =>
   parseProp(p(name, type), value, { now: Date.UTC(2026, 6, 15, 14, 30) })
 
-Deno.test('parseProp: text and optional scalar empties stay distinct', () => {
+test('parseProp: text and optional scalar empties stay distinct', () => {
   for (let t of ['text', 'body', 'query', 'url'] as PropType[]) {
     assertEquals(parse('note', t, ''), '')
   }
@@ -35,7 +36,7 @@ Deno.test('parseProp: text and optional scalar empties stay distinct', () => {
   assertEquals(parse('status', { enum: ['open'] }, ''), null)
 })
 
-Deno.test('parseProp: numbers and priorities become finite numbers', () => {
+test('parseProp: numbers and priorities become finite numbers', () => {
   for (
     let [value, want] of [
       ['02', 2],
@@ -65,7 +66,7 @@ Deno.test('parseProp: numbers and priorities become finite numbers', () => {
   }
 })
 
-Deno.test('parseProp: booleans, enum aliases, and time canonicalize', () => {
+test('parseProp: booleans, enum aliases, and time canonicalize', () => {
   for (
     let [value, want] of [
       ['TRUE', 1],
@@ -106,7 +107,7 @@ Deno.test('parseProp: booleans, enum aliases, and time canonicalize', () => {
 
 // The badge's whole honesty: a page saved and the same page filtered for
 // canonicalize through THIS parser, so neither door can spell it its own way.
-Deno.test('parseProp: a url has one spelling, and only when it is one', () => {
+test('parseProp: a url has one spelling, and only when it is one', () => {
   assertEquals(
     parse('url', 'url', 'HTTPS://X.com/p/?utm_source=n#top'),
     'https://x.com/p',
@@ -117,7 +118,7 @@ Deno.test('parseProp: a url has one spelling, and only when it is one', () => {
   )
 })
 
-Deno.test('parseProp: references resolve and every rejection teaches', () => {
+test('parseProp: references resolve and every rejection teaches', () => {
   let type: PropType = { eid: '', death: 'keep' }
   let id = 'AAAAAAAA-0000-4000-8000-000000000001'
   assertEquals(parseProp(p('target', type), id), id.toLowerCase())
@@ -142,7 +143,7 @@ Deno.test('parseProp: references resolve and every rejection teaches', () => {
   )
 })
 
-Deno.test('parseProp: rejected values name the property, grammar, and input', () => {
+test('parseProp: rejected values name the property, grammar, and input', () => {
   let cases: [Prop, unknown, string][] = [
     [p('x', 'number'), '0x10', 'x is a finite decimal number'],
     [p('at', 'time'), 'later', 'at is a time'],
@@ -154,7 +155,7 @@ Deno.test('parseProp: rejected values name the property, grammar, and input', ()
   }
 })
 
-Deno.test('formatProp: every semantic type has one face', () => {
+test('formatProp: every semantic type has one face', () => {
   let id = 'aaaaaaaa-0000-4000-8000-000000000001'
   assertEquals(formatProp(p('priority', 'priority'), 'p2'), 'P2')
   assertEquals(formatProp(p('priority', 'priority'), 1.5), 'P1.5')
@@ -174,7 +175,7 @@ Deno.test('formatProp: every semantic type has one face', () => {
   assertEquals(formatProp(p('x', 'number'), null), null)
 })
 
-Deno.test('propAt: types and unambiguous error names come from schema', () => {
+test('propAt: types and unambiguous error names come from schema', () => {
   assertEquals(propAt('filed', 'priority'), {
     comp: 'filed',
     prop: 'priority',
@@ -189,7 +190,7 @@ Deno.test('propAt: types and unambiguous error names come from schema', () => {
   assertEquals(propAt('task', 'missing'), undefined)
 })
 
-Deno.test('refOf: an any-entity ref answers entity, kind-constrained its kind', () => {
+test('refOf: an any-entity ref answers entity, kind-constrained its kind', () => {
   // 'entity' (the spine) names the any-entity target like any other kind —
   // truthy, so isRef and refOf agree without a falsy sentinel to trip on.
   assertEquals(refOf('card', 'target'), 'entity')
@@ -202,7 +203,7 @@ Deno.test('refOf: an any-entity ref answers entity, kind-constrained its kind', 
   assertEquals(isRef('task', 'missing'), false)
 })
 
-Deno.test('normalizeChanges: component values, ids, and edges canonicalize', () => {
+test('normalizeChanges: component values, ids, and edges canonicalize', () => {
   let parent = 'aaaaaaaa-0000-4000-8000-000000000001'
   let child = 'aaaaaaaa-0000-4000-8000-000000000002'
   let ids: Record<string, string> = { parent, 'T-2': child, 2: child }

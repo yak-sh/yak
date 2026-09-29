@@ -1,5 +1,6 @@
 // A defect reaches Sentry with where it happened and who hit it, and nothing
 // a person sent rides along with it.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   createTransport,
@@ -30,7 +31,7 @@ let sentry = () => {
   return { seen, done: () => client.flush(1000) }
 }
 
-Deno.test('a defect is sent with its tags and the person who hit it', async () => {
+test('a defect is sent with its tags and the person who hit it', async () => {
   let { seen, done } = sentry()
   defect(
     new TypeError('x is undefined'),
@@ -49,7 +50,7 @@ Deno.test('a defect is sent with its tags and the person who hit it', async () =
   assertEquals(seen[0].user, { id: 'p-1' })
 })
 
-Deno.test('a connector tool names the tool, space, app, client and account', async () => {
+test('a connector tool names the tool, space, app, client and account', async () => {
   let { seen, done } = sentry()
   let ctx = (email: string) =>
     ({
@@ -84,7 +85,7 @@ Deno.test('a connector tool names the tool, space, app, client and account', asy
   assertEquals(seen[0].user, { id: 'p-1' })
 })
 
-Deno.test('a caught failure is sent, and a refusal is not', async () => {
+test('a caught failure is sent, and a refusal is not', async () => {
   let { seen, done } = sentry()
   let status = (n: number) => Object.assign(new Error(`${n}`), { status: n })
   for (
@@ -105,7 +106,7 @@ Deno.test('a caught failure is sent, and a refusal is not', async () => {
   assertEquals(seen[1].tags, { request: 'GET /api/query', space: 'jeff' })
 })
 
-Deno.test('what leaves carries no header, query, body or console argument', () => {
+test('what leaves carries no header, query, body or console argument', () => {
   let event = scrub({
     type: undefined,
     request: {

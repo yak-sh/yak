@@ -1,4 +1,5 @@
 // The map veil follows world regions at each view scale.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { veil } from './mapfog.ts'
 import { regionOf } from './regions.ts'
@@ -7,7 +8,7 @@ import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
 
-Deno.test('visiting one land uncovers its irregular ground only', () => {
+test('visiting one land uncovers its irregular ground only', () => {
   let box: [number, number, number] = [-32, 48, 320]
   let size = 80
   let px = veil(box, new Set(['mossvale']), size)

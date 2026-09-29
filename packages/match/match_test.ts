@@ -2,6 +2,7 @@
 // The door, over the bookshop corpus: what each shape of query selects, in
 // what order, and what it refuses.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
 import { absent, and, eq, pred, present } from '@yaks/query'
@@ -11,7 +12,7 @@ import { bundles, NOW, shop } from './testing.ts'
 let sel = (q: string): string[] =>
   matcher(q, shop, { now: NOW })(bundles).map((b) => b.entity.eid)
 
-Deno.test('a scalar filter selects, and an absent property is a value', () => {
+test('a scalar filter selects, and an absent property is a value', () => {
   assertEquals(sel('.price>=12'), ['b1', 'b2'])
   assertEquals(sel('.status=shelved,sold'), ['b1', 'b2', 'b4'])
   // every entity with no released stamp, book or not
@@ -28,7 +29,7 @@ Deno.test('a scalar filter selects, and an absent property is a value', () => {
   assertEquals(sel('.available=1'), ['b1', 'b3', 'b4'])
 })
 
-Deno.test('a component is worn or it is not', () => {
+test('a component is worn or it is not', () => {
   assertEquals(sel('.review'), ['r1', 'r2', 'r3'])
   assertEquals(sel('.member'), ['m1'])
   // a tag — no properties at all, so wearing it is the whole fact
@@ -38,7 +39,7 @@ Deno.test('a component is worn or it is not', () => {
   assert(sel('!signed').includes('b1'))
 })
 
-Deno.test('presence reads plugin components without a declared schema', () => {
+test('presence reads plugin components without a declared schema', () => {
   let e = { entity: { eid: 'i1' }, doc: { title: 'Invoice' }, invoice: {} }
   let hit = filter(
     and(pred('doc', '!', null), pred('invoice', '!', null)),
@@ -55,7 +56,7 @@ Deno.test('presence reads plugin components without a declared schema', () => {
   assertThrows(() => filter('.invoice=1', shop), Error, 'unknown prop')
 })
 
-Deno.test('a bare bang names the component, not the property beside it', () => {
+test('a bare bang names the component, not the property beside it', () => {
   // `book` is both a component and review's reference property. The bang
   // completes the component sentence; every other form keeps the property, and
   // the property's qualified form still reaches it.
@@ -70,33 +71,33 @@ Deno.test('a bare bang names the component, not the property beside it', () => {
   ])
 })
 
-Deno.test('the kind scope names the most specific kind', () => {
+test('the kind scope names the most specific kind', () => {
   assertEquals(sel('.kind=book'), ['b1', 'b2', 'b3', 'b4'])
   assertEquals(sel('.kind=books'), ['b1', 'b2', 'b3', 'b4'])
   assertEquals(sel('.kind=doc'), ['a1', 'a2', 'd1'])
   assertEquals(sel('.kind=member'), ['m1'])
 })
 
-Deno.test('a reference is followed through the set it was given', () => {
+test('a reference is followed through the set it was given', () => {
   assertEquals(sel('.author=a1'), ['b1', 'b4'])
   assertEquals(sel('.book.author.doc.title~=vale'), ['b1', 'b4'])
   assertEquals(sel('.book.author.doc.body~=manuals'), ['b2'])
   assertEquals(sel('.book.author.member'), [])
 })
 
-Deno.test('a reverse hop reads the children pointing back', () => {
+test('a reverse hop reads the children pointing back', () => {
   assertEquals(sel('.reviews'), ['b1', 'b2'])
   assertEquals(sel('.reviews>=2'), ['b1'])
   assertEquals(sel('.reviews.stars=5'), ['b1'])
   assertEquals(sel('.books'), ['a1', 'a2'])
 })
 
-Deno.test('.refs= gathers the backlinks of an entity', () => {
+test('.refs= gathers the backlinks of an entity', () => {
   assertEquals(sel('.refs=a1'), ['b1', 'b4'])
   assertEquals(sel('.refs=b1'), ['r1', 'r2'])
 })
 
-Deno.test('a bare word matches by whole word, not by substring', () => {
+test('a bare word matches by whole word, not by substring', () => {
   assertEquals(sel('fables'), ['a1', 'b4'])
   assertEquals(sel('cat*'), ['b3'])
   assertEquals(sel('cat'), [])
@@ -104,19 +105,19 @@ Deno.test('a bare word matches by whole word, not by substring', () => {
   assertEquals(sel(''), [])
 })
 
-Deno.test('an ordering sorts, with absent values first', () => {
+test('an ordering sorts, with absent values first', () => {
   assertEquals(sel('.kind=book&.order=price'), ['b3', 'b4', 'b1', 'b2'])
   assertEquals(sel('.kind=book&.order=-price'), ['b2', 'b1', 'b4', 'b3'])
   assertEquals(sel('.kind=book&.order=released'), ['b4', 'b2', 'b3', 'b1'])
   assertEquals(sel('.kind=book&.order=-released'), ['b1', 'b3', 'b2', 'b4'])
 })
 
-Deno.test('a window with no order pages newest first', () => {
+test('a window with no order pages newest first', () => {
   assertEquals(sel('.kind=book&.limit=2'), ['b4', 'b3'])
   assertEquals(sel('.kind=book&.after=5'), ['b2', 'b1'])
 })
 
-Deno.test('a window pages WITHIN the order it was asked for', () => {
+test('a window pages WITHIN the order it was asked for', () => {
   assertEquals(sel('.kind=book&.order=price&.limit=2'), ['b3', 'b4'])
   // the cursor names an entity, and paging continues from its place in the
   // order — b4 is the second cheapest, so the next page is the two dearest
@@ -135,14 +136,14 @@ Deno.test('a window pages WITHIN the order it was asked for', () => {
   ])
 })
 
-Deno.test('an eid cursor pages entities without human numbers', () => {
+test('an eid cursor pages entities without human numbers', () => {
   let bare = bundles.map((b) => ({ ...b, entity: { eid: b.entity.eid } }))
   let read = (q: string) => matcher(q, shop)(bare).map((b) => b.entity.eid)
   assertEquals(read('.kind=book&.limit=2'), ['b4', 'b3'])
   assertEquals(read('.kind=book&.limit=2&.after=b3'), ['b2', 'b1'])
 })
 
-Deno.test('a time phrase answers for the moment each run is asked at', () => {
+test('a time phrase answers for the moment each run is asked at', () => {
   let today = (now: number) =>
     matcher('.released=today', shop, { now })(bundles).map((b) => b.entity.eid)
   assertEquals(today(NOW), ['b1'])
@@ -150,12 +151,12 @@ Deno.test('a time phrase answers for the moment each run is asked at', () => {
   assertEquals(today(NOW), ['b1'])
 })
 
-Deno.test('a deleted entity is never selected', () => {
+test('a deleted entity is never selected', () => {
   assertEquals(sel('.stars=1'), [])
   assertEquals(sel('.stars'), ['r1', 'r2', 'r3'])
 })
 
-Deno.test('the filter door judges one bundle at a time', () => {
+test('the filter door judges one bundle at a time', () => {
   let cheap = filter('.price<10', shop)
   assert(cheap(bundles.find((b) => b.entity.eid == 'b4')!))
   assertFalse(cheap(bundles.find((b) => b.entity.eid == 'b1')!))
@@ -166,7 +167,7 @@ Deno.test('the filter door judges one bundle at a time', () => {
   assert(byVale(b1, bundles))
 })
 
-Deno.test('what it cannot answer exactly, it declines', () => {
+test('what it cannot answer exactly, it declines', () => {
   for (let q of ['.near=b1', '.count', '.distinct=status', '.edges']) {
     let e = assertThrows(() => matcher(q, shop), Unsupported) as Unsupported
     assertEquals(e.by, '@yaks/match', q)
@@ -186,7 +187,7 @@ Deno.test('what it cannot answer exactly, it declines', () => {
   assertThrows(() => matcher('.nonesuch=1', shop), Error, 'unknown prop')
 })
 
-Deno.test('reverse NONE and a builder child conjunction keep quantifier semantics', () => {
+test('reverse NONE and a builder child conjunction keep quantifier semantics', () => {
   assertEquals(sel('.reviews!.stars=5').includes('b1'), false)
   assertEquals(sel('.reviews!.stars=5').includes('b4'), true)
   let ast = and({

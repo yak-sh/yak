@@ -14,7 +14,7 @@ import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Store } from './graph.ts'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 
 let wire = () => {
   let sent: Frame[] = []
@@ -118,7 +118,7 @@ let says = (eid: string, comp: Bundle[string]) => [{
   presence: comp,
 }]
 
-Deno.test('a finger moves, and only the other cooks hear it', async () => {
+test('a finger moves, and only the other cooks hear it', async () => {
   let { store, watch } = await watching()
   let ada = watch(), bert = watch()
 
@@ -135,7 +135,7 @@ Deno.test('a finger moves, and only the other cooks hear it', async () => {
   assertEquals(b.presence, undefined)
 })
 
-Deno.test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
+test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
   let date = Date.now
   let offset = 0
   Date.now = () => date() + offset
@@ -189,7 +189,7 @@ Deno.test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
   }
 })
 
-Deno.test('a cook who arrives late sees the fingers already on the page', async () => {
+test('a cook who arrives late sees the fingers already on the page', async () => {
   let { store, watch } = await watching()
   let ada = watch()
   store.webSocketMessage(
@@ -208,7 +208,7 @@ Deno.test('a cook who arrives late sees the fingers already on the page', async 
   assertEquals(first.relay, says(CAKE, { x: 3, y: 9, name: 'Ada' }))
 })
 
-Deno.test('a cook who leaves takes her finger with her', async () => {
+test('a cook who leaves takes her finger with her', async () => {
   let { store, watch } = await watching()
   let ada = watch(), bert = watch()
   store.webSocketMessage(
@@ -223,7 +223,7 @@ Deno.test('a cook who leaves takes her finger with her', async () => {
   assertEquals(relay(bert), says(CAKE, null))
 })
 
-Deno.test('clearing it is the component set to null, like anywhere else', async () => {
+test('clearing it is the component set to null, like anywhere else', async () => {
   let { store, watch } = await watching()
   let ada = watch(), bert = watch()
   store.webSocketMessage(
@@ -237,7 +237,7 @@ Deno.test('clearing it is the component set to null, like anywhere else', async 
   assertEquals(relay(bert), says(CAKE, null))
 })
 
-Deno.test('a finger lost to an eviction is still taken away', async () => {
+test('a finger lost to an eviction is still taken away', async () => {
   let { ctx, store, watch } = await watching()
   let ada = watch(), bert = watch()
   store.webSocketMessage(
@@ -265,7 +265,7 @@ Deno.test('a finger lost to an eviction is still taken away', async () => {
   assertEquals(relay(late), says(CAKE, null))
 })
 
-Deno.test('a durable component sent to the relay door is not stored by it', async () => {
+test('a durable component sent to the relay door is not stored by it', async () => {
   let { store, watch } = await watching()
   let ada = watch(), bert = watch()
   store.webSocketMessage(

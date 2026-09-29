@@ -3,6 +3,7 @@
 // moves it, it answers again when the server pushes one, and it stops when it
 // is closed.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, transient } from '@yaks/graph'
 import { boxClient, server, titles } from './testing.ts'
@@ -21,7 +22,7 @@ let dal = (eid = 'r1', serves = 4): Bundle => ({
   recipe: { serves, course: 'dinner' },
 })
 
-Deno.test('a watch answers now, and again on a local apply', () => {
+test('a watch answers now, and again on a local apply', () => {
   let c = boxClient()
   c.mutate([dal()])
 
@@ -41,7 +42,7 @@ Deno.test('a watch answers now, and again on a local apply', () => {
   c.close()
 })
 
-Deno.test('an entity that stops matching leaves the answer', () => {
+test('an entity that stops matching leaves the answer', () => {
   let c = boxClient()
   c.mutate([dal()])
   let dinners = c.watch('.course=dinner')
@@ -51,7 +52,7 @@ Deno.test('an entity that stops matching leaves the answer', () => {
   c.close()
 })
 
-Deno.test('a deleted entity leaves the answer', () => {
+test('a deleted entity leaves the answer', () => {
   let c = boxClient()
   c.mutate([dal()])
   let dinners = c.watch('.course=dinner')
@@ -61,7 +62,7 @@ Deno.test('a deleted entity leaves the answer', () => {
   c.close()
 })
 
-Deno.test('an unrelated write does not wake a watch', () => {
+test('an unrelated write does not wake a watch', () => {
   let c = boxClient()
   c.mutate([dal()])
   let dinners = c.watch('.course=dinner')
@@ -73,7 +74,7 @@ Deno.test('an unrelated write does not wake a watch', () => {
   c.close()
 })
 
-Deno.test('an ordered query re-reads, and comes back in order', () => {
+test('an ordered query re-reads, and comes back in order', () => {
   let c = boxClient()
   c.mutate([dal('r1', 4), { ...dal('r2', 9), doc: { title: 'Pie' } }])
 
@@ -85,7 +86,7 @@ Deno.test('an ordered query re-reads, and comes back in order', () => {
   c.close()
 })
 
-Deno.test('a watch stops after close', () => {
+test('a watch stops after close', () => {
   let c = boxClient()
   let dinners = c.watch('.course=dinner')
   let heard = 0
@@ -99,7 +100,7 @@ Deno.test('a watch stops after close', () => {
   c.close()
 })
 
-Deno.test('a watch carries what its query names, after a change as at first', () => {
+test('a watch carries what its query names, after a change as at first', () => {
   let c = boxClient()
   c.mutate([dal()])
   let dinners = c.watch('.course=dinner')
@@ -110,7 +111,7 @@ Deno.test('a watch carries what its query names, after a change as at first', ()
   c.close()
 })
 
-Deno.test('one listener stops without stopping the watch', () => {
+test('one listener stops without stopping the watch', () => {
   let c = boxClient()
   let dinners = c.watch('.course=dinner&?doc')
   let heard = 0
@@ -123,7 +124,7 @@ Deno.test('one listener stops without stopping the watch', () => {
   c.close()
 })
 
-Deno.test('a watch hears a frame the server pushed', async () => {
+test('a watch hears a frame the server pushed', async () => {
   let srv = server()
   let a = boxClient(srv)
   let b = boxClient(srv)
@@ -146,7 +147,7 @@ Deno.test('a watch hears a frame the server pushed', async () => {
   b.close()
 })
 
-Deno.test('a closed watch drops the server subscription', async () => {
+test('a closed watch drops the server subscription', async () => {
   let srv = server()
   let c = boxClient(srv)
   let dinners = c.watch('.course=dinner')
@@ -160,7 +161,7 @@ Deno.test('a closed watch drops the server subscription', async () => {
   c.close()
 })
 
-Deno.test('a signal factory backs the value', () => {
+test('a signal factory backs the value', () => {
   let made: Hold<unknown>[] = []
   let signal: Make = <T>(value: T) => {
     let held = { value }
@@ -178,7 +179,7 @@ Deno.test('a signal factory backs the value', () => {
   c.close()
 })
 
-Deno.test('closing during an asynchronous first read cannot resurrect a watch', async () => {
+test('closing during an asynchronous first read cannot resurrect a watch', async () => {
   let c = boxClient()
   let initial = c.graph.read.bind(c.graph)
   let release!: (rows: Bundle[]) => void
@@ -192,7 +193,7 @@ Deno.test('closing during an asynchronous first read cannot resurrect a watch', 
   c.close()
 })
 
-Deno.test('closing a client during an asynchronous read closes its pending watches', async () => {
+test('closing a client during an asynchronous read closes its pending watches', async () => {
   let c = boxClient()
   let release!: (rows: Bundle[]) => void
   c.graph.read = () => new Promise<Bundle[]>((resolve) => release = resolve)
@@ -203,7 +204,7 @@ Deno.test('closing a client during an asynchronous read closes its pending watch
   assertEquals(c.watches.size(), 0)
 })
 
-Deno.test('local ready is reactive and an empty asynchronous answer notifies', async () => {
+test('local ready is reactive and an empty asynchronous answer notifies', async () => {
   let c = boxClient()
   let release!: (rows: Bundle[]) => void
   c.graph.read = () => new Promise<Bundle[]>((resolve) => release = resolve)
@@ -218,7 +219,7 @@ Deno.test('local ready is reactive and an empty asynchronous answer notifies', a
   c.close()
 })
 
-Deno.test('identical local watches share evaluation but not listener ownership', () => {
+test('identical local watches share evaluation but not listener ownership', () => {
   let c = boxClient()
   let a = c.watch('.recipe&?doc')
   let b = c.watch('.recipe&?doc', { remote: false })
@@ -240,7 +241,7 @@ Deno.test('identical local watches share evaluation but not listener ownership',
   c.close()
 })
 
-Deno.test('remote watches share one sub until the last independent close', async () => {
+test('remote watches share one sub until the last independent close', async () => {
   let c = boxClient(server())
   let a = c.watch('.course=dinner')
   let b = c.watch('.course=dinner', { remote: true })
@@ -274,7 +275,7 @@ Deno.test('remote watches share one sub until the last independent close', async
   assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's2' })
 })
 
-Deno.test('different options and query text never collapse into one watch', async () => {
+test('different options and query text never collapse into one watch', async () => {
   let c = boxClient(server())
   c.watch('.recipe')
   c.watch('.recipe', { remote: false })
@@ -288,7 +289,7 @@ Deno.test('different options and query text never collapse into one watch', asyn
   assertEquals(c.watches.size(), 0)
 })
 
-Deno.test('cached results do not make a new or disconnected remote watch ready', async () => {
+test('cached results do not make a new or disconnected remote watch ready', async () => {
   let srv = server()
   let c = boxClient(srv)
   c.mutate([dal()])
@@ -314,7 +315,7 @@ Deno.test('cached results do not make a new or disconnected remote watch ready',
   c.close()
 })
 
-Deno.test('late frames after unsubscribe cannot refill the graph', async () => {
+test('late frames after unsubscribe cannot refill the graph', async () => {
   let c = boxClient(server())
   let w = c.watch('.recipe')
   await c.idle()
@@ -328,7 +329,7 @@ Deno.test('late frames after unsubscribe cannot refill the graph', async () => {
   c.close()
 })
 
-Deno.test('a refused remote subscription is never ready', async () => {
+test('a refused remote subscription is never ready', async () => {
   let c = boxClient(server())
   let w = c.watch('.recipe')
   await c.idle()
@@ -344,7 +345,7 @@ Deno.test('a refused remote subscription is never ready', async () => {
   c.close()
 })
 
-Deno.test('closing one watch does not disconnect other transient observers', async () => {
+test('closing one watch does not disconnect other transient observers', async () => {
   const { client } = await import('./client.ts')
   const { loadVocab } = await import('@yaks/vocab')
   const c = client(

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   type Bundle,
@@ -16,7 +17,7 @@ let host: EditHost = {
 }
 let bundle = (doc: Bundle['doc']): Bundle => ({ entity: { eid: 'd' }, doc })
 
-Deno.test('edits: literals and repeated edits compose, guards name FOUND', () => {
+test('edits: literals and repeated edits compose, guards name FOUND', () => {
   let input = [
     bundle({ body: 'literal' }),
     bundle({ body: edit('literal', 'first') }),
@@ -41,7 +42,7 @@ Deno.test('edits: literals and repeated edits compose, guards name FOUND', () =>
   assertEquals(resolveEdits([explicit], host)[0].$was, explicit.$was)
 })
 
-Deno.test('edits: explicit drops discard pending text; null is not absent', () => {
+test('edits: explicit drops discard pending text; null is not absent', () => {
   for (let drop of [bundle(null), { entity: { eid: 'd' }, $delete: true }]) {
     let out = resolveEdits([
       bundle({ body: 'pending' }),
@@ -61,7 +62,7 @@ Deno.test('edits: explicit drops discard pending text; null is not absent', () =
   )
 })
 
-Deno.test('edits: operators and hunk refusals retain addressed messages', () => {
+test('edits: operators and hunk refusals retain addressed messages', () => {
   for (let prop of ['number', 'enum', 'ref', 'bool', 'unknown']) {
     assertThrows(
       () => resolveEdits([bundle({ [prop]: edit('x', 'y') })], host),

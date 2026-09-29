@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -24,7 +25,7 @@ let vocab = loadVocab([{
 }])
 
 for (let backend of ['sqlite', 'ram']) {
-  Deno.test(
+  test(
     backend + ': numbering excludes facets across the whole batch',
     () => {
       let opts = { number: { except: ['entry'] } }
@@ -53,7 +54,7 @@ for (let backend of ['sqlite', 'ram']) {
 // A config names what it excepts once, for every graph it opens, and a graph
 // whose plugins declare no such component simply has nothing wearing it.
 for (let backend of ['sqlite', 'ram']) {
-  Deno.test(backend + ': excepting an undeclared component numbers on', () => {
+  test(backend + ': excepting an undeclared component numbers on', () => {
     let opts = { number: { except: ['archetype', 'entry'] } }
     let s = backend == 'sqlite' ? storage(mem(), vocab, opts) : ram(vocab, opts)
     s.install()
@@ -66,7 +67,7 @@ for (let backend of ['sqlite', 'ram']) {
 }
 
 for (let backend of ['sqlite', 'ram']) {
-  Deno.test(backend + ': a reference to nothing numbers nothing', () => {
+  test(backend + ': a reference to nothing numbers nothing', () => {
     let opts = { number: true }
     let s = backend == 'sqlite' ? storage(mem(), vocab, opts) : ram(vocab, opts)
     s.install()
@@ -90,7 +91,7 @@ for (let backend of ['sqlite', 'ram']) {
   })
 }
 
-Deno.test('SQLite migration retains historic high-water across clearing and reopen', () => {
+test('SQLite migration retains historic high-water across clearing and reopen', () => {
   let d = mem()
   let old = storage(d, vocab, { number: true })
   old.install()
@@ -128,7 +129,7 @@ Deno.test('SQLite migration retains historic high-water across clearing and reop
   })
 })
 
-Deno.test('a mint may state the number it is adopting', () => {
+test('a mint may state the number it is adopting', () => {
   // What a store seeded from another store's export needs: an entity read as
   // 37574 there is 37574 here, and the sequence carries on past it rather than
   // handing the next arrival a number already in use.
@@ -148,7 +149,7 @@ Deno.test('a mint may state the number it is adopting', () => {
   })
 })
 
-Deno.test('an adopting store takes the number a patch states', () => {
+test('an adopting store takes the number a patch states', () => {
   // A store seeded from another store's export is told the identity: a stated
   // number is the one the entity takes, a stated null leaves it unnumbered,
   // and the sequence carries on past whatever was stated.
@@ -166,7 +167,7 @@ Deno.test('an adopting store takes the number a patch states', () => {
   })
 })
 
-Deno.test('a store that is not adopting mints its own numbers regardless', () => {
+test('a store that is not adopting mints its own numbers regardless', () => {
   let s = storage(mem(), vocab, { number: true })
   s.install()
   s.tx((tx) => {

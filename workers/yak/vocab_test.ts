@@ -1,6 +1,7 @@
 // The app vocabulary, held to two things: every example the guide teaches
 // loads, and what a load implies is one app's tables — not the fleet's 83
 // (V-33553).
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -86,7 +87,7 @@ let examples = (): [string, VocabDoc][] => {
   )
 }
 
-Deno.test('every example vocab.json in the repo loads', () => {
+test('every example vocab.json in the repo loads', () => {
   let found = examples()
   // The guide is full of them; finding almost none means the extractor broke,
   // not that the examples went away.
@@ -112,7 +113,7 @@ Deno.test('every example vocab.json in the repo loads', () => {
 // A component an app declares is a kind sorting before `doc` without saying
 // so: its own word is the most specific thing said about a row, and that is
 // what earns it its two tools (kinds.ts).
-Deno.test("an app's own word is a kind before doc", () => {
+test("an app's own word is a kind before doc", () => {
   let v = appVocab(says({ recipe: { serves: num } }))
   assertEquals(v.kindOf({ doc: 1, recipe: 1 }), 'recipe')
   // Unless the manifest says otherwise.
@@ -133,7 +134,7 @@ Deno.test("an app's own word is a kind before doc", () => {
 
 // There is one form. A manifest of bare component names is not a shorter
 // way to say a document — it is refused, in the shape that works.
-Deno.test('a manifest that is not a document is refused', () => {
+test('a manifest that is not a document is refused', () => {
   let why = assertThrows(
     () => appDoc('{"recipe": {"serves": "number"}}'),
     Error,
@@ -150,7 +151,7 @@ Deno.test('a manifest that is not a document is refused', () => {
 // YAML is the warm path, and a vocab.json keeps working because YAML reads it
 // (@yaks/yaml, M-34605). The two formats of the file are the same manifest;
 // which one an app wrote is what a refusal has to name.
-Deno.test('a manifest may be written as YAML', () => {
+test('a manifest may be written as YAML', () => {
   let yml = appDoc(
     '$defs:\n  recipe:\n    properties:\n      serves:\n        type: number\n',
     'vocab.yml',
@@ -158,7 +159,7 @@ Deno.test('a manifest may be written as YAML', () => {
   assertEquals(yml, appDoc(says({ recipe: { serves: num } })))
 })
 
-Deno.test('a broken manifest is refused in its own file name', () => {
+test('a broken manifest is refused in its own file name', () => {
   assertThrows(
     () => appDoc('recipe:\n - a\n  b: c\n', 'vocab.yml'),
     Error,
@@ -171,7 +172,7 @@ Deno.test('a broken manifest is refused in its own file name', () => {
   )
 })
 
-Deno.test('a manifest is refused in the words that fix it', () => {
+test('a manifest is refused in the words that fix it', () => {
   assertThrows(() => appDoc('{'), Error, 'vocab.json is not JSON')
   assertThrows(() => appDoc('[]'), Error, 'vocab.json is an object')
   assertThrows(
@@ -216,7 +217,7 @@ let indexes = (stmts: Stmt[]) =>
   )
 
 // Every component the vocabulary declares has a table in an app's store.
-Deno.test('the loaded app vocabulary plants its component tables', () => {
+test('the loaded app vocabulary plants its component tables', () => {
   let vocab = appVocab(says({ recipe: { serves: num }, cooked: {} }))
   let sql = schema(vocab)
   let tables = tablesOf(sql)
@@ -225,7 +226,7 @@ Deno.test('the loaded app vocabulary plants its component tables', () => {
   assert(!sql.some((s) => s.t == 'create virtual table'))
 })
 
-Deno.test('the directory and an app spell one word apart: member.role', () => {
+test('the directory and an app spell one word apart: member.role', () => {
   // The platform's roster is its access ladder, read space-wide (apps.ts
   // `reads`/`edits`, tools.ts `inSpace`); @yaks/member keeps belonging apart
   // from access, which it expresses as a grant or the app's mode. So the two
@@ -240,7 +241,7 @@ Deno.test('the directory and an app spell one word apart: member.role', () => {
   assertEquals(appVocab().prop('member', 'role')?.values, ['owner', 'member'])
 })
 
-Deno.test('the platform declares the uniques its races are decided by', () => {
+test('the platform declares the uniques its races are decided by', () => {
   let platform = indexes(schema(platformVocab()))
   for (
     let want of [
@@ -259,7 +260,7 @@ Deno.test('the platform declares the uniques its races are decided by', () => {
   assert(!platform.some((i) => i.split(' ')[2] == 'former'))
 })
 
-Deno.test('none of the fleet vocabulary comes with it', () => {
+test('none of the fleet vocabulary comes with it', () => {
   let mine = new Set(tablesOf(schema(appVocab())))
   // What must not come with it is the fleet's own working life: its canvas,
   // its memories, and the claims its agents hold. A transcript does come, for
@@ -275,7 +276,7 @@ Deno.test('none of the fleet vocabulary comes with it', () => {
 // @yaks/doc says it of `title` and `body` — the keyword rides the JSON Schema
 // document into the loaded vocabulary, which is what @yaks/fts cuts its index
 // from (graph.ts `searchable`).
-Deno.test('a searched property of an app reaches the index fields', () => {
+test('a searched property of an app reaches the index fields', () => {
   let v = appVocab({
     $defs: {
       memo: {
@@ -304,7 +305,7 @@ Deno.test('a searched property of an app reaches the index fields', () => {
 // grows the home's table. What travels is the property's schema, so the
 // keywords a borrowed property declares reach the store that plants it
 // (T-37546).
-Deno.test('a word the space already has is a use, not a home', () => {
+test('a word the space already has is a use, not a home', () => {
   let shelf = appDoc(says({ book: { title: txt, pages: num } }))
   let homes = {
     book: { at: 'reading-list', props: shelf.$defs!.book.properties! },
@@ -370,7 +371,7 @@ Deno.test('a word the space already has is a use, not a home', () => {
 
 // The `search` keyword is the property's, and a property the platform refuses
 // to index says so at the deploy, in @yaks/vocab's own words.
-Deno.test('a word the manifest stopped naming leaves once it holds nothing', () => {
+test('a word the manifest stopped naming leaves once it holds nothing', () => {
   let was = says({ recipe: { title: txt, serves: num, notes: txt }, jot: {} })
   let next = says({ recipe: { serves: num } })
   // `recipe.notes` still has values; `recipe.title` and `jot` hold nothing.
@@ -387,7 +388,7 @@ Deno.test('a word the manifest stopped naming leaves once it holds nothing', () 
   assertEquals(grew(was, next).dropped, [])
 })
 
-Deno.test('a property takes a new type only while it holds nothing', () => {
+test('a property takes a new type only while it holds nothing', () => {
   let was = says({ fight: { dealt: { type: 'string', format: 'json' } } })
   let next = says({ fight: { dealt: { type: 'array' } } })
   let r = grew(was, next, () => 0)
@@ -403,7 +404,7 @@ Deno.test('a property takes a new type only while it holds nothing', () => {
   assertEquals([same.added, same.retyped], [[], []])
 })
 
-Deno.test('a searched property that holds no prose is refused', () => {
+test('a searched property that holds no prose is refused', () => {
   assertThrows(
     () =>
       appDoc({
@@ -422,7 +423,7 @@ Deno.test('a searched property that holds no prose is refused', () => {
 
 // What a store keeps is the document (graph.ts `#vocabDoor`), and what it
 // answers is that document, keywords and all.
-Deno.test('a store answers the document it means', () => {
+test('a store answers the document it means', () => {
   assertEquals(
     meant({
       $defs: {
@@ -451,7 +452,7 @@ Deno.test('a store answers the document it means', () => {
 // components, that is the whole of what the file is for, and @yaks/vocab's
 // marker (T-37551) is put on here. So a store that accepted a manifest before
 // the marker existed reads back as the same words it accepted.
-Deno.test('a manifest wears the component marker without saying it', () => {
+test('a manifest wears the component marker without saying it', () => {
   let doc = appDoc(
     '{"$defs": {"recipe": {"properties": {"serves": ' +
       '{"type": "number"}}}}}',
@@ -471,7 +472,7 @@ Deno.test('a manifest wears the component marker without saying it', () => {
 // did: `memory_recall` orders by `.order=-entity.num`, which is a property or
 // it is a refused filter — so the one place the plugin is loaded is the
 // platform's own two stores.
-Deno.test("an app has no numbers; the platform's own stores do", () => {
+test("an app has no numbers; the platform's own stores do", () => {
   let app = appVocab(says({ recipe: { serves: num } }))
   assertEquals(app.prop('entity', 'num'), undefined)
   assert(!numbered(app))

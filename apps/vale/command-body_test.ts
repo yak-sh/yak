@@ -1,9 +1,10 @@
 // Command Markdown paints structure while untrusted text and links stay inert.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { commandBody } from './command-body.ts'
 
-Deno.test('a command result paints Markdown without executing markup', () => {
+test('a command result paints Markdown without executing markup', () => {
   let { document } = parseHTML('<html><body></body></html>')
   let previous = globalThis.document
   globalThis.document = document

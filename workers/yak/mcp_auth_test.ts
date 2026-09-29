@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -35,7 +36,7 @@ import { b64u, facing, GUIDE, HELLO } from './mcp-probe.ts'
 // challenge, which is how an MCP client discovers our authorization server.
 // Break that header while making things public and no connector can sign in
 // at all.
-Deno.test('the door before anyone signs in', async () => {
+test('the door before anyone signs in', async () => {
   let k = await kernel()
   try {
     let anon = connector(k)
@@ -415,7 +416,7 @@ Deno.test('the door before anyone signs in', async () => {
 // would show somebody who never signed in, this door shows: the guide, the
 // gallery of published apps, and the data of one app anyone with the link can
 // read, named on the call. Nothing else, and no write.
-Deno.test('signed out: the gallery, the guide, and one public app', async () => {
+test('signed out: the gallery, the guide, and one public app', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'ada30', apps: [] }])
@@ -659,7 +660,7 @@ Deno.test('signed out: the gallery, the guide, and one public app', async () => 
 // the probe answers 200 and the host writes down "no auth"; at
 // `/mcp?auth=required` it answers the challenge, which is the whole
 // difference — everything past signing in is the same door and the same list.
-Deno.test('?auth=required answers the challenge a probing host needs', async () => {
+test('?auth=required answers the challenge a probing host needs', async () => {
   let k = await kernel()
   try {
     let hello = (auth?: string) => ({
@@ -783,7 +784,7 @@ Deno.test('?auth=required answers the challenge a probing host needs', async () 
 // One test rather than five because it is one sequence: every step here is
 // what the step before it handed over, and a break anywhere in it is a person
 // looking at a connector that will not connect.
-Deno.test(
+test(
   'mixed auth: a stranger reads the menu, then signs in for it',
   async () => {
     let k = await kernel()

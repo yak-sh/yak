@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { sealed } from './cache.ts'
 import { records } from './domains.ts'
@@ -8,7 +9,7 @@ import { aimedAt, foreign, onZone, platform, route, says } from './route.ts'
 
 let env = { APEX: 'yaks.fyi' }
 
-Deno.test('platform text changes address hosts while retaining the product and other domains', () => {
+test('platform text changes address hosts while retaining the product and other domains', () => {
   for (
     let [before, after] of [
       ['yaks.app builds apps.', 'yaks.app builds apps.'],
@@ -65,7 +66,7 @@ Deno.test('platform text changes address hosts while retaining the product and o
   }
 })
 
-Deno.test('addresses follow the deployment while production remains the default', () => {
+test('addresses follow the deployment while production remains the default', () => {
   assertEquals(apex(), 'yaks.app')
   assertEquals(spaceHost(env, 'ada'), 'ada.yaks.fyi')
   assertEquals(url(env, '/login'), 'https://yaks.fyi/login')
@@ -73,7 +74,7 @@ Deno.test('addresses follow the deployment while production remains the default'
   assertEquals(records('recipes.example', env)[0].value, 'origin.saas.yaks.fyi')
 })
 
-Deno.test('staging owns only its zone and returns only to that zone', () => {
+test('staging owns only its zone and returns only to that zone', () => {
   assertEquals(route('ada.yaks.fyi', '/recipes/menu', env), {
     space: 'ada',
     app: 'recipes',
@@ -100,7 +101,7 @@ Deno.test('staging owns only its zone and returns only to that zone', () => {
   })
 })
 
-Deno.test('staging mail addresses round trip only within staging', () => {
+test('staging mail addresses round trip only within staging', () => {
   for (let app of ['recipes', null]) {
     let address = mailFrom('ada', app, env)
     assertStringIncludes(address, '@yaks.fyi')
@@ -111,7 +112,7 @@ Deno.test('staging mail addresses round trip only within staging', () => {
   assertEquals(mailedTo('ada@yaks.app', env), null)
 })
 
-Deno.test('staging pages allow their own platform to frame them', () => {
+test('staging pages allow their own platform to frame them', () => {
   let res = sealed(new Response('page'), env)
   assertEquals(
     res.headers.get('content-security-policy'),

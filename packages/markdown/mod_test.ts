@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { h } from 'preact'
 import { mount } from '../preact/testing.ts'
 import { assert, assertEquals } from '@std/assert'
@@ -11,7 +12,7 @@ type Tree = {
 }
 let tree: H<Tree> = (tag, props, ...children) => ({ tag, props, children })
 
-Deno.test('GFM becomes portable semantic elements, not HTML strings', () => {
+test('GFM becomes portable semantic elements, not HTML strings', () => {
   let doc = render(
     parse(
       '# Title\n\n**bold** *italic* ~~gone~~ `code`\n\n> quote\n\n- [x] done\n\n```ts\nlet x = 1\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |',
@@ -40,7 +41,7 @@ Deno.test('GFM becomes portable semantic elements, not HTML strings', () => {
   assert(json.includes('[x] '))
 })
 
-Deno.test('untrusted markup and URLs never become executable nodes', () => {
+test('untrusted markup and URLs never become executable nodes', () => {
   let doc = render(
     parse(
       '<script>alert(1)</script>\n\n[x](javascript:alert) ![alt](https://example.com/a.png)',
@@ -63,7 +64,7 @@ Deno.test('untrusted markup and URLs never become executable nodes', () => {
   assertEquals(safeHref('https://example.com'), 'https://example.com')
 })
 
-Deno.test('Preact component produces ordinary web-compatible elements', () => {
+test('Preact component produces ordinary web-compatible elements', () => {
   let doc = Markdown({ source: '**hello**' })
   assertEquals(doc.type, 'div')
   assertEquals(
@@ -72,7 +73,7 @@ Deno.test('Preact component produces ordinary web-compatible elements', () => {
   )
 })
 
-Deno.test('Markdown mounts as safe semantic browser DOM', () => {
+test('Markdown mounts as safe semantic browser DOM', () => {
   let ui = mount(
     h(Markdown, {
       source:
@@ -97,7 +98,7 @@ Deno.test('Markdown mounts as safe semantic browser DOM', () => {
 // A heading is a place in a document, so it carries the name that place is
 // linked by. `headings` reads the same names out without drawing anything,
 // which is what a contents list is built from.
-Deno.test('headings carry anchor ids a contents list can link', () => {
+test('headings carry anchor ids a contents list can link', () => {
   let source = '# The `store`\n\n## Saving "a" <thing>\n\n## Queries\n' +
     '\n### Queries\n\n## Queries\n\n## !!!\n'
   let tokens = parse(source, { breaks: false })
@@ -120,7 +121,7 @@ Deno.test('headings carry anchor ids a contents list can link', () => {
 
 // A comment is a note to whoever opens the file — the pointer beside a number
 // on a documentation page, say — and it belongs nowhere on the page.
-Deno.test('a comment is not painted, and markup still is, as text', () => {
+test('a comment is not painted, and markup still is, as text', () => {
   let json = JSON.stringify(
     render(parse('<!-- a note -->\n\nwords <b>bold</b>\n'), tree),
   )
@@ -128,7 +129,7 @@ Deno.test('a comment is not painted, and markup still is, as text', () => {
   assert(json.includes('<b>'), json)
 })
 
-Deno.test('explicit source newlines become structural breaks before terminal rendering', () => {
+test('explicit source newlines become structural breaks before terminal rendering', () => {
   let tokens = parse('first\n**second**\n\nthird')
   assertEquals(tokens.map((t) => t.type), ['paragraph', 'space', 'paragraph'])
   let first = render([tokens[0]], tree)

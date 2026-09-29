@@ -1,5 +1,6 @@
 // Ranked hits with marked snippets.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, insert } from '@yaks/sql'
@@ -11,26 +12,26 @@ import { entity, shelf, shop } from './testing.ts'
 
 let text = fields(shop)
 
-Deno.test('hits come back closest first, one row per entity', () => {
+test('hits come back closest first, one row per entity', () => {
   let found = find(shelf(), text, 'dragon')
   assertEquals(found.length, 3)
   assertEquals(new Set(found.map((h) => h.entity)).size, 3)
   assert(found[0].rank <= found[1].rank)
 })
 
-Deno.test('a snippet marks each hit with control characters, never markup', () => {
+test('a snippet marks each hit with control characters, never markup', () => {
   let [first] = find(shelf(), text, 'burglar')
   assert(first.snippet.includes(`${OPEN}burglar${CLOSE}`), first.snippet)
   assert(!first.snippet.includes('<'), first.snippet)
 })
 
-Deno.test('the snippet comes from whichever property matched', () => {
+test('the snippet comes from whichever property matched', () => {
   let [review] = find(shelf(), text, 'chapters')
   assertEquals(review.entity, 'review-4')
   assert(review.snippet.includes(`${OPEN}chapters${CLOSE}`), review.snippet)
 })
 
-Deno.test('a screen narrows the hits to what the filters allow', () => {
+test('a screen narrows the hits to what the filters allow', () => {
   let db = shelf()
   let screen = compile(parse('dragon .price<15'), shop, {
     extend: [search(text)],
@@ -41,11 +42,11 @@ Deno.test('a screen narrows the hits to what the filters allow', () => {
   )
 })
 
-Deno.test('the limit bounds the answer', () => {
+test('the limit bounds the answer', () => {
   assertEquals(find(shelf(), text, 'dragon', { limit: 1 }).length, 1)
 })
 
-Deno.test('a deleted entity is not a hit', () => {
+test('a deleted entity is not a hit', () => {
   let db = shelf()
   db.query(insert('tombstone', { entity: 1, deleted_at: '2026-01-01' }))
   assertEquals(
@@ -54,7 +55,7 @@ Deno.test('a deleted entity is not a hit', () => {
   )
 })
 
-Deno.test('words are terms, so they need not be adjacent or in order', () => {
+test('words are terms, so they need not be adjacent or in order', () => {
   let db = shelf()
   assertEquals(
     find(db, text, 'burglar dragon').map((h) => h.entity),
@@ -68,14 +69,14 @@ Deno.test('words are terms, so they need not be adjacent or in order', () => {
   )
 })
 
-Deno.test('a word reaches the longer word it starts', () => {
+test('a word reaches the longer word it starts', () => {
   assertEquals(
     find(shelf(), text, 'burgl').map((h) => h.entity),
     ['book-1'],
   )
 })
 
-Deno.test('a one-letter word matches exactly unless explicitly starred', () => {
+test('a one-letter word matches exactly unless explicitly starred', () => {
   let db = shelf()
   entity(db, 5, 'book-5')
   db.query(insert('book', {
@@ -88,19 +89,19 @@ Deno.test('a one-letter word matches exactly unless explicitly starred', () => {
   assert(find(db, text, 'a*').some((h) => h.entity == 'book-5'))
 })
 
-Deno.test('distinctive words of a search are marked in the snippet', () => {
+test('distinctive words of a search are marked in the snippet', () => {
   let [book] = find(shelf(), text, 'burglar dragon')
   assert(book.snippet.includes(`${OPEN}burglar${CLOSE}`), book.snippet)
   assert(book.snippet.includes(`${OPEN}dragon${CLOSE}`), book.snippet)
 })
 
-Deno.test('a search that cannot be asked finds nothing', () => {
+test('a search that cannot be asked finds nothing', () => {
   assertEquals(hits(text, '  '), null)
   assertEquals(hits([], 'dragon'), null)
   assertEquals(find(shelf(), text, ''), [])
 })
 
-Deno.test('common words still narrow a search but are not highlighted', () => {
+test('common words still narrow a search but are not highlighted', () => {
   let db = shelf()
   let [book] = find(db, text, 'a burglar with a dragon')
   // The book has no "with", even though it contains both distinctive words.

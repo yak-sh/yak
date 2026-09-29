@@ -1,6 +1,7 @@
 // Elemental cues through the particle interface used by the scene.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type bits } from './fx.ts'
 import { spellFx } from './spell_fx.ts'
@@ -16,7 +17,7 @@ let pool = () => {
   }
 }
 
-Deno.test('earth falls as ground chips while light and life rise differently', () => {
+test('earth falls as ground chips while light and life rise differently', () => {
   let dust = pool(), glow = pool()
   let fx = spellFx(dust, glow)
   let at = new THREE.Vector3(0, 0, 0)
@@ -38,7 +39,7 @@ Deno.test('earth falls as ground chips while light and life rise differently', (
   assertEquals(dust.calls.length, 0)
 })
 
-Deno.test('shadow connects both ends of a step and bursts at its hit', () => {
+test('shadow connects both ends of a step and bursts at its hit', () => {
   let dust = pool(), glow = pool()
   let fx = spellFx(dust, glow)
   let from = new THREE.Vector3(0, 0, 0)
@@ -52,7 +53,7 @@ Deno.test('shadow connects both ends of a step and bursts at its hit', () => {
   assertEquals(dust.calls.length, 0)
 })
 
-Deno.test('existing fire has one visual owner', () => {
+test('existing fire has one visual owner', () => {
   let dust = pool(), glow = pool()
   let fx = spellFx(dust, glow)
   let at = new THREE.Vector3()

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   append,
@@ -21,7 +22,7 @@ let version = (seconds: number, message?: string): Version => ({
   annotations: message ? { 'workers/message': message } : {},
 })
 
-Deno.test('deploy time: an annotation outranks nearest time; unannotated fallback is explicit', () => {
+test('deploy time: an annotation outranks nearest time; unannotated fallback is explicit', () => {
   let nearest = version(10)
   let named = version(30, `${SHA} subject`)
   assertEquals(versionFor(SHA, PUSHED, [named, nearest]), {
@@ -41,7 +42,7 @@ Deno.test('deploy time: an annotation outranks nearest time; unannotated fallbac
   assertEquals(versionFor(SHA, PUSHED, [short])?.estimated, false)
 })
 
-Deno.test('deploy time: use push event, then check-suite, then original gate creation', () => {
+test('deploy time: use push event, then check-suite, then original gate creation', () => {
   let event = {
     type: 'PushEvent',
     created_at: PUSHED,
@@ -99,7 +100,7 @@ let fake = (status: number, served?: string) =>
     )
   }) as typeof fetch
 
-Deno.test('deploy probe: only a 200 from the requested version is live', async () => {
+test('deploy probe: only a 200 from the requested version is live', async () => {
   assertEquals(await probe(ID, fake(200, ID)), null)
   for (let status of [201, 302, 404, 503]) {
     assertEquals(await probe(ID, fake(status, ID)), `HTTP ${status}, want 200`)
@@ -108,7 +109,7 @@ Deno.test('deploy probe: only a 200 from the requested version is live', async (
   assertEquals(await probe(ID, fake(200, 'old')), `version old, want ${ID}`)
 })
 
-Deno.test('deploy probe: transport and body errors remain failures', async () => {
+test('deploy probe: transport and body errors remain failures', async () => {
   let dead = (() => Promise.reject(new Error('network down'))) as typeof fetch
   assertEquals(await probe(ID, dead), 'network down')
   let truncated = (() =>
@@ -136,7 +137,7 @@ let deploy = (n: number, seconds: number): Deploy => {
   }
 }
 
-Deno.test('deploy timing: the commit under test is judged, not the last hand-recorded row', () => {
+test('deploy timing: the commit under test is judged, not the last hand-recorded row', () => {
   // T-35336: rows were only appended by hand, so one unlucky Workers Builds
   // row stayed "the latest deploy" and failed every later commit. The gate step
   // records this commit's own deploy first, which puts it last by upload.
@@ -146,7 +147,7 @@ Deno.test('deploy timing: the commit under test is judged, not the last hand-rec
   assertEquals([fresh.code, fresh.floor, fresh.limit], [0, 40, 50])
 })
 
-Deno.test('deploy timing: a commit Cloudflare never built has nothing to time', () => {
+test('deploy timing: a commit Cloudflare never built has nothing to time', () => {
   // cdabdded touched only bin/ and .github/, outside the Worker's watch paths:
   // Cloudflare skipped it, no version was ever minted, and waiting for one
   // failed the gate. Only Cloudflare's own build check says a deploy is coming.
@@ -155,14 +156,14 @@ Deno.test('deploy timing: a commit Cloudflare never built has nothing to time', 
   assertEquals(built([{ name: 'gate' }, { name: 'Workers Builds: yak' }]), true)
 })
 
-Deno.test('deploy timing: the job summary carries the row the record accepts', () => {
+test('deploy timing: the job summary carries the row the record accepts', () => {
   let rows = [deploy(1, 40), deploy(2, 47)]
   let text = summary(rows)
   assertEquals(records(text.split('```')[1]), rows)
   assertEquals(text.includes('bench/deploys.jsonl'), true)
 })
 
-Deno.test('deploy record: concurrent append is idempotent, and a failed probe can complete', async () => {
+test('deploy record: concurrent append is idempotent, and a failed probe can complete', async () => {
   let dir = await Deno.makeTempDir()
   let path = `${dir}/deploys.jsonl`
   let row: Deploy = {

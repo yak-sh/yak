@@ -4,6 +4,7 @@
 // @yaks/sqlite), held in one network at once, against every entity of the
 // fixture.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { filter } from './match.ts'
 import { net } from './net.ts'
@@ -15,7 +16,7 @@ let routed = () => {
   return { n, held }
 }
 
-Deno.test('a network routes each entity to the queries it matches', () => {
+test('a network routes each entity to the queries it matches', () => {
   let { n, held } = routed()
   for (let b of bundles) {
     let want = held.filter((q) => filter(q, shop, { now: NOW })(b, bundles))
@@ -25,7 +26,7 @@ Deno.test('a network routes each entity to the queries it matches', () => {
   assert(held.length > QUERIES.length / 2)
 })
 
-Deno.test('a question about other entities is left to its caller', () => {
+test('a question about other entities is left to its caller', () => {
   let n = net<string>(shop)
   for (
     let q of [
@@ -40,7 +41,7 @@ Deno.test('a question about other entities is left to its caller', () => {
   assertEquals(n.add('b', '.kind=book&*'), true)
 })
 
-Deno.test('moving an entity says which queries it is in now and which it left', () => {
+test('moving an entity says which queries it is in now and which it left', () => {
   let n = net<string>(shop, { now: NOW })
   n.add('cheap', '.price<10', ['b4'])
   n.add('dear', '.price>=10')
@@ -57,7 +58,7 @@ Deno.test('moving an entity says which queries it is in now and which it left', 
   assertEquals(n.forget('b4'), [])
 })
 
-Deno.test('a dropped query is never reached again, and what it shared still works', () => {
+test('a dropped query is never reached again, and what it shared still works', () => {
   let n = net<string>(shop, { now: NOW })
   n.add('cheap', '.price<10')
   n.add('cheap shelved', '.price<10&.status=shelved')

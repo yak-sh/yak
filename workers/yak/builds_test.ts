@@ -1,5 +1,6 @@
 // A failed Workers Build is filed with its commit; nothing else is filed. A
 // commit's first failure is built once more, and nothing else is.
+import { test } from '@yaks/testing'
 import {
   assertEquals,
   assertInstanceOf,
@@ -33,7 +34,7 @@ let event = (type: string): Built => ({
   },
 })
 
-Deno.test('builds: a failure is filed under its build, with its commit', () => {
+test('builds: a failure is filed under its build, with its commit', () => {
   let b = broke(event('failed'))!
   assertEquals(b.build, 'build-1')
   assertEquals(b.request, 'BUILD yak 191f7134')
@@ -46,7 +47,7 @@ Deno.test('builds: a failure is filed under its build, with its commit', () => {
   )
 })
 
-Deno.test('builds: report links to the failing build and summarizes its log safely', async () => {
+test('builds: report links to the failing build and summarizes its log safely', async () => {
   let env = {
     CF_ACCOUNT: 'account',
     BUILD_LOG_TOKEN: 'secret-build-token',
@@ -94,7 +95,7 @@ Deno.test('builds: report links to the failing build and summarizes its log safe
   }
 })
 
-Deno.test('builds: a logs API failure keeps the build link in the report', async () => {
+test('builds: a logs API failure keeps the build link in the report', async () => {
   let env = { CF_ACCOUNT: 'account', BUILD_LOG_TOKEN: 'test-token' } as Env
   let was = globalThis.fetch
   globalThis.fetch = () => Promise.resolve(new Response('', { status: 403 }))
@@ -110,13 +111,13 @@ Deno.test('builds: a logs API failure keeps the build link in the report', async
   }
 })
 
-Deno.test('builds: any other event is nothing to file', () => {
+test('builds: any other event is nothing to file', () => {
   for (let type of ['started', 'succeeded', 'canceled']) {
     assertEquals(broke(event(type)), null)
   }
 })
 
-Deno.test('builds: a failed build of a branch that deploys nothing is not filed', () => {
+test('builds: a failed build of a branch that deploys nothing is not filed', () => {
   let branch = event('failed')
   branch.payload!.buildTriggerMetadata!.branch = 'worktree-agent-1'
   assertEquals(broke(branch), null)
@@ -158,24 +159,24 @@ let hooked = () => {
   return e
 }
 
-Deno.test('builds: a commit that failed is built again, once', async () => {
+test('builds: a commit that failed is built again, once', async () => {
   assertEquals(await rebuilt([event('failed')]), 1)
   // The queue delivering the same failure again, in one batch or the next.
   assertEquals(await rebuilt([event('failed'), event('failed')]), 1)
   assertEquals(await rebuilt([event('failed')], [event('failed')]), 1)
 })
 
-Deno.test('builds: a build with no commit is never built again', async () => {
+test('builds: a build with no commit is never built again', async () => {
   assertEquals(broke(hooked())!.commit, undefined)
   assertEquals(broke(hooked())!.request, 'BUILD yak unknown')
   assertEquals(await rebuilt([hooked()], [hooked()]), 0)
 })
 
-Deno.test('builds: with no hook there is nothing to start', async () => {
+test('builds: with no hook there is nothing to start', async () => {
   assertEquals(await rebuild({} as Env), 'no BUILD_HOOK')
 })
 
-Deno.test('builds: a failed hook request does not disclose its credential', async () => {
+test('builds: a failed hook request does not disclose its credential', async () => {
   let was = globalThis.fetch
   globalThis.fetch = () => Promise.reject(new Error('https://hook.test/secret'))
   try {

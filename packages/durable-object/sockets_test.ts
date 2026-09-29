@@ -5,7 +5,7 @@
 // on the socket rather than kept in the object's memory.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { subscriptions } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab, type Vocab } from '@yaks/vocab'
@@ -77,7 +77,7 @@ let ask = (id: string, query: string) =>
 let send = (live: Sockets, ws: Wire, message: unknown) =>
   live.message(ws, JSON.stringify(message))
 
-Deno.test('a subscription is answered, and a commit pushes to the socket', () => {
+test('a subscription is answered, and a commit pushes to the socket', () => {
   let ctx = hibernation()
   let [g, live] = instance(store(), ctx)
   let ws = wire()
@@ -92,7 +92,7 @@ Deno.test('a subscription is answered, and a commit pushes to the socket', () =>
   assertEquals((last.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
-Deno.test('a woken object serves the socket it inherited', () => {
+test('a woken object serves the socket it inherited', () => {
   let storage = store()
   let ctx = hibernation()
   let [, first] = instance(storage, ctx)
@@ -115,7 +115,7 @@ Deno.test('a woken object serves the socket it inherited', () => {
   assertEquals((ws.sent.at(-1)!.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
-Deno.test('shared cold snapshots keep separate ACKs and live membership', () => {
+test('shared cold snapshots keep separate ACKs and live membership', () => {
   let storage = store(), ctx = hibernation()
   let [g, first] = instance(storage, ctx)
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
@@ -146,7 +146,7 @@ Deno.test('shared cold snapshots keep separate ACKs and live membership', () => 
   }
 })
 
-Deno.test('acknowledgement survives hibernation and gates later pushes', () => {
+test('acknowledgement survives hibernation and gates later pushes', () => {
   let storage = store()
   let ctx = hibernation()
   let [, first] = instance(storage, ctx)
@@ -184,7 +184,7 @@ Deno.test('acknowledgement survives hibernation and gates later pushes', () => {
   assertEquals(ws.sent.at(-1)?.reset, true)
 })
 
-Deno.test('an idle socket advances past snapshots across repeated hibernation', () => {
+test('an idle socket advances past snapshots across repeated hibernation', () => {
   let storage = store(), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   let [, first] = instance(storage, ctx)
@@ -213,7 +213,7 @@ Deno.test('an idle socket advances past snapshots across repeated hibernation', 
   assertEquals((change.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
-Deno.test('a batched socket wakes without replaying snapshots already on the wire', () => {
+test('a batched socket wakes without replaying snapshots already on the wire', () => {
   let storage = store(), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   let [, first] = instance(storage, ctx)
@@ -243,7 +243,7 @@ Deno.test('a batched socket wakes without replaying snapshots already on the wir
   assertEquals(ws.sent[2].frames?.[0].reset, true)
 })
 
-Deno.test('a batch stops where the socket attachment cannot remember more snapshots', () => {
+test('a batch stops where the socket attachment cannot remember more snapshots', () => {
   let storage = store(), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   let [, live] = instance(storage, ctx)
@@ -261,7 +261,7 @@ Deno.test('a batch stops where the socket attachment cannot remember more snapsh
   )
 })
 
-Deno.test('an idle area subscriber hears a mover after hibernation', async () => {
+test('an idle area subscriber hears a mover after hibernation', async () => {
   let vocab = loadVocab({
     $defs: {
       product: {
@@ -320,7 +320,7 @@ Deno.test('an idle area subscriber hears a mover after hibernation', async () =>
   assertEquals(idle.writes(), writes)
 })
 
-Deno.test('repointing a subscription invalidates its earlier snapshot', () => {
+test('repointing a subscription invalidates its earlier snapshot', () => {
   let storage = store(), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   let [, first] = instance(storage, ctx)
@@ -334,7 +334,7 @@ Deno.test('repointing a subscription invalidates its earlier snapshot', () => {
   assertEquals(ws.sent.at(-1)?.reset, true)
 })
 
-Deno.test('unsubscribing forgets it here and on the socket', () => {
+test('unsubscribing forgets it here and on the socket', () => {
   let ctx = hibernation()
   let [g, live] = instance(store(), ctx)
   let ws = wire()
@@ -348,7 +348,7 @@ Deno.test('unsubscribing forgets it here and on the socket', () => {
   assertEquals(ws.deserializeAttachment(), { subs: {} })
 })
 
-Deno.test('a closed socket drops its subscriptions', () => {
+test('a closed socket drops its subscriptions', () => {
   let ctx = hibernation()
   let [g, live] = instance(store(), ctx)
   let ws = wire()
@@ -361,7 +361,7 @@ Deno.test('a closed socket drops its subscriptions', () => {
   assertEquals(ws.sent, [])
 })
 
-Deno.test('a socket closing before its close event does not break a commit', () => {
+test('a socket closing before its close event does not break a commit', () => {
   let ctx = hibernation()
   let [g, live] = instance(store(), ctx)
   let ws = wire()
@@ -375,7 +375,7 @@ Deno.test('a socket closing before its close event does not break a commit', () 
   live.close(ws)
 })
 
-Deno.test('wake ignores a closing socket still returned by the runtime', () => {
+test('wake ignores a closing socket still returned by the runtime', () => {
   let storage = store(), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   let [, first] = instance(storage, ctx)
@@ -389,7 +389,7 @@ Deno.test('wake ignores a closing socket still returned by the runtime', () => {
   assertEquals(ws.sent.length, 1)
 })
 
-Deno.test('a subscription bigger than an attachment survives hibernation', () => {
+test('a subscription bigger than an attachment survives hibernation', () => {
   let ctx = hibernation(), storage = store()
   let [, live] = instance(storage, ctx)
   let ws = wire()
@@ -434,7 +434,7 @@ Deno.test('a subscription bigger than an attachment survives hibernation', () =>
   )
 })
 
-Deno.test('a lost subscription row retires its socket without blocking other subscribers', () => {
+test('a lost subscription row retires its socket without blocking other subscribers', () => {
   let storage = store(), ctx = hibernation()
   let [, first] = instance(storage, ctx)
   let stale = wire(), healthy = wire()
@@ -470,7 +470,7 @@ Deno.test('a lost subscription row retires its socket without blocking other sub
   assertEquals(stale.closed.length, 1)
 })
 
-Deno.test('a frame on a hibernated socket with a lost row closes it', () => {
+test('a frame on a hibernated socket with a lost row closes it', () => {
   let storage = store(), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   let [, first] = instance(storage, ctx)
@@ -486,7 +486,7 @@ Deno.test('a frame on a hibernated socket with a lost row closes it', () => {
   assertEquals(ws.closed, [[1012, 'subscriptions lost']])
 })
 
-Deno.test('a hibernated frame includes subscription restore in its scope', () => {
+test('a hibernated frame includes subscription restore in its scope', () => {
   let ctx = hibernation(), storage = store()
   let [, first] = instance(storage, ctx)
   let ws = wire()
@@ -522,7 +522,7 @@ Deno.test('a hibernated frame includes subscription restore in its scope', () =>
 // The runtime's socket factory is a global, so a test can stand in for it.
 let pair = () => ({ 0: 'client', 1: wire() })
 
-Deno.test('accept answers the upgrade, and refuses a plain request', () => {
+test('accept answers the upgrade, and refuses a plain request', () => {
   let ctx = hibernation()
   let [, live] = instance(store(), ctx)
   let made = pair()

@@ -3,6 +3,7 @@
 // notes `about` hands over on top of it, the prompt names a person picks
 // from, and the line a client is told when either moved. The doors themselves
 // are mcp_test.ts's, through the whole kernel.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { App, Space } from './directory.ts'
 import {
@@ -48,7 +49,7 @@ let entry = (slug: string, over: Partial<Entry> = {}): Entry => ({
   ...over,
 })
 
-Deno.test('the notes are refused over the cap, with the number', () => {
+test('the notes are refused over the cap, with the number', () => {
   assertEquals(tooLong('NOTES.md', CAP), '')
   assertEquals(tooLong('/NOTES.md', CAP), '')
   // Every other file keeps the platform's own ceiling and no more.
@@ -62,7 +63,7 @@ Deno.test('the notes are refused over the cap, with the number', () => {
   assertEquals(tooLong('AGENTS.md', CAP + 1), '')
 })
 
-Deno.test('the roster names every app and what it holds', () => {
+test('the roster names every app and what it holds', () => {
   assertEquals(passage([]), '')
   let said = passage([
     entry('recipes', { kinds: ['recipe'], commands: ['add_recipe'] }),
@@ -79,7 +80,7 @@ Deno.test('the roster names every app and what it holds', () => {
   assert(passage([entry('notes')]).includes('holds docs'), 'no fallback')
 })
 
-Deno.test('a plural is close enough to read as a sentence', () => {
+test('a plural is close enough to read as a sentence', () => {
   let holds = (kind: string) =>
     passage([entry('x', { kinds: [kind] })]).match(/holds ([a-z]+)/)![1]
   assertEquals(holds('recipe'), 'recipes')
@@ -89,7 +90,7 @@ Deno.test('a plural is close enough to read as a sentence', () => {
   assertEquals(holds('day'), 'days')
 })
 
-Deno.test("an app's notes ride under its heading, when asked for", () => {
+test("an app's notes ride under its heading, when asked for", () => {
   let apps = [
     entry('recipes', { said: '# Recipes\n\nGrams, never cups.' }),
     entry('chores'),
@@ -109,7 +110,7 @@ Deno.test("an app's notes ride under its heading, when asked for", () => {
   assert(!passage([entry('chores')]).includes(HAS_NOTES), 'nothing written')
 })
 
-Deno.test('a prompt is named after the app, and never over something taken', () => {
+test('a prompt is named after the app, and never over something taken', () => {
   let rules = '# Recipes\n\nGrams, never cups.'
   let one = prompted([entry('recipes', { said: rules })], ['make', 'fix'])
   assertEquals(one.map((p) => p.name), ['recipes'])
@@ -140,7 +141,7 @@ Deno.test('a prompt is named after the app, and never over something taken', () 
   ])
 })
 
-Deno.test('a session is told what moved, and never what did not', () => {
+test('a session is told what moved, and never what did not', () => {
   let was = { version: 'a', names: ['about'] }
   // A release that moved no name moves the version and says nothing: there is
   // nothing for the agent to do about it. Which is every release now that the

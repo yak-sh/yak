@@ -1,5 +1,6 @@
 // Natural world props and placed lodes share a gathering lifecycle, while
 // rarity and a hero's skill affect what one life is worth.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   effort,
@@ -29,7 +30,7 @@ seedDesigns()
 seedThemes()
 seedBuildings()
 
-Deno.test('a natural prop is the same gatherable node on every read', () => {
+test('a natural prop is the same gatherable node on every read', () => {
   let prop = propsIn(2, 2).find((p) => p.natural)!
   let find = () =>
     nodesNear(prop.x, prop.z, 3, [{ prop, at: [prop.x, 5, prop.z] }])
@@ -41,14 +42,14 @@ Deno.test('a natural prop is the same gatherable node on every read', () => {
   assert(LODES[first.lode])
 })
 
-Deno.test('a rock is named for its form even when its haul is the same', () => {
+test('a rock is named for its form even when its haul is the same', () => {
   assertEquals(nodeName(LODES.copper, { kind: 'rock' }), 'Stone')
   assertEquals(nodeName(LODES.copper, { kind: 'cairn' }), 'Cairn')
   assertEquals(nodeName(LODES.copper, { kind: 'menhir' }), 'Standing stone')
   assertEquals(nodeName(LODES.copper), 'Stone')
 })
 
-Deno.test('one rock life gives the same possible mineral to a player and companion', () => {
+test('one rock life gives the same possible mineral to a player and companion', () => {
   let x = Array.from({ length: 100 }, (_, i) => i + 5).find((x) =>
     yieldOf(
       naturalEid({ kind: 'rock', x, z: 5, seed: 1, natural: true }),
@@ -105,7 +106,7 @@ Deno.test('one rock life gives the same possible mineral to a player and compani
   )
 })
 
-Deno.test('a harvested tree stays spent for everyone until its next life', () => {
+test('a harvested tree stays spent for everyone until its next life', () => {
   let at = 1000, eid = 'tree', rows = [{ at }]
   let life = (now: number) => nodeLife(rows, eid, 'wood', now)
   let back = at + respawnOf(eid, 'wood', at) * 1000
@@ -118,7 +119,7 @@ Deno.test('a harvested tree stays spent for everyone until its next life', () =>
   assertEquals(nodeRarity('tree', at), nodeRarity('tree', at))
 })
 
-Deno.test('spent resources do not capture gathering interaction', () => {
+test('spent resources do not capture gathering interaction', () => {
   let close: Prop = { kind: 'oak', x: 5, z: 5, seed: 1, natural: true }
   let farther: Prop = { kind: 'oak', x: 6, z: 5, seed: 2, natural: true }
   let natural: Natural[] = [close, farther].map((prop) => ({
@@ -159,7 +160,7 @@ Deno.test('spent resources do not capture gathering interaction', () => {
   ])
 })
 
-Deno.test('node respawns are shared, varied, and never short', () => {
+test('node respawns are shared, varied, and never short', () => {
   for (let trade of ['wood', 'ore', 'herb', 'fish'] as const) {
     let times = Array.from(
       { length: 24 },
@@ -173,7 +174,7 @@ Deno.test('node respawns are shared, varied, and never short', () => {
   }
 })
 
-Deno.test('skill slows hard gathering and rarity raises its rewards', () => {
+test('skill slows hard gathering and rarity raises its rewards', () => {
   let lode = LODES.spruce
   assert(effort(lode, 1) > effort(lode, 7) * 5)
   assert(gatherXp(lode.tier, 'common', 1) < gatherXp(lode.tier, 'common', 7))
@@ -184,7 +185,7 @@ Deno.test('skill slows hard gathering and rarity raises its rewards', () => {
   )
 })
 
-Deno.test('a natural resource changes shape when spent and shines when rare', () => {
+test('a natural resource changes shape when spent and shines when rare', () => {
   let entry: Natural = {
     prop: { kind: 'oak', x: 5, z: 7, seed: 1, natural: true },
     at: [5, 5, 7],

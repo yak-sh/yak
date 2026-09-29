@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -23,7 +24,7 @@ import { FREE, monthOf } from './meter.ts'
 import { minted } from './mcp-probe.ts'
 import { token } from '@yaks/graph'
 
-Deno.test(
+test(
   'a platform secret alias derives before the reach hands it to the store',
   async () => {
     let k = await kernel()
@@ -51,7 +52,7 @@ Deno.test(
 
 // A reduction asks about the selection, not its members, and is answered with
 // its value, as `/query` answers it — one app's or the whole reach's.
-Deno.test('graph_query answers a count and a tally as their value', async () => {
+test('graph_query answers a count and a tally as their value', async () => {
   let k = await kernel()
   try {
     let agent = connector(k, (await signIn(k)).cookie)
@@ -88,7 +89,7 @@ Deno.test('graph_query answers a count and a tally as their value', async () => 
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores
 // they can reach.
-Deno.test('a read with no app composes every app the caller can reach', async () => {
+test('a read with no app composes every app the caller can reach', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -318,7 +319,7 @@ Deno.test('a read with no app composes every app the caller can reach', async ()
 // A write is routed by component (T-32700): each one goes to the app that
 // declares it, a shared one to the app named or the app the entity already
 // lives in, and the parts are admitted everywhere before any of them commits.
-Deno.test('a write with no app routes each component to its own app', async () => {
+test('a write with no app routes each component to its own app', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -491,7 +492,7 @@ Deno.test('a write with no app routes each component to its own app', async () =
 // here through the one door into the meta store, come back in app_list beside
 // the version. The sweep's own parse is usage_test.ts's; what this holds is
 // that the word landed in the directory's store and that the answer says it.
-Deno.test('app_list answers what the month cost', async () => {
+test('app_list answers what the month cost', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [
@@ -554,7 +555,7 @@ Deno.test('app_list answers what the month cost', async () => {
 
 // The ceilings the agent sees coming (T-32758): a line at 80%, said once; the
 // sixth app refused and the fifth not; data past 1 GB refused at the door.
-Deno.test('the free tier: a warning once, then the refusals', async () => {
+test('the free tier: a warning once, then the refusals', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [
@@ -673,7 +674,7 @@ Deno.test('the free tier: a warning once, then the refusals', async () => {
 // space already has uses it there — nothing is planted twice, the writes land
 // in the home store, a new property grows the home's table, and a shape
 // conflict is the only refusal.
-Deno.test('a word the space already has is used where it lives', async () => {
+test('a word the space already has is used where it lives', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -875,7 +876,7 @@ Deno.test('a word the space already has is used where it lives', async () => {
   }
 })
 
-Deno.test('a page queries a borrowed word at its home', async () => {
+test('a page queries a borrowed word at its home', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'flame74', apps: ['probe', 'vale'] }])
@@ -978,7 +979,7 @@ Deno.test('a page queries a borrowed word at its home', async () => {
 // @yaks/doc says `"search": true` of its title and body, and an app says it of
 // its own properties, beside the type, in the one JSON Schema form the
 // guide teaches.
-Deno.test('an app declares which of its own properties are searched', async () => {
+test('an app declares which of its own properties are searched', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -1138,7 +1139,7 @@ Deno.test('an app declares which of its own properties are searched', async () =
   }
 })
 
-Deno.test(
+test(
   'Plus and comped spaces can create and install more than fifty apps',
   async () => {
     let k = await kernel()
@@ -1237,7 +1238,7 @@ Deno.test(
 // about the write. `$was` is the graph's `--ff-only` — the SHA-256 of the
 // value as it was read, per property — and the batch is refused whole when that
 // property has moved since.
-Deno.test(
+test(
   'a $was precondition refuses a batch built on a value that moved',
   async () => {
     let k = await kernel()
@@ -1296,7 +1297,7 @@ Deno.test(
 // entity there is called by the eid its client minted, the answer carries no
 // number to read, and asking the store to mint one is refused by name rather
 // than answered with a bundle that has none.
-Deno.test('an app store answers eids and no numbers, and refuses $num', async () => {
+test('an app store answers eids and no numbers, and refuses $num', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)

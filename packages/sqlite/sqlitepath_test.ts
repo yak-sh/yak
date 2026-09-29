@@ -12,6 +12,7 @@
 //
 // It guards the whole repo, not just this package: however many module graphs
 // reach for the driver, they all land on one native library per process.
+import { test } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
 import { assertEquals } from '@std/assert'
 
@@ -35,7 +36,7 @@ let code = (src: string) =>
 let DRIVER = /from\s+'(?:jsr:)?@db\/sqlite/
 let PRELUDE = /'[^']*sqlitepath\.ts'/
 
-Deno.test('every @db/sqlite import is preceded by the path prelude', async () => {
+test('every @db/sqlite import is preceded by the path prelude', async () => {
   let bare: string[] = []
   for (let path of await mentions()) {
     let src = code(await Deno.readTextFile(root + path))

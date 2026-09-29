@@ -1,4 +1,5 @@
 // The page waits for all of the store's words before it opens a local graph.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { client } from '@yaks/client'
@@ -6,7 +7,7 @@ import { vocabulary } from './net.ts'
 import words from './vocab.json' with { type: 'json' }
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
 
-Deno.test('a vocabulary 500 recovers before the page can query created', async () => {
+test('a vocabulary 500 recovers before the page can query created', async () => {
   using time = new FakeTime()
   let fetchBefore = globalThis.fetch
   let calls = 0

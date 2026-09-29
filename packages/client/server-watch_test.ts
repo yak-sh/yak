@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { echo, type Frame, type Trouble } from '@yaks/sync'
@@ -42,7 +43,7 @@ let fixture = (opts: ClientOpts = {}) => {
 }
 let server = { evaluate: 'server' } as const
 
-Deno.test('server evaluation never parses, filters or primes the query locally', async () => {
+test('server evaluation never parses, filters or primes the query locally', async () => {
   let { c, frame, trouble } = fixture({ wireVault: wireStash() })
   // Even the first prime and later epoch hydration must not ask RAM to run
   // these opaque server contracts. This is a transport test, not proof that
@@ -74,7 +75,7 @@ Deno.test('server evaluation never parses, filters or primes the query locally',
   c.close()
 })
 
-Deno.test('server membership is authoritative even when fields/far targets are unloaded', () => {
+test('server membership is authoritative even when fields/far targets are unloaded', () => {
   let { c, frame } = fixture()
   let w = c.watch('.recipe.cook.doc.title=unloaded', server)
   frame({ id: 's1', bundles: [row('hit')] })
@@ -97,7 +98,7 @@ Deno.test('server membership is authoritative even when fields/far targets are u
   c.close()
 })
 
-Deno.test('replacement preserves server ranking; content deltas do not reorder', () => {
+test('replacement preserves server ranking; content deltas do not reorder', () => {
   let { c, frame } = fixture()
   let w = c.watch('.order=title&.limit=2', server)
   frame({ id: 's1', bundles: [row('z'), row('a')] })
@@ -115,7 +116,7 @@ Deno.test('replacement preserves server ranking; content deltas do not reorder',
   c.close()
 })
 
-Deno.test('server watches dedupe and dispose independently from locally evaluated watches', () => {
+test('server watches dedupe and dispose independently from locally evaluated watches', () => {
   let { c, frame, sockets } = fixture()
   let a = c.watch('.doc', server)
   let b = c.watch('.doc', { ...server, remote: true })
@@ -151,7 +152,7 @@ Deno.test('server watches dedupe and dispose independently from locally evaluate
   c.close()
 })
 
-Deno.test('disconnect/refusal keep server paint but readiness awaits a successful reset', () => {
+test('disconnect/refusal keep server paint but readiness awaits a successful reset', () => {
   let { c, frame, sockets, trouble, reopen } = fixture()
   let w = c.watch('.near=somewhere', server)
   frame({ id: 's1', bundles: [row('old')] })
@@ -177,7 +178,7 @@ Deno.test('disconnect/refusal keep server paint but readiness awaits a successfu
   c.close()
 })
 
-Deno.test('server-only reopens restore bounded semantic membership without local matching', async () => {
+test('server-only reopens restore bounded semantic membership without local matching', async () => {
   let disk = wireStash()
   let { c, frame } = fixture({ wireVault: disk, epoch: 'boot' })
   await c.ready
@@ -199,7 +200,7 @@ Deno.test('server-only reopens restore bounded semantic membership without local
   next.close()
 })
 
-Deno.test('cache observers see commits and physical eviction without tombstones or outbound writes', () => {
+test('cache observers see commits and physical eviction without tombstones or outbound writes', () => {
   let { c, frame } = fixture({ retention: 0 })
   let seen: [string, boolean][] = []
   let stop = c.cache.onRows((eids) => {
@@ -219,7 +220,7 @@ Deno.test('cache observers see commits and physical eviction without tombstones 
   c.close()
 })
 
-Deno.test('cache observers also see local-only commits and stop on client close', () => {
+test('cache observers also see local-only commits and stop on client close', () => {
   let c = client(box, [], { vault: false, wireVault: false })
   let seen: string[][] = []
   c.cache.onRows((eids) => seen.push(eids))
@@ -230,7 +231,7 @@ Deno.test('cache observers also see local-only commits and stop on client close'
   assertEquals(seen, [['local']])
 })
 
-Deno.test('server evaluation cannot silently become a local watch', () => {
+test('server evaluation cannot silently become a local watch', () => {
   let local = client(box, [], { vault: false })
   assertThrows(() => local.watch('.doc', server), Error, 'requires a remote')
   local.close()
@@ -243,7 +244,7 @@ Deno.test('server evaluation cannot silently become a local watch', () => {
   c.close()
 })
 
-Deno.test('server evaluated synchronous first answers are visible before watch returns', () => {
+test('server evaluated synchronous first answers are visible before watch returns', () => {
   let socket = pair().client
   socket.emit('open')
   socket.send = (text: string) => {
@@ -267,7 +268,7 @@ Deno.test('server evaluated synchronous first answers are visible before watch r
   c.close()
 })
 
-Deno.test('projected/full owners share fields, and departures unload only the released scope', () => {
+test('projected/full owners share fields, and departures unload only the released scope', () => {
   let { c, frame, trouble } = fixture({ retention: 0 })
   let whole = c.watch('whole', server)
   frame({
@@ -301,7 +302,7 @@ Deno.test('projected/full owners share fields, and departures unload only the re
   c.close()
 })
 
-Deno.test('omission cannot erase another projected owner, explicit null is authoritative', () => {
+test('omission cannot erase another projected owner, explicit null is authoritative', () => {
   let { c, frame } = fixture()
   let p = c.watch('body', server)
   frame({
@@ -322,7 +323,7 @@ Deno.test('omission cannot erase another projected owner, explicit null is autho
   c.close()
 })
 
-Deno.test('opt-in one-shot properties retain paint, not coverage, within the row budget', () => {
+test('opt-in one-shot properties retain paint, not coverage, within the row budget', () => {
   let { c, frame } = fixture({ retention: 1, retainUnownedProps: true })
   let list = c.watch('list', server)
   frame({ id: 's1', bundles: [row('a')], coverage: { a: { doc: ['title'] } } })
@@ -358,7 +359,7 @@ Deno.test('opt-in one-shot properties retain paint, not coverage, within the row
   c.close()
 })
 
-Deno.test('body omission is unloaded while covered omission is a known absence', () => {
+test('body omission is unloaded while covered omission is a known absence', () => {
   let { c, frame } = fixture()
   c.watch('bodyless', server)
   frame({
@@ -383,7 +384,7 @@ Deno.test('body omission is unloaded while covered omission is a known absence',
   c.close()
 })
 
-Deno.test('peer-only payloads are pinned, never members; each role releases independently', () => {
+test('peer-only payloads are pinned, never members; each role releases independently', () => {
   let { c, frame } = fixture({ retention: 0 })
   let w = c.watch('riders', server)
   frame({
@@ -409,7 +410,7 @@ Deno.test('peer-only payloads are pinned, never members; each role releases inde
   c.close()
 })
 
-Deno.test('peer reset, full member overlap and pending pins survive independent releases', () => {
+test('peer reset, full member overlap and pending pins survive independent releases', () => {
   let { c, frame } = fixture({ retention: 0 })
   c.watch('riders', server)
   frame({ id: 's1', peers: [row('a'), row('b')] })
@@ -432,7 +433,7 @@ Deno.test('peer reset, full member overlap and pending pins survive independent 
 })
 
 for (let disk of ['memory', 'indexedDB']) {
-  Deno.test(
+  test(
     'ranked server answers and riders restore unready with epoch guard: ' +
       disk,
     async () => {
@@ -484,7 +485,7 @@ for (let disk of ['memory', 'indexedDB']) {
   )
 }
 
-Deno.test('answer metadata bounds include empty answers, long keys and coverage; eviction never invents hits', () => {
+test('answer metadata bounds include empty answers, long keys and coverage; eviction never invents hits', () => {
   let { c, frame } = fixture({ answerBytes: 250 })
   for (let i = 1; i <= 20; i++) {
     let w = c.watch('q' + i, server)
@@ -503,7 +504,7 @@ Deno.test('answer metadata bounds include empty answers, long keys and coverage;
   c.close()
 })
 
-Deno.test('retained membership never restores evicted payloads or crosses semantic options', () => {
+test('retained membership never restores evicted payloads or crosses semantic options', () => {
   let { c, frame } = fixture({ retention: 0 })
   let w = c.watch('opaque', server)
   frame({ id: 's1', bundles: [row('a')] })
@@ -514,7 +515,7 @@ Deno.test('retained membership never restores evicted payloads or crosses semant
   c.close()
 })
 
-Deno.test('late answer hydration cannot revive an empty reply or an obsolete epoch', async () => {
+test('late answer hydration cannot revive an empty reply or an obsolete epoch', async () => {
   for (let mode of ['empty', 'epoch', 'close']) {
     let base = wireStash()
     await base.load('one', 10)
@@ -547,7 +548,7 @@ Deno.test('late answer hydration cannot revive an empty reply or an obsolete epo
   }
 })
 
-Deno.test('a restored projected answer cannot acquire another owners body coverage', async () => {
+test('a restored projected answer cannot acquire another owners body coverage', async () => {
   let { c, frame } = fixture()
   let p = c.watch('projected', server)
   frame({ id: 's1', bundles: [row('a')], coverage: { a: { doc: ['title'] } } })
@@ -567,7 +568,7 @@ Deno.test('a restored projected answer cannot acquire another owners body covera
 })
 
 for (let disk of ['memory', 'indexedDB']) {
-  Deno.test(
+  test(
     'semantic vault bounds and epoch-conditional writes: ' + disk,
     async () => {
       let vault = disk === 'memory'
@@ -596,7 +597,7 @@ for (let disk of ['memory', 'indexedDB']) {
   )
 }
 
-Deno.test('identity-only projections restore as members without invented loaded properties', async () => {
+test('identity-only projections restore as members without invented loaded properties', async () => {
   let disk = wireStash()
   let { c, frame } = fixture({ wireVault: disk, epoch: 'boot' })
   await c.ready
@@ -617,7 +618,7 @@ Deno.test('identity-only projections restore as members without invented loaded 
   next.close()
 })
 
-Deno.test('authoritative departure does not drop another payload owners disk row', async () => {
+test('authoritative departure does not drop another payload owners disk row', async () => {
   let disk = wireStash()
   let { c, frame } = fixture({ wireVault: disk, epoch: 'boot' })
   await c.ready
@@ -631,7 +632,7 @@ Deno.test('authoritative departure does not drop another payload owners disk row
   c.close()
 })
 
-Deno.test('one frame may give an eid two different projected role scopes', () => {
+test('one frame may give an eid two different projected role scopes', () => {
   let { c, frame } = fixture({ retention: 0 })
   let w = c.watch('both roles', server)
   frame({
@@ -653,7 +654,7 @@ Deno.test('one frame may give an eid two different projected role scopes', () =>
   c.close()
 })
 
-Deno.test('content deltas do not rewrite unchanged semantic answer checkpoints', async () => {
+test('content deltas do not rewrite unchanged semantic answer checkpoints', async () => {
   let writes = 0
   let disk = wireStash()
   let { c, frame } = fixture({

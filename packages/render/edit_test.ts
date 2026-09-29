@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
@@ -46,7 +47,7 @@ let bundle = { entity: { eid: 'a' }, doc: { title: 'Before', count: 2 } }
 let set = (prop: string, input: unknown) =>
   edit(vocab, { comp: 'doc', prop }).run(bundle, input)
 
-Deno.test('property actions parse typed values and patch only their property', () => {
+test('property actions parse typed values and patch only their property', () => {
   let cases: [string, unknown, unknown][] = [
     ['title', 'new title', 'new title'],
     ['title', '', ''],
@@ -72,7 +73,7 @@ Deno.test('property actions parse typed values and patch only their property', (
   assertEquals(bundle.doc, { title: 'Before', count: 2 })
 })
 
-Deno.test('invalid input and read-only properties never produce patches', () => {
+test('invalid input and read-only properties never produce patches', () => {
   for (
     let [prop, input] of [
       ['title', {}],
@@ -99,7 +100,7 @@ Deno.test('invalid input and read-only properties never produce patches', () => 
   assertThrows(() => edit(vocab, { comp: 'spine', prop: 'num' }).run(bundle, 3))
 })
 
-Deno.test('applications can parse and validate without changing the write path', () => {
+test('applications can parse and validate without changing the write path', () => {
   let calls: string[] = []
   let action = edit(vocab, { comp: 'doc', prop: 'count' }, {
     parse: (input, c, source) => {
@@ -127,7 +128,7 @@ type Node = {
 }
 let h: H<Node> = (tag, props, ...children) => ({ tag, props, children })
 
-Deno.test('seven Edit families select by declaration with no stored value', () => {
+test('seven Edit families select by declaration with no stored value', () => {
   let family = editors(vocab)
   let registry = define(family)
   let empty = { entity: { eid: 'empty' } }
@@ -157,7 +158,7 @@ Deno.test('seven Edit families select by declaration with no stored value', () =
   )
 })
 
-Deno.test('enum controls use the vocabulary and offer inert patch actions', () => {
+test('enum controls use the vocabulary and offer inert patch actions', () => {
   let registry = define(editors(vocab))
   let ctx = { comp: 'doc', prop: 'state' }
   let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
@@ -170,7 +171,7 @@ Deno.test('enum controls use the vocabulary and offer inert patch actions', () =
   assertEquals(bundle.doc, { title: 'Before', count: 2 })
 })
 
-Deno.test('empty and case-distinct enum members keep their declared values', () => {
+test('empty and case-distinct enum members keep their declared values', () => {
   let vocab = loadVocab({
     $defs: {
       doc: {
@@ -192,7 +193,7 @@ Deno.test('empty and case-distinct enum members keep their declared values', () 
   }
 })
 
-Deno.test('property overlays use ordinary specificity and suffix resolution', () => {
+test('property overlays use ordinary specificity and suffix resolution', () => {
   let registry = define(editors(vocab))
   let custom = {
     view: 'Edit',
@@ -214,7 +215,7 @@ Deno.test('property overlays use ordinary specificity and suffix resolution', ()
   )
 })
 
-Deno.test('Props lays out every declared property and delegates its editor', () => {
+test('Props lays out every declared property and delegates its editor', () => {
   let registry = define([...editors(vocab), properties(vocab)])
   let props = resolve(registry, bundle, 'Props', vocab, { comp: 'doc' })!
   let calls: unknown[] = []

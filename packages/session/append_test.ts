@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { appendEntry } from './append.ts'
 import { locked, seed, store } from './testing.ts'
@@ -6,7 +7,7 @@ import { type Bundle, type Comp, status } from '@yaks/graph'
 
 let positions = (rows: Bundle[]) => rows.map((b) => (b.entry as Comp).seq)
 
-Deno.test('concurrent append and passive notices receive integer sequence positions', async () => {
+test('concurrent append and passive notices receive integer sequence positions', async () => {
   let g = locked(store())
   await g.apply([{ entity: { eid: 's' }, session: {} }])
   await Promise.all(
@@ -54,7 +55,7 @@ Deno.test('concurrent append and passive notices receive integer sequence positi
   )
 })
 
-Deno.test('append starts after a nested fork boundary', async () => {
+test('append starts after a nested fork boundary', async () => {
   let s = store()
   seed(
     s,
@@ -87,7 +88,7 @@ Deno.test('append starts after a nested fork boundary', async () => {
   assertEquals(positions(await transcript(g, 'new-child')), [1, 2, 3, 4])
 })
 
-Deno.test('batch reservations reject duplicate explicit entries and rollback', async () => {
+test('batch reservations reject duplicate explicit entries and rollback', async () => {
   let g = locked(store())
   await g.apply([{ entity: { eid: 's' }, session: {} }])
   await assertRejects(
@@ -103,7 +104,7 @@ Deno.test('batch reservations reject duplicate explicit entries and rollback', a
   assertEquals(await transcript(g, 's'), [])
 })
 
-Deno.test('batch child-before-parent order still allocates after the new fork anchor', async () => {
+test('batch child-before-parent order still allocates after the new fork anchor', async () => {
   let g = locked(store())
   await g.apply([
     { entity: { eid: 'child' }, session: {}, fork: { from: 'anchor' } },
@@ -121,7 +122,7 @@ Deno.test('batch child-before-parent order still allocates after the new fork an
   )
 })
 
-Deno.test('notice tool admits passive context without callers supplying sequence', async () => {
+test('notice tool admits passive context without callers supplying sequence', async () => {
   let g = locked(store())
   await g.apply([{ entity: { eid: 's' }, session: {} }])
   let { sessionTools } = await import('./children.ts')
@@ -137,7 +138,7 @@ Deno.test('notice tool admits passive context without callers supplying sequence
   assertEquals(rows[0].notice, {})
 })
 
-Deno.test("an entry naming no session is refused as its writer's mistake", async () => {
+test("an entry naming no session is refused as its writer's mistake", async () => {
   let g = locked(store())
   let e = await assertRejects(
     async () =>

@@ -1,4 +1,5 @@
 // A session row names the work and shows its latest activity and model.
+import { test } from '@yaks/testing'
 import { tick } from '../../testing.ts'
 import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
@@ -38,7 +39,7 @@ let entryPage = (eid: string, limit = 200) => {
   return querySubscription(resolveRefs(parseQuery(q), findEid), q)!.sub
 }
 
-Deno.test('session list Tile names its brief without exposing IDs', () => {
+test('session list Tile names its brief without exposing IDs', () => {
   cache.value = {
     actor: {
       entity: { eid: 'actor', num: 1 },
@@ -69,7 +70,7 @@ Deno.test('session list Tile names its brief without exposing IDs', () => {
   }
 })
 
-Deno.test('session row names the first ask and keeps the brief beneath it', async () => {
+test('session row names the first ask and keeps the brief beneath it', async () => {
   let prior = useRoute(() => {})
   cache.value = {
     asking: {
@@ -109,7 +110,7 @@ Deno.test('session row names the first ask and keeps the brief beneath it', asyn
   }
 })
 
-Deno.test('session title names model and effort', () => {
+test('session title names model and effort', () => {
   // A model's name is its identity: the eid is derived from it.
   let gpt = identityEid('model', ['gpt-5.6'])
   cache.value = {
@@ -134,7 +135,7 @@ Deno.test('session title names model and effort', () => {
   cache.value = {}
 })
 
-Deno.test('uncached graph entries keep their normalized session face', () => {
+test('uncached graph entries keep their normalized session face', () => {
   let { root, free } = mount(
     <SessionEntry
       x={{
@@ -150,7 +151,7 @@ Deno.test('uncached graph entries keep their normalized session face', () => {
   free()
 })
 
-Deno.test('session timestamps link to graph entries', () => {
+test('session timestamps link to graph entries', () => {
   let eid = '12345678-0000-4000-8000-000000000001'
   cache.value = {
     [eid]: {
@@ -190,7 +191,7 @@ Deno.test('session timestamps link to graph entries', () => {
   }
 })
 
-Deno.test('session context renders compactly for the sticky head', () => {
+test('session context renders compactly for the sticky head', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -214,7 +215,7 @@ Deno.test('session context renders compactly for the sticky head', () => {
   }
 })
 
-Deno.test('session stderr is an error only for a non-zero exit', () => {
+test('session stderr is an error only for a non-zero exit', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -234,7 +235,7 @@ Deno.test('session stderr is an error only for a non-zero exit', () => {
   }
 })
 
-Deno.test('session references dedupe entities and links in mention order', () => {
+test('session references dedupe entities and links in mention order', () => {
   cache.value = {
     task: {
       entity: { eid: 'task', num: 2 },
@@ -264,7 +265,7 @@ Deno.test('session references dedupe entities and links in mention order', () =>
   cache.value = {}
 })
 
-Deno.test('session references keep entity ids missing from the cache', () => {
+test('session references keep entity ids missing from the cache', () => {
   cache.value = {}
   assertEquals(
     sessionMentions([
@@ -274,7 +275,7 @@ Deno.test('session references keep entity ids missing from the cache', () => {
   )
 })
 
-Deno.test('graph-native session rows contribute references', () => {
+test('graph-native session rows contribute references', () => {
   cache.value = {}
   assertEquals(
     sessionMentions([{
@@ -287,7 +288,7 @@ Deno.test('graph-native session rows contribute references', () => {
   )
 })
 
-Deno.test('session references link commits with actor repository context', () => {
+test('session references link commits with actor repository context', () => {
   cache.value = {
     project: {
       entity: { eid: 'project', num: 1 },
@@ -316,7 +317,7 @@ Deno.test('session references link commits with actor repository context', () =>
   cache.value = {}
 })
 
-Deno.test('session references read conversation prose only', () => {
+test('session references read conversation prose only', () => {
   assertEquals(
     sessionMentions([
       { row: { kind: 'reason', text: 'https://reason.test' } },
@@ -347,7 +348,7 @@ Deno.test('session references read conversation prose only', () => {
   )
 })
 
-Deno.test('session references use the usual entity and URL faces', () => {
+test('session references use the usual entity and URL faces', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -396,7 +397,7 @@ Deno.test('session references use the usual entity and URL faces', () => {
 // The mention scan is memoized in the view on this signature — it must be STABLE
 // when nothing feeding the parse changed (else the scan reruns every render, the
 // regression) and CHANGE whenever it did (else a new/edited mention goes stale).
-Deno.test('mentionSig: stable on unchanged content, shifts on every input', () => {
+test('mentionSig: stable on unchanged content, shifts on every input', () => {
   let base = {
     count: 3,
     seq: 10,
@@ -428,7 +429,7 @@ Deno.test('mentionSig: stable on unchanged content, shifts on every input', () =
 // The view splits the scan (threadMentions) from resolve+dedup (resolveMentions)
 // to memoize the first alone — the split must stay behavior-identical to the
 // composed sessionMentions.
-Deno.test('sessionMentions == resolveMentions(threadMentions)', () => {
+test('sessionMentions == resolveMentions(threadMentions)', () => {
   let thread = [{
     row: {
       kind: 'say' as const,
@@ -439,7 +440,7 @@ Deno.test('sessionMentions == resolveMentions(threadMentions)', () => {
   assertEquals(sessionMentions(thread), resolveMentions(threadMentions(thread)))
 })
 
-Deno.test('SessionRow loads its task title when no peer delivered it', async () => {
+test('SessionRow loads its task title when no peer delivered it', async () => {
   let { SessionRow } = await import('./Session.tsx')
   let { routeName, unsubscribe } = await import('../../live.ts')
   let { tick } = await import('../../testing.ts')
@@ -489,7 +490,7 @@ Deno.test('SessionRow loads its task title when no peer delivered it', async () 
   }
 })
 
-Deno.test('session Tile names its work, model, and last activity without IDs', () => {
+test('session Tile names its work, model, and last activity without IDs', () => {
   let prior = globalThis.fetch
   let fetched = 0
   globalThis.fetch = (() => {
@@ -592,7 +593,7 @@ Deno.test('session Tile names its work, model, and last activity without IDs', (
   }
 })
 
-Deno.test('session lifecycle shares the task summary lane', () => {
+test('session lifecycle shares the task summary lane', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -633,7 +634,7 @@ Deno.test('session lifecycle shares the task summary lane', () => {
   }
 })
 
-Deno.test('Session explains loading, ready-empty, rows, and read failure', async () => {
+test('Session explains loading, ready-empty, rows, and read failure', async () => {
   let priorRoute = useRoute(() => {})
   let session = (
     eid: string,
@@ -724,7 +725,7 @@ Deno.test('Session explains loading, ready-empty, rows, and read failure', async
   }
 })
 
-Deno.test('Session paints the newest page and loads earlier entries on demand', async () => {
+test('Session paints the newest page and loads earlier entries on demand', async () => {
   let off = useRoute(() => {})
   let eid = 'long-session'
   cache.value = {

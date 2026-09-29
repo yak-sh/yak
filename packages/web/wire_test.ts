@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { bundlesOf, changesOf, yakLine } from './wire.ts'
 
-Deno.test('a batch leaves as one bundle per entity, without spine writes', () => {
+test('a batch leaves as one bundle per entity, without spine writes', () => {
   assertEquals(
     bundlesOf([
       { eid: 'a', name: 'doc', comp: { eid: 'a', title: 'One' } },
@@ -23,7 +24,7 @@ Deno.test('a batch leaves as one bundle per entity, without spine writes', () =>
   )
 })
 
-Deno.test('an answer lands as changes: the spine, each component, a death', () => {
+test('an answer lands as changes: the spine, each component, a death', () => {
   assertEquals(
     changesOf([
       { entity: { eid: 'a', num: 3 }, doc: { title: 'One' }, claim: null },
@@ -38,7 +39,7 @@ Deno.test('an answer lands as changes: the spine, each component, a death', () =
   )
 })
 
-Deno.test('a line asks the host by .eid and leaves riders and projections out', () => {
+test('a line asks the host by .eid and leaves riders and projections out', () => {
   assertEquals(yakLine('id=a,b'), '.eid=a,b')
   assertEquals(
     yakLine('id=a&.edges.peers=task.status,doc.title&.edges.limit=100'),

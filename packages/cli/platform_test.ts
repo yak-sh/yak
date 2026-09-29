@@ -4,6 +4,7 @@
 // packages it names. @yaks/mcp's own HTTP door is this client's `fetch`, so
 // the replies are the ones a server sends.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc'
 import { graph } from '@yaks/graph'
@@ -80,7 +81,7 @@ let asking = async (
   }
 }
 
-Deno.test('a server’s answer is drawn through its packages’ views', async () => {
+test('a server’s answer is drawn through its packages’ views', async () => {
   await asking(async (c, call) => {
     let lines = (await call('graph_query', { q: '.task&*' })).split('\n')
       .sort()
@@ -95,14 +96,14 @@ Deno.test('a server’s answer is drawn through its packages’ views', async ()
   })
 })
 
-Deno.test('a lone entity is shown whole, as its page', async () => {
+test('a lone entity is shown whole, as its page', async () => {
   await asking(async (_c, call) => {
     let page = await call('graph_query', { q: '.completed&*' })
     assert(/^task T-\d+ done\n\nShip it\n/.test(page), page)
   })
 })
 
-Deno.test('a count is answered as its value', async () => {
+test('a count is answered as its value', async () => {
   await asking(async (_c, call) => {
     assertEquals(
       await call('graph_query', { q: '.task&.count' }),
@@ -115,7 +116,7 @@ Deno.test('a count is answered as its value', async () => {
   })
 })
 
-Deno.test('an answer that is not entities prints as the text it came as', async () => {
+test('an answer that is not entities prints as the text it came as', async () => {
   await asking(async (_c, call) => {
     let schema = await call('graph_schema')
     assert(schema.includes('task'), schema)

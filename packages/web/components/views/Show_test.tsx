@@ -2,6 +2,7 @@
 // where an absent field must paint nothing. A renderer is a component: every
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
 // never on a bare call's vnode tree.
+import { test } from '@yaks/testing'
 import { tick } from '../../testing.ts'
 import { h } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
@@ -19,7 +20,7 @@ import { extend, resolve } from '../registry.ts'
 import { mount } from '../mount.ts'
 import { Entity } from '../Entity.tsx'
 
-Deno.test('task acceptance is a distinct Markdown section', () => {
+test('task acceptance is a distinct Markdown section', () => {
   cache.value = {
     task: {
       entity: { eid: 'task', num: 1 },
@@ -46,7 +47,7 @@ Deno.test('task acceptance is a distinct Markdown section', () => {
   }
 })
 
-Deno.test('a doc without accept renders no Acceptance section, not JSON', () => {
+test('a doc without accept renders no Acceptance section, not JSON', () => {
   // The stack asks <Entity view='Acceptance'> for every doc. With no catch-all
   // the absent-accept case fell through resolve() to the JSON dump, printing
   // the whole entity between Body and Dependencies.
@@ -65,7 +66,7 @@ Deno.test('a doc without accept renders no Acceptance section, not JSON', () => 
   cache.value = {}
 })
 
-Deno.test('document meta paints no tally when it has no comments', () => {
+test('document meta paints no tally when it has no comments', () => {
   cache.value = {
     doc: {
       entity: { eid: 'doc', num: 1 },
@@ -86,7 +87,7 @@ Deno.test('document meta paints no tally when it has no comments', () => {
 // answers. It used to open from inside commentCount's computed — a wire dial
 // mid-diff, which in a process that named no server (a bench, a test) reached
 // for one it was never given.
-Deno.test('the meta row renders its tally without reaching live', () => {
+test('the meta row renders its tally without reaching live', () => {
   let host = config.host
   config.host = ''
   // Cold: whatever an earlier mount left open, the render below must face an
@@ -119,7 +120,7 @@ Deno.test('the meta row renders its tally without reaching live', () => {
   }
 })
 
-Deno.test('empty document meta remains a first-class null', () => {
+test('empty document meta remains a first-class null', () => {
   cache.value = {
     doc: {
       entity: { eid: 'doc', num: 1 },
@@ -134,7 +135,7 @@ Deno.test('empty document meta remains a first-class null', () => {
   cache.value = {}
 })
 
-Deno.test('proposal meta distinguishes pending, cancelled, and approved', () => {
+test('proposal meta distinguishes pending, cancelled, and approved', () => {
   let proposal = {
     entity: { eid: 'proposal', num: 1 },
     doc: { eid: 'proposal', title: 'A proposal', body: '' },
@@ -185,7 +186,7 @@ Deno.test('proposal meta distinguishes pending, cancelled, and approved', () => 
   cache.value = {}
 })
 
-Deno.test('a superseded entity is marked on its face with what replaced it', () => {
+test('a superseded entity is marked on its face with what replaced it', () => {
   cache.value = {
     old: {
       entity: { eid: 'old', num: 12 },
@@ -220,7 +221,7 @@ Deno.test('a superseded entity is marked on its face with what replaced it', () 
   cache.value = {}
 })
 
-Deno.test('task meta carries both full facts and compact edge tallies', () => {
+test('task meta carries both full facts and compact edge tallies', () => {
   let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let person = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   let session = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
@@ -334,7 +335,7 @@ Deno.test('task meta carries both full facts and compact edge tallies', () => {
   }
 })
 
-Deno.test('mail Full section shows its envelope and delivery receipt', () => {
+test('mail Full section shows its envelope and delivery receipt', () => {
   cache.value = {
     mail: {
       entity: { eid: 'mail', num: 1 },
@@ -396,7 +397,7 @@ Deno.test('mail Full section shows its envelope and delivery receipt', () => {
   cache.value = {}
 })
 
-Deno.test('document meta names its creator and editor after their ages', () => {
+test('document meta names its creator and editor after their ages', () => {
   let jeff = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let robin = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   let now = Date.now()
@@ -443,7 +444,7 @@ Deno.test('document meta names its creator and editor after their ages', () => {
   }
 })
 
-Deno.test('meta names a creator it has not loaded by its handle', () => {
+test('meta names a creator it has not loaded by its handle', () => {
   let by = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   let at = new Date().toISOString()
   cache.value = {
@@ -463,7 +464,7 @@ Deno.test('meta names a creator it has not loaded by its handle', () => {
   }
 })
 
-Deno.test('the full face paints the body for a viewer with no actor', () => {
+test('the full face paints the body for a viewer with no actor', () => {
   cache.value = {
     doc: {
       entity: { eid: 'doc', num: 1 },
@@ -480,7 +481,7 @@ Deno.test('the full face paints the body for a viewer with no actor', () => {
   }
 })
 
-Deno.test('a view that throws fails in its own slot, and the page paints', async () => {
+test('a view that throws fails in its own slot, and the page paints', async () => {
   extend([{
     view: 'Body',
     match: parse('.doc.title=Throws'),
@@ -514,7 +515,7 @@ Deno.test('a view that throws fails in its own slot, and the page paints', async
   }
 })
 
-Deno.test('a board whose saved query cannot be read shows why', () => {
+test('a board whose saved query cannot be read shows why', () => {
   cache.value = {
     b: {
       entity: { eid: 'b', num: 1 },
@@ -540,7 +541,7 @@ Deno.test('a board whose saved query cannot be read shows why', () => {
   }
 })
 
-Deno.test('a hook-using renderer mounts through the helper', () => {
+test('a hook-using renderer mounts through the helper', () => {
   // The task title's Pip holds useState — a hook-using renderer only works
   // mounted through Preact. A bare call would throw here; the helper mounts it.
   cache.value = {
@@ -559,7 +560,7 @@ Deno.test('a hook-using renderer mounts through the helper', () => {
   cache.value = {}
 })
 
-Deno.test('comment dependencies lead with the entity commented on', () => {
+test('comment dependencies lead with the entity commented on', () => {
   cache.value = {
     comment: {
       entity: { eid: 'comment', num: 2 },
@@ -581,7 +582,7 @@ Deno.test('comment dependencies lead with the entity commented on', () => {
   cache.value = {}
 })
 
-Deno.test('claim chip loads its referenced session instead of painting a blank', async () => {
+test('claim chip loads its referenced session instead of painting a blank', async () => {
   let { landSub, routeName, unsubscribe } = await import('../../live.ts')
   let { tick } = await import('../../testing.ts')
   cache.value = {
@@ -623,7 +624,7 @@ Deno.test('claim chip loads its referenced session instead of painting a blank',
 })
 
 // Runs reads the claim the row carries; Tasks holds one typed membership.
-Deno.test('Runs and Tasks ask only their typed memberships, not every reverse ref', () => {
+test('Runs and Tasks ask only their typed memberships, not every reverse ref', () => {
   let target = 'dddd3707-0000-4000-8000-000000000001'
   let sent: { subscribe?: string; unsubscribe?: string }[] = []
   let restore = useRoute((f) => sent.push(f as typeof sent[number]))

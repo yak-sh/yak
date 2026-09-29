@@ -7,6 +7,7 @@
 // heavy end-to-end (a real /apply refusal, a real reload) is a CDP probe; this
 // tier holds the pure client logic.
 
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Change } from './types.ts'
@@ -49,7 +50,7 @@ let fakeOutbox = () => {
   }
 }
 
-Deno.test('the indicator mirrors the outbox: a mutate adds, an ack clears', async () => {
+test('the indicator mirrors the outbox: a mutate adds, an ack clears', async () => {
   let restore = await stubSockets()
   let live = await import('./live.ts')
   let prev = live.useOutboxStore(fakeOutbox())
@@ -82,7 +83,7 @@ let fakeRefusals = () => {
   }
 }
 
-Deno.test('a refused write persists under a stable id and survives a reload', async () => {
+test('a refused write persists under a stable id and survives a reload', async () => {
   let live = await import('./live.ts')
   let store = fakeRefusals()
   let prev = live.useRefusalStore(store)
@@ -115,7 +116,7 @@ Deno.test('a refused write persists under a stable id and survives a reload', as
   }
 })
 
-Deno.test('loading refusals drops entries older than seven days and keeps fresh ones', async () => {
+test('loading refusals drops entries older than seven days and keeps fresh ones', async () => {
   let live = await import('./live.ts')
   let storage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
   let before = live.refused.value

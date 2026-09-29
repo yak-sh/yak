@@ -2,6 +2,7 @@
 // `entry` is found by its `content.body`, and nothing else carrying `content`
 // is. The index is right whichever of the two rows a write lands first.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { fields, indexes } from './fields.ts'
@@ -58,14 +59,14 @@ let talking = () => {
   return { db, said, entry, found }
 }
 
-Deno.test('a component names the text its entities are found by', () => {
+test('a component names the text its entities are found by', () => {
   assertEquals(text, [{ comp: 'content', prop: 'body', on: 'entry' }])
   assertEquals(indexes(text), [
     { name: 'entry', comp: 'content', props: ['body'], on: 'entry' },
   ])
 })
 
-Deno.test('an entry is found by its text, whichever row lands first', () => {
+test('an entry is found by its text, whichever row lands first', () => {
   let t = talking()
   t.said(1, 'facets are about where things run')
   t.entry(1)
@@ -76,7 +77,7 @@ Deno.test('an entry is found by its text, whichever row lands first', () => {
   assertEquals(heal(t.db, text), [])
 })
 
-Deno.test('the index follows the text and the membership', () => {
+test('the index follows the text and the membership', () => {
   let t = talking()
   t.said(1, 'the daemon takes over')
   t.entry(1)
@@ -97,7 +98,7 @@ Deno.test('the index follows the text and the membership', () => {
   assertEquals(heal(t.db, text), [])
 })
 
-Deno.test('adopting an existing store indexes its entries once, and again changes nothing', () => {
+test('adopting an existing store indexes its entries once, and again changes nothing', () => {
   let db = mem()
   for (
     let s of [

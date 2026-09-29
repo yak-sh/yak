@@ -1,4 +1,5 @@
 // Cold, provisional and confirmed-empty are distinct read states.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { effect } from '@preact/signals'
@@ -24,7 +25,7 @@ import {
   useRoute,
 } from './live.ts'
 
-Deno.test('fold absence becomes expanded only after the client first frame', () => {
+test('fold absence becomes expanded only after the client first frame', () => {
   let prior = useRoute(() => {})
   let client = 'cold-fold-client'
   try {
@@ -50,7 +51,7 @@ Deno.test('fold absence becomes expanded only after the client first frame', () 
   }
 })
 
-Deno.test('repo trace names missing hops and stops cycles', () => {
+test('repo trace names missing hops and stops cycles', () => {
   cache.value = {
     task: { filed: { eid: 'task', project: 'project' } },
     comment: { comment: { eid: 'comment', target: 'task' } },
@@ -74,7 +75,7 @@ Deno.test('repo trace names missing hops and stops cycles', () => {
   assertEquals(repoTrace(ent('cycle')), { eids: ['cycle'] })
 })
 
-Deno.test('entity read distinguishes loading, loaded, and confirmed absent', () => {
+test('entity read distinguishes loading, loaded, and confirmed absent', () => {
   let prior = useRoute(() => {})
   let eid = 'cold-read'
   let fields = 'doc.title'
@@ -109,7 +110,7 @@ Deno.test('entity read distinguishes loading, loaded, and confirmed absent', () 
   }
 })
 
-Deno.test('entity holds share one line and close at the last release', () => {
+test('entity holds share one line and close at the last release', () => {
   let sent: { subscribe?: string; unsubscribe?: string }[] = []
   let prior = useRoute((frame) => void sent.push(frame as typeof sent[number]))
   try {
@@ -128,7 +129,7 @@ Deno.test('entity holds share one line and close at the last release', () => {
 // T-37450: a lost socket never costs a painted read. Each line goes unready on
 // the wire until its resubscribe is answered; meanwhile every read keeps the
 // answer it had, and the next answer replaces it. Only a refusal takes one back.
-Deno.test('a read keeps its answer through a lost socket until the next one', async () => {
+test('a read keeps its answer through a lost socket until the next one', async () => {
   let S = '5e550000-0000-4000-8000-000000000001'
   let E = '5e550000-0000-4000-8000-000000000002'
   let TALLY = '.task&.tally=task.status'

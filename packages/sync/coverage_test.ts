@@ -1,11 +1,12 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { boxGraph, pair } from './testing.ts'
 import { hear, land, snapshot } from './inbound.ts'
 import { sync } from './sync.ts'
 import { type Frame, wire } from './socket.ts'
 
-Deno.test('batched peer clear then partial value clears older properties', async () => {
+test('batched peer clear then partial value clears older properties', async () => {
   let g = boxGraph(true)
   await g.apply([{
     entity: { eid: 'a' },
@@ -21,7 +22,7 @@ Deno.test('batched peer clear then partial value clears older properties', async
   assertEquals((await g.get(['a']))[0].pointing, { x: 3 })
 })
 
-Deno.test('low-level snapshots clear covered whole components, not other tiers or scopes', async () => {
+test('low-level snapshots clear covered whole components, not other tiers or scopes', async () => {
   let g = boxGraph(true)
   await snapshot(g, [{
     entity: { eid: 'a' },
@@ -33,7 +34,7 @@ Deno.test('low-level snapshots clear covered whole components, not other tiers o
   assertEquals((await g.read('.recipe')).length, 0)
 })
 
-Deno.test('unowned land/standalone sync reject projected and rider shapes rather than lose payloads', () => {
+test('unowned land/standalone sync reject projected and rider shapes rather than lose payloads', () => {
   let g = boxGraph(true)
   let socket = pair().client
   let errors: unknown[] = []
@@ -60,7 +61,7 @@ Deno.test('unowned land/standalone sync reject projected and rider shapes rather
   s.close()
 })
 
-Deno.test('socket resets replace membership on every ranking reset; peers never become gone hits', () => {
+test('socket resets replace membership on every ranking reset; peers never become gone hits', () => {
   let socket = pair().client
   let frames: Frame[] = []
   let w = wire({

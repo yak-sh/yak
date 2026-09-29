@@ -1,6 +1,7 @@
 // One model catalog, one transport rule: present each compatible model once
 // and route it graph-native → CLI fallback by readiness, independent of
 // provider-table order.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
@@ -33,7 +34,7 @@ let claude: Provider = {
   labels: { 'claude-opus-4-8': 'Opus', sonnet: 'Sonnet' },
 }
 
-Deno.test('catalog offers each model once, Sol first, fallback as a transport', () => {
+test('catalog offers each model once, Sol first, fallback as a transport', () => {
   let cat = catalog([codex, codexCli, claude])
   // Two Codex models + two Claude models, never the fallback's clone.
   assertEquals(cat.map((c) => c.label), [
@@ -50,12 +51,12 @@ Deno.test('catalog offers each model once, Sol first, fallback as a transport', 
   assertEquals(cat.find((c) => c.model == 'sonnet')?.transports, ['claude'])
 })
 
-Deno.test('catalog ranks the graph-native transport first regardless of table order', () => {
+test('catalog ranks the graph-native transport first regardless of table order', () => {
   let sol = catalog([codexCli, codex])[0]
   assertEquals(sol.transports, ['codex', 'codex-cli'])
 })
 
-Deno.test('offer resolves explicit model and transport combinations', () => {
+test('offer resolves explicit model and transport combinations', () => {
   let picks = catalog([codex, codexCli, claude])
   assertEquals(offer(picks)?.model, 'gpt-5.6-sol')
   assertEquals(offer(picks, { provider: 'claude' })?.model, 'claude-opus-4-8')
@@ -66,7 +67,7 @@ Deno.test('offer resolves explicit model and transport combinations', () => {
   )
 })
 
-Deno.test('transport picks graph-native when ready, the fallback when blocked', () => {
+test('transport picks graph-native when ready, the fallback when blocked', () => {
   let sol = catalog([codex, codexCli])[0]
   assertEquals(transport(sol, () => false), 'codex')
   assertEquals(
@@ -77,7 +78,7 @@ Deno.test('transport picks graph-native when ready, the fallback when blocked', 
   assertEquals(transport(sol, () => true), 'codex-cli')
 })
 
-Deno.test('spawnDefault promotes Sol and degrades to the first provider', () => {
+test('spawnDefault promotes Sol and degrades to the first provider', () => {
   assertEquals(
     spawnDefault([
       { name: 'claude', models: ['opus'] },
@@ -99,7 +100,7 @@ Deno.test('spawnDefault promotes Sol and degrades to the first provider', () => 
   assertEquals(spawnDefault([]), { provider: undefined, model: undefined })
 })
 
-Deno.test('spawnDefault routes the default model by readiness', () => {
+test('spawnDefault routes the default model by readiness', () => {
   // Signed in: the default Sol runs graph-native.
   assertEquals(
     spawnDefault([codex, codexCli], {}, () => false),
@@ -141,7 +142,7 @@ let rows = [
   serves('p3', 'm2'),
 ]
 
-Deno.test('tableOf reads the offered providers and the models they serve', () => {
+test('tableOf reads the offered providers and the models they serve', () => {
   let t = tableOf(rows)
   assertEquals(t.map((p) => p.name), ['codex', 'codex-cli'])
   assertEquals(t[0], {
@@ -159,7 +160,7 @@ Deno.test('tableOf reads the offered providers and the models they serve', () =>
   ])
 })
 
-Deno.test('usingOf names the provider and model entities, or refuses', () => {
+test('usingOf names the provider and model entities, or refuses', () => {
   let t = tableOf(rows)
   assertEquals(
     usingOf(t, { provider: 'codex', model: 'gpt-5.6-sol', effort: 'low' }),

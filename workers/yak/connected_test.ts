@@ -1,5 +1,6 @@
 // OAuth grant projection: pagination, expiry, agent identification and
 // duplicate installations, without a Worker or a second ledger of agents.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import type {
   ClientInfo,
@@ -52,7 +53,7 @@ let provider = (
   return { oauth, looked, users }
 }
 
-Deno.test('agents: all pages, earliest active installation, stable order', async () => {
+test('agents: all pages, earliest active installation, stable order', async () => {
   let p = provider([
     [
       grant('new-chatgpt', {
@@ -77,7 +78,7 @@ Deno.test('agents: all pages, earliest active installation, stable order', async
   assertEquals(p.looked, ['custom'])
 })
 
-Deno.test('agents: local and older grants use explicit registered names', async () => {
+test('agents: local and older grants use explicit registered names', async () => {
   let p = provider([[
     grant('chat', { redirectUri: 'http://localhost:1234/callback' }),
     grant('code', { redirectUri: 'http://127.0.0.1:4567/callback' }),
@@ -97,7 +98,7 @@ Deno.test('agents: local and older grants use explicit registered names', async 
   ])
 })
 
-Deno.test('agents: callback identity requires an exact HTTPS hostname', async () => {
+test('agents: callback identity requires an exact HTTPS hostname', async () => {
   let uris = [
     'https://chatgpt.com.evil.test/callback',
     'https://evil.test/chatgpt.com',
@@ -114,7 +115,7 @@ Deno.test('agents: callback identity requires an exact HTTPS hostname', async ()
   assertEquals(found.every((c) => c.brand === undefined), true)
 })
 
-Deno.test('agents: unknown registered clients stay visible; missing clients do not', async () => {
+test('agents: unknown registered clients stay visible; missing clients do not', async () => {
   let p = provider([[
     grant('unnamed'),
     grant('custom', { redirectUri: 'https://other.test/callback' }),
@@ -128,7 +129,7 @@ Deno.test('agents: unknown registered clients stay visible; missing clients do n
   ])
 })
 
-Deno.test('agents: unavailable metadata retains its grant without hiding other agents', async () => {
+test('agents: unavailable metadata retains its grant without hiding other agents', async () => {
   let p = provider([[
     grant('https://unavailable.test/client.json'),
     grant('https://unavailable.test/client.json', { createdAt: 20 }),
@@ -152,7 +153,7 @@ Deno.test('agents: unavailable metadata retains its grant without hiding other a
   assertEquals(looked, 1)
 })
 
-Deno.test('agents: storage failures remain errors', async () => {
+test('agents: storage failures remain errors', async () => {
   let p = provider([[grant('custom')]])
   await assertRejects(
     () =>
@@ -165,7 +166,7 @@ Deno.test('agents: storage failures remain errors', async () => {
   )
 })
 
-Deno.test('a Zapier grant is a connection, not an agent', async () => {
+test('a Zapier grant is a connection, not an agent', async () => {
   let p = provider([[
     grant('zap', {
       redirectUri: 'https://zapier.com/dashboard/auth/oauth/return/App1CLIAPI/',

@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   by,
@@ -20,7 +21,7 @@ let item = (...cols: CreateTable['cols']): CreateTable => ({
   cols,
 })
 
-Deno.test('statement reuse resets rows and bindings, including after a failed step', () => {
+test('statement reuse resets rows and bindings, including after a failed step', () => {
   using d = durable()
   let sql = driver(d)
   sql.query(item({ name: 'id', type: 'integer', pk: true }, {
@@ -43,7 +44,7 @@ Deno.test('statement reuse resets rows and bindings, including after a failed st
   assertEquals(held.toArray(), [{ value: 'one' }])
 })
 
-Deno.test('eviction, schema changes and deleteAll leave reusable storage', async () => {
+test('eviction, schema changes and deleteAll leave reusable storage', async () => {
   using d = durable()
   let sql = driver(d)
   let all = () => scan(sql, 'item')
@@ -77,7 +78,7 @@ Deno.test('eviction, schema changes and deleteAll leave reusable storage', async
   assertEquals(all(), [{ value: 42 }])
 })
 
-Deno.test('disposed storage rejects queries and can be disposed twice', () => {
+test('disposed storage rejects queries and can be disposed twice', () => {
   let d = durable()
   let one = select({ cols: [lit(1)] })
   let sql = driver(d)

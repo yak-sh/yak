@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { frontend } from './frontend.ts'
@@ -5,7 +6,7 @@ import { App } from './app.ts'
 import type { UIAgent } from './panels.ts'
 import { mount } from './testing.ts'
 
-Deno.test('frontend graph is private, transient and query granular', async () => {
+test('frontend graph is private, transient and query granular', async () => {
   let a = frontend(), b = frontend()
   let viewChanges = 0, draftChanges = 0
   a.view.subscribe(() => viewChanges++)
@@ -35,7 +36,7 @@ Deno.test('frontend graph is private, transient and query granular', async () =>
   }
 })
 
-Deno.test('typing in frontend does not reread domain or render history (10,000 entries)', async () => {
+test('typing in frontend does not reread domain or render history (10,000 entries)', async () => {
   let reads = 0, renders = 0
   let entries = Array.from({ length: 10_000 }, (_, i) => ({
     entity: { eid: 'e' + i },
@@ -88,7 +89,7 @@ Deno.test('typing in frontend does not reread domain or render history (10,000 e
   }
 })
 
-Deno.test('external frontend writes drive controlled input and selection', async () => {
+test('external frontend writes drive controlled input and selection', async () => {
   let state = frontend()
   let selected: string[] = [], sent: string[] = []
   let agent: UIAgent = {
@@ -128,7 +129,7 @@ Deno.test('external frontend writes drive controlled input and selection', async
   }
 })
 
-Deno.test('VISUAL state and local yank belong only to their frontend graph', async () => {
+test('VISUAL state and local yank belong only to their frontend graph', async () => {
   let a = frontend(), b = frontend()
   try {
     a.select({ surface: 'input', text: 'draft', anchor: 0, at: 2, yank: 'dra' })

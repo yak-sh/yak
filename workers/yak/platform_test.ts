@@ -14,6 +14,7 @@
 // What this proves is what the DO export flip turned on (T-33808): every listed
 // caller speaks the graph's own wire, `meta` is `metaOf` over the platform's
 // door, and the fleet-shaped object they used to reach is gone (T-33807).
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
@@ -71,7 +72,7 @@ let space = async (
   return (await dir.space(slug))!
 }
 
-Deno.test('a space and an app are seeded, minted, and read back', async () => {
+test('a space and an app are seeded, minted, and read back', async () => {
   let { dir } = platform()
   let ada = crypto.randomUUID()
   let s = await space(dir, ada, 'ada')
@@ -112,7 +113,7 @@ Deno.test('a space and an app are seeded, minted, and read back', async () => {
   assertEquals((await dir.owners(s)).length, 1)
 })
 
-Deno.test('the slug a space is taken by is taken once', async () => {
+test('the slug a space is taken by is taken once', async () => {
   let { dir } = platform()
   let one = crypto.randomUUID()
   await space(dir, one, 'ada')
@@ -121,7 +122,7 @@ Deno.test('the slug a space is taken by is taken once', async () => {
   assert(no, 'a second space at the same slug was admitted')
 })
 
-Deno.test('a hostname resolves to the app it serves and the space it is in', async () => {
+test('a hostname resolves to the app it serves and the space it is in', async () => {
   let { at, dir } = platform()
   let ada = crypto.randomUUID()
   let s = await space(dir, ada, 'ada')
@@ -160,7 +161,7 @@ Deno.test('a hostname resolves to the app it serves and the space it is in', asy
   assertEquals((await dir.hosts(s)).map((h) => h.name), ['recipes.example.com'])
 })
 
-Deno.test('a sign-in code is minted, spent once, and gone', async () => {
+test('a sign-in code is minted, spent once, and gone', async () => {
   let { at } = platform()
   let code = await mint(at, SECRET, DANA)
   assert(code)
@@ -177,7 +178,7 @@ Deno.test('a sign-in code is minted, spent once, and gone', async () => {
   assertEquals((await at.query(`.signin.email=${DANA}`)).length, 0)
 })
 
-Deno.test('a person is found by their address, or minted at it', async () => {
+test('a person is found by their address, or minted at it', async () => {
   let { at } = platform()
   let one = await personOf(at, DANA)
   assertEquals(await personOf(at, DANA), one)
@@ -213,7 +214,7 @@ let planted = async (before: Bundle[]) => {
   return { ...p, admin, yak }
 }
 
-Deno.test('the platform seeds an admin person, and completes a half-seeded store', async () => {
+test('the platform seeds an admin person, and completes a half-seeded store', async () => {
   // Nothing yet: the space, its app, the admin and the seat all arrive at once.
   await planted([])
   // The store as production has it: seeded before the admin existed.
@@ -240,7 +241,7 @@ Deno.test('the platform seeds an admin person, and completes a half-seeded store
 // Why the seat is worth having: a write made by the admin's session carries
 // the admin in `created.by`, so an agent's platform act reads as the admin and
 // never as the owner (M-31958).
-Deno.test('a write the admin makes is the admin’s', async () => {
+test('a write the admin makes is the admin’s', async () => {
   let { at, admin } = await planted([])
   await at.apply([{ entity: { eid: '$e' }, doc: { title: 'note' } }], {
     'x-yak-person': admin,
@@ -253,7 +254,7 @@ Deno.test('a write the admin makes is the admin’s', async () => {
 // The seat the seed writes is the platform's own, so it is not somebody
 // holding the platform: the first person to sign in still owns the meta space
 // (identity.ts), and after them it is theirs.
-Deno.test('the admin’s seat does not make the meta space somebody’s', async () => {
+test('the admin’s seat does not make the meta space somebody’s', async () => {
   let { dir, yak } = await planted([])
   assertEquals(await dir.memberless(yak), true)
   let ada = crypto.randomUUID()
@@ -269,7 +270,7 @@ Deno.test('the admin’s seat does not make the meta space somebody’s', async 
   assertEquals(await dir.memberless(yak), false)
 })
 
-Deno.test('first-member admission sees a seat written around the directory cache', async () => {
+test('first-member admission sees a seat written around the directory cache', async () => {
   let { at, yak } = await planted([])
   let dir = directory({ fetch: over(at) })
   assertEquals(await dir.memberless(yak), true)
@@ -286,7 +287,7 @@ Deno.test('first-member admission sees a seat written around the directory cache
   assertEquals(await dir.memberless(yak), false)
 })
 
-Deno.test("a break the platform noted about itself is the meta store's", async () => {
+test("a break the platform noted about itself is the meta store's", async () => {
   let { at } = platform()
   await noted((bundles) => at.apply(bundles, KERNEL), {
     request: 'billing POST /stripe',
@@ -302,7 +303,7 @@ Deno.test("a break the platform noted about itself is the meta store's", async (
   assertEquals(broke.doc, undefined)
 })
 
-Deno.test("the meter and the plan are the platform's word, not a person's", async () => {
+test("the meter and the plan are the platform's word, not a person's", async () => {
   let { at, dir } = platform()
   let ada = crypto.randomUUID()
   let s = await space(dir, ada, 'ada')
@@ -335,7 +336,7 @@ Deno.test("the meter and the plan are the platform's word, not a person's", asyn
   assertEquals((await dir.payer('cus_1'))!.slug, 'ada')
 })
 
-Deno.test('erasing a space buries everything that named it', async () => {
+test('erasing a space buries everything that named it', async () => {
   let { at, dir } = platform()
   let ada = crypto.randomUUID()
   let s = await space(dir, ada, 'ada')
@@ -386,7 +387,7 @@ Deno.test('erasing a space buries everything that named it', async () => {
   assertEquals((await space(dir, other, 'ada')).slug, 'ada')
 })
 
-Deno.test('the directory plants the platform, and not one app word', async () => {
+test('the directory plants the platform, and not one app word', async () => {
   let ctx = state()
   let store = new Store(ctx)
   await store.fetch(
@@ -430,7 +431,7 @@ Deno.test('the directory plants the platform, and not one app word', async () =>
 
 // The one bundle the app half writes to its own store today, proving the
 // header that picks a vocabulary picks the other one when the name is an app's.
-Deno.test('a store that is not the directory is still an app', async () => {
+test('a store that is not the directory is still an app', async () => {
   let store = new Store(state())
   let no = await store.fetch(
     new Request('http://store/apply', {

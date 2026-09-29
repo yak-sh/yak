@@ -6,6 +6,7 @@
 // it back"); a dispatch namespace has no local implementation, so the worker's
 // last hop is proved here against the same stubbed account API dispatch_test.ts
 // uses.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
@@ -191,7 +192,7 @@ let directory = () => {
   return { dir, rows: () => rows }
 }
 
-Deno.test('a manifest names paths and shas, not the bytes', async () => {
+test('a manifest names paths and shas, not the bytes', async () => {
   let { blobs, trips } = memory()
   await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
   await blobs.put(PREFIX + 'style.css', bytes('body{}'))
@@ -226,7 +227,7 @@ Deno.test('a manifest names paths and shas, not the bytes', async () => {
   assertEquals(own(['index.html', 'blobs/x', 'versions/y']), ['index.html'])
 })
 
-Deno.test('a rollback restores the bytes, and only the files', async () => {
+test('a rollback restores the bytes, and only the files', async () => {
   let { blobs } = memory()
   await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
   await blobs.put(PREFIX + 'worker.js', bytes('export default { fetch: one }'))
@@ -266,7 +267,7 @@ Deno.test('a rollback restores the bytes, and only the files', async () => {
 
 // What a version PUT back, read off the manifests: a rollback restores files,
 // so the files are its record (T-32910, C-32905 item 6).
-Deno.test('a version made by a rollback says which one it restored', () => {
+test('a version made by a rollback says which one it restored', () => {
   let v = (version: number, index: string): Version => ({
     eid: `d${version}`,
     version,
@@ -287,7 +288,7 @@ Deno.test('a version made by a rollback says which one it restored', () => {
 // an app's commit chain from the manifests, and its bytes are kept as long as
 // it is — so the oldest rollback an app offers works however many deploys
 // later.
-Deno.test('no version is ever buried, and every one keeps its bytes', async () => {
+test('no version is ever buried, and every one keeps its bytes', async () => {
   let { blobs, clock } = memory()
   let { dir, rows } = directory()
   // Two days back, so nothing the sweep sees is inside its grace period.
@@ -320,7 +321,7 @@ Deno.test('no version is ever buried, and every one keeps its bytes', async () =
   assertEquals((await blobs.list(SHA)).length, KEEP + 4)
 })
 
-Deno.test('pruning keeps source bytes named by the serving release', async () => {
+test('pruning keeps source bytes named by the serving release', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()
   clock.now = Date.now() - 2 * GRACE
@@ -354,7 +355,7 @@ Deno.test('pruning keeps source bytes named by the serving release', async () =>
   )
 })
 
-Deno.test('published releases keep versioned bytes after newer deploys', async () => {
+test('published releases keep versioned bytes after newer deploys', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()
   clock.now = Date.now() - 2 * GRACE
@@ -423,7 +424,7 @@ Deno.test('published releases keep versioned bytes after newer deploys', async (
   )
 })
 
-Deno.test('a deploy records the source of the release it replaces', async () => {
+test('a deploy records the source of the release it replaces', async () => {
   let { dir, rows } = directory()
   let old = 'jeff/.releases/a1/old'
   let next = 'jeff/.releases/a1/next'
@@ -450,7 +451,7 @@ Deno.test('a deploy records the source of the release it replaces', async () => 
 // The worker's last hop. A dispatch namespace is remote-only, so what a
 // rollback restores is proved to reach Cloudflare the way dispatch_test.ts
 // proves an upload: against the account API, stubbed.
-Deno.test('the worker a rollback put back is the source uploaded', async () => {
+test('the worker a rollback put back is the source uploaded', async () => {
   let { blobs } = memory()
   await blobs.put(PREFIX + 'worker.js', bytes('export default { fetch: one }'))
   let one = await snapshot(blobs, PREFIX)
@@ -492,7 +493,7 @@ Deno.test('the worker a rollback put back is the source uploaded', async () => {
 
 let ago = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000)
 
-Deno.test('a write pins what it replaced, and a path answers its own past', async () => {
+test('a write pins what it replaced, and a path answers its own past', async () => {
   let { blobs } = memory()
   // A file that did not exist has no previous version, and nothing is written
   // down about it.
@@ -529,7 +530,7 @@ Deno.test('a write pins what it replaced, and a path answers its own past', asyn
   assertEquals(Object.keys(await snapshot(blobs, PREFIX)), ['index.html'])
 })
 
-Deno.test('the prune lets go only of bytes nothing names any more', async () => {
+test('the prune lets go only of bytes nothing names any more', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()
   clock.now = Date.now() - 2 * GRACE
@@ -579,7 +580,7 @@ Deno.test('the prune lets go only of bytes nothing names any more', async () => 
 // The liveness rule itself (T-34952, D-34942): what keeps a blob is that
 // something names it, and never how recent it is — plus the day's grace that
 // keeps a deploy still in flight from being swept out from under.
-Deno.test('a blob lives while anything names it, and a day besides', async () => {
+test('a blob lives while anything names it, and a day besides', async () => {
   let { blobs, clock, trips } = memory()
   let { dir } = directory()
   clock.now = Date.now() - 2 * GRACE
@@ -626,7 +627,7 @@ Deno.test('a blob lives while anything names it, and a day besides', async () =>
 
 // The third thing that can name a blob (plugin.ts `pins`): a domain holding
 // its own pinned bytes, which neither a manifest nor a path's history says.
-Deno.test('a plugin names bytes, and the sweep keeps them', async () => {
+test('a plugin names bytes, and the sweep keeps them', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()
   clock.now = Date.now() - 2 * GRACE
@@ -651,7 +652,7 @@ Deno.test('a plugin names bytes, and the sweep keeps them', async () => {
   assertEquals(await blobs.has(addressed(old!.sha)), false)
 })
 
-Deno.test('a history that cannot be read is a history with nothing in it', async () => {
+test('a history that cannot be read is a history with nothing in it', async () => {
   let { blobs } = memory()
   await blobs.put(PREFIX + 'history/index.html.json', bytes('{ not json'))
   await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
@@ -663,7 +664,7 @@ Deno.test('a history that cannot be read is a history with nothing in it', async
 
 // ---- one key space for the whole bucket (T-34953, D-34942) -----------------
 
-Deno.test('two apps holding the same file hold one object', async () => {
+test('two apps holding the same file hold one object', async () => {
   let { blobs } = memory()
   let theirs = 'ada/recipes/'
   await blobs.put(PREFIX + 'index.html', bytes('<h1>hello</h1>'))
@@ -682,7 +683,7 @@ Deno.test('two apps holding the same file hold one object', async () => {
   )
 })
 
-Deno.test('a pin at the old per-app key is read until it is carried', async () => {
+test('a pin at the old per-app key is read until it is carried', async () => {
   let { blobs } = memory()
   // The bucket as it stands before the migration: bytes under the app's own
   // `versions/` prefix, and nothing at all under `sha/`.
@@ -705,7 +706,7 @@ Deno.test('a pin at the old per-app key is read until it is carried', async () =
 // The mark set is the bucket's: an object one app has stopped naming may be
 // the very file another app serves, so a sweep that saw one app at a time
 // would delete it.
-Deno.test('the sweep keeps a sha another app still names', async () => {
+test('the sweep keeps a sha another app still names', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()
   clock.now = Date.now() - 2 * GRACE
@@ -732,7 +733,7 @@ Deno.test('the sweep keeps a sha another app still names', async () => {
   )
 })
 
-Deno.test('the migration carries the old key across, once', async () => {
+test('the migration carries the old key across, once', async () => {
   let { blobs } = memory()
   let one = await sha256(bytes('<h1>one</h1>'))
   let two = await sha256(bytes('<h1>two</h1>'))
@@ -762,7 +763,7 @@ Deno.test('the migration carries the old key across, once', async () => {
 
 // T-37888: the notes were `AGENTS.md` before T-34632. The sweep carries the
 // file, what it held before, and every release that names it to the one name.
-Deno.test('a renamed path carries its bytes, history and releases', async () => {
+test('a renamed path carries its bytes, history and releases', async () => {
   let { blobs } = memory()
   let { dir, rows } = directory()
   await blobs.put(PREFIX + 'AGENTS.md', bytes('grams'))
@@ -845,7 +846,7 @@ let restarted = async (answer: () => Response) => {
 }
 
 for (let [how, answer] of Object.entries(lost)) {
-  Deno.test(`a deploy recorded as a restart ${how} its answer lands once`, async () => {
+  test(`a deploy recorded as a restart ${how} its answer lands once`, async () => {
     let { dir, app } = await restarted(answer)
     assertEquals((await dir.deploys(app)).map((v) => v.version), [1])
     assertEquals(app.version, 1)

@@ -1,4 +1,5 @@
 // Derived titles say the same words at every display door.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { wakeList, wakeTitle } from './title.ts'
@@ -6,7 +7,7 @@ import { local } from './time.ts'
 
 let NOW = Date.parse('2026-08-10T12:00:00Z')
 
-Deno.test('wake titles derive the recipient and relative clock', () => {
+test('wake titles derive the recipient and relative clock', () => {
   let e = {
     wake: { at: '2026-08-10T13:00:00Z' },
     deliver: { to: 'project' },
@@ -25,7 +26,7 @@ Deno.test('wake titles derive the recipient and relative clock', () => {
   )
 })
 
-Deno.test('wake lists show every pending clock in time order', () => {
+test('wake lists show every pending clock in time order', () => {
   let refs = [
     { eid: 'session', kind: 'session', num: 31 },
     { eid: 'first-task', kind: 'task', num: 42 },

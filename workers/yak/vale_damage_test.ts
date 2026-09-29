@@ -1,5 +1,6 @@
 // Mossvale's damage command changes a hero through the same guarded store
 // door as the page. Only the space owner may turn damage off.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -9,7 +10,7 @@ import {
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { accepted, client, connector, kernel, seed, signIn } from './probe.ts'
 
-Deno.test('the Mossvale owner turns a hero’s damage off and on', async () => {
+test('the Mossvale owner turns a hero’s damage off and on', async () => {
   let k = await kernel()
   try {
     let owner = await seed(k, [{ slug: 'damagelab', apps: [] }])

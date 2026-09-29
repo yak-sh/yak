@@ -1,6 +1,7 @@
 // What a persona holds, gathered off the graph: which tier a doc lands in, the
 // order they arrive in, and how a carried persona folds in.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Graph, isPromise } from '@yaks/graph'
 import { held, link, memory, said, thin, voiced, world } from './testing.ts'
@@ -30,7 +31,7 @@ let graph = (...batch: Bundle[]): Graph => {
   return g
 }
 
-Deno.test('contains carries the doc, reads only names it', () => {
+test('contains carries the doc, reads only names it', () => {
   let g = graph(link('n1', 'contains', 'm1'), link('n1', 'reads', 'm2'))
   let worn = now(g, 'n1')!
   assertEquals(ids(worn.carries), ['m1'])
@@ -38,7 +39,7 @@ Deno.test('contains carries the doc, reads only names it', () => {
   assertEquals(worn.persona.entity.eid, 'n1')
 })
 
-Deno.test('the authored order is the order: ord first, then the end it points at', () => {
+test('the authored order is the order: ord first, then the end it points at', () => {
   let g = graph(
     link('n1', 'contains', 'm3', 1),
     link('n1', 'contains', 'm1', 9),
@@ -47,7 +48,7 @@ Deno.test('the authored order is the order: ord first, then the end it points at
   assertEquals(ids(now(g, 'n1')!.carries), ['m3', 'm2', 'm1'])
 })
 
-Deno.test('an unordered link sorts after the ordered ones, stably', () => {
+test('an unordered link sorts after the ordered ones, stably', () => {
   let g = graph(
     link('n1', 'contains', 'm3'),
     link('n1', 'contains', 'm2'),
@@ -56,7 +57,7 @@ Deno.test('an unordered link sorts after the ordered ones, stably', () => {
   assertEquals(ids(now(g, 'n1')!.carries), ['m1', 'm2', 'm3'])
 })
 
-Deno.test('a carried persona folds in: its voice is carried and its tiers join', () => {
+test('a carried persona folds in: its voice is carried and its tiers join', () => {
   let g = graph(
     voiced('n2', 'base', 'the floor'),
     link('n1', 'contains', 'n2'),
@@ -68,7 +69,7 @@ Deno.test('a carried persona folds in: its voice is carried and its tiers join',
   assertEquals(ids(worn.names), ['m2'])
 })
 
-Deno.test('a named persona is only named — what it holds stays where it is', () => {
+test('a named persona is only named — what it holds stays where it is', () => {
   let g = graph(
     voiced('n2', 'base', 'the floor'),
     link('n1', 'reads', 'n2'),
@@ -79,7 +80,7 @@ Deno.test('a named persona is only named — what it holds stays where it is', (
   assertEquals(ids(worn.names), ['n2'])
 })
 
-Deno.test('a doc carried and named is carried once', () => {
+test('a doc carried and named is carried once', () => {
   let g = graph(
     voiced('n2', 'base', 'the floor'),
     link('n1', 'reads', 'm1'),
@@ -91,7 +92,7 @@ Deno.test('a doc carried and named is carried once', () => {
   assertEquals(ids(worn.names), [])
 })
 
-Deno.test('a ring of personas ends the gather rather than spinning', () => {
+test('a ring of personas ends the gather rather than spinning', () => {
   let g = graph(
     voiced('n2', 'base', 'the floor'),
     link('n1', 'contains', 'n2'),
@@ -101,7 +102,7 @@ Deno.test('a ring of personas ends the gather rather than spinning', () => {
   assertEquals(ids(now(g, 'n1')!.carries), ['n2', 'm1'])
 })
 
-Deno.test('a proposal is said only once somebody approves it', () => {
+test('a proposal is said only once somebody approves it', () => {
   let g = graph(
     { entity: { eid: 'm1' }, proposed: {} },
     { entity: { eid: 'm2' }, proposed: {}, decided: { verdict: 'declined' } },
@@ -115,13 +116,13 @@ Deno.test('a proposal is said only once somebody approves it', () => {
   assertEquals(ids(worn.names), ['m3'])
 })
 
-Deno.test('an entity that is not a persona is nobody to wear', () => {
+test('an entity that is not a persona is nobody to wear', () => {
   let g = graph()
   assertEquals(now(g, 'm1'), undefined)
   assertEquals(now(g, 'nothing-at-all'), undefined)
 })
 
-Deno.test('a relation this vocabulary never declares contributes nothing', () => {
+test('a relation this vocabulary never declares contributes nothing', () => {
   // A host with no @yaks/task composed has no `contains`; the persona still
   // speaks, and still names what it reads.
   let g = world(thin)

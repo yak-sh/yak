@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { images } from './images.ts'
@@ -14,7 +15,7 @@ import { at, harness, worker } from './testing.ts'
 const png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
 
-Deno.test('the harness and blob door share the graph artifact store', async () => {
+test('the harness and blob door share the graph artifact store', async () => {
   let dir = await Deno.makeTempDir()
   try {
     for (let custom of [false, true]) {
@@ -55,7 +56,7 @@ Deno.test('the harness and blob door share the graph artifact store', async () =
   }
 })
 
-Deno.test('generated artifacts survive database reopen and keep payloads out of transcript and requests', async () => {
+test('generated artifacts survive database reopen and keep payloads out of transcript and requests', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graph.db', directory = dir + '/images'
   let h = await harness(db)
@@ -120,7 +121,7 @@ Deno.test('generated artifacts survive database reopen and keep payloads out of 
   }
 })
 
-Deno.test('host store failure returns no artifact and retry repairs partial bytes', async () => {
+test('host store failure returns no artifact and retry repairs partial bytes', async () => {
   let dir = await Deno.makeTempDir()
   try {
     let store = images(fileBlobs(dir)).store
@@ -138,7 +139,7 @@ Deno.test('host store failure returns no artifact and retry repairs partial byte
   }
 })
 
-Deno.test('a model row sends OpenRouter audio to the graph as an artifact', async () => {
+test('a model row sends OpenRouter audio to the graph as an artifact', async () => {
   let h = await harness(':memory:')
   let bytes = new TextEncoder().encode('ID3music')
   let data = btoa(String.fromCharCode(...bytes))
@@ -195,7 +196,7 @@ Deno.test('a model row sends OpenRouter audio to the graph as an artifact', asyn
   }
 })
 
-Deno.test('image options cross the worker boundary without serializing callbacks', async () => {
+test('image options cross the worker boundary without serializing callbacks', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),
@@ -216,7 +217,7 @@ Deno.test('image options cross the worker boundary without serializing callbacks
   }
 })
 
-Deno.test('image configuration defaults to enabled with explicit disable and override', async () => {
+test('image configuration defaults to enabled with explicit disable and override', async () => {
   let { configuredImages } = await import('./images.ts')
   let blobs = memoryBlobs()
   assertEquals(typeof configuredImages(blobs, undefined, '')?.store, 'function')
@@ -229,7 +230,7 @@ Deno.test('image configuration defaults to enabled with explicit disable and ove
   assertEquals(configuredImages(blobs, {}, '0')?.auto, undefined)
 })
 
-Deno.test('image disable crosses the worker boundary', async () => {
+test('image disable crosses the worker boundary', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),

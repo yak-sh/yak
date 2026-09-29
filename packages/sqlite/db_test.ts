@@ -1,13 +1,14 @@
 // The one door to an embedded database: what `open()` sets on a connection,
 // and what its driver does once the connection is closed.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { as, col, insert, isNull, lit, scan, select, val } from '@yaks/sql'
 import { open } from './db.ts'
 
 let value = (v: number) => select({ cols: [as(val(v), 'value')] })
 
-Deno.test('a closed database refuses cached and new statements', () => {
+test('a closed database refuses cached and new statements', () => {
   let sql = open(':memory:')
   assertEquals(sql.query(value(1)), [{ value: 1 }])
   sql.close()
@@ -21,7 +22,7 @@ Deno.test('a closed database refuses cached and new statements', () => {
   ) assertThrows(operation, Error, 'the database is closed')
 })
 
-Deno.test('a file opens in WAL with NORMAL sync and a bounded journal', () => {
+test('a file opens in WAL with NORMAL sync and a bounded journal', () => {
   let dir = Deno.makeTempDirSync()
   let sql = open(`${dir}/nested/graph.db`)
   try {
@@ -36,14 +37,14 @@ Deno.test('a file opens in WAL with NORMAL sync and a bounded journal', () => {
   }
 })
 
-Deno.test('an in-memory database leaves the journal size unlimited', () => {
+test('an in-memory database leaves the journal size unlimited', () => {
   using sql = scratch()
   assertEquals(sql.query({ t: 'pragma', name: 'journal_size_limit' }), [{
     journal_size_limit: -1,
   }])
 })
 
-Deno.test('a kept statement answers with the columns the schema now has', () => {
+test('a kept statement answers with the columns the schema now has', () => {
   using sql = scratch()
   sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
   sql.query(insert('t', { x: 1 }))
@@ -56,7 +57,7 @@ Deno.test('a kept statement answers with the columns the schema now has', () => 
   assertEquals(scan(sql, 't'), [{ x: 1, y: 5 }])
 })
 
-Deno.test('an index cannot name a column the table has not gained', () => {
+test('an index cannot name a column the table has not gained', () => {
   using sql = scratch()
   sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
   assertThrows(

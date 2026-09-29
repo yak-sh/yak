@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
@@ -6,7 +7,7 @@ import { at, harness, worker } from './testing.ts'
 
 let M = identityEid('model', ['test'])
 
-Deno.test('SQLite fork window reads limited bodies and projects position metadata', async () => {
+test('SQLite fork window reads limited bodies and projects position metadata', async () => {
   let h = await harness()
   try {
     await h.g.apply([
@@ -35,7 +36,7 @@ Deno.test('SQLite fork window reads limited bodies and projects position metadat
   }
 })
 
-Deno.test('worker pages retained graph data and keeps initial transfer independent of transcript length', async () => {
+test('worker pages retained graph data and keeps initial transfer independent of transcript length', async () => {
   let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
   let h = await harness(path)
   await h.g.apply([
@@ -93,7 +94,7 @@ Deno.test('worker pages retained graph data and keeps initial transfer independe
   }
 })
 
-Deno.test('mounted bounded transcript navigates beyond loaded edges and restores a detached session anchor', async () => {
+test('mounted bounded transcript navigates beyond loaded edges and restores a detached session anchor', async () => {
   const { h: element } = await import('preact')
   const { mount } = await import('../tui/testing.ts')
   const { pressTo } = await import('../tui/screen.ts')
@@ -194,7 +195,7 @@ Deno.test('mounted bounded transcript navigates beyond loaded edges and restores
   }
 })
 
-Deno.test('usage panel reads latest inherited ask metadata without transcript bodies', async () => {
+test('usage panel reads latest inherited ask metadata without transcript bodies', async () => {
   const { transcriptUsage } = await import('@yaks/session')
   let store = await harness()
   try {
@@ -230,7 +231,7 @@ Deno.test('usage panel reads latest inherited ask metadata without transcript bo
   }
 })
 
-Deno.test('bounded worker subscriptions deliver transient text before final completion', async () => {
+test('bounded worker subscriptions deliver transient text before final completion', async () => {
   const { until } = await import('../process/testing.ts')
   let dir = await Deno.makeTempDir()
   let r = await remote({
@@ -285,7 +286,7 @@ Deno.test('bounded worker subscriptions deliver transient text before final comp
 
 // A window of eight out of a thousand: an unbounded read answers 4 MB of
 // bodies where the window answers 32 KB.
-Deno.test('a long transcript of large entries loads only a bounded body window', async () => {
+test('a long transcript of large entries loads only a bounded body window', async () => {
   let store = await harness()
   try {
     const body = 'x'.repeat(4000)
@@ -311,7 +312,7 @@ Deno.test('a long transcript of large entries loads only a bounded body window',
   }
 })
 
-Deno.test('detached windows receive frontier notices without loading new offscreen bodies', async () => {
+test('detached windows receive frontier notices without loading new offscreen bodies', async () => {
   let dir = await Deno.makeTempDir(), path = dir + '/db.sqlite'
   let store = await harness(path)
   await store.g.apply([
@@ -361,7 +362,7 @@ Deno.test('detached windows receive frontier notices without loading new offscre
   }
 })
 
-Deno.test('window counts exclude fork ancestor entries beyond its boundary', async () => {
+test('window counts exclude fork ancestor entries beyond its boundary', async () => {
   const h = await harness()
   try {
     await h.g.apply([

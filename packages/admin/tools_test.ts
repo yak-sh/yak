@@ -1,6 +1,7 @@
 // The admin verbs at their pure seam: what one refuses before it touches an
 // account or the network, and what one answers once it has. The rest of a
 // verb is the wire (./api_test.ts) and the account rule (./accounts_test.ts).
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -55,7 +56,7 @@ let body = (answer: Bundle[]) =>
   answer.map((b) => (b.content as Comp | undefined)?.body).filter(Boolean)
     .join('\n')
 
-Deno.test('every declared admin verb has an implementation, and no other', () => {
+test('every declared admin verb has an implementation, and no other', () => {
   let declared = toolsIn(adminDoc).map((t) => t.name).sort()
   assertEquals(declared, Object.keys(runs(box())).sort())
   assert(declared.every((n) => n?.startsWith('admin_')), declared.join(' '))
@@ -63,7 +64,7 @@ Deno.test('every declared admin verb has an implementation, and no other', () =>
 
 // The fee is the PLATFORM's (workers/yak/sell.ts `fees`), so reading it or
 // moving it is a named act, and a typo is refused before any account is read.
-Deno.test('the fee is a named act, in whole basis points', async () => {
+test('the fee is a named act, in whole basis points', async () => {
   await assertRejects(
     () => ask('admin_fee', { bps: '250' }),
     Refused,
@@ -82,7 +83,7 @@ Deno.test('the fee is a named act, in whole basis points', async () => {
 // A client is the platform's, and its id and secret are never a call's
 // argument: this graph keeps the call as its text. Both refused before any
 // account is read or anything is fetched.
-Deno.test('a client is kept by --admin, from op:// references only', async () => {
+test('a client is kept by --admin, from op:// references only', async () => {
   let ref = 'op://vault/item/field'
   await assertRejects(
     () => ask('admin_client', { name: 'g', id: ref }),
@@ -99,7 +100,7 @@ Deno.test('a client is kept by --admin, from op:// references only', async () =>
 
 // Signing in AS somebody is the same named act, refused before a letter goes
 // anywhere; a word that is not an address is the bearer `yak login` keeps.
-Deno.test('login refuses what the argv did not name', async () => {
+test('login refuses what the argv did not name', async () => {
   let refused = [
     [{ address: 'you@example.com' }, '--owner'],
     [{ address: ADMIN }, '--admin'],
@@ -118,7 +119,7 @@ let PLATFORM = [
   'admin_revert',
 ]
 
-Deno.test('a platform operation names whose act it is before it runs anything', async () => {
+test('a platform operation names whose act it is before it runs anything', async () => {
   for (let name of PLATFORM) {
     await assertRejects(() => ask(name), Refused, '--owner')
     await assertRejects(() => ask(name, { owner: false }), Refused, '--admin')
@@ -137,7 +138,7 @@ Deno.test('a platform operation names whose act it is before it runs anything', 
 
 // The same act, named by an agent instead of by Jeff (D-35373): it gets past
 // the guard, and the banner says it is the admin's.
-Deno.test('an agent names a platform operation with --admin', async () => {
+test('an agent names a platform operation with --admin', async () => {
   await assertRejects(
     () => ask('admin_revert', { admin: true, sha: 'HEAD' }),
     CallError,
@@ -146,7 +147,7 @@ Deno.test('an agent names a platform operation with --admin', async () => {
   assertStringIncludes(heard.join('\n'), `ADMIN ACCOUNT — ${ADMIN}`)
 })
 
-Deno.test('an interrupted platform operation is a call error, not a defect', () => {
+test('an interrupted platform operation is a call error, not a defect', () => {
   let error = assertThrows(
     () => ended('errors', 130),
     CallError,
@@ -216,7 +217,7 @@ let space = (slug: string, role: string, apps: number) =>
     ...Array.from({ length: apps }, (_, i) => `- a${i} (a${i}) v1`),
   ].join('\n')
 
-Deno.test('whoami asks the listing once and no space its own role', async () => {
+test('whoami asks the listing once and no space its own role', async () => {
   let { hit, said } = await whoami([
     space('ana', 'owner', 3),
     space('mom', 'editor', 1),
@@ -228,13 +229,13 @@ Deno.test('whoami asks the listing once and no space its own role', async () => 
   }
 })
 
-Deno.test('whoami with no spaces still asks once', async () => {
+test('whoami with no spaces still asks once', async () => {
   let { hit, said } = await whoami([])
   assertEquals(hit, ['https://yaks.app/mcp'])
   assertStringIncludes(said, 'spaces    (none)')
 })
 
-Deno.test('the platform store is queried through its graph-tier door', async () => {
+test('the platform store is queried through its graph-tier door', async () => {
   let at = box()
   kept(at, ADMIN, 'admin.token')
   let rows = [{
@@ -290,7 +291,7 @@ Deno.test('the platform store is queried through its graph-tier door', async () 
   )
 })
 
-Deno.test('upload sends local bytes through an app blob door as the named account', async () => {
+test('upload sends local bytes through an app blob door as the named account', async () => {
   let at = box()
   let path = `${at.dir}/theme.mp3`
   let bytes = new Uint8Array([0x49, 0x44, 0x33, 0, 1])
@@ -335,7 +336,7 @@ Deno.test('upload sends local bytes through an app blob door as the named accoun
 // A throwaway's code is a letter in this graph, and the session it buys is
 // answered sealed under the account, beside the words: the write that records
 // the call keeps the session, and nothing else does.
-Deno.test('a throwaway signs in with the code from the graph', async () => {
+test('a throwaway signs in with the code from the graph', async () => {
   let letter = {
     entity: { eid: 'l1' },
     doc: { title: '123456 is your yaks.app code' },

@@ -1,6 +1,7 @@
 // The frozen 432-set sample contains table names only (no owner bodies/IDs).
 // Every curated web registration and terminal overlay must keep its old pick,
 // including qualified views, unnamed defaults, tabs and registration ties.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import './Entity.tsx'
 import { assertEquals, assertStrictEquals } from '@std/assert'
@@ -14,7 +15,7 @@ let sets = new Archetypes()
 let entries = fixture.map((tables) => sets.intern(tables))
 let archetypes = (id: string) => sets.get(id)?.tables
 
-Deno.test('the fleet Ent boundary selects from the spine without touching bodies', () => {
+test('the fleet Ent boundary selects from the spine without touching bodies', () => {
   let a = sets.intern(['doc', 'task'])
   let e = new Proxy({
     eid: 'projected',
@@ -36,7 +37,7 @@ Deno.test('the fleet Ent boundary selects from the spine without touching bodies
   )
 })
 
-Deno.test('432 archetypes preserve every registry pick', () => {
+test('432 archetypes preserve every registry pick', () => {
   assertEquals(entries.length, 432)
   assertEquals(new Set(entries.map((a) => a.eid)).size, 432)
   let old = define(registry.renderers, { views: registry.views })

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { remote } from './remote.ts'
@@ -7,7 +8,7 @@ import { fixture } from '../mcp-client/testing.ts'
 import { graphToolName } from '@yaks/mcp-client/graph'
 import { at, harness, repo, worker } from './testing.ts'
 
-Deno.test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
+test('configured remote MCP tool publishes mockup through existing call/result transcript', async () => {
   const f = fixture()
   const server = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -76,7 +77,7 @@ Deno.test('configured remote MCP tool publishes mockup through existing call/res
   }
 })
 
-Deno.test('worker owns MCP connection and preserves exact configured tool schemas', async () => {
+test('worker owns MCP connection and preserves exact configured tool schemas', async () => {
   const f = fixture()
   const server = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },
@@ -106,7 +107,7 @@ Deno.test('worker owns MCP connection and preserves exact configured tool schema
   }
 })
 
-Deno.test('tool isError uses expected tool failure rather than a defect', async () => {
+test('tool isError uses expected tool failure rather than a defect', async () => {
   const f = fixture()
   f.toolError()
   const server = Deno.serve(
@@ -132,7 +133,7 @@ Deno.test('tool isError uses expected tool failure rather than a defect', async 
   }
 })
 
-Deno.test('remote images use external artifacts while large text retains bounded context policy', async () => {
+test('remote images use external artifacts while large text retains bounded context policy', async () => {
   const f = fixture()
   const image = btoa('image-bytes')
   const server = Deno.serve(

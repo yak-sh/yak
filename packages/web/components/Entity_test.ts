@@ -1,5 +1,6 @@
 // The app's curated faces, actions and mounted Entity door preserve the same
 // defaults and live behavior across the web and terminal hosts.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -10,7 +11,7 @@ import { actionsFor, applicable, extend, resolve } from './registry.ts'
 import { Entity } from './Entity.tsx'
 import { mount } from './mount.ts'
 
-Deno.test('Entity mounts hooks with the original Ent and extra props', async () => {
+test('Entity mounts hooks with the original Ent and extra props', async () => {
   cache.value = {
     doc: {
       entity: { eid: 'doc', num: 1 },
@@ -53,7 +54,7 @@ Deno.test('Entity mounts hooks with the original Ent and extra props', async () 
   }
 })
 
-Deno.test('query groups preserve chosen tabs and default faces', () => {
+test('query groups preserve chosen tabs and default faces', () => {
   let fixture = (comps: Record<string, object>) => {
     cache.value = { x: { entity: { eid: 'x', num: 1 }, ...comps } }
     return ent('x')
@@ -75,7 +76,7 @@ Deno.test('query groups preserve chosen tabs and default faces', () => {
   }
 })
 
-Deno.test('boards open on Board with List still available', () => {
+test('boards open on Board with List still available', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
@@ -87,7 +88,7 @@ Deno.test('boards open on Board with List still available', () => {
   cache.value = {}
 })
 
-Deno.test('sessions open on Session with Full still available', () => {
+test('sessions open on Session with Full still available', () => {
   cache.value = {
     session: {
       entity: { eid: 'session', num: 31 },
@@ -101,7 +102,7 @@ Deno.test('sessions open on Session with Full still available', () => {
   cache.value = {}
 })
 
-Deno.test('release names the session by its chip id', () => {
+test('release names the session by its chip id', () => {
   cache.value = {
     task: {
       entity: { eid: 'task', num: 1 },
@@ -121,7 +122,7 @@ Deno.test('release names the session by its chip id', () => {
   cache.value = {}
 })
 
-Deno.test('quarantine is hidden until revealed and can be cleared', () => {
+test('quarantine is hidden until revealed and can be cleared', () => {
   cache.value = {
     task: {
       entity: { eid: 'task', num: 1 },
@@ -143,7 +144,7 @@ Deno.test('quarantine is hidden until revealed and can be cleared', () => {
   revealed.value = new Set()
 })
 
-Deno.test('a pending proposal keeps deletion named as deletion', () => {
+test('a pending proposal keeps deletion named as deletion', () => {
   cache.value = {
     design: {
       entity: { eid: 'design', num: 45 },
@@ -187,7 +188,7 @@ Deno.test('a pending proposal keeps deletion named as deletion', () => {
   cache.value = {}
 })
 
-Deno.test('a role keeps its face without lifecycle actions', () => {
+test('a role keeps its face without lifecycle actions', () => {
   cache.value = {
     role: {
       entity: { eid: 'role', num: 7 },

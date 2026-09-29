@@ -3,6 +3,7 @@
 // the same step reached through the plugin, where a release row is what wakes
 // it. Constants: ./testing.ts.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
@@ -46,7 +47,7 @@ let landing = (repo: Repo, files: Record<string, string>, message: string) => ({
   message,
 })
 
-Deno.test('a manifest lands as a commit and the branch follows it', async () => {
+test('a manifest lands as a commit and the branch follows it', async () => {
   let { g, bytes } = fixture()
   let repo: Repo = { refs: g, objects: g, bytes }
 
@@ -71,7 +72,7 @@ Deno.test('a manifest lands as a commit and the branch follows it', async () => 
   assertEquals(comp(row, 'ref').name, MAIN)
 })
 
-Deno.test('what the caller says about a commit rides the same batch', async () => {
+test('what the caller says about a commit rides the same batch', async () => {
   let { g, bytes } = fixture({ docs: [hostDoc] })
   let repo: Repo = { refs: g, objects: g, bytes }
   let release = 'b0000000-0000-4000-8000-00000000000b'
@@ -84,7 +85,7 @@ Deno.test('what the caller says about a commit rides the same batch', async () =
   assertEquals(row.entity.eid, made.oid)
 })
 
-Deno.test('the plugin commits a release, and commits it once', async () => {
+test('the plugin commits a release, and commits it once', async () => {
   let seen: Bundle[] = []
   let g!: ReturnType<typeof fixture>['g']
   let bytes!: ReturnType<typeof fixture>['bytes']

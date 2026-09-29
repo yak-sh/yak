@@ -3,6 +3,7 @@
 // fact that an undo is an ordinary write — journaled in its turn, so undoing
 // it again is a redo.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { applied, Final, undo, undone } from './undo.ts'
@@ -22,7 +23,7 @@ let fixture = () => {
   }
 }
 
-Deno.test('undo of a patch restores the property it moved', () => {
+test('undo of a patch restores the property it moved', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
@@ -30,7 +31,7 @@ Deno.test('undo of a patch restores the property it moved', () => {
   assertEquals(f.page('p1')?.title, 'Kickoff')
 })
 
-Deno.test('an undo is itself in history, with its own actor', () => {
+test('an undo is itself in history, with its own actor', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
@@ -43,7 +44,7 @@ Deno.test('an undo is itself in history, with its own actor', () => {
   ])
 })
 
-Deno.test('undoing an undo is a redo', () => {
+test('undoing an undo is a redo', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
@@ -52,14 +53,14 @@ Deno.test('undoing an undo is a redo', () => {
   assertEquals(f.page('p1')?.title, 'Retro')
 })
 
-Deno.test('undo of a create drops the component it brought', () => {
+test('undo of a create drops the component it brought', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.back(1)
   assertEquals(f.page('p1'), null)
 })
 
-Deno.test('an undo guards every property it restores', () => {
+test('an undo guards every property it restores', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }])
@@ -70,7 +71,7 @@ Deno.test('an undo guards every property it restores', () => {
   assert(back.$was?.page?.title)
 })
 
-Deno.test('undo of a delete is refused — death is final', () => {
+test('undo of a delete is refused — death is final', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, $delete: true }])
@@ -81,12 +82,12 @@ Deno.test('undo of a delete is refused — death is final', () => {
   )
 })
 
-Deno.test('undo of a batch that never happened says so', () => {
+test('undo of a batch that never happened says so', () => {
   let f = fixture()
   assertThrows(() => f.back(9), Error, 'no journal batch #9')
 })
 
-Deno.test('applied() rebuilds the batch as committed', () => {
+test('applied() rebuilds the batch as committed', () => {
   let f = fixture()
   f.apply([
     { entity: { eid: 'p1' }, page: { title: 'Kickoff', text: 'body' } },
@@ -98,7 +99,7 @@ Deno.test('applied() rebuilds the batch as committed', () => {
   ])
 })
 
-Deno.test('applied() rebuilds a death as a death', () => {
+test('applied() rebuilds a death as a death', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, $delete: true }])
@@ -109,7 +110,7 @@ Deno.test('applied() rebuilds a death as a death', () => {
 // journal recorded `entity{num}` rows and the import carried them over. The
 // spine is the bundle's identity, so such a patch merges into `entity` rather
 // than landing on top of the eid.
-Deno.test('a recorded spine patch merges into the identity', () => {
+test('a recorded spine patch merges into the identity', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.j.write({ at: '2026-01-02T00:00:00.000Z' }, [

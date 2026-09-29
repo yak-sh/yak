@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
@@ -63,7 +64,7 @@ let told = async (g: Graph, session: string) =>
       .filter((k) => b[k]).join('+')
   )
 
-Deno.test('a transcript file becomes the session it names, at full depth', () =>
+test('a transcript file becomes the session it names, at full depth', () =>
   file(async (g, log, path) => {
     log(
       typed('fix it'),
@@ -97,7 +98,7 @@ Deno.test('a transcript file becomes the session it names, at full depth', () =>
     assertEquals(c(tool, 'tool')?.name, 'Bash')
   }))
 
-Deno.test('a tail reads on from where the transcript stands, and never twice', () =>
+test('a tail reads on from where the transcript stands, and never twice', () =>
   file(async (g, log, path) => {
     log(typed('one'))
     let t = await tail(g, path, { session: ids.run1 })
@@ -117,7 +118,7 @@ Deno.test('a tail reads on from where the transcript stands, and never twice', (
     ])
   }))
 
-Deno.test('a pull told to stop stops between lines, and the rest is read after', () =>
+test('a pull told to stop stops between lines, and the rest is read after', () =>
   file(async (g, log, path) => {
     log(typed('one'), typed('two'), typed('three'))
     let stop = new AbortController()
@@ -129,7 +130,7 @@ Deno.test('a pull told to stop stops between lines, and the rest is read after',
     assertEquals(await told(g, ids.run1), ['content', 'content', 'content'])
   }))
 
-Deno.test('a resume starts where the log was read, whatever became of its entries', () =>
+test('a resume starts where the log was read, whatever became of its entries', () =>
   file(async (g, log, path) => {
     log(typed('one'), reply(use), 'not json at all')
     await pull(g, await tail(g, path, { session: ids.run1 }), claude, {
@@ -147,7 +148,7 @@ Deno.test('a resume starts where the log was read, whatever became of its entrie
     assertEquals((await tail(g, quiet, { session: s.entity.eid })).line, 1)
   }))
 
-Deno.test('prose alone: what was typed and what the model said', () =>
+test('prose alone: what was typed and what the model said', () =>
   file(async (g, log, path) => {
     log(
       typed('fix it'),
@@ -160,7 +161,7 @@ Deno.test('prose alone: what was typed and what the model said', () =>
     assertEquals(await told(g, ids.run1), ['content', 'content+output'])
   }))
 
-Deno.test('a compacted summary survives a prose-only import', () =>
+test('a compacted summary survives a prose-only import', () =>
   file(async (g, log, path) => {
     log(
       typed('old instruction'),
@@ -186,7 +187,7 @@ Deno.test('a compacted summary survives a prose-only import', () =>
     assertEquals(c(rows[1], 'created')?.by, undefined)
   }))
 
-Deno.test('two logs of one session each keep their own entries and their own place', () =>
+test('two logs of one session each keep their own entries and their own place', () =>
   file(async (g, log, path) => {
     log(typed('one'), typed('two'))
     let other = `${path}.other`

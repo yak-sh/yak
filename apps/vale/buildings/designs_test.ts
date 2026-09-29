@@ -1,4 +1,5 @@
 // A changed design changes the rendered building without changing its kind.
+import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 import { BUILDINGS } from '../buildings.ts'
 import type { Bundle } from '../net.ts'
@@ -6,7 +7,7 @@ import { builtOf, installBuildingDesigns, vale } from '../terrain.ts'
 import rows from '../seed/buildings/plans.json' with { type: 'json' }
 import { seedThemes } from '../themes_fixture.ts'
 
-Deno.test('an edited building design replaces its visible shape', () => {
+test('an edited building design replaces its visible shape', () => {
   seedThemes()
   installBuildingDesigns(rows as Bundle[])
   let before = BUILDINGS['cottage.plaster'].raise!(0).vox.size

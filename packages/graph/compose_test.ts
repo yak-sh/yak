@@ -2,6 +2,7 @@
 // patch's properties. Clearing a component resets that fold; clearing a
 // property remains an explicit null for the caller's cache.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { composed } from './compose.ts'
 import type { Comp } from './bundle.ts'
@@ -9,7 +10,7 @@ import type { Comp } from './bundle.ts'
 let fold = (...parts: (Comp | null)[]) =>
   composed(parts.map((book) => ({ entity: { eid: 'b1' }, book })))[0].book
 
-Deno.test('composed merges phase patches by property and preserves clears', () => {
+test('composed merges phase patches by property and preserves clears', () => {
   assertEquals(fold({ pages: 412 }, { status: 'sold' }), {
     pages: 412,
     status: 'sold',
@@ -24,7 +25,7 @@ Deno.test('composed merges phase patches by property and preserves clears', () =
   })
 })
 
-Deno.test('composed retains explicit unnumbered spines without inventing them on patches', () => {
+test('composed retains explicit unnumbered spines without inventing them on patches', () => {
   assertEquals(
     composed([
       { entity: { eid: 'p' }, book: {} },

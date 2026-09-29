@@ -2,6 +2,7 @@
 // committed, the graph keeps the handle, and nothing refused leaves anything
 // behind.
 
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -78,7 +79,7 @@ let none = { env: () => undefined }
 let whole = async (g: Graph, name: string) =>
   (await g.read(`.secret.name="${name}"&*`))[0] as Bundle | undefined
 
-Deno.test('a written value is kept in the vault and read back as its handle', async () => {
+test('a written value is kept in the vault and read back as its handle', async () => {
   let { g, vault } = setup()
   let out = await g.apply([sealed('MAIL_TOKEN', 'cf-token')])
   let held = await row(g, 'MAIL_TOKEN')
@@ -89,7 +90,7 @@ Deno.test('a written value is kept in the vault and read back as its handle', as
   assertEquals(vault.read(secretEid('MAIL_TOKEN'))!.handle, held!.value)
 })
 
-Deno.test('a secret keeps its handle when its value changes, and writing the handle back changes nothing', async () => {
+test('a secret keeps its handle when its value changes, and writing the handle back changes nothing', async () => {
   let { g, vault } = setup()
   await g.apply([sealed('A', 'one')])
   let first = (await row(g, 'A'))!.value
@@ -100,13 +101,13 @@ Deno.test('a secret keeps its handle when its value changes, and writing the han
   assertEquals(await reveal(vault, 'A'), 'two')
 })
 
-Deno.test('one value under two names is two handles', async () => {
+test('one value under two names is two handles', async () => {
   let { g } = setup()
   await g.apply([sealed('A', 'one'), sealed('B', 'one')])
   assertNotEquals((await row(g, 'A'))!.value, (await row(g, 'B'))!.value)
 })
 
-Deno.test('the sentinel is the handle hashed under the vault salt, and survives a rotation', async () => {
+test('the sentinel is the handle hashed under the vault salt, and survives a rotation', async () => {
   let { g, vault } = setup()
   assertEquals(await sentinelOf(vault, 'A'), undefined)
   await g.apply([sealed('A', 'one')])
@@ -119,7 +120,7 @@ Deno.test('the sentinel is the handle hashed under the vault salt, and survives 
   assertEquals(await sentinelOf(vault, 'A'), said)
 })
 
-Deno.test('a swap replaces the sentinels it has values for, and nothing else', async () => {
+test('a swap replaces the sentinels it has values for, and nothing else', async () => {
   let a = await sentinel(new Uint8Array(32), 'yak_secret_a')
   let b = await sentinel(new Uint8Array(32), 'yak_secret_b')
   let text = `Bearer ${a}; ${b}x; ${SENTINEL}short; yak_secret_a`
@@ -130,7 +131,7 @@ Deno.test('a swap replaces the sentinels it has values for, and nothing else', a
   )
 })
 
-Deno.test('deleting a secret, or its component, drops it from the vault', async () => {
+test('deleting a secret, or its component, drops it from the vault', async () => {
   let { g, vault } = setup()
   await g.apply([sealed('A', 'one'), sealed('B', 'two')])
   await g.apply([unsealed('A')])
@@ -139,7 +140,7 @@ Deno.test('deleting a secret, or its component, drops it from the vault', async 
   assertEquals(await reveal(vault, 'A', none), undefined)
 })
 
-Deno.test('a dry run seals nothing, and neither does a refused change', async () => {
+test('a dry run seals nothing, and neither does a refused change', async () => {
   let { g, vault } = setup()
   await g.apply([sealed('A', 'one')])
   await g.apply([sealed('A', 'two'), sealed('B', 'three')], { check: true })
@@ -156,7 +157,7 @@ Deno.test('a dry run seals nothing, and neither does a refused change', async ()
   assertEquals(await reveal(vault, 'A'), 'one')
 })
 
-Deno.test('the writer waits for the seal; a reader in between sees the mark', async () => {
+test('the writer waits for the seal; a reader in between sees the mark', async () => {
   let open = Promise.withResolvers<void>()
   let base = ramVault()
   let { g } = setup({
@@ -178,7 +179,7 @@ Deno.test('the writer waits for the seal; a reader in between sees the mark', as
   assertEquals(await reveal(base, 'A'), 'one')
 })
 
-Deno.test('a failure the vault calls retryable is an error, tried again until it seals', async () => {
+test('a failure the vault calls retryable is an error, tried again until it seals', async () => {
   using time = new FakeTime()
   let { g, vault, reported } = setup(failing(transient()))
   let writing = g.apply([sealed('A', 'one')])
@@ -198,7 +199,7 @@ Deno.test('a failure the vault calls retryable is an error, tried again until it
   assertEquals(reported, [])
 })
 
-Deno.test('any other failure is an exception, reported, and the value is gone', async () => {
+test('any other failure is an exception, reported, and the value is gone', async () => {
   let { g, vault, reported } = setup(failing(new Error('no such table')))
   await g.apply([sealed('A', 'one')])
   let said = (await whole(g, 'A'))!
@@ -216,7 +217,7 @@ Deno.test('any other failure is an exception, reported, and the value is gone', 
   assertEquals(await reveal(vault, 'A'), 'one')
 })
 
-Deno.test('a retryable failure that outlasts every try is both', async () => {
+test('a retryable failure that outlasts every try is both', async () => {
   using time = new FakeTime()
   let { g, reported } = setup(failing(...[1, 2, 3, 4, 5].map(transient)))
   let writing = g.apply([sealed('A', 'one')])
@@ -228,7 +229,7 @@ Deno.test('a retryable failure that outlasts every try is both', async () => {
   assertEquals(reported.length, 1)
 })
 
-Deno.test('a secret inside a call is its handle there too, and sealed when the call applies it', async () => {
+test('a secret inside a call is its handle there too, and sealed when the call applies it', async () => {
   let { g, vault } = setup()
   let [call] = await g.apply([{
     entity: { eid: 'c1' },
@@ -245,7 +246,7 @@ Deno.test('a secret inside a call is its handle there too, and sealed when the c
   )
 })
 
-Deno.test('a name resolves through the vault, then 1Password, then the environment', async () => {
+test('a name resolves through the vault, then 1Password, then the environment', async () => {
   let { g, vault } = setup()
   let op = (ref: string) =>
     ref == 'op://v/item/key' ? Promise.resolve('from-op') : Promise.reject(
@@ -266,7 +267,7 @@ Deno.test('a name resolves through the vault, then 1Password, then the environme
   }
 })
 
-Deno.test('peek answers on the spot, with 1Password values warmed first', async () => {
+test('peek answers on the spot, with 1Password values warmed first', async () => {
   let { g, vault } = setup()
   let op = () => Promise.resolve('warm')
   await g.apply([sealed('A', 'plain'), sealed('B', 'op://v/item/warm')])
@@ -276,7 +277,7 @@ Deno.test('peek answers on the spot, with 1Password values warmed first', async 
   assertEquals(peek(vault, 'B', { op }), 'warm')
 })
 
-Deno.test('records change under the lock and are written back through the graph', async () => {
+test('records change under the lock and are written back through the graph', async () => {
   let { g, vault } = setup()
   let store = records<{ n?: number }>(g, vault, 'count ')
   assertEquals(await store.read('a'), undefined)

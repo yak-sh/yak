@@ -3,6 +3,7 @@
 // a refusal leaves standing. The compiler is yak-esbuild behind a binding,
 // which runs only in workerd, so here it is a stand-in answering what the
 // test says it compiled; @yaks/esbuild's own tests hold the plan.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
 import * as apps from './apps.ts'
@@ -90,7 +91,7 @@ let compiles = (ask: Ask): Partial<Answer> => ({
   installed: ['three@0.186.1'],
 })
 
-Deno.test('TypeScript and npm imports compile at deploy, and serve as JavaScript', async () => {
+test('TypeScript and npm imports compile at deploy, and serve as JavaScript', async () => {
   using s = await scenario(compiles)
   await s.write({
     'index.html': PAGE,
@@ -147,7 +148,7 @@ Deno.test('TypeScript and npm imports compile at deploy, and serve as JavaScript
   assert(await s.seconds() >= 1)
 })
 
-Deno.test('a deploy reuses unchanged compiled entries', async () => {
+test('a deploy reuses unchanged compiled entries', async () => {
   using s = await scenario(compiles)
   await s.write({
     'index.html': PAGE,
@@ -200,7 +201,7 @@ Deno.test('a deploy reuses unchanged compiled entries', async () => {
   assertEquals(s.asks.at(-1)?.pages, ['main.ts'])
 })
 
-Deno.test('a changed lock or previously plain script replans a release', async () => {
+test('a changed lock or previously plain script replans a release', async () => {
   using s = await scenario(compiles)
   await s.write({
     'index.html': PAGE + '<script type="module" src="plain.js"></script>',
@@ -222,7 +223,7 @@ Deno.test('a changed lock or previously plain script replans a release', async (
   assertEquals(s.asks.at(-1)?.pages, ['plain.js'])
 })
 
-Deno.test('a compile that fails refuses the deploy, and the last release serves', async () => {
+test('a compile that fails refuses the deploy, and the last release serves', async () => {
   let broken = false
   using s = await scenario((ask) =>
     broken
@@ -241,7 +242,7 @@ Deno.test('a compile that fails refuses the deploy, and the last release serves'
   assertEquals((await s.served('main.ts')).body, '/* main.ts */')
 })
 
-Deno.test('draft files stay private through a refused deploy and rollback', async () => {
+test('draft files stay private through a refused deploy and rollback', async () => {
   let broken = false
   using s = await scenario((ask) =>
     broken ? { errors: ['main.ts cannot compile'] } : compiles(ask)
@@ -275,7 +276,7 @@ Deno.test('draft files stay private through a refused deploy and rollback', asyn
   assert((await s.tool('app_versions')).includes('4 versions'))
 })
 
-Deno.test('concurrent first edits share one private draft', async () => {
+test('concurrent first edits share one private draft', async () => {
   using s = await scenario(compiles)
   await s.write({ 'index.html': '<h1>old</h1>', 'main.ts': 'let n = 1' })
   await s.tool('app_deploy')
@@ -296,7 +297,7 @@ Deno.test('concurrent first edits share one private draft', async () => {
   assert((await s.served('index.html')).body.includes('<h1>new</h1>'))
 })
 
-Deno.test('a released app stages changed files over its source', async () => {
+test('a released app stages changed files over its source', async () => {
   using s = await scenario(compiles)
   await s.write({
     'index.html': '<h1>old</h1>',
@@ -338,7 +339,7 @@ Deno.test('a released app stages changed files over its source', async () => {
   )
 })
 
-Deno.test('an edit crossing deployment is replayed into the next draft', async () => {
+test('an edit crossing deployment is replayed into the next draft', async () => {
   using s = await scenario(compiles)
   await s.write({ 'index.html': '<h1>old</h1>' })
   await s.tool('app_deploy')
@@ -372,7 +373,7 @@ Deno.test('an edit crossing deployment is replayed into the next draft', async (
   assert((await s.served('index.html')).body.includes('<h1>late</h1>'))
 })
 
-Deno.test('a page that no longer needs compiling serves as written', async () => {
+test('a page that no longer needs compiling serves as written', async () => {
   using s = await scenario(compiles)
   await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
   await s.tool('app_deploy')
@@ -381,7 +382,7 @@ Deno.test('a page that no longer needs compiling serves as written', async () =>
   assertEquals((await s.served('main.ts')).body, 'let n: number = 1')
 })
 
-Deno.test('an app with nothing to compile never calls the compiler', async () => {
+test('an app with nothing to compile never calls the compiler', async () => {
   using s = await scenario(compiles)
   await s.write({
     'index.html': '<script type="module" src="app.js"></script>',
@@ -398,7 +399,7 @@ Deno.test('an app with nothing to compile never calls the compiler', async () =>
   )
 })
 
-Deno.test('with no compiler bound, a deploy that needs one is refused in a sentence', async () => {
+test('with no compiler bound, a deploy that needs one is refused in a sentence', async () => {
   using s = await scenario(compiles, false)
   await s.write({ 'worker.ts': 'export default {}' })
   await assertRejects(

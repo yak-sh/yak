@@ -1,4 +1,5 @@
 // The inbox line names and opens the thing that asked for attention.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
@@ -12,7 +13,7 @@ import { Inbox } from './Inbox.tsx'
 let seedInbox = (eid: string) =>
   setInbox(eid, rows().filter((r) => r.comps.knock || r.comps.comment))
 
-Deno.test('a knock names and opens its target', () => {
+test('a knock names and opens its target', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -70,7 +71,7 @@ Deno.test('a knock names and opens its target', () => {
   }
 })
 
-Deno.test('reading an inbox item keeps the order', () => {
+test('reading an inbox item keeps the order', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -112,7 +113,7 @@ Deno.test('reading an inbox item keeps the order', () => {
   }
 })
 
-Deno.test('a limited inbox keeps the whole count and bounds its rows', () => {
+test('a limited inbox keeps the whole count and bounds its rows', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

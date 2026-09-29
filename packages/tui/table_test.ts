@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { Markdown } from '@yaks/markdown'
@@ -22,7 +23,7 @@ let cell = (text: string, align = 'left') => {
   return node
 }
 
-Deno.test('semantic tables align columns and distinguish header and subtle rules', () => {
+test('semantic tables align columns and distinguish header and subtle rules', () => {
   let node = el(
     'table',
     el('thead', el('tr', el('th', 'Name'), el('th', 'Count'))),
@@ -46,7 +47,7 @@ Deno.test('semantic tables align columns and distinguish header and subtle rules
   assert(lines[1].some((s) => s.text == 'Name' && s.style.bold))
 })
 
-Deno.test('cells wrap words and long tokens, preserve inline styles and explicit breaks', () => {
+test('cells wrap words and long tokens, preserve inline styles and explicit breaks', () => {
   let link = el('a', 'link')
   link.setAttribute('href', 'https://example.com')
   let node = el(
@@ -70,7 +71,7 @@ Deno.test('cells wrap words and long tokens, preserve inline styles and explicit
   assert(ansi(lines[0]).includes('\x1b['))
 })
 
-Deno.test('narrow tables stack labeled values, handle empty and irregular rows', () => {
+test('narrow tables stack labeled values, handle empty and irregular rows', () => {
   let node = el(
     'table',
     el('tr', el('th', 'A'), el('th', 'B')),
@@ -88,7 +89,7 @@ Deno.test('narrow tables stack labeled values, handle empty and irregular rows',
   ])
 })
 
-Deno.test('nested table respects quote and outer box width', () => {
+test('nested table respects quote and outer box width', () => {
   let node = el(
     'div',
     el(
@@ -105,7 +106,7 @@ Deno.test('nested table respects quote and outer box width', () => {
   assertEquals(top.indexOf('┐'), 24)
 })
 
-Deno.test('Markdown tables keep alignment, escaped pipes and streamed incomplete source', async () => {
+test('Markdown tables keep alignment, escaped pipes and streamed incomplete source', async () => {
   let source = '| Name | Count |\n| :--- | ---: |\n| a\\|b | 2 |'
   let ui = await mount(() => h(Markdown, { source }), 30, 10)
   try {
@@ -127,7 +128,7 @@ Deno.test('Markdown tables keep alignment, escaped pipes and streamed incomplete
   }
 })
 
-Deno.test('large table item stays cached across warm virtual paints', () => {
+test('large table item stays cached across warm virtual paints', () => {
   let measured = 0
   let data = Array.from({ length: 10000 }, (_, id) => ({ id: String(id) }))
   let node = el(
@@ -153,7 +154,7 @@ Deno.test('large table item stays cached across warm virtual paints', () => {
   assertEquals(measured, 1)
 })
 
-Deno.test('Markdown table inside a list reflows on resize without losing code pipes', async () => {
+test('Markdown table inside a list reflows on resize without losing code pipes', async () => {
   let ui = await mount(
     () =>
       h(Markdown, {
@@ -177,7 +178,7 @@ Deno.test('Markdown table inside a list reflows on resize without losing code pi
   }
 })
 
-Deno.test('full-width tables separate logical rows, not wrapped cell lines', () => {
+test('full-width tables separate logical rows, not wrapped cell lines', () => {
   let node = el(
     'table',
     el('tr', el('td', 'one', el('br'), 'two'), cell('right')),

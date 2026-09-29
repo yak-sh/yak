@@ -1,11 +1,12 @@
 // Human-facing instruments use graph ids; browser clients keep their short
 // handles.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, ent } from '../live.ts'
 import { byline, composerChanges, prompt, viaName } from './Comments.tsx'
 
-Deno.test('viaName names a session by its chip id, never its harness uuid', () => {
+test('viaName names a session by its chip id, never its harness uuid', () => {
   cache.value = {
     session: {
       entity: { eid: 'session', num: 31 },
@@ -22,7 +23,7 @@ Deno.test('viaName names a session by its chip id, never its harness uuid', () =
   cache.value = {}
 })
 
-Deno.test('graph-native prose is one ordered input entry', () => {
+test('graph-native prose is one ordered input entry', () => {
   assertEquals(composerChanges('session', 'keep going', true, 'input'), [
     { eid: 'input', name: 'entry', comp: { session: 'session' } },
     { eid: 'input', name: 'content', comp: { body: 'keep going' } },
@@ -48,7 +49,7 @@ Deno.test('graph-native prose is one ordered input entry', () => {
   )
 })
 
-Deno.test('byline reads actor and instrument from the created stamp', () => {
+test('byline reads actor and instrument from the created stamp', () => {
   cache.value = {
     actor: {
       entity: { eid: 'actor', num: 2 },
@@ -69,7 +70,7 @@ Deno.test('byline reads actor and instrument from the created stamp', () => {
   cache.value = {}
 })
 
-Deno.test('composer names an unnamed session by its chip id', () => {
+test('composer names an unnamed session by its chip id', () => {
   cache.value = {
     session: {
       entity: { eid: 'session', num: 31 },

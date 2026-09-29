@@ -2,6 +2,7 @@
 // entry may say, how one refusal names every problem in it, and what a call's
 // arguments do to a template. The kernel half — the same file through
 // app_deploy and a call at the MCP door — is in workers/yak/mcp_test.ts.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import {
   commands,
@@ -49,7 +50,7 @@ let club = {
 let parsed = (tools: Record<string, object>, words: string[] = runs) =>
   parseTools(doc(tools), words)
 
-Deno.test('a tool entry: a sentence, its arguments, and one act', () => {
+test('a tool entry: a sentence, its arguments, and one act', () => {
   let tools = parsed(club)
   assertEquals(Object.keys(tools), ['log_run', 'leaderboard'])
   assertEquals(tools.log_run.input, { who: TEXT, miles: NUMBER })
@@ -63,7 +64,7 @@ Deno.test('a tool entry: a sentence, its arguments, and one act', () => {
   assertEquals(parseTools('{}'), {})
 })
 
-Deno.test('a worker command takes its typed arguments to one local path', () => {
+test('a worker command takes its typed arguments to one local path', () => {
   let [tool] = Object.values(parsed({
     tick: {
       description: 'Advance a world',
@@ -85,7 +86,7 @@ Deno.test('a worker command takes its typed arguments to one local path', () => 
   )
 })
 
-Deno.test('declared command access and read-only behavior reach its doors', () => {
+test('declared command access and read-only behavior reach its doors', () => {
   let [tool] = Object.values(parsed({
     position: {
       description: 'Show a position',
@@ -100,7 +101,7 @@ Deno.test('declared command access and read-only behavior reach its doors', () =
   assertEquals(commands({ position: tool })[0].readOnly, true)
 })
 
-Deno.test('a manifest: one refusal names every problem', () => {
+test('a manifest: one refusal names every problem', () => {
   let why = (tools: unknown, words: string[] = []) =>
     assertThrows(
       () =>
@@ -179,14 +180,14 @@ Deno.test('a manifest: one refusal names every problem', () => {
   )
 })
 
-Deno.test('a tool asks for what it declared', () => {
+test('a tool asks for what it declared', () => {
   let tools = parsed(club)
   assertEquals(schemaOf(tools.log_run).properties.miles, NUMBER)
   assertEquals(schemaOf(tools.log_run).required, ['who', 'miles'])
   assertEquals(schemaOf(tools.leaderboard).properties.since, TEXT)
 })
 
-Deno.test('the call fills the template, typed by the input', () => {
+test('the call fills the template, typed by the input', () => {
   let tools = parsed(club)
   // A string that is nothing but a variable keeps the value's own type:
   // `miles` is a number column, and "5" would be text in it.
@@ -228,7 +229,7 @@ Deno.test('the call fills the template, typed by the input', () => {
   )
 })
 
-Deno.test('a variable nobody bound is the alias it looks like', () => {
+test('a variable nobody bound is the alias it looks like', () => {
   // `$run` is what the store mints the entity at, and the second bundle points
   // at the same one — the join `$alias` has always meant, now said in the one
   // language a bound variable is said in too.
@@ -271,7 +272,7 @@ Deno.test('a variable nobody bound is the alias it looks like', () => {
   })
 })
 
-Deno.test("$session is the transcript a model's turn runs in", () => {
+test("$session is the transcript a model's turn runs in", () => {
   let say = (model: boolean) => ({
     say: {
       description: 'Say something',
@@ -298,7 +299,7 @@ Deno.test("$session is the transcript a model's turn runs in", () => {
   )
 })
 
-Deno.test('a manifest written with the {{arg}} hole no longer deploys', () => {
+test('a manifest written with the {{arg}} hole no longer deploys', () => {
   // Refused in the sentence that says what to write instead.
   assertStringIncludes(
     assertThrows(() =>

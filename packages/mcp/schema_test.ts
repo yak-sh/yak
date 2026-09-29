@@ -8,6 +8,7 @@
 // schema as published. `graph_schema` answers a vocabulary document, and
 // publishes the meta-schema instead.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
 import { z } from 'zod'
@@ -35,7 +36,7 @@ let at = (o: unknown, ...keys: string[]): unknown =>
     o,
   )
 
-Deno.test('every tool publishes its answer, and its answers fit it', async () => {
+test('every tool publishes its answer, and its answers fit it', async () => {
   let client = await connect({
     graph: shopGraph(),
     search: () => [{ entity: { eid: 'b1' }, doc: { title: 'Spring' } }],
@@ -112,7 +113,7 @@ Deno.test('every tool publishes its answer, and its answers fit it', async () =>
   await client.close()
 })
 
-Deno.test('graph_apply takes the vocabulary, typed and described', async () => {
+test('graph_apply takes the vocabulary, typed and described', async () => {
   let schema = await writing()
   let book = at(schema, 'properties', 'change', 'items', 'properties', 'book')
   let props = at(book, 'anyOf', '0', 'properties')
@@ -134,7 +135,7 @@ Deno.test('graph_apply takes the vocabulary, typed and described', async () => {
 // A host whose door takes a property differently than the vocabulary declares
 // says so once, and the write schema is derived through it — yaks.app takes an
 // id for a reference (agent.ts `reading`).
-Deno.test('a host states its own reading of a property on the write door', async () => {
+test('a host states its own reading of a property on the write door', async () => {
   let client = await connect({
     prop: (prop, o) =>
       prop.category == 'ref' && !o.write
@@ -160,7 +161,7 @@ Deno.test('a host states its own reading of a property on the write door', async
   assertEquals(at(author, 'type'), ['string', 'null'])
 })
 
-Deno.test('the write door names its own words, and stays open to newer ones', async () => {
+test('the write door names its own words, and stays open to newer ones', async () => {
   let schema = await writing()
   let comp = (name: string) =>
     at(
@@ -184,7 +185,7 @@ Deno.test('the write door names its own words, and stays open to newer ones', as
   assertEquals(at(comp('book'), 'additionalProperties'), true)
 })
 
-Deno.test('a JSON Schema input declaration reaches the listing unchanged', async () => {
+test('a JSON Schema input declaration reaches the listing unchanged', async () => {
   let inputSchema = {
     type: 'object',
     required: ['shelf'],

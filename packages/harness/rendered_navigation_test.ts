@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -10,7 +11,7 @@ import type { UIAgent } from './panels.ts'
 const settle = async () => {
   for (let i = 0; i < 100; i++) await Promise.resolve()
 }
-Deno.test('NORMAL and VISUAL operate on rendered Markdown without replacing it; detail is explicit', async () => {
+test('NORMAL and VISUAL operate on rendered Markdown without replacing it; detail is explicit', async () => {
   const f = frontend(), copies: string[] = []
   const entries: Bundle[] = [{
     entity: { eid: 'e1' },
@@ -105,7 +106,7 @@ Deno.test('NORMAL and VISUAL operate on rendered Markdown without replacing it; 
   }
 })
 
-Deno.test('rendered Markdown tables, quotes, code and boxes keep layout while selecting', async () => {
+test('rendered Markdown tables, quotes, code and boxes keep layout while selecting', async () => {
   const { TElement, install } = await import('../tui/dom.ts')
   const { render } = await import('preact')
   const { lay } = await import('../tui/paint.ts')
@@ -147,7 +148,7 @@ Deno.test('rendered Markdown tables, quotes, code and boxes keep layout while se
   }
 })
 
-Deno.test('rendered cursor requests bounded neighboring windows and selects across overlap', async () => {
+test('rendered cursor requests bounded neighboring windows and selects across overlap', async () => {
   const f = frontend(), copies: string[] = [], requested: string[] = []
   const entries: Bundle[] = Array.from(
     { length: 140 },
@@ -229,7 +230,7 @@ Deno.test('rendered cursor requests bounded neighboring windows and selects acro
   }
 })
 
-Deno.test('INSERT Escape always selects the final rendered character, preserving the draft', async () => {
+test('INSERT Escape always selects the final rendered character, preserving the draft', async () => {
   const f = frontend()
   const entries: Bundle[] = [
     { entity: { eid: 'old' }, content: { body: 'older' } },

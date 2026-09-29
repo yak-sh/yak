@@ -1,5 +1,6 @@
 // A scheduled companion keeps its state across workers, credits one shared
 // harvest, and the same rows answer another player's view.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { companionTick, type Snapshot } from './companion-tick.ts'
 import { comp } from './bundle.ts'
@@ -15,7 +16,7 @@ let row = (eid: string, by: string, part: Record<string, unknown>): Bundle => ({
   ...part,
 })
 
-Deno.test('a scheduled objective resumes, retries once, and credits its hero', async () => {
+test('a scheduled objective resumes, retries once, and credits its hero', async () => {
   let tree: Prop = { kind: 'oak', x: 5, z: 5, seed: 1, natural: true }
   let hero = row('hero', 'owner', {
     player: {},

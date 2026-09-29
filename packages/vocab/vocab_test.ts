@@ -2,6 +2,7 @@
 // kinds, deaths, and instance checks — every answer over the loaded instance,
 // no global vocabulary anywhere.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   Ambiguous,
@@ -17,14 +18,14 @@ import slice from './fleet/slice.schema.json' with { type: 'json' }
 
 let v = loadVocab(slice)
 
-Deno.test('comps are alphabetical and the spine stays unwritable', () => {
+test('comps are alphabetical and the spine stays unwritable', () => {
   assertEquals(v.comps, [...v.comps].sort())
   assert(v.all.includes('entity'))
   assert(!v.comps.includes('entity')) // wire: false
   assertEquals(v.comp('entity')?.stamped, ['num'])
 })
 
-Deno.test('properties interrogate to their whole shape', () => {
+test('properties interrogate to their whole shape', () => {
   assertEquals(v.prop('task', 'priority'), {
     comp: 'task',
     prop: 'priority',
@@ -69,7 +70,7 @@ Deno.test('properties interrogate to their whole shape', () => {
   assertEquals(v.prop('role', 'state')!.values![0], 'running')
 })
 
-Deno.test('stamped properties are readable, never writable', () => {
+test('stamped properties are readable, never writable', () => {
   let claim = v.comp('claim')!
   assertEquals(claim.writable, ['session'])
   assertEquals(claim.stamped, ['at'])
@@ -77,7 +78,7 @@ Deno.test('stamped properties are readable, never writable', () => {
   assert(v.prop('claim', 'at')!.stamped)
 })
 
-Deno.test('bare props route to their home', () => {
+test('bare props route to their home', () => {
   assertEquals(v.route('title'), { comp: 'doc', prop: 'title' })
   assertEquals(v.route('query'), { comp: 'board', prop: 'query' })
   assertEquals(v.route('color'), { comp: 'project', prop: 'color' })
@@ -88,7 +89,7 @@ Deno.test('bare props route to their home', () => {
   assertThrows(() => v.route('nonsense'), Error, 'unknown prop')
 })
 
-Deno.test('a `_` component’s properties are reached qualified only', () => {
+test('a `_` component’s properties are reached qualified only', () => {
   let v = loadVocab({
     $defs: {
       _comp: {
@@ -105,7 +106,7 @@ Deno.test('a `_` component’s properties are reached qualified only', () => {
   assertEquals(v.aim('_comp.kind'), [{ comp: '_comp', prop: 'kind' }])
 })
 
-Deno.test('dotted paths aim to hops', () => {
+test('dotted paths aim to hops', () => {
   assertEquals(v.aim('comment.target.doc.title'), [
     { comp: 'comment', prop: 'target' },
     { comp: 'doc', prop: 'title' },
@@ -123,7 +124,7 @@ Deno.test('dotted paths aim to hops', () => {
   )
 })
 
-Deno.test('a write naming an undeclared property is told the declared types', () => {
+test('a write naming an undeclared property is told the declared types', () => {
   let v = loadVocab([{
     $defs: {
       meal: {
@@ -146,7 +147,7 @@ Deno.test('a write naming an undeclared property is told the declared types', ()
   ])
 })
 
-Deno.test('a bare bang aims at the component a property shadows', () => {
+test('a bare bang aims at the component a property shadows', () => {
   // `project` is both a component and task's reference property. Every form but
   // the bare bang keeps the property — `.project=P-3` must not change meaning.
   assertEquals(v.aim('project'), [{ comp: 'task', prop: 'project' }])
@@ -158,7 +159,7 @@ Deno.test('a bare bang aims at the component a property shadows', () => {
   assertEquals(v.aim('title', true), [{ comp: 'doc', prop: 'title' }])
 })
 
-Deno.test('presence can name an undeclared component, comparisons cannot', () => {
+test('presence can name an undeclared component, comparisons cannot', () => {
   assertEquals(v.aim('invoice', true), [{ comp: 'invoice', prop: '' }])
   assertEquals(v.aim('entity', true), [{ comp: 'entity', prop: '' }])
   assertEquals(v.aim('eid', true), [{ comp: 'entity', prop: 'eid' }])
@@ -166,7 +167,7 @@ Deno.test('presence can name an undeclared component, comparisons cannot', () =>
   assertThrows(() => v.aim('invoice.total', true), Error, 'unknown prop')
 })
 
-Deno.test('the spine routes its own identity, declared or not', () => {
+test('the spine routes its own identity, declared or not', () => {
   // no document declares `entity.eid`; the loader routes it because every
   // entity has one — so `.eid=` and `.entity.eid=` name entities
   assertEquals(v.route('eid'), { comp: 'entity', prop: 'eid' })
@@ -177,7 +178,7 @@ Deno.test('the spine routes its own identity, declared or not', () => {
   assertEquals(v.prop('entity', 'eid'), undefined)
 })
 
-Deno.test('reverse associations derive from the reference properties', () => {
+test('reverse associations derive from the reference properties', () => {
   // one reference property: the component's plural names it
   assertEquals(v.assoc('comments'), { comp: 'comment', prop: 'target' })
   // several reference properties: the property disambiguates the plural
@@ -187,7 +188,7 @@ Deno.test('reverse associations derive from the reference properties', () => {
   assertEquals(v.assoc('task'), undefined)
 })
 
-Deno.test('an association names the property when a comp has several refs', () => {
+test('an association names the property when a comp has several refs', () => {
   let w = loadVocab({
     $defs: {
       book: {
@@ -224,7 +225,7 @@ Deno.test('an association names the property when a comp has several refs', () =
   assertEquals(w.assoc('loans'), undefined)
 })
 
-Deno.test('kindOf takes the most specific kind, entity as the floor', () => {
+test('kindOf takes the most specific kind, entity as the floor', () => {
   assertEquals(v.kindOf({ task: 1, doc: 1 }), 'task')
   assertEquals(v.kindOf({ doc: 1, alias: 1 }), 'doc')
   assertEquals(v.kindOf({ blob: 1 }), 'entity') // blob is not a kind
@@ -237,7 +238,7 @@ Deno.test('kindOf takes the most specific kind, entity as the floor', () => {
   assert(at('doc') < at('alias'))
 })
 
-Deno.test('death worklists derive from the declarations', () => {
+test('death worklists derive from the declarations', () => {
   let cascade = v.deaths('cascade')
   assert(cascade.some(([c, p]) => c == 'comment' && p == 'target'))
   let keep = v.deaths('keep')
@@ -248,7 +249,7 @@ Deno.test('death worklists derive from the declarations', () => {
   assert(v.refProps().some(([c, p]) => c == 'role' && p == 'observed'))
 })
 
-Deno.test('a registered extension keyword is carried, not interpreted', () => {
+test('a registered extension keyword is carried, not interpreted', () => {
   let words = {
     uri: 'https://example.com/vocab/shelf',
     comp: ['prefix', 'by_name'],
@@ -265,7 +266,7 @@ Deno.test('a registered extension keyword is carried, not interpreted', () => {
   assertEquals(v.prop('task', 'priority')?.keywords, {})
 })
 
-Deno.test('the meta-schema composes with an extension vocabulary', () => {
+test('the meta-schema composes with an extension vocabulary', () => {
   let words = {
     uri: 'https://example.com/vocab/shelf',
     comp: ['shelf'],
@@ -284,7 +285,7 @@ Deno.test('the meta-schema composes with an extension vocabulary', () => {
   assert(!('shelf' in core.component.properties))
 })
 
-Deno.test('instances check against the loaded shape', () => {
+test('instances check against the loaded shape', () => {
   assertEquals(v.check('task', { priority: 1, domain: 'Eng' }), [])
   assertEquals(v.check('task', { priority: 'high' }), [
     'task.priority is a number',
@@ -298,7 +299,7 @@ Deno.test('instances check against the loaded shape', () => {
   assert(v.check('task', { domain: { nested: 1 } })[0].includes('scalar'))
 })
 
-Deno.test('JSON properties store validated JSON text', () => {
+test('JSON properties store validated JSON text', () => {
   let w = loadVocab({
     $defs: {
       config: {
@@ -321,7 +322,7 @@ Deno.test('JSON properties store validated JSON text', () => {
   }
 })
 
-Deno.test('object, array and union properties hold a JSON value', () => {
+test('object, array and union properties hold a JSON value', () => {
   let w = loadVocab({
     $defs: {
       recipe: {
@@ -350,7 +351,7 @@ Deno.test('object, array and union properties hold a JSON value', () => {
   ])
 })
 
-Deno.test('a property with no type is refused, never read as text', () => {
+test('a property with no type is refused, never read as text', () => {
   let load = (s: PropSchema) =>
     loadVocab({ $defs: { x: { component: true, properties: { c: s } } } })
   for (let s of [{}, { enum: ['a'] }, { format: 'date-time' }]) {
@@ -358,7 +359,7 @@ Deno.test('a property with no type is refused, never read as text', () => {
   }
 })
 
-Deno.test('a string property casts what it is sent to a string', () => {
+test('a string property casts what it is sent to a string', () => {
   let w = loadVocab({
     $defs: {
       note: {
@@ -395,7 +396,7 @@ Deno.test('a string property casts what it is sent to a string', () => {
   assertEquals(cast(w, 'note', { text: null }), { text: null })
 })
 
-Deno.test('number and priority properties refuse non-finite values', () => {
+test('number and priority properties refuse non-finite values', () => {
   for (let format of [undefined, 'priority']) {
     let w = loadVocab({
       $defs: {
@@ -414,7 +415,7 @@ Deno.test('number and priority properties refuse non-finite values', () => {
   }
 })
 
-Deno.test('a computed property reads but never writes', () => {
+test('a computed property reads but never writes', () => {
   let w = loadVocab({
     $defs: {
       task: {
@@ -434,7 +435,7 @@ Deno.test('a computed property reads but never writes', () => {
   assert(w.check('task', { status: 'open' }).length == 1)
 })
 
-Deno.test('an ambiguous word names its choices for whoever can decide', () => {
+test('an ambiguous word names its choices for whoever can decide', () => {
   let w = loadVocab({
     $defs: {
       task: { component: true, properties: { status: { type: 'string' } } },
@@ -447,7 +448,7 @@ Deno.test('an ambiguous word names its choices for whoever can decide', () => {
   assertEquals((e as Ambiguous).name, 'Ambiguous')
 })
 
-Deno.test('the order refuses cycles', () => {
+test('the order refuses cycles', () => {
   assertThrows(
     () => kindOrder(['a', 'b'], (k) => (k == 'a' ? ['b'] : ['a'])),
     Error,
@@ -455,7 +456,7 @@ Deno.test('the order refuses cycles', () => {
   )
 })
 
-Deno.test('a `before` naming an absent kind is no constraint', () => {
+test('a `before` naming an absent kind is no constraint', () => {
   // a document composes in any subset: an unloaded target just drops out
   assertEquals(kindOrder(['a'], () => ['ghost']), ['a'])
   assertEquals(kindOrder(['b', 'a'], (k) => (k == 'b' ? ['ghost'] : [])), [
@@ -469,14 +470,14 @@ Deno.test('a `before` naming an absent kind is no constraint', () => {
   ])
 })
 
-Deno.test('the fleet order is unchanged: memory and project precede doc', () => {
+test('the fleet order is unchanged: memory and project precede doc', () => {
   // the `before: doc` constraints still bind when doc loads alongside them
   let at = (k: string) => v.kinds.indexOf(k)
   assert(at('memory') < at('doc'))
   assert(at('project') < at('doc'))
 })
 
-Deno.test('a mark names an entity only where no other kind does', () => {
+test('a mark names an entity only where no other kind does', () => {
   let kind = (before: string[] = [], properties = {}) => ({
     component: true,
     type: 'object' as const,
@@ -498,7 +499,7 @@ Deno.test('a mark names an entity only where no other kind does', () => {
   assertEquals(w.kindOf({ doc: 1, memory: 1, task: 1 }), 'task')
 })
 
-Deno.test('indexes merge the property flag with the composite lists', () => {
+test('indexes merge the property flag with the composite lists', () => {
   let w = loadVocab({
     $defs: {
       space: {
@@ -537,7 +538,7 @@ Deno.test('indexes merge the property flag with the composite lists', () => {
   assertEquals(w.indexes('nobody'), [])
 })
 
-Deno.test('one pair declared twice is one index, unique if either said so', () => {
+test('one pair declared twice is one index, unique if either said so', () => {
   let w = loadVocab({
     $defs: {
       shelf: {
@@ -552,7 +553,7 @@ Deno.test('one pair declared twice is one index, unique if either said so', () =
   assertEquals(w.indexes('shelf'), [{ props: ['aisle'], unique: true }])
 })
 
-Deno.test('a word has one home across documents', () => {
+test('a word has one home across documents', () => {
   assertThrows(
     () =>
       loadVocab([slice, {
@@ -587,7 +588,7 @@ let adds = (
   $defs: { entity: { component: true, extends: true, properties, ...more } },
 })
 
-Deno.test('an extension adds its properties to the component another document declares', () => {
+test('an extension adds its properties to the component another document declares', () => {
   let v = loadVocab([spine, adds({ num: { type: 'number', stamped: true } })])
   assertEquals(v.props('entity'), ['archetype', 'num'])
   assertEquals(v.comp('entity')!.wire, false)
@@ -599,7 +600,7 @@ Deno.test('an extension adds its properties to the component another document de
   )
 })
 
-Deno.test('an extension of a component nobody declares is refused', () => {
+test('an extension of a component nobody declares is refused', () => {
   assertThrows(
     () => loadVocab([adds({ num: { type: 'number' } })]),
     Error,
@@ -607,7 +608,7 @@ Deno.test('an extension of a component nobody declares is refused', () => {
   )
 })
 
-Deno.test('an extension may not redeclare a property or restate the component', () => {
+test('an extension may not redeclare a property or restate the component', () => {
   assertThrows(
     () => loadVocab([spine, adds({ archetype: { type: 'string' } })]),
     Error,
@@ -620,7 +621,7 @@ Deno.test('an extension may not redeclare a property or restate the component', 
   )
 })
 
-Deno.test('every stored reference is indexed without an opt-in', () => {
+test('every stored reference is indexed without an opt-in', () => {
   let ref = { type: 'string', ref: 'entity', death: 'keep' }
   let w = loadVocab({
     $defs: {
@@ -649,7 +650,7 @@ Deno.test('every stored reference is indexed without an opt-in', () => {
   ])
 })
 
-Deno.test('only the leading reference is covered by a composite index', () => {
+test('only the leading reference is covered by a composite index', () => {
   for (
     let declaration of [
       { index: [['from', 'to']] },
@@ -675,7 +676,7 @@ Deno.test('only the leading reference is covered by a composite index', () => {
   }
 })
 
-Deno.test('native constraints interrogate: integer, required, default', () => {
+test('native constraints interrogate: integer, required, default', () => {
   let w = loadVocab({
     $defs: {
       created: {
@@ -716,7 +717,7 @@ Deno.test('native constraints interrogate: integer, required, default', () => {
   assertEquals(w.prop('repo', 'seq')!.default, undefined)
 })
 
-Deno.test('a composite entry may be partial: the properties a row must hold', () => {
+test('a composite entry may be partial: the properties a row must hold', () => {
   let w = loadVocab({
     $defs: {
       output: {
@@ -737,7 +738,7 @@ Deno.test('a composite entry may be partial: the properties a row must hold', ()
   ])
 })
 
-Deno.test('a property says for itself whether its words are searched', () => {
+test('a property says for itself whether its words are searched', () => {
   let w = loadVocab({
     $defs: {
       recipe: {
@@ -754,7 +755,7 @@ Deno.test('a property says for itself whether its words are searched', () => {
   assertEquals(w.prop('recipe', 'origin')!.search, false)
 })
 
-Deno.test('a component names the text its entities are found by, from another package', () => {
+test('a component names the text its entities are found by, from another package', () => {
   let talk = (search: unknown, more: Record<string, PropSchema> = {}) =>
     loadVocab([
       {
@@ -801,7 +802,7 @@ Deno.test('a component names the text its entities are found by, from another pa
   )
 })
 
-Deno.test('a component says which package declared it, or its document does', () => {
+test('a component says which package declared it, or its document does', () => {
   let one = (comp: PropSchema, doc: Partial<VocabDoc> = {}) =>
     loadVocab({ ...doc, $defs: { book: comp } }).comp('book')?.package
   let book: PropSchema = { component: true, type: 'object' }

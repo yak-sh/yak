@@ -9,6 +9,7 @@
 // an application drives it: text in through `apply()`, words out through a
 // search.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { fields, find, schema } from '@yaks/fts'
 import { by, insert, scan } from '@yaks/sql'
@@ -23,7 +24,7 @@ let shelf = () => {
   return f
 }
 
-Deno.test('a body in the store is found by a word only the body says', () => {
+test('a body in the store is found by a word only the body says', () => {
   let { g, driver } = shelf()
   g.apply([{
     entity: { eid: 'p1' },
@@ -38,7 +39,7 @@ Deno.test('a body in the store is found by a word only the body says', () => {
   assert(find(driver, text, 'drizzle')[0].snippet.includes('drizzle'))
 })
 
-Deno.test('a body written in the same batch as the row is indexed with it', () => {
+test('a body written in the same batch as the row is indexed with it', () => {
   // The bytes go in on `precondition`, before the row that names them, so the
   // trigger resolving the address in the same transaction finds them there.
   let { g, driver } = shelf()
@@ -50,7 +51,7 @@ Deno.test('a body written in the same batch as the row is indexed with it', () =
   assertEquals(find(driver, text, 'riders').map((h) => h.entity), ['b'])
 })
 
-Deno.test('a rewritten body swaps its words, and a dead one takes them away', () => {
+test('a rewritten body swaps its words, and a dead one takes them away', () => {
   let { g, driver } = shelf()
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'a cook writes it down' } }])
   assertEquals(find(driver, text, 'cook').length, 1)
@@ -63,7 +64,7 @@ Deno.test('a rewritten body swaps its words, and a dead one takes them away', ()
   assertEquals(find(driver, text, 'baker'), [])
 })
 
-Deno.test('the words are indexed on every write path, not just the plugin', () => {
+test('the words are indexed on every write path, not just the plugin', () => {
   // A row written straight into the table — a restore, a repair, a migration —
   // goes through the same triggers, so the index holds prose for it too.
   let { driver } = shelf()

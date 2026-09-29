@@ -3,6 +3,7 @@
 // same rules registered as effects, which is how a call nobody is waiting on
 // (one another process wrote, one that was scheduled) gets run.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   argsOf,
@@ -94,7 +95,7 @@ let called = (
 
 let body = (b: Bundle | undefined) => String((b?.content as Comp)?.body ?? '')
 
-Deno.test('a call is the transcript: the ask, the answer, the result beside it', async () => {
+test('a call is the transcript: the ask, the answer, the result beside it', async () => {
   let { g, r } = world()
   await r.ensure()
   let answer = await r.call(called('example_echo', { value: 'hi' }))
@@ -108,7 +109,7 @@ Deno.test('a call is the transcript: the ask, the answer, the result beside it',
   assertEquals(again.find((b) => b.result)!.entity.eid, result.entity.eid)
 })
 
-Deno.test('a direct tool reply carries what its caller is owed beside its data', async () => {
+test('a direct tool reply carries what its caller is owed beside its data', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
   let data: Tool = {
@@ -137,7 +138,7 @@ Deno.test('a direct tool reply carries what its caller is owed beside its data',
   assertEquals(replies, 1)
 })
 
-Deno.test('a rehearsal keeps its answer in the call graph', async () => {
+test('a rehearsal keeps its answer in the call graph', async () => {
   let { g } = world()
   let host = {
     ...g,
@@ -167,7 +168,7 @@ Deno.test('a rehearsal keeps its answer in the call graph', async () => {
   assertEquals((await g.read('.output&*')).length, 0)
 })
 
-Deno.test('a reply is told what the call wrote: the write, never a read or a rehearsal', async () => {
+test('a reply is told what the call wrote: the write, never a read or a rehearsal', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
   let make: Tool = {
@@ -195,7 +196,7 @@ Deno.test('a reply is told what the call wrote: the write, never a read or a reh
   assertEquals(told, [['created'], [], []])
 })
 
-Deno.test('a refused tool still carries what its caller is owed', async () => {
+test('a refused tool still carries what its caller is owed', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
   let refused: Tool = {
@@ -218,7 +219,7 @@ Deno.test('a refused tool still carries what its caller is owed', async () => {
   assertEquals(worded(answerOf(landed)).includes('new mail'), true)
 })
 
-Deno.test('a runner writes only the tool rows the graph lacks or holds otherwise', async () => {
+test('a runner writes only the tool rows the graph lacks or holds otherwise', async () => {
   let { g, r } = world()
   assertEquals((await r.ensure()).length, 1)
   assertEquals(await runner(g, { tools: [echo] }).ensure(), [])
@@ -227,7 +228,7 @@ Deno.test('a runner writes only the tool rows the graph lacks or holds otherwise
   assertEquals((row.tool as Comp).description, 'Echo a value back')
 })
 
-Deno.test('a runner told which tool a call points at writes that row alone', async () => {
+test('a runner told which tool a call points at writes that row alone', async () => {
   let { g } = world()
   let shout = { ...echo, verb: 'shout', description: 'Echo it loudly' }
   let r = runner(g, { tools: [echo, shout] })
@@ -245,7 +246,7 @@ Deno.test('a runner told which tool a call points at writes that row alone', asy
   ])
 })
 
-Deno.test('a claim is a claim: a second run of a call in flight is the same run', async () => {
+test('a claim is a claim: a second run of a call in flight is the same run', async () => {
   let { g, r } = world()
   await r.ensure()
   let answer = await r.call(called('example_echo', { value: 'one' }))
@@ -256,7 +257,7 @@ Deno.test('a claim is a claim: a second run of a call in flight is the same run'
   assertEquals(answer.filter((b) => b.result).length, 1)
 })
 
-Deno.test('a claim with no answer is unfinished, and the boot pass re-drives it', async () => {
+test('a claim with no answer is unfinished, and the boot pass re-drives it', async () => {
   let { g, r } = world()
   await r.ensure()
   let [call] = await g.apply([{
@@ -271,7 +272,7 @@ Deno.test('a claim with no answer is unfinished, and the boot pass re-drives it'
   )
 })
 
-Deno.test('interrupting an unstarted call answers it once without running the tool', async () => {
+test('interrupting an unstarted call answers it once without running the tool', async () => {
   let runs = 0
   let { g, r } = world([{
     ...echo,
@@ -297,7 +298,7 @@ Deno.test('interrupting an unstarted call answers it once without running the to
   assertEquals(runs, 0)
 })
 
-Deno.test('a call a live process holds is left alone, redrive and all', async () => {
+test('a call a live process holds is left alone, redrive and all', async () => {
   // What an imported transcript looks like: every call in it was made by the
   // process that recorded it, and it says so. This process's own claim, not
   // running in this runner, is running in another of its threads.
@@ -318,7 +319,7 @@ Deno.test('a call a live process holds is left alone, redrive and all', async ()
   assertEquals((await g.read('.result&*')).length, 0)
 })
 
-Deno.test('a call is held from the moment it is written, by whoever asked it', async () => {
+test('a call is held from the moment it is written, by whoever asked it', async () => {
   // Another thread of this process, and another process: runners over graphs
   // of their own on the same store, sharing nothing in memory, and each
   // finding the call the moment it commits. The tool reads, so its answer is
@@ -347,7 +348,7 @@ Deno.test('a call is held from the moment it is written, by whoever asked it', a
   assertEquals(ran, 1)
 })
 
-Deno.test('a claim whose holder has exited is free, and runs once', async () => {
+test('a claim whose holder has exited is free, and runs once', async () => {
   // What a crash leaves now that a process is an entity: the holder is still
   // named, and it wears the ending it wrote on the way out.
   let { g, r } = world([echo], 'host1')
@@ -382,7 +383,7 @@ Deno.test('a claim whose holder has exited is free, and runs once', async () => 
   })
 })
 
-Deno.test('an interrupted call is answered as interrupted, and no sweep runs it again', async () => {
+test('an interrupted call is answered as interrupted, and no sweep runs it again', async () => {
   let hang = Promise.withResolvers<Bundle[]>()
   let stuck: Tool = { ...echo, verb: 'wait', run: () => hang.promise }
   let { g, r } = world([echo, stuck], 'host1')
@@ -400,7 +401,7 @@ Deno.test('an interrupted call is answered as interrupted, and no sweep runs it 
   await assertRejects(() => asked)
 })
 
-Deno.test('a holder that died is interrupted for, from what the graph says it held', async () => {
+test('a holder that died is interrupted for, from what the graph says it held', async () => {
   let { g, r } = world([echo], 'host1')
   await r.ensure()
   await g.apply([{
@@ -416,7 +417,7 @@ Deno.test('a holder that died is interrupted for, from what the graph says it he
   })
 })
 
-Deno.test('a throw is an error entity, a result, and a failed execution', async () => {
+test('a throw is an error entity, a result, and a failed execution', async () => {
   let { g, r } = world([{
     ...echo,
     run: () => {
@@ -435,7 +436,7 @@ Deno.test('a throw is an error entity, a result, and a failed execution', async 
   assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
 })
 
-Deno.test('a defect is reported with its tool; a refusal is not', async () => {
+test('a defect is reported with its tool; a refusal is not', async () => {
   let said: [unknown, string | undefined][] = []
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
@@ -465,7 +466,7 @@ Deno.test('a defect is reported with its tool; a refusal is not', async () => {
   assertEquals(said, [[broke, 'example_broke']])
 })
 
-Deno.test('a batch the graph refuses is the call failing, not a call left claimed', async () => {
+test('a batch the graph refuses is the call failing, not a call left claimed', async () => {
   let { g, r } = world([{
     ...echo,
     run: () => [{ entity: { eid: '$nope' }, person: { nosuch: 1 } }],
@@ -477,7 +478,7 @@ Deno.test('a batch the graph refuses is the call failing, not a call left claime
   assertEquals((await g.read('.result&*')).length, 1)
 })
 
-Deno.test('a tool that ANSWERS a fault has not failed', async () => {
+test('a tool that ANSWERS a fault has not failed', async () => {
   let { g, r } = world([{
     ...echo,
     readOnly: true,
@@ -494,7 +495,7 @@ Deno.test('a tool that ANSWERS a fault has not failed', async () => {
   assertEquals(faulted(landed), false)
 })
 
-Deno.test('a reading tool answers entities and writes none of them', async () => {
+test('a reading tool answers entities and writes none of them', async () => {
   let { g, r } = world([{
     ...echo,
     readOnly: true,
@@ -510,7 +511,7 @@ Deno.test('a reading tool answers entities and writes none of them', async () =>
   assertEquals((await g.read('.person&*'))[0], before)
 })
 
-Deno.test('an answer too long to send whole is refused, not crashed on', async () => {
+test('an answer too long to send whole is refused, not crashed on', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
   let many: Tool = {
@@ -533,7 +534,7 @@ Deno.test('an answer too long to send whole is refused, not crashed on', async (
   assertEquals((await g.read('.execution&*'))[0].execution, { state: 'failed' })
 })
 
-Deno.test('an answer is worded whole within its budget, and counted past it', () => {
+test('an answer is worded whole within its budget, and counted past it', () => {
   let answer: Bundle[] = [
     { entity: { eid: 'a' }, doc: { title: 'one\ntwo' } },
     { entity: { eid: 'b' } },
@@ -551,7 +552,7 @@ Deno.test('an answer is worded whole within its budget, and counted past it', ()
   )
 })
 
-Deno.test('a search answer says its marked hit as text', () => {
+test('a search answer says its marked hit as text', () => {
   let found: Bundle[] = [{
     entity: { eid: 'book-1' },
     hit: {
@@ -567,7 +568,7 @@ Deno.test('a search answer says its marked hit as text', () => {
   )
 })
 
-Deno.test('a refused argument is an error code, not an exception', async () => {
+test('a refused argument is an error code, not an exception', async () => {
   let { r } = world()
   await r.ensure()
   let answer = await r.call(called('example_echo'))
@@ -611,7 +612,7 @@ let named = (tools: Tool[]) => {
   return { g, r: runner(g, { tools, report: () => {} }) }
 }
 
-Deno.test('a reference arrives as the eid it names, of the kind it declares', async () => {
+test('a reference arrives as the eid it names, of the kind it declares', async () => {
   let { g, r } = named([mark()])
   await r.ensure()
   await g.apply([{ entity: { eid: 'p1' }, person: {} }])
@@ -619,7 +620,7 @@ Deno.test('a reference arrives as the eid it names, of the kind it declares', as
   assertEquals(body(answer.find((b) => b.output)), 'p1')
 })
 
-Deno.test('a write naming nothing of its kind is refused, and mints nothing', async () => {
+test('a write naming nothing of its kind is refused, and mints nothing', async () => {
   let { g, r } = named([mark()])
   await r.ensure()
   await g.apply([{ entity: { eid: 'c1' }, content: { body: 'not a person' } }])
@@ -634,14 +635,14 @@ Deno.test('a write naming nothing of its kind is refused, and mints nothing', as
   assertEquals(await g.get(['ghost']), [])
 })
 
-Deno.test('a read is answered about whatever its reference names', async () => {
+test('a read is answered about whatever its reference names', async () => {
   let { r } = named([mark(true)])
   await r.ensure()
   let answer = await r.call(called('person_mark', { who: 'ghost' }))
   assertEquals(body(answer.find((b) => b.output)), 'ghost')
 })
 
-Deno.test("a tool writes in the CALLER's name, never the runner's", async () => {
+test("a tool writes in the CALLER's name, never the runner's", async () => {
   let { g, r } = world()
   await r.ensure()
   await g.apply([{ entity: { eid: 'p1' }, person: {} }])
@@ -650,7 +651,7 @@ Deno.test("a tool writes in the CALLER's name, never the runner's", async () => 
   assertEquals((said.created as Comp).by, 'p1')
 })
 
-Deno.test('two runners over one graph are one claimant and one answer', async () => {
+test('two runners over one graph are one claimant and one answer', async () => {
   let { g, r, fx } = watched()
   await r.ensure()
   // A door's runner beside a daemon's. The effect runs the call the moment it
@@ -663,7 +664,7 @@ Deno.test('two runners over one graph are one claimant and one answer', async ()
   assertEquals((await g.read('.result&*')).length, 1)
 })
 
-Deno.test('a call somebody else wrote is run because an effect matched it', async () => {
+test('a call somebody else wrote is run because an effect matched it', async () => {
   let { g, r } = watched()
   await r.ensure()
   // Nobody awaits this: it is a plain write, by a plain writer.
@@ -675,7 +676,7 @@ Deno.test('a call somebody else wrote is run because an effect matched it', asyn
   assertEquals((await g.read('.execution&*'))[0].execution, { state: 'done' })
 })
 
-Deno.test('a call its caller runs owes the pool nothing; one nobody runs does', async () => {
+test('a call its caller runs owes the pool nothing; one nobody runs does', async () => {
   let vocab = words()
   let fx = effects(vocab, { report: () => {} })
   let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
@@ -693,7 +694,7 @@ Deno.test('a call its caller runs owes the pool nothing; one nobody runs does', 
   assertEquals(owed, ['c9'])
 })
 
-Deno.test('a call for a tool this runner has no word for is left alone', async () => {
+test('a call for a tool this runner has no word for is left alone', async () => {
   let { g, r } = watched()
   await r.ensure()
   await g.apply([{
@@ -705,7 +706,7 @@ Deno.test('a call for a tool this runner has no word for is left alone', async (
   assertEquals((await g.read('.execution&*')).length, 0)
 })
 
-Deno.test('a call this runner does not take is left alone', async () => {
+test('a call this runner does not take is left alone', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
   let r = runner(g, {
@@ -740,7 +741,7 @@ let clock = {
   },
 }
 
-Deno.test('a call waiting on a wake that has not fired is not this tick', async () => {
+test('a call waiting on a wake that has not fired is not this tick', async () => {
   let { g, r } = watched([echo], clock)
   await r.ensure()
   // Written, and sleeping: the ready rule says `!wake` and this one wears it.
@@ -759,7 +760,7 @@ Deno.test('a call waiting on a wake that has not fired is not this tick', async 
   assertEquals(body((await g.read('.result&*'))[0]), 'soon 2')
 })
 
-Deno.test('a recurring call is a standing ask: one invocation per firing', async () => {
+test('a recurring call is a standing ask: one invocation per firing', async () => {
   let { g, r } = watched([echo], clock)
   await r.ensure()
   // The schedule: a call that wears a recurrence. It is never answered

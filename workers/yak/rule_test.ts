@@ -17,7 +17,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { client, connector, kernel, seed, txt, when } from './probe.ts'
 
 // An app vocabulary with a rule in it. `vocabFile` in probe.ts only writes
@@ -36,7 +36,7 @@ let withRule = JSON.stringify({
   },
 })
 
-Deno.test(
+test(
   'an app rule fires on its own alarm inside the deployed Worker',
   async () => {
     let k = await kernel()

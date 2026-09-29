@@ -1,4 +1,5 @@
 // Creature designs enter through the app store and shape the world on a page.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -18,7 +19,7 @@ import { seedBuildings } from './buildings_fixture.ts'
 seedThemes()
 seedBuildings()
 
-Deno.test('a creature design added to the store inhabits its chosen land', async () => {
+test('a creature design added to the store inhabits its chosen land', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply(rows)

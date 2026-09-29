@@ -1,5 +1,6 @@
 // A board's list is a window the reader grows by scrolling: the next page
 // lands below the rows already shown, and those rows stay while it loads.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { act } from 'preact/test-utils'
@@ -29,7 +30,7 @@ let read = reader(Array.from({ length: 12 }, (_, i) => task(i + 1)))
 let titles = (root: Element) =>
   [...root.querySelectorAll('.Tile_Title')].map((n) => n.textContent)
 
-Deno.test('a list grows by appending, and keeps its rows while it loads', async () => {
+test('a list grows by appending, and keeps its rows while it loads', async () => {
   let prior = config.host
   config.host = 'browser.test'
   cache.value = {}

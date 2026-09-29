@@ -1,6 +1,7 @@
 // The harness signs in to OpenAI as a graph connection and reads its bearer
 // through the vault; an API key still selects the public API explicitly.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { identityEid, Refused } from '@yaks/graph'
 import { compose } from '@yaks/cli/host'
@@ -16,7 +17,7 @@ let token = (account: string) =>
     'https://api.openai.com/auth': { chatgpt_account_id: account },
   })).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') + '.sig'
 
-Deno.test('OpenAI authorization starts before a session or model exists', async () => {
+test('OpenAI authorization starts before a session or model exists', async () => {
   let host = await compose(at(), ['graph'])
   let h = hosted(host, () => host.close())
   let auth = authorize(h)
@@ -61,7 +62,7 @@ Deno.test('OpenAI authorization starts before a session or model exists', async 
   }
 })
 
-Deno.test('OpenAI credential uses its grant, refreshes it, or selects an explicit API key', async () => {
+test('OpenAI credential uses its grant, refreshes it, or selects an explicit API key', async () => {
   let h = await harness()
   try {
     let signin = signins(h)
@@ -95,7 +96,7 @@ Deno.test('OpenAI credential uses its grant, refreshes it, or selects an explici
   }
 })
 
-Deno.test('missing OpenAI sign-ins are refusals', async () => {
+test('missing OpenAI sign-ins are refusals', async () => {
   let h = await harness()
   try {
     let signin = signins(h)

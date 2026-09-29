@@ -11,6 +11,7 @@
 //
 // The second test is the one door that is deliberately open to every page
 // (T-33408): an app's read door, answered with the credentials taken off.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { client, connector, kernel, meta, relay, seed } from './probe.ts'
 
@@ -31,7 +32,7 @@ let opened = (url: string) =>
 let titles = (rows: unknown[]) =>
   rows.map((r) => (r as { doc: { title: string } }).doc.title).sort()
 
-Deno.test('a page at another address reaches no door here', async () => {
+test('a page at another address reaches no door here', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{
@@ -201,7 +202,7 @@ Deno.test('a page at another address reaches no door here', async () => {
 // gets, whatever cookie was on the request — and the two that must not move:
 // a write is still refused, on an `open` app most of all, and a private app
 // refuses a stranger's page even carrying its owner's own session.
-Deno.test(
+test(
   'a public app reads to any page, and only ever as a stranger',
   async () => {
     let k = await kernel()

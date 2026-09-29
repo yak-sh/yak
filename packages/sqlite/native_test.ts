@@ -1,6 +1,7 @@
 // The native driver's statement cache: what a store repeats stays prepared, and
 // a fault only the handle itself can produce is recovered from.
 
+import { test } from '@yaks/testing'
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { assertEquals, assertThrows } from '@std/assert'
@@ -9,7 +10,7 @@ import { driver } from './native.ts'
 import { storage } from './mod.ts'
 import { shop } from './testing.ts'
 
-Deno.test('a store in memory prepares nothing more for the same writes, however many units run them', () => {
+test('a store in memory prepares nothing more for the same writes, however many units run them', () => {
   let db = new Database(':memory:')
   try {
     let s = storage(driver(db), shop)
@@ -37,7 +38,7 @@ let insert = (value: number): Insert => ({
   returning: [col('value')],
 })
 
-Deno.test('failed row decoding releases a cached write before rollback and the next savepoint', () => {
+test('failed row decoding releases a cached write before rollback and the next savepoint', () => {
   let db = new Database(':memory:')
   try {
     let sql = driver(db)

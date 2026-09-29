@@ -1,5 +1,6 @@
 // Mouse button gestures and the movement they ask of the hero.
 
+import { test } from '@yaks/testing'
 import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { listen, lookDrag, mouseButtons, movement } from './input.ts'
@@ -7,7 +8,7 @@ import { type Body } from './sim.ts'
 import { stride } from './stride.ts'
 import { flat } from './terrain.ts'
 
-Deno.test('solo mouse clicks act, while a drag does not', () => {
+test('solo mouse clicks act, while a drag does not', () => {
   for (let [button, action] of [[0, 'strike'], [2, 'dodge']] as const) {
     let mouse = mouseButtons()
     mouse.down(button)
@@ -18,7 +19,7 @@ Deno.test('solo mouse clicks act, while a drag does not', () => {
   }
 })
 
-Deno.test('either mouse chord walks and consumes both releases', () => {
+test('either mouse chord walks and consumes both releases', () => {
   for (let first of [0, 2]) {
     for (let released of [0, 2]) {
       let mouse = mouseButtons()
@@ -38,7 +39,7 @@ Deno.test('either mouse chord walks and consumes both releases', () => {
   }
 })
 
-Deno.test('mouse chord follows button state through pointer motion and cancel', () => {
+test('mouse chord follows button state through pointer motion and cancel', () => {
   let mouse = mouseButtons()
   mouse.down(0)
   mouse.move(3, 12) // the second press need not produce a pointerdown
@@ -59,7 +60,7 @@ Deno.test('mouse chord follows button state through pointer motion and cancel', 
   assertEquals(mouse.up(2), undefined)
 })
 
-Deno.test('arrow keys turn in either A/D mode and still allow strafing', () => {
+test('arrow keys turn in either A/D mode and still allow strafing', () => {
   for (let strafe of [false, true]) {
     for (
       let [code, turn] of [
@@ -85,7 +86,7 @@ Deno.test('arrow keys turn in either A/D mode and still allow strafing', () => {
   })
 })
 
-Deno.test('stick directions move in screen space without steering', () => {
+test('stick directions move in screen space without steering', () => {
   let sticks: [number, number][] = [[0, 1], [1, 0], [0, -1], [-1, 0]]
   for (let stick of sticks) {
     assertEquals(movement([], false, stick), {
@@ -96,7 +97,7 @@ Deno.test('stick directions move in screen space without steering', () => {
   }
 })
 
-Deno.test('touch look and mouse look keep their own gesture', () => {
+test('touch look and mouse look keep their own gesture', () => {
   assertEquals(lookDrag(0, 'touch', false), true)
   assertEquals(lookDrag(2, 'mouse', false), true)
   assertEquals(lookDrag(0, 'mouse', false), false)
@@ -104,7 +105,7 @@ Deno.test('touch look and mouse look keep their own gesture', () => {
   assertEquals(lookDrag(2, 'mouse', true), false)
 })
 
-Deno.test('left touch walks right while right touch orbits', () => {
+test('left touch walks right while right touch orbits', () => {
   let { document, window } = parseHTML('<html><body></body></html>')
   let before = Object.fromEntries(
     ['document', 'innerWidth', 'addEventListener'].map((

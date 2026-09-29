@@ -4,6 +4,7 @@
 // person and the host, single-use, and short-lived; `opener` refuses every way
 // it can be misused, and `handoffTo` mints only for a directory-verified host.
 // These functions carry no Cloudflare import, so this suite runs in plain Deno.
+import { test } from '@yaks/testing'
 import { assertEquals, assertMatch } from '@std/assert'
 import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
 import { opened, seal } from './lib/token.ts'
@@ -35,13 +36,13 @@ let dir = {
     Promise.resolve(host == 'good.com' ? { name: host } : null),
 }
 
-Deno.test('opener: a valid token names its person and is spent', async () => {
+test('opener: a valid token names its person and is spent', async () => {
   let spend = spender(kv())
   let t = await tokenFor({ person: 'u-1', host: 'good.com' })
   assertEquals(await opener(t, SECRET, 'good.com', spend), 'u-1')
 })
 
-Deno.test('opener: expired, tampered, wrong-host, wrong-secret refused', async () => {
+test('opener: expired, tampered, wrong-host, wrong-secret refused', async () => {
   let spend = spender(kv())
   // expired
   assertEquals(
@@ -73,21 +74,21 @@ Deno.test('opener: expired, tampered, wrong-host, wrong-secret refused', async (
   )
 })
 
-Deno.test('opener: a token is single-use — a replay is refused', async () => {
+test('opener: a token is single-use — a replay is refused', async () => {
   let spend = spender(kv()) // one ledger across both calls
   let t = await tokenFor({ person: 'u-1', host: 'good.com' })
   assertEquals(await opener(t, SECRET, 'good.com', spend), 'u-1') // spent
   assertEquals(await opener(t, SECRET, 'good.com', spend), null) // refused
 })
 
-Deno.test('safeNext: only a same-host relative path survives', () => {
+test('safeNext: only a same-host relative path survives', () => {
   assertEquals(safeNext('/recipes?a=1'), '/recipes?a=1')
   assertEquals(safeNext('https://evil.com'), '/')
   assertEquals(safeNext('//evil.com'), '/')
   assertEquals(safeNext('recipes'), '/')
 })
 
-Deno.test('handoffTo: mints only for a directory-verified custom host', async () => {
+test('handoffTo: mints only for a directory-verified custom host', async () => {
   // a stranger's host the directory does not vouch for: never
   assertEquals(
     await handoffTo(SECRET, dir, 'u-1', 'https://stranger.com/x'),

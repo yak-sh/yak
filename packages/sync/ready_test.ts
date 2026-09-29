@@ -1,12 +1,12 @@
 /// <reference lib="deno.ns" />
 
 import { assertEquals, assertThrows } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { boxGraph, pair } from './testing.ts'
 import { sync } from './sync.ts'
 
-Deno.test('ready waits for apply, and an old completion cannot confirm a new ask', async () => {
+test('ready waits for apply, and an old completion cannot confirm a new ask', async () => {
   let graph = boxGraph(true)
   let socket = pair().client
   let finish!: (bundles: Bundle[]) => void
@@ -40,7 +40,7 @@ Deno.test('ready waits for apply, and an old completion cannot confirm a new ask
   assertThrows(() => s.subscribe('.recipe'), Error, 'closed')
 })
 
-Deno.test('failed frame application reports failure without confirming readiness', async () => {
+test('failed frame application reports failure without confirming readiness', async () => {
   let graph = boxGraph(true)
   let socket = pair().client
   let errors: unknown[] = []
@@ -69,7 +69,7 @@ Deno.test('failed frame application reports failure without confirming readiness
   s.close()
 })
 
-Deno.test('ready listeners detach and a successful apply confirms after completion', async () => {
+test('ready listeners detach and a successful apply confirms after completion', async () => {
   let graph = boxGraph(true)
   let socket = pair().client
   let finish!: (bundles: Bundle[]) => void

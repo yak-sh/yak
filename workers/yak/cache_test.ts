@@ -8,6 +8,7 @@
 //   2. Nothing is cacheable by accident. Omitting `Cache-Control` is not
 //      opting out — Cloudflare holds a bare 200 for two hours — so `sealed`
 //      says the word for every door that forgot to.
+import { test } from '@yaks/testing'
 import {
   assertEquals,
   assertNotEquals,
@@ -18,7 +19,7 @@ import { at, sealed } from './cache.ts'
 let A = '11111111-1111-4111-8111-111111111111'
 let B = '22222222-2222-4222-8222-222222222222'
 
-Deno.test('two apps at the same path are two cache entries', () => {
+test('two apps at the same path are two cache entries', () => {
   // The same path in two spaces — `alice.yaks.app/recipes/app.js` and
   // `bob.yaks.app/recipes/app.js` — is one cache key to Cloudflare, because a
   // Worker's cache is keyed without the host. These must not collide.
@@ -31,20 +32,20 @@ Deno.test('two apps at the same path are two cache entries', () => {
   assertEquals(at(A, '/'), `https://files.invalid/${A}/`)
 })
 
-Deno.test('a door that says nothing is told not to be shared', async () => {
+test('a door that says nothing is told not to be shared', async () => {
   let bare = sealed(new Response('hello'))
   assertEquals(bare.headers.get('cache-control'), 'private, no-store')
   assertEquals(await bare.text(), 'hello')
 })
 
-Deno.test('a door that states its policy keeps it', () => {
+test('a door that states its policy keeps it', () => {
   let said = sealed(
     new Response('x', { headers: { 'cache-control': 'public, no-cache' } }),
   )
   assertEquals(said.headers.get('cache-control'), 'public, no-cache')
 })
 
-Deno.test('a socket is left alone', () => {
+test('a socket is left alone', () => {
   // A 101 carries the runtime's own socket and no Response constructor here
   // can copy it, so it must pass through untouched rather than be rebuilt.
   let up = new Response(null, { status: 101 })
@@ -54,7 +55,7 @@ Deno.test('a socket is left alone', () => {
 // The framing policy (T-33409): an app is the framed resource, and the browser
 // refuses to render it inside any space but its own — the clickjacking defense,
 // since a same-site frame would otherwise load with the viewer's cookie.
-Deno.test('every sealed response refuses framing by a foreign space', () => {
+test('every sealed response refuses framing by a foreign space', () => {
   let res = sealed(new Response('a page'))
   assertEquals(
     res.headers.get('content-security-policy'),
@@ -62,7 +63,7 @@ Deno.test('every sealed response refuses framing by a foreign space', () => {
   )
 })
 
-Deno.test('the platform homepage stays an allowed ancestor', () => {
+test('the platform homepage stays an allowed ancestor', () => {
   // `https://yaks.app` in the list is what sanctions the T-33424 homepage
   // iframe; a space's own apps are the `'self'` half (they share one origin).
   let csp = sealed(new Response('a page')).headers.get(
@@ -72,7 +73,7 @@ Deno.test('the platform homepage stays an allowed ancestor', () => {
   assertStringIncludes(csp!, 'https://yaks.app')
 })
 
-Deno.test('the frame policy rides even on a door with its own cache policy', () => {
+test('the frame policy rides even on a door with its own cache policy', () => {
   // A door that states its own `cache-control` (a cached app file, the blob)
   // used to pass through sealed untouched, so the header must be applied before
   // that early return or the very responses that get framed would lack it.
@@ -86,7 +87,7 @@ Deno.test('the frame policy rides even on a door with its own cache policy', () 
   )
 })
 
-Deno.test('the frame policy stacks with a response CSP, never clobbers it', () => {
+test('the frame policy stacks with a response CSP, never clobbers it', () => {
   // The blob door (apps.ts `gave`) serves user bytes under a sandbox CSP.
   // Appending keeps that inert-content protection and adds our framing rule;
   // setting would have wiped the sandbox.

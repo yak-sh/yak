@@ -2,6 +2,7 @@
 // formatting tests read Markdown back as HTML so punctuation and nesting are
 // checked for their meaning as well as their source.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { marked } from 'marked'
@@ -18,7 +19,7 @@ let controls = Array.from({ length: 160 }, (_, n) => n)
   .filter((n) => n < 32 || n >= 127)
   .map((n) => String.fromCharCode(n)).join('')
 
-Deno.test('every C0/DEL/C1 byte is stripped from text and hrefs in both modes', () => {
+test('every C0/DEL/C1 byte is stripped from text and hrefs in both modes', () => {
   let dirty = `one${controls}two`
   assertEquals(safe(dirty), 'onetwo')
   assertEquals(safeHref(dirty), 'onetwo')
@@ -35,7 +36,7 @@ Deno.test('every C0/DEL/C1 byte is stripped from text and hrefs in both modes', 
   assertEquals(plain(node), 'onetwo (https://yaks.app/page)')
 })
 
-Deno.test('all controls are removed even when leaves and hrefs change after h', () => {
+test('all controls are removed even when leaves and hrefs change after h', () => {
   let props = { href: 'before' }
   let node = h('a', props, 'before')
   props.href = `a${controls}b`
@@ -44,7 +45,7 @@ Deno.test('all controls are removed even when leaves and hrefs change after h', 
   assertEquals(plain(node), 'ab')
 })
 
-Deno.test('content controls cannot become terminal commands on code or link paths', () => {
+test('content controls cannot become terminal commands on code or link paths', () => {
   let attack = '\x1b]52;c;payload\x07\x9b31mRED\x1b[0m'
   let clean = ']52;c;payload31mRED[0m'
   for (let tag of ['span', 'pre', 'code', 'custom']) {
@@ -63,7 +64,7 @@ Deno.test('content controls cannot become terminal commands on code or link path
   )
 })
 
-Deno.test('literal line controls disappear while structural breaks survive', () => {
+test('literal line controls disappear while structural breaks survive', () => {
   let node = h(
     'div',
     null,
@@ -74,7 +75,7 @@ Deno.test('literal line controls disappear while structural breaks survive', () 
   assertEquals(plain(node), 'onetwothree\n\nfour\nfive')
 })
 
-Deno.test('text punctuation and entity spellings remain literal Markdown content', () => {
+test('text punctuation and entity spellings remain literal Markdown content', () => {
   for (
     let text of [
       '*_[x](y)!',
@@ -97,7 +98,7 @@ Deno.test('text punctuation and entity spellings remain literal Markdown content
   assertEquals(html(markdown(node)).querySelectorAll('a').length, 1)
 })
 
-Deno.test('nested arrays and inline children preserve exact spaces and zero', () => {
+test('nested arrays and inline children preserve exact spaces and zero', () => {
   let node = h(
     'span',
     null,
@@ -114,7 +115,7 @@ Deno.test('nested arrays and inline children preserve exact spaces and zero', ()
   }
 })
 
-Deno.test('headings and emphasis keep their structure and whitespace', () => {
+test('headings and emphasis keep their structure and whitespace', () => {
   let node = h(
     'section',
     null,
@@ -129,7 +130,7 @@ Deno.test('headings and emphasis keep their structure and whitespace', () => {
   assertEquals(markdown(h('strong', null, '  ')), '  ')
 })
 
-Deno.test('nested and ordered lists keep indentation and start numbering', () => {
+test('nested and ordered lists keep indentation and start numbering', () => {
   let node = h(
     'ul',
     null,
@@ -157,7 +158,7 @@ Deno.test('nested and ordered lists keep indentation and start numbering', () =>
   )
 })
 
-Deno.test('link destinations cannot close Markdown syntax and plain mode keeps destinations', () => {
+test('link destinations cannot close Markdown syntax and plain mode keeps destinations', () => {
   let href = 'https://yaks.app/a(b) <c>\\d'
   let node = h('a', { href }, 'label [x]')
   let parsed = html(markdown(node)).querySelector('a')!
@@ -173,7 +174,7 @@ Deno.test('link destinations cannot close Markdown syntax and plain mode keeps d
   assertEquals(markdown(h('a', { href: '\n\t' }, 'label')), 'label')
 })
 
-Deno.test('inline code and fences outgrow embedded backtick runs', () => {
+test('inline code and fences outgrow embedded backtick runs', () => {
   for (let text of ['a`b', '`edge`', ' a ', ' ', '**literal**']) {
     let node = h('code', null, text)
     assertEquals(html(markdown(node)).querySelector('code')?.textContent, text)
@@ -197,7 +198,7 @@ Deno.test('inline code and fences outgrow embedded backtick runs', () => {
   assertEquals(plain(adjacent), 'onetwo')
 })
 
-Deno.test('href entity spellings remain literal, including encoded control references', () => {
+test('href entity spellings remain literal, including encoded control references', () => {
   for (let suffix of ['&copy;', '&#x1b;', '&#27;', '&#x9b;', '&amp;#x1b;']) {
     let href = `https://yaks.app/?a=${suffix}&b=two`
     let node = h('a', { href }, 'link')
@@ -209,7 +210,7 @@ Deno.test('href entity spellings remain literal, including encoded control refer
   }
 })
 
-Deno.test('transparent wrappers retain block boundaries, including at the root', () => {
+test('transparent wrappers retain block boundaries, including at the root', () => {
   let node = h(
     'custom',
     null,
@@ -222,7 +223,7 @@ Deno.test('transparent wrappers retain block boundaries, including at the root',
   assertEquals(html(markdown(node)).querySelectorAll('p').length, 3)
 })
 
-Deno.test('adjacent and nested emphasis preserve elements rather than delimiter text', () => {
+test('adjacent and nested emphasis preserve elements rather than delimiter text', () => {
   for (let tag of ['strong', 'em']) {
     let adjacent = h(
       'span',
@@ -245,7 +246,7 @@ Deno.test('adjacent and nested emphasis preserve elements rather than delimiter 
   }
 })
 
-Deno.test('independent lists keep their boundaries and restart numbering', () => {
+test('independent lists keep their boundaries and restart numbering', () => {
   for (let tag of ['ul', 'ol']) {
     let node = h(
       'div',
@@ -271,7 +272,7 @@ Deno.test('independent lists keep their boundaries and restart numbering', () =>
   assertEquals(plain(node), '- one\n  \n  two')
 })
 
-Deno.test('render resolves views and property context, and missing views are empty', () => {
+test('render resolves views and property context, and missing views are empty', () => {
   let vocab = loadVocab([{
     $defs: {
       doc: {
@@ -298,7 +299,7 @@ Deno.test('render resolves views and property context, and missing views are emp
   assertEquals(render(registry, bundle, 'Missing', vocab), '')
 })
 
-Deno.test('definition lists pair terms and values across grouped and direct rows', () => {
+test('definition lists pair terms and values across grouped and direct rows', () => {
   let node = h(
     'dl',
     null,
@@ -312,7 +313,7 @@ Deno.test('definition lists pair terms and values across grouped and direct rows
   assertEquals(plain(node), 'Title: A *page*\nCount: 2\nMore')
 })
 
-Deno.test('nested text views retain registry context and always render read-only', () => {
+test('nested text views retain registry context and always render read-only', () => {
   let registry = define([
     {
       view: 'Props',

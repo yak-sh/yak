@@ -9,6 +9,7 @@
 // none of them and the diff says which line to add it to, which is the whole
 // point: the table is the declaration, and a tool that forgot to declare
 // cannot slip through wearing whatever the default happened to be.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { annotated, core } from '@yaks/mcp'
 import { read } from '@yaks/yaml'
@@ -110,7 +111,7 @@ let picked = (has: (t: (typeof ROSTER)[number]) => boolean) =>
 // checks that keeps the file and the roster one list: a row whose name the
 // file does not know throws at load (tool.ts `worded`), and an entry no row
 // claims is a description nobody will ever read.
-Deno.test('the tool words are the file, and the file is the roster', () => {
+test('the tool words are the file, and the file is the roster', () => {
   let yml = read(
     Deno.readTextFileSync(new URL('./tools.yml', import.meta.url)),
     'tools.yml',
@@ -137,7 +138,7 @@ Deno.test('the tool words are the file, and the file is the roster', () => {
   }
 })
 
-Deno.test('every platform tool has a title', () => {
+test('every platform tool has a title', () => {
   for (let t of ROSTER) {
     assert(t.title, `${t.name} has no title`)
     assert(t.title.length <= 40, `${t.name}'s title is a sentence: ${t.title}`)
@@ -150,11 +151,11 @@ Deno.test('every platform tool has a title', () => {
   )
 })
 
-Deno.test('the read-only tools are the pinned ones', () => {
+test('the read-only tools are the pinned ones', () => {
   assertEquals(picked((t) => !!t.readOnly), sorted(READS))
 })
 
-Deno.test('the destructive tools are the pinned ones', () => {
+test('the destructive tools are the pinned ones', () => {
   // Through the transport, not the field: what a client is told is what
   // `annotated` derives, and an unsaid `destructive` on a writer means true.
   assertEquals(
@@ -165,11 +166,11 @@ Deno.test('the destructive tools are the pinned ones', () => {
   )
 })
 
-Deno.test('the open-world tools are the pinned ones', () => {
+test('the open-world tools are the pinned ones', () => {
   assertEquals(picked((t) => !!t.openWorld), sorted(OUTSIDE))
 })
 
-Deno.test('a read tool is never destructive, and every write says which', () => {
+test('a read tool is never destructive, and every write says which', () => {
   for (let t of ROSTER) {
     let a = annotated(t)
     assert(
@@ -188,7 +189,7 @@ Deno.test('a read tool is never destructive, and every write says which', () => 
 // And the generic tier, whose own package cannot know it (@yaks/mcp
 // `CoreOpts.undo`): a store's way back is store_restore, and graph_apply is
 // where an agent about to delete a row is reading.
-Deno.test('graph_apply is told this store has a way back', () => {
+test('graph_apply is told this store has a way back', () => {
   assert(
     core({ vocab: platformVocab(), undo: UNDO })
       .find((t) => t.name == 'graph_apply')!.description.endsWith(UNDO),
@@ -196,7 +197,7 @@ Deno.test('graph_apply is told this store has a way back', () => {
   )
 })
 
-Deno.test('annotated derives the four hints from the tool', () => {
+test('annotated derives the four hints from the tool', () => {
   assertEquals(annotated({ readOnly: true }), {
     readOnlyHint: true,
     destructiveHint: false,

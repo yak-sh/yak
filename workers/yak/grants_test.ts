@@ -4,6 +4,7 @@
 // every tool reads membership out of. Nothing here imports a Cloudflare name,
 // so the whole contract holds in plain Deno; the door it hangs on is held in
 // the kernel (mcp_test.ts).
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { seal } from './lib/token.ts'
 import type { Directory } from './directory.ts'
@@ -41,7 +42,7 @@ let kv = () => {
 
 let book = () => ledger(kv()) as Ledger
 
-Deno.test('a grant is minted, and the token names it back', async () => {
+test('a grant is minted, and the token names it back', async () => {
   let b = book()
   let { grant, token } = await mint(SECRET, b, { person: 'p-1' })
   assert(token.startsWith(GRANT), 'a grant says so in its first characters')
@@ -51,13 +52,13 @@ Deno.test('a grant is minted, and the token names it back', async () => {
   assertEquals(grant.exp - Math.floor(Date.now() / 1000) > 3500, true)
 })
 
-Deno.test('a grant carries the space it was narrowed to', async () => {
+test('a grant carries the space it was narrowed to', async () => {
   let b = book()
   let { token } = await mint(SECRET, b, { person: 'p-1', space: 'dana' })
   assertEquals((await held(token, SECRET, b))?.space, 'dana')
 })
 
-Deno.test('hours: asked for, and refused past the ceiling', async () => {
+test('hours: asked for, and refused past the ceiling', async () => {
   let b = book()
   let now = Date.now()
   let { grant } = await mint(SECRET, b, { person: 'p-1', hours: 6 }, now)
@@ -71,7 +72,7 @@ Deno.test('hours: asked for, and refused past the ceiling', async () => {
   }
 })
 
-Deno.test('a grant is refused when it expires', async () => {
+test('a grant is refused when it expires', async () => {
   let b = book()
   let now = Date.now()
   let { token } = await mint(SECRET, b, { person: 'p-1', hours: 1 }, now)
@@ -79,7 +80,7 @@ Deno.test('a grant is refused when it expires', async () => {
   assertEquals(await held(token, SECRET, b, now + 61 * 60_000), null)
 })
 
-Deno.test('a grant is refused when it is revoked, by id or by prefix', async () => {
+test('a grant is refused when it is revoked, by id or by prefix', async () => {
   let b = book()
   let one = await mint(SECRET, b, { person: 'p-1' })
   let two = await mint(SECRET, b, { person: 'p-1' })
@@ -93,14 +94,14 @@ Deno.test('a grant is refused when it is revoked, by id or by prefix', async () 
   assertEquals(await revoke(b, 'p-1', 'zzzz'), [])
 })
 
-Deno.test("one person's grant is not another's to revoke", async () => {
+test("one person's grant is not another's to revoke", async () => {
   let b = book()
   let { grant, token } = await mint(SECRET, b, { person: 'p-1' })
   assertEquals(await revoke(b, 'p-2', grant.id), [])
   assert(await held(token, SECRET, b))
 })
 
-Deno.test('a forged, edited or foreign token is nobody', async () => {
+test('a forged, edited or foreign token is nobody', async () => {
   let b = book()
   let { grant, token } = await mint(SECRET, b, { person: 'p-1' })
   // Another secret's seal, carrying a grant this ledger really holds.
@@ -119,7 +120,7 @@ Deno.test('a forged, edited or foreign token is nobody', async () => {
   assertEquals(await held(token, SECRET, null), null)
 })
 
-Deno.test('no ledger is no grants at all', () => {
+test('no ledger is no grants at all', () => {
   assertEquals(ledger(undefined), null)
   assertEquals(ledger({}), null)
 })
@@ -137,7 +138,7 @@ let dir = {
   own: () => Promise.resolve(spaces[1]),
 } as unknown as Directory
 
-Deno.test('a narrowed grant reaches one space and no other', async () => {
+test('a narrowed grant reaches one space and no other', async () => {
   let only = narrowed(dir, 'dana')
   assertEquals((await only.space('dana'))?.slug, 'dana')
   assertEquals(await only.space('other'), null)

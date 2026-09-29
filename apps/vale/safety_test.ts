@@ -1,5 +1,6 @@
 // The villages' square and streets and the ways between places shelter a
 // traveler, while creatures still live in the country beside them.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { BEASTS } from './beasts.ts'
@@ -16,7 +17,7 @@ seedThemes()
 
 seedBuildings()
 
-Deno.test('the fire and traveled paths shelter a traveler', () => {
+test('the fire and traveled paths shelter a traveler', () => {
   let v = vale(), hearth = hearthOf('mossvale')!
   assert(inVillage(...hearth))
   assertEquals(inVillage(hearth[0] + 20, hearth[1]), false)
@@ -42,7 +43,7 @@ Deno.test('the fire and traveled paths shelter a traveler', () => {
   assert(sheltered(v, lane.xs[0], lane.zs[0]))
 })
 
-Deno.test('creatures live and wander off traveled paths', () => {
+test('creatures live and wander off traveled paths', () => {
   let v = vale()
   for (let id of ['mossvale', 'birchmere', 'fernwood']) {
     let homes = homesOf(id)
@@ -65,7 +66,7 @@ Deno.test('creatures live and wander off traveled paths', () => {
   assert(homesOf('birchmere').some((h) => h.kind == 'slime'))
 })
 
-Deno.test('a creature pursuing a traveler stops at a road', () => {
+test('a creature pursuing a traveler stops at a road', () => {
   let c = roadsOf('mossvale').find((r) => r.to == 'reedmarsh')!.c
   let i = Math.floor(c.xs.length / 2)
   let dx = c.xs[i + 1] - c.xs[i - 1]

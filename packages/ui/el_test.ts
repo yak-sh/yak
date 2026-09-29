@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h, type VNode } from 'preact'
 import { renderToString } from 'preact-render-to-string'
@@ -7,7 +8,7 @@ let html = (node: VNode) => renderToString(node)
 let Dot = el('span', 'Dot')
 let Card = block('div', 'Card', { Head: 'header' })
 
-Deno.test('a part wears its block, its variants and extra classes', () => {
+test('a part wears its block, its variants and extra classes', () => {
   let cases: [VNode, string][] = [
     [h(Dot, {}), '<span class="Dot"></span>'],
     [h(Dot, { mod: 'ring' }), '<span class="Dot Dot-ring"></span>'],
@@ -24,7 +25,7 @@ Deno.test('a part wears its block, its variants and extra classes', () => {
   for (let [node, want] of cases) assertEquals(html(node), want)
 })
 
-Deno.test('links nest the way HTML allows', () => {
+test('links nest the way HTML allows', () => {
   let Id = el('span', 'Id')
   // An href makes the part the link.
   assertEquals(

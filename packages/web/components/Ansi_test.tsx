@@ -1,12 +1,13 @@
 // ANSI rendering keeps terminal presentation while refusing terminal control.
 
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { h, render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { Ansi, ansiRuns } from './Ansi.tsx'
 
-Deno.test('ANSI runs retain SGR presentation and discard terminal commands', () => {
+test('ANSI runs retain SGR presentation and discard terminal commands', () => {
   assertEquals(
     ansiRuns('plain \x1b[1;31mred\x1b[22;39m ok\x1b[2J!\x1b]0;title\x07'),
     [
@@ -18,7 +19,7 @@ Deno.test('ANSI runs retain SGR presentation and discard terminal commands', () 
   )
 })
 
-Deno.test('ANSI output becomes escaped HTML spans', () => {
+test('ANSI output becomes escaped HTML spans', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

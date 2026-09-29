@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { open as opened } from '@yaks/sqlite/db'
@@ -6,7 +7,7 @@ import { tally } from '@yaks/sql'
 import { local } from './local.ts'
 import { harness, repo } from './testing.ts'
 
-Deno.test('closing the agent stops its migration monitor', async () => {
+test('closing the agent stops its migration monitor', async () => {
   using time = new FakeTime()
   const h = await harness()
   const read = h.migrations.read
@@ -27,7 +28,7 @@ Deno.test('closing the agent stops its migration monitor', async () => {
   }
 })
 
-Deno.test('pending migration refuses harness startup before installing domain tables', async () => {
+test('pending migration refuses harness startup before installing domain tables', async () => {
   const dir = Deno.makeTempDirSync()
   const path = dir + '/test.db'
   const sql = opened(path)
@@ -42,7 +43,7 @@ Deno.test('pending migration refuses harness startup before installing domain ta
   }
 })
 
-Deno.test('migration observation stops admission but drains current model before database close', async () => {
+test('migration observation stops admission but drains current model before database close', async () => {
   const dir = Deno.makeTempDirSync()
   const path = dir + '/test.db'
   const h = await harness(path)

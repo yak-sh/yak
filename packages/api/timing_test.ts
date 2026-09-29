@@ -2,10 +2,11 @@
 // One line per response, the server's own `Server-Timing` printed as it
 // arrived.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { timed } from './timing.ts'
 
-Deno.test('one line per answer, the header verbatim', async () => {
+test('one line per answer, the header verbatim', async () => {
   let said: string[] = []
   let go = (r: Request) =>
     new Response('{}', {

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   carried,
@@ -19,7 +20,7 @@ let history = [
   { tag: 'v2', renamed_classes: [{ from: 'Room', to: 'Hall' }] },
 ]
 
-Deno.test('staging app workers and their secrets stay in their own namespace', async () => {
+test('staging app workers and their secrets stay in their own namespace', async () => {
   let was = globalThis.fetch
   let methods: string[] = []
   let staged = {
@@ -60,7 +61,7 @@ Deno.test('staging app workers and their secrets stay in their own namespace', a
 
 // The current tag comes from the dispatch script, not from a locally assumed
 // deploy. That matters after retries and after restoring an older file set.
-Deno.test('upload sends only migrations after the dispatch script tag', async () => {
+test('upload sends only migrations after the dispatch script tag', async () => {
   for (let current of ['', 'v1', 'v2', 'unknown']) {
     let was = globalThis.fetch
     let methods: string[] = []
@@ -115,7 +116,7 @@ Deno.test('upload sends only migrations after the dispatch script tag', async ()
   }
 })
 
-Deno.test('upload refuses a module that would replace the wrapper', async () => {
+test('upload refuses a module that would replace the wrapper', async () => {
   await assertRejects(
     () =>
       upload(env, 'app.abc123', [
@@ -127,7 +128,7 @@ Deno.test('upload refuses a module that would replace the wrapper', async () => 
   )
 })
 
-Deno.test('only permanent deletion removes a script owning Durable Objects', async () => {
+test('only permanent deletion removes a script owning Durable Objects', async () => {
   let was = globalThis.fetch
   let forced: (string | null)[] = []
   globalThis.fetch = ((input: string | Request, init?: RequestInit) => {
@@ -145,7 +146,7 @@ Deno.test('only permanent deletion removes a script owning Durable Objects', asy
   }
 })
 
-Deno.test('reserved imports refuse before provisioning can start', async () => {
+test('reserved imports refuse before provisioning can start', async () => {
   for (let reserved of ['__yak_entry.js', 'metadata']) {
     await assertRejects(
       () =>

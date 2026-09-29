@@ -1,5 +1,6 @@
 // The combat event boundary keeps an ability with its delayed landing and
 // the start of a step, where the renderer needs them.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { useAbilities } from './abilities.ts'
 import { rows } from './abilities_fixture.ts'
@@ -88,7 +89,7 @@ let encounter = (item: string, gap: number) => {
   return { frame, home }
 }
 
-Deno.test('Quake chips land on the creatures it hits', () => {
+test('Quake chips land on the creatures it hits', () => {
   let { frame } = encounter('hammer1', 2)
   let cast = frame(10000, { ability: 1 })
   assert(cast.some((e) => e.type == 'ability' && e.id == 'quake'))
@@ -97,7 +98,7 @@ Deno.test('Quake chips land on the creatures it hits', () => {
   assertEquals(hit.by, 'quake')
 })
 
-Deno.test('Shadowstep carries its route to the visual effect', () => {
+test('Shadowstep carries its route to the visual effect', () => {
   let { frame } = encounter('dagger1', 5)
   let cast = frame(10000, { ability: 2 }).find((e) => e.type == 'ability')
   assert(cast && cast.type == 'ability')
@@ -106,7 +107,7 @@ Deno.test('Shadowstep carries its route to the visual effect', () => {
   assert(Math.hypot(cast.from[0] - cast.at[0], cast.from[2] - cast.at[2]) > 2)
 })
 
-Deno.test('bleed and stun effects need no implicit weapon blow', () => {
+test('bleed and stun effects need no implicit weapon blow', () => {
   let events = (effects: unknown[]) => {
     useAbilities(
       rows.map((row) =>

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { scrollbar } from './scrollbar.ts'
@@ -6,7 +7,7 @@ import { Scroll } from './Scroll.ts'
 import { mount } from './testing.ts'
 import { base as sheet } from './theme.ts'
 
-Deno.test('scrollbar has one column, three thumb rows and dims only when snapped', () => {
+test('scrollbar has one column, three thumb rows and dims only when snapped', () => {
   for (let bottom of [false, true]) {
     let lines = scrollbar(
       [],
@@ -44,7 +45,7 @@ Deno.test('scrollbar has one column, three thumb rows and dims only when snapped
   )
 })
 
-Deno.test('scrollbar estimates never measure unseen history or move the anchor', () => {
+test('scrollbar estimates never measure unseen history or move the anchor', () => {
   let count = 0
   let state = new VirtualWindow<{ id: string }>(
     (_item, width) => {
@@ -69,7 +70,7 @@ Deno.test('scrollbar estimates never measure unseen history or move the anchor',
   assertEquals(state.position(9).bottom, false)
 })
 
-Deno.test('VirtualList and Scroll reserve a scrollbar column and paint a thumb', async () => {
+test('VirtualList and Scroll reserve a scrollbar column and paint a thumb', async () => {
   for (let virtual of [false, true]) {
     let ui = await mount(
       () =>
@@ -100,7 +101,7 @@ Deno.test('VirtualList and Scroll reserve a scrollbar column and paint a thumb',
   }
 })
 
-Deno.test('empty and short scroll ranges have a clamped thumb', () => {
+test('empty and short scroll ranges have a clamped thumb', () => {
   for (let total of [0, 1, 2]) {
     let bar = scrollbar(
       [],

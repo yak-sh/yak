@@ -2,6 +2,7 @@
 // the Preact Entity door, parse the text host's markdown, and compare the tags,
 // words and link destinations a reader receives from those two paths.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { parseHTML } from 'linkedom'
@@ -71,7 +72,7 @@ let signature = (root: Element) =>
       element.getAttribute('href'),
     ])
 
-Deno.test('one renderer preserves its document through Preact and markdown', () => {
+test('one renderer preserves its document through Preact and markdown', () => {
   let Entity = entity({ registry, vocab, store: () => bundle })
   let mounted = mount(h(Entity, { eid: 'page', view: 'Tile' }))
   try {

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   clampPoint,
@@ -9,7 +10,7 @@ import { VirtualWindow } from './VirtualList.ts'
 import { type Line, wrap } from './paint.ts'
 const lines = (text: string): Line[] =>
   text.split('\n').map((text) => [{ text, style: {} }])
-Deno.test('rendered selection excludes borders and preserves styled text', () => {
+test('rendered selection excludes borders and preserves styled text', () => {
   const content: Line[] = [
     [{ text: '╭─────╮', style: {}, decorative: true }],
     [{ text: '│', style: {}, decorative: true }, {
@@ -32,7 +33,7 @@ Deno.test('rendered selection excludes borders and preserves styled text', () =>
   assertEquals(painted[1].style.inverse, true)
   assertEquals(content[1][1].style, { bold: true })
 })
-Deno.test('cross-entry copy bounded and Unicode cursor does not split surrogate pairs', () => {
+test('cross-entry copy bounded and Unicode cursor does not split surrogate pairs', () => {
   const cursor = {
     id: 'b',
     row: 0,
@@ -53,7 +54,7 @@ Deno.test('cross-entry copy bounded and Unicode cursor does not split surrogate 
   assertEquals(stepColumn(lines('a😀b')[0], 3, -1), 1)
   assertEquals(clampPoint({ id: 'x', row: 0, col: 2 }, lines('a😀b')).col, 1)
 })
-Deno.test('rendered cursor crosses entries, reveals tall entries and reuses layout', () => {
+test('rendered cursor crosses entries, reveals tall entries and reuses layout', () => {
   let measured = 0
   const w = new VirtualWindow<{ id: string }>(() => {
     measured++
@@ -76,7 +77,7 @@ Deno.test('rendered cursor crosses entries, reveals tall entries and reuses layo
   assertEquals(measured, before)
 })
 
-Deno.test('selection retains measured cross-page text and rejects an evicted endpoint', () => {
+test('selection retains measured cross-page text and rejects an evicted endpoint', () => {
   const w = new VirtualWindow<{ id: string }>(
     (item) => lines(item.id),
     () => 'v',
@@ -108,7 +109,7 @@ Deno.test('selection retains measured cross-page text and rejects an evicted end
   )
 })
 
-Deno.test('copy joins soft wraps but keeps explicit newlines', () => {
+test('copy joins soft wraps but keeps explicit newlines', () => {
   const wrapped = [...wrap(lines('hello world')[0], 6), ...lines('next')]
   assertEquals(
     copyRendered(
@@ -120,7 +121,7 @@ Deno.test('copy joins soft wraps but keeps explicit newlines', () => {
   )
 })
 
-Deno.test('cursor is clamped after reflow and first NORMAL paint preserves follow', () => {
+test('cursor is clamped after reflow and first NORMAL paint preserves follow', () => {
   const w = new VirtualWindow<{ id: string }>(
     (_item, width) => wrap(lines('abcdefghij')[0], width),
     () => 'v',

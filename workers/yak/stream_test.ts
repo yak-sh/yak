@@ -8,6 +8,7 @@
 // Map and an injected env, and reads the SSE frames straight off the attach
 // Response. Passing env {} exercises the VERSION fallback the workerd probes
 // take, since they have no version-metadata binding either.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { VERSION } from './seo.ts'
 import { resumable, Wire } from './stream.ts'
@@ -31,7 +32,7 @@ let drained = (wire: Wire) => {
   for (let held of [...wire.open]) wire.drop(held)
 }
 
-Deno.test('a stream resuming across a release hears the lists moved', async () => {
+test('a stream resuming across a release hears the lists moved', async () => {
   let storage = kvStorage()
   let wire = new Wire({ storage }, {})
   // The session last spoke under another release.
@@ -60,7 +61,7 @@ Deno.test('a stream resuming across a release hears the lists moved', async () =
   }
 })
 
-Deno.test('a session never spoken for is remembered silently', async () => {
+test('a session never spoken for is remembered silently', async () => {
   let storage = kvStorage()
   let wire = new Wire({ storage }, {})
   try {
@@ -78,7 +79,7 @@ Deno.test('a session never spoken for is remembered silently', async () => {
   }
 })
 
-Deno.test('the deploy id drives the marker, not the human VERSION', async () => {
+test('the deploy id drives the marker, not the human VERSION', async () => {
   let storage = kvStorage()
   // Last spoke under an earlier deploy; VERSION never moved between them.
   storage.map.set('spoke', { abc: 'deploy-1' })
@@ -104,7 +105,7 @@ Deno.test('the deploy id drives the marker, not the human VERSION', async () => 
 // The roster a session connected against (T-34277): recorded at initialize,
 // compared on every later call, and the line said once per changed set — for
 // the client that holds no stream, or whose host ignores the notification.
-Deno.test('a session is told which tools moved, once per changed set', async () => {
+test('a session is told which tools moved, once per changed set', async () => {
   let wire = new Wire({ storage: kvStorage() }, {})
   let listed = (names: string[]) => ({
     session: 'abc',
@@ -140,7 +141,7 @@ Deno.test('a session is told which tools moved, once per changed set', async () 
 // A release the object was already awake for (a rolling deploy, where a stream
 // opened under the old version is still held): whoever is listening hears it
 // now rather than at their next attach.
-Deno.test('a release reaches a stream that was already open', async () => {
+test('a release reaches a stream that was already open', async () => {
   let storage = kvStorage()
   storage.map.set('mark', 'deploy-1')
   let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
@@ -168,7 +169,7 @@ Deno.test('a release reaches a stream that was already open', async () => {
   }
 })
 
-Deno.test('the same deploy id stays quiet', async () => {
+test('the same deploy id stays quiet', async () => {
   let storage = kvStorage()
   storage.map.set('spoke', { abc: 'deploy-2' })
   let wire = new Wire({ storage }, { CF_VERSION_METADATA: { id: 'deploy-2' } })
@@ -195,7 +196,7 @@ let broken = async (why: Error) => {
   return { text, told }
 }
 
-Deno.test('a stream its object was reset under ends cleanly, unreported', async () => {
+test('a stream its object was reset under ends cleanly, unreported', async () => {
   for (
     let why of [
       new Error('Network connection lost.'),
@@ -205,7 +206,7 @@ Deno.test('a stream its object was reset under ends cleanly, unreported', async 
   ) assertEquals(await broken(why), { text: 'id: 1\n\n', told: [] })
 })
 
-Deno.test('a stream broken any other way ends cleanly and is reported', async () => {
+test('a stream broken any other way ends cleanly and is reported', async () => {
   let why = new Error('boom')
   assertEquals(await broken(why), { text: 'id: 1\n\n', told: [why] })
 })

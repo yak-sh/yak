@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { safe, toolHelp, toolLines } from './show.ts'
 import type { Listed as Tool } from './tool.ts'
 
-Deno.test('content off the wire cannot speak to the terminal', () => {
+test('content off the wire cannot speak to the terminal', () => {
   // The escape and the bell go; the printable bytes after them stay, a tab
   // becomes spaces chosen here, and a newline still means one.
   assertEquals(safe('a\x1b[31mred\x07\nb\tc'), 'a[31mred\nb  c')
@@ -14,14 +15,14 @@ let tools: Tool[] = [
   { name: 'graph_query', description: 'Read this store. Filters and all.' },
 ]
 
-Deno.test('a listing is a name and the one word that says what it is', () => {
+test('a listing is a name and the one word that says what it is', () => {
   assertEquals(
     toolLines(tools),
     '  app_list     Your apps\n  graph_query  Read this store.',
   )
 })
 
-Deno.test('a tool help is its own schema, read out', () => {
+test('a tool help is its own schema, read out', () => {
   assertEquals(
     toolHelp({
       name: 'graph_query',

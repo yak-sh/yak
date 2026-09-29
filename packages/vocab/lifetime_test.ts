@@ -1,5 +1,6 @@
 // The two words a component says about its own state, read off a declaration.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   durableOf,
@@ -12,7 +13,7 @@ import {
   syncOf,
 } from './mod.ts'
 
-Deno.test('a declaration answers with its word, or with the default', () => {
+test('a declaration answers with its word, or with the default', () => {
   assertEquals(said('peers'), 'peers')
   assertEquals(said('none'), 'none')
   assertEquals(said(undefined), 'server')
@@ -21,7 +22,7 @@ Deno.test('a declaration answers with its word, or with the default', () => {
   assertEquals(kept(undefined), 'forever')
 })
 
-Deno.test('a duration is milliseconds; a boundary is not a span', () => {
+test('a duration is milliseconds; a boundary is not a span', () => {
   assertEquals(ms('250ms'), 250)
   assertEquals(ms('5s'), 5000)
   assertEquals(ms('2m'), 120_000)
@@ -37,7 +38,7 @@ Deno.test('a duration is milliseconds; a boundary is not a span', () => {
   assertEquals(lives('soon'), false)
 })
 
-Deno.test('a component that says nothing syncs to the server, forever', () => {
+test('a component that says nothing syncs to the server, forever', () => {
   let v = loadVocab({
     $defs: {
       task: {

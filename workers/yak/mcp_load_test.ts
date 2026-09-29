@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -33,7 +34,7 @@ import { HELLO } from './mcp-probe.ts'
 // And a bundle the store refuses refuses the deploy, naming the file and the
 // entry: an agent that wrote ten seed files needs to know which one it
 // mistyped, and the refusal itself only ever names the word.
-Deno.test('a refused seed bundle names its file and index', async () => {
+test('a refused seed bundle names its file and index', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -98,7 +99,7 @@ Deno.test('a refused seed bundle names its file and index', async () => {
 // reading as the seed, asked for on purpose: a folder of files as one batch,
 // aliases across them, only the *.json among them, and no once-only mark — so
 // a second call loads the same file again.
-Deno.test('store_load writes a file already in the app into its store', async () => {
+test('store_load writes a file already in the app into its store', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -191,7 +192,7 @@ Deno.test('store_load writes a file already in the app into its store', async ()
 // it and until when, a grant cannot mint another, and revoking it shuts the
 // door that bearer was walking through — the 401 every credential that did not
 // verify gets (T-34344), rather than the surface a stranger sees.
-Deno.test(
+test(
   'a grant signs a terminal in, and revoking it shuts the door',
   async () => {
     let k = await kernel()
@@ -290,7 +291,7 @@ Deno.test(
 // The spreadsheet half (csv.ts, T-34393): `as` is what a row IS, the headers
 // are its properties, and the id column names each row — which is what makes
 // the second load patch the same two rows rather than mint two more (T-34454).
-Deno.test('store_load reads a CSV as rows of one component', async () => {
+test('store_load reads a CSV as rows of one component', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -374,7 +375,7 @@ Deno.test('store_load reads a CSV as rows of one component', async () => {
 // one that writes too long, so no batch is bigger than a part (seed.ts
 // `parts`). A load bigger than that is written a part at a time, each whole,
 // and all of it lands from the call a caller already knows how to make.
-Deno.test('store_load writes a load too big for one batch a part at a time', async () => {
+test('store_load writes a load too big for one batch a part at a time', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -418,7 +419,7 @@ Deno.test('store_load writes a load too big for one batch a part at a time', asy
 // A write the store's log keeps for fixed code (writes.ts) has not landed, and
 // a load that says it did sends the person looking for rows that are not
 // there. A rule that breaks is such a failure, the platform's and not theirs.
-Deno.test('a load the store keeps for later is pending, not loaded', async () => {
+test('a load the store keeps for later is pending, not loaded', async () => {
   let k = await kernel()
   let plugin: Plugin = {
     name: 'fixture',
@@ -469,7 +470,7 @@ Deno.test('a load the store keeps for later is pending, not loaded', async () =>
 //
 // The two halves are handed over at different moments since T-34632: the
 // roster rides on `initialize`, and the notes are `about`'s answer.
-Deno.test('an app says what it holds, and keeps notes about itself', async () => {
+test('an app says what it holds, and keeps notes about itself', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -630,7 +631,7 @@ Deno.test('an app says what it holds, and keeps notes about itself', async () =>
 // kernel whole.
 // Stripe is Stripe's own sandbox (probe.ts `stripeKey`): the checkout session,
 // the subscription and the connected account are all made there and read back.
-Deno.test('space_sell connects an account and hands back one link', async () => {
+test('space_sell connects an account and hands back one link', async () => {
   let key = stripeKey()
   let price = await plusPrice(key)
   let k = await kernel()
@@ -837,7 +838,7 @@ Deno.test('space_sell connects an account and hands back one link', async () => 
 
 // A title is one line, and short (T-37885): it heads the app on every
 // agent's roster, so a newline in one could start a section of its own there.
-Deno.test('a title is one line on the roster, and a name-sized one', async () => {
+test('a title is one line on the roster, and a name-sized one', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k)

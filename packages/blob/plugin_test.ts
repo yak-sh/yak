@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph'
@@ -8,7 +9,7 @@ import { blobs } from './plugin.ts'
 
 let post = (b: Bundle) => b.post as Record<string, unknown>
 
-Deno.test('a body goes in as text and comes back as text', () => {
+test('a body goes in as text and comes back as text', () => {
   let { g, db } = fixture()
   let out = g.apply([
     { entity: { eid: 'p1' }, post: { title: 'one', body: 'a long essay' } },
@@ -20,7 +21,7 @@ Deno.test('a body goes in as text and comes back as text', () => {
   assertEquals(post(db.read('.post')[0]).title, 'one')
 })
 
-Deno.test('the row holds the address and the store holds the bytes', () => {
+test('the row holds the address and the store holds the bytes', () => {
   let { g, driver } = fixture()
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay' } }])
   let sha = address('a long essay')
@@ -34,7 +35,7 @@ Deno.test('the row holds the address and the store holds the bytes', () => {
   )
 })
 
-Deno.test('the same value written twice is stored once', () => {
+test('the same value written twice is stored once', () => {
   let { g, driver } = fixture()
   g.apply([
     { entity: { eid: 'p1' }, post: { body: 'shared' } },
@@ -45,7 +46,7 @@ Deno.test('the same value written twice is stored once', () => {
 })
 
 for (let async of [false, true]) {
-  Deno.test(`equal bodies are interned once per batch (${async ? 'async' : 'sync'})`, async () => {
+  test(`equal bodies are interned once per batch (${async ? 'async' : 'sync'})`, async () => {
     let { g, blobs: store, db } = fixture()
     let seen: string[] = [], references: string[] = []
     let plugin = blobs(blog, {
@@ -85,7 +86,7 @@ for (let async of [false, true]) {
   })
 }
 
-Deno.test('interned references do not survive a rolled-back batch', () => {
+test('interned references do not survive a rolled-back batch', () => {
   let { g, driver, db } = fixture()
   let fail = true
   g.plugins.push({
@@ -110,7 +111,7 @@ Deno.test('interned references do not survive a rolled-back batch', () => {
   assertEquals(tally(driver, 'blob_text'), 1)
 })
 
-Deno.test('a bundle that names no body property is untouched', () => {
+test('a bundle that names no body property is untouched', () => {
   let { g, db } = fixture()
   g.apply([
     { entity: { eid: 'p1' }, post: { title: 'one', body: 'first' } },
@@ -123,7 +124,7 @@ Deno.test('a bundle that names no body property is untouched', () => {
   assertEquals(db.read('.tag').length, 1)
 })
 
-Deno.test('a body reads back through a query predicate too', () => {
+test('a body reads back through a query predicate too', () => {
   let { g, db } = fixture()
   g.apply([
     { entity: { eid: 'p1' }, post: { body: 'the rain in spain' } },
@@ -135,7 +136,7 @@ Deno.test('a body reads back through a query predicate too', () => {
   assertEquals(db.rows('.body="the rain in spain"').map((r) => r.eid), ['p1'])
 })
 
-Deno.test('the $was guard is hashed over the text, not the address', () => {
+test('the $was guard is hashed over the text, not the address', () => {
   let { g } = fixture()
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'first' } }])
   // a writer that read 'first' may write over it
@@ -159,7 +160,7 @@ Deno.test('the $was guard is hashed over the text, not the address', () => {
   assert(stale, 'a guard on a moved body refuses the batch')
 })
 
-Deno.test('clearing a body clears the property, not the store', () => {
+test('clearing a body clears the property, not the store', () => {
   let { g, db, driver } = fixture()
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay' } }])
   g.apply([{ entity: { eid: 'p1' }, post: { body: null } }])
@@ -168,7 +169,7 @@ Deno.test('clearing a body clears the property, not the store', () => {
   assertEquals(tally(driver, 'blob_text'), 1)
 })
 
-Deno.test('a backend may address bodies by integer keys while echoing text', async () => {
+test('a backend may address bodies by integer keys while echoing text', async () => {
   let { blobs } = await import('./plugin.ts')
   let { blog } = await import('./testing.ts')
   let { g, driver, blobs: store } = fixture()
@@ -188,7 +189,7 @@ Deno.test('a backend may address bodies by integer keys while echoing text', asy
   }])
 })
 
-Deno.test('zero is a reusable backend reference, not a cache miss', () => {
+test('zero is a reusable backend reference, not a cache miss', () => {
   let { g, driver, blobs: store } = fixture()
   let calls = 0
   g.plugins.splice(
@@ -212,7 +213,7 @@ Deno.test('zero is a reusable backend reference, not a cache miss', () => {
   }])
 })
 
-Deno.test('property selection leaves inline body properties alone', async () => {
+test('property selection leaves inline body properties alone', async () => {
   let { blobs } = await import('./plugin.ts')
   let { blog } = await import('./testing.ts')
   let { g, driver, blobs: store } = fixture()

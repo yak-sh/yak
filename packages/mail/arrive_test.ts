@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Eid, Refused } from '@yaks/graph'
 import { arrived, type Book, known, named, routed, wearer } from './arrive.ts'
@@ -56,7 +57,7 @@ let knowing = (graph: Book, ids: Record<string, Eid>): Book => ({
   },
 })
 
-Deno.test('wearer: the address book, read backwards', async () => {
+test('wearer: the address book, read backwards', async () => {
   let { g } = await seeded()
   assertEquals(await wearer(g, 'ana@books.example'), ana)
   // Canonical at your own domain, so a spelling Cloudflare would bounce still
@@ -65,7 +66,7 @@ Deno.test('wearer: the address book, read backwards', async () => {
   assertEquals(await wearer(g, 'bo@elsewhere.com', domain), null)
 })
 
-Deno.test('known: the letter a Message-ID names', async () => {
+test('known: the letter a Message-ID names', async () => {
   let { g } = await seeded()
   assertEquals(await known(g, 'a1@x.example'), 'e-first')
   assertEquals(await known(g, 'nobody@x.example'), null)
@@ -73,7 +74,7 @@ Deno.test('known: the letter a Message-ID names', async () => {
   assertEquals(await known(g, ''), null)
 })
 
-Deno.test('named: the id grammar is the address grammar', async () => {
+test('named: the id grammar is the address grammar', async () => {
   let { g } = await seeded()
   let book = knowing(g, { 'S-31': 'sess-31' })
   assertEquals(await named(book, 'S-31@books.example', domain), 'sess-31')
@@ -82,7 +83,7 @@ Deno.test('named: the id grammar is the address grammar', async () => {
   assertEquals(await named(book, 'S-99@books.example', domain), null)
 })
 
-Deno.test('routed: the book wins, the id grammar catches the rest', async () => {
+test('routed: the book wins, the id grammar catches the rest', async () => {
   let { g } = await seeded()
   let book = knowing(g, { 'S-31': 'sess-31' })
   assertEquals(await routed(book, 'ana@books.example', domain), ana)
@@ -90,7 +91,7 @@ Deno.test('routed: the book wins, the id grammar catches the rest', async () => 
   assertEquals(await routed(book, 'club@books.example', domain), null)
 })
 
-Deno.test('arrived: a letter, with both lookups answered', async () => {
+test('arrived: a letter, with both lookups answered', async () => {
   let { g } = await seeded()
   let receive = arrived({ graph: g, domain, triage: pile })
   let batch = await receive(
@@ -115,7 +116,7 @@ Deno.test('arrived: a letter, with both lookups answered', async () => {
   assertEquals(batch[0].$actor, { by: ana })
 })
 
-Deno.test('arrived: a stranger writes unattributed, to the triage pile', async () => {
+test('arrived: a stranger writes unattributed, to the triage pile', async () => {
   let { g } = await seeded()
   let receive = arrived({ graph: g, domain, triage: pile })
   let batch = await receive(got({ from: 'bo@elsewhere.com', subject: 'hello' }))
@@ -125,7 +126,7 @@ Deno.test('arrived: a stranger writes unattributed, to the triage pile', async (
   assertEquals(comp(batch[0], 'mail').verified, undefined)
 })
 
-Deno.test('arrived: the same Message-ID lands once', async () => {
+test('arrived: the same Message-ID lands once', async () => {
   let { g } = await seeded()
   let receive = arrived({ graph: g, domain })
   let m = got({ subject: 'Is there soup?', 'message-id': '<a1@x.example>' })
@@ -134,7 +135,7 @@ Deno.test('arrived: the same Message-ID lands once', async () => {
   assert((await receive(got({ subject: 'no id' }))).length == 1)
 })
 
-Deno.test('arrived: what it records is what an arrival is — no ask to send', async () => {
+test('arrived: what it records is what an arrival is — no ask to send', async () => {
   let { g } = await seeded()
   let batch = await arrived({ graph: g, domain })(
     got({ from: 'ana@books.example', subject: 'hi' }, 'ana@books.example'),

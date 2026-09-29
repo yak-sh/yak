@@ -3,6 +3,7 @@
 // on an unrelated edit. Failures are reported without undoing the write or
 // hiding it from the other observers.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
@@ -13,7 +14,7 @@ import { books, comp, memory } from './testing.ts'
 let held = (one: ReturnType<typeof graph>, eid = 'b1') =>
   (one.get([eid]) as Bundle[])[0]
 
-Deno.test('effect rules match stored tags and this batch’s writes', () => {
+test('effect rules match stored tags and this batch’s writes', () => {
   let one = graph({ storage: memory(), vocab: books })
   one.apply([{
     entity: { eid: 'b1' },
@@ -47,7 +48,7 @@ Deno.test('effect rules match stored tags and this batch’s writes', () => {
   assertEquals(seen.length, 2)
 })
 
-Deno.test('effect rules share a frozen view and resources, before hooks', () => {
+test('effect rules share a frozen view and resources, before hooks', () => {
   let one = graph({ storage: memory(), vocab: books })
   one.apply([{ entity: { eid: 'b1' }, book: { status: 'stocked' } }])
   let seen: string[] = []
@@ -91,7 +92,7 @@ Deno.test('effect rules share a frozen view and resources, before hooks', () => 
   assertEquals(comp(out[0], 'book'), { pages: 412, status: 'sold' })
 })
 
-Deno.test('each failing effect rule is reported and later observers still run', async () => {
+test('each failing effect rule is reported and later observers still run', async () => {
   let seen: string[] = []
   let errors: unknown[] = []
   let broken = (run: Rule['run']): Rule => ({
@@ -130,7 +131,7 @@ Deno.test('each failing effect rule is reported and later observers still run', 
   }
 })
 
-Deno.test('effect rules do not observe checks or refused writes', () => {
+test('effect rules do not observe checks or refused writes', () => {
   let seen: string[] = []
   let one = graph({
     storage: memory(),

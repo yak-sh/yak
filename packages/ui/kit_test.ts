@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { print } from '@yaks/tui/print'
 import { h, type VNode } from 'preact'
@@ -12,7 +13,7 @@ let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
 let fg = (hex: string) =>
   `38;2;${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(';')}`
 
-Deno.test("a theme's colours are what its stylesheet says", async () => {
+test("a theme's colours are what its stylesheet says", async () => {
   let css = await (await fetch(everforest.css)).text()
   let dark = css.slice(css.indexOf(':root'), css.indexOf('}'))
   let said = Object.fromEntries(
@@ -25,13 +26,13 @@ Deno.test("a theme's colours are what its stylesheet says", async () => {
   }
 })
 
-Deno.test('a browser gets the theme, then every part', async () => {
+test('a browser gets the theme, then every part', async () => {
   let css = await stylesheet(everforest)
   assert(css.indexOf('--bg:') < css.indexOf('.Dot {'))
   assert(css.includes('.Menu_Item-danger'))
 })
 
-Deno.test('a part paints in a terminal in the theme: shape a glyph, tone a colour', () => {
+test('a part paints in a terminal in the theme: shape a glyph, tone a colour', () => {
   let dress = sheet(everforest)
   let c = everforest.colors
   let cases: [string[], string][] = [
@@ -61,7 +62,7 @@ Deno.test('a part paints in a terminal in the theme: shape a glyph, tone a colou
   ])
 })
 
-Deno.test('the style guide paints in a terminal', () => {
+test('the style guide paints in a terminal', () => {
   let out = plain(print(h(Guide, null), 100, sheet(everforest)))
   for (let label of ['Dot-ring', 'Id-retired', 'Stamp', 'Tip', 'table']) {
     assert(out.includes(label), label)

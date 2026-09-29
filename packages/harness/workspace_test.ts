@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { kindOf } from '@yaks/session'
 import { local } from './local.ts'
 import type { Harness } from './store.ts'
@@ -33,7 +34,7 @@ let fixture = async () => {
   }
 }
 
-Deno.test('worktree discovery is canonical, shared, and ref identity survives movement/deletion', async () => {
+test('worktree discovery is canonical, shared, and ref identity survives movement/deletion', async () => {
   let f = await fixture()
   try {
     let a = await discover(f.h.g, f.repo)
@@ -88,7 +89,7 @@ Deno.test('worktree discovery is canonical, shared, and ref identity survives mo
   }
 })
 
-Deno.test('concurrent creation and retry share identity, dirty files stay home, detached and branch HEAD differ', async () => {
+test('concurrent creation and retry share identity, dirty files stay home, detached and branch HEAD differ', async () => {
   let f = await fixture()
   try {
     await Deno.writeTextFile(f.repo + '/file', 'dirty')
@@ -141,7 +142,7 @@ Deno.test('concurrent creation and retry share identity, dirty files stay home, 
   }
 })
 
-Deno.test('host preparation separates home and cwd, defaults to sharing, and refuses failures before launch', async () => {
+test('host preparation separates home and cwd, defaults to sharing, and refuses failures before launch', async () => {
   let f = await fixture()
   try {
     let home = await homeAt(f.h.g, f.repo)
@@ -190,7 +191,7 @@ Deno.test('host preparation separates home and cwd, defaults to sharing, and ref
   }
 })
 
-Deno.test('home attaches an existing checkout by path and rejects other paths', async () => {
+test('home attaches an existing checkout by path and rejects other paths', async () => {
   let f = await fixture()
   try {
     await f.h.g.apply([{
@@ -238,7 +239,7 @@ Deno.test('home attaches an existing checkout by path and rejects other paths', 
   }
 })
 
-Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults are session-local', async () => {
+test('spawn prepares admitted home, replay creates nothing, shell defaults are session-local', async () => {
   let f = await fixture()
   let d = run(f)
   try {
@@ -298,7 +299,7 @@ Deno.test('spawn prepares admitted home, replay creates nothing, shell defaults 
   }
 })
 
-Deno.test('spawn creates a worktree from an explicit home', async () => {
+test('spawn creates a worktree from an explicit home', async () => {
   let f = await fixture()
   let source = await scratchRepo()
   let d = run(f)
@@ -336,7 +337,7 @@ Deno.test('spawn creates a worktree from an explicit home', async () => {
   }
 })
 
-Deno.test('root sessions discover and share the existing default worktree', async () => {
+test('root sessions discover and share the existing default worktree', async () => {
   let f = await fixture()
   let a = local({
     h: f.h,
@@ -366,7 +367,7 @@ Deno.test('root sessions discover and share the existing default worktree', asyn
   }
 })
 
-Deno.test('queued fork preserves anchor and prepares checkout on admission', async () => {
+test('queued fork preserves anchor and prepares checkout on admission', async () => {
   let f = await fixture()
   let d = run(f)
   try {
@@ -410,7 +411,7 @@ Deno.test('queued fork preserves anchor and prepares checkout on admission', asy
   }
 })
 
-Deno.test('user task forks stable context and prepares an independent pinned checkout', async () => {
+test('user task forks stable context and prepares an independent pinned checkout', async () => {
   let f = await fixture()
   let a = local({
     h: f.h,
@@ -474,7 +475,7 @@ Deno.test('user task forks stable context and prepares an independent pinned che
   }
 })
 
-Deno.test('user task outside a repository fails before minting work', async () => {
+test('user task outside a repository fails before minting work', async () => {
   let dir = await Deno.makeTempDir()
   let a = local({
     h: await harness(),

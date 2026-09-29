@@ -1,5 +1,6 @@
 // Local inference must prove a complete physical set. Unknown projected sets
 // use batched, addressed one-shots, never the graph-wide descriptor catalogue.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { eidOf } from '@yaks/archetype'
@@ -9,7 +10,7 @@ import { host } from './host_testing.ts'
 import { tick } from './testing.ts'
 import { effect } from '@preact/signals'
 
-Deno.test('local table names prove the spine without reading component bodies', () => {
+test('local table names prove the spine without reading component bodies', () => {
   let tables = ['doc', 'local_plugin', 'task'], id = eidOf(tables)
   let body = new Proxy({}, {
     get: () => {
@@ -36,7 +37,7 @@ Deno.test('local table names prove the spine without reading component bodies', 
   assertEquals(archetypeTables(next), undefined)
 })
 
-Deno.test('a later physical set is learned, not the prior set of the same owner', () => {
+test('a later physical set is learned, not the prior set of the same owner', () => {
   let names = ['late_plugin'], id = eidOf(names)
   let value = {
     entity: { eid: 'moving-owner', num: 0, archetype: id },
@@ -54,7 +55,7 @@ Deno.test('a later physical set is learned, not the prior set of the same owner'
   assertEquals(archetypeTables(id), names)
 })
 
-Deno.test('projected descriptors batch, wake renderers, release, and survive eviction', async () => {
+test('projected descriptors batch, wake renderers, release, and survive eviction', async () => {
   let prior = config.host
   config.host = 'archetypes.test'
   let tables = ['future_plugin', 'task'], id = eidOf(tables)

@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertNotEquals } from '@std/assert'
 import { addressed, representation, represents } from './representation.ts'
 
-Deno.test('representation identity includes scope, type, and filename', () => {
+test('representation identity includes scope, type, and filename', () => {
   let sha = 'a'.repeat(64)
   let first = representation('app-a', sha, 'audio/MPEG', 'Travel.mp3')
   assertEquals(first, representation('app-a', sha, 'audio/mpeg', 'Travel.mp3'))

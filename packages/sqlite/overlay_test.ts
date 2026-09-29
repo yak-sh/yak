@@ -3,6 +3,7 @@
 // rule takes — so what these assert is that a rule needs no second evaluator
 // to see a batch that has not landed.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { match } from '@yaks/graph'
 import { mem, shop, spy } from './testing.ts'
@@ -36,7 +37,7 @@ let shopFloor = () => {
   return { driver, s }
 }
 
-Deno.test('a batch reads as rows before it is written', () => {
+test('a batch reads as rows before it is written', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [
     // a fresh entity, with no spine of its own yet
@@ -62,14 +63,14 @@ Deno.test('a batch reads as rows before it is written', () => {
   assertEquals(read(driver, shop, '.product.price>10').length, 0)
 })
 
-Deno.test('a deleted entity leaves every membership while the overlay stands', () => {
+test('a deleted entity leaves every membership while the overlay stands', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [{ entity: { eid: 'p2' }, $delete: true }])
   assertEquals(seen(driver, over, '.doc'), ['p1'])
   assertEquals(titles(read(driver, shop, '.doc')), ['Dune', 'Ubik'])
 })
 
-Deno.test('a reference to an entity the same batch mints resolves', () => {
+test('a reference to an entity the same batch mints resolves', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [
     { entity: { eid: 'm1' }, doc: { title: 'Herbert' } },
@@ -80,7 +81,7 @@ Deno.test('a reference to an entity the same batch mints resolves', () => {
   assertEquals(seen(driver, over, '.product.maker=m1'), ['p3'])
 })
 
-Deno.test('the overlay costs the batch, never the database', () => {
+test('the overlay costs the batch, never the database', () => {
   // The same batch, raised over a graph of 2 and a graph of 2,002. What it
   // costs must be the same both times — a wall clock would only say how loaded
   // the box is, so what is asserted is the statements, which is the thing that
@@ -121,7 +122,7 @@ Deno.test('the overlay costs the batch, never the database', () => {
   assertEquals(cost(2000), 3)
 })
 
-Deno.test('an overlay covers what will be read and nothing else', () => {
+test('an overlay covers what will be read and nothing else', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [
     { entity: { eid: 'p1' }, doc: { title: 'Moved' }, product: { price: 99 } },
@@ -135,7 +136,7 @@ Deno.test('an overlay covers what will be read and nothing else', () => {
   assertEquals(seen(driver, over, '.doc.title=Dune'), ['p1'])
 })
 
-Deno.test('a batch that mints nothing leaves the identity table alone', () => {
+test('a batch that mints nothing leaves the identity table alone', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [
     { entity: { eid: 'p1' }, product: { price: 99 } },

@@ -6,10 +6,11 @@
 // origin existed, a raw 522. Held through the whole kernel because the choice
 // lives in the router. domain_test.ts covers the fully wired customer domain; this is the
 // one state that never used to have an answer of its own.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { client, connector, kernel, meta, seed } from './probe.ts'
 
-Deno.test(
+test(
   'a domain with nothing ready gets the branded page, not the apex',
   async () => {
     let k = await kernel()
@@ -35,7 +36,7 @@ Deno.test(
   },
 )
 
-Deno.test('a domain marked active still routes to its app', async () => {
+test('a domain marked active still routes to its app', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{

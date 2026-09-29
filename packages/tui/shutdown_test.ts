@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { shutdown } from './shutdown.ts'
 
-Deno.test('first interrupt drains without forcing; second forces once', async () => {
+test('first interrupt drains without forcing; second forces once', async () => {
   let release!: () => void
   let active = new Promise<void>((resolve) => release = resolve)
   let drains = 0, forces = 0
@@ -26,13 +27,13 @@ Deno.test('first interrupt drains without forcing; second forces once', async ()
   assertEquals(forces, 1)
 })
 
-Deno.test('drain completion exits without another key', async () => {
+test('drain completion exits without another key', async () => {
   let q = shutdown({ drain: () => Promise.resolve() })
   q.interrupt()
   await q.done
 })
 
-Deno.test('drain failure remains visible, but rejection after force is consumed', async () => {
+test('drain failure remains visible, but rejection after force is consumed', async () => {
   let q = shutdown({ drain: () => Promise.reject(new Error('drain broke')) })
   q.interrupt()
   await assertRejects(() => q.done, Error, 'drain broke')

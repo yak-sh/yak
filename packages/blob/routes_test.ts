@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
 import { type Authenticate, type Route, routed } from '@yaks/api'
@@ -101,7 +102,7 @@ let png = new Uint8Array([
   ...new Array(21).fill(0),
 ])
 
-Deno.test('a PUT to an address stores the bytes and mints the artifact', async () => {
+test('a PUT to an address stores the bytes and mints the artifact', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
   let made = await ask(put(sha, text, 'text/plain; charset=utf-8'))
@@ -142,7 +143,7 @@ Deno.test('a PUT to an address stores the bytes and mints the artifact', async (
   assertEquals(head.headers.get('content-length'), String(text.length))
 })
 
-Deno.test('the same upload twice is one object and one row', async () => {
+test('the same upload twice is one object and one row', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
   await ask(put(sha, text, 'text/plain'))
@@ -153,7 +154,7 @@ Deno.test('the same upload twice is one object and one row', async () => {
   assertEquals((await h.graph.read('.representation')).length, 1)
 })
 
-Deno.test('a changed text type gets a new URL without changing the old one', async () => {
+test('a changed text type gets a new URL without changing the old one', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
   let plain = await ask(put(sha, text, 'text/plain'))
@@ -187,7 +188,7 @@ Deno.test('a changed text type gets a new URL without changing the old one', asy
   )
 })
 
-Deno.test('an existing bare address gains a stable type on its first read', async () => {
+test('an existing bare address gains a stable type on its first read', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
   sqliteBlobs(h.sql).put(sha, text)
@@ -208,7 +209,7 @@ Deno.test('an existing bare address gains a stable type on its first read', asyn
   )
 })
 
-Deno.test('bytes that do not hash to their address are refused, and nothing lands', async () => {
+test('bytes that do not hash to their address are refused, and nothing lands', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
   let res = await ask(put(sha, 'something else', 'text/plain'))
@@ -218,14 +219,14 @@ Deno.test('bytes that do not hash to their address are refused, and nothing land
   assertEquals(tally(h.sql, 'blob_text'), 0)
 })
 
-Deno.test('an address is 64 hex digits, whichever way the request points', async () => {
+test('an address is 64 hex digits, whichever way the request points', async () => {
   let h = host(), ask = door(h)
   assertEquals((await ask(new Request(at('etc/passwd')))).status, 404)
   assertEquals((await ask(new Request(at(`${'a'.repeat(63)}Z`)))).status, 404)
   assertEquals((await ask(put('nonsense', text))).status, 400)
 })
 
-Deno.test('an upload past the limit is refused', async () => {
+test('an upload past the limit is refused', async () => {
   let h = host(), ask = door(h, { limit: 4 })
   let sha = await addressOf(text)
   let res = await ask(put(sha, text, 'text/plain'))
@@ -233,7 +234,7 @@ Deno.test('an upload past the limit is refused', async () => {
   assertEquals((await h.graph.read('.artifact')).length, 0)
 })
 
-Deno.test('a text store that cannot keep the bytes says so at the write', async () => {
+test('a text store that cannot keep the bytes says so at the write', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(png)
   let res = await ask(put(sha, png, 'image/png'))
@@ -246,7 +247,7 @@ Deno.test('a text store that cannot keep the bytes says so at the write', async 
   assertEquals((await h.graph.read('.artifact')).length, 0)
 })
 
-Deno.test('the store a host names is where the bytes land', async () => {
+test('the store a host names is where the bytes land', async () => {
   let cells = new Map<string, Uint8Array>()
   let bucket: Pick<Bucket, 'head' | 'get' | 'put'> = {
     head: (key) => {
@@ -295,7 +296,7 @@ Deno.test('the store a host names is where the bytes land', async () => {
   assertEquals(tally(h.sql, 'blob_text'), 0)
 })
 
-Deno.test('the bound is on the bytes, not on what a header claimed', async () => {
+test('the bound is on the bytes, not on what a header claimed', async () => {
   let h = host(), ask = door(h, { limit: 4 })
   let streamed = new Request(at(await addressOf(text)), {
     method: 'PUT',
@@ -309,7 +310,7 @@ Deno.test('the bound is on the bytes, not on what a header claimed', async () =>
   assertEquals((await ask(streamed)).status, 413)
 })
 
-Deno.test('a store nobody can build mounts no door, and says why', () => {
+test('a store nobody can build mounts no door, and says why', () => {
   let h = host()
   let warned: unknown[] = []
   let warn = console.warn
@@ -333,7 +334,7 @@ Deno.test('a store nobody can build mounts no door, and says why', () => {
   )
 })
 
-Deno.test('an upload is by whoever the door says is calling', async () => {
+test('an upload is by whoever the door says is calling', async () => {
   let h = host()
   // The host's own answer to "who is this", as `@yaks/cli` composes it from
   // the plugins: a route reads it rather than writing as nobody.
@@ -344,7 +345,7 @@ Deno.test('an upload is by whoever the door says is calling', async () => {
   assertEquals((row.created as { by: string }).by, 'ana')
 })
 
-Deno.test('a door that knows nobody uploads as nobody, not as the caller', async () => {
+test('a door that knows nobody uploads as nobody, not as the caller', async () => {
   let h = host()
   let ask = door({ ...h, who: () => null })
   let sha = await addressOf(text)

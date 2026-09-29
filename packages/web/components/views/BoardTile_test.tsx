@@ -4,6 +4,7 @@
 // tally frame the server sends, and read the numbers off the meta row. The
 // board's task rows are deliberately ABSENT from the cache here: a tile that
 // could still count them locally would hide the very regression this fixes.
+import { test } from '@yaks/testing'
 import { tick } from '../../testing.ts'
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
@@ -52,7 +53,7 @@ let tally = async (agg: Record<string, number>) => {
   await tick()
 }
 
-Deno.test('board tile counts come from the tally sub, not the members', async () => {
+test('board tile counts come from the tally sub, not the members', async () => {
   await onTile('.task', async (root) => {
     assertEquals(resolve(ent('board'), 'List.Tile').Render, BoardTile)
     assertEquals(root.querySelector('.Tile_Title')?.textContent, 'Work')
@@ -73,7 +74,7 @@ Deno.test('board tile counts come from the tally sub, not the members', async ()
   })
 })
 
-Deno.test('a bad board query does not break its tile', async () => {
+test('a bad board query does not break its tile', async () => {
   await onTile('.hovercraf=x', (root) => {
     assertEquals(stats(root), [])
     assertEquals(root.querySelector('.Id')?.textContent, 'B-1')

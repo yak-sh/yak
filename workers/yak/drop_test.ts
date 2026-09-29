@@ -7,6 +7,7 @@
 // an app too, the same name again is an UPDATE and a version later, and the
 // three refusals are sentences on a page rather than a stack trace — a path
 // out of the app, more than the ceiling, and nobody signed in.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { kernel, type Packed, seed, signIn, zipped } from './probe.ts'
 import { MAX } from './unzip.ts'
@@ -34,7 +35,7 @@ let drops = (
 let zip = async (name: string, entries: Packed[]) =>
   new File([await zipped(entries)], name, { type: 'application/zip' })
 
-Deno.test('a dropped zip becomes an app at its own address', async () => {
+test('a dropped zip becomes an app at its own address', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff14', apps: [] }])
@@ -94,7 +95,7 @@ Deno.test('a dropped zip becomes an app at its own address', async () => {
 // it — so what has to hold here is that the bytes survive the trip: a drop
 // carries a file that is not text through unchanged, and the deploy behind it
 // is the same `app_deploy` that walks worker.js's imports.
-Deno.test('a dropped zip carries a worker and the wasm it imports', async () => {
+test('a dropped zip carries a worker and the wasm it imports', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff15', apps: [] }])
@@ -136,7 +137,7 @@ Deno.test('a dropped zip carries a worker and the wasm it imports', async () => 
   }
 })
 
-Deno.test('a bare index.html is an app, once it is named', async () => {
+test('a bare index.html is an app, once it is named', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff16', apps: [] }])
@@ -159,7 +160,7 @@ Deno.test('a bare index.html is an app, once it is named', async () => {
   }
 })
 
-Deno.test('what the door will not take, it says in a sentence', async () => {
+test('what the door will not take, it says in a sentence', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff17', apps: [] }])
@@ -222,7 +223,7 @@ Deno.test('what the door will not take, it says in a sentence', async () => {
 // building. A stranger must not be offered a form that will only refuse them.
 // The page is the dashboard's, at the apex, and its form posts to the space's
 // own door, which takes it from there and from nowhere else but the space.
-Deno.test("the drop zone is on the owner's New app page", async () => {
+test("the drop zone is on the owner's New app page", async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff18', apps: ['recipes'] }])

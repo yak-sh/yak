@@ -1,10 +1,11 @@
 // Brackets change the cardinality of a multi-entity match, while each member
 // remains an ordinary query.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { parse, parseMatch } from './mod.ts'
 
-Deno.test('a collection nests the same entity queries as a flat match', () => {
+test('a collection nests the same entity queries as a flat match', () => {
   assertEquals(
     parseMatch(
       '$region .region; [$sfx .sfx, sfx.region=$region; [$note .note]]',
@@ -31,7 +32,7 @@ Deno.test('a collection nests the same entity queries as a flat match', () => {
   )
 })
 
-Deno.test('path qualifiers and quoted semicolons stay in their entity', () => {
+test('path qualifiers and quoted semicolons stay in their entity', () => {
   assertEquals(
     parseMatch('.requires[<=3]->T-1; [.doc.title="a;b"]')
       .map((part) => part.kind),
@@ -39,7 +40,7 @@ Deno.test('path qualifiers and quoted semicolons stay in their entity', () => {
   )
 })
 
-Deno.test('an unclosed or empty collection is refused', () => {
+test('an unclosed or empty collection is refused', () => {
   assertThrows(() => parseMatch('[.sfx'), SyntaxError, 'unclosed')
   assertThrows(() => parseMatch('[]'), SyntaxError, 'empty collection')
   assertThrows(() => parseMatch('[.sfx] .region'), SyntaxError)

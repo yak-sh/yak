@@ -1,6 +1,7 @@
 // A box's vault: private files beside the database, which @yaks/secrets seals
 // into through the graph like any other vault.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -19,7 +20,7 @@ import { fileVault, vaultOf } from './vault.ts'
 // A value on its way to the vault wears @yaks/effects' `provisional` mark.
 let vocab = loadVocab([secretsDoc, provisionalDoc])
 
-Deno.test('the file vault is private files, one per secret, and follows no symlink', async () => {
+test('the file vault is private files, one per secret, and follows no symlink', async () => {
   let dir = await Deno.makeTempDir()
   try {
     let vault = fileVault(`${dir}/secrets`)
@@ -52,7 +53,7 @@ Deno.test('the file vault is private files, one per secret, and follows no symli
 })
 
 // `~/.yak/yak.db` keeps its secrets in `~/.yak/secrets`, as it always has.
-Deno.test('a graph keeps its secrets beside its database, or in memory', async () => {
+test('a graph keeps its secrets beside its database, or in memory', async () => {
   let dir = await Deno.makeTempDir()
   try {
     fileVault(`${dir}/secrets`).seal(secretEid('A'), {

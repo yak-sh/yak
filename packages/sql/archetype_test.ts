@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { Archetypes } from '@yaks/archetype'
 import { absent, and, or, parse, present } from '@yaks/query'
@@ -33,7 +34,7 @@ let ids = new Map([
 ])
 let archetypes = archetypeSet(cache, ids)
 
-Deno.test('archetype plans: facets/kinds use the spine, only values add joins', () => {
+test('archetype plans: facets/kinds use the spine, only values add joins', () => {
   for (
     let [query, expected] of [
       ['.task', [12, 13]],
@@ -61,7 +62,7 @@ Deno.test('archetype plans: facets/kinds use the spine, only values add joins', 
   assert(compile(parse('.doc'), v, { archetypes: empty }).sql.includes('0'))
 })
 
-Deno.test('archetype matching caches content, not a rolled-back id assignment', () => {
+test('archetype matching caches content, not a rolled-back id assignment', () => {
   assertEquals(archetypes({ all: ['task'], none: ['claim'] }), [12])
   let learned = cache.intern(['doc', 'claim'])
   let next = archetypeSet(cache, new Map([[learned.eid, 12]]))
@@ -70,7 +71,7 @@ Deno.test('archetype matching caches content, not a rolled-back id assignment', 
   assertEquals(archetypes({ all: ['task'] }), [12, 13])
 })
 
-Deno.test('boolean presence trees retain their composition without component joins', () => {
+test('boolean presence trees retain their composition without component joins', () => {
   let ast = and(or(present('doc'), present('task')), absent('claim'))
   let r = bind(ast, v, { archetypes })
   assertEquals(r.joins, [])
@@ -87,7 +88,7 @@ Deno.test('boolean presence trees retain their composition without component joi
 // expands to K present and every earlier kind absent, and a list per facet
 // bound kinds × archetypes parameters — 20,228 on the fleet graph, past V8's
 // spread and SQLite's variable ceiling (T-37437).
-Deno.test('an AND of facets binds one archetype list, not one per facet', () => {
+test('an AND of facets binds one archetype list, not one per facet', () => {
   let ids = (q: string): number[] =>
     JSON.parse(String(compile(parse(q), v, { archetypes }).params[0] ?? '[]'))
   let sql = compile(parse('.task .doc !claim'), v, { archetypes })

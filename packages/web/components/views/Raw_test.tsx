@@ -1,4 +1,5 @@
 // Raw views keep their source inert while presenting it as highlighted code.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -34,7 +35,7 @@ let html = (View: typeof Json, body: string) => {
   }
 }
 
-Deno.test('JSON renders highlighted code inside pre', () => {
+test('JSON renders highlighted code inside pre', () => {
   let { document } = parseHTML(html(Json, '<script>alert(1)</script>'))
   let root = document
   let code = root.querySelector('.Json > code')
@@ -49,7 +50,7 @@ Deno.test('JSON renders highlighted code inside pre', () => {
   assertEquals(code?.textContent.includes('<script>alert(1)</script>'), true)
 })
 
-Deno.test('Markdown renders highlighted code inside pre', () => {
+test('Markdown renders highlighted code inside pre', () => {
   let { document } = parseHTML(
     html(Md, '# heading\n\n<script>alert(1)</script>'),
   )

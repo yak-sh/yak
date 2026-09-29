@@ -1,10 +1,11 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type BindOpts, insert, lit } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { mem, seed, shop, spy, unit } from './testing.ts'
 import { get, storage } from './mod.ts'
 
-Deno.test('transaction gather observes writes and rollback', () => {
+test('transaction gather observes writes and rollback', () => {
   let driver = mem()
   let opts: BindOpts = {
     derived: { 'doc.body': { tag: 'text', expr: () => lit('hydrated body') } },
@@ -41,7 +42,7 @@ Deno.test('transaction gather observes writes and rollback', () => {
   )
 })
 
-Deno.test('singleton gather reads a wide sparse vocabulary in one probe', () => {
+test('singleton gather reads a wide sparse vocabulary in one probe', () => {
   let vocab = loadVocab({
     $defs: {
       entity: {
@@ -90,7 +91,7 @@ Deno.test('singleton gather reads a wide sparse vocabulary in one probe', () => 
   assertEquals(s.tx((tx) => tx.get(['later']))[0].tag1, {})
 })
 
-Deno.test('projected identities read only named facets and preserve projection/rollback truth', () => {
+test('projected identities read only named facets and preserve projection/rollback truth', () => {
   let driver = mem()
   let queries: string[] = []
   let opts: BindOpts = {
@@ -140,7 +141,7 @@ Deno.test('projected identities read only named facets and preserve projection/r
   )
 })
 
-Deno.test('whole reads scale with worn components across one or 100 hits', () => {
+test('whole reads scale with worn components across one or 100 hits', () => {
   let name = (i: number) =>
     `facet${String.fromCharCode(97 + Math.floor(i / 26))}${
       String.fromCharCode(97 + i % 26)

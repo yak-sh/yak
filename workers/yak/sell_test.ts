@@ -8,6 +8,7 @@
 // collects the identity documents — and every one of them is a promise made to
 // a seller on the terms page and a liability decision for the platform. A diff
 // that moves one is a diff that has to say so out loud.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -57,7 +58,7 @@ let space = (over: Partial<Space> = {}): Space => ({
   ...over,
 })
 
-Deno.test('the account is the charge-merchants-directly model, in full', () => {
+test('the account is the charge-merchants-directly model, in full', () => {
   assertEquals(account(space(), 'ada@example.com'), {
     controller: {
       // The merchant pays Stripe's processing fee out of their own charge.
@@ -82,7 +83,7 @@ Deno.test('the account is the charge-merchants-directly model, in full', () => {
 // destination charge's capability, which a direct charge never uses. `type` is
 // the deprecated form of the four properties above, and the two ways of
 // saying one thing are not both passed.
-Deno.test('the account asks for no capabilities and names no type', () => {
+test('the account asks for no capabilities and names no type', () => {
   let made = account(space(), '') as Record<string, unknown>
   assertEquals('capabilities' in made, false)
   assertEquals('type' in made, false)
@@ -91,11 +92,11 @@ Deno.test('the account asks for no capabilities and names no type', () => {
 // An address we do not have is left out rather than sent empty: an empty
 // `email` is not the same ask as no email at all, and Stripe's form asks for
 // one either way.
-Deno.test('an account with no address for the seller sends none', () => {
+test('an account with no address for the seller sends none', () => {
   assertEquals('email' in account(space(), ''), false)
 })
 
-Deno.test('the onboarding link comes back to the space page, both ways', () => {
+test('the onboarding link comes back to the space page, both ways', () => {
   assertEquals(link(space(), 'acct_1'), {
     account: 'acct_1',
     type: 'account_onboarding',
@@ -104,7 +105,7 @@ Deno.test('the onboarding link comes back to the space page, both ways', () => {
   })
 })
 
-Deno.test('the fee is basis points, rounded down, and never the whole sale', () => {
+test('the fee is basis points, rounded down, and never the whole sale', () => {
   // No rate set is a rate of 0, and nothing is taken.
   assertEquals(fee(10_000, 0), 0)
   assertEquals(fee(1000, 250), 25)
@@ -117,7 +118,7 @@ Deno.test('the fee is basis points, rounded down, and never the whole sale', () 
   assertEquals(fee(0, 250), 0)
 })
 
-Deno.test('the rate reads the way a person says it', () => {
+test('the rate reads the way a person says it', () => {
   assertEquals(rate(0), '0%')
   assertEquals(rate(250), '2.5%')
   assertEquals(rate(1000), '10%')
@@ -126,7 +127,7 @@ Deno.test('the rate reads the way a person says it', () => {
 // The rate is a setting on the platform's own space row (T-34554), so it is
 // asked of `yak` and of no other space — a seller's row saying 500 would be a
 // seller choosing what they pay us.
-Deno.test('the fee is read off the platform’s own space row', async () => {
+test('the fee is read off the platform’s own space row', async () => {
   let asked: string[] = []
   let dir = (fee: number | null) => ({
     space: (slug: string) => {
@@ -144,7 +145,7 @@ Deno.test('the fee is read off the platform’s own space row', async () => {
 // The pricing page is a file. The live rate is spliced into its one marked
 // element on the way out, and the number in the file is what a crawler reading
 // the repo sees and what serves when the directory will not answer.
-Deno.test('the pricing page is quoted the rate that is set', () => {
+test('the pricing page is quoted the rate that is set', () => {
   let page = `<p>We take <span class="Fee">0%</span> of each sale.</p>`
   assertStringIncludes(quoted(page, 250), 'We take <span class="Fee">2.5%<')
   assertEquals(quoted(page, 0), page)
@@ -162,7 +163,7 @@ Deno.test('the pricing page is quoted the rate that is set', () => {
   )
 })
 
-Deno.test('the seller row is the account object, flags and all', () => {
+test('the seller row is the account object, flags and all', () => {
   assertEquals(
     sellerOf({ id: 'acct_1', charges_enabled: true, details_submitted: true }),
     { account: 'acct_1', charges_enabled: true, details_submitted: true },
@@ -178,7 +179,7 @@ Deno.test('the seller row is the account object, flags and all', () => {
   })
 })
 
-Deno.test('a redelivered account.updated moves no property at all', () => {
+test('a redelivered account.updated moves no property at all', () => {
   let now = held(space({
     stripe: { account: 'acct_1', chargesEnabled: true, detailsSubmitted: true },
   }))
@@ -196,7 +197,7 @@ Deno.test('a redelivered account.updated moves no property at all', () => {
   assertEquals(moved(held(space()), next), next)
 })
 
-Deno.test('ready is charges_enabled and nothing else', () => {
+test('ready is charges_enabled and nothing else', () => {
   assertEquals(selling(space()), 'none')
   assertEquals(
     selling(space({
@@ -252,7 +253,7 @@ let shelf: Product[] = [
   { entity: { eid: FREE }, doc: { title: 'Sticker' }, product: {} },
 ]
 
-Deno.test('a cart is read off the wire, or refused in words', () => {
+test('a cart is read off the wire, or refused in words', () => {
   assertEquals(cart({ items: [{ product: TEE, qty: '2', options: ' M ' }] }), [
     { product: TEE, qty: 2, options: 'M' },
   ])
@@ -271,7 +272,7 @@ Deno.test('a cart is read off the wire, or refused in words', () => {
   }
 })
 
-Deno.test('the cart is priced off the store, never off the wire', () => {
+test('the cart is priced off the store, never off the wire', () => {
   let out = priced(shelf, [
     { product: TEE, qty: 2, options: 'M' },
     { product: MUG, qty: 1 },
@@ -299,7 +300,7 @@ Deno.test('the cart is priced off the store, never off the wire', () => {
   assertEquals(out.total, 2800 * 2 + 1250)
 })
 
-Deno.test('a product this app has not got, or has not priced, is refused', () => {
+test('a product this app has not got, or has not priced, is refused', () => {
   // An eid off another app, or one somebody made up.
   assertThrows(
     () => priced(shelf, [{ product: MUG.replace('2', '9'), qty: 1 }]),
@@ -317,7 +318,7 @@ Deno.test('a product this app has not got, or has not priced, is refused', () =>
 // Stripe takes 500 characters per metadata value and the items ride one, so the
 // door says how many lines fit rather than handing Stripe something it will cut
 // in half.
-Deno.test('a cart too big for one metadata value is refused by size', () => {
+test('a cart too big for one metadata value is refused by size', () => {
   let many = Array.from({ length: 40 }, () => ({ product: TEE, qty: 1 }))
   assert(packed(many).length > META)
   assertThrows(() => priced(shelf, many), Error, 'too many different things')
@@ -327,7 +328,7 @@ Deno.test('a cart too big for one metadata value is refused by size', () => {
   assertEquals(priced(shelf, few).lines.length, 5)
 })
 
-Deno.test('the packed items keep the product, the count and the variant', () => {
+test('the packed items keep the product, the count and the variant', () => {
   assertEquals(
     packed([{ product: TEE, qty: 2, options: 'M' }, { product: MUG, qty: 1 }]),
     '[{"p":"11111111111141118111111111111111","q":2,"o":"M"},' +
@@ -338,7 +339,7 @@ Deno.test('the packed items keep the product, the count and the variant', () => 
 // The buyer comes back inside the app, always. This door is callable by a guest
 // on an open app, so an absolute URL off the wire would let a stranger have
 // yaks.app's own checkout hand buyers to a page they wrote.
-Deno.test('success and cancel resolve inside the app, and never outside it', () => {
+test('success and cancel resolve inside the app, and never outside it', () => {
   let root = 'https://ada.yaks.app/shop/'
   assertEquals(backAt(root, undefined), root)
   assertEquals(backAt(root, ''), root)
@@ -375,7 +376,7 @@ let asked = {
   cancel: 'https://ada.yaks.app/shop/',
 }
 
-Deno.test('the session is a payment, with the cart in numbered line items', () => {
+test('the session is a payment, with the cart in numbered line items', () => {
   let made = session({ ...asked, email: 'ana@example.com' })
   assertEquals(made.mode, 'payment')
   // Stripe's form encoding numbers a list by its keys, and billing.ts `form`
@@ -403,7 +404,7 @@ Deno.test('the session is a payment, with the cart in numbered line items', () =
 
 // With no rate set the platform takes nothing — and Stripe requires a positive
 // application fee, so a fee of nothing has to be no fee rather than a zero.
-Deno.test('the fee rides payment_intent_data, and is absent when it is zero', () => {
+test('the fee rides payment_intent_data, and is absent when it is zero', () => {
   assertEquals(
     'application_fee_amount' in session(asked).payment_intent_data,
     false,
@@ -419,7 +420,7 @@ Deno.test('the fee rides payment_intent_data, and is absent when it is zero', ()
 // The rate is a setting (T-34554), so it can move between the checkout and the
 // event that files the order. What the order records is what was taken, which
 // is the rate the session carries and never the rate in force now.
-Deno.test('an order is charged the rate its session carried', () => {
+test('an order is charged the rate its session carried', () => {
   let paid = (fee: Record<string, string>) =>
     orderOf(
       { id: 'cs_1', amount_total: 10_000, metadata: fee },
@@ -440,7 +441,7 @@ Deno.test('an order is charged the rate its session carried', () => {
 // from Stripe's session id, so a second delivery of `checkout.session.completed`
 // addresses the row the first one wrote instead of minting a second order.
 // There is no remembered-event list to keep correct.
-Deno.test('an order is written at an eid derived from its session', () => {
+test('an order is written at an eid derived from its session', () => {
   assertEquals(orderEid('cs_test_1'), orderEid('cs_test_1'))
   assert(orderEid('cs_test_1') != orderEid('cs_test_2'))
   // Shaped as a uuid, because that is what a store's eids are — version 8,
@@ -452,7 +453,7 @@ Deno.test('an order is written at an eid derived from its session', () => {
   )
 })
 
-Deno.test('the cart survives the round trip through Stripe metadata', () => {
+test('the cart survives the round trip through Stripe metadata', () => {
   let items = [
     { product: TEE, qty: 2, options: 'M' },
     { product: MUG, qty: 1 },
@@ -477,7 +478,7 @@ let sess = {
   metadata: { space: 'e-space', app: 'shop', items: '[{"p":"x","q":1}]' },
 }
 
-Deno.test('the order row is what one completed session says', () => {
+test('the order row is what one completed session says', () => {
   assertEquals(orderOf(sess, 'acct_seller'), {
     session: 'cs_test_1',
     intent: 'pi_1',
@@ -505,7 +506,7 @@ Deno.test('the order row is what one completed session says', () => {
 
 // A redelivery derives the identical row, so `moved` finds nothing and the
 // store is never written to at all.
-Deno.test('the same completed session twice moves no property', () => {
+test('the same completed session twice moves no property', () => {
   let one = orderOf(sess, 'acct_seller')
   assertEquals(moved(one, orderOf(sess, 'acct_seller')), {})
   assertEquals(moved(one, { ...one, status: 'refunded' }), {
@@ -513,7 +514,7 @@ Deno.test('the same completed session twice moves no property', () => {
   })
 })
 
-Deno.test('the buyer is told what they bought and what it cost', () => {
+test('the buyer is told what they bought and what it cost', () => {
   let letter = receipt(
     'The Shop',
     orderOf(sess, 'acct_seller'),

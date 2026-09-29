@@ -5,7 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import {
   arrives,
   client,
@@ -19,7 +19,7 @@ import {
 } from './probe.ts'
 import { type Letter } from './mcp-probe.ts'
 
-Deno.test("an app's letters, listed and sent through the connector", async () => {
+test("an app's letters, listed and sent through the connector", async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff41', apps: ['recipes'] }])
@@ -178,7 +178,7 @@ Deno.test("an app's letters, listed and sent through the connector", async () =>
 // across them, the app's own component seeded because the vocabulary is
 // planted first, a redeploy that writes nothing more, and files the web never
 // sees.
-Deno.test(
+test(
   'a deploy seeds the store once, and the seed is not on the web',
   async () => {
     let k = await kernel()
@@ -298,7 +298,7 @@ Deno.test(
   },
 )
 
-Deno.test('a later release seeds a newly declared component', async () => {
+test('a later release seeds a newly declared component', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)

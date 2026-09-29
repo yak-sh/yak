@@ -1,4 +1,5 @@
 // The edge identity derivation and the transition table (D-23820, T-23825).
+import { test } from '@yaks/testing'
 import './testing.ts'
 import {
   assertEquals,
@@ -21,7 +22,7 @@ import { comps, edges } from './types.ts'
 let UUID8 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
-Deno.test('edgeEid: one sentence, one uuid; direction and nature distinguish', () => {
+test('edgeEid: one sentence, one uuid; direction and nature distinguish', () => {
   let a = edgeEid('a', 'requires', 'b')
   assertMatch(a, UUID8)
   assertEquals(a, edgeEid('a', 'requires', 'b'))
@@ -31,7 +32,7 @@ Deno.test('edgeEid: one sentence, one uuid; direction and nature distinguish', (
 
 // The derivation is pinned to this exact table, so a sentence names ONE
 // entity whichever door writes it.
-Deno.test('edgeEid: the pinned derivation', () => {
+test('edgeEid: the pinned derivation', () => {
   let cases: [string, string, string, string][] = [
     ['a', 'requires', 'b', '07c39ec4-e16c-8322-ad59-44178f02e45a'],
     ['b', 'requires', 'a', 'd5e0b374-7e61-80dc-97e3-9975c5353a45'],
@@ -67,7 +68,7 @@ Deno.test('edgeEid: the pinned derivation', () => {
   }
 })
 
-Deno.test('natureOf: every edge type, present tense but the event, each a comp', () => {
+test('natureOf: every edge type, present tense but the event, each a comp', () => {
   assertEquals(Object.keys(natureOf).sort(), [...edges].sort())
   assertEquals(natureOf.referenced, 'references')
   assertEquals(natureOf.requires, 'requires')
@@ -81,7 +82,7 @@ Deno.test('natureOf: every edge type, present tense but the event, each a comp',
 
 // The two changes that SAY a sentence, and the reader that takes them back
 // apart — the seam every consumer of the wire now goes through.
-Deno.test('link/unlink: the entity is the sentence, both halves or neither', () => {
+test('link/unlink: the entity is the sentence, both halves or neither', () => {
   let said = edgeEid('a', 'references', 'b')
   assertEquals(link('a', 'referenced', 'b'), [
     { eid: said, name: 'edge', comp: { from: 'a', to: 'b' } },
@@ -105,7 +106,7 @@ Deno.test('link/unlink: the entity is the sentence, both halves or neither', () 
   assertThrows(() => link('a', 'blocks', 'b'), Error, 'unknown edge type')
 })
 
-Deno.test('moves: a batch read back as the sentences it says and unsays', () => {
+test('moves: a batch read back as the sentences it says and unsays', () => {
   let said = edgeEid('a', 'requires', 'b')
   assertEquals(moves(link('a', 'requires', 'b')), [{
     dep: { parent: 'a', type: 'requires', child: 'b' },
@@ -140,7 +141,7 @@ Deno.test('moves: a batch read back as the sentences it says and unsays', () => 
   assertEquals(moves([{ eid: 'x', name: 'entity', comp: null }]), [])
 })
 
-Deno.test('client singleton sentences have stable, distinct UUID8 identities', () => {
+test('client singleton sentences have stable, distinct UUID8 identities', () => {
   assertEquals(cameraEid('a', 'b'), 'f8ed5a9a-5e24-8055-88d4-27e39fdc4bbd')
   assertEquals(cursorEid('a'), '2a752f2b-add0-8957-9f0d-710fadcfc6c6')
   assertMatch(cameraEid('a', 'b'), UUID8)

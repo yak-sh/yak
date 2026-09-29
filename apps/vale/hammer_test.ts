@@ -1,4 +1,5 @@
 // A hammer's head comes down and forward through the moment its blow lands.
+import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 import * as THREE from 'three'
 import { BUILD, hero } from './figures.ts'
@@ -7,7 +8,7 @@ import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
 
-Deno.test('hammer head descends through the hit', () => {
+test('hammer head descends through the hit', () => {
   let f = hero(
     BUILD,
     { tint: '#4a7ab8', hair: '#6a4a30', skin: '#e8c0a0' },

@@ -11,6 +11,7 @@
 // is what "fits neatly" means, and it is a gate rather than a test because a
 // second TypeScript program is the only thing that can prove it.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { compose, every, ROLES } from '@yaks/cli/host'
 import { type Keywords, loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -43,7 +44,7 @@ let has = (p: Pkg, facet: string) => `./${facet}` in p.exports
 let file = (p: Pkg, facet: string) =>
   new URL(`${p.dir}/${p.exports[`./${facet}`].slice(2)}`, here)
 
-Deno.test('a package with words exports them at ./vocab, and they load', async () => {
+test('a package with words exports them at ./vocab, and they load', async () => {
   let said: string[] = []
   for (let p of packages) {
     let words = false
@@ -69,7 +70,7 @@ Deno.test('a package with words exports them at ./vocab, and they load', async (
   assert(said.includes('@yaks/tmux'), said.join(' '))
 })
 
-Deno.test("every package's words load beside every other package's", async () => {
+test("every package's words load beside every other package's", async () => {
   // A word has one home (packages/README.md). `bin/transition_test.ts` says
   // that of the `vocab.json` files; this says it of the facet a host actually
   // imports, which is where a package can still fold another's words into its
@@ -113,7 +114,7 @@ Deno.test("every package's words load beside every other package's", async () =>
   assert(vocab.all.includes('session'), 'no session')
 })
 
-Deno.test('every other facet a package exports is shaped the way a host reads it', async () => {
+test('every other facet a package exports is shaped the way a host reads it', async () => {
   // What each facet's module has to say. `rules` has four, what a write
   // means, what a query may ask for, who is writing and what other hosts
   // committed (@yaks/cli `RulesFacet`). `routes` has three: the HTTP a plugin adds, the filter it
@@ -181,7 +182,7 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
   ])
 })
 
-Deno.test('compose takes every facet of the plugins a config names, for every role', async () => {
+test('compose takes every facet of the plugins a config names, for every role', async () => {
   // The harness beside the words it runs over: a config naming packages, read
   // the way `yak serve` reads it.
   let plugins = [

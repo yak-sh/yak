@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graph, transient } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -15,7 +16,7 @@ const vocab = loadVocab([{
     },
   },
 }])
-Deno.test('subscriptions transfer ordered append frames and snapshot live values on resubscribe', async () => {
+test('subscriptions transfer ordered append frames and snapshot live values on resubscribe', async () => {
   const source = graph({ vocab, storage: ram(vocab) })
   // The target only lands what the source sent, so it declares the marks
   // `land` puts on a batch and nothing else (mark.ts `marks`).
@@ -59,7 +60,7 @@ Deno.test('subscriptions transfer ordered append frames and snapshot live values
   })
 })
 
-Deno.test('resubscription clears a stale projection when finalization was missed', async () => {
+test('resubscription clears a stale projection when finalization was missed', async () => {
   const source = graph({ vocab, storage: ram(vocab) })
   // The target only lands what the source sent, so it declares the marks
   // `land` puts on a batch and nothing else (mark.ts `marks`).
@@ -87,7 +88,7 @@ Deno.test('resubscription clears a stale projection when finalization was missed
   assertEquals(transient(target).snapshots(), [])
 })
 
-Deno.test('transient subscription respects fields withheld by the authoritative reader', async () => {
+test('transient subscription respects fields withheld by the authoritative reader', async () => {
   const source = graph({ vocab, storage: ram(vocab) })
   await source.apply([{ entity: { eid: 'd' }, doc: { body: 'secret' } }])
   const read = source.read.bind(source)

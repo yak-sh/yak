@@ -1,6 +1,7 @@
 // A browsing context, faked whole for each test: nav.tsx reads location,
 // history and the two web stores as it goes. Everything a launch can be —
 // cold, warm, deep-linked, a second tab — is then one line.
+import { test } from '@yaks/testing'
 import { faked, tick, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, census } from '../live.ts'
@@ -86,7 +87,7 @@ let fresh = () => {
   return held
 }
 
-Deno.test('a cold launch resumes the card and the view it was left in', () => {
+test('a cold launch resumes the card and the view it was left in', () => {
   using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7?v=Md')
@@ -96,7 +97,7 @@ Deno.test('a cold launch resumes the card and the view it was left in', () => {
   assertEquals(here(), '/T-7?v=Md') // the url says what the screen shows
 })
 
-Deno.test('back from a restored card reaches the canvas it was left on', () => {
+test('back from a restored card reaches the canvas it was left on', () => {
   using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7')
@@ -108,7 +109,7 @@ Deno.test('back from a restored card reaches the canvas it was left on', () => {
   assertEquals(here(), '/?v=List')
 })
 
-Deno.test('the root canvas keeps its own view choice', () => {
+test('the root canvas keeps its own view choice', () => {
   using _ = fresh()
   navigate('/?v=List')
 
@@ -117,7 +118,7 @@ Deno.test('the root canvas keeps its own view choice', () => {
   assertEquals(entries, ['/?v=List']) // nothing to go back to: this IS home
 })
 
-Deno.test('an explicit / in a live tab shows the canvas, never the card', () => {
+test('an explicit / in a live tab shows the canvas, never the card', () => {
   using _ = fresh()
   navigate('/T-7')
 
@@ -126,7 +127,7 @@ Deno.test('an explicit / in a live tab shows the canvas, never the card', () => 
   assertEquals(entries, ['/'])
 })
 
-Deno.test('going home once makes the canvas the next cold launch', () => {
+test('going home once makes the canvas the next cold launch', () => {
   using _ = fresh()
   navigate('/T-7')
   launch('/', false)
@@ -135,7 +136,7 @@ Deno.test('going home once makes the canvas the next cold launch', () => {
   assertEquals(route.value, '/')
 })
 
-Deno.test('a deep link wins over the memory', () => {
+test('a deep link wins over the memory', () => {
   using _ = fresh()
   navigate('/T-7')
 
@@ -144,7 +145,7 @@ Deno.test('a deep link wins over the memory', () => {
   assertEquals(entries, ['/1'])
 })
 
-Deno.test('a remembered entity that has died falls back to the canvas', () => {
+test('a remembered entity that has died falls back to the canvas', () => {
   using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7')
@@ -158,7 +159,7 @@ Deno.test('a remembered entity that has died falls back to the canvas', () => {
   assertEquals(entries, ['/?v=List'])
 })
 
-Deno.test('a second tab is a cold launch and resumes where you were', () => {
+test('a second tab is a cold launch and resumes where you were', () => {
   using _ = fresh()
   navigate('/?v=List')
   navigate('/T-7')
@@ -169,7 +170,7 @@ Deno.test('a second tab is a cold launch and resumes where you were', () => {
   assertEquals(route.value, '/?v=List') // and the way back came with it
 })
 
-Deno.test('a device that refuses storage still opens the canvas', () => {
+test('a device that refuses storage still opens the canvas', () => {
   using _ = fresh()
   navigate('/T-7')
   let no = () => {
@@ -190,7 +191,7 @@ Deno.test('a device that refuses storage still opens the canvas', () => {
   }
 })
 
-Deno.test('chrome and dead ends are not places you were', () => {
+test('chrome and dead ends are not places you were', () => {
   using _ = fresh()
   navigate('/T-7')
   navigate('/admin')
@@ -200,7 +201,7 @@ Deno.test('chrome and dead ends are not places you were', () => {
   assertEquals(route.value, '/T-7')
 })
 
-Deno.test('a legacy ?task= link paints the canvas, then lands on its card', async () => {
+test('a legacy ?task= link paints the canvas, then lands on its card', async () => {
   using _ = fresh()
   launch('/?task=T-7')
   assertEquals(route.value, '/?task=T-7') // the canvas, before any answer
@@ -209,7 +210,7 @@ Deno.test('a legacy ?task= link paints the canvas, then lands on its card', asyn
   assertEquals(entries, ['/T-7']) // replaced: the legacy address is gone
 })
 
-Deno.test('a legacy link that never resolves is not a place you were', () => {
+test('a legacy link that never resolves is not a place you were', () => {
   using _ = fresh()
   navigate('/T-7')
   launch('/?task=gone')
@@ -219,7 +220,7 @@ Deno.test('a legacy link that never resolves is not a place you were', () => {
   assertEquals(route.value, '/T-7')
 })
 
-Deno.test('a legacy link never pulls back someone who moved on', async () => {
+test('a legacy link never pulls back someone who moved on', async () => {
   using _ = fresh()
   launch('/?task=T-7')
   navigate('/?v=List') // before the id resolves

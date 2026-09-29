@@ -1,5 +1,6 @@
 // Commits: the body git writes, and the id it takes. Constants: ./testing.ts.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { commitBody, signature } from './commit.ts'
 import { oid, oid256 } from './oid.ts'
@@ -17,14 +18,14 @@ import {
 let one = { tree: ROOT_OID, author: AUTHOR, committer: COMMITTER }
 let two = { at: 1757000060000 }
 
-Deno.test('a commit is named as git names it', async () => {
+test('a commit is named as git names it', async () => {
   assertEquals(
     await oid('commit', commitBody({ ...one, message: 'deploy 1' })),
     ONE_OID,
   )
 })
 
-Deno.test('a commit follows its parent', async () => {
+test('a commit follows its parent', async () => {
   let body = commitBody({
     tree: ROOT_OID,
     parents: [ONE_OID],
@@ -35,7 +36,7 @@ Deno.test('a commit follows its parent', async () => {
   assertEquals(await oid('commit', body), TWO_OID)
 })
 
-Deno.test('the SHA-256 commit names its tree and parent by their SHA-256 names', async () => {
+test('the SHA-256 commit names its tree and parent by their SHA-256 names', async () => {
   assertEquals(
     await oid256(
       'commit',
@@ -58,7 +59,7 @@ Deno.test('the SHA-256 commit names its tree and parent by their SHA-256 names',
   )
 })
 
-Deno.test('the body is the lines git writes, in order', () => {
+test('the body is the lines git writes, in order', () => {
   assertEquals(
     new TextDecoder().decode(commitBody({ ...one, message: 'deploy 1' })),
     `tree ${ROOT_OID}\n` +
@@ -68,20 +69,20 @@ Deno.test('the body is the lines git writes, in order', () => {
   )
 })
 
-Deno.test('a message ends in exactly one newline, however it arrived', async () => {
+test('a message ends in exactly one newline, however it arrived', async () => {
   for (let message of ['deploy 1', 'deploy 1\n', 'deploy 1\n\n\n']) {
     assertEquals(await oid('commit', commitBody({ ...one, message })), ONE_OID)
   }
 })
 
-Deno.test("an ident carrying the format's punctuation is trimmed", () => {
+test("an ident carrying the format's punctuation is trimmed", () => {
   assertEquals(
     signature({ name: 'a\nb <c>', email: 'x@y', at: 1757000000000 }),
     'ab c <x@y> 1757000000 +0000',
   )
 })
 
-Deno.test('a time is taken as an instant, however it is said', () => {
+test('a time is taken as an instant, however it is said', () => {
   let at = '2025-09-04T15:33:20.000Z'
   assertEquals(
     signature({ ...AUTHOR, at }),

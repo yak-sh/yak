@@ -2,11 +2,12 @@
 // (T-37978). The runner checks the arguments against the command's schema
 // before it runs; a validator that compiled the schema into a function was
 // refused by the runtime, and every such call was answered as a refusal.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { toolEid } from '@yaks/tools'
 import { client, connector, kernel, seed, txt, vocabFile } from './probe.ts'
 
-Deno.test('a command that takes an argument runs in its store', async () => {
+test('a command that takes an argument runs in its store', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'ada6', apps: [] }])

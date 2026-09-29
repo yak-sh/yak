@@ -3,6 +3,7 @@
 // query the door answers — nobody wires an extension up by hand. The package depends on
 // nothing up here; the test does, because what it is checking is the wiring.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { compose } from '@yaks/cli/host'
@@ -60,7 +61,7 @@ let host = () =>
     ],
   }, ['graph', 'web', '@yaks/embedding'])
 
-Deno.test('a config composes the vectors, and asking the door ranks by them', async () => {
+test('a config composes the vectors, and asking the door ranks by them', async () => {
   let yak = await host()
   try {
     void yak.duties()
@@ -95,7 +96,7 @@ Deno.test('a config composes the vectors, and asking the door ranks by them', as
 // T-37699: a host whose key has not arrived comes up anyway. It keeps no
 // vectors, its check says what it is waiting for, and `.near` still compiles —
 // the config names the space even where it cannot reach the model yet.
-Deno.test('a config with no key composes, and nothing about the boot is different', async () => {
+test('a config with no key composes, and nothing about the boot is different', async () => {
   let warn = console.warn
   console.warn = () => {}
   let yak = await compose({
@@ -143,7 +144,7 @@ Deno.test('a config with no key composes, and nothing about the boot is differen
 // T-37726: open, write, close — and nothing fires afterwards. The service's
 // wait is cut short by the ending rather than waking over a database that is
 // gone.
-Deno.test('a host that closes takes its service with it', async () => {
+test('a host that closes takes its service with it', async () => {
   let late: unknown[] = []
   let warn = console.warn
   console.warn = (...said: unknown[]) => late.push(said)

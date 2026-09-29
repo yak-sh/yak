@@ -7,6 +7,7 @@
 //
 // What is proven here is the whole of the claim: the files say it that way,
 // and a file's own frontmatter applied twice to a store is one entity.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
 import type { Bundle } from '@yaks/graph'
@@ -55,7 +56,7 @@ let named = (dir: string, comp: string) =>
 let pages = named('./public/docs/', 'guide')
 let prompts = named('./prompts/', 'prompt')
 
-Deno.test('no content file names an entity — the identity property does', () => {
+test('no content file names an entity — the identity property does', () => {
   assert(pages.length > 1 && prompts.length > 1)
   for (
     let [dir, comp, prop, names] of [
@@ -83,7 +84,7 @@ Deno.test('no content file names an entity — the identity property does', () =
   }
 })
 
-Deno.test('a page applied twice is one entity, at the id its slug names', () => {
+test('a page applied twice is one entity, at the id its slug names', () => {
   let g = graph({ storage: memory(), vocab })
   let { meta } = file('./public/docs/store.md')
   let eid = identityEid('guide', ['store'])

@@ -2,10 +2,11 @@
 // they add rows, change only their own, never touch the shop's prices or say
 // an order was paid, and send at a visitor's size and pace. The owner is not
 // held to any of it.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { client, connector, kernel, seed, signedIn } from './probe.ts'
 
-Deno.test(
+test(
   'a visitor to an open app adds, and changes only what they wrote',
   async () => {
     let k = await kernel()

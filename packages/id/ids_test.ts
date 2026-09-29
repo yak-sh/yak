@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Tx } from '@yaks/graph'
 import { idKeywords } from './keywords.ts'
@@ -46,12 +47,12 @@ let tx = {
 let at = async (...said: string[]) =>
   Object.fromEntries(await ids(vocab).address!(tx, said))
 
-Deno.test('a human id is the entity wearing that number', async () => {
+test('a human id is the entity wearing that number', async () => {
   assertEquals(await at('T-7'), { 'T-7': 'a' })
   assertEquals(await at('M-9'), { 'M-9': 'b' })
 })
 
-Deno.test('the number is the identity; the letter only has to agree', async () => {
+test('the number is the identity; the letter only has to agree', async () => {
   assertEquals(await at('7'), { '7': 'a' })
   assertEquals(await at('t-7'), { 't-7': 'a' })
   // Every kind it wears answers for it: entity 7 is a task and a doc.
@@ -61,7 +62,7 @@ Deno.test('the number is the identity; the letter only has to agree', async () =
   assertEquals(await at('M-7', 'T-9'), { 'M-7': null, 'T-9': null })
 })
 
-Deno.test('an entity without a kind answers to its displayed E id', async () => {
+test('an entity without a kind answers to its displayed E id', async () => {
   let id = human(vocab)(rows[2])
   assertEquals(id, 'E-11')
   assertEquals(await at(id, 'e-11', '11'), {
@@ -72,17 +73,17 @@ Deno.test('an entity without a kind answers to its displayed E id', async () => 
   assertEquals(await at('T-11', 'E-7'), { 'T-11': null, 'E-7': null })
 })
 
-Deno.test("an eid and a name are not this plugin's to answer", async () => {
+test("an eid and a name are not this plugin's to answer", async () => {
   asked = []
   assertEquals(await at('a', 'some-name'), {})
   assertEquals(asked, [])
 })
 
-Deno.test('a human id nobody wears names nothing, and says so', async () => {
+test('a human id nobody wears names nothing, and says so', async () => {
   assertEquals(await at('T-404', '404'), { 'T-404': null, '404': null })
 })
 
-Deno.test('every id on the line costs one read', async () => {
+test('every id on the line costs one read', async () => {
   asked = []
   assertEquals(await at('T-7', 'M-9', '7'), {
     'T-7': 'a',
@@ -92,14 +93,14 @@ Deno.test('every id on the line costs one read', async () => {
   assertEquals(asked, ['.entity.num=7,9'])
 })
 
-Deno.test('a short handle is the entity whose eid starts that way', async () => {
+test('a short handle is the entity whose eid starts that way', async () => {
   let task = '47e9678b-df12-4000-8000-000000000001'
   assertEquals(await at('#47e9678bdf1'), { '#47e9678bdf1': task })
   assertEquals(await at('#47E9678BDF1'), { '#47E9678BDF1': task })
   assertEquals(await at('#c0ffee01'), { '#c0ffee01': 'c0ffee0123456789' })
 })
 
-Deno.test('a handle two entities share, or one with a letter, names nothing', async () => {
+test('a handle two entities share, or one with a letter, names nothing', async () => {
   assertEquals(await at('#47e9678bdf'), { '#47e9678bdf': null })
   assertEquals(await at('T#47e9678bdf1'), { 'T#47e9678bdf1': null })
   assertEquals(await at('#deadbeef00'), { '#deadbeef00': null })

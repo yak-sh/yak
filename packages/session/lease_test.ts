@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { Bounced } from './bounce.ts'
@@ -6,7 +7,7 @@ import { ids, locked, lockOn, store } from './testing.ts'
 let AT = '2026-03-04T05:06:07.000Z'
 let clock = { now: () => AT }
 
-Deno.test('a lock lands, stamped with the moment it was taken', () => {
+test('a lock lands, stamped with the moment it was taken', () => {
   let s = store()
   locked(s, clock).apply([
     { entity: { eid: ids.p1 }, claim: { session: ids.run1 } },
@@ -14,7 +15,7 @@ Deno.test('a lock lands, stamped with the moment it was taken', () => {
   assertEquals(lockOn(s, ids.p1), { session: ids.run1, at: AT })
 })
 
-Deno.test('the same run re-claiming is a refresh, not a take', () => {
+test('the same run re-claiming is a refresh, not a take', () => {
   let s = store()
   let g = locked(s, clock)
   g.apply([{ entity: { eid: ids.p1 }, claim: { session: ids.run1 } }])
@@ -22,7 +23,7 @@ Deno.test('the same run re-claiming is a refresh, not a take', () => {
   assertEquals(lockOn(s, ids.p1)?.session, ids.run1)
 })
 
-Deno.test('another run’s take bounces, naming both sides', () => {
+test('another run’s take bounces, naming both sides', () => {
   let s = store()
   let g = locked(s, clock)
   g.apply([{ entity: { eid: ids.p1 }, claim: { session: ids.run1 } }])
@@ -34,7 +35,7 @@ Deno.test('another run’s take bounces, naming both sides', () => {
   assert(/already claimed/.test(e.message))
 })
 
-Deno.test('a bounce rolls the whole batch back', () => {
+test('a bounce rolls the whole batch back', () => {
   let s = store()
   let g = locked(s, clock)
   g.apply([{ entity: { eid: ids.p1 }, claim: { session: ids.run1 } }])
@@ -47,7 +48,7 @@ Deno.test('a bounce rolls the whole batch back', () => {
   assertEquals((p2.page as Record<string, unknown>).text, undefined)
 })
 
-Deno.test('a release is unguarded — letting go is how a lock moves', () => {
+test('a release is unguarded — letting go is how a lock moves', () => {
   let s = store()
   let g = locked(s, clock)
   g.apply([{ entity: { eid: ids.p1 }, claim: { session: ids.run1 } }])
@@ -57,7 +58,7 @@ Deno.test('a release is unguarded — letting go is how a lock moves', () => {
   assertEquals(lockOn(s, ids.p1)?.session, ids.run2)
 })
 
-Deno.test('two runs taking one lock in one batch collide with each other', () => {
+test('two runs taking one lock in one batch collide with each other', () => {
   let s = store()
   assertThrows(
     () =>
@@ -70,7 +71,7 @@ Deno.test('two runs taking one lock in one batch collide with each other', () =>
   assertEquals(lockOn(s, ids.p1), undefined)
 })
 
-Deno.test('the holder is read before the cascade could remove it', () => {
+test('the holder is read before the cascade could remove it', () => {
   // Deleting the holding run and taking its lock in one batch must still
   // bounce: `precondition` runs before `cascade`, so the lock is still there
   // to be read. A check after the cascade would find nothing and admit it.
@@ -88,7 +89,7 @@ Deno.test('the holder is read before the cascade could remove it', () => {
   assertEquals(lockOn(s, ids.p1)?.session, ids.run1)
 })
 
-Deno.test('a dying run lets its locks go, and the page lives', () => {
+test('a dying run lets its locks go, and the page lives', () => {
   // No code in this package: `claim.session` dies by `release`, and
   // @yaks/graph's cascade does the rest.
   let s = store()
@@ -100,7 +101,7 @@ Deno.test('a dying run lets its locks go, and the page lives', () => {
   assertEquals((p1.page as Record<string, unknown>).title, 'Lemon cake')
 })
 
-Deno.test('a batch taking no lock is untouched', () => {
+test('a batch taking no lock is untouched', () => {
   let s = store()
   let out = locked(s, clock).apply([
     { entity: { eid: ids.p1 }, page: { text: 'three lemons' } },

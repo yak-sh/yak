@@ -1,4 +1,5 @@
 // The icon vocabulary keeps Lucide behind one stable, data-driven component.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { render } from 'preact'
 import { assertEquals, assertExists } from '@std/assert'
@@ -23,7 +24,7 @@ let svg = (name: string, size?: number) => {
   }
 }
 
-Deno.test('icons keep the app contract around Lucide', () => {
+test('icons keep the app contract around Lucide', () => {
   let icon = svg('search', 18)
   assertExists(icon.querySelector('circle'))
   assertEquals(icon.getAttribute('class'), 'lucide lucide-search Icon')
@@ -33,18 +34,18 @@ Deno.test('icons keep the app contract around Lucide', () => {
   assertEquals(icon.getAttribute('aria-hidden'), 'true')
 })
 
-Deno.test('unknown icon names keep the document fallback', () => {
+test('unknown icon names keep the document fallback', () => {
   let icon = svg('future-view')
   assertEquals(icon.getAttribute('class'), 'lucide lucide-file-text Icon')
   assertEquals(icon.getAttribute('width'), '14')
 })
 
-Deno.test('the rejection icon survives the vocabulary migration', () => {
+test('the rejection icon survives the vocabulary migration', () => {
   let icon = svg('circle-x')
   assertEquals(icon.getAttribute('class'), 'lucide lucide-circle-x Icon')
 })
 
-Deno.test('the sidebar menu has its own icon', () => {
+test('the sidebar menu has its own icon', () => {
   let icon = svg('menu')
   assertEquals(icon.getAttribute('class'), 'lucide lucide-menu Icon')
 })

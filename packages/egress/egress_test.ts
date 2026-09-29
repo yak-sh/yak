@@ -2,6 +2,7 @@
 // answers what each test scripts: where a credential goes in its sentinel's
 // place, who and what is refused, and the one retry after a refresh.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -155,7 +156,7 @@ await assertRejects(() =>
   forward(c, viewer, new Request(`https://evil.example/?k=${KEY}`))
 )
 
-Deno.test('a key goes out in its sentinel’s place wherever the app put it, with every other byte as it was', async () => {
+test('a key goes out in its sentinel’s place wherever the app put it, with every other byte as it was', async () => {
   answering([200])
   await forward(
     c,
@@ -188,7 +189,7 @@ let refused: [string, Caller, string][] = [
   ['another port', viewer, `https://api.texts.example:8443/?k=${KEY}`],
 ]
 for (let [why, caller, url] of refused) {
-  Deno.test(`refused: ${why}`, async () => {
+  test(`refused: ${why}`, async () => {
     answering()
     let req = new Request(new URL(url, 'https://api.texts.example/'))
     await assertRejects(() => forward(c, caller, req), Refused)
@@ -196,7 +197,7 @@ for (let [why, caller, url] of refused) {
   })
 }
 
-Deno.test('a key the app opened to anyone goes out for a caller holding nothing', async () => {
+test('a key the app opened to anyone goes out for a caller holding nothing', async () => {
   answering([200])
   let res = await forward(
     c,
@@ -207,7 +208,7 @@ Deno.test('a key the app opened to anyone goes out for a caller holding nothing'
   assertEquals(seen[0].url, 'https://api.texts.example/?k=sk-live')
 })
 
-Deno.test('a person’s own key goes out for them, whatever they hold on the app', async () => {
+test('a person’s own key goes out for them, whatever they hold on the app', async () => {
   answering([200])
   let res = await forward(
     c,
@@ -218,7 +219,7 @@ Deno.test('a person’s own key goes out for them, whatever they hold on the app
   assertEquals(seen[0].url, 'https://api.notes.example/?k=ann-key')
 })
 
-Deno.test('a request carrying no sentinel goes out as it came', async () => {
+test('a request carrying no sentinel goes out as it came', async () => {
   answering([302])
   let res = await forward(
     c,
@@ -240,7 +241,7 @@ let events = () =>
     }),
   )
 
-Deno.test(
+test(
   'an access token the service refuses is refreshed, and the call made once more',
   async () => {
     answering([401], [200, { access_token: 'A2' }], [200])
@@ -252,13 +253,13 @@ Deno.test(
   },
 )
 
-Deno.test('a refreshed token the service refuses too is its answer', async () => {
+test('a refreshed token the service refuses too is its answer', async () => {
   answering([401], [200, { access_token: 'A3' }], [401])
   assertEquals((await events()).status, 401)
   assertEquals(seen.length, 3)
 })
 
-Deno.test(
+test(
   'Google Calendar as shipped: a person signs in, and the app lists their calendars through the egress',
   async () => {
     let signing = { ...c, redirect: 'https://yaks.app/connections/callback' }

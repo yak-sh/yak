@@ -1,13 +1,14 @@
 // The vocabulary: what it declares, and the two invariants that are decisions
 // rather than details.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { relations } from '@yaks/edge'
 import { CONTAINS, REQUIRES } from './comp.ts'
 import { statuses } from './words.ts'
 import { team } from './testing.ts'
 
-Deno.test('the components this package ships', () => {
+test('the components this package ships', () => {
   for (
     let c of [
       'task',
@@ -23,7 +24,7 @@ Deno.test('the components this package ships', () => {
   ) assert(team.comp(c), `declares ${c}`)
 })
 
-Deno.test('status is readable and routable, and nobody can write it', () => {
+test('status is readable and routable, and nobody can write it', () => {
   let status = team.prop('task', 'status')!
   assertEquals(status.computed, true)
   assertEquals(status.values, ['cancelled', 'done', 'open'])
@@ -35,7 +36,7 @@ Deno.test('status is readable and routable, and nobody can write it', () => {
   assertEquals(team.route('status'), { comp: 'task', prop: 'status' })
 })
 
-Deno.test('a board is a query — there is no membership property anywhere', () => {
+test('a board is a query — there is no membership property anywhere', () => {
   assertEquals(team.comp('board')!.writable, ['query'])
   assertEquals(team.prop('board', 'query')!.scalar, 'query')
   // nothing in the vocabulary points a task at a board, in either direction
@@ -47,14 +48,14 @@ Deno.test('a board is a query — there is no membership property anywhere', () 
   }
 })
 
-Deno.test('the two relations are declared through @yaks/edge', () => {
+test('the two relations are declared through @yaks/edge', () => {
   assertEquals(relations(team), {
     [REQUIRES]: REQUIRES,
     [CONTAINS]: CONTAINS,
   })
 })
 
-Deno.test('the marks keep their author as history; a project only detaches', () => {
+test('the marks keep their author as history; a project only detaches', () => {
   for (let comp of ['completed', 'cancelled']) {
     assertEquals(team.prop(comp, 'by')!.death, 'keep')
   }
@@ -62,12 +63,12 @@ Deno.test('the marks keep their author as history; a project only detaches', () 
   assertEquals(team.prop('filed', 'project')!.ref, 'project')
 })
 
-Deno.test('blocked carries a reason and is not a status', () => {
+test('blocked carries a reason and is not a status', () => {
   assertEquals(team.comp('blocked')!.writable, ['on'])
   assert(!team.prop('task', 'status')!.values!.includes('blocked'))
 })
 
-Deno.test('a bare task has no writable properties; filing is optional and routes alone', () => {
+test('a bare task has no writable properties; filing is optional and routes alone', () => {
   assertEquals(team.comp('task')!.writable, [])
   assertEquals(team.comp('filed')!.writable.sort(), [
     'assignee',

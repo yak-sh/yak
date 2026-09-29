@@ -3,6 +3,7 @@
 // a disposable repository, where the interesting part is that git's answer
 // means what this module says it means.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { docDoc } from '@yaks/doc'
@@ -76,7 +77,7 @@ let stirred = (narrowed = '') =>
     }
   )
 
-Deno.test('a citation nobody has checked is unverified, and asks git nothing', async () => {
+test('a citation nobody has checked is unverified, and asks git nothing', async () => {
   let git = fake()
   let cited = cite()
   delete cited.verified
@@ -86,7 +87,7 @@ Deno.test('a citation nobody has checked is unverified, and asks git nothing', a
   assertEquals(git.asked, [])
 })
 
-Deno.test('a file nothing touched is current, and the place is never asked about', async () => {
+test('a file nothing touched is current, and the place is never asked about', async () => {
   let git = fake()
   let got = await status(cite(), def('open'), {
     cwd: '.',
@@ -105,7 +106,7 @@ Deno.test('a file nothing touched is current, and the place is never asked about
   assertEquals(placeArgs(git.asked), [])
 })
 
-Deno.test('a definition narrows a file that moved to the commits that touched it', async () => {
+test('a definition narrows a file that moved to the commits that touched it', async () => {
   let git = stirred()
   let got = await status(cite(), def('open'), {
     cwd: '.',
@@ -123,7 +124,7 @@ Deno.test('a definition narrows a file that moved to the commits that touched it
   ])
 })
 
-Deno.test('a line range narrows to those lines, and one line is a range of itself', async () => {
+test('a line range narrows to those lines, and one line is a range of itself', async () => {
   let git = stirred()
   await status(cite({ lines: { start: 3, end: 9 } }), file, {
     cwd: '.',
@@ -140,7 +141,7 @@ Deno.test('a line range narrows to those lines, and one line is a range of itsel
   assert(placeArgs(one.asked).includes('4,4:src/db.ts'))
 })
 
-Deno.test('a citation naming no place moves with the whole file', async () => {
+test('a citation naming no place moves with the whole file', async () => {
   let git = stirred()
   assertEquals(await status(cite(), file, { cwd: '.', vocab, run: git.run }), {
     state: 'moved',
@@ -149,7 +150,7 @@ Deno.test('a citation naming no place moves with the whole file', async () => {
   assertEquals(placeArgs(git.asked), [])
 })
 
-Deno.test('commits touching the place mean the citation moved, and name themselves', async () => {
+test('commits touching the place mean the citation moved, and name themselves', async () => {
   let git = stirred('b8b0f89\n0c9c68a\n')
   assertEquals(
     await status(cite(), def('open'), {
@@ -161,7 +162,7 @@ Deno.test('commits touching the place mean the citation moved, and name themselv
   )
 })
 
-Deno.test('a commit this checkout does not have reads unknown, never current', async () => {
+test('a commit this checkout does not have reads unknown, never current', async () => {
   let git = fake((args) => args[0] == 'cat-file' ? { ok: false } : {})
   assertEquals(await status(cite(), file, { cwd: '.', vocab, run: git.run }), {
     state: 'unknown',
@@ -171,7 +172,7 @@ Deno.test('a commit this checkout does not have reads unknown, never current', a
   assertEquals(logArgs(git.asked), [])
 })
 
-Deno.test('a mark with no commit beside it reads unknown', async () => {
+test('a mark with no commit beside it reads unknown', async () => {
   let git = fake()
   let cited = cite()
   delete cited.revision
@@ -181,7 +182,7 @@ Deno.test('a mark with no commit beside it reads unknown', async () => {
   })
 })
 
-Deno.test('git failing to answer reads unknown, in git own words', async () => {
+test('git failing to answer reads unknown, in git own words', async () => {
   let git = fake((args) =>
     args[0] != 'log'
       ? {}
@@ -199,7 +200,7 @@ Deno.test('git failing to answer reads unknown, in git own words', async () => {
   )
 })
 
-Deno.test('a citation of an entity compares its verified content', async () => {
+test('a citation of an entity compares its verified content', async () => {
   let git = fake()
   let checked = { ...cite(), ...verify(cite(), design, vocab) }
   assertEquals(await status(checked, design, { vocab, run: git.run }), {
@@ -215,7 +216,7 @@ Deno.test('a citation of an entity compares its verified content', async () => {
   assertEquals(git.asked, [])
 })
 
-Deno.test('a symbol without its file cannot appear current as a graph entity', async () => {
+test('a symbol without its file cannot appear current as a graph entity', async () => {
   let checked = { ...cite(), ...verify(cite(), def('lost'), vocab) }
   assertEquals(await status(checked, def('lost'), { vocab }), {
     state: 'unknown',
@@ -255,7 +256,7 @@ let setup = async () => {
   return { cwd, at }
 }
 
-Deno.test(
+test(
   'a definition somebody edited moved; the line above it did not',
   async () => {
     let { cwd, at } = await setup()
@@ -281,7 +282,7 @@ Deno.test(
   },
 )
 
-Deno.test('a commit rebased out of the repository reads unknown', async () => {
+test('a commit rebased out of the repository reads unknown', async () => {
   let { cwd } = await setup()
   let gone = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
   let got = await status(

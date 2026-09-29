@@ -3,6 +3,7 @@
 // over the asynchronous wrapper — that none of it depends on being
 // synchronous.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { Checked, graph } from './graph.ts'
@@ -26,7 +27,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let at = (out: Bundle[], eid: string, name: string) =>
   comp(out.find((b) => b.entity.eid == eid && b[name] !== undefined), name)
 
-Deno.test('a traced dry run reports phases and leaves the graph unchanged', () => {
+test('a traced dry run reports phases and leaves the graph unchanged', () => {
   let one = g()
   let phases: string[] = []
   let out = sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 7 } }], {
@@ -45,7 +46,7 @@ Deno.test('a traced dry run reports phases and leaves the graph unchanged', () =
 })
 
 for (let async of [false, true]) {
-  Deno.test(`failed effect snapshots log at error level (${async ? 'async' : 'sync'})`, async () => {
+  test(`failed effect snapshots log at error level (${async ? 'async' : 'sync'})`, async () => {
     let storage = memory()
     let committed = false
     let error = new Error('too many terms in compound SELECT')
@@ -100,7 +101,7 @@ for (let async of [false, true]) {
   })
 }
 
-Deno.test('failed effect hooks log their plugin and do not undo committed writes', async () => {
+test('failed effect hooks log their plugin and do not undo committed writes', async () => {
   let error = new Error('observer failed')
   let one = g([{
     name: 'shelf',
@@ -114,7 +115,7 @@ Deno.test('failed effect hooks log their plugin and do not undo committed writes
   ])
 })
 
-Deno.test('a batch lands, and the return carries the births', () => {
+test('a batch lands, and the return carries the births', () => {
   let one = g()
   let out = sync(one.apply([
     { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { pages: 412 } },
@@ -127,7 +128,7 @@ Deno.test('a batch lands, and the return carries the births', () => {
   assertEquals(comp(stored, 'book').pages, 412)
 })
 
-Deno.test('a write naming a component the graph does not declare lands nothing', () => {
+test('a write naming a component the graph does not declare lands nothing', () => {
   let one = g()
   assertThrows(
     () =>
@@ -140,7 +141,7 @@ Deno.test('a write naming a component the graph does not declare lands nothing',
   assertEquals(one.get(['b1']), [])
 })
 
-Deno.test('a bundle that names no entity is refused by its place, and lands nothing', () => {
+test('a bundle that names no entity is refused by its place, and lands nothing', () => {
   let one = g()
   for (let bad of [{ doc: { title: 'Dune' } }, { entity: {} }, null]) {
     assertThrows(
@@ -156,7 +157,7 @@ Deno.test('a bundle that names no entity is refused by its place, and lands noth
   assertEquals(one.get(['b1']), [])
 })
 
-Deno.test('a replica lands what it declares and leaves the rest out', () => {
+test('a replica lands what it declares and leaves the rest out', () => {
   let one = g()
   sync(one.apply([
     { entity: { eid: 'b1' }, doc: { title: 'Dune' }, audiobook: {} },
@@ -168,7 +169,7 @@ Deno.test('a replica lands what it declares and leaves the rest out', () => {
   assertEquals(one.get(['b2']), [])
 })
 
-Deno.test('the answer is one bundle per entity, and no pipeline key', () => {
+test('the answer is one bundle per entity, and no pipeline key', () => {
   let one = g()
   // A write: the caller's patch, the stamp and the birth are one bundle, and
   // the `$actor` that made the stamp does not leave apply() (T-34294).
@@ -202,7 +203,7 @@ Deno.test('the answer is one bundle per entity, and no pipeline key', () => {
   assertEquals(died, [{ entity: { eid: 'b1' }, tombstone: {} }])
 })
 
-Deno.test('a patch touches only the properties it names; null clears one', () => {
+test('a patch touches only the properties it names; null clears one', () => {
   let one = g()
   sync(one.apply([{
     entity: { eid: 'b1' },
@@ -216,7 +217,7 @@ Deno.test('a patch touches only the properties it names; null clears one', () =>
   assertEquals(comp(c, 'book').status, null)
 })
 
-Deno.test('a null component drops the row, the entity survives', () => {
+test('a null component drops the row, the entity survives', () => {
   let one = g()
   sync(one.apply([{
     entity: { eid: 'b1' },
@@ -229,7 +230,7 @@ Deno.test('a null component drops the row, the entity survives', () => {
   assertEquals(comp(b, 'doc').title, 'Dune')
 })
 
-Deno.test('births are stamped created, later touches updated', () => {
+test('births are stamped created, later touches updated', () => {
   let one = g()
   let born = sync(one.apply([
     { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'me' } },
@@ -249,7 +250,7 @@ Deno.test('births are stamped created, later touches updated', () => {
   assertEquals(again.find((b) => b.created), undefined)
 })
 
-Deno.test("a batch nobody signed is the graph's own, and a signed one is not", () => {
+test("a batch nobody signed is the graph's own, and a signed one is not", () => {
   let one = graph({
     storage: memory(),
     vocab: books,
@@ -267,7 +268,7 @@ Deno.test("a batch nobody signed is the graph's own, and a signed one is not", (
   assertEquals(at(hers, 'b2', 'created').by, 'ada')
 })
 
-Deno.test('a mark is signed where it lands, and the first telling stands', () => {
+test('a mark is signed where it lands, and the first telling stands', () => {
   let one = g()
   let out = sync(one.apply([{
     entity: { eid: 'b1' },
@@ -294,7 +295,7 @@ Deno.test('a mark is signed where it lands, and the first telling stands', () =>
   })
 })
 
-Deno.test('$was guards a property, and a moved value refuses the whole batch', () => {
+test('$was guards a property, and a moved value refuses the whole batch', () => {
   let one = g()
   sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
   // the value the caller read still holds
@@ -321,7 +322,7 @@ Deno.test('$was guards a property, and a moved value refuses the whole batch', (
   assertEquals(one.get(['b2']), [])
 })
 
-Deno.test('a guard on an absent value is null, and on an unknown property refuses', () => {
+test('a guard on an absent value is null, and on an unknown property refuses', () => {
   let one = g()
   sync(one.apply([{
     entity: { eid: 'b1' },
@@ -340,7 +341,7 @@ Deno.test('a guard on an absent value is null, and on an unknown property refuse
   )
 })
 
-Deno.test('a delete tombstones the entity and death spreads by the vocabulary', () => {
+test('a delete tombstones the entity and death spreads by the vocabulary', () => {
   let one = g()
   sync(one.apply([
     { entity: { eid: 'p1' }, doc: { title: 'Chilton' } },
@@ -361,7 +362,7 @@ Deno.test('a delete tombstones the entity and death spreads by the vocabulary', 
   assertEquals(dead.filter(isDead).length, 2)
 })
 
-Deno.test('a detach reference is nulled and the survivor hears it', () => {
+test('a detach reference is nulled and the survivor hears it', () => {
   let one = g()
   sync(one.apply([
     { entity: { eid: 'p1' }, doc: { title: 'Chilton' } },
@@ -374,7 +375,7 @@ Deno.test('a detach reference is nulled and the survivor hears it', () => {
   assertEquals(comp(b, 'book').pages, 412) // the book itself is untouched
 })
 
-Deno.test('a patch after its own delete in one batch is dropped', () => {
+test('a patch after its own delete in one batch is dropped', () => {
   let one = g()
   sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
   sync(one.apply([
@@ -396,7 +397,7 @@ let buried = () => {
   return { one, num: born.entity.num }
 }
 
-Deno.test('a write that raced the delete is swallowed, and the batch lands', () => {
+test('a write that raced the delete is swallowed, and the batch lands', () => {
   let { one } = buried()
   sync(one.apply([
     {
@@ -411,7 +412,7 @@ Deno.test('a write that raced the delete is swallowed, and the batch lands', () 
   assertEquals(comp(b2, 'doc').title, 'Emma')
 })
 
-Deno.test('any other write brings the dead back under its eid and number', () => {
+test('any other write brings the dead back under its eid and number', () => {
   for (let was of [undefined, { doc: { title: null } }]) {
     let { one, num } = buried()
     let out = sync(one.apply([{
@@ -428,14 +429,14 @@ Deno.test('any other write brings the dead back under its eid and number', () =>
   }
 })
 
-Deno.test('a write that only removes leaves the dead dead', () => {
+test('a write that only removes leaves the dead dead', () => {
   let { one } = buried()
   sync(one.apply([{ entity: { eid: 'b1' }, book: null }]))
   let [b] = one.get(['b1']) as Bundle[]
   assert(isDead(b))
 })
 
-Deno.test('a hook rewrites the batch the next phase sees', () => {
+test('a hook rewrites the batch the next phase sees', () => {
   let one = g([{
     name: 'shelver',
     hooks: {
@@ -454,7 +455,7 @@ Deno.test('a hook rewrites the batch the next phase sees', () => {
   assertEquals(at(out, 'b1', 'book'), { pages: 1, shelved: true })
 })
 
-Deno.test('a hook that throws refuses the batch and nothing lands', () => {
+test('a hook that throws refuses the batch and nothing lands', () => {
   let one = g([{
     name: 'lease',
     hooks: {
@@ -471,7 +472,7 @@ Deno.test('a hook that throws refuses the batch and nothing lands', () => {
   assertEquals(one.get(['b1']), [])
 })
 
-Deno.test('a hook can add a bundle, and the added one is applied', () => {
+test('a hook can add a bundle, and the added one is applied', () => {
   let one = g([{
     name: 'librarian',
     hooks: {
@@ -486,7 +487,7 @@ Deno.test('a hook can add a bundle, and the added one is applied', () => {
   assertEquals(comp(log, 'doc').title, 'applied 1')
 })
 
-Deno.test('effects run after the commit and a failing one is telemetry', () => {
+test('effects run after the commit and a failing one is telemetry', () => {
   let seen: string[] = []
   let errs: unknown[] = []
   let one = graph({
@@ -520,7 +521,7 @@ Deno.test('effects run after the commit and a failing one is telemetry', () => {
   assert(out.length > 0) // and the batch was not broken by the broken effect
 })
 
-Deno.test('a check runs every phase, writes nothing, and refuses what it must', () => {
+test('a check runs every phase, writes nothing, and refuses what it must', () => {
   let ran: string[] = []
   let one = graph({
     storage: memory(),
@@ -561,7 +562,7 @@ Deno.test('a check runs every phase, writes nothing, and refuses what it must', 
   )
 })
 
-Deno.test('an audit hook runs after the rollback, with the refusal', () => {
+test('an audit hook runs after the rollback, with the refusal', () => {
   let audited: unknown[] = []
   let one = g([{
     name: 'auditor',
@@ -581,7 +582,7 @@ Deno.test('an audit hook runs after the rollback, with the refusal', () => {
   assertEquals((audited[0] as Error).message, 'refused')
 })
 
-Deno.test('a check over an asynchronous storage rolls back the same way', async () => {
+test('a check over an asynchronous storage rolls back the same way', async () => {
   let one = graph({ storage: slow(memory()), vocab: books })
   let out = await one.apply(
     [{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }],
@@ -591,7 +592,7 @@ Deno.test('a check over an asynchronous storage rolls back the same way', async 
   assertEquals(await one.get(['b1']), [])
 })
 
-Deno.test('the same batches run over an asynchronous storage', async () => {
+test('the same batches run over an asynchronous storage', async () => {
   let one = graph({ storage: slow(memory()), vocab: books })
   let out = one.apply([
     { entity: { eid: 'b1' }, book: { pages: 412 } },
@@ -603,7 +604,7 @@ Deno.test('the same batches run over an asynchronous storage', async () => {
   assert(dead.some((b) => b.entity.eid == 'r1' && isDead(b)))
 })
 
-Deno.test('registries are per instance', () => {
+test('registries are per instance', () => {
   let a = g([{ name: 'p', hooks: { normalize: (b) => b } }])
   let b = g()
   assertEquals(a.plugins.length, 1)
@@ -613,7 +614,7 @@ Deno.test('registries are per instance', () => {
 })
 
 for (let async of [false, true]) {
-  Deno.test(`provenance policy selects, overrides and suppresses without bypassing core clock (${async ? 'async' : 'sync'})`, async () => {
+  test(`provenance policy selects, overrides and suppresses without bypassing core clock (${async ? 'async' : 'sync'})`, async () => {
     let store = memory()
     let one = graph({
       storage: async ? slow(store) : store,
@@ -646,7 +647,7 @@ for (let async of [false, true]) {
   })
 }
 
-Deno.test('provenance policy narrows an attribution-only vocabulary, including explicit null', async () => {
+test('provenance policy narrows an attribution-only vocabulary, including explicit null', async () => {
   let { loadVocab } = await import('@yaks/vocab')
   let vocab = loadVocab({
     $defs: {
@@ -679,7 +680,7 @@ Deno.test('provenance policy narrows an attribution-only vocabulary, including e
   assertEquals(at(out, 'b', 'created'), { by: null })
 })
 
-Deno.test('the rules phase runs after the guard and before the patches land', () => {
+test('the rules phase runs after the guard and before the patches land', () => {
   let seen: string[] = []
   let one = g([{
     name: 'watcher',

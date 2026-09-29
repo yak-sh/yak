@@ -3,6 +3,7 @@
 // which app a signed-out read is scoped to. The list is pinned on purpose — a
 // tool that grows `noauth` lands here in a diff, which is the whole point of
 // declaring it.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -28,7 +29,7 @@ let OPEN = [
   'guide',
 ]
 
-Deno.test('the tools that need nobody are the pinned ones', () => {
+test('the tools that need nobody are the pinned ones', () => {
   assertEquals(TOOLS.filter(openly).map((t) => t.name).sort(), OPEN)
   // Each says both schemes: it works with a token and without one, which is
   // what a host reads to offer the sign-in beside an open tool.
@@ -61,7 +62,7 @@ let ctx = {
   },
 } as unknown as Ctx
 
-Deno.test('a read signed out is scoped to one app anybody can read', async () => {
+test('a read signed out is scoped to one app anybody can read', async () => {
   for (let app of ['runs', 'votes']) {
     let [one] = await opened(ctx, { space: 'ada', app })
     assertEquals([one.space.slug, one.app.slug], ['ada', app])
@@ -71,7 +72,7 @@ Deno.test('a read signed out is scoped to one app anybody can read', async () =>
   }
 })
 
-Deno.test('signed out, a private app is refused by name', async () => {
+test('signed out, a private app is refused by name', async () => {
   await assertRejects(
     () => opened(ctx, { space: 'ada', app: 'diary' }),
     CallError,
@@ -79,7 +80,7 @@ Deno.test('signed out, a private app is refused by name', async () => {
   )
 })
 
-Deno.test('signed out, an app that is not there says so', async () => {
+test('signed out, an app that is not there says so', async () => {
   for (let app of ['nope', 'gone']) {
     await assertRejects(
       () => opened(ctx, { space: 'ada', app }),
@@ -94,7 +95,7 @@ Deno.test('signed out, an app that is not there says so', async () => {
   )
 })
 
-Deno.test('a read that names no app says it is needed signed out', async () => {
+test('a read that names no app says it is needed signed out', async () => {
   for (let args of [{}, { app: 'runs' }, { space: 'ada' }, { app: '  ' }]) {
     await assertRejects(
       () => opened(ctx, args),
@@ -113,7 +114,7 @@ Deno.test('a read that names no app says it is needed signed out', async () => {
 // sentence and the schema are held together: the paragraph is the signed-out
 // one, it names every read that takes the pair and every argument in it, and it
 // says what the other door does instead.
-Deno.test('about promises the app pair exactly where a schema declares it', () => {
+test('about promises the app pair exactly where a schema declares it', () => {
   let said = about().text.split('\n\n').find((p) => p.includes('graph_query'))
   assert(said, 'about says nothing about the generic reads')
   assert(said.startsWith('Signed out'), said.slice(0, 60))

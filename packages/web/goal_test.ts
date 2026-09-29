@@ -1,6 +1,7 @@
 // `## goals` — the standing goals (M-31946 §5) a context reads right after
 // what the owner said: fleet-wide ones plus its own project's, never another
 // project's, titles only.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { contextDigest, goalLines, rows } from './client.ts'
@@ -33,7 +34,7 @@ let snap: Snapshot = {
   deps: [],
 }
 
-Deno.test('goalLines: fleet-wide plus the scope, by num, titles only', () => {
+test('goalLines: fleet-wide plus the scope, by num, titles only', () => {
   let all = rows(snap)
   assertEquals(goalLines(all, P), [
     '- V-10 Reduce noise, amplify signal',
@@ -44,7 +45,7 @@ Deno.test('goalLines: fleet-wide plus the scope, by num, titles only', () => {
   assertEquals(goalLines(all, P, 1), ['- V-10 Reduce noise, amplify signal'])
 })
 
-Deno.test('contextDigest carries `## goals`, and omits it with none', () => {
+test('contextDigest carries `## goals`, and omits it with none', () => {
   let d = contextDigest(snap, 'sess-x', Date.now(), P)
   assertEquals(
     d.includes(

@@ -1,6 +1,7 @@
 // The HTML host keeps registry behavior and the browser's document structure,
 // including literal content that would become markup without serialization.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { parseHTML } from 'linkedom'
@@ -45,7 +46,7 @@ let signature = (root: Element): unknown => [
   ),
 ]
 
-Deno.test('HTML escapes content and agrees with the mounted Preact view', () => {
+test('HTML escapes content and agrees with the mounted Preact view', () => {
   let html = render(registry, bundle, 'Library.Tile', vocab, ctx)
   let { document } = parseHTML(`<main>${html}</main>`)
   let root = document.querySelector('main')!
@@ -67,7 +68,7 @@ Deno.test('HTML escapes content and agrees with the mounted Preact view', () => 
   }
 })
 
-Deno.test('HTML retains missing, unnamed and JSON fallback view behavior', () => {
+test('HTML retains missing, unnamed and JSON fallback view behavior', () => {
   assertEquals(render(registry, bundle, 'Missing', vocab), '')
   assertEquals(
     render(registry, { entity: { eid: 'empty' } }, 'Tile', vocab),
@@ -85,7 +86,7 @@ Deno.test('HTML retains missing, unnamed and JSON fallback view behavior', () =>
   assertEquals(render(fallback, bundle, 'Missing', vocab), '<pre>page</pre>')
 })
 
-Deno.test('HTML forwards property selection and renderer context', () => {
+test('HTML forwards property selection and renderer context', () => {
   let editors = define([{
     view: 'Edit',
     match: parse('.prop.type=string'),
@@ -108,7 +109,7 @@ Deno.test('HTML forwards property selection and renderer context', () => {
   )
 })
 
-Deno.test('HTML omits portable action data without running it', () => {
+test('HTML omits portable action data without running it', () => {
   let called = false
   let registry = define([{
     view: 'Edit',
@@ -132,7 +133,7 @@ Deno.test('HTML omits portable action data without running it', () => {
   assertEquals(called, false)
 })
 
-Deno.test('an empty child list does not replace a textarea value during serialization', () => {
+test('an empty child list does not replace a textarea value during serialization', () => {
   let registry = define([{
     view: 'Edit',
     match: true,

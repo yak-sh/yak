@@ -8,6 +8,7 @@
 //
 // The three ends are held too — nobody, too many rounds, no key — because
 // each one is a sentence somebody reads, not an exception somebody catches.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import * as apps from './apps.ts'
 import {
@@ -73,7 +74,7 @@ let asked = (text: string) => [{ said: 'person' as const, text }]
 // A space that has never paid, said the way the directory says one.
 let free = (space: Space) => ({ ...space, tier: null })
 
-Deno.test('the fake model builds an app end to end, and it serves', async () => {
+test('the fake model builds an app end to end, and it serves', async () => {
   let { env, space } = await seeded()
   let model = fake([
     {
@@ -134,7 +135,7 @@ Deno.test('the fake model builds an app end to end, and it serves', async () => 
 // What the person said rides on the builder's prompt too (memory.ts,
 // T-34474): the agent we run and the agent somebody brings are taught one
 // page, so a preference kept through the connector is followed here.
-Deno.test('the builder is handed what the person has said', async () => {
+test('the builder is handed what the person has said', async () => {
   let { env, space } = await seeded()
   await remember(env, dirOf(env), space, owner, {
     said: 'use grams, never cups',
@@ -153,7 +154,7 @@ Deno.test('the builder is handed what the person has said', async () => {
   assertStringIncludes(system, 'setting up the recipe app')
 })
 
-Deno.test('a conversation that ships nothing is no build at all', async () => {
+test('a conversation that ships nothing is no build at all', async () => {
   let { env, space } = await seeded()
   let model = fake([
     { calls: [call('c1', 'app_list', {})] },
@@ -164,7 +165,7 @@ Deno.test('a conversation that ships nothing is no build at all', async () => {
   assertEquals((await dirOf(env).space('ada'))!.meter?.built, undefined)
 })
 
-Deno.test('a space at its build ceiling is told so before a token is spent', async () => {
+test('a space at its build ceiling is told so before a token is spent', async () => {
   let { env, space } = await seeded()
   let model = fake([{ text: 'never asked' }])
   let full = {
@@ -187,7 +188,7 @@ Deno.test('a space at its build ceiling is told so before a token is spent', asy
   assertEquals(out.usage, { input: 0, output: 0, cached: 0 })
 })
 
-Deno.test('an account out of budget is told so before a model is asked', async () => {
+test('an account out of budget is told so before a model is asked', async () => {
   let { env, space } = await seeded()
   let model = fake([{ text: 'never asked' }])
   let spent = {
@@ -207,7 +208,7 @@ Deno.test('an account out of budget is told so before a model is asked', async (
 
 // Nothing a build spends goes uncounted: a model the catalogue has no price
 // for is never asked (models.ts).
-Deno.test('a model with no price is never asked', async () => {
+test('a model with no price is never asked', async () => {
   let { env, space } = await seeded()
   let model = { ...fake([{ text: 'never asked' }]), price: undefined }
   let out = await build(env, owner, space, asked('hi'), { model })
@@ -216,7 +217,7 @@ Deno.test('a model with no price is never asked', async () => {
   assertEquals(model.asked.length, 0)
 })
 
-Deno.test('an anonymous caller is refused before a tool runs', async () => {
+test('an anonymous caller is refused before a tool runs', async () => {
   let { env, space } = await seeded()
   let model = fake([{ text: 'never asked' }])
   let out = await build(env, nobody, space, asked('build me something'), {
@@ -229,7 +230,7 @@ Deno.test('an anonymous caller is refused before a tool runs', async () => {
   assertEquals(model.asked.length, 0)
 })
 
-Deno.test('the round limit stops a looping model', async () => {
+test('the round limit stops a looping model', async () => {
   let { env, space } = await seeded()
   // A model that only ever asks for the app list, forever.
   let model = fake(
@@ -245,7 +246,7 @@ Deno.test('the round limit stops a looping model', async () => {
   assertStringIncludes(out.text, 'What is built so far is built')
 })
 
-Deno.test('the wall budget stops a slow one', async () => {
+test('the wall budget stops a slow one', async () => {
   let { env, space } = await seeded()
   let clock = 0
   let model = fake(
@@ -262,7 +263,7 @@ Deno.test('the wall budget stops a slow one', async () => {
   assertStringIncludes(out.refused!, 'out of time after 1 seconds')
 })
 
-Deno.test('usage is summed over every response', async () => {
+test('usage is summed over every response', async () => {
   let { env, space } = await seeded()
   let model = fake([
     {
@@ -283,7 +284,7 @@ Deno.test('usage is summed over every response', async () => {
   )
 })
 
-Deno.test('a tool refusal is a line the model can correct', async () => {
+test('a tool refusal is a line the model can correct', async () => {
   let { env, space } = await seeded()
   let model = fake([
     { calls: [call('c1', 'app_new', { slug: 'Not A Slug', title: 'x' })] },
@@ -302,7 +303,7 @@ Deno.test('a tool refusal is a line the model can correct', async () => {
 
 // Neither tier has a model bound in a Deno test: both run on the binding, and
 // the stand-in has none unless a test scripts one (testing.ts `ai`).
-Deno.test('no model is bound here, and either tier says so', async () => {
+test('no model is bound here, and either tier says so', async () => {
   let { env, space } = await seeded()
   for (let tier of [null, 'plus' as const]) {
     let out = await build(env, owner, { ...space, tier }, asked('go'))
@@ -311,7 +312,7 @@ Deno.test('no model is bound here, and either tier says so', async () => {
   }
 })
 
-Deno.test('an OpenAI model with no gateway to reach it says so', async () => {
+test('an OpenAI model with no gateway to reach it says so', async () => {
   let { env, space } = await seeded()
   let out = await build(env, owner, { ...space, tier: 'plus' }, asked('go'), {
     model: terra(env),
@@ -321,7 +322,7 @@ Deno.test('an OpenAI model with no gateway to reach it says so', async () => {
   assertStringIncludes(out.text, 'AI_GATEWAY')
 })
 
-Deno.test('the tier picks the model, and the id picks the provider', async () => {
+test('the tier picks the model, and the id picks the provider', async () => {
   let { env, space } = await seeded()
   // Both tiers are Workers AI today — nothing is bought to build here — and
   // the paid one is the bigger model of the same family.
@@ -337,7 +338,7 @@ Deno.test('the tier picks the model, and the id picks the provider', async () =>
   assertEquals(modelOf(env, 'gpt-5.6-terra').id, 'gpt-5.6-terra')
 })
 
-Deno.test('the roster is the platform table, whole', async () => {
+test('the roster is the platform table, whole', async () => {
   let { env } = await seeded()
   let ctx = {
     env,
@@ -383,7 +384,7 @@ let openaiStub = (
   }
 }
 
-Deno.test('the paid build reaches the gateway with no key of ours', async () => {
+test('the paid build reaches the gateway with no key of ours', async () => {
   let said = openaiStub(() => ({
     body: {
       output: [{
@@ -417,7 +418,7 @@ Deno.test('the paid build reaches the gateway with no key of ours', async () => 
   }
 })
 
-Deno.test('a busy model is a wait, not a failure', async () => {
+test('a busy model is a wait, not a failure', async () => {
   let said = openaiStub(() => ({ status: 429, body: { error: 'slow down' } }))
   try {
     let { env, space } = await seeded({ OPENAI_API: said.url })

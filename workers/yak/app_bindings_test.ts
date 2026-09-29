@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -179,7 +180,7 @@ let fixture = async () => {
   }
 }
 
-Deno.test('app bindings survive redeploy, removal and trash until permanent deletion', async () => {
+test('app bindings survive redeploy, removal and trash until permanent deletion', async () => {
   let k = await fixture()
   try {
     await k.write(configuration)
@@ -236,7 +237,7 @@ Deno.test('app bindings survive redeploy, removal and trash until permanent dele
   }
 })
 
-Deno.test('rollback switches files and worker only after the upload succeeds', async () => {
+test('rollback switches files and worker only after the upload succeeds', async () => {
   let k = await fixture()
   try {
     await k.write({ main: 'worker.js' })
@@ -273,7 +274,7 @@ Deno.test('rollback switches files and worker only after the upload succeeds', a
   }
 })
 
-Deno.test('a vpc_services door needs a tunnel, and the script never holds it', async () => {
+test('a vpc_services door needs a tunnel, and the script never holds it', async () => {
   let k = await fixture()
   try {
     let service = '66666666-7777-4888-8999-aaaaaaaaaaaa'
@@ -296,7 +297,7 @@ Deno.test('a vpc_services door needs a tunnel, and the script never holds it', a
   }
 })
 
-Deno.test('a static app may deploy its browser entry.js', async () => {
+test('a static app may deploy its browser entry.js', async () => {
   let k = await fixture()
   try {
     await k.tool('app_files', {
@@ -323,7 +324,7 @@ Deno.test('a static app may deploy its browser entry.js', async () => {
 // Deletion runs before the in-flight API call creates its remote effect.
 // The late reply must compensate, since deletion could not see that resource.
 for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
-  Deno.test(`permanent deletion cleans a late ${phase == 'beforeCreate' ? 'resource creation' : 'worker upload'}`, async () => {
+  test(`permanent deletion cleans a late ${phase == 'beforeCreate' ? 'resource creation' : 'worker upload'}`, async () => {
     let k = await fixture()
     try {
       await k.write(configuration)
@@ -339,7 +340,7 @@ for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
   })
 }
 
-Deno.test('resource names fit every product and distinguish normalized binding names', async () => {
+test('resource names fit every product and distinguish normalized binding names', async () => {
   let store = `app.${'a'.repeat(64)}`
   let names = await Promise.all(
     ['DB', 'db', 'D_B', 'D-B', 'B'.repeat(64)].map((name) =>
@@ -352,7 +353,7 @@ Deno.test('resource names fit every product and distinguish normalized binding n
   assert(await resourceName('app.bbb', 'DB') != names[0])
 })
 
-Deno.test('a refused provisioning scope keeps draft files private and uploads no worker', async () => {
+test('a refused provisioning scope keeps draft files private and uploads no worker', async () => {
   for (
     let [path, scope, config] of [
       ['/d1/', 'D1 Edit', { d1_databases: configuration.d1_databases }],
@@ -386,7 +387,7 @@ Deno.test('a refused provisioning scope keeps draft files private and uploads no
   }
 })
 
-Deno.test('a missing explicit main refuses before resource creation, upload or deletion', async () => {
+test('a missing explicit main refuses before resource creation, upload or deletion', async () => {
   let k = await fixture()
   try {
     await k.write({ ...configuration, main: 'missing/server.js' })
@@ -404,7 +405,7 @@ Deno.test('a missing explicit main refuses before resource creation, upload or d
   }
 })
 
-Deno.test('JSONC takes precedence over JSON and neither config is served publicly', async () => {
+test('JSONC takes precedence over JSON and neither config is served publicly', async () => {
   let k = await fixture()
   try {
     await k.write({ compatibility_date: '2025-01-01' }, 'wrangler.json')
@@ -445,7 +446,7 @@ Deno.test('JSONC takes precedence over JSON and neither config is served publicl
   }
 })
 
-Deno.test('malformed JSONC keeps the prior worker and never falls back to JSON', async () => {
+test('malformed JSONC keeps the prior worker and never falls back to JSON', async () => {
   let k = await fixture()
   try {
     await k.write(configuration)
@@ -474,7 +475,7 @@ Deno.test('malformed JSONC keeps the prior worker and never falls back to JSON',
   }
 })
 
-Deno.test('a partial resource creation is recorded and reused on retry', async () => {
+test('a partial resource creation is recorded and reused on retry', async () => {
   let k = await fixture()
   try {
     k.state.fail = '/r2/'
@@ -496,7 +497,7 @@ Deno.test('a partial resource creation is recorded and reused on retry', async (
   }
 })
 
-Deno.test('permanent deletion empties R2 and keeps ownership through a failed retry', async () => {
+test('permanent deletion empties R2 and keeps ownership through a failed retry', async () => {
   let k = await fixture()
   try {
     await k.write(configuration)
@@ -529,7 +530,7 @@ Deno.test('permanent deletion empties R2 and keeps ownership through a failed re
   }
 })
 
-Deno.test('main deploys the chosen nested source and its imports, never the default worker', async () => {
+test('main deploys the chosen nested source and its imports, never the default worker', async () => {
   let k = await fixture()
   try {
     await k.write({ main: './dist/server.mjs' })
@@ -587,7 +588,7 @@ export default { fetch() { return new Response(value) } }`,
   }
 })
 
-Deno.test('explicit worker.js and entry.js are valid server sources', async () => {
+test('explicit worker.js and entry.js are valid server sources', async () => {
   let k = await fixture()
   try {
     for (let main of ['worker.js', 'entry.js']) {
@@ -605,7 +606,7 @@ Deno.test('explicit worker.js and entry.js are valid server sources', async () =
   }
 })
 
-Deno.test('invalid main leaves the prior script intact even with no default source', async () => {
+test('invalid main leaves the prior script intact even with no default source', async () => {
   let k = await fixture()
   try {
     await k.tool('app_files', {

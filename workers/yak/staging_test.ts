@@ -1,5 +1,6 @@
 // A missing named-environment binding silently disables a door; a reused
 // resource writes staging traffic into production. Hold both boundaries.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import { parse } from '@std/toml'
 
@@ -8,7 +9,7 @@ let config = parse(
 )
 let staging = (config.env as Record<string, Record<string, unknown>>).staging
 
-Deno.test('staging repeats the kernel bindings without production resources', () => {
+test('staging repeats the kernel bindings without production resources', () => {
   for (
     let key of [
       'durable_objects',

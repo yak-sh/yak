@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Reply } from '@yaks/model'
@@ -35,7 +36,7 @@ let limited = (h: Harness, limits: ChildLimits) => ({
   tools: sessionTools(h.g, limits),
 })
 
-Deno.test('shared FIFO pool admits IDs before preparation and never over-admits across parents', async () => {
+test('shared FIFO pool admits IDs before preparation and never over-admits across parents', async () => {
   let h = await harness()
   let starts: string[] = [], prepared: string[] = []
   let replies = Array.from({ length: 3 }, () => Promise.withResolvers<Reply>())
@@ -95,7 +96,7 @@ Deno.test('shared FIFO pool admits IDs before preparation and never over-admits 
   await a.close()
 })
 
-Deno.test('queued intent survives a restart, and closing does not drain the durable queue', async () => {
+test('queued intent survives a restart, and closing does not drain the durable queue', async () => {
   let { path, free } = await file()
   let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })
@@ -143,7 +144,7 @@ Deno.test('queued intent survives a restart, and closing does not drain the dura
   }
 })
 
-Deno.test('cap one nested delegated wait releases and reacquires its slot', async () => {
+test('cap one nested delegated wait releases and reacquires its slot', async () => {
   let h = await harness()
   let turns = new Map<string, number>()
   let finished = false
@@ -194,7 +195,7 @@ Deno.test('cap one nested delegated wait releases and reacquires its slot', asyn
   await a.close()
 })
 
-Deno.test('queued cancellation skips expensive prep; prep failure has one terminal receipt', async () => {
+test('queued cancellation skips expensive prep; prep failure has one terminal receipt', async () => {
   let { path, free } = await file()
   let h = await harness(path)
   let prepared: string[] = []
@@ -260,7 +261,7 @@ Deno.test('queued cancellation skips expensive prep; prep failure has one termin
   }
 })
 
-Deno.test('queued submissions and fork anchors survive file reopen without duplicate preparation', async () => {
+test('queued submissions and fork anchors survive file reopen without duplicate preparation', async () => {
   let { path, free } = await file()
   let h = await harness(path)
   let bound = limited(h, { maxChildren: 0 })

@@ -2,6 +2,7 @@
 // Before T-37880 `member_add` wrote the seat outright, so naming a stranger's
 // address put the inviter's space in the stranger's listing, their agent's
 // instructions, and behind a bare app name their agent would say.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { SUBJECT } from './invite.ts'
 import {
@@ -15,7 +16,7 @@ import {
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
 
-Deno.test('an invitation reaches nobody until its person accepts it', async () => {
+test('an invitation reaches nobody until its person accepts it', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)

@@ -1,12 +1,13 @@
 // The bag lists wearable pieces before grouped supplies, with item level
 // taking priority over rarity and older pieces using their tier's first level.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { seedItems } from './items_fixture.ts'
 import { carried } from './pack.ts'
 
 seedItems()
 
-Deno.test('the bag orders gear by item level, then rarity', () => {
+test('the bag orders gear by item level, then rarity', () => {
   let h = (eid: string, kind: string, lvl?: number, rarity?: 'legendary') => ({
     eid,
     kind,

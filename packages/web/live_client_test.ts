@@ -1,5 +1,6 @@
 // The replica over a hand-driven socket: what it asks the host, and what a
 // frame the host sends does to the box and to the names that asked.
+import { test } from '@yaks/testing'
 import { tick } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import type { Frame, Socket } from '@yaks/sync'
@@ -45,7 +46,7 @@ let row = (eid: string, title: string) => ({
   doc: { title },
 })
 
-Deno.test('two names on one line share one subscription on the wire', () => {
+test('two names on one line share one subscription on the wire', () => {
   let { c, sent } = replica()
   c.open('a', '.doc')
   c.open('b', '.doc')
@@ -56,7 +57,7 @@ Deno.test('two names on one line share one subscription on the wire', () => {
   assertEquals(sent.filter((m) => 'unsubscribe' in m).length, 1)
 })
 
-Deno.test('a frame lands in the box and is reported to every name, first as a reset', async () => {
+test('a frame lands in the box and is reported to every name, first as a reset', async () => {
   let { c, frames, sent, say } = replica()
   c.open('a', '.doc')
   c.open('b', '.doc')
@@ -73,7 +74,7 @@ Deno.test('a frame lands in the box and is reported to every name, first as a re
   assertEquals(c.box.ent('x')?.doc, { title: 'Two' })
 })
 
-Deno.test('a derived value wider than its enum still lands', async () => {
+test('a derived value wider than its enum still lands', async () => {
   let { c, sent, say } = replica()
   c.open('a', '.task')
   await say({
@@ -83,7 +84,7 @@ Deno.test('a derived value wider than its enum still lands', async () => {
   assertEquals(c.box.ent('x')?.task, { status: 'wip' })
 })
 
-Deno.test('a refusal is reported, and lands no rows', async () => {
+test('a refusal is reported, and lands no rows', async () => {
   let { c, frames, sent, say } = replica()
   c.open('a', '.nope')
   await say({
@@ -95,7 +96,7 @@ Deno.test('a refusal is reported, and lands no rows', async () => {
   assertEquals(c.members('a'), [])
 })
 
-Deno.test('a test server speaks through receive, as changes', () => {
+test('a test server speaks through receive, as changes', () => {
   let { c, frames } = replica()
   c.open('a', '.doc')
   c.receive({

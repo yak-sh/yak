@@ -17,6 +17,7 @@
 // alternates between the two halves is what proves the rounds are run to a
 // fixed point rather than once.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { ARMS, doomSql, looseSql, narrow } from '@yaks/sql'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
@@ -121,7 +122,7 @@ let both = (seed: Bundle[], kill: Bundle[], v: Vocab = words): Bundle[] => {
 let dead = (out: Bundle[]): string[] =>
   out.filter((b) => b.tombstone != null).map((b) => b.entity.eid)
 
-Deno.test('a chain falls to the end, rung by rung', () => {
+test('a chain falls to the end, rung by rung', () => {
   let out = both([
     { entity: { eid: 'a' }, node: { name: 'a' } },
     { entity: { eid: 'b' }, node: { name: 'b', of: 'a' } },
@@ -136,7 +137,7 @@ Deno.test('a chain falls to the end, rung by rung', () => {
   assertEquals(dead(out), ['a', 'b', 'c', 'd'])
 })
 
-Deno.test('a fork takes both arms, and stops at what points nowhere', () => {
+test('a fork takes both arms, and stops at what points nowhere', () => {
   let out = both([
     { entity: { eid: 'a' }, node: { name: 'a' } },
     { entity: { eid: 'b' }, node: { name: 'b', of: 'a' } },
@@ -146,7 +147,7 @@ Deno.test('a fork takes both arms, and stops at what points nowhere', () => {
   assertEquals(dead(out), ['a', 'b', 'c', 'd'])
 })
 
-Deno.test('a cycle of cascade references terminates', () => {
+test('a cycle of cascade references terminates', () => {
   // Two nodes that each exist about the other. The walk stops on a repeat and
   // the statement's rung count saturates, so neither runs forever.
   let out = both([
@@ -157,7 +158,7 @@ Deno.test('a cycle of cascade references terminates', () => {
   assertEquals(dead(out), ['x', 'y'])
 })
 
-Deno.test('only survivors let go', () => {
+test('only survivors let go', () => {
   let out = both([
     { entity: { eid: 'a' }, node: { name: 'a' } },
     { entity: { eid: 'b' }, node: { name: 'b', of: 'a' } },
@@ -179,7 +180,7 @@ Deno.test('only survivors let go', () => {
   assertEquals(dead(out), ['a', 'b', 'c'])
 })
 
-Deno.test('the closure carries the rung it fell on', () => {
+test('the closure carries the rung it fell on', () => {
   let s = db()
   s.tx((tx) =>
     tx.patch([
@@ -202,7 +203,7 @@ Deno.test('the closure carries the rung it fell on', () => {
   )
 })
 
-Deno.test('a chain longer than the rung count still falls whole', () => {
+test('a chain longer than the rung count still falls whole', () => {
   // Past @yaks/sql's deep the rung number saturates rather than climbing — the
   // count is what stops, never the walk. A chain twice that long proves it.
   let s = db()
@@ -220,7 +221,7 @@ Deno.test('a chain longer than the rung count still falls whole', () => {
   assertEquals(gone.at(-1)?.eid, `n${n - 1}`)
 })
 
-Deno.test('a wide vocabulary is asked in rounds until nothing is new', () => {
+test('a wide vocabulary is asked in rounds until nothing is new', () => {
   // Every rung crosses from one statement's tables to the other's, so one
   // round of asking finds one rung and no more. The whole chain still falls.
   let out = both(
@@ -245,7 +246,7 @@ Deno.test('a wide vocabulary is asked in rounds until nothing is new', () => {
   })
 })
 
-Deno.test('a wide vocabulary asks no statement more than it may carry', () => {
+test('a wide vocabulary asks no statement more than it may carry', () => {
   // Workerd caps a compound SELECT at five terms and answers a wider one with
   // `too many terms in compound SELECT` — which is not a limit an embedded
   // SQLite (500) will ever show, so the shape is what a fast test can hold.
@@ -261,7 +262,7 @@ Deno.test('a wide vocabulary asks no statement more than it may carry', () => {
   assert(narrow(words) && !narrow(wide))
 })
 
-Deno.test('a large delete stays atomic within the host bind limit', () => {
+test('a large delete stays atomic within the host bind limit', () => {
   for (let vocab of [words, wide]) {
     let driver = spy(mem(), (_, params) => {
       if (params.length > 100) throw new Error('too many SQL variables')
@@ -288,7 +289,7 @@ Deno.test('a large delete stays atomic within the host bind limit', () => {
   }
 })
 
-Deno.test('a grave is not a casualty twice', () => {
+test('a grave is not a casualty twice', () => {
   let s = db()
   let g = graph({ storage: s, vocab: words })
   g.apply([

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { place } from './overlay.tsx'
@@ -20,7 +21,7 @@ let put = (side: 'above' | 'below', h: number) => {
   return node.style
 }
 
-Deno.test('a growing overlay stays inside the viewport', () => {
+test('a growing overlay stays inside the viewport', () => {
   Object.defineProperties(globalThis, {
     innerWidth: { value: 1000, configurable: true },
     innerHeight: { value: 800, configurable: true },

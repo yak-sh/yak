@@ -2,6 +2,7 @@
 // it is written, sent, and stamped — through one apply() and two effects that
 // have never heard of each other.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { clubhouse, noon } from './testing.ts'
@@ -38,7 +39,7 @@ let rig = async (refuse?: string) => {
   return house
 }
 
-Deno.test('a new seat writes an invitation, and the invitation goes', async () => {
+test('a new seat writes an invitation, and the invitation goes', async () => {
   let { g, post } = await rig()
   await g.apply([{
     entity: { eid: 'm-first' },
@@ -53,7 +54,7 @@ Deno.test('a new seat writes an invitation, and the invitation goes', async () =
   assertEquals((invite.mail as Comp).message_id, 'stash-1')
 })
 
-Deno.test("the role is the letter's business, not the handler's", async () => {
+test("the role is the letter's business, not the handler's", async () => {
   let { g, post } = await rig()
   await g.apply([{
     entity: { eid: 'm-first' },
@@ -62,7 +63,7 @@ Deno.test("the role is the letter's business, not the handler's", async () => {
   assertEquals(post.last()?.subject, 'You run the book club')
 })
 
-Deno.test('a member with no address gets a bounced invitation, not silence', async () => {
+test('a member with no address gets a bounced invitation, not silence', async () => {
   let { g, post } = await rig()
   await g.apply([{ entity: { eid: 'p-bo' }, person: { name: 'Bo' } }])
   await g.apply([{

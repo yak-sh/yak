@@ -4,6 +4,7 @@
 // building, in every land's dress and turned every way, can be walked into
 // from outside its door, up every flight, to everywhere something in it is
 // used.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { BUILDINGS } from './buildings.ts'
 import { seedBuildings } from './buildings_fixture.ts'
@@ -71,13 +72,13 @@ let ahead = (u: Use, m: number): [number, number] => [
   u.at[2] + Math.cos(u.yaw) * m,
 ]
 
-Deno.test('a wall stops a walker', () => {
+test('a wall stops a walker', () => {
   let v = town(), b = v.buildings(64, 64, 0)[0], [, n] = b.foot
   let got = go(v, [b.x - 1.5, 5, n - 3], [b.x - 1.5, b.z])
   assert(got.z < n && got.z > n - 1, `stopped at ${got.z}`)
 })
 
-Deno.test('a door lets in whoever opens doors, and no creature', () => {
+test('a door lets in whoever opens doors, and no creature', () => {
   let v = town(), b = v.buildings(64, 64, 0)[0], door = use(b, 'door')
   let hero = go(v, door.at, ahead(door, 3))
   assertEquals(within(v, hero.x, hero.y, hero.z), b)
@@ -86,7 +87,7 @@ Deno.test('a door lets in whoever opens doors, and no creature', () => {
   assertEquals(within(v, boar.x, boar.y, boar.z), null)
 })
 
-Deno.test('creatures live and wander outside building footprints', () => {
+test('creatures live and wander outside building footprints', () => {
   let v = vale(), room = RADIUS * 2
   let clear = (v: Vale, x: number, z: number) =>
     v.buildings(x, z, room).every((b) =>
@@ -114,13 +115,13 @@ Deno.test('creatures live and wander outside building footprints', () => {
   }
 })
 
-Deno.test('stairs carry a walker to the floor above', () => {
+test('stairs carry a walker to the floor above', () => {
   let v = town(), b = v.buildings(64, 64, 0)[0], up = use(b, 'up')
   let [x, z] = ahead(up, b.floors[1] - b.floors[0] + 1)
   assertEquals(go(v, up.at, [x, z]).y, b.floors[1])
 })
 
-Deno.test('a walker stands on the floor above the room below', () => {
+test('a walker stands on the floor above the room below', () => {
   let v = town(), b = v.buildings(64, 64, 0)[0], down = use(b, 'down')
   let [x, , z] = down.at
   assertEquals(floorAt(v, x, z, b.floors[1]), b.floors[1])
@@ -161,7 +162,7 @@ let ALL: [string, number][] = Object.keys(BUILDINGS).flatMap((kind) =>
   [0, 1, 2, 3].map((turn): [string, number] => [kind, turn])
 )
 
-Deno.test('every building can be walked into, up, and to all it has', () => {
+test('every building can be walked into, up, and to all it has', () => {
   for (let [kind, turn] of ALL) {
     let v = town(kind, turn), b = v.buildings(64, 64, 0)[0]
     let got = reach(v, use(b, 'door').at)
@@ -187,7 +188,7 @@ let size = (p: Prop): [number, number] => {
     : [k.foot ?? 0, k.foot ?? 0]
 }
 
-Deno.test('village buildings leave clear plots for one another and landmarks', () => {
+test('village buildings leave clear plots for one another and landmarks', () => {
   for (let { id } of villages) {
     let props = builtOf(id)
     for (let b of props.filter((p) => KINDS[p.kind].raise)) {
@@ -205,7 +206,7 @@ Deno.test('village buildings leave clear plots for one another and landmarks', (
   }
 })
 
-Deno.test('village crafting stations are inside their workshops', () => {
+test('village crafting stations are inside their workshops', () => {
   let v = vale()
   for (let { id, at: [x, z] } of villages) {
     let stations = stationsNear(v, x, z, 35)
@@ -225,7 +226,7 @@ Deno.test('village crafting stations are inside their workshops', () => {
   }
 })
 
-Deno.test('the mill stands only beside water', () => {
+test('the mill stands only beside water', () => {
   let v = vale()
   let mills = Object.keys(LEVELS).flatMap((id) =>
     builtOf(id).filter((p) => p.kind.startsWith('mill.'))
@@ -236,7 +237,7 @@ Deno.test('the mill stands only beside water', () => {
   assert(v.rise(mill.x - 5, mill.z) > WATER)
 })
 
-Deno.test('distant buildings draw their shell; other props share a mesh', () => {
+test('distant buildings draw their shell; other props share a mesh', () => {
   let near = model('smithy.plaster', 0)
   let far = model('smithy.plaster', 0, 0, false)
   assert(far.idx.length < near.idx.length)

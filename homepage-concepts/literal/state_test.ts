@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { act, initial, reserve, summary } from './demo-state.js'
 
-Deno.test('reservations are persistent-shaped records, not generated copy', () => {
+test('reservations are persistent-shaped records, not generated copy', () => {
   const first = reserve(initial(), 'projector', 'Lea').state
   assertEquals(first.reservations.length, 1)
   assertEquals(reserve(first, 'projector', 'Other').state, first)
@@ -17,14 +18,14 @@ Deno.test('reservations are persistent-shaped records, not generated copy', () =
   assert(summary(reserve(after, 'screen', 'Mo').state).startsWith('All three'))
   assertEquals(JSON.parse(JSON.stringify(after)), after)
 })
-Deno.test('publication and interface changes do not remove existing records', () => {
+test('publication and interface changes do not remove existing records', () => {
   const state = reserve(initial(), 'screen', 'Mo').state
   assertEquals(act(state, 'publish').reservations, state.reservations)
   assertEquals(act(state, 'checklist').reservations, state.reservations)
   assertEquals(act(act(state, 'neighbor'), 'neighbor').reservations.length, 2)
   assertEquals(initial().reservations.length, 0)
 })
-Deno.test('all directions share one demonstrator and resolve local assets', async () => {
+test('all directions share one demonstrator and resolve local assets', async () => {
   const root = new URL('.', import.meta.url)
   for (
     const page of [

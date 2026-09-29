@@ -15,7 +15,7 @@ import {
 } from '@std/assert'
 import { client as keeper } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { browser, client, connector, kernel, seed } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a
@@ -31,7 +31,7 @@ type Row = {
   filed: { assignee: { eid: string; name: string } }
 }
 
-Deno.test('the served client: a page saves, lists and watches', async () => {
+test('the served client: a page saves, lists and watches', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
   let them = await seed(k, [{ slug: 'jeff7', apps: ['recipes'] }])
@@ -267,7 +267,7 @@ Deno.test('the served client: a page saves, lists and watches', async () => {
 // and 7): an app's pretty paths make a relative import wrong, and `store()`
 // takes an address that is a path, since every app in a space shares one
 // hostname.
-Deno.test('the client at a pretty path, and a sibling app by path', async () => {
+test('the client at a pretty path, and a sibling app by path', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
   let them = await seed(k, [{ slug: 'nora8', apps: ['reading', 'lending'] }])
@@ -335,7 +335,7 @@ Deno.test('the client at a pretty path, and a sibling app by path', async () => 
 // A page that keeps its own copy of the store (@yaks/client) writes in the
 // Store's wire, and the answer is what lands its write whole: the byline the
 // store stamped on it names who made it, on the page that made it.
-Deno.test('a page keeping a copy of its store learns who made its own write', async () => {
+test('a page keeping a copy of its store learns who made its own write', async () => {
   let k = await kernel()
   let them = await seed(k, [{ slug: 'ivo3', apps: ['recipes'] }])
   let mine = browser(k, 'ivo3.yaks.app', them.cookie)

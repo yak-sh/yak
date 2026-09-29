@@ -1,5 +1,6 @@
 // The owner can request a safe move; the hero answers only the latest request,
 // and a saved acknowledgment keeps that move from replaying on another page.
+import { test } from '@yaks/testing'
 import {
   assertEquals,
   assertObjectMatch,
@@ -18,7 +19,7 @@ import { rows as themeRows } from './themes_fixture.ts'
 
 seedDesigns()
 
-Deno.test('teleport destinations stay in their land and refuse unsafe coordinates', () => {
+test('teleport destinations stay in their land and refuse unsafe coordinates', () => {
   let world = vale()
   let named = destinationOf(world, { level: 'tombsands' })
   assertEquals(named.level, 'tombsands')
@@ -36,7 +37,7 @@ Deno.test('teleport destinations stay in their land and refuse unsafe coordinate
   )
 })
 
-Deno.test('a seen acknowledgment consumes the latest admin move', () => {
+test('a seen acknowledgment consumes the latest admin move', () => {
   let request = (eid: string, at: string): Bundle => ({
     entity: { eid },
     created: { at },
@@ -53,7 +54,7 @@ Deno.test('a seen acknowledgment consumes the latest admin move', () => {
   assertEquals(nextTeleport(rows, 'hero', undefined, 'new'), null)
 })
 
-Deno.test('the teleport worker admits owner and refuses editor', async () => {
+test('the teleport worker admits owner and refuses editor', async () => {
   let wrote: Bundle[] = []
   let env = {
     STORE: {
@@ -96,7 +97,7 @@ Deno.test('the teleport worker admits owner and refuses editor', async () => {
   })
 })
 
-Deno.test('teleport targets live positions and stored companion spots', async () => {
+test('teleport targets live positions and stored companion spots', async () => {
   let target = '01234567-89ab-cdef-0123-456789abcdef'
   let wrote: Bundle[] = []
   let present = true
@@ -167,7 +168,7 @@ Deno.test('teleport targets live positions and stored companion spots', async ()
   })
 })
 
-Deno.test('teleport can meet a villager at their current world position', async () => {
+test('teleport can meet a villager at their current world position', async () => {
   let wrote: Bundle[] = []
   let env = {
     STORE: {
@@ -207,7 +208,7 @@ Deno.test('teleport can meet a villager at their current world position', async 
   })
 })
 
-Deno.test('an active hero moves once and a returning hero keeps the move', () => {
+test('an active hero moves once and a returning hero keeps the move', () => {
   let hero = 'hero', request = 'request', now = 1000
   let rows = new Map<string, Bundle>([[hero, {
     entity: { eid: hero },

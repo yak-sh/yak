@@ -3,6 +3,7 @@
 // ending are the thing under test. The provider is a shell script, so the
 // whole file costs a few hundred milliseconds.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
@@ -36,7 +37,7 @@ let said = (g: { read: (q: string) => unknown }) =>
 let bodies = async (g: { read: (q: string) => unknown }) =>
   (await said(g)).map((b) => String(comp(b, 'content')?.body ?? ''))
 
-Deno.test('the request starts the provider, and what it printed is the transcript', async () => {
+test('the request starts the provider, and what it printed is the transcript', async () => {
   let g = tracked()
   let where = dir()
   watching(g, { dir: where, poll: 20 })
@@ -107,7 +108,7 @@ let voiced = (eid: string, body: string, home?: string): Bundle => ({
   persona: home ? { home } : {},
 })
 
-Deno.test('the chosen persona reaches a managed provider', async () => {
+test('the chosen persona reaches a managed provider', async () => {
   let given = await persona(voiced('N1', 'Keep the graph true.'), {
     entity: { eid: 'S1' },
     session: { persona: 'N1' },
@@ -115,7 +116,7 @@ Deno.test('the chosen persona reaches a managed provider', async () => {
   assert(given?.includes('Keep the graph true.'))
 })
 
-Deno.test("a run on a sub-project's task hears each common persona above it", async () => {
+test("a run on a sub-project's task hears each common persona above it", async () => {
   let given = await persona(
     { entity: { eid: 'P1' }, project: {} },
     { entity: { eid: 'P2' }, project: {}, filed: { project: 'P1' } },
@@ -130,7 +131,7 @@ Deno.test("a run on a sub-project's task hears each common persona above it", as
   assert(given?.includes('Keep the graph true.'), given)
 })
 
-Deno.test('a request made beside a server is started by the server, not the command', async () => {
+test('a request made beside a server is started by the server, not the command', async () => {
   let vocab = loadVocab(
     [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, effectDoc, spawnDoc],
     [edgeKeywords],
@@ -174,7 +175,7 @@ Deno.test('a request made beside a server is started by the server, not the comm
   }
 })
 
-Deno.test('a run works in a checkout of its own, taken back when it ends', async () => {
+test('a run works in a checkout of its own, taken back when it ends', async () => {
   let vocab = loadVocab(
     [
       sessionDoc,
@@ -247,7 +248,7 @@ Deno.test('a run works in a checkout of its own, taken back when it ends', async
   }
 })
 
-Deno.test('a run speaks as its own session, never its launcher’s', () => {
+test('a run speaks as its own session, never its launcher’s', () => {
   let env = sessionEnv('S1', {
     PATH: '/bin',
     CLAUDE_CODE_SESSION_ID: 'launcher',
@@ -257,7 +258,7 @@ Deno.test('a run speaks as its own session, never its launcher’s', () => {
   assertEquals(env, { PATH: '/bin', TASKS_SESSION: 'S1' })
 })
 
-Deno.test('a stop on the session reaches the agent', async () => {
+test('a stop on the session reaches the agent', async () => {
   let g = tracked()
   let where = dir()
   watching(g, { dir: where, poll: 20, grace: 500 })
@@ -284,7 +285,7 @@ Deno.test('a stop on the session reaches the agent', async () => {
   }
 })
 
-Deno.test('a stop committed with a request prevents its launch', async () => {
+test('a stop committed with a request prevents its launch', async () => {
   let g = tracked()
   let where = dir()
   watching(g, { dir: where, poll: 20 })
@@ -301,7 +302,7 @@ Deno.test('a stop committed with a request prevents its launch', async () => {
   }
 })
 
-Deno.test('a command passing through adopts no run', async () => {
+test('a command passing through adopts no run', async () => {
   // Its tails would outlive the lease it gives back on the way out, so it
   // does not so much as look.
   let looked = false
@@ -310,7 +311,7 @@ Deno.test('a command passing through adopts no run', async () => {
   assertEquals(looked, false)
 })
 
-Deno.test('a restart adopts the run and reads its log on from where it stands', async () => {
+test('a restart adopts the run and reads its log on from where it stands', async () => {
   let g = tracked()
   let where = dir()
   try {

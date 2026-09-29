@@ -5,6 +5,7 @@
 // age, a code dies of too many guesses, a code minted for one address never
 // opens another, and an address gets three letters an hour — a window no test
 // can sit through, and a count nobody buys back by burning a code.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import {
   chose,
@@ -64,20 +65,20 @@ let tries = (wrote: Bundle[]) =>
   wrote.map((b) => (b.signin as { tries?: number } | undefined)?.tries)
     .filter((t) => t != null)
 
-Deno.test('the live code opens, and is spent', async () => {
+test('the live code opens, and is spent', async () => {
   let d = door([row(ME, await mac(ME, '123456', SECRET), soon())])
   assert(await spend(d.at, SECRET, ME, '123456'))
   assert(forgotten(d.wrote))
 })
 
-Deno.test('a wrong guess costs a try, not the code', async () => {
+test('a wrong guess costs a try, not the code', async () => {
   let d = door([row(ME, await mac(ME, '123456', SECRET), soon())])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
   assertFalse(forgotten(d.wrote))
   assertEquals(tries(d.wrote), [1])
 })
 
-Deno.test('the last guess burns the code, and leaves its record', async () => {
+test('the last guess burns the code, and leaves its record', async () => {
   let burnt = row(ME, await mac(ME, '123456', SECRET), soon(), TRIES - 1)
   let d = door([burnt])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
@@ -91,7 +92,7 @@ Deno.test('the last guess burns the code, and leaves its record', async () => {
   assertEquals(after.wrote.length, 0)
 })
 
-Deno.test('an expired code opens nothing, right digits or not', async () => {
+test('an expired code opens nothing, right digits or not', async () => {
   let d = door([row(ME, await mac(ME, '123456', SECRET), past())])
   assertFalse(await spend(d.at, SECRET, ME, '123456'))
   assertEquals(d.wrote.length, 0)
@@ -100,7 +101,7 @@ Deno.test('an expired code opens nothing, right digits or not', async () => {
 // Several codes can stand for one address at once, because the store keeps a
 // mac and never the digits: a second ask cannot re-send the first letter's
 // code, so the first letter is left working for whoever it reaches late.
-Deno.test('every standing code opens, and one guess costs them all', async () => {
+test('every standing code opens, and one guess costs them all', async () => {
   let both = async () => [
     row(ME, await mac(ME, '111111', SECRET), soon()),
     row(ME, await mac(ME, '222222', SECRET), soon()),
@@ -130,7 +131,7 @@ let record = (ago: number) => ({
 let minted = (wrote: Bundle[]) =>
   wrote.filter((b) => (b.signin as { code?: string } | undefined)?.code)
 
-Deno.test('three letters an hour to one address, and no more', async () => {
+test('three letters an hour to one address, and no more', async () => {
   let under = door([record(0), record(60_000)])
   assert(await mint(under.at, SECRET, ME))
   assertEquals(minted(under.wrote).length, 1)
@@ -141,7 +142,7 @@ Deno.test('three letters an hour to one address, and no more', async () => {
   assertFalse(forgotten(full.wrote))
 })
 
-Deno.test('the window passes and the address may ask again', async () => {
+test('the window passes and the address may ask again', async () => {
   let old = Array.from({ length: SENDS }, () => record(WINDOW + 60_000))
   let d = door(old)
   assert(await mint(d.at, SECRET, ME))
@@ -150,7 +151,7 @@ Deno.test('the window passes and the address may ask again', async () => {
   assertEquals(minted(d.wrote).length, 1)
 })
 
-Deno.test('signing in clears the count', async () => {
+test('signing in clears the count', async () => {
   let full = [
     ...Array.from({ length: SENDS - 1 }, () => record(60_000)),
     row(ME, await mac(ME, '123456', SECRET), soon()),
@@ -186,7 +187,7 @@ let guarded = (rows: Signin[]) => {
   return at
 }
 
-Deno.test('forty guesses at once still get five, and the code dies', async () => {
+test('forty guesses at once still get five, and the code dies', async () => {
   let rows = [row(ME, await mac(ME, '123456', SECRET), soon()) as Signin]
   let store = guarded(rows)
   let wrong = Array.from({ length: 40 }, (_, i) => String(i).padStart(6, '9'))
@@ -196,14 +197,14 @@ Deno.test('forty guesses at once still get five, and the code dies', async () =>
   assertFalse(await spend(store, SECRET, ME, '123456'))
 })
 
-Deno.test('a code belongs to its address', async () => {
+test('a code belongs to its address', async () => {
   // The address is inside the mac, so the row's own email cannot be edited
   // into someone else's sign-in.
   let d = door([row('you@yaks.app', await mac(ME, '123456', SECRET), soon())])
   assertFalse(await spend(d.at, SECRET, 'you@yaks.app', '123456'))
 })
 
-Deno.test('no code at all is no sign-in', async () => {
+test('no code at all is no sign-in', async () => {
   let d = door([])
   assertFalse(await spend(d.at, SECRET, ME, '123456'))
   assertEquals(d.wrote.length, 0)
@@ -213,7 +214,7 @@ Deno.test('no code at all is no sign-in', async () => {
 // rows are titled with one (T-32627), so such a title reads as no name — the
 // next sign-in asks, and an app's store is written the front of the address
 // meanwhile (T-32654).
-Deno.test('a name, never an address', () => {
+test('a name, never an address', () => {
   assertEquals(nameOf('Dana', ME), 'Dana')
   assertEquals(nameOf(null, ME), 'me')
   assertEquals(nameOf('', 'Dana@Example.com'), 'dana')
@@ -232,13 +233,13 @@ let titles = (wrote: Bundle[]) =>
   wrote.map((b) => (b.doc as { title?: string } | undefined)?.title)
     .filter(Boolean)
 
-Deno.test('a person nobody has named keeps no title', async () => {
+test('a person nobody has named keeps no title', async () => {
   let d = door([])
   await personOf(d.at, ME)
   assertEquals(titles(d.wrote), [])
 })
 
-Deno.test('an invitation names someone unnamed, and only them', async () => {
+test('an invitation names someone unnamed, and only them', async () => {
   let fresh = door([])
   await personOf(fresh.at, ME, 'Dana')
   assertEquals(titles(fresh.wrote), ['Dana'])

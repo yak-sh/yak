@@ -2,6 +2,7 @@
 // real store. What the rule says is all there is — no code runs for any of
 // these.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { effects } from '@yaks/effects'
 import { graph, invoked } from '@yaks/graph'
@@ -24,7 +25,7 @@ let g = (declared: { name: string; match: string; before?: string[] }[]) => {
   })
 }
 
-Deno.test('a gated rule fires once and writes what it said', () => {
+test('a gated rule fires once and writes what it said', () => {
   // Every product that is not on a shelf goes in aisle Z. The gate is what
   // makes it fire once: after it writes, the product has a shelf.
   let one = g([{
@@ -44,7 +45,7 @@ Deno.test('a gated rule fires once and writes what it said', () => {
   assertEquals(at(again, 'p1', 'shelf'), undefined)
 })
 
-Deno.test('a rule fires on an entity the same batch created', () => {
+test('a rule fires on an entity the same batch created', () => {
   let one = g([{
     name: 'unshelved',
     match: '.product, +!shelf, +shelf.aisle=Z',
@@ -57,7 +58,7 @@ Deno.test('a rule fires on an entity the same batch created', () => {
   assertEquals(at(out, 'p2', 'shelf'), { aisle: 'Z' })
 })
 
-Deno.test('a rule MAKES an entity, named from its firing', () => {
+test('a rule MAKES an entity, named from its firing', () => {
   // A product with no review gets one, five stars, pointing back at it. The
   // second pattern matches nothing: every word in it writes, so it makes the
   // entity it writes to.
@@ -81,7 +82,7 @@ Deno.test('a rule MAKES an entity, named from its firing', () => {
   assert(!again.find((b) => b.review), 'no second review')
 })
 
-Deno.test('a rule fires on what another rule wrote, in one batch', () => {
+test('a rule fires on what another rule wrote, in one batch', () => {
   // Shelving is one rule; pricing a shelved product is another. The second
   // fires on the first's output because the batch settles to a fixpoint.
   let one = g([
@@ -99,7 +100,7 @@ Deno.test('a rule fires on what another rule wrote, in one batch', () => {
   assertEquals((at(out, 'p1', 'product') as { status: string }).status, 'live')
 })
 
-Deno.test('a rule that does not gate itself is refused by name and binding', () => {
+test('a rule that does not gate itself is refused by name and binding', () => {
   // No gate: the rule matches its own output forever. The second firing on the
   // same binding is a refusal, not a loop.
   let one = g([{ name: 'runaway', match: '.product, +shelf.aisle=Z' }])
@@ -112,7 +113,7 @@ Deno.test('a rule that does not gate itself is refused by name and binding', () 
   assertEquals(one.get(['p1']), [])
 })
 
-Deno.test('a rule writes a resource it named', () => {
+test('a rule writes a resource it named', () => {
   let one = g([{
     name: 'dated',
     match: '.product, +!shelf, +shelf.aisle=#Now',
@@ -123,7 +124,7 @@ Deno.test('a rule writes a resource it named', () => {
   assertEquals(at(out, 'p1', 'shelf'), { aisle: '2026-09-19T00:00:00.000Z' })
 })
 
-Deno.test('what a rule writes is stamped and journaled like anything else', () => {
+test('what a rule writes is stamped and journaled like anything else', () => {
   let one = g([{
     name: 'unshelved',
     match: '.product, +!shelf, +shelf.aisle=Z',
@@ -139,7 +140,7 @@ Deno.test('what a rule writes is stamped and journaled like anything else', () =
   assertEquals(held.shelf, { aisle: 'Z', slot: null, height: null })
 })
 
-Deno.test('a rule declared in a vocabulary runs with no wiring at all', () => {
+test('a rule declared in a vocabulary runs with no wiring at all', () => {
   // No `declared` list, no code: the rule is a `$defs` entry the plugin ships
   // beside its components, exactly as an app's manifest would.
   let s = storage(mem(), shop)
@@ -166,7 +167,7 @@ Deno.test('a rule declared in a vocabulary runs with no wiring at all', () => {
 // A template is the same object as a rule, and an invocation is that query
 // merged with the call's arguments as a bindings query (T-37570).
 
-Deno.test('a template invocation is the template merged with its arguments', () => {
+test('a template invocation is the template merged with its arguments', () => {
   let s = storage(mem(), shop)
   s.install()
   let one = graph({ storage: s, vocab: shop })
@@ -193,7 +194,7 @@ Deno.test('a template invocation is the template merged with its arguments', () 
   )
 })
 
-Deno.test('a template with no argument for a variable still joins on it', () => {
+test('a template with no argument for a variable still joins on it', () => {
   let s = storage(mem(), shop)
   s.install()
   graph({ storage: s, vocab: shop }).apply([
@@ -211,7 +212,7 @@ Deno.test('a template with no argument for a variable still joins on it', () => 
 // A pattern effect over the same store: a match is a query, and a storage
 // that answers bindings answers one that joins two entities.
 
-Deno.test('an effect on a joining pattern fires over a real store', async () => {
+test('an effect on a joining pattern fires over a real store', async () => {
   let s = storage(mem(), shop)
   s.install()
   let fx = effects(shop)
@@ -233,7 +234,7 @@ Deno.test('an effect on a joining pattern fires over a real store', async () => 
   assertEquals(seen, ['p1 p1'])
 })
 
-Deno.test('an effect on a removal beside a filter reads the batch overlay', async () => {
+test('an effect on a removal beside a filter reads the batch overlay', async () => {
   let s = storage(mem(), shop)
   s.install()
   let fx = effects(shop)

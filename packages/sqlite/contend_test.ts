@@ -1,6 +1,7 @@
 // Two connections on one file. While one holds the write lock, the other's
 // lookups and opens stay prompt: WAL readers do not wait for its writer.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc } from '@yaks/archetype'
 import { loadVocab, type Vocab } from '@yaks/vocab'
@@ -42,19 +43,19 @@ let prompt = <T>(f: () => T): T => {
   return out
 }
 
-Deno.test('a lookup answers while another process is writing', () => {
+test('a lookup answers while another process is writing', () => {
   using p = beside()
   let [x] = prompt(() => p.store.get(['x']))
   assertEquals(x.entity.eid, 'x')
 })
 
-Deno.test('a query answers while another process is writing', () => {
+test('a query answers while another process is writing', () => {
   using p = beside(indexed)
   let found = prompt(() => p.store.read('.doc'))
   assertEquals(found.map((b) => b.entity.eid), ['x'])
 })
 
-Deno.test('an open beside a writer goes on without it', () => {
+test('an open beside a writer goes on without it', () => {
   using p = beside()
   prompt(() => storage(p.mine, shop).install())
 })

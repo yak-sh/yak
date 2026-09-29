@@ -1,6 +1,7 @@
 // The edge as a graph plugin: a link states itself, is named by what it says,
 // dies with either end, and cannot be half-said.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
@@ -25,21 +26,21 @@ let posts = (g: ReturnType<typeof blogGraph>) => {
 let read = (g: ReturnType<typeof blogGraph>, q: string) =>
   (g.read(q) as Bundle[]).map((b) => b.entity.eid).sort()
 
-Deno.test('a link states itself and is stored', () => {
+test('a link states itself and is stored', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))
   assertEquals(read(g, '.cites'), [edgeEid('p1', 'cites', 'p2')])
   assertEquals(read(g, '.edge.from=p1'), [edgeEid('p1', 'cites', 'p2')])
 })
 
-Deno.test('the same link stated twice is one entity', () => {
+test('the same link stated twice is one entity', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))
   sync(g.apply([link('p1', 'cites', 'p2', 3)]))
   assertEquals(read(g, '.cites').length, 1)
 })
 
-Deno.test('an aliased link mints at the sentence it states', () => {
+test('an aliased link mints at the sentence it states', () => {
   let g = posts(blogGraph())
   let out = sync(g.apply([{
     entity: { eid: '$l' },
@@ -50,7 +51,7 @@ Deno.test('an aliased link mints at the sentence it states', () => {
   assertEquals(made.entity.eid, edgeEid('p1', 'cites', 'p2'))
 })
 
-Deno.test('a link to an entity the same batch mints resolves first', () => {
+test('a link to an entity the same batch mints resolves first', () => {
   let g = blogGraph()
   let out = sync(g.apply([
     { entity: { eid: 'p1' }, post: { title: 'One' } },
@@ -62,7 +63,7 @@ Deno.test('a link to an entity the same batch mints resolves first', () => {
   assertEquals(made.entity.eid, edgeEid('p1', 'cites', born))
 })
 
-Deno.test('unlinking drops the sentence and keeps the identity', () => {
+test('unlinking drops the sentence and keeps the identity', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))
   sync(g.apply([unlink('p1', 'cites', 'p2')]))
@@ -72,7 +73,7 @@ Deno.test('unlinking drops the sentence and keeps the identity', () => {
   assertEquals(read(g, '.cites'), [edgeEid('p1', 'cites', 'p2')])
 })
 
-Deno.test('a link dies with either end', () => {
+test('a link dies with either end', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2'), link('p2', 'links', 'p1')]))
   assertEquals(read(g, '.edge').length, 2)
@@ -80,7 +81,7 @@ Deno.test('a link dies with either end', () => {
   assertEquals(read(g, '.edge'), [])
 })
 
-Deno.test('an edge with no relation is refused, and says so', () => {
+test('an edge with no relation is refused, and says so', () => {
   let g = posts(blogGraph())
   let e = assertThrows(() =>
     sync(g.apply([{
@@ -97,7 +98,7 @@ Deno.test('an edge with no relation is refused, and says so', () => {
   assert((e as Error).message.includes('cites, linked'), (e as Error).message)
 })
 
-Deno.test('an edge missing an end is refused, naming the end', () => {
+test('an edge missing an end is refused, naming the end', () => {
   let g = posts(blogGraph())
   let e = assertThrows(() =>
     sync(g.apply([{ entity: { eid: 'x1' }, edge: { from: 'p1' }, cites: {} }]))
@@ -105,7 +106,7 @@ Deno.test('an edge missing an end is refused, naming the end', () => {
   assert((e as Error).message.includes('`to` end'), (e as Error).message)
 })
 
-Deno.test('a sentence spread over two bundles is one sentence', () => {
+test('a sentence spread over two bundles is one sentence', () => {
   let g = posts(blogGraph())
   let eid = edgeEid('p1', 'cites', 'p2')
   sync(g.apply([
@@ -115,7 +116,7 @@ Deno.test('a sentence spread over two bundles is one sentence', () => {
   assertEquals(read(g, '.cites'), [eid])
 })
 
-Deno.test('a patch that states no ends is left alone', () => {
+test('a patch that states no ends is left alone', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))
   sync(g.apply([{

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
 import { type Bundle, graph, type Plugin } from '@yaks/graph'
@@ -88,7 +89,7 @@ let setup = (extra: Plugin[] = []) => {
   return { driver, store, g, get }
 }
 
-Deno.test('archetype: non-opt-in schema adapters can reinstall over a legacy spine', () => {
+test('archetype: non-opt-in schema adapters can reinstall over a legacy spine', () => {
   let d = mem()
   d.query(OLD_SPINE)
   for (let s of schema(loadVocab([domain]))) d.query(s)
@@ -98,7 +99,7 @@ Deno.test('archetype: non-opt-in schema adapters can reinstall over a legacy spi
   assert(indexes(d, 'entity').includes('entity_archetype'))
 })
 
-Deno.test('archetype: two writers, create, value-only, add/remove, same-batch net move', () => {
+test('archetype: two writers, create, value-only, add/remove, same-batch net move', () => {
   let { g, store, driver, get } = setup()
   let a = g.apply([{
     entity: { eid: 'a', archetype: 'forged' },
@@ -127,7 +128,7 @@ Deno.test('archetype: two writers, create, value-only, add/remove, same-batch ne
   assertEquals(get(eidOf(['archetype'])).entity.archetype, eidOf(['archetype']))
 })
 
-Deno.test('archetype: reference-only births, release/cascade and tombstones', () => {
+test('archetype: reference-only births, release/cascade and tombstones', () => {
   let { g, get } = setup()
   g.apply([
     { entity: { eid: 'ref' }, link: { to: 'bare' } },
@@ -141,7 +142,7 @@ Deno.test('archetype: reference-only births, release/cascade and tombstones', ()
   assertEquals(get('ref').link, undefined)
 })
 
-Deno.test('archetype: dry run and late rollback cannot poison cached sets', () => {
+test('archetype: dry run and late rollback cannot poison cached sets', () => {
   let fail = false
   let { driver, g, get } = setup([{
     name: 'late',
@@ -175,7 +176,7 @@ Deno.test('archetype: dry run and late rollback cannot poison cached sets', () =
   )
 })
 
-Deno.test('archetype: the journal sees a descriptor creation, once', () => {
+test('archetype: the journal sees a descriptor creation, once', () => {
   let v = loadVocab([archetypeDoc, domain])
   let d = mem()
   let s = storage(d, v)
@@ -195,7 +196,7 @@ Deno.test('archetype: the journal sees a descriptor creation, once', () => {
   assertEquals(descriptors(), before)
 })
 
-Deno.test('archetype: additive boot, physical hidden table, idempotent backfill, retirement', () => {
+test('archetype: additive boot, physical hidden table, idempotent backfill, retirement', () => {
   let d = mem()
   d.query(OLD_SPINE)
   d.query(HIDDEN)
@@ -225,7 +226,7 @@ Deno.test('archetype: additive boot, physical hidden table, idempotent backfill,
   assert(indexes(d, 'entity').includes('entity_archetype'))
 })
 
-Deno.test('archetype: pre-existing reference stub can become a descriptor', () => {
+test('archetype: pre-existing reference stub can become a descriptor', () => {
   let { g, get } = setup()
   g.apply([
     { entity: { eid: 'ref' }, link: { to: eidOf(['task']) } },
@@ -236,7 +237,7 @@ Deno.test('archetype: pre-existing reference stub can become a descriptor', () =
   assertEquals(descriptor.entity.archetype, eidOf(['archetype']))
 })
 
-Deno.test('archetype: explicit content aliases canonicalize the stored list', () => {
+test('archetype: explicit content aliases canonicalize the stored list', () => {
   let { g, get } = setup()
   g.apply([{
     entity: { eid: '$set' },
@@ -247,7 +248,7 @@ Deno.test('archetype: explicit content aliases canonicalize the stored list', ()
   })
 })
 
-Deno.test('archetype: stamps join the final set and value-only writes do not assign again', () => {
+test('archetype: stamps join the final set and value-only writes do not assign again', () => {
   let v = loadVocab([archetypeDoc, domain, {
     $defs: {
       created: {
@@ -289,7 +290,7 @@ Deno.test('archetype: stamps join the final set and value-only writes do not ass
   assertEquals(updates, 3)
 })
 
-Deno.test('archetype: backfill classifies a future descriptor stub in either order', () => {
+test('archetype: backfill classifies a future descriptor stub in either order', () => {
   for (let first of [true, false]) {
     let d = mem()
     let s = storage(d, vocab)
@@ -308,7 +309,7 @@ Deno.test('archetype: backfill classifies a future descriptor stub in either ord
   }
 })
 
-Deno.test('archetype: deletion removes physical facets outside the writer vocabulary', () => {
+test('archetype: deletion removes physical facets outside the writer vocabulary', () => {
   let { driver, store, g, get } = setup()
   driver.query(HIDDEN)
   store.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
@@ -320,7 +321,7 @@ Deno.test('archetype: deletion removes physical facets outside the writer vocabu
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
 
-Deno.test('archetype: boot respects number exclusions and the persistent high-water mark', () => {
+test('archetype: boot respects number exclusions and the persistent high-water mark', () => {
   for (let numbered of [true, false]) {
     let d = mem()
     let s = storage(d, vocab, {
@@ -355,7 +356,7 @@ Deno.test('archetype: boot respects number exclusions and the persistent high-wa
   }
 })
 
-Deno.test('physical archetype discovery never inspects provider-owned SQLite tables', () => {
+test('physical archetype discovery never inspects provider-owned SQLite tables', () => {
   let base = mem()
   base.query(raised('_cf_KV', key, { name: 'value', type: 'text' }))
   base.query(raised('__cf_METADATA', key))
@@ -368,7 +369,7 @@ Deno.test('physical archetype discovery never inspects provider-owned SQLite tab
   assertEquals(componentTables(d), ['ordinary'])
 })
 
-Deno.test('one-archetype paged reads use the compound ordering index', async () => {
+test('one-archetype paged reads use the compound ordering index', async () => {
   let d = mem()
   let s = storage(d, vocab)
   s.install()
@@ -393,7 +394,7 @@ Deno.test('one-archetype paged reads use the compound ordering index', async () 
   assert(indexes(d, 'entity').includes('entity_archetype_num'))
 })
 
-Deno.test('archetype: reclassify classifies rows written past the graph, no triggers', () => {
+test('archetype: reclassify classifies rows written past the graph, no triggers', () => {
   let { driver, g, get } = setup()
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   assertEquals(get('a').entity.archetype, eidOf(['doc']))
@@ -423,7 +424,7 @@ Deno.test('archetype: reclassify classifies rows written past the graph, no trig
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
 })
 
-Deno.test('archetype: drift finds the pointer a raw writer left behind', () => {
+test('archetype: drift finds the pointer a raw writer left behind', () => {
   let { driver, g } = setup()
   g.apply([
     { entity: { eid: 'a' }, doc: { title: 'A' } },

@@ -1,6 +1,7 @@
 // A citation's answer comes from the cited entity's written content, without
 // a journal or a checkout.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { docDoc } from '@yaks/doc'
@@ -21,7 +22,7 @@ let cite: Bundle = {
   cites: {},
 }
 
-Deno.test('a verified graph citation tracks content and ignores stamps', () => {
+test('a verified graph citation tracks content and ignores stamps', () => {
   let checked = verify(cite, target('oak'), vocab)
   assertEquals(checked.verified, {})
   assertEquals(checked.cites, { hash: content(vocab)(target('oak')) })
@@ -44,14 +45,14 @@ Deno.test('a verified graph citation tracks content and ignores stamps', () => {
   )
 })
 
-Deno.test('checking again records the new content', () => {
+test('checking again records the new content', () => {
   let moved = target('ash')
   let checked = verify(cite, target('oak'), vocab)
   let again = verify(checked, moved, vocab)
   assertEquals(status(again, moved, vocab), { state: 'current' })
 })
 
-Deno.test('missing checks and old marks never claim freshness', () => {
+test('missing checks and old marks never claim freshness', () => {
   assertEquals(status(cite, target('oak'), vocab), {
     state: 'unverified',
   })

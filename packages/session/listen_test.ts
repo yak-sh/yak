@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
@@ -9,7 +10,7 @@ import { hear, said } from './listen.ts'
 let vocab = loadVocab([docDoc, sessionDoc], [idKeywords])
 let named = (eid: string) => eid.toUpperCase()
 
-Deno.test('an item is one line, whitespace folded, naming what it points at', () => {
+test('an item is one line, whitespace folded, naming what it points at', () => {
   let b: Bundle = {
     entity: { eid: 'c1', num: 7 },
     comment: { target: 't1' },
@@ -46,7 +47,7 @@ let heard = async (rows: Bundle[], session: string) => {
   return { lines, marked: applied.map((b) => b.entity.eid) }
 }
 
-Deno.test('what the session wrote itself is never said, and what is said is marked', async () => {
+test('what the session wrote itself is never said, and what is said is marked', async () => {
   let rows: Bundle[] = [
     {
       entity: { eid: 'c1' },

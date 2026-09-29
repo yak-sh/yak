@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools, parametersOf } from './tools.ts'
 import { core } from '@yaks/mcp'
@@ -11,7 +12,7 @@ let schemas = async () => {
   return new Map(table)
 }
 
-Deno.test('every graph tool says its arguments as JSON Schema', async () => {
+test('every graph tool says its arguments as JSON Schema', async () => {
   for (let [name, schema] of await schemas()) {
     assertEquals(schema.type, 'object', name)
     assert(!('$schema' in schema), `${name} carries a $schema`)
@@ -19,7 +20,7 @@ Deno.test('every graph tool says its arguments as JSON Schema', async () => {
   }
 })
 
-Deno.test('a required argument is required and an optional one is not', async () => {
+test('a required argument is required and an optional one is not', async () => {
   let query = (await schemas()).get('graph_query')!
   assertEquals(query.required, ['q'])
   let props = query.properties as Record<string, Record<string, unknown>>
@@ -27,7 +28,7 @@ Deno.test('a required argument is required and an optional one is not', async ()
   assertEquals(props.limit.type, 'number')
 })
 
-Deno.test('the harness gives an agent the shell and the graph', async () => {
+test('the harness gives an agent the shell and the graph', async () => {
   let h = await harness()
   let names = harnessTools(h.g).map((t) => t.name)
   assertEquals(names.slice(0, 3), ['shell', 'wait', 'stop'])
@@ -39,7 +40,7 @@ Deno.test('the harness gives an agent the shell and the graph', async () => {
   h.close()
 })
 
-Deno.test('a graph tool writes and reads the harness graph', async () => {
+test('a graph tool writes and reads the harness graph', async () => {
   let h = await harness()
   let tools = graphTools(h.g)
   let by = (name: string) => tools.find((t) => t.name == name)!
@@ -51,7 +52,7 @@ Deno.test('a graph tool writes and reads the harness graph', async () => {
   h.close()
 })
 
-Deno.test('a graph tool’s answer carries what a direct call is owed beside it', async () => {
+test('a graph tool’s answer carries what a direct call is owed beside it', async () => {
   let h = await harness()
   let told: string[][] = []
   let [apply] = graphTools(h.g, {
@@ -71,7 +72,7 @@ Deno.test('a graph tool’s answer carries what a direct call is owed beside it'
   h.close()
 })
 
-Deno.test('the merged wait preserves process output and child status alongside task waiting', async () => {
+test('the merged wait preserves process output and child status alongside task waiting', async () => {
   let h = await harness()
   // A process's output is its run's files (@yaks/process `tail`).
   let was = Deno.env.get('PROCESS_DIR')

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { ModelError } from '@yaks/model'
 import { ResponseError, responses, transport } from './mod.ts'
@@ -35,7 +36,7 @@ let credentials = {
 }
 let req = { model: 'm', input: [] }
 
-Deno.test('transient failures replay the same request and keep only successful items', async () => {
+test('transient failures replay the same request and keep only successful items', async () => {
   for (
     let [index, failure] of [
       () => {
@@ -77,7 +78,7 @@ Deno.test('transient failures replay the same request and keep only successful i
   }
 })
 
-Deno.test('three body-read failures become one ModelError, or a retry succeeds quietly', async () => {
+test('three body-read failures become one ModelError, or a retry succeeds quietly', async () => {
   for (let failures of [1, 3]) {
     let calls = 0
     let pauses: number[] = []
@@ -102,7 +103,7 @@ Deno.test('three body-read failures become one ModelError, or a retry succeeds q
   }
 })
 
-Deno.test('a capacity code is transient however it arrives, whatever the status', async () => {
+test('a capacity code is transient however it arrives, whatever the status', async () => {
   for (
     let [failure, wait] of [
       [overloaded, 1000],
@@ -144,7 +145,7 @@ Deno.test('a capacity code is transient however it arrives, whatever the status'
   }
 })
 
-Deno.test('an overloaded backend recovers with no error, or exhausts into exactly one', async () => {
+test('an overloaded backend recovers with no error, or exhausts into exactly one', async () => {
   for (let mode of ['recover', 'exhaust', 'unauthorized'] as const) {
     let calls = 0
     let pauses: number[] = []
@@ -176,7 +177,7 @@ Deno.test('an overloaded backend recovers with no error, or exhausts into exactl
   }
 })
 
-Deno.test('HTTP auth and validation, malformed SSE, provider failures and hook defects fail fast', async () => {
+test('HTTP auth and validation, malformed SSE, provider failures and hook defects fail fast', async () => {
   for (
     let response of [
       () => new Response('', { status: 401 }),
@@ -217,7 +218,7 @@ Deno.test('HTTP auth and validation, malformed SSE, provider failures and hook d
   )
 })
 
-Deno.test('Retry-After accepts seconds and HTTP dates and caps large waits', async () => {
+test('Retry-After accepts seconds and HTTP dates and caps large waits', async () => {
   for (
     let [header, expected] of [['2', 2000], ['999999', 60_000], [
       'invalid',
@@ -261,7 +262,7 @@ Deno.test('Retry-After accepts seconds and HTTP dates and caps large waits', asy
   assertEquals(waits[0] > 28_000 && waits[0] <= 30_000, true)
 })
 
-Deno.test('stop during backoff cancels the wait and prevents another attempt', async () => {
+test('stop during backoff cancels the wait and prevents another attempt', async () => {
   let stop = new AbortController()
   let calls = 0
   let client = transport({
@@ -292,7 +293,7 @@ let silent = (init?: RequestInit) =>
     )
   )
 
-Deno.test('a stall is transient: the attempt after it completes the turn', async () => {
+test('a stall is transient: the attempt after it completes the turn', async () => {
   let calls = 0
   let pauses: number[] = []
   let client = transport({
@@ -312,7 +313,7 @@ Deno.test('a stall is transient: the attempt after it completes the turn', async
 
 // The incident of 2026-09-10 (T-37332): every attempt answered 503 inside five
 // seconds, and the Session settled `failed` over a blip.
-Deno.test('an outage is waited out while patience remains, then gives up', async () => {
+test('an outage is waited out while patience remains, then gives up', async () => {
   for (let outage of [8, Infinity]) {
     let calls = 0
     let pauses: number[] = []

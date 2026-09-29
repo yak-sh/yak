@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -7,7 +8,7 @@ import { hearthOf } from './terrain.ts'
 import type { Bundle, Me } from './net.ts'
 import words from './vocab.json' with { type: 'json' }
 
-Deno.test('two visits write one fire discovery', async () => {
+test('two visits write one fire discovery', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   let visit = (eid: string) =>
@@ -21,7 +22,7 @@ Deno.test('two visits write one fire discovery', async () => {
   assertEquals((await g.read('.fire')).length, 1)
 })
 
-Deno.test('travel needs a known destination and a village fire underfoot', () => {
+test('travel needs a known destination and a village fire underfoot', () => {
   let home = hearthOf('mossvale')!
   let known = new Set(['mossvale', 'birchmere'])
   assertEquals(destination(...home, known, 'birchmere')?.level, 'birchmere')
@@ -30,7 +31,7 @@ Deno.test('travel needs a known destination and a village fire underfoot', () =>
   assertEquals(destination(home[0] + 20, home[1], known, 'birchmere'), null)
 })
 
-Deno.test('a fire discovery belongs to its hero and survives a tab reload', () => {
+test('a fire discovery belongs to its hero and survives a tab reload', () => {
   let previous = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')
   let entries = new Map<string, string>()
   Object.defineProperty(globalThis, 'sessionStorage', {

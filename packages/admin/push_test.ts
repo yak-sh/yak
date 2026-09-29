@@ -1,5 +1,6 @@
 // A push through a platform that keeps apps in memory: after it, the app holds
 // exactly the directory's files and has been released once.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   type Ask,
@@ -95,7 +96,7 @@ let hash = async (f: File) => {
     .map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-Deno.test('a push leaves the app holding exactly the directory, released once', async () => {
+test('a push leaves the app holding exactly the directory, released once', async () => {
   let p = platform({ mail: held('index.html', 'old.js') })
   let said = await push(p.ask, [file('index.html'), file('new.js')], {
     app: 'mail',
@@ -106,7 +107,7 @@ Deno.test('a push leaves the app holding exactly the directory, released once', 
   assertEquals(said[0], 'wrote 1 file, deleted old.js')
 })
 
-Deno.test('a changed file is written and an unchanged file is left alone', async () => {
+test('a changed file is written and an unchanged file is left alone', async () => {
   let p = platform({ mail: held('index.html', 'icon.png') })
   let files = [
     { path: 'index.html', content: 'new page' },
@@ -118,7 +119,7 @@ Deno.test('a changed file is written and an unchanged file is left alone', async
   assertEquals(said[0], 'wrote 1 file')
 })
 
-Deno.test('a released app with the same bytes causes no write or deploy', async () => {
+test('a released app with the same bytes causes no write or deploy', async () => {
   let p = platform({
     mail: new Map([
       ['index.html', { path: 'index.html', content: 'é' }],
@@ -134,7 +135,7 @@ Deno.test('a released app with the same bytes causes no write or deploy', async 
   assertEquals(p.deployed, [])
 })
 
-Deno.test('a retry releases files written before the deploy failed', async () => {
+test('a retry releases files written before the deploy failed', async () => {
   let p = platform({ mail: held('index.html') })
   let files = [file('index.html'), file('new.js')]
   let ask: Ask = (method, params) => {
@@ -153,7 +154,7 @@ Deno.test('a retry releases files written before the deploy failed', async () =>
   assertEquals(p.deployed, ['mail'])
 })
 
-Deno.test('a large directory fits bounded calls before deletion and deploy', async () => {
+test('a large directory fits bounded calls before deletion and deploy', async () => {
   let p = platform({ mail: held('old.js') })
   let files = Array.from({ length: 40 }, (_, i) => ({
     path: `part-${i}.js`,
@@ -192,7 +193,7 @@ Deno.test('a large directory fits bounded calls before deletion and deploy', asy
   assertEquals(uploaded.length > 1, true)
 })
 
-Deno.test('progress marks each remote operation before it waits and after it answers', async () => {
+test('progress marks each remote operation before it waits and after it answers', async () => {
   let p = platform({ mail: held('old.js') })
   let events: PushProgress[] = []
   let ask: Ask = (method, params) => {
@@ -225,7 +226,7 @@ Deno.test('progress marks each remote operation before it waits and after it ans
   ])
 })
 
-Deno.test('large files are split by request size', async () => {
+test('large files are split by request size', async () => {
   let p = platform({ mail: held() })
   let files = Array.from({ length: 3 }, (_, i) => ({
     path: `large-${i}.js`,
@@ -248,7 +249,7 @@ Deno.test('large files are split by request size', async () => {
   assertEquals(calls > 1, true)
 })
 
-Deno.test('an interrupted push can be run again before deletion or deploy', async () => {
+test('an interrupted push can be run again before deletion or deploy', async () => {
   let p = platform({ mail: held('old.js') })
   let files = Array.from({ length: 40 }, (_, i) => file(`part-${i}.js`))
   let writes = 0
@@ -272,7 +273,7 @@ Deno.test('an interrupted push can be run again before deletion or deploy', asyn
   assertEquals(p.deployed, ['mail'])
 })
 
-Deno.test('a list whose words carry more than the files still yields the files', async () => {
+test('a list whose words carry more than the files still yields the files', async () => {
   let p = platform(
     { mail: held('index.html', 'old.js') },
     '\n\n## unseen errors\n- 2026-09-26 page /mail/ — boom is not a function',
@@ -282,7 +283,7 @@ Deno.test('a list whose words carry more than the files still yields the files',
   assertEquals(said[0], 'wrote 0 files, deleted old.js')
 })
 
-Deno.test('a push waits for a deploying server to answer file hashes', async () => {
+test('a push waits for a deploying server to answer file hashes', async () => {
   let p = platform({ mail: held('index.html', 'old.js') }, '', 1)
   let said = await push(
     p.ask,
@@ -296,7 +297,7 @@ Deno.test('a push waits for a deploying server to answer file hashes', async () 
   assertEquals(said[0], 'wrote 0 files, deleted old.js')
 })
 
-Deno.test('a server that keeps answering no list data changes nothing', async () => {
+test('a server that keeps answering no list data changes nothing', async () => {
   let p = platform({ mail: held('index.html', 'old.js') }, '', Infinity)
   await assertRejects(
     () =>
@@ -314,7 +315,7 @@ Deno.test('a server that keeps answering no list data changes nothing', async ()
   assertEquals(p.deployed, [])
 })
 
-Deno.test('malformed list data is a defect immediately', async () => {
+test('malformed list data is a defect immediately', async () => {
   let calls = 0
   let ask: Ask = () => {
     calls++
@@ -339,20 +340,20 @@ Deno.test('malformed list data is a defect immediately', async () => {
   assertEquals(calls, 1)
 })
 
-Deno.test('a push to an app that does not exist creates it first', async () => {
+test('a push to an app that does not exist creates it first', async () => {
   let p = platform()
   await push(p.ask, [file('index.html')], { app: 'mail' })
   assertEquals(p.held('mail'), ['index.html'])
   assertEquals(p.deployed, ['mail'])
 })
 
-Deno.test('an empty directory pushes nothing', async () => {
+test('an empty directory pushes nothing', async () => {
   let p = platform()
   await assertRejects(() => push(p.ask, [], { app: 'mail' }))
   assertEquals(p.deployed, [])
 })
 
-Deno.test('a directory reads as text, bytes that are not UTF-8 as base64, and no dotfiles', async () => {
+test('a directory reads as text, bytes that are not UTF-8 as base64, and no dotfiles', async () => {
   let dir = await Deno.makeTempDir()
   await Deno.mkdir(`${dir}/js`)
   await Deno.writeTextFile(`${dir}/index.html`, '<p>hi')
@@ -367,7 +368,7 @@ Deno.test('a directory reads as text, bytes that are not UTF-8 as base64, and no
   await Deno.remove(dir, { recursive: true })
 })
 
-Deno.test('fileOf keeps UTF-8 as text', () => {
+test('fileOf keeps UTF-8 as text', () => {
   assertEquals(fileOf('a.txt', new TextEncoder().encode('é')), {
     path: 'a.txt',
     content: 'é',

@@ -1,6 +1,7 @@
 // A space's dashboard and front door, drawn straight: pages.ts `desk` and
 // `spaceIndex` are pure, so every state a person passes through is one call
 // here. The address itself, served by the kernel, is home_kernel_test.ts's.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { desk, spaceIndex } from './pages.ts'
@@ -29,7 +30,7 @@ let face = (at: Partial<Parameters<typeof spaceIndex>[0]> = {}) =>
     ...at,
   }).text()
 
-Deno.test('the app library has navigation, not account forms', async () => {
+test('the app library has navigation, not account forms', async () => {
   let page = await block({
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
   })
@@ -49,7 +50,7 @@ Deno.test('the app library has navigation, not account forms', async () => {
   assert(!page.includes('src="/api/build.js"'), page)
 })
 
-Deno.test('profile and address save independently in settings', async () => {
+test('profile and address save independently in settings', async () => {
   let page = await block({ view: 'settings' })
   let forms = page.match(/<form[\s\S]*?<\/form>/g) ?? []
   assertEquals(forms.length, 2)
@@ -63,7 +64,7 @@ Deno.test('profile and address save independently in settings', async () => {
   }
 })
 
-Deno.test('new app exposes separate build and upload forms below the agent route', async () => {
+test('new app exposes separate build and upload forms below the agent route', async () => {
   let page = await block({ view: 'new' })
   let { document } = parseHTML(page)
   let build = document.querySelector('textarea')!
@@ -91,7 +92,7 @@ Deno.test('new app exposes separate build and upload forms below the agent route
   )
 })
 
-Deno.test('the fixed app address links to the displayed host and emphasizes its space name', async () => {
+test('the fixed app address links to the displayed host and emphasizes its space name', async () => {
   for (let env of [{}, { APEX: 'example.test' }]) {
     let { document } = parseHTML(
       await block({ view: 'settings', fixed: true }, env),
@@ -110,7 +111,7 @@ Deno.test('the fixed app address links to the displayed host and emphasizes its 
   assert(document.querySelector('input[name=space]'))
 })
 
-Deno.test('connected empty library offers a copyable request', async () => {
+test('connected empty library offers a copyable request', async () => {
   let page = await block({
     agents: [{
       id: 'chatgpt',
@@ -142,7 +143,7 @@ Deno.test('connected empty library offers a copyable request', async () => {
   }
 })
 
-Deno.test('connected pages show the named client and put setup behind a disclosure', async () => {
+test('connected pages show the named client and put setup behind a disclosure', async () => {
   let agents = [{
     id: 'chatgpt',
     brand: 'chatgpt' as const,
@@ -196,7 +197,7 @@ let VISITS = {
   },
 }
 
-Deno.test('who visited: a bar per day and three lists, no script', async () => {
+test('who visited: a bar per day and three lists, no script', async () => {
   let page = await block({
     view: 'visits',
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
@@ -225,7 +226,7 @@ Deno.test('who visited: a bar per day and three lists, no script', async () => {
   assert(!parseHTML(theirs).document.querySelector('.Stats'))
 })
 
-Deno.test('who visited: no token is one sentence, no chart', async () => {
+test('who visited: no token is one sentence, no chart', async () => {
   let page = await block({
     view: 'visits',
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
@@ -239,7 +240,7 @@ Deno.test('who visited: no token is one sentence, no chart', async () => {
   )
 })
 
-Deno.test('who visited: an app nobody opened says so', async () => {
+test('who visited: an app nobody opened says so', async () => {
   let page = await block({
     view: 'visits',
     apps: [{ eid: 'recipes', slug: 'recipes', title: 'Recipes' }],
@@ -260,7 +261,7 @@ Deno.test('who visited: an app nobody opened says so', async () => {
   assert(!page.includes('<svg class="Stats_Chart"'), page)
 })
 
-Deno.test('trash has restore forms only on its own page', async () => {
+test('trash has restore forms only on its own page', async () => {
   let trash = [{ slug: 'notes', title: 'Notes', days: 12 }]
   let page = await block({ view: 'trash', trash })
   assertStringIncludes(page, `action="${managePath('trash')}"`)
@@ -271,7 +272,7 @@ Deno.test('trash has restore forms only on its own page', async () => {
   assert(!other.includes('Notes'), other)
 })
 
-Deno.test("none of the dashboard is anybody else's", async () => {
+test("none of the dashboard is anybody else's", async () => {
   for (let role of [null, 'editor', 'owner']) {
     let page = await face({ role, person: !!role })
     assert(!page.includes('name="name"'), page)
@@ -280,7 +281,7 @@ Deno.test("none of the dashboard is anybody else's", async () => {
   }
 })
 
-Deno.test('Billing is a management page beside Settings with space checkout and portal', async () => {
+test('Billing is a management page beside Settings with space checkout and portal', async () => {
   let settings = await block({ view: 'settings' })
   assertStringIncludes(settings, `href="${managePath('billing')}"`)
   let { document: profile } = parseHTML(settings)

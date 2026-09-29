@@ -1,6 +1,7 @@
 // One word, one meaning: the ways a caller can say which run it means, and
 // the actor that run writes as.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -39,23 +40,23 @@ let store = () => {
 let found = async (said: string) =>
   (await sessionFor(store(), said))?.entity.eid
 
-Deno.test('a run is reached by its eid, its human id, or its own name', async () => {
+test('a run is reached by its eid, its human id, or its own name', async () => {
   assertEquals(await found('s1'), 's1')
   assertEquals(await found('S-1'), 's1')
   assertEquals(await found('abc'), 's1')
   assertEquals(await found('def'), 's2')
 })
 
-Deno.test('a word no run answers to reaches nothing', async () => {
+test('a word no run answers to reaches nothing', async () => {
   assertEquals(await found('nothing-here'), undefined)
   assertEquals(await found(''), undefined)
 })
 
-Deno.test('an id that names no run is refused, never taken for a name', async () => {
+test('an id that names no run is refused, never taken for a name', async () => {
   await assertRejects(() => found('S-404'), Refused, 'S-404 names nothing')
 })
 
-Deno.test('a run writes for whoever it speaks as, through itself', () => {
+test('a run writes for whoever it speaks as, through itself', () => {
   assertEquals(
     speaking({ entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } }),
     { by: 'p1', via: 's1' },
@@ -68,7 +69,7 @@ Deno.test('a run writes for whoever it speaks as, through itself', () => {
   )
 })
 
-Deno.test("a run's own name addresses it when a session is meant, and only then", async () => {
+test("a run's own name addresses it when a session is meant, and only then", async () => {
   let s = ram(vocab, { number: true })
   let g = graph({ storage: s, vocab, plugins: [ids(vocab), sessions()] })
   await g.apply([{ entity: { eid: 's1' }, session: { id: 'abc' } }])

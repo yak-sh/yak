@@ -13,10 +13,10 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { tick } from '@yaks/testing'
+import { test, tick } from '@yaks/testing'
 import { client, connector, kernel, meta, seed } from './probe.ts'
 
-Deno.test('a page reports its own breaks, and the agent hears', async () => {
+test('a page reports its own breaks, and the agent hears', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'jeff59', apps: ['recipes'] }])
@@ -141,7 +141,7 @@ Deno.test('a page reports its own breaks, and the agent hears', async () => {
 
 // A refusal the door answered on purpose is the platform working, so it files
 // nothing; a page that threw still lands (C-32652 item 3, T-32655).
-Deno.test('a refusal the door meant is not a break', async () => {
+test('a refusal the door meant is not a break', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'club60', apps: ['runs'] }])
@@ -240,7 +240,7 @@ Deno.test('a refusal the door meant is not a break', async () => {
 // else is invisible to an ordinary read — which is how the ninth user test's
 // first throw after a deploy filed as `weather v1` while the deploy had just
 // answered v2 (C-32869 item 4). The report path reads past the cache.
-Deno.test('a break names the version the app is serving', async () => {
+test('a break names the version the app is serving', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{
@@ -283,7 +283,7 @@ Deno.test('a break names the version the app is serving', async () => {
 // the break the reporter posts for a file that never loaded, and the reporter
 // every page is served carries the soft state, and the capture-phase listener
 // that catches such a break at all.
-Deno.test('a page that dies on its first import says so', async () => {
+test('a page that dies on its first import says so', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'jeff62', apps: ['weather'] }])
@@ -403,7 +403,7 @@ let browser = (code: string, page: string) => {
   }
 }
 
-Deno.test("the platform's own scripts are never the app's break", async () => {
+test("the platform's own scripts are never the app's break", async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'jeff63', apps: ['weather'] }])
@@ -489,7 +489,7 @@ Deno.test("the platform's own scripts are never the app's break", async () => {
 // decoder throws on while serving an app's file (files.ts `keyed`) — and it
 // proves what an eviction would: our code fell over, on the app's address,
 // with no app code anywhere near it.
-Deno.test("the platform's own break is ours, not the app's", async () => {
+test("the platform's own break is ours, not the app's", async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'acme64', apps: ['shop'] }])

@@ -4,6 +4,7 @@
 // two things only a log can say — a death comes back as `$delete`, and an
 // entity nothing ever touched has no history rather than an error.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -34,7 +35,7 @@ let history = async (
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
-Deno.test('the journal declares one tool and implements it', () => {
+test('the journal declares one tool and implements it', () => {
   assertEquals(
     loadTools(journalDoc, runs({ sql: null as never })).map((t) => [
       t.name,
@@ -45,7 +46,7 @@ Deno.test('the journal declares one tool and implements it', () => {
   )
 })
 
-Deno.test('a history is the batches that touched it, newest first', async () => {
+test('a history is the batches that touched it, newest first', async () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{
@@ -65,7 +66,7 @@ Deno.test('a history is the batches that touched it, newest first', async () => 
   assertEquals(comp(said[1], 'updated'), { at: NOW })
 })
 
-Deno.test('a limit counts back from the newest', async () => {
+test('a limit counts back from the newest', async () => {
   let f = fixture()
   for (let title of ['one', 'two', 'three']) {
     f.apply([{ entity: { eid: 'p1' }, page: { title } }])
@@ -74,7 +75,7 @@ Deno.test('a limit counts back from the newest', async () => {
   assertEquals(said.map((b) => comp(b, 'page').title), ['three', 'two'])
 })
 
-Deno.test('a death answers as the death it was', async () => {
+test('a death answers as the death it was', async () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
   f.apply([{ entity: { eid: 'p1' }, $delete: true }])
@@ -83,7 +84,7 @@ Deno.test('a death answers as the death it was', async () => {
   assert(!said.page, 'a death carries no properties forward')
 })
 
-Deno.test('nothing ever written about has no history, and no entity is a refusal', async () => {
+test('nothing ever written about has no history, and no entity is a refusal', async () => {
   let f = fixture()
   assertEquals(await history(f.tools, { entity: 'nobody' }), [])
   let refused = await history(f.tools, { entity: '  ' }).catch((e) => e)

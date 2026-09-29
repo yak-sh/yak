@@ -3,6 +3,7 @@
 // read in, the entry a bad file names, and the entry a refused batch is blamed
 // on. The end-to-end proof — a deploy seeding a store and a redeploy seeding
 // nothing — is mcp_test.ts.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -47,7 +48,7 @@ let door = (no: (b: Bundle[]) => string | null = () => null) => {
   return { asked, apply }
 }
 
-Deno.test('a seed file is seed.json or seed.yml, or one under seed/', () => {
+test('a seed file is seed.json or seed.yml, or one under seed/', () => {
   for (
     let path of [
       'seed.json',
@@ -73,7 +74,7 @@ Deno.test('a seed file is seed.json or seed.yml, or one under seed/', () => {
 // YAML is the warm path and JSON keeps working, because YAML reads it
 // (@yaks/yaml, M-34605): one seed may be written either way, and a folder may
 // hold both.
-Deno.test('a seed written in YAML is the same seed', () => {
+test('a seed written in YAML is the same seed', () => {
   let all = sown([
     {
       path: 'seed.yml',
@@ -87,7 +88,7 @@ Deno.test('a seed written in YAML is the same seed', () => {
   ])
 })
 
-Deno.test('a seed that is neither is refused in its own name', () => {
+test('a seed that is neither is refused in its own name', () => {
   assertThrows(
     () => sown([{ path: 'seed.yml', text: 'a:\n - b\n  c: d\n' }]),
     Error,
@@ -95,7 +96,7 @@ Deno.test('a seed that is neither is refused in its own name', () => {
   )
 })
 
-Deno.test('the bundles are read in filename order, the file and folder as one', () => {
+test('the bundles are read in filename order, the file and folder as one', () => {
   let all = sown([
     { path: 'index.html', text: '<h1>hi</h1>' },
     file('seed/02-menu.json', [one('$soup', 'Soup')]),
@@ -110,7 +111,7 @@ Deno.test('the bundles are read in filename order, the file and folder as one', 
   ])
 })
 
-Deno.test('an alias minted in one file is the batch the next one joins', async () => {
+test('an alias minted in one file is the batch the next one joins', async () => {
   let { asked, apply } = door()
   await sow([
     file('seed/01-places.json', [one('$here', 'Here')]),
@@ -129,7 +130,7 @@ Deno.test('an alias minted in one file is the batch the next one joins', async (
 
 // The other caller of the same reading: store_load, which names its files by a
 // path instead of by `seedy` (T-34392).
-Deno.test('a load path names one file, or the data under a folder', () => {
+test('a load path names one file, or the data under a folder', () => {
   for (
     let [path, file] of [
       ['data/cities.json', 'data/cities.json'],
@@ -151,7 +152,7 @@ Deno.test('a load path names one file, or the data under a folder', () => {
   ) assertEquals(asked(path, file), false, `${path} ← ${file}`)
 })
 
-Deno.test('a load is one batch too, whatever chose the files', async () => {
+test('a load is one batch too, whatever chose the files', async () => {
   let { asked: got, apply } = door()
   let all = await load(
     loaded([
@@ -174,7 +175,7 @@ Deno.test('a load is one batch too, whatever chose the files', async () => {
 
 // A spreadsheet is read the same way and takes its place in the same order —
 // what one row becomes is csv.ts's, and csv_test.ts holds that.
-Deno.test('a CSV among the files is rows of the component `as` names', () => {
+test('a CSV among the files is rows of the component `as` names', () => {
   let all = loaded([
     { path: 'data/02-menu.csv', text: 'id,serves\nsoup,4\n' },
     file('data/01-places.json', [one('$here', 'Here')]),
@@ -193,7 +194,7 @@ Deno.test('a CSV among the files is rows of the component `as` names', () => {
 // One batch is one transaction, so a load is cut where a batch would outgrow
 // what a store writes at once: every bundle once, in order, and no part more
 // than PART bundles or more bytes than the store's write log keeps.
-Deno.test('a load is cut into parts a store writes whole', () => {
+test('a load is cut into parts a store writes whole', () => {
   let rows = (n: number, body = ''): Sown[] =>
     Array.from({ length: n }, (_, index) => ({
       file: 'data/rows.json',
@@ -230,7 +231,7 @@ let titles = (batches: { batch: Bundle[]; check: boolean }[]) =>
     b.batch.map((x) => (x.doc as { title: string }).title).join()
   )
 
-Deno.test('a load of several parts is written a part per batch', async () => {
+test('a load of several parts is written a part per batch', async () => {
   let { asked, apply } = door()
   let { wrote, last } = await loadParts(three, 1, apply)
   assertEquals(titles(asked), ['A', 'B', 'C'])
@@ -240,7 +241,7 @@ Deno.test('a load of several parts is written a part per batch', async () => {
   assertEquals(titles(again.asked), ['B', 'C'])
 })
 
-Deno.test('a refused part says what was written and where to go on', async () => {
+test('a refused part says what was written and where to go on', async () => {
   let { asked, apply } = door((b) =>
     b.some((x) => x.entity.eid == '$b') ? 'no B' : null
   )
@@ -252,7 +253,7 @@ Deno.test('a refused part says what was written and where to go on', async () =>
   assertEquals(titles(asked), ['A', 'B'])
 })
 
-Deno.test('a call stops between parts once its stint is spent', async () => {
+test('a call stops between parts once its stint is spent', async () => {
   let { asked, apply } = door()
   let clock = [0, STINT + 1]
   let { last } = await loadParts(three, 1, apply, () => clock.shift() ?? 1e9)
@@ -260,7 +261,7 @@ Deno.test('a call stops between parts once its stint is spent', async () => {
   assertEquals(titles(asked), ['A'])
 })
 
-Deno.test('a seed bigger than one part refuses and writes nothing', async () => {
+test('a seed bigger than one part refuses and writes nothing', async () => {
   let { asked, apply } = door()
   let seed = file(
     'seed.json',
@@ -273,7 +274,7 @@ Deno.test('a seed bigger than one part refuses and writes nothing', async () => 
   assertEquals(asked.length, 0)
 })
 
-Deno.test('an app with no seed writes nothing at all', async () => {
+test('an app with no seed writes nothing at all', async () => {
   let { asked, apply } = door()
   assertEquals(
     await sow([{ path: 'index.html', text: '<h1>hi</h1>' }], apply),
@@ -282,7 +283,7 @@ Deno.test('an app with no seed writes nothing at all', async () => {
   assertEquals(asked.length, 0)
 })
 
-Deno.test('a file that is not JSON, or not a list of bundles, names itself', () => {
+test('a file that is not JSON, or not a list of bundles, names itself', () => {
   let why = (files: { path: string; text: string }[]) =>
     assertThrows(() => sown(files), Error).message
   assert(
@@ -303,7 +304,7 @@ Deno.test('a file that is not JSON, or not a list of bundles, names itself', () 
   )
 })
 
-Deno.test('a refused bundle is named by its file and index', async () => {
+test('a refused bundle is named by its file and index', async () => {
   let SAID = 'unknown property: recipe.serving — recipe has serves (number)'
   // The store refuses whatever batch carries the fifth bundle — the second of
   // the second file — and says the same thing every time, which is what the

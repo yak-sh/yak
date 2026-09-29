@@ -5,6 +5,7 @@
 // The cases that need Git each build a repository. A graph entity's content
 // is checked without a checkout or subprocess.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -63,7 +64,7 @@ let cite = (from: string, to: string, extra: Partial<Bundle> = {}): Bundle => ({
   ...extra,
 })
 
-Deno.test('every git tool is declared and implemented', () => {
+test('every git tool is declared and implemented', () => {
   assertEquals(loadTools(gitDoc, tools).map((t) => t.name).sort(), [
     'cites_check',
     'cites_verify',
@@ -71,7 +72,7 @@ Deno.test('every git tool is declared and implemented', () => {
   ])
 })
 
-Deno.test('a citation nobody has checked is a warning naming the place it points', async () => {
+test('a citation nobody has checked is a warning naming the place it points', async () => {
   let bundles = [
     doc('doc-1', 1),
     fileAt('file-1', 'src/db.ts'),
@@ -85,7 +86,7 @@ Deno.test('a citation nobody has checked is a warning naming the place it points
   assertEquals((answer[0].error as Bundle)?.code, 'warn')
 })
 
-Deno.test('a citation of an entity reports changed content without a checkout', async () => {
+test('a citation of an entity reports changed content without a checkout', async () => {
   let hash = content(vocab)(doc('design-1', 9))
   let bundles = [
     doc('doc-1', 1),
@@ -100,7 +101,7 @@ Deno.test('a citation of an entity reports changed content without a checkout', 
   assertEquals((answer[0].error as Bundle)?.code, 'fail')
 })
 
-Deno.test('a citation of a removed entity is a failed check', async () => {
+test('a citation of a removed entity is a failed check', async () => {
   let answer = await tools.cites_check!(...asked({}, [
     doc('doc-1', 1),
     cite('doc-1', 'gone', { verified: {}, cites: { hash: 'old' } }),
@@ -109,7 +110,7 @@ Deno.test('a citation of a removed entity is a failed check', async () => {
   assertEquals((answer[0].error as Bundle)?.code, 'fail')
 })
 
-Deno.test('a line range reads as a range, and a citation with no place named is the whole file', async () => {
+test('a line range reads as a range, and a citation with no place named is the whole file', async () => {
   let bundles = [
     doc('doc-1', 1),
     fileAt('file-1', 'src/db.ts'),
@@ -122,7 +123,7 @@ Deno.test('a line range reads as a range, and a citation with no place named is 
   assert(said.includes('cites src/db.ts —'), said)
 })
 
-Deno.test('check is scoped by the entity citing, and by the file cited', async () => {
+test('check is scoped by the entity citing, and by the file cited', async () => {
   let bundles = [
     doc('doc-1', 1),
     doc('doc-2', 2),
@@ -141,13 +142,13 @@ Deno.test('check is scoped by the entity citing, and by the file cited', async (
   assert(!one.includes('src/db.ts'), one)
 })
 
-Deno.test('a check with nothing to report still answers, and reports no fault', async () => {
+test('a check with nothing to report still answers, and reports no fault', async () => {
   let answer = await tools.cites_check!(...asked({}, [doc('doc-1', 1)]))
   assert(body(answer).includes('nothing to report'), body(answer))
   assertEquals(answer[0].error, undefined)
 })
 
-Deno.test('verify refuses an id that cites nothing, before it asks git anything', async () => {
+test('verify refuses an id that cites nothing, before it asks git anything', async () => {
   let bundles = [doc('doc-1', 1)]
   await assertRejects(
     () =>
@@ -164,7 +165,7 @@ Deno.test('verify refuses an id that cites nothing, before it asks git anything'
   )
 })
 
-Deno.test('a graph citation verifies without a checkout', async () => {
+test('a graph citation verifies without a checkout', async () => {
   let bundles = [doc('doc-1', 1), doc('design-1', 9), cite('doc-1', 'design-1')]
   let [written] = await tools.cites_verify!(
     ...asked({ cite: 'cite-doc-1-design-1' }, bundles, ''),
@@ -180,7 +181,7 @@ Deno.test('a graph citation verifies without a checkout', async () => {
   assert(body(answer).includes('nothing to report'), body(answer))
 })
 
-Deno.test('verify refuses a symbol whose file is missing', async () => {
+test('verify refuses a symbol whose file is missing', async () => {
   let bundles = [doc('doc-1', 1), {
     entity: { eid: 'sym-1' },
     symbol: { module: 'gone', name: 'open' },
@@ -225,7 +226,7 @@ let repo = async () => {
   return { cwd, at }
 }
 
-Deno.test(
+test(
   'a citation whose file moved since it was verified fails the check',
   async () => {
     let { cwd, at } = await repo()
@@ -244,7 +245,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'verify marks the citation and moves its revision to the commit checked out',
   async () => {
     let { cwd, at } = await repo()

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { artifactTools, imageContext } from './artifact_tools.ts'
 import { input } from '@yaks/openai'
@@ -12,7 +13,7 @@ const png = Uint8Array.from(
   (c) => c.charCodeAt(0),
 )
 
-Deno.test('file import snapshots bytes; attach is user-only; explicit view projects bounded image bytes', async () => {
+test('file import snapshots bytes; attach is user-only; explicit view projects bounded image bytes', async () => {
   let dir = await Deno.makeTempDir()
   let h = await harness()
   let blobs = fileBlobs(dir + '/blobs')
@@ -77,7 +78,7 @@ Deno.test('file import snapshots bytes; attach is user-only; explicit view proje
   }
 })
 
-Deno.test('tool-driven vision reaches the next model request and survives database reopen', async () => {
+test('tool-driven vision reaches the next model request and survives database reopen', async () => {
   const { local } = await import('./local.ts')
   let dir = await Deno.makeTempDir()
   let h = await harness(dir + '/test.db')
@@ -137,7 +138,7 @@ Deno.test('tool-driven vision reaches the next model request and survives databa
   }
 })
 
-Deno.test('vision admission rejects unsupported files and changed artifact revisions', async () => {
+test('vision admission rejects unsupported files and changed artifact revisions', async () => {
   let dir = await Deno.makeTempDir()
   let h = await harness()
   let blobs = fileBlobs(dir)

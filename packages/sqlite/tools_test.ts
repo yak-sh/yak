@@ -1,6 +1,7 @@
 // The checks over the file itself: a key nothing enforced, and a pointer a raw
 // writer left behind.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
@@ -60,14 +61,14 @@ let checkup = async (
   }
 }
 
-Deno.test('a file the store wrote is nothing to report', async () => {
+test('a file the store wrote is nothing to report', async () => {
   let { sql, g } = file()
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   assertEquals((await checkup('storage_check', sql)).level, undefined)
   assertEquals((await checkup('archetype_check', sql)).level, undefined)
 })
 
-Deno.test('a component row written with the key off is a fail', async () => {
+test('a component row written with the key off is a fail', async () => {
   let { sql, g } = file()
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   // The way the impossible gets in: a writer that opened the file with
@@ -81,7 +82,7 @@ Deno.test('a component row written with the key off is a fail', async () => {
   assert(said.body.includes('point at an entity that is not there'), said.body)
 })
 
-Deno.test('a connection with the key off says so before anything else', async () => {
+test('a connection with the key off says so before anything else', async () => {
   let { sql, g } = file()
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   keys(sql, 'off')
@@ -90,7 +91,7 @@ Deno.test('a connection with the key off says so before anything else', async ()
   assert(said.body.includes('`foreign_keys` off'), said.body)
 })
 
-Deno.test('a row landed past the graph drifts its pointer', async () => {
+test('a row landed past the graph drifts its pointer', async () => {
   let { sql, g } = file()
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   // A raw writer: the entity wears `task` now, and nothing reclassified it.
@@ -110,7 +111,7 @@ Deno.test('a row landed past the graph drifts its pointer', async () => {
   assert(said.body.includes('in: a'), said.body)
 })
 
-Deno.test('a file that keeps no archetypes says so rather than passing', async () => {
+test('a file that keeps no archetypes says so rather than passing', async () => {
   let { sql, g } = file(false)
   await g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
   let said = await checkup('archetype_check', sql)

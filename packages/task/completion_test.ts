@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import { team, teamGraph } from './testing.ts'
 
-Deno.test('completion uses by, never a second actor property', () => {
+test('completion uses by, never a second actor property', () => {
   assertEquals(team.prop('completed', 'actor'), undefined)
   // The mark is written bare and signed: when, by whom and through what are
   // the server's, so there is nothing left for a client to state.
@@ -10,7 +11,7 @@ Deno.test('completion uses by, never a second actor property', () => {
   assertEquals(team.comp('completed')!.stamped, ['at', 'by', 'via'])
 })
 
-Deno.test('completion fills an author gap but preserves a named author and later edits', async () => {
+test('completion fills an author gap but preserves a named author and later edits', async () => {
   let { g } = teamGraph()
   await g.apply([
     { entity: { eid: 'writer' }, person: {} },

@@ -1,12 +1,13 @@
 // The app_errors command reads an app's exception rows, including fields a
 // stored report left empty.
+import { test } from '@yaks/testing'
 import { assertObjectMatch, assertStringIncludes } from '@std/assert'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
 import { call } from './tools.ts'
 
-Deno.test('app_errors lists a break whose stored stack is null', async () => {
+test('app_errors lists a break whose stored stack is null', async () => {
   using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env)
@@ -30,7 +31,7 @@ Deno.test('app_errors lists a break whose stored stack is null', async () => {
   assertStringIncludes(listed.text, 'page /cookbook/ — failed before a stack')
 })
 
-Deno.test('app_errors shows a session error from its content', async () => {
+test('app_errors shows a session error from its content', async () => {
   using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env)

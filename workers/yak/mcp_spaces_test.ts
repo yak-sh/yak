@@ -5,7 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import {
   accepted,
   client,
@@ -30,7 +30,7 @@ let NOTES = vocabFile({ note: { at: txt } }, {
   },
 })
 
-Deno.test('only a space owner can inspect and retry held store writes', async () => {
+test('only a space owner can inspect and retry held store writes', async () => {
   let k = await kernel()
   try {
     let slug = `review${crypto.randomUUID().slice(0, 8)}`
@@ -70,7 +70,7 @@ Deno.test('only a space owner can inspect and retry held store writes', async ()
 // open. `home: false` puts it back to the list. Where the space's own address
 // points is the owner's, like publishing and membership — an editor is
 // refused.
-Deno.test('the front page moves, and only the owner moves it', async () => {
+test('the front page moves, and only the owner moves it', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'front45', apps: ['first', 'second'] }])
@@ -175,7 +175,7 @@ Deno.test('the front page moves, and only the owner moves it', async () => {
 // and stays reserved, and what the platform keeps for the space — the store
 // each app is named by, the domain somebody else owns, the roster — never
 // held the slug and so never moves.
-Deno.test('a space moves, and the subdomain it leaves points at it', async () => {
+test('a space moves, and the subdomain it leaves points at it', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'ada46', apps: ['cookbook', 'garden'] }])
@@ -299,7 +299,7 @@ Deno.test('a space moves, and the subdomain it leaves points at it', async () =>
 // which is only true because the store is named by the app's own handle
 // (T-34657): a freed address can be taken by a new app, and the two are two
 // objects with two sets of data.
-Deno.test('an address is forgotten, freed, and taken by another app', async () => {
+test('an address is forgotten, freed, and taken by another app', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'ada47', apps: ['recipes'] }])
@@ -377,7 +377,7 @@ Deno.test('an address is forgotten, freed, and taken by another app', async () =
 // one takes `home` with it, so either way nothing is left saying which app the
 // bare hostname opens. The word itself stays on the trashed row, because a
 // restore has to put the space back exactly as it was (T-34430).
-Deno.test('deleting the front page puts the space back to the default', async () => {
+test('deleting the front page puts the space back to the default', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'reset48', apps: ['site', 'garden'] }])
@@ -441,7 +441,7 @@ Deno.test('deleting the front page puts the space back to the default', async ()
 // of its own goes in the trash, and everything that names it stops naming it
 // while nothing it holds is touched; then it comes back, whole, and the same
 // four answers are the answers again.
-Deno.test('an app goes to the trash, and app_restore brings it back', async () => {
+test('an app goes to the trash, and app_restore brings it back', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'binlab49', apps: ['garden'] }])
@@ -547,7 +547,7 @@ Deno.test('an app goes to the trash, and app_restore brings it back', async () =
 // reaches it — so this walks the whole way an owner actually goes, and then
 // every answer that named the space stops naming it while nothing it holds is
 // touched.
-Deno.test(
+test(
   'a space goes to the trash, and space_restore brings it back',
   async () => {
     let k = await kernel()
@@ -690,7 +690,7 @@ Deno.test(
 // Routing itself is T-34200/T-34201; what this proves is the vocabulary, the
 // tool and the read back — that only a front page routes, and that the
 // platform's own paths are refused, whole, before anything is written.
-Deno.test('the front page says which paths it answers first', async () => {
+test('the front page says which paths it answers first', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'route51', apps: ['site', 'recipes'] }])
@@ -782,7 +782,7 @@ Deno.test('the front page says which paths it answers first', async () => {
 // not a space at `login.yaks.app`, not an app at `/admin/`, not a letter from
 // `security@yaks.app`. Sign-in steps around one the way it steps around a
 // taken one, by number.
-Deno.test('an address that reads as the platform is refused', async () => {
+test('an address that reads as the platform is refused', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k, `security@${k.host}`)

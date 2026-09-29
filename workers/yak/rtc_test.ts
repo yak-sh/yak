@@ -4,7 +4,7 @@
 // allowance refuses a new call, and that a lease nobody renewed closes its
 // call at Realtime.
 import { assert, assertEquals } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { BUDGET, monthOf } from './meter.ts'
 import {
   cloudflare,
@@ -16,7 +16,7 @@ import {
 } from './probe.ts'
 import { platform } from './testing.ts'
 
-Deno.test("an app's voice door calls for its members, and for visitors where it opens voice", async () => {
+test("an app's voice door calls for its members, and for visitors where it opens voice", async () => {
   let k = await kernel()
   try {
     let slug = `v${crypto.randomUUID().slice(0, 6)}`
@@ -112,7 +112,7 @@ Deno.test("an app's voice door calls for its members, and for visitors where it 
   }
 })
 
-Deno.test('a lease nobody renewed closes its call at Realtime and drops its row', async () => {
+test('a lease nobody renewed closes its call at Realtime and drops its row', async () => {
   let log = Deno.makeTempFileSync({ prefix: 'yak-mail-' })
   let cf = cloudflare(log)
   let p = platform('a probe secret', {

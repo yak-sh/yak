@@ -1,5 +1,6 @@
 // Retry the public callers, not just the helper: stubs consume POST bodies
 // before failing, and each new stub permits only one call.
+import { test } from '@yaks/testing'
 import { assertEquals, assertNotStrictEquals, assertRejects } from '@std/assert'
 import { joining, posting, SPACE, wiped } from './build.ts'
 import type { Space } from './directory.ts'
@@ -125,7 +126,7 @@ let callers: Array<{
 ]
 
 for (let caller of callers) {
-  Deno.test(
+  test(
     caller.path + ': fresh stub and request, one eviction retry only',
     async () => {
       for (let failure of failures) {
@@ -206,7 +207,7 @@ let methods: Array<{ method: keyof Box; args: unknown[]; result: unknown }> = [
 ]
 
 for (let { method, args, result } of methods) {
-  Deno.test(
+  test(
     'sandbox ' + method + ': fresh stub, intact arguments, bounded retry',
     async () => {
       for (let failure of failures) {
@@ -256,7 +257,7 @@ for (let { method, args, result } of methods) {
   )
 }
 
-Deno.test('sandbox cleanup and initial sleep also retry evictions', async () => {
+test('sandbox cleanup and initial sleep also retry evictions', async () => {
   let sleep = 0
   let destroy = 0
   let ns: Sandboxes = {

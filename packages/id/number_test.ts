@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { graph } from '@yaks/graph'
@@ -39,7 +40,7 @@ let numbered = (): Graph =>
 let wrote = (g: Graph, bundles: Bundle[]): Bundle[] =>
   g.apply(bundles) as Bundle[]
 
-Deno.test('a number goes to the entity that asked, and to no other', () => {
+test('a number goes to the entity that asked, and to no other', () => {
   let out = wrote(numbered(), [
     { entity: { eid: 'a' }, $num: true, book: { title: 'Dune' } },
     { entity: { eid: 'b' }, book: { title: 'Emma' } },
@@ -49,7 +50,7 @@ Deno.test('a number goes to the entity that asked, and to no other', () => {
   assertEquals(at.get('b'), undefined)
 })
 
-Deno.test('asking twice gives the same number', () => {
+test('asking twice gives the same number', () => {
   let g = numbered()
   let one = wrote(g, [{ entity: { eid: 'a' }, $num: true, book: {} }])
   let two = wrote(g, [{ entity: { eid: 'a' }, $num: true, book: {} }])
@@ -57,7 +58,7 @@ Deno.test('asking twice gives the same number', () => {
   assertEquals(two[0].entity.num, 1)
 })
 
-Deno.test('a graph without the plugin refuses the request', () => {
+test('a graph without the plugin refuses the request', () => {
   let bare = graph({ storage: ram(vocab), vocab })
   assertThrows(
     () => bare.apply([{ entity: { eid: 'a' }, $num: true, book: {} }]),
@@ -66,7 +67,7 @@ Deno.test('a graph without the plugin refuses the request', () => {
   )
 })
 
-Deno.test('a graph without the plugin has no num property at all', () => {
+test('a graph without the plugin has no num property at all', () => {
   assertEquals(loadVocab([shop]).props('entity'), [])
   assertEquals(vocab.props('entity'), ['num'])
 })

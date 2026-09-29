@@ -4,6 +4,7 @@
 // the words don't. This mounts the shared entry renderer through the fake DOM
 // (the very seam the web and TUI share) and asserts the bodies paint, while the
 // control-char boundary still neutralizes anything a body tries to speak.
+import { test } from '@yaks/testing'
 import '../testing.ts' // learns the vocabulary
 import './doc.ts' // installs the fake document — before anything renders
 import { render } from 'preact'
@@ -42,7 +43,7 @@ let say = (role: 'agent' | 'user', text: string): EntryLine => ({
   row: { kind: 'say', role, text },
 })
 
-Deno.test('the shared Session partition paints its bodies in the terminal', () => {
+test('the shared Session partition paints its bodies in the terminal', () => {
   let out = painted(
     say('user', 'run the tests'),
     {
@@ -60,7 +61,7 @@ Deno.test('the shared Session partition paints its bodies in the terminal', () =
   assertStringIncludes(out, 'green')
 })
 
-Deno.test('a Session body cannot speak ANSI to the terminal', () => {
+test('a Session body cannot speak ANSI to the terminal', () => {
   // A body carrying an OSC 52 clipboard write must reach the terminal defanged:
   // the escape stripped, only the inert text left.
   let out = painted(say('agent', 'oops \x1b]52;c;QQ==\x07 done'))

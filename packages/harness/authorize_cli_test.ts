@@ -1,6 +1,7 @@
 // A command-line sign-in finishes in one process, with the callback confined
 // to private input and the authorization controller.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { OAuthError } from '@yaks/oauth'
 import {
@@ -9,7 +10,7 @@ import {
   readHidden,
 } from './authorize_cli.ts'
 
-Deno.test('connection authorize lists targets without starting a sign-in', async () => {
+test('connection authorize lists targets without starting a sign-in', async () => {
   let calls: string[] = []
   let auth: Authorization = {
     run: (action) => {
@@ -27,7 +28,7 @@ Deno.test('connection authorize lists targets without starting a sign-in', async
   assertEquals(calls, ['list', 'close'])
 })
 
-Deno.test('private line accepts bracketed paste across reads and masks it', async () => {
+test('private line accepts bracketed paste across reads and masks it', async () => {
   let bytes = new TextEncoder().encode(
     '\x1b[200~http://localhost/callback?state=synthetic\x1b[201~\r',
   )
@@ -46,7 +47,7 @@ Deno.test('private line accepts bracketed paste across reads and masks it', asyn
   assertEquals(marks, [true])
 })
 
-Deno.test('private line ignores pasted line endings until paste closes', async () => {
+test('private line ignores pasted line endings until paste closes', async () => {
   let chunks = [new TextEncoder().encode(
     '\x1b[200~\rhttp://localhost/callback?state=synthetic\n\x1b[201~\r',
   )]
@@ -56,7 +57,7 @@ Deno.test('private line ignores pasted line endings until paste closes', async (
   )
 })
 
-Deno.test('connection authorize sends a pasted return URL only to completion', async () => {
+test('connection authorize sends a pasted return URL only to completion', async () => {
   let callback = 'http://localhost:8765/oauth/callback?code=private&state=s'
   let calls: [string, string | undefined, string | undefined][] = []
   let shown: string[] = []
@@ -87,7 +88,7 @@ Deno.test('connection authorize sends a pasted return URL only to completion', a
   assertEquals(shown.some((line) => line.includes('private')), false)
 })
 
-Deno.test('connection authorize closes an unfinished attempt', async () => {
+test('connection authorize closes an unfinished attempt', async () => {
   let closed = false
   let auth: Authorization = {
     run: () => Promise.resolve({ url: 'https://issuer.test/authorize' }),
@@ -108,7 +109,7 @@ Deno.test('connection authorize closes an unfinished attempt', async () => {
   assertEquals(closed, true)
 })
 
-Deno.test('a refused return URL can be pasted again into the same attempt', async () => {
+test('a refused return URL can be pasted again into the same attempt', async () => {
   let calls: string[] = []
   let shown: string[] = []
   let pastes = ['invalid', 'http://localhost/callback?state=ok']

@@ -1,9 +1,10 @@
 // Design readers receive changed designs once, even when a watch republishes
 // the same rows while its connection or other graph components change.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { watchDesigns } from './design-watch.ts'
 
-Deno.test('a design watch ignores equivalent rows and reports changed designs', () => {
+test('a design watch ignores equivalent rows and reports changed designs', () => {
   let a = { entity: { eid: 'a' }, theme_design: { name: 'Wood' } }
   let b = { entity: { eid: 'b' }, theme_design: { name: 'Marsh' } }
   let ready = false

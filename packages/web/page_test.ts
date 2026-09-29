@@ -1,11 +1,12 @@
 // What the page must hold for a browser that reaches it over plain http on a
 // phone: the shell does not scale, and nothing mints ids through an API a
 // non-secure context lacks.
+import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 
 let here = new URL('.', import.meta.url)
 
-Deno.test('the mobile viewport does not scale the app shell', async () => {
+test('the mobile viewport does not scale the app shell', async () => {
   let html = await Deno.readTextFile(new URL('index.html', here))
   let viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]+)"/)
   assert(viewport, 'index.html has no viewport metadata')
@@ -19,7 +20,7 @@ Deno.test('the mobile viewport does not scale the app shell', async () => {
 // the first write throws out of a layout effect and the canvas never paints.
 // types.ts `uuid` (and @yaks/id `mint`) build a v4 from getRandomValues, which
 // is gated nowhere. The page's code mints through those, always.
-Deno.test('page code mints uuids outside a secure context', async () => {
+test('page code mints uuids outside a secure context', async () => {
   let gated: string[] = []
   let walk = async (dir: URL) => {
     for await (let entry of Deno.readDir(dir)) {

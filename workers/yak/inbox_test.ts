@@ -18,7 +18,7 @@
 // A page subscribed to its own store hears the letter arrive: that is a
 // socket, and socket_workerd_test.ts's.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { monthOf } from './meter.ts'
 import {
   arrives,
@@ -48,7 +48,7 @@ let SECOND = 'd0000000-0000-4000-8000-000000000005'
 let signed = (dkim: 'pass' | 'fail') =>
   `mx.yaks.app; dkim=${dkim} header.i=@books.example; spf=pass`
 
-Deno.test('a letter lands in the app its address named', async () => {
+test('a letter lands in the app its address named', async () => {
   let k = await kernel()
   let them = await seed(k, [{ slug: 'jeff24', apps: ['recipes', 'garden'] }])
   try {
@@ -218,7 +218,7 @@ Deno.test('a letter lands in the app its address named', async () => {
   }
 })
 
-Deno.test("a letter to an app's former address follows the rename", async () => {
+test("a letter to an app's former address follows the rename", async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff25', apps: ['recipes'] }])
@@ -251,7 +251,7 @@ Deno.test("a letter to an app's former address follows the rename", async () => 
   }
 })
 
-Deno.test("a letter to a space's former subdomain follows the rename", async () => {
+test("a letter to a space's former subdomain follows the rename", async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'jeff26', apps: ['recipes'] }])
@@ -283,7 +283,7 @@ Deno.test("a letter to a space's former subdomain follows the rename", async () 
   }
 })
 
-Deno.test(
+test(
   'an address nobody answers at is refused, and nothing is written',
   async () => {
     let k = await kernel()
@@ -371,7 +371,7 @@ Deno.test(
 // counted on (meter.ts `metering`, mail_test.ts) — and it is counted past the
 // allowance rather than refused there, because a letter turned away at the door
 // is somebody else's words lost.
-Deno.test(
+test(
   'an arrival is one letter on the month, over the ceiling too',
   async () => {
     let k = await kernel()

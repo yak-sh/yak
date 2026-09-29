@@ -2,6 +2,7 @@
 // `fights`): not within a part, and not between two parts standing square to
 // each other as it is built. Every creature, the people who give quests, and
 // heroes in each weight of armour with each weapon.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { HANDLES, WEIGHTS } from './arms.ts'
@@ -79,7 +80,7 @@ let fighting = (made: Record<string, () => Figure>) =>
 
 let look = { tint: '#4a7ab8', hair: '#6a4a30', skin: '#e8c0a0' }
 
-Deno.test('no creature fights itself', () => {
+test('no creature fights itself', () => {
   assertEquals(
     fighting(Object.fromEntries(
       Object.keys(BEASTS).map((kind) => [kind, () => beast(kind)]),
@@ -88,7 +89,7 @@ Deno.test('no creature fights itself', () => {
   )
 })
 
-Deno.test('no hero fights what they wear, grown or a child', () => {
+test('no hero fights what they wear, grown or a child', () => {
   let offs = ['shield1', 'torch1', 'tome1', 'dagger1']
   let made: Record<string, () => Figure> = {}
   for (let [build, b] of Object.entries({ grown: BUILD, child: CHILD })) {

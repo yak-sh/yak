@@ -1,5 +1,6 @@
 // Village streets reach the buildings as placed, and their grown ground is
 // walkable at the voxel size a nearby hero sees.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { seedBuildings } from './buildings_fixture.ts'
 import { LEVELS } from './levels.ts'
@@ -41,7 +42,7 @@ let gap = (
   )
 }
 
-Deno.test('village roads join the streets without crossing plots', () => {
+test('village roads join the streets without crossing plots', () => {
   let v = vale(), side = EDGE * 2 + 1
   for (let village of villages) {
     let built = builtOf(village.level)
@@ -74,7 +75,7 @@ Deno.test('village roads join the streets without crossing plots', () => {
   }
 })
 
-Deno.test('each placed village door opens onto a clear street', () => {
+test('each placed village door opens onto a clear street', () => {
   let v = vale()
   for (let village of villages) {
     let street = streetsOf(v, village)
@@ -107,7 +108,7 @@ Deno.test('each placed village door opens onto a clear street', () => {
   }
 })
 
-Deno.test('grown streets climb by walkable steps and match cold ground', () => {
+test('grown streets climb by walkable steps and match cold ground', () => {
   let v = vale()
   for (let id of ['mossvale', 'stonestep', 'dustmere', 'palmwell']) {
     let village = villages.find((p) => p.level == id)!
@@ -140,7 +141,7 @@ Deno.test('grown streets climb by walkable steps and match cold ground', () => {
   }
 })
 
-Deno.test('a hillside plot levels into its retaining wall', () => {
+test('a hillside plot levels into its retaining wall', () => {
   let v = vale()
   let slopes = 0
   for (let p of builtOf('palmwell')) {

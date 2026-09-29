@@ -2,6 +2,7 @@
 // graph whose letters wait, never a host that will not come up — and the first
 // process that can send sends them, once.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -72,7 +73,7 @@ let letter = (eid: string, extra: Bundle = { entity: { eid } }): Bundle => ({
 let read = async (g: { read: (q: string) => unknown }, eid: string) =>
   ((await g.read(`.eid=${eid}`)) as Bundle[])[0]
 
-Deno.test('a transport that is named and complete sends', async () => {
+test('a transport that is named and complete sends', async () => {
   let [code, warned] = await quietly(() =>
     effects(null, { sender: { via: 'stash' } })
   )
@@ -83,13 +84,13 @@ Deno.test('a transport that is named and complete sends', async () => {
   assertEquals(warned, [])
 })
 
-Deno.test('no sender named is no code, and nothing said about it', async () => {
+test('no sender named is no code, and nothing said about it', async () => {
   let [code, warned] = await quietly(() => effects(null, {}))
   assertEquals(code, {})
   assertEquals(warned, [])
 })
 
-Deno.test('credentials that have not arrived say nothing until a letter is owed', async () => {
+test('credentials that have not arrived say nothing until a letter is owed', async () => {
   let said = post(unarmed)
   assertEquals(said.sender, undefined)
   assert(said.waiting?.startsWith('waiting for credentials'), `${said.waiting}`)
@@ -116,7 +117,7 @@ Deno.test('credentials that have not arrived say nothing until a letter is owed'
   assertEquals(kept.delivered, undefined)
 })
 
-Deno.test('a letter written with no sender goes with the first process that has one, once', async () => {
+test('a letter written with no sender goes with the first process that has one, once', async () => {
   let [code] = await quietly(() => effects(null, { sender: unarmed }))
   let g = await rig(code)
   await quietly(async () => {
@@ -134,7 +135,7 @@ Deno.test('a letter written with no sender goes with the first process that has 
   assertEquals(box.sent.length, 1)
 })
 
-Deno.test('a letter handed over and never settled is not handed over again', async () => {
+test('a letter handed over and never settled is not handed over again', async () => {
   let g = await rig({})
   await g.apply([ana])
   await g.apply([letter('e-lost', {
@@ -150,7 +151,7 @@ Deno.test('a letter handed over and never settled is not handed over again', asy
   assertEquals(box.sent, [])
 })
 
-Deno.test('the letter is marked tried before the transport sees it', async () => {
+test('the letter is marked tried before the transport sees it', async () => {
   let at: unknown[] = []
   let g = await rig({
     mail_post: sending({

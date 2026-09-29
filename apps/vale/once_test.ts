@@ -1,8 +1,9 @@
 // A delayed store answer must still decide which hero the gate shows.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { once } from './once.ts'
 
-Deno.test('a delayed query returns its rows instead of an empty answer', async () => {
+test('a delayed query returns its rows instead of an empty answer', async () => {
   let calls = 0
   let rows = await once<{ player: object }>(
     new URL('https://example.test/vale/api/query?.player'),
@@ -18,7 +19,7 @@ Deno.test('a delayed query returns its rows instead of an empty answer', async (
   assertEquals(rows, [{ player: {} }])
 })
 
-Deno.test('a refused query cannot say this person has no hero', async () => {
+test('a refused query cannot say this person has no hero', async () => {
   let calls = 0
   await assertRejects(
     () =>

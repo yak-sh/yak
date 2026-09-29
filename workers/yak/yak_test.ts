@@ -2,6 +2,7 @@
 // apex and its soft 404, a space and app born in the directory and served,
 // the session cookie forged and signed, the file door, the graph API, and a
 // route that threw becoming an error entity behind a soft page.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -38,7 +39,7 @@ let hello = flat(
   )![1],
 ).trim()
 
-Deno.test('the kernel routes, vouches, serves, and surfaces', async () => {
+test('the kernel routes, vouches, serves, and surfaces', async () => {
   let k = await kernel()
   try {
     // The apex: the home page, its assets, and a soft 404 in its voice.
@@ -390,7 +391,7 @@ Deno.test('the kernel routes, vouches, serves, and surfaces', async () => {
 // What an app lets a stranger with the link do (T-32504), and the guest list
 // beside it: three apps, one per access word, each asked by the person who
 // owns it, by nobody at all, and by someone invited into the space by email.
-Deno.test('an app says who may read it and who may write it', async () => {
+test('an app says who may read it and who may write it', async () => {
   let k = await kernel()
   try {
     // He signs in for real: the address is his.
@@ -737,7 +738,7 @@ Deno.test('an app says who may read it and who may write it', async () => {
 // The OpenAI apps directory verifies the domain by fetching one well-known URL
 // and reading the token as the whole body: the bytes have to be exact, no
 // trailing newline, and only at the apex — a space host never serves it.
-Deno.test('the apex serves the OpenAI apps challenge token, exactly', async () => {
+test('the apex serves the OpenAI apps challenge token, exactly', async () => {
   let token = CHALLENGE
   let k = await kernel()
   try {

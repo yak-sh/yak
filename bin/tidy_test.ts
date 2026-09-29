@@ -1,6 +1,7 @@
 // bin/tidy against a scratch repo and a scratch /tmp, never the live box: it
 // collects only the worktrees that can lose nothing, and reaps only the
 // headless browsers and profiles that outlived any probe.
+import { test } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 
@@ -56,7 +57,7 @@ let fixture = async () => {
   }
 }
 
-Deno.test('tidy collects a worktree only when nothing in it can be lost', async () => {
+test('tidy collects a worktree only when nothing in it can be lost', async () => {
   let f = await fixture()
   try {
     let add = async (
@@ -100,7 +101,7 @@ Deno.test('tidy collects a worktree only when nothing in it can be lost', async 
   }
 })
 
-Deno.test('tidy reaps old headless browsers and unused profiles, and nothing else', async () => {
+test('tidy reaps old headless browsers and unused profiles, and nothing else', async () => {
   let f = await fixture()
   let procs: Deno.ChildProcess[] = []
   // A stand-in for one Chrome process: its command line is all tidy reads.

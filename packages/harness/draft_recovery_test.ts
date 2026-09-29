@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { stash } from '@yaks/client'
 import { frontend } from './frontend.ts'
@@ -6,7 +7,7 @@ import { draftVault } from './draft_vault.ts'
 let text = (ui: ReturnType<typeof frontend>) =>
   ui.draft.value[0].draft as { text: string; at: number }
 
-Deno.test('local drafts recover per session, including new-session draft and yank', async () => {
+test('local drafts recover per session, including new-session draft and yank', async () => {
   const vault = stash()
   let ui = frontend(vault)
   await ui.ready
@@ -28,7 +29,7 @@ Deno.test('local drafts recover per session, including new-session draft and yan
   ui.close()
 })
 
-Deno.test('acknowledgement clears only submitted draft, failures and newer edits stay', async () => {
+test('acknowledgement clears only submitted draft, failures and newer edits stay', async () => {
   const ui = frontend(stash())
   await ui.ready
   ui.patch({ selected: 'one' })
@@ -49,7 +50,7 @@ Deno.test('acknowledgement clears only submitted draft, failures and newer edits
   ui.close()
 })
 
-Deno.test('disk vault restores private text and clear removes saved records', async () => {
+test('disk vault restores private text and clear removes saved records', async () => {
   const directory = await Deno.makeTempDir()
   try {
     const vault = await draftVault(directory)
@@ -75,7 +76,7 @@ Deno.test('disk vault restores private text and clear removes saved records', as
   }
 })
 
-Deno.test('failed vault write is visible and shutdown flush rejects', async () => {
+test('failed vault write is visible and shutdown flush rejects', async () => {
   const vault = stash()
   vault.save = () => Promise.reject(new Error('disk full'))
   const ui = frontend(vault)
@@ -86,7 +87,7 @@ Deno.test('failed vault write is visible and shutdown flush rejects', async () =
   ui.close()
 })
 
-Deno.test('restart recovers an unacknowledged submission without resending it', async () => {
+test('restart recovers an unacknowledged submission without resending it', async () => {
   const vault = stash()
   let ui = frontend(vault)
   await ui.ready
@@ -106,7 +107,7 @@ Deno.test('restart recovers an unacknowledged submission without resending it', 
   ui.close()
 })
 
-Deno.test('rejected submission restores text ahead of newer edits without touching another session', async () => {
+test('rejected submission restores text ahead of newer edits without touching another session', async () => {
   const ui = frontend(stash())
   await ui.ready
   ui.patch({ selected: 'one' })
@@ -123,7 +124,7 @@ Deno.test('rejected submission restores text ahead of newer edits without touchi
   ui.close()
 })
 
-Deno.test('cut draft is cleared durably while yank remains recoverable', async () => {
+test('cut draft is cleared durably while yank remains recoverable', async () => {
   const vault = stash()
   let ui = frontend(vault)
   await ui.ready
@@ -139,7 +140,7 @@ Deno.test('cut draft is cleared durably while yank remains recoverable', async (
   ui.close()
 })
 
-Deno.test('new-session acknowledgement keeps newer text in the created session, not the next new draft', async () => {
+test('new-session acknowledgement keeps newer text in the created session, not the next new draft', async () => {
   const ui = frontend(stash())
   await ui.ready
   ui.edit({ text: 'first', at: 5 })
@@ -155,7 +156,7 @@ Deno.test('new-session acknowledgement keeps newer text in the created session, 
   ui.close()
 })
 
-Deno.test('draft vocabulary registers local and ephemeral tiers, not default wire tier', async () => {
+test('draft vocabulary registers local and ephemeral tiers, not default wire tier', async () => {
   const { local } = await import('@yaks/sync')
   const { frontendVocab } = await import('./frontend.ts')
   assertEquals(local(frontendVocab, 'savedDraft'), 'vault')
@@ -165,7 +166,7 @@ Deno.test('draft vocabulary registers local and ephemeral tiers, not default wir
   assertEquals(local(frontendVocab, 'visual'), 'memory')
 })
 
-Deno.test('independent pending new sessions keep recovery ownership separate', async () => {
+test('independent pending new sessions keep recovery ownership separate', async () => {
   const vault = stash()
   let ui = frontend(vault)
   await ui.ready

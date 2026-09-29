@@ -1,10 +1,11 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { remote } from './remote.ts'
 import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { at, harness, worker } from './testing.ts'
-Deno.test('worker owns an isolated database; selected entries replicate and commands stay explicit', async () => {
+test('worker owns an isolated database; selected entries replicate and commands stay explicit', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),
@@ -42,7 +43,7 @@ Deno.test('worker owns an isolated database; selected entries replicate and comm
   }
 })
 
-Deno.test('worker rejects bad paths without creating a fallback database', async () => {
+test('worker rejects bad paths without creating a fallback database', async () => {
   const { assertRejects } = await import('@std/assert')
   let dir = await Deno.makeTempDir()
   try {
@@ -54,7 +55,7 @@ Deno.test('worker rejects bad paths without creating a fallback database', async
   }
 })
 
-Deno.test('worker stop waits for admitted commands and model turns', async () => {
+test('worker stop waits for admitted commands and model turns', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),
@@ -71,7 +72,7 @@ Deno.test('worker stop waits for admitted commands and model turns', async () =>
   }
 })
 
-Deno.test('worker frontend typing stays local after its subscribed view is ready', async () => {
+test('worker frontend typing stays local after its subscribed view is ready', async () => {
   const { h } = await import('preact')
   const { App } = await import('./app.ts')
   const { frontend } = await import('./frontend.ts')
@@ -125,7 +126,7 @@ Deno.test('worker frontend typing stays local after its subscribed view is ready
   }
 })
 
-Deno.test('worker subscribes only to selected fork ancestry, respecting each boundary', async () => {
+test('worker subscribes only to selected fork ancestry, respecting each boundary', async () => {
   let dir = await Deno.makeTempDir(), path = dir + '/test.db'
   let store = await harness(path)
   await store.g.apply([
@@ -179,7 +180,7 @@ Deno.test('worker subscribes only to selected fork ancestry, respecting each bou
   }
 })
 
-Deno.test('worker publishes a second input while a slow model is still pending', async () => {
+test('worker publishes a second input while a slow model is still pending', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),
@@ -218,7 +219,7 @@ Deno.test('worker publishes a second input while a slow model is still pending',
   }
 })
 
-Deno.test('worker exit drains a burst and is idempotent', async () => {
+test('worker exit drains a burst and is idempotent', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),
@@ -244,7 +245,7 @@ Deno.test('worker exit drains a burst and is idempotent', async () => {
   }
 })
 
-Deno.test('stuck model deadline is an expected bounded exit, not a crash', async () => {
+test('stuck model deadline is an expected bounded exit, not a crash', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/shutdown.db'
   let r = await remote({
@@ -306,7 +307,7 @@ Deno.test('stuck model deadline is an expected bounded exit, not a crash', async
   }
 })
 
-Deno.test('selection subscription does not invalidate its own awaiting projection', async () => {
+test('selection subscription does not invalidate its own awaiting projection', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),
@@ -355,7 +356,7 @@ Deno.test('selection subscription does not invalidate its own awaiting projectio
   }
 })
 
-Deno.test('unbounded graceful close finishes a slow response beyond the old deadline', async () => {
+test('unbounded graceful close finishes a slow response beyond the old deadline', async () => {
   let dir = await Deno.makeTempDir()
   let db = dir + '/graceful.db'
   let r = await remote({
@@ -406,7 +407,7 @@ Deno.test('unbounded graceful close finishes a slow response beyond the old dead
   }
 })
 
-Deno.test('explicit force releases unbounded close while a provider is stuck', async () => {
+test('explicit force releases unbounded close while a provider is stuck', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({ config: at(':memory:'), cwd: dir, fake: 'stuck' })
   try {
@@ -423,7 +424,7 @@ Deno.test('explicit force releases unbounded close while a provider is stuck', a
   }
 })
 
-Deno.test('new reads during graceful shutdown are typed expected refusals', async () => {
+test('new reads during graceful shutdown are typed expected refusals', async () => {
   const { assertRejects } = await import('@std/assert')
   const { ShuttingDown } = await import('./shutdown.ts')
   const dir = await Deno.makeTempDir()
@@ -443,7 +444,7 @@ Deno.test('new reads during graceful shutdown are typed expected refusals', asyn
   }
 })
 
-Deno.test('worker model selection is database-backed, passive, and forwarded on start', async () => {
+test('worker model selection is database-backed, passive, and forwarded on start', async () => {
   const dir = await Deno.makeTempDir()
   const { seed } = await import('./agent.ts')
   const path = dir + '/model-picker.db'

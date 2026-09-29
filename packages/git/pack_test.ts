@@ -6,6 +6,7 @@
 // and the SHA-1 trailer over all of it. `git rev-list --objects` then proves
 // the pack is complete, because it cannot walk a tree that is not there.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { objects } from './objects.ts'
 import { entry, head, pack } from './pack.ts'
@@ -71,7 +72,7 @@ let deploy = async () => {
   return { one, tree, index, bytes, git: objects(g, bytes) }
 }
 
-Deno.test('git indexes the pack and walks every object in it', async () => {
+test('git indexes the pack and walks every object in it', async () => {
   let { git: from } = await deploy()
   let bytes = await all(await from.pack([ONE_OID]))
   let dir = await Deno.makeTempDir({ prefix: 'yaks-git-' })
@@ -109,7 +110,7 @@ Deno.test('git indexes the pack and walks every object in it', async () => {
   }
 })
 
-Deno.test('the objects are named once, commits before trees before blobs', async () => {
+test('the objects are named once, commits before trees before blobs', async () => {
   let { git: from } = await deploy()
   assertEquals(await from.reach([ONE_OID]), [
     ONE_OID,
@@ -120,7 +121,7 @@ Deno.test('the objects are named once, commits before trees before blobs', async
   ])
 })
 
-Deno.test('a have is subtracted, however it was reached', async () => {
+test('a have is subtracted, however it was reached', async () => {
   let { git: from, index, tree, one } = await deploy()
   let at = { at: 1757000060000 }
   let two = await index.commit({
@@ -137,7 +138,7 @@ Deno.test('a have is subtracted, however it was reached', async () => {
   assertEquals((await from.reach([two.oid], ['ff'.repeat(20)])).length, 6)
 })
 
-Deno.test('a want this graph never had is refused', async () => {
+test('a want this graph never had is refused', async () => {
   let { git: from } = await deploy()
   await assertRejects(
     () => from.reach(['ff'.repeat(20)]),
@@ -146,7 +147,7 @@ Deno.test('a want this graph never had is refused', async () => {
   )
 })
 
-Deno.test('a pack of nothing is its header and the name of it', async () => {
+test('a pack of nothing is its header and the name of it', async () => {
   let bytes = await all(pack(0, []))
   assertEquals(bytes.length, 32)
   assertEquals(text.decode(bytes.subarray(0, 4)), 'PACK')
@@ -156,14 +157,14 @@ Deno.test('a pack of nothing is its header and the name of it', async () => {
   )
 })
 
-Deno.test('an entry states its type and its unpacked size', () => {
+test('an entry states its type and its unpacked size', () => {
   assertEquals([...entry('blob', 6)], [0x36])
   // 1000 = 62 * 16 + 8: four bits under the type, the rest seven at a time.
   assertEquals([...entry('blob', 1000)], [0xb8, 0x3e])
   assertEquals([...entry('commit', 0)], [0x10])
 })
 
-Deno.test('a pack that promised more than it wrote breaks rather than lies', async () => {
+test('a pack that promised more than it wrote breaks rather than lies', async () => {
   await assertRejects(
     () => all(pack(2, [{ type: 'blob', bytes: utf8.encode(HELLO) }])),
     Error,

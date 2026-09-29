@@ -1,4 +1,5 @@
 // Raster-logo contracts: five large RGBA masters for concept review.
+import { test } from '@yaks/testing'
 let files = [
   '01-skeuo-standing.png',
   '02-skeuo-bell-bust.png',
@@ -12,7 +13,7 @@ let assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message)
 }
 
-Deno.test('corrected yak concepts are large PNG masters with alpha', async () => {
+test('corrected yak concepts are large PNG masters with alpha', async () => {
   for (let file of files) {
     let bytes = await Deno.readFile(new URL(file, root))
     let view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)

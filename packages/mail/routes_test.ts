@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { PATH, type Posted, routes } from './routes.ts'
@@ -40,7 +41,7 @@ let door =
 
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
-Deno.test('the door records a letter and answers with its id', async () => {
+test('the door records a letter and answers with its id', async () => {
   let { g } = await seeded()
   let post = door(g, { domain: 'books.example' })
   let answer = await post({})
@@ -52,7 +53,7 @@ Deno.test('the door records a letter and answers with its id', async () => {
   assertEquals(comp(letter, 'mail').target, ana)
 })
 
-Deno.test('the same letter posted twice is recorded once', async () => {
+test('the same letter posted twice is recorded once', async () => {
   let { g } = await seeded()
   let post = door(g, { domain: 'books.example' })
   let sent = { headers: { 'Message-ID': '<a1@x.example>', Subject: 'twice' } }
@@ -61,7 +62,7 @@ Deno.test('the same letter posted twice is recorded once', async () => {
   assertEquals(await (await post(sent)).json(), { eid: null })
 })
 
-Deno.test('a secret is what the door asks for, when one is named', async () => {
+test('a secret is what the door asks for, when one is named', async () => {
   let { g } = await seeded()
   let post = door(g, { door: { secret: 'shh' } })
   assertEquals((await post({}, 'shh')).status, 200)
@@ -70,12 +71,12 @@ Deno.test('a secret is what the door asks for, when one is named', async () => {
   assertEquals((await post({})).status, 401)
 })
 
-Deno.test('no secret leaves the door as open as the /apply beside it', async () => {
+test('no secret leaves the door as open as the /apply beside it', async () => {
   let { g } = await seeded()
   assertEquals((await door(g)({})).status, 200)
 })
 
-Deno.test('a body that is not a letter is refused, and says so', async () => {
+test('a body that is not a letter is refused, and says so', async () => {
   let { g } = await seeded()
   let post = door(g)
   assertEquals((await post('not json')).status, 400)
@@ -84,7 +85,7 @@ Deno.test('a body that is not a letter is refused, and says so', async () => {
   assertEquals((await answer.json() as { error: string }).error, 'Refused')
 })
 
-Deno.test('the path is the door option, and the default is one word', async () => {
+test('the path is the door option, and the default is one word', async () => {
   let { g } = await seeded()
   assertEquals(routes({ graph: g }, {})[0].path, PATH)
   let said = routes({ graph: g }, { door: { path: '/letters' } })

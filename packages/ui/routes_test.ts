@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { routes } from './routes.ts'
 
-Deno.test('/ui answers the style guide, dressed, with no script', async () => {
+test('/ui answers the style guide, dressed, with no script', async () => {
   let [ui] = routes()
   assertEquals([ui.method, ui.path], ['GET', '/ui'])
   let res = await ui.handle(new Request('http://box/ui'))

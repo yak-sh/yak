@@ -3,6 +3,7 @@
 // the door and nowhere else, and every other shape of request refused in its
 // own words.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { type Bundle, graph } from '@yaks/graph'
@@ -46,7 +47,7 @@ let rpc = (method: string, params: Record<string, unknown> = {}) =>
 let call = (name: string, args: Record<string, unknown> = {}) =>
   rpc('tools/call', { name, arguments: args })
 
-Deno.test('the door answers the protocol, and signs what a tool writes', async () => {
+test('the door answers the protocol, and signs what a tool writes', async () => {
   let graph = shopGraph()
   let door = mcp({ graph, authenticate: () => ada })
 
@@ -76,7 +77,7 @@ Deno.test('the door answers the protocol, and signs what a tool writes', async (
   assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
-Deno.test('a slow tool answers with its committed outcome', async () => {
+test('a slow tool answers with its committed outcome', async () => {
   using time = new FakeTime()
   let graph = shopGraph()
   let started = Promise.withResolvers<void>()
@@ -111,7 +112,7 @@ Deno.test('a slow tool answers with its committed outcome', async () => {
 // that reads `serverInfo` shows this server without anybody typing it into a
 // form. What is not passed is not sent — an absent field says nothing, an
 // empty one says nothing is its name.
-Deno.test('the door hands over the face it was given', async () => {
+test('the door hands over the face it was given', async () => {
   let face = {
     name: 'shop.test',
     title: 'The Shop',
@@ -144,7 +145,7 @@ Deno.test('the door hands over the face it was given', async () => {
   assertEquals(plain.result.serverInfo.icons, undefined)
 })
 
-Deno.test('a door that refuses to name a caller answers 401', async () => {
+test('a door that refuses to name a caller answers 401', async () => {
   let door = mcp({
     graph: shopGraph(),
     authenticate: () => {
@@ -156,7 +157,7 @@ Deno.test('a door that refuses to name a caller answers 401', async () => {
   assertEquals((await r.json()).error, 'Unauthorized')
 })
 
-Deno.test('the door refuses what it does not serve', async () => {
+test('the door refuses what it does not serve', async () => {
   let door = mcp({ graph: shopGraph() })
   assertEquals((await door(new Request('http://shop.test/mcp'))).status, 405)
   assertEquals(
@@ -171,7 +172,7 @@ Deno.test('the door refuses what it does not serve', async () => {
   assertEquals((await door(broken)).status, 400)
 })
 
-Deno.test('a notification is answered with nothing at all', async () => {
+test('a notification is answered with nothing at all', async () => {
   let door = mcp({ graph: shopGraph() })
   let r = await door(
     post({ jsonrpc: '2.0', method: 'notifications/initialized' }),
@@ -179,7 +180,7 @@ Deno.test('a notification is answered with nothing at all', async () => {
   assertEquals(r.status, 202)
 })
 
-Deno.test('a caller-owned MCP session does not write into the tool graph', async () => {
+test('a caller-owned MCP session does not write into the tool graph', async () => {
   let g = sessionGraph()
   let door = mcp({ graph: g })
   let listed = await door(rpc('tools/list'))
@@ -188,7 +189,7 @@ Deno.test('a caller-owned MCP session does not write into the tool graph', async
   assertEquals(await g.read('.session'), [])
 })
 
-Deno.test('an MCP connection writes through its own graph session', async () => {
+test('an MCP connection writes through its own graph session', async () => {
   let g = sessionGraph()
   let door = mcp({ graph: g, sessions: g })
   let first = await door(rpc('initialize', {
@@ -228,7 +229,7 @@ Deno.test('an MCP connection writes through its own graph session', async () => 
   assertEquals(unknown.status, 404)
 })
 
-Deno.test('authentication keeps its actor while the MCP session names the run', async () => {
+test('authentication keeps its actor while the MCP session names the run', async () => {
   let g = sessionGraph()
   await g.apply([{ entity: { eid: 'm1' }, doc: { title: 'A member' } }])
   let door = mcp({ graph: g, sessions: g, authenticate: () => ({ by: 'm1' }) })
@@ -254,7 +255,7 @@ Deno.test('authentication keeps its actor while the MCP session names the run', 
   assertEquals(made.via, session.entity.eid)
 })
 
-Deno.test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
+test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
   let g = sessionGraph()
   await g.apply([
     { entity: { eid: 'm1' }, doc: { title: 'A member' } },
@@ -289,7 +290,7 @@ Deno.test('x-via keeps its session, and a one-shot CLI call gets one', async () 
   assertEquals(made.via, session.entity.eid)
 })
 
-Deno.test('what the host owes a direct call rides after the answer, which is unchanged', async () => {
+test('what the host owes a direct call rides after the answer, which is unchanged', async () => {
   let door = routes({
     config: {},
     graph: shopGraph(),
@@ -310,7 +311,7 @@ Deno.test('what the host owes a direct call rides after the answer, which is unc
   assert(said.result.content[0].text.includes('near b1: b0 · book'))
 })
 
-Deno.test('initialize carries instructions from the loaded vocabularies', async () => {
+test('initialize carries instructions from the loaded vocabularies', async () => {
   let vocab = loadVocab([
     { ...shop.docs[0], instructions: 'Read the shelf.' },
     { ...shop.docs[1], instructions: 'Keep each sale.' },

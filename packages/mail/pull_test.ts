@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -103,12 +104,12 @@ let hit = (n: number): EdgeRequest => ({
 let mails = async (g: Awaited<ReturnType<typeof club>>) =>
   (await g.read('.mail')).map((b: Bundle) => b.mail as Comp)
 
-Deno.test('messageIdOf: the Message-ID inside the edge key', () => {
+test('messageIdOf: the Message-ID inside the edge key', () => {
   assertEquals(messageIdOf('msg:1789:<a1@x.example>'), 'a1@x.example')
   assertEquals(messageIdOf('a1@x.example'), 'a1@x.example')
 })
 
-Deno.test('received: the edge fields become the headers arrive reads', () => {
+test('received: the edge fields become the headers arrive reads', () => {
   let [m, arrival] = received({ ...letter(1), in_reply_to: '<a0@x.example>' })
   assertEquals(
     ['from', 'subject', 'message-id', 'in-reply-to'].map(m.headers.get),
@@ -121,7 +122,7 @@ Deno.test('received: the edge fields become the headers arrive reads', () => {
   })
 })
 
-Deno.test('pull: letters are recorded, routed and acknowledged', async () => {
+test('pull: letters are recorded, routed and acknowledged', async () => {
   let g = await club()
   let { at, acked } = stub([letter(1), letter(2, 'nobody@far.example')])
   assertEquals(await pull({ graph: g, domain }, at), {
@@ -137,7 +138,7 @@ Deno.test('pull: letters are recorded, routed and acknowledged', async () => {
   assertEquals(two.target, undefined)
 })
 
-Deno.test('pull: a letter handed back after a crash is recorded once', async () => {
+test('pull: a letter handed back after a crash is recorded once', async () => {
   let g = await club()
   let { at, acked } = stub([letter(1)], [hit(1)], { forget: true })
   await pull({ graph: g, domain }, at)
@@ -147,7 +148,7 @@ Deno.test('pull: a letter handed back after a crash is recorded once', async () 
   assertEquals(acked, [letter(1).id, 'r1', letter(1).id, 'r1'])
 })
 
-Deno.test('pull: a request becomes a hook about the mailbox it names', async () => {
+test('pull: a request becomes a hook about the mailbox it names', async () => {
   let g = await club()
   let { at } = stub([], [hit(1)])
   assertEquals(await pull({ graph: g, domain }, at), {
@@ -166,7 +167,7 @@ Deno.test('pull: a request becomes a hook about the mailbox it names', async () 
   ])
 })
 
-Deno.test('pull: each tray fails alone, and a graph without hook leaves requests', async () => {
+test('pull: each tray fails alone, and a graph without hook leaves requests', async () => {
   let g = await club()
   let { at } = stub([letter(1)], [hit(1)], { broken: true })
   assertEquals(await pull({ graph: g, domain }, at), {
@@ -182,7 +183,7 @@ Deno.test('pull: each tray fails alone, and a graph without hook leaves requests
   assertEquals(other.acked, [letter(1).id])
 })
 
-Deno.test('edge: the HTTP API, a missing tray, and acknowledgements in bites', async () => {
+test('edge: the HTTP API, a missing tray, and acknowledgements in bites', async () => {
   let asked: string[] = []
   let at = edge({ url: 'https://inbox.example/', token: 't' }, (url, init) => {
     asked.push(`${init.method} ${url} ${init.body ?? ''}`.trim())
@@ -225,7 +226,7 @@ let streaming = (_url: string, init: RequestInit): Promise<Response> =>
     ),
   )
 
-Deno.test('edge: a response that never finishes times out', async () => {
+test('edge: a response that never finishes times out', async () => {
   let at = edge(
     { url: 'https://inbox.example', token: 't' },
     streaming,
@@ -235,7 +236,7 @@ Deno.test('edge: a response that never finishes times out', async () => {
   await assertRejects(() => at.messages(), DOMException, 'timeout')
 })
 
-Deno.test('edge: stopping its service ends an in-flight request quietly', async () => {
+test('edge: stopping its service ends an in-flight request quietly', async () => {
   let stop = new AbortController()
   let at = edge(
     { url: 'https://inbox.example', token: 't' },
@@ -267,7 +268,7 @@ let pulled = (stop?: AbortController) => {
   return { go, messages: () => messages }
 }
 
-Deno.test('service: an already-ended signal is one complete pull', async () => {
+test('service: an already-ended signal is one complete pull', async () => {
   let g = await club()
   let at = pulled()
   let options = {
@@ -284,7 +285,7 @@ Deno.test('service: an already-ended signal is one complete pull', async () => {
   assertEquals((await mails(g)).length, 1)
 })
 
-Deno.test('service: a timed-out pull is tried again', async () => {
+test('service: a timed-out pull is tried again', async () => {
   let g = await club()
   let stop = new AbortController()
   let at = pulled(stop)
@@ -307,7 +308,7 @@ Deno.test('service: a timed-out pull is tried again', async () => {
   assertEquals((await mails(g)).length, 1)
 })
 
-Deno.test('service: stopping ends an in-flight pull', async () => {
+test('service: stopping ends an in-flight pull', async () => {
   let stop = new AbortController()
   let began = Promise.withResolvers<void>()
   let go = (url: string, init: RequestInit) => {
@@ -329,6 +330,6 @@ Deno.test('service: stopping ends an in-flight pull', async () => {
   await running
 })
 
-Deno.test('service: a config naming no pull has nothing to take', async () => {
+test('service: a config naming no pull has nothing to take', async () => {
   assertEquals(await service({ graph: await club() }, { domain }), undefined)
 })

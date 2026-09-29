@@ -1,6 +1,7 @@
 // The pure seams of the platform client: where a store answers, what a
 // session says about itself, which letter carries the code, and how a tool's
 // reply reads once the envelope is off.
+import { test } from '@yaks/testing'
 import {
   assertEquals,
   assertRejects,
@@ -34,7 +35,7 @@ import {
   timing,
 } from './api.ts'
 
-Deno.test('an invitation is accepted through the invitee session', async () => {
+test('an invitation is accepted through the invitee session', async () => {
   let url = 'https://yaks.app/invite?t=sealed'
   let mail: Bundle = {
     entity: { eid: crypto.randomUUID() },
@@ -64,7 +65,7 @@ let letter = (title: string, to: string, at: string): Bundle => ({
   mail: { to, at },
 })
 
-Deno.test('an app store answers under its space, the front page at the root', () => {
+test('an app store answers under its space, the front page at the root', () => {
   assertEquals(
     storeUrl('jeff/recipes', '/query', 'yaks.app'),
     'https://jeff.yaks.app/recipes/api/query',
@@ -83,7 +84,7 @@ Deno.test('an app store answers under its space, the front page at the root', ()
   }
 })
 
-Deno.test('admin query sends joined filters as the page reads them', async () => {
+test('admin query sends joined filters as the page reads them', async () => {
   let old = globalThis.fetch
   let lines: string[] = []
   globalThis.fetch = ((input: string) => {
@@ -102,7 +103,7 @@ Deno.test('admin query sends joined filters as the page reads them', async () =>
   }
 })
 
-Deno.test('a session says whose it is without the secret', () => {
+test('a session says whose it is without the secret', () => {
   let body = btoa(JSON.stringify({ person: 'p-1', space: null, exp: 42 }))
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
   assertEquals(claimsOf(`${body}.mac`), { person: 'p-1', space: null, exp: 42 })
@@ -110,7 +111,7 @@ Deno.test('a session says whose it is without the secret', () => {
   assertEquals(claimsOf(''), null)
 })
 
-Deno.test('the session is read off the card’s own set-cookie', () => {
+test('the session is read off the card’s own set-cookie', () => {
   assertEquals(
     cookieOf('yak_session=tok.en; Domain=yaks.app; Path=/; HttpOnly'),
     'tok.en',
@@ -119,7 +120,7 @@ Deno.test('the session is read off the card’s own set-cookie', () => {
   assertEquals(cookieOf(null), null)
 })
 
-Deno.test('the code is the newest letter to THIS address since the ask', () => {
+test('the code is the newest letter to THIS address since the ask', () => {
   let letters = [
     letter(
       '111111 is your yaks.app code',
@@ -174,7 +175,7 @@ let mailbox = async (letters: Bundle[]) => {
   return (q: And) => g.read(q)
 }
 
-Deno.test('the code is found by its address among many newer letters', async () => {
+test('the code is found by its address among many newer letters', async () => {
   let since = Date.parse('2026-09-04T12:00:00Z')
   let ours = letter(
     '444444 is your yaks.app code',
@@ -199,7 +200,7 @@ Deno.test('the code is found by its address among many newer letters', async () 
   )
 })
 
-Deno.test('a tool answers its words, and an erring one throws them', () => {
+test('a tool answers its words, and an erring one throws them', () => {
   assertEquals(
     saidBy({ content: [{ type: 'text', text: 'made notes' }] }),
     'made notes',
@@ -217,7 +218,7 @@ Deno.test('a tool answers its words, and an erring one throws them', () => {
   assertEquals((no as CallError).code, 'mcp_tool')
 })
 
-Deno.test('a kernel page is read back as the words it says', () => {
+test('a kernel page is read back as the words it says', () => {
   // The shape workers/yak/pages.ts `shell` renders, with everything it
   // interpolated escaped on the way out (T-33166).
   let page =
@@ -260,7 +261,7 @@ let answering = (res: ReturnType<typeof fee>) => {
   return { sent, done: () => void (globalThis.fetch = real) }
 }
 
-Deno.test('a renewed cookie is handed on, and an ordinary answer is quiet', async () => {
+test('a renewed cookie is handed on, and an ordinary answer is quiet', async () => {
   let fresh: string[] = []
   renewing((v) => fresh.push(v))
   let renewed = answering(
@@ -287,7 +288,7 @@ Deno.test('a renewed cookie is handed on, and an ordinary answer is quiet', asyn
   renewing(() => {})
 })
 
-Deno.test('an expired MCP session is a refusal, not a defect', async () => {
+test('an expired MCP session is a refusal, not a defect', async () => {
   let stub = answering({
     ...fee(),
     ok: false,
@@ -316,7 +317,7 @@ Deno.test('an expired MCP session is a refusal, not a defect', async () => {
   }
 })
 
-Deno.test('an MCP 500 names its request without dumping an HTML page', async () => {
+test('an MCP 500 names its request without dumping an HTML page', async () => {
   let old = globalThis.fetch
   globalThis.fetch = (() =>
     Promise.resolve(
@@ -342,7 +343,7 @@ Deno.test('an MCP 500 names its request without dumping an HTML page', async () 
   }
 })
 
-Deno.test('an edge MCP 500 names its Cloudflare ray', async () => {
+test('an edge MCP 500 names its Cloudflare ray', async () => {
   let old = globalThis.fetch
   globalThis.fetch = (() =>
     Promise.resolve(
@@ -365,7 +366,7 @@ Deno.test('an edge MCP 500 names its Cloudflare ray', async () => {
   }
 })
 
-Deno.test("an app store's refusal keeps its code, rather than becoming a defect", async () => {
+test("an app store's refusal keeps its code, rather than becoming a defect", async () => {
   let stub = answering({
     ...fee(),
     ok: false,
@@ -390,7 +391,7 @@ Deno.test("an app store's refusal keeps its code, rather than becoming a defect"
   }
 })
 
-Deno.test("a door's own refusal is a call refusal, not a defect", async () => {
+test("a door's own refusal is a call refusal, not a defect", async () => {
   let stub = answering({
     ...fee(),
     ok: false,
@@ -413,7 +414,7 @@ Deno.test("a door's own refusal is a call refusal, not a defect", async () => {
   }
 })
 
-Deno.test("a missing app's HTML 404 is a missing refusal, not a defect", async () => {
+test("a missing app's HTML 404 is a missing refusal, not a defect", async () => {
   let stub = answering({
     ...fee(),
     ok: false,
@@ -440,7 +441,7 @@ Deno.test("a missing app's HTML 404 is a missing refusal, not a defect", async (
 // `yak --timing`, this end: the account's calls do not go through the
 // connector door, so `sent` says the same line for them (@yaks/api `timed`).
 // The stub answers the header a platform answer would carry.
-Deno.test('--timing says one line per account call, and none without', async () => {
+test('--timing says one line per account call, and none without', async () => {
   let said: string[] = []
   let say = timing.say
   timing.say = (line) => said.push(line)

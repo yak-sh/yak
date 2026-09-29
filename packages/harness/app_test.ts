@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { frontend } from './frontend.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -20,7 +21,7 @@ let deferred = <T>() => {
   return { promise, resolve }
 }
 
-Deno.test('fake agent: panels, burst selector keys, editing and stale reads', async () => {
+test('fake agent: panels, burst selector keys, editing and stale reads', async () => {
   let listener = () => {}
   let reads = 0, freed = false
   let stale = deferred<Bundle[]>()
@@ -110,7 +111,7 @@ Deno.test('fake agent: panels, burst selector keys, editing and stale reads', as
   assert(freed)
 })
 
-Deno.test('selected session opens alone and the browser requests one page at a time', async () => {
+test('selected session opens alone and the browser requests one page at a time', async () => {
   let f = frontend()
   f.patch({ selected: 's1' })
   let asked: (string | undefined)[] = []
@@ -175,7 +176,7 @@ Deno.test('selected session opens alone and the browser requests one page at a t
   }
 })
 
-Deno.test('graph effects paint a model reply without a keypress; sends are input bundles', async () => {
+test('graph effects paint a model reply without a keypress; sends are input bundles', async () => {
   let reply = deferred<Awaited<ReturnType<Model>>>()
   let a = local({
     cwd: repo(),
@@ -249,7 +250,7 @@ Deno.test('graph effects paint a model reply without a keypress; sends are input
   }
 })
 
-Deno.test('two submissions before start resolves stay ordered in one new session', async () => {
+test('two submissions before start resolves stay ordered in one new session', async () => {
   let started = deferred<string>()
   let starts: string[] = [], sends: string[] = []
   let a: UIAgent = {
@@ -289,7 +290,7 @@ Deno.test('two submissions before start resolves stay ordered in one new session
   }
 })
 
-Deno.test('a failed send is visible and contributed panels read and render bundles', async () => {
+test('a failed send is visible and contributed panels read and render bundles', async () => {
   let a: UIAgent = {
     taskEntry: () => Promise.resolve({ task: 'task', child: 'child' }),
     children: () => Promise.resolve([]),
@@ -337,7 +338,7 @@ Deno.test('a failed send is visible and contributed panels read and render bundl
   }
 })
 
-Deno.test('Tab preserves editing and captures message/task mode for each queued submit', async () => {
+test('Tab preserves editing and captures message/task mode for each queued submit', async () => {
   let started = deferred<string>()
   let writes: string[] = []
   let a: UIAgent = {
@@ -389,7 +390,7 @@ Deno.test('Tab preserves editing and captures message/task mode for each queued 
   }
 })
 
-Deno.test('task mode paints claimed work and subagent, then its delivered result without keys', async () => {
+test('task mode paints claimed work and subagent, then its delivered result without keys', async () => {
   let childReply = deferred<Awaited<ReturnType<Model>>>()
   let childAsked = deferred<void>()
   let r = await scratchRepo()
@@ -457,7 +458,7 @@ Deno.test('task mode paints claimed work and subagent, then its delivered result
   }
 })
 
-Deno.test('composer spans the bottom below transcript and responsive sidebar', async () => {
+test('composer spans the bottom below transcript and responsive sidebar', async () => {
   let a: UIAgent = {
     start: () => Promise.resolve('s'),
     send: () => Promise.resolve('e'),
@@ -513,7 +514,7 @@ Deno.test('composer spans the bottom below transcript and responsive sidebar', a
   }
 })
 
-Deno.test('completed subagents hide but unfinished settled workers stay visible', async () => {
+test('completed subagents hide but unfinished settled workers stay visible', async () => {
   let sessions: Bundle[] = [
     { entity: { eid: 'parent' }, session: { id: 'ROOT', status: 'settled' } },
     {
@@ -589,7 +590,7 @@ Deno.test('completed subagents hide but unfinished settled workers stay visible'
   }
 })
 
-Deno.test('tree navigation skips children between roots and archive toggles stay in graph state', async () => {
+test('tree navigation skips children between roots and archive toggles stay in graph state', async () => {
   let sessions: Bundle[] = [
     { entity: { eid: 'a' }, session: { id: 'ROOT_A', status: 'settled' } },
     {
@@ -658,7 +659,7 @@ Deno.test('tree navigation skips children between roots and archive toggles stay
   }
 })
 
-Deno.test('session return preserves detached anchors through loading; Ctrl+End follows again', async () => {
+test('session return preserves detached anchors through loading; Ctrl+End follows again', async () => {
   let f = frontend()
   let sessions = ['a', 'b'].map((id) => ({
     entity: { eid: id },
@@ -724,7 +725,7 @@ Deno.test('session return preserves detached anchors through loading; Ctrl+End f
   }
 })
 
-Deno.test('large open tree reserves room for all sidebar headings and reveals selected rows', async () => {
+test('large open tree reserves room for all sidebar headings and reveals selected rows', async () => {
   let f = frontend()
   let sessions: Bundle[] = [
     { entity: { eid: 'root' }, session: { status: 'settled', title: 'ROOT' } },
@@ -767,7 +768,7 @@ Deno.test('large open tree reserves room for all sidebar headings and reveals se
   }
 })
 
-Deno.test('transcript publishes before slow sidebar reads and despite ongoing changes', async () => {
+test('transcript publishes before slow sidebar reads and despite ongoing changes', async () => {
   let reply = deferred<Awaited<ReturnType<Model>>>()
   let sidebar = deferred<Bundle[]>()
   let dir = await Deno.makeTempDir()
@@ -829,7 +830,7 @@ Deno.test('transcript publishes before slow sidebar reads and despite ongoing ch
   }
 })
 
-Deno.test('Ctrl directions navigate visual rows and spatial focus; legacy Enter and Backspace edit', async () => {
+test('Ctrl directions navigate visual rows and spatial focus; legacy Enter and Backspace edit', async () => {
   let rows: Bundle[] = [
     { entity: { eid: 'root' }, session: { id: 'Root', status: 'running' } },
     {
@@ -922,7 +923,7 @@ Deno.test('Ctrl directions navigate visual rows and spatial focus; legacy Enter 
   }
 })
 
-Deno.test('sidebar selectable contributions follow visual order and archive only selected session', async () => {
+test('sidebar selectable contributions follow visual order and archive only selected session', async () => {
   const f = frontend()
   const sessions: Bundle[] = [
     { entity: { eid: 'root' }, session: { id: 'Root', status: 'running' } },
@@ -984,7 +985,7 @@ Deno.test('sidebar selectable contributions follow visual order and archive only
   }
 })
 
-Deno.test('mouse clicks preserve mode while selecting sessions and new session', async () => {
+test('mouse clicks preserve mode while selecting sessions and new session', async () => {
   const f = frontend()
   const sessions: Bundle[] = ['s1', 's2'].map((id) => ({
     entity: { eid: id },
@@ -1053,7 +1054,7 @@ Deno.test('mouse clicks preserve mode while selecting sessions and new session',
   }
 })
 
-Deno.test('shutdown stops a pending summary from starting sidebar reads', async () => {
+test('shutdown stops a pending summary from starting sidebar reads', async () => {
   const { frontend } = await import('./frontend.ts')
   const local = frontend()
   const pending = Promise.withResolvers<Bundle[]>()
@@ -1110,7 +1111,7 @@ Deno.test('shutdown stops a pending summary from starting sidebar reads', async 
   }
 })
 
-Deno.test('shutdown refusal from pending transcript does not overwrite shutdown feedback', async () => {
+test('shutdown refusal from pending transcript does not overwrite shutdown feedback', async () => {
   const { frontend } = await import('./frontend.ts')
   const { ShuttingDown } = await import('./shutdown.ts')
   const local = frontend()
@@ -1157,7 +1158,7 @@ Deno.test('shutdown refusal from pending transcript does not overwrite shutdown 
   }
 })
 
-Deno.test('delayed or failed refresh retains visible transcript until a successful empty answer', async () => {
+test('delayed or failed refresh retains visible transcript until a successful empty answer', async () => {
   const f = frontend()
   const record: Bundle = {
     entity: { eid: 'saved' },

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { ratchet, record, type Sample, timed, VERSION } from './suite-time.ts'
 
@@ -10,14 +11,14 @@ const sample = (seconds = 10, controlSeconds = 0.05, code = 0): Sample => ({
 })
 const baseline = { ratio: 200, controlFloorSeconds: 0.05 }
 
-Deno.test('suite ratchet cancels 2x load, reports real slowdown, and never banks loaded gains', () => {
+test('suite ratchet cancels 2x load, reports real slowdown, and never banks loaded gains', () => {
   assertEquals(ratchet(sample(20, 0.1), baseline).verdict, 'HELD')
   assertEquals(ratchet(sample(26, 0.1), baseline).verdict, 'REGRESSION')
   assertEquals(ratchet(sample(15, 0.1), baseline).baseline, baseline)
   assertEquals(ratchet(sample(8), baseline).baseline?.ratio, 160)
   assertEquals(ratchet(sample(12.5), baseline).verdict, 'HELD')
 })
-Deno.test('new metrics, explicit acceptance, and failed commands', () => {
+test('new metrics, explicit acceptance, and failed commands', () => {
   assertEquals(ratchet(sample(), undefined).verdict, 'NEW')
   assertEquals(ratchet(sample(30), baseline, 0.25, true).baseline?.ratio, 600)
   assertEquals(
@@ -28,7 +29,7 @@ Deno.test('new metrics, explicit acceptance, and failed commands', () => {
   assertThrows(() => ratchet(sample(0), baseline))
   assertThrows(() => ratchet(sample(), baseline, NaN))
 })
-Deno.test('results preserve bench data and other suites; committed floors survive results deletion and move only on accept', async () => {
+test('results preserve bench data and other suites; committed floors survive results deletion and move only on accept', async () => {
   let dir = await Deno.makeTempDir()
   let path = dir + '/results.json'
   try {
@@ -61,7 +62,7 @@ Deno.test('results preserve bench data and other suites; committed floors surviv
     await Deno.remove(dir, { recursive: true })
   }
 })
-Deno.test('timer preserves nonzero command status and handles short commands', async () => {
+test('timer preserves nonzero command status and handles short commands', async () => {
   let result = await timed(Deno.execPath(), ['eval', 'Deno.exit(7)'])
   assertEquals(result.code, 7)
   assertEquals(result.samples > 0, true)

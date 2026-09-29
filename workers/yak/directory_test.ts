@@ -1,5 +1,6 @@
 // Directory reads through its cache and the serving app roster that must be
 // fresh and coherent across apps in one request.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
@@ -43,7 +44,7 @@ let an: App = {
   theme: null,
 }
 
-Deno.test('a release is served only after its deploy records it', async () => {
+test('a release is served only after its deploy records it', async () => {
   let source = 'jeff/.releases/a1/'
   let dir = directory({
     fetch: (req: Request) => {
@@ -165,7 +166,7 @@ let hosts = () => {
   return directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
 }
 
-Deno.test('a hostname resolves to its space and app, or to nobody', async () => {
+test('a hostname resolves to its space and app, or to nobody', async () => {
   let dir = hosts()
   let at = await dir.serves('herbusiness.com')
   assertEquals([at?.space.slug, at?.app?.slug], ['jeff', 'recipes'])
@@ -173,7 +174,7 @@ Deno.test('a hostname resolves to its space and app, or to nobody', async () => 
   assertEquals(await dir.serves('elsewhere.com'), null)
 })
 
-Deno.test('a hostname on the space resolves to the space, with no app', async () => {
+test('a hostname on the space resolves to the space, with no app', async () => {
   let dir = hosts()
   let at = await dir.serves('ourbookclub.com')
   assertEquals(at?.space.slug, 'jeff')
@@ -181,7 +182,7 @@ Deno.test('a hostname on the space resolves to the space, with no app', async ()
   assertEquals(at?.host.serves, 's1')
 })
 
-Deno.test('an app read selects the current release', async () => {
+test('an app read selects the current release', async () => {
   let { at, dir } = stub()
   assertEquals((await dir.app(space, 'recipes'))?.version, 1)
   at.version = 2
@@ -189,7 +190,7 @@ Deno.test('an app read selects the current release', async () => {
   assertEquals(at.reads, 2)
 })
 
-Deno.test('a release reaches consumer and home through stale isolate caches', async () => {
+test('a release reaches consumer and home through stale isolate caches', async () => {
   let version = 1
   let reads = [0, 0]
   let isolate = (i: number) => {
@@ -243,7 +244,7 @@ Deno.test('a release reaches consumer and home through stale isolate caches', as
 // constant read here and a property nowhere: what makes that safe is that
 // nothing on the wire can reach it, which is the same reason `plan` is
 // stamped (billing.ts).
-Deno.test('a comped space reads as plus, everyone else as what they pay', () => {
+test('a comped space reads as plus, everyone else as what they pay', () => {
   assertEquals(dirPart.tierOf('yourname', null), 'plus')
   assertEquals(dirPart.tierOf('yourname', 'free'), 'plus')
   assertEquals(dirPart.tierOf('jeff', null), null)
@@ -254,7 +255,7 @@ Deno.test('a comped space reads as plus, everyone else as what they pay', () => 
 // The app's handle (T-34657): the string the platform names everything it
 // keeps for this app by, and the thing a rename — of the app, or of its space —
 // must never move.
-Deno.test('a handle reads as the app and is the app, not its address', () => {
+test('a handle reads as the app and is the app, not its address', () => {
   let eid = '9efd22a8-19a0-49b8-95f7-5ecec9385dac'
   // Legible in the dashboard, sorted under its space, with the key on the end.
   assertEquals(dirPart.handle(space, 'cookbook', eid), 'jeff/cookbook.385dac')
@@ -365,7 +366,7 @@ let held = () => {
   }
 }
 
-Deno.test("a person's own space is one they own, not one they were invited to", async () => {
+test("a person's own space is one they own, not one they were invited to", async () => {
   let m = held()
   let inviter = crypto.randomUUID()
   let guest = crypto.randomUUID()
@@ -403,7 +404,7 @@ Deno.test("a person's own space is one they own, not one they were invited to", 
 //
 // A number that moves is not automatically wrong. It is a number somebody
 // should have looked at, with the reason written down beside it.
-Deno.test('signing in asks the directory a bounded number of questions', async () => {
+test('signing in asks the directory a bounded number of questions', async () => {
   let m = held()
   // The first person pays for the seed — the meta space and the platform app,
   // minted on the directory's first write. That happens once ever and is not
@@ -432,7 +433,7 @@ Deno.test('signing in asks the directory a bounded number of questions', async (
   assertEquals(m.hops.length, 4, m.hops.join('\n'))
 })
 
-Deno.test('directory caches belong to a store, not the shared isolate', async () => {
+test('directory caches belong to a store, not the shared isolate', async () => {
   let a = stub()
   let b = stub()
   assertEquals((await a.dir.space('jeff'))?.slug, 'jeff')

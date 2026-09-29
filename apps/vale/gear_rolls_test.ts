@@ -1,5 +1,6 @@
 // Saved upgrade gains replay the same, and the crafting and upgrade ranges
 // contain the pieces those rolls can make.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { tierRange } from './arms.ts'
 import { itemStats, numbers, statValue, stepRange, versus } from './compare.ts'
@@ -19,7 +20,7 @@ import { MOST, upgradesOf } from './upgrade.ts'
 
 seedItems()
 
-Deno.test('upgrade rows preserve old steps and replay new rolls', () => {
+test('upgrade rows preserve old steps and replay new rolls', () => {
   let row = upgradeGain('upgrade-one')
   assert(row >= UP_MIN && row <= UP_MAX)
   assert(
@@ -51,7 +52,7 @@ Deno.test('upgrade rows preserve old steps and replay new rolls', () => {
   assertEquals(upgradesOf(ordered), upgradesOf(ordered.reverse()))
 })
 
-Deno.test('each upgrade roll stays within a visible range', () => {
+test('each upgrade roll stays within a visible range', () => {
   for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
     let h = { eid: 'x', kind, lvl: tierRange(ITEMS[kind].tier!)[0] }
     let [lo, hi] = upgradeRange(h), [a, b] = [piece(lo), piece(hi)]
@@ -64,7 +65,7 @@ Deno.test('each upgrade roll stays within a visible range', () => {
   }
 })
 
-Deno.test('craft preview bounds contain the gear that can roll', () => {
+test('craft preview bounds contain the gear that can roll', () => {
   for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
     let [lo, hi] = tierRange(ITEMS[kind].tier!)
     let bounds = statRange(kind)
@@ -83,7 +84,7 @@ Deno.test('craft preview bounds contain the gear that can roll', () => {
   assertEquals(statRange('tonic'), {})
 })
 
-Deno.test('upgrade preview shows current values and possible next values', () => {
+test('upgrade preview shows current values and possible next values', () => {
   let h = { eid: 's', kind: 'sword2', n: 1, lvl: 13 }
   let [lo, hi] = upgradeRange(h)
   let side = (x: typeof h & { plus?: number; gain?: number }) => ({
@@ -104,7 +105,7 @@ Deno.test('upgrade preview shows current values and possible next values', () =>
   assert(!html.includes('a blow'))
 })
 
-Deno.test('item stats and equipped hero changes read separately', () => {
+test('item stats and equipped hero changes read separately', () => {
   let h = { eid: 's', kind: 'sword2', n: 1, lvl: 13 }
   let hero = { lvl: 13, learned: [] }
   let p = piece(h)

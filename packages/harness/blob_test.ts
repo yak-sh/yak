@@ -2,6 +2,7 @@
 // `blob_text` and every property holding it keeps only its address. The read
 // side resolves it back, so nothing above storage ever sees a hash, and a
 // reopened file reads the same prose it was written with.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { address } from '@yaks/blob'
 import type { Bundle, Comp } from '@yaks/graph'
@@ -11,7 +12,7 @@ import { harness } from './testing.ts'
 let bodyOf = (b: Bundle, comp = 'content') =>
   (b[comp] as Comp | undefined)?.body
 
-Deno.test('blob prose deduplicates across properties and survives reopen', async () => {
+test('blob prose deduplicates across properties and survives reopen', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/test.db'
   let h = await harness(path)

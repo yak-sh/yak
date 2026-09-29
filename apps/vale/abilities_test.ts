@@ -1,4 +1,5 @@
 // Ability designs arrive from the store and shape combat and its descriptions.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -18,7 +19,7 @@ import { uuidOf } from './rand.ts'
 import { formOf, SKILLS } from './skills.ts'
 import words from './vocab.json' with { type: 'json' }
 
-Deno.test('store ability designs drive grants, skill forms and descriptions', async () => {
+test('store ability designs drive grants, skill forms and descriptions', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply(rows)
@@ -82,7 +83,7 @@ Deno.test('store ability designs drive grants, skill forms and descriptions', as
   assert(formOf(newKind, [])?.name == 'Moonflash')
 })
 
-Deno.test('composed abilities retain skill changes and price their effects', () => {
+test('composed abilities retain skill changes and price their effects', () => {
   useAbilities(rows)
   let doer = { blow: 20, max: 120 }
   assertEquals(effect(formOf('flurry', ['cuts'])!.effects, 'damage')?.hits, 5)
@@ -106,7 +107,7 @@ Deno.test('composed abilities retain skill changes and price their effects', () 
   assert(!fits({ ...ABILITIES.flurry, cool: 1000 }))
 })
 
-Deno.test('Store admits an invented ability only within its effect budget', async () => {
+test('Store admits an invented ability only within its effect budget', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab, plugins: [admitSchema(vocab)] })
   let row = (kind: string, effects: unknown[]) => [{

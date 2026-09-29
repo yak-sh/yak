@@ -9,6 +9,7 @@
 // look like a helpful refactor.
 //
 // The whole app deployed and served is in serving_test.ts.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { added, asked, dropped, money, shown, sizes } from './shop/cart.js'
 
@@ -26,14 +27,14 @@ let shelf = new Map([
   [LONG, row(LONG, 'Long Sleeve', 3600, '')],
 ])
 
-Deno.test('the cart reads the sizes the seller wrote, in her order', () => {
+test('the cart reads the sizes the seller wrote, in her order', () => {
   assertEquals(sizes(shelf.get(TEE)!), ['S', 'M', 'L'])
   // No sizes at all is no picker, not one empty option.
   assertEquals(sizes(shelf.get(LONG)!), [])
   assertEquals(sizes({ product: { sizes: ' XL ,, L ' } }), ['XL', 'L'])
 })
 
-Deno.test('a line is a product AND a size', () => {
+test('a line is a product AND a size', () => {
   let cart = added([], { product: TEE, options: 'M' })
   cart = added(cart, { product: TEE, options: 'L' })
   // Two sizes of one shirt are two lines...
@@ -54,7 +55,7 @@ Deno.test('a line is a product AND a size', () => {
   assertEquals(one[0].qty, 1)
 })
 
-Deno.test('a line comes out by the pair that names it', () => {
+test('a line comes out by the pair that names it', () => {
   let cart = added(added([], { product: TEE, options: 'M' }), {
     product: TEE,
     options: 'L',
@@ -68,7 +69,7 @@ Deno.test('a line comes out by the pair that names it', () => {
   assertEquals(dropped(cart, { product: LONG, options: '' }).length, 2)
 })
 
-Deno.test('what the checkout door is asked for carries no money', () => {
+test('what the checkout door is asked for carries no money', () => {
   let cart = added(added([], { product: TEE, options: 'M', qty: 2 }), {
     product: LONG,
   })
@@ -84,7 +85,7 @@ Deno.test('what the checkout door is asked for carries no money', () => {
   assert(!('options' in want[1]))
 })
 
-Deno.test('the cart draws what the shop still sells', () => {
+test('the cart draws what the shop still sells', () => {
   let cart = added(added([], { product: TEE, options: 'M', qty: 2 }), {
     product: LONG,
   })

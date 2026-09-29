@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { groupOf, invitations, memberOf } from './party-state.ts'
 import type { Bundle } from './net.ts'
@@ -14,7 +15,7 @@ let invite = (eid: string, by: string, at = now - 1000): Bundle => ({
   },
 })
 
-Deno.test('only the invited hero sees an unanswered invitation from its sender', () => {
+test('only the invited hero sees an unanswered invitation from its sender', () => {
   let rows = [invite('good', 'owner-a'), invite('forged', 'someone-else')]
   let owners = new Map([['hero-a', 'owner-a'], ['hero-b', 'owner-b']])
   assertEquals(
@@ -57,7 +58,7 @@ let step = (
   party_step: { player: 'hero-b', group, at },
 })
 
-Deno.test('only the hero owner can change membership', () => {
+test('only the hero owner can change membership', () => {
   let rows = [
     step('join', 'owner-b', 'hero-a', 10),
     step('forged-leave', 'someone-else', '', 100),
@@ -68,7 +69,7 @@ Deno.test('only the hero owner can change membership', () => {
   assertEquals(groupOf(rows, 'hero-c', 'owner-b'), '')
 })
 
-Deno.test('latest authored step wins despite arrival order, then leave and rejoin', () => {
+test('latest authored step wins despite arrival order, then leave and rejoin', () => {
   let join = step('join', 'owner-b', 'hero-a', 10, now + 3000)
   let leave = step('leave', 'owner-b', '', 11, now + 2000)
   let rejoin = step('rejoin', 'owner-b', 'hero-a', 12, now + 1000)
@@ -80,7 +81,7 @@ Deno.test('latest authored step wins despite arrival order, then leave and rejoi
   assertEquals(groupOf([rejoin, tied], 'hero-b', 'owner-b'), 'hero-c')
 })
 
-Deno.test('a party member has a live location, then a last known land', () => {
+test('a party member has a live location, then a last known land', () => {
   let row: Bundle = {
     entity: { eid: 'hero-a' },
     player: {},

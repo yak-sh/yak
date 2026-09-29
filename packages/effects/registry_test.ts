@@ -4,6 +4,7 @@
 // casualty it took with it, a failing handler is reported and its neighbours
 // still run, a write-back lands, and a refused batch fires nothing.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Tx } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
@@ -33,7 +34,7 @@ let post = (eid: string, comp: Record<string, unknown> = { title: 'One' }) => ({
   post: comp,
 })
 
-Deno.test('a created handler fires once per new component', () => {
+test('a created handler fires once per new component', () => {
   let { fx, seen, apply } = fixture()
   fx.created(
     'post',
@@ -46,7 +47,7 @@ Deno.test('a created handler fires once per new component', () => {
   assertEquals(seen.length, 1)
 })
 
-Deno.test('a birth patched again in the same batch is one birth', () => {
+test('a birth patched again in the same batch is one birth', () => {
   let { fx, seen, apply } = fixture()
   fx.created('post', (e) => seen.push(`created ${e.entity.eid}`))
   fx.changed('post', (e) => seen.push(`changed ${e.entity.eid}`))
@@ -54,14 +55,14 @@ Deno.test('a birth patched again in the same batch is one birth', () => {
   assertEquals(seen, ['created p1', 'changed p1'])
 })
 
-Deno.test('a created handler sees the num storage minted', () => {
+test('a created handler sees the num storage minted', () => {
   let { fx, seen, apply } = fixture()
   fx.created('post', (e) => seen.push(String(e.entity.num)))
   apply([post('p1')])
   assertEquals(seen, ['1'])
 })
 
-Deno.test('changed fires only for the properties that moved', () => {
+test('changed fires only for the properties that moved', () => {
   let { fx, seen, apply } = fixture()
   fx.changed('post', 'published', (e) => seen.push(`published ${e.entity.eid}`))
   fx.changed('post', 'title', () => seen.push('retitled'))
@@ -73,7 +74,7 @@ Deno.test('changed fires only for the properties that moved', () => {
   assertEquals(seen, ['published p1', 'retitled'])
 })
 
-Deno.test('a property-less changed handler fires for any patch', () => {
+test('a property-less changed handler fires for any patch', () => {
   let { fx, seen, apply } = fixture()
   fx.changed('post', (e) => seen.push(Object.keys(e.comp ?? {}).join(',')))
   apply([post('p1')])
@@ -81,7 +82,7 @@ Deno.test('a property-less changed handler fires for any patch', () => {
   assertEquals(seen, ['title,published'])
 })
 
-Deno.test('a changed event carries only the patch, not the whole row', () => {
+test('a changed event carries only the patch, not the whole row', () => {
   let { fx, seen, apply } = fixture()
   fx.changed('post', (e) => seen.push(JSON.stringify(e.comp)))
   apply([post('p1', { title: 'One', body: 'text' })])
@@ -89,7 +90,7 @@ Deno.test('a changed event carries only the patch, not the whole row', () => {
   assertEquals(seen, ['{"published":true}'])
 })
 
-Deno.test('removed fires when a component is dropped', () => {
+test('removed fires when a component is dropped', () => {
   let { fx, seen, apply } = fixture()
   fx.removed('post', (e) => seen.push(`gone ${e.entity.eid}`))
   apply([post('p1')])
@@ -100,7 +101,7 @@ Deno.test('removed fires when a component is dropped', () => {
   assertEquals(seen.length, 1)
 })
 
-Deno.test('removed fires for every component a dead entity carried', () => {
+test('removed fires for every component a dead entity carried', () => {
   let { fx, seen, apply } = fixture()
   fx.removed('post', () => seen.push('post'))
   fx.removed('created', () => seen.push('created'))
@@ -109,7 +110,7 @@ Deno.test('removed fires for every component a dead entity carried', () => {
   assertEquals(seen.sort(), ['created', 'post'])
 })
 
-Deno.test('removed fires for every casualty of a cascade', () => {
+test('removed fires for every casualty of a cascade', () => {
   let { fx, seen, apply } = fixture()
   fx.removed('comment', (e) => seen.push(e.entity.eid))
   apply([
@@ -122,7 +123,7 @@ Deno.test('removed fires for every casualty of a cascade', () => {
   assertEquals(seen.sort(), ['c1', 'c2'])
 })
 
-Deno.test('a throwing handler is reported and the others still run', () => {
+test('a throwing handler is reported and the others still run', () => {
   let { fx, seen, oops, apply } = fixture()
   fx.created('post', () => {
     throw new Error('boom')
@@ -133,7 +134,7 @@ Deno.test('a throwing handler is reported and the others still run', () => {
   assertEquals(oops.map((o) => o.handler), ['post.created'])
 })
 
-Deno.test('a rejecting handler is reported, and the batch still returns', async () => {
+test('a rejecting handler is reported, and the batch still returns', async () => {
   let { fx, seen, oops, g } = fixture()
   fx.created('post', () => Promise.reject(new Error('boom')))
   fx.created('post', () => seen.push('second'))
@@ -143,7 +144,7 @@ Deno.test('a rejecting handler is reported, and the batch still returns', async 
   assertEquals(oops.map((o) => o.handler), ['post.created'])
 })
 
-Deno.test("a handler's write-back commits and is visible", () => {
+test("a handler's write-back commits and is visible", () => {
   let { fx, g, apply } = fixture()
   fx.changed('post', 'published', (e, tx: Tx) => {
     tx.patch([{ entity: { eid: 's1' }, subscriber: { email: e.entity.eid } }])
@@ -154,7 +155,7 @@ Deno.test("a handler's write-back commits and is visible", () => {
   assertEquals((sub.subscriber as Record<string, unknown>).email, 'p1')
 })
 
-Deno.test('a handler may write back through the graph itself', () => {
+test('a handler may write back through the graph itself', () => {
   let { fx, g, apply } = fixture()
   fx.created('post', (e) =>
     sync(g.apply([{
@@ -165,7 +166,7 @@ Deno.test('a handler may write back through the graph itself', () => {
   assertEquals((g.read('.subscriber') as Bundle[]).length, 1)
 })
 
-Deno.test('nothing fires when the batch is refused', () => {
+test('nothing fires when the batch is refused', () => {
   let { fx, seen, oops, apply } = fixture()
   fx.created('post', () => seen.push('fired'))
   fx.removed('post', () => seen.push('fired'))
@@ -174,7 +175,7 @@ Deno.test('nothing fires when the batch is refused', () => {
   assertEquals(oops, [])
 })
 
-Deno.test('nothing fires when a hook refuses inside the transaction', () => {
+test('nothing fires when a hook refuses inside the transaction', () => {
   let seen: string[] = []
   let fx = effects(blog)
   let doorman = {
@@ -191,7 +192,7 @@ Deno.test('nothing fires when a hook refuses inside the transaction', () => {
   assertEquals(seen, [])
 })
 
-Deno.test('the batch a caller gets back carries no pipeline keys', () => {
+test('the batch a caller gets back carries no pipeline keys', () => {
   let { fx, apply } = fixture()
   fx.created('post', () => {})
   let out = apply([post('p1')])
@@ -200,13 +201,13 @@ Deno.test('the batch a caller gets back carries no pipeline keys', () => {
   }
 })
 
-Deno.test('an unwatched batch costs nothing and still returns its bundles', () => {
+test('an unwatched batch costs nothing and still returns its bundles', () => {
   let { apply } = fixture()
   let out = apply([post('p1')])
   assertEquals(out.filter((b) => b.post).length, 1)
 })
 
-Deno.test('slots list what a graph will do about a write', () => {
+test('slots list what a graph will do about a write', () => {
   let { fx } = fixture()
   let noop = (_e: Event) => {}
   fx.created('post', noop).changed('post', 'published', noop)
@@ -220,7 +221,7 @@ Deno.test('slots list what a graph will do about a write', () => {
   ])
 })
 
-Deno.test('an async handler makes that one apply a promise', async () => {
+test('an async handler makes that one apply a promise', async () => {
   let { fx, seen, g } = fixture()
   fx.created('post', () => Promise.resolve().then(() => seen.push('late')))
   let out = g.apply([post('p1')])
@@ -232,7 +233,7 @@ Deno.test('an async handler makes that one apply a promise', async () => {
 // A pattern registration: any query over what the batch committed, with
 // nothing derived into the graph to trigger it.
 
-Deno.test('a pattern fires where this batch made it hold', () => {
+test('a pattern fires where this batch made it hold', () => {
   let { fx, seen, apply } = fixture()
   fx.on('.post, !comments', (e) => seen.push(e.entity.eid))
   apply([post('p1')])
@@ -246,7 +247,7 @@ Deno.test('a pattern fires where this batch made it hold', () => {
   assertEquals(seen, ['p1', 'p2'])
 })
 
-Deno.test('a pattern is a query, not a property subscription', () => {
+test('a pattern is a query, not a property subscription', () => {
   let { fx, seen, apply } = fixture()
   fx.on('.post.title=Ready', (e) => seen.push(e.entity.eid))
   apply([post('p1', { title: 'Draft' })])
@@ -255,7 +256,7 @@ Deno.test('a pattern is a query, not a property subscription', () => {
   assertEquals(seen, ['p1'])
 })
 
-Deno.test('a removal is the same registration said in the grammar', () => {
+test('a removal is the same registration said in the grammar', () => {
   let { fx, seen, apply } = fixture()
   fx.on('-post', (e) => seen.push(`gone ${e.entity.eid}`))
   apply([post('p1')])
@@ -269,7 +270,7 @@ Deno.test('a removal is the same registration said in the grammar', () => {
   assertEquals(fx.docs().map((d) => d.hooks), [['removed']])
 })
 
-Deno.test('a pattern names its component, and lists beside the rest', () => {
+test('a pattern names its component, and lists beside the rest', () => {
   let { fx } = fixture()
   fx.on('.post, !comments', () => {})
   fx.created('post', () => {})
@@ -277,7 +278,7 @@ Deno.test('a pattern names its component, and lists beside the rest', () => {
   assertEquals(fx.docs().map((d) => d.hooks), [['matched'], ['created']])
 })
 
-Deno.test('a word this vocabulary has no entry for says nothing, or nothing at all', () => {
+test('a word this vocabulary has no entry for says nothing, or nothing at all', () => {
   let { fx, seen, apply } = fixture()
   // Nothing here can wear `archived`, so requiring its absence is no
   // constraint — one sentence, right in a graph that has the word and in one
@@ -290,7 +291,7 @@ Deno.test('a word this vocabulary has no entry for says nothing, or nothing at a
   assertEquals(fx.slots().length, 2)
 })
 
-Deno.test('a pattern over two entities needs a storage that answers bindings', () => {
+test('a pattern over two entities needs a storage that answers bindings', () => {
   let { fx, oops, apply } = fixture()
   fx.on('$p .post; .comment, comment.post=$p', () => {})
   // The batch committed; a question this storage cannot answer is telemetry.
@@ -298,7 +299,7 @@ Deno.test('a pattern over two entities needs a storage that answers bindings', (
   assertEquals(oops.map((j) => j.handler), ['post.matched'])
 })
 
-Deno.test('a collected pattern uses the binding interface', () => {
+test('a collected pattern uses the binding interface', () => {
   let { fx, oops, apply } = fixture()
   fx.on('$p .post; [.comment, comment.post=$p]', () => {})
   apply([post('p1')])
@@ -316,7 +317,7 @@ let owing = () => {
   return { fx, seen, apply, note }
 }
 
-Deno.test('a declared effect runs where it is handled, on each trigger it declares', () => {
+test('a declared effect runs where it is handled, on each trigger it declares', () => {
   let { fx, seen, apply, note } = owing()
   fx.handle({ post_note: note, post_gone: note })
   apply([post('p1')])
@@ -326,7 +327,7 @@ Deno.test('a declared effect runs where it is handled, on each trigger it declar
   assertEquals(seen, ['created p1', 'changed p1', 'removed p1'])
 })
 
-Deno.test('a declared effect can exclude bookkeeping entities', async () => {
+test('a declared effect can exclude bookkeeping entities', async () => {
   let vocab = loadVocab([...blog.docs, effectDoc, {
     $defs: {
       watch_change: {
@@ -355,14 +356,14 @@ Deno.test('a declared effect can exclude bookkeeping entities', async () => {
   assertEquals((await g.read('.effect')).length, 1)
 })
 
-Deno.test('a declared effect nobody handles runs nothing', () => {
+test('a declared effect nobody handles runs nothing', () => {
   let { fx, seen, apply } = owing()
   fx.created('post', (e) => seen.push(`saw ${e.entity.eid}`))
   apply([post('p1')])
   assertEquals(seen, ['saw p1'])
 })
 
-Deno.test('handling a name nothing declares is an error', () => {
+test('handling a name nothing declares is an error', () => {
   let { fx } = owing()
   assertThrows(() => fx.handle({ post_nte: () => {} }), Error, 'post_nte')
 })

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { checked, refusal, type Scheme, SKEW } from './signed.ts'
 
@@ -31,7 +32,7 @@ let stripe = async (raw: string, at: number, secret = SECRET) =>
 let ask = (scheme: Scheme, raw: string, headers: Record<string, string>) =>
   refusal(scheme, SECRET, raw, new Headers(headers), NOW)
 
-Deno.test('stripe: the exact bytes verify; a moved byte or another secret does not', async () => {
+test('stripe: the exact bytes verify; a moved byte or another secret does not', async () => {
   let raw = '{"id":"evt_1","type":"invoice.paid"}'
   let sig = await stripe(raw, SEC)
   assertEquals(
@@ -46,7 +47,7 @@ Deno.test('stripe: the exact bytes verify; a moved byte or another secret does n
   )
 })
 
-Deno.test('stripe: a stale timestamp is refused, and the edge is the edge', async () => {
+test('stripe: a stale timestamp is refused, and the edge is the edge', async () => {
   let raw = '{"id":"evt_1"}'
   let at = async (t: number) =>
     await ask('stripe', raw, { 'stripe-signature': await stripe(raw, t) })
@@ -56,7 +57,7 @@ Deno.test('stripe: a stale timestamp is refused, and the edge is the edge', asyn
   )
 })
 
-Deno.test('stripe: a header missing its parts is refused, never thrown past', async () => {
+test('stripe: a header missing its parts is refused, never thrown past', async () => {
   let sent = (v: string | null) =>
     ask('stripe', '{}', v == null ? {} : { 'stripe-signature': v })
   assertEquals(
@@ -74,7 +75,7 @@ Deno.test('stripe: a header missing its parts is refused, never thrown past', as
   )
 })
 
-Deno.test('stripe: a rolled secret sends both signatures and either may match', async () => {
+test('stripe: a rolled secret sends both signatures and either may match', async () => {
   let raw = '{"id":"evt_1"}'
   let mine = await stripe(raw, SEC)
   let theirs = await stripe(raw, SEC, 'whsec_the_old_one')
@@ -88,7 +89,7 @@ Deno.test('stripe: a rolled secret sends both signatures and either may match', 
   )
 })
 
-Deno.test('github: sha256= and the hex of the body', async () => {
+test('github: sha256= and the hex of the body', async () => {
   let raw = '{"zen":"Keep it logically awesome."}'
   let good = `sha256=${hex(await mac(SECRET, raw))}`
   let h = (v: string) => ({ 'x-hub-signature-256': v })
@@ -108,7 +109,7 @@ Deno.test('github: sha256= and the hex of the body', async () => {
   )
 })
 
-Deno.test('hmac: a named header, hex or base64', async () => {
+test('hmac: a named header, hex or base64', async () => {
   let raw = 'a=1&b=2'
   let d = await mac(SECRET, raw)
   let hexed: Scheme = { header: 'X-Signature' }
@@ -124,7 +125,7 @@ Deno.test('hmac: a named header, hex or base64', async () => {
   )
 })
 
-Deno.test('checked: a captured request carries the answer in verified', async () => {
+test('checked: a captured request carries the answer in verified', async () => {
   let body = '{"action":"opened"}'
   let headers = JSON.stringify({
     'X-Hub-Signature-256': `sha256=${hex(await mac(SECRET, body))}`,

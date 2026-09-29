@@ -3,6 +3,7 @@
 // to, what an id column names the row, and every refusal that names the row and
 // the header. The end-to-end proof — a CSV loaded into a store twice — is
 // mcp_test.ts.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { type Sheet, sheet } from './csv.ts'
 
@@ -17,7 +18,7 @@ let bundles = (text: string, spec: Sheet = city) =>
 let no = (text: string, spec: Sheet = city) =>
   assertThrows(() => bundles(text, spec), Error).message
 
-Deno.test('a header is the same-named property, coerced to its type', () => {
+test('a header is the same-named property, coerced to its type', () => {
   assertEquals(
     bundles('name,pop,capital\nOslo,709037,true\n'),
     [{
@@ -27,14 +28,14 @@ Deno.test('a header is the same-named property, coerced to its type', () => {
   )
 })
 
-Deno.test('an empty cell is unsaid, never null', () => {
+test('an empty cell is unsaid, never null', () => {
   assertEquals(bundles('name,pop\nOslo,\n')[0], {
     entity: { eid: '$data/cities.csv:0' },
     city: { name: 'Oslo' },
   })
 })
 
-Deno.test('a bool is written either way round', () => {
+test('a bool is written either way round', () => {
   let said = (cell: string) =>
     (bundles(`name,capital\nOslo,${cell}\n`)[0].city as {
       capital: boolean
@@ -43,7 +44,7 @@ Deno.test('a bool is written either way round', () => {
   for (let nope of ['false', 'No', '0']) assertEquals(said(nope), false, nope)
 })
 
-Deno.test('an object, a list or a union is a cell of JSON', () => {
+test('an object, a list or a union is a cell of JSON', () => {
   let dish: Sheet = {
     as: 'dish',
     props: { tags: 'array', makes: 'object', size: 'number or text' },
@@ -67,7 +68,7 @@ Deno.test('an object, a list or a union is a cell of JSON', () => {
   )
 })
 
-Deno.test('map renames a header that does not match a property', () => {
+test('map renames a header that does not match a property', () => {
   assertEquals(
     bundles('City,How many\nOslo,709037\n', {
       ...city,
@@ -80,7 +81,7 @@ Deno.test('map renames a header that does not match a property', () => {
   )
 })
 
-Deno.test('title and body land in doc, and the component wins the name', () => {
+test('title and body land in doc, and the component wins the name', () => {
   assertEquals(bundles('title,body,name\nOslo,the capital,Oslo\n')[0], {
     entity: { eid: '$data/cities.csv:0' },
     city: { name: 'Oslo' },
@@ -93,7 +94,7 @@ Deno.test('title and body land in doc, and the component wins the name', () => {
   )
 })
 
-Deno.test("an id column is the row's name, so a second load patches", () => {
+test("an id column is the row's name, so a second load patches", () => {
   let named = {
     entity: { eid: '$data/cities.csv:0' },
     alias: { name: 'oslo' },
@@ -110,7 +111,7 @@ Deno.test("an id column is the row's name, so a second load patches", () => {
   })
 })
 
-Deno.test('the rows keep the file and their order, for the blame', () => {
+test('the rows keep the file and their order, for the blame', () => {
   assertEquals(
     sheet('data/cities.csv', 'name\nOslo\nBergen\n', city).map((s) => [
       s.file,
@@ -120,7 +121,7 @@ Deno.test('the rows keep the file and their order, for the blame', () => {
   )
 })
 
-Deno.test("quotes, CRLF and a spreadsheet's BOM are the parser's own", () => {
+test("quotes, CRLF and a spreadsheet's BOM are the parser's own", () => {
   assertEquals(
     bundles('﻿name,country\r\n"Washington, D.C.","the ""US"""\r\n')[0],
     {
@@ -130,7 +131,7 @@ Deno.test("quotes, CRLF and a spreadsheet's BOM are the parser's own", () => {
   )
 })
 
-Deno.test('a row that is only what it IS still wears the component', () => {
+test('a row that is only what it IS still wears the component', () => {
   assertEquals(bundles('title\nOslo\n')[0], {
     entity: { eid: '$data/cities.csv:0' },
     city: {},
@@ -138,14 +139,14 @@ Deno.test('a row that is only what it IS still wears the component', () => {
   })
 })
 
-Deno.test('a CSV with no `as` says what it needs', () => {
+test('a CSV with no `as` says what it needs', () => {
   assertStringIncludes(
     assertThrows(() => sheet('data/cities.csv', 'name\nOslo\n'), Error).message,
     "say which component a row becomes — store_load(as: 'city')",
   )
 })
 
-Deno.test('a header naming nothing is refused, naming the header', () => {
+test('a header naming nothing is refused, naming the header', () => {
   assertStringIncludes(no('name,pop,mayor\nOslo,1,Anne\n'), '"mayor"')
   assertStringIncludes(no('name,pop,mayor\nOslo,1,Anne\n'), 'city takes name')
   // A mapped one names both the header and the property it maps to.
@@ -156,7 +157,7 @@ Deno.test('a header naming nothing is refused, naming the header', () => {
   assertStringIncludes(no('name,\nOslo,x\n'), 'column 2 has no header')
 })
 
-Deno.test('a cell that will not coerce names the row and the header', () => {
+test('a cell that will not coerce names the row and the header', () => {
   assertStringIncludes(
     no('name,pop\nOslo,709037\nBergen,many\n'),
     'data/cities.csv[1]: pop is "many", not a number',
@@ -167,14 +168,14 @@ Deno.test('a cell that will not coerce names the row and the header', () => {
   )
 })
 
-Deno.test('a row with more values than columns is refused', () => {
+test('a row with more values than columns is refused', () => {
   assertStringIncludes(
     no('name\nOslo,709037\n'),
     'data/cities.csv[0] has 2 values for 1 header',
   )
 })
 
-Deno.test('an empty file, and one that is not a CSV at all', () => {
+test('an empty file, and one that is not a CSV at all', () => {
   assertStringIncludes(no(''), 'data/cities.csv is empty')
   assertStringIncludes(no('name\n"Oslo\n'), 'data/cities.csv is not a CSV')
 })

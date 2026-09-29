@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { sha256 } from '@yaks/graph'
 import { address, decode, encode } from './store.ts'
@@ -7,13 +8,13 @@ import { blog, mem } from './testing.ts'
 import { blobSchema } from './sqlite.ts'
 import { by, scan } from '@yaks/sql'
 
-Deno.test('an address is the SHA-256 of the text, and nothing else', () => {
+test('an address is the SHA-256 of the text, and nothing else', () => {
   assertEquals(address('a long essay'), sha256('a long essay'))
   assertEquals(address(''), sha256(''))
   assert(address('one') != address('two'))
 })
 
-Deno.test('text round-trips through the byte encoding', () => {
+test('text round-trips through the byte encoding', () => {
   for (let s of ['', 'plain', 'héllo — ✓', 'a\nb\tc']) {
     assertEquals(decode(encode(s)), s)
   }
@@ -25,7 +26,7 @@ let store = () => {
   return sqliteBlobs(driver)
 }
 
-Deno.test('the sqlite backend stores, finds and answers for what it holds', () => {
+test('the sqlite backend stores, finds and answers for what it holds', () => {
   let s = store()
   let sha = address('a long essay')
   assertEquals(s.has(sha), false)
@@ -38,7 +39,7 @@ Deno.test('the sqlite backend stores, finds and answers for what it holds', () =
   assertEquals(decode(s.get(sha) as Uint8Array), 'a long essay')
 })
 
-Deno.test('a layout points the backend at a table it did not make', () => {
+test('a layout points the backend at a table it did not make', () => {
   let driver = mem()
   let layout = { table: 'body_text', key: 'entity', value: 'text' }
   for (let stmt of blobSchema(layout)) driver.query(stmt)
@@ -50,7 +51,7 @@ Deno.test('a layout points the backend at a table it did not make', () => {
   )
 })
 
-Deno.test('hydrate resolves a gathered bundle through any backend', async () => {
+test('hydrate resolves a gathered bundle through any backend', async () => {
   let s = store()
   let sha = address('a long essay')
   s.put(sha, encode('a long essay'))

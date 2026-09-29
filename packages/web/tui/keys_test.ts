@@ -1,6 +1,7 @@
 // The key tokens: a raw stdin chunk becomes the tokens key() reads. The one
 // that earns this is ⇧⏎ — a newline the terminal can only send under the kitty
 // protocol, and the reason the TUI asks for it.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { keys } from './keys.ts'
 
@@ -23,7 +24,7 @@ let cases: [string, string, string[]][] = [
   ['a paste types its characters', '\x1b[200~a\nb\x1b[201~', ['a', '\n', 'b']],
 ]
 
-Deno.test('keys maps terminal chunks to the keys the app binds', () => {
+test('keys maps terminal chunks to the keys the app binds', () => {
   for (let [what, chunk, want] of cases) {
     assertEquals(keys(chunk), want, what)
   }

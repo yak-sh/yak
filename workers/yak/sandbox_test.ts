@@ -16,6 +16,7 @@
 // `--containers-rollout=none` is what gets a dry run past it. So the last test
 // here reads the deploy's own config instead (see the gate note in
 // wrangler.toml).
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -124,7 +125,7 @@ let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
   return { env, space, ctx, box }
 }
 
-Deno.test('the machine tools write, run and read, and a ship copies out', async () => {
+test('the machine tools write, run and read, and a ship copies out', async () => {
   // The build leaves a .js and a .wasm in pkg/, and the glob finds both.
   let { ctx, box, env, space } = await bench((cmd) =>
     cmd.startsWith('ls -1d')
@@ -180,7 +181,7 @@ Deno.test('the machine tools write, run and read, and a ship copies out', async 
   assertEquals([...box.alive], [`build-${space.eid}`])
 })
 
-Deno.test('sandbox_exec, as the directory listed it, runs its cmd and answers as sandbox_shell does', async () => {
+test('sandbox_exec, as the directory listed it, runs its cmd and answers as sandbox_shell does', async () => {
   let { ctx, box } = await bench(() => ({
     stdout: 'Finished\n',
     stderr: 'error: no main\n',
@@ -194,7 +195,7 @@ Deno.test('sandbox_exec, as the directory listed it, runs its cmd and answers as
   assertEquals(box.ran, ['cargo build'])
 })
 
-Deno.test('a ship that matches nothing says what to look at', async () => {
+test('a ship that matches nothing says what to look at', async () => {
   let { ctx } = await bench((cmd) =>
     cmd.startsWith('ls -1d') ? { stdout: '', exitCode: 2 } : {}
   )
@@ -204,7 +205,7 @@ Deno.test('a ship that matches nothing says what to look at', async () => {
   assertStringIncludes(String(said), 'nothing in the sandbox matches')
 })
 
-Deno.test('a path that is not one is refused before the shell sees it', async () => {
+test('a path that is not one is refused before the shell sees it', async () => {
   let { ctx, box } = await bench()
   for (let path of ['pkg/../../etc/passwd', 'a; rm -rf /', '$(whoami)']) {
     await assertRejects(
@@ -216,7 +217,7 @@ Deno.test('a path that is not one is refused before the shell sees it', async ()
   assertEquals(box.ran, [])
 })
 
-Deno.test('a command that outlives its call is a process wait and stop reach', async () => {
+test('a command that outlives its call is a process wait and stop reach', async () => {
   let { ctx } = await bench((cmd) =>
     cmd == 'deno task dev'
       ? { running: true, stdout: 'listening on :8000' }
@@ -247,7 +248,7 @@ Deno.test('a command that outlives its call is a process wait and stop reach', a
   )
 })
 
-Deno.test('a member who cannot write is not given the workbench', async () => {
+test('a member who cannot write is not given the workbench', async () => {
   let box = sandboxes()
   let { env } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let BOB = 'b0000000-0000-4000-8000-0000000000b0'
@@ -274,7 +275,7 @@ Deno.test('a member who cannot write is not given the workbench', async () => {
   assertEquals(box.ran, [])
 })
 
-Deno.test('no container bound is a sentence, not a stack trace', async () => {
+test('no container bound is a sentence, not a stack trace', async () => {
   let { env } = await seeded()
   let ctx = ctxOf(env)
   await assertRejects(
@@ -287,7 +288,7 @@ Deno.test('no container bound is a sentence, not a stack trace', async () => {
   assertEquals(seconds(ctx.spend!), 0)
 })
 
-Deno.test('the budget refuses in a sentence, and only after it is spent', async () => {
+test('the budget refuses in a sentence, and only after it is spent', async () => {
   let box = sandboxes()
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let clock = 0
@@ -311,7 +312,7 @@ Deno.test('the budget refuses in a sentence, and only after it is spent', async 
   assertStringIncludes(said.message, 'already shipped into the app is shipped')
 })
 
-Deno.test('a release answers the seconds held, and the container goes', async () => {
+test('a release answers the seconds held, and the container goes', async () => {
   let box = sandboxes()
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let clock = 0
@@ -333,7 +334,7 @@ Deno.test('a release answers the seconds held, and the container goes', async ()
 // The sandbox's sign-in (T-34387): every command runs with a grant of the
 // caller's in its environment, one grant for the whole container, and the
 // grant dies with the container.
-Deno.test('every command is signed in as the caller, with one grant', async () => {
+test('every command is signed in as the caller, with one grant', async () => {
   let { box, env } = await bench(() => ({ stdout: 'ok' }))
   // No `spend` on the Ctx, so each of these is its own build as far as the
   // tools are concerned: what makes the two say one grant is the ledger row
@@ -359,7 +360,7 @@ Deno.test('every command is signed in as the caller, with one grant', async () =
   assert(Math.abs(hours - LIFE) < 0.01, `${hours} hours is about ${LIFE}`)
 })
 
-Deno.test('destroying the container revokes what it was wearing', async () => {
+test('destroying the container revokes what it was wearing', async () => {
   let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
   await tool('sandbox_shell').run(lone, { command: 'ls' })
@@ -380,7 +381,7 @@ Deno.test('destroying the container revokes what it was wearing', async () => {
   assert(await held(box.env[1].YAKS_TOKEN, SECRET, book))
 })
 
-Deno.test('the token is in the environment and never in the transcript', async () => {
+test('the token is in the environment and never in the transcript', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let model = fake([
@@ -408,7 +409,7 @@ Deno.test('the token is in the environment and never in the transcript', async (
   }
 })
 
-Deno.test('a build pays for its workbench and leaves none running', async () => {
+test('a build pays for its workbench and leaves none running', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let model = fake([
@@ -437,7 +438,7 @@ Deno.test('a build pays for its workbench and leaves none running', async () => 
   assertEquals(after.meter?.built, 0)
 })
 
-Deno.test('a build that ships pays for both in one write', async () => {
+test('a build that ships pays for both in one write', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let call = (id: string, name: string, args: unknown) => ({
@@ -478,7 +479,7 @@ Deno.test('a build that ships pays for both in one write', async () => {
 // and above all the one thing that rots silently: the image tag and the SDK
 // version are two halves of one release, and the SDK warns at startup rather
 // than failing when they disagree.
-Deno.test('the deploy names the container, and the image is the SDK version', async () => {
+test('the deploy names the container, and the image is the SDK version', async () => {
   let conf = parse(await at('wrangler.toml')) as {
     containers: {
       class_name: string
@@ -551,14 +552,14 @@ Deno.test('the deploy names the container, and the image is the SDK version', as
 // The image builds FROM the toolchain base (base.ts, T-38057), and the tag it
 // names is the base Dockerfile's own hash: edit the base and this names the
 // FROM line to write.
-Deno.test('the sandbox builds FROM the base its Dockerfile hashes to', async () => {
+test('the sandbox builds FROM the base its Dockerfile hashes to', async () => {
   let want = await tag(await at('sandbox/base/Dockerfile'))
   let image = from(await at('sandbox/Dockerfile'))
   assertEquals(image?.split('/').at(-1), `yak-sandbox:${want}`)
 })
 
 // What `based()` asks docker to do, for each state the registry can be in.
-Deno.test('a deploy builds and pushes the base only when it is missing', async () => {
+test('a deploy builds and pushes the base only when it is missing', async () => {
   let image = from(await at('sandbox/Dockerfile'))!
   let calls = async (held: string[], dry = false) => {
     let ran: string[] = []
@@ -584,7 +585,7 @@ Deno.test('a deploy builds and pushes the base only when it is missing', async (
 // the rule under it: nothing is fetched into the image without a sha256 to
 // check it against, because a floating toolchain is a build that worked
 // yesterday and there is nobody here to debug it.
-Deno.test('a toolchain apiece, pinned, and every download checksummed', async () => {
+test('a toolchain apiece, pinned, and every download checksummed', async () => {
   let file = await at('sandbox/base/Dockerfile')
   let versions = await pinned()
   for (
@@ -618,7 +619,7 @@ Deno.test('a toolchain apiece, pinned, and every download checksummed', async ()
   assertStringIncludes(file, 'wasm32-freestanding')
 })
 
-Deno.test('sandbox_shell names what is in the image, and where the rest comes from', async () => {
+test('sandbox_shell names what is in the image, and where the rest comes from', async () => {
   let said = tool('sandbox_shell').description
   for (let [name, version] of await pinned()) {
     assert(said.includes(version), `${name} ${version} is named`)
@@ -634,7 +635,7 @@ Deno.test('sandbox_shell names what is in the image, and where the rest comes fr
   assertStringIncludes(said, 'destroyed when the build ends')
 })
 
-Deno.test('the guide and the limits page say the same image', async () => {
+test('the guide and the limits page say the same image', async () => {
   let [guide, tech] = await Promise.all([
     at('public/docs/code.md'),
     at('public/docs/technical.md'),
@@ -649,7 +650,7 @@ Deno.test('the guide and the limits page say the same image', async () => {
   }
 })
 
-Deno.test('a lone connector call pays for itself and leaves the container', async () => {
+test('a lone connector call pays for itself and leaves the container', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   // No `spend` on the Ctx: this is somebody's own agent over the connector,
@@ -666,7 +667,7 @@ Deno.test('a lone connector call pays for itself and leaves the container', asyn
 // T-37883: one person holds one sandbox at a time on the free tier. A space
 // of hers is a sandbox of its own, so without this her five spaces were
 // every container the deploy runs.
-Deno.test('one person holds one sandbox awake on the free tier', async () => {
+test('one person holds one sandbox awake on the free tier', async () => {
   let { env, ctx, box } = await bench()
   await tool('space_new').run(ctx, { slug: 'ada2', title: 'Two' })
   let other = (await dirOf(env).space('ada2'))!
@@ -689,7 +690,7 @@ Deno.test('one person holds one sandbox awake on the free tier', async () => {
   await awake(env, space, ADA, now + (HELD + 1) * 1000)
 })
 
-Deno.test("the month of sandbox time is the account's, and it refuses", async () => {
+test("the month of sandbox time is the account's, and it refuses", async () => {
   let { env, space, ctx } = await bench()
   await dirPart.stamp(env, {
     entities: [{
@@ -710,7 +711,7 @@ Deno.test("the month of sandbox time is the account's, and it refuses", async ()
   )
 })
 
-Deno.test('a sandbox reaches the registries and this platform, and nothing else', () => {
+test('a sandbox reaches the registries and this platform, and nothing else', () => {
   let hosts = egress({ APEX: 'yaks.fyi' })
   for (let host of ['static.crates.io', 'pypi.org', 'registry.npmjs.org']) {
     assert(hosts.includes(host), host)

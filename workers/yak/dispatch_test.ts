@@ -17,6 +17,7 @@
 //   - a 5xx is written where the person's agent reads it
 //   - the script carries every module the app's worker imports, each typed by
 //     what the runtime must do with it — a wasm compiled, a `.js` linked
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   createTransport,
@@ -160,11 +161,11 @@ let sentry = () => {
   return { seen, done: () => client.flush(1_000) }
 }
 
-Deno.test('a script is named for the store, which a rename never moves', () => {
+test('a script is named for the store, which a rename never moves', () => {
   assertEquals(scriptName('jeff/recipes'), 'jeff_recipes')
 })
 
-Deno.test('the worker is handed who is looking, and never the cookie', async () => {
+test('the worker is handed who is looking, and never the cookie', async () => {
   let m = mirror()
   let out = await ran(envOf(m.get), space, app, visit(), who)
   assertEquals(await out!.text(), 'from the worker')
@@ -177,7 +178,7 @@ Deno.test('the worker is handed who is looking, and never the cookie', async () 
   assertEquals(sent.headers.get('cookie'), 'theme=dark')
 })
 
-Deno.test('what the worker sends out is said to be the app’s, for this visitor', async () => {
+test('what the worker sends out is said to be the app’s, for this visitor', async () => {
   let asked: unknown[] = []
   let m = mirror()
   await ran(
@@ -192,7 +193,7 @@ Deno.test('what the worker sends out is said to be the app’s, for this visitor
   }])
 })
 
-Deno.test('declared commands have bounded CPU and only scheduled calls have context', async () => {
+test('declared commands have bounded CPU and only scheduled calls have context', async () => {
   let m = mirror()
   let asked: unknown[] = []
   let env = envOf((...args: unknown[]) => (asked = args, m.get()))
@@ -240,7 +241,7 @@ Deno.test('declared commands have bounded CPU and only scheduled calls have cont
   assertEquals(m.seen().headers.get('x-yak-command-source'), null)
 })
 
-Deno.test('a command worker failure calls its reporter once', async () => {
+test('a command worker failure calls its reporter once', async () => {
   let notes: string[] = []
   let report = (req: Request, error: Error) => {
     notes.push(`${req.method} ${new URL(req.url).pathname}: ${error.message}`)
@@ -289,7 +290,7 @@ Deno.test('a command worker failure calls its reporter once', async () => {
   ])
 })
 
-Deno.test('a command failure is captured once across worker and caller', async () => {
+test('a command failure is captured once across worker and caller', async () => {
   let { seen, done } = sentry()
   let env = envOf(mirror(503).get)
   wrote = []
@@ -313,7 +314,7 @@ Deno.test('a command failure is captured once across worker and caller', async (
   })
 })
 
-Deno.test('an app sets cookies for its own host, and none for the zone', async () => {
+test('an app sets cookies for its own host, and none for the zone', async () => {
   // Login fixation (T-37876): an app that sets the platform's session, or any
   // cookie scoped past its own hostname, signs visitors elsewhere in as
   // whoever it likes. Its own host-only cookies are its business.
@@ -340,7 +341,7 @@ Deno.test('an app sets cookies for its own host, and none for the zone', async (
   assertEquals(await out!.text(), 'hi')
 })
 
-Deno.test('a worker acts as the visitor, and only on its own store', async () => {
+test('a worker acts as the visitor, and only on its own store', async () => {
   let m = mirror()
   await ran(envOf(m.get), space, app, visit(), who)
   let held = m.seen().headers.get('x-yak-grant')!
@@ -380,7 +381,7 @@ Deno.test('a worker acts as the visitor, and only on its own store', async () =>
   )
 })
 
-Deno.test('a client cannot send its own grant, or say who it is', async () => {
+test('a client cannot send its own grant, or say who it is', async () => {
   let m = mirror()
   await ran(
     envOf(m.get),
@@ -414,7 +415,7 @@ Deno.test('a client cannot send its own grant, or say who it is', async () => {
 // ── env.APP (T-34303): the second grant, naming the APP as the actor, so a
 // worker can be the gatekeeper on a store its visitors may not touch.
 
-Deno.test('a worker is handed the app itself, and only on its own store', async () => {
+test('a worker is handed the app itself, and only on its own store', async () => {
   let m = mirror()
   await ran(envOf(m.get), space, app, visit(), who)
   let mine = m.seen().headers.get('x-yak-app-grant')!
@@ -439,14 +440,14 @@ Deno.test('a worker is handed the app itself, and only on its own store', async 
   )
 })
 
-Deno.test('the app acting as itself is told apart from any visitor', () => {
+test('the app acting as itself is told apart from any visitor', () => {
   assert(itsApp({ person: 'a1', role: 'editor' }, app))
   assert(!itsApp(who, app))
   assert(!itsApp(nobody, app))
   assert(!itsApp(null, app))
 })
 
-Deno.test('a 404 from the worker, and no worker, both mean the files', async () => {
+test('a 404 from the worker, and no worker, both mean the files', async () => {
   assertEquals(
     await ran(envOf(mirror(404).get), space, app, visit(), who),
     null,
@@ -469,7 +470,7 @@ Deno.test('a 404 from the worker, and no worker, both mean the files', async () 
 // A 4xx the worker answered is its own deliberate no — the outside service
 // that refused its key, a city it does not know — and the platform files
 // nothing about it (T-32874, C-32869 item 5). A 5xx is nobody's choice.
-Deno.test("a worker's own no is not a break; its 5xx is", async () => {
+test("a worker's own no is not a break; its 5xx is", async () => {
   wrote = []
   let no = await ran(envOf(mirror(401).get), space, app, visit(), who)
   assertEquals(no!.status, 401)
@@ -484,7 +485,7 @@ Deno.test("a worker's own no is not a break; its 5xx is", async () => {
   assertEquals(broke.message, "the app's worker answered 503")
 })
 
-Deno.test('an answered worker 5xx reaches Sentry with its app', async () => {
+test('an answered worker 5xx reaches Sentry with its app', async () => {
   let { seen, done } = sentry()
   await ran(envOf(mirror(503).get), space, app, visit(), who)
   await done()
@@ -504,7 +505,7 @@ Deno.test('an answered worker 5xx reaches Sentry with its app', async () => {
 //
 // A throw and an answered 5xx are one event, so they are one entity: the app's
 // own store, its serving version, and the soft page the visitor already got.
-Deno.test("a worker that throws is the app's break, and is filed here", async () => {
+test("a worker that throws is the app's break, and is filed here", async () => {
   wrote = []
   let boom = () => ({
     fetch: () => Promise.reject(new Error('undefined is not an object')),
@@ -523,7 +524,7 @@ Deno.test("a worker that throws is the app's break, and is filed here", async ()
 // And the same rule the answered status reads: a no the app's worker relayed
 // by throwing what one of our doors told it is an answer carried out, not
 // something that fell over.
-Deno.test('a no the worker threw is not the app breaking', async () => {
+test('a no the worker threw is not the app breaking', async () => {
   wrote = []
   let relayed = () => ({
     fetch: () =>
@@ -539,7 +540,7 @@ Deno.test('a no the worker threw is not the app breaking', async () => {
 // The shim is the only thing standing between the app's code and the grant,
 // so it is run, not read: written out beside a worker.js that reports what
 // it was given, and imported as the module the namespace would run.
-Deno.test('the shim gives the app its doors and keeps the grant', async () => {
+test('the shim gives the app its doors and keeps the grant', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
   try {
     Deno.writeTextFileSync(`${dir}/entry.js`, SHIM)
@@ -611,7 +612,7 @@ Deno.test('the shim gives the app its doors and keeps the grant', async () => {
   }
 })
 
-Deno.test('a vpc_services name is a door to the kernel as the app, never a binding', async () => {
+test('a vpc_services name is a door to the kernel as the app, never a binding', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
   try {
     Deno.writeTextFileSync(`${dir}/entry.js`, shim(WORKER, ['BOX']))
@@ -664,7 +665,7 @@ Deno.test('a vpc_services name is a door to the kernel as the app, never a bindi
   }
 })
 
-Deno.test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sentence', async () => {
+test('an ai binding is the app asking ./api/ai/run, and a refusal throws its sentence', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
   try {
     Deno.writeTextFileSync(`${dir}/entry.js`, shim(WORKER, [], 'AI'))
@@ -770,7 +771,7 @@ let AT = 'https://api.cloudflare.com/client/v4/accounts/acct/workers/dispatch' +
 
 let source = (text: string) => new TextEncoder().encode(text)
 
-Deno.test('an upload sends the shim, the app, and one way home', async () => {
+test('an upload sends the shim, the app, and one way home', async () => {
   let { calls } = await recorded(
     () => ok({ startup_time_ms: 3, id: 'jeff_recipes' }),
     () =>
@@ -807,7 +808,7 @@ Deno.test('an upload sends the shim, the app, and one way home', async () => {
   assertEquals(meta.limits, { cpu_ms: 50, subrequests: 50 })
 })
 
-Deno.test('a secret goes out once and is never answered back', async () => {
+test('a secret goes out once and is never answered back', async () => {
   let { out, calls } = await recorded(
     () => ok({ name: 'WEATHER_KEY', type: 'secret_text' }),
     () => setSecret(api, 'jeff/recipes', 'WEATHER_KEY', 'the-key-itself'),
@@ -824,7 +825,7 @@ Deno.test('a secret goes out once and is never answered back', async () => {
   assert(!JSON.stringify(out).includes('the-key-itself'))
 })
 
-Deno.test('a list is names, whatever the API sends', async () => {
+test('a list is names, whatever the API sends', async () => {
   // Cloudflare's list is documented as name and type; its schema would allow
   // a value, so the platform reads the name off and drops the rest.
   let { out } = await recorded(
@@ -839,7 +840,7 @@ Deno.test('a list is names, whatever the API sends', async () => {
   assert(!JSON.stringify(out).includes('leaked?'))
 })
 
-Deno.test('no script yet is nowhere to bind, and a removal names one', async () => {
+test('no script yet is nowhere to bind, and a removal names one', async () => {
   let { out } = await recorded(
     () => new Response('nope', { status: 404 }),
     () => secrets(api, 'jeff/recipes'),
@@ -853,7 +854,7 @@ Deno.test('no script yet is nowhere to bind, and a removal names one', async () 
   assertEquals(calls[0].url, `${AT}/jeff_recipes/secrets/WEATHER_KEY`)
 })
 
-Deno.test("cloudflare's refusal is what the agent is told", async () => {
+test("cloudflare's refusal is what the agent is told", async () => {
   await recorded(
     () =>
       Response.json({
@@ -893,7 +894,7 @@ let filesOf =
   (files: Record<string, Uint8Array<ArrayBuffer>>) => (path: string) =>
     Promise.resolve(files[path] ?? null)
 
-Deno.test('a module is typed by what it IS, not by what a file is served as', () => {
+test('a module is typed by what it IS, not by what a file is served as', () => {
   // The serving mime and the module type are different questions: `.js` is
   // served as text/javascript and uploaded as an ES module, and anything the
   // runtime has no module kind for arrives as bytes.
@@ -904,7 +905,7 @@ Deno.test('a module is typed by what it IS, not by what a file is served as', ()
   assertEquals(moduleType('table.bin'), 'application/octet-stream')
 })
 
-Deno.test('the script carries worker.js and everything it imports', async () => {
+test('the script carries worker.js and everything it imports', async () => {
   let got = await carried(filesOf({
     'worker.js': APP,
     'add.wasm': WASM,
@@ -917,7 +918,7 @@ Deno.test('the script carries worker.js and everything it imports', async () => 
   assertEquals(got[1].bytes, WASM)
 })
 
-Deno.test('the walk follows a chain, survives a cycle, and stays inside the app', async () => {
+test('the walk follows a chain, survives a cycle, and stays inside the app', async () => {
   let got = await carried(filesOf({
     'worker.js': source(
       `import './lib/a.js'\nimport gone from './nowhere.js'\n` +
@@ -940,7 +941,7 @@ Deno.test('the walk follows a chain, survives a cycle, and stays inside the app'
   ])
 })
 
-Deno.test('a wasm module goes up as a module part of its own type', async () => {
+test('a wasm module goes up as a module part of its own type', async () => {
   let { calls } = await recorded(
     () => ok({ startup_time_ms: 5, id: 'jeff_adder' }),
     async () =>

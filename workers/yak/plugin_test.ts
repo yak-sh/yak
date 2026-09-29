@@ -5,6 +5,7 @@
 // (memory_test.ts, views_test.ts) — so this is the contract on its own, and
 // what it pins is the two things a host relies on: order is the list's, and a
 // slot nobody filled contributes nothing.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Effects as Registry } from '@yaks/effects'
 import { graph, type Rule } from '@yaks/graph'
@@ -121,7 +122,7 @@ let stored = (at: Partial<Stored> = {}): Stored => ({
 // A plugin that fills nothing: the host must be able to hold it.
 let quiet: Plugin = { name: 'quiet' }
 
-Deno.test('a plugin contributes its words, its rows, its pages and its rules', () => {
+test('a plugin contributes its words, its rows, its pages and its rules', () => {
   let list = [fixture, quiet]
   assertEquals(vocabOf(list), [doc])
   assertEquals(toolsOf(list).map((t) => t.name), ['fixture_one'])
@@ -136,7 +137,7 @@ Deno.test('a plugin contributes its words, its rows, its pages and its rules', (
   assertEquals(wakesOf([quiet]).length, 0)
 })
 
-Deno.test('a plugin answers its own door and passes on every other', async () => {
+test('a plugin answers its own door and passes on every other', async () => {
   let list = [fixture, quiet]
   let said = await answered(list, asked('/fixture'))
   assertEquals(await said?.text(), 'counted')
@@ -152,7 +153,7 @@ let arrived = (path: string, space: string | null = 'one'): Arrived => ({
   space,
 })
 
-Deno.test('a plugin answers a root door, and knows which root it is', async () => {
+test('a plugin answers a root door, and knows which root it is', async () => {
   let list = [fixture, quiet]
   // The whole path on the hostname, so a door claims what no app slug can.
   assertEquals(
@@ -168,7 +169,7 @@ Deno.test('a plugin answers a root door, and knows which root it is', async () =
   assertEquals(await routed([quiet], arrived('/fixture.git/info/refs')), null)
 })
 
-Deno.test('a plugin registers its effects on the store it is handed', () => {
+test('a plugin registers its effects on the store it is handed', () => {
   registered = []
   let { fx, on } = registry()
   effected([fixture, quiet], fx, stored())
@@ -184,7 +185,7 @@ Deno.test('a plugin registers its effects on the store it is handed', () => {
   assertEquals(registered, [])
 })
 
-Deno.test('order is the list order', async () => {
+test('order is the list order', async () => {
   let second: Plugin = {
     name: 'second',
     tools: [row('second_one')],
@@ -206,7 +207,7 @@ Deno.test('order is the list order', async () => {
   )
 })
 
-Deno.test('a served page reaches every watcher, and a throw stops nobody', () => {
+test('a served page reaches every watcher, and a throw stops nobody', () => {
   seen = []
   let angry: Plugin = {
     name: 'angry',

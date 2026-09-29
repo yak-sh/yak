@@ -1,11 +1,12 @@
 // A hosted Store in workerd accepts one stable build per query binding. The
 // old-index migration is exercised through the Store's persisted DO adapter.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { identityEid } from '@yaks/graph'
 import { connector, seed, workerd } from './probe.ts'
 
-Deno.test('a hosted builder keeps independent builds for 50 bindings', async () => {
+test('a hosted builder keeps independent builds for 50 bindings', async () => {
   let k = workerd()
   let space = `buildidx${crypto.randomUUID().slice(0, 6)}`
   let { cookie } = await seed(k, [{ slug: space, apps: ['index'] }])

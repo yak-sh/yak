@@ -1,4 +1,5 @@
 // Frontier landmarks grow through the world's ordinary ground and prop doors.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert } from '@std/assert'
 import { levelAt } from './levels.ts'
@@ -24,7 +25,7 @@ let landmark = (kind: string) => {
 
 seedBuildings()
 
-Deno.test('frontier valleys shape the ground and castles stand in it', () => {
+test('frontier valleys shape the ground and castles stand in it', () => {
   let valley = landmark('valley')
   let [x, z] = valley.at
   assert(rise(x + 35, z) > rise(x, z) + 2)
@@ -38,7 +39,7 @@ Deno.test('frontier valleys shape the ground and castles stand in it', () => {
   assert(standing.some((p) => p.kind == 'rampart'))
 })
 
-Deno.test('a river crossing has stone parapets and a clear dry deck', () => {
+test('a river crossing has stone parapets and a clear dry deck', () => {
   let road = roadsOf('clovermead').find((r) =>
     [r.from, r.to].sort().join('/') == 'clovermead/fernwood'
   )!

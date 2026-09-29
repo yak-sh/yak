@@ -2,6 +2,7 @@
 // The value rules, one operator at a time: what each form selects, and
 // where a question is refused rather than guessed at.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import type { Tag } from '@yaks/sql'
 import { check } from './value.ts'
@@ -16,7 +17,7 @@ let hit = (op: string, value: string, tag: Tag, v: unknown): boolean => {
   return c(v)
 }
 
-Deno.test('equality reads text, numbers, lists and ranges', () => {
+test('equality reads text, numbers, lists and ranges', () => {
   assert(hit('', 'open', 'enum', 'open'))
   assertFalse(hit('', 'open', 'enum', 'done'))
   assert(hit('', '12', 'number', 12))
@@ -29,37 +30,37 @@ Deno.test('equality reads text, numbers, lists and ranges', () => {
   assert(hit('', 'false', 'bool', 0))
 })
 
-Deno.test('an empty operand asks for an absent property', () => {
+test('an empty operand asks for an absent property', () => {
   assert(hit('', '', 'text', null))
   assert(hit('', '', 'text', ''))
   assertFalse(hit('', '', 'text', 'x'))
 })
 
-Deno.test('not-equals counts an absent property as different', () => {
+test('not-equals counts an absent property as different', () => {
   assert(hit('!', 'open', 'enum', null))
   assert(hit('!', 'open', 'enum', 'done'))
   assertFalse(hit('!', 'open', 'enum', 'open'))
 })
 
-Deno.test('contains is case-insensitive, and empty means present', () => {
+test('contains is case-insensitive, and empty means present', () => {
   assert(hit('~', 'SPRING', 'text', 'the spring catalogue'))
   assertFalse(hit('~', 'spring', 'text', null))
   assert(hit('~', '', 'text', 'anything'))
   assertFalse(hit('~', '', 'text', null))
 })
 
-Deno.test('an absent property never compares true', () => {
+test('an absent property never compares true', () => {
   assert(hit('>=', '10', 'number', 10))
   assertFalse(hit('>=', '10', 'number', null))
   assert(hit('<', 'm', 'text', 'alpha'))
 })
 
-Deno.test('presence asks only whether the property has a value', () => {
+test('presence asks only whether the property has a value', () => {
   assert(hit('exists', '', 'text', ''))
   assertFalse(hit('exists', '', 'text', null))
 })
 
-Deno.test('a relative time compares as the moment it names', () => {
+test('a relative time compares as the moment it names', () => {
   let mins = 60_000
   assert(hit('', '1 hour ago', 'time', ago(30 * mins)))
   assertFalse(hit('', '1 hour ago', 'time', ago(90 * mins)))
@@ -74,7 +75,7 @@ Deno.test('a relative time compares as the moment it names', () => {
   assert(hit('', 'someday', 'time', 'someday'))
 })
 
-Deno.test('a question the property cannot answer is refused, not guessed', () => {
+test('a question the property cannot answer is refused, not guessed', () => {
   assertEquals(check('>=', 'cheap', 'number', NOW), null)
   assertEquals(check('<', '10', 'text', NOW), null)
   assertEquals(check('nonsense', 'x', 'text', NOW), null)

@@ -27,7 +27,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, platform, state, type Turn } from './testing.ts'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { sign } from './lib/token.ts'
 
 let SECRET = 'a probe secret'
@@ -152,7 +152,7 @@ let settled = (ws: { sent: Frame[] }) =>
     label: () => `the build never finished: ${kinds(ws.sent).join(', ')}`,
   })
 
-Deno.test('a page joins, says one line, and watches the build happen', async () => {
+test('a page joins, says one line, and watches the build happen', async () => {
   let o = await seeded(MAKES_ONE)
   let ws = joined(o)
   // Nothing has been said here yet: the replay is empty and the page is told
@@ -193,7 +193,7 @@ Deno.test('a page joins, says one line, and watches the build happen', async () 
   assertStringIncludes(await page.text(), 'Lemon cake')
 })
 
-Deno.test('a page that reloads hears the whole conversation again', async () => {
+test('a page that reloads hears the whole conversation again', async () => {
   let o = await seeded(MAKES_ONE)
   let first = joined(o)
   o.object.webSocketMessage(first, JSON.stringify({ say: 'a recipe box' }))
@@ -225,7 +225,7 @@ Deno.test('a page that reloads hears the whole conversation again', async () => 
   assertEquals(kinds(third.sent), kinds(again.sent))
 })
 
-Deno.test('a second line during a build is told to wait', async () => {
+test('a second line during a build is told to wait', async () => {
   let o = await seeded(MAKES_ONE)
   let ws = joined(o)
   let building = o.object.say(o.held, 'a recipe box')
@@ -241,7 +241,7 @@ Deno.test('a second line during a build is told to wait', async () => {
   assert(!said.some((f) => f.text.includes('garden')))
 })
 
-Deno.test('a socket with nobody on it never opens', async () => {
+test('a socket with nobody on it never opens', async () => {
   let { object } = await seeded()
   let upgrade = { upgrade: 'websocket', 'x-space-eid': 'a-space' }
   let refused = async (headers: Record<string, string>) => {
@@ -272,7 +272,7 @@ Deno.test('a socket with nobody on it never opens', async () => {
 // The page with no script (T-34242): the same conversation, said once. A form
 // POST to the same address waits for the round and is answered a page — the
 // transcript, each tool as a row, and the address the build ended at.
-Deno.test('a form posted with no script is answered the conversation', async () => {
+test('a form posted with no script is answered the conversation', async () => {
   let { env } = await seeded(MAKES_ONE)
   let form = new FormData()
   form.set('say', 'a recipe box please')
@@ -304,7 +304,7 @@ Deno.test('a form posted with no script is answered the conversation', async () 
   assertStringIncludes(await live.text(), 'Lemon cake')
 })
 
-Deno.test('the door refuses a stranger before it reaches the object', async () => {
+test('the door refuses a stranger before it reaches the object', async () => {
   let { env } = await seeded()
   let r = await apps.fetch(
     new Request('https://ada.yaks.app/api/build', {

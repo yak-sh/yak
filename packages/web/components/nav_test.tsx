@@ -3,24 +3,25 @@
 // — createElement, createTextNode, activeElement. So navigation startup
 // cannot object-guard alone: `document?.querySelectorAll(…)` passes the guard
 // and then throws on the missing member, which is how the TUI lost its boot.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { cache, census } from '../live.ts'
 import { menu, wire } from './nav.tsx'
 
-Deno.test('nav starts against a document missing browser-only methods', () => {
+test('nav starts against a document missing browser-only methods', () => {
   wire({}) // the TUI's shape: the object is there, the members are not
   wire(undefined) // and a host with no document at all
 })
 
-Deno.test('nav delegates entity-link gestures wherever the host can listen', () => {
+test('nav delegates entity-link gestures wherever the host can listen', () => {
   let heard: string[] = []
   wire({ addEventListener: (t) => heard.push(t) })
   assertEquals(heard, ['click', 'contextmenu', 'click', 'dblclick'])
 })
 
-Deno.test('a link inside a link takes its own clicks, ahead of the one around it', () => {
+test('a link inside a link takes its own clicks, ahead of the one around it', () => {
   let early: Record<string, (ev: MouseEvent) => void> = {}
   wire({ addEventListener: (t, fn, capture) => capture && (early[t] = fn) })
   let { document } = parseHTML(
@@ -43,7 +44,7 @@ Deno.test('a link inside a link takes its own clicks, ahead of the one around it
   ])
 })
 
-Deno.test('a native entity anchor opens its target menu', () => {
+test('a native entity anchor opens its target menu', () => {
   let handlers: Record<string, (ev: MouseEvent) => void> = {}
   wire({ addEventListener: (t, fn) => (handlers[t] = fn) })
   let { document } = parseHTML('<a href="/T-7"><span id="target"></span></a>')

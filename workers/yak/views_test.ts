@@ -6,6 +6,7 @@
 // The other half is what is asked of the SQL API (T-34497): every count is
 // `sum(_sample_interval)` rather than `count()`, or a busy app under-reports
 // by exactly the factor that made it busy — so the queries are pinned too.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Env } from './env.ts'
 import {
@@ -28,7 +29,7 @@ import { PLUGINS } from './plugins.ts'
 import { PAGES } from './guide.ts'
 import { TOOLS } from './tools.ts'
 
-Deno.test('classed: an assistant, a crawler, a person, a script', () => {
+test('classed: an assistant, a crawler, a person, a script', () => {
   // The AI clients read first: almost all of them spell themselves `…Bot`.
   for (
     let ua of [
@@ -66,7 +67,7 @@ Deno.test('classed: an assistant, a crawler, a person, a script', () => {
   assertEquals(classed(''), 'bot')
 })
 
-Deno.test('referred: the host, never the path — and never ourselves', () => {
+test('referred: the host, never the path — and never ourselves', () => {
   assertEquals(
     referred('https://news.example.com/a/story?q=my+search', 'ada.yaks.app'),
     'news.example.com',
@@ -87,7 +88,7 @@ let A_VIEW = {
   status: 200,
 }
 
-Deno.test('point: the columns, in the order the queries read them', () => {
+test('point: the columns, in the order the queries read them', () => {
   assertEquals(point(A_VIEW), {
     indexes: [A_VIEW.app],
     blobs: [
@@ -105,7 +106,7 @@ Deno.test('point: the columns, in the order the queries read them', () => {
 // developers.cloudflare.com/analytics/analytics-engine/limits/: 20 blobs,
 // 20 doubles, one index of at most 96 bytes, 16 KB of blobs all together. A
 // point over any of those is not recorded, and nothing would say so.
-Deno.test('point: inside every Analytics Engine limit, even given junk', () => {
+test('point: inside every Analytics Engine limit, even given junk', () => {
   let long = (n: number) => 'x'.repeat(n)
   let p = point({
     ...A_VIEW,
@@ -131,7 +132,7 @@ Deno.test('point: inside every Analytics Engine limit, even given junk', () => {
 
 let APP = A_VIEW.app
 
-Deno.test('every query counts sampled rows, never rows', () => {
+test('every query counts sampled rows, never rows', () => {
   for (
     let sql of [
       perDay(APP),
@@ -150,7 +151,7 @@ Deno.test('every query counts sampled rows, never rows', () => {
   }
 })
 
-Deno.test('the four queries, in full', () => {
+test('the four queries, in full', () => {
   assertEquals(
     perDay(APP, 7),
     "SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS day, " +
@@ -172,7 +173,7 @@ Deno.test('the four queries, in full', () => {
   assert(!topPages(APP).includes("blob3 != ''"), 'every view has a path')
 })
 
-Deno.test('nothing reaches the SQL text unshaped', () => {
+test('nothing reaches the SQL text unshaped', () => {
   // There are no bound parameters, so an eid that is not one is refused
   // rather than spliced in.
   assertThrows(() => perDay("' OR 1=1 --"))
@@ -185,7 +186,7 @@ Deno.test('nothing reaches the SQL text unshaped', () => {
   assert(topPages(APP, 30, 1e9).includes('LIMIT 100'))
 })
 
-Deno.test("the endpoint is the account's own", () => {
+test("the endpoint is the account's own", () => {
   assertEquals(
     sqlAt({ CF_ACCOUNT: 'acc0unt' } as Env),
     'https://api.cloudflare.com/client/v4/accounts/acc0unt/analytics_engine/sql',
@@ -199,7 +200,7 @@ Deno.test("the endpoint is the account's own", () => {
   )
 })
 
-Deno.test('daily: a dense series, gaps and all', () => {
+test('daily: a dense series, gaps and all', () => {
   let now = Date.parse('2026-09-06T11:00:00Z')
   let series = daily(
     // Cloudflare answers a DateTime, and a wide number as a string.
@@ -237,7 +238,7 @@ let sql = (
 let env = (vars: Partial<Env> = {}) =>
   ({ CF_ACCOUNT: 'acc0unt', CF_ANALYTICS_TOKEN: 'a token', ...vars }) as Env
 
-Deno.test('staging analytics reads and cached counts stay in their dataset', async () => {
+test('staging analytics reads and cached counts stay in their dataset', async () => {
   let api = sql((q) => ({
     body: JSON.stringify({
       data: [{
@@ -264,7 +265,7 @@ Deno.test('staging analytics reads and cached counts stay in their dataset', asy
   }
 })
 
-Deno.test('visits authenticate with the platform analytics reader', async () => {
+test('visits authenticate with the platform analytics reader', async () => {
   let api = sql((_q, headers) => {
     assertEquals(headers.get('authorization'), 'Bearer a token')
     return { body: JSON.stringify({ data: [{ views: 7 }] }) }
@@ -276,7 +277,7 @@ Deno.test('visits authenticate with the platform analytics reader', async () => 
   }
 })
 
-Deno.test('a dataset nobody has written to is no views, not a failure', async () => {
+test('a dataset nobody has written to is no views, not a failure', async () => {
   let api = sql(() => ({ status: 404, body: 'unknown table yak_views' }))
   try {
     assertEquals(await ran(env(), perDay(APP)), [])
@@ -285,7 +286,7 @@ Deno.test('a dataset nobody has written to is no views, not a failure', async ()
   }
 })
 
-Deno.test('a refusal from the SQL API is said, not swallowed', async () => {
+test('a refusal from the SQL API is said, not swallowed', async () => {
   let api = sql(() => ({ status: 400, body: 'syntax error at line 1' }))
   try {
     await assertRejects(() => ran(env(), perDay(APP)), Error, 'analytics 400')
@@ -294,7 +295,7 @@ Deno.test('a refusal from the SQL API is said, not swallowed', async () => {
   }
 })
 
-Deno.test('with no token there is nothing to ask, and one sentence to say', () => {
+test('with no token there is nothing to ask, and one sentence to say', () => {
   assertEquals(statsOf(env({ CF_ANALYTICS_TOKEN: undefined }), APP), null)
   assertEquals(statsOf(env({ CF_ACCOUNT: undefined }), APP), null)
   assert(NOT_ON.includes('not switched on'))
@@ -306,7 +307,7 @@ Deno.test('with no token there is nothing to ask, and one sentence to say', () =
 // that the door and the counter still land through the list — the two slots
 // this conversion exercises — and the tool and the page with them.
 
-Deno.test('the host composes the views plugin', () => {
+test('the host composes the views plugin', () => {
   assert(PLUGINS.includes(viewsPlugin), 'views is not in PLUGINS')
   assertEquals(toolsOf([viewsPlugin]).map((t) => t.name), ['app_stats'])
   assertEquals(pagesOf([viewsPlugin]).map((p) => p.slug), ['stats'])
@@ -321,7 +322,7 @@ Deno.test('the host composes the views plugin', () => {
 // analytics token set gets the sentence and a 200; somebody with no role in
 // the space is refused; a path that is not this plugin's passes through as
 // null, which is what lets the kernel go on to its own doors.
-Deno.test('its /stats door arrives through the host', async () => {
+test('its /stats door arrives through the host', async () => {
   let at = (path: string, role: string | null) =>
     ({
       env: {} as Env,
@@ -343,7 +344,7 @@ Deno.test('its /stats door arrives through the host', async () => {
 
 // The counter, told the way apps.ts tells it, on the way out of a request that
 // is already answered.
-Deno.test('a served page reaches the counter through the host', () => {
+test('a served page reaches the counter through the host', () => {
   let wrote: unknown[] = []
   let env = {
     VIEWS: { writeDataPoint: (p: unknown) => void wrote.push(p) },

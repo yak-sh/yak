@@ -1,5 +1,6 @@
 // The media view serves an artifact at its own address, including when an
 // attachment points to it.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -16,7 +17,7 @@ let show = (eid: string) => {
   return mount(h(resolve(e).Render, { e }))
 }
 
-Deno.test('artifact images, audio, and video preview at their blob address', () => {
+test('artifact images, audio, and video preview at their blob address', () => {
   try {
     for (
       let [mime, tag] of [
@@ -51,7 +52,7 @@ Deno.test('artifact images, audio, and video preview at their blob address', () 
   }
 })
 
-Deno.test('other artifacts download, and attachments share the media face', () => {
+test('other artifacts download, and attachments share the media face', () => {
   try {
     cache.value = {
       [address]: {

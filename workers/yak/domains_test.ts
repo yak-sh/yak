@@ -8,6 +8,7 @@
 // point of `steps()` is to tell those three apart specifically enough for an
 // agent to say what the person is waiting on, so the test holds it to the
 // bytes Cloudflare actually sends.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   apex,
@@ -57,7 +58,7 @@ let LIVE: Custom = {
 
 let state = (c: Custom) => steps(c).map((s) => `${s.step}:${s.state}`)
 
-Deno.test('the three moments a person waits through read differently', () => {
+test('the three moments a person waits through read differently', () => {
   assertEquals(state(MADE), [
     'dns:waiting',
     'validation:waiting',
@@ -88,7 +89,7 @@ Deno.test('the three moments a person waits through read differently', () => {
   )
 })
 
-Deno.test('the certificate step is read apart from the hostname', () => {
+test('the certificate step is read apart from the hostname', () => {
   // The hostname is accepted and the certificate is still coming: the one
   // moment where "your CNAME hasn't propagated" would be a lie.
   assertEquals(
@@ -113,7 +114,7 @@ Deno.test('the certificate step is read apart from the hostname', () => {
   assertEquals(stageOf(caa), 'error')
 })
 
-Deno.test('a word Cloudflare has not shown us yet is said, not assumed', () => {
+test('a word Cloudflare has not shown us yet is said, not assumed', () => {
   // Never `done` on a guess: an unknown word waits, carrying itself.
   let odd = steps({ ...LIVE, status: 'pending_migration' })
   assertEquals(odd[1].state, 'waiting')
@@ -129,14 +130,14 @@ Deno.test('a word Cloudflare has not shown us yet is said, not assumed', () => {
   assert(/attach/.test(steps({ ...LIVE, status: 'moved' })[1].said))
 })
 
-Deno.test('the record a person adds is one CNAME, at the name itself', () => {
+test('the record a person adds is one CNAME, at the name itself', () => {
   assertEquals(records('herbusiness.com'), [
     { type: 'CNAME', name: 'herbusiness.com', value: ORIGIN },
   ])
   assertEquals(records('www.herbusiness.com')[0].name, 'www.herbusiness.com')
 })
 
-Deno.test('the apex hint knows a bare name from one with a label', () => {
+test('the apex hint knows a bare name from one with a label', () => {
   for (let host of ['herbusiness.com', 'herbusiness.co.uk', 'a.io']) {
     assert(apex(host), host)
   }
@@ -151,7 +152,7 @@ Deno.test('the apex hint knows a bare name from one with a label', () => {
   }
 })
 
-Deno.test('the lines an agent reads out say the order of the wait', () => {
+test('the lines an agent reads out say the order of the wait', () => {
   let said = reading(steps(WAITING)).split('\n')
   assertEquals(said.length, 3)
   assert(said[0].startsWith('… dns:'), said[0])
@@ -162,7 +163,7 @@ Deno.test('the lines an agent reads out say the order of the wait', () => {
   )
 })
 
-Deno.test('with no token or no zone, every door says which is missing', () => {
+test('with no token or no zone, every door says which is missing', () => {
   assertThrows(() => reachable({} as Env), Error, 'CF_ZONE')
   assertThrows(
     () => reachable({ CF_ZONE: 'zone' } as Env),
@@ -201,7 +202,7 @@ let recorded = async (
 let ok = (result: unknown) =>
   Response.json({ success: true, errors: [], messages: [], result })
 
-Deno.test('provisioning asks for the hostname and nothing else', async () => {
+test('provisioning asks for the hostname and nothing else', async () => {
   let { out, calls } = await recorded(
     () => ok(MADE),
     () => provision(env, 'probe.example.com'),
@@ -219,7 +220,7 @@ Deno.test('provisioning asks for the hostname and nothing else', async () => {
   assertEquals((out as Custom).id, MADE.id)
 })
 
-Deno.test('a hostname is looked up by name, never by a stored id', async () => {
+test('a hostname is looked up by name, never by a stored id', async () => {
   let { out, calls } = await recorded(
     () => ok([LIVE]),
     () => customOf(env, 'probe.example.com'),
@@ -236,7 +237,7 @@ Deno.test('a hostname is looked up by name, never by a stored id', async () => {
   assertEquals(none, null)
 })
 
-Deno.test('detaching gives the hostname back, and says if there was none', async () => {
+test('detaching gives the hostname back, and says if there was none', async () => {
   let { out, calls } = await recorded(
     (r) => r.method == 'DELETE' ? ok({ id: MADE.id }) : ok([LIVE]),
     () => release(env, 'probe.example.com'),
@@ -254,7 +255,7 @@ Deno.test('detaching gives the hostname back, and says if there was none', async
   assertEquals(asked.map((c) => c.method), ['GET'])
 })
 
-Deno.test('a refusal from Cloudflare is answered in its own words', async () => {
+test('a refusal from Cloudflare is answered in its own words', async () => {
   let said = ''
   try {
     await recorded(

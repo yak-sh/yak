@@ -1,5 +1,6 @@
 // The HTTP embedder: two servers, one sentence — and what a fault does.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { cut, type Fetch, remote } from './remote.ts'
 import { Refused } from './embedder.ts'
@@ -20,7 +21,7 @@ let answered = (body: unknown, ok = true, status = 200) => {
   return { go, seen }
 }
 
-Deno.test('ollama: /api/embed, and the vector out of `embeddings`', async () => {
+test('ollama: /api/embed, and the vector out of `embeddings`', async () => {
   let { go, seen } = answered({ embeddings: [[3, 4]] })
   let e = remote({
     via: 'ollama',
@@ -35,14 +36,14 @@ Deno.test('ollama: /api/embed, and the vector out of `embeddings`', async () => 
   assert(!seen[0].init?.headers?.authorization)
 })
 
-Deno.test('a text longer than the model reads is sent as its opening', async () => {
+test('a text longer than the model reads is sent as its opening', async () => {
   let { go, seen } = answered({ embeddings: [[1]] })
   let e = remote({ via: 'ollama', model: 'm', base: 'b', chars: 3, fetch: go })
   await e.embed('abcdef')
   assertEquals(JSON.parse(seen[0].init!.body!).input, ['abc'])
 })
 
-Deno.test('openai: /v1/embeddings, the vector out of `data`, and the key as a bearer', async () => {
+test('openai: /v1/embeddings, the vector out of `data`, and the key as a bearer', async () => {
   let { go, seen } = answered({ data: [{ embedding: [1, 0] }] })
   let e = remote({
     via: 'openai',
@@ -56,7 +57,7 @@ Deno.test('openai: /v1/embeddings, the vector out of `data`, and the key as a be
   assertEquals(seen[0].init?.headers?.authorization, 'Bearer sk-x')
 })
 
-Deno.test('a dim keeps the leading coordinates, renormalized', async () => {
+test('a dim keeps the leading coordinates, renormalized', async () => {
   let { go } = answered({ embeddings: [[3, 4, 99]] })
   let e = remote({
     via: 'ollama',
@@ -68,12 +69,12 @@ Deno.test('a dim keeps the leading coordinates, renormalized', async () => {
   assertEquals(round(await e.embed('x')), [0.6, 0.8])
 })
 
-Deno.test('a model narrower than the dim asked for is a refusal, not a pad', () => {
+test('a model narrower than the dim asked for is a refusal, not a pad', () => {
   assertEquals(round(cut(Float32Array.from([3, 4, 0]), 2)), [0.6, 0.8])
   assertThrows(() => cut(Float32Array.from([1]), 2), Error, 'fewer than the 2')
 })
 
-Deno.test('a status and a shapeless answer both throw, with the body in the words', async () => {
+test('a status and a shapeless answer both throw, with the body in the words', async () => {
   let bad = answered({ error: 'no such model' }, false, 404)
   let e = remote({
     via: 'ollama',
@@ -92,7 +93,7 @@ Deno.test('a status and a shapeless answer both throw, with the body in the word
   await assertRejects(async () => await f.embed('x'), Error, 'no vector')
 })
 
-Deno.test('calls made together ride together, split by count and in order', async () => {
+test('calls made together ride together, split by count and in order', async () => {
   let seen: string[][] = []
   let e = remote({
     via: 'openai',
@@ -116,7 +117,7 @@ Deno.test('calls made together ride together, split by count and in order', asyn
   assertEquals(seen, [['a', 'bb'], ['ccc']])
 })
 
-Deno.test('a refused input is Refused; an unreachable server is not', async () => {
+test('a refused input is Refused; an unreachable server is not', async () => {
   let at = (status: number) =>
     remote({
       via: 'ollama',

@@ -8,6 +8,7 @@
 // for as long as it listens — is @yaks/api's own test. What this asserts of it
 // is that a config naming that package gets the verb, and a handler at all.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { compose, read } from './host.ts'
 
@@ -19,7 +20,7 @@ let free = (): number => {
   return port
 }
 
-Deno.test(
+test(
   'a composed host answers on every endpoint, and carries the serve verb',
   async () => {
     let dir = Deno.makeTempDirSync()

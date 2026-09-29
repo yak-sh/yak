@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { type Route, routed } from '@yaks/api'
@@ -53,7 +54,7 @@ let host = handler({
 })
 let get = (path: string) => host(new Request(`http://x${path}`))
 
-Deno.test('every id letter the vocabulary uses has a route, in both cases', () => {
+test('every id letter the vocabulary uses has a route, in both cases', () => {
   let ls = letters(vocab)
   for (let l of ['T', 't', 'D', 'd']) assertEquals(ls.includes(l), true, l)
   for (
@@ -71,12 +72,12 @@ Deno.test('every id letter the vocabulary uses has a route, in both cases', () =
   }
 })
 
-Deno.test('the doors and the other plugins keep their paths', async () => {
+test('the doors and the other plugins keep their paths', async () => {
   assertEquals((await get('/query')).status, 400)
   assertEquals(await (await get('/mcp')).text(), 'mcp')
 })
 
-Deno.test('a name opens the page, and a path naming nothing is the 404 page', async () => {
+test('a name opens the page, and a path naming nothing is the 404 page', async () => {
   let page = async (path: string) => {
     let r = await get(path)
     return [r.status, (await r.text()).includes('src="/web/app.js"')]
@@ -96,7 +97,7 @@ Deno.test('a name opens the page, and a path naming nothing is the 404 page', as
   }
 })
 
-Deno.test('a kindless entity opens at the id the page displays', async () => {
+test('a kindless entity opens at the id the page displays', async () => {
   let [row] = await graph.get(['kindless'])
   let id = human(vocab)(row)
   assertEquals(id.startsWith('E-'), true)
@@ -104,13 +105,13 @@ Deno.test('a kindless entity opens at the id the page displays', async () => {
   assertEquals((await get(`/${id}`)).status, 200)
 })
 
-Deno.test('every address answers the one page, which loads the bundled app', async () => {
+test('every address answers the one page, which loads the bundled app', async () => {
   let page = await reached('/T-9')!.handle(new Request('http://x/T-9'))
   assertEquals(page.headers.get('content-type'), 'text/html; charset=utf-8')
   assertEquals((await page.text()).includes('src="/web/app.js"'), true)
 })
 
-Deno.test('the vocabulary is served with a tag the browser revalidates', async () => {
+test('the vocabulary is served with a tag the browser revalidates', async () => {
   let get = (headers: HeadersInit = {}) =>
     reached('/web/vocab.json')!.handle(
       new Request('http://x/web/vocab.json', { headers }),

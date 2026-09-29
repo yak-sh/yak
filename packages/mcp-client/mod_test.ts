@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { clients, connect, nameOf } from './mod.ts'
@@ -16,7 +17,7 @@ let asking = (args: Record<string, unknown> = {}): [Bundle, Graph] => [
 let words = (out: Bundle[]): string =>
   String((out[0]?.content as { body?: unknown })?.body ?? '')
 
-Deno.test('portable client initializes, exposes unchanged schema and invokes exact remote name', async () => {
+test('portable client initializes, exposes unchanged schema and invokes exact remote name', async () => {
   const f = fixture()
   const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
     fetch: f.fetcher,
@@ -62,13 +63,13 @@ Deno.test('portable client initializes, exposes unchanged schema and invokes exa
     await c.close()
   }
 })
-Deno.test('names expose readable server namespace and exact opaque remote name', async () => {
+test('names expose readable server namespace and exact opaque remote name', async () => {
   assertEquals(await nameOf('yaks.app', 'app_list'), 'yaks_app__app_list')
   assertEquals(await nameOf('Other', 'app_list'), 'Other__app_list')
   assertThrows(() => nameOf('a', 'x'.repeat(64)))
   assertThrows(() => nameOf('a', 'remote.name'))
 })
-Deno.test('normalized namespace collisions are rejected before connecting', () => {
+test('normalized namespace collisions are rejected before connecting', () => {
   assertThrows(
     () =>
       clients([
@@ -79,7 +80,7 @@ Deno.test('normalized namespace collisions are rejected before connecting', () =
     'Duplicate MCP namespace',
   )
 })
-Deno.test('allowlists restrict list and invocation; errors are not mutation retries', async () => {
+test('allowlists restrict list and invocation; errors are not mutation retries', async () => {
   const f = fixture()
   const c = connect({
     name: 'site',
@@ -114,7 +115,7 @@ Deno.test('allowlists restrict list and invocation; errors are not mutation retr
   }
   await assertRejects(() => other.call('publish_mockup', {}), Error, 'closed')
 })
-Deno.test('multiple servers are composed without remote-name collisions', async () => {
+test('multiple servers are composed without remote-name collisions', async () => {
   const f = fixture()
   const pool = clients([{ name: 'one', url: 'https://example.test/mcp' }, {
     name: 'two',
@@ -129,7 +130,7 @@ Deno.test('multiple servers are composed without remote-name collisions', async 
   }
 })
 
-Deno.test('SDK list_changed notification invalidates discovery for next snapshot', async () => {
+test('SDK list_changed notification invalidates discovery for next snapshot', async () => {
   const f = fixture()
   let notify: ((value: Uint8Array) => void) | undefined
   const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
@@ -172,7 +173,7 @@ Deno.test('SDK list_changed notification invalidates discovery for next snapshot
   }
 })
 
-Deno.test('401 does not retry a call, and error text excludes credential and body', async () => {
+test('401 does not retry a call, and error text excludes credential and body', async () => {
   const f = fixture()
   let rejected = 0
   const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
@@ -199,7 +200,7 @@ Deno.test('401 does not retry a call, and error text excludes credential and bod
   }
 })
 
-Deno.test('a redirect is refused, and the credential goes nowhere else', async () => {
+test('a redirect is refused, and the credential goes nowhere else', async () => {
   const f = fixture()
   const reached: string[] = []
   const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
@@ -226,7 +227,7 @@ Deno.test('a redirect is refused, and the credential goes nowhere else', async (
   }
 })
 
-Deno.test('graph Tool is usable through the CLI adapter without any session runtime', async () => {
+test('graph Tool is usable through the CLI adapter without any session runtime', async () => {
   const { cli } = await import('@yaks/cli')
   const f = fixture()
   const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
@@ -266,7 +267,7 @@ Deno.test('graph Tool is usable through the CLI adapter without any session runt
   }
 })
 
-Deno.test('about tool accepts declared draft-07 input and output through SDK validation', async () => {
+test('about tool accepts declared draft-07 input and output through SDK validation', async () => {
   // Matches the public yaks.app about schema shape observed on 2026-09-16.
   const schema = {
     type: 'object',
@@ -324,7 +325,7 @@ Deno.test('about tool accepts declared draft-07 input and output through SDK val
   }
 })
 
-Deno.test('opaque separators cannot silently collide across distinct server namespaces', async () => {
+test('opaque separators cannot silently collide across distinct server namespaces', async () => {
   const { checkToolNames } = await import('./mod.ts')
   const a = await nameOf('a', 'b__c'), b = await nameOf('a__b', 'c')
   assertEquals(a, b)

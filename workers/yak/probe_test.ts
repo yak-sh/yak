@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { letters, mailed } from './probe.ts'
 
-Deno.test('mailed waits for a new delivery rather than returning a spent code', async () => {
+test('mailed waits for a new delivery rather than returning a spent code', async () => {
   let log = Deno.makeTempFileSync()
   let k = { log }
   let to = 'probe@example.test'

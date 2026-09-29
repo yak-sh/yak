@@ -2,6 +2,7 @@
 // the items a stream becomes, how a refusal and a dead stream read, and where
 // a credential comes from.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { ModelError, type Request } from '@yaks/model'
 import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
@@ -21,7 +22,7 @@ let req: Request = {
   tokens: 64,
 }
 
-Deno.test('a request is shaped the way the API wants', () => {
+test('a request is shaped the way the API wants', () => {
   let b = body(req, true)
   assertEquals(b.input, [
     { role: 'user', content: [{ type: 'input_text', text: 'hi' }] },
@@ -63,7 +64,7 @@ Deno.test('a request is shaped the way the API wants', () => {
   assertEquals(body(req).store, false)
 })
 
-Deno.test('completed items come back neutral; reasoning is dropped', () => {
+test('completed items come back neutral; reasoning is dropped', () => {
   assertEquals(
     items([
       { type: 'reasoning', summary: [] },
@@ -106,7 +107,7 @@ let serving = (status: number, text: string) => {
 
 let codex = { token: 't', account: 'acct', base: 'https://x.test/codex' }
 
-Deno.test('a compaction request succeeds on the Codex endpoint', async () => {
+test('a compaction request succeeds on the Codex endpoint', async () => {
   let asked: Record<string, unknown>[] = []
   let model = responses({
     credential: () => ({ ...codex, base: CODEX }),
@@ -138,7 +139,7 @@ Deno.test('a compaction request succeeds on the Codex endpoint', async () => {
   assertEquals(asked.length, 1)
 })
 
-Deno.test('a streamed reply is read to its end', async () => {
+test('a streamed reply is read to its end', async () => {
   let { asked, fetcher } = serving(
     200,
     sse(
@@ -188,7 +189,7 @@ Deno.test('a streamed reply is read to its end', async () => {
   assertEquals((asked[0].body as { store: boolean }).store, false)
 })
 
-Deno.test('a refusal, a failed stream and no credential are errors', async () => {
+test('a refusal, a failed stream and no credential are errors', async () => {
   let refused = serving(
     400,
     JSON.stringify({
@@ -233,7 +234,7 @@ Deno.test('a refusal, a failed stream and no credential are errors', async () =>
   assertEquals([e.code, idle.asked], ['questions', []])
 })
 
-Deno.test('an API key and a ChatGPT bearer identify their own endpoint', () => {
+test('an API key and a ChatGPT bearer identify their own endpoint', () => {
   let env = (vars: Record<string, string>) => (n: string) => vars[n]
   assertEquals(fromEnv(env({ OPENAI_API_KEY: 'k' })), {
     token: 'k',
@@ -251,7 +252,7 @@ Deno.test('an API key and a ChatGPT bearer identify their own endpoint', () => {
   assertThrows(() => fromChatGPT('bad.token'), Error, 'no account')
 })
 
-Deno.test('the Model shares refresh, redacted frame hooks, store, and anchor policy', async () => {
+test('the Model shares refresh, redacted frame hooks, store, and anchor policy', async () => {
   let attempts = 0
   let seen: unknown[] = []
   let model = responses({
@@ -290,7 +291,7 @@ Deno.test('the Model shares refresh, redacted frame hooks, store, and anchor pol
   )
 })
 
-Deno.test('the Model maps the shared watchdog to ModelError', async () => {
+test('the Model maps the shared watchdog to ModelError', async () => {
   let model = responses({
     credential: () => codex,
     stallMs: 20,
@@ -309,7 +310,7 @@ Deno.test('the Model maps the shared watchdog to ModelError', async () => {
   assertEquals(error.code, 'stalled')
 })
 
-Deno.test('usage keeps missing counts unknown and rejects invalid counts', async () => {
+test('usage keeps missing counts unknown and rejects invalid counts', async () => {
   let { tokenUsage } = await import('./responses.ts')
   assertEquals(tokenUsage(undefined), {})
   assertEquals(tokenUsage({}), {})

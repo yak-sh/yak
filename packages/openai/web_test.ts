@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { body, items, responses } from './responses.ts'
 
-Deno.test('hosted web search composes with function tools', () => {
+test('hosted web search composes with function tools', () => {
   const req = {
     model: 'test',
     items: [],
@@ -17,7 +18,7 @@ Deno.test('hosted web search composes with function tools', () => {
   )
 })
 
-Deno.test('web citations are visible links; hosted actions are not local function calls', () => {
+test('web citations are visible links; hosted actions are not local function calls', () => {
   const result = items([
     {
       type: 'web_search_call',
@@ -50,7 +51,7 @@ Deno.test('web citations are visible links; hosted actions are not local functio
   assertEquals(JSON.stringify(result).includes('javascript:'), false)
 })
 
-Deno.test('OAuth requests offer web tools by default and allow explicit disable', async () => {
+test('OAuth requests offer web tools by default and allow explicit disable', async () => {
   for (const web of [undefined, false]) {
     let sent: Record<string, unknown> = {}
     const model = responses({

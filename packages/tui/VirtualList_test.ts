@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { VirtualList, VirtualWindow } from './VirtualList.ts'
 import { h } from 'preact'
@@ -21,7 +22,7 @@ let window = (follow = true) =>
 let text = (lines: ReturnType<ReturnType<typeof window>['layout']>) =>
   lines.map((l) => l.map((s) => s.text).join(''))
 
-Deno.test('cold bottom open and resize only measure the viewport; warm paint measures nothing', () => {
+test('cold bottom open and resize only measure the viewport; warm paint measures nothing', () => {
   let v = window(), data = items(10000)
   v.update(data)
   assertEquals(text(v.layout(80, 10))[0], '9990')
@@ -35,7 +36,7 @@ Deno.test('cold bottom open and resize only measure the viewport; warm paint mea
   assertEquals(v.stats.measured, 20)
 })
 
-Deno.test('detached anchor survives append, reorder, resize and removal', () => {
+test('detached anchor survives append, reorder, resize and removal', () => {
   let v = window(), data = items(100)
   v.update(data)
   v.layout(80, 5)
@@ -53,7 +54,7 @@ Deno.test('detached anchor survives append, reorder, resize and removal', () => 
   assertEquals(v.anchor?.id, '92')
 })
 
-Deno.test('top start, local offset, growing tail and explicit end follow', () => {
+test('top start, local offset, growing tail and explicit end follow', () => {
   let v = window(false),
     data = [{ id: 'a', text: 'abcdef' }, { id: 'b', text: 'tail' }]
   v.update(data)
@@ -71,7 +72,7 @@ Deno.test('top start, local offset, growing tail and explicit end follow', () =>
   assertEquals(text(v.layout(2, 2)), ['ab', 'cd'])
 })
 
-Deno.test('mounted virtual list renders only visible history and stays warm on key repaint', async () => {
+test('mounted virtual list renders only visible history and stays warm on key repaint', async () => {
   let count = 0
   let ui = await mount(
     () =>
@@ -100,7 +101,7 @@ Deno.test('mounted virtual list renders only visible history and stays warm on k
   }
 })
 
-Deno.test('exact end snap follows append, detached growing entries do not move anchor', () => {
+test('exact end snap follows append, detached growing entries do not move anchor', () => {
   let v = window(false), data = items(10)
   v.update(data)
   v.layout(20, 3)
@@ -119,7 +120,7 @@ Deno.test('exact end snap follows append, detached growing entries do not move a
   assertEquals(v.anchor, anchor)
 })
 
-Deno.test('visible edits and theme invalidate layout; bounded cache evicts old history', () => {
+test('visible edits and theme invalidate layout; bounded cache evicts old history', () => {
   let v = window(), data = items(10000)
   v.update(data)
   v.layout(80, 5, 'one')
@@ -134,7 +135,7 @@ Deno.test('visible edits and theme invalidate layout; bounded cache evicts old h
   assertEquals(v.stats.measured, 16)
 })
 
-Deno.test('cache eviction is bounded and empty/zero-sized lists keep a valid anchor', () => {
+test('cache eviction is bounded and empty/zero-sized lists keep a valid anchor', () => {
   let count = 0
   let v = new VirtualWindow<{ id: string; text: string }>(
     (item) => {
@@ -164,7 +165,7 @@ Deno.test('cache eviction is bounded and empty/zero-sized lists keep a valid anc
   assertEquals(text(v.layout(1, 1)), ['0'])
 })
 
-Deno.test('input-only paints do not parse history; switching viewport resets follow without stealing editor keys', async () => {
+test('input-only paints do not parse history; switching viewport resets follow without stealing editor keys', async () => {
   let rendered = 0
   let { Textarea } = await import('./Textarea.ts')
   let { useState } = await import('preact/hooks')
@@ -214,7 +215,7 @@ Deno.test('input-only paints do not parse history; switching viewport resets fol
   }
 })
 
-Deno.test('controlled viewport publishes anchors and restores externally owned position', async () => {
+test('controlled viewport publishes anchors and restores externally owned position', async () => {
   let position = { follow: false, anchor: { id: '12', offset: 0 } }
   let seen: string[] = []
   let ui = await mount(
@@ -246,7 +247,7 @@ Deno.test('controlled viewport publishes anchors and restores externally owned p
   }
 })
 
-Deno.test('controlled selection jumps lazily and reveals the complete entry', () => {
+test('controlled selection jumps lazily and reveals the complete entry', () => {
   let v = window(false)
   let data = items(10000)
   data[9000].text = 'selected '.repeat(20)
@@ -262,7 +263,7 @@ Deno.test('controlled selection jumps lazily and reveals the complete entry', ()
   assert(v.stats.measured < 40)
 })
 
-Deno.test('item keys use estimated page heights and preserve scrolling API', () => {
+test('item keys use estimated page heights and preserve scrolling API', () => {
   let v = window(false)
   v.update(items(100))
   v.layout(80, 10)
@@ -288,7 +289,7 @@ Deno.test('item keys use estimated page heights and preserve scrolling API', () 
   assertEquals(text(v.layout(80, 10))[0], '1')
 })
 
-Deno.test('selection at exact viewport boundary is revealed', () => {
+test('selection at exact viewport boundary is revealed', () => {
   let v = window(false)
   v.update(items(100))
   v.layout(80, 5)
@@ -301,7 +302,7 @@ Deno.test('selection at exact viewport boundary is revealed', () => {
   assertEquals(text(v.layout(80, 5)).at(-1), '99')
 })
 
-Deno.test('mounted generic controlled list reveals offscreen selection lazily', async () => {
+test('mounted generic controlled list reveals offscreen selection lazily', async () => {
   let { signal } = await import('@preact/signals')
   let selected = signal('9000'), count = 0
   let data = items(10000)
@@ -333,7 +334,7 @@ Deno.test('mounted generic controlled list reveals offscreen selection lazily', 
   }
 })
 
-Deno.test('selected oversized entry shows its beginning after resize', () => {
+test('selected oversized entry shows its beginning after resize', () => {
   let v = window(false)
   v.update([{ id: 'a', text: 'before' }, { id: 'b', text: 'abcdefghij' }])
   v.selected = 'b'
@@ -342,7 +343,7 @@ Deno.test('selected oversized entry shows its beginning after resize', () => {
   assertEquals(v.anchor, { id: 'b', offset: 0 })
 })
 
-Deno.test('wheel scrolling remains possible after selected item is revealed', () => {
+test('wheel scrolling remains possible after selected item is revealed', () => {
   const v = window(false)
   v.update(items(100))
   v.selected = '20'
@@ -353,7 +354,7 @@ Deno.test('wheel scrolling remains possible after selected item is revealed', ()
   assert(v.anchor!.id !== before)
 })
 
-Deno.test('wheel scrolling clamps at the end even with a selected entry', () => {
+test('wheel scrolling clamps at the end even with a selected entry', () => {
   let v = window(false)
   v.update(items(100))
   v.selected = '20'
@@ -373,7 +374,7 @@ Deno.test('wheel scrolling clamps at the end even with a selected entry', () => 
   assertEquals(v.follow, false)
 })
 
-Deno.test('hidden selection retains logical position without painting highlight', () => {
+test('hidden selection retains logical position without painting highlight', () => {
   let v = window(false)
   v.update(items(20))
   v.selected = '0'
@@ -386,7 +387,7 @@ Deno.test('hidden selection retains logical position without painting highlight'
   assert(v.layout(40, 5)[0].some((s) => s.style.bg == '#123456'))
 })
 
-Deno.test('partial ranges load neighbors without mistaking a page boundary for the end', async () => {
+test('partial ranges load neighbors without mistaking a page boundary for the end', async () => {
   let { signal } = await import('@preact/signals')
   let data = items(200), visible = signal(data.slice(90, 110))
   let value = signal({ anchor: { id: '90', offset: 0 }, follow: false })
@@ -421,7 +422,7 @@ Deno.test('partial ranges load neighbors without mistaking a page boundary for t
   }
 })
 
-Deno.test('an unchanged page answer does not re-request the same anchor', async () => {
+test('an unchanged page answer does not re-request the same anchor', async () => {
   let { signal } = await import('@preact/signals')
   let data = items(20), visible = signal(data.slice(0, 10))
   let requests: unknown[] = []
@@ -453,7 +454,7 @@ Deno.test('an unchanged page answer does not re-request the same anchor', async 
   }
 })
 
-Deno.test('scroll estimates retain heights after text-cache eviction and page replacement', () => {
+test('scroll estimates retain heights after text-cache eviction and page replacement', () => {
   type Item = { id: string; rows: number }
   let measured = 0
   const v = new VirtualWindow<Item>(
@@ -493,7 +494,7 @@ Deno.test('scroll estimates retain heights after text-cache eviction and page re
   assertEquals(v.position(10).total, 400)
 })
 
-Deno.test('uniform partial pages have stable global scroll positions', () => {
+test('uniform partial pages have stable global scroll positions', () => {
   const v = window(false)
   const data = items(10000)
   for (const offset of [0, 100, 5000, 9900]) {
@@ -507,7 +508,7 @@ Deno.test('uniform partial pages have stable global scroll positions', () => {
   assert(v.stats.measured <= 40)
 })
 
-Deno.test('pending virtual windows retain their frame and scrollbar without repainting', async () => {
+test('pending virtual windows retain their frame and scrollbar without repainting', async () => {
   const { signal } = await import('@preact/signals')
   const pending = signal(false), identity = signal('one')
   const data = signal(items(100))

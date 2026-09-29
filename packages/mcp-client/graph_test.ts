@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { serverOf } from './graph.ts'
 import { mcpDoc } from './vocab.ts'
 import { loadVocab } from '@yaks/vocab'
 
-Deno.test('MCP graph vocabulary is portable, with endpoint identity independent of label', () => {
+test('MCP graph vocabulary is portable, with endpoint identity independent of label', () => {
   const vocab = loadVocab([mcpDoc])
   assert(vocab.comp('mcp_server'))
   const row = {

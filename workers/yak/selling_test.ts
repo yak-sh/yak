@@ -12,7 +12,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -135,7 +135,7 @@ let paying = async (env: Env, body: unknown, cookie?: string) => {
   return { status: res.status, body: await res.json() }
 }
 
-Deno.test('the shop example deploys, seeds itself and serves its front', async () => {
+test('the shop example deploys, seeds itself and serves its front', async () => {
   using k = await shopping()
   let out = await k.deploy()
   // The shop declares no components of its own, and that is the point: both
@@ -176,7 +176,7 @@ Deno.test('the shop example deploys, seeds itself and serves its front', async (
   )
 })
 
-Deno.test('a cart off the shop page is an ask the checkout door can price', async () => {
+test('a cart off the shop page is an ask the checkout door can price', async () => {
   using k = await shopping()
   await k.deploy()
   let shirts = await k.shirts()
@@ -204,7 +204,7 @@ Deno.test('a cart off the shop page is an ask the checkout door can price', asyn
 // The seller is a connected account in the sandbox that can take money
 // (probe.ts `merchant`), so every call the door makes on the seller's behalf
 // is made on that account and read back from it.
-Deno.test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
+test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
   let key = stripeKey()
   // Found or made at Stripe while the shop deploys here.
   let merchantFound = merchant(key)
@@ -594,7 +594,7 @@ let hook = async (env: Env, type: string, object: unknown, account: string) =>
     ),
   ) as { did: string }).did
 
-Deno.test('a space connects Stripe, and the webhook makes it ready', async () => {
+test('a space connects Stripe, and the webhook makes it ready', async () => {
   let key = stripeKey()
   using scenario = platform({
     STRIPE_KEY: key,
@@ -719,7 +719,7 @@ Deno.test('a space connects Stripe, and the webhook makes it ready', async () =>
   }
 })
 
-Deno.test('the connect door refuses what Stripe did not sign', async () => {
+test('the connect door refuses what Stripe did not sign', async () => {
   using scenario = platform({ STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
   let { env } = scenario
   await seeded(env)
@@ -760,7 +760,7 @@ Deno.test('the connect door refuses what Stripe did not sign', async () => {
 // The secret is the owner's to set (README.md). Until he has, the door says so
 // in one sentence — and every other half of selling still works, which is the
 // whole reason it is a 503 rather than a boot failure.
-Deno.test('with no connect secret the door says so, and nothing else breaks', async () => {
+test('with no connect secret the door says so, and nothing else breaks', async () => {
   using scenario = platform({ STRIPE_KEY: 'sk_probe' })
   let { env } = scenario
   await seeded(env)
@@ -778,7 +778,7 @@ Deno.test('with no connect secret the door says so, and nothing else breaks', as
 
 // The one button a space can press without a Stripe key set is Stop, and it
 // needs no Stripe call at all: forgetting an account is a write of ours.
-Deno.test('stopping selling forgets the account and calls nothing', async () => {
+test('stopping selling forgets the account and calls nothing', async () => {
   using scenario = platform({ STRIPE_CONNECT_WEBHOOK_SECRET: WHSEC })
   let { env } = scenario
   let { space } = await seeded(env)
@@ -825,7 +825,7 @@ let seated = async (env: Env, dir: ReturnType<typeof directory>) =>
     }],
   })
 
-Deno.test('the fee is an owner’s to set, and is charged on the next request', async () => {
+test('the fee is an owner’s to set, and is charged on the next request', async () => {
   using scenario = platform()
   let { env } = scenario
   await seeded(env)
@@ -860,7 +860,7 @@ Deno.test('the fee is an owner’s to set, and is charged on the next request', 
   assertStringIncludes(await page.text(), 'We take <span class="Fee">2.5%<')
 })
 
-Deno.test('the fee is whole basis points, and never more than the sale', async () => {
+test('the fee is whole basis points, and never more than the sale', async () => {
   using scenario = platform()
   let { env } = scenario
   await seeded(env)

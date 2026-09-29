@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { argsFor, type Reads, saidIn, Usage, valueOf } from './args.ts'
 import type { Listed as Tool } from './tool.ts'
@@ -26,7 +27,7 @@ let tool: Tool = {
 
 let args = (argv: string[]) => argsFor(tool, argv, reads)
 
-Deno.test('a line splits into options, values and bare words', () => {
+test('a line splits into options, values and bare words', () => {
   assertEquals(saidIn(['--q', '.recipe']), {
     opts: [['q', '.recipe']],
     words: [],
@@ -43,7 +44,7 @@ Deno.test('a line splits into options, values and bare words', () => {
   })
 })
 
-Deno.test('a value is what its property says it is', () => {
+test('a value is what its property says it is', () => {
   // A string stays a string even when it looks like JSON.
   assertEquals(valueOf('a', '42', { type: 'string' }), '42')
   assertEquals(valueOf('a', '42', { type: 'number' }), 42)
@@ -59,7 +60,7 @@ Deno.test('a value is what its property says it is', () => {
   assertThrows(() => valueOf('a', 'nope', { type: 'object' }), Usage)
 })
 
-Deno.test('@file inflates, - is stdin, and both happen before the type', async () => {
+test('@file inflates, - is stdin, and both happen before the type', async () => {
   assertEquals(await args(['--app', 'r', '--content', '@index.html']), {
     app: 'r',
     content: '<index.html>',
@@ -78,14 +79,14 @@ Deno.test('@file inflates, - is stdin, and both happen before the type', async (
   )
 })
 
-Deno.test('a repeated option builds the list its property asked for', async () => {
+test('a repeated option builds the list its property asked for', async () => {
   assertEquals(await args(['--app', 'r', '--files', 'a', '--files', 'b']), {
     app: 'r',
     files: ['a', 'b'],
   })
 })
 
-Deno.test('a bare flag is a boolean, and only a boolean', async () => {
+test('a bare flag is a boolean, and only a boolean', async () => {
   assertEquals(await args(['--app', 'r', '--deploy']), {
     app: 'r',
     deploy: true,
@@ -93,7 +94,7 @@ Deno.test('a bare flag is a boolean, and only a boolean', async () => {
   await assertRejects(() => args(['--app', 'r', '--path']), Usage)
 })
 
-Deno.test('the command line is refused before the round trip', async () => {
+test('the command line is refused before the round trip', async () => {
   // A name the tool does not declare, a required one nobody gave, and a bare
   // word where a name belongs.
   await assertRejects(() => args(['--app', 'r', '--nmae', 'x']), Usage)
@@ -101,7 +102,7 @@ Deno.test('the command line is refused before the round trip', async () => {
   await assertRejects(() => args(['recipes']), Usage)
 })
 
-Deno.test('a tool with no schema takes nothing', async () => {
+test('a tool with no schema takes nothing', async () => {
   assertEquals(await argsFor({ name: 'app_list' }, [], reads), {})
   await assertRejects(
     () => argsFor({ name: 'app_list' }, ['--app', 'r'], reads),

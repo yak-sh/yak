@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assertEquals, assertRejects } from '@std/assert'
 import { promptEntry } from '@yaks/context'
@@ -6,7 +7,7 @@ import { input } from '../openai/responses.ts'
 import { voice, wear } from '@yaks/persona'
 import { harness } from './testing.ts'
 
-Deno.test('instruction admission snapshots files in stable ancestor order', async () => {
+test('instruction admission snapshots files in stable ancestor order', async () => {
   let dir = await Deno.makeTempDir()
   try {
     await Deno.mkdir(dir + '/home/.agents', { recursive: true })
@@ -37,7 +38,7 @@ Deno.test('instruction admission snapshots files in stable ancestor order', asyn
   }
 })
 
-Deno.test('instruction items map to ordered developer messages, never user text', () => {
+test('instruction items map to ordered developer messages, never user text', () => {
   assertEquals(
     input([
       { kind: 'user', text: 'before' },
@@ -55,7 +56,7 @@ Deno.test('instruction items map to ordered developer messages, never user text'
   )
 })
 
-Deno.test('root admission is snapshotted and explicit later context is an instruction', async () => {
+test('root admission is snapshotted and explicit later context is an instruction', async () => {
   let dir = await Deno.makeTempDir()
   let { local } = await import('./local.ts')
   let requests: import('@yaks/model').Request[] = []
@@ -97,7 +98,7 @@ Deno.test('root admission is snapshotted and explicit later context is an instru
   }
 })
 
-Deno.test('a native session carries its chosen graph persona into the model request', async () => {
+test('a native session carries its chosen graph persona into the model request', async () => {
   let dir = await Deno.makeTempDir()
   let { local } = await import('./local.ts')
   let h = await harness()
@@ -142,7 +143,7 @@ Deno.test('a native session carries its chosen graph persona into the model requ
   }
 })
 
-Deno.test('retired CLI instructions are omitted on future asks without rewriting history', async () => {
+test('retired CLI instructions are omitted on future asks without rewriting history', async () => {
   let { local } = await import('./local.ts')
   let dir = await Deno.makeTempDir()
   let h = await harness()
@@ -220,7 +221,7 @@ Deno.test('retired CLI instructions are omitted on future asks without rewriting
   }
 })
 
-Deno.test('explicit configuration and custom inherited instructions remain supported', async () => {
+test('explicit configuration and custom inherited instructions remain supported', async () => {
   let { inheritedInstructions } = await import('./legacy_instructions.ts')
   assertEquals(inheritedInstructions(undefined, 'configured'), 'configured')
   assertEquals(inheritedInstructions('custom', 'configured'), 'custom')

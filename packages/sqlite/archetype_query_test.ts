@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
@@ -16,7 +17,7 @@ let vocab = loadVocab([...shop.docs, archetypeDoc, {
     },
   },
 }])
-Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, reverse and aggregates', () => {
+test('archetype query golden: presence/kind, value joins, boolean, paths, reverse and aggregates', () => {
   let driver = mem()
   // Numbered: the golden reads the order a numbered store hands rows back in.
   let s = storage(driver, vocab, { number: true })
@@ -62,7 +63,7 @@ Deno.test('archetype query golden: presence/kind, value joins, boolean, paths, r
   assertEquals(rows(driver, vocab, bool), driver.query(old))
 })
 
-Deno.test('a wide archetype catalog still answers a component query', () => {
+test('a wide archetype catalog still answers a component query', () => {
   let flags = Object.fromEntries(
     Array.from({ length: 7 }, (_, i) => [
       `flag${i}`,
@@ -94,7 +95,7 @@ Deno.test('a wide archetype catalog still answers a component query', () => {
   assertEquals(s.rows('.doc !excluded .count')[0]?.n, 120)
 })
 
-Deno.test('archetype query/gather see new sets, rollback and reused descriptor ids', () => {
+test('archetype query/gather see new sets, rollback and reused descriptor ids', () => {
   let driver = mem()
   let s = storage(driver, vocab)
   s.install()
@@ -123,7 +124,7 @@ Deno.test('archetype query/gather see new sets, rollback and reused descriptor i
   assertEquals(ids('.marker'), ['doc'])
 })
 
-Deno.test('archetype plans and gathers observe commits from another SQLite handle', () => {
+test('archetype plans and gathers observe commits from another SQLite handle', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'archetype-read-' })
   let first = open(`${dir}/graph.sqlite`)
   let second = open(`${dir}/graph.sqlite`)

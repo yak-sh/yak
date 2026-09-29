@@ -1,9 +1,10 @@
 // Hosted sound rows name the blob the player hears; the listening set keeps
 // its reviewed clips even if a builder has a candidate with the same name.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { blendLoop, catalog, load, loaded, SAMPLES } from './samples.ts'
 
-Deno.test('sound samples retry a missing blob and share a successful load', async () => {
+test('sound samples retry a missing blob and share a successful load', async () => {
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let report = Object.getOwnPropertyDescriptor(globalThis, 'reportError')
   let fetchWas = globalThis.fetch
@@ -54,7 +55,7 @@ Deno.test('sound samples retry a missing blob and share a successful load', asyn
   }
 })
 
-Deno.test('hosted audio outputs supply clips without replacing the listening set', () => {
+test('hosted audio outputs supply clips without replacing the listening set', () => {
   let builds = [
     {
       entity: { eid: 'water-build' },
@@ -166,7 +167,7 @@ Deno.test('hosted audio outputs supply clips without replacing the listening set
   )
 })
 
-Deno.test('an ambient overlap meets at neighboring source samples', () => {
+test('an ambient overlap meets at neighboring source samples', () => {
   let input = new Float32Array([0, 1, 2, 3, 4, 5, 6, 7])
   let output = blendLoop(input, 2)
   assertEquals(output.length, 6)

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import { token } from './guard.ts'
@@ -8,7 +9,7 @@ import type { Bundle } from './bundle.ts'
 
 for (let async of [false, true]) {
   for (let veto of [false, true]) {
-    Deno.test(`beforeWrite: independent batches require unanimous guards (${async}, ${veto})`, async () => {
+    test(`beforeWrite: independent batches require unanimous guards (${async}, ${veto})`, async () => {
       let base = memory()
       let writes: number[] = [], seen: number[] = [], journal: Bundle[] = []
       let counted: Storage = {
@@ -65,7 +66,7 @@ for (let async of [false, true]) {
     })
   }
 
-  Deno.test(`beforeWrite: one ordered mutation, FOUND guards, final answer (${async})`, async () => {
+  test(`beforeWrite: one ordered mutation, FOUND guards, final answer (${async})`, async () => {
     let storage = async ? slow(memory()) : memory()
     let seen: unknown[] = [], journal: unknown[] = []
     let g = graph({ storage, vocab: books })
@@ -99,7 +100,7 @@ for (let async of [false, true]) {
     assertEquals(journal, [{ pages: 2 }, { pages: 3 }, null, { pages: 4 }])
   })
 
-  Deno.test(`beforeWrite: death, releases and detaches precede the next check (${async})`, async () => {
+  test(`beforeWrite: death, releases and detaches precede the next check (${async})`, async () => {
     let storage = async ? slow(memory()) : memory()
     let g = graph({ storage, vocab: books })
     await g.apply([
@@ -133,7 +134,7 @@ for (let async of [false, true]) {
     assertEquals(comp(out.find((b) => b.entity.eid == 'm'), 'bookmark'), {})
   })
 
-  Deno.test(`beforeWrite: a late refusal rolls back prefix and suppresses effects (${async})`, async () => {
+  test(`beforeWrite: a late refusal rolls back prefix and suppresses effects (${async})`, async () => {
     let storage = async ? slow(memory()) : memory()
     let effects = 0
     let g = graph({
@@ -171,7 +172,7 @@ for (let async of [false, true]) {
   })
 }
 
-Deno.test('a host may defer effects; its clock is frozen before context leaves', () => {
+test('a host may defer effects; its clock is frozen before context leaves', () => {
   let queued: (() => void | Promise<void>)[] = []
   let clocks = 0, observations = 0, active = true
   let g = graph({

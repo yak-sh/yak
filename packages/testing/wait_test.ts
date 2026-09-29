@@ -1,11 +1,12 @@
 // Polling checks the fact after every yield, including one delayed beyond the
 // deadline. FakeTime advances the clock without giving promise continuations
 // a turn, reproducing a busy event loop without a wall-clock wait.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStrictEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { until } from './wait.ts'
 
-Deno.test('until rechecks a settled fact after a delayed poll', async () => {
+test('until rechecks a settled fact after a delayed poll', async () => {
   using time = new FakeTime(0)
   let ready = false
   let waiting = until(() => ready, { timeout: 10, poll: 5 })
@@ -15,7 +16,7 @@ Deno.test('until rechecks a settled fact after a delayed poll', async () => {
   assertEquals(await waiting, true)
 })
 
-Deno.test('until still times out with its final state in the label', async () => {
+test('until still times out with its final state in the label', async () => {
   using time = new FakeTime(0)
   let checks = 0
   let waiting = until(() => {
@@ -32,7 +33,7 @@ Deno.test('until still times out with its final state in the label', async () =>
   assertEquals(checks, 2)
 })
 
-Deno.test('until preserves the fact value and errors', async () => {
+test('until preserves the fact value and errors', async () => {
   let value = { ready: true }
   assertStrictEquals(await until(() => value, { timeout: 0 }), value)
   let error = new Error('failed check')

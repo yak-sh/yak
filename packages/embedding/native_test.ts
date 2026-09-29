@@ -1,6 +1,7 @@
 // The installed native exact scan ranks current stored vectors, not a stale
 // index, and keeps the unindexed filtered search's semantics intact.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { among, col, render, select, table, val } from '@yaks/sql'
 import { bury } from '../sqlite/testing.ts'
@@ -8,7 +9,7 @@ import { install } from './native.ts'
 import { nearest, vectorOf } from './near.ts'
 import { embedder, stocked } from './testing.ts'
 
-Deno.test('native scan ranks live vectors and excludes graves', async () => {
+test('native scan ranks live vectors and excludes graves', async () => {
   let db = await stocked()
   let query = vectorOf(db, 'book-1', embedder.model)!
   let expected = nearest(db, query, {
@@ -33,7 +34,7 @@ Deno.test('native scan ranks live vectors and excludes graves', async () => {
   )
 })
 
-Deno.test('native top-k never intersects a screen after ranking', async () => {
+test('native top-k never intersects a screen after ranking', async () => {
   let db = await stocked()
   install(db)
   let query = vectorOf(db, 'book-1', embedder.model)!
@@ -52,7 +53,7 @@ Deno.test('native top-k never intersects a screen after ranking', async () => {
   )
 })
 
-Deno.test('a connection starts on JS and switches after explicit install', async () => {
+test('a connection starts on JS and switches after explicit install', async () => {
   let db = await stocked()
   let query = vectorOf(db, 'book-1', embedder.model)!
   nearest(db, query, { model: embedder.model, limit: 1 })

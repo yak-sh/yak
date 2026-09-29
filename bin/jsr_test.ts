@@ -3,6 +3,7 @@
 // HTTP doors are exercised through a stub fetch, so nothing here reaches the
 // network; the workspace walk is Deno.readDir over real files and is left to
 // the tool itself.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   BLANK,
@@ -41,7 +42,7 @@ let stub = (answer: (url: string, init?: RequestInit) => Response) => {
 let json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status })
 
-Deno.test('split: a scoped name is a scope and a package', () => {
+test('split: a scoped name is a scope and a package', () => {
   assertEquals(split('@yaks/graph'), { scope: 'yaks', pkg: 'graph' })
   assertEquals(split('@yaks/durable-object'), {
     scope: 'yaks',
@@ -52,12 +53,12 @@ Deno.test('split: a scoped name is a scope and a package', () => {
   }
 })
 
-Deno.test('fits: JSR caps a description at one line of 250', () => {
+test('fits: JSR caps a description at one line of 250', () => {
   assertEquals([fits(''), fits('x'.repeat(250))], [true, true])
   assertEquals([fits('x'.repeat(251)), fits('two\nlines')], [false, false])
 })
 
-Deno.test('compat: only what a platform config proves, plus Deno', () => {
+test('compat: only what a platform config proves, plus Deno', () => {
   assertEquals(compat({ browser: false, workers: false }), { deno: true })
   assertEquals(compat({ browser: true, workers: false }), {
     deno: true,
@@ -70,7 +71,7 @@ Deno.test('compat: only what a platform config proves, plus Deno', () => {
   })
 })
 
-Deno.test('want: the description rides from deno.json, the repo is the repo', () => {
+test('want: the description rides from deno.json, the repo is the repo', () => {
   assertEquals(
     want({ name: '@yaks/graph', description: 'the core' }, {
       browser: true,
@@ -84,7 +85,7 @@ Deno.test('want: the description rides from deno.json, the repo is the repo', ()
   )
 })
 
-Deno.test('want: a package with no description asks for none, not a gap', () => {
+test('want: a package with no description asks for none, not a gap', () => {
   assertEquals(
     want({ name: '@yaks/query' }, { browser: false, workers: false })
       .description,
@@ -92,7 +93,7 @@ Deno.test('want: a package with no description asks for none, not a gap', () => 
   )
 })
 
-Deno.test('want: an over-long description names its package, not a 400', () => {
+test('want: an over-long description names its package, not a 400', () => {
   assertThrows(
     () =>
       want({ name: '@yaks/graph', description: 'x'.repeat(251) }, {
@@ -104,7 +105,7 @@ Deno.test('want: an over-long description names its package, not a 400', () => {
   )
 })
 
-Deno.test('mine: the live row keeps only the fields this repo owns', () => {
+test('mine: the live row keeps only the fields this repo owns', () => {
   assertEquals(
     mine({
       scope: 'yaks',
@@ -128,14 +129,14 @@ Deno.test('mine: the live row keeps only the fields this repo owns', () => {
   )
 })
 
-Deno.test('mine: an untouched page narrows to blank', () => {
+test('mine: an untouched page narrows to blank', () => {
   assertEquals(
     mine({ description: '', githubRepository: null, runtimeCompat: {} }),
     BLANK,
   )
 })
 
-Deno.test('diff: one edit per field that moved, key order and nulls aside', () => {
+test('diff: one edit per field that moved, key order and nulls aside', () => {
   let page: Details = {
     description: 'the core',
     githubRepository: { name: 'yak', owner: 'yak-sh' },
@@ -157,7 +158,7 @@ Deno.test('diff: one edit per field that moved, key order and nulls aside', () =
   ])
 })
 
-Deno.test('plan: no page on JSR is measured against a blank one', () => {
+test('plan: no page on JSR is measured against a blank one', () => {
   let pkg = {
     name: '@yaks/x',
     dir: 'packages/x',
@@ -170,14 +171,14 @@ Deno.test('plan: no page on JSR is measured against a blank one', () => {
   })
 })
 
-Deno.test('show: a value as a human reads it', () => {
+test('show: a value as a human reads it', () => {
   assertEquals(show('hi'), '"hi"')
   assertEquals([show(''), show(null), show({})], ['none', 'none', 'none'])
   assertEquals(show({ owner: 'yak-sh', name: 'yak' }), 'yak-sh/yak')
   assertEquals(show({ deno: true, browser: true }), 'deno, browser')
 })
 
-Deno.test('lines: a headline, then the fields that move', () => {
+test('lines: a headline, then the fields that move', () => {
   assertEquals(lines({ name: '@yaks/x', have: BLANK, edits: [] }), [
     'ok   @yaks/x',
   ])
@@ -195,7 +196,7 @@ Deno.test('lines: a headline, then the fields that move', () => {
   )
 })
 
-Deno.test('read: a page comes back narrowed, a 404 comes back null', async () => {
+test('read: a page comes back narrowed, a 404 comes back null', async () => {
   let { get, calls } = stub((url) =>
     url.endsWith('/graph')
       ? json({ description: 'the core', runtimeCompat: { deno: true } })
@@ -210,7 +211,7 @@ Deno.test('read: a page comes back narrowed, a 404 comes back null', async () =>
   assertEquals(calls[0].url, 'https://api.jsr.io/scopes/yaks/packages/graph')
 })
 
-Deno.test('read: any other status is the error, with what JSR said', async () => {
+test('read: any other status is the error, with what JSR said', async () => {
   let { get } = stub(() => new Response('down', { status: 500 }))
   await assertRejects(
     () => read(get, '@yaks/graph'),
@@ -219,7 +220,7 @@ Deno.test('read: any other status is the error, with what JSR said', async () =>
   )
 })
 
-Deno.test('write: one PATCH carrying exactly one field', async () => {
+test('write: one PATCH carrying exactly one field', async () => {
   let { get, calls } = stub(() => new Response(null, { status: 200 }))
   await write(get, 'jsrw_tok', '@yaks/graph', {
     field: 'runtimeCompat',
@@ -232,7 +233,7 @@ Deno.test('write: one PATCH carrying exactly one field', async () => {
   }])
 })
 
-Deno.test('write: a refusal names the package and the field', async () => {
+test('write: a refusal names the package and the field', async () => {
   let { get } = stub(() => new Response('too long', { status: 400 }))
   await assertRejects(
     () =>
@@ -245,7 +246,7 @@ Deno.test('write: a refusal names the package and the field', async () => {
   )
 })
 
-Deno.test('mint: POST to the scope, the bare package name as the body', async () => {
+test('mint: POST to the scope, the bare package name as the body', async () => {
   let { get, calls } = stub(() => new Response(null, { status: 200 }))
   await mint(get, 'jsrw_tok', '@yaks/graph')
   assertEquals(calls, [{
@@ -255,7 +256,7 @@ Deno.test('mint: POST to the scope, the bare package name as the body', async ()
   }])
 })
 
-Deno.test('mint: the weekly creation limit surfaces as JSR worded it', async () => {
+test('mint: the weekly creation limit surfaces as JSR worded it', async () => {
   let { get } = stub(() =>
     new Response('weekly package creation limit exceeded', { status: 400 })
   )

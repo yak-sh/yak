@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   extract,
@@ -20,13 +21,13 @@ let measurement = (): Measurement => ({
   cpu: 'test',
   ns: Object.fromEntries(benchmarkNames().map((n) => [n, 100])),
 })
-Deno.test('bench median is the middle run, not the fastest or mean', () => {
+test('bench median is the middle run, not the fastest or mean', () => {
   assertEquals(median([500, 100, 110]), 110)
   for (let values of [[], [1], [1, 2, NaN], [1, 2, 0], [1, 2, Infinity]]) {
     assertThrows(() => median(values))
   }
 })
-Deno.test('bench threshold boundary, regression failure, and no implicit ratchet', () => {
+test('bench threshold boundary, regression failure, and no implicit ratchet', () => {
   let base = measurement()
   let current = measurement()
   let name = benchmarkNames()[0]
@@ -36,7 +37,7 @@ Deno.test('bench threshold boundary, regression failure, and no implicit ratchet
   assertEquals(regressions(base, current), [name])
   assertEquals(base.ns[name], 100)
 })
-Deno.test('bench fails closed on incomparable, missing, renamed, and invalid numbers', () => {
+test('bench fails closed on incomparable, missing, renamed, and invalid numbers', () => {
   for (
     let key of ['version', 'metric', 'workload', 'runtime', 'cpu'] as const
   ) {
@@ -53,7 +54,7 @@ Deno.test('bench fails closed on incomparable, missing, renamed, and invalid num
     assertThrows(() => validateNames(ns))
   }
 })
-Deno.test('Deno JSON extraction rejects failed, absent, and duplicate results', () => {
+test('Deno JSON extraction rejects failed, absent, and duplicate results', () => {
   let ok = { name: 'one', results: [{ ok: { avg: 100 } }] }
   let report = { version: 1, runtime: 'test', cpu: 'test', benches: [ok] }
   assertEquals(extract(report, ['one']), { one: 100 })

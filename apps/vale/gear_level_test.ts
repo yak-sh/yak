@@ -1,5 +1,6 @@
 // An item's level is stable in its tier, changes what it gives, and keeps a
 // hero from wearing gear they have not reached yet.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { tierRange } from './arms.ts'
 import { sortLine } from './compare.ts'
@@ -10,7 +11,7 @@ import { itemLevel, piece } from './rarity.ts'
 
 seedItems()
 
-Deno.test('item levels stay with their piece and refine its power', () => {
+test('item levels stay with their piece and refine its power', () => {
   for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
     let [lo, hi] = tierRange(ITEMS[kind].tier!)
     let lvl = itemLevel('one-piece', kind)!
@@ -30,7 +31,7 @@ Deno.test('item levels stay with their piece and refine its power', () => {
   assert(shield(12).armour! > shield(1).armour!)
 })
 
-Deno.test('gear waits for its item level before it can be worn', () => {
+test('gear waits for its item level before it can be worn', () => {
   let h = { eid: 's', kind: 'sword1', n: 1, lvl: 8 }
   let low = { eid: 't', kind: 'sword1', n: 1, lvl: 1 }
   let rows = [{ slot: 'main', item: 's', at: 1 }]

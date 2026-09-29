@@ -2,6 +2,7 @@
 // Vale's page opens several short watches and then long village and deal
 // watches. The whole set must survive the Store socket's attachment limit.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Frame, subscriptions } from '@yaks/api'
 import { sockets, storage, type Wire } from '@yaks/durable-object'
@@ -57,7 +58,7 @@ let watches = () => {
   ]
 }
 
-Deno.test('Vale watches fit and recover after Store hibernation', () => {
+test('Vale watches fit and recover after Store hibernation', () => {
   let db = durable(), vocab = appVocab(words)
   let store = storage(db, vocab)
   store.install()

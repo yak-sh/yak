@@ -25,7 +25,7 @@ import {
 } from './host.ts'
 import { sealed } from '@yaks/secrets'
 import { signer } from './local.ts'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
@@ -170,7 +170,7 @@ let compose = (config: Config, load?: Load) =>
 let write = (path: string, body: unknown) =>
   Deno.writeTextFileSync(path, JSON.stringify(body))
 
-Deno.test('a config resolves its database and its relative plugins against itself', () => {
+test('a config resolves its database and its relative plugins against itself', () => {
   let dir = Deno.makeTempDirSync()
   try {
     write(`${dir}/yak.json`, {
@@ -190,7 +190,7 @@ Deno.test('a config resolves its database and its relative plugins against itsel
   }
 })
 
-Deno.test('a config that is not an object, or not JSON, says which file', () => {
+test('a config that is not an object, or not JSON, says which file', () => {
   let dir = Deno.makeTempDirSync()
   try {
     write(`${dir}/list.json`, [1, 2])
@@ -206,7 +206,7 @@ Deno.test('a config that is not an object, or not JSON, says which file', () => 
   }
 })
 
-Deno.test('a host without a database refuses rather than guessing one', () => {
+test('a host without a database refuses rather than guessing one', () => {
   // An environment with no DB_PATH in it: the process's own is shared by every
   // test running beside this one, and the gate sets it.
   assertThrows(
@@ -216,7 +216,7 @@ Deno.test('a host without a database refuses rather than guessing one', () => {
   )
 })
 
-Deno.test('compose takes each facet from its own subpath, and mounts the doors', async () => {
+test('compose takes each facet from its own subpath, and mounts the doors', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
@@ -268,7 +268,7 @@ Deno.test('compose takes each facet from its own subpath, and mounts the doors',
   }
 })
 
-Deno.test('a config may keep a component off the human number line', async () => {
+test('a config may keep a component off the human number line', async () => {
   // What `numbers` says is what the store's own `number` says, so a host
   // composing a component whose entities nobody ever types the number of —
   // a classifier's descriptors, a log's rows — can say so in its config.
@@ -300,7 +300,7 @@ Deno.test('a config may keep a component off the human number line', async () =>
   host.close()
 })
 
-Deno.test('a config that numbers entities and reads no number back refuses', async () => {
+test('a config that numbers entities and reads no number back refuses', async () => {
   await assertRejects(
     () =>
       compose(
@@ -312,7 +312,7 @@ Deno.test('a config that numbers entities and reads no number back refuses', asy
   )
 })
 
-Deno.test('a declared tool nobody runs refuses its first call', async () => {
+test('a declared tool nobody runs refuses its first call', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
     only({ shop: { vocab: { docs: [doc] } } }),
@@ -326,7 +326,7 @@ Deno.test('a declared tool nobody runs refuses its first call', async () => {
   host.close()
 })
 
-Deno.test('a plugin’s tools are imported by the first call of one of them', async () => {
+test('a plugin’s tools are imported by the first call of one of them', async () => {
   let asked: string[] = []
   let load = <F extends keyof Facets>(spec: string, name: F) => {
     asked.push(name)
@@ -345,7 +345,7 @@ Deno.test('a plugin’s tools are imported by the first call of one of them', as
   host.close()
 })
 
-Deno.test('a host that names itself writes as itself, and a plugin may say who else', async () => {
+test('a host that names itself writes as itself, and a plugin may say who else', async () => {
   // The plugin names a caller for the requests that carry a token, and says
   // nothing about the rest — which is the host's own writing.
   let ana = { by: 'ana', via: 'her-run' }
@@ -385,7 +385,7 @@ Deno.test('a host that names itself writes as itself, and a plugin may say who e
   }
 })
 
-Deno.test('a command line writes as the session it names, through the same door as HTTP, or as the person typing it', async () => {
+test('a command line writes as the session it names, through the same door as HTTP, or as the person typing it', async () => {
   // The door knows one run by its `x-via`, as @yaks/session's does.
   let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
@@ -419,7 +419,7 @@ Deno.test('a command line writes as the session it names, through the same door 
   }
 })
 
-Deno.test('a process writes itself in, signs with that row, and stamps its exit', async () => {
+test('a process writes itself in, signs with that row, and stamps its exit', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
     only({ shop }),
@@ -442,7 +442,7 @@ Deno.test('a process writes itself in, signs with that row, and stamps its exit'
   // matters is that `close` took the code without throwing.
 })
 
-Deno.test('a graph with no `process` word signs nothing', async () => {
+test('a graph with no `process` word signs nothing', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['bare'] },
     only({ bare: { ...shop, vocab: { docs: [doc] } } }),
@@ -457,7 +457,7 @@ Deno.test('a graph with no `process` word signs nothing', async () => {
   }
 })
 
-Deno.test('two plugins may not both say who is calling', async () => {
+test('two plugins may not both say who is calling', async () => {
   let who: Plugged = { rules: { authenticate: () => () => ({ by: 'a' }) } }
   await assertRejects(
     () =>
@@ -472,7 +472,7 @@ Deno.test('two plugins may not both say who is calling', async () => {
 
 // T-37821, Jeff's words: "compose should be the other way around: if a plugin
 // lists routes but @yaks/api is not included, then those facets are ignored."
-Deno.test('a host with nobody to host routes has no handler, and never asks for them', async () => {
+test('a host with nobody to host routes has no handler, and never asks for them', async () => {
   let asked = 0
   let counted: Plugged = {
     ...shop,
@@ -503,7 +503,7 @@ Deno.test('a host with nobody to host routes has no handler, and never asks for 
   }
 })
 
-Deno.test('two plugins may not both host the routes', async () => {
+test('two plugins may not both host the routes', async () => {
   let hosts: Plugged = { routes: { handler: () => () => new Response('one') } }
   await assertRejects(
     () =>
@@ -516,7 +516,7 @@ Deno.test('two plugins may not both host the routes', async () => {
   )
 })
 
-Deno.test('a process imports the facets of the roles it serves, and no others', async () => {
+test('a process imports the facets of the roles it serves, and no others', async () => {
   let ran: string[] = []
   let busy: Plugged = {
     effects: { effects: () => ({}) },
@@ -559,7 +559,7 @@ Deno.test('a process imports the facets of the roles it serves, and no others', 
   assertEquals(ran, ['busy'])
 })
 
-Deno.test('a service role names a plugin the config lists', async () => {
+test('a service role names a plugin the config lists', async () => {
   await assertRejects(
     () =>
       composing(
@@ -572,7 +572,7 @@ Deno.test('a service role names a plugin the config lists', async () => {
   )
 })
 
-Deno.test('a facet that fails to import is loud; one that is absent is skipped', async () => {
+test('a facet that fails to import is loud; one that is absent is skipped', async () => {
   // The default loader tells the two apart by the error: an unknown subpath is
   // a facet the package does not have, and anything else is that facet failing.
   let load = <F extends keyof Facets>(
@@ -590,7 +590,7 @@ Deno.test('a facet that fails to import is loud; one that is absent is skipped',
   )
 })
 
-Deno.test('a rule sees the graph it is part of, and an effect fires on a commit', async () => {
+test('a rule sees the graph it is part of, and an effect fires on a commit', async () => {
   let seen: string[] = []
   let mod: Plugged = {
     vocab: { docs: [doc, owes] },
@@ -623,7 +623,7 @@ Deno.test('a rule sees the graph it is part of, and an effect fires on a commit'
   }
 })
 
-Deno.test('a start-up pass is an effect on this process being born', async () => {
+test('a start-up pass is an effect on this process being born', async () => {
   let booted: string[] = []
   let mod: Plugged = {
     ...shop,
@@ -661,7 +661,7 @@ Deno.test('a start-up pass is an effect on this process being born', async () =>
 // the answer are written down as they go, and a call somebody else wrote is
 // run by the effect the server registers.
 
-Deno.test('the door calls the tool, and the call is the transcript', async () => {
+test('the door calls the tool, and the call is the transcript', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
@@ -705,7 +705,7 @@ Deno.test('the door calls the tool, and the call is the transcript', async () =>
   }
 })
 
-Deno.test('a plugin attaches reply bundles through the host runner', async () => {
+test('a plugin attaches reply bundles through the host runner', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
     only({
@@ -733,7 +733,7 @@ Deno.test('a plugin attaches reply bundles through the host runner', async () =>
   }
 })
 
-Deno.test('a call written through the door is run by the effect', async () => {
+test('a call written through the door is run by the effect', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
@@ -768,7 +768,7 @@ Deno.test('a call written through the door is run by the effect', async () => {
   }
 })
 
-Deno.test('a plugin named with options gets them, beside the host', async () => {
+test('a plugin named with options gets them, beside the host', async () => {
   let said: unknown[] = []
   let host = await compose(
     {
@@ -828,7 +828,7 @@ let pooled = (effects: Plugged['effects']): Plugged => ({
   effects,
 })
 
-Deno.test('a process coming up owes again what a declared sweep selects', async () => {
+test('a process coming up owes again what a declared sweep selects', async () => {
   let ran: string[] = []
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
@@ -863,7 +863,7 @@ Deno.test('a process coming up owes again what a declared sweep selects', async 
   }
 })
 
-Deno.test('an explicit pass runs the retries that are due', async () => {
+test('an explicit pass runs the retries that are due', async () => {
   let ran: string[] = []
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
@@ -913,7 +913,7 @@ Deno.test('an explicit pass runs the retries that are due', async () => {
   }
 })
 
-Deno.test('a pass over some duty roles leaves the others to whoever serves them', async () => {
+test('a pass over some duty roles leaves the others to whoever serves them', async () => {
   let ran: string[] = []
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
@@ -950,7 +950,7 @@ Deno.test('a pass over some duty roles leaves the others to whoever serves them'
   }
 })
 
-Deno.test('a thread its process ended holds nothing, though the pid it ran in lives on', async () => {
+test('a thread its process ended holds nothing, though the pid it ran in lives on', async () => {
   let ran: string[] = []
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
@@ -1007,7 +1007,7 @@ Deno.test('a thread its process ended holds nothing, though the pid it ran in li
   }
 })
 
-Deno.test('a host reads the letter an id wears, which no plugin registers', async () => {
+test('a host reads the letter an id wears, which no plugin registers', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
     only({ shop }),
@@ -1021,7 +1021,7 @@ Deno.test('a host reads the letter an id wears, which no plugin registers', asyn
   }
 })
 
-Deno.test('a duty runs while the host is up and stops when it closes', async () => {
+test('a duty runs while the host is up and stops when it closes', async () => {
   let beats = 0
   let stopped = false
   let host = await compose(
@@ -1054,7 +1054,7 @@ Deno.test('a duty runs while the host is up and stops when it closes', async () 
   assert(stopped, 'closing the host did not let its duty go')
 })
 
-Deno.test('a signal that has already aborted is one pass and out', async () => {
+test('a signal that has already aborted is one pass and out', async () => {
   let passes = 0
   let host = await compose(
     { db: ':memory:', plugins: ['once'] },
@@ -1083,7 +1083,7 @@ Deno.test('a signal that has already aborted is one pass and out', async () => {
   }
 })
 
-Deno.test('a duty that throws is reported, and the host still serves', async () => {
+test('a duty that throws is reported, and the host still serves', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', 'broken', ...HTTP] },
     only({
@@ -1108,7 +1108,7 @@ Deno.test('a duty that throws is reported, and the host still serves', async () 
   }
 })
 
-Deno.test('a one-shot pass lets every lease go, and a host with no duties takes none', async () => {
+test('a one-shot pass lets every lease go, and a host with no duties takes none', async () => {
   let passes = 0
   let leases = async (duties: boolean) => {
     let host = await compose(
@@ -1144,7 +1144,7 @@ Deno.test('a one-shot pass lets every lease go, and a host with no duties takes 
   assertEquals(passes, 1)
 })
 
-Deno.test('a property that declares its words searched is indexed, and ranked', async () => {
+test('a property that declares its words searched is indexed, and ranked', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', ...HTTP] },
     only({ shop }),
@@ -1202,7 +1202,7 @@ Deno.test('a property that declares its words searched is indexed, and ranked', 
   }
 })
 
-Deno.test('search joins word and meaning results, keeping the marked text', async () => {
+test('search joins word and meaning results, keeping the marked text', async () => {
   let host = await compose(
     { db: ':memory:', plugins: ['shop', 'meaning'] },
     only({
@@ -1238,7 +1238,7 @@ Deno.test('search joins word and meaning results, keeping the marked text', asyn
 // T-37726: a settle timer that outlived its host fired into a closed store
 // and printed a stack about nothing. The host's ending is one fact, and a
 // facet that arms a timer hangs it off that fact.
-Deno.test('a facet hangs its timer off the host ending, and closing cancels it', async () => {
+test('a facet hangs its timer off the host ending, and closing cancels it', async () => {
   let late = 0
   let host = await compose(
     { db: ':memory:', plugins: ['settle'] },
@@ -1261,7 +1261,7 @@ Deno.test('a facet hangs its timer off the host ending, and closing cancels it',
   assertEquals(late, 0, 'a timer fired after the database was let go')
 })
 
-Deno.test('a host hears what another host commits to the same store, and not what it commits itself', async () => {
+test('a host hears what another host commits to the same store, and not what it commits itself', async () => {
   // Two processes over one file — `yak serve` and a `yak` command beside it —
   // each a host of its own, with the journal listed.
   let db = `${Deno.makeTempDirSync()}/graph.db`
@@ -1289,7 +1289,7 @@ Deno.test('a host hears what another host commits to the same store, and not wha
   }
 })
 
-Deno.test('an option written {secret} is that secret, read each time it is asked for', async () => {
+test('an option written {secret} is that secret, read each time it is asked for', async () => {
   let seen: Options | undefined
   let host = await compose(
     {
@@ -1325,7 +1325,7 @@ Deno.test('an option written {secret} is that secret, read each time it is asked
   }
 })
 
-Deno.test('a body kept in the store is still found by its own words', async () => {
+test('a body kept in the store is still found by its own words', async () => {
   // The index is cut from the words, and a property that says `store: blob`
   // holds an address where its text was. An index raised over the raw column
   // would hold hashes, so the host hands its computed reads to the index the
@@ -1372,7 +1372,7 @@ Deno.test('a body kept in the store is still found by its own words', async () =
   }
 })
 
-Deno.test('a duty held by a process that died on this machine is taken at once', async () => {
+test('a duty held by a process that died on this machine is taken at once', async () => {
   let passes = 0
   let host = await compose(
     {

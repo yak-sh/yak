@@ -4,6 +4,7 @@
 // the whole file runs in well under a second. A launch runs under every
 // launcher this machine has, so Linux runs the macOS one too.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
@@ -25,7 +26,7 @@ let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
 
 for (let os of launchers) {
-  Deno.test(`${os}: a launched child keeps both its streams and stamps its exit`, async () => {
+  test(`${os}: a launched child keeps both its streams and stamps its exit`, async () => {
     let g = tracked()
     let at = dir()
     let run = await launch(store(g), {
@@ -48,7 +49,7 @@ for (let os of launchers) {
   // systemd expands the command line it launches, so an unescaped `$` reaches
   // the program as an empty string — a hosted shell wrote a heredoc with
   // every `${…}` deleted before anyone noticed (T-37332).
-  Deno.test(`${os}: a command keeps every dollar the caller wrote`, async () => {
+  test(`${os}: a command keeps every dollar the caller wrote`, async () => {
     let at = dir()
     let run = await launch(store(tracked()), {
       command: 'sh',
@@ -58,7 +59,7 @@ for (let os of launchers) {
     assertEquals(tail(run.eid, 1, { dir: at }), ['${backend} $defs $$ $'])
   })
 
-  Deno.test(`${os}: a document of an argument reaches the program whole, not the row`, async () => {
+  test(`${os}: a document of an argument reaches the program whole, not the row`, async () => {
     let g = tracked()
     let at = dir()
     let long = 'x'.repeat(100_000)
@@ -72,7 +73,7 @@ for (let os of launchers) {
     assert(String(comp(row, PROCESS)?.command).length < long.length)
   })
 
-  Deno.test(`${os}: a finished run's running time stops at its end`, async () => {
+  test(`${os}: a finished run's running time stops at its end`, async () => {
     let run = await launch(store(tracked()), {
       command: 'sleep',
       args: ['0.05'],
@@ -86,7 +87,7 @@ for (let os of launchers) {
   })
 }
 
-Deno.test('output stays until its caller cleans the finished run', async () => {
+test('output stays until its caller cleans the finished run', async () => {
   let at = dir()
   let run = await launch(store(tracked()), {
     command: 'sh',
@@ -102,7 +103,7 @@ Deno.test('output stays until its caller cleans the finished run', async () => {
 
 // A tail is read backward a block (64 KiB) at a time, so the cases that matter
 // are lines on either side of a block's edge.
-Deno.test('a tail answers the last whole lines, however long they are', async () => {
+test('a tail answers the last whole lines, however long they are', async () => {
   let at = dir()
   let say = async (script: string) => {
     let run = await launch(store(tracked()), {
@@ -120,7 +121,7 @@ Deno.test('a tail answers the last whole lines, however long they are', async ()
   assertEquals(wide(9), ['a', 'x'.repeat(200_000), 'end'])
 })
 
-Deno.test('a sweep cleans only the runs that ended longer ago than its age', async () => {
+test('a sweep cleans only the runs that ended longer ago than its age', async () => {
   let at = dir()
   let echo = async (word: string) => {
     let run = await launch(store(tracked()), {
@@ -140,7 +141,7 @@ Deno.test('a sweep cleans only the runs that ended longer ago than its age', asy
   assertEquals(await sweep(30_000, { dir: dir() + '/none' }), 0)
 })
 
-Deno.test('a machine with no launcher is refused before anything starts', async () => {
+test('a machine with no launcher is refused before anything starts', async () => {
   let d = dir()
   await assertRejects(() =>
     launch(store(tracked()), { command: 'true' }, { dir: d, os: 'plan9' })
@@ -148,7 +149,7 @@ Deno.test('a machine with no launcher is refused before anything starts', async 
   assertEquals([...Deno.readDirSync(d)], [])
 })
 
-Deno.test('adopting a pid that is already gone stamps the ending, code unknown', async () => {
+test('adopting a pid that is already gone stamps the ending, code unknown', async () => {
   let g = tracked()
   let run = await adopt(store(g), await reaped(), { dir: dir(), poll: 5 })
   assertEquals(await run.done, null)
@@ -158,7 +159,7 @@ Deno.test('adopting a pid that is already gone stamps the ending, code unknown',
   assertEquals(comp(row, EXIT)?.code, null)
 })
 
-Deno.test('watch picks up an unfinished row and stamps the one already gone', async () => {
+test('watch picks up an unfinished row and stamps the one already gone', async () => {
   let g = tracked()
   let dead = await reaped()
   await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: dead } }])
@@ -170,7 +171,7 @@ Deno.test('watch picks up an unfinished row and stamps the one already gone', as
   assertEquals(await watch(store(g), { dir: dir(), poll: 5 }), [])
 })
 
-Deno.test('a run that ended without saying so is found; a live one, a launched one and the asker are not', async () => {
+test('a run that ended without saying so is found; a live one, a launched one and the asker are not', async () => {
   let g = tracked()
   let at = dir()
   Deno.writeTextFileSync(`${at}/launched.started`, '1')
@@ -200,7 +201,7 @@ Deno.test('a run that ended without saying so is found; a live one, a launched o
 // The wrapper's `echo $code > file` creates the file empty and writes it a
 // moment later; a load that stretches that moment let a read see the empty
 // file and stamp a clean exit on a child that exited 3 (T-38290).
-Deno.test('an exit-code file read before it is written is waited for, never read as 0', async () => {
+test('an exit-code file read before it is written is waited for, never read as 0', async () => {
   let g = tracked()
   let d = dir()
   await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await reaped() } }])
@@ -214,7 +215,7 @@ Deno.test('an exit-code file read before it is written is waited for, never read
 // waited for for as long as it is alive, not for a fixed number of polls. Like
 // the wrapper, the stand-in writes the code and then exits, so however a load
 // stretches its sleep, the file is final once it is gone.
-Deno.test('a wrapper slow to write the code is waited for while it lives', async () => {
+test('a wrapper slow to write the code is waited for while it lives', async () => {
   let g = tracked()
   let d = dir()
   let wrapper = new Deno.Command('sh', {

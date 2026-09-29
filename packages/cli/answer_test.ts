@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
@@ -43,18 +44,18 @@ let t10 = {
   completed: {},
 }
 
-Deno.test('a tool’s text prints as written, line for line', () => {
+test('a tool’s text prints as written, line for line', () => {
   let text = { entity: { eid: 'c' }, content: { body: 'one\ntwo\x1b[31m' } }
   assertEquals(said(text), 'one\ntwo[31m')
   assertEquals(said(text, text), 'one\ntwo[31m\none\ntwo[31m')
 })
 
-Deno.test('several entities are a line each; nothing is no lines', () => {
+test('several entities are a line each; nothing is no lines', () => {
   assertEquals(said(t9, t10), 'T-9 Fix the bar open\nT-10 Ship it done')
   assertEquals(said(), '')
 })
 
-Deno.test('search hits show kind, title and marked excerpt even for one hit', async () => {
+test('search hits show kind, title and marked excerpt even for one hit', async () => {
   let found = {
     entity: t9.entity,
     hit: {
@@ -83,7 +84,7 @@ Deno.test('search hits show kind, title and marked excerpt even for one hit', as
   assertEquals(lines, [line])
 })
 
-Deno.test('a transcript search hit names its speaker and session', () => {
+test('a transcript search hit names its speaker and session', () => {
   let entry = {
     entity: { eid: '33333333-3333-4333-8333-333333333333' },
     hit: {
@@ -104,7 +105,7 @@ Deno.test('a transcript search hit names its speaker and session', () => {
   )
 })
 
-Deno.test('search excerpts strip raw controls and compact multiple kinds', () => {
+test('search excerpts strip raw controls and compact multiple kinds', () => {
   let a = {
     entity: t9.entity,
     hit: {
@@ -128,14 +129,14 @@ Deno.test('search excerpts strip raw controls and compact multiple kinds', () =>
   assert(!/[\x00-\x09\x0b-\x1f\x7f-\x9f]/.test(lines))
 })
 
-Deno.test('a lone entity is shown whole', () => {
+test('a lone entity is shown whole', () => {
   assertEquals(
     said(t10),
     'task T-10 done\n\nShip it\n\nDetails\n\ntask: ✓\ncompleted: ✓',
   )
 })
 
-Deno.test('a reference prints as the id of the entity looked up for it', () => {
+test('a reference prints as the id of the entity looked up for it', () => {
   let t11 = {
     entity: { eid: '33333333-3333-4333-8333-333333333333', num: 11 },
     task: {},
@@ -149,7 +150,7 @@ Deno.test('a reference prints as the id of the entity looked up for it', () => {
   assertEquals(facts([t11]), 'completed: by T-11')
 })
 
-Deno.test('a held answer is drawn by a plugin’s terminal views first', async () => {
+test('a held answer is drawn by a plugin’s terminal views first', async () => {
   let app = { view: 'Page', match: true as const, Render: () => null }
   let held = await terminal(
     ['@yaks/task'],
@@ -169,7 +170,7 @@ let link = (from: string, relation: string, to: string) => ({
   [relation]: {},
 })
 
-Deno.test('a lone entity’s page asks for its links and comments, and leaves bookkeeping out', async () => {
+test('a lone entity’s page asks for its links and comments, and leaves bookkeeping out', async () => {
   let t9eid = t9.entity.eid, t10eid = t10.entity.eid
   let g = graph({ storage: ram(vocab), vocab })
   let edge = (from: string, relation: string, to: string) => ({
@@ -209,7 +210,7 @@ Deno.test('a lone entity’s page asks for its links and comments, and leaves bo
   assertStringIncludes(page, 'looks good')
 })
 
-Deno.test('a write’s answer is drawn as its entities now stand', async () => {
+test('a write’s answer is drawn as its entities now stand', async () => {
   let shown = async (answer: unknown[], wrote: boolean) => {
     let lines: string[] = []
     await show(
@@ -230,7 +231,7 @@ Deno.test('a write’s answer is drawn as its entities now stand', async () => {
   assertEquals(await shown([gone], true), await shown([gone], false))
 })
 
-Deno.test('a new entity is drawn whole, and what it was found near a line apiece', async () => {
+test('a new entity is drawn whole, and what it was found near a line apiece', async () => {
   let made = { entity: { eid: t9.entity.eid }, doc: t9.doc, task: {} }
   let near = {
     entity: t10.entity,
@@ -262,7 +263,7 @@ Deno.test('a new entity is drawn whole, and what it was found near a line apiece
   assertEquals(found, 'T-9: T-10 Ship it · task done (meaning)')
 })
 
-Deno.test('a link in a list reads as the sentence it states', () => {
+test('a link in a list reads as the sentence it states', () => {
   assertEquals(
     printed(views, vocab, [
       link(t10.entity.eid, 'contains', t9.entity.eid),

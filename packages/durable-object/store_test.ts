@@ -4,6 +4,7 @@
 // owns a transaction — hold. The stand-in refuses anything workerd would, so
 // each of these fails loudly rather than only in production.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, match, reads } from '@yaks/graph'
 import { blobKeywords, blobRead, blobSchema } from '@yaks/blob'
@@ -16,7 +17,7 @@ import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Record<string, unknown>
 
-Deno.test('install is idempotent, and a bundle survives the round trip', () => {
+test('install is idempotent, and a bundle survives the round trip', () => {
   let s = store()
   s.install() // create-if-not-exists: a woken object may call it every time
   s.tx((tx) =>
@@ -34,7 +35,7 @@ Deno.test('install is idempotent, and a bundle survives the round trip', () => {
   assertEquals(comp(p, 'product').available, true)
 })
 
-Deno.test('an object and an array come back as the values written', () => {
+test('an object and an array come back as the values written', () => {
   let s = store(kitchen)
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   let [read] = s.read('.recipe') as Bundle[]
@@ -42,13 +43,13 @@ Deno.test('an object and an array come back as the values written', () => {
   assertEquals([read.recipe, got.recipe], [RECIPE, RECIPE])
 })
 
-Deno.test('a projected boolean reads back as true or false', () => {
+test('a projected boolean reads back as true or false', () => {
   let s = store(kitchen)
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(s.rows(PROJECTED), [PROJECTED_ROW])
 })
 
-Deno.test('a hosted blob-backed binding projects text at every collection level', () => {
+test('a hosted blob-backed binding projects text at every collection level', () => {
   let vocab = loadVocab({
     $defs: {
       doc: {
@@ -75,7 +76,7 @@ Deno.test('a hosted blob-backed binding projects text at every collection level'
   })
 })
 
-Deno.test('bytes go in as an ArrayBuffer and come back as bytes', () => {
+test('bytes go in as an ArrayBuffer and come back as bytes', () => {
   let s = store()
   s.tx((tx) =>
     tx.patch([{
@@ -87,7 +88,7 @@ Deno.test('bytes go in as an ArrayBuffer and come back as bytes', () => {
   assertEquals(comp(d, 'doc').body, new Uint8Array([1, 2, 3]))
 })
 
-Deno.test("the transaction is the runtime's, and it rolls back", () => {
+test("the transaction is the runtime's, and it rolls back", () => {
   let s = store()
   assertThrows(() =>
     s.tx((tx) => {
@@ -98,7 +99,7 @@ Deno.test("the transaction is the runtime's, and it rolls back", () => {
   assertEquals(s.read('.kind=doc'), [])
 })
 
-Deno.test('a value the engine will not take never reaches it', () => {
+test('a value the engine will not take never reaches it', () => {
   // The stand-in throws on anything but an ArrayBuffer, string, number or
   // null — so this passing is the proof the driver converts.
   let s = storage(durable(), shop)

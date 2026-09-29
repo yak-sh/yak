@@ -1,4 +1,5 @@
 // A task tile owns the frame; its facts come through the shared Meta view.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
@@ -10,7 +11,7 @@ let children = (v: VNode) =>
   (Array.isArray(v.props.children) ? v.props.children : [v.props.children])
     .flat().filter(Boolean) as VNode[]
 
-Deno.test('task tile delegates its dense meta row to the registry', () => {
+test('task tile delegates its dense meta row to the registry', () => {
   let e: Ent = {
     eid: 'task',
     num: 1,

@@ -1,11 +1,12 @@
 // The app gateway decides who may read before asking Files for cached bytes.
 // The versioned representation, conditions and seeks all use that one door.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as apps from './apps.ts'
 import * as files from './files.ts'
 import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 
-Deno.test('private app blobs keep the cache behind authorization', async () => {
+test('private app blobs keep the cache behind authorization', async () => {
   using scenario = platform()
   let { env } = scenario
   await seeded(env, 'private')

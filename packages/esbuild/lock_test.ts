@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { lockfile, pins, wanted } from './lock.ts'
 
-Deno.test('a lock the build writes is the lock the next build installs', () => {
+test('a lock the build writes is the lock the next build installs', () => {
   let ranges = { three: '^0.180.0', hono: '^4' }
   let versions = { three: '0.180.1', hono: '4.13.9', 'es-toolkit': '1.2.0' }
   let text = lockfile('game', ranges, versions)
@@ -14,7 +15,7 @@ Deno.test('a lock the build writes is the lock the next build installs', () => {
   assertEquals(lock.packages[''].dependencies, ranges)
 })
 
-Deno.test('a range the lock no longer satisfies is resolved again', () => {
+test('a range the lock no longer satisfies is resolved again', () => {
   let held = pins(
     lockfile(undefined, { three: '^0.180.0' }, { three: '0.180.1' }),
   )

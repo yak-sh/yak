@@ -1,5 +1,6 @@
 // Command names find the current hero, villager or land, with ids for
 // ambiguous names and ephemeral entities.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -18,7 +19,7 @@ let row = (eid: string, player: string, name: string, at: number): Bundle => ({
   look: { player, name, at },
 })
 
-Deno.test('command target names choose lands, villagers, and current heroes', async () => {
+test('command target names choose lands, villagers, and current heroes', async () => {
   let looks = [
     row('old', 'hero-1', 'Bramble', 1),
     row('new', 'hero-1', 'Hazel', 2),
@@ -45,7 +46,7 @@ Deno.test('command target names choose lands, villagers, and current heroes', as
   assertEquals(await resolveTarget('Nobody', () => Promise.resolve([])), null)
 })
 
-Deno.test('command target refuses ambiguous current hero names', async () => {
+test('command target refuses ambiguous current hero names', async () => {
   let looks = [
     row('a', 'hero-1', 'Bramble', 1),
     row('b', 'hero-2', 'Bramble', 2),
@@ -64,7 +65,7 @@ Deno.test('command target refuses ambiguous current hero names', async () => {
   )
 })
 
-Deno.test('command name queries parse spaces and ampersands in graph', async () => {
+test('command name queries parse spaces and ampersands in graph', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   let hero = '01234567-89ab-cdef-0123-456789abcdef'

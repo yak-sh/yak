@@ -1,10 +1,11 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { runtimeRows } from './runtime.ts'
 import { elapsed } from './RuntimePanel.ts'
 import { at, harness, repo, worker } from './testing.ts'
 
-Deno.test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
+test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
   let entered = Promise.withResolvers<void>()
   let calls = 0
   let a = local({
@@ -61,7 +62,7 @@ Deno.test('runtime cancellation preserves partial text, waits for new input, and
 let assertMatch = (value: string, part: string) =>
   assert(value.includes(part), value)
 
-Deno.test('runtime queued cancellation is scoped, and inspection does not schedule execution', async () => {
+test('runtime queued cancellation is scoped, and inspection does not schedule execution', async () => {
   let h = await harness()
   let calls = 0
   let a = local({
@@ -103,13 +104,13 @@ Deno.test('runtime queued cancellation is scoped, and inspection does not schedu
     await a.close()
   }
 })
-Deno.test('elapsed tolerates unknown clocks and does not display negative durations', () => {
+test('elapsed tolerates unknown clocks and does not display negative durations', () => {
   assertEquals(elapsed(undefined, 0), '')
   assertEquals(elapsed('1970-01-01T00:00:00Z', 62000), '1m 2s')
   assertEquals(elapsed('1970-01-01T00:00:02Z', 0), '0s')
 })
 
-Deno.test('runtime panel reads only while visible; navigation and feedback stay local', async () => {
+test('runtime panel reads only while visible; navigation and feedback stay local', async () => {
   const { h: node } = await import('preact')
   const { mount } = await import('../tui/testing.ts')
   const { frontend } = await import('./frontend.ts')
@@ -184,7 +185,7 @@ Deno.test('runtime panel reads only while visible; navigation and feedback stay 
   }
 })
 
-Deno.test('worker runtime projection and scoped continuation use explicit commands', async () => {
+test('worker runtime projection and scoped continuation use explicit commands', async () => {
   const { remote } = await import('./remote.ts')
   let connection = await remote({
     worker: worker(),

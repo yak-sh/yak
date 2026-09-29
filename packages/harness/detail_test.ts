@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { entrySource, SOURCE_LIMIT } from './detail.ts'
 import { remote } from './remote.ts'
@@ -19,7 +20,7 @@ const seed = [
   { entity: { eid: 'other' }, session: {} },
 ]
 
-Deno.test('SOURCE authorizes inherited entry without reading transcript and pages Unicode with revision', async () => {
+test('SOURCE authorizes inherited entry without reading transcript and pages Unicode with revision', async () => {
   let h = await harness()
   try {
     await h.g.apply(seed)
@@ -73,7 +74,7 @@ Deno.test('SOURCE authorizes inherited entry without reading transcript and page
   }
 })
 
-Deno.test('SOURCE worker fake matches inline read and rejects unrelated entries', async () => {
+test('SOURCE worker fake matches inline read and rejects unrelated entries', async () => {
   let dir = await Deno.makeTempDir(), db = dir + '/db.sqlite'
   let h = await harness(db)
   await h.g.apply(seed)
@@ -108,7 +109,7 @@ Deno.test('SOURCE worker fake matches inline read and rejects unrelated entries'
   }
 })
 
-Deno.test('SOURCE prefers full receipt and supports call arguments without searching', async () => {
+test('SOURCE prefers full receipt and supports call arguments without searching', async () => {
   let h = await harness()
   try {
     await h.g.apply([

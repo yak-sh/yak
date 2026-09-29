@@ -1,4 +1,5 @@
 // The shared renderer registry picks a vocabulary column's face and control.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { h, render } from 'preact'
@@ -35,7 +36,7 @@ let show = (comp: string, col: string, v: unknown) => {
 // deno-lint-ignore no-explicit-any
 let vn = (x: unknown) => x as any
 
-Deno.test('the type picks its face', () => {
+test('the type picks its face', () => {
   // text is its own words (a fragment face)
   assertEquals(vn(show('doc', 'title', 'hi')).props.children, 'hi')
   assertEquals(vn(show('filed', 'priority', 3)).props.children, 'P3')
@@ -56,7 +57,7 @@ Deno.test('the type picks its face', () => {
   assertEquals(show('web', 'url', null), null)
 })
 
-Deno.test('formatted scalars feed browser faces and badges', () => {
+test('formatted scalars feed browser faces and badges', () => {
   let badge = vn(Prio({ p: 'p02' }))
   assertEquals(badge.props.children, 'P2')
   assertEquals(Prio({ p: null }), null)
@@ -64,7 +65,7 @@ Deno.test('formatted scalars feed browser faces and badges', () => {
   assertEquals(formatProp(prop('number'), '+01.0'), '1')
 })
 
-Deno.test('an eid face prefers its target title and falls back to id', () => {
+test('an eid face prefers its target title and falls back to id', () => {
   let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   cache.value = {
     [eid]: {
@@ -79,7 +80,7 @@ Deno.test('an eid face prefers its target title and falls back to id', () => {
   cache.value = {}
 })
 
-Deno.test('a linked prop keeps a separate edit press', () => {
+test('a linked prop keeps a separate edit press', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -132,7 +133,7 @@ Deno.test('a linked prop keeps a separate edit press', () => {
   }
 })
 
-Deno.test('ago says the distance in words', () => {
+test('ago says the distance in words', () => {
   let now = Date.parse('2026-07-23T12:00:00Z')
   assertEquals(ago('2026-07-23T11:00:00Z', now), '1 hour ago')
   assertEquals(ago('2026-07-23T11:59:40Z', now), 'just now')
@@ -140,7 +141,7 @@ Deno.test('ago says the distance in words', () => {
   assertEquals(ago(null, now), '')
 })
 
-Deno.test('column overlays use the entity registry and retain its view walk', () => {
+test('column overlays use the entity registry and retain its view walk', () => {
   let e = ent('selection')
   for (
     let [comp, col] of [
@@ -199,7 +200,7 @@ Deno.test('column overlays use the entity registry and retain its view walk', ()
   }
 })
 
-Deno.test('column actions keep fleet parsing and reject derived writes', () => {
+test('column actions keep fleet parsing and reject derived writes', () => {
   let e = ent('editing')
   assertEquals(editColumn(e, { comp: 'filed', prop: 'priority' }, 'p02'), {
     filed: { priority: 2 },
@@ -211,7 +212,7 @@ Deno.test('column actions keep fleet parsing and reject derived writes', () => {
   assertThrows(() => editColumn(e, { comp: 'task', prop: 'status' }, 'done'))
 })
 
-Deno.test('native number and query editors retain their existing elements', () => {
+test('native number and query editors retain their existing elements', () => {
   for (
     let [comp, prop, value, selector] of [
       ['filed', 'priority', 2, 'input.Prop_Num'],
@@ -237,7 +238,7 @@ Deno.test('native number and query editors retain their existing elements', () =
   }
 })
 
-Deno.test('enum, reference and domain controls retain their shared popouts', () => {
+test('enum, reference and domain controls retain their shared popouts', () => {
   let domains = defineWells({}).domains
   defineWells({ domains: () => ['plugin domain'] })
   let restore = useRoute(() => {})

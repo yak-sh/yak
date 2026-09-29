@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -67,7 +68,7 @@ let row = (root: Element, col: string) =>
     row.querySelector('dt')?.textContent == col
   )!
 
-Deno.test('component properties open anchored reference and enum controls', async () => {
+test('component properties open anchored reference and enum controls', async () => {
   let { root, document, eid, free } = page()
   try {
     for (
@@ -99,7 +100,7 @@ Deno.test('component properties open anchored reference and enum controls', asyn
   }
 })
 
-Deno.test('properties stay closed and native read-only fields have no edit press', () => {
+test('properties stay closed and native read-only fields have no edit press', () => {
   let { root, document, eid, free } = page()
   try {
     render(h(Entity, { eid, view: 'Props', comp: 'doc' }), root)
@@ -128,7 +129,7 @@ Deno.test('properties stay closed and native read-only fields have no edit press
   }
 })
 
-Deno.test('native resolve callers can mount a portable property list', () => {
+test('native resolve callers can mount a portable property list', () => {
   let { root, eid, free } = page()
   try {
     let e = ent(eid)
@@ -146,7 +147,7 @@ Deno.test('native resolve callers can mount a portable property list', () => {
   }
 })
 
-Deno.test('portable property editors apply through the app host and status uses marks', async () => {
+test('portable property editors apply through the app host and status uses marks', async () => {
   let { root, document, eid, sent, free } = page()
   try {
     render(h(Entity, { eid, view: 'Props', comp: 'repo' }), root)

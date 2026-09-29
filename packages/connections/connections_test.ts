@@ -2,6 +2,7 @@
 // where a key and a grant go, what an app is handed, and what a disconnect or a
 // deleted owner leaves behind.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, Stale } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -132,7 +133,7 @@ let setup = async (...replies: [number, unknown][]) => {
   return { g, vault, c, needs, seen: e.seen }
 }
 
-Deno.test('a space owner can attach a connected account in place of an unmet ask', async () => {
+test('a space owner can attach a connected account in place of an unmet ask', async () => {
   let { g, c, needs, vault } = await setup()
   let connected = await needs({ app: undefined, integration: 'texts' })
   await connect(c, connected, { key: 'private-key' })
@@ -178,7 +179,7 @@ Deno.test('a space owner can attach a connected account in place of an unmet ask
   )
 })
 
-Deno.test('attachment requires the space connection and sufficient OAuth scopes', async () => {
+test('attachment requires the space connection and sufficient OAuth scopes', async () => {
   let { g, needs } = await setup()
   let connected = await needs({ app: undefined, scopes: ['events'] })
   await g.apply([{
@@ -202,7 +203,7 @@ Deno.test('attachment requires the space connection and sufficient OAuth scopes'
   )
 })
 
-Deno.test('attachment does not turn a direct-key request into an implicit grant', async () => {
+test('attachment does not turn a direct-key request into an implicit grant', async () => {
   let { g, c, needs } = await setup()
   let connected = await needs({ app: undefined, integration: 'texts' })
   await connect(c, connected, { key: 'private-key' })
@@ -236,7 +237,7 @@ await sentinelOf(warm.vault, 'none')
 await crypto.subtle.digest('SHA-256', new Uint8Array())
 new URL('https://warm.example/?a=b').searchParams.set('c', 'd')
 
-Deno.test(
+test(
   'install: each built integration whole and marked built, and nothing once all match',
   async () => {
     let { g } = await setup()
@@ -263,7 +264,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'only the host marks an integration built, and need never writes over one',
   async () => {
     let { g } = await setup()
@@ -284,7 +285,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'need: a connection with no credential, linked from the app, and asked again is the same one',
   async () => {
     let { g, c, needs } = await setup()
@@ -309,7 +310,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'need: a key for an unbuilt service names its hosts, which no later need may change',
   async () => {
     let { g, needs } = await setup()
@@ -343,7 +344,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'connect: a pasted key goes to the vault, and the app is handed its sentinel',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -366,7 +367,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'begin and connect: a sign-in keeps its grant behind the connection’s own handle',
   async () => {
     let { g, vault, c, needs, seen } = await setup([200, {
@@ -391,7 +392,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'a sign-in answering a key needs no registered client, and the key is its credential',
   async () => {
     let { c, needs } = await setup([200, { key: 'sk-or' }])
@@ -402,7 +403,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'an OAuth client is kept once, and a custom integration never signs in as a built one’s',
   async () => {
     let { g, vault } = await setup()
@@ -417,7 +418,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'refresh: a new token behind the same handle; a refused grant is broken, a failed wire is not',
   async () => {
     let { g, c, needs } = await setup(
@@ -441,7 +442,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'disconnect: the credential is forgotten, and an app that used it needs a new one',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -465,7 +466,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'each: every person connects their own, which only they are handed, and which a disconnect does not replace',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -502,7 +503,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'envOf: what the app reads, by name: a sentinel, or the key itself where the link is direct',
   async () => {
     let { g, vault, c, needs } = await setup()
@@ -550,7 +551,7 @@ Deno.test(
   },
 )
 
-Deno.test('a deleted owner takes its connections, and their credentials', async () => {
+test('a deleted owner takes its connections, and their credentials', async () => {
   let { g, vault, c, needs } = await setup()
   await connect(c, await needs({ integration: 'texts' }), { key: 'sk-live' })
   await g.apply([{ entity: { eid: 'space' }, tombstone: {} }])
@@ -558,7 +559,7 @@ Deno.test('a deleted owner takes its connections, and their credentials', async 
   assertEquals(kept(vault), CLIENTS)
 })
 
-Deno.test(
+test(
   'the tools: need writes nothing secret, and list answers the owner’s',
   async () => {
     let { g } = await setup()

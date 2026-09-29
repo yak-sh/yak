@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphics } from './graphics.ts'
 import type { Line } from './paint.ts'
@@ -17,7 +18,7 @@ let lines = (source: ImageSource): Line[] =>
     image: { source, row, rows: 3, width: 4 },
   }])
 let settle = () => new Promise((resolve) => setTimeout(resolve, 0))
-Deno.test('graphics loads only full visible blocks, uploads once, removes placements and frees data', async () => {
+test('graphics loads only full visible blocks, uploads once, removes placements and frees data', async () => {
   let loads = 0, paints = 0
   let source = {
     key: 'one',
@@ -49,7 +50,7 @@ Deno.test('graphics loads only full visible blocks, uploads once, removes placem
   assert(g.close().includes('a=d,d=I'))
   assertEquals(g.draw(lines(source)), '')
 })
-Deno.test('disabled graphics never loads; invalid PNG stays fallback; tmux transport escapes APC', async () => {
+test('disabled graphics never loads; invalid PNG stays fallback; tmux transport escapes APC', async () => {
   let source = {
     key: 'one',
     rows: 3,
@@ -77,7 +78,7 @@ Deno.test('disabled graphics never loads; invalid PNG stays fallback; tmux trans
   bad.close()
 })
 
-Deno.test('pure Image layout reserves rows and backend never resends bytes on warm paint', async () => {
+test('pure Image layout reserves rows and backend never resends bytes on warm paint', async () => {
   const { h, render } = await import('preact')
   const { Image } = await import('./Image.ts')
   const { install, onPaint } = await import('./dom.ts')
@@ -123,7 +124,7 @@ Deno.test('pure Image layout reserves rows and backend never resends bytes on wa
   }
 })
 
-Deno.test('each Kitty upload chunk suppresses replies and errors produce a diagnostic fallback', async () => {
+test('each Kitty upload chunk suppresses replies and errors produce a diagnostic fallback', async () => {
   let source = {
     key: 'chunked',
     rows: 3,
@@ -150,7 +151,7 @@ Deno.test('each Kitty upload chunk suppresses replies and errors produce a diagn
   g.close()
 })
 
-Deno.test('virtual cached image repaints after asynchronous load without re-upload on typing', async () => {
+test('virtual cached image repaints after asynchronous load without re-upload on typing', async () => {
   let { h, render } = await import('preact')
   let { VirtualList } = await import('./VirtualList.ts')
   let { Image } = await import('./Image.ts')

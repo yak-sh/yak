@@ -11,6 +11,7 @@
 // carry the whole subscription and the door reads nothing back — which is also
 // the shape a deploy has before the owner sets one. Stripe cannot reach a
 // loopback kernel, so the test signs each delivery with that secret.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   charged,
@@ -25,7 +26,7 @@ import {
   WEBHOOK_SECRET,
 } from './probe.ts'
 
-Deno.test(
+test(
   'the webhook flips a plan, once, whatever order it arrives in',
   async () => {
     let key = stripeKey()
@@ -111,7 +112,7 @@ Deno.test(
 // Every one of these is refused before its object is read, so the object need
 // not be Stripe's: the refusals are the door's own. A delivery getting in with
 // no Origin is the test above.
-Deno.test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
+test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
   let k = await kernel()
   try {
     await seed(k, [{ slug: 'jeff3', apps: ['recipes'] }])
@@ -176,7 +177,7 @@ Deno.test('an unsigned webhook is refused, and so is a foreign Origin', async ()
   }
 })
 
-Deno.test('the billing doors say no before they say anything else', async () => {
+test('the billing doors say no before they say anything else', async () => {
   let k = await kernel()
   try {
     // Signed out, at both doors: the same refusal, and never a 500.

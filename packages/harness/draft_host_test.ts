@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { openDrafts } from './draft_vault.ts'
 
-Deno.test('host profiles isolate frontends, lock concurrent writers and recover across reopen', async () => {
+test('host profiles isolate frontends, lock concurrent writers and recover across reopen', async () => {
   const directory = await Deno.makeTempDir()
   // Each frontend reads its own environment; the test process's is untouched.
   const at = (frontend: string) => (name: string) =>

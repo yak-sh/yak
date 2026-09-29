@@ -1,6 +1,7 @@
 // Equipped magic stays lit in the hero's hands through the figure render door.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { BUILD, hero } from './figures.ts'
 import { ITEMS } from './items.ts'
@@ -8,7 +9,7 @@ import { seedItems } from './items_fixture.ts'
 
 seedItems()
 
-Deno.test('a staff and tome carry their own soft light', () => {
+test('a staff and tome carry their own soft light', () => {
   let f = hero(BUILD, { tint: '#668866', hair: '#443322', skin: '#ddbb99' }, {
     main: 'staff2',
     off: 'tome2',

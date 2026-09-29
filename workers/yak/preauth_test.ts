@@ -7,6 +7,7 @@
 // else it could have made. mcp_test.ts holds the rest: the tools a stranger
 // may call, which do read data (anon.ts), and the 401 and its challenge for
 // everything neither surface answers.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { WORDS } from './content.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
@@ -30,7 +31,7 @@ let site = () => {
   }
 }
 
-Deno.test('every public method answers, out of the site and nothing else', async () => {
+test('every public method answers, out of the site and nothing else', async () => {
   let s = site()
   let init = await answer('initialize', { protocolVersion: '2025-03-26' }, s)
   assertEquals(
@@ -66,7 +67,7 @@ Deno.test('every public method answers, out of the site and nothing else', async
   assertEquals(read.contents[0].text, '# /docs/querying.md')
 })
 
-Deno.test('public MCP words and resources use the configured apex', async () => {
+test('public MCP words and resources use the configured apex', async () => {
   let env = { ...site(), APEX: 'yaks.fyi' }
   let init = await answer('initialize', {}, env) as {
     serverInfo: { websiteUrl: string; icons: { src: string }[] }
@@ -93,7 +94,7 @@ Deno.test('public MCP words and resources use the configured apex', async () => 
   assert(ideas.messages[0].content.text.includes('https://yaks.fyi/login'))
 })
 
-Deno.test('a protected method, tool or page is not answered here', async () => {
+test('a protected method, tool or page is not answered here', async () => {
   let s = site()
   for (
     let [method, params] of [
@@ -131,7 +132,7 @@ Deno.test('a protected method, tool or page is not answered here', async () => {
   assertEquals(s.asked, [])
 })
 
-Deno.test('the public tools are the signed-in ones, word for word', async () => {
+test('the public tools are the signed-in ones, word for word', async () => {
   for (let t of PUBLIC) {
     let full = TOOLS.find((f) => f.name == t.name)
     assert(full, `${t.name} is public but not offered signed in`)
@@ -146,7 +147,7 @@ Deno.test('the public tools are the signed-in ones, word for word', async () => 
   assert(TOOLS.length > PUBLIC.length, 'signing in has to be worth something')
 })
 
-Deno.test('the public resources are the guide, and only the guide', () => {
+test('the public resources are the guide, and only the guide', () => {
   assertEquals(DOCS.map((d) => d.uri), [
     WHOLE,
     ...PAGES.map((p) => uriOf(p.slug)),
@@ -165,7 +166,7 @@ Deno.test('the public resources are the guide, and only the guide', () => {
 // to subscriptions or purchases, and this text is the part of it a stranger
 // reads first. Not even "free to start", which names a paid tier by implying
 // one.
-Deno.test('nothing public sells anything', () => {
+test('nothing public sells anything', () => {
   // `subscribe` is deliberately not in this net: it is the client function a
   // page calls to redraw itself (docs/store.md), and the word to catch is
   // the noun, not the verb.

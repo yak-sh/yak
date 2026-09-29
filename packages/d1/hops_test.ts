@@ -71,6 +71,7 @@
 //                             still one statement: the cut is OR'd groups, not
 //                             rounds.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, graph, token } from '@yaks/graph'
 import { members } from '@yaks/member'
@@ -119,7 +120,7 @@ let shopHops = async (
   return hops()
 }
 
-Deno.test('a plain write', async () => {
+test('a plain write', async () => {
   let name = 'a plain write'
   holds(
     name,
@@ -130,7 +131,7 @@ Deno.test('a plain write', async () => {
   )
 })
 
-Deno.test('a write with $was', async () => {
+test('a write with $was', async () => {
   let name = 'a write with $was'
   holds(
     name,
@@ -142,7 +143,7 @@ Deno.test('a write with $was', async () => {
   )
 })
 
-Deno.test('a $delete with a cascade', async () => {
+test('a $delete with a cascade', async () => {
   let name = 'a $delete with a cascade'
   // A review cascades with its product, a bookmark of it is released, and a
   // maker would be detached. The closure and the soft references are one batch
@@ -158,7 +159,7 @@ Deno.test('a $delete with a cascade', async () => {
   )
 })
 
-Deno.test('a member-guarded write', async () => {
+test('a member-guarded write', async () => {
   let name = 'a member-guarded write'
   let { store, hops, reset } = await counted(club)
   let { club: c, dana, raj, mo, list, notes } = ids
@@ -198,7 +199,7 @@ Deno.test('a member-guarded write', async () => {
   holds(name, hops())
 })
 
-Deno.test('a .refs= read over a wide vocabulary', async () => {
+test('a .refs= read over a wide vocabulary', async () => {
   let name = 'a .refs= read over a wide vocabulary'
   let { store, hops, reset } = await counted(club)
   let { club: c, dana, list } = ids
@@ -222,7 +223,7 @@ Deno.test('a .refs= read over a wide vocabulary', async () => {
   holds(name, hops())
 })
 
-Deno.test('a batch of 50 bundles', async () => {
+test('a batch of 50 bundles', async () => {
   let name = 'a batch of 50 bundles'
   // The point of the row: the gather and the flush are each one round trip
   // however wide the batch is, so 50 bundles cost what one does.

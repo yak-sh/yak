@@ -4,6 +4,7 @@
 // asserts every branch that reads one of those indexes still fires correctly —
 // the behavior the eight former per-name scans produced.
 
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { link } from './edge.ts'
@@ -28,7 +29,7 @@ let ctx: Ctx = {
   idOf: (e) => ids[e] ?? null,
 }
 
-Deno.test('attentionOf derives model receipt from transcript references', () => {
+test('attentionOf derives model receipt from transcript references', () => {
   let changes: Change[] = [
     { eid: 'E1', name: 'entry', comp: { session: 'S' } },
     ...link('E1', 'referenced', 'C1'),
@@ -38,7 +39,7 @@ Deno.test('attentionOf derives model receipt from transcript references', () => 
   assertEquals([...attentionOf(changes, 'S')].sort(), ['C1', 'E1'])
 })
 
-Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
+test('channelEvents: one-pass indexing feeds every branch', () => {
   let batch: Change[] = [
     // comment aimed at the served session entity — a comment on an entity
     // this run does not claim, so it is not delivered
@@ -110,7 +111,7 @@ Deno.test('channelEvents: one-pass indexing feeds every branch', () => {
 // A notice (D-13858) is served beside comments, keyed the same way — about a
 // claimed task — but as its own `notice` kind, with the emitter's byline. A
 // notice about the session entity or an unrelated entity reaches nobody here.
-Deno.test('channelEvents: notices serve beside comments', () => {
+test('channelEvents: notices serve beside comments', () => {
   let batch: Change[] = [
     { eid: 'nz', name: 'signal', comp: { target: 'S', event: 'lapse' } },
     { eid: 'nz', name: 'doc', comp: { title: '', body: 'lease lapsed' } },
@@ -136,7 +137,7 @@ Deno.test('channelEvents: notices serve beside comments', () => {
 // consumers filter identically. The edge case the blanket guard must NOT harm:
 // a self-directed cadence knock ("your pass resumes"), which a wake mints on
 // the actor's behalf with created.via == null — never the reading session.
-Deno.test('channelEvents: own writes skipped, cadence self-knock kept', () => {
+test('channelEvents: own writes skipped, cadence self-knock kept', () => {
   // The unified operator: its actor IS its home project (D-19459), so a knock
   // delivered to the home board passes the recipient gate as the actor knock.
   let opIds: Record<string, string> = { S: 'S-31', T: 'T-9', P: 'P-19' }

@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bound, Bundle } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { Store } from './graph.ts'
 import { platform, state } from './testing.ts'
 import { meta } from './meta.ts'
@@ -39,7 +39,7 @@ let ring = async (p: ReturnType<typeof platform>, name = PLATFORM_STORE) => {
   await p.object(name).alarm()
 }
 
-Deno.test('a wake fires in the store that holds it and its rule receives the tick instant', async () => {
+test('a wake fires in the store that holds it and its rule receives the tick instant', async () => {
   let seen: Bound[] = []
   let fixture: Plugin = {
     name: 'wake-fixture',
@@ -93,7 +93,7 @@ Deno.test('a wake fires in the store that holds it and its rule receives the tic
   }
 })
 
-Deno.test('seeded wake rows survive a directory restart without rewinding or resuming', async () => {
+test('seeded wake rows survive a directory restart without rewinding or resuming', async () => {
   let p = platform('wake restart')
   let store = await directory(p)
   let planted = await meta(p.env).query('.wake')
@@ -123,7 +123,7 @@ Deno.test('seeded wake rows survive a directory restart without rewinding or res
   )
 })
 
-Deno.test('a job is marked begun on its row while it runs, and cleared after', async () => {
+test('a job is marked begun on its row while it runs, and cleared after', async () => {
   let marks: unknown[] = []
   let META = {
     apply: (b: Bundle[], headers?: Record<string, string>) => {
@@ -164,14 +164,14 @@ let died = async (began: string, since?: string) => {
 }
 let ago = (ms: number) => new Date(Date.now() - ms).toISOString()
 
-Deno.test('a job its object died under is fired again by the next one, unreported', async () => {
+test('a job its object died under is fired again by the next one, unreported', async () => {
   let began = ago(60_000)
   let { sweep, broke } = await died(began)
   assertEquals(sweep, { kind: 'trash', began: null, since: began })
   assertEquals(broke, [])
 })
 
-Deno.test('a job with no run finished for STUCK is reported at each death', async () => {
+test('a job with no run finished for STUCK is reported at each death', async () => {
   let began = ago(60_000), since = ago(STUCK)
   let { sweep, broke } = await died(began, since)
   assertEquals(sweep, { kind: 'trash', began: null, since })
@@ -183,7 +183,7 @@ Deno.test('a job with no run finished for STUCK is reported at each death', asyn
   }])
 })
 
-Deno.test('the meter wake runs its job at the supplied hour', async () => {
+test('the meter wake runs its job at the supplied hour', async () => {
   let asked: Record<string, unknown>[] = []
   let fetch = globalThis.fetch
   globalThis.fetch = (url, init) => {
@@ -222,7 +222,7 @@ Deno.test('the meter wake runs its job at the supplied hour', async () => {
 // asking the directory once per space ran past the runtime's depth limit
 // (T-34844). The alarm removes the last of that hop: the tick is the object's
 // own method, so the heartbeat's knock on /tick is gone too.
-Deno.test('a directory job reads and writes the directory in-process, never through its own stub', async () => {
+test('a directory job reads and writes the directory in-process, never through its own stub', async () => {
   let fetch = globalThis.fetch
   globalThis.fetch = () =>
     Promise.resolve(Response.json({ data: { viewer: { accounts: [] } } }))
@@ -261,7 +261,7 @@ Deno.test('a directory job reads and writes the directory in-process, never thro
   }
 })
 
-Deno.test('a refused wake stays due, says why in the break log, and is tried again', async () => {
+test('a refused wake stays due, says why in the break log, and is tried again', async () => {
   let p = platform('wake refusal')
   let store = await directory(p)
   await meta(p.env).apply([{
@@ -296,7 +296,7 @@ Deno.test('a refused wake stays due, says why in the break log, and is tried aga
   )
 })
 
-Deno.test('a write arms the object for the wake it just heard, and the alarm fires it', async () => {
+test('a write arms the object for the wake it just heard, and the alarm fires it', async () => {
   let p = platform('wake alarm')
   await directory(p)
   let storage = p.states.get(PLATFORM_STORE)!.storage
@@ -333,7 +333,7 @@ Deno.test('a write arms the object for the wake it just heard, and the alarm fir
   assertEquals(await storage.getAlarm(), soon)
 })
 
-Deno.test('an app store keeps its own schedule, with no platform in the middle', async () => {
+test('an app store keeps its own schedule, with no platform in the middle', async () => {
   let p = platform('app wake')
   let door = metaOf(storeOf(p.env.STORE, 'ada/app'))
   let now = Date.now() - 1
@@ -355,7 +355,7 @@ Deno.test('an app store keeps its own schedule, with no platform in the middle',
   )
 })
 
-Deno.test('the git object store keeps a clock too, with nothing owed', async () => {
+test('the git object store keeps a clock too, with nothing owed', async () => {
   let p = platform('git wake')
   await metaOf(storeOf(p.env.STORE, GIT_STORE)).query('.gitobj')
   assertEquals(await p.object(GIT_STORE).tick(Date.now()), {
@@ -378,7 +378,7 @@ let GARDEN = JSON.stringify({
   },
 })
 
-Deno.test("an app's rule on `fired` advances the row its wake was about", async () => {
+test("an app's rule on `fired` advances the row its wake was about", async () => {
   let ctx = state()
   let store = new Store(ctx)
   let head = {
@@ -478,7 +478,7 @@ let chores = async () => {
   return a
 }
 
-Deno.test('a call wearing a wake waits for it, and answers when it fires', async () => {
+test('a call wearing a wake waits for it, and answers when it fires', async () => {
   let a = await chores()
   // A call nobody scheduled is due when it is written: the other rule.
   await a.ask('/apply', [{
@@ -516,7 +516,7 @@ Deno.test('a call wearing a wake waits for it, and answers when it fires', async
   )
 })
 
-Deno.test('a recurring call is one invocation per firing, never a re-run', async () => {
+test('a recurring call is one invocation per firing, never a re-run', async () => {
   let a = await chores()
   let first = Date.now() - 1
   await a.ask('/apply', [{
@@ -560,7 +560,7 @@ let ADVANCE = JSON.stringify({
   },
 })
 
-Deno.test('an idle world advances offline, a missed stretch in one firing', async () => {
+test('an idle world advances offline, a missed stretch in one firing', async () => {
   let a = app('ada/idler')
   assertEquals((await a.ask('/vocab', IDLER)).status, 200)
   assertEquals((await a.ask('/tools', ADVANCE)).status, 200)
@@ -613,7 +613,7 @@ let VILLAGE = JSON.stringify({
   },
 })
 
-Deno.test('a world with nobody in it stops ticking, and a player arriving wakes it', async () => {
+test('a world with nobody in it stops ticking, and a player arriving wakes it', async () => {
   let a = app('ada/village')
   assertEquals((await a.ask('/vocab', VILLAGE)).status, 200)
   assertEquals((await a.ask('/tools', ADVANCE)).status, 200)
@@ -666,7 +666,7 @@ Deno.test('a world with nobody in it stops ticking, and a player arriving wakes 
   assertEquals((await a.rows('.call.source=world')).length, 4)
 })
 
-Deno.test('a condition naming a word the app does not speak is refused when written', async () => {
+test('a condition naming a word the app does not speak is refused when written', async () => {
   let a = app('ada/village')
   assertEquals((await a.ask('/vocab', VILLAGE)).status, 200)
   let res = await a.ask('/apply', [{
@@ -695,7 +695,7 @@ let binned = {
 }
 
 for (let [what, [out, back]] of Object.entries(binned)) {
-  Deno.test(`a trashed ${what} fires no wakes, and catches up once restored`, async () => {
+  test(`a trashed ${what} fires no wakes, and catches up once restored`, async () => {
     using p = probe()
     let k = { ...await seeded(p.env), env: p.env }
     let name = storeName(k.space, k.app)

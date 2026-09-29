@@ -1,5 +1,6 @@
 // Markdown owns the DOM injection while its caller keeps the element that
 // participates in layout and interaction.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { render } from 'preact'
@@ -9,7 +10,7 @@ import { el } from '@yaks/ui'
 
 let Face = el('article', 'Prose')
 
-Deno.test('markdown fills the chosen face and forwards its props', () => {
+test('markdown fills the chosen face and forwards its props', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

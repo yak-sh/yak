@@ -1,5 +1,6 @@
 // The session token's contract: what verifies is exactly what this secret
 // signed, unexpired, and nothing else.
+import { test } from '@yaks/testing'
 import { assertEquals, assertMatch } from '@std/assert'
 import {
   cookie,
@@ -16,7 +17,7 @@ import { CUT } from './token_legacy.ts'
 let secret = 'a-test-secret'
 let claims = { person: 'u-1', space: null, exp: 2_000_000_000 }
 
-Deno.test('a signed token verifies to its claims', async () => {
+test('a signed token verifies to its claims', async () => {
   let t = await sign(claims, secret)
   assertMatch(t, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/)
   assertEquals(await verify(t, secret), claims)
@@ -26,7 +27,7 @@ Deno.test('a signed token verifies to its claims', async () => {
   )
 })
 
-Deno.test('a forged, edited, foreign, or expired token is null', async () => {
+test('a forged, edited, foreign, or expired token is null', async () => {
   let t = await sign(claims, secret)
   let [body, mac] = t.split('.')
   assertEquals(await verify(t, 'another-secret'), null)
@@ -39,7 +40,7 @@ Deno.test('a forged, edited, foreign, or expired token is null', async () => {
   assertEquals(await verify(dead, secret), null)
 })
 
-Deno.test('a value sealed for one use opens as no other, a session least', async () => {
+test('a value sealed for one use opens as no other, a session least', async () => {
   // A grant carries a person and an expiry, which is all a session's claims
   // are: sealed for another use, it still fails the session's mac.
   for (let use of ['visit', 'grant', 'link', 'handoff', 'erase'] as const) {
@@ -76,7 +77,7 @@ let USES: Use[] = [
   'review',
 ]
 
-Deno.test('a token sealed before 2c05d0f6 opens for its own use and no other', async () => {
+test('a token sealed before 2c05d0f6 opens for its own use and no other', async () => {
   for (let [use, v] of OLD) {
     let t = await sealedOld(v, secret)
     for (let u of USES) {
@@ -86,7 +87,7 @@ Deno.test('a token sealed before 2c05d0f6 opens for its own use and no other', a
   }
 })
 
-Deno.test('an old session verifies, marked for re-minting; other old kinds do not', async () => {
+test('an old session verifies, marked for re-minting; other old kinds do not', async () => {
   let was = OLD[0][1]
   let old = await sealedOld(was, secret)
   assertEquals(await verify(old, secret, 0), {
@@ -111,7 +112,7 @@ Deno.test('an old session verifies, marked for re-minting; other old kinds do no
   ) assertEquals(await verify(await sealedOld(v, secret), secret, 0), null)
 })
 
-Deno.test('the cookie carries the token platform-wide and reads back', () => {
+test('the cookie carries the token platform-wide and reads back', () => {
   let c = cookie('tok.en', 'yaks.app', 60)
   assertEquals(
     c,

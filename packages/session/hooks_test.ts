@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { install, lifecycle, merged } from './hooks.ts'
 
 let theirs = { hooks: [{ type: 'command', command: 'say-hello' }] }
 
-Deno.test('an install leads each event and keeps everything else', () => {
+test('an install leads each event and keeps everything else', () => {
   let out = merged({ SessionStart: [theirs] }, lifecycle())
   assertEquals(out.SessionStart.length, 2)
   assertEquals(out.SessionStart[1], theirs)
@@ -12,7 +13,7 @@ Deno.test('an install leads each event and keeps everything else', () => {
   )
 })
 
-Deno.test('a second install replaces the first, never doubles it', () => {
+test('a second install replaces the first, never doubles it', () => {
   let once = merged({ SessionStart: [theirs] }, lifecycle())
   let twice = merged(once, lifecycle('/usr/local/bin/yak'))
   assertEquals(twice.SessionStart.length, 2)
@@ -23,13 +24,13 @@ Deno.test('a second install replaces the first, never doubles it', () => {
   )
 })
 
-Deno.test('removing takes ours out and leaves theirs', () => {
+test('removing takes ours out and leaves theirs', () => {
   let once = merged({ SessionStart: [theirs], Stop: [theirs] }, lifecycle())
   let gone = merged(once, lifecycle(), true)
   assertEquals(gone, { SessionStart: [theirs], Stop: [theirs] })
 })
 
-Deno.test('a settings file keeps the keys nobody asked about', async () => {
+test('a settings file keeps the keys nobody asked about', async () => {
   let dir = await Deno.makeTempDir()
   try {
     let path = `${dir}/settings.json`
@@ -49,7 +50,7 @@ Deno.test('a settings file keeps the keys nobody asked about', async () => {
   }
 })
 
-Deno.test('an install takes out the turn hooks an older one wrote', () => {
+test('an install takes out the turn hooks an older one wrote', () => {
   let spooled = {
     hooks: [{
       type: 'command',

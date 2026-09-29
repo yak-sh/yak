@@ -1,6 +1,7 @@
 // The memory tools, over a graph small enough to read: what a save writes or
 // marks, what a patch leaves alone, the token that stands between a merge and a
 // clobber, and the four reads around a memory.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Actor,
@@ -107,7 +108,7 @@ let said = (session: string, seq: number, body: string): Bundle => ({
 let jeff = { by: 'jeff', via: 's1' }
 let agent = { by: 'agent', via: 's1' }
 
-Deno.test('every memory tool is declared and implemented', () => {
+test('every memory tool is declared and implemented', () => {
   assertEquals(loadTools(memoryDoc, tools).map((t) => t.name).sort(), [
     'memory_around',
     'memory_recall',
@@ -118,7 +119,7 @@ Deno.test('every memory tool is declared and implemented', () => {
   ])
 })
 
-Deno.test('words the graph already holds are marked where they are', async () => {
+test('words the graph already holds are marked where they are', async () => {
   let g = fresh()
   await write(g, [
     said('s1', 1, 'ok so the persona.\nuse grams,   never cups. and commit'),
@@ -146,7 +147,7 @@ Deno.test('words the graph already holds are marked where they are', async () =>
   assertEquals(heard(back).said, part(e, 'content').body)
 })
 
-Deno.test('the words are marked where their speaker first said them', async () => {
+test('the words are marked where their speaker first said them', async () => {
   let g = fresh()
   await write(g, [{
     entity: { eid: 'quote' },
@@ -166,7 +167,7 @@ Deno.test('the words are marked where their speaker first said them', async () =
   )
 })
 
-Deno.test('on marks the entity named, only for words it holds', async () => {
+test('on marks the entity named, only for words it holds', async () => {
   let g = fresh()
   await write(g, [
     { entity: { eid: 't1' }, task: {}, doc: { title: 'a task' } },
@@ -202,7 +203,7 @@ Deno.test('on marks the entity named, only for words it holds', async () => {
   )
 })
 
-Deno.test('a new memory is the sentence, and where it belongs', async () => {
+test('a new memory is the sentence, and where it belongs', async () => {
   let g = fresh()
   await write(g, [{ entity: { eid: 'p19' }, project: {} }])
   let [kept] = await ask('memory_save', {
@@ -224,7 +225,7 @@ Deno.test('a new memory is the sentence, and where it belongs', async () => {
   await assertRejects(() => ask('memory_save', { said: ' ' }, g), Refused)
 })
 
-Deno.test('feedback names who gave it, or says only that somebody did', async () => {
+test('feedback names who gave it, or says only that somebody did', async () => {
   let by = async (feedback: string) =>
     part(
       (await ask('memory_save', { said: 'use grams', feedback }, fresh()))[0],
@@ -234,7 +235,7 @@ Deno.test('feedback names who gave it, or says only that somebody did', async ()
   assertEquals(await by(''), {})
 })
 
-Deno.test('a patch leaves alone what the line left out', async () => {
+test('a patch leaves alone what the line left out', async () => {
   let g = fresh()
   await save({ said: 'use grams, never cups', title: 'measurements' }, g)
   let [m] = await marks(g)
@@ -247,7 +248,7 @@ Deno.test('a patch leaves alone what the line left out', async () => {
   assertEquals([memory.scope, memory.context], ['p19', 'the recipe app'])
 })
 
-Deno.test('the words are not replaced by somebody who never read them', async () => {
+test('the words are not replaced by somebody who never read them', async () => {
   let g = fresh()
   await save({ said: 'use grams, never cups' }, g)
   let [m] = await marks(g)
@@ -269,7 +270,7 @@ Deno.test('the words are not replaced by somebody who never read them', async ()
   assertEquals(part(await read(g, m), 'doc').body, 'use cups')
 })
 
-Deno.test('a memory this graph does not hold is said so', async () => {
+test('a memory this graph does not hold is said so', async () => {
   await assertRejects(
     () => ask('memory_save', { id: 'nobody', said: 'x' }, fresh()),
     Refused,
@@ -277,7 +278,7 @@ Deno.test('a memory this graph does not hold is said so', async () => {
   )
 })
 
-Deno.test('a recall answers whole memories, each wearing its token', async () => {
+test('a recall answers whole memories, each wearing its token', async () => {
   let g = fresh()
   await save({ said: 'use grams, never cups', feedback: 'jeff' }, g)
   await save({ said: 'always commit your changes' }, g)
@@ -295,7 +296,7 @@ Deno.test('a recall answers whole memories, each wearing its token', async () =>
   assertEquals(feedback.map((b) => heard(b).said), ['use grams, never cups'])
 })
 
-Deno.test('a recall stays in its space, and words never speak its grammar', async () => {
+test('a recall stays in its space, and words never speak its grammar', async () => {
   let g = fresh()
   let [a] = eids(
     await write(
@@ -325,7 +326,7 @@ let transcript = async (g: G) => {
   await write(g, [said('s2', 5, 'elsewhere')])
 }
 
-Deno.test('around reads an entry as grep -C reads a line', async () => {
+test('around reads an entry as grep -C reads a line', async () => {
   let g = fresh()
   await transcript(g)
   let seqs = async (args: Record<string, unknown>) =>
@@ -358,7 +359,7 @@ let discussion = async (g: G) => {
   await write(g, [{ entity: { eid: 't9' }, task: {}, doc: { title: 'quiet' } }])
 }
 
-Deno.test('target is what a comment is aimed at, whole', async () => {
+test('target is what a comment is aimed at, whole', async () => {
   let g = fresh()
   await discussion(g)
   let [t] = await ask('memory_target', { id: 'k1' }, g)
@@ -371,7 +372,7 @@ Deno.test('target is what a comment is aimed at, whole', async () => {
   )
 })
 
-Deno.test('a thread is what it is about, then every comment, oldest first', async () => {
+test('a thread is what it is about, then every comment, oldest first', async () => {
   let g = fresh()
   await discussion(g)
   let thread = ['t1', 'k1', 'k2', 'r1', 'r2']
@@ -380,7 +381,7 @@ Deno.test('a thread is what it is about, then every comment, oldest first', asyn
   assertEquals(eids(await ask('memory_thread', { id: 't9' }, g)), ['t9'])
 })
 
-Deno.test('session is where it was said, and what that session worked on', async () => {
+test('session is where it was said, and what that session worked on', async () => {
   let g = fresh()
   await transcript(g)
   await write(g, [

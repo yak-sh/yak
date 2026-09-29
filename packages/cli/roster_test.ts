@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { rosterLine } from '@yaks/mcp'
 import { rosterAfter, saidBy, versionIn } from './roster.ts'
@@ -9,7 +10,7 @@ let stale = rosterLine(['about'], ['about', 'mail_send'])!
 
 let held: Roster = { version: '1a2b3c4d', tools: [{ name: 'about' }] }
 
-Deno.test('the roster line is news about this program, not the answer', () => {
+test('the roster line is news about this program, not the answer', () => {
   assertEquals(saidBy({ content: [{ type: 'text', text: '[]' }] }), {
     text: '[]',
   })
@@ -40,13 +41,13 @@ let about = (version: string) =>
     roster: { version, names: ['about'] },
   })
 
-Deno.test('an about answer names the list it served, as data', () => {
+test('an about answer names the list it served, as data', () => {
   assertEquals(versionIn(about('1a2b3c4d')), '1a2b3c4d')
   // Words that look like a version are words.
   assertEquals(versionIn(reply('roster 1a2b3c4d')), undefined)
 })
 
-Deno.test('a cached list is dropped on the news, and never asked about', () => {
+test('a cached list is dropped on the news, and never asked about', () => {
   // An ordinary answer says nothing about the list — the cache stands.
   assertEquals(rosterAfter(held, 'graph_query', reply('[]')), held)
   // The roster line says the list moved: drop it and list again.

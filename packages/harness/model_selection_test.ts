@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Model, Request } from '@yaks/model'
 import { seed } from './agent.ts'
@@ -9,7 +10,7 @@ import { harness, repo } from './testing.ts'
 
 const M = (name: string) => identityEid('model', [name])
 
-Deno.test('model selection derives provider, does not ask, and applies only to selected session', async () => {
+test('model selection derives provider, does not ask, and applies only to selected session', async () => {
   const h = await harness()
   const seen: [string, Request][] = []
   const fake = (provider: string): Model => (request) => {
@@ -60,7 +61,7 @@ Deno.test('model selection derives provider, does not ask, and applies only to s
   }
 })
 
-Deno.test('inflight model is unchanged; a passive selection survives its completion and later ask', async () => {
+test('inflight model is unchanged; a passive selection survives its completion and later ask', async () => {
   const h = await harness()
   let release!: () => void, started!: () => void
   const begun = new Promise<void>((resolve) => started = resolve)
@@ -110,7 +111,7 @@ Deno.test('inflight model is unchanged; a passive selection survives its complet
   }
 })
 
-Deno.test('passive model controls do not add invented user text to the next request', async () => {
+test('passive model controls do not add invented user text to the next request', async () => {
   const seen: Request[] = []
   const h = await harness()
   const a = local({
@@ -141,7 +142,7 @@ Deno.test('passive model controls do not add invented user text to the next requ
   }
 })
 
-Deno.test('late nonstream ask does not override an explicitly selected model', async () => {
+test('late nonstream ask does not override an explicitly selected model', async () => {
   const h = await harness()
   let release!: () => void, started!: () => void
   const begun = new Promise<void>((r) => started = r)

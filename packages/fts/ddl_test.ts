@@ -1,5 +1,6 @@
 // The index a set of fields implies, and that it stays true to its table.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   by,
@@ -39,7 +40,7 @@ let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql).join('\n')
 let all = text(schema(fields(shop)))
 let away = text(schema(fields(shop), stashed))
 
-Deno.test('one external-content index per component, over its text properties', () => {
+test('one external-content index per component, over its text properties', () => {
   assert(
     /create virtual table if not exists "book_fts" using fts5\(/.test(all),
     all,
@@ -51,7 +52,7 @@ Deno.test('one external-content index per component, over its text properties', 
   assert(all.includes(`"prose", content='review', content_rowid='entity'`), all)
 })
 
-Deno.test('three triggers follow each table, delete mirroring insert', () => {
+test('three triggers follow each table, delete mirroring insert', () => {
   for (let t of ['book_fts_insert', 'book_fts_delete', 'book_fts_update']) {
     assert(all.includes(`create trigger if not exists "${t}"`), t)
   }
@@ -60,12 +61,12 @@ Deno.test('three triggers follow each table, delete mirroring insert', () => {
   assert(all.includes(`coalesce("old"."title", '')`), all)
 })
 
-Deno.test('a component with no text gets no index', () => {
+test('a component with no text gets no index', () => {
   assertEquals(schema([]), [])
   assert(!all.includes('entity_fts'), all)
 })
 
-Deno.test('the triggers keep the index current as rows come and go', () => {
+test('the triggers keep the index current as rows come and go', () => {
   let db = shelf()
   let hits = () => matched(db, 'dragon')
   assertEquals(hits(), 2)
@@ -75,7 +76,7 @@ Deno.test('the triggers keep the index current as rows come and go', () => {
   assertEquals(hits(), 2)
 })
 
-Deno.test('heal leaves a true index alone and rebuilds a drifted one', () => {
+test('heal leaves a true index alone and rebuilds a drifted one', () => {
   let db = shelf()
   assertEquals(heal(db, fields(shop)), [])
   untracked(db)
@@ -89,7 +90,7 @@ Deno.test('heal leaves a true index alone and rebuilds a drifted one', () => {
 // `store: "blob"`). The index has to hold the prose, or a search finds a book
 // by its title alone.
 
-Deno.test('a resolved property indexes its words on both sides of the mirror', () => {
+test('a resolved property indexes its words on both sides of the mirror', () => {
   // Every place the address could leak in: the two trigger sides, and the view
   // FTS5 reads a column back out of for `snippet()` and `rebuild`.
   assert(away.includes(`create view if not exists "book_text" as`), away)
@@ -103,7 +104,7 @@ Deno.test('a resolved property indexes its words on both sides of the mirror', (
   assert(!away.includes('review_text'), away)
 })
 
-Deno.test('a search over a stashed property matches its words, not its address', () => {
+test('a search over a stashed property matches its words, not its address', () => {
   let db = shelf(stashed)
   let hits = (word: string) =>
     find(db, fields(shop), word).map((h) => h.entity).sort()
@@ -125,7 +126,7 @@ Deno.test('a search over a stashed property matches its words, not its address',
   assertEquals(hits('dragon'), ['book-2', 'review-4'])
 })
 
-Deno.test('a rebuild reads the words back, so heal does not undo the resolution', () => {
+test('a rebuild reads the words back, so heal does not undo the resolution', () => {
   let db = shelf(stashed)
   untracked(db)
   entity(db, 9, 'book-9')
@@ -139,14 +140,14 @@ Deno.test('a rebuild reads the words back, so heal does not undo the resolution'
   ])
 })
 
-Deno.test('a rebuild that cannot fix the fault throws, naming both faults', () => {
+test('a rebuild that cannot fix the fault throws, naming both faults', () => {
   let db = shelf()
   // An index whose table is gone can be neither read nor rebuilt.
   db.query({ t: 'drop', kind: 'table', name: 'review' })
   assertThrows(() => heal(db, fields(shop)))
 })
 
-Deno.test('an owner-only read override cannot silently index the stored address', () => {
+test('an owner-only read override cannot silently index the stored address', () => {
   assertThrows(
     () =>
       schema(fields(shop), {

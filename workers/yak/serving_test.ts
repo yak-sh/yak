@@ -30,7 +30,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
 import { directory, stamp, storeName } from './directory.ts'
@@ -85,7 +85,7 @@ let CAKE = 'c0000000-0000-4000-8000-00000000cake'.replace('cake', '0001')
 
 // ---- the tests -------------------------------------------------------------
 
-Deno.test('a page is served with its base and its reporter', async () => {
+test('a page is served with its base and its reporter', async () => {
   using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
@@ -105,7 +105,7 @@ Deno.test('a page is served with its base and its reporter', async () => {
   assert((await js.text()).includes('export let store ='))
 })
 
-Deno.test('a new release serves its files beside the old cached release', async () => {
+test('a new release serves its files beside the old cached release', async () => {
   using scenario = platform()
   let { env, files } = scenario
   let { app } = await seeded(env)
@@ -175,7 +175,7 @@ Deno.test('a new release serves its files beside the old cached release', async 
   assertEquals(misses, 6)
 })
 
-Deno.test('an app worker query can read a connected peer position', async () => {
+test('an app worker query can read a connected peer position', async () => {
   using scenario = platform()
   let { env, object, states } = scenario
   let { space, app } = await seeded(env)
@@ -228,7 +228,7 @@ Deno.test('an app worker query can read a connected peer position', async () => 
   assertEquals((await res.json())[0].position, { x: 4, z: 7 })
 })
 
-Deno.test('an app worker can send a stored query as one encoded filter', async () => {
+test('an app worker can send a stored query as one encoded filter', async () => {
   using scenario = platform()
   let { env } = scenario
   await seeded(env)
@@ -248,7 +248,7 @@ Deno.test('an app worker can send a stored query as one encoded filter', async (
   assertEquals(rows[0].doc.title, title)
 })
 
-Deno.test('an app serves audio and video with byte ranges', async () => {
+test('an app serves audio and video with byte ranges', async () => {
   using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
@@ -322,7 +322,7 @@ Deno.test('an app serves audio and video with byte ranges', async () => {
   await head.body?.cancel()
 })
 
-Deno.test('an app is installable: the five tags, the icon, the manifest', async () => {
+test('an app is installable: the five tags, the icon, the manifest', async () => {
   using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
@@ -405,7 +405,7 @@ Deno.test('an app is installable: the five tags, the icon, the manifest', async 
   assertEquals(await theirs.json(), { name: 'Ours' })
 })
 
-Deno.test("an app's own colours, set through app_set, win over the platform's", async () => {
+test("an app's own colours, set through app_set, win over the platform's", async () => {
   using scenario = platform()
   let { env, files } = scenario
   let { dir } = await seeded(env)
@@ -440,7 +440,7 @@ Deno.test("an app's own colours, set through app_set, win over the platform's", 
   )
 })
 
-Deno.test('a refresh after the page changes is sent the page, and one before is not', async () => {
+test('a refresh after the page changes is sent the page, and one before is not', async () => {
   using scenario = platform()
   let { env, files } = scenario
   let { dir } = await seeded(env)
@@ -468,7 +468,7 @@ Deno.test('a refresh after the page changes is sent the page, and one before is 
   )
 })
 
-Deno.test('a page view is one data point, and it names no visitor', async () => {
+test('a page view is one data point, and it names no visitor', async () => {
   let seen = dataset()
   using scenario = platform({ VIEWS: seen })
   let { env, files } = scenario
@@ -529,7 +529,7 @@ let ROWS: Record<string, Record<string, unknown>[]> = {
 let rowsFor = (sql: string) =>
   ROWS[Object.keys(ROWS).find((k) => sql.includes(` AS ${k},`)) ?? ''] ?? []
 
-Deno.test("/api/stats answers the app's own people, and nobody else", async () => {
+test("/api/stats answers the app's own people, and nobody else", async () => {
   let api = analytics(rowsFor)
   try {
     using scenario = platform({
@@ -562,7 +562,7 @@ Deno.test("/api/stats answers the app's own people, and nobody else", async () =
   }
 })
 
-Deno.test('/api/stats with no analytics token is a sentence, not a failure', async () => {
+test('/api/stats with no analytics token is a sentence, not a failure', async () => {
   using scenario = platform()
   let { env } = scenario
   await seeded(env)
@@ -576,7 +576,7 @@ Deno.test('/api/stats with no analytics token is a sentence, not a failure', asy
   assertStringIncludes(said.say, 'not switched on')
 })
 
-Deno.test('the page wire: apply, query and search round-trip', async () => {
+test('the page wire: apply, query and search round-trip', async () => {
   using scenario = platform()
   let { env } = scenario
   await seeded(env)
@@ -632,7 +632,7 @@ Deno.test('the page wire: apply, query and search round-trip', async () => {
   assertEquals((await page.query('.person')).length, 1)
 })
 
-Deno.test('a store tells the directory what it holds once a write moves it', async () => {
+test('a store tells the directory what it holds once a write moves it', async () => {
   using scenario = platform()
   let { env, states } = scenario
   let { dir, space, app } = await seeded(env)
@@ -652,7 +652,7 @@ Deno.test('a store tells the directory what it holds once a write moves it', asy
   assert(held() > 0)
 })
 
-Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
+test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
   using scenario = platform()
   let { env } = scenario
   await seeded(env)
@@ -709,7 +709,7 @@ Deno.test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () =
   assertEquals((await page.query('.doc')).length, 3)
 })
 
-Deno.test('a subscription is that query still answering', async () => {
+test('a subscription is that query still answering', async () => {
   using scenario = platform()
   let { env, object, sockets } = scenario
   await seeded(env)
@@ -744,7 +744,7 @@ Deno.test('a subscription is that query still answering', async () => {
   assertEquals((frame.bundles[0].entity as { eid: string }).eid, CAKE)
 })
 
-Deno.test('an open app takes a write from nobody, and a public one does not', async () => {
+test('an open app takes a write from nobody, and a public one does not', async () => {
   using open = platform()
   await seeded(open.env, 'open')
   let stranger = client(open.env)
@@ -773,7 +773,7 @@ Deno.test('an open app takes a write from nobody, and a public one does not', as
   assert(said.error.signIn.includes('/login'), said.error.signIn)
 })
 
-Deno.test('a break is the platform writing about the app, not in it', async () => {
+test('a break is the platform writing about the app, not in it', async () => {
   using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env, 'private')
@@ -802,7 +802,7 @@ Deno.test('a break is the platform writing about the app, not in it', async () =
   assertEquals((await openIn(env, space, app, who)).length, 0)
 })
 
-Deno.test('draft edits leave served breaks open until deployment', async () => {
+test('draft edits leave served breaks open until deployment', async () => {
   using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env)
@@ -829,7 +829,7 @@ Deno.test('draft edits leave served breaks open until deployment', async () => {
   assertEquals(open.length, 2)
 })
 
-Deno.test('seen closes a whole deploy at once (T-34338)', async () => {
+test('seen closes a whole deploy at once (T-34338)', async () => {
   using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env)
@@ -848,7 +848,7 @@ Deno.test('seen closes a whole deploy at once (T-34338)', async () => {
   assertEquals((await openIn(env, space, app, who, true)).length, 0)
 })
 
-Deno.test('DELETE / empties the app store and bears it again', async () => {
+test('DELETE / empties the app store and bears it again', async () => {
   using scenario = platform()
   let { env, object, files } = scenario
   let { space, app } = await seeded(env)
@@ -945,7 +945,7 @@ let router = async (
   }
 }
 
-Deno.test('monthly visit quota stops all app serving before dispatch or files', async () => {
+test('monthly visit quota stops all app serving before dispatch or files', async () => {
   for (let tier of ['free', 'plus'] as const) {
     let calls = 0
     using k = await router(() => {
@@ -1021,7 +1021,7 @@ Deno.test('monthly visit quota stops all app serving before dispatch or files', 
   }
 })
 
-Deno.test("a stranger's reads are held to a rate per source, a member's are not", async () => {
+test("a stranger's reads are held to a rate per source, a member's are not", async () => {
   using k = await router()
   let spent = 0
   k.env.API_RATE = { limit: () => Promise.resolve({ success: ++spent <= 2 }) }
@@ -1046,7 +1046,7 @@ Deno.test("a stranger's reads are held to a rate per source, a member's are not"
   assertEquals(spent, 3, 'a member spent the stranger allowance')
 })
 
-Deno.test('rung 1: a platform path never reaches an app', async () => {
+test('rung 1: a platform path never reaches an app', async () => {
   using k = await router(() => new Response('the router', { status: 200 }))
   // The store doors are the kernel's, under an app's slug and at the home
   // app's bare root alike: a home worker that answers everything else does not
@@ -1060,7 +1060,7 @@ Deno.test('rung 1: a platform path never reaches an app', async () => {
   assertEquals((await k.at('/gone/api/query')).status, 404)
 })
 
-Deno.test("rung 2: an app's slug wins over the home app", async () => {
+test("rung 2: an app's slug wins over the home app", async () => {
   using k = await router(() => new Response('the router', { status: 200 }))
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   let page = await k.at('/garden/')
@@ -1071,7 +1071,7 @@ Deno.test("rung 2: an app's slug wins over the home app", async () => {
   assertEquals((await k.at('/garden/nothing.txt')).status, 404)
 })
 
-Deno.test("rung 3: the home app's files answer the bare hostname", async () => {
+test("rung 3: the home app's files answer the bare hostname", async () => {
   using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/cookbook/photo.png', 'not really a png')
@@ -1081,7 +1081,7 @@ Deno.test("rung 3: the home app's files answer the bare hostname", async () => {
   assert((await (await k.at('/about')).text()).includes('cookbook'))
 })
 
-Deno.test("rung 4: the space's index is `/`'s last word", async () => {
+test("rung 4: the space's index is `/`'s last word", async () => {
   // A home app with a front page keeps `/`.
   using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
@@ -1104,7 +1104,7 @@ Deno.test("rung 4: the space's index is `/`'s last word", async () => {
   assertEquals(await (await own.at('/')).text(), 'the router')
 })
 
-Deno.test('rung 5: everything else is the home worker, else 404', async () => {
+test('rung 5: everything else is the home worker, else 404', async () => {
   using k = await router((req) =>
     new Response(`ran ${new URL(req.url).pathname}`)
   )
@@ -1144,7 +1144,7 @@ let fronted = async (
   return k
 }
 
-Deno.test('rung 1½: a `first` glob hands the path to the home worker', async () => {
+test('rung 1½: a `first` glob hands the path to the home worker', async () => {
   let seen: string[] = []
   using k = await fronted((req) => {
     seen.push(new URL(req.url).pathname)
@@ -1156,12 +1156,12 @@ Deno.test('rung 1½: a `first` glob hands the path to the home worker', async ()
   assertEquals(seen, ['/garden/print'])
 })
 
-Deno.test("rung 1½: the router's 404 passes, and the app answers", async () => {
+test("rung 1½: the router's 404 passes, and the app answers", async () => {
   using k = await fronted(() => new Response('no', { status: 404 }))
   assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
 })
 
-Deno.test('rung 1½: a router that throws is skipped, and written on the home app', async () => {
+test('rung 1½: a router that throws is skipped, and written on the home app', async () => {
   using k = await fronted(() => {
     throw new Error('the router fell over')
   })
@@ -1176,7 +1176,7 @@ Deno.test('rung 1½: a router that throws is skipped, and written on the home ap
   assertEquals((await openIn(k.env, k.space, garden, OWNER, true)).length, 0)
 })
 
-Deno.test(
+test(
   'rung 1½: a router that hangs is skipped when its patience runs out',
   async () => {
     using k = await fronted(() => new Promise<Response>(() => {}))
@@ -1187,7 +1187,7 @@ Deno.test(
   },
 )
 
-Deno.test('rung 1½: a glob over a store door never takes it', async () => {
+test('rung 1½: a glob over a store door never takes it', async () => {
   using k = await fronted(() => new Response('the router'))
   // `/garden/*` covers `/garden/api/…` by its own shape, and the store doors
   // are the kernel's however the property is written (router.ts
@@ -1198,7 +1198,7 @@ Deno.test('rung 1½: a glob over a store door never takes it', async () => {
   )
 })
 
-Deno.test('rung 1½: the router acts as the caller, not as the app it fronts', async () => {
+test('rung 1½: the router acts as the caller, not as the app it fronts', async () => {
   let env: Env
   using k = await fronted(async () => {
     let asked = await apps.fetch(visit('/garden/api/query?.doc'), env)
@@ -1215,7 +1215,7 @@ Deno.test('rung 1½: the router acts as the caller, not as the app it fronts', a
   assertEquals(await (await k.at('/garden/print')).text(), '401')
 })
 
-Deno.test("rung 1½: the router's own onward request is not intercepted again", async () => {
+test("rung 1½: the router's own onward request is not intercepted again", async () => {
   let env: Env
   let ran = 0
   using k = await fronted(async (req) => {
@@ -1240,7 +1240,7 @@ Deno.test("rung 1½: the router's own onward request is not intercepted again", 
 // that is the same nothing a wrong address gets — whether an app was ever here
 // is not a stranger's business — and to the owner it is the one page that says
 // where the app went and how long they have.
-Deno.test('an app in the trash serves nothing, and says so to its owner', async () => {
+test('an app in the trash serves nothing, and says so to its owner', async () => {
   using k = await router()
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   let garden = (await k.dir.app(k.space, 'garden'))!
@@ -1266,7 +1266,7 @@ Deno.test('an app in the trash serves nothing, and says so to its owner', async 
 // it is still wearing it — and the space is a space with no front page until
 // it comes back. The restore itself is a form on that space's own page: no
 // assistant, no script, one POST.
-Deno.test("a trashed front page is nobody's, and the owner restores it there", async () => {
+test("a trashed front page is nobody's, and the owner restores it there", async () => {
   using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
@@ -1308,7 +1308,7 @@ Deno.test("a trashed front page is nobody's, and the owner restores it there", a
 // ahead of every rung of the order above, since none of them is reached. Its
 // owner is the exception, and the page they get carries the one button that
 // brings the space back.
-Deno.test('a space in the trash serves nothing, and its owner restores it', async () => {
+test('a space in the trash serves nothing, and its owner restores it', async () => {
   using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
@@ -1366,7 +1366,7 @@ Deno.test('a space in the trash serves nothing, and its owner restores it', asyn
 // (dispatch.ts shim) — under grant, on the app's own door — because the shim
 // runs inside the dispatch namespace and this harness stands where that
 // namespace would be.
-Deno.test('env.APP: a private app is written by its own worker, and by nobody else', async () => {
+test('env.APP: a private app is written by its own worker, and by nobody else', async () => {
   let env: Env
   let door = (req: Request, path: string, init: RequestInit = {}) =>
     apps.fetch(
@@ -1444,7 +1444,7 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
 // Where Cloudflare refuses the hop to the cache in front of `Files`, as it
 // does inside an app worker's own call (files.ts `door`), the page and the
 // upload are still served, whoever asks.
-Deno.test('a page and an upload are served where the cache hop is refused', async () => {
+test('a page and an upload are served where the cache hop is refused', async () => {
   using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
@@ -1482,7 +1482,7 @@ Deno.test('a page and an upload are served where the cache hop is refused', asyn
   assertEquals(new Uint8Array(await got.arrayBuffer()), body)
 })
 
-Deno.test('photo and file uploads enforce space R2 limits from actual bytes', async () => {
+test('photo and file uploads enforce space R2 limits from actual bytes', async () => {
   using scenario = platform()
   let { env, files } = scenario
   let { dir, space, app } = await seeded(env)

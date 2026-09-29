@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { publicPage } from './public-cache.ts'
 
-Deno.test('a deployed public page revalidates before drawing again', async () => {
+test('a deployed public page revalidates before drawing again', async () => {
   let env = { APEX: 'yaks.app', CF_VERSION_METADATA: { id: 'deploy-one' } }
   let drawn = 0
   let draw = () => {
@@ -36,7 +37,7 @@ Deno.test('a deployed public page revalidates before drawing again', async () =>
   assertEquals(drawn, 2)
 })
 
-Deno.test('a changing representation rotates its validator within a deploy', async () => {
+test('a changing representation rotates its validator within a deploy', async () => {
   let env = { CF_VERSION_METADATA: { id: 'deploy-one' } }
   let url = 'https://yaks.app/.well-known/security.txt'
   let first = await publicPage(
@@ -61,7 +62,7 @@ Deno.test('a changing representation rotates its validator within a deploy', asy
   assertEquals(await changed?.text(), 'day two')
 })
 
-Deno.test('a page without deploy metadata is not stored', async () => {
+test('a page without deploy metadata is not stored', async () => {
   let res = await publicPage(
     new Request('https://yaks.app/docs'),
     {},

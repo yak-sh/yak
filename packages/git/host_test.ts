@@ -1,6 +1,7 @@
 // Taking a worktree back, against a real repository: what a worktree holds is
 // Git's answer, so the fixture is Git itself, one repository and a root of
 // checkouts cut from it.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { holds, lost, reclaim } from './host.ts'
 
@@ -47,7 +48,7 @@ let fixture = async () => {
   }
 }
 
-Deno.test('a clean, landed checkout is taken back with its branch', async () => {
+test('a clean, landed checkout is taken back with its branch', async () => {
   let f = await fixture()
   try {
     let path = await f.cut('done')
@@ -60,7 +61,7 @@ Deno.test('a clean, landed checkout is taken back with its branch', async () => 
   }
 })
 
-Deno.test('dirty files and unlanded commits keep a checkout', async () => {
+test('dirty files and unlanded commits keep a checkout', async () => {
   let f = await fixture()
   try {
     let dirty = await f.cut('dirty')
@@ -83,7 +84,7 @@ Deno.test('dirty files and unlanded commits keep a checkout', async () => {
   }
 })
 
-Deno.test('a path that is not a checkout is kept, never guessed at', async () => {
+test('a path that is not a checkout is kept, never guessed at', async () => {
   let dir = await Deno.makeTempDir()
   try {
     assertEquals(await holds(dir), 'unlanded')
@@ -93,7 +94,7 @@ Deno.test('a path that is not a checkout is kept, never guessed at', async () =>
   }
 })
 
-Deno.test('a checkout whose gitdir is gone is removed outright', async () => {
+test('a checkout whose gitdir is gone is removed outright', async () => {
   let f = await fixture()
   try {
     let path = await f.cut('orphan')

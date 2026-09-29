@@ -3,6 +3,7 @@
 // set it declared refuses the batch instead of writing, and what the `#Name`
 // resources of a tick are — one instant, read-only, and provided or refused.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
@@ -22,7 +23,7 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let held = (one: ReturnType<typeof g>, eid: string) =>
   (one.get([eid]) as Bundle[])[0]
 
-Deno.test('a produce-only rule writes its template into what it matched', () => {
+test('a produce-only rule writes its template into what it matched', () => {
   let one = g([{
     name: 'shelf',
     rules: [{
@@ -42,7 +43,7 @@ Deno.test('a produce-only rule writes its template into what it matched', () => 
   assertEquals(held(one, 'p1').book, undefined)
 })
 
-Deno.test('a gate makes a rule fire once, across applies', () => {
+test('a gate makes a rule fire once, across applies', () => {
   let fired: string[] = []
   let one = g([{
     name: 'once',
@@ -61,7 +62,7 @@ Deno.test('a gate makes a rule fire once, across applies', () => {
   assertEquals(fired, ['b1'])
 })
 
-Deno.test('a rule writing outside its *write set refuses the batch', () => {
+test('a rule writing outside its *write set refuses the batch', () => {
   let one = g([{
     name: 'sloppy',
     rules: [{
@@ -83,7 +84,7 @@ Deno.test('a rule writing outside its *write set refuses the batch', () => {
   assertEquals(held(one, 'b1'), undefined)
 })
 
-Deno.test('#Now is one instant for every rule in one apply', () => {
+test('#Now is one instant for every rule in one apply', () => {
   let seen: string[] = []
   let clock = (phase: Phase): Rule => ({
     name: `clock at ${phase}`,
@@ -100,7 +101,7 @@ Deno.test('#Now is one instant for every rule in one apply', () => {
   assertEquals(new Set(seen).size, 1)
 })
 
-Deno.test('a rule writing a resource refuses the batch', () => {
+test('a rule writing a resource refuses the batch', () => {
   let one = g([{
     name: 'clockwork',
     rules: [{
@@ -120,7 +121,7 @@ Deno.test('a rule writing a resource refuses the batch', () => {
 // A resource is not vocabulary, so naming one nobody provides is a mistake
 // where naming an unknown component is inert — and it is one before the match,
 // not only where a rule would have fired.
-Deno.test('a rule naming a resource nobody provides is refused', () => {
+test('a rule naming a resource nobody provides is refused', () => {
   let one = g([{
     name: 'weathered',
     rules: [{
@@ -143,7 +144,7 @@ Deno.test('a rule naming a resource nobody provides is refused', () => {
 // A resource is bound for `run`, never for the match: the grammar's values are
 // values, so `created.at<Now.at` would compare against the literal text. It is
 // refused rather than answered wrong.
-Deno.test('a match comparing against a resource is refused', () => {
+test('a match comparing against a resource is refused', () => {
   let one = g([{
     name: 'stale',
     rules: [{
@@ -160,7 +161,7 @@ Deno.test('a match comparing against a resource is refused', () => {
   )
 })
 
-Deno.test('a plugin provides a resource, capitalized', () => {
+test('a plugin provides a resource, capitalized', () => {
   let shop = (name: string): Plugin => ({
     name: 'shop',
     resources: { [name]: () => stands({ n: 3 }), Nobody: () => stands({}) },
@@ -187,7 +188,7 @@ Deno.test('a plugin provides a resource, capitalized', () => {
 
 // A rule declaring components this graph has never heard of is inert: that is
 // how the core's own stamps ride along in a vocabulary with no `created`.
-Deno.test('a rule about an unknown component is inert', () => {
+test('a rule about an unknown component is inert', () => {
   let one = g([{
     name: 'elsewhere',
     rules: [{

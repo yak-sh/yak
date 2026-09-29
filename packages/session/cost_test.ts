@@ -1,6 +1,7 @@
 // What a transcript cost: each request weighed where its usage is written, and
 // the session's cost summed from its entries through a SQLite store.
 
+import { test } from '@yaks/testing'
 import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -52,7 +53,7 @@ let costOf = (
 let session = (g: ReturnType<typeof shop>, eid: string) =>
   (g.get([eid]) as Bundle[])[0].session as Comp
 
-Deno.test('a request is weighed at its model price unless its provider said', () => {
+test('a request is weighed at its model price unless its provider said', () => {
   let g = shop()
   let weighed = asked(PRICED, { usage })
   let told = asked(PRICED, {
@@ -76,7 +77,7 @@ Deno.test('a request is weighed at its model price unless its provider said', ()
   assertEquals(costOf(g, later.entity.eid)?.dollars, 2.25)
 })
 
-Deno.test("a session's cost is its entries' sum, and absent where none cost", () => {
+test("a session's cost is its entries' sum, and absent where none cost", () => {
   let g = shop()
   g.apply([
     asked(PRICED, { usage }),

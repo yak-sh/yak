@@ -3,6 +3,7 @@
 // kind — each as markdown and as one vocabulary document — plus the refusal
 // for a word this graph has never heard of.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
 import { proseOf, schemaOf } from '@yaks/graph'
@@ -27,7 +28,7 @@ let asked = async (
   }
 }
 
-Deno.test('bare, it is the index: every component, what it is, its types', async () => {
+test('bare, it is the index: every component, what it is, its types', async () => {
   let { doc, said } = await asked()
   // The shop's components, and the ones a call is written in — a graph that
   // serves tools knows both (@yaks/tools `toolsDoc`).
@@ -52,7 +53,7 @@ Deno.test('bare, it is the index: every component, what it is, its types', async
   assert(!said.includes('**'), said)
 })
 
-Deno.test('the index nests each component under the package declaring it', () => {
+test('the index nests each component under the package declaring it', () => {
   let vocab = loadVocab([
     { package: '@shop/books', $defs: { book: shop.def('book')! } },
     { package: '@shop/words', $defs: { doc: shop.def('doc')! } },
@@ -70,7 +71,7 @@ Deno.test('the index nests each component under the package declaring it', () =>
   )
 })
 
-Deno.test('named, it is the component as declared, with an example', async () => {
+test('named, it is the component as declared, with an example', async () => {
   let { doc, said } = await asked({ component: 'book' }, {
     guide: (comp) => comp == 'book' ? 'https://shop/guide/books.md' : undefined,
   })
@@ -103,7 +104,7 @@ Deno.test('named, it is the component as declared, with an example', async () =>
   assertStringIncludes(stamps, 'server-owned')
 })
 
-Deno.test('a kind is that component whole, beside what it is shown with', async () => {
+test('a kind is that component whole, beside what it is shown with', async () => {
   let { doc, said } = await asked({ kind: 'book' })
   assertEquals(Object.keys(doc.$defs), ['book', 'doc'])
   assert(doc.$defs.book.examples)
@@ -115,7 +116,7 @@ Deno.test('a kind is that component whole, beside what it is shown with', async 
   assertStringIncludes(said, 'title, body')
 })
 
-Deno.test('a JSON text property is exampled as valid JSON text', () => {
+test('a JSON text property is exampled as valid JSON text', () => {
   let vocab = loadVocab({
     $defs: {
       config: {
@@ -130,7 +131,7 @@ Deno.test('a JSON text property is exampled as valid JSON text', () => {
   assertEquals(vocab.check('config', example as Record<string, unknown>), [])
 })
 
-Deno.test('a word this graph never heard of is a refusal that says where to look', async () => {
+test('a word this graph never heard of is a refusal that says where to look', async () => {
   let { doc, error } = await asked({ component: 'bok' })
   assertStringIncludes(error, "no component 'bok'")
   assertStringIncludes(error, 'index')

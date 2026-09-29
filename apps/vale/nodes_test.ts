@@ -1,6 +1,7 @@
 // Resource plates and a felled tree as the scene sees gathering change.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { LODES, naturalEid } from './gather.ts'
 import { type ChunkProps, natureMesh } from './nature_mesh.ts'
@@ -9,7 +10,7 @@ import { flat, type Prop } from './terrain.ts'
 import { tradesOf } from './trades.ts'
 import type { Job, Seen } from './work.ts'
 
-Deno.test('gathered trees topple, lose their plates, and return on respawn', () => {
+test('gathered trees topple, lose their plates, and return on respawn', () => {
   let prop: Prop = { kind: 'oak', x: 5, z: 7, seed: 1, natural: true }
   let at: [number, number, number] = [5, 5, 7]
   let entry = { prop, at }
@@ -116,7 +117,7 @@ Deno.test('gathered trees topple, lose their plates, and return on respawn', () 
   view.dispose()
 })
 
-Deno.test('rare resources keep visible rarity light before their plates appear', () => {
+test('rare resources keep visible rarity light before their plates appear', () => {
   let seen = (x: number, rarity: Seen['rarity']): Seen => {
     let prop: Prop = { kind: 'oak', x, z: 7, seed: x, natural: true }
     return {
@@ -175,7 +176,7 @@ Deno.test('rare resources keep visible rarity light before their plates appear',
   view.dispose()
 })
 
-Deno.test('resource light stays bounded on phones', () => {
+test('resource light stays bounded on phones', () => {
   let job: Job = {
     nodes: Array.from({ length: 25 }, (_, i): Seen => {
       let prop: Prop = { kind: 'oak', x: i, z: 7, seed: i, natural: true }

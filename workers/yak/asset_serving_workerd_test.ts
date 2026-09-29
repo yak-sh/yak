@@ -1,9 +1,10 @@
 // Published app assets keep their release bytes through later deploys and a
 // rollback, while the page and ordinary file paths follow the live release.
+import { test } from '@yaks/testing'
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
 import { connector, seed, workerd } from './probe.ts'
 
-Deno.test('a page uses release assets whose bytes survive deploy and rollback', async () => {
+test('a page uses release assets whose bytes survive deploy and rollback', async () => {
   let k = workerd()
   try {
     let space = 'releaseassets'

@@ -1,5 +1,6 @@
 // The store's own key/value, and the epoch minted on top of it.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import { META, schema } from './ddl.ts'
 import { EPOCH, epoch, meta } from './meta.ts'
@@ -16,7 +17,7 @@ let installed = (d: Driver = mem()) => {
 // The table as the live database holds it, straight out of its schema.
 let master = (d: Driver) => objects(d, { name: META })[0]?.sql
 
-Deno.test('the meta table is raised with the spine', () => {
+test('the meta table is raised with the spine', () => {
   assert(
     schema(shop).some((s) =>
       render(s).sql.includes(`create table if not exists "${META}"`)
@@ -26,7 +27,7 @@ Deno.test('the meta table is raised with the spine', () => {
   assert(master(installed()), 'the installed database has no meta table')
 })
 
-Deno.test('meta: set, get, overwrite, delete', () => {
+test('meta: set, get, overwrite, delete', () => {
   let m = meta(installed())
   assertEquals(m.get('sweep'), undefined)
   m.set('sweep', '2026-09-15T00:00:00Z')
@@ -38,7 +39,7 @@ Deno.test('meta: set, get, overwrite, delete', () => {
   m.del('sweep') // clearing what is not there is a no-op, not an error
 })
 
-Deno.test('meta: keys are independent and values keep their text', () => {
+test('meta: keys are independent and values keep their text', () => {
   let m = meta(installed())
   m.set('a', '1')
   m.set('b', '')
@@ -47,13 +48,13 @@ Deno.test('meta: keys are independent and values keep their text', () => {
   assertEquals([m.get('a'), m.get('b')], [undefined, ''])
 })
 
-Deno.test('meta: a value with a quote rides as a bind, not a literal', () => {
+test('meta: a value with a quote rides as a bind, not a literal', () => {
   let m = meta(installed())
   m.set("it's", "o'clock")
   assertEquals(m.get("it's"), "o'clock")
 })
 
-Deno.test('epoch: minted by install, stable, and its own per store', () => {
+test('epoch: minted by install, stable, and its own per store', () => {
   let d = installed()
   let minted = meta(d).get(EPOCH)
   assert(minted, 'install minted no epoch')
@@ -63,7 +64,7 @@ Deno.test('epoch: minted by install, stable, and its own per store', () => {
   assertNotEquals(epoch(installed()), minted) // a different store, its own
 })
 
-Deno.test('epoch: mints on a store whose row was stripped', () => {
+test('epoch: mints on a store whose row was stripped', () => {
   let d = installed()
   meta(d).del(EPOCH)
   assertEquals(meta(d).get(EPOCH), undefined)
@@ -72,7 +73,7 @@ Deno.test('epoch: mints on a store whose row was stripped', () => {
   assertEquals(meta(d).get(EPOCH), again)
 })
 
-Deno.test('install adopts a server_meta the host already raised', () => {
+test('install adopts a server_meta the host already raised', () => {
   let d = mem()
   // The fleet's live table, as src/db.ts writes it.
   d.query({

@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 // The join: declarations out of the vocabulary, runs out of the module.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadTools } from './tools.ts'
 
@@ -18,7 +19,7 @@ let doc = {
   },
 }
 
-Deno.test('a declaration wears the run the module gives it', () => {
+test('a declaration wears the run the module gives it', () => {
   let [t] = loadTools(doc, {
     book_shelve: (args) => ({ change: [{ book: args }] }),
   })
@@ -32,7 +33,7 @@ Deno.test('a declaration wears the run the module gives it', () => {
   assertEquals(loadTools(named, { book_shelve: () => ({}) })[0].name, 'shelve')
 })
 
-Deno.test('a tool that said one word is named by that word', () => {
+test('a tool that said one word is named by that word', () => {
   let one = {
     $defs: {
       history: {
@@ -47,7 +48,7 @@ Deno.test('a tool that said one word is named by that word', () => {
   assertEquals([t.name, t.noun, t.verb], ['history', 'history', undefined])
 })
 
-Deno.test('a declaration nobody implements is a load error', () => {
+test('a declaration nobody implements is a load error', () => {
   assertThrows(
     () => loadTools(doc, {}),
     Error,

@@ -1,11 +1,12 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { col, eq, lit, render, select, shape, val } from '@yaks/sql'
 import { profile, type Summary } from './profile.ts'
 import { driver } from './sql.ts'
 import { durable } from './testing.ts'
 
-Deno.test('the Durable Object driver observes cursor costs after execution', () => {
+test('the Durable Object driver observes cursor costs after execution', () => {
   using d = durable()
   let exec = d.sql.exec.bind(d.sql)
   d.sql.exec = (query, ...bindings) => {
@@ -42,7 +43,7 @@ Deno.test('the Durable Object driver observes cursor costs after execution', () 
   assertEquals(sample.shape.includes('example.com'), false)
 })
 
-Deno.test('statement shapes keep identifiers but omit inline and bound values', () => {
+test('statement shapes keep identifiers but omit inline and bound values', () => {
   let query = (secret: string) =>
     select({
       cols: [col("owner's"), lit(secret), lit(secret.length * 1024)],
@@ -52,7 +53,7 @@ Deno.test('statement shapes keep identifiers but omit inline and bound values', 
   assertStringIncludes(shape(render(query('one'))), '"owner\'s"')
 })
 
-Deno.test('a profile reports first costs promptly and later costs at most once per minute', () => {
+test('a profile reports first costs promptly and later costs at most once per minute', () => {
   let at = 100
   let reports: Summary[] = []
   let p = profile((summary) => reports.push(summary), () => at)
@@ -89,7 +90,7 @@ Deno.test('a profile reports first costs promptly and later costs at most once p
   assertEquals(reports[1].total, { calls: 1, rowsRead: 7, rowsWritten: 1 })
 })
 
-Deno.test('interleaved async invocations keep their own SQL costs', async () => {
+test('interleaved async invocations keep their own SQL costs', async () => {
   let reports: Summary[] = []
   let p = profile((summary) => reports.push(summary))
   let resume!: () => void
@@ -119,7 +120,7 @@ Deno.test('interleaved async invocations keep their own SQL costs', async () => 
   assertEquals(reports[0].total.rowsRead, 12)
 })
 
-Deno.test('a subscription keeps its scope after the socket handler returns', async () => {
+test('a subscription keeps its scope after the socket handler returns', async () => {
   let reports: Summary[] = []
   let p = profile((summary) => reports.push(summary))
   let resume!: () => void
@@ -137,7 +138,7 @@ Deno.test('a subscription keeps its scope after the socket handler returns', asy
   assertEquals(reports[0].operations[0].total.rowsRead, 11)
 })
 
-Deno.test('many invocation labels and shapes remain bounded and fully counted', () => {
+test('many invocation labels and shapes remain bounded and fully counted', () => {
   let reports: Summary[] = []
   let p = profile((summary) => reports.push(summary))
   for (let i = 0; i < 30; i++) {

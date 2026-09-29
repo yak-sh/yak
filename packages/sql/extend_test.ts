@@ -3,6 +3,7 @@
 // pull a table in, declining falls back, and claiming a directive stops it
 // declining.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -63,7 +64,7 @@ let shelves: Extension = {
   },
 }
 
-Deno.test('an extension compiles a clause the binder would decline', () => {
+test('an extension compiles a clause the binder would decline', () => {
   let near: Extension = {
     name: 'near',
     compile: {
@@ -81,13 +82,13 @@ Deno.test('an extension compiles a clause the binder would decline', () => {
   assert(sql.includes('select "entity" from "vec"'), sql)
 })
 
-Deno.test('an extension supplies text compilation', () => {
+test('an extension supplies text compilation', () => {
   let { sql, params } = compile(parse('poetry'), v, { extend: [shelves] })
   assert(!sql.includes('doc_fts'), sql)
   assertEquals(params, ['poetry'])
 })
 
-Deno.test('declining text without another handler is unsupported', () => {
+test('declining text without another handler is unsupported', () => {
   let quiet: Extension = { name: 'quiet', compile: { text: () => null } }
   assertThrows(
     () => compile(parse('poetry'), v, { extend: [quiet] }),
@@ -97,7 +98,7 @@ Deno.test('declining text without another handler is unsupported', () => {
   assertEquals(params, ['poetry'])
 })
 
-Deno.test('site.join pulls a component table into the statement', () => {
+test('site.join pulls a component table into the statement', () => {
   let joins: Extension = {
     name: 'joins',
     compile: {
@@ -109,7 +110,7 @@ Deno.test('site.join pulls a component table into the statement', () => {
   assert(sql.includes('"shelf"."entity" is not null'), sql)
 })
 
-Deno.test('an extension supplies an order value that names no property', () => {
+test('an extension supplies an order value that names no property', () => {
   let ranks: Extension = {
     name: 'ranks',
     compile: {},
@@ -139,7 +140,7 @@ Deno.test('an extension supplies an order value that names no property', () => {
   )
 })
 
-Deno.test('a cursor pages within an extension ranking', () => {
+test('a cursor pages within an extension ranking', () => {
   let ranks: Extension = {
     name: 'ranks',
     compile: {},
@@ -162,7 +163,7 @@ Deno.test('a cursor pages within an extension ranking', () => {
 
 // A ranking extension is told what the rest of the line selects, so it ranks
 // among those rows instead of cutting its answer before they are filtered.
-Deno.test('an extension is handed the screen for the rest of the line', () => {
+test('an extension is handed the screen for the rest of the line', () => {
   let seen: (string | null)[] = []
   let ranker: Extension = {
     name: 'ranker',
@@ -190,7 +191,7 @@ Deno.test('an extension is handed the screen for the rest of the line', () => {
   assertEquals(seen[1], null)
 })
 
-Deno.test('extensions run in registration order, first answer wins', () => {
+test('extensions run in registration order, first answer wins', () => {
   let second: Extension = {
     name: 'second',
     compile: {

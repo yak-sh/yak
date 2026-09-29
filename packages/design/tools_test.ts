@@ -1,5 +1,6 @@
 // The two halves of a decision: writing a proposal down, and settling it.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -18,14 +19,14 @@ let asked = (args: Record<string, unknown>): [Bundle, Graph] => [
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
-Deno.test('every design tool is declared and implemented', () => {
+test('every design tool is declared and implemented', () => {
   assertEquals(loadTools(designDoc, tools).map((t) => t.name).sort(), [
     'design_decide',
     'design_new',
   ])
 })
 
-Deno.test('a proposal is design{} plus the words, put forward', async () => {
+test('a proposal is design{} plus the words, put forward', async () => {
   let [said] = await tools.design_new!(
     ...asked({ title: 'One shape', body: 'why', project: 'p19' }),
   ) as Bundle[]
@@ -35,7 +36,7 @@ Deno.test('a proposal is design{} plus the words, put forward', async () => {
   assertEquals(comp(said, 'filed'), { project: 'p19' })
 })
 
-Deno.test('a proposal nobody filed wears no filing', async () => {
+test('a proposal nobody filed wears no filing', async () => {
   let [said] = await tools.design_new!(...asked({ title: 'A thought' }))
   assertEquals(Object.keys(said as Bundle).sort(), [
     'design',
@@ -47,7 +48,7 @@ Deno.test('a proposal nobody filed wears no filing', async () => {
 
 // The mark carries the verdict and nothing else: `by`, `via` and `at` are
 // stamped from the caller, so the line cannot name somebody else as decider.
-Deno.test('a decision is the verdict on the design it names', async () => {
+test('a decision is the verdict on the design it names', async () => {
   let [said] = await tools.design_decide!(
     ...asked({ design: 'd1', verdict: 'declined' }),
   ) as Bundle[]

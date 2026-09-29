@@ -3,6 +3,7 @@
 // a memory or a comment created by a call comes back with its nearest few of
 // the same kind.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { compose, type Plug } from '@yaks/cli/host'
@@ -64,7 +65,7 @@ let hits = (answer: Bundle[]): Comp[] =>
 
 let made = (answer: Bundle[]) => answer.find((b) => b.created)!.entity.eid
 
-Deno.test('a new task answers its nearest tasks, and not itself or a memory', async () => {
+test('a new task answers its nearest tasks, and not itself or a memory', async () => {
   let yak = await open({ via: 'hash' })
   try {
     await stocked(yak)
@@ -118,7 +119,7 @@ Deno.test('a new task answers its nearest tasks, and not itself or a memory', as
   }
 })
 
-Deno.test('a comment answers comments near it, shown by their words', async () => {
+test('a comment answers comments near it, shown by their words', async () => {
   let yak = await open({ via: 'hash' })
   try {
     await stocked(yak)
@@ -141,7 +142,7 @@ Deno.test('a comment answers comments near it, shown by their words', async () =
   }
 })
 
-Deno.test('a model out of reach leaves a twin found by its words', async () => {
+test('a model out of reach leaves a twin found by its words', async () => {
   let yak = await open({
     via: 'ollama',
     model: 'm',

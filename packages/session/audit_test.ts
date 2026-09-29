@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { Bounced } from './bounce.ts'
@@ -17,7 +18,7 @@ let collide = (s: ReturnType<typeof store>, loser = ids.run2) => {
   return (s.tx((tx) => tx.get(['c1'])) as Bundle[])[0]
 }
 
-Deno.test('a bounce is written down after the rollback', () => {
+test('a bounce is written down after the rollback', () => {
   let s = store()
   assertEquals(collide(s).conflict, {
     target: ids.p1,
@@ -27,7 +28,7 @@ Deno.test('a bounce is written down after the rollback', () => {
   })
 })
 
-Deno.test('the record survives the batch it condemns', () => {
+test('the record survives the batch it condemns', () => {
   // Written through a detached transaction: the batch rolled back, and the
   // record of why did not.
   let s = store()
@@ -39,7 +40,7 @@ Deno.test('the record survives the batch it condemns', () => {
   )
 })
 
-Deno.test('a side that does not exist is written null', () => {
+test('a side that does not exist is written null', () => {
   // A run born inside the batch that bounced went down with it — pointing at
   // it would mint an identity for an entity that was never committed.
   let s = store()
@@ -49,7 +50,7 @@ Deno.test('a side that does not exist is written null', () => {
   )
 })
 
-Deno.test('any other refusal writes nothing', () => {
+test('any other refusal writes nothing', () => {
   let s = store()
   assertThrows(() =>
     locked(s, opts).apply([

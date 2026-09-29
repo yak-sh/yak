@@ -18,6 +18,7 @@
 // stranger must not learn that a private app exists by reading its name, so
 // anonymous, member and owner are each asked separately.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { managePath } from './route.ts'
 import { client, connector, kernel, seed, signIn } from './probe.ts'
@@ -31,7 +32,7 @@ let resolves = (page: string, at: string, href: string) => {
     .pathname
 }
 
-Deno.test('a space with no front page lists what you may open', async () => {
+test('a space with no front page lists what you may open', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [
@@ -136,7 +137,7 @@ Deno.test('a space with no front page lists what you may open', async () => {
 
 // Builder and setup are separate destinations, and the live script is served
 // on the same origin as the optional builder.
-Deno.test('management separates app creation from agent setup', async () => {
+test('management separates app creation from agent setup', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'bare22', apps: [] }])
@@ -163,7 +164,7 @@ Deno.test('management separates app creation from agent setup', async () => {
   }
 })
 
-Deno.test('the front page is served at the space root', async () => {
+test('the front page is served at the space root', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{

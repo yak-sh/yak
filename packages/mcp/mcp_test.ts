@@ -4,6 +4,7 @@
 // every structured reply against the tool's published outputSchema, so a
 // schema that stopped describing its answer fails here.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Bundle, graph, who } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -38,7 +39,7 @@ let called = async (
   args: Record<string, unknown> = {},
 ) => await client.callTool({ name, arguments: args })
 
-Deno.test('the generic tier is what it lists', async () => {
+test('the generic tier is what it lists', async () => {
   let client = await connect()
   let names = (await listed(client)).sort()
   assertEquals(names, [
@@ -50,7 +51,7 @@ Deno.test('the generic tier is what it lists', async () => {
   await client.close()
 })
 
-Deno.test('a read-only door lists no write, and its reads take its scope', async () => {
+test('a read-only door lists no write, and its reads take its scope', async () => {
   // The write is not a tool that refuses — it is not there at all, which is
   // what a door anybody may call has to be able to say.
   let client = await connect({
@@ -85,7 +86,7 @@ Deno.test('a read-only door lists no write, and its reads take its scope', async
 // the documentation for what it queries, so each of these closes with the page
 // that explains it. The address is the project's own: these tools are the same
 // tools whoever serves them, and so is the page that documents them.
-Deno.test('every generic tool says where it is documented', async () => {
+test('every generic tool says where it is documented', async () => {
   let client = await connect({ search: () => [spring] })
   let tools = (await client.listTools()).tools as {
     name: string
@@ -107,7 +108,7 @@ Deno.test('every generic tool says where it is documented', async () => {
   await client.close()
 })
 
-Deno.test('a search seam adds its tool, and answers through it', async () => {
+test('a search seam adds its tool, and answers through it', async () => {
   let client = await connect({ search: () => [spring] })
   let names = await listed(client)
   assert(names.includes('search'))
@@ -116,7 +117,7 @@ Deno.test('a search seam adds its tool, and answers through it', async () => {
   await client.close()
 })
 
-Deno.test('a batch applied comes back as it landed, and reads back', async () => {
+test('a batch applied comes back as it landed, and reads back', async () => {
   let client = await connect({ actor: ada })
   let wrote = bundles(result(
     await called(client, 'graph_apply', {
@@ -161,7 +162,7 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
   assertEquals(found[0].doc, { title: 'The Left Hand of Spring' })
 })
 
-Deno.test('a checked batch says what would land and keeps none of it', async () => {
+test('a checked batch says what would land and keeps none of it', async () => {
   let g = shopGraph()
   let client = await connect({ graph: g, actor: ada })
   let out = await called(client, 'graph_apply', {
@@ -185,7 +186,7 @@ Deno.test('a checked batch says what would land and keeps none of it', async () 
   assert(text(no).includes('colour'))
 })
 
-Deno.test('an applied batch may drop a component, and says so', async () => {
+test('an applied batch may drop a component, and says so', async () => {
   let client = await connect()
   await called(client, 'graph_apply', { change: [spring] })
   let out = await called(client, 'graph_apply', {
@@ -195,7 +196,7 @@ Deno.test('an applied batch may drop a component, and says so', async () => {
   assertEquals(bundles(result(out))[0].doc, null)
 })
 
-Deno.test('filters and limit narrow the whole query line', async () => {
+test('filters and limit narrow the whole query line', async () => {
   let client = await connect()
   await called(client, 'graph_apply', {
     change: [spring, { entity: { eid: 'b2' }, book: { price: 40 } }],
@@ -227,7 +228,7 @@ Deno.test('filters and limit narrow the whole query line', async () => {
   assertEquals(either.map((b) => b.entity.eid), ['b1'])
 })
 
-Deno.test('the server signs the batch, never the client', async () => {
+test('the server signs the batch, never the client', async () => {
   let graph = shopGraph()
   let client = await connect({ graph, actor: ada })
   await called(client, 'graph_apply', {
@@ -238,7 +239,7 @@ Deno.test('the server signs the batch, never the client', async () => {
   assertEquals(comp((await graph.read('.price=12&*'))[0], 'created').by, 'm1')
 })
 
-Deno.test('a tool runs as whoever called it', async () => {
+test('a tool runs as whoever called it', async () => {
   let graph = shopGraph()
   let seen: string | null = null
   graph.use({
@@ -263,7 +264,7 @@ Deno.test('a tool runs as whoever called it', async () => {
   await client.close()
 })
 
-Deno.test('an unattributed server leaves the actor off', async () => {
+test('an unattributed server leaves the actor off', async () => {
   let graph = shopGraph()
   let client = await connect({ graph })
   await called(client, 'graph_apply', {
@@ -275,7 +276,7 @@ Deno.test('an unattributed server leaves the actor off', async () => {
   )
 })
 
-Deno.test('graph_show answers the entities asked for and nothing else', async () => {
+test('graph_show answers the entities asked for and nothing else', async () => {
   let graph = shopGraph()
   await graph.apply([spring, {
     entity: { eid: 'r1' },
@@ -287,7 +288,7 @@ Deno.test('graph_show answers the entities asked for and nothing else', async ()
   await client.close()
 })
 
-Deno.test('graph_show reads an entity by whatever names it', async () => {
+test('graph_show reads an entity by whatever names it', async () => {
   let g = graph({
     storage: ram(shop, { number: true }),
     vocab: shop,
@@ -334,7 +335,7 @@ let wideDoc: VocabDoc = {
   } as VocabDoc['$defs'],
 }
 
-Deno.test('graph_query .refs= reads backlinks over a vocabulary that references many ways', async () => {
+test('graph_query .refs= reads backlinks over a vocabulary that references many ways', async () => {
   let wide = loadVocab([wideDoc, toolsDoc])
   let g = graph({ storage: ram(wide), vocab: wide })
   await g.apply([
@@ -352,7 +353,7 @@ Deno.test('graph_query .refs= reads backlinks over a vocabulary that references 
 
 // The three sizes are graph_schema_test.ts's; this is only that the tool is
 // listed and answers the vocabulary it was built over.
-Deno.test('graph_schema hands over the words of this graph', async () => {
+test('graph_schema hands over the words of this graph', async () => {
   let client = await connect()
   // A vocabulary is not rows in the store it describes, so its structured
   // answer is a vocabulary document rather than bundles.
@@ -381,7 +382,7 @@ Deno.test('graph_schema hands over the words of this graph', async () => {
   )
 })
 
-Deno.test('a refusal is the tool error the agent reads, not a broken call', async () => {
+test('a refusal is the tool error the agent reads, not a broken call', async () => {
   let client = await connect()
   // The write door's schema is the vocabulary (T-34153), so a bundle with no
   // identity and a value of the wrong type are each refused where they were
@@ -420,7 +421,7 @@ Deno.test('a refusal is the tool error the agent reads, not a broken call', asyn
   assertEquals(bare.isError, true)
 })
 
-Deno.test('a plugin contributes tools the way it contributes components', async () => {
+test('a plugin contributes tools the way it contributes components', async () => {
   let graph = shopGraph()
   graph.use({
     name: 'shelf',
@@ -448,7 +449,7 @@ Deno.test('a plugin contributes tools the way it contributes components', async 
   )
 })
 
-Deno.test('a tool whose answer is words says them as content, and its bundles beside', async () => {
+test('a tool whose answer is words says them as content, and its bundles beside', async () => {
   let graph = shopGraph()
   graph.use({
     name: 'shelf',
@@ -490,14 +491,14 @@ Deno.test('a tool whose answer is words says them as content, and its bundles be
 // a tool a release added is one it will never call and one that went is one it
 // calls into a refusal. The version names the list, the host remembers which
 // one a session connected under, and every result carries the diff.
-Deno.test('the roster version moves with the names and with the release', () => {
+test('the roster version moves with the names and with the release', () => {
   let a = ['graph_query', 'about']
   assertEquals(rosterVersion(a, 'v1'), rosterVersion([...a].reverse(), 'v1'))
   assert(rosterVersion(a, 'v1') != rosterVersion([...a, 'mail_send'], 'v1'))
   assert(rosterVersion(a, 'v1') != rosterVersion(a, 'v2'))
 })
 
-Deno.test('the line names what moved, and says nothing when nothing did', () => {
+test('the line names what moved, and says nothing when nothing did', () => {
   assertEquals(rosterLine(['about'], ['about']), undefined)
   assertEquals(
     rosterLine(['about', 'vocab'], ['about', 'mail_list', 'mail_send']),
@@ -506,7 +507,7 @@ Deno.test('the line names what moved, and says nothing when nothing did', () => 
   )
 })
 
-Deno.test('a tool offered only on a command line is not listed here', () => {
+test('a tool offered only on a command line is not listed here', () => {
   let tool = (name: string, surfaces?: ('cli' | 'mcp')[]) => ({
     name,
     description: name,
@@ -524,7 +525,7 @@ Deno.test('a tool offered only on a command line is not listed here', () => {
   ])
 })
 
-Deno.test('a session that connected against another roster is told, once', async () => {
+test('a session that connected against another roster is told, once', async () => {
   let graph = shopGraph()
   // What this client cached at connect — a roster from before the release
   // that added `search` and took `vocab` away. It is the host that remembers
@@ -561,7 +562,7 @@ Deno.test('a session that connected against another roster is told, once', async
   await client.close()
 })
 
-Deno.test('a host with more than tools registers them on the same server', async () => {
+test('a host with more than tools registers them on the same server', async () => {
   let client = await connect({
     extend: (server) =>
       void server.registerResource('shelf', 'shop://shelf', {
@@ -580,7 +581,7 @@ Deno.test('a host with more than tools registers them on the same server', async
   await client.close()
 })
 
-Deno.test('every tool says how a client signs in for it', async () => {
+test('every tool says how a client signs in for it', async () => {
   // Nothing said, nothing declared: a server whose tools need no sign-in
   // leaves the field off rather than guessing at one. The words the tier
   // declared still ride there — `_meta` is where a tool's command-line words
@@ -648,7 +649,7 @@ Deno.test('every tool says how a client signs in for it', async () => {
   await client.close()
 })
 
-Deno.test('a tool lists its title in its annotations as well', async () => {
+test('a tool lists its title in its annotations as well', async () => {
   // A connector directory reads a listing's display name out of
   // `annotations.title`, so it rides there beside the four hints — on both
   // listing paths, the SDK's own and the passthrough one a declared

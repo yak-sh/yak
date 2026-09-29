@@ -2,6 +2,7 @@
 // one candidate and its label, or its absence, so a test never freezes the
 // whole list.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { type Cand, complete, type Source } from './complete.ts'
@@ -178,24 +179,24 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
   ['mid-line, the word up to the caret', '.pri§ .task', '.priority', 'task'],
 ]
 for (let [name, text, cand, kind, source] of has) {
-  Deno.test(`complete: ${name}`, () => {
+  test(`complete: ${name}`, () => {
     assertEquals(offered(text, source)[cand], kind)
   })
 }
 
-Deno.test('complete: the word itself is never offered', () => {
+test('complete: the word itself is never offered', () => {
   assertEquals(offered('.priority')['.priority'], undefined)
   assertEquals(offered('.task.status=open')['.task.status=open'], undefined)
 })
 
-Deno.test('complete: the span is the word under the caret', () => {
+test('complete: the span is the word under the caret', () => {
   let { from, to } = complete(v, '.task .pri .pin', 10)
   assertEquals([from, to], [6, 10])
   assertEquals(complete(v, '.task.status=open,d').from, 0)
   assertEquals(complete(v, '.entity,.pri').from, 8)
 })
 
-Deno.test('complete: an asynchronous source makes the answer a promise', async () => {
+test('complete: an asynchronous source makes the answer a promise', async () => {
   let slow: Source = {
     ids: () => Promise.resolve([{ text: 'jeff', kind: 'person' }]),
   }
@@ -203,13 +204,13 @@ Deno.test('complete: an asynchronous source makes the answer a promise', async (
   assertEquals(c.cands, [{ text: '.assignee=jeff', kind: 'person' }])
 })
 
-Deno.test('complete: nothing to offer is an empty list', () => {
+test('complete: nothing to offer is an empty list', () => {
   assertEquals(complete(v, '').cands, [])
   assertEquals(complete(v, '"quoted').cands, [])
   assertEquals(complete(v, '.nothing.').cands, [])
 })
 
-Deno.test("complete: a _ component follows the application's own", () => {
+test("complete: a _ component follows the application's own", () => {
   let texts = complete(v, '.').cands.map((c) => c.text)
   assertEquals(texts.indexOf('._prop.') > texts.indexOf('.task.'), true)
 })

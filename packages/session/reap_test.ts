@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { detached } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
@@ -17,7 +18,7 @@ let held = () => {
   return s
 }
 
-Deno.test('a lock whose holder is gone is freed, a session’s is left alone', () => {
+test('a lock whose holder is gone is freed, a session’s is left alone', () => {
   let s = held()
   let freed = reapLeases(s) as Bundle[]
   assertEquals(freed.map((b) => b.entity.eid), [ids.p2])
@@ -25,24 +26,24 @@ Deno.test('a lock whose holder is gone is freed, a session’s is left alone', (
   assertEquals(lockOn(s, ids.p1)?.session, ids.run1)
 })
 
-Deno.test('a lock held by an entity that is not a session is freed', () => {
+test('a lock held by an entity that is not a session is freed', () => {
   let s = store()
   seed(s, { entity: { eid: ids.p1 }, claim: { session: ids.ada } })
   assertEquals((reapLeases(s) as Bundle[]).length, 1)
   assertEquals(lockOn(s, ids.p1), undefined)
 })
 
-Deno.test('reaping twice frees nothing the second time', () => {
+test('reaping twice frees nothing the second time', () => {
   let s = held()
   reapLeases(s)
   assertEquals((reapLeases(s) as Bundle[]).length, 0)
 })
 
-Deno.test('a graph with no locks at all is no work', () => {
+test('a graph with no locks at all is no work', () => {
   assertEquals((reapLeases(store()) as Bundle[]).length, 0)
 })
 
-Deno.test('staleLeases only reads — the releases are the caller’s to apply', () => {
+test('staleLeases only reads — the releases are the caller’s to apply', () => {
   let s = held()
   let free = staleLeases(detached(s)) as Bundle[]
   assertEquals(free, [{ entity: { eid: ids.p2, num: 6 }, claim: null }])

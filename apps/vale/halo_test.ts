@@ -1,8 +1,9 @@
 // A halo fades to transparency and can be made without a browser document.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { halo } from './halo.ts'
 
-Deno.test('one radial halo serves every light without a DOM', () => {
+test('one radial halo serves every light without a DOM', () => {
   let map = halo()
   let { data, width } = map.image
   assert(data)

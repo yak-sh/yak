@@ -3,7 +3,7 @@
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
@@ -118,7 +118,7 @@ let start = (v: Awaited<ReturnType<typeof app>>) =>
     },
   ])
 
-Deno.test('a hosted builder writes named outputs and spends the account budget', async () => {
+test('a hosted builder writes named outputs and spends the account budget', async () => {
   let v = await app()
   assertEquals((await start(v)).status, 200)
   let [built] = await until(async () => {
@@ -146,7 +146,7 @@ Deno.test('a hosted builder writes named outputs and spends the account budget',
   assertAlmostEquals((await v.dir.space('builder-test'))!.meter!.models, cost)
 })
 
-Deno.test('a hosted builder cannot spend beyond the account budget', async () => {
+test('a hosted builder cannot spend beyond the account budget', async () => {
   let v = await app(BUDGET.free)
   assertEquals((await start(v)).status, 200)
   let [run] = await until(async () => {
@@ -167,7 +167,7 @@ Deno.test('a hosted builder cannot spend beyond the account budget', async () =>
   assertEquals(v.asked.length, 0)
 })
 
-Deno.test('an open app cannot let a visitor start a builder at its account expense', async () => {
+test('an open app cannot let a visitor start a builder at its account expense', async () => {
   let v = await app(0, 'open')
   let refused = await v.send('/apply', [
     {

@@ -3,6 +3,7 @@
 // batch that rebuilds into the bundles it committed — the two things a server
 // does with the journal (recast to subscribers, drive effects at most once).
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { applied } from './undo.ts'
@@ -20,26 +21,26 @@ let fixture = (n: number) => {
   return { g, j }
 }
 
-Deno.test('the feed hands out the batches after a cursor, in order', () => {
+test('the feed hands out the batches after a cursor, in order', () => {
   let f = fixture(5)
   assertEquals(f.j.since(0).map((e) => e.seq), [1, 2, 3, 4, 5])
   assertEquals(f.j.since(3).map((e) => e.seq), [4, 5])
 })
 
-Deno.test('an exhausted feed is empty, and the tip is the cursor', () => {
+test('an exhausted feed is empty, and the tip is the cursor', () => {
   let f = fixture(2)
   assertEquals(f.j.tip(), 2)
   assertEquals(f.j.since(2), [])
 })
 
-Deno.test('a batch carries only its own operations', () => {
+test('a batch carries only its own operations', () => {
   let f = fixture(3)
   let [second] = f.j.since(1)
   assertEquals(second.seq, 2)
   assertEquals(second.patches.map((p) => p.target), ['p2'])
 })
 
-Deno.test('a batch from the feed recasts as the bundles it committed', () => {
+test('a batch from the feed recasts as the bundles it committed', () => {
   let { g, j } = wikiGraph()
   let change: Bundle[] = [
     { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
@@ -49,7 +50,7 @@ Deno.test('a batch from the feed recasts as the bundles it committed', () => {
   assertEquals(j.since(0).map((e) => applied(j.at(e.seq)!)), [change])
 })
 
-Deno.test('a feed drains what was committed while it was away', () => {
+test('a feed drains what was committed while it was away', () => {
   let f = fixture(2)
   let cursor = f.j.since(0).at(-1)!.seq
   sync(f.g.apply([{ entity: { eid: 'p9' }, page: { title: 'late' } }]))
@@ -67,7 +68,7 @@ let page = (title: string) => (eid: string): Bundle => ({
   page: { title },
 })
 
-Deno.test('a follower hears what another host committed, and not its own', () => {
+test('a follower hears what another host committed, and not its own', () => {
   let { g, j, them } = hosts()
   sync(g.apply([page('before')('p0')]))
   let next = follow(j)
@@ -77,7 +78,7 @@ Deno.test('a follower hears what another host committed, and not its own', () =>
   assertEquals(next(), [])
 })
 
-Deno.test('a follower hears a deletion as the patches that made it', () => {
+test('a follower hears a deletion as the patches that made it', () => {
   let { g, j, them } = hosts()
   sync(g.apply([
     page('Kickoff')('p1'),
@@ -92,7 +93,7 @@ Deno.test('a follower hears a deletion as the patches that made it', () => {
   ])
 })
 
-Deno.test('a follower pages through a burst without losing any of it', () => {
+test('a follower pages through a burst without losing any of it', () => {
   let { j, them } = hosts()
   let next = follow(j, { page: 2 })
   for (let i = 1; i <= 5; i++) sync(them.g.apply([page('p')(`p${i}`)]))
@@ -100,7 +101,7 @@ Deno.test('a follower pages through a burst without losing any of it', () => {
   assertEquals(eids, ['p1', 'p2', 'p3', 'p4', 'p5'])
 })
 
-Deno.test('a store an older journal made takes the host once it is opened again', () => {
+test('a store an older journal made takes the host once it is opened again', () => {
   let db = mem()
   let old = ddl().map((s) =>
     s.t == 'create table' && s.name == 'journal_tx'

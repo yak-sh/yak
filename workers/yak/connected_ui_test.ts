@@ -1,6 +1,7 @@
 // The component updates its own rows and what shows while any agent is
 // connected, preserves form state, and never trusts names or remote link
 // destinations.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import type { Agent } from './connected.ts'
@@ -61,7 +62,7 @@ ${view ? agentList(initial, view) : ''}${agentLive('/oauth/agents')}
   }
 }
 
-Deno.test('agent rows show names and only known web agent destinations', () => {
+test('agent rows show names and only known web agent destinations', () => {
   let hostile = '<img src=x onerror=alert(1)>'
   let m = mount([
     chatgpt,
@@ -86,7 +87,7 @@ Deno.test('agent rows show names and only known web agent destinations', () => {
   assertEquals(m.list.getAttribute('aria-label'), 'Connected agents')
 })
 
-Deno.test('compact agents render launch links and refresh without replacing drafts or stable links', async () => {
+test('compact agents render launch links and refresh without replacing drafts or stable links', async () => {
   let claude: Agent = {
     id: 'claude',
     brand: 'claude',
@@ -127,7 +128,7 @@ Deno.test('compact agents render launch links and refresh without replacing draf
   }
 })
 
-Deno.test('agent refresh preserves drafts and changes setup only when an agent connects or leaves', async () => {
+test('agent refresh preserves drafts and changes setup only when an agent connects or leaves', async () => {
   let m = mount()
   let draft = m.document.querySelector('input')!
   assertEquals(m.list.hidden, true)
@@ -169,7 +170,7 @@ Deno.test('agent refresh preserves drafts and changes setup only when an agent c
   })
 })
 
-Deno.test('agent refresh coalesces events and preserves state on failures', async () => {
+test('agent refresh coalesces events and preserves state on failures', async () => {
   let m = mount([chatgpt])
   let finish!: (response: Response) => void
   m.reply(() =>
@@ -205,7 +206,7 @@ Deno.test('agent refresh coalesces events and preserves state on failures', asyn
   assertEquals(m.calls.length, count)
 })
 
-Deno.test('connected state refreshes without an agent list or row template', async () => {
+test('connected state refreshes without an agent list or row template', async () => {
   for (let initial of [[], [chatgpt]]) {
     let m = mount(initial, false)
     let prompt = m.document.querySelector<HTMLElement>('[data-disconnected]')!

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { ids, noon, shop } from '../builders/testing.ts'
@@ -7,7 +8,7 @@ import { dreamingDoc } from './vocab.ts'
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-Deno.test('a dream is a scheduled builder and reads as a dream', async () => {
+test('a dream is a scheduled builder and reads as a dream', async () => {
   let { g, vocab, runner } = await shop({ rest: '1h', now: noon }, [
     dreamingDoc,
   ])

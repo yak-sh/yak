@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { rootOf, sessionTree } from './tree.ts'
@@ -6,7 +7,7 @@ let row = (id: string, parent?: string, status = 'running'): Bundle => ({
   session: { id, status, tasksCompleted: status == 'settled' },
   ...parent ? { spawned: { parent } } : {},
 })
-Deno.test('tree is always open, retains selected ancestry and hides archived subtrees', () => {
+test('tree is always open, retains selected ancestry and hides archived subtrees', () => {
   let rows = [row('a'), row('b'), row('c', 'a'), row('d', 'c', 'settled')]
   let ids = (o = {}) =>
     sessionTree(rows, o).map((r) => [r.bundle.entity.eid, r.depth])
@@ -18,13 +19,13 @@ Deno.test('tree is always open, retains selected ancestry and hides archived sub
   assertEquals(ids(), [['b', 0]])
   assertEquals(ids({ showArchived: true }), [['a', 0], ['c', 1], ['b', 0]])
 })
-Deno.test('orphan roots and corrupt cycles never loop', () => {
+test('orphan roots and corrupt cycles never loop', () => {
   assertEquals(sessionTree([row('orphan', 'missing')]).length, 1)
   let cycle = [row('x', 'y'), row('y', 'x')]
   assertEquals(sessionTree(cycle).length, 2)
 })
 
-Deno.test('connectors account for filtered siblings without expansion state', () => {
+test('connectors account for filtered siblings without expansion state', () => {
   let rows = [
     row('root'),
     row('a', 'root'),
@@ -40,7 +41,7 @@ Deno.test('connectors account for filtered siblings without expansion state', ()
   ])
 })
 
-Deno.test('unnumbered task children without a call are visible and child archive is local', () => {
+test('unnumbered task children without a call are visible and child archive is local', () => {
   let parent = row('parent')
   let child = row('child', 'parent')
   child.spawned = { parent: 'parent', call: null }
@@ -57,7 +58,7 @@ Deno.test('unnumbered task children without a call are visible and child archive
   assertEquals(parent.archived, undefined)
 })
 
-Deno.test('settled children hide regardless of assigned task completion', () => {
+test('settled children hide regardless of assigned task completion', () => {
   const root = row('root')
   const child = row('child', 'root', 'settled')
   for (const tasksCompleted of [undefined, false, true]) {
@@ -74,7 +75,7 @@ Deno.test('settled children hide regardless of assigned task completion', () => 
   assertEquals(sessionTree([root, child]).length, 2)
 })
 
-Deno.test('settled parent stays visible for active descendants, not archived trees', () => {
+test('settled parent stays visible for active descendants, not archived trees', () => {
   const root = row('root')
   const parent = row('parent', 'root', 'settled')
   const child = row('child', 'parent', 'running')

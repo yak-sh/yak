@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { col, lit } from '@yaks/sql'
 import { inspect } from './inspect.ts'
 import { mem } from './testing.ts'
 
-Deno.test('inspection counts stored rows and indexes without reading values', () => {
+test('inspection counts stored rows and indexes without reading values', () => {
   let db = mem()
   db.query({
     t: 'create table',

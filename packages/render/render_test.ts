@@ -1,6 +1,7 @@
 // Registry behavior against one small vocabulary: selection never renders or
 // runs an action, and a property declaration is independent of its stored value.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
 import { and, parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
@@ -46,7 +47,7 @@ let face = (view: string, match: string | true): Renderer => ({
 let pick = (rs: Renderer[], view = 'Tile') =>
   resolve(define(rs), bundle, view, vocab)
 
-Deno.test('all clauses must hold; specificity outranks registration order', () => {
+test('all clauses must hold; specificity outranks registration order', () => {
   let plain = face('Tile', '.doc')
   let task = face('Tile', '.doc, .task')
   let wrong = face('Tile', '.doc, .task, .task.rank>3')
@@ -55,7 +56,7 @@ Deno.test('all clauses must hold; specificity outranks registration order', () =
   assertEquals(pick([wrong]), undefined)
 })
 
-Deno.test('ties go to the first registration; true is the weakest match', () => {
+test('ties go to the first registration; true is the weakest match', () => {
   let first = face('Tile', '.doc')
   let second = face('Tile', '.task')
   let fallback = face('Tile', true)
@@ -67,7 +68,7 @@ Deno.test('ties go to the first registration; true is the weakest match', () => 
   assertStrictEquals(pick([empty, first, fallback]), first)
 })
 
-Deno.test('closest role wins before specificity; leftmost qualifiers strip', () => {
+test('closest role wins before specificity; leftmost qualifiers strip', () => {
   let tile = face('Tile', '.doc, .task')
   let list = face('List.Tile', '.doc')
   let board = face('Board.List.Tile', true)
@@ -80,14 +81,14 @@ Deno.test('closest role wins before specificity; leftmost qualifiers strip', () 
   assertStrictEquals(pick([miss, list], 'Board.List.Tile'), list)
 })
 
-Deno.test('an unknown view name resolves to nothing, not to a prototype key', () => {
+test('an unknown view name resolves to nothing, not to a prototype key', () => {
   let tile = face('Tile', true)
   let registry = define([tile])
   assertEquals(resolve(registry, bundle, 'toString', vocab), undefined)
   assertStrictEquals(resolve(registry, bundle, 'Card.Tile', vocab), tile)
 })
 
-Deno.test('unnamed views honor the configured list; JSON is an explicit fallback', () => {
+test('unnamed views honor the configured list; JSON is an explicit fallback', () => {
   let tile = face('Tile', '.doc')
   let full = face('Full', '.doc, .task')
   let json = face('JSON', true)
@@ -101,7 +102,7 @@ Deno.test('unnamed views honor the configured list; JSON is an explicit fallback
   assertEquals(resolve(define([]), bundle, 'Missing', vocab), undefined)
 })
 
-Deno.test('property types use declared schemas, even when the value is absent', () => {
+test('property types use declared schemas, even when the value is absent', () => {
   let types = ['string', 'number', 'boolean', 'enum', 'time', 'ref']
   let rs = types.map((type) => face('Edit', `.prop.type=${type}`))
   let registry = define([face('Tile', '.doc'), face('Edit', true), ...rs])
@@ -142,7 +143,7 @@ Deno.test('property types use declared schemas, even when the value is absent', 
   )
 })
 
-Deno.test('a property pick is remembered per registry, and an overlay replaces it', () => {
+test('a property pick is remembered per registry, and an overlay replaces it', () => {
   let plain = face('Edit', '.prop.type=string')
   let registry = define([plain])
   let ask = () =>
@@ -176,7 +177,7 @@ Deno.test('a property pick is remembered per registry, and an overlay replaces i
   assertStrictEquals(resolve(byType, bundle, 'Edit', other, title), ranks)
 })
 
-Deno.test('actions union all worn components, preserve duplicates, and never run', () => {
+test('actions union all worn components, preserve duplicates, and never run', () => {
   let ran = 0
   let run = () => {
     ran++
@@ -217,7 +218,7 @@ Deno.test('actions union all worn components, preserve duplicates, and never run
   assertEquals(actions(conditional, bundle, vocab).length, 1)
 })
 
-Deno.test('host registrations preserve payloads; overlays and tabs share matching', () => {
+test('host registrations preserve payloads; overlays and tabs share matching', () => {
   let original = {
     view: 'Tile',
     match: parse('.doc'),
@@ -256,7 +257,7 @@ Deno.test('host registrations preserve payloads; overlays and tabs share matchin
   assertEquals(resolve(define([original]), bundle, 'Tile', vocab), original)
 })
 
-Deno.test('dynamic typed actions receive their source and refresh without running', () => {
+test('dynamic typed actions receive their source and refresh without running', () => {
   type Source = { title: string }
   type Verb = { label: string; run: () => void }
   let runs = 0

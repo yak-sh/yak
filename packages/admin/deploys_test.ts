@@ -1,5 +1,6 @@
 // The deploy history's pure seams: how Wrangler's JSON joins uploads to
 // commits, where a data boundary is, and which version a rollback may land on.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError } from '@yaks/tools'
 import { Refused } from './accounts.ts'
@@ -52,7 +53,7 @@ let deploy = (
   ...over,
 })
 
-Deno.test('Wrangler JSON joins uploads to named commits and the latest traffic deployment', () => {
+test('Wrangler JSON joins uploads to named commits and the latest traffic deployment', () => {
   let versions = rowsIn<Version>(
     JSON.parse(JSON.stringify([
       version(1, `${commit(1).sha} change 1`),
@@ -87,7 +88,7 @@ Deno.test('Wrangler JSON joins uploads to named commits and the latest traffic d
   assert(shown.includes('50%'))
 })
 
-Deno.test('migration markers are read from MARKS declarations, including the first pass', () => {
+test('migration markers are read from MARKS declarations, including the first pass', () => {
   let source = `
     export let MARK = 'yak/store/packages/1'
     export const HANDLED = 'yak/store/handle/5'
@@ -106,7 +107,7 @@ Deno.test('migration markers are read from MARKS declarations, including the fir
   assertEquals(marksIn('export let MARKS = generated()'), null)
 })
 
-Deno.test('explicit rollback boundaries exclude status markers and fail closed', () => {
+test('explicit rollback boundaries exclude status markers and fail closed', () => {
   let source = `
     export let MARK = 'yak/store/packages/1'
     export let REFUSED = 'yak/store/refused/6'
@@ -145,14 +146,14 @@ Deno.test('explicit rollback boundaries exclude status markers and fail closed',
 
 // A rollback is refused wherever the history cannot be read, so the file as it
 // stands has to parse.
-Deno.test('the migrations as they stand are a history deploys can read', async () => {
+test('the migrations as they stand are a history deploys can read', async () => {
   let source = await Deno.readTextFile(
     new URL('../../workers/yak/migrate.ts', import.meta.url),
   )
   assert(marksIn(source)?.length, 'migrate.ts declares no readable history')
 })
 
-Deno.test('a gradual deploy can roll back to its prior version while that version still serves traffic', () => {
+test('a gradual deploy can roll back to its prior version while that version still serves traffic', () => {
   let rows = deploysIn(
     [version(1, commit(1).sha), version(2, commit(2).sha)],
     [deployment(3, 'v1'), deployment(4, 'v1', 'v2')],
@@ -167,7 +168,7 @@ Deno.test('a gradual deploy can roll back to its prior version while that versio
   )
 })
 
-Deno.test('boundaries survive rollback and unserved uploads do not move data', () => {
+test('boundaries survive rollback and unserved uploads do not move data', () => {
   let rows = boundaries([
     deploy(4, ['one', 'two', 'three'], { first: undefined, last: undefined }),
     deploy(3, ['one', 'two']),
@@ -188,7 +189,7 @@ Deno.test('boundaries survive rollback and unserved uploads do not move data', (
   assertThrows(() => rollbackTarget(rows, 'v'), Refused, 'names 4')
 })
 
-Deno.test('later code that drops a served marker remains unsafe despite a newer upload time', () => {
+test('later code that drops a served marker remains unsafe despite a newer upload time', () => {
   let rows = boundaries([
     deploy(4, ['one'], { live: 100 }),
     deploy(3, ['one', 'two']),
@@ -201,7 +202,7 @@ Deno.test('later code that drops a served marker remains unsafe despite a newer 
   assertEquals(rows[2].refusal, undefined)
 })
 
-Deno.test('rollback fails closed for unknown migration sources or time-inferred commits', () => {
+test('rollback fails closed for unknown migration sources or time-inferred commits', () => {
   for (let over of [{ marks: null }, { estimated: true }]) {
     let rows = boundaries([deploy(2, ['one'], over), deploy(1, ['one'])])
     assert(rows.every((r) => r.refusal?.startsWith('no rollback:')))
@@ -211,7 +212,7 @@ Deno.test('rollback fails closed for unknown migration sources or time-inferred 
   assertEquals(rollbackTarget(boundaries([deploy(1, [])]), 'v1').id, 'v1')
 })
 
-Deno.test('main history keeps a data boundary after Wrangler ages its deployment out', () => {
+test('main history keeps a data boundary after Wrangler ages its deployment out', () => {
   let rows = [deploy(9, ['one'], { live: 100 }), deploy(8, ['one'])]
   let guarded = boundaries(rows, ['one', 'two'])
   assertEquals(guarded.map((r) => r.refusal), [
@@ -222,7 +223,7 @@ Deno.test('main history keeps a data boundary after Wrangler ages its deployment
   assert(boundaries(rows, null).every((r) => r.refusal?.includes('unknown')))
 })
 
-Deno.test('stopping a platform command interrupts its whole process group', async () => {
+test('stopping a platform command interrupts its whole process group', async () => {
   let stopping = new AbortController()
   let started = Date.now()
   let ran = command(
@@ -240,7 +241,7 @@ Deno.test('stopping a platform command interrupts its whole process group', asyn
   assert(Date.now() - started < 2_000, 'the child process group stayed alive')
 })
 
-Deno.test('a command failure is still a defect when the host is not stopping', async () => {
+test('a command failure is still a defect when the host is not stopping', async () => {
   let error = await assertRejects(
     () =>
       command(
@@ -255,7 +256,7 @@ Deno.test('a command failure is still a defect when the host is not stopping', a
   assert(!(error instanceof CallError))
 })
 
-Deno.test('deployment history never overlaps Wrangler OAuth refreshes', async () => {
+test('deployment history never overlaps Wrangler OAuth refreshes', async () => {
   let active = false
   let called: string[][] = []
   let read = async (args: string[]) => {

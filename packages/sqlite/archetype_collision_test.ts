@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertNotEquals, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes, eidOf, tablesOf } from '@yaks/archetype'
 import { type Bundle, graph, sha256 } from '@yaks/graph'
@@ -83,7 +84,7 @@ let owners: Bundle[] = [
 
 for (let backend of ['ram', 'sqlite']) {
   for (let first of [true, false]) {
-    Deno.test(`archetype/blob: ${backend}, blobs first=${first}`, () => {
+    test(`archetype/blob: ${backend}, blobs first=${first}`, () => {
       let s = backend == 'ram' ? ram(vocab) : storage(mem(), vocab)
       if ('install' in s) s.install()
       let g = graph({ storage: s, vocab, plugins: [archetypes()] })
@@ -111,7 +112,7 @@ for (let backend of ['ram', 'sqlite']) {
   }
 }
 
-Deno.test('archetype/blob: file backfill and reopen preserve text in both insertion orders', () => {
+test('archetype/blob: file backfill and reopen preserve text in both insertion orders', () => {
   for (let first of [true, false]) {
     let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
     let db = open(path)
@@ -152,7 +153,7 @@ Deno.test('archetype/blob: file backfill and reopen preserve text in both insert
   }
 })
 
-Deno.test('archetype: migrate legacy SHA descriptors in place, references and retirement survive', () => {
+test('archetype: migrate legacy SHA descriptors in place, references and retirement survive', () => {
   let d = mem()
   let s = storage(d, vocab)
   s.install()
@@ -185,7 +186,7 @@ Deno.test('archetype: migrate legacy SHA descriptors in place, references and re
 })
 
 for (let fault of ['occupied', 'invalid']) {
-  Deno.test(`archetype: legacy migration refuses ${fault} identities atomically`, () => {
+  test(`archetype: legacy migration refuses ${fault} identities atomically`, () => {
     let d = mem()
     let s = storage(d, vocab)
     s.install()
@@ -214,7 +215,7 @@ for (let fault of ['occupied', 'invalid']) {
   })
 }
 
-Deno.test('archetype: migration never steals content from a shared legacy blob spine', () => {
+test('archetype: migration never steals content from a shared legacy blob spine', () => {
   let d = mem()
   let s = storage(d, vocab)
   s.install()

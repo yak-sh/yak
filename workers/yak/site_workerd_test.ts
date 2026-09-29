@@ -1,9 +1,10 @@
 // The public Site service binding, through workerd rather than the in-process
 // fallback used by the Deno kernel tests.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { workerd } from './probe.ts'
 
-Deno.test('workerd serves home and gallery through Site', async () => {
+test('workerd serves home and gallery through Site', async () => {
   let k = workerd()
   for (let path of ['/', '/gallery']) {
     let page = await k.at('yaks.app', path)

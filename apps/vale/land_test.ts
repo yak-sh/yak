@@ -1,5 +1,6 @@
 // The land beyond each village: its ground, what grows there, and the
 // creatures a traveler meets after leaving the old center.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert } from '@std/assert'
 import { Top } from './features.ts'
@@ -23,7 +24,7 @@ let ground = (id: string, x: number, z: number) => {
 
 seedBuildings()
 
-Deno.test('each land has creatures beyond its old center', () => {
+test('each land has creatures beyond its old center', () => {
   let mid = SIZE / 2, outer = SIZE / 4
   for (let lv of Object.values(LEVELS)) {
     let [ox, oz] = lv.cell.map((n) => n * SIZE)
@@ -36,7 +37,7 @@ Deno.test('each land has creatures beyond its old center', () => {
   }
 })
 
-Deno.test('the outer ground keeps the land instead of becoming a grass ring', () => {
+test('the outer ground keeps the land instead of becoming a grass ring', () => {
   let mid = SIZE / 2, margin = CHUNK + 4
   for (
     let { id, tops } of [
@@ -57,7 +58,7 @@ Deno.test('the outer ground keeps the land instead of becoming a grass ring', ()
   }
 })
 
-Deno.test('Birchmere grows birches in its outer woods', () => {
+test('Birchmere grows birches in its outer woods', () => {
   let [gx, gz] = LEVELS.birchmere.cell
   let birches = 0
   for (let z = CHUNK; z < SIZE / 4; z += CHUNK) {

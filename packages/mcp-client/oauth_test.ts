@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { AuthorizationError, discover } from './oauth.ts'
 import { edge } from './testing.ts'
@@ -41,7 +42,7 @@ await (await discover('https://service.test/mcp', {}, mock())).register(
   'http://127.0.0.1:8765/oauth/callback',
 )
 
-Deno.test('discover: an MCP server’s sign-in as an integration, and a client registered there', async () => {
+test('discover: an MCP server’s sign-in as an integration, and a client registered there', async () => {
   const found = await discover('https://service.test/mcp', {}, mock())
   assertEquals(found.integration, {
     name: 'https://service.test/mcp',
@@ -58,7 +59,7 @@ Deno.test('discover: an MCP server’s sign-in as an integration, and a client r
   )
 })
 
-Deno.test('discover: a challenge names the metadata and the scope', async () => {
+test('discover: a challenge names the metadata and the scope', async () => {
   const asked: string[] = []
   const found = await discover('https://service.test/mcp', {
     resourceMetadataUrl: 'https://service.test/meta/oauth-protected-resource',
@@ -68,7 +69,7 @@ Deno.test('discover: a challenge names the metadata and the scope', async () => 
   assertEquals(found.integration.scopes, ['only'])
 })
 
-Deno.test('discover: a redirect is refused, not followed', async () => {
+test('discover: a redirect is refused, not followed', async () => {
   const asked: string[] = []
   const found = mock(asked)
   const moved: typeof fetch = (input, init) => {
@@ -88,7 +89,7 @@ Deno.test('discover: a redirect is refused, not followed', async () => {
   assertEquals(asked.filter((u) => u.includes('elsewhere')), [])
 })
 
-Deno.test('discover: plain HTTP off this machine is refused', async () => {
+test('discover: plain HTTP off this machine is refused', async () => {
   await assertRejects(
     () => discover('http://service.test/mcp', {}, mock()),
     AuthorizationError,

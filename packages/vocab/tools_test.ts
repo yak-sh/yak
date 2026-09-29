@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   toolDefinition,
@@ -7,7 +8,7 @@ import {
 } from './tools.ts'
 
 const draft7 = 'http://json-schema.org/draft-07/schema#'
-Deno.test('tool schemas preserve draft-07 tuple semantics beside 2020 schemas', () => {
+test('tool schemas preserve draft-07 tuple semantics beside 2020 schemas', () => {
   const inputSchema = {
     $schema: draft7,
     type: 'object',
@@ -40,7 +41,7 @@ Deno.test('tool schemas preserve draft-07 tuple semantics beside 2020 schemas', 
   validateToolOutput({ outputSchema }, { pair: ['x'] })
   assertThrows(() => validateToolOutput({ outputSchema }, { pair: ['x', 'y'] }))
 })
-Deno.test('draft-07 outputs validate without defaults and unsupported dialects fail clearly', () => {
+test('draft-07 outputs validate without defaults and unsupported dialects fail clearly', () => {
   const outputSchema = {
     $schema: draft7,
     type: 'object',
@@ -66,7 +67,7 @@ Deno.test('draft-07 outputs validate without defaults and unsupported dialects f
   )
 })
 
-Deno.test('2019 schema semantics and independent identical IDs use selected dialect', () => {
+test('2019 schema semantics and independent identical IDs use selected dialect', () => {
   const inputSchema = {
     $schema: 'https://json-schema.org/draft/2019-09/schema',
     type: 'object',
@@ -91,7 +92,7 @@ Deno.test('2019 schema semantics and independent identical IDs use selected dial
   }
 })
 
-Deno.test('a vocabulary carries tool declarations beside its components', async () => {
+test('a vocabulary carries tool declarations beside its components', async () => {
   let { toolsIn } = await import('./tools.ts')
   let doc = {
     $defs: {
@@ -136,7 +137,7 @@ Deno.test('a vocabulary carries tool declarations beside its components', async 
   )
 })
 
-Deno.test('a tool may be one word: a noun alone, or a verb alone', () => {
+test('a tool may be one word: a noun alone, or a verb alone', () => {
   // Either word alone is a whole declaration — `history` is a noun nobody
   // needs a verb for, `land` a verb nobody needs a noun for.
   assertEquals(

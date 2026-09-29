@@ -1,8 +1,9 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { portLink } from './port.ts'
-Deno.test('MessagePort requests, frames, failures and pending shutdown', async () => {
+test('MessagePort requests, frames, failures and pending shutdown', async () => {
   let { port1, port2 } = new MessageChannel()
   let frames: unknown[] = []
   let a = portLink(port1, { frame: (f) => frames.push(f) })
@@ -30,7 +31,7 @@ Deno.test('MessagePort requests, frames, failures and pending shutdown', async (
   }
 })
 
-Deno.test('MessagePort request limits and timeout bound abandoned operations', async () => {
+test('MessagePort request limits and timeout bound abandoned operations', async () => {
   let { port1, port2 } = new MessageChannel()
   let a = portLink(port1, { maxPending: 1, timeout: 10 })
   try {
@@ -44,7 +45,7 @@ Deno.test('MessagePort request limits and timeout bound abandoned operations', a
   }
 })
 
-Deno.test('peer disconnect rejects outstanding port requests immediately', async () => {
+test('peer disconnect rejects outstanding port requests immediately', async () => {
   let { port1, port2 } = new MessageChannel()
   let a = portLink(port1)
   let b = portLink(port2, { receive: () => new Promise(() => {}) })
@@ -56,7 +57,7 @@ Deno.test('peer disconnect rejects outstanding port requests immediately', async
   port2.close()
 })
 
-Deno.test('real worker crash rejects pending requests', async () => {
+test('real worker crash rejects pending requests', async () => {
   let worker = new Worker(
     'data:application/javascript,onmessage=()=>{throw new Error("crash")}',
     { type: 'module' },
@@ -71,7 +72,7 @@ Deno.test('real worker crash rejects pending requests', async () => {
   }
 })
 
-Deno.test('request deadline override can wait indefinitely but disconnect still rejects', async () => {
+test('request deadline override can wait indefinitely but disconnect still rejects', async () => {
   using time = new FakeTime()
   const { port1, port2 } = new MessageChannel()
   const link = portLink(port1, { timeout: 10 })

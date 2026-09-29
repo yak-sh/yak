@@ -1,6 +1,7 @@
 // The library keeps its existing card DOM while the registry supplies the view.
 // Exercise both the served page and a mounted Preact host with the same data.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { parseHTML } from 'linkedom'
@@ -28,7 +29,7 @@ let bundle = {
   home: {},
 }
 
-Deno.test('app Tile resolves by component and keeps the library card DOM', async () => {
+test('app Tile resolves by component and keeps the library card DOM', async () => {
   assertEquals(resolve(registry, bundle, 'List.Tile', vocab), app)
   assertEquals(
     resolve(
@@ -76,7 +77,7 @@ Deno.test('app Tile resolves by component and keeps the library card DOM', async
   }
 })
 
-Deno.test('app Tile preserves title fallback, empty tags and badge order', () => {
+test('app Tile preserves title fallback, empty tags and badge order', () => {
   for (let home of [false, true]) {
     for (let access of [null, 'public', 'open', 'private']) {
       for (let gallery of [undefined, 'in the gallery', 'gallery: waiting']) {
@@ -99,7 +100,7 @@ Deno.test('app Tile preserves title fallback, empty tags and badge order', () =>
   }
 })
 
-Deno.test('app Tile escapes every label and attribute once', () => {
+test('app Tile escapes every label and attribute once', () => {
   let text = '<script>"A&B\'s"</script>'
   let root = card(tile({
     eid: 'app-1',

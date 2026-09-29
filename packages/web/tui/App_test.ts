@@ -1,4 +1,5 @@
 // TUI-only renderers keep the shared scalar language in their visible labels.
+import { test } from '@yaks/testing'
 import '../testing.ts' // learns the vocabulary
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -49,13 +50,13 @@ let paint = (e: Ent) => {
   return out
 }
 
-Deno.test('the TUI task heading formats priority through its type', () => {
+test('the TUI task heading formats priority through its type', () => {
   assertEquals(paint(task('')).includes('P1.5'), true)
 })
 
 // A body this client was never shipped is not an empty one: the terminal
 // paints the wait too, rather than a task that looks like it has no body.
-Deno.test('the TUI paints the wait for a body it does not have', () => {
+test('the TUI paints the wait for a body it does not have', () => {
   let prior = globalThis.fetch
   globalThis.fetch = () => Promise.reject(new Error('no server')) // pending() asks
   liveConfig.host = '127.0.0.1:0' // and nothing it queues may reach a real one
@@ -67,7 +68,7 @@ Deno.test('the TUI paints the wait for a body it does not have', () => {
   }
 })
 
-Deno.test('j/k move the pane cursor, keyed by the entity we are in', () => {
+test('j/k move the pane cursor, keyed by the entity we are in', () => {
   trail.value = []
   assertEquals(spot(), -1) // the board's cursor is over the query, not lines
   key('j')
@@ -88,7 +89,7 @@ Deno.test('j/k move the pane cursor, keyed by the entity we are in', () => {
   assertEquals(spot(), 1) // stepping back returns to the line we left
 })
 
-Deno.test('a cursor the content shrank past comes back to the last line', () => {
+test('a cursor the content shrank past comes back to the last line', () => {
   trail.value = ['one']
   spots.value = { one: 40 }
   fit(12)
@@ -100,7 +101,7 @@ Deno.test('a cursor the content shrank past comes back to the last line', () => 
   assertEquals(spot(), -1)
 })
 
-Deno.test('⇧⏎ builds a multi-line command shown on one row; ⏎ runs it', () => {
+test('⇧⏎ builds a multi-line command shown on one row; ⏎ runs it', () => {
   trail.value = []
   mode.value = 'normal'
   key(':')
@@ -129,7 +130,7 @@ Deno.test('⇧⏎ builds a multi-line command shown on one row; ⏎ runs it', ()
   assertEquals(mode.value, 'normal')
 })
 
-Deno.test('question mark shows keybindings until they are dismissed', () => {
+test('question mark shows keybindings until they are dismissed', () => {
   help.value = false
   quit.value = false
 
@@ -146,7 +147,7 @@ Deno.test('question mark shows keybindings until they are dismissed', () => {
   assertEquals(help.value, false)
 })
 
-Deno.test(':ui opens the style guide, j/k read it and q closes it', () => {
+test(':ui opens the style guide, j/k read it and q closes it', () => {
   trail.value = []
   mode.value = 'normal'
   quit.value = false
@@ -160,7 +161,7 @@ Deno.test(':ui opens the style guide, j/k read it and q closes it', () => {
   assertEquals({ spot: spot(), quit: quit.value }, { spot: -1, quit: false })
 })
 
-Deno.test('the TUI keybinding card teaches its navigation keys', () => {
+test('the TUI keybinding card teaches its navigation keys', () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
   render(h('div', null, h(TKeys, null), h('footer', null, 'status')), target)

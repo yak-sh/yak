@@ -1,13 +1,14 @@
 // The complete yak gallery: every local round-five PNG is linked, and every
 // retained output stays a large PNG master even when its background is a known
 // generation defect.
+import { test } from '@yaks/testing'
 let root = new URL('.', import.meta.url)
 let html = await Deno.readTextFile(new URL('index.html', root))
 let assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message)
 }
 
-Deno.test('the gallery includes every retained round-five output', async () => {
+test('the gallery includes every retained round-five output', async () => {
   let files = []
   for await (let entry of Deno.readDir(root)) {
     if (entry.isFile && entry.name.endsWith('.png')) files.push(entry.name)
@@ -18,14 +19,14 @@ Deno.test('the gallery includes every retained round-five output', async () => {
   }
 })
 
-Deno.test('every earlier-round image linked by the gallery exists', async () => {
+test('every earlier-round image linked by the gallery exists', async () => {
   let links = [...html.matchAll(/'((?:\.\.\/)[^']+\.png)'/g)]
     .map((match) => match[1])
   assert(links.length > 0, 'no earlier-round images linked')
   for (let link of links) await Deno.stat(new URL(link, root))
 })
 
-Deno.test('retained outputs are large PNG masters', async () => {
+test('retained outputs are large PNG masters', async () => {
   let rgb = new Set([
     'archive-01-cut-paper-head-checker.png',
     'archive-02-cut-paper-body-checker.png',

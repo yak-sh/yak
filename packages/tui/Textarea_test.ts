@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { decode } from './input.ts'
@@ -45,16 +46,16 @@ let table: [string, string][] = [
   ['a\x1bb\x7f', '|a'],
 ]
 
-Deno.test('every editing key is one row of a table', () => {
+test('every editing key is one row of a table', () => {
   for (let [bytes, want] of table) assertEquals(typed(bytes), want, bytes)
 })
 
-Deno.test('the cursor knows its row and column', () => {
+test('the cursor knows its row and column', () => {
   assertEquals(spot({ text: 'ab\ncde', at: 5 }), { row: 1, col: 2 })
   assertEquals(spot({ text: '', at: 0 }), { row: 0, col: 0 })
 })
 
-Deno.test('typing shows on screen, and Enter submits and clears', async () => {
+test('typing shows on screen, and Enter submits and clears', async () => {
   let sent: string[] = []
   let App = () =>
     h(
@@ -73,7 +74,7 @@ Deno.test('typing shows on screen, and Enter submits and clears', async () => {
   ui.free()
 })
 
-Deno.test('a keystroke repaints the line it changed, not the screen', async () => {
+test('a keystroke repaints the line it changed, not the screen', async () => {
   let App = () =>
     h(
       'div',
@@ -93,7 +94,7 @@ Deno.test('a keystroke repaints the line it changed, not the screen', async () =
   ui.free()
 })
 
-Deno.test('soft rows preserve whitespace, hard breaks, long tokens and cursor offsets', () => {
+test('soft rows preserve whitespace, hard breaks, long tokens and cursor offsets', () => {
   let text = 'one two three\n\nabcdefghij'
   let rows = visualRows(text, 6)
   assertEquals(rows.map((r) => text.slice(r.start, r.end)), [
@@ -127,7 +128,7 @@ Deno.test('soft rows preserve whitespace, hard breaks, long tokens and cursor of
   assertEquals(visualEdit(s, { name: 'home', ctrl: true }, 6)?.at, 0)
 })
 
-Deno.test('soft input wraps and resizes without changing submitted text', async () => {
+test('soft input wraps and resizes without changing submitted text', async () => {
   let sent: string[] = []
   let changed: string[] = []
   let ui = await mount(
@@ -159,7 +160,7 @@ Deno.test('soft input wraps and resizes without changing submitted text', async 
   }
 })
 
-Deno.test('soft rows scroll to the cursor and use allocated width, not terminal width', async () => {
+test('soft rows scroll to the cursor and use allocated width, not terminal width', async () => {
   let ui = await mount(
     () =>
       h(
@@ -184,7 +185,7 @@ Deno.test('soft rows scroll to the cursor and use allocated width, not terminal 
   }
 })
 
-Deno.test('a one-column input hides its gutter and keeps the cursor visible', async () => {
+test('a one-column input hides its gutter and keeps the cursor visible', async () => {
   let ui = await mount(() => h(Textarea, { max: 4 }), 1, 4)
   try {
     await ui.send('ab')
@@ -196,7 +197,7 @@ Deno.test('a one-column input hides its gutter and keeps the cursor visible', as
   }
 })
 
-Deno.test('terminal blur hides the synthetic caret without changing the draft', async () => {
+test('terminal blur hides the synthetic caret without changing the draft', async () => {
   let changes = 0
   let ui = await mount(
     () =>

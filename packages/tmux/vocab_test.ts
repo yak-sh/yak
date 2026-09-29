@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { docs, TMUX, tmuxDoc } from './vocab.ts'
 
-Deno.test('a terminal says what is showing and where tmux finds it', () => {
+test('a terminal says what is showing and where tmux finds it', () => {
   let vocab = loadVocab([
     {
       title: 'spine',

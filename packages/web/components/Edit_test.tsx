@@ -1,5 +1,6 @@
 // The in-place editor leaves native text gestures alone once editing —
 // and refuses to arm at all over a body it doesn't have.
+import { test } from '@yaks/testing'
 import { wire } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -8,7 +9,7 @@ import { cache, config, useRoute } from '../live.ts'
 import type { Bundle } from '@yaks/graph'
 import { Edit } from './Edit.tsx'
 
-Deno.test('double-click selects words while already editing', () => {
+test('double-click selects words while already editing', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let priorSelection = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -154,7 +155,7 @@ let typeInto = (body: string | undefined, text: string, readOnly = false) => {
   }
 }
 
-Deno.test('a loaded body is still edited, empty or not', () => {
+test('a loaded body is still edited, empty or not', () => {
   let out = typeInto('', 'a fragment')
   assertEquals(out.armed, true)
   assertEquals(out.sent, [
@@ -166,14 +167,14 @@ Deno.test('a loaded body is still edited, empty or not', () => {
   assertEquals(out.stored, 'a fragment')
 })
 
-Deno.test('an unloaded body refuses the editor and commits nothing', () => {
+test('an unloaded body refuses the editor and commits nothing', () => {
   let out = typeInto(undefined, 'a fragment')
   assertEquals(out.sent, []) // the whole bar: nothing reached the graph
   assertEquals(out.stored, undefined)
   assertEquals(out.armed, false)
 })
 
-Deno.test('a body made read-only during editing reverts on blur', () => {
+test('a body made read-only during editing reverts on blur', () => {
   let out = typeInto('stored words', 'unsaved words', true)
   assertEquals(out.armed, true)
   assertEquals(out.sent, [])

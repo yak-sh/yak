@@ -1,11 +1,12 @@
 // The Files entrypoint's blob door caches only tenant-keyed bytes. In a
 // runtime without Workers Caching, the same door streams bounded R2 ranges.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { blobAt } from './cache.ts'
 import { blobBytes, fetch } from './files.ts'
 import { platform } from './serving-probe.ts'
 
-Deno.test('the cached blob door streams bytes and bounds uncached seeks', async () => {
+test('the cached blob door streams bytes and bounds uncached seeks', async () => {
   using scenario = platform()
   let { env, files } = scenario
   let eid = '11111111-1111-4111-8111-111111111111'

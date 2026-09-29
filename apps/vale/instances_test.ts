@@ -1,6 +1,7 @@
 // A template stays shared while any visible chunk uses it, then leaves the GPU.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { cuboids } from './boxes.ts'
 import { instances } from './instances.ts'
@@ -9,7 +10,7 @@ import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
 
-Deno.test('building template is shared between chunks and disposed after both leave', async () => {
+test('building template is shared between chunks and disposed after both leave', async () => {
   let scene = new THREE.Scene(), material = new THREE.MeshBasicMaterial()
   let calls = 0
   let shared = instances(scene, material, () => {

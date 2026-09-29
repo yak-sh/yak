@@ -1,4 +1,5 @@
 // hot: the decay rank behind `.order=hot`; sunk/warm: the retirement damper.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { hot, SUNK, sunk, warm } from './warmth.ts'
@@ -10,21 +11,21 @@ let ago = (ms: number) => new Date(T0 - ms).toISOString()
 let recalled = (count: number, firstAgo: number, lastAgo: number) =>
   hot({ recall: { count, first_at: ago(firstAgo), last_at: ago(lastAgo) } }, T0)
 
-Deno.test('hot: hours top of mind, days recallable, months rings a bell', () => {
+test('hot: hours top of mind, days recallable, months rings a bell', () => {
   assert(recalled(1, 2 * H, 2 * H) > 0.9) // just touched
   assert(recalled(1, 5 * D, 5 * D) < 0.05) // one touch, days ago: faded
   assert(recalled(20, 200 * D, 7 * D) > 0.6) // a habit stays warm across weeks
 })
 
-Deno.test('hot: recalled often decays slower than recalled once', () => {
+test('hot: recalled often decays slower than recalled once', () => {
   assert(recalled(10, 30 * D, 5 * D) > recalled(1, 5 * D, 5 * D))
 })
 
-Deno.test('hot: spaced recalls outlast crammed ones at equal count', () => {
+test('hot: spaced recalls outlast crammed ones at equal count', () => {
   assert(recalled(10, 90 * D, 10 * D) > recalled(10, 10 * D + H, 10 * D))
 })
 
-Deno.test('hot: no recalls yet — the last touch counts as a single touch', () => {
+test('hot: no recalls yet — the last touch counts as a single touch', () => {
   assert(hot({ created: { at: ago(H) } }, T0) > 0.9)
   assert(hot({ created: { at: ago(10 * D) } }, T0) < 0.01)
   assertEquals(hot({}, T0), 0)
@@ -32,7 +33,7 @@ Deno.test('hot: no recalls yet — the last touch counts as a single touch', () 
 
 // ---- retirement: the damper that sinks a dead venture ----
 
-Deno.test('sunk: own stamp, or the project the task is filed under', () => {
+test('sunk: own stamp, or the project the task is filed under', () => {
   let P = 'p-eid'
   let look = (eid: string) =>
     eid == P ? { project: {}, archived: { at: '2026-01-01' } } : undefined
@@ -44,7 +45,7 @@ Deno.test('sunk: own stamp, or the project the task is filed under', () => {
   assertEquals(sunk({ task: {} }, look), false)
 })
 
-Deno.test('warm: retirement damps the rank, never zeroes it', () => {
+test('warm: retirement damps the rank, never zeroes it', () => {
   let c = { created: { at: ago(H) }, project: {}, archived: { at: 'x' } }
   assert(warm(c, T0) > 0) // sunk, not erased
   assertEquals(warm(c, T0), hot(c, T0) * SUNK)

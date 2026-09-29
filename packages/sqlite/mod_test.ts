@@ -1,6 +1,7 @@
 // The store as a whole: bound to a driver and a vocabulary, it installs its
 // schema and speaks bundles — a write in, a read out, over one round trip.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -18,7 +19,7 @@ import { objects, storage, type Store } from './mod.ts'
 import { open } from './db.ts'
 import { mem, shop, spy } from './testing.ts'
 
-Deno.test('indexed text predicates seek their component rows', () => {
+test('indexed text predicates seek their component rows', () => {
   let vocab = loadVocab({
     $defs: {
       seen: {
@@ -76,7 +77,7 @@ Deno.test('indexed text predicates seek their component rows', () => {
   assert(!plan.includes('SCAN entity'), plan)
 })
 
-Deno.test('stored property presence reads its component without scanning entities', () => {
+test('stored property presence reads its component without scanning entities', () => {
   let vocab = loadVocab({
     $defs: {
       wake: {
@@ -110,7 +111,7 @@ Deno.test('stored property presence reads its component without scanning entitie
   assert(!plan.includes('SCAN entity'), plan)
 })
 
-Deno.test('ddl() lists the statements install() runs', () => {
+test('ddl() lists the statements install() runs', () => {
   let s = storage(mem(), shop)
   let ddl = s.ddl()
   assert(ddl.length > 0)
@@ -121,7 +122,7 @@ Deno.test('ddl() lists the statements install() runs', () => {
   )
 })
 
-Deno.test('ddl() grows a populated table before indexing its new column', () => {
+test('ddl() grows a populated table before indexing its new column', () => {
   let book = (indexed: boolean) =>
     loadVocab({
       $defs: {
@@ -162,7 +163,7 @@ Deno.test('ddl() grows a populated table before indexing its new column', () => 
   }])
 })
 
-Deno.test('install() is idempotent', () => {
+test('install() is idempotent', () => {
   let s = storage(mem(), shop)
   s.install()
   s.install() // create-if-not-exists — a second run is a no-op, not an error
@@ -170,7 +171,7 @@ Deno.test('install() is idempotent', () => {
   assertEquals((s.read('.title~=hi') as Bundle[])[0].entity.eid, 'x')
 })
 
-Deno.test('an OR filtered by one or several entity ids keeps their matches', () => {
+test('an OR filtered by one or several entity ids keeps their matches', () => {
   let s = storage(mem(), shop)
   s.install()
   s.tx((tx) =>
@@ -188,7 +189,7 @@ Deno.test('an OR filtered by one or several entity ids keeps their matches', () 
   assertEquals(ids(query + 'a,b,d'), ['a', 'b'])
 })
 
-Deno.test('a second store over an installed file leaves its schema alone', () => {
+test('a second store over an installed file leaves its schema alone', () => {
   let d = mem()
   storage(d, shop).install()
   let version = () => d.query({ t: 'pragma', name: 'schema_version' })
@@ -222,7 +223,7 @@ let reopened = (times: number, beside: (d: Driver) => void) => {
   }
 }
 
-Deno.test('an open of a file its schema is current in installs nothing', () => {
+test('an open of a file its schema is current in installs nothing', () => {
   // What a host's plugins keep beside the store's tables once it has
   // installed: a table of their own keyed by entity (@yaks/embedding's
   // vectors), and a trigger on doc that fills it (@yaks/fts).
@@ -254,7 +255,7 @@ Deno.test('an open of a file its schema is current in installs nothing', () => {
   assertEquals(reopened(3, plugins), [true, false, false])
 })
 
-Deno.test('an open puts back what another hand dropped from the schema', () => {
+test('an open puts back what another hand dropped from the schema', () => {
   let found: number[] = []
   let dropped = (d: Driver) => {
     found.push(objects(d, { name: 'shelf_aisle_height' }).length)
@@ -264,7 +265,7 @@ Deno.test('an open puts back what another hand dropped from the schema', () => {
   assertEquals(found, [1, 1])
 })
 
-Deno.test('a driver that owns transactions is asked for them', () => {
+test('a driver that owns transactions is asked for them', () => {
   let base = mem()
   let seen: string[] = []
   let depth = 0
@@ -292,7 +293,7 @@ Deno.test('a driver that owns transactions is asked for them', () => {
   assertEquals((s.read('.title~=kettle') as Bundle[])[0].entity.eid, 'p1')
 })
 
-Deno.test('a bundle written and read back is the same entity', () => {
+test('a bundle written and read back is the same entity', () => {
   let s = storage(mem(), shop)
   s.install()
   s.tx((tx) =>
@@ -309,7 +310,7 @@ Deno.test('a bundle written and read back is the same entity', () => {
   assertEquals((p.product as Record<string, unknown>).status, 'live')
 })
 
-Deno.test('a driver over a FILE takes the write lock up front', () => {
+test('a driver over a FILE takes the write lock up front', () => {
   // The arrangement every `yak` line depends on: a graph is a file, and as
   // many processes as there are lines typed have it open. A deferred
   // transaction that read before it wrote cannot upgrade once another

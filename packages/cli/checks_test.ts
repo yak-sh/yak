@@ -9,6 +9,7 @@
 // way any caller calls a tool: a `call` entity through the runner, and the
 // prose it answered read back off the result.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { answerOf, checks, toolEid, worded } from '@yaks/tools'
 import { compose, type Served } from './host.ts'
@@ -45,7 +46,7 @@ let ask = async (h: Served, name: string): Promise<string> => {
   return worded(answerOf(landed))
 }
 
-Deno.test('the checks are the tools whose verb is check', async () => {
+test('the checks are the tools whose verb is check', async () => {
   let h = await host()
   try {
     let named = checks(h.tools).map((t) => t.name).sort()
@@ -65,7 +66,7 @@ Deno.test('the checks are the tools whose verb is check', async () => {
   }
 })
 
-Deno.test('a composed host finds exactly the two states we broke', async () => {
+test('a composed host finds exactly the two states we broke', async () => {
   let h = await host()
   try {
     // A project, a task filed under it, and a transcript that has stopped

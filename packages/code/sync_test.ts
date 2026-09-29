@@ -1,6 +1,7 @@
 // A codebase in a scratch Git repository, read into an in-memory graph and read
 // again as it changes. It runs git and `deno doc` as subprocesses.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
@@ -58,7 +59,7 @@ let commit = async (dir: string) => {
 let names = (bundles: Bundle[]) =>
   bundles.map((b) => String((b.symbol as Comp).name)).sort()
 
-Deno.test(
+test(
   'code sync reads a tree, then only what moved, and clears what went',
   async () => {
     let dir = Deno.makeTempDirSync()
@@ -110,7 +111,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'code sync reads what each package declares, and clears what it stops declaring',
   async () => {
     let dir = Deno.makeTempDirSync()

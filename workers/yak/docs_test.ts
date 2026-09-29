@@ -3,6 +3,7 @@
 // a subject offered in the contents with no markdown behind it, a page whose
 // heading never reaches its title, a guide link that still lands on a file a
 // browser downloads — so each is asserted against the files themselves.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { headings, parse } from '@yaks/markdown'
 import { front } from '@yaks/yaml'
@@ -37,7 +38,7 @@ let got = async (path: string) => {
 
 let read = async (path: string) => (await got(path)).text()
 
-Deno.test('/docs draws the guide with a link to every page', async () => {
+test('/docs draws the guide with a link to every page', async () => {
   let html = await read('/docs')
   assertStringIncludes(html, `<title>${esc(DOCS.title)}</title>`)
   assertStringIncludes(
@@ -77,7 +78,7 @@ let heading = (slug: string) =>
     ),
   )![1]
 
-Deno.test('every guide page draws under its own heading', async () => {
+test('every guide page draws under its own heading', async () => {
   for (let p of CONTENTS) {
     let html = await read(pathOf(p.slug))
     let name = heading(p.slug)
@@ -101,7 +102,7 @@ Deno.test('every guide page draws under its own heading', async () => {
 let sidebar = (html: string) =>
   html.split('<nav class="Page_Side')[1].split('</nav>')[0]
 
-Deno.test('every page of the documentation carries the whole list beside it', async () => {
+test('every page of the documentation carries the whole list beside it', async () => {
   for (let at of [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]) {
     let nav = sidebar(await read(at))
     assertEquals(
@@ -123,7 +124,7 @@ let fileAt = (path: string) =>
 
 let sourceOf = (path: string) => front(fileAt(path), path).body
 
-Deno.test('a page lists its own sections, and every one of them is there', async () => {
+test('a page lists its own sections, and every one of them is there', async () => {
   for (let p of CONTENTS) {
     let html = await read(pathOf(p.slug))
     let toc = html.split('<nav class="Page_Aside')[1].split('</nav>')[0]
@@ -145,7 +146,7 @@ Deno.test('a page lists its own sections, and every one of them is there', async
 // The technical page is drawn from its own markdown like every other page,
 // and it is the page the guide does not offer: no `guide` row in the file, no
 // row in PAGES, and the words still reach the page.
-Deno.test('the technical page is markdown drawn like the rest', async () => {
+test('the technical page is markdown drawn like the rest', async () => {
   assertEquals(PAGES.find((p) => p.slug == 'technical'), undefined)
   assertEquals(
     front(fileAt('/docs/technical.md'), 'technical.md').meta.guide,
@@ -173,7 +174,7 @@ Deno.test('the technical page is markdown drawn like the rest', async () => {
 
 // The whole rule, on one page: the `.md` address is the file, the address
 // without it is that same file drawn, and neither redirects to the other.
-Deno.test('a page and its markdown are one text at two addresses', async () => {
+test('a page and its markdown are one text at two addresses', async () => {
   for (let at of [PATH, ...CONTENTS.map((p) => pathOf(p.slug))]) {
     let text = sourceOf(`${at}.md`)
     // Nothing is drawn for the `.md` address: it is a file under public/.
@@ -195,7 +196,7 @@ Deno.test('a page and its markdown are one text at two addresses', async () => {
 
 // Every address these moved from answers a 301 rather than a 404: the links
 // are in the world and in the resource list a connector cached (T-37793).
-Deno.test('the addresses the documentation moved from redirect to it', async () => {
+test('the addresses the documentation moved from redirect to it', async () => {
   for (
     let [was, now] of [
       ['/technical', '/docs/technical'],
@@ -210,7 +211,7 @@ Deno.test('the addresses the documentation moved from redirect to it', async () 
   }
 })
 
-Deno.test('the drawn pages stop where the files start', async () => {
+test('the drawn pages stop where the files start', async () => {
   for (let path of ['/docs/nothing', '/help', '/guide/querying']) {
     assertEquals(
       await answer(new Request(`https://yaks.app${path}`), site(), path),

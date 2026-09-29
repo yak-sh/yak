@@ -1,6 +1,7 @@
 // A wake that repeats only while something holds, read through the two calls
 // a host makes: `tick` when its clock goes off, `rouse` after a write.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { soonest, wakeOf } from './due.ts'
@@ -35,7 +36,7 @@ let world = () => {
   return { g, plant, uproot, at, sow }
 }
 
-Deno.test('a wake goes on at the first cadence that holds, and sleeps when none does', async () => {
+test('a wake goes on at the first cadence that holds, and sleeps when none does', async () => {
   let w = world()
   w.plant('fern')
   w.sow({ at: iso(T0) })
@@ -54,7 +55,7 @@ Deno.test('a wake goes on at the first cadence that holds, and sleeps when none 
   assertEquals(await soonest(w.g, T0), null)
 })
 
-Deno.test('a write that makes a condition hold arms a sleeping wake, and a faster one brings it forward', async () => {
+test('a write that makes a condition hold arms a sleeping wake, and a faster one brings it forward', async () => {
   let w = world()
   w.sow({})
   assertEquals((await rouse(w.g, T0)).roused, [])
@@ -70,7 +71,7 @@ Deno.test('a write that makes a condition hold arms a sleeping wake, and a faste
   assertEquals(w.at(), iso(T0 + 40 * MIN))
 })
 
-Deno.test('a pass shares match answers while each wake chooses its own cadence', async () => {
+test('a pass shares match answers while each wake chooses its own cadence', async () => {
   let g = woken(store())
   g.apply([{ entity: { eid: 'basil' }, plant: { name: 'basil' } }])
   let ids = ['one', 'two', 'three']
@@ -112,7 +113,7 @@ Deno.test('a pass shares match answers while each wake chooses its own cadence',
   assertEquals((await g.read('.wake')).every((b) => !wakeOf(b)?.at), true)
 })
 
-Deno.test('a failed shared match can be read for the next wake', async () => {
+test('a failed shared match can be read for the next wake', async () => {
   let g = woken(store())
   g.apply([{ entity: { eid: 'basil' }, plant: { name: 'basil' } }])
   g.apply(['one', 'two'].map((eid, i) => ({
@@ -138,7 +139,7 @@ Deno.test('a failed shared match can be read for the next wake', async () => {
   assertEquals(reads, 2)
 })
 
-Deno.test('a wake write changes matches on the next pass', async () => {
+test('a wake write changes matches on the next pass', async () => {
   let g = woken(store())
   let plant = { entity: { eid: 'basil' }, plant: { name: 'basil' } }
   let wakes = ['one', 'two'].map((eid) => ({
@@ -185,7 +186,7 @@ Deno.test('a wake write changes matches on the next pass', async () => {
   assertEquals((await g.read('.wake')).every((b) => !wakeOf(b)?.at), true)
 })
 
-Deno.test('a condition is refused when it is written, not when it fires', () => {
+test('a condition is refused when it is written, not when it fires', () => {
   let g = graph({ storage: store(), vocab: home, plugins: [wakes()] })
   for (
     let bad of [

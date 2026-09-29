@@ -1,11 +1,12 @@
 // The agreement seam, proven without a socket: which queries a subscription
 // is expected to disagree with a scan on, and the diff between the two.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { parseQuery } from './query.ts'
 import { diff, gaps } from './subs.ts'
 
-Deno.test('the only agreement gap is moving time', () => {
+test('the only agreement gap is moving time', () => {
   let cases: [string, string[]][] = [
     ['.task.status=open', []],
     ['.domain=Ops,Eng', []],
@@ -21,7 +22,7 @@ Deno.test('the only agreement gap is moving time', () => {
   for (let [q, want] of cases) assertEquals(gaps(parseQuery(q)), want, q)
 })
 
-Deno.test('agreement diff names both sides once and in order', () => {
+test('agreement diff names both sides once and in order', () => {
   assertEquals(diff(['c', 'a', 'c'], ['b', 'c']), {
     scanOnly: ['a'],
     subOnly: ['b'],

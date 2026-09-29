@@ -3,6 +3,7 @@
 // the stamps attribute to a person. A typed turn is an input entry a person
 // signed; one nobody signed is the harness's, and a gesture the web writes in
 // the owner's name is not authorship.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { contextDigest, rows, saidLines } from './client.ts'
@@ -193,7 +194,7 @@ let spoke: Snapshot = {
   deps: [],
 }
 
-Deno.test('saidLines: everything the owner authored, oldest first', () => {
+test('saidLines: everything the owner authored, oldest first', () => {
   let all = rows(spoke)
   let byEid = new Map(all.map((r) => [r.eid, r]))
   // Each line names the entity (its own id, `task show`-able), the act, and
@@ -228,7 +229,7 @@ Deno.test('saidLines: everything the owner authored, oldest first', () => {
   ])
 })
 
-Deno.test('contextDigest carries `## owner said`, and omits it with nothing said', () => {
+test('contextDigest carries `## owner said`, and omits it with nothing said', () => {
   let d = contextDigest(spoke, 'sess-x')
   assertEquals(
     d.includes(

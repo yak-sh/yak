@@ -3,6 +3,7 @@
 // of every reference to it, and the refusals — a dangling alias, and a knot of
 // aliases that name each other.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
@@ -19,7 +20,7 @@ let ids = () => {
 let g = (mint = ids()) =>
   graph({ storage: memory(), vocab: books, mint, plugins: [] })
 
-Deno.test('an alias becomes a fresh id, and the return says which', () => {
+test('an alias becomes a fresh id, and the return says which', () => {
   let one = g()
   let out = one.apply([
     { entity: { eid: '$dune' }, doc: { title: 'Dune' } },
@@ -30,7 +31,7 @@ Deno.test('an alias becomes a fresh id, and the return says which', () => {
   assertEquals(comp(stored, 'doc').title, 'Dune')
 })
 
-Deno.test('every reference to the alias points at the same entity', () => {
+test('every reference to the alias points at the same entity', () => {
   let one = g()
   one.apply([
     { entity: { eid: '$dune' }, book: { pages: 412 } },
@@ -44,7 +45,7 @@ Deno.test('every reference to the alias points at the same entity', () => {
   assertEquals(comp(d, 'book').pages, 412)
 })
 
-Deno.test('a content-addressed component names its own entity', () => {
+test('a content-addressed component names its own entity', () => {
   // A plugin says how its component is named; here a bookmark is the sentence
   // "this points at that", so two writers stating it land on one entity.
   let one = graph({
@@ -72,7 +73,7 @@ Deno.test('a content-addressed component names its own entity', () => {
   )
 })
 
-Deno.test('a derived id sees the aliases under it already resolved', () => {
+test('a derived id sees the aliases under it already resolved', () => {
   let one = graph({
     storage: memory(),
     vocab: books,
@@ -89,7 +90,7 @@ Deno.test('a derived id sees the aliases under it already resolved', () => {
   assertEquals(out.find((b) => b.$alias == '$mark')!.entity.eid, 'mark:id-1')
 })
 
-Deno.test('an alias nothing in the batch mints is refused', () => {
+test('an alias nothing in the batch mints is refused', () => {
   let one = g()
   assertThrows(
     () =>
@@ -101,7 +102,7 @@ Deno.test('an alias nothing in the batch mints is refused', () => {
   )
 })
 
-Deno.test('aliases that only name each other are refused', () => {
+test('aliases that only name each other are refused', () => {
   let one = graph({
     storage: memory(),
     vocab: books,
@@ -119,7 +120,7 @@ Deno.test('aliases that only name each other are refused', () => {
   )
 })
 
-Deno.test('a batch with no alias is left exactly alone', () => {
+test('a batch with no alias is left exactly alone', () => {
   let one = g()
   let out = one.apply([
     { entity: { eid: 'b1' }, doc: { title: 'Dune' } },

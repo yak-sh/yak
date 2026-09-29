@@ -3,6 +3,7 @@
 // a bug with a long fuse. Held against the published vectors and against the
 // platform's own digest.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { sha256 } from './sha256.ts'
 import { token } from './guard.ts'
@@ -10,7 +11,7 @@ import { token } from './guard.ts'
 let hex = (buf: ArrayBuffer) =>
   [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
 
-Deno.test('sha256 matches the published vectors', () => {
+test('sha256 matches the published vectors', () => {
   assertEquals(
     sha256(''),
     'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -21,7 +22,7 @@ Deno.test('sha256 matches the published vectors', () => {
   )
 })
 
-Deno.test('sha256 matches the platform digest, including multi-byte text', async () => {
+test('sha256 matches the platform digest, including multi-byte text', async () => {
   for (
     let s of ['', 'a', 'the quick brown fox', 'æøå — 日本語', 'x'.repeat(200)]
   ) {
@@ -32,7 +33,7 @@ Deno.test('sha256 matches the platform digest, including multi-byte text', async
   }
 })
 
-Deno.test('a guard token hashes the value as text, and absence is null', () => {
+test('a guard token hashes the value as text, and absence is null', () => {
   assertEquals(token(null), null)
   assertEquals(token(undefined), null)
   assertEquals(token(42), sha256('42'))

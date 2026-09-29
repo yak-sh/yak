@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { TElement, TText } from './dom.ts'
 import { ansi, ansiBackend, type Line, screenful } from './paint.ts'
@@ -28,7 +29,7 @@ let dress = {
   Composer_Border: { fg: '#7a8478', dim: true },
 }
 
-Deno.test('blocks stack and inline children run into one line', () => {
+test('blocks stack and inline children run into one line', () => {
   let tree = el(
     'root',
     {},
@@ -38,7 +39,7 @@ Deno.test('blocks stack and inline children run into one line', () => {
   assertEquals(seen(tree), ['one', 'two-three', '', '', '', ''])
 })
 
-Deno.test('a text node keeps its newlines and loses every control byte', () => {
+test('a text node keeps its newlines and loses every control byte', () => {
   let controls = Array.from({ length: 160 }, (_, n) => n)
     .filter((n) => (n < 32 || n >= 127) && n != 10 && n != 9)
     .map((n) => String.fromCharCode(n)).join('')
@@ -47,13 +48,13 @@ Deno.test('a text node keeps its newlines and loses every control byte', () => {
   assertEquals(seen(tree).slice(0, 2), ['ab', 'c  d'])
 })
 
-Deno.test('an href is sanitized and rides in an OSC 8', () => {
+test('an href is sanitized and rides in an OSC 8', () => {
   let a = el('a', { href: 'https://x/\x07evil' }, 'link')
   let line = screenful(el('root', {}, el('div', {}, a)), 20, 1).lines[0]
   assertEquals(ansi(line), '\x1b]8;;https://x/evil\x07link\x1b]8;;\x07')
 })
 
-Deno.test('a row puts a fixed sidebar beside a growing column', () => {
+test('a row puts a fixed sidebar beside a growing column', () => {
   let tree = el(
     'root',
     {},
@@ -69,7 +70,7 @@ Deno.test('a row puts a fixed sidebar beside a growing column', () => {
   assertEquals(lines[0][1].text, ' '.repeat(10)) // the main column is padded to width
 })
 
-Deno.test('a col gives its leftover rows to the growing child', () => {
+test('a col gives its leftover rows to the growing child', () => {
   let tree = el(
     'root',
     { col: '1' },
@@ -86,7 +87,7 @@ Deno.test('a col gives its leftover rows to the growing child', () => {
   assertEquals(metrics.body, { total: 5, height: 3, width: 20 })
 })
 
-Deno.test('a scroll offset windows the content and is clamped to it', () => {
+test('a scroll offset windows the content and is clamped to it', () => {
   let rows = (top: string) =>
     seen(
       el(
@@ -106,7 +107,7 @@ Deno.test('a scroll offset windows the content and is clamped to it', () => {
   assertEquals(rows('99'), ['c', 'd'])
 })
 
-Deno.test('a block style lays an inline tag out on lines of its own', () => {
+test('a block style lays an inline tag out on lines of its own', () => {
   let item = (text: string) => el('button', { class: 'Item' }, text)
   let tree = el('root', {}, el('div', {}, item('one'), item('two')))
   assertEquals(words(screenful(tree, 20, 2).lines), ['onetwo', ''])
@@ -116,7 +117,7 @@ Deno.test('a block style lays an inline tag out on lines of its own', () => {
   )
 })
 
-Deno.test('a style becomes the escapes, and nothing else does', () => {
+test('a style becomes the escapes, and nothing else does', () => {
   let line = screenful(
     el('root', {}, el('div', { class: 'Title' }, 'hi')),
     10,
@@ -126,7 +127,7 @@ Deno.test('a style becomes the escapes, and nothing else does', () => {
   assertEquals(ansi(line), '\x1b[1mhi\x1b[0m')
 })
 
-Deno.test('the backend paints only the lines that changed', () => {
+test('the backend paints only the lines that changed', () => {
   let out: string[] = []
   let back = ansiBackend({
     size: () => ({ columns: 20, rows: 4 }),
@@ -145,7 +146,7 @@ Deno.test('the backend paints only the lines that changed', () => {
   assertEquals(back.draw(tree).written, 4) // a resize repaints everything
 })
 
-Deno.test('wrap folds words and long tokens before measuring and scrolling', () => {
+test('wrap folds words and long tokens before measuring and scrolling', () => {
   let tree = el(
     'div',
     { wrap: '1', scroll: '1', id: 'log' },
@@ -158,7 +159,7 @@ Deno.test('wrap folds words and long tokens before measuring and scrolling', () 
   assertEquals(seen(el('div', { wrap: '1' }, 'abc'), 0, 1), [''])
 })
 
-Deno.test('wrap preserves inline styles, explicit blank lines and indent width', () => {
+test('wrap preserves inline styles, explicit blank lines and indent width', () => {
   let tree = el(
     'div',
     { wrap: '1', class: 'Inset' },
@@ -180,7 +181,7 @@ Deno.test('wrap preserves inline styles, explicit blank lines and indent width',
   ])
 })
 
-Deno.test('inline and fenced code wear the Code style', () => {
+test('inline and fenced code wear the Code style', () => {
   let tree = el(
     'root',
     {},
@@ -208,7 +209,7 @@ Deno.test('inline and fenced code wear the Code style', () => {
   )
 })
 
-Deno.test('themed borders reserve inner width and height without dimming content', () => {
+test('themed borders reserve inner width and height without dimming content', () => {
   let root = el(
     'div',
     { border: 'Composer_Border' },
@@ -226,7 +227,7 @@ Deno.test('themed borders reserve inner width and height without dimming content
   }
 })
 
-Deno.test('quotes use a muted surface with normal text and preserve nested inline styles', () => {
+test('quotes use a muted surface with normal text and preserve nested inline styles', () => {
   let tree = el(
     'div',
     { class: 'Dim' },
@@ -269,7 +270,7 @@ Deno.test('quotes use a muted surface with normal text and preserve nested inlin
   assertEquals(words(custom.lines)[0], '  custom')
 })
 
-Deno.test('br preserves explicit breaks inside styled inline content and blank rows', () => {
+test('br preserves explicit breaks inside styled inline content and blank rows', () => {
   assertEquals(
     seen(
       el(
@@ -288,7 +289,7 @@ Deno.test('br preserves explicit breaks inside styled inline content and blank r
   )
 })
 
-Deno.test('pre backgrounds fill allocated width including empty lines; inline code does not', () => {
+test('pre backgrounds fill allocated width including empty lines; inline code does not', () => {
   let code = el('pre', {}, el('code', {}, 'one\n\nthree'))
   let lines = screenful(el('root', {}, code), 12, 3, dress).lines
   assertEquals(lines.map((row) => row.map((s) => s.text).join('')), [
@@ -310,7 +311,7 @@ Deno.test('pre backgrounds fill allocated width including empty lines; inline co
   assertEquals(inline[1].style.bg, undefined)
 })
 
-Deno.test('pre fill respects nested borders, indentation and narrow widths', () => {
+test('pre fill respects nested borders, indentation and narrow widths', () => {
   let root = el(
     'root',
     {},
@@ -332,7 +333,7 @@ Deno.test('pre fill respects nested borders, indentation and narrow widths', () 
   ])
 })
 
-Deno.test('full-width pre background is stable on warm paints', () => {
+test('full-width pre background is stable on warm paints', () => {
   let root = el('root', {}, el('pre', {}, 'short\n\nlast'))
   let backend = ansiBackend({
     size: () => ({ columns: 20, rows: 3 }),
@@ -342,7 +343,7 @@ Deno.test('full-width pre background is stable on warm paints', () => {
   assertEquals(backend.draw(root).written, 0)
 })
 
-Deno.test('terminal focus reporting is saved, enabled, and restored', () => {
+test('terminal focus reporting is saved, enabled, and restored', () => {
   let out: string[] = []
   let back = ansiBackend({ write: (s) => void out.push(s) })
   back.start()
@@ -352,7 +353,7 @@ Deno.test('terminal focus reporting is saved, enabled, and restored', () => {
   assert(out.join('').includes('\x1b[?1004r'))
 })
 
-Deno.test('maximum height bounds wrapped previews and emits overflow only when needed', () => {
+test('maximum height bounds wrapped previews and emits overflow only when needed', () => {
   const attrs = { wrap: '1', 'max-height': '2', 'overflow-text': 'more' }
   assertEquals(seen(el('div', attrs, 'x'.repeat(50)), 10, 6).filter(Boolean), [
     'xxxxxxxxxx',

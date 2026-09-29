@@ -2,6 +2,7 @@
 // it in order, the rest of the line still filters, and the similarity comes
 // back as a component.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, Unsupported } from '@yaks/sql'
@@ -16,7 +17,7 @@ let ask = (db: Driver, q: string, ext: ReturnType<typeof semantic>) => {
     .map((r) => String(r.eid))
 }
 
-Deno.test('.near selects the neighbourhood and nothing else', async () => {
+test('.near selects the neighbourhood and nothing else', async () => {
   let db = await stocked()
   let near = semantic(db, embedder, { limit: 2 })
   let got = ask(db, '.near=book-1', near)
@@ -25,7 +26,7 @@ Deno.test('.near selects the neighbourhood and nothing else', async () => {
   assert(got.includes('book-2'))
 })
 
-Deno.test('.order=similar puts the neighbourhood in order', async () => {
+test('.order=similar puts the neighbourhood in order', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)
   let got = ask(db, '.near=book-1&.order=similar', near)
@@ -40,7 +41,7 @@ Deno.test('.order=similar puts the neighbourhood in order', async () => {
 // way it pages a board, and never learns that the sort key is a similarity. The
 // binder asks this extension's `order` hook a second time with the anchor's
 // owner id, so a rank position is derived rather than written out.
-Deno.test('a window pages within the neighbourhood, nearest first', async () => {
+test('a window pages within the neighbourhood, nearest first', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)
   let all = ask(db, '.near=book-1&.order=similar', near)
@@ -57,7 +58,7 @@ Deno.test('a window pages within the neighbourhood, nearest first', async () => 
   )
 })
 
-Deno.test('the rest of the query line still filters', async () => {
+test('the rest of the query line still filters', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)
   assertEquals(ask(db, '.near=book-1&.price<15&.order=similar', near), [
@@ -69,7 +70,7 @@ Deno.test('the rest of the query line still filters', async () => {
 // The defect this replaced: the neighbourhood was cut to `limit` before the
 // rest of the line filtered, so `.near=X&.kind=review` answered the reviews
 // among the nearest two of any kind — almost always none of them.
-Deno.test('the neighbourhood is taken among what the rest of the line selects', async () => {
+test('the neighbourhood is taken among what the rest of the line selects', async () => {
   let db = await stocked()
   let near = semantic(db, embedder, { limit: 1 })
   assertEquals(ask(db, '.near=book-1', near), ['book-2'])
@@ -79,7 +80,7 @@ Deno.test('the neighbourhood is taken among what the rest of the line selects', 
   assertEquals(ask(db, '.near=book-1', near), ['book-2'])
 })
 
-Deno.test('the ranking is compiled, not bound — no params in the order', async () => {
+test('the ranking is compiled, not bound — no params in the order', async () => {
   let db = await stocked()
   let { sql, params } = compile(
     parse('.near=book-1&.order=similar'),
@@ -93,20 +94,20 @@ Deno.test('the ranking is compiled, not bound — no params in the order', async
   assert(params.every((p) => typeof p == 'number'), `${params}`)
 })
 
-Deno.test('an anchor with no vector selects nothing, never everything', async () => {
+test('an anchor with no vector selects nothing, never everything', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)
   assertEquals(ask(db, '.near=nobody', near), [])
   assertEquals(near.neighbours(), [])
 })
 
-Deno.test('a floor can leave the neighbourhood empty', async () => {
+test('a floor can leave the neighbourhood empty', async () => {
   let db = await stocked()
   let near = semantic(db, embedder, { floor: 0.99 })
   assertEquals(ask(db, '.near=book-1&.order=similar', near), [])
 })
 
-Deno.test('the similarity rides back as a query-only comp', async () => {
+test('the similarity rides back as a query-only comp', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)
   ask(db, '.near=book-1&.order=similar', near)
@@ -128,7 +129,7 @@ Deno.test('the similarity rides back as a query-only comp', async () => {
 // A host registers its extensions once and serves every query through them, so
 // what one question resolved must not answer the next: the compiler says when a
 // new one begins (@yaks/sql `Begin`) and the neighbourhood goes with the old.
-Deno.test('one extension, many questions — each answered from its own .near', async () => {
+test('one extension, many questions — each answered from its own .near', async () => {
   let db = await stocked()
   let near = semantic(db, embedder)
   assertEquals(ask(db, '.near=book-1&.order=similar', near)[0], 'book-2')
@@ -141,7 +142,7 @@ Deno.test('one extension, many questions — each answered from its own .near', 
   )
 })
 
-Deno.test('without this extension the compiler still declines .near', async () => {
+test('without this extension the compiler still declines .near', async () => {
   let db = await stocked()
   assertThrows(() => compile(parse('.near=book-1'), shop), Unsupported, '.near')
   // and an ordering with no anchor to rank by declines too

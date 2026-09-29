@@ -1,6 +1,7 @@
 // Door shapes belong to one world, shared by its chunks and freed with it.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { seedBuildings } from './buildings_fixture.ts'
 import { doors } from './doors.ts'
@@ -8,7 +9,7 @@ import { flat } from './terrain.ts'
 
 seedBuildings()
 
-Deno.test('door shapes are shared within a world and disposed only with it', () => {
+test('door shapes are shared within a world and disposed only with it', () => {
   let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
   let b = v.buildings(64, 64, 0)[0]
   assert(b.doors.length > 0)

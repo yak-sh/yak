@@ -1,6 +1,7 @@
 // The near match: what a failed handle lookup may name. Scoring only —
 // the check that a suggestion RESOLVES belongs to the door that offers it
 // (client.ts nearby), and client_test drives that half.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { nearest, offer } from './near.ts'
@@ -23,7 +24,7 @@ let fleet = [
 
 // The untargeted pool is the whole graph, so a common word opens somebody's
 // ticket every time. A name outranks a sentence that merely starts with it.
-Deno.test('nearest: a ticket opening with the word loses to the thing named by it', () => {
+test('nearest: a ticket opening with the word loses to the thing named by it', () => {
   let graph = [
     ...fleet,
     T(
@@ -51,7 +52,7 @@ Deno.test('nearest: a ticket opening with the word loses to the thing named by i
   )
 })
 
-Deno.test('nearest: a title word answers the alias nobody could guess', () => {
+test('nearest: a title word answers the alias nobody could guess', () => {
   // the reported shape: `tasks` IS the venture, `home` is its handle
   assertEquals(nearest('tasks', fleet)?.id, 'P-19')
   assertEquals(nearest('task graph', fleet)?.id, 'P-19')
@@ -62,7 +63,7 @@ Deno.test('nearest: a title word answers the alias nobody could guess', () => {
   assertEquals(nearest('crayon', fleet)?.id, 'P-22')
 })
 
-Deno.test('nearest: nothing close is nothing offered', () => {
+test('nearest: nothing close is nothing offered', () => {
   assertEquals(nearest('flux', fleet), undefined)
   assertEquals(nearest('', fleet), undefined)
   assertEquals(nearest('tasks', []), undefined)
@@ -80,7 +81,7 @@ Deno.test('nearest: nothing close is nothing offered', () => {
   assertEquals(nearest('jef', [{ id: 'U-3709', alias: 'jeff' }])?.id, 'U-3709')
 })
 
-Deno.test('nearest: duplicate names are told apart by the handle', () => {
+test('nearest: duplicate names are told apart by the handle', () => {
   // Ids alone do not disambiguate — both boards are titled `holdco`, so
   // the winner is whichever the caller's word matches, and offer() prints
   // the alias that tells them apart.
@@ -96,7 +97,7 @@ Deno.test('nearest: duplicate names are told apart by the handle', () => {
   )
 })
 
-Deno.test('offer: the handle leads, because it is what they got wrong', () => {
+test('offer: the handle leads, because it is what they got wrong', () => {
   assertEquals(
     offer(P('P-19', 'home', 'Task Graph')),
     "'home' (P-19, Task Graph)",

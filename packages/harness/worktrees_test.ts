@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { discover, restore } from '@yaks/git/host'
 import { sessionCwd } from './workspace.ts'
@@ -66,11 +67,11 @@ let said = (session: string, seq = 1) =>
   line(session, seq, { output: {}, content: { body: 'done' } })
 let stopped = (session: string, seq = 1) => line(session, seq, { stop: {} })
 
-Deno.test('a checkout is named after the child it was cut for', () => {
+test('a checkout is named after the child it was cut for', () => {
   assertEquals(cutFor('child:abc', '/wt'), '/wt/child-abc')
 })
 
-Deno.test('a sweep takes back the root, keeps what is held, and skips a live home', async () => {
+test('a sweep takes back the root, keeps what is held, and skips a live home', async () => {
   let f = await fixture()
   let h = await harness()
   try {
@@ -105,7 +106,7 @@ Deno.test('a sweep takes back the root, keeps what is held, and skips a live hom
   }
 })
 
-Deno.test('over: a transcript that ended, and a process that exited with it', async () => {
+test('over: a transcript that ended, and a process that exited with it', async () => {
   let h = await harness()
   try {
     await h.g.apply([
@@ -143,7 +144,7 @@ Deno.test('over: a transcript that ended, and a process that exited with it', as
   }
 })
 
-Deno.test('collect keeps a checkout while its session could still run', async () => {
+test('collect keeps a checkout while its session could still run', async () => {
   let f = await fixture()
   let h = await harness()
   try {
@@ -168,7 +169,7 @@ Deno.test('collect keeps a checkout while its session could still run', async ()
   }
 })
 
-Deno.test('a collected checkout is cut again where it stood', async () => {
+test('a collected checkout is cut again where it stood', async () => {
   let f = await fixture()
   let h = await harness()
   try {
@@ -203,7 +204,7 @@ Deno.test('a collected checkout is cut again where it stood', async () => {
   }
 })
 
-Deno.test('a checkout with nothing recorded cannot be cut again', async () => {
+test('a checkout with nothing recorded cannot be cut again', async () => {
   let h = await harness()
   try {
     await h.g.apply([{ entity: { eid: 'w1' }, worktree: { path: '/wt/gone' } }])
@@ -214,7 +215,7 @@ Deno.test('a checkout with nothing recorded cannot be cut again', async () => {
   }
 })
 
-Deno.test('concurrent resumes share one restored checkout', async () => {
+test('concurrent resumes share one restored checkout', async () => {
   let f = await fixture()
   let h = await harness()
   try {
@@ -242,7 +243,7 @@ Deno.test('concurrent resumes share one restored checkout', async () => {
   }
 })
 
-Deno.test('live homes are the checkouts named for a session and the ones it inherited', async () => {
+test('live homes are the checkouts named for a session and the ones it inherited', async () => {
   let h = await harness()
   try {
     await h.g.apply([
@@ -260,7 +261,7 @@ Deno.test('live homes are the checkouts named for a session and the ones it inhe
   }
 })
 
-Deno.test('a child that is over hands its checkout back, and gets it again on resume', async () => {
+test('a child that is over hands its checkout back, and gets it again on resume', async () => {
   let f = await fixture()
   // The root is passed, never set in the environment: test files run side by
   // side in one process, and a root set there is where every other file's

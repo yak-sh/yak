@@ -1,4 +1,5 @@
 // Usage warnings through their pure decision and the hourly meter door.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -21,7 +22,7 @@ let usage = (hour: number, values: Partial<Usage> = {}): Usage => ({
   ...values,
 })
 
-Deno.test('account warning rises once per threshold and rearms after a rate spike', () => {
+test('account warning rises once per threshold and rearms after a rate spike', () => {
   let first = warning(null, usage(10, { rows_read: 20e9 }), null)
   assertStringIncludes(
     first.body,
@@ -61,7 +62,7 @@ Deno.test('account warning rises once per threshold and rearms after a rate spik
   assertStringIncludes(requests.body, 'early-warning proxy')
 })
 
-Deno.test('hourly account alert is mailed once and kept on the wake row', async () => {
+test('hourly account alert is mailed once and kept on the wake row', async () => {
   let p = platform('account usage alert', {
     CF_ACCOUNT: 'account',
     CF_ANALYTICS_TOKEN: 'read-only',

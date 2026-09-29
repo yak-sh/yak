@@ -4,6 +4,7 @@
 // working. The root that made most of them reachable is the platform's shape:
 // yaks.app is not on the Public Suffix List, so every `<space>.yaks.app` app is
 // same-site with the apex, and anybody can serve code from a free space.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { COOKIE, sealedOld, verify } from './lib/token.ts'
 import { CUT } from './lib/token_legacy.ts'
@@ -61,7 +62,7 @@ let authorizing = async (k: Kernel) => {
   }).toString()
 }
 
-Deno.test(
+test(
   'a token minted for anything but a session is no cookie (T-37873)',
   async () => {
     let k = await kernel()
@@ -101,7 +102,7 @@ Deno.test(
 // their own use (lib/token_legacy.ts): an old visitor's token and an old grant
 // with its prefix taken off are no cookie, and an old session cookie still
 // signs its person in and comes back re-minted (T-37924).
-Deno.test(
+test(
   'a token sealed before 2c05d0f6 is a cookie only if it was one (T-37924)',
   async () => {
     let k = await kernel()
@@ -148,7 +149,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'forty guesses at a sign-in code at once still get five (T-37875)',
   async () => {
     let k = await kernel()
@@ -180,7 +181,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'the consent card says where the authorization goes (T-37877)',
   async () => {
     let k = await kernel()
@@ -201,7 +202,7 @@ Deno.test(
   },
 )
 
-Deno.test('a page in another space forges no signed-in form (T-37874)', async () => {
+test('a page in another space forges no signed-in form (T-37874)', async () => {
   let k = await kernel()
   try {
     let me = await signIn(k)

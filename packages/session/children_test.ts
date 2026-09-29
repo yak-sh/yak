@@ -1,6 +1,7 @@
 // Admission of a root session: the cap counts the transcripts a runner is
 // working on, over a store that reads `session.status` the way the fleet's does.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -35,7 +36,7 @@ let shapes: [string, Bundle[], boolean][] = [
   ['a turn the runner is taking', [entry('s', 1, { ask: {} })], true],
 ]
 
-Deno.test('the session cap counts the transcripts the runner is running', async () => {
+test('the session cap counts the transcripts the runner is running', async () => {
   for (let [name, entries, fills] of shapes) {
     let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
     s.install()

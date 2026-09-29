@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Frame, type Sink, subscriptions } from '@yaks/api'
 import { graph } from '@yaks/graph'
@@ -12,7 +13,7 @@ import words from './vocab.json' with { type: 'json' }
 
 seedThemes()
 
-Deno.test('a page sees nearby world rows and moving heroes', () => {
+test('a page sees nearby world rows and moving heroes', () => {
   let at = areaOf(64, 64, REACH)
   let select = matcher(at.query, loadVocab([words]))
   let row = (eid: string, x: number, z: number) => ({
@@ -39,7 +40,7 @@ Deno.test('a page sees nearby world rows and moving heroes', () => {
   ])
 })
 
-Deno.test('an area query finds stored rows in generated regions', () => {
+test('an area query finds stored rows in generated regions', () => {
   let x = 5 * 256 + 128, z = 128
   let select = matcher(areaOf(x, z, REACH).query, loadVocab([words]))
   let row = (eid: string, px: number, pz: number) => ({
@@ -54,7 +55,7 @@ Deno.test('an area query finds stored rows in generated regions', () => {
   )
 })
 
-Deno.test('a nearby creature reaches another page without a stored row', () => {
+test('a nearby creature reaches another page without a stored row', () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   let subs = subscriptions(g)
@@ -76,7 +77,7 @@ Deno.test('a nearby creature reaches another page without a stored row', () => {
   assertEquals(heard.flatMap((f) => f.relay ?? []).length, 1)
 })
 
-Deno.test('a crowded area keeps its looks as heroes move and restyle', () => {
+test('a crowded area keeps its looks as heroes move and restyle', () => {
   let vocab = loadVocab([words])
   let db = spy(mem(), (_, params) => {
     if (params.length > 100) throw new Error('too many SQL variables')

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { micHint, type MicSignal, senderActive } from './mic-health.ts'
 
@@ -11,7 +12,7 @@ let live: MicSignal = {
   duration: 10,
   packets: 100,
 }
-Deno.test('local plate distinguishes blocked, missing and stopped mic', () => {
+test('local plate distinguishes blocked, missing and stopped mic', () => {
   assertEquals(
     micHint('denied', null, null, null, time)?.includes('allow'),
     true,
@@ -31,7 +32,7 @@ Deno.test('local plate distinguishes blocked, missing and stopped mic', () => {
     true,
   )
 })
-Deno.test('a sustained quiet mic prompts browser-input test without calling a pause a failure', () => {
+test('a sustained quiet mic prompts browser-input test without calling a pause a failure', () => {
   assertEquals(
     micHint('on', 'live', { talking: false }, live, { ...time, now: 7_000 }),
     null,
@@ -44,7 +45,7 @@ Deno.test('a sustained quiet mic prompts browser-input test without calling a pa
   assertEquals(micHint('off', null, null, null, time), null)
 })
 
-Deno.test('outgoing light requires fresh packets and audible sender samples', () => {
+test('outgoing light requires fresh packets and audible sender samples', () => {
   let next = { ...live, packets: 103, level: 0.12, energy: 0.02, duration: 11 }
   assertEquals(senderActive(live, next), true)
   assertEquals(senderActive(null, next), false)

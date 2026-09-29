@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { dbPath, home, worktrees } from './paths.ts'
 
-Deno.test('harness state moves together without redirecting HOME', () => {
+test('harness state moves together without redirecting HOME', () => {
   let values: Record<string, string> = { HOME: '/owner' }
   let env = (key: string) => values[key]
   assertEquals(home(env), '/owner/.yak')

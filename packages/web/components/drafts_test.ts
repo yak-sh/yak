@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { drop, focused, peek, save } from './drafts.ts'
 
-Deno.test('drafts: save/peek/drop round-trip; focus follows the pen', () => {
+test('drafts: save/peek/drop round-trip; focus follows the pen', () => {
   save('a', 'hello', 3)
   assertEquals(peek('a')?.v, 'hello')
   assertEquals(peek('a')?.caret, 3)
@@ -15,7 +16,7 @@ Deno.test('drafts: save/peek/drop round-trip; focus follows the pen', () => {
   assert(!focused('b'), 'dropping the focused key clears the heir')
 })
 
-Deno.test('drafts: never expire — only commit or revert spends one', () => {
+test('drafts: never expire — only commit or revert spends one', () => {
   save('old', 'yesterday')
   assertEquals(peek('old')?.v, 'yesterday')
   drop('old')

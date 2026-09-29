@@ -1,5 +1,6 @@
 // Which components a read answers with: the ones its query names.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
 import { wanted } from './projection.ts'
@@ -22,7 +23,7 @@ let vocab = loadVocab([{
 
 let asks = (query: string) => [...wanted(vocab, query) ?? ['*']].sort()
 
-Deno.test('a read answers the components its query names', () => {
+test('a read answers the components its query names', () => {
   for (
     let [query, comps] of [
       ['.file', ['file']],

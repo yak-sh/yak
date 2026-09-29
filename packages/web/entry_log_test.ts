@@ -1,5 +1,6 @@
 // The transcript as the page draws it, over yak entries: what each entry says,
 // what the session is waiting on, and paging. No server, browser, or process.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
@@ -47,7 +48,7 @@ let turn = [
   row('final', 6, { content: { body: 'done' }, output: { source: 'ask2' } }),
 ]
 
-Deno.test('a transcript says who said what, in order', () => {
+test('a transcript says who said what, in order', () => {
   let log = graphLog(turn.toReversed(), names)
   assertEquals(log.entries.map((e) => e.seq), [1, 2, 3, 4, 5, 6])
   assertEquals(log.entries.map((e) => e.row), [
@@ -83,7 +84,7 @@ Deno.test('a transcript says who said what, in order', () => {
   assertEquals(log.activity, undefined)
 })
 
-Deno.test('what an entry is decides its row', () => {
+test('what an entry is decides its row', () => {
   let shown = (comps: EntryRow['comps']) =>
     graphLog([row('e', 1, comps)], names).entries[0].row
   assertEquals(
@@ -123,7 +124,7 @@ Deno.test('what an entry is decides its row', () => {
   )
 })
 
-Deno.test('the log says what a working transcript waits on', () => {
+test('the log says what a working transcript waits on', () => {
   let activity = (rows: EntryRow[]) => graphLog(rows, names).activity
   let input = row('input', 1, { content: { body: 'go' }, using: {} })
   let ask = row('ask', 2, { ask: { to: 'gpt', through: 'input' } })
@@ -156,7 +157,7 @@ Deno.test('the log says what a working transcript waits on', () => {
   assertEquals(activity([...turn, row('stop', 7, { stop: {} })]), undefined)
 })
 
-Deno.test('pageEntries pages the rendered log by sequence', () => {
+test('pageEntries pages the rendered log by sequence', () => {
   let { entries } = graphLog(turn)
   assertEquals(pageEntries(entries, { after: 4 }).map((e) => e.seq), [5, 6])
   assertEquals(

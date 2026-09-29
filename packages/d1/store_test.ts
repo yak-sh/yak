@@ -4,6 +4,7 @@
 // D1's grain — one atomic write batch, reads that see the transaction's own
 // pending writes, and nothing sent at all when a transaction throws.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
@@ -16,7 +17,7 @@ import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 let titles = (bs: Bundle[]) =>
   bs.map((b) => (b.doc as { title?: string })?.title).sort()
 
-Deno.test('a store reads back what it wrote', async () => {
+test('a store reads back what it wrote', async () => {
   let s = await store()
   await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
@@ -24,7 +25,7 @@ Deno.test('a store reads back what it wrote', async () => {
   assertEquals(titles(await s.read('.kind=doc')), ['Dune'])
 })
 
-Deno.test('a batch delete clears its components and keeps tombstones', async () => {
+test('a batch delete clears its components and keeps tombstones', async () => {
   let s = await store()
   let g = graph({ storage: s, vocab: shop })
   let ids = Array.from({ length: 25 }, (_, i) => `book-${i}`)
@@ -38,7 +39,7 @@ Deno.test('a batch delete clears its components and keeps tombstones', async () 
   assertEquals(dead.filter((b) => b.tombstone != null).length, ids.length)
 })
 
-Deno.test('an object and an array come back as the values written', async () => {
+test('an object and an array come back as the values written', async () => {
   let s = await store(kitchen)
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   let [read] = await s.read('.recipe')
@@ -51,13 +52,13 @@ Deno.test('an object and an array come back as the values written', async () => 
   ])
 })
 
-Deno.test('a projected boolean reads back as true or false', async () => {
+test('a projected boolean reads back as true or false', async () => {
   let s = await store(kitchen)
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(await s.rows(PROJECTED), [PROJECTED_ROW])
 })
 
-Deno.test('a transaction that throws sends nothing', async () => {
+test('a transaction that throws sends nothing', async () => {
   let s = await store()
   await assertRejects(() =>
     s.tx(async (tx) => {
@@ -68,7 +69,7 @@ Deno.test('a transaction that throws sends nothing', async () => {
   assertEquals(await s.read('.kind=doc'), [])
 })
 
-Deno.test('a transaction reads its own pending writes', async () => {
+test('a transaction reads its own pending writes', async () => {
   let s = await store()
   let seen = await s.tx(async (tx) => {
     await tx.patch([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
@@ -79,7 +80,7 @@ Deno.test('a transaction reads its own pending writes', async () => {
   assertEquals(titles(await s.read('.kind=doc')), ['Dune'])
 })
 
-Deno.test('a pending write that no longer matches drops out of a read', async () => {
+test('a pending write that no longer matches drops out of a read', async () => {
   let s = await store()
   await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'p1' }, product: { status: 'live' } }])
@@ -91,7 +92,7 @@ Deno.test('a pending write that no longer matches drops out of a read', async ()
   assertEquals(seen as Bundle[], [])
 })
 
-Deno.test('a whole read is one round trip, and the same answer', async () => {
+test('a whole read is one round trip, and the same answer', async () => {
   let { store: s, hops, reset } = await counted()
   let g = graph({ storage: s, vocab: shop })
   await g.apply([
@@ -112,7 +113,7 @@ Deno.test('a whole read is one round trip, and the same answer', async () => {
   assertEquals(trips, 1)
 })
 
-Deno.test('a whole read sees pending writes too', async () => {
+test('a whole read sees pending writes too', async () => {
   let s = await store()
   await s.tx((tx) =>
     tx.patch([{ entity: { eid: 'm1' }, doc: { title: 'Acme' } }])
@@ -124,7 +125,7 @@ Deno.test('a whole read sees pending writes too', async () => {
   assertEquals((seen as Bundle[]).map((b) => b.entity.eid), ['p1'])
 })
 
-Deno.test('the whole write goes as one batch', async () => {
+test('the whole write goes as one batch', async () => {
   let db = d1()
   let sizes: number[] = []
   let batch = db.batch
@@ -148,7 +149,7 @@ Deno.test('the whole write goes as one batch', async () => {
   assert(sizes.at(-1)! > 1, `the flush should carry the batch: ${sizes}`)
 })
 
-Deno.test('a number a refused batch reserved is handed out again', async () => {
+test('a number a refused batch reserved is handed out again', async () => {
   let s = await store()
   let g = graph({ storage: s, vocab: shop })
   await assertRejects(() =>
@@ -161,7 +162,7 @@ Deno.test('a number a refused batch reserved is handed out again', async () => {
   assertEquals((await s.read('.kind=doc'))[0].entity.num, 1)
 })
 
-Deno.test('partial updates over D1 keep required columns and roll back late failures', async () => {
+test('partial updates over D1 keep required columns and roll back late failures', async () => {
   let db = d1(), s = storage(db, shop)
   await s.install()
   await prepare(db, { t: 'drop', kind: 'table', name: 'doc' }).all()

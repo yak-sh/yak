@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
@@ -31,7 +32,7 @@ let seeded = async () => {
   return h
 }
 
-Deno.test('a transcript is entities in SQLite, read back in order', async () => {
+test('a transcript is entities in SQLite, read back in order', async () => {
   let h = await seeded()
   let entries = await transcript(h.g, 's')
   assertEquals(entries.map((b) => (b.content as Comp).body), ['ping'])
@@ -39,7 +40,7 @@ Deno.test('a transcript is entities in SQLite, read back in order', async () => 
   h.close()
 })
 
-Deno.test('one step against a fake model appends its ask and its prose', async () => {
+test('one step against a fake model appends its ask and its prose', async () => {
   let h = await seeded()
   let step = await react(h.g, 's', { model: fake, tools: [] })
   assertEquals(step.did, 'asked')
@@ -53,7 +54,7 @@ Deno.test('one step against a fake model appends its ask and its prose', async (
   h.close()
 })
 
-Deno.test('session.status is a derived property, so a query filters on it', async () => {
+test('session.status is a derived property, so a query filters on it', async () => {
   let h = await seeded()
   assertEquals((await h.g.read('.session.status=pending&*')).length, 1)
   assertEquals((await h.g.read('.session.status=settled&*')).length, 0)
@@ -65,7 +66,7 @@ Deno.test('session.status is a derived property, so a query filters on it', asyn
   h.close()
 })
 
-Deno.test('a task applies and reads back with its derived status', async () => {
+test('a task applies and reads back with its derived status', async () => {
   let h = await harness()
   h.g.apply([{
     entity: { eid: 't1' },
@@ -81,7 +82,7 @@ Deno.test('a task applies and reads back with its derived status', async () => {
   h.close()
 })
 
-Deno.test('entries, tasks and sessions omit human numbers, after reopen too', async () => {
+test('entries, tasks and sessions omit human numbers, after reopen too', async () => {
   let dir = Deno.makeTempDirSync()
   let path = dir + '/numbering.db'
   try {
@@ -107,7 +108,7 @@ Deno.test('entries, tasks and sessions omit human numbers, after reopen too', as
   }
 })
 
-Deno.test('a deleted provider leaves past entries saying what answered', async () => {
+test('a deleted provider leaves past entries saying what answered', async () => {
   let dir = Deno.makeTempDirSync()
   let h = await harness(dir + '/history.db')
   try {
@@ -130,7 +131,7 @@ Deno.test('a deleted provider leaves past entries saying what answered', async (
   }
 })
 
-Deno.test('SQLite commits simultaneous append batches with distinct positions', async () => {
+test('SQLite commits simultaneous append batches with distinct positions', async () => {
   let h = await harness()
   try {
     await h.g.apply([{ entity: { eid: 's' }, session: {} }])

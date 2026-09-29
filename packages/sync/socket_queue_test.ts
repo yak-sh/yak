@@ -1,11 +1,12 @@
 /// <reference lib="deno.ns" />
 // A congested relay sends the newest patch when the socket can take it.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { pair } from './testing.ts'
 import { type Frame, wire } from './socket.ts'
 
-Deno.test('waiting relay patches replace older motion and preserve clears', () => {
+test('waiting relay patches replace older motion and preserve clears', () => {
   let socket = pair().client
   let due: (() => void)[] = []
   let w = wire({
@@ -40,7 +41,7 @@ Deno.test('waiting relay patches replace older motion and preserve clears', () =
   w.close()
 })
 
-Deno.test('a subscriber acknowledges only after landing a frame', async () => {
+test('a subscriber acknowledges only after landing a frame', async () => {
   let socket = pair().client
   let done: () => void = () => {}
   let settled = new Promise<void>((resolve) => done = resolve)
@@ -69,7 +70,7 @@ Deno.test('a subscriber acknowledges only after landing a frame', async () => {
   w.close()
 })
 
-Deno.test('an unacknowledged peer frame lands before the next durable frame', async () => {
+test('an unacknowledged peer frame lands before the next durable frame', async () => {
   let socket = pair().client
   let done: () => void = () => {}
   let settled = new Promise<void>((resolve) => done = resolve)
@@ -105,7 +106,7 @@ Deno.test('an unacknowledged peer frame lands before the next durable frame', as
   w.close()
 })
 
-Deno.test('a server without acknowledgements can send consecutive frames', () => {
+test('a server without acknowledgements can send consecutive frames', () => {
   let sockets = pair()
   let seen: Frame[] = []
   let w = wire({
@@ -136,7 +137,7 @@ Deno.test('a server without acknowledgements can send consecutive frames', () =>
   w.close()
 })
 
-Deno.test('a batched packet is applied in order before its ACK', async () => {
+test('a batched packet is applied in order before its ACK', async () => {
   let socket = pair().client
   let done: () => void = () => {}
   let settled = new Promise<void>((resolve) => done = resolve)

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   BUCKETS,
@@ -55,7 +56,7 @@ let fake = (empty = false) => {
   return { calls, run }
 }
 
-Deno.test('yak-staging-init reports existing resources without creating them', async () => {
+test('yak-staging-init reports existing resources without creating them', async () => {
   let { calls, run } = fake()
   let lines: string[] = []
   assertEquals(await initialize(run, (line) => lines.push(line)), 'kv-id')
@@ -72,7 +73,7 @@ Deno.test('yak-staging-init reports existing resources without creating them', a
   )
 })
 
-Deno.test('yak-staging-init creates every missing resource once', async () => {
+test('yak-staging-init creates every missing resource once', async () => {
   let { calls, run } = fake(true)
   let lines: string[] = []
   await initialize(run, (line) => lines.push(line))
@@ -97,7 +98,7 @@ Deno.test('yak-staging-init creates every missing resource once', async () => {
   )
 })
 
-Deno.test('yak-staging-init refuses an incompatible existing index', async () => {
+test('yak-staging-init refuses an incompatible existing index', async () => {
   let { run } = fake()
   let changed: Run = async (args) => {
     if (args.join(' ') == 'vectorize list --json') {

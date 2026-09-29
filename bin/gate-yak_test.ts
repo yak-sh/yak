@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parse } from '@std/yaml'
 
@@ -22,7 +23,7 @@ let workflow = parse(
 }
 let steps = workflow.jobs.gate.steps
 
-Deno.test('every CI run step has a stable timing label and failures retain the artifact', () => {
+test('every CI run step has a stable timing label and failures retain the artifact', () => {
   assertEquals(
     workflow.jobs.gate.defaults.run.shell,
     'deno run -A bin/suite-time.ts --ci bash --noprofile --norc -eo pipefail {0}',

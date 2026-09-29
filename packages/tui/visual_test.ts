@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { mount } from './testing.ts'
@@ -13,7 +14,7 @@ import {
   visualLines,
 } from './visual.ts'
 
-Deno.test('visual surfaces cycle, select exact source, yank explicitly, cancel without editing', async () => {
+test('visual surfaces cycle, select exact source, yank explicitly, cancel without editing', async () => {
   let state = emptyVisual(), copied = '', edits = 0
   setClipboard((s) => copied = s)
   let ui = await mount(
@@ -65,7 +66,7 @@ Deno.test('visual surfaces cycle, select exact source, yank explicitly, cancel w
   }
 })
 
-Deno.test('virtual source selection visits one item and never renders history', async () => {
+test('virtual source selection visits one item and never renders history', async () => {
   let state = emptyVisual(), renders = 0, reads = 0
   let items = Array.from({ length: 10000 }, (_, i) => ({ id: String(i) }))
   let ui = await mount(
@@ -102,7 +103,7 @@ Deno.test('virtual source selection visits one item and never renders history', 
   }
 })
 
-Deno.test('OSC52 encodes UTF8 and controls only as base64; visual output strips controls', () => {
+test('OSC52 encodes UTF8 and controls only as base64; visual output strips controls', () => {
   let text = 'a\x1b]52;c;evil\x07é'
   let seq = osc52(text)
   assertEquals(
@@ -113,7 +114,7 @@ Deno.test('OSC52 encodes UTF8 and controls only as base64; visual output strips 
   assertEquals(seq.split('\x1b').length - 1, 1)
 })
 
-Deno.test('wrapped selection keeps hard newlines and redraw never emits source control bytes', async () => {
+test('wrapped selection keeps hard newlines and redraw never emits source control bytes', async () => {
   let state = emptyVisual()
   let ui = await mount(
     () => {

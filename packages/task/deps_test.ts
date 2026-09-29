@@ -1,12 +1,13 @@
 // The two questions, kept apart: what is in the way (an alarm) and how much is
 // left (a count).
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { link } from '@yaks/edge'
 import { done, gated, openDeps } from './deps.ts'
 import { teamGraph } from './testing.ts'
 
-Deno.test('gated reads the blocked facet, and nothing else', () => {
+test('gated reads the blocked facet, and nothing else', () => {
   assertEquals(gated({ entity: { eid: 't' }, task: {} }), false)
   assertEquals(gated({ entity: { eid: 't' }, task: {}, blocked: {} }), true)
   assertEquals(
@@ -36,23 +37,23 @@ let seeded = () => {
   return storage
 }
 
-Deno.test('openDeps counts what has not settled, over both relations', () => {
+test('openDeps counts what has not settled, over both relations', () => {
   // a is open; d is not a task and cannot settle; b and c are finished
   assertEquals(openDeps(seeded(), 'p'), 2)
 })
 
-Deno.test('a task with no children counts nothing', () => {
+test('a task with no children counts nothing', () => {
   assertEquals(openDeps(seeded(), 'a'), 0)
 })
 
-Deno.test('openDeps follows only the relations it is given', () => {
+test('openDeps follows only the relations it is given', () => {
   let s = seeded()
   // `contains` alone reaches c, which is cancelled and therefore settled
   assertEquals(openDeps(s, 'p', { relations: ['contains'] }), 0)
   assertEquals(openDeps(s, 'p', { relations: ['requires'] }), 2)
 })
 
-Deno.test('a rung the ladder does not know leaves a child open', () => {
+test('a rung the ladder does not know leaves a child open', () => {
   let { g, storage } = teamGraph()
   g.install()
   g.apply([
@@ -71,7 +72,7 @@ Deno.test('a rung the ladder does not know leaves a child open', () => {
   assertEquals(openDeps(storage, 'p', { marks }), 1)
 })
 
-Deno.test('finishing a child lowers the count', () => {
+test('finishing a child lowers the count', () => {
   let { g, storage } = teamGraph()
   g.install()
   g.apply([
@@ -84,7 +85,7 @@ Deno.test('finishing a child lowers the count', () => {
   assertEquals(openDeps(storage, 'p'), 0)
 })
 
-Deno.test('done requires a task and a settled status, not merely zero children', () => {
+test('done requires a task and a settled status, not merely zero children', () => {
   let storage = seeded()
   assertEquals(done(storage, 'a'), false)
   assertEquals(done(storage, 'b'), true)
@@ -93,7 +94,7 @@ Deno.test('done requires a task and a settled status, not merely zero children',
   assertEquals(done(storage, 'missing'), false)
 })
 
-Deno.test('done waits for both relations, deduplicates children, and accepts cancellation', () => {
+test('done waits for both relations, deduplicates children, and accepts cancellation', () => {
   let { g, storage } = teamGraph()
   g.install()
   g.apply([
@@ -115,7 +116,7 @@ Deno.test('done waits for both relations, deduplicates children, and accepts can
   assertEquals(done(storage, 'p'), false)
 })
 
-Deno.test('done uses the supplied ladder for the parent and the children', () => {
+test('done uses the supplied ladder for the parent and the children', () => {
   let { g, storage } = teamGraph()
   g.install()
   g.apply([
@@ -129,7 +130,7 @@ Deno.test('done uses the supplied ladder for the parent and the children', () =>
   assertEquals(done(storage, 'p', { marks }), true)
 })
 
-Deno.test('done stays async over asynchronous storage, for true and false answers', async () => {
+test('done stays async over asynchronous storage, for true and false answers', async () => {
   let s = seeded()
   s.tx((tx) => tx.patch([{ entity: { eid: 'p' }, completed: {} }]))
   let asyncStorage: import('@yaks/graph').Storage = {
@@ -147,7 +148,7 @@ Deno.test('done stays async over asynchronous storage, for true and false answer
   }
 })
 
-Deno.test('done cannot settle a non-task or a parent waiting on one', () => {
+test('done cannot settle a non-task or a parent waiting on one', () => {
   let { g, storage } = teamGraph()
   g.install()
   g.apply([

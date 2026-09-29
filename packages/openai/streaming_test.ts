@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { responses } from './responses.ts'
 import type { TextDelta } from '@yaks/model'
 const packet = (value: unknown) => 'data: ' + JSON.stringify(value) + '\n\n'
 let sse = (...events: unknown[]) => new Response(events.map(packet).join(''))
-Deno.test('provider emits only public text and retains response item identities', async () => {
+test('provider emits only public text and retains response item identities', async () => {
   const events = [
     { type: 'response.created' },
     { type: 'response.reasoning_summary_text.delta', delta: 'not exposed' },
@@ -41,7 +42,7 @@ Deno.test('provider emits only public text and retains response item identities'
   assertEquals(deltas, [{ index: 0, id: 'm1', text: 'hello' }])
   assertEquals(reply.items, [{ kind: 'assistant', id: 'm1', text: 'hello' }])
 })
-Deno.test('streaming retries a transient failure before public text', async () => {
+test('streaming retries a transient failure before public text', async () => {
   for (
     let fail of [
       () => Promise.reject(new TypeError('connection reset')),
@@ -92,7 +93,7 @@ Deno.test('streaming retries a transient failure before public text', async () =
     assertEquals(reply.items, [{ kind: 'assistant', id: 'm', text: 'done' }])
   }
 })
-Deno.test('a broken streamed exchange is not retried after public text was exposed', async () => {
+test('a broken streamed exchange is not retried after public text was exposed', async () => {
   let calls = 0
   const model = responses({
     credential: () => ({ token: 'private', base: 'https://example.invalid' }),
@@ -116,7 +117,7 @@ Deno.test('a broken streamed exchange is not retried after public text was expos
   assertEquals(calls, 1)
 })
 
-Deno.test('per-request cancellation reaches provider fetch without changing adapter-wide options', async () => {
+test('per-request cancellation reaches provider fetch without changing adapter-wide options', async () => {
   const started = Promise.withResolvers<void>()
   const controller = new AbortController()
   let seen: AbortSignal | null | undefined

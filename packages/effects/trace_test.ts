@@ -2,6 +2,7 @@
 // The derivation on its own: a batch plus a reading of what stood before it,
 // read as what happened. No graph, no storage — just the arithmetic.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { BEFORE, type Before, events, strip } from './trace.ts'
@@ -13,7 +14,7 @@ let batch = (had: Before, ...bundles: Bundle[]): Bundle[] =>
 let said = (bundles: Bundle[]) =>
   events(bundles).map((e) => `${e.kind} ${e.entity.eid} ${e.name}`)
 
-Deno.test('a component nobody carried is a birth, one carried is a change', () => {
+test('a component nobody carried is a birth, one carried is a change', () => {
   assertEquals(
     said(batch(
       { p2: ['post'] },
@@ -24,7 +25,7 @@ Deno.test('a component nobody carried is a birth, one carried is a change', () =
   )
 })
 
-Deno.test('a birth patched again in the same batch is one birth', () => {
+test('a birth patched again in the same batch is one birth', () => {
   assertEquals(
     said(batch(
       {},
@@ -35,7 +36,7 @@ Deno.test('a birth patched again in the same batch is one birth', () => {
   )
 })
 
-Deno.test('a null component is a removal, and only if it was there', () => {
+test('a null component is a removal, and only if it was there', () => {
   assertEquals(
     said(batch(
       { p1: ['post'] },
@@ -46,7 +47,7 @@ Deno.test('a null component is a removal, and only if it was there', () => {
   )
 })
 
-Deno.test('a removal then a re-statement is a second birth', () => {
+test('a removal then a re-statement is a second birth', () => {
   assertEquals(
     said(batch(
       { p1: ['post'] },
@@ -57,7 +58,7 @@ Deno.test('a removal then a re-statement is a second birth', () => {
   )
 })
 
-Deno.test('a dead entity removes every component it carried, once', () => {
+test('a dead entity removes every component it carried, once', () => {
   assertEquals(
     said(batch(
       { p1: ['post', 'created'] },
@@ -68,11 +69,11 @@ Deno.test('a dead entity removes every component it carried, once', () => {
   )
 })
 
-Deno.test('a casualty with nothing read for it says nothing', () => {
+test('a casualty with nothing read for it says nothing', () => {
   assertEquals(said(batch({}, { entity: { eid: 'c9' }, tombstone: {} })), [])
 })
 
-Deno.test('an event carries the patch, and the num the batch minted', () => {
+test('an event carries the patch, and the num the batch minted', () => {
   let [e] = events(batch(
     {},
     { entity: { eid: 'p1' }, post: { title: 'One' } },
@@ -82,7 +83,7 @@ Deno.test('an event carries the patch, and the num the batch minted', () => {
   assertEquals(e.entity, { eid: 'p1', num: 7 })
 })
 
-Deno.test('stripping leaves the batch as applied', () => {
+test('stripping leaves the batch as applied', () => {
   let bundles = batch({ p1: [] }, {
     entity: { eid: 'p1' },
     post: { title: 'x' },

@@ -1,6 +1,7 @@
 // Compaction keeps a model transcript valid while replacing an old prefix
 // with its summary.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { prefix } from './compact.ts'
@@ -10,7 +11,7 @@ let entry = (
   comps: Record<string, Record<string, unknown>>,
 ): Bundle => ({ entity: { eid: `e${seq}` }, entry: { seq }, ...comps })
 
-Deno.test('a compaction prefix does not split an interleaved call and result', () => {
+test('a compaction prefix does not split an interleaved call and result', () => {
   let entries = [
     entry(1, { content: { body: 'x'.repeat(160) } }),
     entry(2, { ask: { to: 'model' } }),

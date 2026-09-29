@@ -1,4 +1,5 @@
 // Nearby and world map gestures share one world-coordinate viewport.
+import { test } from '@yaks/testing'
 import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { LEVELS, SIZE } from './levels.ts'
 import {
@@ -15,7 +16,7 @@ import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
 
-Deno.test('the map opens near the hero and zooms out around their position', () => {
+test('the map opens near the hero and zooms out around their position', () => {
   let near = view([100, 120])
   assertEquals(near[2], NEAR)
   assertEquals(place(near, [100, 120]), [0.5, 0.5])
@@ -31,7 +32,7 @@ Deno.test('the map opens near the hero and zooms out around their position', () 
   }
 })
 
-Deno.test('panning and anchored zoom keep places aligned', () => {
+test('panning and anchored zoom keep places aligned', () => {
   let near = view([100, 120])
   let moved = pan(near, 0.25, -0.25)
   assertEquals(place(moved, [100, 120]), [0.75, 0.25])
@@ -49,7 +50,7 @@ Deno.test('panning and anchored zoom keep places aligned', () => {
   assertEquals(zoom(changed, 0.001)[2], NEAR)
 })
 
-Deno.test('pinch keeps ground beneath the moving midpoint', () => {
+test('pinch keeps ground beneath the moving midpoint', () => {
   let box = zoom(view([100, 120]), 2)
   let from: [number, number] = [0.3, 0.4]
   let to: [number, number] = [0.5, 0.6]
@@ -64,7 +65,7 @@ Deno.test('pinch keeps ground beneath the moving midpoint', () => {
   assertAlmostEquals(v, to[1])
 })
 
-Deno.test('reopening nearby reuses the chart until the hero leaves its middle', () => {
+test('reopening nearby reuses the chart until the hero leaves its middle', () => {
   let first = reopen([100, 120], null)
   assertEquals(place(first, [100, 120]), [0.5, 0.5])
   assertEquals(reopen([101, 120], first), first)

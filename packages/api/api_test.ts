@@ -2,6 +2,7 @@
 // The route table, end to end: a batch in and back out, a query answered, the
 // door's own actor on every write, and each refusal at its own status.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import type { Bundle } from '@yaks/graph'
@@ -28,7 +29,7 @@ let ask = (line: string) => req(`/query?q=${encodeURIComponent(line)}`)
 
 for (let async of [false, true]) {
   for (let method of ['GET', 'POST']) {
-    Deno.test(`${method} /query logs ${async ? 'async' : 'sync'} failures with door context`, async () => {
+    test(`${method} /query logs ${async ? 'async' : 'sync'} failures with door context`, async () => {
       let graph = shopGraph()
       let error = new Error('too many terms in compound SELECT')
       graph.read = () => {
@@ -54,7 +55,7 @@ for (let async of [false, true]) {
   }
 }
 
-Deno.test('expected client refusals do not log server errors', async () => {
+test('expected client refusals do not log server errors', async () => {
   using logged = stub(console, 'error')
   assertEquals(
     (await shop(() => {
@@ -69,7 +70,7 @@ Deno.test('expected client refusals do not log server errors', async () => {
   assertEquals(logged.calls.length, 0)
 })
 
-Deno.test('/apply logs failed post-commit effects while preserving its successful response', async () => {
+test('/apply logs failed post-commit effects while preserving its successful response', async () => {
   let graph = shopGraph()
   let error = new Error('observer failed')
   graph.use({
@@ -94,7 +95,7 @@ Deno.test('/apply logs failed post-commit effects while preserving its successfu
   assertEquals((await graph.read('.price=12')).length, 1)
 })
 
-Deno.test('a batch applied comes back as it landed, and reads back', async () => {
+test('a batch applied comes back as it landed, and reads back', async () => {
   let handler = shop()
   let wrote = await handler(post('/apply', [
     { entity: { eid: 'b1' }, doc: { title: 'Spring' }, book: { price: 12 } },
@@ -118,7 +119,7 @@ Deno.test('a batch applied comes back as it landed, and reads back', async () =>
   assertEquals(comp(found[0], 'doc').title, 'Spring')
 })
 
-Deno.test('/query sends a selection larger than one piece of its stream, whole', async () => {
+test('/query sends a selection larger than one piece of its stream, whole', async () => {
   let graph = shopGraph()
   let books = Array.from({ length: 300 }, (_, i) => ({
     entity: { eid: `b${i}` },
@@ -137,7 +138,7 @@ Deno.test('/query sends a selection larger than one piece of its stream, whole',
   )
 })
 
-Deno.test('POST /query reads the same line', async () => {
+test('POST /query reads the same line', async () => {
   let handler = shop()
   await handler(
     post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
@@ -148,7 +149,7 @@ Deno.test('POST /query reads the same line', async () => {
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
 })
 
-Deno.test('the door signs the batch, never the client', async () => {
+test('the door signs the batch, never the client', async () => {
   let handler = shop()
   await handler(post('/apply', [
     // the client claims someone else wrote this
@@ -158,7 +159,7 @@ Deno.test('the door signs the batch, never the client', async () => {
   assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
-Deno.test('an unattributed door leaves the actor off', async () => {
+test('an unattributed door leaves the actor off', async () => {
   let handler = shop(() => null)
   await handler(post('/apply', [
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
@@ -167,7 +168,7 @@ Deno.test('an unattributed door leaves the actor off', async () => {
   assertEquals(comp(found[0], 'created').by ?? null, null)
 })
 
-Deno.test('a refused property answers 400 in the shape apply threw', async () => {
+test('a refused property answers 400 in the shape apply threw', async () => {
   let handler = shop()
   let r = await handler(post('/apply', [
     { entity: { eid: 'b1' }, book: { colour: 'red' } },
@@ -178,7 +179,7 @@ Deno.test('a refused property answers 400 in the shape apply threw', async () =>
   assert(said.message.includes('book.colour'))
 })
 
-Deno.test('a moved precondition answers 409, naming what it holds now', async () => {
+test('a moved precondition answers 409, naming what it holds now', async () => {
   let handler = shop()
   await handler(
     post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
@@ -199,7 +200,7 @@ Deno.test('a moved precondition answers 409, naming what it holds now', async ()
   })
 })
 
-Deno.test('/apply?check=1 answers the batch it would take, and keeps none of it', async () => {
+test('/apply?check=1 answers the batch it would take, and keeps none of it', async () => {
   let handler = shop()
   let asked = await handler(post('/apply?check=1', [
     { entity: { eid: 'b1' }, doc: { title: 'Spring' }, book: { price: 12 } },
@@ -217,18 +218,18 @@ Deno.test('/apply?check=1 answers the batch it would take, and keeps none of it'
   assertEquals(no.status, 409)
 })
 
-Deno.test('a body that is not a batch is refused', async () => {
+test('a body that is not a batch is refused', async () => {
   let r = await shop()(post('/apply', { entity: { eid: 'b1' } }))
   assertEquals(r.status, 400)
   assertEquals((await body(r)).error, 'Refused')
 })
 
-Deno.test('/query needs a query', async () => {
+test('/query needs a query', async () => {
   let r = await shop()(req('/query'))
   assertEquals(r.status, 400)
 })
 
-Deno.test('the route table refuses what it does not serve', async () => {
+test('the route table refuses what it does not serve', async () => {
   let handler = shop()
   assertEquals((await handler(req('/apply'))).status, 405)
   assertEquals((await handler(req('/query', { method: 'DELETE' }))).status, 405)
@@ -238,7 +239,7 @@ Deno.test('the route table refuses what it does not serve', async () => {
   assertEquals((await body(missing)).error, 'NotFound')
 })
 
-Deno.test('a door that refuses to name a writer answers 401', async () => {
+test('a door that refuses to name a writer answers 401', async () => {
   let handler = shop(() => {
     throw new Unauthorized('sign in first')
   })
@@ -250,7 +251,7 @@ Deno.test('a door that refuses to name a writer answers 401', async () => {
   })
 })
 
-Deno.test('/query answers an aggregate with its value, not a row set', async () => {
+test('/query answers an aggregate with its value, not a row set', async () => {
   let handler = shop()
   await handler(post('/apply', [
     { entity: { eid: 'b1' }, book: { price: 12, status: 'shelved' } },
@@ -272,6 +273,6 @@ Deno.test('/query answers an aggregate with its value, not a row set', async () 
   assertEquals(found.map((b) => b.entity.eid).sort(), ['b1', 'b3'])
 })
 
-Deno.test('a count over nothing is zero, never an empty list', async () => {
+test('a count over nothing is zero, never an empty list', async () => {
   assertEquals(await body(await shop()(ask('.book&.count'))), { count: 0 })
 })

@@ -7,6 +7,7 @@
 // The whole act — publish, letter, approve, page, search, unpublish — is held
 // through the kernel in mcp_test.ts, where there is a directory to write and a letter
 // to read off the log.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import type { App, Directory, Space } from './directory.ts'
 import {
@@ -77,7 +78,7 @@ let app = (over: Partial<App> = {}): App => ({
 let asked = { askedAt: '2026-09-06T10:00:00.000Z', listedAt: '' }
 let live = { ...asked, listedAt: '2026-09-06T12:00:00.000Z' }
 
-Deno.test('the two stamps distinguish unsubmitted, pending and listed apps', () => {
+test('the two stamps distinguish unsubmitted, pending and listed apps', () => {
   assertEquals(standing(app()), 'no')
   assertEquals(standing(app({ gallery: asked })), 'asked')
   assertEquals(standing(app({ gallery: live })), 'listed')
@@ -87,7 +88,7 @@ Deno.test('the two stamps distinguish unsubmitted, pending and listed apps', () 
 // screens what the row cannot say for itself — a trashed app, and an app whose
 // whole space is in the trash — so both leave the page the moment they are
 // thrown away and are back, unasked, when they are restored.
-Deno.test('the listing is the approved offers, minus what is in the trash', async () => {
+test('the listing is the approved offers, minus what is in the trash', async () => {
   let at = (over: Partial<App>, s: Partial<Space> = {}) => ({
     space: space(s),
     app: app(over),
@@ -121,7 +122,7 @@ let shown = (over: Partial<Shown> = {}): Shown => ({
 
 // Words against the title and the line its maker wrote, and nothing else. A
 // title hit outranks a description hit, because a title is what the thing IS.
-Deno.test('words find a listing by its name and its own description', () => {
+test('words find a listing by its name and its own description', () => {
   let all = [
     shown({ eid: 'a', name: 'recipes', title: 'Recipe box' }),
     shown({
@@ -147,7 +148,7 @@ Deno.test('words find a listing by its name and its own description', () => {
 
 // The letter is the only door to a listing, so it carries the whole decision:
 // what the app is, where it lives, who made it, and the two answers.
-Deno.test('the letter names the app, its maker, and both answers', () => {
+test('the letter names the app, its maker, and both answers', () => {
   let l = letter({
     title: 'Recipe box',
     about: 'Somewhere to keep recipes',
@@ -165,7 +166,7 @@ Deno.test('the letter names the app, its maker, and both answers', () => {
   assertStringIncludes(l.body, 'https://yaks.app/gallery/review?t=no')
 })
 
-Deno.test('staging gallery listings, reviews and mail stay on its own host', async () => {
+test('staging gallery listings, reviews and mail stay on its own host', async () => {
   let env = { APEX: 'yaks.fyi' }
   let dir = {
     offers: () =>
@@ -198,7 +199,7 @@ Deno.test('staging gallery listings, reviews and mail stay on its own host', asy
 
 // The ticket carries which answer, signed, so a decline cannot be talked into
 // a listing by editing an address — and it lapses on its own after a week.
-Deno.test(
+test(
   'a gallery ticket carries its answer for a week and no longer',
   async () => {
     let secret = 'gallery-secret'
@@ -215,7 +216,7 @@ Deno.test(
 
 // The app's own share card, out of the bytes we already hold — and an address
 // relative to the app's page, which on our page would point at our files.
-Deno.test("a listing takes its picture from the app's own og:image", () => {
+test("a listing takes its picture from the app's own og:image", () => {
   let at = 'https://jeff.yaks.app/recipes/'
   assertEquals(
     pictured('<meta property="og:image" content="card.png">', at),
@@ -242,7 +243,7 @@ Deno.test("a listing takes its picture from the app's own og:image", () => {
 })
 
 // Listings include their app data, links and search metadata.
-Deno.test('the gallery page carries the listings and its own metadata', async () => {
+test('the gallery page carries the listings and its own metadata', async () => {
   let html = await page([
     shown({ shot: 'https://jeff.yaks.app/recipes/c.png' }),
   ])
@@ -260,7 +261,7 @@ Deno.test('the gallery page carries the listings and its own metadata', async ()
 
 // The home page keeps its own examples in the file, and gives the space up to
 // the newest three listings when there are any.
-Deno.test('the showcase keeps the chosen demo order and featured image', () => {
+test('the showcase keeps the chosen demo order and featured image', () => {
   let file = `<ul class="Make_List"><li>A recipe box</li></ul><p>after</p>`
   assertEquals(showcase(file, []), file)
   let six = showcase(
@@ -286,7 +287,7 @@ Deno.test('the showcase keeps the chosen demo order and featured image', () => {
   )
 })
 
-Deno.test('the homepage paints all six chosen screenshots and Mossvale', async () => {
+test('the homepage paints all six chosen screenshots and Mossvale', async () => {
   let apps = [
     ...DEMOS.map((slug) =>
       app({ slug, gallery: null, screenshot: `${slug}-image` })
@@ -315,7 +316,7 @@ Deno.test('the homepage paints all six chosen screenshots and Mossvale', async (
   assertStringIncludes(html, 'https://yourname.yaks.app/vale/api/blob/abc')
 })
 
-Deno.test('a card keeps its copy instructions outside the app link', () => {
+test('a card keeps its copy instructions outside the app link', () => {
   let html = card(shown())
   assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
   assertStringIncludes(html, 'jeff.yaks.app/recipes/')

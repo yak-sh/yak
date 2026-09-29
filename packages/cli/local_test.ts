@@ -1,11 +1,12 @@
 // A command can read a graph that owes effects and leave those runs for the
 // process serving duties. The CLI closes and exits without starting a worker.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { detached } from '@yaks/graph'
 import { compose, read } from './host.ts'
 
-Deno.test('a graph read exits and leaves owed effects unclaimed', async () => {
+test('a graph read exits and leaves owed effects unclaimed', async () => {
   let dir = await Deno.makeTempDir()
   let file = `${dir}/yak.json`
   await Deno.writeTextFile(

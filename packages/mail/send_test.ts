@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { clubhouse, noon } from './testing.ts'
@@ -24,7 +25,7 @@ let comp = (b: Bundle | undefined, name: string) =>
 let read = async (g: { read: (q: string) => unknown }, eid: string) =>
   ((await g.read(`.eid=${eid}`)) as Bundle[])[0]
 
-Deno.test('a letter that asks to go, goes — and says so', async () => {
+test('a letter that asks to go, goes — and says so', async () => {
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
@@ -52,7 +53,7 @@ Deno.test('a letter that asks to go, goes — and says so', async () => {
   assertEquals(comp(sent, 'bounced'), undefined)
 })
 
-Deno.test('a letter with no ask is kept, not sent', async () => {
+test('a letter with no ask is kept, not sent', async () => {
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
@@ -63,7 +64,7 @@ Deno.test('a letter with no ask is kept, not sent', async () => {
   assertEquals(comp(await read(g, letter), 'delivered'), undefined)
 })
 
-Deno.test('a recipient with no address bounces, and says whose fault it is', async () => {
+test('a recipient with no address bounces, and says whose fault it is', async () => {
   let { g, post } = await seeded()
   await g.apply([{ entity: { eid: 'p-bo' }, person: { name: 'Bo' } }])
   await g.apply([{
@@ -79,7 +80,7 @@ Deno.test('a recipient with no address bounces, and says whose fault it is', asy
   })
 })
 
-Deno.test('a letter with no sender bounces before the transport is troubled', async () => {
+test('a letter with no sender bounces before the transport is troubled', async () => {
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
@@ -94,7 +95,7 @@ Deno.test('a letter with no sender bounces before the transport is troubled', as
   )
 })
 
-Deno.test('a transport that refuses writes the reason it gave', async () => {
+test('a transport that refuses writes the reason it gave', async () => {
   let { g } = await seeded('no route to host')
   await g.apply([{
     entity: { eid: letter },
@@ -108,7 +109,7 @@ Deno.test('a transport that refuses writes the reason it gave', async () => {
   )
 })
 
-Deno.test('a reply threads on what the answered letter went out as', async () => {
+test('a reply threads on what the answered letter went out as', async () => {
   let { g, post } = await seeded()
   await g.apply([{
     entity: { eid: letter },
@@ -125,7 +126,7 @@ Deno.test('a reply threads on what the answered letter went out as', async () =>
   assertEquals(post.last()?.replyTo, 'stash-1')
 })
 
-Deno.test('an answer to a letter we sent threads onto it', async () => {
+test('an answer to a letter we sent threads onto it', async () => {
   let { g } = await seeded()
   await g.apply([{
     entity: { eid: letter },
@@ -145,7 +146,7 @@ Deno.test('an answer to a letter we sent threads onto it', async () => {
   assertEquals(comp(answer, 'mail')?.reply_to, letter)
 })
 
-Deno.test('the address is canonical however it was written', async () => {
+test('the address is canonical however it was written', async () => {
   let { g } = await seeded()
   await g.apply([{
     entity: { eid: 'p-cy' },
@@ -158,7 +159,7 @@ Deno.test('the address is canonical however it was written', async () => {
   )
 })
 
-Deno.test('message: the composition, without a transport anywhere', () => {
+test('message: the composition, without a transport anywhere', () => {
   assertEquals(
     message(
       {
@@ -197,7 +198,7 @@ let inhouse = async () => {
   return club
 }
 
-Deno.test('a letter to an address the graph owns never reaches the transport', async () => {
+test('a letter to an address the graph owns never reaches the transport', async () => {
   let { g, post } = await inhouse()
   await g.apply([{
     entity: { eid: letter },
@@ -212,7 +213,7 @@ Deno.test('a letter to an address the graph owns never reaches the transport', a
   assertEquals(comp(sent, 'mail')?.to, 'ana@books.example')
 })
 
-Deno.test('a letter out of the house still rides the transport', async () => {
+test('a letter out of the house still rides the transport', async () => {
   let { g, post } = await inhouse()
   await g.apply([{
     entity: { eid: letter },

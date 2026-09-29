@@ -1,4 +1,5 @@
 // A dodge moves in the camera's screen plane while the hero keeps facing.
+import { test } from '@yaks/testing'
 import { assert, assertAlmostEquals } from '@std/assert'
 import type { Intent } from './input.ts'
 import type { Bundle, Net } from './net.ts'
@@ -12,7 +13,7 @@ seedDesigns()
 seedThemes()
 seedBuildings()
 
-Deno.test('dodging sideways moves without turning the hero', () => {
+test('dodging sideways moves without turning the hero', () => {
   let now = 1000
   let hero: Bundle = {
     entity: { eid: 'hero' },

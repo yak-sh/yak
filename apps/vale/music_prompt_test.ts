@@ -1,4 +1,5 @@
 // A prompt is available for both songs in every playable land.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { LEVELS } from './levels.ts'
 import { musicPrompt } from './music_prompt.ts'
@@ -6,7 +7,7 @@ import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
 
-Deno.test('each land gives its songs a distinct direction', () => {
+test('each land gives its songs a distinct direction', () => {
   assertEquals(Object.keys(LEVELS).length, 40)
   for (let id of Object.keys(LEVELS)) {
     let first = musicPrompt(id, 1)
@@ -18,7 +19,7 @@ Deno.test('each land gives its songs a distinct direction', () => {
   }
 })
 
-Deno.test('voices follow the land', () => {
+test('voices follow the land', () => {
   assert(musicPrompt('tombsands', 1).includes('Wordless choir voices'))
   assert(musicPrompt('elderglade', 1).includes('solo wordless voice'))
   assert(musicPrompt('cinderreach', 1).includes('Wordless choir voices'))

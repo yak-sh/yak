@@ -1,4 +1,5 @@
 // Encounters through the same creature, kit, and combat rules the game uses.
+import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 import { ITEMS } from './items.ts'
 import { foeOf, landLevel, skull } from './danger.ts'
@@ -51,7 +52,7 @@ let encounter = (
   }
 }
 
-Deno.test('every land has encounters on the level-one-to-sixty path', () => {
+test('every land has encounters on the level-one-to-sixty path', () => {
   let lands = Object.values(LEVELS)
   for (let lv of lands) {
     let foes = [...new Set(dens(lv).map((d) => d.kind))]
@@ -65,7 +66,7 @@ Deno.test('every land has encounters on the level-one-to-sixty path', () => {
   assert(foeOf('cinderwyrm', 'maw').lvl == 60)
 })
 
-Deno.test('outward roads get riskier, and skipping two lands is fatal', () => {
+test('outward roads get riskier, and skipping two lands is fatal', () => {
   for (let land of Object.values(LEVELS)) {
     let hops = HOPS[land.id]
     if (!hops) continue
@@ -90,7 +91,7 @@ Deno.test('outward roads get riskier, and skipping two lands is fatal', () => {
   }
 })
 
-Deno.test('equipment and a friend turn the next land from fatal to possible', () => {
+test('equipment and a friend turn the next land from fatal to possible', () => {
   let lvl = 17
   let bare = wear(lvl, 1, false, [])
   let geared = wear(lvl, 2, true, ['brawn', 'hide', 'keen'])
@@ -106,7 +107,7 @@ Deno.test('equipment and a friend turn the next land from fatal to possible', ()
   assert(!skull(ahead.foe.lvl, lvl))
 })
 
-Deno.test('the final boss asks more of a hero than the best plain kit', () => {
+test('the final boss asks more of a hero than the best plain kit', () => {
   let lvl = 60
   let kit = wear(lvl, 5, true, [])
   let boss = encounter(lvl, kit, 'cinderwyrm', 'maw')
@@ -114,7 +115,7 @@ Deno.test('the final boss asks more of a hero than the best plain kit', () => {
   assert(boss.killTime / 2 < boss.surviveTime)
 })
 
-Deno.test('saved awards retain their value while new lands reward their level', () => {
+test('saved awards retain their value while new lands reward their level', () => {
   let quest = QUESTS.find((q) =>
     HOPS[q.level ?? GIVERS.find((g) => g.id == q.giver)?.level ?? ''] == 8
   )!

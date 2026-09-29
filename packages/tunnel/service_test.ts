@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { ARGS, service, type Spawn } from './service.ts'
 
@@ -21,13 +22,13 @@ let fake = () => {
 
 let tick = () => new Promise((done) => setTimeout(done, 0))
 
-Deno.test('no token, nothing to run', async () => {
+test('no token, nothing to run', async () => {
   let f = fake()
   await service(null, { spawn: f.spawn }, new AbortController().signal)
   assertEquals(f.starts.length, 0)
 })
 
-Deno.test('the token rides in the environment, never the arguments', async () => {
+test('the token rides in the environment, never the arguments', async () => {
   let f = fake()
   let stop = new AbortController()
   let running = service(null, { token: 'tok', spawn: f.spawn }, stop.signal)
@@ -42,7 +43,7 @@ Deno.test('the token rides in the environment, never the arguments', async () =>
   assertEquals(f.starts.length, 1)
 })
 
-Deno.test('a connector that exits is started again', async () => {
+test('a connector that exits is started again', async () => {
   let f = fake()
   let stop = new AbortController()
   let options = { token: 'tok', spawn: f.spawn, pause: 0 }

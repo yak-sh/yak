@@ -3,6 +3,7 @@
 // @yaks/graph asks for. Which entities a delete takes with it is the graph's
 // decision, held in ./graph_test.ts.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
 import { mem, shop, spy, store } from './testing.ts'
@@ -17,7 +18,7 @@ let c = (b: Bundle, name: string): Comp => b[name] as Comp
 let write = (s: ReturnType<typeof store>, bundles: Bundle[]) =>
   s.tx((tx) => tx.patch(bundles))
 
-Deno.test('a bundle creates an entity wearing its components', () => {
+test('a bundle creates an entity wearing its components', () => {
   let s = store()
   write(s, [{
     entity: { eid: 'p1' },
@@ -31,7 +32,7 @@ Deno.test('a bundle creates an entity wearing its components', () => {
   assertEquals(c(got[0], 'doc').title, 'Mug')
 })
 
-Deno.test('a patch mints identity once and reports the number', () => {
+test('a patch mints identity once and reports the number', () => {
   let s = store()
   let born = write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
   assertEquals(born.length, 1)
@@ -44,7 +45,7 @@ Deno.test('a patch mints identity once and reports the number', () => {
   )
 })
 
-Deno.test('a patch touches only the properties it names', () => {
+test('a patch touches only the properties it names', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12, status: 'live' } }])
   write(s, [{ entity: { eid: 'p1' }, product: { price: 15 } }])
@@ -53,7 +54,7 @@ Deno.test('a patch touches only the properties it names', () => {
   assertEquals(c(p, 'product').status, 'live') // untouched
 })
 
-Deno.test('a null property clears it, its siblings untouched', () => {
+test('a null property clears it, its siblings untouched', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12, status: 'live' } }])
   write(s, [{ entity: { eid: 'p1' }, product: { status: null } }])
@@ -62,7 +63,7 @@ Deno.test('a null property clears it, its siblings untouched', () => {
   assertEquals(c(p, 'product').price, 12)
 })
 
-Deno.test('a null component drops the row, the entity survives', () => {
+test('a null component drops the row, the entity survives', () => {
   let s = store()
   write(s, [{
     entity: { eid: 'p1' },
@@ -76,7 +77,7 @@ Deno.test('a null component drops the row, the entity survives', () => {
   assertEquals(c(p, 'doc').title, 'Mug')
 })
 
-Deno.test('a boolean round-trips through integer storage', () => {
+test('a boolean round-trips through integer storage', () => {
   let s = store()
   write(s, [
     { entity: { eid: 'p1' }, product: { available: true } },
@@ -88,7 +89,7 @@ Deno.test('a boolean round-trips through integer storage', () => {
   assertEquals(read('.available=0'), [false])
 })
 
-Deno.test('a reference may name a target minted later in the same batch', () => {
+test('a reference may name a target minted later in the same batch', () => {
   let s = store()
   write(s, [
     { entity: { eid: 'r1' }, review: { stars: 5, product: 'p1' } },
@@ -98,7 +99,7 @@ Deno.test('a reference may name a target minted later in the same batch', () => 
   assertEquals(c(r, 'review').product, 'p1')
 })
 
-Deno.test('remove drops every component row and tombstones the identity', () => {
+test('remove drops every component row and tombstones the identity', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
@@ -108,7 +109,7 @@ Deno.test('remove drops every component row and tombstones the identity', () => 
   assertEquals(b.doc, undefined)
 })
 
-Deno.test('a tombstoned entity takes no patch until it is revived', () => {
+test('a tombstoned entity takes no patch until it is revived', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, doc: { title: 'Mug' } }])
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
@@ -129,7 +130,7 @@ Deno.test('a tombstoned entity takes no patch until it is revived', () => {
   assertEquals(c(back, 'doc').title, 'back')
 })
 
-Deno.test('get answers by identity, and says nothing about an unknown eid', () => {
+test('get answers by identity, and says nothing about an unknown eid', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
   let got = s.tx((tx) => tx.get(['p1', 'nope'])) as Bundle[]
@@ -137,7 +138,7 @@ Deno.test('get answers by identity, and says nothing about an unknown eid', () =
   assertEquals(got[0].entity.num, 1)
 })
 
-Deno.test('a declared unique refuses the second writer of the value', () => {
+test('a declared unique refuses the second writer of the value', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { sku: 'MUG-1' } }])
   let threw = false
@@ -151,7 +152,7 @@ Deno.test('a declared unique refuses the second writer of the value', () => {
   assertEquals(s.tx((tx) => tx.get(['p2'])), [])
 })
 
-Deno.test('a composite unique refuses only the whole pair', () => {
+test('a composite unique refuses only the whole pair', () => {
   let s = store()
   write(s, [{ entity: { eid: 's1' }, shelf: { aisle: 'A', slot: 1 } }])
   // The same aisle in another slot is fine.
@@ -172,7 +173,7 @@ Deno.test('a composite unique refuses only the whole pair', () => {
 // the numbers a mint hands out cost nothing here. What is left is one question
 // about identity: which of the named eids are already in the grave. It does not
 // multiply with the batch.
-Deno.test('a patch asks once about identity, whatever the batch is', () => {
+test('a patch asks once about identity, whatever the batch is', () => {
   let seen: string[] = []
   let driver = spy(mem(), (sql) => void seen.push(sql))
   let s = storage(driver, shop)
@@ -202,7 +203,7 @@ Deno.test('a patch asks once about identity, whatever the batch is', () => {
   assertEquals(asked(), 0)
 })
 
-Deno.test('a transaction rolls back on a throw, and nests', () => {
+test('a transaction rolls back on a throw, and nests', () => {
   let s = store()
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
   let threw = false
@@ -220,7 +221,7 @@ Deno.test('a transaction rolls back on a throw, and nests', () => {
   assertEquals((s.tx((tx) => tx.get(['p1'])) as Bundle[]).length, 1)
 })
 
-Deno.test('number:false reports explicit unnumbered births without consuming numbers', () => {
+test('number:false reports explicit unnumbered births without consuming numbers', () => {
   let driver = mem()
   let s = storage(driver, shop, { number: false })
   s.install()
@@ -244,7 +245,7 @@ Deno.test('number:false reports explicit unnumbered births without consuming num
   )
 })
 
-Deno.test('partial updates and bare tags respect required columns and SQL defaults', () => {
+test('partial updates and bare tags respect required columns and SQL defaults', () => {
   let d = mem(), s = storage(d, shop)
   s.install()
   d.query({ t: 'drop', kind: 'table', name: 'doc' })
@@ -282,7 +283,7 @@ Deno.test('partial updates and bare tags respect required columns and SQL defaul
 
 // A Durable Object's SQLite binds at most 100 parameters per statement, so a
 // write whose statements grow a parameter per entity fails at the 101st.
-Deno.test('a batch past 100 entities binds under the Durable Object limit', async () => {
+test('a batch past 100 entities binds under the Durable Object limit', async () => {
   let capped = spy(mem(), (_, params) => {
     if (params.length > 100) throw new Error('too many SQL variables')
   })

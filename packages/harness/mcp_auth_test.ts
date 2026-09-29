@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
@@ -9,7 +10,7 @@ import { fixture } from '../mcp-client/testing.ts'
 import { remote } from './remote.ts'
 import { at, harness, mount, worker } from './testing.ts'
 
-Deno.test('authorization UI captures pasted callback privately, preserving draft and never sending it', async () => {
+test('authorization UI captures pasted callback privately, preserving draft and never sending it', async () => {
   const ui = frontend()
   ui.keys({ mode: 'NORMAL' })
   const received: string[] = []
@@ -44,7 +45,7 @@ Deno.test('authorization UI captures pasted callback privately, preserving draft
   }
 })
 
-Deno.test('local HTTP OAuth exchange reconnects MCP discovery and works through worker controls', async () => {
+test('local HTTP OAuth exchange reconnects MCP discovery and works through worker controls', async () => {
   const dir = await Deno.makeTempDir()
   let origin = '', exchanges = 0
   const f = fixture()

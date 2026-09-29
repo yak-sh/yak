@@ -2,11 +2,12 @@
 // The switchboard: a request handed to the object that holds a named graph,
 // whole and unopened.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { namespace, post } from './testing.ts'
 import { forward } from './stub.ts'
 
-Deno.test('a request reaches the object for its name, unopened', async () => {
+test('a request reaches the object for its name, unopened', async () => {
   let ns = namespace((name) => new Response(name))
   let batch = post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }])
 
@@ -22,7 +23,7 @@ Deno.test('a request reaches the object for its name, unopened', async () => {
   }])
 })
 
-Deno.test('the same name is the same object, a different name another', async () => {
+test('the same name is the same object, a different name another', async () => {
   let ns = namespace()
   await forward(ns, 'ada', post('/apply', []))
   await forward(ns, 'ada', post('/apply', []))

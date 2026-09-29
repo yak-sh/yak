@@ -6,6 +6,7 @@
 // `deno check` reads, and the workspace (wrangler.ts `members`) is what esbuild
 // bundles by. A workers.json entry pointing anywhere else type-checks one file
 // and bundles another.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,7 +24,7 @@ import {
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
 
-Deno.test('wrangler: staging keeps deploy annotations with either flag position', () => {
+test('wrangler: staging keeps deploy annotations with either flag position', () => {
   for (
     let args of [
       ['deploy'],
@@ -37,7 +38,7 @@ Deno.test('wrangler: staging keeps deploy annotations with either flag position'
   assertEquals(command(['secret', 'put', 'deploy']), 'secret')
 })
 
-Deno.test('wrangler: a deploy of the kernel deploys its siblings first, and nothing else does', () => {
+test('wrangler: a deploy of the kernel deploys its siblings first, and nothing else does', () => {
   let each = (argv: string[]) =>
     SIBLINGS.map((c) => [...argv, '-c', c, '--containers-rollout=none'])
   for (
@@ -53,7 +54,7 @@ Deno.test('wrangler: a deploy of the kernel deploys its siblings first, and noth
   ) assertEquals(siblings(args), [])
 })
 
-Deno.test('every @yaks/* the checker knows is the file the bundler gets', () => {
+test('every @yaks/* the checker knows is the file the bundler gets', () => {
   let checked = (JSON.parse(read('./workers.json')) as {
     imports: Record<string, string>
   }).imports
@@ -65,7 +66,7 @@ Deno.test('every @yaks/* the checker knows is the file the bundler gets', () => 
   }
 })
 
-Deno.test('aliased: every export of a member, relative to the paths file', () => {
+test('aliased: every export of a member, relative to the paths file', () => {
   let root = Deno.makeTempDirSync({ prefix: 'yak-paths-' })
   let write = (at: string, json: unknown) => {
     Deno.mkdirSync(`${root}/${at}`, { recursive: true })
@@ -88,7 +89,7 @@ Deno.test('aliased: every export of a member, relative to the paths file', () =>
   Deno.removeSync(root, { recursive: true })
 })
 
-Deno.test('stale: no stamp, an older stamp, a newer stamp', () => {
+test('stale: no stamp, an older stamp, a newer stamp', () => {
   let root = Deno.makeTempDirSync({ prefix: 'yak-npm-' })
   let lock = `${root}/package-lock.json`
   let stamp = `${root}/node_modules/.package-lock.json`
@@ -119,7 +120,7 @@ let run = async (cwd: string, ...args: string[]) => {
   return new TextDecoder().decode(r.stdout).trim()
 }
 
-Deno.test('wrangler: app-only pushes do not supersede a build, but Worker source and newer live versions do', async () => {
+test('wrangler: app-only pushes do not supersede a build, but Worker source and newer live versions do', async () => {
   let root = Deno.makeTempDirSync({ prefix: 'yak-live-' })
   try {
     let origin = join(root, 'origin.git')

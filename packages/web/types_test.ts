@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import './testing.ts'
 import {
   awake,
@@ -15,7 +16,7 @@ import {
 } from './types.ts'
 import { assertEquals } from '@std/assert'
 
-Deno.test('the current vocabulary carries no representation suffixes', () => {
+test('the current vocabulary carries no representation suffixes', () => {
   for (let [comp, props] of Object.entries({ ...comps, ...stamped })) {
     for (let prop of Object.keys(props)) {
       assertEquals(prop.endsWith('_eid'), false, `${comp}.${prop}`)
@@ -26,7 +27,7 @@ Deno.test('the current vocabulary carries no representation suffixes', () => {
 // The death words come from the host's vocabulary, one per reference: a
 // delete guard reads the cascade set, so a word lost in learning is a delete
 // that says less than it will do.
-Deno.test("death words: each reference carries its plugin's word", () => {
+test("death words: each reference carries its plugin's word", () => {
   let words = (w: Parameters<typeof deaths>[0]) =>
     new Set(deaths(w).map(([c, p]) => `${c}.${p}`))
   assertEquals(words('cascade').has('card.target'), true)
@@ -45,7 +46,7 @@ Deno.test("death words: each reference carries its plugin's word", () => {
   assertEquals(all.toSorted(), refs.toSorted())
 })
 
-Deno.test('nick: the model word, vendor and versions dropped', () => {
+test('nick: the model word, vendor and versions dropped', () => {
   assertEquals(nick('claude-fable-5'), 'fable')
   assertEquals(nick('claude-opus-4-8'), 'opus')
   assertEquals(nick('claude-haiku-4-5-20251001'), 'haiku')
@@ -56,7 +57,7 @@ Deno.test('nick: the model word, vendor and versions dropped', () => {
   assertEquals(nick('claude-3'), null) // nothing left to call it
 })
 
-Deno.test('friendly: the display face — caps back, dots back, pins off', () => {
+test('friendly: the display face — caps back, dots back, pins off', () => {
   assertEquals(friendly('claude-opus-4-8'), 'Opus 4.8')
   assertEquals(friendly('claude-fable-5'), 'Fable 5')
   assertEquals(friendly('claude-haiku-4-5-20251001'), 'Haiku 4.5')
@@ -69,7 +70,7 @@ Deno.test('friendly: the display face — caps back, dots back, pins off', () =>
 
 // The declared stamped columns must never leak into the wire allowlist —
 // cols() reads comps alone, and this holds it to that.
-Deno.test('stamped: declared, and still not wire-writable', () => {
+test('stamped: declared, and still not wire-writable', () => {
   for (let [comp, props] of Object.entries(stamped)) {
     for (let col of Object.keys(props)) {
       assertEquals(
@@ -86,7 +87,7 @@ Deno.test('stamped: declared, and still not wire-writable', () => {
 // `.edges.peers=task.status,doc.title` named — so it carries the derived value
 // and none of the comps it was derived from; reading marks alone painted every
 // done dependency as open on its parent's card.
-Deno.test('statusOf: marks first, a projected task.status beneath them', () => {
+test('statusOf: marks first, a projected task.status beneath them', () => {
   let cases: [Record<string, unknown>, string][] = [
     [{ task: {} }, 'open'],
     [{ task: {}, completed: {} }, 'done'],
@@ -106,7 +107,7 @@ Deno.test('statusOf: marks first, a projected task.status beneath them', () => {
   }
 })
 
-Deno.test('settled: done or cancelled, nothing else', () => {
+test('settled: done or cancelled, nothing else', () => {
   assertEquals(settled('done'), true)
   assertEquals(settled('cancelled'), true)
   assertEquals(settled('open'), false)
@@ -124,7 +125,7 @@ let sess = (x: Partial<Session> = {}, more: Omit<Life, 'session'> = {}) => ({
 let pid = { process: { eid: 'e', pid: 9 } }
 let exited = { ...pid, exit: { eid: 'e', code: 0 } }
 
-Deno.test('awake: a status says it, else a live process does', () => {
+test('awake: a status says it, else a live process does', () => {
   assertEquals(awake(sess({ status: 'pending' })), true)
   assertEquals(awake(sess({ status: 'running' })), true)
   assertEquals(awake(sess({ status: 'settled' })), false)
@@ -134,14 +135,14 @@ Deno.test('awake: a status says it, else a live process does', () => {
   assertEquals(awake(sess()), false)
 })
 
-Deno.test('standing: the status, else running while only a process says so', () => {
+test('standing: the status, else running while only a process says so', () => {
   assertEquals(standing(sess({ status: 'failed' })), 'failed')
   assertEquals(standing(sess({}, pid)), 'running')
   assertEquals(standing(sess({}, exited)), '')
   assertEquals(standing(sess()), '')
 })
 
-Deno.test('standing: an awake idle turn rests without hiding its ending', () => {
+test('standing: an awake idle turn rests without hiding its ending', () => {
   assertEquals(standing(sess({ status: 'running', standing: 'idle' })), 'idle')
   assertEquals(standing(sess({ standing: 'idle' }, pid)), 'idle')
   assertEquals(

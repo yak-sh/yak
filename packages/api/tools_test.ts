@@ -2,6 +2,7 @@
 // The `serve` tool, over a host written here: no database, no plugins, just
 // the four things it reads off the host it was composed into.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { CallError, type Runner } from '@yaks/tools'
@@ -58,7 +59,7 @@ let fake = (port?: number) => {
   return { host, told, stopping }
 }
 
-Deno.test('serve answers with the host handler until the host stops', async () => {
+test('serve answers with the host handler until the host stops', async () => {
   let port = free()
   let { host, told, stopping } = fake(port)
   let call = runs(host).serve(asked(), graph) as Promise<Bundle[]>
@@ -74,7 +75,7 @@ Deno.test('serve answers with the host handler until the host stops', async () =
   assert(body.includes(`http://127.0.0.1:${port}`), body)
 })
 
-Deno.test('a host that composed no handler has nothing to serve', async () => {
+test('a host that composed no handler has nothing to serve', async () => {
   // Which is what a config leaving this package out gets: the routes facets
   // are never asked for, and nothing binds a port to refuse every request.
   let { host } = fake(PORT)
@@ -88,7 +89,7 @@ Deno.test('a host that composed no handler has nothing to serve', async () => {
   )
 })
 
-Deno.test('an address in use is refused without starting duties', async () => {
+test('an address in use is refused without starting duties', async () => {
   let listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (listener.addr as Deno.NetAddr).port
   try {
@@ -105,7 +106,7 @@ Deno.test('an address in use is refused without starting duties', async () => {
   }
 })
 
-Deno.test('the call names the port, over the one the config named', async () => {
+test('the call names the port, over the one the config named', async () => {
   let port = free()
   // The config names one port and the call another: the call wins.
   let { host, stopping } = fake(PORT)

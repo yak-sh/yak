@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { decode, feed, type Key } from './input.ts'
 
@@ -50,11 +51,11 @@ let table: [string, Key[]][] = [
   }]],
 ]
 
-Deno.test('every binding decodes to one key', () => {
+test('every binding decodes to one key', () => {
   for (let [bytes, keys] of table) assertEquals(decode(bytes), keys, bytes)
 })
 
-Deno.test('a paste split across reads arrives as one key', () => {
+test('a paste split across reads arrives as one key', () => {
   let read = feed()
   assertEquals(read('\x1b[200~one '), [])
   assertEquals(read('two'), [])
@@ -64,7 +65,7 @@ Deno.test('a paste split across reads arrives as one key', () => {
   ])
 })
 
-Deno.test('Kitty replies are protocol data, never text, at every chunk boundary', () => {
+test('Kitty replies are protocol data, never text, at every chunk boundary', () => {
   for (
     let response of [
       '\x1b_Gi=0;OK\x1b\\',
@@ -89,7 +90,7 @@ Deno.test('Kitty replies are protocol data, never text, at every chunk boundary'
   assertEquals(decode('\x1b_Gi=0;OK\x1b\\'), [])
 })
 
-Deno.test('bare Escape flushes separately and paste remains literal', () => {
+test('bare Escape flushes separately and paste remains literal', () => {
   let read = feed()
   assertEquals(read('\x1b'), [])
   assertEquals(read.flush(), [{ name: 'escape' }])
@@ -104,7 +105,7 @@ Deno.test('bare Escape flushes separately and paste remains literal', () => {
   }])
 })
 
-Deno.test('oversized terminal control replies are discarded with bounded buffering', () => {
+test('oversized terminal control replies are discarded with bounded buffering', () => {
   let replies: string[] = []
   let read = feed((body) => replies.push(body))
   assertEquals(read('\x1b_G' + 'x'.repeat(9000)), [])
@@ -114,7 +115,7 @@ Deno.test('oversized terminal control replies are discarded with bounded bufferi
   assertEquals(replies, [])
 })
 
-Deno.test('modified Enter survives every stdin boundary without submitting', () => {
+test('modified Enter survives every stdin boundary without submitting', () => {
   for (
     let [bytes, key] of [
       ['\x1b[13;2u', { name: 'enter', shift: true }],
@@ -137,7 +138,7 @@ Deno.test('modified Enter survives every stdin boundary without submitting', () 
   }
 })
 
-Deno.test('partial CSI does not expire into keys; plain Enter stays Enter', () => {
+test('partial CSI does not expire into keys; plain Enter stays Enter', () => {
   let read = feed()
   assertEquals(read('\x1b[27;2;'), [])
   assertEquals(read.flush(), [])
@@ -146,7 +147,7 @@ Deno.test('partial CSI does not expire into keys; plain Enter stays Enter', () =
   assertEquals(read('hello'), [{ name: 'char', text: 'hello' }])
 })
 
-Deno.test('terminal focus reports survive every chunk boundary and paste stays literal', () => {
+test('terminal focus reports survive every chunk boundary and paste stays literal', () => {
   for (
     let [bytes, name] of [['\x1b[I', 'focusin'], [
       '\x1b[O',

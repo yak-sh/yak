@@ -1,5 +1,6 @@
 // The graph palette lets a word settle before asking the single server loop
 // to search it.
+import { test } from '@yaks/testing'
 import { until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -16,7 +17,7 @@ let hit = (num: number, kind: string, title: string) => ({
   open: `${num}`,
 })
 
-Deno.test('search keeps exact ids and titles above kind groups', () => {
+test('search keeps exact ids and titles above kind groups', () => {
   let task = hit(1, 'task', 'mentions fleet base common persona')
   let memory = hit(2, 'memory', 'another mention')
   let persona = hit(3, 'persona', 'fleet base common persona')
@@ -31,7 +32,7 @@ Deno.test('search keeps exact ids and titles above kind groups', () => {
   )
 })
 
-Deno.test('search fills tile titles and bodies with marked matches', () => {
+test('search fills tile titles and bodies with marked matches', () => {
   let slots = hitSlots({
     ...hit(1, 'task', 'One row'),
     title_hit: 'One \x01row\x02',
@@ -48,7 +49,7 @@ Deno.test('search fills tile titles and bodies with marked matches', () => {
 
 // Polls a real debounce window to prove only the settled query is sent — the
 // settle is the point, so it cannot be sub-ms.
-Deno.test('search sends only the settled query while typing', async () => {
+test('search sends only the settled query while typing', async () => {
   let host = config.host
   // A location-less process no longer guesses a server. This test owns its
   // fetch below, so name that test endpoint rather than the operator's host.

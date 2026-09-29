@@ -1,5 +1,6 @@
 // Exercise the real view hooks/transport: absence is a server answer, not an
 // empty RAM cache; counts share ownership and watch/mute keeps row policy.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -11,7 +12,7 @@ import { host } from '../host_testing.ts'
 import { uuid } from '../types.ts'
 import { useInboxCount } from './useInbox.ts'
 
-Deno.test('inbox count waits for authority, shares holds, and switches to watch/mute rows', async () => {
+test('inbox count waits for authority, shares holds, and switches to watch/mute rows', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

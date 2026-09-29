@@ -1,19 +1,20 @@
 // A region owns one song source at a time, including while the hero reverses
 // course across a border.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { heard, music } from './music.ts'
 import { TRACKS } from './music_tracks.ts'
 import { seedThemes } from './themes_fixture.ts'
 
-Deno.test('a border holds the playing region until its neighbor leads', () => {
+test('a border holds the playing region until its neighbor leads', () => {
   let edge = { a: 'birchmere', b: 'mossvale', t: 0.55 }
   assertEquals(heard(edge, 'mossvale'), 'mossvale')
   assertEquals(heard(edge, 'birchmere'), 'birchmere')
   assertEquals(heard({ ...edge, t: 0.8 }, 'mossvale'), 'birchmere')
 })
 
-Deno.test('region music finishes one source before starting another', async () => {
+test('region music finishes one source before starting another', async () => {
   using time = new FakeTime()
   seedThemes()
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')

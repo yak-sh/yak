@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import {
   type Api,
@@ -40,7 +41,7 @@ let account = (answers: Record<string, [number, unknown]>) => {
   return { api, seen }
 }
 
-Deno.test('connect makes a tunnel and a service behind it on the port', async () => {
+test('connect makes a tunnel and a service behind it on the port', async () => {
   let { api, seen } = account({
     'POST /cfd_tunnel': [200, { id: 't-1', token: 'secret-token' }],
     'POST /connectivity/directory/services': [200, { service_id: 's-1' }],
@@ -58,7 +59,7 @@ Deno.test('connect makes a tunnel and a service behind it on the port', async ()
   })
 })
 
-Deno.test('a service that cannot be made takes its tunnel with it', async () => {
+test('a service that cannot be made takes its tunnel with it', async () => {
   let { api, seen } = account({
     'POST /cfd_tunnel': [200, { id: '11111111-aaaa', token: 'x' }],
     'POST /connectivity/directory/services': [403, 'not authorized'],
@@ -75,7 +76,7 @@ Deno.test('a service that cannot be made takes its tunnel with it', async () => 
   })
 })
 
-Deno.test('disconnect removes the service, then the tunnel, gone or not', async () => {
+test('disconnect removes the service, then the tunnel, gone or not', async () => {
   let { api, seen } = account({
     'DELETE /connectivity/directory/services/:id': [404, 'service not found'],
     'DELETE /cfd_tunnel/:id': [200, null],
@@ -87,7 +88,7 @@ Deno.test('disconnect removes the service, then the tunnel, gone or not', async 
   ])
 })
 
-Deno.test('rotate answers the new token', async () => {
+test('rotate answers the new token', async () => {
   let { api, seen } = account({
     'PATCH /cfd_tunnel/:id': [200, { id: 't', token: 'fresh' }],
   })
@@ -96,7 +97,7 @@ Deno.test('rotate answers the new token', async () => {
   assertEquals(atob(body.tunnel_secret).length, 32)
 })
 
-Deno.test('a gateway is bound to the tunnel’s service and nothing else', async () => {
+test('a gateway is bound to the tunnel’s service and nothing else', async () => {
   let at = '/workers/dispatch/namespaces/ns/scripts/tunnel-1'
   let { api, seen } = account({
     [`PUT ${at}`]: [200, {}],

@@ -20,6 +20,7 @@
 // flow through the kernel to prove a bearer resolves to the same person the cookie
 // does. From there on, every credential is a vouch, which is what this file
 // starts from.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
@@ -89,7 +90,7 @@ let idOf = (v: unknown): string | null =>
 
 let by = (b: Bundle) => idOf((b.created as { by?: unknown } | undefined)?.by)
 
-Deno.test('the kernel vouched, so the batch is signed by that person', async () => {
+test('the kernel vouched, so the batch is signed by that person', async () => {
   let { store, head } = await cookbook()
   let wrote = await post(store, '/apply', [{
     entity: { eid: CAKE },
@@ -107,7 +108,7 @@ Deno.test('the kernel vouched, so the batch is signed by that person', async () 
   assertEquals(grant.grant.access, 'owner')
 })
 
-Deno.test('an instrument that named itself is attribution, never a level', () => {
+test('an instrument that named itself is attribution, never a level', () => {
   let said = vouchOf(
     new Request('http://store/apply', {
       headers: { 'x-via': MALLORY, 'x-yak-role': 'owner', 'x-yak-title': 'me' },
@@ -116,7 +117,7 @@ Deno.test('an instrument that named itself is attribution, never a level', () =>
   assertEquals(said, { person: MALLORY, level: null, title: null })
 })
 
-Deno.test('a bundle that signs itself is signed by the door instead', async () => {
+test('a bundle that signs itself is signed by the door instead', async () => {
   let { store, head } = await cookbook()
   let wrote = await post(store, '/apply', [{
     entity: { eid: CAKE },
@@ -129,7 +130,7 @@ Deno.test('a bundle that signs itself is signed by the door instead', async () =
   assert(!applied.some((b) => by(b) == MALLORY), 'and the bundle did not')
 })
 
-Deno.test('a visitor cannot ride their own vouch into a store', async () => {
+test('a visitor cannot ride their own vouch into a store', async () => {
   let seen: Request[] = []
   let ns = {
     idFromName: (n: string) => n,
@@ -166,7 +167,7 @@ Deno.test('a visitor cannot ride their own vouch into a store', async () => {
   assertEquals(sent.get('x-yak-access'), 'open')
 })
 
-Deno.test('a private app answers a stranger nothing, and its owner everything', async () => {
+test('a private app answers a stranger nothing, and its owner everything', async () => {
   let { store, head } = await cookbook('private')
   await post(
     store,
@@ -199,7 +200,7 @@ Deno.test('a private app answers a stranger nothing, and its owner everything', 
   )
 })
 
-Deno.test('a socket onto a private app passes the same door', async () => {
+test('a socket onto a private app passes the same door', async () => {
   let { store } = await cookbook('private')
   let upgrade = { upgrade: 'websocket' }
   let no = await get(
@@ -213,7 +214,7 @@ Deno.test('a socket onto a private app passes the same door', async () => {
 // ── The sealed grant (dispatch.ts): an app's own worker, acting as the
 // visitor it is answering, for one minute.
 
-Deno.test('a sealed grant is admitted at the level it names', async () => {
+test('a sealed grant is admitted at the level it names', async () => {
   let { store, head } = await cookbook('private')
   await post(
     store,
@@ -237,7 +238,7 @@ Deno.test('a sealed grant is admitted at the level it names', async () => {
   assertEquals((await read.json()).length, 1)
 })
 
-Deno.test('an expired grant is nobody, and nobody reads a private app', async () => {
+test('an expired grant is nobody, and nobody reads a private app', async () => {
   let { store, head } = await cookbook('private')
   await post(
     store,
@@ -283,7 +284,7 @@ Deno.test('an expired grant is nobody, and nobody reads a private app', async ()
 // one caller a `private` app admits without a person behind it, because on
 // that path the app's own worker is the gatekeeper.
 
-Deno.test('an app writing as itself is signed by the app, and is not a person', async () => {
+test('an app writing as itself is signed by the app, and is not a person', async () => {
   let { store, head } = await cookbook('private')
   // What the kernel vouches for an `env.APP` call: the app entity, at editor.
   let mine = vouch({ person: APP, role: 'editor' }, 'private')
@@ -311,7 +312,7 @@ Deno.test('an app writing as itself is signed by the app, and is not a person', 
   )
 })
 
-Deno.test('an app acting as itself still may not touch the roster', async () => {
+test('an app acting as itself still may not touch the roster', async () => {
   let { store } = await cookbook('private')
   let mine = vouch({ person: APP, role: 'editor' }, 'private')
   // An editor writes the data and never hands out keys — the app included,
@@ -348,7 +349,7 @@ let call = (
     }),
   )
 
-Deno.test('the agent door signs with the same actor the page door does', async () => {
+test('the agent door signs with the same actor the page door does', async () => {
   let { store, head } = await cookbook()
   let door = mcp(store.door)
 
@@ -366,7 +367,7 @@ Deno.test('the agent door signs with the same actor the page door does', async (
   assertEquals(by(cake), ADA)
 })
 
-Deno.test('the agent door refuses what the page door refuses', async () => {
+test('the agent door refuses what the page door refuses', async () => {
   let { store } = await cookbook('private')
   let out = await call(
     mcp(store.door),

@@ -2,11 +2,12 @@
 // A refusal is not an incident (tool.ts `refuse`): the runner records a
 // `CallError` as `error{code}` and mails nothing, and anything else a tool
 // throws is a defect it reports.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { CallError } from '@yaks/tools'
 import { rejected } from './tool.ts'
 
-Deno.test("a door's 4xx is a refusal with its code, and a 5xx a defect", () => {
+test("a door's 4xx is a refusal with its code, and a 5xx a defect", () => {
   let code = (status: number) => {
     let e = rejected(status, 'no')
     return e instanceof CallError ? e.code : null

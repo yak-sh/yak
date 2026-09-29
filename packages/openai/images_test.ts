@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { artifactStore, type Blobs } from '@yaks/blob'
 import { generatedImages } from './images.ts'
@@ -27,7 +28,7 @@ let call = (extra = {}) => ({
   ...extra,
 })
 
-Deno.test('native image tool composes with functions and stores exact deduplicated bytes', async () => {
+test('native image tool composes with functions and stores exact deduplicated bytes', async () => {
   let m = memory(), options = { store: artifactStore(m.blobs) }
   let req = {
     model: 'gpt-4.1',
@@ -51,7 +52,7 @@ Deno.test('native image tool composes with functions and stores exact deduplicat
   assert(!JSON.stringify(artifacts).includes(png))
 })
 
-Deno.test('malformed, incomplete, oversized and failed storage produce bounded errors', async () => {
+test('malformed, incomplete, oversized and failed storage produce bounded errors', async () => {
   let m = memory(), options = { store: artifactStore(m.blobs) }
   for (
     let extra of [
@@ -81,7 +82,7 @@ Deno.test('malformed, incomplete, oversized and failed storage produce bounded e
   assertEquals(m.puts(), 0)
 })
 
-Deno.test('streamed image output persists before reply and event observers never see base64', async () => {
+test('streamed image output persists before reply and event observers never see base64', async () => {
   let m = memory(), observed: unknown[] = []
   let frames = [
     { type: 'response.output_item.done', item: call() },
@@ -119,7 +120,7 @@ Deno.test('streamed image output persists before reply and event observers never
   assertEquals(m.puts(), 1)
 })
 
-Deno.test('JPEG and WebP output honor format settings and mixed output stays separate', async () => {
+test('JPEG and WebP output honor format settings and mixed output stays separate', async () => {
   let m = memory()
   for (
     let [format, bytes] of [
@@ -145,7 +146,7 @@ Deno.test('JPEG and WebP output honor format settings and mixed output stays sep
   }
 })
 
-Deno.test('configured image tools are offered on OAuth, unknown models and custom endpoints', async () => {
+test('configured image tools are offered on OAuth, unknown models and custom endpoints', async () => {
   for (
     let [name, endpoint, auto, expected] of [
       ['gpt-4.1', 'https://api.openai.com/v1', true, true],
@@ -187,7 +188,7 @@ Deno.test('configured image tools are offered on OAuth, unknown models and custo
   }
 })
 
-Deno.test('image-tool rejection propagates without stripping tools or caching a guess', async () => {
+test('image-tool rejection propagates without stripping tools or caching a guess', async () => {
   for (let status of [400, 403]) {
     let sent: Record<string, unknown>[] = []
     let model = responses({
@@ -228,7 +229,7 @@ Deno.test('image-tool rejection propagates without stripping tools or caching a 
   }
 })
 
-Deno.test('unconfigured image tools remain disabled on OAuth', async () => {
+test('unconfigured image tools remain disabled on OAuth', async () => {
   let sent: Record<string, unknown>[] = []
   let model = responses({
     web: false,

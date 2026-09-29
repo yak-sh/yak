@@ -4,6 +4,7 @@
 // there (packages/git/http_test.ts); what is pinned here is the mount — which
 // app a URL names, who may clone it and how they say so, and that a path which
 // is no repository is left for the apps.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
@@ -128,7 +129,7 @@ let serving = (env: Env) =>
     return await gitPlugin.routes![0](at) ?? new Response('no', { status: 404 })
   })
 
-Deno.test('git clones an app at <app>.git, and its history is its deploys', async () => {
+test('git clones an app at <app>.git, and its history is its deploys', async () => {
   let { env } = platform(SECRET)
   let { dir: listing, space, app } = await standing(env, 'public')
   await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
@@ -166,7 +167,7 @@ Deno.test('git clones an app at <app>.git, and its history is its deploys', asyn
   }
 })
 
-Deno.test('git clones the browser address, with and without its slash', async () => {
+test('git clones the browser address, with and without its slash', async () => {
   let { env } = platform(SECRET)
   let { app } = await standing(env, 'public')
   // A file at the very address the door now answers: what proves the app is
@@ -199,7 +200,7 @@ Deno.test('git clones the browser address, with and without its slash', async ()
   }
 })
 
-Deno.test('the browser address redirects to the repository, query and all', async () => {
+test('the browser address redirects to the repository, query and all', async () => {
   let { env } = platform(SECRET)
   await standing(env, 'public')
   let res = await asked(env, '/recipes/info/refs?service=git-upload-pack', {
@@ -226,7 +227,7 @@ let pkt = (line: string) =>
 // `ada/recipesversions/<sha>`, found nothing, and threw inside the response
 // stream — a 200 that stops after the section header, which git reports as
 // `early EOF` and which no status code says anything about.
-Deno.test('an app whose bytes are pinned per-app still serves a pack', async () => {
+test('an app whose bytes are pinned per-app still serves a pack', async () => {
   let { env } = platform(SECRET)
   let { app } = await standing(env, 'public')
   let blobs = r2Objects(env.BLOBS)
@@ -281,7 +282,7 @@ Deno.test('an app whose bytes are pinned per-app still serves a pack', async () 
   assertEquals(text.decode(pack.subarray(-4)), '0000')
 })
 
-Deno.test('a private app asks for a credential, and judges the one it gets', async () => {
+test('a private app asks for a credential, and judges the one it gets', async () => {
   let { env } = platform(SECRET)
   let { app } = await standing(env, 'private')
   await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
@@ -320,7 +321,7 @@ Deno.test('a private app asks for a credential, and judges the one it gets', asy
   )
 })
 
-Deno.test('a trashed app is gone to a credential as much as to nobody', async () => {
+test('a trashed app is gone to a credential as much as to nobody', async () => {
   let { env } = platform(SECRET)
   let { app } = await standing(env, 'private', true)
   await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
@@ -337,7 +338,7 @@ Deno.test('a trashed app is gone to a credential as much as to nobody', async ()
   }
 })
 
-Deno.test('git clones a private app with the token as the password', async () => {
+test('git clones a private app with the token as the password', async () => {
   let { env } = platform(SECRET)
   let { app } = await standing(env, 'private')
   await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
@@ -383,7 +384,7 @@ Deno.test('git clones a private app with the token as the password', async () =>
   }
 })
 
-Deno.test('an app that is not there, and a path that is no repository', async () => {
+test('an app that is not there, and a path that is no repository', async () => {
   let { env } = platform(SECRET)
   await standing(env, 'public')
   let gone = await asked(env, '/nothing.git/info/refs', {
@@ -396,7 +397,7 @@ Deno.test('an app that is not there, and a path that is no repository', async ()
   }
 })
 
-Deno.test('the advertisement is served at info/refs on a public app', async () => {
+test('the advertisement is served at info/refs on a public app', async () => {
   let { env } = platform(SECRET)
   await standing(env, 'public')
   let res = await asked(env, '/recipes.git/info/refs?service=git-upload-pack', {

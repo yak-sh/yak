@@ -1,6 +1,7 @@
 // The runner lent a graph and nothing else: no shell, no checkout, no lock, no
 // instruction files, no file of its own. What a Worker lends the agent is this
 // much (D1 is the same SQL), and a transcript still runs to the end.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
@@ -20,7 +21,7 @@ let host = async () => {
   return { h: { g, fx, vocab, me }, release: close }
 }
 
-Deno.test('the runner needs a graph and a model, nothing of a machine', async () => {
+test('the runner needs a graph and a model, nothing of a machine', async () => {
   let { h, release } = await host()
   let released = false
   let a = agent({
@@ -41,7 +42,7 @@ Deno.test('the runner needs a graph and a model, nothing of a machine', async ()
   await assertRejects(() => a.send(s, 'again'), Error, 'Agent is closing')
 })
 
-Deno.test('what a caller says is signed with them, through the transcript', async () => {
+test('what a caller says is signed with them, through the transcript', async () => {
   let { h, release } = await host()
   let a = agent({ h, model: echo, release })
   try {
@@ -63,7 +64,7 @@ Deno.test('what a caller says is signed with them, through the transcript', asyn
   }
 })
 
-Deno.test('a new session opens with what its host found for it', async () => {
+test('a new session opens with what its host found for it', async () => {
   let a = agent({
     ...await host(),
     model: echo,

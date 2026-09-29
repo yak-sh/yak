@@ -1,4 +1,5 @@
 // Region borders shape the land without closing the roads between villages.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { blend, borderOf } from './regions.ts'
@@ -20,7 +21,7 @@ let crossing = (from: string, to: string) => {
 
 seedBuildings()
 
-Deno.test('a ridge has a road pass and a river has a dry ford', () => {
+test('a ridge has a road pass and a river has a dry ford', () => {
   let ridge = crossing('mossvale', 'reedmarsh')
   let river = crossing('clovermead', 'fernwood')
   assertEquals(borderOf(blend(ridge.x, ridge.z)).kind, 'ridge')
@@ -52,7 +53,7 @@ Deno.test('a ridge has a road pass and a river has a dry ford', () => {
   )
 })
 
-Deno.test('a boundary chunk agrees with the next chunk at the seam', () => {
+test('a boundary chunk agrees with the next chunk at the seam', () => {
   let { x, z } = crossing('mossvale', 'reedmarsh')
   let ci = Math.floor(x / CHUNK), ck = Math.floor(z / CHUNK)
   let v = vale(0.5), left = v.grow(ci, ck), right = v.grow(ci + 1, ck)

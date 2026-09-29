@@ -4,6 +4,7 @@
 // leaking a real socket. Real UUID eids here (not restore_test's synthetic
 // 'canvas'/'task'), because mark() writes them through the same eid grammar
 // apply() enforces, which only a UUID clears.
+import { test } from '@yaks/testing'
 import { faked } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache, census, myCursor } from '../live.ts'
@@ -89,7 +90,7 @@ let go = (url: string) => {
   route.value = place.pathname + place.search
 }
 
-Deno.test('navigating writes this client’s cursor into the graph', () => {
+test('navigating writes this client’s cursor into the graph', () => {
   using _ = graph()
   go('/')
   navigate(`/T-7`)
@@ -98,7 +99,7 @@ Deno.test('navigating writes this client’s cursor into the graph', () => {
   assertEquals(cur?.client, CLIENT) // one row, this client's
 })
 
-Deno.test('the cursor row is idempotent — one per client', () => {
+test('the cursor row is idempotent — one per client', () => {
   using _ = graph()
   go('/')
   navigate(`/T-7`)
@@ -111,7 +112,7 @@ Deno.test('the cursor row is idempotent — one per client', () => {
 // `show`, another client, or a stale server row — must NOT move the tab. This is
 // the bug that made P-19 inescapable: a cursor left pointing there yanked every
 // attempt to open something else straight back.
-Deno.test('a cursor write never navigates the tab (update-only)', () => {
+test('a cursor write never navigates the tab (update-only)', () => {
   using _ = graph()
   go('/') // the tab sits on the root canvas
   let cur = '00000000-0000-4000-8000-0000000000f0'

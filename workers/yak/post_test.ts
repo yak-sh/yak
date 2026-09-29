@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Env } from './env.ts'
 import { mail } from './mail.ts'
 import { type Binding, posting } from './post.ts'
 
-Deno.test('the app mail transport sinks recipients and keeps threading intact', async () => {
+test('the app mail transport sinks recipients and keeps threading intact', async () => {
   let sent: Parameters<Binding['send']>[0][] = []
   let binding: Binding = {
     send: (letter) => {
@@ -34,7 +35,7 @@ Deno.test('the app mail transport sinks recipients and keeps threading intact', 
   }
 })
 
-Deno.test('platform letters sink every recipient, including feedback copies', async () => {
+test('platform letters sink every recipient, including feedback copies', async () => {
   let sent: Record<string, unknown>[] = []
   let original = globalThis.fetch
   globalThis.fetch = ((_url: string, init: RequestInit) => {

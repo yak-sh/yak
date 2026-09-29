@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -6,7 +7,7 @@ import { script } from './probe.ts'
 // A dispatch namespace is remote-only. The API is stood in for at fetch, as
 // in dispatch_test.ts; its uploaded bytes then run in workerd, where missing
 // class exports and bindings lost by the shim can no longer hide in metadata.
-Deno.test(
+test(
   'the uploaded shim keeps local classes and the app bindings in workerd',
   async () => {
     let files: Record<string, string> = {}

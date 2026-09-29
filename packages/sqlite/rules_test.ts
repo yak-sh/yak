@@ -1,6 +1,7 @@
 // A rule's match, compiled and run: one statement, however many entities it
 // is about, against committed rows and against a batch that has not landed.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { match } from '@yaks/graph'
 import { mem, shop } from './testing.ts'
@@ -34,13 +35,13 @@ let floor = () => {
   return { driver, s }
 }
 
-Deno.test('one pattern is the ordinary query it looks like', () => {
+test('one pattern is the ordinary query it looks like', () => {
   let { driver } = floor()
   let hits = matched(driver, match('.product.price>5'), shop)
   assertEquals(hits.map((h) => h.entities), [['p1']])
 })
 
-Deno.test('a gate is a left join that found nothing', () => {
+test('a gate is a left join that found nothing', () => {
   let { driver, s } = floor()
   // A gate is about the matched entity: `+!shelf` is a product that is not on
   // a shelf. The gate joins `shelf` under a name of its own and requires the
@@ -55,7 +56,7 @@ Deno.test('a gate is a left join that found nothing', () => {
   assertEquals(matched(driver, m, shop).map((h) => h.entities[0]), ['p2'])
 })
 
-Deno.test('two patterns share a variable, and that is the join', () => {
+test('two patterns share a variable, and that is the join', () => {
   let { driver } = floor()
   // The review and the product it is about, in one statement: `$p` is an entity
   // in the first pattern and a reference property in the second, and both are
@@ -69,7 +70,7 @@ Deno.test('two patterns share a variable, and that is the join', () => {
   assert(!render(rule(m, shop)).sql.includes(';'))
 })
 
-Deno.test('a collection keeps every correlated member under one outer binding', () => {
+test('a collection keeps every correlated member under one outer binding', () => {
   let { driver } = floor()
   let found = matched(
     driver,
@@ -85,7 +86,7 @@ Deno.test('a collection keeps every correlated member under one outer binding', 
   ])
 })
 
-Deno.test('a top-level collection has one outer binding, even when empty', () => {
+test('a top-level collection has one outer binding, even when empty', () => {
   let { driver } = floor()
   assertEquals(matched(driver, match('[.review.stars>10]'), shop), [{
     entities: [],
@@ -99,7 +100,7 @@ Deno.test('a top-level collection has one outer binding, even when empty', () =>
   )
 })
 
-Deno.test('nested collections correlate to the member above them', () => {
+test('nested collections correlate to the member above them', () => {
   let { driver } = floor()
   let [outer] = matched(
     driver,
@@ -115,7 +116,7 @@ Deno.test('nested collections correlate to the member above them', () => {
   )
 })
 
-Deno.test('a collection reads unchanged members through a batch overlay', () => {
+test('a collection reads unchanged members through a batch overlay', () => {
   let { driver } = floor()
   let m = match('$p .product; [$r .review, review.product=$p]')
   let over = overlay(driver, shop, [{
@@ -131,7 +132,7 @@ Deno.test('a collection reads unchanged members through a batch overlay', () => 
   )
 })
 
-Deno.test('a variable can tie two plain properties together', () => {
+test('a variable can tie two plain properties together', () => {
   let { driver } = floor()
   // Both products were made by the same maker, said as a join rather than as
   // a literal: two `product` rows whose `maker` agrees, one of them Dune.
@@ -141,7 +142,7 @@ Deno.test('a variable can tie two plain properties together', () => {
   assertEquals(matched(driver, m, shop).map((h) => h.entities), [['p1', 'p2']])
 })
 
-Deno.test('an entity variable and a plain value are not the same slot', () => {
+test('an entity variable and a plain value are not the same slot', () => {
   assertThrows(
     () => render(rule(match('$x .product; .doc.title=$x'), shop)),
     Error,
@@ -149,7 +150,7 @@ Deno.test('an entity variable and a plain value are not the same slot', () => {
   )
 })
 
-Deno.test('the same statement reads a batch that has not landed', () => {
+test('the same statement reads a batch that has not landed', () => {
   let { driver } = floor()
   let m = match('$p .product; .review, review.product=$p')
   let batch = [
@@ -167,7 +168,7 @@ Deno.test('the same statement reads a batch that has not landed', () => {
   assertEquals(matched(driver, m, shop).map((h) => h.entities), [['p1', 'r1']])
 })
 
-Deno.test('a gate over a batch sees what the batch will add', () => {
+test('a gate over a batch sees what the batch will add', () => {
   let { driver } = floor()
   let m = match('.product, +!shelf')
   let over = overlay(
@@ -190,7 +191,7 @@ Deno.test('a gate over a batch sees what the batch will add', () => {
   assertEquals(matched(driver, m, shop).length, 2)
 })
 
-Deno.test('a removal is a clause, and only a batch answers it', () => {
+test('a removal is a clause, and only a batch answers it', () => {
   let { driver } = floor()
   // `-product`: the entities this batch took `product` off. p1 keeps its doc,
   // so the rest of the pattern is answered from the committed file as usual.
@@ -217,7 +218,7 @@ Deno.test('a removal is a clause, and only a batch answers it', () => {
   )
 })
 
-Deno.test('a component removed and written again in one batch is not gone', () => {
+test('a component removed and written again in one batch is not gone', () => {
   let { driver } = floor()
   let m = match('-product')
   let batch = [
@@ -232,7 +233,7 @@ Deno.test('a component removed and written again in one batch is not gone', () =
   )
 })
 
-Deno.test('the components a match reads are what an overlay must cover', () => {
+test('the components a match reads are what an overlay must cover', () => {
   assertEquals(
     reads(match('$p .product, doc.title=$t; .review, review.product=$p'), shop)
       .sort(),

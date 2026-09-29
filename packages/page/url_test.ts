@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { canon, fetchable, pageEid } from './url.ts'
 
 let same = (a: string, b: string) => assertEquals(canon(a), b)
 
-Deno.test('one address, canonically spelled', () => {
+test('one address, canonically spelled', () => {
   // the spot inside a page is not the page
   same('https://a.com/x#top', 'https://a.com/x')
   // a trailing slash is a server's habit; the root's slash is the root
@@ -21,7 +22,7 @@ Deno.test('one address, canonically spelled', () => {
   same('https://a.com/x?b=2&a=1', 'https://a.com/x?b=2&a=1')
 })
 
-Deno.test('an address this package does not canonicalize is left alone', () => {
+test('an address this package does not canonicalize is left alone', () => {
   same('file:///tmp/note.html', 'file:///tmp/note.html')
   same('git@host:owner/repo.git', 'git@host:owner/repo.git')
   same('  https://a.com/x  ', 'https://a.com/x')
@@ -29,7 +30,7 @@ Deno.test('an address this package does not canonicalize is left alone', () => {
   assert(!fetchable('file:///x'))
 })
 
-Deno.test('canonicalizing is idempotent', () => {
+test('canonicalizing is idempotent', () => {
   for (
     let raw of ['https://a.com/x/?utm_source=n#f', 'file:///x', 'nonsense']
   ) {
@@ -37,7 +38,7 @@ Deno.test('canonicalizing is idempotent', () => {
   }
 })
 
-Deno.test('the address names the entity', () => {
+test('the address names the entity', () => {
   // two spellings of one page are one entity, and a uuid either way
   assertEquals(pageEid('https://a.com/x/'), pageEid('HTTPS://a.com/x?utm_a=1'))
   assert(

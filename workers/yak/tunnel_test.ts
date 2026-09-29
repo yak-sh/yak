@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { HEADER } from '@yaks/tunnel'
 import type { App, Space } from './directory.ts'
@@ -101,7 +102,7 @@ let spaces = async (vars: Partial<Env> = TOKENS) => {
 
 let adopt = { space: 'ada', do: 'adopt', tunnel: T, service: S }
 
-Deno.test('only the platform adopts a pair, since its ids name the platform’s resources', async () => {
+test('only the platform adopts a pair, since its ids name the platform’s resources', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
   using _ = scenario
@@ -117,7 +118,7 @@ Deno.test('only the platform adopts a pair, since its ids name the platform’s 
   assertEquals(cf.made, [`PUT ${gateway}`])
 })
 
-Deno.test('an adopted pair rotates only its gateway, and disconnecting leaves the tunnel alone', async () => {
+test('an adopted pair rotates only its gateway, and disconnecting leaves the tunnel alone', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
   using _ = scenario
@@ -135,14 +136,14 @@ Deno.test('an adopted pair rotates only its gateway, and disconnecting leaves th
   ])
 })
 
-Deno.test('no gateway can be uploaded without the workers token, so no tunnel is made', async () => {
+test('no gateway can be uploaded without the workers token, so no tunnel is made', async () => {
   let { scenario, door } = await spaces({ CF_ACCOUNT: 'acct' })
   using _ = scenario
   assertEquals((await door(JEFF, adopt)).body.error.code, 'no_token')
   assertEquals((await door(ADA, { space: 'ada' })).body.tunnel, null)
 })
 
-Deno.test('connect makes a pair and its gateway, answering the token once', async () => {
+test('connect makes a pair and its gateway, answering the token once', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
   using _ = scenario
@@ -264,7 +265,7 @@ let reach = async (
 
 let code = async (r: Response) => (await r.json()).error.code
 
-Deno.test('only the app itself reaches the machine, and only an app built in the space', async () => {
+test('only the app itself reaches the machine, and only an app built in the space', async () => {
   let visitor: Who = { person: 'p1', role: 'owner' }
   assertEquals(await code((await reach({ who: visitor })).res), 'not_the_app')
   let copy = { ...mail, installed: { from: 'x' } } as unknown as App
@@ -273,7 +274,7 @@ Deno.test('only the app itself reaches the machine, and only an app built in the
   assertEquals(await code((await reach({ space: alone })).res), 'no_tunnel')
 })
 
-Deno.test('the app’s request goes to its space’s gateway with the platform’s words taken off', async () => {
+test('the app’s request goes to its space’s gateway with the platform’s words taken off', async () => {
   let { res, handed, named } = await reach()
   assertEquals(await res.text(), 'from the machine')
   assertEquals(named, ['tunnel-s1'])
@@ -287,7 +288,7 @@ Deno.test('the app’s request goes to its space’s gateway with the platform�
   }
 })
 
-Deno.test('a tunnel with no gateway yet says so', async () => {
+test('a tunnel with no gateway yet says so', async () => {
   let { res } = await reach({}, true)
   assertEquals(res.status, 503)
   assertEquals(await code(res), 'no_gateway')

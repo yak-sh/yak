@@ -1,4 +1,5 @@
 // A peek belongs to its one opener without making every link reactive.
+import { test } from '@yaks/testing'
 import { until } from '../testing.ts'
 import { effect } from '@preact/signals'
 import { parseHTML } from 'linkedom'
@@ -36,7 +37,7 @@ let e: Ent = {
 
 let from = () => peek.value.at(-1)?.from
 
-Deno.test('numeric routes resolve confirmed retained rows before a reopen frame', () => {
+test('numeric routes resolve confirmed retained rows before a reopen frame', () => {
   cache.value = {}
   try {
     landSub({
@@ -58,11 +59,11 @@ Deno.test('numeric routes resolve confirmed retained rows before a reopen frame'
   }
 })
 
-Deno.test('peek state lives above the hot-swap boundary', () => {
+test('peek state lives above the hot-swap boundary', () => {
   assertStrictEquals(peek, shellPeek)
 })
 
-Deno.test('only the same opener toggles its peek closed', () => {
+test('only the same opener toggles its peek closed', () => {
   let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
   let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
   let { document, window } = parseHTML('<a id="a"></a><a id="b"></a>')
@@ -105,7 +106,7 @@ Deno.test('only the same opener toggles its peek closed', () => {
   }
 })
 
-Deno.test('the current peek id stays mounted for double-click navigation', () => {
+test('the current peek id stays mounted for double-click navigation', () => {
   let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
   let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
   let { document, window } = parseHTML(
@@ -142,7 +143,7 @@ Deno.test('the current peek id stays mounted for double-click navigation', () =>
   }
 })
 
-Deno.test('a card menu leaves nested controls and links to themselves', () => {
+test('a card menu leaves nested controls and links to themselves', () => {
   let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
   let { document, window } = parseHTML(
     '<div id="body"></div><a id="link"><span id="inside"></span></a>',
@@ -183,7 +184,7 @@ Deno.test('a card menu leaves nested controls and links to themselves', () => {
   }
 })
 
-Deno.test('an entity link opens its target menu', () => {
+test('an entity link opens its target menu', () => {
   let prevented = false
   let stopped = false
   let ev = {
@@ -202,7 +203,7 @@ Deno.test('an entity link opens its target menu', () => {
   }
 })
 
-Deno.test('a point menu carries only the actions its host gives it', () => {
+test('a point menu carries only the actions its host gives it', () => {
   let handled = 0
   let acts = [{ label: 'doc', run: () => {} }]
   let ev = {
@@ -222,7 +223,7 @@ Deno.test('a point menu carries only the actions its host gives it', () => {
   }
 })
 
-Deno.test('link props do not subscribe to peek state', () => {
+test('link props do not subscribe to peek state', () => {
   let runs = 0
   let stop = effect(() => {
     clickProps(e)
@@ -234,7 +235,7 @@ Deno.test('link props do not subscribe to peek state', () => {
   peek.value = []
 })
 
-Deno.test('short id chip and browser route round trip; a lettered handle is lost', async () => {
+test('short id chip and browser route round trip; a lettered handle is lost', async () => {
   let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
   let before = cache.peek()
   cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { parseQuery, resolveRefs } from '../../query.ts'
@@ -16,7 +17,7 @@ import {
 import { sessionsOf } from './Dashboard.tsx'
 import '../Entity.tsx'
 
-Deno.test('project reads open wire subs and retain hits without cached far rows', () => {
+test('project reads open wire subs and retain hits without cached far rows', () => {
   let project = 'abcdef10-0000-4000-8000-000000000001'
   let queries = [
     `.filed.project=${project}&.order=hot&.limit=8`,
@@ -64,7 +65,7 @@ Deno.test('project reads open wire subs and retain hits without cached far rows'
   }
 })
 
-Deno.test('Dashboard membership follows the newest claim, cached or not', () => {
+test('Dashboard membership follows the newest claim, cached or not', () => {
   let claim = (eid: string, project: string, at: string) => ({
     task: { eid },
     claim: { eid, session: 's', at },

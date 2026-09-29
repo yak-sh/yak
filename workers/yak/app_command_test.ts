@@ -1,5 +1,6 @@
 // A page and an agent invoke the same declared app command with their caller's
 // authority. The page door exercises the stored declaration and HTTP result.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
 import * as apps from './apps.ts'
@@ -43,7 +44,7 @@ let words = {
   },
 }
 
-Deno.test('a page invokes declared commands as its owner; the command door refuses an editor', async () => {
+test('a page invokes declared commands as its owner; the command door refuses an editor', async () => {
   using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env, 'private')

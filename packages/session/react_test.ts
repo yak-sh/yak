@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 // The runner's step over a fake model, on @yaks/ram: an input is asked, a tool
 // call is run, the transcript settles; a stop is obeyed; a fork continues from
@@ -129,7 +130,7 @@ let rest = async (g: Graph, s: string, deps: Deps) => {
   return statusOf(await transcript(g, s))
 }
 
-Deno.test('an input is asked, a tool call is run, the transcript settles', async () => {
+test('an input is asked, a tool call is run, the transcript settles', async () => {
   let g = world()
   let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
   let deps = { model, tools: [echo], mint }
@@ -162,7 +163,7 @@ Deno.test('an input is asked, a tool call is run, the transcript settles', async
   }])
 })
 
-Deno.test('an anchored ask can include a late result from an earlier call', async () => {
+test('an anchored ask can include a late result from an earlier call', async () => {
   let g = world()
   await g.apply([{
     entity: { eid: 'old-ask' },
@@ -198,7 +199,7 @@ Deno.test('an anchored ask can include a late result from an earlier call', asyn
   ])
 })
 
-Deno.test('an interrupted tool call gets a result and the model continues without replay', async () => {
+test('an interrupted tool call gets a result and the model continues without replay', async () => {
   let g = world()
   await g.apply([{
     entity: { eid: 'old-ask' },
@@ -240,7 +241,7 @@ Deno.test('an interrupted tool call gets a result and the model continues withou
   )
 })
 
-Deno.test('a legacy unfinished-call exception recovers without replay', async () => {
+test('a legacy unfinished-call exception recovers without replay', async () => {
   let g = world()
   await g.apply([{
     entity: { eid: 'old-ask' },
@@ -294,7 +295,7 @@ Deno.test('a legacy unfinished-call exception recovers without replay', async ()
   )
 })
 
-Deno.test('a stop is obeyed: nothing is asked or run after it', async () => {
+test('a stop is obeyed: nothing is asked or run after it', async () => {
   let g = world()
   let { model, asked } = scripted([calls(['c1', 'hi'])])
   let deps = { model, tools: [echo], mint }
@@ -309,7 +310,7 @@ Deno.test('a stop is obeyed: nothing is asked or run after it', async () => {
   assertEquals(asked.length, 1)
 })
 
-Deno.test('a fork continues from its anchor with only what followed', async () => {
+test('a fork continues from its anchor with only what followed', async () => {
   let g = world()
   let { model, asked } = scripted([says('r1', 'done'), says('r2', 'again')])
   let deps = { model, tools: [echo], mint }
@@ -337,7 +338,7 @@ Deno.test('a fork continues from its anchor with only what followed', async () =
   assertEquals(statusOf(await transcript(g, ids.s)), 'settled')
 })
 
-Deno.test('a provider that keeps nothing replays the whole transcript', async () => {
+test('a provider that keeps nothing replays the whole transcript', async () => {
   let g = world()
   let { model, asked } = scripted(
     [calls(['c1', 'hi']), says('r2', 'done')],
@@ -350,7 +351,7 @@ Deno.test('a provider that keeps nothing replays the whole transcript', async ()
   assertEquals(ask.fake, undefined)
 })
 
-Deno.test('an imported compaction resumes from its summary and later entries', async () => {
+test('an imported compaction resumes from its summary and later entries', async () => {
   let g = world()
   await g.apply([
     {
@@ -385,7 +386,7 @@ Deno.test('an imported compaction resumes from its summary and later entries', a
   ])
 })
 
-Deno.test('a checkpoint keeps a call whose result followed an input', async () => {
+test('a checkpoint keeps a call whose result followed an input', async () => {
   let g = world()
   await g.apply([
     {
@@ -435,7 +436,7 @@ Deno.test('a checkpoint keeps a call whose result followed an input', async () =
   ])
 })
 
-Deno.test('a long native transcript writes a checkpoint before continuing', async () => {
+test('a long native transcript writes a checkpoint before continuing', async () => {
   let g = world()
   await g.apply([{
     entity: { eid: 'later' },
@@ -487,7 +488,7 @@ Deno.test('a long native transcript writes a checkpoint before continuing', asyn
   })
 })
 
-Deno.test('media transcripts compact only through a text model without persona instructions', async () => {
+test('media transcripts compact only through a text model without persona instructions', async () => {
   let g = world()
   let media = scripted([says('media', 'Audio ready.')], false)
   let text = scripted([says('summary', 'Remember the blue bridge.')], false)
@@ -518,7 +519,7 @@ Deno.test('media transcripts compact only through a text model without persona i
   assertEquals((await transcript(g, ids.s)).some((b) => !!b.checkpoint), true)
 })
 
-Deno.test('an over-budget media transcript without a summarizer never asks for a summary', async () => {
+test('an over-budget media transcript without a summarizer never asks for a summary', async () => {
   let g = world()
   let media = scripted([says('media', 'Audio ready.')], false)
   await g.apply([{
@@ -542,7 +543,7 @@ Deno.test('an over-budget media transcript without a summarizer never asks for a
   assertEquals((await transcript(g, ids.s)).some((b) => !!b.checkpoint), false)
 })
 
-Deno.test('a refused model ask ends without another provider call', async () => {
+test('a refused model ask ends without another provider call', async () => {
   let g = world()
   let { model, asked } = scripted([])
   let deps = { model, tools: [echo], mint }
@@ -555,7 +556,7 @@ Deno.test('a refused model ask ends without another provider call', async () => 
   ])
 })
 
-Deno.test('an audio provider refusal keeps its cause and makes one ask', async () => {
+test('an audio provider refusal keeps its cause and makes one ask', async () => {
   let g = world(), calls = 0
   await g.apply([{
     entity: { eid: ids.m },
@@ -576,7 +577,7 @@ Deno.test('an audio provider refusal keeps its cause and makes one ask', async (
   )
 })
 
-Deno.test('a retryable audio failure never resends an ambiguous request', async () => {
+test('a retryable audio failure never resends an ambiguous request', async () => {
   let g = world(), calls = 0
   await g.apply([{
     entity: { eid: ids.m },
@@ -591,7 +592,7 @@ Deno.test('a retryable audio failure never resends an ambiguous request', async 
   assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
 })
 
-Deno.test('a transient model failure retries before a streaming reply is visible', async () => {
+test('a transient model failure retries before a streaming reply is visible', async () => {
   let g = world(), calls = 0, pauses: number[] = []
   let model: Model = () => {
     calls++
@@ -620,7 +621,7 @@ Deno.test('a transient model failure retries before a streaming reply is visible
   assertEquals(await kinds(g, ids.s), ['input', 'ask', 'output'])
 })
 
-Deno.test('exhausted transient failures explain the terminal outcome', async () => {
+test('exhausted transient failures explain the terminal outcome', async () => {
   let g = world(), calls = 0
   let model: Model = () => {
     calls++
@@ -647,7 +648,7 @@ Deno.test('exhausted transient failures explain the terminal outcome', async () 
   )
 })
 
-Deno.test('an exhausted nonstream request does not start another transcript ask', async () => {
+test('an exhausted nonstream request does not start another transcript ask', async () => {
   let g = world(), calls = 0
   let model: Model = () => {
     calls++
@@ -668,7 +669,7 @@ Deno.test('an exhausted nonstream request does not start another transcript ask'
   assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
 })
 
-Deno.test('stopping during model backoff starts no further attempt', async () => {
+test('stopping during model backoff starts no further attempt', async () => {
   let g = world(), calls = 0, stop = new AbortController()
   let model: Model = () => {
     calls++
@@ -690,7 +691,7 @@ Deno.test('stopping during model backoff starts no further attempt', async () =>
   assertEquals(calls, 1)
 })
 
-Deno.test('a permanent model refusal is not retried', async () => {
+test('a permanent model refusal is not retried', async () => {
   let g = world(), calls = 0
   let model: Model = () => {
     calls++
@@ -712,7 +713,7 @@ Deno.test('a permanent model refusal is not retried', async () => {
   )
 })
 
-Deno.test('two tool calls in one reply are both answered before the next ask', async () => {
+test('two tool calls in one reply are both answered before the next ask', async () => {
   let g = world()
   let { model, asked } = scripted([
     calls(['c1', 'a'], ['c2', 'b']),
@@ -728,7 +729,7 @@ Deno.test('two tool calls in one reply are both answered before the next ask', a
   )
 })
 
-Deno.test('a call for a tool this session does not serve is refused, not left open', async () => {
+test('a call for a tool this session does not serve is refused, not left open', async () => {
   let g = world()
   let { model } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
   // The tool row is in the graph and the session serves no function for it.
@@ -752,7 +753,7 @@ Deno.test('a call for a tool this session does not serve is refused, not left op
   )
 })
 
-Deno.test('a fork must name an entry, a using a model', () => {
+test('a fork must name an entry, a using a model', () => {
   let g = world()
   let bad = (b: Bundle) => {
     try {
@@ -786,7 +787,7 @@ Deno.test('a fork must name an entry, a using a model', () => {
   )
 })
 
-Deno.test('as `session_run`, the steps run themselves until the transcript settles', async () => {
+test('as `session_run`, the steps run themselves until the transcript settles', async () => {
   let fx = effects(vocab)
   let g = graph({ storage: ram(vocab), vocab, plugins: [sessions(), fx] })
   let { model, asked } = scripted([calls(['c1', 'hi']), says('r2', 'done')])
@@ -805,7 +806,7 @@ Deno.test('as `session_run`, the steps run themselves until the transcript settl
   assertEquals(steps.filter((s) => s != 'nothing'), ['asked', 'ran', 'asked'])
 })
 
-Deno.test('usage is persisted once on its ask, not on output entries', async () => {
+test('usage is persisted once on its ask, not on output entries', async () => {
   let g = world()
   let usage = {
     input_tokens: 1000,
@@ -821,7 +822,7 @@ Deno.test('usage is persisted once on its ask, not on output entries', async () 
   assertEquals(kindOf(entries[1]), 'ask')
 })
 
-Deno.test('unexpected model failures reach diagnostics, expected model errors do not', async () => {
+test('unexpected model failures reach diagnostics, expected model errors do not', async () => {
   let reported: unknown[] = []
   for (
     let error of [
@@ -845,7 +846,7 @@ Deno.test('unexpected model failures reach diagnostics, expected model errors do
   assertEquals((reported[0] as Error).message, 'defect')
 })
 
-Deno.test('provider completion allocates positions after concurrently admitted notices', async () => {
+test('provider completion allocates positions after concurrently admitted notices', async () => {
   let g = world()
   let release!: (reply: Reply) => void
   let entered!: () => void
@@ -876,7 +877,7 @@ Deno.test('provider completion allocates positions after concurrently admitted n
   assertEquals((all[1].ask as Comp).through, 'e1')
 })
 
-Deno.test('recovery excludes a stale streamed provider reply', async () => {
+test('recovery excludes a stale streamed provider reply', async () => {
   let g = world()
   let releaseOld!: () => void, startedOld!: () => void
   let oldGate = new Promise<void>((done) => releaseOld = done)
@@ -948,7 +949,7 @@ Deno.test('recovery excludes a stale streamed provider reply', async () => {
   assertEquals(done.filter((b) => b.exception).length, 0)
 })
 
-Deno.test('recovery leaves an interrupted nonstream request for inspection', async () => {
+test('recovery leaves an interrupted nonstream request for inspection', async () => {
   let g = world(), calls = 0
   let release!: () => void, started!: () => void
   let gate = new Promise<void>((done) => release = done)
@@ -973,7 +974,7 @@ Deno.test('recovery leaves an interrupted nonstream request for inspection', asy
   assertEquals((entries.at(-1)?.error as Comp).code, 'interrupted')
 })
 
-Deno.test('unstarted older calls get results without replay or provider dispatch', async () => {
+test('unstarted older calls get results without replay or provider dispatch', async () => {
   let g = world()
   let { model, asked } = scripted([
     calls(['old-one', 'hi'], ['old-two', 'bye']),
@@ -1025,7 +1026,7 @@ Deno.test('unstarted older calls get results without replay or provider dispatch
   assertEquals(runs, 0)
 })
 
-Deno.test('a claimed older call still fails for manual inspection', async () => {
+test('a claimed older call still fails for manual inspection', async () => {
   let g = world()
   let { model, asked } = scripted([
     calls(['unstarted', 'hi'], ['claimed', 'bye']),
@@ -1057,7 +1058,7 @@ Deno.test('a claimed older call still fails for manual inspection', async () => 
   assertEquals(asked.length, 1)
 })
 
-Deno.test('typed questions are asked once and answered one entry each', async () => {
+test('typed questions are asked once and answered one entry each', async () => {
   let g = world()
   let questions = {
     plan: { type: 'choice' as const, instructions: 'Where next?' },
@@ -1097,7 +1098,7 @@ Deno.test('typed questions are asked once and answered one entry each', async ()
   assertEquals(asked[1].items, [{ kind: 'user', text: 'what did you decide?' }])
 })
 
-Deno.test('questions are not asked of a model a later line chose', async () => {
+test('questions are not asked of a model a later line chose', async () => {
   let g = world()
   await g.apply([{
     entity: { eid: 'e2' },
@@ -1116,7 +1117,7 @@ Deno.test('questions are not asked of a model a later line chose', async () => {
   assertEquals(asked[0].questions, undefined)
 })
 
-Deno.test('a request refused at its limit is not retried', async () => {
+test('a request refused at its limit is not retried', async () => {
   let g = world()
   let asked = 0
   let model: Model = () => {
@@ -1129,7 +1130,7 @@ Deno.test('a request refused at its limit is not retried', async () => {
   assertEquals(statusOf(await transcript(g, ids.s)), 'pending')
 })
 
-Deno.test('a window sends the newest entries, from the input that began their turn', async () => {
+test('a window sends the newest entries, from the input that began their turn', async () => {
   let g = world()
   let { model, asked } = scripted([
     says('r1', 'one'),
@@ -1162,7 +1163,7 @@ Deno.test('a window sends the newest entries, from the input that began their tu
   assertEquals(await say('e4', 'last', 1), ['user'])
 })
 
-Deno.test('a window keeps a call whose result followed an input', () => {
+test('a window keeps a call whose result followed an input', () => {
   let entries = [
     { entity: { eid: 'call' }, call: { to: ids.t, id: 'c1' } },
     { entity: { eid: 'input' }, content: { body: 'while it runs' } },
@@ -1171,7 +1172,7 @@ Deno.test('a window keeps a call whose result followed an input', () => {
   assertEquals(recent(entries, 2), entries)
 })
 
-Deno.test("a window counts the conversation, never a wake's typed questions", async () => {
+test("a window counts the conversation, never a wake's typed questions", async () => {
   let g = world()
   let decided: Reply = {
     id: 'q',

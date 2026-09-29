@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -17,11 +18,11 @@ let asked = (args: Record<string, unknown>): [Bundle, Graph] => [
 
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
-Deno.test('every kernel tool is declared and implemented', () => {
+test('every kernel tool is declared and implemented', () => {
   assertEquals(loadTools(kernelDoc, tools).map((t) => t.name), ['comment_new'])
 })
 
-Deno.test('a comment is a doc aimed at an entity', async () => {
+test('a comment is a doc aimed at an entity', async () => {
   let [said] = await tools.comment_new!(
     ...asked({ target: 'seven', body: 'looks right' }),
   ) as Bundle[]

@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -31,7 +32,7 @@ import { HELLO, minted } from './mcp-probe.ts'
 // What the person said, kept as they said it (memory.ts, T-34473, T-34474).
 // The whole point is that the words survive the conversation they were said
 // in, so the proof is a second connection reading them without asking.
-Deno.test('what the person said is kept, and read back whole', async () => {
+test('what the person said is kept, and read back whole', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'kitchen42', apps: ['recipes'] }])
@@ -128,7 +129,7 @@ Deno.test('what the person said is kept, and read back whole', async () => {
   }
 })
 
-Deno.test('feedback reaches the platform, in the words it was said in', async () => {
+test('feedback reaches the platform, in the words it was said in', async () => {
   let k = await kernel()
   try {
     let them = await seed(k, [{ slug: 'kitchen43', apps: ['recipes'] }])
@@ -229,7 +230,7 @@ Deno.test('feedback reaches the platform, in the words it was said in', async ()
 // "theirs" aims at it. Belonging to the inviter's space is not having one —
 // while it was, an invited person's first app_install aimed at the
 // publisher's space and was refused there by the publisher's own app ceiling.
-Deno.test('an invited person gets a space of their own', async () => {
+test('an invited person gets a space of their own', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -284,7 +285,7 @@ Deno.test('an invited person gets a space of their own', async () => {
 // rung — a grant on that app alone. What it proves is the "alone": the app she
 // was invited to answers her as a member, the app beside it does not exist as
 // far as she is concerned, and the file door is shut to her in both.
-Deno.test(
+test(
   'a guest of one app holds that app and nothing else in the space',
   async () => {
     let k = await kernel()
@@ -380,7 +381,7 @@ Deno.test(
 // house rules — so the overview an agent writes belongs in the app's own store,
 // as the entity `doc` already is. This is the guide's own example, run: the
 // section stops being true by failing here rather than by misleading somebody.
-Deno.test('a project document is an entity, and search finds it', async () => {
+test('a project document is an entity, and search finds it', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -455,7 +456,7 @@ Deno.test('a project document is an entity, and search finds it', async () => {
 // being true fails rather than misleads: what a `time` property takes,
 // filtering a property that holds an eid, what an unwritten property reads back
 // as, and `task.status` before either mark.
-Deno.test('the answers four builders had to guess at', async () => {
+test('the answers four builders had to guess at', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k)

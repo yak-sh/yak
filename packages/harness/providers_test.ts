@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Mark, Model, Request } from '@yaks/model'
 import { type Comp, identityEid } from '@yaks/graph'
@@ -9,7 +10,7 @@ import { at, harness, repo, worker } from './testing.ts'
 
 const P = (name: string) => identityEid('provider', [name])
 const M = (name: string) => identityEid('model', [name])
-Deno.test('OpenRouter provider uses UUIDs and is selected per session/ask, including switched context', async () => {
+test('OpenRouter provider uses UUIDs and is selected per session/ask, including switched context', async () => {
   const h = await harness()
   const seen: [string, Request][] = []
   const fake = (provider: string): Model =>
@@ -63,7 +64,7 @@ Deno.test('OpenRouter provider uses UUIDs and is selected per session/ask, inclu
     await a.close()
   }
 })
-Deno.test('explicit default provider seeds correctly and custom model override remains usable', async () => {
+test('explicit default provider seeds correctly and custom model override remains usable', async () => {
   const a = local({
     cwd: repo(),
     h: await harness(),
@@ -84,7 +85,7 @@ Deno.test('explicit default provider seeds correctly and custom model override r
   }
 })
 
-Deno.test('fork and spawn selecting an existing model are served by a provider that serves it', async () => {
+test('fork and spawn selecting an existing model are served by a provider that serves it', async () => {
   const h = await harness()
   const seen: string[] = []
   const a = local({
@@ -140,7 +141,7 @@ Deno.test('fork and spawn selecting an existing model are served by a provider t
   }
 })
 
-Deno.test('worker authorization panel offers graph-configured OpenRouter without a model request', async () => {
+test('worker authorization panel offers graph-configured OpenRouter without a model request', async () => {
   const { remote } = await import('./remote.ts')
   const dir = await Deno.makeTempDir()
   const path = dir + '/harness.db'
@@ -167,7 +168,7 @@ Deno.test('worker authorization panel offers graph-configured OpenRouter without
   }
 })
 
-Deno.test('a model two providers serve is asked by the named one, by its name for it', async () => {
+test('a model two providers serve is asked by the named one, by its name for it', async () => {
   const h = await harness()
   const seen: [string, string][] = []
   const fake = (provider: string): Model => (req) => {

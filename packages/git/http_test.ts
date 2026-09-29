@@ -6,6 +6,7 @@
 // over a real socket, then `git log` and `git fsck` in what it wrote, which is
 // the only judge of a clone that cannot be argued with.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { advertise, CAPS, type Refs, uploadPack } from './http.ts'
 import { objects } from './objects.ts'
@@ -73,7 +74,7 @@ let command = async (name: string, args: string[], over?: Refs) => {
   return { res, said: text.decode(new Uint8Array(await res.arrayBuffer())) }
 }
 
-Deno.test('the advertisement is the service line and what we implement', async () => {
+test('the advertisement is the service line and what we implement', async () => {
   let res = advertise(
     new Request('http://x/a.git/info/refs?service=git-upload-pack', {
       headers: V2,
@@ -96,7 +97,7 @@ Deno.test('the advertisement is the service line and what we implement', async (
   )
 })
 
-Deno.test('a client that cannot say v2, and a service we do not serve', async () => {
+test('a client that cannot say v2, and a service we do not serve', async () => {
   let one = advertise(
     new Request('http://x/a.git/info/refs?service=git-upload-pack'),
   )
@@ -110,7 +111,7 @@ Deno.test('a client that cannot say v2, and a service we do not serve', async ()
   assertEquals(two.status, 404)
 })
 
-Deno.test('ls-refs answers HEAD as a symbolic ref, then the refs', async () => {
+test('ls-refs answers HEAD as a symbolic ref, then the refs', async () => {
   let { said } = await command('ls-refs', [
     'peel',
     'symrefs',
@@ -124,7 +125,7 @@ Deno.test('ls-refs answers HEAD as a symbolic ref, then the refs', async () => {
   )
 })
 
-Deno.test('a fetch still negotiating is told nothing is common', async () => {
+test('a fetch still negotiating is told nothing is common', async () => {
   let { said } = await command('fetch', [
     `want ${TWO_OID}`,
     `have ${'0'.repeat(40)}`,
@@ -132,12 +133,12 @@ Deno.test('a fetch still negotiating is told nothing is common', async () => {
   assertEquals(said, '0014acknowledgments\n0008NAK\n0000')
 })
 
-Deno.test('a want a ref reaches is served, though it is no tip itself', async () => {
+test('a want a ref reaches is served, though it is no tip itself', async () => {
   let { said } = await command('fetch', [`want ${ONE_OID}`, 'done'])
   assertStringIncludes(said, '000dpackfile\n')
 })
 
-Deno.test('a want no ref reaches is refused, and no pack is written', async () => {
+test('a want no ref reaches is refused, and no pack is written', async () => {
   // The refs say only the first commit, so the second is an object this graph
   // holds and will not serve: unpublished, and named only by guessing its id.
   let { said } = await command('fetch', [`want ${TWO_OID}`, 'done'], {
@@ -146,12 +147,12 @@ Deno.test('a want no ref reaches is refused, and no pack is written', async () =
   assertEquals(said, `0049ERR upload-pack: not our ref ${TWO_OID}`)
 })
 
-Deno.test('a want of something we never had is not our ref either', async () => {
+test('a want of something we never had is not our ref either', async () => {
   let { said } = await command('fetch', [`want ${'f'.repeat(40)}`, 'done'])
   assertStringIncludes(said, `ERR upload-pack: not our ref ${'f'.repeat(40)}`)
 })
 
-Deno.test('a command we do not have, and a hash we do not serve', async () => {
+test('a command we do not have, and a hash we do not serve', async () => {
   assertStringIncludes(
     (await command('object-info', [])).said,
     'unknown command object-info',
@@ -173,7 +174,7 @@ Deno.test('a command we do not have, and a hash we do not serve', async () => {
   )
 })
 
-Deno.test('the packfile section is side-band framed, band 1', async () => {
+test('the packfile section is side-band framed, band 1', async () => {
   let { said } = await command('fetch', [
     `want ${TWO_OID}`,
     'done',
@@ -226,7 +227,7 @@ let cloned = async (
 }
 
 // The whole door, judged by git: clone it, read the history, check the objects.
-Deno.test('git clones it, and finds nothing wrong with what it got', async () => {
+test('git clones it, and finds nothing wrong with what it got', async () => {
   let { refs, from } = await repo()
   await cloned(refs, from, async (at, git) => {
     assertEquals(
@@ -247,7 +248,7 @@ Deno.test('git clones it, and finds nothing wrong with what it got', async () =>
 // the last chunk is short, the ones before it are exactly band, and a client
 // that reassembles them off by one byte gets a corrupt pack rather than an
 // error. Incompressible bytes, so the pack is as big as the file.
-Deno.test('a pack too big for one packet arrives whole', async () => {
+test('a pack too big for one packet arrives whole', async () => {
   let { g, git: index, bytes } = fixture()
   // 64k is all the entropy one call gives, and hex of random bytes deflates to
   // about half its length — so four of them is a pack of a few packets.

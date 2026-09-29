@@ -4,6 +4,7 @@
 // line adds to the tool: a dry run is `check` on the call, and a sign-out ends
 // the token rather than only forgetting it.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { cli } from './run.ts'
 import { saveToken, tokenFor } from './store.ts'
@@ -54,7 +55,7 @@ let ran = async (
 
 let change = '[{"entity":{"eid":"$a"},"doc":{"title":"One"}}]'
 
-Deno.test('a dry run is the tool’s check, and nothing else moves', async () => {
+test('a dry run is the tool’s check, and nothing else moves', async () => {
   let { calls: [dry] } = await ran([
     'apply',
     '--change',
@@ -71,7 +72,7 @@ Deno.test('a dry run is the tool’s check, and nothing else moves', async () =>
 // `init` starts a graph where there was none: a config that opens, naming a
 // person the graph holds under the name given. A second `init` on the same
 // path is refused and leaves the first alone.
-Deno.test('init writes a config whose graph knows its person', async () => {
+test('init writes a config whose graph knows its person', async () => {
   let dir = Deno.makeTempDirSync()
   let path = `${dir}/yak.json`
   let line = (argv: string[]) =>
@@ -99,7 +100,7 @@ Deno.test('init writes a config whose graph knows its person', async () => {
   }
 })
 
-Deno.test('a sign-out asks the host to revoke the token, then forgets it', async () => {
+test('a sign-out asks the host to revoke the token, then forgets it', async () => {
   let out = await ran(['logout'], { token: 'yaks_abc' })
   assertEquals(out.calls, [{
     name: 'grant',

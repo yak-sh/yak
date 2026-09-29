@@ -4,6 +4,7 @@
 // writer's connection closes, or its own time runs out — because a broadcast
 // that only ever says "here it is" leaves a cursor on the screen forever.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { shopGraph } from './testing.ts'
@@ -45,7 +46,7 @@ let stopped = () => {
 
 let shop = (): Graph => shopGraph()
 
-Deno.test('selected peer values follow writes, takeover, clear and drop', () => {
+test('selected peer values follow writes, takeover, clear and drop', () => {
   let clock = stopped()
   let relay = relaying<string>(shop().vocab, () => {}, clock.timer)
   relay.write('one', [
@@ -72,7 +73,7 @@ Deno.test('selected peer values follow writes, takeover, clear and drop', () => 
   relay.close()
 })
 
-Deno.test('held reference lookup follows retargeting and takeover', () => {
+test('held reference lookup follows retargeting and takeover', () => {
   let relay = relaying<string>(shop().vocab, () => {})
   let root = { entity: { eid: 'root' }, pointing: { at: 'one' } }
   relay.write('one', [root])
@@ -95,7 +96,7 @@ Deno.test('held reference lookup follows retargeting and takeover', () => {
   relay.close()
 })
 
-Deno.test('a peer hears a relay; the writer does not hear its own', () => {
+test('a peer hears a relay; the writer does not hear its own', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -111,7 +112,7 @@ Deno.test('a peer hears a relay; the writer does not hear its own', () => {
   assertEquals(one.take(), []) // its own graph already has it
 })
 
-Deno.test('a relay is never stored: the set is unchanged and nothing commits', () => {
+test('a relay is never stored: the set is unchanged and nothing commits', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -128,7 +129,7 @@ Deno.test('a relay is never stored: the set is unchanged and nothing commits', (
   assertEquals(two.take(), [])
 })
 
-Deno.test('a live query reads the current peer value and loses it on disconnect', async () => {
+test('a live query reads the current peer value and loses it on disconnect', async () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -159,7 +160,7 @@ Deno.test('a live query reads the current peer value and loses it on disconnect'
   assertEquals(await ask(), [])
 })
 
-Deno.test('a late subscriber is told what the peers are already saying', () => {
+test('a late subscriber is told what the peers are already saying', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -177,7 +178,7 @@ Deno.test('a late subscriber is told what the peers are already saying', () => {
 })
 
 for (let query of ['.book', '.book&.order=price']) {
-  Deno.test(`an entity joining ${query} brings what the peers already say of it`, () => {
+  test(`an entity joining ${query} brings what the peers already say of it`, () => {
     let graph = shop()
     let subs = subscriptions(graph)
     let one = ear(), two = ear()
@@ -196,7 +197,7 @@ for (let query of ['.book', '.book&.order=price']) {
   })
 }
 
-Deno.test('a closed connection stops saying everything it was saying', () => {
+test('a closed connection stops saying everything it was saying', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -211,7 +212,7 @@ Deno.test('a closed connection stops saying everything it was saying', () => {
   assertEquals(relayed(two.take()), [{ entity: { eid: 'b1' }, browsing: null }])
 })
 
-Deno.test('a value another connection took over outlives the first closing', () => {
+test('a value another connection took over outlives the first closing', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -230,7 +231,7 @@ Deno.test('a value another connection took over outlives the first closing', () 
   ])
 })
 
-Deno.test('a durable duration clears itself, and each write restarts it', () => {
+test('a durable duration clears itself, and each write restarts it', () => {
   let clock = stopped()
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
@@ -252,7 +253,7 @@ Deno.test('a durable duration clears itself, and each write restarts it', () => 
   assertEquals(relayed(two.take()), [{ entity: { eid: 'b1' }, typing: null }])
 })
 
-Deno.test('a value held through a lost memory can still be cleared', () => {
+test('a value held through a lost memory can still be cleared', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -284,7 +285,7 @@ Deno.test('a value held through a lost memory can still be cleared', () => {
   }])
 })
 
-Deno.test('a durable component sent to the relay door is dropped, not stored', () => {
+test('a durable component sent to the relay door is dropped, not stored', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -297,7 +298,7 @@ Deno.test('a durable component sent to the relay door is dropped, not stored', (
   assertEquals(subs.relaying(one.to), [])
 })
 
-Deno.test('a peer predicate admits late and moving rows, then lets them go', () => {
+test('a peer predicate admits late and moving rows, then lets them go', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -327,7 +328,7 @@ Deno.test('a peer predicate admits late and moving rows, then lets them go', () 
   assertEquals(watcher.take().at(-1)?.gone, ['b1'])
 })
 
-Deno.test('sustained peer movement does not resend stored data to existing members', () => {
+test('sustained peer movement does not resend stored data to existing members', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -352,7 +353,7 @@ Deno.test('sustained peer movement does not resend stored data to existing membe
   assertEquals(watcher.take().at(-1)?.bundles?.[0].book, { price: 13 })
 })
 
-Deno.test('peer movement reads storage once until a commit or release', () => {
+test('peer movement reads storage once until a commit or release', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'b1' }, book: { price: 12 }, doc: { title: 'first' } },
@@ -405,7 +406,7 @@ Deno.test('peer movement reads storage once until a commit or release', () => {
   assertEquals(reads, 1) // a new held lifetime reads its durable row
 })
 
-Deno.test('shared reference watches refresh from one moved peer read', () => {
+test('shared reference watches refresh from one moved peer read', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'p1' }, doc: { title: 'One' } },
@@ -462,7 +463,7 @@ Deno.test('shared reference watches refresh from one moved peer read', () => {
   ])
 })
 
-Deno.test('shared reference source keeps each watch membership', () => {
+test('shared reference source keeps each watch membership', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'p1' }, doc: { title: 'One' } },
@@ -497,7 +498,7 @@ Deno.test('shared reference source keeps each watch membership', () => {
   assertEquals(close.take(), [])
 })
 
-Deno.test('scoped reference refresh keeps other roots and direct branches', () => {
+test('scoped reference refresh keeps other roots and direct branches', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'p1' }, doc: { title: 'One' } },
@@ -541,7 +542,7 @@ Deno.test('scoped reference refresh keeps other roots and direct branches', () =
   assertEquals(watcher.take(), []) // the direct branch keeps l3
 })
 
-Deno.test('a peer-held reference follows its target and can retarget', () => {
+test('a peer-held reference follows its target and can retarget', () => {
   let graph = shop(), subs = subscriptions(graph)
   let writer = ear(), watcher = ear(), late = ear()
   subs.open(watcher.to, 'looks', '.pointing.at.browsing.x<10&*')
@@ -566,7 +567,7 @@ Deno.test('a peer-held reference follows its target and can retarget', () => {
   assertEquals(watcher.take().at(-1)?.gone, ['root'])
 })
 
-Deno.test('reference peer movement sends rows only on entry and exit', () => {
+test('reference peer movement sends rows only on entry and exit', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'p1' }, doc: { title: 'One' } },
@@ -609,7 +610,7 @@ Deno.test('reference peer movement sends rows only on entry and exit', () => {
   assertEquals(expired.find((f) => f.id == 'looks')?.gone, ['l1'])
 })
 
-Deno.test('reference peer watch follows edits, retargets and deletion', () => {
+test('reference peer watch follows edits, retargets and deletion', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'p1' }, doc: { title: 'One' } },
@@ -640,7 +641,7 @@ Deno.test('reference peer watch follows edits, retargets and deletion', () => {
   assertEquals(watcher.take(), [])
 })
 
-Deno.test('peer-only rows keep a missing durable candidate until expiry', () => {
+test('peer-only rows keep a missing durable candidate until expiry', () => {
   let clock = stopped(), graph = shop()
   let reads = 0
   let spy: Graph = {
@@ -674,7 +675,7 @@ Deno.test('peer-only rows keep a missing durable candidate until expiry', () => 
   assertEquals(reads, 2)
 })
 
-Deno.test('commits replace a cached missing row while its peer value lives', () => {
+test('commits replace a cached missing row while its peer value lives', () => {
   let graph = shop(), subs = subscriptions(graph)
   let writer = ear(), watcher = ear()
   subs.open(watcher.to, 'near', '.book&.browsing.x<10')
@@ -695,7 +696,7 @@ Deno.test('commits replace a cached missing row while its peer value lives', () 
   assertEquals(watcher.take(), [])
 })
 
-Deno.test('durable commits recheck a row beside its held peer value', () => {
+test('durable commits recheck a row beside its held peer value', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -711,7 +712,7 @@ Deno.test('durable commits recheck a row beside its held peer value', () => {
   assertEquals(again.relay?.[0].browsing, { x: 2 })
 })
 
-Deno.test('peer expiry removes membership', () => {
+test('peer expiry removes membership', () => {
   let clock = stopped(), graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph, { timer: clock.timer })
@@ -724,7 +725,7 @@ Deno.test('peer expiry removes membership', () => {
   assertEquals(watcher.take().at(-1)?.gone, ['b1'])
 })
 
-Deno.test('a peer-only entity can join a query and a count', () => {
+test('a peer-only entity can join a query and a count', () => {
   let graph = shop(), subs = subscriptions(graph)
   let writer = ear(), watcher = ear()
   subs.open(watcher.to, 'where', '.browsing.x<10')
@@ -742,7 +743,7 @@ Deno.test('a peer-only entity can join a query and a count', () => {
   assertEquals(left.find((f) => f.id == 'count'), { id: 'count', count: 0 })
 })
 
-Deno.test('a query joins stored and peer branches without losing projection', () => {
+test('a query joins stored and peer branches without losing projection', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'stored' }, book: { price: 12 }, doc: { title: 'one' } },
@@ -769,7 +770,7 @@ Deno.test('a query joins stored and peer branches without losing projection', ()
   assertEquals(joined.relay?.[0].browsing, { x: 2 })
 })
 
-Deno.test('async peer reads keep successive membership moves in order', async () => {
+test('async peer reads keep successive membership moves in order', async () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let release: (() => void)[] = []

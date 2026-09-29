@@ -3,6 +3,7 @@
 // only as far as the villager's stock, the land and the worth of what it asks
 // allow, a job on the board goes to one hero, and every page that reads the
 // same rows reaches the same answer.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { seedDesigns } from './designs_fixture.ts'
 import { GIVERS } from './quests.ts'
@@ -86,7 +87,7 @@ let book = (deals: Deal[], hands: Reply[] = [], now = 10, kinds = ['coin']) => {
   }
 }
 
-Deno.test("only the villager's own turn makes a deal", () => {
+test("only the villager's own turn makes a deal", () => {
   // A row a page wrote itself, naming the villager, came through no turn of
   // theirs.
   let forged = { ...deal(0, '5 coin'), via: '' }
@@ -96,7 +97,7 @@ Deno.test("only the villager's own turn makes a deal", () => {
   })
 })
 
-Deno.test('a gift beyond what the villager holds gives nothing', () => {
+test('a gift beyond what the villager holds gives nothing', () => {
   assertEquals(book([deal(0, '1000 coin')]), {
     states: ['void'],
     holds: [20],
@@ -104,7 +105,7 @@ Deno.test('a gift beyond what the villager holds gives nothing', () => {
   assertEquals(book([deal(0, '20 coin')]), { states: ['open'], holds: [0] })
 })
 
-Deno.test('what a villager holds is finite, and comes back slowly', () => {
+test('what a villager holds is finite, and comes back slowly', () => {
   let gifts = [deal(0, '15 coin'), deal(1, '15 coin', '', 'bob', 'rook')]
   let hands = [hand(gifts[0], 1)]
   assertEquals(book(gifts, hands, 1), { states: ['done', 'void'], holds: [5] })
@@ -113,13 +114,13 @@ Deno.test('what a villager holds is finite, and comes back slowly', () => {
   assertEquals(book(gifts, hands, 600).holds, [20])
 })
 
-Deno.test("a gift is small, and never one of the villager's own things", () => {
+test("a gift is small, and never one of the villager's own things", () => {
   let asks = [deal(0, '1 staff2'), deal(1, '2 tonic, 20 coin', '', 'bob')]
   assertEquals(book(asks).states, ['void', 'void'])
   assertEquals(book([deal(0, '1 tonic, 2 coin')]).states, ['open'])
 })
 
-Deno.test('a person gets one gift from a villager in a while', () => {
+test('a person gets one gift from a villager in a while', () => {
   let asks = [
     deal(0, '1 coin'),
     deal(10, '1 coin'),
@@ -130,14 +131,14 @@ Deno.test('a person gets one gift from a villager in a while', () => {
   assertEquals(counted, [true, false, true, true])
 })
 
-Deno.test('a hand-in counts once, from the person who made the hero', () => {
+test('a hand-in counts once, from the person who made the hero', () => {
   let gift = deal(0, '5 coin')
   let states = (hands: Reply[]) => book([gift], hands, 5).states
   assertEquals(states([hand(gift, 1, 'bob')]), ['open'])
   assertEquals(states([hand(gift, 1), hand(gift, 2)]), ['done'])
 })
 
-Deno.test('what a deal set aside is free again if it is never handed in', () => {
+test('what a deal set aside is free again if it is never handed in', () => {
   // Wren's fine staff, for repeated dangerous work and a rare stone.
   let staff = deal(0, '1 staff2', '7 thornback, 1 toadstone')
   let holds = (now: number, hands: Reply[] = []) =>
@@ -152,7 +153,7 @@ Deno.test('what a deal set aside is free again if it is never handed in', () => 
   assertEquals(holds(OFFER / MIN + 1, [agree(staff, 5, 'bob')]), [1, 0])
 })
 
-Deno.test('a trade moves only things both sides hold', () => {
+test('a trade moves only things both sides hold', () => {
   let trade = deal(0, '1 tonic', '6 tusk')
   let kinds = ['tonic', 'tusk']
   let before = book([trade], [], 1, kinds).holds
@@ -172,7 +173,7 @@ Deno.test('a trade moves only things both sides hold', () => {
   })
 })
 
-Deno.test('a deal asks only for what the land has', () => {
+test('a deal asks only for what the land has', () => {
   let asks = [
     deal(0, '5 coin', '1 frostwolf'),
     deal(1, '5 coin', '1 pearl', 'bob', 'rook'),
@@ -182,7 +183,7 @@ Deno.test('a deal asks only for what the land has', () => {
   assertEquals(book(asks).states, ['void', 'void', 'open', 'open'])
 })
 
-Deno.test('a deal gives about what its ask is worth, and precious things only for much', () => {
+test('a deal gives about what its ask is worth, and precious things only for much', () => {
   let asks = [
     // The staff asks for many hard fights; the stone makes the offer fair.
     deal(0, '1 staff2', '7 thornback'),
@@ -193,7 +194,7 @@ Deno.test('a deal gives about what its ask is worth, and precious things only fo
   assertEquals(book(asks).states, ['void', 'open', 'void'])
 })
 
-Deno.test('a newer offer takes the place of one the hero has not agreed to', () => {
+test('a newer offer takes the place of one the hero has not agreed to', () => {
   let first = deal(0, '1 tonic', '6 tusk')
   let second = deal(1, '1 tonic', '5 tusk')
   let tonics = (replies: Reply[]) =>
@@ -205,7 +206,7 @@ Deno.test('a newer offer takes the place of one the hero has not agreed to', () 
   })
 })
 
-Deno.test('every page reaches the same answer from the same rows', () => {
+test('every page reaches the same answer from the same rows', () => {
   let deals = [
     deal(0, '15 coin'),
     deal(0, '15 coin', '', 'bob', 'rook'),
@@ -222,7 +223,7 @@ Deno.test('every page reaches the same answer from the same rows', () => {
   )
 })
 
-Deno.test('a job on the board goes to the first hero to take it', () => {
+test('a job on the board goes to the first hero to take it', () => {
   let j = job(0, '5 coin', '2 boar')
   let states = (replies: Reply[]) => book([j], replies).states
   let rook = agree(j, 1, 'bob')
@@ -232,7 +233,7 @@ Deno.test('a job on the board goes to the first hero to take it', () => {
   assertEquals(states([rook, hand(j, 3, 'bob')]), ['done'])
 })
 
-Deno.test('a job holds to what the villager holds, the land has, and its worth', () => {
+test('a job holds to what the villager holds, the land has, and its worth', () => {
   let one = (give: string, take: string) => book([job(0, give, take)]).states
   assertEquals(
     [
@@ -246,7 +247,7 @@ Deno.test('a job holds to what the villager holds, the land has, and its worth',
   assertEquals(one('1 staff2', '7 thornback, 1 toadstone'), ['open'])
 })
 
-Deno.test('a villager posts now and then, and a board holds a few jobs', () => {
+test('a villager posts now and then, and a board holds a few jobs', () => {
   let first = job(0, '1 coin', '1 slime')
   let again = (at: number, replies: Reply[] = []) =>
     book([first, job(at, '1 coin', '1 slime')], replies, at + 1).states[1]
@@ -270,14 +271,14 @@ Deno.test('a villager posts now and then, and a board holds a few jobs', () => {
   assertEquals(at([agree(jobs[0], 15, 'bob')]).get(last)!.room, true)
 })
 
-Deno.test('a job nobody takes comes down, and what it set aside is free again', () => {
+test('a job nobody takes comes down, and what it set aside is free again', () => {
   let j = job(0, '1 tonic', '6 tusk')
   let tonics = (now: number) => book([j], [], now, ['tonic']).holds
   assertEquals(tonics(60), [1])
   assertEquals(tonics(POSTED / MIN + 1), [2])
 })
 
-Deno.test('declining an addressed errand pins it, preserves stock, and lets another hero take it', () => {
+test('declining an addressed errand pins it, preserves stock, and lets another hero take it', () => {
   let d = deal(0, '1 tonic', '6 tusk')
   let declined = reply(d, 1, 'ada', 'declined')
   let read = (replies: Reply[], now: number) =>
@@ -299,7 +300,7 @@ Deno.test('declining an addressed errand pins it, preserves stock, and lets anot
   assertEquals(read([declined], POSTED / MIN + 2).holds.get('tonic'), 2)
 })
 
-Deno.test('only the addressed hero can decline open work, and refusal cannot undo agreement', () => {
+test('only the addressed hero can decline open work, and refusal cannot undo agreement', () => {
   let d = deal(0, '1 tonic', '6 tusk')
   let read = (replies: Reply[]) =>
     ledger(land('mossvale'), [d], replies, owner, 4 * MIN).get('wren')!
@@ -323,7 +324,7 @@ Deno.test('only the addressed hero can decline open work, and refusal cannot und
   )
 })
 
-Deno.test('declining pins even when the board is full, taking down the oldest untaken job', () => {
+test('declining pins even when the board is full, taking down the oldest untaken job', () => {
   let givers = [...land('mossvale').keys()]
   let jobs = givers.slice(0, BOARD).map((v, i) =>
     job(i, '1 tonic', '6 tusk', v)
@@ -344,7 +345,7 @@ Deno.test('declining pins even when the board is full, taking down the oldest un
   assertEquals(result.get('wren')!.room, false)
 })
 
-Deno.test('a declined offer replaces this villager’s untaken board job', () => {
+test('a declined offer replaces this villager’s untaken board job', () => {
   let old = job(0, '1 tonic', '6 tusk')
   let proposed = deal(1, '1 tonic', '6 tusk', 'ada', 'hero')
   let refused = reply(proposed, 2, 'ada', 'declined')

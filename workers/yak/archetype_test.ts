@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { pkt } from '@yaks/git'
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
@@ -11,7 +12,7 @@ import {
   vocabFile,
 } from './probe.ts'
 
-Deno.test(
+test(
   'hosted app archetypes classify and query writes through the deployed Worker',
   async () => {
     let k = await kernel()

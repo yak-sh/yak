@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { claude, codex, type Event } from './readers.ts'
 
@@ -12,7 +13,7 @@ let reply = (...content: Event[]) => ({
 })
 let entries = (read: typeof claude, e: Event) => read(e).entries
 
-Deno.test('claude: who said it — a person, the harness, or the model', () => {
+test('claude: who said it — a person, the harness, or the model', () => {
   let human = { origin: { kind: 'human' } }
   let cases: [Event, unknown][] = [
     [say('fix it', human), [{ content: { body: 'fix it' } }]],
@@ -63,7 +64,7 @@ Deno.test('claude: who said it — a person, the harness, or the model', () => {
   for (let [e, want] of cases) assertEquals(entries(claude, e), want)
 })
 
-Deno.test('claude: a tool call and its result, a credential scrubbed from both', () => {
+test('claude: a tool call and its result, a credential scrubbed from both', () => {
   let use = {
     type: 'tool_use',
     id: 'toolu_1',
@@ -95,7 +96,7 @@ Deno.test('claude: a tool call and its result, a credential scrubbed from both',
   )
 })
 
-Deno.test('claude: a managed run opens with its id and ends with its cost', () => {
+test('claude: a managed run opens with its id and ends with its cost', () => {
   assertEquals(
     claude({ type: 'system', subtype: 'init', session_id: 'abc' }).about,
     { session: { id: 'abc' } },
@@ -140,7 +141,7 @@ Deno.test('claude: a managed run opens with its id and ends with its cost', () =
   assertEquals(claude(say('hi', { timestamp: 'T1' })).at, 'T1')
 })
 
-Deno.test('codex: what it said, what it ran, and the turn it closed', () => {
+test('codex: what it said, what it ran, and the turn it closed', () => {
   let run = (status: string, exit_code: number | null) => ({
     id: 'item_1',
     type: 'command_execution',

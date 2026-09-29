@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import {
@@ -38,7 +39,7 @@ let staged = async (response: Response, contains: string[]) => {
   for (let text of contains) assertStringIncludes(html, text)
 }
 
-Deno.test('pages: staging sign-in and error pages link to their own apex', async () => {
+test('pages: staging sign-in and error pages link to their own apex', async () => {
   for (
     let response of [
       lost(env),
@@ -54,7 +55,7 @@ Deno.test('pages: staging sign-in and error pages link to their own apex', async
   }
 })
 
-Deno.test('pages: staging space management and connector forms keep their host', async () => {
+test('pages: staging space management and connector forms keep their host', async () => {
   for (let view of ['apps', 'settings', 'connect', 'selling'] as const) {
     await staged(desk({ ...page, view }, env), [
       'ada.yaks.fyi',
@@ -97,7 +98,7 @@ Deno.test('pages: staging space management and connector forms keep their host',
   )
 })
 
-Deno.test('pages: only production offers its repository marketplace shortcut', async () => {
+test('pages: only production offers its repository marketplace shortcut', async () => {
   let yours = {
     slug: 'ada',
     fixed: true,
@@ -113,7 +114,7 @@ Deno.test('pages: only production offers its repository marketplace shortcut', a
   }
 })
 
-Deno.test('connections: the space’s ask of each person offers nothing to connect, and a person’s own is theirs to remove', async () => {
+test('connections: the space’s ask of each person offers nothing to connect, and a person’s own is theirs to remove', async () => {
   let drawn = async (own: boolean) =>
     await desk({
       ...page,
@@ -158,7 +159,7 @@ Deno.test('connections: the space’s ask of each person offers nothing to conne
   assertEquals(own.includes('Open to anyone'), false)
 })
 
-Deno.test('connections: the person’s own, then this space with what it could add, then each other space', async () => {
+test('connections: the person’s own, then this space with what it could add, then each other space', async () => {
   let shown = (integration: string, space: string | null) => ({
     eid: integration,
     integration,
@@ -236,7 +237,7 @@ Deno.test('connections: the person’s own, then this space with what it could a
   )
 })
 
-Deno.test('askConnect: the app, the service, the one form, and the way back', async () => {
+test('askConnect: the app, the service, the one form, and the way back', async () => {
   let html = await askConnect({
     app: 'Notes',
     face: CAL,
@@ -256,7 +257,7 @@ Deno.test('askConnect: the app, the service, the one form, and the way back', as
   ) assertStringIncludes(html, text)
 })
 
-Deno.test('connections: a built integration is offered by its face, and a site is linked only at https', async () => {
+test('connections: a built integration is offered by its face, and a site is linked only at https', async () => {
   let offered = async (site: string) =>
     await desk({
       ...page,
@@ -273,7 +274,7 @@ Deno.test('connections: a built integration is offered by its face, and a site i
   assertEquals((await offered('javascript:alert(1)')).includes('alert'), false)
 })
 
-Deno.test('paid plan settings describe unlimited apps', async () => {
+test('paid plan settings describe unlimited apps', async () => {
   const html = await desk({
     ...page,
     view: 'billing',

@@ -1,6 +1,7 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { promptEntry, snapshot } from './mod.ts'
-Deno.test('snapshots retain immutable text and source identity separately', async () => {
+test('snapshots retain immutable text and source identity separately', async () => {
   let a = await snapshot('old', 'graph:rules')
   let b = await snapshot('new', a.source)
   assertEquals(a.source, b.source)

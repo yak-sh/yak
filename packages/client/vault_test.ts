@@ -3,6 +3,7 @@
 // is written through and comes back, what it declares `none` does not, and
 // what the server owns was never this vault's business.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { boxClient, comp, fakeDb, fakeIdb } from './testing.ts'
 import { stash, type Vault } from './vault.ts'
@@ -25,7 +26,7 @@ let reload = async (vault: Vault) => {
   return next
 }
 
-Deno.test('a local comp survives a rebuild; a none comp does not', async () => {
+test('a local comp survives a rebuild; a none comp does not', async () => {
   let next = await reload(stash())
   assertEquals(comp(next.ent('r1'), 'draft').text, 'more cumin?')
   assertEquals(comp(next.ent('r1'), 'sieve'), {})
@@ -34,14 +35,14 @@ Deno.test('a local comp survives a rebuild; a none comp does not', async () => {
   next.close()
 })
 
-Deno.test('the same, kept in IndexedDB', async () => {
+test('the same, kept in IndexedDB', async () => {
   let next = await reload(fakeIdb(fakeDb()))
   assertEquals(comp(next.ent('r1'), 'draft').text, 'more cumin?')
   assertEquals(comp(next.ent('r1'), 'sieve'), {})
   next.close()
 })
 
-Deno.test('a rebuild keeps the number the entity had', async () => {
+test('a rebuild keeps the number the entity had', async () => {
   let vault = stash()
   let first = boxClient(undefined, { vault })
   await first.ready
@@ -54,7 +55,7 @@ Deno.test('a rebuild keeps the number the entity had', async () => {
   next.close()
 })
 
-Deno.test('a watch sees the local tier arrive at boot', async () => {
+test('a watch sees the local tier arrive at boot', async () => {
   let db = fakeDb()
   let done = await reload(fakeIdb(db))
   done.close()
@@ -67,7 +68,7 @@ Deno.test('a watch sees the local tier arrive at boot', async () => {
   c.close()
 })
 
-Deno.test('a dropped comp is written through', async () => {
+test('a dropped comp is written through', async () => {
   let vault = stash()
   let c = boxClient(undefined, { vault })
   await c.mutate([{ entity: { eid: 'r1' }, draft: { text: 'more cumin?' } }])
@@ -76,7 +77,7 @@ Deno.test('a dropped comp is written through', async () => {
   c.close()
 })
 
-Deno.test('a dead entity leaves the vault', async () => {
+test('a dead entity leaves the vault', async () => {
   let vault = stash()
   let c = boxClient(undefined, { vault })
   await c.mutate([{ entity: { eid: 'r1' }, draft: { text: 'more cumin?' } }])
@@ -85,7 +86,7 @@ Deno.test('a dead entity leaves the vault', async () => {
   c.close()
 })
 
-Deno.test('a wire-only write never touches the vault', async () => {
+test('a wire-only write never touches the vault', async () => {
   let vault = stash()
   let touched = 0
   let counted: Vault = {

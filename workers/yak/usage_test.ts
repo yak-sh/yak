@@ -1,5 +1,6 @@
 // Object ids keep usage with one deployment even when another deployment
 // holds the same app handle. Both analytics datasets must make that join.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -87,7 +88,7 @@ let ANSWER = {
   errors: null,
 }
 
-Deno.test('meter queries distinguish the same handle in two deployments', async () => {
+test('meter queries distinguish the same handle in two deployments', async () => {
   let { env } = platform('meter-staging', {
     CF_ACCOUNT: 'account',
     CF_ANALYTICS_TOKEN: 'read-only',
@@ -185,7 +186,7 @@ Deno.test('meter queries distinguish the same handle in two deployments', async 
   }
 })
 
-Deno.test('an analytics answer reads as one row per store', () => {
+test('an analytics answer reads as one row per store', () => {
   let by = read(ANSWER)
   assertEquals(by.get('jeff/recipe-box'), {
     requests: 133,
@@ -200,7 +201,7 @@ Deno.test('an analytics answer reads as one row per store', () => {
   assertEquals(by.get('jeff/nothing-yet'), undefined)
 })
 
-Deno.test('account usage includes the directory and active-socket messages', () => {
+test('account usage includes the directory and active-socket messages', () => {
   assertEquals(accountOf(ANSWER, new Date('2026-09-28T10:00:00Z')), {
     month: '2026-09',
     at: '2026-09-28T10:00:00.000Z',
@@ -210,7 +211,7 @@ Deno.test('account usage includes the directory and active-socket messages', () 
   })
 })
 
-Deno.test('a store in one dataset and not the other still reads', () => {
+test('a store in one dataset and not the other still reads', () => {
   let by = read({
     data: {
       viewer: {
@@ -232,7 +233,7 @@ Deno.test('a store in one dataset and not the other still reads', () => {
   })
 })
 
-Deno.test('a token that may not read analytics is a throw, not a zero', () => {
+test('a token that may not read analytics is a throw, not a zero', () => {
   // The API answers 200 with `errors` for an unauthorized token; metering
   // everyone at zero would quietly say every space is idle.
   assertThrows(
@@ -242,7 +243,7 @@ Deno.test('a token that may not read analytics is a throw, not a zero', () => {
   )
 })
 
-Deno.test('bytes read as a person says them', () => {
+test('bytes read as a person says them', () => {
   assertEquals(size(0), '0 B')
   assertEquals(size(999), '999 B')
   assertEquals(size(1536), '1.5 KB')
@@ -282,7 +283,7 @@ let space = (meter: Partial<Meter> = {}, tier: Tier | null = null): Space => ({
   },
 })
 
-Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
+test('a space is near a ceiling at 80% and over it at 100%', () => {
   assertEquals(level(space(), 1, NOW), 'ok')
   assertEquals(level(space({ requests: 39_999 }), 1, NOW), 'ok')
   assertEquals(level(space({ requests: 40_000 }), 1, NOW), 'near')
@@ -304,7 +305,7 @@ Deno.test('a space is near a ceiling at 80% and over it at 100%', () => {
   )
 })
 
-Deno.test('monthly serving quota: both tiers, comped spaces, and UTC reset', async () => {
+test('monthly serving quota: both tiers, comped spaces, and UTC reset', async () => {
   let req = new Request('https://jeff.yaks.app/')
   for (let tier of [null, 'free', 'plus'] as const) {
     let limit = tier == 'plus' ? PLUS.requests : FREE.requests
@@ -371,7 +372,7 @@ Deno.test('monthly serving quota: both tiers, comped spaces, and UTC reset', asy
   await december.body?.cancel()
 })
 
-Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
+test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   assertEquals(ceilings(null), FREE)
   assertEquals(ceilings('free'), FREE)
   assertEquals(ceilings('plus'), PLUS)
@@ -402,7 +403,7 @@ Deno.test('Plus ceilings are distinct and comped apps/data stay uncapped', () =>
   )
 })
 
-Deno.test('the line says every number against its ceiling', () => {
+test('the line says every number against its ceiling', () => {
   let said = standing(
     space({ requests: 41_000, bytes: 900 * 1024 ** 2 }),
     3,
@@ -419,7 +420,7 @@ Deno.test('the line says every number against its ceiling', () => {
   assertStringIncludes(said, 'App serving pauses at')
 })
 
-Deno.test('before the first sweep the line says so, not zero', () => {
+test('before the first sweep the line says so, not zero', () => {
   let said = standing(space({ at: '', emails: 3 }), 1, NOW)
   assertStringIncludes(said, '1 of 5 apps')
   assertStringIncludes(said, 'have not been read yet')
@@ -433,7 +434,7 @@ Deno.test('before the first sweep the line says so, not zero', () => {
 // A refusal points at the page that describes the plans and never at anything
 // that starts a purchase — the agent surface's policy line (C-33033 on
 // D-32751), which is why the assertion is on both halves.
-Deno.test('a refusal names the ceiling and where the plans are written', () => {
+test('a refusal names the ceiling and where the plans are written', () => {
   for (let what of ['apps', 'bytes', 'emails'] as const) {
     let said = atCeiling(space(), what)
     assertStringIncludes(said, 'free tier')
@@ -489,7 +490,7 @@ let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
   return { env, dir, space: await held(), held, read }
 }
 
-Deno.test('a free space gets five builds each month regardless of lifetime use', async () => {
+test('a free space gets five builds each month regardless of lifetime use', async () => {
   for (let builds of [0, 1, 4]) {
     assertEquals(await refusedBuild(space({ builds, built: 40 }), NOW), null)
   }
@@ -523,7 +524,7 @@ Deno.test('a free space gets five builds each month regardless of lifetime use',
   assertEquals(await refusedBuild(after, october), null)
 })
 
-Deno.test('a paid space counts its builds down, and the month gives them back', async () => {
+test('a paid space counts its builds down, and the month gives them back', async () => {
   let plus = (builds: number, month = '2026-09') =>
     space({ month, builds, built: 40 }, 'plus')
   assertEquals(await refusedBuild(plus(BUILDS.plus - 1), NOW), null)
@@ -553,7 +554,7 @@ Deno.test('a paid space counts its builds down, and the month gives them back', 
   })
 })
 
-Deno.test('the build line warns at 80%, and the line says both numbers', () => {
+test('the build line warns at 80%, and the line says both numbers', () => {
   assertEquals(
     level(space({ builds: BUILDS.plus * 0.8 - 1, built: 40 }, 'plus'), 1, NOW),
     'ok',
@@ -585,7 +586,7 @@ Deno.test('the build line warns at 80%, and the line says both numbers', () => {
   )
 })
 
-Deno.test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped spaces bypass it', async () => {
+test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped spaces bypass it', async () => {
   let { env } = platform('plus-bytes')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   await dir.apply({
@@ -624,7 +625,7 @@ Deno.test('Plus byte writes use the 10 GB ceiling as the stores last told it; co
   )
 })
 
-Deno.test('R2 files use every page of the space prefix, not a sibling or shared pins', async () => {
+test('R2 files use every page of the space prefix, not a sibling or shared pins', async () => {
   let { env } = platform('files-pages')
   let calls: (string | undefined)[] = []
   env.BLOBS.list = ({ prefix, cursor }) => {
@@ -646,7 +647,7 @@ Deno.test('R2 files use every page of the space prefix, not a sibling or shared 
   assertEquals(calls, [undefined, 'next'])
 })
 
-Deno.test('file ceilings use live R2 growth, allow duplicates and shrinking overwrites', async () => {
+test('file ceilings use live R2 growth, allow duplicates and shrinking overwrites', async () => {
   let { env } = platform('files-full')
   for (let tier of ['free', 'plus'] as const) {
     let cap = FILES[tier]
@@ -695,7 +696,7 @@ Deno.test('file ceilings use live R2 growth, allow duplicates and shrinking over
   }
 })
 
-Deno.test('R2 accounting sweeps without analytics, follows deletion and survives the month', async () => {
+test('R2 accounting sweeps without analytics, follows deletion and survives the month', async () => {
   let { env, files } = platform('files-sweep')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   await dir.apply({
@@ -732,7 +733,7 @@ Deno.test('R2 accounting sweeps without analytics, follows deletion and survives
   )
 })
 
-Deno.test('all quota guidance uses space plan settings without promising a Plus upgrade', () => {
+test('all quota guidance uses space plan settings without promising a Plus upgrade', () => {
   for (
     const what of [
       'apps',
@@ -765,7 +766,7 @@ Deno.test('all quota guidance uses space plan settings without promising a Plus 
 
 // The account (T-37882): a free allowance is the owner's, summed over the free
 // spaces they own, and a Plus space answers to its own alone.
-Deno.test('a free space answers to the free spaces its owner owns, summed', async () => {
+test('a free space answers to the free spaces its owner owns, summed', async () => {
   let as = (eid: string, meter: Partial<Meter>, tier: Tier | null = null) => ({
     ...space(meter, tier),
     eid,
@@ -799,7 +800,7 @@ Deno.test('a free space answers to the free spaces its owner owns, summed', asyn
   assertEquals(await refusedSpend(dir, paid, 'emails', {}, 0, NOW), null)
 })
 
-Deno.test('a conversation that shipped nothing pays for its model and seconds', async () => {
+test('a conversation that shipped nothing pays for its model and seconds', async () => {
   let c = await counting({
     month: '2026-09',
     models: 0.5,
@@ -816,7 +817,7 @@ Deno.test('a conversation that shipped nothing pays for its model and seconds', 
 // The meter is the directory's to add up (meter.ts `spend`): a count that
 // lands beside another, or while the hourly sweep is reading, is never
 // written over by a total somebody else worked out.
-Deno.test('spends counted at once all count, and the sweep keeps them', async () => {
+test('spends counted at once all count, and the sweep keeps them', async () => {
   let c = await counting({ month: '2026-08', models: 0.5, emails: 12 }, {
     CF_ACCOUNT: 'account',
     CF_ANALYTICS_TOKEN: 'read-only',
@@ -858,7 +859,7 @@ Deno.test('spends counted at once all count, and the sweep keeps them', async ()
   })
 })
 
-Deno.test('models and voice spend one account budget, each counted apart', async () => {
+test('models and voice spend one account budget, each counted apart', async () => {
   let half = BUDGET.free / 2
   let both = space({ models: half, realtime: half })
   assert(await refusedSpend(alone, both, 'models', {}, 0, NOW))

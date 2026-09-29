@@ -1,9 +1,10 @@
 // One hero's tick never completes another hero's village task.
+import { test } from '@yaks/testing'
 import { assertEquals, assertNotEquals } from '@std/assert'
 import { finished, WELCOME } from '../vale/village-tasks.ts'
 import { completed, completionEid } from './state.js'
 
-Deno.test('a village task completion belongs to one hero', async () => {
+test('a village task completion belongs to one hero', async () => {
   let task = WELCOME, first = crypto.randomUUID(), second = crypto.randomUUID()
   let eid = await completionEid(task, first)
   assertEquals(eid, await completionEid(task, first))

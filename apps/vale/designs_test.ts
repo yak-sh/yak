@@ -1,5 +1,6 @@
 // A watched design edit keeps unrelated ground and refreshes the ground,
 // buildings and collision where the changed design reaches.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import buildings from './seed/buildings/plans.json' with { type: 'json' }
 import themes from './seed/themes.json' with { type: 'json' }
@@ -15,7 +16,7 @@ import {
   vale,
 } from './terrain.ts'
 
-Deno.test('one land theme keeps another land’s cached terrain', () => {
+test('one land theme keeps another land’s cached terrain', () => {
   let rows = themes as Bundle[]
   installThemeDesigns(rows)
   installBuildingDesigns(buildings as Bundle[])
@@ -38,7 +39,7 @@ Deno.test('one land theme keeps another land’s cached terrain', () => {
   }
 })
 
-Deno.test('one building plan refreshes its terrain and collision', () => {
+test('one building plan refreshes its terrain and collision', () => {
   let rows = buildings as Bundle[]
   installThemeDesigns(themes as Bundle[])
   installBuildingDesigns(rows)

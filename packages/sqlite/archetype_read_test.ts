@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
@@ -21,7 +22,7 @@ let vocab = loadVocab([...shop.docs, archetypeDoc, {
   },
 }])
 
-Deno.test('archetype gather golden: nulls, tags, refs, derived, stubs, graves, order and duplicates', () => {
+test('archetype gather golden: nulls, tags, refs, derived, stubs, graves, order and duplicates', () => {
   let driver = mem()
   let s = storage(driver, vocab)
   s.install()
@@ -51,7 +52,7 @@ Deno.test('archetype gather golden: nulls, tags, refs, derived, stubs, graves, o
   assert(get(driver, vocab, ['stub'])[0].entity.archetype)
 })
 
-Deno.test('archetype gather golden: wide sparse sets, chunks and a smaller reader vocabulary', () => {
+test('archetype gather golden: wide sparse sets, chunks and a smaller reader vocabulary', () => {
   let driver = mem()
   let wide = loadVocab([...vocab.docs, {
     $defs: Object.fromEntries(Array.from({ length: 405 }, (_, i) => [
@@ -87,7 +88,7 @@ Deno.test('archetype gather golden: wide sparse sets, chunks and a smaller reade
   assertEquals(get(driver, wide, ids), census(driver, wide, ids))
 })
 
-Deno.test('classified gathers select only present tables and only their owners', () => {
+test('classified gathers select only present tables and only their owners', () => {
   let asked: { sql: string; params: unknown[] }[] = []
   let driver = spy(
     mem(),

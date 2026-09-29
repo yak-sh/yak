@@ -1,5 +1,6 @@
 // The service: a loop over the queue, whoever wrote what it holds.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { service } from './service.ts'
 import { TABLE } from './ddl.ts'
@@ -36,13 +37,13 @@ let quiet = async (test: (said: unknown[]) => Promise<void>) => {
   }
 }
 
-Deno.test('one pass when the signal has already ended, the way a command runs it', async () => {
+test('one pass when the signal has already ended, the way a command runs it', async () => {
   let db = shelf()
   await service({ vocab: shop, sql: db }, { embedder: { via: 'hash' } })
   assertEquals(count(db), 4)
 })
 
-Deno.test('a backlog drains pass after pass, then a write from anywhere is found', async () => {
+test('a backlog drains pass after pass, then a write from anywhere is found', async () => {
   let { db, end } = running({ embedder: { via: 'hash' }, batch: 1, after: 1 })
   await until(() => count(db) == 4)
   entity(db, 9, 'book-9')
@@ -51,7 +52,7 @@ Deno.test('a backlog drains pass after pass, then a write from anywhere is found
   await end()
 })
 
-Deno.test('a key that arrives late starts the embedding, without anybody restarting', async () => {
+test('a key that arrives late starts the embedding, without anybody restarting', async () => {
   await quiet(async (said) => {
     let key: string | undefined
     let fetch = (_: string, init?: { body?: string }) => {
@@ -84,7 +85,7 @@ Deno.test('a key that arrives late starts the embedding, without anybody restart
   })
 })
 
-Deno.test('a model that cannot be reached is reported, and the work waits for it', async () => {
+test('a model that cannot be reached is reported, and the work waits for it', async () => {
   await quiet(async (said) => {
     let up = false
     let fetch = (_: string, init?: { body?: string }) => {
@@ -109,7 +110,7 @@ Deno.test('a model that cannot be reached is reported, and the work waits for it
   })
 })
 
-Deno.test('the host ending stops the loop: nothing runs afterwards', async () => {
+test('the host ending stops the loop: nothing runs afterwards', async () => {
   await quiet(async (said) => {
     let { db, end } = running({ embedder: { via: 'hash' }, after: 1 })
     await until(() => count(db) == 4)

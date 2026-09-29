@@ -1,6 +1,7 @@
 // What an agent in a checkout is owed of its persona, given the instruction
 // files its provider reads there.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { human } from '@yaks/id'
@@ -21,14 +22,14 @@ let spoken = async (g: Graph, eid: string) =>
 let id = async (g: Graph, eid: string) =>
   human(g.vocab)((await g.get([eid]))[0])
 
-Deno.test('an agent in any checkout of the repository is owed its common persona', async () => {
+test('an agent in any checkout of the repository is owed its common persona', async () => {
   let g = fleet('/r')
   let owes = await owed(g, '/r/agent', [])
   assertEquals(owes?.text, await spoken(g, 'n1'))
   assertEquals(owes?.source, await id(g, 'n1'))
 })
 
-Deno.test('a file that is the persona file is not said twice; any other file is', async () => {
+test('a file that is the persona file is not said twice; any other file is', async () => {
   let g = fleet('/r')
   let file = await agentsMd(g)
   assertEquals(await owed(g, '/r/agent', ['# elsewhere\n', file]), undefined)
@@ -43,7 +44,7 @@ Deno.test('a file that is the persona file is not said twice; any other file is'
   assertEquals((await owed(g, '/r', [file]))?.text, await spoken(g, 'n1'))
 })
 
-Deno.test('a checkout the graph does not know, or a project with no common persona, is owed nothing', async () => {
+test('a checkout the graph does not know, or a project with no common persona, is owed nothing', async () => {
   assertEquals(await owed(fleet('/r'), '/elsewhere', []), undefined)
   let bare = then(fleet('/r'), {
     entity: { eid: 'n1' },
@@ -52,7 +53,7 @@ Deno.test('a checkout the graph does not know, or a project with no common perso
   assertEquals(await owed(bare, '/r/agent', []), undefined)
 })
 
-Deno.test('a chosen persona is omitted when its file says it', async () => {
+test('a chosen persona is omitted when its file says it', async () => {
   let g = fleet('/r')
   let worn = (await wear(g.storage, g.vocab)('n2'))!
   assertEquals(
@@ -70,7 +71,7 @@ Deno.test('a chosen persona is omitted when its file says it', async () => {
   )
 })
 
-Deno.test("a sub-project's agent hears its own common persona and its parent's", async () => {
+test("a sub-project's agent hears its own common persona and its parent's", async () => {
   let g = nested('/r')
   let owes = await owed(g, '/r/agent', [], { work: 't1' })
   assertEquals(owes?.source, await id(g, 'n3'))
@@ -82,7 +83,7 @@ Deno.test("a sub-project's agent hears its own common persona and its parent's",
   assert(rest?.includes('third') && !rest.includes('first'), rest)
 })
 
-Deno.test("a sub-project with no persona of its own hears its parent's", async () => {
+test("a sub-project with no persona of its own hears its parent's", async () => {
   let g = nested('/r')
   assertEquals(
     (await owed(g, '/r/agent', [], { work: 't2' }))?.text,

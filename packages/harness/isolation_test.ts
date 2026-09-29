@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
 import { local } from './local.ts'
 import { harness } from './testing.ts'
 
-Deno.test('agent rejects a spread harness', async () => {
+test('agent rejects a spread harness', async () => {
   let h = await harness()
   try {
     assertThrows(

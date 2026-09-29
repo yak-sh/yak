@@ -2,7 +2,7 @@
 // tests exercise the worker boundary, where an eager pass once gated service.
 
 import { assertEquals } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { thread } from './thread.ts'
 
 let clock = async (pass = false) => {
@@ -35,7 +35,7 @@ let clock = async (pass = false) => {
   return { config, dir, marker, plugin }
 }
 
-Deno.test('live duties do not wait on a one-shot pass', async () => {
+test('live duties do not wait on a one-shot pass', async () => {
   let { config, dir, marker, plugin } = await clock()
   let aside = thread()
   let stop = new AbortController()
@@ -64,7 +64,7 @@ Deno.test('live duties do not wait on a one-shot pass', async () => {
   }
 })
 
-Deno.test('an ended duty signal runs one pass', async () => {
+test('an ended duty signal runs one pass', async () => {
   let { config, dir, marker, plugin } = await clock(true)
   let aside = thread()
   aside.plan({ config, roles: [plugin] })

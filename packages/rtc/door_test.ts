@@ -3,6 +3,7 @@
 // an app's store (@yaks/ram) and a Realtime that answers the way Cloudflare's
 // schema says it does.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -107,7 +108,7 @@ let app = (allowance = Infinity) => {
   }
 }
 
-Deno.test('opening a session keeps it here under a lease, and hands its key back once', async () => {
+test('opening a session keeps it here under a lease, and hands its key back once', async () => {
   let a = app()
   let { status, body } = await a.call('POST', '/sessions/new')
   assertEquals(status, 201)
@@ -120,7 +121,7 @@ Deno.test('opening a session keeps it here under a lease, and hands its key back
   assertEquals(a.rt.sent[0].auth, 'Bearer secret')
 })
 
-Deno.test('a session opens at the ceiling as a refusal, and nothing at Realtime', async () => {
+test('a session opens at the ceiling as a refusal, and nothing at Realtime', async () => {
   let a = app(0)
   let { status, body } = await a.call('POST', '/sessions/new')
   assertEquals(status, 429)
@@ -128,7 +129,7 @@ Deno.test('a session opens at the ceiling as a refusal, and nothing at Realtime'
   assertEquals(a.rt.sent, [])
 })
 
-Deno.test('a change to a session carries the key it was opened with', async () => {
+test('a change to a session carries the key it was opened with', async () => {
   let a = app()
   let s = await a.open()
   let offer = { sessionDescription: { type: 'offer', sdp: 'v=0' } }
@@ -155,7 +156,7 @@ Deno.test('a change to a session carries the key it was opened with', async () =
   assertEquals(last.body, { ...offer, tracks })
 })
 
-Deno.test('a session subscribes only to sessions this store holds, and not at the ceiling', async () => {
+test('a session subscribes only to sessions this store holds, and not at the ceiling', async () => {
   let a = app(1)
   let me = await a.open()
   await a.open()
@@ -171,7 +172,7 @@ Deno.test('a session subscribes only to sessions this store holds, and not at th
   assertEquals((await hear('s2')).body.error.code, 'limit')
 })
 
-Deno.test('a renewal moves the lease, and weighs what the session receives over the time it adds', async () => {
+test('a renewal moves the lease, and weighs what the session receives over the time it adds', async () => {
   let a = app()
   let me = await a.open()
   a.rt.receiving.s1 = [
@@ -194,7 +195,7 @@ Deno.test('a renewal moves the lease, and weighs what the session receives over 
   assertEquals(a.spent, 60)
 })
 
-Deno.test('a lapsed lease closes what the session still has open, and forgets it', async () => {
+test('a lapsed lease closes what the session still has open, and forgets it', async () => {
   let a = app()
   await a.open()
   a.rt.receiving.s1 = [{ mid: '3', location: 'remote' }]
@@ -210,7 +211,7 @@ Deno.test('a lapsed lease closes what the session still has open, and forgets it
   )
 })
 
-Deno.test('ICE servers come from TURN, asked with its own token', async () => {
+test('ICE servers come from TURN, asked with its own token', async () => {
   let a = app()
   let { status, body } = await a.call('POST', '/ice')
   assertEquals(status, 201)

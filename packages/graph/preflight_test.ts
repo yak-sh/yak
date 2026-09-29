@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import { detached } from './storage.ts'
@@ -7,7 +8,7 @@ import { books, comp, memory, slow } from './testing.ts'
 import type { Bundle } from './bundle.ts'
 
 for (let async of [false, true]) {
-  Deno.test(`preflight sees ordered prefix and rolls back rehearsal (${async ? 'async' : 'sync'})`, async () => {
+  test(`preflight sees ordered prefix and rolls back rehearsal (${async ? 'async' : 'sync'})`, async () => {
     let storage = async ? slow(memory()) : memory()
     let seen: unknown[] = []
     let check = preflight(
@@ -48,7 +49,7 @@ for (let async of [false, true]) {
     assertEquals(effects, 1)
   })
 
-  Deno.test(`preflight refusal rolls back prefix, late tombstone writes are void (${async ? 'async' : 'sync'})`, async () => {
+  test(`preflight refusal rolls back prefix, late tombstone writes are void (${async ? 'async' : 'sync'})`, async () => {
     let storage = async ? slow(memory()) : memory()
     let calls = 0
     let check = preflight(storage, books, (bs) => {

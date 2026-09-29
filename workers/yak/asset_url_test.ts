@@ -1,9 +1,10 @@
 // A page's static references move as a release, while its app calls and links
 // stay where the page put them.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { assetMaps, assetPath, assetUrl, releaseId } from './asset_url.ts'
 
-Deno.test('release URLs keep local assets under their mount', () => {
+test('release URLs keep local assets under their mount', () => {
   let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
   assertEquals(releaseId(`ada/.releases/app/${id}`), id)
   assertEquals(releaseId('ada/cookbook'), null)
@@ -39,7 +40,7 @@ Deno.test('release URLs keep local assets under their mount', () => {
   )
 })
 
-Deno.test('local import-map values, URL keys, and scopes follow a release', () => {
+test('local import-map values, URL keys, and scopes follow a release', () => {
   let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
   let html = `<script type=importmap>{"imports":{` +
     `"@local":"./scripts/chunk.js",` +

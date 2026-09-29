@@ -1,6 +1,7 @@
 // The open-state digest against the platform's closed one: same bytes, same
 // twenty, however the bytes arrive.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { hex } from './oid.ts'
 import { sha1 } from './sha1.ts'
@@ -23,7 +24,7 @@ let fed = (bytes: Uint8Array, runs: number[]): string => {
 let some = (n: number): Uint8Array<ArrayBuffer> =>
   Uint8Array.from({ length: n }, (_, i) => (i * 37 + 11) % 256)
 
-Deno.test("the digest is the platform's, at every padding boundary", async () => {
+test("the digest is the platform's, at every padding boundary", async () => {
   // 55/56/64 are where the length word does and does not fit in the block.
   for (let n of [0, 1, 3, 55, 56, 63, 64, 65, 119, 120, 128, 1000]) {
     let bytes = some(n)
@@ -31,7 +32,7 @@ Deno.test("the digest is the platform's, at every padding boundary", async () =>
   }
 })
 
-Deno.test('how the bytes arrive is nothing to the digest', async () => {
+test('how the bytes arrive is nothing to the digest', async () => {
   let bytes = some(1000)
   let want = await subtle(bytes)
   for (let runs of [[1], [7], [63], [64], [65], [1, 100, 3], [500]]) {

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { artifactDoc } from '@yaks/blob'
 import { loadVocab } from '@yaks/vocab'
@@ -12,7 +13,7 @@ import { at } from './testing.ts'
 
 let { vocab } = await words(at())
 
-Deno.test('package JSON declarations preserve artifact references and compose with the rest', () => {
+test('package JSON declarations preserve artifact references and compose with the rest', () => {
   assertEquals(artifactDoc, artifact)
   assertEquals<unknown>(
     { ...harnessDoc.$defs, ...workspaceDoc.$defs },
@@ -28,7 +29,7 @@ Deno.test('package JSON declarations preserve artifact references and compose wi
   ])
 })
 
-Deno.test('frontend and projection vocabularies stay separate from stored backend fields', () => {
+test('frontend and projection vocabularies stay separate from stored backend fields', () => {
   assertEquals(frontendVocab.comp('draft')?.durable, 'connection')
   assertEquals(frontendVocab.comp('savedDraft')?.sync, 'none')
   assertEquals(vocab.comp('savedDraft'), undefined)

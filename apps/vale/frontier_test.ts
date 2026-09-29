@@ -1,4 +1,5 @@
 // Generated country remains the same on every page and gets harder outward.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { foeOf } from './danger.ts'
@@ -16,7 +17,7 @@ seedDesigns()
 
 seedBuildings()
 
-Deno.test('frontier cells grow named lands with their own terrain and wildlife', () => {
+test('frontier cells grow named lands with their own terrain and wildlife', () => {
   let near = levelAt(5, 0), far = levelAt(10, 0)
   assertEquals(levelOf(near.id), near)
   assertEquals(levelOf('frontier_0_0'), undefined)
@@ -30,7 +31,7 @@ Deno.test('frontier cells grow named lands with their own terrain and wildlife',
   assert(foeOf(kind, far.id).lvl > foeOf(kind, near.id).lvl)
 })
 
-Deno.test('roads carry the frontier into authored country and onward', () => {
+test('roads carry the frontier into authored country and onward', () => {
   let edge = levelAt(5, 0)
   assertEquals(edge.id, frontierId(5, 0))
   assertEquals(LEVELS.frostpine.cell, [4, 0])

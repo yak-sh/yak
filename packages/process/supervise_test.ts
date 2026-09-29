@@ -5,6 +5,7 @@
 // driven explicitly rather than on a timer, so a respawn is one call and the
 // tally is exactly what the assertion reads.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS, SERVICE } from './comp.ts'
@@ -26,7 +27,7 @@ let living = async (pid: number) =>
     stderr: 'null',
   }).output()).success
 
-Deno.test('a failing service is respawned once, onto the same row', async () => {
+test('a failing service is respawned once, onto the same row', async () => {
   let g = tracked()
   let pass = supervise(store(g), care())
   await g.apply([{
@@ -52,7 +53,7 @@ Deno.test('a failing service is respawned once, onto the same row', async () => 
   assert(Number(comp(await row(), PROCESS)?.pid) != before)
 })
 
-Deno.test('restart never leaves the ending standing', async () => {
+test('restart never leaves the ending standing', async () => {
   let g = tracked()
   let pass = supervise(store(g), care())
   await g.apply([{
@@ -69,7 +70,7 @@ Deno.test('restart never leaves the ending standing', async () => {
 // The TERM goes to the wrapper's process group, which exists only if the
 // launcher gave the wrapper a session of its own.
 for (let os of launchers) {
-  Deno.test(`${os}: a stop ends an always service, and nothing respawns after it`, async () => {
+  test(`${os}: a stop ends an always service, and nothing respawns after it`, async () => {
     let g = tracked()
     let pass = supervise(store(g), { ...care(), os })
     await g.apply([{
@@ -91,7 +92,7 @@ for (let os of launchers) {
   })
 }
 
-Deno.test('deleting the service row takes its process down', async () => {
+test('deleting the service row takes its process down', async () => {
   let g = tracked()
   let pass = supervise(store(g), care())
   await g.apply([{
@@ -105,7 +106,7 @@ Deno.test('deleting the service row takes its process down', async () => {
   await run.done
 })
 
-Deno.test('supervise refuses its own program, and whatever else the host names', async () => {
+test('supervise refuses its own program, and whatever else the host names', async () => {
   let g = tracked()
   let self = (Deno.mainModule ?? '').split('/').pop() ?? ''
   assert(self, 'the test runner has a main module')

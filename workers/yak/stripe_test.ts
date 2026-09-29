@@ -1,5 +1,6 @@
 // The Stripe client (stripe.ts): what goes on the wire, and a call asked
 // again when it did not get through, against a Stripe stood in by `fetch`.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { FakeTime } from '@std/testing/time'
@@ -7,7 +8,7 @@ import { ask, form } from './stripe.ts'
 
 // --- what goes on the wire to Stripe -------------------------------------
 
-Deno.test('form encoding nests the way Stripe reads it', () => {
+test('form encoding nests the way Stripe reads it', () => {
   assertEquals(
     form({
       mode: 'subscription',
@@ -61,7 +62,7 @@ let settled = async <T>(time: FakeTime, p: Promise<T>) => {
   return p
 }
 
-Deno.test('a write that did not get through is asked again, as one write', async () => {
+test('a write that did not get through is asked again, as one write', async () => {
   for (let first of [lost(), held()]) {
     using time = new FakeTime()
     using s = stripe(first, made())
@@ -73,7 +74,7 @@ Deno.test('a write that did not get through is asked again, as one write', async
   }
 })
 
-Deno.test('a refusal is said once, and a call never answered fails', async () => {
+test('a refusal is said once, and a call never answered fails', async () => {
   {
     using s = stripe(
       Response.json({ error: { message: 'No such customer' } }, {

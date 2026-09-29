@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import {
@@ -22,7 +23,7 @@ let changes = (eid: string) => [
   { eid, name: 'comment', comp: { target: 'card' } },
 ]
 
-Deno.test('reopen paints retained rows before sending; confirmation removes stale hits', () => {
+test('reopen paints retained rows before sending; confirmation removes stale hits', () => {
   cache.value = {}
   restore()
   let route = useRoute(() => {})
@@ -63,7 +64,7 @@ Deno.test('reopen paints retained rows before sending; confirmation removes stal
   }
 })
 
-Deno.test('retained tombstones never resurrect through reads', () => {
+test('retained tombstones never resurrect through reads', () => {
   let route = useRoute(() => {})
   try {
     cache.value = {}
@@ -77,7 +78,7 @@ Deno.test('retained tombstones never resurrect through reads', () => {
   }
 })
 
-Deno.test('ownership-only retention does not expand a confirmed bounded query', () => {
+test('ownership-only retention does not expand a confirmed bounded query', () => {
   let route = useRoute(() => {})
   let preds = parseQuery('.comment.target=card')
   let sub = `q:${JSON.stringify(preds)}`
@@ -102,7 +103,7 @@ Deno.test('ownership-only retention does not expand a confirmed bounded query', 
   }
 })
 
-Deno.test('bounded confirmation does not invalidate retained rows outside its page', () => {
+test('bounded confirmation does not invalidate retained rows outside its page', () => {
   let route = useRoute(() => {})
   try {
     cache.value = {}
@@ -129,7 +130,7 @@ Deno.test('bounded confirmation does not invalidate retained rows outside its pa
   }
 })
 
-Deno.test('full confirmation drops removed components without blanking retained rows', () => {
+test('full confirmation drops removed components without blanking retained rows', () => {
   let route = useRoute(() => {})
   try {
     cache.value = {}

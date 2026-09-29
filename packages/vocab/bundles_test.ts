@@ -2,6 +2,7 @@
 // @yaks/ram: what loads from the bundles is what loaded from the documents,
 // and the queries that describe a vocabulary answer from its entities.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
@@ -96,7 +97,7 @@ let load = (docs: VocabDoc[]) => loadVocab(docs, words)
 let bundlesOf = (docs: VocabDoc[], id: Ids) =>
   docs.flatMap((d) => toBundles(d, id))
 
-Deno.test('a vocabulary loads back from its bundles as it was', () => {
+test('a vocabulary loads back from its bundles as it was', () => {
   let docs = [kitchen, tagger, docDoc]
   assertEquals(
     facts(load(fromBundles(bundlesOf(docs, plain)))),
@@ -104,7 +105,7 @@ Deno.test('a vocabulary loads back from its bundles as it was', () => {
   )
 })
 
-Deno.test('a union type, the declared order and every keyword survive', () => {
+test('a union type, the declared order and every keyword survive', () => {
   let back = load(fromBundles(bundlesOf([kitchen, tagger, docDoc], plain)))
   assertEquals(back.prop('recipe', 'serves')?.types, ['number', 'string'])
   assertEquals(back.props('recipe'), [
@@ -151,7 +152,7 @@ let described = () => {
   return { g, id, put, titles }
 }
 
-Deno.test('the queries that describe a vocabulary answer from its entities', async () => {
+test('the queries that describe a vocabulary answer from its entities', async () => {
   let { g, id, put, titles } = described()
   let meta = { ...metaDoc, package: '@yaks/vocab' }
   await put([kitchen, tagger, meta, docDoc])
@@ -215,7 +216,7 @@ Deno.test('the queries that describe a vocabulary answer from its entities', asy
   )
 })
 
-Deno.test('a document read again states each row whole', async () => {
+test('a document read again states each row whole', async () => {
   let { g, put } = described()
   await put([kitchen])
   let { kind: _, description: __, ...plainer } = kitchen.$defs!.recipe

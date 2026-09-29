@@ -1,5 +1,6 @@
 // Villagers find the furnishings of placed buildings and walk through their
 // doors and stairs under the same collision rules as the hero.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { lifeOf } from './lives.ts'
@@ -14,7 +15,7 @@ seedThemes()
 
 seedBuildings()
 
-Deno.test('the tailor works beside the loom and can walk there from home', () => {
+test('the tailor works beside the loom and can walk there from home', () => {
   let v = vale(), elsie = GIVERS.find((g) => g.id == 'elsie')!
   let life = lifeOf(elsie, v), loom = life.work!
   let station = stationsNear(v, loom[0], loom[2], 2)
@@ -28,7 +29,7 @@ Deno.test('the tailor works beside the loom and can walk there from home', () =>
   for (let [x, y, z] of path) assert(fits(v, x, z, y))
 })
 
-Deno.test('smith and tailor work to the side while the station stays open', () => {
+test('smith and tailor work to the side while the station stays open', () => {
   let v = vale()
   for (let [id, craft] of [['rowan', 'forge'], ['elsie', 'loom']] as const) {
     let g = GIVERS.find((g) => g.id == id)!
@@ -51,7 +52,7 @@ Deno.test('smith and tailor work to the side while the station stays open', () =
   }
 })
 
-Deno.test('villagers sharing a village have separate places to rest and meet', () => {
+test('villagers sharing a village have separate places to rest and meet', () => {
   let v = vale()
   for (let id of ['wren', 'pip']) {
     assert(lifeOf(GIVERS.find((g) => g.id == id)!, v).inn)

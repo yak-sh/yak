@@ -5,7 +5,7 @@
 // the door's number from one address, of which exactly one is turned away,
 // and then another address that is still let in.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { connector, kernel, seed } from './probe.ts'
 
 let from = (ip: string) => ({ 'cf-connecting-ip': ip })
@@ -33,7 +33,7 @@ let one = <T>(answers: T[], away: (a: T) => boolean) => {
   return out[0]
 }
 
-Deno.test(
+test(
   'a stranger is held to a rate per source at every anonymous door',
   async () => {
     let k = await kernel()

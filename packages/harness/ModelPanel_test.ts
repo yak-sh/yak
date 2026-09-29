@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -11,7 +12,7 @@ import { identityEid } from '@yaks/graph'
 import type { Request } from '@yaks/model'
 import { harness, mount, repo } from './testing.ts'
 
-Deno.test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
+test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
   const hnd = await harness()
   const requests: Request[] = []
   const a = local({
@@ -85,7 +86,7 @@ Deno.test('m chooses a model for a new draft; existing choice is passive, Esc pr
   }
 })
 
-Deno.test('model row mouse selection preserves INSERT and does not submit a draft', async () => {
+test('model row mouse selection preserves INSERT and does not submit a draft', async () => {
   const hnd = await harness()
   let requests = 0
   const a = local({

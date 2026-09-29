@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { VirtualList } from './VirtualList.ts'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -26,7 +27,7 @@ let el = (text = '') => {
   if (text) node.appendChild(new TText(text))
   return node
 }
-Deno.test('SGR coordinates, modifiers, releases and fragmented reports stay distinct', () => {
+test('SGR coordinates, modifiers, releases and fragmented reports stay distinct', () => {
   assertEquals(decode('\x1b[<65;3;4M'), [{ ...wheel(2, 3) }])
   let report = decode('\x1b[<28;1;2m')[0] as Mouse
   assertEquals([
@@ -43,7 +44,7 @@ Deno.test('SGR coordinates, modifiers, releases and fragmented reports stay dist
   assertEquals(read('3;4M'), [wheel(2, 3)])
   assertEquals(decode('\x1b[A'), [{ name: 'up' }])
 })
-Deno.test('paint ownership scopes siblings, bubbles, consumes and clips after resize', () => {
+test('paint ownership scopes siblings, bubbles, consumes and clips after resize', () => {
   let root = el(), left = el('left'), right = el('right')
   root.setAttribute('row', '1')
   left.setAttribute('width', '5')
@@ -83,7 +84,7 @@ Deno.test('paint ownership scopes siblings, bubbles, consumes and clips after re
   assertEquals(hit(lines, 6, 0), undefined)
   assertEquals(hit(lines, 1, 1), undefined)
 })
-Deno.test('scroll clips hidden descendants and terminal reporting restores saved modes', () => {
+test('scroll clips hidden descendants and terminal reporting restores saved modes', () => {
   let root = el(), hidden = el('hidden'), visible = el('visible')
   root.setAttribute('scroll', '1')
   root.setAttribute('height', '1')
@@ -103,7 +104,7 @@ Deno.test('scroll clips hidden descendants and terminal reporting restores saved
   assert(output.includes('\x1b[?1006r\x1b[?1000r'))
   assert(output.includes('\x1b[?1007h'))
 })
-Deno.test('Preact onWheel scrolls only the pointed sibling, not keyboard focus', async () => {
+test('Preact onWheel scrolls only the pointed sibling, not keyboard focus', async () => {
   let ui = await mount(
     () =>
       h(
@@ -132,7 +133,7 @@ Deno.test('Preact onWheel scrolls only the pointed sibling, not keyboard focus',
   }
 })
 
-Deno.test('virtual wheel stays lazy over 10000 items and bubbles at bottom', async () => {
+test('virtual wheel stays lazy over 10000 items and bubbles at bottom', async () => {
   let renders = 0, bubbled = 0
   let items = Array.from({ length: 10000 }, (_, i) => ({ id: String(i) }))
   let ui = await mount(
@@ -170,7 +171,7 @@ Deno.test('virtual wheel stays lazy over 10000 items and bubbles at bottom', asy
   }
 })
 
-Deno.test('nested Preact handlers bubble from inline target and disappear on unmount', async () => {
+test('nested Preact handlers bubble from inline target and disappear on unmount', async () => {
   let events: string[] = []
   let ui = await mount(
     () =>
@@ -203,7 +204,7 @@ Deno.test('nested Preact handlers bubble from inline target and disappear on unm
   }
 })
 
-Deno.test('clicks bubble after primary press/release; drags and other buttons do not click', async () => {
+test('clicks bubble after primary press/release; drags and other buttons do not click', async () => {
   let clicks = 0
   let parentClicks = 0
   const ui = await mount(
@@ -231,7 +232,7 @@ Deno.test('clicks bubble after primary press/release; drags and other buttons do
   }
 })
 
-Deno.test('click propagation can be stopped with normal Preact handlers', async () => {
+test('click propagation can be stopped with normal Preact handlers', async () => {
   let outer = 0, inner = 0
   const ui = await mount(
     () =>

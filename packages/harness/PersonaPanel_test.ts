@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Comp } from '@yaks/graph'
@@ -7,7 +8,7 @@ import { App } from './app.ts'
 import { frontend } from './frontend.ts'
 import type { UIAgent } from './panels.ts'
 
-Deno.test('P chooses a graph persona for a new session without changing the draft', async () => {
+test('P chooses a graph persona for a new session without changing the draft', async () => {
   let f = frontend()
   let started: { text: string; persona?: string }[] = []
   let a: UIAgent = {

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { type ComponentChild, h, type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
@@ -18,7 +19,7 @@ let nodes = (child: ComponentChild): VNode[] => {
   return [child, ...nodes(child.props.children)]
 }
 
-Deno.test('Inline renderers say the title without the id', () => {
+test('Inline renderers say the title without the id', () => {
   cache.value = {
     doc: {
       entity: { eid: 'doc', num: 1 },
@@ -49,7 +50,7 @@ Deno.test('Inline renderers say the title without the id', () => {
 // (`.edges.peers=task.status,doc.title` — subserve.ts peerPayload), which is
 // the derived status and none of the marks it came from. The pip and the strike
 // must read that, or a card lists its own done children as open.
-Deno.test('a projected peer paints its settled status', () => {
+test('a projected peer paints its settled status', () => {
   cache.value = {}
   // Landed the way the rider delivers it, so the test holds the peer's real
   // partial shape rather than a hand-built row that happens to agree.
@@ -68,7 +69,7 @@ Deno.test('a projected peer paints its settled status', () => {
   }
 })
 
-Deno.test('an entity with no title and no number is called by its handle', () => {
+test('an entity with no title and no number is called by its handle', () => {
   let eid = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
   cache.value = {}
   applyLocal([{ eid, name: 'process', comp: { pid: 1 } }])

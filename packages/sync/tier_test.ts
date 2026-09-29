@@ -3,6 +3,7 @@
 // are pure functions over a committed batch, so they are tested without a
 // server, a socket, or a graph.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { box } from './testing.ts'
@@ -13,7 +14,7 @@ import { durableOf, inverse, local, outward, relayed, syncOf } from './tier.ts'
 // A bundle as the effect phase sees it: marked with what stood before it.
 let sent = (b: Bundle, was: Bundle | null = null) => asking(b, was)
 
-Deno.test('a component says who hears it and how long it lives', () => {
+test('a component says who hears it and how long it lives', () => {
   assertEquals([syncOf(box, 'recipe'), durableOf(box, 'recipe')], [
     'server',
     'forever',
@@ -23,7 +24,7 @@ Deno.test('a component says who hears it and how long it lives', () => {
   assertEquals(local(box, 'pointing'), null) // it leaves; not this node's
 })
 
-Deno.test('only server-tier components are told to the server', () => {
+test('only server-tier components are told to the server', () => {
   let batch = [sent({
     entity: { eid: 'r1' },
     recipe: { serves: 4 },
@@ -34,12 +35,12 @@ Deno.test('only server-tier components are told to the server', () => {
   ])
 })
 
-Deno.test('a batch that is entirely local says nothing at all', () => {
+test('a batch that is entirely local says nothing at all', () => {
   let batch = [sent({ entity: { eid: 'r1' }, draft: { text: 'hm' } })]
   assertEquals(outward(batch, box), [])
 })
 
-Deno.test('stamps and casualties are not sent: they are the graph talking to itself', () => {
+test('stamps and casualties are not sent: they are the graph talking to itself', () => {
   let batch: Bundle[] = [
     sent({ entity: { eid: 'r1' }, recipe: { serves: 4 } }),
     { entity: { eid: 'r1' }, created: { at: 'now', by: 'c1' } },
@@ -50,7 +51,7 @@ Deno.test('stamps and casualties are not sent: they are the graph talking to its
   ])
 })
 
-Deno.test('a delete and a $was ride out with the batch', () => {
+test('a delete and a $was ride out with the batch', () => {
   let was = { recipe: { serves: 'abc' } }
   let batch = [
     sent({ entity: { eid: 'r1' }, $delete: true }),
@@ -62,7 +63,7 @@ Deno.test('a delete and a $was ride out with the batch', () => {
   ])
 })
 
-Deno.test('the inverse restores a property, clears one that was absent, drops a new component', () => {
+test('the inverse restores a property, clears one that was absent, drops a new component', () => {
   let before: Bundle = { entity: { eid: 'r1' }, recipe: { serves: 4 } }
   let batch = [sent({
     entity: { eid: 'r1' },
@@ -76,7 +77,7 @@ Deno.test('the inverse restores a property, clears one that was absent, drops a 
   }])
 })
 
-Deno.test('the inverse of a dropped component puts it back whole', () => {
+test('the inverse of a dropped component puts it back whole', () => {
   let before: Bundle = { entity: { eid: 'r1' }, doc: { title: 'Dal' } }
   assertEquals(
     inverse([sent({ entity: { eid: 'r1' }, doc: null }, before)], box),
@@ -84,7 +85,7 @@ Deno.test('the inverse of a dropped component puts it back whole', () => {
   )
 })
 
-Deno.test('the inverse contains only fields in the refused request', () => {
+test('the inverse contains only fields in the refused request', () => {
   let before: Bundle = {
     entity: { eid: 'r1' },
     recipe: { serves: 4 },
@@ -103,7 +104,7 @@ Deno.test('the inverse contains only fields in the refused request', () => {
   }])
 })
 
-Deno.test('a bundle no caller sent has no inverse, and neither has a death', () => {
+test('a bundle no caller sent has no inverse, and neither has a death', () => {
   let dead = sent({ entity: { eid: 'r1' }, $delete: true }, {
     entity: { eid: 'r1' },
     recipe: { serves: 4 },
@@ -115,19 +116,19 @@ Deno.test('a bundle no caller sent has no inverse, and neither has a death', () 
   )
 })
 
-Deno.test('an echoed bundle is marked, and the marks come off what a caller sees', () => {
+test('an echoed bundle is marked, and the marks come off what a caller sees', () => {
   let [b] = echo([sent({ entity: { eid: 'r1' }, recipe: { serves: 4 } })])
   assertEquals(echoed(b), true)
   assertEquals(clean(b), { entity: { eid: 'r1' }, recipe: { serves: 4 } })
 })
 
-Deno.test('the reconnect wait doubles, up to the ceiling', () => {
+test('the reconnect wait doubles, up to the ceiling', () => {
   assertEquals(backoff(250, 30_000), 500)
   assertEquals(backoff(20_000, 30_000), 30_000)
   assertEquals(backoff(30_000, 30_000), 30_000)
 })
 
-Deno.test('the relay half goes to the peers, and only it', () => {
+test('the relay half goes to the peers, and only it', () => {
   let batch = [sent({
     entity: { eid: 'r1' },
     recipe: { serves: 4 },
@@ -144,7 +145,7 @@ Deno.test('the relay half goes to the peers, and only it', () => {
   ])
 })
 
-Deno.test('a relay carries no precondition and no death: it guards nothing', () => {
+test('a relay carries no precondition and no death: it guards nothing', () => {
   let batch = [
     sent({ entity: { eid: 'r1' }, pointing: { x: 1, y: 2 } }, {
       entity: { eid: 'r1' },

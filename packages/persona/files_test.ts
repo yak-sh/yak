@@ -1,6 +1,7 @@
 // The persona files: which files a graph says its checkouts hold, and a sync
 // that writes them.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { memo, sync } from '@yaks/mirror'
@@ -12,7 +13,7 @@ let then = (g: Graph, ...batch: Bundle[]): Graph => (g.apply(batch), g)
 let texts = async (g: Graph) =>
   new Map((await personaFiles(g)).files.map((f) => [f.path, f.text]))
 
-Deno.test('the common persona is AGENTS.md; a specialist says only what it adds', async () => {
+test('the common persona is AGENTS.md; a specialist says only what it adds', async () => {
   let by = await texts(fleet('/r'))
   assertEquals([...by.keys()], [
     '/r/.tasks/AGENTS.md',
@@ -29,7 +30,7 @@ Deno.test('the common persona is AGENTS.md; a specialist says only what it adds'
   assert(coder.includes('second') && !coder.includes('first'), coder)
 })
 
-Deno.test("a sub-project's personas are specialists in its parent's checkout", async () => {
+test("a sub-project's personas are specialists in its parent's checkout", async () => {
   let by = await texts(nested('/r'))
   assertEquals(
     by.get('/r/.tasks/AGENTS.md'),
@@ -40,22 +41,22 @@ Deno.test("a sub-project's personas are specialists in its parent's checkout", a
   assert(!sub.includes('first'), sub)
 })
 
-Deno.test('what the files say is every persona and document in them', async () => {
+test('what the files say is every persona and document in them', async () => {
   let { said } = await personaFiles(fleet('/r'))
   assertEquals([...said].sort(), ['m1', 'm2', 'n1', 'n2'])
 })
 
-Deno.test('a specialist with no name is named for its id', async () => {
+test('a specialist with no name is named for its id', async () => {
   let g = then(fleet('/r'), { entity: { eid: 'k1' }, key: null, alias: null })
   assertMatch([...(await texts(g)).keys()][1], /\/personas\/n-\d+\.md$/)
 })
 
-Deno.test('an archived project keeps what it last had', async () => {
+test('an archived project keeps what it last had', async () => {
   let archived = then(fleet('/r'), { entity: { eid: 'p1' }, archived: {} })
   assertEquals((await personaFiles(archived)).files, [])
 })
 
-Deno.test('a sync keeps the main checkout current, never a linked worktree', async () => {
+test('a sync keeps the main checkout current, never a linked worktree', async () => {
   let root = Deno.makeTempDirSync()
   try {
     // A worktree cut by hand, which nothing marks, and first by path.
@@ -76,7 +77,7 @@ Deno.test('a sync keeps the main checkout current, never a linked worktree', asy
   }
 })
 
-Deno.test('a sync writes the files, removes a stale one, then has nothing to do', async () => {
+test('a sync writes the files, removes a stale one, then has nothing to do', async () => {
   let root = Deno.makeTempDirSync()
   try {
     Deno.mkdirSync(`${root}/.tasks/personas`, { recursive: true })

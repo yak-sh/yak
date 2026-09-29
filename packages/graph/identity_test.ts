@@ -3,6 +3,7 @@
 // loaded twice must be one entity, with no eid written down anywhere and no
 // `$alias` that means anything outside its own batch.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { graph } from './graph.ts'
@@ -55,7 +56,7 @@ let page = (alias: string, slug: string, brief: string): Bundle => ({
   guide: { slug, brief },
 })
 
-Deno.test('a page is its slug: written twice, it is one entity', () => {
+test('a page is its slug: written twice, it is one entity', () => {
   let one = g()
   let first = sync(one.apply([page('$a', 'store', 'the store, from a page')]))
   let eid = identityEid('guide', ['store'])
@@ -72,7 +73,7 @@ Deno.test('a page is its slug: written twice, it is one entity', () => {
   assertEquals(comp(held, 'guide').brief, 'said again')
 })
 
-Deno.test('two slugs are two entities, and the id says which', () => {
+test('two slugs are two entities, and the id says which', () => {
   let one = g()
   let out = sync(one.apply([
     page('$a', 'store', 'one'),
@@ -85,7 +86,7 @@ Deno.test('two slugs are two entities, and the id says which', () => {
   )
 })
 
-Deno.test('an id that disagrees with the value it names is refused', () => {
+test('an id that disagrees with the value it names is refused', () => {
   let one = g()
   assertThrows(
     () =>
@@ -98,7 +99,7 @@ Deno.test('an id that disagrees with the value it names is refused', () => {
   )
 })
 
-Deno.test('a rename is refused: the slug is the entity, not a property', () => {
+test('a rename is refused: the slug is the entity, not a property', () => {
   let one = g()
   sync(one.apply([page('$a', 'store', 'one')]))
   assertThrows(
@@ -112,7 +113,7 @@ Deno.test('a rename is refused: the slug is the entity, not a property', () => {
   )
 })
 
-Deno.test('a patch that says nothing about the slug is ordinary', () => {
+test('a patch that says nothing about the slug is ordinary', () => {
   let one = g()
   sync(one.apply([page('$a', 'store', 'one')]))
   let eid = identityEid('guide', ['store'])
@@ -122,7 +123,7 @@ Deno.test('a patch that says nothing about the slug is ordinary', () => {
   assertEquals(comp(held, 'guide').slug, 'store')
 })
 
-Deno.test('a minted page with no slug is refused, by name', () => {
+test('a minted page with no slug is refused, by name', () => {
   let one = g()
   assertThrows(
     () => one.apply([{ entity: { eid: '$a' }, guide: { brief: 'nameless' } }]),
@@ -131,7 +132,7 @@ Deno.test('a minted page with no slug is refused, by name', () => {
   )
 })
 
-Deno.test('a composite identity is the whole tuple, in order', () => {
+test('a composite identity is the whole tuple, in order', () => {
   let one = g()
   let out = sync(one.apply([{
     entity: { eid: '$r' },
@@ -145,7 +146,7 @@ Deno.test('a composite identity is the whole tuple, in order', () => {
   )
 })
 
-Deno.test('an identity is a unique index, said out loud', () => {
+test('an identity is a unique index, said out loud', () => {
   assertEquals(pages.identity('guide'), ['slug'])
   assertEquals(pages.identity('release'), ['app', 'version'])
   assertEquals(pages.identity('doc'), [])

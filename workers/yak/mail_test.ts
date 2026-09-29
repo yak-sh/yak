@@ -12,6 +12,7 @@
 // in these tests is the directory — the same class, woken on the platform's own
 // vocabulary because of the name it is given — so a letter counted against a
 // space is counted through the wire that counts it in life.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
@@ -34,12 +35,12 @@ import { KERNEL, metaOf } from './meta.ts'
 import { monthOf } from './meter.ts'
 import { mailedTo, mailFrom, posting } from './post.ts'
 
-Deno.test('an app writes from a local part at the apex', () => {
+test('an app writes from a local part at the apex', () => {
   assertEquals(mailFrom('ada', 'cookbook'), 'ada.cookbook@yaks.app')
   assertEquals(mailFrom('ada', null), 'ada@yaks.app')
 })
 
-Deno.test('the same derivation reads an arrival back', () => {
+test('the same derivation reads an arrival back', () => {
   assertEquals(mailedTo('ada.cookbook@yaks.app'), {
     space: 'ada',
     app: 'cookbook',
@@ -55,7 +56,7 @@ Deno.test('the same derivation reads an arrival back', () => {
   assertEquals(mailedTo('Ada_Lovelace@yaks.app'), null)
 })
 
-Deno.test('every address an app writes from is one it can be written to', () => {
+test('every address an app writes from is one it can be written to', () => {
   for (let [space, app] of [['ada', 'cookbook'], ['ada', null]] as const) {
     assertEquals(mailedTo(mailFrom(space, app)), { space, app })
   }
@@ -66,7 +67,7 @@ Deno.test('every address an app writes from is one it can be written to', () => 
 // REPLY_TO and miss the fleet's graph inbox at GRAPH (or the other way).
 // Whatever the list, the letter still comes FROM the bot address — the only
 // domain Email Sending will sign for — and is still answered at REPLY_TO.
-Deno.test('one send carries every reader, from one address', async () => {
+test('one send carries every reader, from one address', async () => {
   let posted: {
     to: string[]
     reply_to: string
@@ -95,7 +96,7 @@ Deno.test('one send carries every reader, from one address', async () => {
 // A deploy can send when it has the local adapter, or a token and an account;
 // the account may be the Worker's own (CF_ACCOUNT), so the token is the one
 // secret a deploy must set. Staging with only the Connect secret cannot.
-Deno.test('mailable: the token is the one secret a deploy needs', () => {
+test('mailable: the token is the one secret a deploy needs', () => {
   assertEquals(mailable({}), false)
   assertEquals(mailable({ MAIL_DEV: '1' }), true)
   assertEquals(mailable({ MAIL_TOKEN: 't' }), false)
@@ -105,7 +106,7 @@ Deno.test('mailable: the token is the one secret a deploy needs', () => {
   assertEquals(account({ CF_ACCOUNT: 'acct' }), 'acct')
 })
 
-Deno.test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset', async () => {
+test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset', async () => {
   let urls: string[] = []
   let real = globalThis.fetch
   globalThis.fetch = ((url: string) => {
@@ -127,7 +128,7 @@ Deno.test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset'
 // The graph inbox is the box's mailbox for what the platform writes: the
 // box's @yaks/mail pulls bot.yak.sh and routes by the canonical address, so
 // the platform must name the same mailbox or the report lands nowhere.
-Deno.test('the graph inbox is the fleet address the pull routes', () => {
+test('the graph inbox is the fleet address the pull routes', () => {
   assertEquals(GRAPH, canon('bot.yak.sh')('task@bot.yak.sh'))
 })
 
@@ -281,14 +282,14 @@ let read = async (store: Store, eid: string, v = owner): Promise<Bundle> => {
 
 // The receipt beside a sale is written by the platform through the kernel's
 // door (sell.ts `asApp`), and it leaves from the app like any other letter.
-Deno.test("the platform's receipt leaves from the app's own address", async () => {
+test("the platform's receipt leaves from the app's own address", async () => {
   let { store, mail } = await cookbook()
   let platform: Vouch = { person: APP, role: 'editor', kernel: true }
   assertEquals((await post(store, '/apply', letter(), platform)).status, 200)
   assertEquals(mail.sent[0]?.from, 'ada.cookbook@yaks.app')
 })
 
-Deno.test("a member's letter leaves from the app's own address", async () => {
+test("a member's letter leaves from the app's own address", async () => {
   let { store, mail } = await cookbook()
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
   assertEquals(mail.sent.length, 1)
@@ -311,7 +312,7 @@ Deno.test("a member's letter leaves from the app's own address", async () => {
 // The whole point of writing the outcome through apply() rather than straight
 // through storage (T-34044): a page watching the letter is told it left, in the
 // same second, instead of finding out on its next query.
-Deno.test('a page watching the letter is told it left', async () => {
+test('a page watching the letter is told it left', async () => {
   let ctx = state()
   let { store, mail } = await cookbook(outbox(), owner, ctx)
   let ws = wire()
@@ -344,7 +345,7 @@ Deno.test('a page watching the letter is told it left', async () => {
   )
 })
 
-Deno.test("the from address is the platform's word, never the batch's", async () => {
+test("the from address is the platform's word, never the batch's", async () => {
   let { store, mail } = await cookbook()
   let forged = letter()
   forged[1].mail = { from: 'billing@stripe.com' }
@@ -352,7 +353,7 @@ Deno.test("the from address is the platform's word, never the batch's", async ()
   assertEquals(mail.sent[0].from, 'ada.cookbook@yaks.app')
 })
 
-Deno.test('an anonymous visitor to an open app may not send', async () => {
+test('an anonymous visitor to an open app may not send', async () => {
   let { store, mail } = await cookbook()
   // Open: @yaks/member admits the write, and the post room refuses the ask.
   let anyone: Vouch = { access: 'open' }
@@ -364,7 +365,7 @@ Deno.test('an anonymous visitor to an open app may not send', async () => {
   assertEquals(await read(store, NOTE), undefined)
 })
 
-Deno.test('an open app still takes an anonymous write that is not a letter', async () => {
+test('an open app still takes an anonymous write that is not a letter', async () => {
   let { store } = await cookbook()
   let r = await post(store, '/apply', [{
     entity: { eid: NOTE },
@@ -373,7 +374,7 @@ Deno.test('an open app still takes an anonymous write that is not a letter', asy
   assertEquals(r.status, 200)
 })
 
-Deno.test('a provider failure comes to rest on the letter', async () => {
+test('a provider failure comes to rest on the letter', async () => {
   let { store } = await cookbook(outbox('550 mailbox unavailable'))
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
   let row = await read(store, NOTE)
@@ -384,7 +385,7 @@ Deno.test('a provider failure comes to rest on the letter', async () => {
   assertEquals(row.delivered, undefined)
 })
 
-Deno.test('a deploy with no binding bounces rather than swallows', async () => {
+test('a deploy with no binding bounces rather than swallows', async () => {
   let store = new Store(state(), {})
   assertEquals((await post(store, '/vocab', {}, owner)).status, 200)
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
@@ -395,7 +396,7 @@ Deno.test('a deploy with no binding bounces rather than swallows', async () => {
   )
 })
 
-Deno.test('the same letter written twice is sent once', async () => {
+test('the same letter written twice is sent once', async () => {
   let { store, mail } = await cookbook()
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
   // The replay: the same bundles, the same eids. `mail` and `deliver` are
@@ -405,7 +406,7 @@ Deno.test('the same letter written twice is sent once', async () => {
   assertEquals(mail.sent.length, 1)
 })
 
-Deno.test('a letter with no ask to send is kept, not sent', async () => {
+test('a letter with no ask to send is kept, not sent', async () => {
   let { store, mail } = await cookbook()
   let draft = [{
     entity: { eid: NOTE },
@@ -427,7 +428,7 @@ Deno.test('a letter with no ask to send is kept, not sent', async () => {
 
 // ---- the meter (T-33688) ----------------------------------------------------
 
-Deno.test('a letter delivered is one letter on the month', async () => {
+test('a letter delivered is one letter on the month', async () => {
   let { ns, spent } = await platform()
   let { store, mail } = await cookbook(outbox(), owner, state(), ns)
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
@@ -449,7 +450,7 @@ Deno.test('a letter delivered is one letter on the month', async () => {
   assertEquals((await spent()).emails, 2)
 })
 
-Deno.test('a letter that bounced costs the space nothing', async () => {
+test('a letter that bounced costs the space nothing', async () => {
   let { ns, spent } = await platform()
   let { store } = await cookbook(
     outbox('550 mailbox unavailable'),
@@ -466,7 +467,7 @@ Deno.test('a letter that bounced costs the space nothing', async () => {
   assertEquals((await spent()).emails ?? 0, 0)
 })
 
-Deno.test('past the month allowance a send bounces naming the ceiling', async () => {
+test('past the month allowance a send bounces naming the ceiling', async () => {
   let { ns, spent } = await platform({ emails: 100 })
   let { store, mail } = await cookbook(outbox(), owner, state(), ns)
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
@@ -482,7 +483,7 @@ Deno.test('past the month allowance a send bounces naming the ceiling', async ()
   assertEquals((await spent()).emails, 100)
 })
 
-Deno.test('no binding, no letter: the sender that refuses says why', async () => {
+test('no binding, no letter: the sender that refuses says why', async () => {
   let refused = await posting().send({
     from: 'ada@yaks.app',
     to: 'ana@example.com',

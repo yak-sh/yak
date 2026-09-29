@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Item, ModelError, type Request } from '@yaks/model'
 import { workersAi } from './mod.ts'
@@ -25,7 +26,7 @@ let ask = (items: Item[], more: Partial<Request> = {}): Request => ({
 
 let calls = (items: Item[]) => items.flatMap((i) => i.kind == 'call' ? [i] : [])
 
-Deno.test('a conversation is sent as chat messages', async () => {
+test('a conversation is sent as chat messages', async () => {
   let { asked, model } = binding({ response: 'ok' })
   let tool = { name: 'look', description: 'Look', parameters: {} }
   await model(ask([
@@ -78,7 +79,7 @@ Deno.test('a conversation is sent as chat messages', async () => {
   })
 })
 
-Deno.test("the binding's own answer: words, calls given ids, usage", async () => {
+test("the binding's own answer: words, calls given ids, usage", async () => {
   let texts: string[] = []
   let { model } = binding({
     response: 'on it',
@@ -109,7 +110,7 @@ Deno.test("the binding's own answer: words, calls given ids, usage", async () =>
   })
 })
 
-Deno.test("OpenAI's answer shape is read the same", async () => {
+test("OpenAI's answer shape is read the same", async () => {
   let { model } = binding({
     id: 'r1',
     choices: [{
@@ -127,7 +128,7 @@ Deno.test("OpenAI's answer shape is read the same", async () => {
   })
 })
 
-Deno.test('a rate limit and spent credits are expected; any other failure is not', async () => {
+test('a rate limit and spent credits are expected; any other failure is not', async () => {
   let busy = binding(new Error('3040: Capacity temporarily exceeded'))
   let e = await assertRejects(() => busy.model(ask([])), ModelError)
   assertEquals(e.code, 'busy')
@@ -139,7 +140,7 @@ Deno.test('a rate limit and spent credits are expected; any other failure is not
   assertEquals(other, broken)
 })
 
-Deno.test('images and cancelled requests are never sent', async () => {
+test('images and cancelled requests are never sent', async () => {
   let { asked, model } = binding({ response: 'ok' })
   let image: Item = {
     kind: 'image',
@@ -152,7 +153,7 @@ Deno.test('images and cancelled requests are never sent', async () => {
   assertEquals(asked, [])
 })
 
-Deno.test('typed questions go as state and come back answered by name', async () => {
+test('typed questions go as state and come back answered by name', async () => {
   let questions = {
     plan: {
       type: 'choice' as const,
@@ -206,14 +207,14 @@ Deno.test('typed questions go as state and come back answered by name', async ()
   assertEquals(bare.usage, reply.usage)
 })
 
-Deno.test('a reply to typed questions with no answers is a defect', async () => {
+test('a reply to typed questions with no answers is a defect', async () => {
   let { model } = binding({ response: 'the forge, I think' })
   let questions = { plan: { type: 'noul' as const, instructions: '?' } }
   let e = await assertRejects(() => model(ask([], { questions })))
   assertEquals(e instanceof ModelError, false)
 })
 
-Deno.test("a binding's own ModelError is passed on as it is", async () => {
+test("a binding's own ModelError is passed on as it is", async () => {
   let refused = new ModelError('limit', 'This space has used its allowance')
   let e = await assertRejects(() => binding(refused).model(ask([])))
   assertEquals(e, refused)

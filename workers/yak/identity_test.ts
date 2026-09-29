@@ -16,7 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import {
   allowed,
   connector,
@@ -64,7 +64,7 @@ let b64u = (b: ArrayBuffer) =>
   btoa(String.fromCharCode(...new Uint8Array(b)))
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 
-Deno.test(
+test(
   'agents identify existing grants and belong to the signed-in browser',
   async () => {
     let k = await kernel()
@@ -194,7 +194,7 @@ Deno.test(
   },
 )
 
-Deno.test('a person signs in by mail, and an agent by OAuth', async () => {
+test('a person signs in by mail, and an agent by OAuth', async () => {
   let k = await kernel()
   try {
     // The card asks for an address, and nothing else.
@@ -640,7 +640,7 @@ Deno.test('a person signs in by mail, and an agent by OAuth', async () => {
 // expiry, and a public client's refresh refused for carrying a `client_secret`
 // it was never issued, which is what ChatGPT sends and what a person reads as
 // "your connection has expired, reconnect it".
-Deno.test('a connector keeps its door until the person closes it', async () => {
+test('a connector keeps its door until the person closes it', async () => {
   let k = await kernel()
   try {
     let { cookie } = await signIn(k)
@@ -764,7 +764,7 @@ Deno.test('a connector keeps its door until the person closes it', async () => {
 // them on — to the page they were headed for when it is ours to send them to,
 // and to where a fresh sign-in lands when it is nowhere or a stranger's, which
 // is the same guard closing the same open redirect.
-Deno.test('/login never draws the box for a browser already signed in', async () => {
+test('/login never draws the box for a browser already signed in', async () => {
   let k = await kernel()
   try {
     let get = (path: string, cookie?: string) =>
@@ -821,7 +821,7 @@ Deno.test('/login never draws the box for a browser already signed in', async ()
 // mints nothing beside it, and where the code lands them is the one page that
 // space serves — the owner's, with the button that brings it back. This is the
 // half of the trash a person meets without ever being told about it.
-Deno.test(
+test(
   'the code lands on the trash page when the only space is there',
   async () => {
     let k = await kernel()
@@ -893,7 +893,7 @@ Deno.test(
 // their apps live at. One form, one POST to the space's own address, and the
 // answer is a redirect — a changed address moves this hostname, so where they
 // land is wherever the space now is.
-Deno.test('account settings save the name and address', async () => {
+test('account settings save the name and address', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
   let post = (
@@ -1022,7 +1022,7 @@ Deno.test('account settings save the name and address', async () => {
 // live at, theirs to change inline while nothing is built there (T-32967). A
 // stranger asking for it is sent to sign in (T-34408). Every directory read
 // below goes through the meta space's door, which is the kernel's owner's.
-Deno.test('the connector page, and the address chosen on it', async () => {
+test('the connector page, and the address chosen on it', async () => {
   let k = await kernel()
   let uniq = () => crypto.randomUUID().slice(0, 8)
   let post = (fields: Record<string, string>, cookie?: string) =>
@@ -1150,7 +1150,7 @@ Deno.test('the connector page, and the address chosen on it', async () => {
 // was lying. So both are read here from one kernel and compared. It lives
 // beside the identity part rather than in site_test.ts because the connect
 // page is the kernel's own (pages.ts), not one of the static ones.
-Deno.test(
+test(
   'the connect page teaches the OAuth settings the door serves',
   async () => {
     let k = await kernel()
@@ -1194,7 +1194,7 @@ Deno.test(
 // app directory's reviewer is given instead of a mailbox — OpenAI's review
 // refuses any credential that needs one. Both are the same door and the same
 // landing a typed code reaches; what tells them apart is how they die.
-Deno.test('a link signs a person in, once or until it is revoked', async () => {
+test('a link signs a person in, once or until it is revoked', async () => {
   let k = await kernel()
   try {
     // The letter's one click. The same code, said as a link.
@@ -1320,7 +1320,7 @@ Deno.test('a link signs a person in, once or until it is revoked', async () => {
 // The renewal, wired (session.ts `slid`, T-35380): every answer leaves the
 // router past it, so a cookie past half its life comes back fresh from a door
 // that knows nothing about sessions — here the apex's own home page.
-Deno.test(
+test(
   'an answer to a request past half a session renews the cookie',
   async () => {
     let k = await kernel()

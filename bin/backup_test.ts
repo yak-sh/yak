@@ -1,5 +1,6 @@
 // Backups use private SQLite paths, so a failed or concurrent run cannot
 // replace a database another reader or restore verifier still has open.
+import { test } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { at, fn, insert, lit, type Stmt } from '@yaks/sql'
@@ -95,7 +96,7 @@ let fixture = async () => {
   }
 }
 
-Deno.test(
+test(
   'backup snapshots WAL commits and leaves existing SQLite files attached',
   async () => {
     let f = await fixture()
@@ -151,7 +152,7 @@ Deno.test(
 // fails to create, which is what left every `insert into mail_fts` with no
 // such table from 2026-09-11. The script's own round-trip gate is the rest of
 // the proof: a run that gets here loaded its dump back.
-Deno.test(
+test(
   'the dump defines each FTS5 index and dumps none of its rows',
   async () => {
     let f = await fixture()
@@ -178,7 +179,7 @@ Deno.test(
   },
 )
 
-Deno.test('a separate snapshot directory is private and cleaned', async () => {
+test('a separate snapshot directory is private and cleaned', async () => {
   let f = await fixture()
   let scratch = await Deno.makeTempDir({ prefix: 'yak-snapshot-' })
   try {
@@ -197,7 +198,7 @@ Deno.test('a separate snapshot directory is private and cleaned', async () => {
   }
 })
 
-Deno.test('a snapshot directory without enough space is refused', async () => {
+test('a snapshot directory without enough space is refused', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-backup-capacity-' })
   let scratch = await Deno.makeTempDir({ prefix: 'yak-snapshot-' })
   try {
@@ -223,7 +224,7 @@ Deno.test('a snapshot directory without enough space is refused', async () => {
   }
 })
 
-Deno.test('the restore proof compares against snapshot row counts', async () => {
+test('the restore proof compares against snapshot row counts', async () => {
   let f = await fixture()
   try {
     f.db.query({
@@ -252,7 +253,7 @@ Deno.test('the restore proof compares against snapshot row counts', async () => 
   }
 })
 
-Deno.test(
+test(
   'a backup timing out on the lock cannot remove the active verifier database',
   async () => {
     let f = await fixture()

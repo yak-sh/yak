@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertNotEquals } from '@std/assert'
 import { resourceName } from './bindings.ts'
 
-Deno.test('app resources keep production names and isolate staging copies', async () => {
+test('app resources keep production names and isolate staging copies', async () => {
   let store = 'one/app.abc123'
   let name = 'DATA'
   let production = await resourceName(store, name)

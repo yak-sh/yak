@@ -2,6 +2,7 @@
 // the compiled statement, the derived-property hook, that values are bound
 // never inlined, and that a gap declines loudly.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { absent, and, eq, parse, present, text } from '@yaks/query'
 import { loadVocab, Unknown } from '@yaks/vocab'
@@ -74,28 +75,28 @@ let status: Derived = {
   },
 }
 
-Deno.test('a scalar predicate binds its value as a param, never inlined', () => {
+test('a scalar predicate binds its value as a param, never inlined', () => {
   let { sql, params } = compile(parse('.priority=1'), v)
   assertEquals(params, [1])
   assert(sql.includes('"task"."priority" = ?'), sql)
 })
 
-Deno.test('a text term requires a search extension', () => {
+test('a text term requires a search extension', () => {
   assertThrows(() => compile(parse('hello'), v), Unsupported)
 })
 
-Deno.test('a contains needle rides as a param', () => {
+test('a contains needle rides as a param', () => {
   let { params } = compile(parse('.title~=hi'), v)
   assert(params.includes('hi'))
 })
 
-Deno.test('the derived hook supplies a computed property expression', () => {
+test('the derived hook supplies a computed property expression', () => {
   let { sql, params } = compile(parse('.status=open'), v, { derived: status })
   assert(sql.includes('case when'), sql)
   assertEquals(params, ['open'])
 })
 
-Deno.test('a computed property with no registration declines loudly', () => {
+test('a computed property with no registration declines loudly', () => {
   assertThrows(
     () => compile(parse('.status=open'), v),
     Unsupported,
@@ -108,7 +109,7 @@ Deno.test('a computed property with no registration declines loudly', () => {
 // `.session.status=empty` selected all of them (T-37730). A qualified path
 // names its component as much as its property, so the read is NULL without it,
 // the way every stored property reads through the left join.
-Deno.test('a derived read is NULL where the component is not worn', () => {
+test('a derived read is NULL where the component is not worn', () => {
   let blind: Derived = {
     'task.status': {
       tag: 'enum',
@@ -138,7 +139,7 @@ Deno.test('a derived read is NULL where the component is not worn', () => {
 // `updated.at` coalesces to `created.at`, because being made is the last time
 // an untouched row changed, and 1,656 of 10,767 entities were invisible to
 // `.updated.at>=…` before it did.
-Deno.test('a read marked worn: false keeps its value without the component', () => {
+test('a read marked worn: false keeps its value without the component', () => {
   let fallback: Derived = {
     'task.status': {
       tag: 'enum',
@@ -152,14 +153,14 @@ Deno.test('a read marked worn: false keeps its value without the component', () 
   assert(!sql.includes('("task"."entity" is not null and '), sql)
 })
 
-Deno.test('the .kind scope expands to present-and-earlier-absent', () => {
+test('the .kind scope expands to present-and-earlier-absent', () => {
   // task sorts before doc, so `.kind=doc` is doc present and task absent.
   let { sql } = compile(parse('.kind=doc'), v)
   assert(sql.includes('"doc"."entity" is not null'), sql)
   assert(sql.includes('"task"."entity" is null'), sql)
 })
 
-Deno.test('a reverse hop compiles to a correlated EXISTS', () => {
+test('a reverse hop compiles to a correlated EXISTS', () => {
   let { sql, params } = compile(parse('.notes'), v)
   assert(
     sql.includes('exists (select 1 from "note" where "note"."about" ='),
@@ -172,7 +173,7 @@ Deno.test('a reverse hop compiles to a correlated EXISTS', () => {
 // The step relation a chained walk composes: the hops joined on each other, so
 // one rung of the CTE crosses the whole chain. `.fork.from.session` is the
 // session a session forked out of.
-Deno.test('a walk over a chain of references composes one step', () => {
+test('a walk over a chain of references composes one step', () => {
   let vocab = loadVocab({
     $defs: {
       entity: {
@@ -213,14 +214,14 @@ Deno.test('a walk over a chain of references composes one step', () => {
   )
 })
 
-Deno.test('a reverse cardinality binds its count', () => {
+test('a reverse cardinality binds its count', () => {
   let { sql, params } = compile(parse('.notes>=5'), v)
   assert(sql.includes('count(*) from "note"'), sql)
   assert(sql.includes(') >= ?'), sql)
   assertEquals(params, [5])
 })
 
-Deno.test('a reverse child filter screens the child row', () => {
+test('a reverse child filter screens the child row', () => {
   let { sql, params } = compile(parse('.notes.stars=5'), v)
   assert(sql.includes('"note"."stars" = ?'), sql)
   assertEquals(params, [5])
@@ -235,14 +236,14 @@ Deno.test('a reverse child filter screens the child row', () => {
   )
 })
 
-Deno.test('a reverse hop with no count and no child filter declines', () => {
+test('a reverse hop with no count and no child filter declines', () => {
   let e = assertThrows(() => compile(parse('.notes~=lots'), v), Unsupported)
   assertEquals((e as Unsupported).feature, 'a reverse hop')
   // and one reaching for the spine, whose name means the outer row down there
   assertThrows(() => compile(parse('.notes.num=3'), v), Unsupported)
 })
 
-Deno.test('an unreachable directive throws Unsupported naming the feature', () => {
+test('an unreachable directive throws Unsupported naming the feature', () => {
   let e = assertThrows(
     () => compile(parse('.near=x&.order=similar'), v),
     Unsupported,
@@ -252,13 +253,13 @@ Deno.test('an unreachable directive throws Unsupported naming the feature', () =
 
 // A rule sigil is an instruction to a rule engine, and storage has no engine:
 // compiling one away would answer a question nobody asked.
-Deno.test('a rule sigil throws Unsupported rather than compiling', () => {
+test('a rule sigil throws Unsupported rather than compiling', () => {
   for (let q of ['+task', '+!task', '*task', '#task', '$t']) {
     assertThrows(() => compile(parse(q), v), Unsupported, 'directive')
   }
 })
 
-Deno.test('ordering by an unfiltered property still joins its table', () => {
+test('ordering by an unfiltered property still joins its table', () => {
   let { sql } = compile(parse('.priority=1&.order=title'), v)
   assert(sql.includes('left join "doc"'), sql)
   // the spine breaks ties — the num where there is one, the row id always —
@@ -273,7 +274,7 @@ Deno.test('ordering by an unfiltered property still joins its table', () => {
   )
 })
 
-Deno.test('a window with no .order is newest-first by spine num', () => {
+test('a window with no .order is newest-first by spine num', () => {
   let { sql, params } = compile(parse('.priority=1&.limit=2&.after=7'), v)
   assert(sql.includes('order by "entity"."num" desc'), sql)
   assert(sql.includes('"entity"."num" < ?'), sql)
@@ -289,13 +290,13 @@ let unnumbered = loadVocab({
   },
 } as VocabDoc)
 
-Deno.test('a store with no numbers still states its order, by the spine id', () => {
+test('a store with no numbers still states its order, by the spine id', () => {
   let { sql } = compile(parse('.priority=1&.limit=2'), unnumbered)
   assert(sql.endsWith('order by "entity"."id" desc limit ?'), sql)
   assert(!sql.includes('"entity"."num"'), sql)
 })
 
-Deno.test('a cursor names an entity by number, and a store with none says so', () => {
+test('a cursor names an entity by number, and a store with none says so', () => {
   assertThrows(
     () => compile(parse('.priority=1&.after=7'), unnumbered),
     Unsupported,
@@ -303,7 +304,7 @@ Deno.test('a cursor names an entity by number, and a store with none says so', (
   )
 })
 
-Deno.test('an eid cursor pages a store with no numbers', () => {
+test('an eid cursor pages a store with no numbers', () => {
   let { sql } = compile(
     parse('.priority=1&.order=-title&.limit=2&.after=child:abc'),
     unnumbered,
@@ -312,7 +313,7 @@ Deno.test('an eid cursor pages a store with no numbers', () => {
   assert(sql.includes('"entity"."id" < (select'), sql)
 })
 
-Deno.test('an explicit .order survives a window', () => {
+test('an explicit .order survives a window', () => {
   let { sql } = compile(parse('.priority=1&.order=-title&.limit=2'), v)
   assert(
     sql.endsWith(
@@ -323,7 +324,7 @@ Deno.test('an explicit .order survives a window', () => {
   )
 })
 
-Deno.test('.after pages within the asked order, keyed on the anchor', () => {
+test('.after pages within the asked order, keyed on the anchor', () => {
   let { sql, params } = compile(parse('.order=title&.limit=2&.after=7'), v)
   // the cursor names an entity by its num — the same form whatever the
   // order — and the anchor's own value is read back to page past it
@@ -335,7 +336,7 @@ Deno.test('.after pages within the asked order, keyed on the anchor', () => {
   assertEquals(params, [7, 2])
 })
 
-Deno.test('.after over a derived order reads the anchor through the hook', () => {
+test('.after over a derived order reads the anchor through the hook', () => {
   let { sql } = compile(parse('.order=status&.after=7'), v, { derived: status })
   // the derived expression is written twice: once over the row, once over the
   // anchor's own owner id
@@ -349,7 +350,7 @@ Deno.test('.after over a derived order reads the anchor through the hook', () =>
 let among = (col: string) =>
   `"entity"."${col}" in (select value from json_each(?))`
 
-Deno.test('.eid names entities as one set lookup on the spine', () => {
+test('.eid names entities as one set lookup on the spine', () => {
   let one = compile(parse('.eid=a3f1'), v)
   assert(one.sql.includes(among('eid')), one.sql)
   assertEquals(one.params, ['["a3f1"]'])
@@ -364,7 +365,7 @@ Deno.test('.eid names entities as one set lookup on the spine', () => {
   assertEquals(compile(parse(`.eid=${ids}`), v).params, [JSON.stringify(ids)])
 })
 
-Deno.test('.num and a human id name entities by their spine number', () => {
+test('.num and a human id name entities by their spine number', () => {
   let nums = compile(parse('.num=3,4'), v)
   assert(nums.sql.includes(among('num')), nums.sql)
   assertEquals(nums.params, ['[3,4]'])
@@ -382,7 +383,7 @@ Deno.test('.num and a human id name entities by their spine number', () => {
   assertEquals(both.params, ['["a3f1"]', '[7]'])
 })
 
-Deno.test('an OR compiles as a union of indexed selections of spine ids', () => {
+test('an OR compiles as a union of indexed selections of spine ids', () => {
   let either = compile(parse('.doc.title=a|.task.priority=1'), v)
   let [head, arms] = either.sql.split('"entity"."id" in (')
   assert(head.includes('from "entity"'), either.sql)
@@ -392,7 +393,7 @@ Deno.test('an OR compiles as a union of indexed selections of spine ids', () => 
   assertEquals(either.params, ['a', 1])
 })
 
-Deno.test('a wide OR is cut into compounds workerd will take', () => {
+test('a wide OR is cut into compounds workerd will take', () => {
   // Six alternatives is a sixth term, which workerd refuses (compound.ts) —
   // the tray's own or is seven. Each group stays one indexed `in`.
   let wide = compile(
@@ -407,20 +408,20 @@ Deno.test('a wide OR is cut into compounds workerd will take', () => {
   assertEquals(wide.params, ['a', 'b', 1, 2, 'c', 3])
 })
 
-Deno.test('a spine value that is no operand list keeps the column road', () => {
+test('a spine value that is no operand list keeps the column road', () => {
   // an empty value is still absence grammar, and a range is a comparison the
   // spine's untyped column declines exactly as it did before
   assert(compile(parse('!eid'), v).sql.includes('is null'), 'absence')
   assertThrows(() => compile(parse('.num=3..5'), v), Unsupported)
 })
 
-Deno.test('the membership statement excludes graves and answers one eid', () => {
+test('the membership statement excludes graves and answers one eid', () => {
   let { sql } = compile(parse('.priority>=1'), v)
   assert(sql.startsWith('select "entity"."eid" as eid from "entity"'), sql)
   assert(sql.includes('not exists (select 1 from tombstone'), sql)
 })
 
-Deno.test('.refs= groups its arms and cuts them to what a compound may carry', () => {
+test('.refs= groups its arms and cuts them to what a compound may carry', () => {
   // A vocabulary wider than one compound SELECT may carry: seven tables bear a
   // reference column and one of them bears two, where workerd would refuse the
   // sixth term (./compound.ts). Every group is its own `in`, so no compound
@@ -468,7 +469,7 @@ Deno.test('.refs= groups its arms and cuts them to what a compound may carry', (
   for (let terms of compounds) assert(terms <= ARMS, `${terms} terms: ${sql}`)
 })
 
-Deno.test('.refs= over a vocabulary that references nothing selects nothing', () => {
+test('.refs= over a vocabulary that references nothing selects nothing', () => {
   let none = loadVocab({
     $defs: {
       entity: {
@@ -484,7 +485,7 @@ Deno.test('.refs= over a vocabulary that references nothing selects nothing', ()
   assert(sql.includes('where 0'), sql)
 })
 
-Deno.test('a request for a word this vocabulary never planted asks, and passes', () => {
+test('a request for a word this vocabulary never planted asks, and passes', () => {
   // `?loan` names a component nobody here declares. Asking is not asserting:
   // it narrows nothing, so the statement stands and the row simply carries no
   // loan — which is what lets one line be asked of every store in a fan-out.
@@ -502,7 +503,7 @@ Deno.test('a request for a word this vocabulary never planted asks, and passes',
   assertThrows(() => compile(parse('?loan.to'), v))
 })
 
-Deno.test('reference equality compares indexed keys, not projected eids', () => {
+test('reference equality compares indexed keys, not projected eids', () => {
   let one = compile(parse('.note.about=target'), v)
   assert(
     one.sql.includes(
@@ -549,7 +550,7 @@ Deno.test('reference equality compares indexed keys, not projected eids', () => 
   )
 })
 
-Deno.test('reverse NONE and compound child conditions bind without outer-owner leakage', () => {
+test('reverse NONE and compound child conditions bind without outer-owner leakage', () => {
   let none = compile(parse('.notes!.stars=5'), v)
   assert(none.sql.includes('not exists (select 1 from "note"'))
   assertEquals(none.params, [5])
@@ -573,7 +574,7 @@ Deno.test('reverse NONE and compound child conditions bind without outer-owner l
   )
 })
 
-Deno.test('a builder can preserve a terminal component facet across name collisions', () => {
+test('a builder can preserve a terminal component facet across name collisions', () => {
   let vocab = loadVocab({
     $defs: {
       book: {
@@ -595,7 +596,7 @@ Deno.test('a builder can preserve a terminal component facet across name collisi
 // A bare prop several reference properties share routes to comp '' — one read
 // concept with no one table behind it. Lowered, its path leaf named the table
 // `""` and SQLite refused the statement; the contract is to decline (S-37088).
-Deno.test('a shared reference equality unions its owners, other shapes decline', () => {
+test('a shared reference equality unions its owners, other shapes decline', () => {
   // Two components hold a reference property of the same name: the bare word
   // routes to neither (vocab route(): comp ''), and its equality is one indexed
   // question per owner, compiled the way `.refs=` is.
@@ -636,7 +637,7 @@ Deno.test('a shared reference equality unions its owners, other shapes decline',
   }
 })
 
-Deno.test('a property test says its component is present, so the planner drives from that table', () => {
+test('a property test says its component is present, so the planner drives from that table', () => {
   // `.board.query~=<id>` scanned the spine through a left join (243 ms on
   // the live graph) where the boards were 22 rows: a value test cannot hold
   // on a row without the component, and saying so lets SQLite start there.
@@ -659,7 +660,7 @@ Deno.test('a property test says its component is present, so the planner drives 
   }
 })
 
-Deno.test('a path leaf shared by several reference properties declines', () => {
+test('a path leaf shared by several reference properties declines', () => {
   let vocab = loadVocab({
     $defs: {
       claim: {

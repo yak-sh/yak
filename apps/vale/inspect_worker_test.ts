@@ -1,5 +1,6 @@
 // An admin sees a short command answer from stored and live rows; other
 // visitors cannot use the store-backed inspection door.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { flat } from './terrain.ts'
 import { eidOf } from './villager-id.ts'
@@ -33,7 +34,7 @@ let project = (row: Record<string, unknown>, line: string) =>
     ),
   )
 
-Deno.test('inspect worker checks owner and reads live hero state', async () => {
+test('inspect worker checks owner and reads live hero state', async () => {
   let reads: string[] = []
   let env = {
     STORE: {
@@ -81,7 +82,7 @@ Deno.test('inspect worker checks owner and reads live hero state', async () => {
   assertEquals(text.includes('owner-person'), false)
 })
 
-Deno.test('inspect worker resolves land and villager names', async () => {
+test('inspect worker resolves land and villager names', async () => {
   let worker = workerOf(flat(5))
   let elder = {
     entity: { eid: eidOf('wren') },

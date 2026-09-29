@@ -2,6 +2,7 @@
 // `/query` line saying `.task&.status=open`) rides on `graph.read`; this is
 // the pure half.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { Ambiguous, loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
@@ -36,7 +37,7 @@ let vocab = loadVocab([{
 let mean = meaning(vocab)
 let said = (q: string) => mean(q)
 
-Deno.test('the comp the line selects resolves the bare property', () => {
+test('the comp the line selects resolves the bare property', () => {
   assertEquals(said('.task&.status=open'), parse('.task&.task.status=open'))
   assertEquals(
     said('.session&.status=running'),
@@ -44,33 +45,33 @@ Deno.test('the comp the line selects resolves the bare property', () => {
   )
 })
 
-Deno.test('a qualified path selects its comp for the rest of the line', () => {
+test('a qualified path selects its comp for the rest of the line', () => {
   assertEquals(
     said('.task.domain=Ops&.status=open'),
     parse('.task.domain=Ops&.task.status=open'),
   )
 })
 
-Deno.test('nothing on the line picking one leaves the refusal standing', () => {
+test('nothing on the line picking one leaves the refusal standing', () => {
   assertEquals(said('.status=open'), '.status=open')
   let e = assertThrows(() => vocab.route('status'), Ambiguous)
   assertEquals((e as Ambiguous).comps, ['session', 'task'])
 })
 
-Deno.test('a line naming both candidates is still ambiguous', () => {
+test('a line naming both candidates is still ambiguous', () => {
   assertEquals(
     said('.task&.session&.status=open'),
     '.task&.session&.status=open',
   )
 })
 
-Deno.test('a line naming no bare property comes back whole', () => {
+test('a line naming no bare property comes back whole', () => {
   assertEquals(said('.task.status=open&.limit=3'), '.task.status=open&.limit=3')
   assertEquals(said('.doc.title=Dune'), '.doc.title=Dune')
   assertEquals(said('.task&.domain=Ops'), '.task&.domain=Ops')
 })
 
-Deno.test('an alternative reads its own arm, never its neighbour', () => {
+test('an alternative reads its own arm, never its neighbour', () => {
   assertEquals(
     said('.task&.status=open|.session&.status=running'),
     parse('.task&.task.status=open|.session&.session.status=running'),
@@ -82,7 +83,7 @@ Deno.test('an alternative reads its own arm, never its neighbour', () => {
   )
 })
 
-Deno.test('an aggregate, a projection and an ordering name properties too', () => {
+test('an aggregate, a projection and an ordering name properties too', () => {
   assertEquals(said('.task&.tally=status'), parse('.task&.tally=task.status'))
   assertEquals(
     said('.task&.distinct=status'),
@@ -92,12 +93,12 @@ Deno.test('an aggregate, a projection and an ordering name properties too', () =
   assertEquals(said('.task&.order=-status'), parse('.task&.order=-task.status'))
 })
 
-Deno.test('a ranking and an unknown word are left for whoever owns them', () => {
+test('a ranking and an unknown word are left for whoever owns them', () => {
   assertEquals(said('.task&.order=similar'), '.task&.order=similar')
   assertEquals(said('.task&.hot=1'), '.task&.hot=1')
 })
 
-Deno.test('an already-built AST is read the same way', () => {
+test('an already-built AST is read the same way', () => {
   let ast = parse('.task&.status=open')
   let out = mean(ast)
   assert(out != ast)

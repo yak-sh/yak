@@ -1,6 +1,7 @@
 // The status rule over bundles, and the same rule as SQL through a real SQLite
 // store: every shape a transcript can be in answers the same word both ways.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
@@ -208,7 +209,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
 ]
 
-Deno.test('statusOf reads the newest entry', () => {
+test('statusOf reads the newest entry', () => {
   for (let [name, entries, want] of shapes) {
     assertEquals(statusOf(entries.toReversed()), want, name)
   }
@@ -218,7 +219,7 @@ Deno.test('statusOf reads the newest entry', () => {
 // everything the model said and asked for in one batch, so the prefixes below
 // are the states a reader can actually see: running while the tool is owed an
 // answer, and settled only at the last output, which asked for nothing.
-Deno.test('a turn that uses a tool is running until its last output', () => {
+test('a turn that uses a tool is running until its last output', () => {
   let turn = [
     request(1),
     entry(2, { ask: { to: M } }),
@@ -234,7 +235,7 @@ Deno.test('a turn that uses a tool is running until its last output', () => {
   }
 })
 
-Deno.test('kindOf: prose alone is an input, prose with an output is one', () => {
+test('kindOf: prose alone is an input, prose with an output is one', () => {
   assertEquals(kindOf(input(1)), 'input')
   assertEquals(kindOf(said(2, 'e1')), 'output')
   assertEquals(
@@ -260,7 +261,7 @@ let store = (): Graph => {
   return g
 }
 
-Deno.test('the SQL view answers the same word as the rule', () => {
+test('the SQL view answers the same word as the rule', () => {
   for (let [name, entries, want] of shapes) {
     let g = store()
     if (entries.length) g.apply(entries, { trusted: true })
@@ -279,7 +280,7 @@ Deno.test('the SQL view answers the same word as the rule', () => {
 // `.session.status=empty` answered with the whole graph (T-37730). A qualified
 // path names the component as much as the property, and @yaks/sql says so for
 // every derived read.
-Deno.test('a status filter answers only the entities wearing session', () => {
+test('a status filter answers only the entities wearing session', () => {
   let g = store()
   let eids = (q: string) => (g.read(q) as Bundle[]).map((b) => b.entity.eid)
   assertEquals(eids('.session.status=empty'), [S])
@@ -292,7 +293,7 @@ Deno.test('a status filter answers only the entities wearing session', () => {
   assertEquals(eids('.session&.session.status!=settled,stopped,failed'), [S])
 })
 
-Deno.test('one transcript stays settled beside other transcripts with open work', () => {
+test('one transcript stays settled beside other transcripts with open work', () => {
   let g = store()
   g.apply([
     { entity: { eid: 'open' }, session: { id: 'open' } },
@@ -326,7 +327,7 @@ Deno.test('one transcript stays settled beside other transcripts with open work'
   )
 })
 
-Deno.test('usingBefore is the newest using at or before a seq', () => {
+test('usingBefore is the newest using at or before a seq', () => {
   let entries = [
     entry(1, { content: { body: 'a' }, using: { model: 'a' } }),
     entry(2, { ask: { to: 'a' }, using: { model: 'a' } }),
@@ -337,14 +338,14 @@ Deno.test('usingBefore is the newest using at or before a seq', () => {
   assertEquals(usingBefore([input(1)]), undefined)
 })
 
-Deno.test('passive notices do not change settled, stopped or empty status', () => {
+test('passive notices do not change settled, stopped or empty status', () => {
   let notice = entry(10, { notice: {}, content: { body: 'context' } })
   assertEquals(statusOf([notice]), 'empty')
   assertEquals(statusOf([said(3, 'e2'), notice]), 'settled')
   assertEquals(statusOf([entry(3, { stop: {} }), notice]), 'stopped')
 })
 
-Deno.test('a harness ending stays ended while its importer catches up, then clears on resume', () => {
+test('a harness ending stays ended while its importer catches up, then clears on resume', () => {
   let g = store()
   g.apply([{ entity: { eid: S }, session: { ended: true } }])
   g.apply([input(1), said(2, S)], { trusted: true })
@@ -358,7 +359,7 @@ Deno.test('a harness ending stays ended while its importer catches up, then clea
 // Where an app's transcripts live, a Durable Object's SQLite, workerd refuses
 // an expression past 100 deep, and the runner's sweep nests the status inside
 // a union: the query a worker coming up asks for the turns nobody wrote down.
-Deno.test("the runner's sweep finds a transcript owed a turn in a Durable Object", () => {
+test("the runner's sweep finds a transcript owed a turn in a Durable Object", () => {
   let [run] = effectsIn(sessionDoc).filter((e) => e.name == 'session_run')
   let s = held(durable(), vocab, { derived: sessionDerived(vocab) })
   s.install()

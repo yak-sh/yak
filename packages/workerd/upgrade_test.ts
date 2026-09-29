@@ -3,6 +3,7 @@
 // half handed back on the 101 — and a clear refusal anywhere that is not a
 // Worker.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { api } from '@yaks/api'
 import { installPair, made, req, shopGraph } from './testing.ts'
@@ -10,7 +11,7 @@ import { workerUpgrade } from './upgrade.ts'
 
 let ws = () => req('/ws', { headers: { upgrade: 'websocket' } })
 
-Deno.test('the server half is accepted and the client half answers 101', () => {
+test('the server half is accepted and the client half answers 101', () => {
   let undo = installPair()
   try {
     let { socket, response } = workerUpgrade(ws())
@@ -24,7 +25,7 @@ Deno.test('the server half is accepted and the client half answers 101', () => {
   }
 })
 
-Deno.test('off a Worker it says so instead of failing obscurely', () => {
+test('off a Worker it says so instead of failing obscurely', () => {
   assertThrows(
     () => workerUpgrade(ws()),
     Error,
@@ -32,7 +33,7 @@ Deno.test('off a Worker it says so instead of failing obscurely', () => {
   )
 })
 
-Deno.test('/ws through this upgrade serves subscriptions', async () => {
+test('/ws through this upgrade serves subscriptions', async () => {
   let undo = installPair()
   try {
     let handler = api({ graph: shopGraph(), upgrade: workerUpgrade })

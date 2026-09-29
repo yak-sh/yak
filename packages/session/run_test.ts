@@ -31,7 +31,7 @@ import { kindOf, sessionDerived, statusOf } from './status.ts'
 import { answers } from './providers.ts'
 import { sessionTools } from './children.ts'
 import { RUN, type Runner, running, settle } from './run.ts'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 
 let worker: VocabDoc = {
   $defs: {
@@ -139,7 +139,7 @@ let child = (eid: string, order: number, parent = 'root'): Bundle[] => [
 let kinds = async (p: { g: ReturnType<typeof graph> }, s: string) =>
   (await transcript(p.g, s)).map(kindOf)
 
-Deno.test('a request one process writes is answered by a process working the pool', async () => {
+test('a request one process writes is answered by a process working the pool', async () => {
   let s = store()
   let { model, asked } = fake()
   let writer = proc(s, 'w1', model)
@@ -160,7 +160,7 @@ Deno.test('a request one process writes is answered by a process working the poo
   }
 })
 
-Deno.test('two processes running one transcript at once ask its model once', async () => {
+test('two processes running one transcript at once ask its model once', async () => {
   let s = store()
   let open!: () => void
   let { model, asked } = fake(new Promise<void>((go) => open = go))
@@ -175,7 +175,7 @@ Deno.test('two processes running one transcript at once ask its model once', asy
   assertEquals(await kinds(a, 's1'), ['input', 'ask', 'output'])
 })
 
-Deno.test('a run longer than its lease keeps the transcript, renewed while it goes', async () => {
+test('a run longer than its lease keeps the transcript, renewed while it goes', async () => {
   let s = store()
   let open!: () => void
   let { model, asked } = fake(new Promise<void>((go) => open = go))
@@ -192,7 +192,7 @@ Deno.test('a run longer than its lease keeps the transcript, renewed while it go
   assertEquals(await kinds(a, 's1'), ['input', 'ask', 'output'])
 })
 
-Deno.test('a former lease holder takes no next transcript step', async () => {
+test('a former lease holder takes no next transcript step', async () => {
   let s = store()
   let rival: ReturnType<typeof proc>
   let asks = 0, runs = 0
@@ -249,7 +249,7 @@ Deno.test('a former lease holder takes no next transcript step', async () => {
   ])
 })
 
-Deno.test('a transcript asking for a provider this host was lent nothing for is left alone', async () => {
+test('a transcript asking for a provider this host was lent nothing for is left alone', async () => {
   let s = store()
   let { model, asked } = fake()
   let p = proc(s, 'w1', model)
@@ -266,7 +266,7 @@ Deno.test('a transcript asking for a provider this host was lent nothing for is 
   }
 })
 
-Deno.test('an input landing while its transcript is being run elsewhere is answered after', async () => {
+test('an input landing while its transcript is being run elsewhere is answered after', async () => {
   let s = store()
   let open!: () => void
   let { model, asked } = fake(new Promise<void>((go) => open = go))
@@ -288,7 +288,7 @@ Deno.test('an input landing while its transcript is being run elsewhere is answe
   assertEquals(statusOf(await transcript(a.g, 's1')), 'settled')
 })
 
-Deno.test('children past the bound wait queued, and each ending admits the next', async () => {
+test('children past the bound wait queued, and each ending admits the next', async () => {
   let s = store()
   let { model } = fake()
   let p = proc(s, 'w1', model, { maxChildren: 1 })
@@ -315,7 +315,7 @@ Deno.test('children past the bound wait queued, and each ending admits the next'
   }
 })
 
-Deno.test('a child waiting on its own child gives up its place, and takes one back after', async () => {
+test('a child waiting on its own child gives up its place, and takes one back after', async () => {
   let s = store()
   let { model } = fake()
   let p = proc(s, 'w1', model, { maxChildren: 1 })
@@ -348,7 +348,7 @@ Deno.test('a child waiting on its own child gives up its place, and takes one ba
   }
 })
 
-Deno.test('a withdrawn streamed request is aborted', async () => {
+test('a withdrawn streamed request is aborted', async () => {
   let s = store()
   let model: Model = (req) =>
     new Promise((_, no) =>
@@ -375,7 +375,7 @@ Deno.test('a withdrawn streamed request is aborted', async () => {
 // An app's store has tasks and no claims: a task finishing there owes a run
 // (`completed` is one of `session_run`'s triggers) that no transcript could be
 // holding, and a transcript asked for a turn is answered all the same.
-Deno.test('a graph with tasks and no claims runs its transcripts', async () => {
+test('a graph with tasks and no claims runs its transcripts', async () => {
   let words = loadVocab([
     pick(sessionDoc, [
       'session',
@@ -412,7 +412,7 @@ Deno.test('a graph with tasks and no claims runs its transcripts', async () => {
   assertEquals(statusOf(await transcript(g, 's1')), 'settled')
 })
 
-Deno.test('a worker coming up runs what a restart left owed', async () => {
+test('a worker coming up runs what a restart left owed', async () => {
   let s = store()
   // Written by a graph keeping no pool: nothing was owed on the way in.
   graph({ storage: s, vocab }).apply(ask('s1'), { trusted: true })
@@ -424,7 +424,7 @@ Deno.test('a worker coming up runs what a restart left owed', async () => {
   assertEquals(statusOf(await transcript(p.g, 's1')), 'settled')
 })
 
-Deno.test('a transcript ending releases its claims through the effects pool', async () => {
+test('a transcript ending releases its claims through the effects pool', async () => {
   let s = store()
   let p = proc(s, 'w1', fake().model)
   await p.fx.work(p.g)
@@ -442,7 +442,7 @@ Deno.test('a transcript ending releases its claims through the effects pool', as
   assertEquals((await p.g.get(['work']))[0].claim, undefined)
 })
 
-Deno.test('a managed transcript keeps its claim until its process exits', async () => {
+test('a managed transcript keeps its claim until its process exits', async () => {
   let p = proc(store(), 'w1', fake().model)
   await p.fx.work(p.g)
   await p.g.apply([
@@ -457,7 +457,7 @@ Deno.test('a managed transcript keeps its claim until its process exits', async 
   assertEquals((await p.g.get(['work']))[0].claim, undefined)
 })
 
-Deno.test('retryable errors keep a claim until the transcript fails', async () => {
+test('retryable errors keep a claim until the transcript fails', async () => {
   let s = store()
   let p = proc(s, 'w1', fake().model)
   await p.fx.work(p.g)
@@ -476,7 +476,7 @@ Deno.test('retryable errors keep a claim until the transcript fails', async () =
   }
 })
 
-Deno.test('a worker reclaims claims left by already ended transcripts', async () => {
+test('a worker reclaims claims left by already ended transcripts', async () => {
   let s = store()
   await graph({ storage: s, vocab }).apply([
     { entity: { eid: 's1' }, session: { id: 's1' } },

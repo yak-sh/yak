@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Bundle } from '@yaks/graph'
@@ -33,7 +34,7 @@ let text = async (rows: Bundle[]) => {
   }
 }
 
-Deno.test('context panel reads only the selected transcript, including its inherited prefix', async () => {
+test('context panel reads only the selected transcript, including its inherited prefix', async () => {
   let calls: string[] = []
   let rows = [row('parent-ask', 90, { input_tokens: 12 })]
   let read = (session: string) => {
@@ -47,7 +48,7 @@ Deno.test('context panel reads only the selected transcript, including its inher
   assert((await text(rows)).includes('Input context: 12 tokens'))
 })
 
-Deno.test('context panel uses latest reported ask in transcript order, not totals or sequence order', async () => {
+test('context panel uses latest reported ask in transcript order, not totals or sequence order', async () => {
   let rendered = await text([
     row('inherited', 90, {
       input_tokens: 900,
@@ -75,7 +76,7 @@ Deno.test('context panel uses latest reported ask in transcript order, not total
   assert(!rendered.includes('999'))
 })
 
-Deno.test('context panel handles unavailable and optional usage without carrying old counts forward', async () => {
+test('context panel handles unavailable and optional usage without carrying old counts forward', async () => {
   for (let rows of [[], [row('pending', 1)]]) {
     let rendered = await text(rows)
     assert(rendered.includes('Input context: unavailable'))
@@ -96,7 +97,7 @@ Deno.test('context panel handles unavailable and optional usage without carrying
   )
 })
 
-Deno.test('sidebar labels keep names and indicators without redundant status text', async () => {
+test('sidebar labels keep names and indicators without redundant status text', async () => {
   let child = 'child:abcdef01-2345-6789-abcd-0123456789ab'
   let sessions: Bundle[] = [
     { entity: { eid: child }, session: { id: child, status: 'settled' } },
@@ -128,7 +129,7 @@ Deno.test('sidebar labels keep names and indicators without redundant status tex
   }
 })
 
-Deno.test('context panel compacts displayed counts without changing usage', async () => {
+test('context panel compacts displayed counts without changing usage', async () => {
   const usage = {
     input_tokens: 273000,
     output_tokens: 1200,

@@ -1,8 +1,9 @@
 // A worker command's HTTP answer as both human text and its existing data.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { workerReply } from './app-command.ts'
 
-Deno.test('JSON command answers show fields and keep their raw answer', async () => {
+test('JSON command answers show fields and keep their raw answer', async () => {
   let payload = { player: 'Elder Wren', level: 'tombsands', x: 27 }
   let res = Response.json(payload)
   let out = await workerReply(res, 'teleport', 'yourname/vale')
@@ -14,7 +15,7 @@ Deno.test('JSON command answers show fields and keep their raw answer', async ()
   assertEquals(out.value.answer, JSON.stringify(payload))
 })
 
-Deno.test('worker command plain text keeps its sentence and answer', async () => {
+test('worker command plain text keeps its sentence and answer', async () => {
   let res = new Response('moved to Tombsands', {
     headers: { 'content-type': 'text/plain; charset=utf-8' },
   })
@@ -25,7 +26,7 @@ Deno.test('worker command plain text keeps its sentence and answer', async () =>
   })
 })
 
-Deno.test('JSON MIME suffix and charset render as fields', async () => {
+test('JSON MIME suffix and charset render as fields', async () => {
   let res = new Response('{"state":"ready"}', {
     headers: { 'content-type': 'application/vnd.yaks+json; charset=utf-8' },
   })

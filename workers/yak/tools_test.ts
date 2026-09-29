@@ -3,6 +3,7 @@
 // here is the four pieces a caller actually gets wrong — the op it did not
 // say, the file it miscounted, the patch that matched twice, the URL it
 // reached for — each a function, so a case is a line.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -36,7 +37,7 @@ import { clock } from './timing.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
 
-Deno.test('staging tool URLs and app mail use the same configured host', async () => {
+test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: Address }[] = []
   let { env } = platform('staging-tool-secret', {
     APEX: 'yaks.fyi',
@@ -129,7 +130,7 @@ Deno.test('staging tool URLs and app mail use the same configured host', async (
 // directory's own `member` row (T-35384). It is the only door that says a role
 // for every space at once: before this, a client had to ask each space's front
 // app `/me`, one round trip apiece, for a fact the directory already held.
-Deno.test('app_list says the caller’s role in each space it lists', async () => {
+test('app_list says the caller’s role in each space it lists', async () => {
   let { env } = platform('member-role-secret', {
     MAIL: { send: () => Promise.resolve({ messageId: 'sent' }) },
   })
@@ -169,7 +170,7 @@ let bytes = (s: string) => new TextEncoder().encode(s)
 // the builder gets it through the same roster (builder.ts).
 let app_files = TOOLS.find((t) => t.name == 'app_files')!
 
-Deno.test('bytes say a call is a write, and a bare path says nothing', () => {
+test('bytes say a call is a write, and a bare path says nothing', () => {
   assertEquals(opOf({ path: 'index.html', content: '<h1>hi' }, 0), 'write')
   assertEquals(opOf({ path: 'a.wasm', base64: 'AGFzbQ==' }, 0), 'write')
   assertEquals(opOf({}, 2), 'write')
@@ -183,7 +184,7 @@ Deno.test('bytes say a call is a write, and a bare path says nothing', () => {
   assertEquals(opOf({ path: 'index.html' }, 0), '')
 })
 
-Deno.test('a write answers what it stored, and json answers whether it parses', async () => {
+test('a write answers what it stored, and json answers whether it parses', async () => {
   let page = bytes('<!doctype html><h1>hi</h1>')
   assertEquals(
     stored('index.html', page, await sha256(page)),
@@ -220,7 +221,7 @@ Deno.test('a write answers what it stored, and json answers whether it parses', 
   )
 })
 
-Deno.test('a patch replaces exactly one match, or refuses saying how many', () => {
+test('a patch replaces exactly one match, or refuses saying how many', () => {
   let page = '<h1>Old</h1>\n<p>Old news</p>\n'
   assertEquals(
     patched(page, '<h1>Old</h1>', '<h1>New</h1>', 'index.html'),
@@ -250,7 +251,7 @@ Deno.test('a patch replaces exactly one match, or refuses saying how many', () =
   )
 })
 
-Deno.test('an integrity hash is base64 of the same digest, not the hex', async () => {
+test('an integrity hash is base64 of the same digest, not the hex', async () => {
   // The empty string's sha256, in the encoding an <script integrity> wants.
   assertEquals(
     sri(await sha256(new Uint8Array())),
@@ -277,7 +278,7 @@ let served = async <T>(
 let refuses = (saying: string, from: string) =>
   assertRejects(() => fetched(from), Error, saying)
 
-Deno.test('a fetch takes https, a live answer, and nothing over the ceiling', async () => {
+test('a fetch takes https, a live answer, and nothing over the ceiling', async () => {
   await refuses('is not a URL', 'cdnjs.example/chess.js')
   await refuses('https only, not http', 'http://cdnjs.example/chess.js')
   await refuses('https only, not file', 'file:///etc/passwd')
@@ -314,7 +315,7 @@ Deno.test('a fetch takes https, a live answer, and nothing over the ceiling', as
   )
 })
 
-Deno.test('the tool teaches every op it answers', () => {
+test('the tool teaches every op it answers', () => {
   let input = app_files.input as {
     properties: Record<string, { enum?: string[] }>
   }
@@ -349,7 +350,7 @@ Deno.test('the tool teaches every op it answers', () => {
 })
 
 // Portable hosts choose their sandbox. ChatGPT may use its namespaced origin.
-Deno.test('view metadata leaves portable sandbox selection to the host', () => {
+test('view metadata leaves portable sandbox selection to the host', () => {
   let bare = uiMeta('https://yaks.app')
   assertEquals(bare['openai/widgetDomain'], 'https://yaks.app')
   // A strict Claude host rejects a website origin in ui.domain; omission is
@@ -393,7 +394,7 @@ let booted = (ctx: Ctx) => call(ctx, 'app_list', {})
 // because something started asking one file at a time. Read back through the
 // bench's own parser (bin/app-deploy-time.ts `stages`), so what a run records
 // is what the header says.
-Deno.test('a deploy says how many round trips it took', async () => {
+test('a deploy says how many round trips it took', async () => {
   let { env } = platform('hops-secret')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -460,7 +461,7 @@ Deno.test('a deploy says how many round trips it took', async () => {
 // bound to those apps — and only the one fact an app's own store alone holds
 // (what is broken in it, unseen.ts `noted`) costs per app, two facets each,
 // asked as one wave. Space by space and app by app it was 38.
-Deno.test('a listing asks the directory a fixed number of times', async () => {
+test('a listing asks the directory a fixed number of times', async () => {
   let { env } = platform('listing-hops-secret')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -494,7 +495,7 @@ Deno.test('a listing asks the directory a fixed number of times', async () => {
 
 // The other half of asking once: every row of the one answer has to find its
 // way back to the app it is about. A binding names its own app, so it does.
-Deno.test('one read of the bindings still lands each on its own app', async () => {
+test('one read of the bindings still lands each on its own app', async () => {
   let { env } = platform('listing-bindings-secret')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -528,7 +529,7 @@ Deno.test('one read of the bindings still lands each on its own app', async () =
   assertEquals(under('garden').length, 0)
 })
 
-Deno.test('free custom domains return plan settings before provisioning', async () => {
+test('free custom domains return plan settings before provisioning', async () => {
   const { env } = platform('domain-plan-test', { APEX: 'yaks.fyi' })
   const dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   const ctx: Ctx = { env, dir, person: 'a0000000-0000-4000-8000-0000000000ad' }
@@ -555,7 +556,7 @@ Deno.test('free custom domains return plan settings before provisioning', async 
   }
 })
 
-Deno.test('paid and comped domain attachment still provisions normally', async () => {
+test('paid and comped domain attachment still provisions normally', async () => {
   const { env } = platform('domain-paid-test', {
     CF_ZONE: 'test-zone',
     CF_HOSTNAMES_TOKEN: 'test-only',

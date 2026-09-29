@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@std/toml'
 import { claude, codex } from './adapters.ts'
@@ -22,7 +23,7 @@ let setting = (argv: string[], key: string): unknown => {
   }
 }
 
-Deno.test('a provider is its argv: the thread it is told to be, and -- last', () => {
+test('a provider is its argv: the thread it is told to be, and -- last', () => {
   let argv = claude.argv(job)
   assertEquals(argv[0], 'claude')
   // The session entity is the provider's thread name, so a resume knows it.
@@ -40,7 +41,7 @@ Deno.test('a provider is its argv: the thread it is told to be, and -- last', ()
   assertEquals(setting(unstated, 'model_reasoning_effort'), undefined)
 })
 
-Deno.test('a persona reaches each provider through its own instruction flag', () => {
+test('a persona reaches each provider through its own instruction flag', () => {
   let persona = '# N-1 common\n\n"quoted" \\ and\ttabbed, $was\x7f'
   let said = claude.argv({ ...job, persona })
   assertEquals(said[said.indexOf('--append-system-prompt') + 1], persona)

@@ -23,7 +23,7 @@ import { platform } from './testing.ts'
 import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BOB = 'b0000000-0000-4000-8000-0000000000b0'
@@ -142,7 +142,7 @@ let vale = async (
   }
 }
 
-Deno.test('a connected OpenRouter model puts generated audio in the app store', async () => {
+test('a connected OpenRouter model puts generated audio in the app store', async () => {
   let key = 'probe-openrouter-key'
   let vaultKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(4)))
   let v = await vale(() => ({ response: 'workers-only' }), {
@@ -222,7 +222,7 @@ Deno.test('a connected OpenRouter model puts generated audio in the app store', 
   }
 })
 
-Deno.test('an app without the OpenRouter connection cannot ask its model', async () => {
+test('an app without the OpenRouter connection cannot ask its model', async () => {
   let v = await vale(() => ({ response: 'workers-only' }))
   let session = crypto.randomUUID()
   assertEquals((await v.send('/apply', asking(session, SEED))).status, 200)
@@ -231,7 +231,7 @@ Deno.test('an app without the OpenRouter connection cannot ask its model', async
   assertEquals(v.asked.length, 0)
 })
 
-Deno.test('one app-store write completes seven model turns within its dispatch bound', async () => {
+test('one app-store write completes seven model turns within its dispatch bound', async () => {
   let releases: (() => void)[] = []
   let active = 0, peak = 0
   let v = await vale(() => {
@@ -279,7 +279,7 @@ let asking = (
 
 let said = (b: Bundle) => (b.content as Comp | undefined)?.body
 
-Deno.test('a page asks its store for a turn and the answer lands beside it', async () => {
+test('a page asks its store for a turn and the answer lands beside it', async () => {
   let v = await vale(() => ({
     response: 'Welcome, traveller.',
     usage: { prompt_tokens: 1_000, completion_tokens: 100 },
@@ -301,7 +301,7 @@ Deno.test('a page asks its store for a turn and the answer lands beside it', asy
   assertAlmostEquals(Number((session.session as Comp).cost), cost)
 })
 
-Deno.test('a typed question comes back as an answer entry', async () => {
+test('a typed question comes back as an answer entry', async () => {
   let plan = {
     type: 'choice',
     choice: 'forge',
@@ -335,7 +335,7 @@ Deno.test('a typed question comes back as an answer entry', async () => {
   assertEquals(v.asked[0].input.questions, questions.asked)
 })
 
-Deno.test('a model calls only the commands marked for it, as the person who asked', async () => {
+test('a model calls only the commands marked for it, as the person who asked', async () => {
   let manifest = {
     $defs: {
       mood: {
@@ -386,7 +386,7 @@ Deno.test('a model calls only the commands marked for it, as the person who aske
   assertEquals((mood.created as Comp).via, s)
 })
 
-Deno.test('a visitor asks an app for a turn only where it opens its models', async () => {
+test('a visitor asks an app for a turn only where it opens its models', async () => {
   let answer = () => ({ response: 'hello' })
   let shut = await vale(answer, { access: 'open' })
   let refused = await shut.send(
@@ -408,7 +408,7 @@ Deno.test('a visitor asks an app for a turn only where it opens its models', asy
   )
 })
 
-Deno.test('an account past its budget is told so, and the transcript rests', async () => {
+test('an account past its budget is told so, and the transcript rests', async () => {
   let v = await vale(() => ({ response: 'never' }), { models: BUDGET.free })
   let s = crypto.randomUUID()
   await v.send('/apply', asking(s, FLASH))
@@ -425,7 +425,7 @@ Deno.test('an account past its budget is told so, and the transcript rests', asy
   assertEquals(v.asked.length, 0)
 })
 
-Deno.test('./api/ai/run answers what the model said, and the space pays for it', async () => {
+test('./api/ai/run answers what the model said, and the space pays for it', async () => {
   let usage = { prompt_tokens: 2_000, completion_tokens: 50 }
   let v = await vale(() => ({ response: 'Welcome.', usage }))
   let input = { messages: [{ role: 'user', content: 'hello' }] }
@@ -441,7 +441,7 @@ Deno.test('./api/ai/run answers what the model said, and the space pays for it',
   assertEquals(v.asked.length, 1)
 })
 
-Deno.test('./api/ai/run answers a visitor only where the app opens its models', async () => {
+test('./api/ai/run answers a visitor only where the app opens its models', async () => {
   let body = { model: JEV, input: { prompt: 'hi' } }
   let answer = () => ({ response: 'hello' })
   let shut = await vale(answer, { access: 'open' })

@@ -1,6 +1,7 @@
 // The index: a manifest in, git's own objects out, and the rows a pack walks.
 // Constants: ./testing.ts.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { edges } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
@@ -36,13 +37,13 @@ let deployed = (bytes: Parameters<typeof file>[0]) => ({
   'lib/a.txt': file(bytes, X),
 })
 
-Deno.test('a manifest becomes the trees git would build', async () => {
+test('a manifest becomes the trees git would build', async () => {
   let { git, bytes } = fixture()
   let root = await git.files(deployed(bytes))
   assertEquals(root, { oid: ROOT_OID, oid256: ROOT_OID256 })
 })
 
-Deno.test('an object row is its type, its size and its bytes', async () => {
+test('an object row is its type, its size and its bytes', async () => {
   let { g, git, bytes } = fixture()
   let sha = deployed(bytes)['hello.txt']
   await git.files(deployed(bytes))
@@ -51,7 +52,7 @@ Deno.test('an object row is its type, its size and its bytes', async () => {
   assertEquals(comp(row, 'gitobj'), { type: 'blob', size: 6 })
 })
 
-Deno.test('the SHA-256 name is a key off the SHA-1 one', async () => {
+test('the SHA-256 name is a key off the SHA-1 one', async () => {
   let { g, git, bytes } = fixture()
   await git.files(deployed(bytes))
   let [key] = await g.read(`.compat&.key.of=${HELLO_OID}`)
@@ -59,7 +60,7 @@ Deno.test('the SHA-256 name is a key off the SHA-1 one', async () => {
   assertEquals(comp(key, 'key'), { of: HELLO_OID, value: HELLO_OID256 })
 })
 
-Deno.test('a tree links to each child under the name it holds it by', async () => {
+test('a tree links to each child under the name it holds it by', async () => {
   let { g, git, bytes } = fixture()
   await git.files(deployed(bytes))
   let rows = await g.read(`.tree_entry&.edge.from=${ROOT_OID}&.order=ord`)
@@ -76,7 +77,7 @@ Deno.test('a tree links to each child under the name it holds it by', async () =
   assertEquals(rows[0].entity.eid, entryEid(ROOT_OID, 'hello.txt'))
 })
 
-Deno.test('one blob under two names is two entries', async () => {
+test('one blob under two names is two entries', async () => {
   let { g, git, bytes } = fixture()
   let sha = file(bytes, HELLO)
   let root = await git.files({ 'a.txt': sha, 'b.txt': sha })
@@ -91,7 +92,7 @@ Deno.test('one blob under two names is two entries', async () => {
   )
 })
 
-Deno.test('a manifest written twice writes one graph and reads no bytes again', async () => {
+test('a manifest written twice writes one graph and reads no bytes again', async () => {
   let { g, git, bytes } = fixture()
   let manifest = deployed(bytes)
   await git.files(manifest)
@@ -102,7 +103,7 @@ Deno.test('a manifest written twice writes one graph and reads no bytes again', 
   assertEquals(bytes.reads(), reads)
 })
 
-Deno.test('a repeat manifest reads existing Git names in batches', async () => {
+test('a repeat manifest reads existing Git names in batches', async () => {
   let { g, git, bytes } = fixture()
   let manifest = Object.fromEntries(
     Array.from({ length: 101 }, (_, i) => [
@@ -123,7 +124,7 @@ Deno.test('a repeat manifest reads existing Git names in batches', async () => {
   assert(reads < Object.keys(manifest).length)
 })
 
-Deno.test('a large manifest reuses stored Git blobs under a 100-bind limit', async () => {
+test('a large manifest reuses stored Git blobs under a 100-bind limit', async () => {
   let db = spy(mem(), (_, params) => {
     if (params.length > 100) throw new Error('too many SQL variables')
   })
@@ -146,7 +147,7 @@ Deno.test('a large manifest reuses stored Git blobs under a 100-bind limit', asy
   assertEquals(bytes.reads(), reads)
 })
 
-Deno.test('bytes nothing stored are refused by name', async () => {
+test('bytes nothing stored are refused by name', async () => {
   let { git } = fixture()
   await assertRejects(
     () => git.files({ 'gone.txt': 'ff'.repeat(32) }),
@@ -155,7 +156,7 @@ Deno.test('bytes nothing stored are refused by name', async () => {
   )
 })
 
-Deno.test('a commit chain is the ids git takes, and a parent walk', async () => {
+test('a commit chain is the ids git takes, and a parent walk', async () => {
   let { g, git, bytes } = fixture()
   let tree = await git.files(deployed(bytes))
   let one = await git.commit({
@@ -179,7 +180,7 @@ Deno.test('a commit chain is the ids git takes, and a parent walk', async () => 
   assertEquals(comp(edge, 'edge').ord, 0)
 })
 
-Deno.test('a commit body is in the store, verbatim', async () => {
+test('a commit body is in the store, verbatim', async () => {
   let { g, git, bytes } = fixture()
   let tree = await git.files(deployed(bytes))
   let one = await git.commit({

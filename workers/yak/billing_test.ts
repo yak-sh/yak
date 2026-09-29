@@ -2,6 +2,7 @@
 // subscription, which is the whole of the idempotency and ordering story, so it
 // is tested here rather than only through the door. Stripe's signature is
 // @yaks/hook's (signed_test.ts).
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   elsewhere,
@@ -28,7 +29,7 @@ let sub = (over: Partial<Sub> = {}): Sub => ({
   ...over,
 })
 
-Deno.test('the period end is read off the item, and off the subscription', () => {
+test('the period end is read off the item, and off the subscription', () => {
   // Where it lives since API 2025-03-31.basil...
   assertEquals(periodEnd(sub()), PERIOD)
   // ...and where it lived before, which an older api_version still sends.
@@ -36,7 +37,7 @@ Deno.test('the period end is read off the item, and off the subscription', () =>
   assertEquals(periodEnd({}), null)
 })
 
-Deno.test('a paying subscription is plus, and the rest are free', () => {
+test('a paying subscription is plus, and the rest are free', () => {
   for (let status of ['active', 'trialing', 'past_due']) {
     assertEquals(planOf(sub({ status }), AT).tier, 'plus', status)
   }
@@ -53,7 +54,7 @@ Deno.test('a paying subscription is plus, and the rest are free', () => {
   }
 })
 
-Deno.test('cancelled but paid through says both, in one row', () => {
+test('cancelled but paid through says both, in one row', () => {
   let renewing = planOf(sub(), AT)
   assertEquals(renewing.until, new Date(PERIOD * 1000).toISOString())
   assertEquals(renewing.ending, null, 'a renewing plan is not ending')
@@ -74,14 +75,14 @@ let row = (over: Partial<Plan> = {}): Plan => ({
   ...over,
 })
 
-Deno.test('the same event twice writes nothing the second time', () => {
+test('the same event twice writes nothing the second time', () => {
   let now = row()
   let again = planOf(sub(), AT)
   assert(!stale(now, again), 'a duplicate is not stale, it is simply the same')
   assertEquals(moved(now, again), {}, 'and there is nothing to write')
 })
 
-Deno.test('deleted before an older updated does not revive the plan', () => {
+test('deleted before an older updated does not revive the plan', () => {
   // The delete lands first, whatever its clock says...
   let dead = planOf(
     sub({ status: 'canceled', ended_at: 1_789_000_000 }),
@@ -95,7 +96,7 @@ Deno.test('deleted before an older updated does not revive the plan', () => {
   assert(stale(dead, late), 'a cancelled plan does not come back')
 })
 
-Deno.test('an event older than the row is dropped', () => {
+test('an event older than the row is dropped', () => {
   let now = row({ at: LATER, status: 'active' })
   assert(stale(now, planOf(sub({ status: 'past_due' }), AT)))
   assert(
@@ -104,21 +105,21 @@ Deno.test('an event older than the row is dropped', () => {
   )
 })
 
-Deno.test('a new subscription after a cancelled one is not refused', () => {
+test('a new subscription after a cancelled one is not refused', () => {
   let dead = planOf(sub({ status: 'canceled' }), AT)
   let fresh = planOf(sub({ id: 'sub_2', status: 'active' }), LATER)
   assert(!stale(dead, fresh), 'a different subscription is a new sentence')
   assertEquals(moved(dead, fresh).tier, 'plus')
 })
 
-Deno.test('a first plan is never stale', () => {
+test('a first plan is never stale', () => {
   assert(!stale(null, planOf(sub(), AT)))
   assertEquals(Object.keys(moved(null, planOf(sub(), AT))).length, 7)
 })
 
 // --- whose purchase ------------------------------------------------------
 
-Deno.test('another apex is elsewhere; ours, or none, is ours', () => {
+test('another apex is elsewhere; ours, or none, is ours', () => {
   let bought = (apex?: string) => ({ metadata: apex ? { apex } : {} })
   assert(elsewhere(bought('yaks.app'), 'yaks.fyi'))
   assert(!elsewhere(bought('yaks.fyi'), 'yaks.fyi'))

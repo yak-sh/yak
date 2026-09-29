@@ -12,6 +12,7 @@
 // upgrade — `WebSocketPair` and a 101 `Response` are the runtime's, not the
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -102,7 +103,7 @@ let post = (store: Store, path: string, body: string | unknown[], v?: Vouch) =>
     }),
   )
 
-Deno.test('each store response reports the SQL it ran for that fetch', async () => {
+test('each store response reports the SQL it ran for that fetch', async () => {
   let ctx = state()
   using _db = ctx.storage
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
@@ -121,7 +122,7 @@ Deno.test('each store response reports the SQL it ran for that fetch', async () 
   assert(measured > 0 && measured <= calls - before)
 })
 
-Deno.test('a Store row profile attributes SQL to the HTTP route', async () => {
+test('a Store row profile attributes SQL to the HTTP route', async () => {
   let ctx = state()
   using _db = ctx.storage
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
@@ -204,7 +205,7 @@ let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   return store
 }
 
-Deno.test('erasing a Store closes its subscribers and serves the empty Store', async () => {
+test('erasing a Store closes its subscribers and serves the empty Store', async () => {
   let ctx = state()
   using _db = ctx.storage
   let store = await cookbook(ctx)
@@ -225,7 +226,7 @@ Deno.test('erasing a Store closes its subscribers and serves the empty Store', a
   assertEquals((await get(store, '/vocab', owner)).status, 200)
 })
 
-Deno.test('a Store checks a large delete as one batch', async () => {
+test('a Store checks a large delete as one batch', async () => {
   let ctx = state()
   using _db = ctx.storage
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
@@ -260,7 +261,7 @@ Deno.test('a Store checks a large delete as one batch', async () => {
   assertEquals(await still.json(), { count: ids.length })
 })
 
-Deno.test('a Store commits a large delete within its operation budget', async () => {
+test('a Store commits a large delete within its operation budget', async () => {
   let ctx = state()
   using _db = ctx.storage
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
@@ -317,7 +318,7 @@ Deno.test('a Store commits a large delete within its operation budget', async ()
   assertEquals(await remaining.json(), { count: 0 })
 })
 
-Deno.test('an app store admits only values matching opted-in nested schemas', async () => {
+test('an app store admits only values matching opted-in nested schemas', async () => {
   let ctx = state()
   using _db = ctx.storage
   let store = await cookbook(
@@ -410,7 +411,7 @@ Deno.test('an app store admits only values matching opted-in nested schemas', as
   }])
 })
 
-Deno.test('an app store bounds a derived value over the final patched row', async () => {
+test('an app store bounds a derived value over the final patched row', async () => {
   let ctx = state()
   using _db = ctx.storage
   let store = await cookbook(
@@ -467,7 +468,7 @@ Deno.test('an app store bounds a derived value over the final patched row', asyn
   assertEquals((await saved.json())[0].move.effects, [{ scale: 2 }])
 })
 
-Deno.test('a declared rule cannot write a value outside an app constraint', async () => {
+test('a declared rule cannot write a value outside an app constraint', async () => {
   let ctx = state()
   using _db = ctx.storage
   let store = await cookbook(
@@ -499,7 +500,7 @@ Deno.test('a declared rule cannot write a value outside an app constraint', asyn
 })
 
 for (let aggregate of [false, true]) {
-  Deno.test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door`, async () => {
+  test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door`, async () => {
     let store = await cookbook()
     let error = new Error('query storage failed')
     using _broken = stub(store.door.graph, aggregate ? 'rows' : 'read', () => {
@@ -526,7 +527,7 @@ for (let aggregate of [false, true]) {
 // A line that does not parse, or names a property its component does not
 // declare, is the caller's mistake: a 400 in the store's own words, and
 // nothing logged as the store's failure.
-Deno.test('a malformed query is a 400 to the caller, not a failure', async () => {
+test('a malformed query is a 400 to the caller, not a failure', async () => {
   let store = await cookbook()
   using logged = stub(console, 'error')
   for (
@@ -576,7 +577,7 @@ let words = async (store: Store) =>
 
 // What a store keeps is the document, so a keyword a property declares is still
 // on it when the kernel reads the manifest back (T-37546).
-Deno.test("an app's vocab.json is read back as the document it means", async () => {
+test("an app's vocab.json is read back as the document it means", async () => {
   assertEquals(
     (await words(await cookbook())).recipe.properties,
     { serves: { type: 'number' } },
@@ -598,7 +599,7 @@ Deno.test("an app's vocab.json is read back as the document it means", async () 
   })
 })
 
-Deno.test('stores holding different words each wake speaking their own', async () => {
+test('stores holding different words each wake speaking their own', async () => {
   let kitchen = state(), yard = state()
   await cookbook(kitchen)
   await cookbook(
@@ -635,7 +636,7 @@ Deno.test('stores holding different words each wake speaking their own', async (
   }
 })
 
-Deno.test('a manifest the vocabulary refuses leaves the store as it was', async () => {
+test('a manifest the vocabulary refuses leaves the store as it was', async () => {
   let store = await cookbook()
   let was = await words(store)
   let no = await post(
@@ -649,7 +650,7 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
   assertEquals(await words(store), was)
 })
 
-Deno.test('an app store refuses a malformed score declaration', async () => {
+test('an app store refuses a malformed score declaration', async () => {
   let store = new Store(state())
   let manifest = JSON.stringify({
     $defs: {
@@ -670,7 +671,7 @@ Deno.test('an app store refuses a malformed score declaration', async () => {
   assertStringIncludes((await refused.json()).message, 'move.constraints')
 })
 
-Deno.test('a property says its type', async () => {
+test('a property says its type', async () => {
   let store = await cookbook()
   let was = await words(store)
   let no = await post(
@@ -692,7 +693,7 @@ let asked = async (store: Store, q: string) => {
 
 // An object, a list and a union are written and read back as themselves, and a
 // filter asks only whether one is there (docs/components.md).
-Deno.test('an app keeps objects and arrays, and asks only whether one is there', async () => {
+test('an app keeps objects and arrays, and asks only whether one is there', async () => {
   let store = await cookbook(
     state(),
     JSON.stringify({
@@ -735,7 +736,7 @@ Deno.test('an app keeps objects and arrays, and asks only whether one is there',
 
 // A property's type is kept by the values written under it: one that holds
 // nothing takes a new type, and one that holds values keeps its own.
-Deno.test('a property that holds nothing may change its type', async () => {
+test('a property that holds nothing may change its type', async () => {
   let dish = (tags: object) =>
     JSON.stringify({
       $defs: { dish: { properties: { tags, n: { type: 'number' } } } },
@@ -758,7 +759,7 @@ Deno.test('a property that holds nothing may change its type', async () => {
 })
 
 {
-  Deno.test('a bundle applies and queries back', async () => {
+  test('a bundle applies and queries back', async () => {
     let store = await cookbook()
 
     let wrote = await post(store, '/apply', [{
@@ -792,7 +793,7 @@ Deno.test('a property that holds nothing may change its type', async () => {
   })
 }
 
-Deno.test('the writer the kernel vouched for is a person here, by name', async () => {
+test('the writer the kernel vouched for is a person here, by name', async () => {
   let store = await cookbook()
   await post(store, '/apply', [{
     entity: { eid: CAKE },
@@ -807,7 +808,7 @@ Deno.test('the writer the kernel vouched for is a person here, by name', async (
   assertEquals(ada.doc.title, 'Ada')
 })
 
-Deno.test('an edge is a sentence, and the relation is a word the store knows', async () => {
+test('an edge is a sentence, and the relation is a word the store knows', async () => {
   let store = await cookbook()
   let wrote = await post(store, '/apply', [
     { entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } },
@@ -826,12 +827,12 @@ Deno.test('an edge is a sentence, and the relation is a word the store knows', a
   assertEquals(links[0].edge.to, CAKE)
 })
 
-Deno.test('/ws without an upgrade is not a door', async () => {
+test('/ws without an upgrade is not a door', async () => {
   let store = await cookbook()
   assertEquals((await get(store, '/ws', owner)).status, 405)
 })
 
-Deno.test('a Store live query sees only connected peer positions', async () => {
+test('a Store live query sees only connected peer positions', async () => {
   let ctx = state()
   let manifest = JSON.stringify({
     $defs: {
@@ -872,7 +873,7 @@ Deno.test('a Store live query sees only connected peer positions', async () => {
   assertEquals(await positions(), [])
 })
 
-Deno.test('a subscription is answered, and a commit reaches the socket', async () => {
+test('a subscription is answered, and a commit reaches the socket', async () => {
   let ctx = state()
   let store = await cookbook(ctx)
   let ws = wire()
@@ -898,7 +899,7 @@ Deno.test('a subscription is answered, and a commit reaches the socket', async (
   assertEquals(pushed.bundles[0].entity.eid, CAKE)
 })
 
-Deno.test("a page's subscription leaves out the platform's rows unless it names one", async () => {
+test("a page's subscription leaves out the platform's rows unless it names one", async () => {
   let ctx = state()
   let store = await cookbook(ctx)
   await post(store, '/apply', [{
@@ -923,7 +924,7 @@ Deno.test("a page's subscription leaves out the platform's rows unless it names 
 // both doors: it used to be cut out of `/query`'s line by hand and handed to
 // `subs.open` whole, where it reached @yaks/match as a full-text term nothing
 // matches — the subscription answered empty and stayed silent forever (T-34070).
-Deno.test('a subscription asking `*` answers what /query answers', async () => {
+test('a subscription asking `*` answers what /query answers', async () => {
   let ctx = state()
   let store = await cookbook(ctx)
   let ws = wire()
@@ -986,7 +987,7 @@ Deno.test('a subscription asking `*` answers what /query answers', async () => {
   )
 })
 
-Deno.test('a woken object serves the same app, and the same sockets', async () => {
+test('a woken object serves the same app, and the same sockets', async () => {
   let ctx = state()
   let store = await cookbook(ctx)
   await post(store, '/apply', [{
@@ -1009,7 +1010,7 @@ Deno.test('a woken object serves the same app, and the same sockets', async () =
 
 // A wake plants what the platform ships before any door answers (`#sow`), so a
 // row it rewrites for nothing makes every read wait on a durable write.
-Deno.test('a woken object rewrites nothing it already holds', async () => {
+test('a woken object rewrites nothing it already holds', async () => {
   let ctx = state()
   using _db = ctx.storage
   await get(await cookbook(ctx), '/query?q=.model', owner)
@@ -1018,7 +1019,7 @@ Deno.test('a woken object rewrites nothing it already holds', async () => {
   assertEquals(moved, [])
 })
 
-Deno.test('a stranger is refused on a private app', async () => {
+test('a stranger is refused on a private app', async () => {
   let mine: Vouch = { ...owner, access: 'private' }
   let store = await cookbook(state(), SCHEMA, mine)
   // The owner writes: the kernel vouched for the level, and the store wrote
@@ -1044,7 +1045,7 @@ Deno.test('a stranger is refused on a private app', async () => {
   assertEquals(cake.recipe.serves, 8)
 })
 
-Deno.test('an open app is written by nobody', async () => {
+test('an open app is written by nobody', async () => {
   let open: Vouch = { app: APP, access: 'open' }
   let store = await cookbook(state(), SCHEMA, open)
   let wrote = await post(store, '/apply', [{
@@ -1060,7 +1061,7 @@ Deno.test('an open app is written by nobody', async () => {
 // An open app takes a visitor's rows and keeps everybody else's (T-37881,
 // T-37896): the shop's prices are its editors', what was sold is the
 // platform's, and a row the owner wrote is the owner's.
-Deno.test('a visitor to an open app adds, and touches no price, order or row of the owner’s', async () => {
+test('a visitor to an open app adds, and touches no price, order or row of the owner’s', async () => {
   let own: Vouch = { ...owner, access: 'open' }
   let open: Vouch = { app: APP, access: 'open' }
   let store = await cookbook(state(), SCHEMA, own)
@@ -1126,7 +1127,7 @@ Deno.test('a visitor to an open app adds, and touches no price, order or row of 
 // A component of the app's own may say who writes it and how often (T-40650):
 // a chat line only someone signed in says, each of them once a pace. The store
 // holds it at its own door, so every door in front of it does too.
-Deno.test('a line is said by someone signed in, once a pace each', async () => {
+test('a line is said by someone signed in, once a pace each', async () => {
   let own: Vouch = { ...owner, access: 'open' }
   let open: Vouch = { app: APP, access: 'open' }
   let kim: Vouch = { ...open, person: 'f0000000-0000-4000-8000-000000000006' }
@@ -1158,7 +1159,7 @@ Deno.test('a line is said by someone signed in, once a pace each', async () => {
 // A name outlives the batch (T-34390): @yaks/key carries it, @yaks/alias
 // resolves it, and both are composed into every store — so the same seed
 // written twice is one entity, and the name stands where an eid does.
-Deno.test('a named row written twice is one entity, and answers to its name', async () => {
+test('a named row written twice is one entity, and answers to its name', async () => {
   let store = await cookbook()
   let seed = async (title: string) => {
     let out = await post(store, '/apply', [{
@@ -1192,7 +1193,7 @@ Deno.test('a named row written twice is one entity, and answers to its name', as
 
 // An app's store answers its own vocabulary and refuses a directory-only
 // component without disturbing an accepted row.
-Deno.test("an app's store keeps its words apart from the directory's", async () => {
+test("an app's store keeps its words apart from the directory's", async () => {
   let store = await cookbook()
   let wrote = await post(store, '/apply', [
     { entity: { eid: CAKE }, recipe: { serves: 8 } },
@@ -1215,7 +1216,7 @@ Deno.test("an app's store keeps its words apart from the directory's", async () 
 // byte. This pins the id both ways — against the bytes, built here without the
 // escape, and against a frozen hex — so the separator cannot quietly become a
 // space and silently move every grant.
-Deno.test('a grant id is the sha of app and person joined by a NUL', () => {
+test('a grant id is the sha of app and person joined by a NUL', () => {
   let nul = String.fromCharCode(0)
   assertEquals(
     grantEid('cookbook', 'P-1'),
@@ -1245,7 +1246,7 @@ let ruling = async (rules: Rule[], body: () => Promise<void>) => {
   }
 }
 
-Deno.test("a plugin's rule reaches the store the host built", async () => {
+test("a plugin's rule reaches the store the host built", async () => {
   await ruling([{
     name: 'fixture/titled',
     phase: 'stamp',
@@ -1267,7 +1268,7 @@ Deno.test("a plugin's rule reaches the store the host built", async () => {
   })
 })
 
-Deno.test('a rule writing outside its *write set takes the batch with it', async () => {
+test('a rule writing outside its *write set takes the batch with it', async () => {
   await ruling([{
     name: 'fixture/stray',
     phase: 'stamp',
@@ -1291,7 +1292,7 @@ Deno.test('a rule writing outside its *write set takes the batch with it', async
 
 // The one rule this Worker ships (trash.ts): the caller asks for the trash and
 // the store dates it and signs it, the way it dates a birth.
-Deno.test('the store dates the trash mark, and signs it', async () => {
+test('the store dates the trash mark, and signs it', async () => {
   let store = new Store(state())
   let at = (body: unknown[]) =>
     store.fetch(
@@ -1323,7 +1324,7 @@ Deno.test('the store dates the trash mark, and signs it', async () => {
   assertEquals(row.trashed.at, mark.at)
 })
 
-Deno.test('app archetypes classify writes and migrate old rows only on schema changes', async () => {
+test('app archetypes classify writes and migrate old rows only on schema changes', async () => {
   let ctx = state()
   let store = await cookbook(ctx)
   let added = await post(store, '/apply', [
@@ -1368,7 +1369,7 @@ Deno.test('app archetypes classify writes and migrate old rows only on schema ch
   )
 })
 
-Deno.test('app archetype descriptors are read-only and vocabulary extension tracks new shapes', async () => {
+test('app archetype descriptors are read-only and vocabulary extension tracks new shapes', async () => {
   let ctx = state(), store = await cookbook(ctx)
   let vocab = await post(
     store,

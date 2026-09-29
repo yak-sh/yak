@@ -1,9 +1,10 @@
 // Canvas gesture settlement: cancellation forgets the pan without saving it.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { panEvents } from './Canvas.tsx'
 
-Deno.test('a cancelled pan forgets movement and never settles', () => {
+test('a cancelled pan forgets movement and never settles', () => {
   let elem = new EventTarget()
   let moved = 0
   let settled = 0

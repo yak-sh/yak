@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { decode, encode } from './store.ts'
 import { type Bucket, bucketObjects, objectBlobs } from './object.ts'
@@ -65,7 +66,7 @@ let fake = (): Bucket & { keys: () => string[] } => {
   }
 }
 
-Deno.test('the object backend stores and reads by address', async () => {
+test('the object backend stores and reads by address', async () => {
   let bucket = fake()
   let store = objectBlobs(bucket)
   assertEquals(await store.has('abc'), false)
@@ -75,7 +76,7 @@ Deno.test('the object backend stores and reads by address', async () => {
   assertEquals(decode((await store.get('abc')) as Uint8Array), 'a long essay')
 })
 
-Deno.test('a prefix namespaces the keys without changing the address', async () => {
+test('a prefix namespaces the keys without changing the address', async () => {
   let bucket = fake()
   let store = objectBlobs(bucket, 'bodies/')
   await store.put('abc', encode('hello'))
@@ -83,7 +84,7 @@ Deno.test('a prefix namespaces the keys without changing the address', async () 
   assertEquals(decode((await store.get('abc')) as Uint8Array), 'hello')
 })
 
-Deno.test('an object-store read fetches only the requested byte span', async () => {
+test('an object-store read fetches only the requested byte span', async () => {
   let bucket = fake()
   let calls: { offset: number; length: number }[] = []
   let get = bucket.get
@@ -102,7 +103,7 @@ Deno.test('an object-store read fetches only the requested byte span', async () 
   assertEquals(calls, [{ offset: 2, length: 4 }])
 })
 
-Deno.test('a store keyed by name reads, deletes and lists every page', async () => {
+test('a store keyed by name reads, deletes and lists every page', async () => {
   let files = bucketObjects(fake())
   assertEquals(await files.read('a/x'), null)
   await assertRejects(() => files.get('a/x'), Error, 'no object at a/x')

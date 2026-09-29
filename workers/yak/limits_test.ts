@@ -4,13 +4,13 @@
 // month's letters are shared by every free space the owner has. usage_test.ts
 // holds the sums at their seam; this holds that the doors ask them.
 import { assertStringIncludes } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { connector, kernel, meta, onPlus, signIn } from './probe.ts'
 
 let eidIn = (said: { value?: Record<string, unknown> }) =>
   String(said.value?.eid)
 
-Deno.test('free allowances hold per person, not per space', async () => {
+test('free allowances hold per person, not per space', async () => {
   let k = await kernel()
   try {
     // The first to sign in owns the platform too, which is how this test

@@ -3,6 +3,7 @@
 // doors: what the object remembers rewritten into the one shape a deploy takes
 // now, a schema that moves re-cut and refilled, and a schema that will not
 // stand refused at every door and heard by Sentry.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   createTransport,
@@ -39,7 +40,7 @@ let APP = 'd0000000-0000-4000-8000-0000000000ab'
 let ONE = '10000000-0000-4000-8000-000000000001'
 let TWO = '20000000-0000-4000-8000-000000000002'
 
-Deno.test('an app deploy turns stored player eids into queryable look references', async () => {
+test('an app deploy turns stored player eids into queryable look references', async () => {
   let ctx = state(), now = newer(ctx, 'ada/vale')
   let words = (ref: boolean) => ({
     $defs: {
@@ -91,7 +92,7 @@ Deno.test('an app deploy turns stored player eids into queryable look references
   assertEquals(restored.look, { player: ONE, name: 'Ada' })
 })
 
-Deno.test('a Store retires an old build identity index on its next schema wake', async () => {
+test('a Store retires an old build identity index on its next schema wake', async () => {
   let ctx = state(), app = newer(ctx, 'ada/vale')
   await app.query('.build&*', APP)
   run(ctx, {
@@ -163,7 +164,7 @@ let run = (ctx: State, ...statements: Stmt[]) => {
   for (let s of statements) d.query(s)
 }
 
-Deno.test('a Store keeps exception request ids across the rename', async () => {
+test('a Store keeps exception request ids across the rename', async () => {
   for (let partial of [false, true]) {
     let ctx = state()
     let before = newer(ctx, PLATFORM_STORE)
@@ -214,7 +215,7 @@ Deno.test('a Store keeps exception request ids across the rename', async () => {
 // short form is gone from every door, so the slot itself is rewritten as the
 // document at the object's next open. The tools slot the same way: a manifest
 // accepted while `{{arg}}` was the hole is rewritten with `$arg`.
-Deno.test(
+test(
   'a store holding an old shape is rewritten at its next open',
   async () => {
     let ctx = state()
@@ -257,7 +258,7 @@ Deno.test(
   },
 )
 
-Deno.test('the {{arg}} hole, as the variable it became', () => {
+test('the {{arg}} hole, as the variable it became', () => {
   assertEquals(
     unholed('{"a":{"query":".r.t={{t}}&.r.n={{n_2}}","apply":"{{x}}!"}}'),
     '{"a":{"query":".r.t=$t&.r.n=$n_2","apply":"$x!"}}',
@@ -267,7 +268,7 @@ Deno.test('the {{arg}} hole, as the variable it became', () => {
   assertEquals(unholed('{"a":{"query":".r.t=$$5 {{ }} {{T}}"}}'), null)
 })
 
-Deno.test('each query clause in its one spelling', () => {
+test('each query clause in its one spelling', () => {
   let cases: [string, string | null][] = [
     [`query('.recipe!&.doc?')`, `query('.recipe&?doc')`],
     [`'/query?.art_asset!&.doc?'`, `'/query?.art_asset&?doc'`],
@@ -286,7 +287,7 @@ Deno.test('each query clause in its one spelling', () => {
   for (let [text, now] of cases) assertEquals(respelled(text), now, text)
 })
 
-Deno.test('a tools slot, each argument the JSON Schema it meant', () => {
+test('a tools slot, each argument the JSON Schema it meant', () => {
   assertEquals(
     JSON.parse(
       unworded(JSON.stringify({
@@ -334,7 +335,7 @@ Deno.test('a tools slot, each argument the JSON Schema it meant', () => {
   assertEquals(unworded('not json'), null)
 })
 
-Deno.test('the short type map, as the document it means', () => {
+test('the short type map, as the document it means', () => {
   assertEquals(
     JSON.parse(documented('{"recipe": {"serves": "number"}}')!),
     {
@@ -402,7 +403,7 @@ Deno.test('the short type map, as the document it means', () => {
 
 // ---- the definitions, when the schema moves under them ---------------------
 
-Deno.test('a schema that moves re-cuts its definitions and refills', async () => {
+test('a schema that moves re-cuts its definitions and refills', async () => {
   // No old rows here: this is a store already on the packages, whose schema
   // moves — a deploy that grew its vocabulary. `create ... if not exists` says
   // nothing about a trigger or a full-text index that is already standing, so
@@ -468,7 +469,7 @@ Deno.test('a schema that moves re-cuts its definitions and refills', async () =>
   assertEquals((await now.query('lemons', APP)).length, 1)
 })
 
-Deno.test('a kind the vocabulary stopped listing is written beside the rows it kept', async () => {
+test('a kind the vocabulary stopped listing is written beside the rows it kept', async () => {
   // The table was made when the vocabulary listed kinds, and holds that list
   // as its check; a deploy that lets any word be a kind raises it again.
   let now = newer(state(), 'ada/vale')
@@ -495,7 +496,7 @@ Deno.test('a kind the vocabulary stopped listing is written beside the rows it k
   assertEquals(kinds, ['fox', 'hen'])
 })
 
-Deno.test('a doc_value-backed legacy index upgrades to the composed FTS schema', async () => {
+test('a doc_value-backed legacy index upgrades to the composed FTS schema', async () => {
   let ctx = state()
   let now = newer(ctx, 'ada/cookbook')
   let write = (store: ReturnType<typeof newer>, body: string) =>
@@ -589,13 +590,13 @@ let unsatisfiable = async () => {
   return ctx
 }
 
-Deno.test('a declared index the rows cannot satisfy refuses the boot', async () => {
+test('a declared index the rows cannot satisfy refuses the boot', async () => {
   let ctx = await unsatisfiable()
   await refused(newer(ctx, PLATFORM_STORE), 'skipped unique index space_slug')
   assertEquals(slot(ctx, 'schema'), 'older schema')
 })
 
-Deno.test('a nullable unique key is raised over older rows without one', async () => {
+test('a nullable unique key is raised over older rows without one', async () => {
   let ctx = state()
   let now = newer(ctx, 'ada/vale')
   let deploy = (unique: boolean) =>
@@ -641,7 +642,7 @@ Deno.test('a nullable unique key is raised over older rows without one', async (
   )
 })
 
-Deno.test('a unique index survives dropping another column on its table', async () => {
+test('a unique index survives dropping another column on its table', async () => {
   let ctx = state()
   let now = newer(ctx, 'ada/vale')
   let deploy = (old: boolean) =>
@@ -686,7 +687,7 @@ Deno.test('a unique index survives dropping another column on its table', async 
   assertEquals((await now.query('.ability_design', APP)).length, 1)
 })
 
-Deno.test('a raw index creation failure still refuses an empty store', async () => {
+test('a raw index creation failure still refuses an empty store', async () => {
   let ctx = state()
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (query, ...params) => {
@@ -699,7 +700,7 @@ Deno.test('a raw index creation failure still refuses an empty store', async () 
   await refused(now, 'index creation failed')
 })
 
-Deno.test('a refused boot reaches Sentry, tagged with its store', async () => {
+test('a refused boot reaches Sentry, tagged with its store', async () => {
   let seen: ErrorEvent[] = []
   let client = new ServerRuntimeClient({
     dsn: 'https://key@example.ingest.sentry.io/1',

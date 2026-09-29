@@ -1,9 +1,10 @@
 // Public entity links have one origin and speak the current path grammar.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { entityId, entityUrl, normalize } from './url.ts'
 
-Deno.test('entity links use the public board and direct id path', () => {
+test('entity links use the public board and direct id path', () => {
   assertEquals(entityUrl('T-42'), 'https://tasks.yak.sh/T-42')
   let short = '#a83446de17'
   assertEquals(entityUrl(short), 'https://tasks.yak.sh/%23a83446de17')
@@ -12,7 +13,7 @@ Deno.test('entity links use the public board and direct id path', () => {
   }
 })
 
-Deno.test('normalize gives one page one name', () => {
+test('normalize gives one page one name', () => {
   let same = (a: string, b: string) => assertEquals(normalize(a), b)
   same('https://x.com', 'https://x.com/')
   same('  https://x.com/p  ', 'https://x.com/p')
@@ -29,7 +30,7 @@ Deno.test('normalize gives one page one name', () => {
   same('https://user:pw@x.com/p', 'https://x.com/p')
 })
 
-Deno.test('normalize leaves alone what it does not understand', () => {
+test('normalize leaves alone what it does not understand', () => {
   // The same PropType carries repo.url — mangling a git remote is the bug.
   let same = (a: string) => assertEquals(normalize(a), a)
   same('git@github.com:jeffpeterson/tasks.git')

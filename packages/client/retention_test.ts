@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { echo } from '@yaks/sync'
@@ -34,7 +35,7 @@ let fixture = (opts: ClientOpts = {}) => {
 }
 let readIds = (bundles: Bundle[]) => bundles.map((b) => b.entity.eid)
 
-Deno.test('inactive LRU is bounded, reads touch without changing query order', async () => {
+test('inactive LRU is bounded, reads touch without changing query order', async () => {
   let { c, frame } = fixture({ retention: 2 })
   let w = c.watch('.doc')
   frame('s1', [row('a'), row('b')])
@@ -51,7 +52,7 @@ Deno.test('inactive LRU is bounded, reads touch without changing query order', a
   c.close()
 })
 
-Deno.test('active/shared owners exceed the inactive bound and gone is per answer', () => {
+test('active/shared owners exceed the inactive bound and gone is per answer', () => {
   let { c, frame } = fixture({ retention: 0 })
   let a = c.watch('.doc')
   let b = c.watch('.title=a')
@@ -73,7 +74,7 @@ Deno.test('active/shared owners exceed the inactive bound and gone is per answer
   c.close()
 })
 
-Deno.test('reopen before first frame pins retained hits; empty frame reconciles stale floor', () => {
+test('reopen before first frame pins retained hits; empty frame reconciles stale floor', () => {
   let { c, frame } = fixture({ retention: 1 })
   let old = c.watch('.doc')
   frame('s1', [row('a')])
@@ -99,7 +100,7 @@ Deno.test('reopen before first frame pins retained hits; empty frame reconciles 
   c.close()
 })
 
-Deno.test('snapshots replace absent wire fields and preserve local/none on gone', async () => {
+test('snapshots replace absent wire fields and preserve local/none on gone', async () => {
   let vault = stash()
   let { c, frame } = fixture({ vault, retention: 0 })
   await c.ready
@@ -127,7 +128,7 @@ Deno.test('snapshots replace absent wire fields and preserve local/none on gone'
   c.close()
 })
 
-Deno.test('eviction physically drops payloads and restore keeps identity, not a tombstone', async () => {
+test('eviction physically drops payloads and restore keeps identity, not a tombstone', async () => {
   let { c, frame } = fixture({ retention: 0 })
   let w = c.watch('.doc')
   frame('s1', [row('a', 75)])
@@ -141,7 +142,7 @@ Deno.test('eviction physically drops payloads and restore keeps identity, not a 
   c.close()
 })
 
-Deno.test('pending optimistic writes survive pressure, gone and stale socket snapshots', async () => {
+test('pending optimistic writes survive pressure, gone and stale socket snapshots', async () => {
   let answer = Promise.withResolvers<Response>()
   let { c, frame } = fixture({ retention: 0, fetch: () => answer.promise })
   let w = c.watch('.doc')
@@ -160,7 +161,7 @@ Deno.test('pending optimistic writes survive pressure, gone and stale socket sna
   c.close()
 })
 
-Deno.test('an accepted write stays in its matching watch until the socket answers', async () => {
+test('an accepted write stays in its matching watch until the socket answers', async () => {
   let { c, frame } = fixture({
     retention: 0,
     fetch: async (request) => Response.json(JSON.parse(await request.text())),
@@ -181,7 +182,7 @@ Deno.test('an accepted write stays in its matching watch until the socket answer
   c.close()
 })
 
-Deno.test('overlapping pending writes release only their own pins; uncertain transport stays pinned', async () => {
+test('overlapping pending writes release only their own pins; uncertain transport stays pinned', async () => {
   let first = Promise.withResolvers<Response>()
   let second = Promise.withResolvers<Response>()
   let calls = 0
@@ -202,7 +203,7 @@ Deno.test('overlapping pending writes release only their own pins; uncertain tra
   c.close()
 })
 
-Deno.test('eviction invalidates local watches without sending deletes', () => {
+test('eviction invalidates local watches without sending deletes', () => {
   let { c, frame, sockets } = fixture({ retention: 0 })
   let local = c.watch('.doc', { remote: false })
   let remote = c.watch('.doc')
@@ -219,7 +220,7 @@ Deno.test('eviction invalidates local watches without sending deletes', () => {
 })
 
 for (let name of ['memory', 'indexedDB']) {
-  Deno.test('bounded epoch wire vault: ' + name, async () => {
+  test('bounded epoch wire vault: ' + name, async () => {
     let indexedDB = fakeDb()
     let vault = name === 'memory' ? wireStash() : wireIdb({ indexedDB })
     assertEquals(await vault.load('one', 3), [])
@@ -244,7 +245,7 @@ for (let name of ['memory', 'indexedDB']) {
   })
 }
 
-Deno.test('wire disk paint is bounded, unready, and same-epoch reopen reconciles stale hits', async () => {
+test('wire disk paint is bounded, unready, and same-epoch reopen reconciles stale hits', async () => {
   let vault = wireIdb({ indexedDB: fakeDb() })
   await vault.load('one', 100)
   await vault.save('one', ['a', 'b', 'c'].map(saved), 100)
@@ -261,7 +262,7 @@ Deno.test('wire disk paint is bounded, unready, and same-epoch reopen reconciles
   c.close()
 })
 
-Deno.test('epoch mismatch invalidates only server tier, including ready state', async () => {
+test('epoch mismatch invalidates only server tier, including ready state', async () => {
   let db = fakeDb()
   let vault = fakeIdb(db)
   let wireVault = wireIdb({ indexedDB: db })
@@ -282,7 +283,7 @@ Deno.test('epoch mismatch invalidates only server tier, including ready state', 
   c.close()
 })
 
-Deno.test('a burst of frames is one vault write, flushed by idle', async () => {
+test('a burst of frames is one vault write, flushed by idle', async () => {
   let writes: Saved[][] = []
   let vault: WireVault = {
     ...wireStash(),
@@ -316,7 +317,7 @@ let deferredVault = () => {
   return { read, vault }
 }
 
-Deno.test('late wire hydration cannot overwrite local writes, socket rows, or an empty first answer', async () => {
+test('late wire hydration cannot overwrite local writes, socket rows, or an empty first answer', async () => {
   for (let mode of ['local', 'socket', 'empty']) {
     let { read, vault } = deferredVault()
     let { c, frame } = fixture({ epoch: 'one', wireVault: vault })
@@ -339,7 +340,7 @@ Deno.test('late wire hydration cannot overwrite local writes, socket rows, or an
   }
 })
 
-Deno.test('late local hydration does not overwrite edits or deletions', async () => {
+test('late local hydration does not overwrite edits or deletions', async () => {
   let read = Promise.withResolvers<Saved[]>()
   let vault = { ...stash(), load: () => read.promise }
   let { c } = fixture({ vault })
@@ -355,13 +356,13 @@ Deno.test('late local hydration does not overwrite edits or deletions', async ()
   c.close()
 })
 
-Deno.test('retention validates bounds and never defaults to an unbounded disk read', () => {
+test('retention validates bounds and never defaults to an unbounded disk read', () => {
   for (let retention of [-1, NaN, Infinity, 1.5]) {
     assertThrows(() => fixture({ retention }))
   }
 })
 
-Deno.test('storage enumeration and reactive refresh do not touch LRU', async () => {
+test('storage enumeration and reactive refresh do not touch LRU', async () => {
   let { c, frame } = fixture({ retention: 2 })
   let w = c.watch('.doc')
   frame('s1', [row('a'), row('b')])
@@ -375,7 +376,7 @@ Deno.test('storage enumeration and reactive refresh do not touch LRU', async () 
   c.close()
 })
 
-Deno.test('a render can close its watch during an optimistic write without evicting it', async () => {
+test('a render can close its watch during an optimistic write without evicting it', async () => {
   let answer = Promise.withResolvers<Response>()
   let { c, frame } = fixture({ retention: 0, fetch: () => answer.promise })
   let w = c.watch('.doc')
@@ -394,7 +395,7 @@ Deno.test('a render can close its watch during an optimistic write without evict
 // A frame that lands before validation is what an addressed boot paints from
 // (the fleet seeds its entity, then validates): the disk floor still hydrates
 // behind it, and never over it.
-Deno.test('same epoch validation never overwrites an already newer RAM row', async () => {
+test('same epoch validation never overwrites an already newer RAM row', async () => {
   let vault = wireStash()
   await vault.load('one', 10)
   await vault.save('one', [saved('a'), saved('b')], 10)
@@ -407,7 +408,7 @@ Deno.test('same epoch validation never overwrites an already newer RAM row', asy
   c.close()
 })
 
-Deno.test('close cancels an outstanding disk restore', async () => {
+test('close cancels an outstanding disk restore', async () => {
   let { read, vault } = deferredVault()
   let { c } = fixture({ epoch: 'one', wireVault: vault })
   c.watch('.doc')
@@ -418,7 +419,7 @@ Deno.test('close cancels an outstanding disk restore', async () => {
   assertEquals(c.watches.size(), 0)
 })
 
-Deno.test('a newer epoch supersedes an outstanding older hydration', async () => {
+test('a newer epoch supersedes an outstanding older hydration', async () => {
   let read = Promise.withResolvers<Saved[]>()
   let loads = 0
   let vault: WireVault = {
@@ -434,7 +435,7 @@ Deno.test('a newer epoch supersedes an outstanding older hydration', async () =>
   c.close()
 })
 
-Deno.test('refusal releases pending protection after restoring the old image', async () => {
+test('refusal releases pending protection after restoring the old image', async () => {
   let response = Promise.withResolvers<Response>()
   let { c, frame } = fixture({
     retention: 0,
@@ -454,7 +455,7 @@ Deno.test('refusal releases pending protection after restoring the old image', a
   c.close()
 })
 
-Deno.test('local-only graphs do not evict their sole copy of wire-default data', async () => {
+test('local-only graphs do not evict their sole copy of wire-default data', async () => {
   let c = client(box, [], { vault: false, retention: 0 })
   await c.mutate([row('a'), row('b')])
   await Promise.resolve()
@@ -463,7 +464,7 @@ Deno.test('local-only graphs do not evict their sole copy of wire-default data',
   c.close()
 })
 
-Deno.test('a synchronous first frame filters stale shared hits before watch returns', () => {
+test('a synchronous first frame filters stale shared hits before watch returns', () => {
   let { c, frame, sockets } = fixture()
   let a = c.watch('.doc')
   sockets[0].emit('open')
@@ -481,7 +482,7 @@ Deno.test('a synchronous first frame filters stale shared hits before watch retu
   c.close()
 })
 
-Deno.test('query replica applies transient frames without persisting projections', async () => {
+test('query replica applies transient frames without persisting projections', async () => {
   const { client } = await import('./client.ts')
   const { loadVocab } = await import('@yaks/vocab')
   const c = client(

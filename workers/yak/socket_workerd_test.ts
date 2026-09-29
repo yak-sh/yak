@@ -7,7 +7,7 @@
 import { assertEquals, assertObjectMatch } from '@std/assert'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { minted } from './mcp-probe.ts'
 import {
   arrives,
@@ -76,7 +76,7 @@ let heard = (live: Live, filter: string) => {
   return { next, stop }
 }
 
-Deno.test('a page watches a component homed in another app', async () => {
+test('a page watches a component homed in another app', async () => {
   let k = workerd()
   let slug = `borrow${crypto.randomUUID().slice(0, 6)}`
   let host = `${slug}.yaks.app`
@@ -163,7 +163,7 @@ Deno.test('a page watches a component homed in another app', async () => {
   }
 })
 
-Deno.test('a page watches its store and hears what others write', async () => {
+test('a page watches its store and hears what others write', async () => {
   let k = workerd()
   let p = await page(k)
   try {
@@ -210,7 +210,7 @@ Deno.test('a page watches its store and hears what others write', async () => {
   }
 })
 
-Deno.test('a workerd socket waits for the page to acknowledge its frame', async () => {
+test('a workerd socket waits for the page to acknowledge its frame', async () => {
   let k = workerd()
   let p = await page(k)
   let socket = new WebSocket(`${p.wire.replace(/^http/, 'ws')}/ws`)
@@ -243,7 +243,7 @@ Deno.test('a workerd socket waits for the page to acknowledge its frame', async 
 // A page that keeps a copy of its store (@yaks/client) speaks the words the
 // store serves, and lands the rows a socket sends in them: `created.by` is who
 // made a row, so a page finds a person's rows by asking for the ones they made.
-Deno.test('a page keeping a copy of its store watches rows by who made them', async () => {
+test('a page keeping a copy of its store watches rows by who made them', async () => {
   let k = workerd()
   let p = await page(k)
   let words = await (await fetch(`${p.mine}/vocab.json`)).json()
@@ -268,7 +268,7 @@ Deno.test('a page keeping a copy of its store watches rows by who made them', as
   }
 })
 
-Deno.test('a page watching its store hears a letter arrive', async () => {
+test('a page watching its store hears a letter arrive', async () => {
   let k = workerd()
   let p = await page(k)
   try {

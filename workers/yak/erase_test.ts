@@ -3,6 +3,7 @@
 // two spaces that may not be deleted at all — then what the act takes with it
 // outside the graph over testing.ts's stand-in (T-34371). The whole act,
 // through the kernel, is erase_kernel_test.ts's.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from '@std/toml'
 import { next } from '@yaks/wake'
@@ -91,7 +92,7 @@ let doomed = (over: Partial<Doomed> = {}): Doomed => ({
   ...over,
 })
 
-Deno.test('a ticket opens one space for one person, for an hour', async () => {
+test('a ticket opens one space for one person, for an hour', async () => {
   let secret = 'shhh'
   let t = await ticket(space(), 'p1', secret)
   let open = await ticketed(t, secret)
@@ -107,7 +108,7 @@ Deno.test('a ticket opens one space for one person, for an hour', async () => {
 // Which act the link opens rides inside the signature (T-34431), so the only
 // way to reach the erase is a letter the platform sent: a link off the web,
 // or one somebody edited, opens the trash.
-Deno.test('a ticket carries whether it erases or trashes', async () => {
+test('a ticket carries whether it erases or trashes', async () => {
   let secret = 'shhh'
   let mild = await ticketed(await ticket(space(), 'p1', secret), secret)
   assertEquals(mild?.forever, false)
@@ -115,7 +116,7 @@ Deno.test('a ticket carries whether it erases or trashes', async () => {
   assertEquals(final?.forever, true)
 })
 
-Deno.test('what a delete would destroy is named, not counted', () => {
+test('what a delete would destroy is named, not counted', () => {
   let lines = naming(doomed({
     apps: [app(), app({ eid: 'b', slug: 'notes', title: 'Notes' })],
     hosts: [host('herbusiness.com')],
@@ -141,7 +142,7 @@ Deno.test('what a delete would destroy is named, not counted', () => {
 // What a trash says is a different list, not a softer wording of that one
 // (T-34431): every line names something that stops, and the last one is the
 // opposite of the last line above — the address is held, never released.
-Deno.test('a space in the trash is told what stops, not what is destroyed', () => {
+test('a space in the trash is told what stops, not what is destroyed', () => {
   let d = doomed({ hosts: [host('herbusiness.com')] })
   let said = keeping(d).join('\n')
   assertStringIncludes(
@@ -159,7 +160,7 @@ Deno.test('a space in the trash is told what stops, not what is destroyed', () =
   assertEquals(l.body.includes('It cannot be undone'), false)
 })
 
-Deno.test('the platform and a paying space refuse to be deleted', () => {
+test('the platform and a paying space refuse to be deleted', () => {
   assertEquals(refused(space()), '')
   assertStringIncludes(refused(space({ slug: 'yak' })), 'the platform itself')
   let paying = space({
@@ -188,7 +189,7 @@ let AT = '2026-09-05T12:00:00.000Z'
 let day = 86_400_000
 let then = (ms: number) => Date.parse(AT) + ms
 
-Deno.test('the trash is thirty days, counted in whole days left', () => {
+test('the trash is thirty days, counted in whole days left', () => {
   let t = { at: AT, by: 'p1' }
   assertEquals(GRACE, 30 * day)
   assertEquals(daysLeft(t, then(0)), 30)
@@ -208,7 +209,7 @@ Deno.test('the trash is thirty days, counted in whole days left', () => {
 // The trash row owns its schedule outright: there is no heartbeat to line it
 // up with any more (D-37562), and the instant the directory's alarm is set to
 // is the one this row names.
-Deno.test('the trash wake names 04:20 UTC and nothing coarser rounds it off', async () => {
+test('the trash wake names 04:20 UTC and nothing coarser rounds it off', async () => {
   let conf = parse(
     await Deno.readTextFile(new URL('./wrangler.toml', import.meta.url)),
   ) as { triggers?: unknown }
@@ -219,7 +220,7 @@ Deno.test('the trash wake names 04:20 UTC and nothing coarser rounds it off', as
   assertEquals(next(DAILY, before), '2026-09-07T04:20:00.000Z')
 })
 
-Deno.test('the sweep takes the trash that is out of days, and nothing else', () => {
+test('the sweep takes the trash that is out of days, and nothing else', () => {
   let apps = [
     app({ eid: 'live', slug: 'live' }),
     app({ eid: 'fresh', slug: 'fresh', trashed: { at: AT, by: 'p1' } }),
@@ -235,7 +236,7 @@ Deno.test('the sweep takes the trash that is out of days, and nothing else', () 
 // A space wears the same word and is counted out of the trash by the same
 // days (T-34431) — one selection, asked of whichever rows the sweep is
 // holding, because "thirty days ago" cannot be allowed to mean two things.
-Deno.test('a space out of days is taken the same way an app is', () => {
+test('a space out of days is taken the same way an app is', () => {
   let spaces = [
     space({ eid: 'live', slug: 'live' }),
     space({ eid: 'fresh', slug: 'fresh', trashed: { at: AT, by: 'p1' } }),
@@ -310,7 +311,7 @@ let wire = () => {
 // container that conversation compiled in (sandbox.ts, same key). `/privacy`
 // says a closed space takes its things with it; this is that sentence held to
 // the code.
-Deno.test('a deleted space takes its conversation and its workbench', async () => {
+test('a deleted space takes its conversation and its workbench', async () => {
   let box = sandboxes()
   let { env, builder } = platform('a probe secret', {
     AI: ai([{ text: 'Making it now.' }]) as Env['AI'],
@@ -341,7 +342,7 @@ Deno.test('a deleted space takes its conversation and its workbench', async () =
 // what it takes, and — the half that matters — what it leaves. An app inside
 // its thirty days is a person's app that they can still have back, and a sweep
 // that took one early would be the bug this whole feature exists to prevent.
-Deno.test(
+test(
   'the sweep erases the trash that is out of days, and only that',
   async () => {
     let { env } = platform('a probe secret')
@@ -421,7 +422,7 @@ Deno.test(
 // And the same sweep on the row above (T-34431): a space out of days goes
 // whole, taking its apps and their bytes with it, while a space still inside
 // its thirty days is a space its person can still have back.
-Deno.test(
+test(
   'the sweep erases a space out of days, and leaves one in them',
   async () => {
     let { env } = platform('a probe secret')

@@ -1,5 +1,6 @@
 /// <reference lib="deno.ns" />
 // A stalled recovery must not keep microphone presence or a departed call alive.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { join } from './join.ts'
@@ -62,7 +63,7 @@ let browser = () => {
   }
 }
 
-Deno.test('stalled reconnect cannot delay unpublication or leave; cannot resurrect an old session', async () => {
+test('stalled reconnect cannot delay unpublication or leave; cannot resurrect an old session', async () => {
   let restore = browser()
   let block: ((response: Response) => void) | null = null
   let sessions = 0
@@ -135,7 +136,7 @@ Deno.test('stalled reconnect cannot delay unpublication or leave; cannot resurre
   }
 })
 
-Deno.test('rejected initial presence write closes the connection without a call handle', async () => {
+test('rejected initial presence write closes the connection without a call handle', async () => {
   let restore = browser()
   try {
     let failed = false
@@ -164,7 +165,7 @@ Deno.test('rejected initial presence write closes the connection without a call 
   }
 })
 
-Deno.test('rejected asynchronous presence write detaches sender instead of stranding a publication', async () => {
+test('rejected asynchronous presence write detaches sender instead of stranding a publication', async () => {
   let restore = browser()
   let rejectWrite = false
   let call: Awaited<ReturnType<typeof join>> | null = null
@@ -205,7 +206,7 @@ Deno.test('rejected asynchronous presence write detaches sender instead of stran
   }
 })
 
-Deno.test('same-hero replacement waits for old asynchronous clear before new presence', async () => {
+test('same-hero replacement waits for old asynchronous clear before new presence', async () => {
   let restore = browser()
   let writes: (Bundle['rtc'])[] = []
   let release: (() => void) | null = null

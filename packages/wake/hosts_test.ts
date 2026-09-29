@@ -1,6 +1,7 @@
 // Host clocks choose when to call the same write. A fake web clock keeps
 // minute-long waits and shutdown races deterministic and fast.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { arm, scheduled } from './cloudflare.ts'
@@ -13,7 +14,7 @@ let advance = async (time: FakeTime, ms: number) => {
   await time.runMicrotasks()
 }
 
-Deno.test('scheduled uses the event instant and leaves later wakes alone', async () => {
+test('scheduled uses the event instant and leaves later wakes alone', async () => {
   let g = woken(store())
   g.apply(['due', 'later'].map((eid, i) => ({
     entity: { eid },
@@ -25,7 +26,7 @@ Deno.test('scheduled uses the event instant and leaves later wakes alone', async
   assertEquals(result.refused, [])
 })
 
-Deno.test('a DO alarm fills the gap before a trigger and preserves earlier alarms', async () => {
+test('a DO alarm fills the gap before a trigger and preserves earlier alarms', async () => {
   let held: number | null = null
   let writes: number[] = []
   let storage = {
@@ -52,7 +53,7 @@ Deno.test('a DO alarm fills the gap before a trigger and preserves earlier alarm
   assertEquals(held, T0 + 100)
 })
 
-Deno.test('the loop sleeps to the earliest wake, caps empty waits, and stops', async () => {
+test('the loop sleeps to the earliest wake, caps empty waits, and stops', async () => {
   using time = new FakeTime(T0)
   let stop = new AbortController()
   let g = woken(store())
@@ -84,7 +85,7 @@ Deno.test('the loop sleeps to the earliest wake, caps empty waits, and stops', a
   assertEquals(ticks.length, 3)
 })
 
-Deno.test('the loop retries refused wakes at the cap without a tight timer', async () => {
+test('the loop retries refused wakes at the cap without a tight timer', async () => {
   using time = new FakeTime(T0)
   let stop = new AbortController()
   let g = woken(store())
@@ -117,7 +118,7 @@ Deno.test('the loop retries refused wakes at the cap without a tight timer', asy
   await running
 })
 
-Deno.test('the loop refuses invalid caps and accepts an already stopped signal', async () => {
+test('the loop refuses invalid caps and accepts an already stopped signal', async () => {
   let g = woken(store())
   for (let cap of [0, -1, NaN, Infinity, 2_147_483_648]) {
     await assertRejects(() => loop(g, { cap }), RangeError)
@@ -127,7 +128,7 @@ Deno.test('the loop refuses invalid caps and accepts an already stopped signal',
   await loop(g, { signal: stop.signal })
 })
 
-Deno.test('the loop promptly visits a wake that became due during an effect', async () => {
+test('the loop promptly visits a wake that became due during an effect', async () => {
   using time = new FakeTime(T0)
   let stop = new AbortController()
   let g = woken(store())

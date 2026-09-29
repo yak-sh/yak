@@ -1,11 +1,12 @@
 // What a config says to this plugin: the embedder it names, and the text it
 // chose.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { chosen, embedderOf, ready } from './options.ts'
 import { shop } from './testing.ts'
 
-Deno.test('the offline embedder is named like any other', () => {
+test('the offline embedder is named like any other', () => {
   assertEquals(
     embedderOf({ embedder: { via: 'hash' } }).embedder?.model,
     'hash-64',
@@ -16,7 +17,7 @@ Deno.test('the offline embedder is named like any other', () => {
   )
 })
 
-Deno.test('a hosted one carries its model name into the vector space', () => {
+test('a hosted one carries its model name into the vector space', () => {
   let said = embedderOf({
     embedder: { via: 'ollama', model: 'qwen3', base: 'https://box' },
   })
@@ -24,7 +25,7 @@ Deno.test('a hosted one carries its model name into the vector space', () => {
   assertEquals(said.model, 'qwen3')
 })
 
-Deno.test('config that has not arrived is waiting, never a boot failure', () => {
+test('config that has not arrived is waiting, never a boot failure', () => {
   let none = embedderOf({})
   assertEquals(none.embedder, undefined)
   assert(none.waiting?.includes('no `embedder` is named'), `${none.waiting}`)
@@ -35,7 +36,7 @@ Deno.test('config that has not arrived is waiting, never a boot failure', () => 
   assert(magic.waiting?.includes('"magic"'), `${magic.waiting}`)
 })
 
-Deno.test('a key the environment has not got yet is waiting, and the space is known anyway', () => {
+test('a key the environment has not got yet is waiting, and the space is known anyway', () => {
   let asked = {
     via: 'ollama',
     model: 'qwen3',
@@ -59,7 +60,7 @@ Deno.test('a key the environment has not got yet is waiting, and the space is kn
   assertEquals(open.waiting, undefined)
 })
 
-Deno.test('what a pass needs is read whole, and a bad name waits rather than throws', () => {
+test('what a pass needs is read whole, and a bad name waits rather than throws', () => {
   let now = ready(shop, { embedder: { via: 'hash' } })
   assertEquals(now.text.length, 2)
   assertEquals(now.embedder?.model, 'hash-64')
@@ -69,7 +70,7 @@ Deno.test('what a pass needs is read whole, and a bad name waits rather than thr
   assert(bad.waiting?.includes('book.spine'), `${bad.waiting}`)
 })
 
-Deno.test('text defaults to the searched properties and narrows by name', () => {
+test('text defaults to the searched properties and narrows by name', () => {
   assertEquals(chosen(shop, {}).map((f) => `${f.comp}.${f.prop}`), [
     'book.title',
     'review.prose',
@@ -80,7 +81,7 @@ Deno.test('text defaults to the searched properties and narrows by name', () => 
   }])
 })
 
-Deno.test('a property nothing declares is a refusal, not a field that embeds nothing', () => {
+test('a property nothing declares is a refusal, not a field that embeds nothing', () => {
   assertThrows(
     () => chosen(shop, { text: ['book.spine'] }),
     Error,

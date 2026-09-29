@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { argsFor, cli, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
@@ -32,7 +33,7 @@ let host = () =>
     ],
   }, ['graph'])
 
-Deno.test('the harness composes as a plugin, and its words reach a command line and MCP', async () => {
+test('the harness composes as a plugin, and its words reach a command line and MCP', async () => {
   let h = await host()
   try {
     let names = h.tools.map((t) => t.name)
@@ -66,7 +67,7 @@ Deno.test('the harness composes as a plugin, and its words reach a command line 
   }
 })
 
-Deno.test('connection authorization is a CLI command without a stored call', async () => {
+test('connection authorization is a CLI command without a stored call', async () => {
   let dir = await Deno.makeTempDir()
   let path = dir + '/yak.json'
   let out: string[] = []
@@ -89,7 +90,7 @@ Deno.test('connection authorization is a CLI command without a stored call', asy
   }
 })
 
-Deno.test('session new opens an empty TUI session and requires input otherwise', async () => {
+test('session new opens an empty TUI session and requires input otherwise', async () => {
   let h = await harness()
   let start = runs().session_new!
   let call = (args: Record<string, unknown>): Bundle => ({
@@ -113,7 +114,7 @@ Deno.test('session new opens an empty TUI session and requires input otherwise',
   }
 })
 
-Deno.test('session new accepts a graph persona and snapshots its instructions', async () => {
+test('session new accepts a graph persona and snapshots its instructions', async () => {
   let h = await harness()
   let persona = crypto.randomUUID()
   await h.g.apply([{
@@ -142,7 +143,7 @@ Deno.test('session new accepts a graph persona and snapshots its instructions', 
   }
 })
 
-Deno.test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {
+test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {
   const { parametersOf } = await import('./tools.ts')
   const { toolDefinition } = await import('@yaks/vocab/tools')
   const tool = {

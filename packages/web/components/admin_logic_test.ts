@@ -4,6 +4,7 @@
 // pulls types.ts + client.ts, no view), so they never mount and stay sub-ms.
 // The DOM-mount tests that render <Admin/> live in admin_test.ts, which must
 // import the heavy Admin.tsx view and cannot hit the 1ms budget.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import {
   adminRoute,
@@ -19,7 +20,7 @@ import { assertEquals } from '@std/assert'
 // the vocabulary's first traversal — keeps every test in this file sub-ms.
 columnsFor('task')
 
-Deno.test("columnsFor: a kind's columns ARE its vocabulary row", () => {
+test("columnsFor: a kind's columns ARE its vocabulary row", () => {
   let keys = columnsFor('task').map((c) => c.key)
   assertEquals(keys[0], 'id')
   assertEquals(keys[1], 'title')
@@ -29,7 +30,7 @@ Deno.test("columnsFor: a kind's columns ARE its vocabulary row", () => {
   assertEquals(keys[keys.length - 1], 'modified')
 })
 
-Deno.test('columnsFor: stamped columns render too', () => {
+test('columnsFor: stamped columns render too', () => {
   // any vocabulary comp that also has stamped columns — found, not named,
   // so a comp rename never breaks the property being held
   let kind = Object.keys(stamped).find((k) => comps[k])!
@@ -39,7 +40,7 @@ Deno.test('columnsFor: stamped columns render too', () => {
   }
 })
 
-Deno.test('derivation: a new comp needs zero admin edits', () => {
+test('derivation: a new comp needs zero admin edits', () => {
   ;(comps as Record<string, Record<string, unknown>>).gadget = {
     size: 'number',
     owner: { eid: '' },
@@ -71,7 +72,7 @@ let faceted = {
 }
 let plain = { eid: 't', num: 2, kind: 'task', comps: { doc: {}, task: {} } }
 
-Deno.test('inSection: an entity appears under every component it wears', () => {
+test('inSection: an entity appears under every component it wears', () => {
   let rows = [faceted, plain]
   assertEquals(inSection(rows, 'repo'), [faceted])
   assertEquals(inSection(rows, 'project'), [faceted])
@@ -79,21 +80,21 @@ Deno.test('inSection: an entity appears under every component it wears', () => {
   assertEquals(inSection(rows, 'task'), [plain])
 })
 
-Deno.test('countsByPresence: each entity counts under every component', () => {
+test('countsByPresence: each entity counts under every component', () => {
   let counts = countsByPresence([faceted, plain], ['project', 'repo', 'task'])
   assertEquals(counts.project, 1)
   assertEquals(counts.repo, 1)
   assertEquals(counts.task, 1)
 })
 
-Deno.test('censusComps: every vocabulary component gets a section', () => {
+test('censusComps: every vocabulary component gets a section', () => {
   assertEquals(censusComps(), Object.keys(comps).sort())
   assertEquals(censusComps().includes('task'), true)
   assertEquals(censusComps().includes('alias'), true)
   assertEquals(censusComps().includes('created'), true)
 })
 
-Deno.test('adminRoute: bare, kind, and new forms', () => {
+test('adminRoute: bare, kind, and new forms', () => {
   assertEquals(adminRoute('/admin'), { kind: censusComps()[0], form: false })
   assertEquals(adminRoute('/admin/memory'), { kind: 'memory', form: false })
   assertEquals(adminRoute('/admin/person/new'), { kind: 'person', form: true })

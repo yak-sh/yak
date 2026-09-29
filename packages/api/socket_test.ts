@@ -2,6 +2,7 @@
 // The socket half: the two verbs a client sends, the frames that come back,
 // and the `/ws` route that wires one to a graph through the host's upgrade.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { fake, req, shopGraph } from './testing.ts'
 import { api } from './route.ts'
@@ -13,7 +14,7 @@ let ids = (frames: { bundles?: { entity: { eid: string } }[] }[]) =>
 
 let ws = () => req('/ws', { headers: { upgrade: 'websocket' } })
 
-Deno.test('subscriber queue stops when the socket closes during a flush', () => {
+test('subscriber queue stops when the socket closes during a flush', () => {
   let open = false
   let sent: string[] = []
   let q = queue(
@@ -39,7 +40,7 @@ Deno.test('subscriber queue stops when the socket closes during a flush', () => 
   assertEquals(sent.map((data) => JSON.parse(data).id), ['one'])
 })
 
-Deno.test('subscriber queue folds relay patches without crossing a data frame', () => {
+test('subscriber queue folds relay patches without crossing a data frame', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let to = sink(socket, (fn) => {
@@ -81,7 +82,7 @@ Deno.test('subscriber queue folds relay patches without crossing a data frame', 
   ])
 })
 
-Deno.test('acknowledged subscriber sends coalesced peer relays without ACKs', () => {
+test('acknowledged subscriber sends coalesced peer relays without ACKs', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let q = queue(socket, (fn) => due.push(fn))
@@ -109,7 +110,7 @@ Deno.test('acknowledged subscriber sends coalesced peer relays without ACKs', ()
   assertEquals(socket.sent, [])
 })
 
-Deno.test('crowded peer movement sends one current frame per tick', () => {
+test('crowded peer movement sends one current frame per tick', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let q = queue(socket, (fn) => due.push(fn))
@@ -133,7 +134,7 @@ Deno.test('crowded peer movement sends one current frame per tick', () => {
   assertEquals(socket.sent, [])
 })
 
-Deno.test('membership and durable frames keep their place among peer relays', () => {
+test('membership and durable frames keep their place among peer relays', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let q = queue(socket, (fn) => due.push(fn))
@@ -153,7 +154,7 @@ Deno.test('membership and durable frames keep their place among peer relays', ()
   ])
 })
 
-Deno.test('a resumed socket sends peers without changing its owed durable frame', () => {
+test('a resumed socket sends peers without changing its owed durable frame', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let sent: unknown[] = []
@@ -178,7 +179,7 @@ Deno.test('a resumed socket sends peers without changing its owed durable frame'
   assertEquals(sent, [[{ id: 's', gone: ['a'] }]])
 })
 
-Deno.test('an ACK received during send releases the next durable frame', () => {
+test('an ACK received during send releases the next durable frame', () => {
   let seen: { id: string; ack?: string }[] = []
   let q: ReturnType<typeof queue>
   q = queue({
@@ -194,7 +195,7 @@ Deno.test('an ACK received during send releases the next durable frame', () => {
   assertEquals(seen.map((f) => f.id), ['first', 'second'])
 })
 
-Deno.test('a pending membership frame stays ahead of later peer relays', () => {
+test('a pending membership frame stays ahead of later peer relays', () => {
   let socket = fake()
   let due: (() => void)[] = []
   let sent: unknown[] = []
@@ -220,7 +221,7 @@ Deno.test('a pending membership frame stays ahead of later peer relays', () => {
   ])
 })
 
-Deno.test('a batched subscriber lands adjacent frames under one ACK', () => {
+test('a batched subscriber lands adjacent frames under one ACK', () => {
   let sent: Record<string, unknown>[] = []
   let take = () => sent.splice(0, sent.length)
   let q = queue({ send: (data) => void sent.push(JSON.parse(data)) })
@@ -247,7 +248,7 @@ Deno.test('a batched subscriber lands adjacent frames under one ACK', () => {
   assertEquals(take()[0].frames, [{ id: 's', gone: ['b'] }])
 })
 
-Deno.test('peer movement remains bounded behind an unacknowledged frame', () => {
+test('peer movement remains bounded behind an unacknowledged frame', () => {
   let graph = shopGraph()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let socket = fake()
@@ -280,7 +281,7 @@ Deno.test('peer movement remains bounded behind an unacknowledged frame', () => 
   assertEquals(socket.sent, [])
 })
 
-Deno.test('a subscriber opts into acknowledgements through the socket', () => {
+test('a subscriber opts into acknowledgements through the socket', () => {
   let graph = shopGraph()
   let socket = fake()
   attach(subscriptions(graph), socket)
@@ -297,7 +298,7 @@ Deno.test('a subscriber opts into acknowledgements through the socket', () => {
   assertEquals(ids(socket.taken()), ['b1'])
 })
 
-Deno.test('a socket subscribes, hears its set, and hears every change', () => {
+test('a socket subscribes, hears its set, and hears every change', () => {
   let graph = shopGraph()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let socket = fake()
@@ -314,7 +315,7 @@ Deno.test('a socket subscribes, hears its set, and hears every change', () => {
   assertEquals(socket.taken(), [])
 })
 
-Deno.test('unsubscribe stops one, closing stops them all', () => {
+test('unsubscribe stops one, closing stops them all', () => {
   let graph = shopGraph()
   let socket = fake()
   attach(subscriptions(graph), socket)
@@ -332,7 +333,7 @@ Deno.test('unsubscribe stops one, closing stops them all', () => {
   assertEquals(socket.taken(), [])
 })
 
-Deno.test('frames sent before the socket opens are held for it', () => {
+test('frames sent before the socket opens are held for it', () => {
   let graph = shopGraph()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let socket = fake()
@@ -347,7 +348,7 @@ Deno.test('frames sent before the socket opens are held for it', () => {
   assertEquals(ids(socket.taken()), ['b1'])
 })
 
-Deno.test('a frame the server cannot read is refused', () => {
+test('a frame the server cannot read is refused', () => {
   let graph = shopGraph()
   let socket = fake()
   attach(subscriptions(graph), socket)
@@ -359,7 +360,7 @@ Deno.test('a frame the server cannot read is refused', () => {
   assert(said.every((f) => f.refused))
 })
 
-Deno.test('a flooding relay socket closes without affecting another socket', () => {
+test('a flooding relay socket closes without affecting another socket', () => {
   let graph = shopGraph()
   let subs = subscriptions(graph)
   let writer = fake(), peer = fake()
@@ -389,7 +390,7 @@ Deno.test('a flooding relay socket closes without affecting another socket', () 
   assertEquals(ids(peer.taken()), ['b1'])
 })
 
-Deno.test('/ws upgrades through the host and serves that socket', async () => {
+test('/ws upgrades through the host and serves that socket', async () => {
   let graph = shopGraph()
   let socket = fake()
   let handler = api({

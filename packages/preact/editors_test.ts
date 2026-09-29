@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { hydrate } from 'preact'
 import { type Bundle, define, editors, properties } from '@yaks/render'
@@ -48,7 +49,7 @@ let changed = (control: Control) => {
   control.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-Deno.test('Props lays out every property with the matching editor and current value', () => {
+test('Props lays out every property with the matching editor and current value', () => {
   let mounted = mount(render(registry, bundle, 'Props', vocab, context))
   try {
     assertEquals(
@@ -81,7 +82,7 @@ Deno.test('Props lays out every property with the matching editor and current va
   }
 })
 
-Deno.test('mounted editors emit typed patches and reject invalid JSON', () => {
+test('mounted editors emit typed patches and reject invalid JSON', () => {
   let patches: unknown[] = []
   let errors: unknown[] = []
   let mounted = mount(render(registry, bundle, 'Props', vocab, {
@@ -121,7 +122,7 @@ Deno.test('mounted editors emit typed patches and reject invalid JSON', () => {
   }
 })
 
-Deno.test('HTML keeps editor values through hydration without exposing actions', () => {
+test('HTML keeps editor values through hydration without exposing actions', () => {
   assertStringIncludes(
     html(registry, bundle, 'Props', vocab, context),
     '{&quot;count&quot;:2}</textarea>',
@@ -154,7 +155,7 @@ Deno.test('HTML keeps editor values through hydration without exposing actions',
   }
 })
 
-Deno.test('text Props uses read-only values and registry editor overrides', () => {
+test('text Props uses read-only values and registry editor overrides', () => {
   let custom = define([{
     view: 'Edit',
     match: parse('.prop.comp=doc, .prop.prop=title'),

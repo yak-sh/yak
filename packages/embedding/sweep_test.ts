@@ -1,6 +1,7 @@
 // The sweep: what it embeds, what it skips, and what it drops — found from a
 // queue the database's triggers keep, whoever wrote.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   by,
@@ -46,7 +47,7 @@ let stocked = async () => {
   return db
 }
 
-Deno.test('an entity gets one text, joined from every field it wears', () => {
+test('an entity gets one text, joined from every field it wears', () => {
   let one = sources(shelf(), text).find((s) => s.entity == 'book-1')!
   assertEquals(
     one.text,
@@ -55,13 +56,13 @@ Deno.test('an entity gets one text, joined from every field it wears', () => {
   assertEquals(one.had, null)
 })
 
-Deno.test('a review is its own entity, not part of the book it is about', () => {
+test('a review is its own entity, not part of the book it is about', () => {
   let all = sources(shelf(), text)
   assertEquals(all.length, 4)
   assert(all.find((s) => s.entity == 'review-4')!.text.includes('chapters'))
 })
 
-Deno.test('a field read through an override is read as what it stands for', () => {
+test('a field read through an override is read as what it stands for', () => {
   let loud = text.map((f) =>
     f.prop == 'blurb' ? { ...f, text: (s: Expr) => fn('upper', s) } : f
   )
@@ -69,21 +70,21 @@ Deno.test('a field read through an override is read as what it stands for', () =
   assert(one.text.endsWith('MEETS A DRAGON.'), one.text)
 })
 
-Deno.test('the sweep embeds everything owed, then nothing', async () => {
+test('the sweep embeds everything owed, then nothing', async () => {
   let db = shelf()
   assertEquals(await swept(db), { fresh: 4, left: 0 })
   assertEquals(await swept(db), { fresh: 0, left: 0 })
   assert(has(db, 'book-1'))
 })
 
-Deno.test('a limit takes the newest and says what is left', async () => {
+test('a limit takes the newest and says what is left', async () => {
   let db = shelf()
   assertEquals(await swept(db, embedder, 3), { fresh: 3, left: 1 })
   assert(!has(db, 'book-1') && has(db, 'review-4'))
   assertEquals(await swept(db), { fresh: 1, left: 0 })
 })
 
-Deno.test('a write from anywhere is owed a look; unchanged text is not re-embedded', async () => {
+test('a write from anywhere is owed a look; unchanged text is not re-embedded', async () => {
   let db = await stocked()
   change(db, 'book', 1, { blurb: val('A cook, actually.') })
   change(db, 'review', 4, { prose: col('prose') })
@@ -91,14 +92,14 @@ Deno.test('a write from anywhere is owed a look; unchanged text is not re-embedd
   assertEquals(await swept(db), { fresh: 1, left: 0 })
 })
 
-Deno.test('a new model re-embeds the whole corpus, once', async () => {
+test('a new model re-embeds the whole corpus, once', async () => {
   let db = await stocked()
   let other = hashEmbedder(32)
   assertEquals(await swept(db, other), { fresh: 4, left: 0 })
   assertEquals(await swept(db, other), { fresh: 0, left: 0 })
 })
 
-Deno.test('emptied, deleted and undressed entities lose their vectors', async () => {
+test('emptied, deleted and undressed entities lose their vectors', async () => {
   let db = await stocked()
   change(db, 'book', 3, { title: val(''), blurb: val('  ') })
   bury(db, 2)
@@ -108,7 +109,7 @@ Deno.test('emptied, deleted and undressed entities lose their vectors', async ()
   assert(has(db, 'book-1'))
 })
 
-Deno.test('a restored entity, and a vector deleted by hand, are made again', async () => {
+test('a restored entity, and a vector deleted by hand, are made again', async () => {
   let db = await stocked()
   bury(db, 2)
   await swept(db)
@@ -118,14 +119,14 @@ Deno.test('a restored entity, and a vector deleted by hand, are made again', asy
   assertEquals(count(db), 4)
 })
 
-Deno.test('the vectors are derived: drop the table and the sweep rebuilds it', async () => {
+test('the vectors are derived: drop the table and the sweep rebuilds it', async () => {
   let db = await stocked()
   db.query({ t: 'drop', kind: 'table', name: TABLE })
   for (let stmt of schema()) db.query(stmt)
   assertEquals(await swept(db), { fresh: 4, left: 0 })
 })
 
-Deno.test('the fields changing queues everything, once', async () => {
+test('the fields changing queues everything, once', async () => {
   let db = await stocked()
   let titles = fields(shop, (c) => c.prop == 'title')
   assertEquals(watch(db, titles), true)
@@ -135,7 +136,7 @@ Deno.test('the fields changing queues everything, once', async () => {
   assertEquals([got.fresh, count(db)], [3, 3])
 })
 
-Deno.test('an embedder that cannot be reached keeps everything owed', async () => {
+test('an embedder that cannot be reached keeps everything owed', async () => {
   let db = shelf()
   let down: Embedder = {
     model: embedder.model,
@@ -146,7 +147,7 @@ Deno.test('an embedder that cannot be reached keeps everything owed', async () =
   assertEquals(await swept(db), { fresh: 4, left: 0 })
 })
 
-Deno.test('a text the model refuses is dropped; the batch it rode in is not', async () => {
+test('a text the model refuses is dropped; the batch it rode in is not', async () => {
   let db = shelf()
   // a server that refuses a whole request for one input in it
   let asked = 0
@@ -173,7 +174,7 @@ Deno.test('a text the model refuses is dropped; the batch it rode in is not', as
   assert(!has(db, 'book-3'))
 })
 
-Deno.test('a vocabulary with nothing to embed sweeps to nothing', async () => {
+test('a vocabulary with nothing to embed sweeps to nothing', async () => {
   let db = shelf()
   assertEquals(await sweep(db, [], embedder), {
     fresh: 0,
@@ -202,7 +203,7 @@ let desk = loadVocab({
   },
 })
 
-Deno.test('text found through another component counts only while that one is worn', async () => {
+test('text found through another component counts only while that one is worn', async () => {
   let db = mem()
   let key = { name: 'entity', type: 'integer', pk: true }
   for (

@@ -1,6 +1,7 @@
 // A tick is ordinary graph traffic: the same transaction guard, phase rules,
 // and refusal isolation as any other writer. No timer or handler is mocked.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertInstanceOf } from '@std/assert'
 import { type Bundle, type Comp, Stale } from '@yaks/graph'
 import { due, wakeOf } from './due.ts'
@@ -10,7 +11,7 @@ import { tick } from './tick.ts'
 let iso = (t: number) => new Date(t).toISOString()
 let ids = (bs: Bundle[]) => bs.map((b) => b.entity.eid)
 
-Deno.test('tick commits one wake per batch and leaves a refusal due', async () => {
+test('tick commits one wake per batch and leaves a refusal due', async () => {
   let s = store()
   let g = woken(s)
   g.apply(['no', 'once', 'again'].map((eid, i) => ({
@@ -56,7 +57,7 @@ Deno.test('tick commits one wake per batch and leaves a refusal due', async () =
   )
 })
 
-Deno.test('overlapping ticks consume an occurrence only once', async () => {
+test('overlapping ticks consume an occurrence only once', async () => {
   let g = woken(store())
   g.apply([{ entity: { eid: 'one' }, wake: { at: iso(T0) } }])
   let results = await Promise.all([tick(g, T0), tick(g, T0)])
@@ -66,7 +67,7 @@ Deno.test('overlapping ticks consume an occurrence only once', async () => {
   assertInstanceOf(refused[0].error, Stale)
 })
 
-Deno.test('an asynchronous refusal still lets the next wake commit', async () => {
+test('an asynchronous refusal still lets the next wake commit', async () => {
   let g = woken(store())
   g.apply(['no', 'yes'].map((eid) => ({
     entity: { eid },
@@ -83,7 +84,7 @@ Deno.test('an asynchronous refusal still lets the next wake commit', async () =>
   assertEquals(result.refused.length, 1)
 })
 
-Deno.test('tick refuses a recurrence edited since the due read', async () => {
+test('tick refuses a recurrence edited since the due read', async () => {
   let g = woken(store())
   g.apply([{
     entity: { eid: 'edited' },

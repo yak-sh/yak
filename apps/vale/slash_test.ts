@@ -1,4 +1,5 @@
 // Chat's slash form calls the commands declared by the app, with typed args.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { slash as parse } from './slash.ts'
 import words from './vocab.json' with { type: 'json' }
@@ -8,7 +9,7 @@ let all = Object.fromEntries(
 )
 let slash = (text: string) => parse(text, all)
 
-Deno.test('slash adapts declared app commands and leaves chat alone', () => {
+test('slash adapts declared app commands and leaves chat alone', () => {
   assertEquals(slash('hello /damage on'), null)
   assertEquals(slash('/damage on'), {
     command: { name: 'damage', args: { on: true } },
@@ -61,7 +62,7 @@ Deno.test('slash adapts declared app commands and leaves chat alone', () => {
   })
 })
 
-Deno.test('help uses declared commands and omits NPC model tools', () => {
+test('help uses declared commands and omits NPC model tools', () => {
   let available = { gather_wood: all.gather_wood, where: all.where }
   let answer = parse('/help', available)
   if (!answer || !('help' in answer)) throw new Error('help missing')

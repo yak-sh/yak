@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { cloudflare, type Fetch, payload } from './cloudflare.ts'
 import type { Message } from './send.ts'
@@ -10,7 +11,7 @@ let m: Message = {
   html: '<p>Bring a dish.</p>',
 }
 
-Deno.test('payload: the display name is the local part; a reply carries headers', () => {
+test('payload: the display name is the local part; a reply carries headers', () => {
   assertEquals(payload(m), {
     from: { address: 'hello@books.example', name: 'hello' },
     to: ['ana@books.example'],
@@ -37,7 +38,7 @@ let answers = (body: string, status = 200): [Fetch, string[]] => {
   ]
 }
 
-Deno.test('cloudflare: the message id comes back unbracketed', async () => {
+test('cloudflare: the message id comes back unbracketed', async () => {
   let [call, seen] = answers(
     JSON.stringify({ success: true, result: { message_id: '<a1@x.example>' } }),
   )
@@ -55,7 +56,7 @@ Deno.test('cloudflare: the message id comes back unbracketed', async () => {
   assertEquals(JSON.parse(seen[1]).to, ['ana@books.example'])
 })
 
-Deno.test('cloudflare: a refusal rejects with what the API said', async () => {
+test('cloudflare: a refusal rejects with what the API said', async () => {
   let [call] = answers('{"success":false,"errors":["no such domain"]}', 403)
   let sender = cloudflare({ account: 'a', token: 't', fetch: call })
   await assertRejects(

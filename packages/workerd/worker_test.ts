@@ -2,6 +2,7 @@
 // The entrypoint: the api's three routes answered from a Worker's bindings,
 // built once per isolate, with the socket upgrade already wired.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { door } from './door.ts'
@@ -35,7 +36,7 @@ let shop = (opts: { required?: boolean } = {}) => {
 let ada = { cookie: 'shop_session=ada' }
 let body = async (r: Response) => await r.json()
 
-Deno.test('a Worker answers apply and query over its bindings', async () => {
+test('a Worker answers apply and query over its bindings', async () => {
   let { w } = shop()
   let wrote = await w.fetch(
     post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
@@ -48,7 +49,7 @@ Deno.test('a Worker answers apply and query over its bindings', async () => {
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
 })
 
-Deno.test('the door names the writer of a request', async () => {
+test('the door names the writer of a request', async () => {
   let { w } = shop()
   await w.fetch(
     post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
@@ -73,14 +74,14 @@ Deno.test('the door names the writer of a request', async () => {
   assertEquals((signed[0].created as { by?: string }).by, 'm1')
 })
 
-Deno.test('a required door refuses with the api refusal shape', async () => {
+test('a required door refuses with the api refusal shape', async () => {
   let { w } = shop({ required: true })
   let r = await w.fetch(req('/query?q=.price%3C20'), env)
   assertEquals(r.status, 401)
   assertEquals((await body(r)).error, 'Unauthorized')
 })
 
-Deno.test('the api is built once for the isolate, not once a request', async () => {
+test('the api is built once for the isolate, not once a request', async () => {
   let { w, builds } = shop()
   await w.fetch(req('/query?q=.price%3C20'), env)
   await w.fetch(req('/query?q=.price%3C20'), env)
@@ -92,7 +93,7 @@ Deno.test('the api is built once for the isolate, not once a request', async () 
   assertEquals(builds(), 2)
 })
 
-Deno.test('a build that throws is refused, and tried again next time', async () => {
+test('a build that throws is refused, and tried again next time', async () => {
   let tries = 0
   let w = worker<Env>({
     api: () => {
@@ -110,7 +111,7 @@ Deno.test('a build that throws is refused, and tried again next time', async () 
   assertEquals(tries, 2)
 })
 
-Deno.test('/ws upgrades through Cloudflare without being asked to', async () => {
+test('/ws upgrades through Cloudflare without being asked to', async () => {
   let undo = installPair()
   try {
     let { w } = shop()

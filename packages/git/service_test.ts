@@ -1,6 +1,7 @@
 // Collecting the worktrees agents leave behind, against a real repository: a
 // linked worktree goes once it holds nothing and Git has left it alone for
 // long enough, and nothing else does.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { discover } from './host.ts'
 import { collect, IDLE, service } from './service.ts'
@@ -44,7 +45,7 @@ let fixture = async () => {
 
 let later = Date.now() + 2 * IDLE
 
-Deno.test('an idle worktree that holds nothing is taken back', async () => {
+test('an idle worktree that holds nothing is taken back', async () => {
   let f = await fixture()
   try {
     let landed = await f.cut('landed')
@@ -70,7 +71,7 @@ Deno.test('an idle worktree that holds nothing is taken back', async () => {
   }
 })
 
-Deno.test('a worktree the harness manages is left to it', async () => {
+test('a worktree the harness manages is left to it', async () => {
   let f = await fixture()
   try {
     let path = await f.cut('managed')
@@ -83,7 +84,7 @@ Deno.test('a worktree the harness manages is left to it', async () => {
   }
 })
 
-Deno.test('the service collects each repository the graph knows', async () => {
+test('the service collects each repository the graph knows', async () => {
   let f = await fixture()
   try {
     let path = await f.cut('landed')

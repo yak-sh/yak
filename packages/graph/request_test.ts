@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { books, memory } from './testing.ts'
 import { graph } from './graph.ts'
@@ -10,7 +11,7 @@ let g = (requests?: string[]) =>
     plugins: requests ? [{ name: 'test', requests }] : [],
   })
 
-Deno.test('a request no plugin answers is refused, and the message names it', () => {
+test('a request no plugin answers is refused, and the message names it', () => {
   let err = assertThrows(
     () => g().apply([{ entity: { eid: 'b' }, $num: true }]),
     Refused,
@@ -22,12 +23,12 @@ Deno.test('a request no plugin answers is refused, and the message names it', ()
   )
 })
 
-Deno.test('a plugin that declares a request lets it through', async () => {
+test('a plugin that declares a request lets it through', async () => {
   let out = await g(['$num']).apply([{ entity: { eid: 'b' }, $num: true }])
   assertEquals(out.map((b) => b.entity.eid), ['b'])
 })
 
-Deno.test('the core answers its own without a plugin', async () => {
+test('the core answers its own without a plugin', async () => {
   let out = await g().apply([{
     entity: { eid: 'b' },
     doc: { title: 'Dune' },

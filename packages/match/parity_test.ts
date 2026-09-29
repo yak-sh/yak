@@ -7,6 +7,7 @@
 // select the same entities, in the same order — that agreement is the whole
 // promise: a filter written once means one thing wherever the data lives.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { open } from '@yaks/sqlite/db'
 import type { Bundle } from './read.ts'
@@ -73,7 +74,7 @@ let fromSql = (s: ReturnType<typeof sql>, q: string) => {
 // queries that ask for one.
 let asks = (q: string) => /\.order=|\.limit=|\.after=/.test(q)
 
-Deno.test('every query selects the same entities', () => {
+test('every query selects the same entities', () => {
   let s = sql()
   for (let q of QUERIES) {
     let mine = eids(matcher(q, shop, { now: NOW })(bundles))
@@ -84,7 +85,7 @@ Deno.test('every query selects the same entities', () => {
   }
 })
 
-Deno.test('a window cuts the whole alternation, on both sides', () => {
+test('a window cuts the whole alternation, on both sides', () => {
   let s = sql()
   let sides = [
     (q: string) => eids(matcher(q, shop, { now: NOW })(bundles)),
@@ -102,7 +103,7 @@ Deno.test('a window cuts the whole alternation, on both sides', () => {
   }
 })
 
-Deno.test('an aggregate answers the same rows on both sides', () => {
+test('an aggregate answers the same rows on both sides', () => {
   let s = sql()
   for (
     let q of [
@@ -123,7 +124,7 @@ Deno.test('an aggregate answers the same rows on both sides', () => {
 
 // A projection carries each value it names beside the eid, one hop or through
 // references, a boolean as true/false and an entity nothing reaches as null.
-Deno.test('a projection answers the same rows on both sides', () => {
+test('a projection answers the same rows on both sides', () => {
   let s = sql()
   let answers = [
     '.review&.fields=review.stars,review.book.doc.title&.order=review.stars',
@@ -160,7 +161,7 @@ Deno.test('a projection answers the same rows on both sides', () => {
   }, { eid: 'r3', 'review.book.doc.title': 'Cooking on a Barge' }])
 })
 
-Deno.test('a query neither side can answer is declined by both', () => {
+test('a query neither side can answer is declined by both', () => {
   let s = sql()
   for (
     let q of [
@@ -237,7 +238,7 @@ let WALKS = [
   '.cites->p1 .post.title=p3',
 ]
 
-Deno.test('a walk over edges selects the same entities', () => {
+test('a walk over edges selects the same entities', () => {
   let s = loaded(blog, posts, {}, [traverse(blog)])
   for (let q of WALKS) {
     let mine = eids(matcher(q, blog, { now: NOW })(posts)).sort()
@@ -255,7 +256,7 @@ Deno.test('a walk over edges selects the same entities', () => {
   ])
 })
 
-Deno.test('a walk over nothing declares is declined by both', () => {
+test('a walk over nothing declares is declined by both', () => {
   let s = loaded(blog, posts, {}, [traverse(blog)])
   for (let q of ['.admires->p1', '.post.title->p1']) {
     assertThrows(() => s.read(q), Error, 'cannot compile', q)
@@ -330,7 +331,7 @@ let CHAINS = [
   '.fork.from.session->s1&.session.title=s3',
 ]
 
-Deno.test('a walk over a chain of references selects the same entities', () => {
+test('a walk over a chain of references selects the same entities', () => {
   let s = loaded(forked, lineage)
   for (let q of CHAINS) {
     let mine = eids(matcher(q, forked, { now: NOW })(lineage)).sort()
@@ -344,7 +345,7 @@ Deno.test('a walk over a chain of references selects the same entities', () => {
   assertEquals(sel('.fork.from.session<-s4'), ['s1', 's2', 's3'])
 })
 
-Deno.test('a chain with a hop that is no reference is declined by both', () => {
+test('a chain with a hop that is no reference is declined by both', () => {
   let s = loaded(forked, lineage)
   for (let q of ['.fork.from.text->s1', '.entry.session.title->s1']) {
     assertThrows(() => s.read(q), Error, 'cannot compile', q)
@@ -424,7 +425,7 @@ let STATUS = [
   '.status&.order=status&.after=2',
 ]
 
-Deno.test('a computed property agrees when both sides are given the rule', () => {
+test('a computed property agrees when both sides are given the rule', () => {
   let s = loaded(todo, ROWS, taskDerived())
   let select = (q: string) =>
     matcher(q, todo, { now: NOW, computed: compute() })
@@ -440,7 +441,7 @@ Deno.test('a computed property agrees when both sides are given the rule', () =>
   assertEquals(eids(select('.status=cancelled')(todos)).sort(), ['t3', 't4'])
 })
 
-Deno.test('a computed property nobody registered still declines', () => {
+test('a computed property nobody registered still declines', () => {
   let e = assertThrows(
     () => matcher('.status=open', todo),
     Unsupported,
@@ -452,7 +453,7 @@ Deno.test('a computed property nobody registered still declines', () => {
 
 // An order names a property. A whole component in its place is refused by
 // both compilers alike, and the refusal names what the caller could order by.
-Deno.test('an order naming a whole component declines, naming its properties', () => {
+test('an order naming a whole component declines, naming its properties', () => {
   let mine = assertThrows(() => matcher('.order=doc', shop), Unsupported)
   let theirs = assertThrows(() => sql().read('.order=doc'), Unsupported)
   assertEquals(

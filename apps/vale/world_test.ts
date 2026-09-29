@@ -2,6 +2,7 @@
 // the shape go when no other chunk is drawing it.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { seedBuildings } from './buildings_fixture.ts'
 import { cuboids } from './boxes.ts'
@@ -39,7 +40,7 @@ let bare = (ci: number, ck: number): Chunk => ({
   },
 })
 
-Deno.test('visible buildings share one mesh and release it when they leave', async () => {
+test('visible buildings share one mesh and release it when they leave', async () => {
   let v = flat(5), empty = pack(out())
   let calls = 0
   let reveal: (p: Packed) => void = () => {}
@@ -96,7 +97,7 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
   w.dispose()
 })
 
-Deno.test('an edited design redraws a visible building', async () => {
+test('an edited design redraws a visible building', async () => {
   let mid = SIZE / 2, calls = 0
   let reveal: (p: Packed) => void = () => {}
   let held = new Promise<Packed>((done) => reveal = done)
@@ -139,7 +140,7 @@ Deno.test('an edited design redraws a visible building', async () => {
   w.dispose()
 })
 
-Deno.test('new ground draws before detail and keeps a worker free while travelling', async () => {
+test('new ground draws before detail and keeps a worker free while travelling', async () => {
   let sent: { ci: number; ck: number; lod: number }[] = []
   let fine: (() => void)[] = []
   let w = world(flat(5), {
@@ -170,7 +171,7 @@ Deno.test('new ground draws before detail and keeps a worker free while travelli
   w.dispose()
 })
 
-Deno.test('a design refresh keeps visible ground until replacement chunks arrive', async () => {
+test('a design refresh keeps visible ground until replacement chunks arrive', async () => {
   let next = false
   let finish = new Map<string, (c: Chunk) => void>()
   let w = world(flat(5), {
@@ -217,7 +218,7 @@ Deno.test('a design refresh keeps visible ground until replacement chunks arrive
   w.dispose()
 })
 
-Deno.test('a scoped design edit replaces its chunk and keeps its neighbour', async () => {
+test('a scoped design edit replaces its chunk and keeps its neighbour', async () => {
   let calls: string[] = []
   let w = world(flat(5), {
     capacity: 4,
@@ -254,7 +255,7 @@ Deno.test('a scoped design edit replaces its chunk and keeps its neighbour', asy
   w.dispose()
 })
 
-Deno.test('a building edit remeshes its model without remeshing another kind', async () => {
+test('a building edit remeshes its model without remeshing another kind', async () => {
   let calls: string[] = []
   let w = world(flat(5), {
     capacity: 4,

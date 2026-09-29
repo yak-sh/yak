@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { raise, scan, select } from '@yaks/sql'
 import { harness } from './testing.ts'
 
-Deno.test('blob-backed graph remains writable after SQL failure and rolls back the whole batch', async () => {
+test('blob-backed graph remains writable after SQL failure and rolls back the whole batch', async () => {
   let h = await harness()
   try {
     h.sql.query({

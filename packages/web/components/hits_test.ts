@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { pickLine } from './hits.ts'
@@ -7,7 +8,7 @@ import { EXISTS, parseQuery, TEXT } from '../query.ts'
 // presence filter with a trailing term ('.person ali'), which parseQuery
 // rejects outright ("presence filters end at !"): so every form here is both
 // shape-checked AND fed through parseQuery, which throws on a bad line.
-Deno.test('pickLine builds parseable picker queries', () => {
+test('pickLine builds parseable picker queries', () => {
   // a doc picker keeps typed text a single text pred, so the server's
   // id-addressing (findEid) can still resolve a typed human id
   assertEquals(pickLine('T-3'), 'T-3')

@@ -1,5 +1,6 @@
 // The companion acts only for its owner's objective and credits one harvest
 // per node life, including when two pages finish together.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -29,7 +30,7 @@ let row = (eid: string, by: string, at: number, part: Bundle): Bundle => ({
   created: { by, at: new Date(at).toISOString() },
 })
 
-Deno.test('the latest objective from a hero’s owner directs their companion', () => {
+test('the latest objective from a hero’s owner directs their companion', () => {
   let hero = row('hero', 'owner', 0, { entity: { eid: 'hero' }, player: {} })
   let request = (eid: string, by: string, at: number) =>
     row(eid, by, at, {
@@ -50,7 +51,7 @@ Deno.test('the latest objective from a hero’s owner directs their companion', 
   )
 })
 
-Deno.test('a companion advances along a route without jumping to the tree', () => {
+test('a companion advances along a route without jumping to the tree', () => {
   let path: [number, number, number][] = [[1, 0, 0], [3, 0, 0]]
   let first = advance([0, 0, 0], path, 0.5)
   assertEquals(first.at, [1, 0, 0])
@@ -59,7 +60,7 @@ Deno.test('a companion advances along a route without jumping to the tree', () =
   assertEquals(next.path, [])
 })
 
-Deno.test('a natural tree is chosen and reached through the world’s walk', () => {
+test('a natural tree is chosen and reached through the world’s walk', () => {
   let prop: Prop = { kind: 'oak', x: 5, z: 5, seed: 1, natural: true }
   let natural: Natural[] = [{ prop, at: [5, 5, 5] }]
   let [tree] = treesOf(1, 5, natural, [], 1000)
@@ -75,7 +76,7 @@ Deno.test('a natural tree is chosen and reached through the world’s walk', () 
   assert(Math.hypot(at[0] - tree.x, at[2] - tree.z) < 2.4)
 })
 
-Deno.test('companion work gathers by the hero’s ordinary rules', () => {
+test('companion work gathers by the hero’s ordinary rules', () => {
   let prop: Prop = { kind: 'oak', x: 5, z: 5, seed: 1, natural: true }
   let natural: Natural[] = [{ prop, at: [5, 5, 5] }]
   let rows: Bundle[] = []
@@ -127,7 +128,7 @@ Deno.test('companion work gathers by the hero’s ordinary rules', () => {
   assertEquals(fits(walking, 5, 5, 5), false)
 })
 
-Deno.test('two gathers cannot credit the same node life', async () => {
+test('two gathers cannot credit the same node life', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   let item = (eid: string, life: number) => ({

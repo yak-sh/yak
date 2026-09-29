@@ -1,4 +1,5 @@
 // Chat shortcuts belong to gameplay while text fields keep their own keys.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { chatbox } from './chatbox.ts'
@@ -6,7 +7,7 @@ import type { overlay } from './fx.ts'
 import type { Net } from './net.ts'
 import type { Village } from './village.ts'
 
-Deno.test('chat shortcuts focus a line without taking another field’s keys', () => {
+test('chat shortcuts focus a line without taking another field’s keys', () => {
   let { document, window } = parseHTML('<html><body></body></html>')
   let keys = ['document', 'HTMLElement', 'addEventListener'] as const
   let before = keys.map((key) =>

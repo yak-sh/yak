@@ -1,5 +1,6 @@
 // A private release reuses immutable source bytes and still serves a complete
 // app after its draft and the old release's unreferenced files are removed.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { prepare, releaseFiles, staged } from './release.ts'
@@ -63,7 +64,7 @@ let bytes = (text: string) => new TextEncoder().encode(text)
 let text = (bytes: Uint8Array<ArrayBuffer> | null) =>
   bytes ? new TextDecoder().decode(bytes) : null
 
-Deno.test('a release serves unchanged, changed, and compiled files', async () => {
+test('a release serves unchanged, changed, and compiled files', async () => {
   let { files, held } = memory()
   let old = 'alice/.releases/app/old'
   let next = 'alice/.releases/app/next'
@@ -113,7 +114,7 @@ Deno.test('a release serves unchanged, changed, and compiled files', async () =>
   )
 })
 
-Deno.test('a live indexed release keeps its bytes when promoted', async () => {
+test('a live indexed release keeps its bytes when promoted', async () => {
   let { files } = memory()
   let source = 'alice/.releases/app/live'
   await files.put(`${source}/index.html`, bytes('page'))
@@ -144,7 +145,7 @@ Deno.test('a live indexed release keeps its bytes when promoted', async () => {
   assertEquals(await prepare(files, source), index)
 })
 
-Deno.test('copying a legacy release leaves its source index untouched', async () => {
+test('copying a legacy release leaves its source index untouched', async () => {
   let { files } = memory()
   let source = 'alice/.releases/app/legacy'
   let copy = 'alice/.releases/app/repacked'

@@ -7,6 +7,7 @@
 // Driven directly rather than through workerd: the renewal is one function
 // every answer leaves through (index.ts), and what it does with a cookie is
 // the whole of it.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -41,7 +42,7 @@ let asked = (cookie: string) =>
 
 let value = (set: string) => set.slice(`${COOKIE}=`.length, set.indexOf(';'))
 
-Deno.test('a session past half its life is renewed; one still young is not', async () => {
+test('a session past half its life is renewed; one still young is not', async () => {
   // Day 46, a day past the half way mark: another ninety days, same person.
   let day46 = await aged(46)
   let renewed = await slid(asked(day46), ENV, new Response('ok'))
@@ -64,19 +65,19 @@ Deno.test('a session past half its life is renewed; one still young is not', asy
 // has died (T-37927 deletes it).
 let last = CUT + SESSION
 
-Deno.test({
-  name: 'a cookie sealed before 2c05d0f6 is re-minted on sight, however young',
-  ignore: Date.now() >= last * 1000,
-  fn: async () => {
+test(
+  'a cookie sealed before 2c05d0f6 is re-minted on sight, however young',
+  async () => {
     let old = await sealedOld({ person: 'p-1', space: null, exp: last }, SECRET)
     let r = await slid(asked(`${COOKIE}=${old}`), ENV, new Response('ok'))
     let fresh = await verify(value(r.headers.get('set-cookie') ?? ''), SECRET)
     assertEquals(fresh?.person, 'p-1')
     assertEquals(fresh?.legacy, undefined)
   },
-})
+  { skip: Date.now() >= last * 1000 },
+)
 
-Deno.test('a session ninety days idle renews nothing', async () => {
+test('a session ninety days idle renews nothing', async () => {
   // Day 91: the token fails its own expiry, so there is nobody to renew for
   // (identity.ts `asking` reads the same `verify`) and the browser is signed
   // out.
@@ -84,7 +85,7 @@ Deno.test('a session ninety days idle renews nothing', async () => {
   assertEquals(r.headers.get('set-cookie'), null)
 })
 
-Deno.test('a renewal never speaks over an answer that sets the cookie itself', async () => {
+test('a renewal never speaks over an answer that sets the cookie itself', async () => {
   // Signing in and the handoff each mint their own (identity.ts `landed`,
   // `handoff`), and a socket has no body to copy.
   let own = `${COOKIE}=their.own; Path=/`
@@ -98,7 +99,7 @@ Deno.test('a renewal never speaks over an answer that sets the cookie itself', a
   assertEquals(await slid(asked(await aged(46)), ENV, socket), socket)
 })
 
-Deno.test('a token minted for anything else is no session, and renews into none', async () => {
+test('a token minted for anything else is no session, and renews into none', async () => {
   // The two a stranger can hold (T-37873): the grant an app's worker is handed
   // for every signed-in visitor, and a CLI grant with its prefix taken off.
   // Each names a person and an expiry, and neither is a cookie.
@@ -122,7 +123,7 @@ Deno.test('a token minted for anything else is no session, and renews into none'
   }
 })
 
-Deno.test('a cookie a stranger wrote, and no cookie at all, renew nothing', async () => {
+test('a cookie a stranger wrote, and no cookie at all, renew nothing', async () => {
   let forged = await sign(
     { person: 'p-1', space: null, exp: Math.floor(Date.now() / 1000) + DAY },
     'another-secret',

@@ -6,6 +6,7 @@
 // one row, a picture arrives measured, a file over the ceiling is refused in
 // words a guest can act on, and a stranger on a `public` app is sent to sign
 // in.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { browser, connector, kernel, seed } from './probe.ts'
 
@@ -63,7 +64,7 @@ let hex = async (bytes: Uint8Array<ArrayBuffer>) =>
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 
-Deno.test('a named media upload stays seekable when its metadata changes', async () => {
+test('a named media upload stays seekable when its metadata changes', async () => {
   let k = await kernel()
   let them = await seed(k, [{ slug: 'mediabox', apps: ['player'] }])
   let host = 'mediabox.yaks.app'
@@ -158,7 +159,7 @@ type Row = {
   image?: { w: number; h: number }
 }
 
-Deno.test('the file door: a page uploads bytes and gets an address', async () => {
+test('the file door: a page uploads bytes and gets an address', async () => {
   let k = await kernel()
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-blob-' })
   let them = await seed(k, [{ slug: 'jeff5', apps: ['photos'] }])

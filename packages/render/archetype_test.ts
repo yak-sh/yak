@@ -1,5 +1,6 @@
 // Archetype selection is independent of projected component bodies; value
 // predicates, properties and registry overlays retain their existing semantics.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { and, or, parse, present } from '@yaks/query'
@@ -27,7 +28,7 @@ let r = (name: string, q: string | true, view = 'Tile') => ({
   match: q === true ? true as const : q ? parse(q) : and(),
 })
 
-Deno.test('archetype presence never touches bodies, caches false and true; ties and extend', () => {
+test('archetype presence never touches bodies, caches false and true; ties and extend', () => {
   let entries = [
     r('missing', '.missing'),
     r('specific', '.doc .task'),
@@ -54,7 +55,7 @@ Deno.test('archetype presence never touches bodies, caches false and true; ties 
   assertStrictEquals(resolve(reg, b, 'Tile', vocab), entries[4])
 })
 
-Deno.test('archetype groups, missing/unknown descriptors, moves and value conditions', () => {
+test('archetype groups, missing/unknown descriptors, moves and value conditions', () => {
   let group = {
     ...r('group', '.doc'),
     match: and(or(present('doc'), present('task'))),
@@ -73,7 +74,7 @@ Deno.test('archetype groups, missing/unknown descriptors, moves and value condit
   assertStrictEquals(resolve(reg, b, undefined, vocab), group)
 })
 
-Deno.test('value-only selection does not request a lazy archetype descriptor', () => {
+test('value-only selection does not request a lazy archetype descriptor', () => {
   let value = r('value', '.doc.title=yes')
   let reg = define([value, r('any', true)], {
     archetypes: () => {

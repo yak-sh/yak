@@ -3,6 +3,7 @@
 // plugin recognised and nobody resolved is refused rather than minted as an
 // entity of that literal name.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
@@ -36,7 +37,7 @@ let g = (...plugins: Plugin[]) => {
 let get = (one: ReturnType<typeof g>, eid: string) =>
   (one.get([eid]) as Bundle[])[0]
 
-Deno.test('an id that names nothing is refused, by name', () => {
+test('an id that names nothing is refused, by name', () => {
   assertThrows(
     () => g(numbered).address(['dune', 'B-7', 'B-9', 'B-10']),
     Refused,
@@ -45,11 +46,11 @@ Deno.test('an id that names nothing is refused, by name', () => {
   assertEquals(g(numbered).address(['dune', 'B-7']), new Map([['B-7', 'dune']]))
 })
 
-Deno.test('a later plugin may resolve what an earlier one found nothing for', () => {
+test('a later plugin may resolve what an earlier one found nothing for', () => {
   assertEquals(g(numbered, named).address(['B-8']), new Map([['B-8', 'dune']]))
 })
 
-Deno.test('a write lands on the entity its ids name', () => {
+test('a write lands on the entity its ids name', () => {
   let one = g(numbered)
   one.apply([
     { entity: { eid: 'B-7' }, book: { pages: 412 } },
@@ -60,7 +61,7 @@ Deno.test('a write lands on the entity its ids name', () => {
   assertEquals(get(one, 'B-7'), undefined)
 })
 
-Deno.test('a write naming nothing is refused before anything is minted', () => {
+test('a write naming nothing is refused before anything is minted', () => {
   let one = g(numbered)
   assertThrows(
     () => one.apply([{ entity: { eid: 'B-9' }, doc: { title: 'x' } }]),
@@ -74,6 +75,6 @@ Deno.test('a write naming nothing is refused before anything is minted', () => {
   assertEquals([get(one, 'B-9'), get(one, 'r2')], [undefined, undefined])
 })
 
-Deno.test('a read naming nothing is refused too', () => {
+test('a read naming nothing is refused too', () => {
   assertThrows(() => g(numbered).read('.review.book=B-9'), Refused)
 })

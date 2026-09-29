@@ -2,6 +2,7 @@
 // a fixed clock and declines a plain word. Interpreting whether a given field
 // is time-typed (and so should be read through here) stays downstream.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { isTimeLiteral, timeInstant, timeSpan } from './mod.ts'
 
@@ -11,13 +12,13 @@ let at = (...a: number[]) =>
 // A fixed clock so ranges are deterministic: 2026-09-02T12:00 local.
 let NOW = +new Date(2026, 8, 2, 12, 0, 0)
 
-Deno.test('today names a midnight-to-midnight range', () => {
+test('today names a midnight-to-midnight range', () => {
   let s = timeSpan('today', NOW)!
   assertEquals(s.start, +new Date(2026, 8, 2))
   assertEquals(s.end, +new Date(2026, 8, 3))
 })
 
-Deno.test('a relative phrase names a moment, and spans from now to it', () => {
+test('a relative phrase names a moment, and spans from now to it', () => {
   assertEquals(timeSpan('1 hour ago', NOW), {
     start: NOW - 3_600_000,
     end: NOW,
@@ -33,13 +34,13 @@ Deno.test('a relative phrase names a moment, and spans from now to it', () => {
   assertEquals(timeInstant('today', NOW), +new Date(2026, 8, 2))
 })
 
-Deno.test('an ISO stamp and a clock time', () => {
+test('an ISO stamp and a clock time', () => {
   assertEquals(timeSpan('2026-07-25', NOW)!.start, +new Date(2026, 6, 25))
   assertEquals(timeSpan('9am', NOW)!.start, +new Date(2026, 8, 2, 9, 0))
   assertEquals(timeSpan('noon', NOW)!.start, +new Date(2026, 8, 2, 12, 0))
 })
 
-Deno.test('a plain word is no time literal', () => {
+test('a plain word is no time literal', () => {
   assertEquals(timeSpan('open', NOW), null)
   assertEquals(isTimeLiteral('open', NOW), false)
   assertEquals(isTimeLiteral('yesterday', NOW), true)
@@ -93,18 +94,18 @@ let spans: [string, number, number, number?][] = [
 ]
 for (let [phrase, start, end, moment] of spans) {
   // Only a phrase naming a moment carries it.
-  Deno.test(`span: ${phrase}`, () =>
+  test(`span: ${phrase}`, () =>
     assertEquals(
       timeSpan(phrase, THEN),
       moment == null ? { start, end } : { start, end, at: moment },
     ))
 }
-Deno.test('span: a zoned stamp keeps its own zone', () =>
+test('span: a zoned stamp keeps its own zone', () =>
   assertEquals(timeSpan('2026-07-25T09:00:00.000Z', THEN), {
     start: Date.parse('2026-07-25T09:00:00.000Z'),
     end: Date.parse('2026-07-25T09:00:00.000Z') + 1000,
   }))
-Deno.test('span: not phrases', () => {
+test('span: not phrases', () => {
   for (let s of ['Ops', 'open', '1..3', 'a,b', '', 'todayish', '25:00']) {
     assertEquals(timeSpan(s, THEN), null)
   }
@@ -125,12 +126,12 @@ let moments: [string, number][] = [
   ['now', THEN],
 ]
 for (let [phrase, moment] of moments) {
-  Deno.test(`instant: ${phrase}`, () =>
+  test(`instant: ${phrase}`, () =>
     assertEquals(timeInstant(phrase, THEN), moment))
 }
-Deno.test('instant: an ISO stamp resolves to itself', () => {
+test('instant: an ISO stamp resolves to itself', () => {
   let iso = new Date(at(2026, 6, 25, 9)).toISOString()
   assertEquals(timeInstant(iso, THEN), at(2026, 6, 25, 9))
 })
-Deno.test('instant: nonsense is null, never a guess', () =>
+test('instant: nonsense is null, never a guess', () =>
   assertEquals(timeInstant('whenever', THEN), null))

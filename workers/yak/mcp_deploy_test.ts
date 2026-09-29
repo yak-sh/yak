@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -17,7 +18,7 @@ import {
 } from './probe.ts'
 import { sha256 } from './versions.ts'
 
-Deno.test('a trashed app releases its component to another app in the space', async () => {
+test('a trashed app releases its component to another app in the space', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'handoff32', apps: ['first'] }])
@@ -72,7 +73,7 @@ Deno.test('a trashed app releases its component to another app in the space', as
 // path, where a relative URL would otherwise resolve against the page's depth.
 // Before this, an install under another name served bare HTML: no stylesheet,
 // no script, and nothing said so.
-Deno.test('an app names no app, and the copy works at its own address', async () => {
+test('an app names no app, and the copy works at its own address', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -160,7 +161,7 @@ Deno.test('an app names no app, and the copy works at its own address', async ()
 // correctness). The person's own repair when their assistant breaks a working
 // page is "put it back", so every deploy is a version and one word restores
 // one — as a new version, since history is never rewritten.
-Deno.test('a deploy is a version, and one word puts it back', async () => {
+test('a deploy is a version, and one word puts it back', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'undo31', apps: ['recipes'] }])
@@ -334,7 +335,7 @@ Deno.test('a deploy is a version, and one word puts it back', async () => {
   }
 })
 
-Deno.test('a failed rollback leaves the served files and deploy unchanged', async () => {
+test('a failed rollback leaves the served files and deploy unchanged', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{
@@ -385,7 +386,7 @@ Deno.test('a failed rollback leaves the served files and deploy unchanged', asyn
   }
 })
 
-Deno.test('borrowed declarations switch with their consumer release', async () => {
+test('borrowed declarations switch with their consumer release', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{
@@ -446,7 +447,7 @@ Deno.test('borrowed declarations switch with their consumer release', async () =
   }
 })
 
-Deno.test('a rolled back app keeps serving through app and space renames', async () => {
+test('a rolled back app keeps serving through app and space renames', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'backrename', apps: ['page'] }])
@@ -486,7 +487,7 @@ Deno.test('a rolled back app keeps serving through app and space renames', async
 // says it right after the write. The directory's read cache is 30 seconds
 // wide and private to an isolate, so a deploy made anywhere else is invisible
 // to an ordinary read — which is why the tool tier reads fresh (directory.ts).
-Deno.test(
+test(
   'after a rollback, the list says what is live and what came back',
   async () => {
     let k = await kernel()
@@ -551,7 +552,7 @@ Deno.test(
 // With no token there is nothing to read, and the agent is told so in one
 // sentence rather than handed a failure: the secret is the owner's to set and
 // there is nothing an agent can do about it (README.md).
-Deno.test('app_stats with no analytics token says so, once', async () => {
+test('app_stats with no analytics token says so, once', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'quiet33', apps: ['weather'] }])
@@ -568,7 +569,7 @@ Deno.test('app_stats with no analytics token says so, once', async () => {
 // D-32318 §Errors, verbatim: "One is open until a later deploy stops
 // producing it or the agent marks it fixed." So the deploy that carries the
 // fix closes it, with nobody archiving by hand (T-32910, C-32905 item 7).
-Deno.test('the deploy that fixes a break closes it', async () => {
+test('the deploy that fixes a break closes it', async () => {
   let k = await kernel()
   try {
     let { cookie } = await seed(k, [{ slug: 'mend34', apps: ['weather'] }])

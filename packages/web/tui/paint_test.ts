@@ -1,5 +1,6 @@
 // The window: where a screenful sits over the content, given a cursor — and
 // the escape invariant: content never speaks to the terminal.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { ansi, TElement, TNode, TText } from '@yaks/tui'
 import { cursorLine, pane, win } from './paint.ts'
@@ -19,13 +20,13 @@ let cases: [number[], number][] = [
   [[0, 0, 10, 0], 0], // empty content
 ]
 
-Deno.test('the window follows the cursor and stops at both ends', () => {
+test('the window follows the cursor and stops at both ends', () => {
   for (let [[top, at, h, n], want] of cases) {
     assertEquals(win(top, at, h, n), want, `win(${top}, ${at}, ${h}, ${n})`)
   }
 })
 
-Deno.test('the board scrolls to its selected row, which paints inverse', () => {
+test('the board scrolls to its selected row, which paints inverse', () => {
   // The board's cursor is over the query (at<0); it marks the selected row
   // with TRow-on (inverse) rather than a line number. cursorLine finds that
   // line so the window follows it — a wall of tasks scrolls.
@@ -87,13 +88,13 @@ let content: [string, string, string][] = [
   ['\\t expands to spaces we chose', 'a\tb', 'a  b'],
 ]
 
-Deno.test('content cannot speak to the terminal', () => {
+test('content cannot speak to the terminal', () => {
   for (let [what, data, want] of content) {
     assertEquals(bytes(div('', data)), want, what)
   }
 })
 
-Deno.test('the painter still speaks: SGR, OSC 8, and a sanitized href', () => {
+test('the painter still speaks: SGR, OSC 8, and a sanitized href', () => {
   // Style the sheet knows is emitted by ansi(), not by the content.
   assertStringIncludes(bytes(div('Md_B', 'bold')), '\x1b[1mbold\x1b[0m')
 

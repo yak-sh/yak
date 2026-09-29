@@ -3,6 +3,7 @@
 // discriminator — an entry is a component, a tool, or neither, and the shape
 // it must have follows from which it said.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { metaSchema } from './mod.ts'
@@ -23,7 +24,7 @@ let TOOL = {
   input: { scope: { type: 'string', enum: ['open', 'done'] } },
 }
 
-Deno.test('a marked component is a component, an unmarked entry is nobody’s', () => {
+test('a marked component is a component, an unmarked entry is nobody’s', () => {
   assertEquals(
     ok({
       component: true,
@@ -43,7 +44,7 @@ Deno.test('a marked component is a component, an unmarked entry is nobody’s', 
   assert(ok({ component: true, spelled: 'wrong' }).length)
 })
 
-Deno.test('a tool declaration is checked as a tool', () => {
+test('a tool declaration is checked as a tool', () => {
   assertEquals(ok(TOOL), [])
   assertEquals(ok({ ...TOOL, readOnly: true, options: { rest: 'words' } }), [])
   // A noun and a verb are two words a line says in either order; either one
@@ -58,7 +59,7 @@ Deno.test('a tool declaration is checked as a tool', () => {
   assert(ok({ ...TOOL, component: true }).length)
 })
 
-Deno.test('a property declares its type, and a JSON one may declare its shape', () => {
+test('a property declares its type, and a JSON one may declare its shape', () => {
   let prop = (s: PropSchema) =>
     ok({ component: true, type: 'object', properties: { c: s } })
   assertEquals(prop({ type: 'string', enum: ['a'] }), [])

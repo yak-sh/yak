@@ -1,6 +1,7 @@
 // Sub-projects: everything under a project is one walk, the way up is its
 // lineage, and a project is never filed under itself.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { Refused } from '@yaks/graph'
 import { teamGraph } from './testing.ts'
@@ -26,7 +27,7 @@ let tree = () => {
 let eids = (bs: { entity: { eid: string } }[]) =>
   bs.map((b) => b.entity.eid).sort()
 
-Deno.test('what is under a project is one walk, at any depth', async () => {
+test('what is under a project is one walk, at any depth', async () => {
   let g = tree()
   let under = async (q: string) => eids(await g.read(q))
   assertEquals(await under('.task .filed.project->p1'), [
@@ -39,7 +40,7 @@ Deno.test('what is under a project is one walk, at any depth', async () => {
   assertEquals(await under('.task .filed.project=p1'), ['t-p1'])
 })
 
-Deno.test('a lineage runs from the nearest project up', async () => {
+test('a lineage runs from the nearest project up', async () => {
   let g = tree()
   let up = async (eid: string) =>
     (await lineage(g, eid)).map((b) => b.entity.eid)
@@ -49,7 +50,7 @@ Deno.test('a lineage runs from the nearest project up', async () => {
   assertEquals(await up('nothing'), [])
 })
 
-Deno.test('a project is never filed under itself or anything under it', () => {
+test('a project is never filed under itself or anything under it', () => {
   let g = tree()
   let file = (eid: string, project: string) => () =>
     g.apply([{ entity: { eid }, filed: { project } }])

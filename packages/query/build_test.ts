@@ -2,6 +2,7 @@
 // composition and the explicit `time` node the text format cannot spell, plus
 // the accessors a downstream compiler reads directives off with.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   and,
@@ -25,7 +26,7 @@ import {
   windowOf,
 } from './mod.ts'
 
-Deno.test('builders produce plain data', () => {
+test('builders produce plain data', () => {
   assertEquals(eq('status', 'open'), {
     kind: 'pred',
     path: ['status'],
@@ -45,13 +46,13 @@ Deno.test('builders produce plain data', () => {
 })
 
 // A number coerces to a scalar, so a builder reads naturally.
-Deno.test('numeric input coerces to a scalar', () => {
+test('numeric input coerces to a scalar', () => {
   assertEquals(coerce(2), scalar('2'))
   assertEquals(gt('priority', 2), gt('priority', '2'))
 })
 
 // A ready value node passes through untouched.
-Deno.test('value nodes compose', () => {
+test('value nodes compose', () => {
   assertEquals(eq('priority', range('1', '5')), {
     kind: 'pred',
     path: ['priority'],
@@ -61,7 +62,7 @@ Deno.test('value nodes compose', () => {
 })
 
 // `or` is builder-only — the text format is a flat and-list.
-Deno.test('or composes', () => {
+test('or composes', () => {
   assertEquals(or(eq('a', '1'), eq('b', '2')), {
     kind: 'or',
     clauses: [eq('a', '1'), eq('b', '2')],
@@ -69,7 +70,7 @@ Deno.test('or composes', () => {
 })
 
 // `time` is an explicit phrase node a builder makes; parse never emits one.
-Deno.test('time node is builder-made', () => {
+test('time node is builder-made', () => {
   assertEquals(time('today'), { kind: 'time', raw: 'today' })
   assertEquals(eq('created.at', time('today')), {
     kind: 'pred',
@@ -80,7 +81,7 @@ Deno.test('time node is builder-made', () => {
 })
 
 // A field selector from a spec string, `~` marking volatile.
-Deno.test('field selector', () => {
+test('field selector', () => {
   assertEquals(field('pin.x'), { path: ['pin', 'x'], wake: true })
   assertEquals(field('pin.z~'), { path: ['pin', 'z'], wake: false })
   assertEquals(fields('pin.x', 'pin.z~').fields, [
@@ -90,7 +91,7 @@ Deno.test('field selector', () => {
 })
 
 // Edges builder shapes match the parser's.
-Deno.test('edges builder', () => {
+test('edges builder', () => {
   assertEquals(edges(), { kind: 'edges', peers: [] })
   assertEquals(edges({ peers: [['status']] }), {
     kind: 'edges',
@@ -99,7 +100,7 @@ Deno.test('edges builder', () => {
 })
 
 // Accessors pick directives out of a clause list.
-Deno.test('accessors', () => {
+test('accessors', () => {
   let ast = parse('.status=open&.order=hot&.near=T-3&.limit=50&.after=900')
   assertEquals(orderOf(ast), 'hot')
   assertEquals(nearOf(ast), 'T-3')

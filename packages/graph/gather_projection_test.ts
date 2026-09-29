@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Bundle,
@@ -41,7 +42,7 @@ let fixture = (async: boolean) => {
 }
 
 for (let async of [false, true]) {
-  Deno.test(`projected gather: noop checks do not read unrelated facets (${async})`, async () => {
+  test(`projected gather: noop checks do not read unrelated facets (${async})`, async () => {
     let { storage, calls } = fixture(async)
     let g = graph({ storage, vocab: books })
     await g.apply([{
@@ -74,7 +75,7 @@ for (let async of [false, true]) {
     assertEquals(journals, [[]])
   })
 
-  Deno.test(`projected gather: whole read and precondition writes complete FOUND (${async})`, async () => {
+  test(`projected gather: whole read and precondition writes complete FOUND (${async})`, async () => {
     let { base, storage, calls } = fixture(async)
     await base.tx((tx) =>
       tx.patch([{
@@ -109,7 +110,7 @@ for (let async of [false, true]) {
     })
   })
 
-  Deno.test(`projected gather: ordered stamps, guards and late rollback (${async})`, async () => {
+  test(`projected gather: ordered stamps, guards and late rollback (${async})`, async () => {
     let { base, storage } = fixture(async)
     let g = graph({ storage, vocab: books })
     let initial = await g.apply([{
@@ -174,7 +175,7 @@ for (let async of [false, true]) {
     )
   })
 
-  Deno.test(`projected gather: completing keeps already observed facets (${async})`, async () => {
+  test(`projected gather: completing keeps already observed facets (${async})`, async () => {
     let { base, storage } = fixture(async)
     await base.tx((tx) =>
       tx.patch([{

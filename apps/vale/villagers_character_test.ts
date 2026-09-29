@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -8,7 +9,7 @@ import { aboutOf, characterOf, eidOf, persona } from './villagers.ts'
 import characters from './seed/characters.json' with { type: 'json' }
 import words from './vocab.json' with { type: 'json' }
 
-Deno.test('each villager has a distinct story on their graph entity', () => {
+test('each villager has a distinct story on their graph entity', () => {
   let rows = new Map(characters.map((row) => [row.entity.eid, row]))
   assertEquals(rows.size, GIVERS.length)
   for (let g of GIVERS) {
@@ -22,7 +23,7 @@ Deno.test('each villager has a distinct story on their graph entity', () => {
   )
 })
 
-Deno.test('loading character data keeps a villager’s existing fields', async () => {
+test('loading character data keeps a villager’s existing fields', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   let wren = GIVERS.find((g) => g.id == 'wren')!
@@ -48,7 +49,7 @@ Deno.test('loading character data keeps a villager’s existing fields', async (
   assertEquals(comp(born, 'character').story, characters[0].character.story)
 })
 
-Deno.test('a villager speaks from graph character details', () => {
+test('a villager speaks from graph character details', () => {
   let wren = GIVERS.find((g) => g.id == 'wren')!
   let row = characters.find((row) => row.entity.eid == eidOf(wren.id))!
   let words = persona(wren, {

@@ -1,5 +1,6 @@
 // The pure seams: what a save writes and what it refuses, where an entity's
 // words are read from, and the passage an agent is handed.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   BYTES,
@@ -25,7 +26,7 @@ let said = (over: Partial<Memory> = {}): Memory => ({
   ...over,
 })
 
-Deno.test('a save keeps the words and says nothing about them', () => {
+test('a save keeps the words and says nothing about them', () => {
   let [b] = saved({ eid: 'm1', said: '  use grams, never cups  ', space: 's1' })
   assertEquals(b.entity, { eid: 'm1' })
   // Verbatim but for the whitespace around it, and in doc.body, where a
@@ -35,7 +36,7 @@ Deno.test('a save keeps the words and says nothing about them', () => {
   assertEquals(b.memory, { space: 's1' })
 })
 
-Deno.test('a mark says where the words belong, and nothing about them', () => {
+test('a mark says where the words belong, and nothing about them', () => {
   let [b] = marked({ eid: 'e1', scope: 'p1', context: ' ', feedback: true })
   assertEquals(b, {
     entity: { eid: 'e1' },
@@ -44,7 +45,7 @@ Deno.test('a mark says where the words belong, and nothing about them', () => {
   })
 })
 
-Deno.test('the words are wherever the entity keeps them', () => {
+test('the words are wherever the entity keeps them', () => {
   let e = { entity: { eid: 'e1' } }
   assertEquals(
     words({ ...e, doc: { title: 'x', body: 'use grams' } }),
@@ -58,7 +59,7 @@ Deno.test('the words are wherever the entity keeps them', () => {
   assertEquals(words({ ...e, doc: { title: 'x' } }), '')
 })
 
-Deno.test('a memory with no sentence in it is refused', () => {
+test('a memory with no sentence in it is refused', () => {
   let no = assertThrows(
     () => saved({ eid: 'm1', said: '   \n ', space: 's1' }),
     Error,
@@ -66,7 +67,7 @@ Deno.test('a memory with no sentence in it is refused', () => {
   assertEquals(no.message, EMPTY)
 })
 
-Deno.test('the context is two lines, and never the summary', () => {
+test('the context is two lines, and never the summary', () => {
   assertEquals(clamped('  one  \n\n two \nthree\nfour'), 'one\ntwo')
   assertEquals(clamped('\n\n'), '')
   let [b] = saved({
@@ -83,7 +84,7 @@ Deno.test('the context is two lines, and never the summary', () => {
   })
 })
 
-Deno.test('a bundle reads back whole, and a byline speaks human', () => {
+test('a bundle reads back whole, and a byline speaks human', () => {
   assertEquals(
     heard({
       entity: { eid: 'm1' },
@@ -105,14 +106,14 @@ Deno.test('a bundle reads back whole, and a byline speaks human', () => {
   assertEquals(heard({ entity: { eid: 'm2' } }).said, '')
 })
 
-Deno.test("the ranker's order is the answer's order", () => {
+test("the ranker's order is the answer's order", () => {
   let held = [said({ eid: 'a' }), said({ eid: 'b' }), said({ eid: 'c' })]
   assertEquals(ordered(['c', 'a'], held).map((m) => m.eid), ['c', 'a'])
   // An id the store did not answer for — a memory since deleted — drops out.
   assertEquals(ordered(['z', 'b'], held).map((m) => m.eid), ['b'])
 })
 
-Deno.test('the passage says the sentence whole, with its context under it', () => {
+test('the passage says the sentence whole, with its context under it', () => {
   assertEquals(passage({ name: 'Jeff', space: 'ada' }, []), '')
   let out = passage({ name: 'Jeff', space: 'ada' }, [
     said({ about: 'recipes', context: 'looking at the recipe app' }),
@@ -130,7 +131,7 @@ Deno.test('the passage says the sentence whole, with its context under it', () =
   assert(!out.includes('memory_recall finds'), 'nothing was left out')
 })
 
-Deno.test('the passage is bounded by both the count and the bytes', () => {
+test('the passage is bounded by both the count and the bytes', () => {
   let many = Array.from(
     { length: LAST + 3 },
     (_, i) => said({ eid: `m${i}`, said: `sentence ${i}` }),

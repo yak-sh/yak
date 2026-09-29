@@ -1,6 +1,7 @@
 // The D1 vault, handed to @yaks/secrets the way yaks.app hands it: the plugin
 // seals into it, the value reads back, and the rows hold only ciphertext.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -41,7 +42,7 @@ let setup = (db = d1()) => {
   return { db, g, vault }
 }
 
-Deno.test('a secret sealed through the graph is ciphertext in D1', async () => {
+test('a secret sealed through the graph is ciphertext in D1', async () => {
   let { db, g, vault } = setup()
   await g.apply([sealed('A', 'plain-value')])
   assertEquals(await reveal(vault, 'A'), 'plain-value')
@@ -55,7 +56,7 @@ Deno.test('a secret sealed through the graph is ciphertext in D1', async () => {
   assertEquals(await vault.all(), [])
 })
 
-Deno.test('the salt is made once, and opens only under its key', async () => {
+test('the salt is made once, and opens only under its key', async () => {
   let db = d1()
   let k = await key()
   let salt = await d1Vault(db, k).salt()
@@ -63,7 +64,7 @@ Deno.test('the salt is made once, and opens only under its key', async () => {
   await assertRejects(async () => await d1Vault(db, await key()).salt())
 })
 
-Deno.test('the lock holds a read, a change and the write back as one step', async () => {
+test('the lock holds a read, a change and the write back as one step', async () => {
   let { g, vault } = setup()
   let store = records<{ n?: number }>(g, vault, 'count ')
   await Promise.all(
@@ -74,7 +75,7 @@ Deno.test('the lock holds a read, a change and the write back as one step', asyn
   assertEquals(await store.read('a'), { n: 3 })
 })
 
-Deno.test('a lease held by another isolate is waited for', async () => {
+test('a lease held by another isolate is waited for', async () => {
   let db = d1()
   let k = await key()
   let one = d1Vault(db, k)
@@ -91,7 +92,7 @@ Deno.test('a lease held by another isolate is waited for', async () => {
   assertEquals(order, ['one in', 'one out', 'two'])
 })
 
-Deno.test('what D1 says to retry is flagged retryable, and nothing else is', async () => {
+test('what D1 says to retry is flagged retryable, and nothing else is', async () => {
   let failing = (message: string) => {
     let db = d1()
     return d1Vault({

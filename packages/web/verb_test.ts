@@ -1,6 +1,7 @@
 // The verb vocabulary is executable data: finite kinds teach and validate,
 // while usage and arity are mechanical renderings of one declaration.
 
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { comps } from './types.ts'
@@ -15,7 +16,7 @@ let verb = (
   ...shape,
 })
 
-Deno.test('usage renders finite options, defaults and required alternatives', () => {
+test('usage renders finite options, defaults and required alternatives', () => {
   let model = of('model', () => ['short', 'also-short'])
   assertEquals(
     usageOf(verb({
@@ -36,7 +37,7 @@ Deno.test('usage renders finite options, defaults and required alternatives', ()
   )
 })
 
-Deno.test('words derive from required, optional and trailing positionals', () => {
+test('words derive from required, optional and trailing positionals', () => {
   assertEquals(wordsOf(verb({ args: [] })), [0, 0])
   assertEquals(
     wordsOf(verb({
@@ -49,7 +50,7 @@ Deno.test('words derive from required, optional and trailing positionals', () =>
   )
 })
 
-Deno.test('enumOf accepts the graph enum and its input aliases', () => {
+test('enumOf accepts the graph enum and its input aliases', () => {
   assertEquals(enumOf(comps.review.verdict).of?.(), [
     'approved',
     'rejected',

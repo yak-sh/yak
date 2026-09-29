@@ -3,6 +3,7 @@
 // grammar as anything else, from the journal's own rows, and are never
 // written.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
@@ -70,7 +71,7 @@ let fixture = () => {
 let ada = { by: 'ada' }
 let bob = { by: 'bob', via: 'cli' }
 
-Deno.test('an entity’s history is a query over its changes', () => {
+test('an entity’s history is a query over its changes', () => {
   let { read, said } = fixture()
   assertEquals(said(read('._change.target=p1')), [
     'page p1 {"title":"Kickoff"}',
@@ -82,7 +83,7 @@ Deno.test('an entity’s history is a query over its changes', () => {
   ])
 })
 
-Deno.test('a change points at the _comp describing its component', () => {
+test('a change points at the _comp describing its component', () => {
   let { read, said } = fixture()
   assertEquals(said(read('._change.comp._comp.name=entity')), [
     'entity p2 null',
@@ -95,7 +96,7 @@ Deno.test('a change points at the _comp describing its component', () => {
   ])
 })
 
-Deno.test('a change names its transaction, which reads like any entity', () => {
+test('a change names its transaction, which reads like any entity', () => {
   let { g, read } = fixture()
   let [first, second] = read('._change.target=p1')
   let tx = (first._change as { tx: string }).tx
@@ -108,7 +109,7 @@ Deno.test('a change names its transaction, which reads like any entity', () => {
   assertEquals(read(`.eid=${second.entity.eid}`), [second])
 })
 
-Deno.test('a transaction is found by who wrote it, and through it', () => {
+test('a transaction is found by who wrote it, and through it', () => {
   let { read, said } = fixture()
   let seqs = (q: string) => read(q).map((b) => (b._tx as { seq: number }).seq)
   assertEquals(seqs('._tx.via=cli'), [2])
@@ -123,7 +124,7 @@ Deno.test('a transaction is found by who wrote it, and through it', () => {
   ])
 })
 
-Deno.test('a history pages newest first', () => {
+test('a history pages newest first', () => {
   let { read, rows, said } = fixture()
   let [last] = read('._change.target=p1&.limit=1')
   assertEquals(said([last]), ['page p1 {"title":"Retro"}'])
@@ -134,7 +135,7 @@ Deno.test('a history pages newest first', () => {
   assertEquals(rows('._change.target=p1&.count'), [{ value: '', n: 2 }])
 })
 
-Deno.test('a history reads who wrote each change through its transaction', () => {
+test('a history reads who wrote each change through its transaction', () => {
   let { rows } = fixture()
   let by = '_change.tx._tx.by'
   let via = '_change.tx._tx.via'
@@ -149,21 +150,21 @@ Deno.test('a history reads who wrote each change through its transaction', () =>
   ])
 })
 
-Deno.test('an entity counts its changes by the reverse association', () => {
+test('an entity counts its changes by the reverse association', () => {
   let { read } = fixture()
   assertEquals(read('.page&._changes_target>=2').map((b) => b.entity.eid), [
     'p1',
   ])
 })
 
-Deno.test('the journal is no part of any other answer', () => {
+test('the journal is no part of any other answer', () => {
   let { read } = fixture()
   assertEquals(read('.page').map((b) => b.entity.eid), ['p1'])
   assertEquals(read('._change.target=p1&.page'), [])
   assertEquals(read('.refs=p1'), [])
 })
 
-Deno.test('nothing writes the journal’s components', () => {
+test('nothing writes the journal’s components', () => {
   let { apply, g } = fixture()
   let change = { tx: null, target: 'p1', value: {} }
   assertEquals(apply([{ entity: { eid: 'x' }, _change: change }]), [])
@@ -177,7 +178,7 @@ Deno.test('nothing writes the journal’s components', () => {
   )
 })
 
-Deno.test('a replica answers a history query the same way', () => {
+test('a replica answers a history query the same way', () => {
   let { read } = fixture()
   let copy = graph({ storage: ram(vocab), vocab })
   let rows = read('._change.target=p2')

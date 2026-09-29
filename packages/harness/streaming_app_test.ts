@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
 import { h } from 'preact'
 import { App, changes } from './app.ts'
@@ -6,7 +7,7 @@ import { local } from './local.ts'
 import { until } from '../process/testing.ts'
 import { harness, mount, repo } from './testing.ts'
 
-Deno.test('mounted transcript paints partial markdown before the model returns', async () => {
+test('mounted transcript paints partial markdown before the model returns', async () => {
   let release!: () => void
   const wait = new Promise<void>((r) => release = r)
   const a = local({

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Act, type Binding, blobOf, decide, memo, sync } from './mod.ts'
 
@@ -19,14 +20,14 @@ let R = { read: true }
 let W = { write: true }
 let RW = { read: true, write: true }
 
-Deno.test('decide: read-only follows the file', () => {
+test('decide: read-only follows the file', () => {
   assertEquals(row('a', undefined, ['a'], R), 'same')
   assertEquals(row('b', undefined, ['a'], R), 'read')
   assertEquals(row('a', undefined, undefined, R), 'read')
   assertEquals(row(undefined, undefined, ['a'], R), 'read') // gone
 })
 
-Deno.test('decide: write-only follows the graph, and a double move conflicts', () => {
+test('decide: write-only follows the graph, and a double move conflicts', () => {
   assertEquals(row('a', 'a', ['a', 'a'], W), 'same')
   assertEquals(row('a', 'b', ['a', 'a'], W), 'write')
   assertEquals(row('x', 'a', ['a', 'a'], W), 'write') // a hand edit is put back
@@ -38,7 +39,7 @@ Deno.test('decide: write-only follows the graph, and a double move conflicts', (
   assertEquals(row(undefined, 'b', ['a', 'a'], W), 'write') // deleted to resolve
 })
 
-Deno.test('decide: both ways reads a file move and writes a graph move', () => {
+test('decide: both ways reads a file move and writes a graph move', () => {
   assertEquals(row('b', 'a', ['a', 'a'], RW), 'read')
   assertEquals(row('a', 'b', ['a', 'a'], RW), 'write')
   assertEquals(row('b', 'c', ['a', 'a'], RW), 'conflict')
@@ -49,7 +50,7 @@ Deno.test('decide: both ways reads a file move and writes a graph move', () => {
 
 let text = (p: string) => Deno.readTextFileSync(p)
 
-Deno.test('sync: writes, keeps a hand edit the graph also moved, and removes', async () => {
+test('sync: writes, keeps a hand edit the graph also moved, and removes', async () => {
   let dir = Deno.makeTempDirSync()
   let a = `${dir}/x/a.md`
   let b = `${dir}/b.md`
@@ -84,7 +85,7 @@ Deno.test('sync: writes, keeps a hand edit the graph also moved, and removes', a
   Deno.removeSync(dir, { recursive: true })
 })
 
-Deno.test('sync: a read binding reads what moved and what is gone', async () => {
+test('sync: a read binding reads what moved and what is gone', async () => {
   let files = new Map([['a', '1'], ['b', '2']])
   let seen: [string[], string[]][] = []
   let bind: Binding = {

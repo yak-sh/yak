@@ -2,6 +2,7 @@
 // first few dozen bytes of a file, because that is all sizeOf is allowed to
 // look at. What is proved is the shape of each format's own statement of its
 // size — and that a file which states none gets none rather than a guess.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { mediaTypeOf, sizeOf } from './image.ts'
 
@@ -55,14 +56,14 @@ let gif = (w: number, h: number) => bytes('GIF89a', le16(w), le16(h), pad(2))
 let riff = (tag: string, ...rest: (number | number[] | string)[]) =>
   bytes('RIFF', be32(0), 'WEBP', tag, be32(0), ...rest)
 
-Deno.test('a png states its size in IHDR', () => {
+test('a png states its size in IHDR', () => {
   assertEquals(sizeOf(png(1600, 900)), { w: 1600, h: 900 })
   assertEquals(sizeOf(png(1, 1)), { w: 1, h: 1 })
   assertEquals(sizeOf(png(0, 0)), undefined)
   assertEquals(sizeOf(png(4, 4).slice(0, 20)), undefined)
 })
 
-Deno.test('a jpeg states its size in the frame the markers lead to', () => {
+test('a jpeg states its size in the frame the markers lead to', () => {
   assertEquals(sizeOf(jpeg(4032, 3024)), { w: 4032, h: 3024 })
   // Progressive and arithmetic frames are frames too; a table is not.
   assertEquals(sizeOf(jpeg(80, 60, 0xc2)), { w: 80, h: 60 })
@@ -75,7 +76,7 @@ Deno.test('a jpeg states its size in the frame the markers lead to', () => {
   )
 })
 
-Deno.test('a gif states its logical screen', () => {
+test('a gif states its logical screen', () => {
   assertEquals(sizeOf(gif(320, 200)), { w: 320, h: 200 })
   assertEquals(sizeOf(bytes('GIF87a', le16(6), le16(7), pad(2))), {
     w: 6,
@@ -83,7 +84,7 @@ Deno.test('a gif states its logical screen', () => {
   })
 })
 
-Deno.test('a webp states its size three different ways', () => {
+test('a webp states its size three different ways', () => {
   // lossy: behind the keyframe's sync code, 14 bits apiece
   assertEquals(
     sizeOf(riff('VP8 ', pad(3), '\x9d\x01\x2a', le16(640), le16(480), pad(4))),
@@ -112,14 +113,14 @@ Deno.test('a webp states its size three different ways', () => {
   )
 })
 
-Deno.test('a file that states no size gets none', () => {
+test('a file that states no size gets none', () => {
   assertEquals(sizeOf(new TextEncoder().encode('the guest list\n')), undefined)
   assertEquals(sizeOf(new Uint8Array(0)), undefined)
   assertEquals(sizeOf(bytes('%PDF-1.7', pad(40))), undefined)
   assertEquals(sizeOf(bytes('RIFF', be32(0), 'WAVE', pad(30))), undefined)
 })
 
-Deno.test('a picture is named by its signature, never by a guess', () => {
+test('a picture is named by its signature, never by a guess', () => {
   assertEquals(mediaTypeOf(png(1, 1)), 'image/png')
   assertEquals(mediaTypeOf(jpeg(1, 1)), 'image/jpeg')
   assertEquals(mediaTypeOf(gif(1, 1)), 'image/gif')

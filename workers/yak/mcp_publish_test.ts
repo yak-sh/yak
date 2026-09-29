@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -19,7 +20,7 @@ import {
 // Across spaces a word means what its space says (T-32728): one name, two
 // vocabularies. A bundle merges by name only where the shapes agree, and
 // otherwise the rows stay apart with the space named beside `kind`.
-Deno.test('a word two spaces spell differently stays two words', async () => {
+test('a word two spaces spell differently stays two words', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -102,7 +103,7 @@ Deno.test('a word two spaces spell differently stays two words', async () => {
 // every other space under a platform-wide name, that name is one app's — a
 // second claim on it is refused in a sentence — and withdrawing the offer
 // leaves the app, and everyone who took it, exactly as they were.
-Deno.test('an app is published by name, and the name is one app', async () => {
+test('an app is published by name, and the name is one app', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -294,7 +295,7 @@ Deno.test('an app is published by name, and the name is one app', async () => {
 // only after somebody here opens the link that says yes (gallery.ts, M-4522).
 // Then the two ways off it: withdrawing, which clears the word, and the trash,
 // which writes nothing and gives the listing back on a restore.
-Deno.test('an app reaches the gallery only when yaks.app says yes', async () => {
+test('an app reaches the gallery only when yaks.app says yes', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -513,7 +514,7 @@ Deno.test('an app reaches the gallery only when yaks.app says yes', async () => 
 // arrives only when the installer asks for it. An update keeps their data: a
 // vocabulary that only grew is grafted, one that conflicts is refused with
 // the deploy's own sentence (T-32728) and nothing moves.
-Deno.test('an installed app is the installer own copy, data and all', async () => {
+test('an installed app is the installer own copy, data and all', async () => {
   let k = await kernel()
   try {
     let jeff = await signIn(k)
@@ -667,7 +668,7 @@ Deno.test('an installed app is the installer own copy, data and all', async () =
 // it once arrived only after the copy had been minted and its code written,
 // leaving an app nobody asked for in the installer's space and counted
 // against its ceiling (T-37809).
-Deno.test(
+test(
   'an install refused on its manifest leaves nothing',
   async () => {
     let k = await kernel()

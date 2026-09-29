@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { type Action, type Bundle, define, type Renderer } from '@yaks/render'
@@ -21,7 +22,7 @@ let change = (control: Element) => {
   control.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
-Deno.test('action-valued changes deliver control values and preserve the bundle', () => {
+test('action-valued changes deliver control values and preserve the bundle', () => {
   let inputs: unknown[] = []
   let act: Action = {
     name: 'Update',
@@ -68,7 +69,7 @@ Deno.test('action-valued changes deliver control values and preserve the bundle'
   }
 })
 
-Deno.test('failed actions report validity and a successful edit clears it', () => {
+test('failed actions report validity and a successful edit clears it', () => {
   let errors: unknown[] = []
   let patches: unknown[] = []
   let validity: string[] = []
@@ -113,7 +114,7 @@ Deno.test('failed actions report validity and a successful edit clears it', () =
   }
 })
 
-Deno.test('ordinary handlers keep the host event', () => {
+test('ordinary handlers keep the host event', () => {
   let seen: Event[] = []
   let registry = define([{
     view: 'Edit',
@@ -130,7 +131,7 @@ Deno.test('ordinary handlers keep the host event', () => {
   }
 })
 
-Deno.test('malformed browser input cannot clear a value and custom errors can recover', () => {
+test('malformed browser input cannot clear a value and custom errors can recover', () => {
   let patches: unknown[] = []
   let errors: unknown[] = []
   let validity: string[] = []
@@ -177,7 +178,7 @@ Deno.test('malformed browser input cannot clear a value and custom errors can re
   }
 })
 
-Deno.test('nested views use the same registry, context and native source props', () => {
+test('nested views use the same registry, context and native source props', () => {
   type Ent = { eid: string; title: string }
   let source: Ent = { eid: 'a', title: 'Native' }
   let props: Renderer = {

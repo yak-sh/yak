@@ -1,6 +1,7 @@
 // The public Entity door mounted through Preact: data and address changes must
 // repaint, while each mounted entity owns exactly its own subscription.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h, type VNode } from 'preact'
 import { useLayoutEffect, useState } from 'preact/hooks'
@@ -72,7 +73,7 @@ let source = () => {
   }
 }
 
-Deno.test('Entity mounts the selected view and passes context, including properties', () => {
+test('Entity mounts the selected view and passes context, including properties', () => {
   let Entity = entity({ registry, vocab, store: () => bundle('a', 'A page') })
   let m = mount(h(Entity, { eid: 'a', view: 'Board.Tile', suffix: '!' }))
   try {
@@ -88,7 +89,7 @@ Deno.test('Entity mounts the selected view and passes context, including propert
   }
 })
 
-Deno.test('notifications repaint replaced and in-place bundles, then release on unmount', async () => {
+test('notifications repaint replaced and in-place bundles, then release on unmount', async () => {
   let s = source()
   let Entity = entity({ registry, vocab, ...s })
   let m = mount(h(Entity, { eid: 'a', view: 'Tile' }))
@@ -109,7 +110,7 @@ Deno.test('notifications repaint replaced and in-place bundles, then release on 
   assertEquals(s.count('a'), 0)
 })
 
-Deno.test('changing eid removes the old listener; shared readers keep their own', async () => {
+test('changing eid removes the old listener; shared readers keep their own', async () => {
   let s = source()
   let Entity = entity({ registry, vocab, ...s })
   let m = mount(
@@ -144,7 +145,7 @@ Deno.test('changing eid removes the old listener; shared readers keep their own'
   assertEquals([s.count('a'), s.count('b')], [0, 0])
 })
 
-Deno.test('a missing bundle can arrive and disappear through the same subscription', async () => {
+test('a missing bundle can arrive and disappear through the same subscription', async () => {
   let s = source()
   let Entity = entity({ registry, vocab, ...s })
   let m = mount(h(Entity, { eid: 'later', view: 'Tile' }))
@@ -164,7 +165,7 @@ Deno.test('a missing bundle can arrive and disappear through the same subscripti
   }
 })
 
-Deno.test('a change during subscription is not lost before the listener is ready', async () => {
+test('a change during subscription is not lost before the listener is ready', async () => {
   let row = bundle('a', 'Before')
   let Entity = entity({
     registry,
@@ -184,7 +185,7 @@ Deno.test('a change during subscription is not lost before the listener is ready
   }
 })
 
-Deno.test('portable rendering preserves the host node type and hyperscript', () => {
+test('portable rendering preserves the host node type and hyperscript', () => {
   let node: VNode<Record<string, unknown>> | null = render(
     registry,
     bundle('a'),
@@ -199,7 +200,7 @@ Deno.test('portable rendering preserves the host node type and hyperscript', () 
   }
 })
 
-Deno.test('native views own hook state and cleanup across view changes', async () => {
+test('native views own hook state and cleanup across view changes', async () => {
   let cleaned: string[] = []
   let face = (view: string): ComponentRenderer => ({
     view,
@@ -235,7 +236,7 @@ Deno.test('native views own hook state and cleanup across view changes', async (
   assertEquals(cleaned, ['Tile', 'Full'])
 })
 
-Deno.test('native props preserve the application entity beside a matchable bundle', () => {
+test('native props preserve the application entity beside a matchable bundle', () => {
   type Ent = { eid: string; kids: string[] }
   let e: Ent = { eid: 'a', kids: ['b'] }
   let registry = define<ComponentRenderer<Ent>>([{

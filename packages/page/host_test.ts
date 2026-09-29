@@ -2,6 +2,7 @@
 // package that starts a process, so the check is a real one — a command, its
 // output, its failures — against a file this test wrote and removes.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { archiver } from './host.ts'
 
@@ -11,7 +12,7 @@ let written = async (text: string) => {
   return path
 }
 
-Deno.test('an archiver is the command a config names', async () => {
+test('an archiver is the command a config names', async () => {
   let path = await written('<title>Local</title>')
   try {
     let said = await archiver({ run: ['cat', '{url}'] })(path)
@@ -23,7 +24,7 @@ Deno.test('an archiver is the command a config names', async () => {
   }
 })
 
-Deno.test('a capture that did not happen says so', async () => {
+test('a capture that did not happen says so', async () => {
   // the tool's own words, not a shrug
   await assertRejects(
     () => archiver({ run: ['cat', '{url}'] })('/nowhere/at/all'),

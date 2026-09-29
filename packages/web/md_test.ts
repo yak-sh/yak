@@ -1,11 +1,12 @@
 // The markdown door's contract — the behaviors the app leans on. If a
 // re-vendored marked or a config change breaks one, this says so.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { md, mdAbs, mdInline, mdMentions } from './md.ts'
 import { prefix } from './types.ts'
 
-Deno.test('mdInline: title markup has no block wrapper or nested links', () => {
+test('mdInline: title markup has no block wrapper or nested links', () => {
   assertEquals(
     mdInline('designs use `task design` and **prose**'),
     'designs use <code>task design</code> and <strong>prose</strong>',
@@ -14,16 +15,16 @@ Deno.test('mdInline: title markup has no block wrapper or nested links', () => {
   assertEquals(mdInline('![alt](https://y.z/x.png)'), 'alt')
 })
 
-Deno.test('md: paragraphs are <p>, not a wall of <br>', () => {
+test('md: paragraphs are <p>, not a wall of <br>', () => {
   assertEquals(md('one\n\ntwo').trim(), '<p>one</p>\n<p>two</p>')
 })
 
-Deno.test('md: intra-word underscores stay literal', () => {
+test('md: intra-word underscores stay literal', () => {
   assertStringIncludes(md('foo_bar and bar_baz'), 'foo_bar and bar_baz')
   assertEquals(md('a _point_ made').trim(), '<p>a <em>point</em> made</p>')
 })
 
-Deno.test('md: gfm tables render', () => {
+test('md: gfm tables render', () => {
   let html = md('| a | b |\n| - | - |\n| 1 | 2 |')
   assertStringIncludes(html, '<table>')
   assertStringIncludes(html, '<td>1</td>')
@@ -31,13 +32,13 @@ Deno.test('md: gfm tables render', () => {
 
 // hljs highlights the fence — grammar compile and, absent a language, auto-
 // detection across every registered grammar.
-Deno.test('md: fenced code with blank lines survives whole', () => {
+test('md: fenced code with blank lines survives whole', () => {
   let html = md('```\none\n\ntwo\n```')
   assertStringIncludes(html, '<pre><code class="hljs')
   assertStringIncludes(html, '</span>\n\ntwo')
 })
 
-Deno.test('md: fenced code follows its language or detects one', () => {
+test('md: fenced code follows its language or detects one', () => {
   let typed = md("```ts\nlet name: string = 'Ada'\n```")
   assertStringIncludes(typed, '<code class="hljs language-ts">')
   assertStringIncludes(typed, '<span class="hljs-keyword">let</span>')
@@ -50,7 +51,7 @@ Deno.test('md: fenced code follows its language or detects one', () => {
   assertStringIncludes(detected, '<span class="hljs-keyword">def</span>')
 })
 
-Deno.test('md: a bare id auto-links with data-ref', () => {
+test('md: a bare id auto-links with data-ref', () => {
   assertStringIncludes(
     md('see T-123 for the plan'),
     '<a href="/T-123" data-ref="T-123">T-123</a>',
@@ -58,7 +59,7 @@ Deno.test('md: a bare id auto-links with data-ref', () => {
   assertStringIncludes(md('N-9 and P-19'), 'data-ref="N-9"')
 })
 
-Deno.test('md: sigilled ids link with an encoded path, not a browser fragment', () => {
+test('md: sigilled ids link with an encoded path, not a browser fragment', () => {
   let id = '#3f9a1c2e7b'
   let path = '/' + encodeURIComponent(id)
   assertStringIncludes(md(`see ${id}`), `href="${path}" data-ref="${id}"`)
@@ -72,7 +73,7 @@ Deno.test('md: sigilled ids link with an encoded path, not a browser fragment', 
   assertEquals(mdMentions('see T#3f9a1c2e7b'), [])
 })
 
-Deno.test('md: a written link aims at an id', () => {
+test('md: a written link aims at an id', () => {
   assertStringIncludes(
     md('[my task idea](T-123)'),
     '<a href="/T-123" data-ref="T-123">my task idea</a>',
@@ -81,7 +82,7 @@ Deno.test('md: a written link aims at an id', () => {
   assertStringIncludes(md('[x](https://y.z)'), 'href="https://y.z"')
 })
 
-Deno.test('mdMentions follows markdown link semantics in written order', () => {
+test('mdMentions follows markdown link semantics in written order', () => {
   assertEquals(
     mdMentions(
       'T-2 then [site](https://x.test) then T-2 and `T-3` ![pic](/p.png)',
@@ -95,7 +96,7 @@ Deno.test('mdMentions follows markdown link semantics in written order', () => {
   )
 })
 
-Deno.test('mdMentions refuses quote and escape debris in URLs', () => {
+test('mdMentions refuses quote and escape debris in URLs', () => {
   assertEquals(
     mdMentions(
       'https://x.test/"quote https://x.test/\\escape https://x.test/clean',
@@ -104,7 +105,7 @@ Deno.test('mdMentions refuses quote and escape debris in URLs', () => {
   )
 })
 
-Deno.test('md: ids in code stay literal; mid-word letters stay words', () => {
+test('md: ids in code stay literal; mid-word letters stay words', () => {
   assertEquals(md('`T-123`').includes('data-ref'), false)
   assertEquals(md('```\nT-123\n```').includes('data-ref'), false)
   assertEquals(md('UTF-8 and SHA-256').includes('data-ref'), false)
@@ -114,7 +115,7 @@ Deno.test('md: ids in code stay literal; mid-word letters stay words', () => {
   assertEquals(md(`${unknown}-123`).includes('data-ref'), false)
 })
 
-Deno.test('md: a code-span commit links through its project repo', () => {
+test('md: a code-span commit links through its project repo', () => {
   let html = md('landed as `46dcd3f`', 'https://github.com/acme/widget')
   assertStringIncludes(
     html,
@@ -131,14 +132,14 @@ Deno.test('md: a code-span commit links through its project repo', () => {
   )
 })
 
-Deno.test('md: a repo setting cannot inject an attribute', () => {
+test('md: a repo setting cannot inject an attribute', () => {
   let html = md('`46dcd3f`', 'javascript:alert(1)" autofocus="')
   assertEquals(html.includes('<a '), false)
 })
 
 // mdAbs is the same door for a reader with no base document: a mail
 // client resolves the canvas's `/T-123` as `http:///T-123` (T-12558).
-Deno.test('mdAbs: ids link to the public door, without data-ref', () => {
+test('mdAbs: ids link to the public door, without data-ref', () => {
   assertStringIncludes(
     mdAbs('see T-123 for the plan'),
     '<a href="https://tasks.yak.sh/T-123">T-123</a>',
@@ -151,7 +152,7 @@ Deno.test('mdAbs: ids link to the public door, without data-ref', () => {
   assertEquals(mdAbs('T-123').includes('href="/'), false)
 })
 
-Deno.test('mdAbs: everything else renders as the canvas does', () => {
+test('mdAbs: everything else renders as the canvas does', () => {
   assertStringIncludes(mdAbs('[x](https://y.z)'), 'href="https://y.z"')
   assertEquals(mdAbs('`T-123`').includes('tasks.yak.sh'), false)
   assertEquals(mdAbs('```\nT-123\n```').includes('tasks.yak.sh'), false)
@@ -167,7 +168,7 @@ Deno.test('mdAbs: everything else renders as the canvas does', () => {
 
 // The canvas anchor is what nav.tsx's delegated listeners bind to — a
 // table cell renders it exactly like prose does.
-Deno.test('md: an id in a table cell keeps the canvas anchor', () => {
+test('md: an id in a table cell keeps the canvas anchor', () => {
   assertStringIncludes(
     md('| a |\n| - |\n| T-123 |'),
     '<td><a href="/T-123" data-ref="T-123">T-123</a></td>',
@@ -180,7 +181,7 @@ Deno.test('md: an id in a table cell keeps the canvas anchor', () => {
 let doors = { md, mdAbs }
 
 for (let [door, render] of Object.entries(doors)) {
-  Deno.test(`${door}: html written in a body renders as text`, () => {
+  test(`${door}: html written in a body renders as text`, () => {
     for (
       let payload of [
         '<script>alert(1)</script>',
@@ -204,7 +205,7 @@ for (let [door, render] of Object.entries(doors)) {
     }
   })
 
-  Deno.test(`${door}: a url that could carry a scheme never becomes an href`, () => {
+  test(`${door}: a url that could carry a scheme never becomes an href`, () => {
     for (
       let payload of [
         '[x](javascript:alert(1))',
@@ -225,7 +226,7 @@ for (let [door, render] of Object.entries(doors)) {
   })
 
   // The words survive the refusal — a reader still sees what was written.
-  Deno.test(`${door}: a refused link keeps its text and its markup`, () => {
+  test(`${door}: a refused link keeps its text and its markup`, () => {
     assertStringIncludes(
       render('[a **bold** trap](javascript:alert(1))'),
       '<strong>bold</strong>',
@@ -233,7 +234,7 @@ for (let [door, render] of Object.entries(doors)) {
   })
 
   // Everything a url can legitimately be still links.
-  Deno.test(`${door}: ordinary urls still link`, () => {
+  test(`${door}: ordinary urls still link`, () => {
     for (
       let [payload, href] of [
         ['[x](https://y.z/a?b=c#d)', 'https://y.z/a?b=c#d'],
@@ -258,7 +259,7 @@ for (let [door, render] of Object.entries(doors)) {
 
   // The door's OWN output is not content: our anchors and marked's own
   // escaping of code, titles and lang all still stand.
-  Deno.test(`${door}: what we generate is untouched`, () => {
+  test(`${door}: what we generate is untouched`, () => {
     assertStringIncludes(render('T-123'), 'href=')
     assertStringIncludes(render('| a |\n| - |\n| 1 |'), '<table>')
     assertStringIncludes(render('- [ ] todo'), 'type="checkbox"')

@@ -1,5 +1,6 @@
 // The web tray hotkey respects normal mode, editable controls, and browser
 // shortcuts before it toggles the tray state.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -17,7 +18,7 @@ import {
 } from './Tray.tsx'
 import { graphStanding } from './session_status.tsx'
 
-Deno.test('t opens and closes the tray only from normal mode', () => {
+test('t opens and closes the tray only from normal mode', () => {
   trayOpen.value = false
   mode.value = 'insert'
   assertEquals(trayKey('t'), false)
@@ -45,14 +46,14 @@ let run = (x: Partial<Ent> = {}, at?: string): Ent => ({
   ...x,
 })
 
-Deno.test('the tray keeps a newly started session visible', () => {
+test('the tray keeps a newly started session visible', () => {
   let now = Date.parse('2026-08-12T00:30:00-04:00')
   assertEquals(trayRecent(run({}, '2026-08-12T00:20:00-04:00'), now), true)
   assertEquals(trayRecent(run({}, '2026-08-11T12:00:00-04:00'), now), false)
   assertEquals(trayRecent(run(), now), false)
 })
 
-Deno.test('old pending work is hidden without a runner; recent idle work remains visible', () => {
+test('old pending work is hidden without a runner; recent idle work remains visible', () => {
   let now = Date.parse('2026-09-27T12:00:00Z')
   let old = run(
     { session: { eid: 'session', id: 'run', status: 'pending' } },
@@ -69,7 +70,7 @@ Deno.test('old pending work is hidden without a runner; recent idle work remains
   assertEquals(trayShown('old', old, expired, now), false)
 })
 
-Deno.test('tray sessions put live work first, then recent work', () => {
+test('tray sessions put live work first, then recent work', () => {
   assertEquals(
     traySessions([
       ['unstarted', run()],
@@ -90,7 +91,7 @@ Deno.test('tray sessions put live work first, then recent work', () => {
   )
 })
 
-Deno.test('tray live classification uses a current lease or unexited process, never status', () => {
+test('tray live classification uses a current lease or unexited process, never status', () => {
   let now = Date.parse('2026-08-12T12:00:00Z')
   let running = run({
     session: { eid: 'session', id: 'run', status: 'running' },
@@ -128,7 +129,7 @@ Deno.test('tray live classification uses a current lease or unexited process, ne
   )
 })
 
-Deno.test('the tray shows live and recent sessions in separate sections', () => {
+test('the tray shows live and recent sessions in separate sections', () => {
   cache.value = {
     live: {
       entity: { eid: 'live', num: 1 },
@@ -169,7 +170,7 @@ let status = (s: Session['status'], standing?: string) =>
   run({ session: { eid: 'session', id: 'run', status: s, standing } })
 
 // The dot's word is the status the host derived, idle between turns.
-Deno.test('graph-native status follows the host', () => {
+test('graph-native status follows the host', () => {
   assertEquals(graphStanding(status('pending')), 'pending')
   assertEquals(graphStanding(status('running')), 'running')
   assertEquals(graphStanding(status('running', 'idle')), 'idle')
@@ -179,7 +180,7 @@ Deno.test('graph-native status follows the host', () => {
 })
 
 // A failure recorded on the session outranks whatever the transcript says.
-Deno.test('a session exception reads failed while the session rests', () => {
+test('a session exception reads failed while the session rests', () => {
   let e = status('running', 'idle')
   e.exception = {
     eid: e.eid,

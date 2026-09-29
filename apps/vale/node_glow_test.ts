@@ -1,6 +1,7 @@
 // Rare resource motes as the scene's particle pool receives them.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { AIRS } from './air.ts'
 import { LODES } from './gather.ts'
@@ -42,7 +43,7 @@ let run = (nodes: Seen[], phone = false) => {
   return { scene, emitted, light }
 }
 
-Deno.test('finer resources send more visible, distinct moving motes', () => {
+test('finer resources send more visible, distinct moving motes', () => {
   let tiers = ['uncommon', 'rare', 'epic', 'legendary'] as const
   let outputs = tiers.map((rarity) => run([node(rarity)]))
   let counts = outputs.map((o) => o.emitted.length)
@@ -66,7 +67,7 @@ Deno.test('finer resources send more visible, distinct moving motes', () => {
   for (let o of outputs) o.light.dispose()
 })
 
-Deno.test('phone mote work stays bounded and spent resources go quiet', () => {
+test('phone mote work stays bounded and spent resources go quiet', () => {
   let nodes = Array.from({ length: 25 }, (_, i) => node('legendary', i))
   let { scene, emitted, light } = run(nodes, true)
   assert(emitted.length <= 60)

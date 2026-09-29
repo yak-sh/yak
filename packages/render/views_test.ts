@@ -1,6 +1,7 @@
 // The views as a terminal prints them: the same renderers a browser mounts,
 // through @yaks/text, with a package's own views ahead of the generic ones.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { views as docViews } from '@yaks/doc/views'
 import { docDoc } from '@yaks/doc'
@@ -50,20 +51,20 @@ let ctx: Shown<Node> = {
 let text = (b: object, view: string, extra: Partial<Shown<Node>> = {}) =>
   plain(tree(registry, b as never, view, vocab, { ...ctx, ...extra }))
 
-Deno.test('a tile is the id, the title and the status the marks give', () => {
+test('a tile is the id, the title and the status the marks give', () => {
   assertEquals(text(task, 'Tile'), 'T-9 Web door open')
   assertEquals(text(done, 'Tile'), 'T-4 Reserve a name done')
 })
 
-Deno.test('an entity with no title is called by its id', () => {
+test('an entity with no title is called by its id', () => {
   assertEquals(text({ entity: { eid: WEB, num: 9 } }, 'Title'), 'T-9')
 })
 
-Deno.test('a comment names its author and when, then its body', () => {
+test('a comment names its author and when, then its body', () => {
   assertEquals(text(comment, 'Comment'), 'Jeff (/P-2) · today\n\nLooks right.')
 })
 
-Deno.test('a page gathers its relations and comments through show', () => {
+test('a page gathers its relations and comments through show', () => {
   let page = text(task, 'Page', {
     relations: [{ title: 'requires', items: [done] }, {
       title: 'empty',

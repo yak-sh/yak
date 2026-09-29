@@ -1,6 +1,7 @@
 // The status rule, from all three doors — and the point of the exercise: the
 // three agree, because they are built from one list.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { col, render } from '@yaks/sql'
@@ -37,23 +38,23 @@ let CASES: [Bundle, string | null][] = [
   [task({ task: { status: 'open' }, completed: {} }), 'done'],
 ]
 
-Deno.test('statusOf reads the marks in ladder order, then the status carried', () => {
+test('statusOf reads the marks in ladder order, then the status carried', () => {
   for (let [b, want] of CASES) assertEquals(statusOf(b), want, b.entity.eid)
 })
 
-Deno.test('compute answers exactly what statusOf answers', () => {
+test('compute answers exactly what statusOf answers', () => {
   let read = compute()['task.status']
   for (let [b, want] of CASES) assertEquals(read(b), want)
 })
 
-Deno.test('the closed set is the ladder plus open, and settled is the end', () => {
+test('the closed set is the ladder plus open, and settled is the end', () => {
   assertEquals(statuses(), ['cancelled', 'done', OPEN])
   assert(settled('done'))
   assert(settled('cancelled'))
   assert(!settled(OPEN))
 })
 
-Deno.test('an added rung reaches every reader at once', () => {
+test('an added rung reaches every reader at once', () => {
   let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
   assertEquals(statusOf(task({ claim: { person: 'p1' } }), marks), 'wip')
   assertEquals(statuses(marks), ['cancelled', 'done', 'wip', OPEN])
@@ -63,7 +64,7 @@ Deno.test('an added rung reaches every reader at once', () => {
   assertEquals(statusOf(task({ claim: {}, completed: {} }), marks), 'done')
 })
 
-Deno.test('derived writes the ladder as SQL, guarded by the owner null', () => {
+test('derived writes the ladder as SQL, guarded by the owner null', () => {
   let prop = derived()['task.status']
   assertEquals(prop.tag, 'enum')
   assertEquals(prop.values, ['cancelled', 'done', OPEN])
@@ -75,7 +76,7 @@ Deno.test('derived writes the ladder as SQL, guarded by the owner null', () => {
   assert(sql.endsWith(`else '${OPEN}' end`), sql)
 })
 
-Deno.test('derived widens its members with the ladder', () => {
+test('derived widens its members with the ladder', () => {
   let marks = [...MARKS, { status: 'wip', comp: 'claim', settled: false }]
   let prop = derived(marks)['task.status']
   assertEquals(prop.values, ['cancelled', 'done', 'wip', OPEN])

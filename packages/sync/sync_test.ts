@@ -5,6 +5,7 @@
 // socket catches up on what it missed. No network, no timers, no sleeps — the
 // harness is the wire.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, dead, Refused } from '@yaks/graph'
 import { at, client, comp, COOK, server } from './testing.ts'
@@ -15,7 +16,7 @@ let dal = (eid = 'r1'): Bundle => ({
   recipe: { serves: 4, course: 'dinner' },
 })
 
-Deno.test('a local apply lands on the server, minus what is local-tier', async () => {
+test('a local apply lands on the server, minus what is local-tier', async () => {
   let srv = server()
   let c = client(srv)
   c.graph.apply([{ ...dal(), draft: { text: 'more cumin?' } }])
@@ -32,7 +33,7 @@ Deno.test('a local apply lands on the server, minus what is local-tier', async (
   c.wire.close()
 })
 
-Deno.test("the server's number and stamps land back on the client", async () => {
+test("the server's number and stamps land back on the client", async () => {
   let srv = server()
   // Two entities the client knows nothing about: a number the client guessed
   // for the recipe would be one of theirs.
@@ -53,7 +54,7 @@ Deno.test("the server's number and stamps land back on the client", async () => 
   c.wire.close()
 })
 
-Deno.test('a second client sees the bundles, and a delete arrives as gone', async () => {
+test('a second client sees the bundles, and a delete arrives as gone', async () => {
   let srv = server()
   let a = client(srv)
   let b = client(srv)
@@ -74,7 +75,7 @@ Deno.test('a second client sees the bundles, and a delete arrives as gone', asyn
   b.wire.close()
 })
 
-Deno.test('a subscriber hears an edit that pushes an entity out of the set', async () => {
+test('a subscriber hears an edit that pushes an entity out of the set', async () => {
   let srv = server()
   let a = client(srv)
   let b = client(srv)
@@ -92,7 +93,7 @@ Deno.test('a subscriber hears an edit that pushes an entity out of the set', asy
   b.wire.close()
 })
 
-Deno.test('a server refusal reverts the client and is reported', async () => {
+test('a server refusal reverts the client and is reported', async () => {
   let srv = server()
   srv.graph.use({
     name: 'the cook',
@@ -131,7 +132,7 @@ Deno.test('a server refusal reverts the client and is reported', async () => {
   c.wire.close()
 })
 
-Deno.test('a refused store write keeps local and relayed values', async () => {
+test('a refused store write keeps local and relayed values', async () => {
   let srv = server()
   srv.graph.use({
     name: 'the cook',
@@ -172,7 +173,7 @@ Deno.test('a refused store write keeps local and relayed values', async () => {
   b.wire.close()
 })
 
-Deno.test('a refused write on an entity the server never had leaves it bare', async () => {
+test('a refused write on an entity the server never had leaves it bare', async () => {
   let srv = server()
   srv.graph.use({
     name: 'the cook',
@@ -192,7 +193,7 @@ Deno.test('a refused write on an entity the server never had leaves it bare', as
   c.wire.close()
 })
 
-Deno.test('a delete waits for the server, and a refused one leaves the entity', async () => {
+test('a delete waits for the server, and a refused one leaves the entity', async () => {
   let srv = server()
   srv.graph.use({
     name: 'the cook',
@@ -218,7 +219,7 @@ Deno.test('a delete waits for the server, and a refused one leaves the entity', 
   c.wire.close()
 })
 
-Deno.test("an accepted delete lands from the server's answer", async () => {
+test("an accepted delete lands from the server's answer", async () => {
   let srv = server()
   let c = client(srv)
   c.graph.apply([dal()])
@@ -233,7 +234,7 @@ Deno.test("an accepted delete lands from the server's answer", async () => {
   c.wire.close()
 })
 
-Deno.test('a dropped socket resubscribes and catches up on what it missed', async () => {
+test('a dropped socket resubscribes and catches up on what it missed', async () => {
   let srv = server()
   let a = client(srv)
   let b = client(srv)
@@ -265,7 +266,7 @@ Deno.test('a dropped socket resubscribes and catches up on what it missed', asyn
   b.wire.close()
 })
 
-Deno.test('what came from the server is never sent back to it', async () => {
+test('what came from the server is never sent back to it', async () => {
   let srv = server()
   let c = client(srv)
   c.wire.subscribe(true, 'all')
@@ -289,7 +290,7 @@ Deno.test('what came from the server is never sent back to it', async () => {
   counted.wire.close()
 })
 
-Deno.test('a subscription refused by the server is reported, not applied', async () => {
+test('a subscription refused by the server is reported, not applied', async () => {
   let srv = server()
   let c = client(srv)
   c.wire.subscribe('.nonsense=1', 'bad')
@@ -299,7 +300,7 @@ Deno.test('a subscription refused by the server is reported, not applied', async
   c.wire.close()
 })
 
-Deno.test('an unreachable server reverts nothing: the batch may have landed', async () => {
+test('an unreachable server reverts nothing: the batch may have landed', async () => {
   let srv = server()
   let c = client(srv)
   let g = c.graph
@@ -337,7 +338,7 @@ let pointing = async () => {
   return { srv, a, b, finger, point }
 }
 
-Deno.test("a peer's value reaches the others, and is stored nowhere", async () => {
+test("a peer's value reaches the others, and is stored nowhere", async () => {
   let { srv, a, b, finger, point } = await pointing()
   await point({ x: 3, y: 9 })
   assertEquals(finger(), { x: 3, y: 9 })
@@ -353,7 +354,7 @@ Deno.test("a peer's value reaches the others, and is stored nowhere", async () =
   b.wire.close()
 })
 
-Deno.test("a peer's value goes with its connection", async () => {
+test("a peer's value goes with its connection", async () => {
   let { a, b, finger, point } = await pointing()
   await point({ x: 3, y: 9 })
   a.socket()!.close()
@@ -363,7 +364,7 @@ Deno.test("a peer's value goes with its connection", async () => {
   b.wire.close()
 })
 
-Deno.test('a late subscriber hears what is already being said', async () => {
+test('a late subscriber hears what is already being said', async () => {
   let { srv, a, b, point } = await pointing()
   await point({ x: 3, y: 9 })
   let c = client(srv)
@@ -373,7 +374,7 @@ Deno.test('a late subscriber hears what is already being said', async () => {
   for (let x of [a, b, c]) x.wire.close()
 })
 
-Deno.test('a reconnect clears a value that stopped while it was away', async () => {
+test('a reconnect clears a value that stopped while it was away', async () => {
   let { a, b, finger, point } = await pointing()
   await point({ x: 3, y: 9 })
   b.socket()!.close() // deaf: the clearing below never reaches it
@@ -386,7 +387,7 @@ Deno.test('a reconnect clears a value that stopped while it was away', async () 
   b.wire.close()
 })
 
-Deno.test('a reconnect keeps what this page is saying, and the others hear it again', async () => {
+test('a reconnect keeps what this page is saying, and the others hear it again', async () => {
   let { a, b, finger, point } = await pointing()
   await point({ x: 3, y: 9 })
   a.socket()!.close()
@@ -420,7 +421,7 @@ let reading = async () => {
   return { a, read, said, heard, done }
 }
 
-Deno.test('a paced value is sent about once a pace, and the last always arrives', async () => {
+test('a paced value is sent about once a pace, and the last always arrives', async () => {
   let { a, read, said, heard, done } = await reading()
   for (let n = 0; n < 60; n++) {
     read(n)
@@ -433,7 +434,7 @@ Deno.test('a paced value is sent about once a pace, and the last always arrives'
   done()
 })
 
-Deno.test('a clear is sent at once, and what it cleared never follows', async () => {
+test('a clear is sent at once, and what it cleared never follows', async () => {
   let { a, read, said, heard, done } = await reading()
   read(1)
   read(2) // inside the pace: waiting

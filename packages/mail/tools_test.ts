@@ -1,6 +1,7 @@
 // What the mail words DO when somebody types them: the inbox predicate, the
 // mark reading leaves, the far side a reply is aimed at, and the check.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
 import { clubhouse } from './testing.ts'
@@ -69,7 +70,7 @@ let arrival = (eid: string, o: Record<string, unknown> = {}) => ({
   },
 })
 
-Deno.test('the inbox is what is addressed to you and not archived', async () => {
+test('the inbox is what is addressed to you and not archived', async () => {
   let { g } = await club()
   await g.apply([
     arrival('a1'),
@@ -97,7 +98,7 @@ Deno.test('the inbox is what is addressed to you and not archived', async () => 
   await assertRejects(() => ask(g, 'inbox_list'), Error, 'nobody is asking')
 })
 
-Deno.test('an address you wear puts a letter in your inbox', async () => {
+test('an address you wear puts a letter in your inbox', async () => {
   let { g } = await club()
   // Ana wears the address the letter was delivered to, and nothing routed it.
   await g.apply([
@@ -111,7 +112,7 @@ Deno.test('an address you wear puts a letter in your inbox', async () => {
   assertEquals(ids(await ask(g, 'inbox_list', { who: 'ana' })), ['a1'])
 })
 
-Deno.test('archiving is the one act that hides, and --all is the way back', async () => {
+test('archiving is the one act that hides, and --all is the way back', async () => {
   let { g } = await club()
   await g.apply([arrival('a1')])
   await did(g, 'inbox_archive', { item: 'a1' })
@@ -122,7 +123,7 @@ Deno.test('archiving is the one act that hides, and --all is the way back', asyn
   )
 })
 
-Deno.test('reading a letter marks it, and shows its thread', async () => {
+test('reading a letter marks it, and shows its thread', async () => {
   let { g } = await club()
   await g.apply([
     arrival('a1'),
@@ -155,7 +156,7 @@ Deno.test('reading a letter marks it, and shows its thread', async () => {
   )
 })
 
-Deno.test('a reply to an arrival goes to its author, from the desk it came to', async () => {
+test('a reply to an arrival goes to its author, from the desk it came to', async () => {
   let { g, post } = await club()
   await g.apply([arrival('a1')])
   let landed = await did(g, 'mail_reply', {
@@ -176,7 +177,7 @@ Deno.test('a reply to an arrival goes to its author, from the desk it came to', 
   assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
 })
 
-Deno.test('a reply to your own letter goes to whom you wrote it', async () => {
+test('a reply to your own letter goes to whom you wrote it', async () => {
   let { g } = await club()
   await g.apply([
     { entity: { eid: 'ana' }, email: { address: 'ana@books.example' } },
@@ -195,7 +196,7 @@ Deno.test('a reply to your own letter goes to whom you wrote it', async () => {
   assertEquals(landed.find((b) => b.entity.eid == 'a1'), undefined)
 })
 
-Deno.test('a letter nobody can answer is refused rather than misdelivered', async () => {
+test('a letter nobody can answer is refused rather than misdelivered', async () => {
   let { g } = await club()
   await g.apply([{
     entity: { eid: 'a1' },
@@ -210,7 +211,7 @@ Deno.test('a letter nobody can answer is refused rather than misdelivered', asyn
   )
 })
 
-Deno.test('sending mints the address it is for, and goes', async () => {
+test('sending mints the address it is for, and goes', async () => {
   let { g, post } = await club()
   await did(g, 'mail_send', {
     to: 'Nina@Elsewhere.Example',
@@ -227,7 +228,7 @@ Deno.test('sending mints the address it is for, and goes', async () => {
   assertEquals(post.last()?.subject, 'Thursday')
 })
 
-Deno.test('who is asking supplies the from address, and its absence is loud', async () => {
+test('who is asking supplies the from address, and its absence is loud', async () => {
   let { g, post } = await club()
   await did(g, 'mail_send', {
     to: 'nina@elsewhere.example',
@@ -247,7 +248,7 @@ Deno.test('who is asking supplies the from address, and its absence is loud', as
   )
 })
 
-Deno.test('a letter to somebody already in the book reuses their row', async () => {
+test('a letter to somebody already in the book reuses their row', async () => {
   let { g } = await club()
   await did(g, 'mail_send', {
     to: 'hello@books.example',
@@ -259,7 +260,7 @@ Deno.test('a letter to somebody already in the book reuses their row', async () 
   assertEquals(comp(letter, 'doc').title, 'Note to self')
 })
 
-Deno.test('Re: piles no higher than one', () => {
+test('Re: piles no higher than one', () => {
   assertEquals(reSubject('Potluck'), 'Re: Potluck')
   assertEquals(reSubject('Re: re: Fwd: Potluck'), 'Re: Potluck')
 })
@@ -281,7 +282,7 @@ let posted = async (mail: Record<string, unknown>) => {
   return g
 }
 
-Deno.test('a letter that arrived with a sender is nothing to report', async () => {
+test('a letter that arrived with a sender is nothing to report', async () => {
   let said = await checkup(
     await posted({ from: 'ana@books.example', message_id: '<a@x>' }),
   )
@@ -290,19 +291,19 @@ Deno.test('a letter that arrived with a sender is nothing to report', async () =
   assertEquals(said.source, 'c1')
 })
 
-Deno.test('a letter that arrived with no sender is a fail', async () => {
+test('a letter that arrived with no sender is a fail', async () => {
   let said = await checkup(await posted({ message_id: '<a@x>' }))
   assertEquals(said.level, 'fail')
   assert(said.body.includes('arrived with no sender'), said.body)
 })
 
-Deno.test('a letter nobody received is not the check’s business', async () => {
+test('a letter nobody received is not the check’s business', async () => {
   // No Message-ID: composed here, and ./send.ts is what refuses it a sender.
   let said = await checkup(await posted({ to: 'ana@books.example' }))
   assertEquals(said.level, undefined)
 })
 
-Deno.test('a sender this host cannot build is what the check says out loud', async () => {
+test('a sender this host cannot build is what the check says out loud', async () => {
   // Missing config never stops the boot (./effects.ts), so the check is where
   // a graph whose letters are going nowhere finds out.
   let said = await checkup(await posted({ to: 'ana@books.example' }), {

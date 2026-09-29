@@ -1,6 +1,7 @@
 // The door's half: a request says which run it speaks for, and what it writes
 // carries that run and whoever the run speaks as.
 
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -39,7 +40,7 @@ let asking = (said?: string) =>
     }),
   )
 
-Deno.test('the run a request names is who its writes are by, and through', async () => {
+test('the run a request names is who its writes are by, and through', async () => {
   assertEquals(await asking('abc'), { by: 'p1', via: 's1' })
   // However the caller names it — the harness's name, the id a person says,
   // the eid — it is one run.
@@ -47,7 +48,7 @@ Deno.test('the run a request names is who its writes are by, and through', async
   assertEquals(await asking('s1'), { by: 'p1', via: 's1' })
 })
 
-Deno.test('a request naming nobody, or a run this graph never saw, is left to the host', async () => {
+test('a request naming nobody, or a run this graph never saw, is left to the host', async () => {
   assertEquals(await asking(), null)
   assertEquals(await asking('nothing-here'), null)
 })

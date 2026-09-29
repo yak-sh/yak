@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Deploy, gate, records, split, stages } from './deploy-gate.ts'
 
@@ -10,7 +11,7 @@ let row = (seconds: number, n = 0): Deploy => ({
 })
 let history = (...times: number[]) => times.map(row)
 
-Deno.test('deploy records: JSONL, blank lines, and unavailable historical live times', () => {
+test('deploy records: JSONL, blank lines, and unavailable historical live times', () => {
   let old = { ...row(40), live: null, seconds: null, backfill: true }
   assertEquals(
     records(`\n${JSON.stringify(old)}\n\n${JSON.stringify(row(20))}\n`),
@@ -19,7 +20,7 @@ Deno.test('deploy records: JSONL, blank lines, and unavailable historical live t
   assertEquals(records(' \n'), [])
 })
 
-Deno.test('deploy records: corrupt measurements cannot reset the gate', () => {
+test('deploy records: corrupt measurements cannot reset the gate', () => {
   for (
     let bad of [
       null,
@@ -52,7 +53,7 @@ Deno.test('deploy records: corrupt measurements cannot reset the gate', () => {
   )
 })
 
-Deno.test('deploy stages: the split is arithmetic on the stamps every row already has', () => {
+test('deploy stages: the split is arithmetic on the stamps every row already has', () => {
   // Cloudflare owns `upload`, we own `propagate`; the verdict never says which
   // grew unless both are on the line. T-35426's three REGRESSIONs were 40s of
   // upload and two minutes of "propagate" that was the gate's own test suite.
@@ -63,7 +64,7 @@ Deno.test('deploy stages: the split is arithmetic on the stamps every row alread
   assertEquals(split(unverified), 'upload 30.000s')
 })
 
-Deno.test('deploy gate: every verdict carries the split, verified or not', () => {
+test('deploy gate: every verdict carries the split, verified or not', () => {
   assertEquals(
     gate(history(40, 60)).message,
     'aaaaaaaa: 60.000s (upload 30.000s + propagate 30.000s); ' +
@@ -76,14 +77,14 @@ Deno.test('deploy gate: every verdict carries the split, verified or not', () =>
   )
 })
 
-Deno.test('deploy gate: no data and the first measurement bootstrap without blocking', () => {
+test('deploy gate: no data and the first measurement bootstrap without blocking', () => {
   assertEquals(gate([]).code, 0)
   assertEquals(gate([]).floor, null)
   assertEquals(gate(history(80)).code, 0)
   assertEquals(gate(history(80)).limit, 60)
 })
 
-Deno.test('deploy gate: the bench margin is inclusive, regressions never raise the floor', () => {
+test('deploy gate: the bench margin is inclusive, regressions never raise the floor', () => {
   for (
     let [times, floor, code] of [
       [[40, 50], 40, 0],
@@ -103,7 +104,7 @@ Deno.test('deploy gate: the bench margin is inclusive, regressions never raise t
   for (let margin of [-1, NaN, Infinity]) assertThrows(() => gate([], margin))
 })
 
-Deno.test('deploy gate: upload order matters; historical observations cannot ratchet or hide failures', () => {
+test('deploy gate: upload order matters; historical observations cannot ratchet or hide failures', () => {
   assertEquals(gate(history(40, 20, 30).reverse()).code, 1)
   let historical = { ...row(900, 3), backfill: true }
   assertEquals(gate([historical]).floor, null)

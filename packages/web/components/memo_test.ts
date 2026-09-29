@@ -1,4 +1,5 @@
 // A memo boundary skips parent reconciliation but yields to its own signal.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { signal } from '@preact/signals'
 import { h, render } from 'preact'
@@ -6,7 +7,7 @@ import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { memo } from './memo.ts'
 
-Deno.test('memo sleeps on equal props and wakes for an owned signal', async () => {
+test('memo sleeps on equal props and wakes for an owned signal', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

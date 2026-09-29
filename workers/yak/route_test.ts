@@ -1,4 +1,5 @@
 // The route table as data: hostname + path in, (space, app, path) out.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   aimedAt,
@@ -37,7 +38,7 @@ let cases: [string, string, ReturnType<typeof route>][] = [
   ['example.com', '/', { space: null, app: null, path: '/' }],
 ]
 
-Deno.test('route: hostname and path name the space, app, and the rest', () => {
+test('route: hostname and path name the space, app, and the rest', () => {
   for (let [host, path, want] of cases) {
     assertEquals(route(host, path), want, `${host}${path}`)
   }
@@ -48,7 +49,7 @@ Deno.test('route: hostname and path name the space, app, and the rest', () => {
 // hostname with the path untouched — which is the same address `route` above
 // reads, so the two forms are one rule and not two — and an app's is that
 // app's prefix, mounted at the domain's root.
-Deno.test('aimedAt: a domain is carried to the address of what it serves', () => {
+test('aimedAt: a domain is carried to the address of what it serves', () => {
   assertEquals(aimedAt('jeff', null, '/'), {
     host: 'jeff.yaks.app',
     pathname: '/',
@@ -73,7 +74,7 @@ Deno.test('aimedAt: a domain is carried to the address of what it serves', () =>
   })
 })
 
-Deno.test('hostOf: x-yak-host stands in on a dev host only', () => {
+test('hostOf: x-yak-host stands in on a dev host only', () => {
   let at = (url: string, host?: string) =>
     hostOf(new Request(url, { headers: host ? { 'x-yak-host': host } : {} }))
   assertEquals(at('http://127.0.0.1:8787/', 'Jeff.yaks.app'), 'jeff.yaks.app')
@@ -86,7 +87,7 @@ Deno.test('hostOf: x-yak-host stands in on a dev host only', () => {
 // Which hostnames the directory is asked about at all (T-33037): only ones
 // the platform does not already answer on, so every address that exists today
 // is decided without a read.
-Deno.test("foreign: someone else's hostname, and nothing of ours", () => {
+test("foreign: someone else's hostname, and nothing of ours", () => {
   let cases: [string, boolean][] = [
     ['herbusiness.com', true],
     ['www.herbusiness.com', true],
@@ -106,13 +107,13 @@ Deno.test("foreign: someone else's hostname, and nothing of ours", () => {
 // The fallback origin is out of the space namespace by its shape: `route`
 // reads everything before `.yaks.app` as a slug, and no slug holds a dot, so
 // no space can ever be minted that shadows our own origin.
-Deno.test('the fallback origin is no space', () => {
+test('the fallback origin is no space', () => {
   assertEquals(route(ORIGIN, '/'), { space: null, app: null, path: '/' })
 })
 
 // What a sign-in is allowed to hand someone back to (T-32593). A stranger's
 // address is not one of ours however it is spelled.
-Deno.test('onZone: our own https hostnames, and nothing else', () => {
+test('onZone: our own https hostnames, and nothing else', () => {
   let ours: [string, string | null][] = [
     ['https://jeff.yaks.app/notes/', 'https://jeff.yaks.app/notes/'],
     ['https://yaks.app/', 'https://yaks.app/'],
@@ -140,7 +141,7 @@ Deno.test('onZone: our own https hostnames, and nothing else', () => {
 // Whose `/.well-known/` it is (route.ts `platform`): the place a site grants
 // authority over its own name, so it belongs to whoever owns the name — us
 // on `<space>.yaks.app`, the app on a custom domain.
-Deno.test("platform: a grant on our name is not an app's to make", () => {
+test("platform: a grant on our name is not an app's to make", () => {
   let owned: [string, string, boolean][] = [
     // Our own hostnames: the whole prefix, because a list of the names that
     // grant authority is a thing to forget.
@@ -183,7 +184,7 @@ Deno.test("platform: a grant on our name is not an app's to make", () => {
 
 // What the origin check guards (route.ts `guarded`): every write but the
 // OAuth provider's two CORS doors, and every method where the graph answers.
-Deno.test('guarded: every write, and the graph doors, not the pages', () => {
+test('guarded: every write, and the graph doors, not the pages', () => {
   let doors: [string, string, boolean][] = [
     ['GET', '/recipes/api/apply', true],
     ['GET', '/recipes/api/ws', true],
@@ -225,7 +226,7 @@ Deno.test('guarded: every write, and the graph doors, not the pages', () => {
 // The line between spaces (route.ts `sameOrigin`). Sibling spaces are
 // same-site, so nothing but this tells them apart; an absent header is a
 // client with no page behind it and keeps its door.
-Deno.test('sameOrigin: the page that asked, at the host it asked', () => {
+test('sameOrigin: the page that asked, at the host it asked', () => {
   let asked: [string, string | null, boolean][] = [
     ['jeff.yaks.app', null, true],
     ['jeff.yaks.app', 'https://jeff.yaks.app', true],
@@ -253,7 +254,7 @@ Deno.test('sameOrigin: the page that asked, at the host it asked', () => {
 // The one exception to it (route.ts `shared`): the read door, asked with GET.
 // Everything a write could ride on is outside — including `/ws`, which reads
 // but carries the write grant on the same socket.
-Deno.test('shared: the read door, and nothing a write could ride on', () => {
+test('shared: the read door, and nothing a write could ride on', () => {
   let doors: [string, string, boolean][] = [
     ['GET', '/recipes/api/query', true],
     ['HEAD', '/recipes/api/query', true],
@@ -279,7 +280,7 @@ Deno.test('shared: the read door, and nothing a write could ride on', () => {
 
 // A sandboxed app's page speaking to its own doors (installed.ts): the token
 // leads the app's path, or the path itself at a front page or on a domain.
-Deno.test('paged: the token segment, where an app path starts', () => {
+test('paged: the token segment, where an app path starts', () => {
   let paths: [string, boolean][] = [
     ['/recipes/~abc.def/api/query', true],
     ['/recipes/~abc.def/', true],

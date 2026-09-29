@@ -6,6 +6,7 @@
 // it the app's own, and a space, which is that space's own hostname under
 // another name — front page at `/`, every app at `/<app>/`. The hostname is the
 // key, so two spaces cannot both claim it.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -22,7 +23,7 @@ import {
   seed,
 } from './probe.ts'
 
-Deno.test('a hostname finds its app, and only one app', async () => {
+test('a hostname finds its app, and only one app', async () => {
   let k = await kernel()
   try {
     // Before anything is attached, someone else's hostname is a foreign host
@@ -183,7 +184,7 @@ Deno.test('a hostname finds its app, and only one app', async () => {
 // at `/<app>/` — because the request is carried to that hostname and routed by
 // the same rungs, not by a second copy of them (route.ts `aimedAt`). An app of
 // that space may still hold a custom domain, and there it is the root.
-Deno.test('a domain on the space opens the space, apps and all', async () => {
+test('a domain on the space opens the space, apps and all', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{
@@ -273,7 +274,7 @@ Deno.test('a domain on the space opens the space, apps and all', async () => {
 // asked, said in its own sentence, and nothing half-written when the token is
 // the thing that is missing. The Cloudflare exchange itself is held in
 // domains_test.ts against the bytes the live zone answered.
-Deno.test('attaching a domain: what it refuses, and what it says', async () => {
+test('attaching a domain: what it refuses, and what it says', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{
@@ -372,7 +373,7 @@ Deno.test('attaching a domain: what it refuses, and what it says', async () => {
 // `hostnames`): the space form and the app form side by side, each saying what
 // it points at, and a detach that leaves what it carried at the address it
 // always had (T-34596).
-Deno.test(
+test(
   'a domain is attached to a space or to an app, and says which',
   async () => {
     let k = await kernel()
@@ -442,7 +443,7 @@ Deno.test(
   },
 )
 
-Deno.test('plan settings preserves its destination through sign-in', async () => {
+test('plan settings preserves its destination through sign-in', async () => {
   const k = await kernel()
   try {
     const { cookie } = await seed(k, [{ slug: 'plans13', apps: [] }])

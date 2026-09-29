@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -105,7 +106,7 @@ let through = async (
 let body = (bundles: Bundle[]) =>
   String(comp(bundles[0], 'content')?.body ?? '')
 
-Deno.test('a duration is what a person says', () => {
+test('a duration is what a person says', () => {
   assertEquals(every('45m', 0), 45 * 60_000)
   assertEquals(every('2h', 0), 2 * 3600_000)
   assertEquals(every('90', 0), 90_000)
@@ -113,7 +114,7 @@ Deno.test('a duration is what a person says', () => {
   assertEquals(every(undefined, 7), 7)
 })
 
-Deno.test('a spawn lands the session, the request and the lease', async () => {
+test('a spawn lands the session, the request and the lease', async () => {
   let { g } = host()
   await g.apply(shelf)
   let said = await through(g, 'session_spawn', {
@@ -141,7 +142,7 @@ Deno.test('a spawn lands the session, the request and the lease', async () => {
   assertEquals(comp(held, 'claim')?.session, session.entity.eid)
 })
 
-Deno.test('a spawn records the chosen persona on its session', async () => {
+test('a spawn records the chosen persona on its session', async () => {
   let { g } = host()
   let persona = crypto.randomUUID()
   await g.apply([
@@ -157,7 +158,7 @@ Deno.test('a spawn records the chosen persona on its session', async () => {
   assertEquals(comp(session, 'session')?.persona, persona)
 })
 
-Deno.test('a spawn refuses what is not a provider, and work that is not there', async () => {
+test('a spawn refuses what is not a provider, and work that is not there', async () => {
   let { g } = host()
   await g.apply(shelf)
   let refused = async (args: Record<string, unknown>) => {
@@ -191,7 +192,7 @@ Deno.test('a spawn refuses what is not a provider, and work that is not there', 
   )
 })
 
-Deno.test('a run is reached by its graph id or its provider id', async () => {
+test('a run is reached by its graph id or its provider id', async () => {
   let { g } = host()
   await g.apply([
     { entity: { eid: 's' }, session: { id: 'provider-run' } },
@@ -217,7 +218,7 @@ Deno.test('a run is reached by its graph id or its provider id', async () => {
   assertStringIncludes(ended, 'shipped it')
 })
 
-Deno.test('a peek shows the last lines, and refuses what is not a session', async () => {
+test('a peek shows the last lines, and refuses what is not a session', async () => {
   let { g } = host()
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -243,7 +244,7 @@ Deno.test('a peek shows the last lines, and refuses what is not a session', asyn
   )
 })
 
-Deno.test('a peek keeps the entire last multiline output within its entry limit', async () => {
+test('a peek keeps the entire last multiline output within its entry limit', async () => {
   let { g } = host()
   let final =
     'A final report longer than seventy characters is still entirely readable.\nSecond line of the report\nThird line'
@@ -266,7 +267,7 @@ Deno.test('a peek keeps the entire last multiline output within its entry limit'
   assert(!seen.includes('earlier'))
 })
 
-Deno.test('a peek bounds transcript reads and previews a large entry', async () => {
+test('a peek bounds transcript reads and previews a large entry', async () => {
   let { g } = host()
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -309,7 +310,7 @@ Deno.test('a peek bounds transcript reads and previews a large entry', async () 
   assert(!seen.includes('earlier'))
 })
 
-Deno.test('a transcript-only wait returns when its output settles', async () => {
+test('a transcript-only wait returns when its output settles', async () => {
   let { g } = host()
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -335,7 +336,7 @@ Deno.test('a transcript-only wait returns when its output settles', async () => 
   assert(!said.includes('still running'))
 })
 
-Deno.test('a wait answers "still running" rather than killing anything', async () => {
+test('a wait answers "still running" rather than killing anything', async () => {
   let { g } = host()
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -350,7 +351,7 @@ Deno.test('a wait answers "still running" rather than killing anything', async (
 // The whole machine, with a provider that is a shell script: the request
 // starts it, the wait blocks on the process ending rather than the transcript,
 // and the peek reads back what it said.
-Deno.test('spawn --wait runs the provider and answers what it came to', async () => {
+test('spawn --wait runs the provider and answers what it came to', async () => {
   let { g, fx } = host()
   let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-tools-' })
   fx.handle(
@@ -383,7 +384,7 @@ Deno.test('spawn --wait runs the provider and answers what it came to', async ()
   }
 })
 
-Deno.test('session stop ends a managed run', async () => {
+test('session stop ends a managed run', async () => {
   let { g, fx } = host()
   let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-stop-' })
   fx.handle(
@@ -413,7 +414,7 @@ Deno.test('session stop ends a managed run', async () => {
   }
 })
 
-Deno.test('session stop refuses a session without a managed process', async () => {
+test('session stop refuses a session without a managed process', async () => {
   let { g } = host()
   await g.apply([{ entity: { eid: 's' }, session: {} }])
   await assertRejects(

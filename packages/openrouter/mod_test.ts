@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { ModelError, type TextDelta } from '@yaks/model'
 import { responses } from './mod.ts'
@@ -42,7 +43,7 @@ const events = [
     },
   },
 ]
-Deno.test('OpenRouter shares Responses transport but not credentials, anchors or native tools', async () => {
+test('OpenRouter shares Responses transport but not credentials, anchors or native tools', async () => {
   const seen: Record<string, unknown>[] = []
   const model = responses({
     key: () => 'test-key',
@@ -100,7 +101,7 @@ Deno.test('OpenRouter shares Responses transport but not credentials, anchors or
     ),
   )
 })
-Deno.test('OpenRouter propagates cancellation without replaying streaming calls', async () => {
+test('OpenRouter propagates cancellation without replaying streaming calls', async () => {
   let calls = 0
   const controller = new AbortController()
   const model = responses({
@@ -128,7 +129,7 @@ Deno.test('OpenRouter propagates cancellation without replaying streaming calls'
   assertEquals(calls, 1)
 })
 
-Deno.test('vision input uses Responses image parts and HTTP 400 fails without retry', async () => {
+test('vision input uses Responses image parts and HTTP 400 fails without retry', async () => {
   let seen: Record<string, unknown>[] = []
   const model = responses({
     key: () => 'private-key',
@@ -166,7 +167,7 @@ Deno.test('vision input uses Responses image parts and HTTP 400 fails without re
   ])
 })
 
-Deno.test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes in the reply', async () => {
+test('streamed OpenRouter audio becomes one blob artifact with no encoded bytes in the reply', async () => {
   let bytes = new TextEncoder().encode('ID3generated music')
   let encoded = btoa(String.fromCharCode(...bytes))
   let seen: Record<string, unknown> = {}
@@ -212,7 +213,7 @@ Deno.test('streamed OpenRouter audio becomes one blob artifact with no encoded b
   assert(!JSON.stringify(reply).includes(encoded))
 })
 
-Deno.test('OpenRouter image output shares the artifact path', async () => {
+test('OpenRouter image output shares the artifact path', async () => {
   let png =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
   let model = responses({
@@ -244,7 +245,7 @@ Deno.test('OpenRouter image output shares the artifact path', async () => {
   assert(!JSON.stringify(reply).includes(png))
 })
 
-Deno.test('a speech model uses the audio door and stores its bytes as an artifact', async () => {
+test('a speech model uses the audio door and stores its bytes as an artifact', async () => {
   let bytes = new Uint8Array([
     0xff,
     0xfb,
@@ -286,7 +287,7 @@ Deno.test('a speech model uses the audio door and stores its bytes as an artifac
   assert(!JSON.stringify(reply).includes('255,251,144,100'))
 })
 
-Deno.test('media connection faults are bounded without exposing credentials', async () => {
+test('media connection faults are bounded without exposing credentials', async () => {
   let model = responses({
     key: () => 'private-test-key',
     media: { store: artifactStore(memoryBlobs()) },
@@ -307,7 +308,7 @@ Deno.test('media connection faults are bounded without exposing credentials', as
   assertEquals(error.retry, { after: 0 })
 })
 
-Deno.test('media HTTP failures tell the session which ones can retry', async () => {
+test('media HTTP failures tell the session which ones can retry', async () => {
   for (let status of [400, 503]) {
     let model = responses({
       key: () => 'fake',

@@ -1,4 +1,5 @@
 // The camera holds its orbit and fits its depth to the current fog.
+import { test } from '@yaks/testing'
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { depth, moveLook, NEAR, steer } from './cam.ts'
@@ -38,7 +39,7 @@ let still: Intent = {
   zoom: 0,
 }
 
-Deno.test('the camera sees to the changing edge of the fog', () => {
+test('the camera sees to the changing edge of the fog', () => {
   let camera = new THREE.PerspectiveCamera()
   let fog = new THREE.Fog(0xffffff, 40, 110)
   depth(camera, fog)
@@ -48,7 +49,7 @@ Deno.test('the camera sees to the changing edge of the fog', () => {
   assertEquals(camera.far, 137.5)
 })
 
-Deno.test('a mouse orbit holds its angle until steering or explicit snap', () => {
+test('a mouse orbit holds its angle until steering or explicit snap', () => {
   let cam = cameraState()
   steer(cam, { ...still, orbit: [0.8, 0], look: true }, Math.PI, 0.016)
   for (let n = 0; n < 240; n++) steer(cam, still, Math.PI, 1 / 60)
@@ -65,7 +66,7 @@ Deno.test('a mouse orbit holds its angle until steering or explicit snap', () =>
   assertEquals(cam.snap, false)
 })
 
-Deno.test('free orbit keeps keys and dodges on the hero heading', () => {
+test('free orbit keeps keys and dodges on the hero heading', () => {
   let cam = cameraState()
   let yaw = Math.PI
   let pan = {

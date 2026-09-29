@@ -6,13 +6,14 @@
 // (@yaks/sqlite's parity.ts) because agreeing with it is what it means to be a
 // storage adapter.
 
+import { test } from '@yaks/testing'
 import { answers, parity, rig } from '../sqlite/parity.ts'
 import { store as reference } from '../sqlite/testing.ts'
 import { store } from './testing.ts'
 
-Deno.test('a durable-object graph and a sqlite graph agree, batch for batch', () => {
+test('a durable-object graph and a sqlite graph agree, batch for batch', () => {
   parity(rig(store()), rig(reference()))
 })
 
-Deno.test('a durable-object graph selects what each query means', () =>
+test('a durable-object graph selects what each query means', () =>
   answers(rig(store())))

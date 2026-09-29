@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { type CreateTable, insert, lit, scan } from '@yaks/sql'
 import { open, type Opened } from './db.ts'
@@ -26,7 +27,7 @@ function fixture() {
     },
   }
 }
-Deno.test('committed announcement is visible, blocks startup and competitors, monitor latches once', () => {
+test('committed announcement is visible, blocks startup and competitors, monitor latches once', () => {
   const f = fixture()
   try {
     const a = f.connect(), b = f.connect()
@@ -57,7 +58,7 @@ Deno.test('committed announcement is visible, blocks startup and competitors, mo
     f.close()
   }
 })
-Deno.test('migration failure rolls back data/DDL and leaves explicit recoverable failure', () => {
+test('migration failure rolls back data/DDL and leaves explicit recoverable failure', () => {
   const f = fixture()
   try {
     const a = f.connect(), b = f.connect()
@@ -78,7 +79,7 @@ Deno.test('migration failure rolls back data/DDL and leaves explicit recoverable
     f.close()
   }
 })
-Deno.test('missed pending notification still detects applied data-only migration; unchanged polls are quiet', () => {
+test('missed pending notification still detects applied data-only migration; unchanged polls are quiet', () => {
   const f = fixture()
   try {
     const a = f.connect(), b = f.connect()
@@ -105,7 +106,7 @@ Deno.test('missed pending notification still detects applied data-only migration
     f.close()
   }
 })
-Deno.test('run waits announced grace outside transaction; early application is refused without clearing claim', async () => {
+test('run waits announced grace outside transaction; early application is refused without clearing claim', async () => {
   const f = fixture()
   try {
     const a = f.connect(), b = f.connect()

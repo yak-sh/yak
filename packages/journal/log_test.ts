@@ -6,6 +6,7 @@
 // stored, and that a content-addressed property is recorded by its address
 // rather than its bytes.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { effects } from '@yaks/effects'
@@ -42,7 +43,7 @@ let lines = (f: { j: { history: (e: string) => unknown } }, eid: string) =>
     )
   )
 
-Deno.test('history lists a create, two patches and a death, in order', () => {
+test('history lists a create, two patches and a death, in order', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' }, $actor: ada }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' }, $actor: bob }])
@@ -58,7 +59,7 @@ Deno.test('history lists a create, two patches and a death, in order', () => {
   ])
 })
 
-Deno.test('a batch row carries the actor, the instrument and the moment', () => {
+test('a batch row carries the actor, the instrument and the moment', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' }, $actor: bob }])
   let [batch] = f.j.history('p1')
@@ -70,7 +71,7 @@ Deno.test('a batch row carries the actor, the instrument and the moment', () => 
   ])
 })
 
-Deno.test('the provenance stamps are not recorded twice', () => {
+test('the provenance stamps are not recorded twice', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' }, $actor: ada }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' }, $actor: ada }])
@@ -79,7 +80,7 @@ Deno.test('the provenance stamps are not recorded twice', () => {
   assertEquals(stamps, [], 'created/updated live on the batch row')
 })
 
-Deno.test('a cascade casualty is recorded, whole, under its own entity', () => {
+test('a cascade casualty is recorded, whole, under its own entity', () => {
   let f = fixture()
   f.apply([
     { entity: { eid: 'p1' }, page: { title: 'One' } },
@@ -92,7 +93,7 @@ Deno.test('a cascade casualty is recorded, whole, under its own entity', () => {
   ])
 })
 
-Deno.test('a component dropped is recorded whole, and a property cleared is not', () => {
+test('a component dropped is recorded whole, and a property cleared is not', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One', text: 'body' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { text: null } }])
@@ -106,7 +107,7 @@ Deno.test('a component dropped is recorded whole, and a property cleared is not'
   ])
 })
 
-Deno.test('a refused batch leaves no record', () => {
+test('a refused batch leaves no record', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
   try {
@@ -119,7 +120,7 @@ Deno.test('a refused batch leaves no record', () => {
   assertEquals(f.j.history('p1').length, 1)
 })
 
-Deno.test('a dry run leaves no record either', () => {
+test('a dry run leaves no record either', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
   // Every phase runs, the journal hook included — and then the transaction is
@@ -130,14 +131,14 @@ Deno.test('a dry run leaves no record either', () => {
   assertEquals(f.j.history('p1').length, 1)
 })
 
-Deno.test('a batch that moved nothing writes no row', () => {
+test('a batch that moved nothing writes no row', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
   f.apply([{ entity: { eid: 'p1' } }])
   assertEquals(f.j.history('p1').length, 1)
 })
 
-Deno.test('the reading an effect takes never reaches the caller', () => {
+test('the reading an effect takes never reaches the caller', () => {
   let fired: string[] = []
   let fx = effects(wiki)
   let { g } = wikiGraph([fx])
@@ -153,7 +154,7 @@ Deno.test('the reading an effect takes never reaches the caller', () => {
   )
 })
 
-Deno.test('the before-side is derived, and the state before a batch with it', () => {
+test('the before-side is derived, and the state before a batch with it', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One', text: 'body' } }])
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Two' } }])
@@ -164,7 +165,7 @@ Deno.test('the before-side is derived, and the state before a batch with it', ()
   assert(!f.j.touchedSince('p1', 2))
 })
 
-Deno.test('every write of one property, anywhere, oldest first', () => {
+test('every write of one property, anywhere, oldest first', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
   f.apply([{ entity: { eid: 'p2' }, page: { title: 'Two' } }])
@@ -174,7 +175,7 @@ Deno.test('every write of one property, anywhere, oldest first', () => {
   ])
 })
 
-Deno.test('a value can be sought and scrubbed in place', () => {
+test('a value can be sought and scrubbed in place', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'hunter2' } }])
   let [hit] = f.j.seek('hunter2')
@@ -192,7 +193,7 @@ Deno.test('a value can be sought and scrubbed in place', () => {
 // A property whose text the graph already keeps under a content address is
 // recorded by that address, so the log costs a row per revision and not a copy
 // of the document.
-Deno.test('a content-addressed property is recorded by its address', () => {
+test('a content-addressed property is recorded by its address', () => {
   let db = mem()
   let store = storage(db, wiki)
   store.install()
@@ -235,7 +236,7 @@ Deno.test('a content-addressed property is recorded by its address', () => {
   assertEquals(j.history('p1')[0].deltas.at(-1)?.after, 'a long body')
 })
 
-Deno.test('a second graph over the same log counts on from its tip', () => {
+test('a second graph over the same log counts on from its tip', () => {
   let held = wikiLog()
   let one = held.g()
   let two = held.g()

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { mode } from '../live.ts'
@@ -7,7 +8,7 @@ import {
   toggleNavigation,
 } from './Navigation.tsx'
 
-Deno.test('n toggles web navigation only from unmodified normal mode', () => {
+test('n toggles web navigation only from unmodified normal mode', () => {
   toggleNavigation(false)
   mode.value = 'insert'
   assertEquals(navigationKey('n'), false)

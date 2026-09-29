@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { plan, Unplanned } from './plan.ts'
 import { modules, sources } from './graph.ts'
@@ -30,7 +31,7 @@ let PAGE = (src: string) =>
   `<!doctype html><script type="module" src="${src}"></script>`
 let THREE = JSON.stringify({ dependencies: { three: '^0.180.0' } })
 
-Deno.test('a module graph reads siblings together and keeps import order', async () => {
+test('a module graph reads siblings together and keeps import order', async () => {
   let files: Record<string, string> = {
     'main.ts': "import './a.ts'\nimport './b.ts'",
     'a.ts': "import './shared.ts'\nimport 'alpha'",
@@ -57,7 +58,7 @@ Deno.test('a module graph reads siblings together and keeps import order', async
   assertEquals(found.named, ['gamma', 'alpha', 'beta'])
 })
 
-Deno.test('an app of plain modules compiles nothing', async () => {
+test('an app of plain modules compiles nothing', async () => {
   assertEquals(
     await planned({
       'index.html': PAGE('app.js'),
@@ -71,7 +72,7 @@ Deno.test('an app of plain modules compiles nothing', async () => {
   )
 })
 
-Deno.test('a TypeScript worker compiles, with the files it reaches', async () => {
+test('a TypeScript worker compiles, with the files it reaches', async () => {
   assertEquals(
     await planned({
       'worker.ts':
@@ -95,7 +96,7 @@ Deno.test('a TypeScript worker compiles, with the files it reaches', async () =>
   )
 })
 
-Deno.test('a JavaScript worker that imports a package compiles', async () => {
+test('a JavaScript worker that imports a package compiles', async () => {
   let got = await planned({
     'worker.js': `import { Hono } from 'hono'\nexport default new Hono()`,
     'package.json': JSON.stringify({ dependencies: { hono: '^4' } }),
@@ -105,7 +106,7 @@ Deno.test('a JavaScript worker that imports a package compiles', async () => {
   assertEquals(got?.sent, ['package-lock.json', 'package.json', 'worker.js'])
 })
 
-Deno.test('a page script compiles when it is TypeScript or imports a declared package', async () => {
+test('a page script compiles when it is TypeScript or imports a declared package', async () => {
   let got = await planned({
     'index.html': PAGE('main.ts') + PAGE('./game/app.js?v=2') +
       PAGE('plain.js'),
@@ -128,7 +129,7 @@ Deno.test('a page script compiles when it is TypeScript or imports a declared pa
   ])
 })
 
-Deno.test('a deploy reads shared modules once across its entries', async () => {
+test('a deploy reads shared modules once across its entries', async () => {
   let files = {
     'worker.js': "import { n } from './shared.ts'\nexport default { n }",
     'index.html': PAGE('main.ts'),
@@ -150,7 +151,7 @@ Deno.test('a deploy reads shared modules once across its entries', async () => {
   assertEquals(got?.ask.worker?.entry, 'worker.js')
 })
 
-Deno.test('a module worker a page script starts compiles as an entry of its own', async () => {
+test('a module worker a page script starts compiles as an entry of its own', async () => {
   let MAP =
     `<script type=importmap>{"imports": {"lit": "https://esm.sh/lit"}}` +
     '</script>'
@@ -189,7 +190,7 @@ Deno.test('a module worker a page script starts compiles as an entry of its own'
   assertEquals(nested?.pages, ['main.ts', 'w.ts'])
 })
 
-Deno.test('a compiled page notes each package no import map on its pages resolves', async () => {
+test('a compiled page notes each package no import map on its pages resolves', async () => {
   let MAP = `<script type=importmap>{"imports": {"@yaks/client": ` +
     `"https://esm.sh/jsr/@yaks/client", "lit/": "https://esm.sh/lit/"}}` +
     '</script>'
@@ -215,7 +216,7 @@ Deno.test('a compiled page notes each package no import map on its pages resolve
   )
 })
 
-Deno.test('a package package.json does not name is left to an import map', async () => {
+test('a package package.json does not name is left to an import map', async () => {
   // Nothing to compile: the page imports it by name, and says where in HTML.
   assertEquals(
     await planned({
@@ -237,7 +238,7 @@ Deno.test('a package package.json does not name is left to an import map', async
   assertEquals(got?.notes[1].startsWith('app.ts imports app.css'), true)
 })
 
-Deno.test('a package.json that says nothing readable refuses in a sentence', async () => {
+test('a package.json that says nothing readable refuses in a sentence', async () => {
   for (let pkg of ['{"dependencies": ', '{"dependencies": ["three"]}']) {
     await assertRejects(
       () => plan(app({ 'package.json': pkg, 'worker.ts': '' }, 'worker.ts')),
@@ -247,7 +248,7 @@ Deno.test('a package.json that says nothing readable refuses in a sentence', asy
   }
 })
 
-Deno.test('the runtime reads a specifier exactly, esbuild tries the extensions', async () => {
+test('the runtime reads a specifier exactly, esbuild tries the extensions', async () => {
   let files = app({
     'worker.js': `import './lib'\nimport './dir'\nimport './w.js'`,
     'lib.ts': '',

@@ -2,6 +2,7 @@
 // the refusal are exercised end to end over a real store (@yaks/sqlite's
 // declared_test.ts); these are the pure halves.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { emitted, firing, ready } from './declared.ts'
@@ -22,7 +23,7 @@ let vocab = loadVocab([{
 
 let one = (match: string) => ready([{ name: 'r', match }])[0]
 
-Deno.test('a gated rule writes the gate it fired on', () => {
+test('a gated rule writes the gate it fired on', () => {
   let out = emitted(
     one('.call, +!result'),
     { entities: ['c1'], vars: {} },
@@ -31,7 +32,7 @@ Deno.test('a gated rule writes the gate it fired on', () => {
   assertEquals(out, [{ entity: { eid: 'c1' }, result: {} }])
 })
 
-Deno.test('a written property takes the variable it named', () => {
+test('a written property takes the variable it named', () => {
   let out = emitted(
     one('$c .call; +result.call=$c, +result.ms=12'),
     { entities: ['c1', null], vars: { c: 'c1' } },
@@ -43,7 +44,7 @@ Deno.test('a written property takes the variable it named', () => {
   assertEquals(out[0].result, { call: 'c1', ms: 12 })
 })
 
-Deno.test('a made entity is named from the firing, so it is the same one twice', () => {
+test('a made entity is named from the firing, so it is the same one twice', () => {
   let rule = one('$c .call; +result.call=$c')
   let row = { entities: ['c1', null], vars: { c: 'c1' } }
   assertEquals(
@@ -59,7 +60,7 @@ Deno.test('a made entity is named from the firing, so it is the same one twice',
   )
 })
 
-Deno.test('a resource a rule wrote is the value it stands for', () => {
+test('a resource a rule wrote is the value it stands for', () => {
   let out = emitted(
     one('.call, +!result, +result.ms=#Now'),
     { entities: ['c1'], vars: {} },
@@ -69,7 +70,7 @@ Deno.test('a resource a rule wrote is the value it stands for', () => {
   assertEquals((out[0].result as { ms: number }).ms, 42)
 })
 
-Deno.test('a firing is the rule and what it bound', () => {
+test('a firing is the rule and what it bound', () => {
   assertEquals(
     firing({ name: 'settle', match: '.call' }, {
       entities: ['c1', null],
@@ -79,7 +80,7 @@ Deno.test('a firing is the rule and what it bound', () => {
   )
 })
 
-Deno.test('order is declared, never the order a plugin was registered in', () => {
+test('order is declared, never the order a plugin was registered in', () => {
   let names = (rules: { name: string; match: string; before?: string[] }[]) =>
     ready(rules).map((r) => r.rule.name)
   // Alphabetical by default…
@@ -97,7 +98,7 @@ Deno.test('order is declared, never the order a plugin was registered in', () =>
   )
 })
 
-Deno.test('rules that run before each other are a circle, said out loud', () => {
+test('rules that run before each other are a circle, said out loud', () => {
   assertThrows(
     () =>
       ready([

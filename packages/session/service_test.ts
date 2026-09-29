@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Graph } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
@@ -76,14 +77,14 @@ let told = async (g: Graph, id: string) => {
 
 let DAY = 24 * 60 * 60 * 1000
 
-Deno.test('the duty frees the locks whose holder is gone as it starts', async () => {
+test('the duty frees the locks whose holder is gone as it starts', async () => {
   let s = store()
   seed(s, { entity: { eid: ids.p2 }, claim: { session: ids.gone } })
   await service({ graph: locked(s) }, {}, AbortSignal.abort())
   assertEquals(lockOn(s, ids.p2), undefined)
 })
 
-Deno.test('a recent transcript is followed in full; an old one is read in later, its prose alone', () =>
+test('a recent transcript is followed in full; an old one is read in later, its prose alone', () =>
   projects({
     one: { text: lines('fix it') },
     fresh: { text: lines('hello') },
@@ -113,7 +114,7 @@ Deno.test('a recent transcript is followed in full; an old one is read in later,
     assertEquals((await g.read('.session')).length, 4)
   }))
 
-Deno.test('a managed run is read from its own output, not its transcript file', () =>
+test('a managed run is read from its own output, not its transcript file', () =>
   projects({ run1: { text: lines('asked') } }, async (dir) => {
     let s = store()
     seed(s, {
@@ -134,7 +135,7 @@ let ended = JSON.stringify({
   usage: { input_tokens: 10, output_tokens: 5 },
 }) + '\n'
 
-Deno.test('a session quiet past its full depth is stripped to its prose and its cost', () =>
+test('a session quiet past its full depth is stripped to its prose and its cost', () =>
   projects({
     past: { text: dated(lines('long ago') + tool + ended, 30 * DAY) },
     today: { text: lines('hello') + tool },

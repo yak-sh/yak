@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -26,7 +27,7 @@ let saying = (g: Graph, say: () => unknown) =>
     }],
   })
 
-Deno.test('result membership is joined before sequence allocation and observers', async () => {
+test('result membership is joined before sequence allocation and observers', async () => {
   const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const fx = effects(vocab)
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions(), fx] })
@@ -52,7 +53,7 @@ Deno.test('result membership is joined before sequence allocation and observers'
   assertEquals((await g.read('.result&*'))[0].entry, result.entry)
 })
 
-Deno.test('same-batch call/result join respects the absence gate and detached calls', async () => {
+test('same-batch call/result join respects the absence gate and detached calls', async () => {
   const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
@@ -80,7 +81,7 @@ Deno.test('same-batch call/result join respects the absence gate and detached ca
   assertEquals(rows.find((b) => b.entity.eid == 'detached-r')?.entry, undefined)
 })
 
-Deno.test('independent callers can complete out of order without losing transcript association', async () => {
+test('independent callers can complete out of order without losing transcript association', async () => {
   const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([

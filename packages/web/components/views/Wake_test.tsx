@@ -1,4 +1,5 @@
 // A wake reads from its clock and addressing facets, never a stored title.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { render } from 'preact'
 import { assertEquals } from '@std/assert'
@@ -30,7 +31,7 @@ let data = (by: string, outcome: Record<string, unknown> = {}) => ({
   },
 })
 
-Deno.test('wake owns the default view and derives its title', () => {
+test('wake owns the default view and derives its title', () => {
   cache.value = data('creator')
   let e = ent('wake')
   assertEquals(applicable(e)[0], 'Wake')
@@ -45,7 +46,7 @@ Deno.test('wake owns the default view and derives its title', () => {
   cache.value = {}
 })
 
-Deno.test('wake coordinates pending, delivered, and failed states', () => {
+test('wake coordinates pending, delivered, and failed states', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -124,7 +125,7 @@ Deno.test('wake coordinates pending, delivered, and failed states', () => {
   }
 })
 
-Deno.test('wake shows its relative and exact time and addressed people', () => {
+test('wake shows its relative and exact time and addressed people', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

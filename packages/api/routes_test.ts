@@ -1,4 +1,5 @@
 /// <reference lib="deno.ns" />
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Filter } from './route.ts'
 import { handler } from './routes.ts'
@@ -24,7 +25,7 @@ let host = (filters: Filter[]) =>
 let status = async (h: ReturnType<typeof host>, path: string) =>
   (await h(req(path))).status
 
-Deno.test('a filter that throws answers the request, and nothing behind it runs', async () => {
+test('a filter that throws answers the request, and nothing behind it runs', async () => {
   let asked: string[] = []
   let h = host([
     (r) => void asked.push(new URL(r.url).pathname),
@@ -39,14 +40,14 @@ Deno.test('a filter that throws answers the request, and nothing behind it runs'
   assertEquals(asked, ['/hello', '/query'])
 })
 
-Deno.test('with no filter, every route and door answers as before', async () => {
+test('with no filter, every route and door answers as before', async () => {
   let h = host([])
   assertEquals(await (await h(req('/hello'))).text(), 'hi')
   assertEquals(await status(h, '/query?q=.price'), 200)
   assertEquals(await status(h, '/nowhere'), 404)
 })
 
-Deno.test('an HTTP route answers while the graph reader is busy', async () => {
+test('an HTTP route answers while the graph reader is busy', async () => {
   let graph = shopGraph()
   let slow = Promise.withResolvers<Awaited<ReturnType<typeof graph.read>>>()
   let called = false

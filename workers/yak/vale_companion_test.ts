@@ -1,10 +1,11 @@
 // An agent's app command reaches the same objective the Mossvale page reads;
 // a gather credited by the page is then visible through the agent's command.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { client, connector, kernel, seed } from './probe.ts'
 
-Deno.test('a Mossvale command becomes a playable objective with queryable progress', async () => {
+test('a Mossvale command becomes a playable objective with queryable progress', async () => {
   let k = await kernel()
   try {
     let who = await seed(k, [{ slug: 'companionlab', apps: [] }])

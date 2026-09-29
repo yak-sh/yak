@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { address, decode, encode } from './store.ts'
 import { fileBlobs } from './file.ts'
 
-Deno.test('the file backend stores one file per address', async () => {
+test('the file backend stores one file per address', async () => {
   let dir = await Deno.makeTempDir()
   try {
     let store = fileBlobs(`${dir}/blobs`)

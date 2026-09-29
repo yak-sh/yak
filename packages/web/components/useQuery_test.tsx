@@ -1,5 +1,6 @@
 // Query ownership lives at view roots. Exercise the real hooks and transport,
 // including overlapping mounts, retargeting, and reads between cleanup/mount.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -15,7 +16,7 @@ let actor = 'dddd3703-0000-4000-8000-000000000003'
 // `{unsubscribe}` closes it.
 type Frame = { subscribe?: unknown; id?: string; unsubscribe?: string }
 
-Deno.test('eid-keyed view queries release on retarget and last unmount', () => {
+test('eid-keyed view queries release on retarget and last unmount', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

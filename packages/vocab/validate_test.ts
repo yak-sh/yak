@@ -1,6 +1,7 @@
 // Document validation: the storable profile and reserved names. Each refusal
 // names the fix.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab, reserved, storable } from './mod.ts'
 import type { PropSchema, VocabDoc } from './mod.ts'
@@ -14,11 +15,11 @@ let doc = (defs: VocabDoc['$defs']): VocabDoc => ({
   ),
 })
 
-Deno.test('the slice is storable', () => {
+test('the slice is storable', () => {
   assertEquals(storable(slice), [])
 })
 
-Deno.test('JSON text and JSON values are storable', () => {
+test('JSON text and JSON values are storable', () => {
   let schema = (value: PropSchema) =>
     doc({ config: { type: 'object', properties: { value } } })
   let ok: PropSchema[] = [
@@ -47,7 +48,7 @@ Deno.test('JSON text and JSON values are storable', () => {
   )
 })
 
-Deno.test('storable refuses what a table cannot lower', () => {
+test('storable refuses what a table cannot lower', () => {
   let errs = storable(doc({
     'Bad Name': { type: 'object' },
     recipe: {
@@ -78,7 +79,7 @@ Deno.test('storable refuses what a table cannot lower', () => {
   )
 })
 
-Deno.test('storable refuses an index over a property that is not there', () => {
+test('storable refuses an index over a property that is not there', () => {
   let errs = storable(doc({
     recipe: {
       type: 'object',
@@ -90,7 +91,7 @@ Deno.test('storable refuses an index over a property that is not there', () => {
   assertEquals(errs, ['recipe indexes oven, which is no property of recipe'])
 })
 
-Deno.test('storable refuses a mark a client could sign', () => {
+test('storable refuses a mark a client could sign', () => {
   let mark = (stamped: boolean) => ({
     baked: {
       type: 'object',
@@ -120,7 +121,7 @@ Deno.test('storable refuses a mark a client could sign', () => {
   )
 })
 
-Deno.test('storable refuses an identity nothing could derive', () => {
+test('storable refuses an identity nothing could derive', () => {
   let errs = storable(doc({
     page: {
       type: 'object',
@@ -144,7 +145,7 @@ Deno.test('storable refuses an identity nothing could derive', () => {
   ])
 })
 
-Deno.test('storable refuses search on anything but stored prose', () => {
+test('storable refuses search on anything but stored prose', () => {
   let errs = storable(doc({
     recipe: {
       type: 'object',
@@ -167,7 +168,7 @@ Deno.test('storable refuses search on anything but stored prose', () => {
   ])
 })
 
-Deno.test('reserved names refuse against a base vocabulary', () => {
+test('reserved names refuse against a base vocabulary', () => {
   let base = loadVocab(slice)
   let app = doc({
     doc: { type: 'object' },
@@ -179,7 +180,7 @@ Deno.test('reserved names refuse against a base vocabulary', () => {
   assertEquals(reserved(doc({ recipe: { type: 'object' } }), base.all), [])
 })
 
-Deno.test('storable refuses a required or present property that is not there', () => {
+test('storable refuses a required or present property that is not there', () => {
   let errs = storable(doc({
     output: {
       type: 'object',
@@ -197,7 +198,7 @@ Deno.test('storable refuses a required or present property that is not there', (
   ])
 })
 
-Deno.test('storable admits a literal or clock default and refuses the rest', () => {
+test('storable admits a literal or clock default and refuses the rest', () => {
   let one = (props: Record<string, PropSchema>) =>
     storable(doc({ row: { type: 'object', properties: props } }))
   assertEquals(one({ a: { type: 'string', default: 'x' } }), [])
@@ -216,7 +217,7 @@ Deno.test('storable admits a literal or clock default and refuses the rest', () 
   ])
 })
 
-Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
+test('a relay owns nothing, so it cannot keep a value forever', () => {
   let one = (comp: PropSchema) => storable(doc({ presence: comp }))
   assertEquals(
     one({ type: 'object', sync: 'peers', durable: 'connection' }),
@@ -235,7 +236,7 @@ Deno.test('a relay owns nothing, so it cannot keep a value forever', () => {
   ])
 })
 
-Deno.test('a pace is how often a value is taken, so what nobody takes has none', () => {
+test('a pace is how often a value is taken, so what nobody takes has none', () => {
   let one = (comp: PropSchema) => storable(doc({ presence: comp }))
   let peers = { type: 'object', sync: 'peers', durable: 'connection' }
   assertEquals(one({ ...peers, pace: '100ms' }), [])
@@ -248,7 +249,7 @@ Deno.test('a pace is how often a value is taken, so what nobody takes has none',
   ])
 })
 
-Deno.test('a $defs entry says what it is, or it is no table', () => {
+test('a $defs entry says what it is, or it is no table', () => {
   // The ordinary JSON Schema use of $defs: a subschema something $refs. It
   // declares no properties, so nothing here has anything to say about it.
   assertEquals(storable({ $defs: { unit: { type: 'string' } } }), [])

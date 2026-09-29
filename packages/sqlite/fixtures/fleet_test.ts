@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { BATCH_SIZE, CHAIN, eid, TASKS, workload } from './fleet.ts'
 
-Deno.test('throughput workload is deterministic, bounded, and every reference exists', () => {
+test('throughput workload is deterministic, bounded, and every reference exists', () => {
   let data = workload()
   assertEquals(data, workload())
   let ids = new Set(data.bundles.map((b) => b.entity.eid))

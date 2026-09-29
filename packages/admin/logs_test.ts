@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError } from '@yaks/tools'
 import { duration, errors, eventLine, faultsOf, records } from './logs.ts'
@@ -20,7 +21,7 @@ let event = (over: Record<string, unknown> = {}) => ({
   ...over,
 })
 
-Deno.test('console errors have their own timestamps and ignore other levels', () => {
+test('console errors have their own timestamps and ignore other levels', () => {
   let faults = faultsOf(event({
     exceptions: [],
     logs: [
@@ -44,7 +45,7 @@ Deno.test('console errors have their own timestamps and ignore other levels', ()
   assertEquals(faults.map((f) => f.message), ['cannot index', 'another error'])
 })
 
-Deno.test('a structured Error log keeps its first frame, not the whole stack', () => {
+test('a structured Error log keeps its first frame, not the whole stack', () => {
   let [fault] = faultsOf(event({
     exceptions: [],
     logs: [{
@@ -63,7 +64,7 @@ Deno.test('a structured Error log keeps its first frame, not the whole stack', (
   ])
 })
 
-Deno.test('implicit entrypoints separate scheduled, alarm, queue and RPC errors', () => {
+test('implicit entrypoints separate scheduled, alarm, queue and RPC errors', () => {
   let events = [
     { cron: '* * * * *' },
     { scheduledTime: 0 },
@@ -81,7 +82,7 @@ Deno.test('implicit entrypoints separate scheduled, alarm, queue and RPC errors'
   ])
 })
 
-Deno.test('tail JSON tolerates pretty printing, escaped braces and arbitrary chunk boundaries', () => {
+test('tail JSON tolerates pretty printing, escaped braces and arbitrary chunk boundaries', () => {
   let rows: unknown[] = []
   let parser = records((row) => rows.push(row))
   let fixture = {
@@ -96,7 +97,7 @@ Deno.test('tail JSON tolerates pretty printing, escaped braces and arbitrary chu
   assertThrows(() => parser.finish(), Error, 'inside a JSON event')
 })
 
-Deno.test('tail renders one line with the door, status and exception', () => {
+test('tail renders one line with the door, status and exception', () => {
   assertEquals(
     eventLine(event()),
     '1970-01-01T00:00:01.000Z  exception  Directory  500 GET https://yaks.app/  Error: missing kind at index (worker.js:3:4)',
@@ -111,7 +112,7 @@ Deno.test('tail renders one line with the door, status and exception', () => {
   )
 })
 
-Deno.test('since accepts seconds, minutes, hours or days, up to 90 days', () => {
+test('since accepts seconds, minutes, hours or days, up to 90 days', () => {
   for (
     let [input, expected] of [
       ['10m', 600],
@@ -168,7 +169,7 @@ let listed = async (s: ReturnType<typeof sentry>, since = '6h') => {
   return { said, noted }
 }
 
-Deno.test('errors lists every issue Sentry holds for the window, across pages', async () => {
+test('errors lists every issue Sentry holds for the window, across pages', async () => {
   let s = sentry([
     [row(
       'YAKS-APP-12',
@@ -202,7 +203,7 @@ Deno.test('errors lists every issue Sentry holds for the window, across pages', 
   assertEquals(second.get('start'), first.get('start'))
 })
 
-Deno.test('errors without a kept token refuses with the fix, and never tails forward', async () => {
+test('errors without a kept token refuses with the fix, and never tails forward', async () => {
   let said: string[] = []
   let refusal = await assertRejects(
     () => errors('30m', undefined, (l) => said.push(l), (l) => said.push(l)),
@@ -213,7 +214,7 @@ Deno.test('errors without a kept token refuses with the fix, and never tails for
   assertEquals(/yak graph apply .*op:\/\/<vault>/.test(refusal.message), true)
 })
 
-Deno.test('a token Sentry refuses is answered with the same fix', async () => {
+test('a token Sentry refuses is answered with the same fix', async () => {
   let refusal = await assertRejects(
     () => listed(sentry([[]], 401)),
     CallError,

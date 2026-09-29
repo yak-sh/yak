@@ -1,6 +1,7 @@
 // A provider or a model is named where its eid is expected: at every door that
 // resolves ids through Graph.address, a read, a write and a caller's lookup.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
 import { kernelKeywords, spineDoc } from '@yaks/kernel'
@@ -39,7 +40,7 @@ let ASTRA = identityEid('model', ['gpt-6-astra'])
 let CODEX = identityEid('provider', ['codex'])
 let E = 'e0000000-0000-4000-8000-000000000001'
 
-Deno.test('a provider or a model is addressed by its name', () => {
+test('a provider or a model is addressed by its name', () => {
   let g = shelf()
   assertEquals(
     g.address(['gpt-6-astra', 'codex', 'gpt-9', E]),
@@ -47,7 +48,7 @@ Deno.test('a provider or a model is addressed by its name', () => {
   )
 })
 
-Deno.test('a name is accepted wherever a model reference is', () => {
+test('a name is accepted wherever a model reference is', () => {
   let g = shelf()
   g.apply([{ entity: { eid: E }, using: { model: 'gpt-6-astra' } }])
   let read = (q: string) =>
@@ -56,7 +57,7 @@ Deno.test('a name is accepted wherever a model reference is', () => {
   assertEquals(read('.using.model=gpt-6-astra'), [[E, ASTRA]])
 })
 
-Deno.test('a name a provider and a model both hold is refused', () => {
+test('a name a provider and a model both hold is refused', () => {
   let g = shelf()
   g.apply([{ entity: { eid: '$m' }, model: { name: 'codex' } }])
   assertThrows(() => g.address(['codex']), Error, 'both a provider and a model')

@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { Frame } from './Frame.ts'
@@ -15,7 +16,7 @@ let App = () =>
     h(Scroll, { id: 'log', grow: '1' }, h('div', null, 'body')),
   )
 
-Deno.test('the sidebar sits beside the main column, panel by panel', async () => {
+test('the sidebar sits beside the main column, panel by panel', async () => {
   let ui = await mount(App, 30, 6)
   assertEquals(ui.text().split('\n'), [
     'body                One', // no blanket sidebar gutter
@@ -28,13 +29,13 @@ Deno.test('the sidebar sits beside the main column, panel by panel', async () =>
   ui.free()
 })
 
-Deno.test('a narrow terminal folds the sidebar away', async () => {
+test('a narrow terminal folds the sidebar away', async () => {
   let ui = await mount(App, 20, 3)
   assertEquals(ui.text().split('\n'), ['body', '', ''])
   ui.free()
 })
 
-Deno.test('bounded panels share height rather than pushing sibling headings offscreen', async () => {
+test('bounded panels share height rather than pushing sibling headings offscreen', async () => {
   let ui = await mount(
     () =>
       h(Frame, {
@@ -74,7 +75,7 @@ Deno.test('bounded panels share height rather than pushing sibling headings offs
   }
 })
 
-Deno.test('fit panels shrink and return their unused height to the expanding tree', async () => {
+test('fit panels shrink and return their unused height to the expanding tree', async () => {
   let ui = await mount(
     () =>
       h(Frame, {
@@ -124,7 +125,7 @@ Deno.test('fit panels shrink and return their unused height to the expanding tre
   }
 })
 
-Deno.test('proportional terminal sidebar keeps its minimum and reflows on resize', async () => {
+test('proportional terminal sidebar keeps its minimum and reflows on resize', async () => {
   let ui = await mount(
     () =>
       h(Frame, {
@@ -147,7 +148,7 @@ Deno.test('proportional terminal sidebar keeps its minimum and reflows on resize
   }
 })
 
-Deno.test('fixed sidebar width remains the default on wide terminals', async () => {
+test('fixed sidebar width remains the default on wide terminals', async () => {
   let ui = await mount(
     () => h(Frame, { sidebar: panels }, h('div', null, 'main')),
     200,
@@ -160,7 +161,7 @@ Deno.test('fixed sidebar width remains the default on wide terminals', async () 
   }
 })
 
-Deno.test('proportional sidebar leaves room for the main column at small custom thresholds', async () => {
+test('proportional sidebar leaves room for the main column at small custom thresholds', async () => {
   let ui = await mount(
     () => h(Frame, { ratio: 1, min: 1, sidebar: panels }, h('div', null, 'M')),
     8,

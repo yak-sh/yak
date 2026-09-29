@@ -1,11 +1,12 @@
 /// <reference lib="deno.ns" />
 // The web reader sees committed graph rows through its own connection.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { read } from './config.ts'
 import { compose } from './host.ts'
 import { readThread } from './read_thread.ts'
 
-Deno.test('the web reader sees commits and closes after a refused query', async () => {
+test('the web reader sees commits and closes after a refused query', async () => {
   let dir = await Deno.makeTempDir()
   let file = `${dir}/yak.json`
   await Deno.writeTextFile(

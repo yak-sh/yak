@@ -2,6 +2,7 @@
 // and the guide read back through the assets binding. What the pages say is
 // site_test.ts's, read from disk.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { kernel } from './probe.ts'
@@ -10,7 +11,7 @@ import { ADDRESSES } from './seo.ts'
 // The generated addresses, through the kernel, at the apex and not on a space's
 // hostname — where robots.txt is the customer's own file (route.ts) and always
 // has been.
-Deno.test('the apex answers the crawler and the model', async () => {
+test('the apex answers the crawler and the model', async () => {
   let k = await kernel()
   try {
     let robots = await k.at('yaks.app', '/robots.txt')

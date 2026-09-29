@@ -1,6 +1,7 @@
 // The schema a vocabulary implies: one identity table, one graveyard, one table
 // per component, and the doc view (search indexes belong to @yaks/fts).
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { graph, identityEid } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -47,7 +48,7 @@ let lookWords = (ref = false) =>
     },
   })
 
-Deno.test('a look survives reference upgrades and rollbacks', () => {
+test('a look survives reference upgrades and rollbacks', () => {
   let d = mem(), old = lookWords(), next = lookWords(true)
   let before = storage(d, old)
   before.install()
@@ -75,7 +76,7 @@ Deno.test('a look survives reference upgrades and rollbacks', () => {
   })
 })
 
-Deno.test('a changed identity retires its old unique index', () => {
+test('a changed identity retires its old unique index', () => {
   let shape = (identity: string[]) =>
     loadVocab({
       $defs: {
@@ -126,7 +127,7 @@ Deno.test('a changed identity retires its old unique index', () => {
   assert(names.includes('build_lookup'))
 })
 
-Deno.test('a changed constraint replaces the index with the same name', () => {
+test('a changed constraint replaces the index with the same name', () => {
   let words = (unique: boolean) =>
     loadVocab({
       $defs: {
@@ -162,7 +163,7 @@ Deno.test('a changed constraint replaces the index with the same name', () => {
   )
 })
 
-Deno.test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
+test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
   let d = mem(), old = lookWords(), next = lookWords(true)
   let before = storage(d, old)
   before.install()
@@ -181,19 +182,19 @@ Deno.test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
   }])
 })
 
-Deno.test('the shop vocabulary loads with its kinds and death words', () => {
+test('the shop vocabulary loads with its kinds and death words', () => {
   assertEquals(shop.all.includes('product'), true)
   assertEquals(shop.deaths('cascade'), [['review', 'product']])
   assertEquals(shop.deaths('detach'), [['product', 'maker']])
   assertEquals(shop.deaths('release'), [['bookmark', 'of']])
 })
 
-Deno.test('the spine and the graveyard are always present', () => {
+test('the spine and the graveyard are always present', () => {
   assert(all.includes('create table if not exists "entity" ('), all)
   assert(all.includes('create table if not exists "tombstone"'), all)
 })
 
-Deno.test('every component gets a table keyed by an entity owner', () => {
+test('every component gets a table keyed by an entity owner', () => {
   for (let comp of ['doc', 'product', 'review', 'bookmark']) {
     assert(
       new RegExp(`create table if not exists "${comp}" \\(`).test(all),
@@ -204,24 +205,24 @@ Deno.test('every component gets a table keyed by an entity owner', () => {
   assert(!all.includes('"entity" ("entity" integer'), all)
 })
 
-Deno.test('a reference column stores an integer with a foreign key', () => {
+test('a reference column stores an integer with a foreign key', () => {
   // product.maker is a reference — an integer id pointing at the spine.
   assert(all.includes('"maker" integer references "entity"("id")'), all)
 })
 
-Deno.test('a boolean column takes integer affinity, a text column text', () => {
+test('a boolean column takes integer affinity, a text column text', () => {
   assert(/"available" integer/.test(all), all)
   assert(/"title" text/.test(all), all)
   assert(/"price" real/.test(all), all)
 })
 
-Deno.test('a doc vocabulary gets a read view but no implicit search index', () => {
+test('a doc vocabulary gets a read view but no implicit search index', () => {
   assert(all.includes('create view if not exists "doc_value"'), all)
   assert(!all.includes('fts5'), all)
   assert(!all.includes('create trigger if not exists "doc'), all)
 })
 
-Deno.test('a resolved doc column is read as text by the view', () => {
+test('a resolved doc column is read as text by the view', () => {
   let words = (stored: Expr) =>
     sub(select({
       cols: [col('words')],
@@ -238,7 +239,7 @@ Deno.test('a resolved doc column is read as text by the view', () => {
   }
 })
 
-Deno.test('a store reopened with other read overrides raises its view again', () => {
+test('a store reopened with other read overrides raises its view again', () => {
   let d = mem()
   let view = () =>
     String(objects(d, { type: 'view', name: 'doc_value' })[0].sql)
@@ -250,12 +251,12 @@ Deno.test('a store reopened with other read overrides raises its view again', ()
   assert(view().includes('upper'), view())
 })
 
-Deno.test('the statements list in dependency order — spine first', () => {
+test('the statements list in dependency order — spine first', () => {
   let stmts = text(schema(shop))
   assertEquals(stmts[0].includes('create table if not exists "entity" ('), true)
 })
 
-Deno.test('a property marked unique gets a unique index named after it', () => {
+test('a property marked unique gets a unique index named after it', () => {
   assert(
     all.includes(
       'create unique index if not exists "product_sku" on "product" ("sku")',
@@ -264,7 +265,7 @@ Deno.test('a property marked unique gets a unique index named after it', () => {
   )
 })
 
-Deno.test('a component declares its composite unique and its index', () => {
+test('a component declares its composite unique and its index', () => {
   assert(
     all.includes(
       'create unique index if not exists "shelf_aisle_slot" ' +
@@ -281,7 +282,7 @@ Deno.test('a component declares its composite unique and its index', () => {
   )
 })
 
-Deno.test('an index comes after the table it covers', () => {
+test('an index comes after the table it covers', () => {
   let stmts = text(schema(shop))
   let table = stmts.findIndex((s) => s.includes('exists "shelf"'))
   let index = stmts.findIndex((s) => s.includes('shelf_aisle_slot'))
@@ -291,7 +292,7 @@ Deno.test('an index comes after the table it covers', () => {
 // A vocabulary that grew: `create table if not exists` is silent about a table
 // that is already there, so a property added to a word has to arrive by
 // `alter table` or every read naming it fails at the engine.
-Deno.test('a property a component grew is added to the live table', () => {
+test('a property a component grew is added to the live table', () => {
   let spine = {
     component: true,
     type: 'object',
@@ -339,7 +340,7 @@ Deno.test('a property a component grew is added to the live table', () => {
   assertEquals(grew.grown(), [])
 })
 
-Deno.test('reference indexes are installed on new and existing member stores', () => {
+test('reference indexes are installed on new and existing member stores', () => {
   let vocab = loadVocab(memberDoc)
   for (let existing of [false, true]) {
     let d = mem()
@@ -449,7 +450,7 @@ let strict = loadVocab({
   },
 })
 
-Deno.test('the engine holds what the vocabulary said', () => {
+test('the engine holds what the vocabulary said', () => {
   let d = mem()
   storage(d, strict).install()
   d.query(insert('entity', { id: 1, eid: 'a' }, { id: 2, eid: 'b' }, {
@@ -480,7 +481,7 @@ Deno.test('the engine holds what the vocabulary said', () => {
   )
 })
 
-Deno.test('a grown column keeps a literal default, takes the clock only ahead', () => {
+test('a grown column keeps a literal default, takes the clock only ahead', () => {
   let d = mem()
   let was = loadVocab({
     $defs: {
@@ -526,7 +527,7 @@ Deno.test('a grown column keeps a literal default, takes the clock only ahead', 
   assertEquals(scan(d, 'created', undefined, ['at']), [{ at: null }])
 })
 
-Deno.test('refitting removes only empty undeclared columns', () => {
+test('refitting removes only empty undeclared columns', () => {
   let d = mem()
   storage(d, shop).install()
   d.query(insert('entity', { id: 1, eid: 'm' }, { id: 2, eid: 'p' }))
@@ -550,7 +551,7 @@ Deno.test('refitting removes only empty undeclared columns', () => {
   assertEquals(cols(d, 'product').includes('used'), true)
 })
 
-Deno.test('a death word that moved rebuilds its table without the key', () => {
+test('a death word that moved rebuilds its table without the key', () => {
   let d = mem()
   storage(d, shop).install()
   d.query(insert('entity', { id: 1, eid: 'm' }, { id: 2, eid: 'p' }))
@@ -621,7 +622,7 @@ let life = (...ages: [Record<string, unknown>, string[]][]) => {
   return { d, s, said, kinds }
 }
 
-Deno.test('a table takes the kinds its vocabulary grew or stopped listing', () => {
+test('a table takes the kinds its vocabulary grew or stopped listing', () => {
   let two = { enum: ['fox', 'owl'] }
   for (let later of [{ enum: ['fox', 'owl', 'hen'] }, {}]) {
     let { kinds, said } = life([two, ['fox']], [later, ['hen']])
@@ -630,7 +631,7 @@ Deno.test('a table takes the kinds its vocabulary grew or stopped listing', () =
   }
 })
 
-Deno.test('a narrowed list refuses the kind it dropped', () => {
+test('a narrowed list refuses the kind it dropped', () => {
   let { s, kinds } = life(
     [{ enum: ['fox', 'owl'] }, ['fox']],
     [{ enum: ['fox'] }, []],
@@ -640,7 +641,7 @@ Deno.test('a narrowed list refuses the kind it dropped', () => {
   assertThrows(() => s.tx((tx) => tx.patch(owl)), Error, 'CHECK')
 })
 
-Deno.test('rows a narrowed list would refuse keep their table as it stood', () => {
+test('rows a narrowed list would refuse keep their table as it stood', () => {
   let { d, s, kinds, said } = life(
     [{ enum: ['fox', 'owl'] }, ['fox', 'owl']],
     [{ enum: ['fox'] }, []],
@@ -654,7 +655,7 @@ Deno.test('rows a narrowed list would refuse keep their table as it stood', () =
   assertEquals(objects(d, { name: 'creature__refit' }), [])
 })
 
-Deno.test('a table kept for its rows fits on the open after they move', () => {
+test('a table kept for its rows fits on the open after they move', () => {
   let { d } = life(
     [{ enum: ['fox', 'owl'] }, ['fox', 'owl']],
     [{ enum: ['fox'] }, []],
@@ -666,7 +667,7 @@ Deno.test('a table kept for its rows fits on the open after they move', () => {
   assertThrows(() => s.tx((tx) => tx.patch(owl)), Error, 'CHECK')
 })
 
-Deno.test('a store over a file installs the sizes its planner reads it by', () => {
+test('a store over a file installs the sizes its planner reads it by', () => {
   let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
   let d = open(path)
   try {
@@ -693,7 +694,7 @@ Deno.test('a store over a file installs the sizes its planner reads it by', () =
   }
 })
 
-Deno.test('a store that is not a file is left unmeasured', () => {
+test('a store that is not a file is left unmeasured', () => {
   let said: string[] = []
   storage(spy(mem(), (sql) => void said.push(sql)), shop).install()
   assertEquals(

@@ -4,6 +4,7 @@
 // SECOND implementation satisfies the same Resolver interface, proof the seam is
 // real (T-17124, the boundary T-17125's IDB backend plugs into). Pure — a plain
 // mutable graph stands in for the live cache, so no DB and no DOM.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { anchor, emptyIndex, indexAll } from './index.ts'
 import { parseQuery, type Pred } from './query.ts'
@@ -31,7 +32,7 @@ let storeOver = (graph: Graph): Store => {
 
 let q = (line: string): Pred[] => parseQuery(line)
 
-Deno.test('memoryResolver resolves and subscribes an {eid}-ref query, narrowly', () => {
+test('memoryResolver resolves and subscribes an {eid}-ref query, narrowly', () => {
   let graph: Graph = {
     person: { entity: { num: 1 }, person: {} },
     t1: {
@@ -77,7 +78,7 @@ Deno.test('memoryResolver resolves and subscribes an {eid}-ref query, narrowly',
   }
 })
 
-Deno.test('memoryResolver folds a multi-hop traversal (T-17123)', () => {
+test('memoryResolver folds a multi-hop traversal (T-17123)', () => {
   let graph: Graph = {
     c1: { entity: { num: 1 }, comment: { target: 't1' } },
     c2: { entity: { num: 2 }, comment: { target: 't2' } },
@@ -107,7 +108,7 @@ Deno.test('memoryResolver folds a multi-hop traversal (T-17123)', () => {
   assertEquals(ids.value.toSorted(), ['c1', 'c2'])
 })
 
-Deno.test('a projection re-fires on a waking column, sleeps on a volatile one', () => {
+test('a projection re-fires on a waking column, sleeps on a volatile one', () => {
   // The canvas working set's shape: pins on a canvas, projecting the box and
   // marking z VOLATILE (`~`). Membership is `.pin.canvas=cv`; the projection
   // rides along, so a move (x) re-fires while a z-bump never does — the exact
@@ -146,7 +147,7 @@ Deno.test('a projection re-fires on a waking column, sleeps on a volatile one', 
   }
 })
 
-Deno.test('a second Resolver implementation satisfies the same interface', () => {
+test('a second Resolver implementation satisfies the same interface', () => {
   // A stub backend answering from a canned set — no cache, no index. It stands
   // in wherever a Resolver is expected, so the seam is not shaped around the
   // in-memory impl.

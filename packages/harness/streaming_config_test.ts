@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import { streamingEnabled } from './streaming.ts'
@@ -5,7 +6,7 @@ import { local } from './local.ts'
 import { remote } from './remote.ts'
 import { at, harness, repo, worker } from './testing.ts'
 
-Deno.test('streaming defaults on; explicit options override the environment', () => {
+test('streaming defaults on; explicit options override the environment', () => {
   for (const value of [undefined, '1', '0']) {
     const env = () => value
     assertEquals(streamingEnabled({}, env), value != '0')
@@ -26,7 +27,7 @@ Deno.test('streaming defaults on; explicit options override the environment', ()
 const streamAs = (value: string | undefined) => (name: string) =>
   name == 'HARNESS_STREAM' ? value : Deno.env.get(name)
 
-Deno.test('local streaming options control the model text callback', async () => {
+test('local streaming options control the model text callback', async () => {
   for (
     const [options, expected] of [
       [{}, true],
@@ -86,7 +87,7 @@ Deno.test('local streaming options control the model text callback', async () =>
   }
 })
 
-Deno.test('worker streaming options reach the model request', async () => {
+test('worker streaming options reach the model request', async () => {
   for (
     const [value, options, expected] of [
       [undefined, {}, true],

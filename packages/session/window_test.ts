@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -17,7 +18,7 @@ let tracked = () => {
   return graph({ storage: ram(vocab), vocab })
 }
 import { transcriptPlan, transcriptWindow } from './window.ts'
-Deno.test('transcript windows bound bodies, support both edges and entry anchors', async () => {
+test('transcript windows bound bodies, support both edges and entry anchors', async () => {
   let g = tracked()
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -49,7 +50,7 @@ Deno.test('transcript windows bound bodies, support both edges and entry anchors
   )
   assertEquals([middle.before, middle.after], [true, true])
 })
-Deno.test('nested fork page crosses stable ancestor boundaries without newer parent output', async () => {
+test('nested fork page crosses stable ancestor boundaries without newer parent output', async () => {
   let g = tracked()
   await g.apply([
     { entity: { eid: 'p' }, session: {} },

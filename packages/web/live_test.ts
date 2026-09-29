@@ -1,5 +1,6 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
+import { test } from '@yaks/testing'
 import { tick, until } from './testing.ts'
 import {
   agreementProbe,
@@ -99,7 +100,7 @@ let mark = (status: string, eid: string): Record<string, unknown> =>
     ? { claim: { eid, session: 's' } }
     : {}
 
-Deno.test('findEid reads an alias off the key that names the entity', () => {
+test('findEid reads an alias off the key that names the entity', () => {
   cache.value = {
     t: { entity: { eid: 't', num: 7 } },
     k: {
@@ -114,7 +115,7 @@ Deno.test('findEid reads an alias off the key that names the entity', () => {
   assertEquals(findEid('desk'), undefined)
 })
 
-Deno.test('findEid does not scan or subscribe after indexing', () => {
+test('findEid does not scan or subscribe after indexing', () => {
   let scans = 0
   cache.value = new Proxy({
     indexed: {
@@ -173,7 +174,7 @@ let stubResolve = (
   return { calls, wire, restore: wire.free }
 }
 
-Deno.test('server-resolve: a cache hit never touches the wire', () => {
+test('server-resolve: a cache hit never touches the wire', () => {
   clearResolved()
   cache.value = {
     'bbbbbbbb-0000-4000-8000-000000000031': {
@@ -196,7 +197,7 @@ Deno.test('server-resolve: a cache hit never touches the wire', () => {
 // hand-written index anywhere — yet it is queryable through the same reverse
 // index, because the reference list flows from the vocabulary. Adding an {eid} field needs no
 // index code (T-17036 done-when).
-Deno.test('queryEids indexes any {eid} reference with no bespoke index', () => {
+test('queryEids indexes any {eid} reference with no bespoke index', () => {
   cache.value = {
     person: { entity: { eid: 'person', num: 1 }, person: { eid: 'person' } },
     t1: {
@@ -234,7 +235,7 @@ Deno.test('queryEids indexes any {eid} reference with no bespoke index', () => {
   }
 })
 
-Deno.test('repoUrl follows task, comment, and session ownership', () => {
+test('repoUrl follows task, comment, and session ownership', () => {
   cache.value = {
     project: {
       entity: { eid: 'project', num: 1 },
@@ -265,7 +266,7 @@ Deno.test('repoUrl follows task, comment, and session ownership', () => {
   }
 })
 
-Deno.test('repoUrl follows a session actor', () => {
+test('repoUrl follows a session actor', () => {
   cache.value = {
     project: {
       entity: { eid: 'project', num: 1 },
@@ -288,7 +289,7 @@ Deno.test('repoUrl follows a session actor', () => {
 // A transcript entry speaks for its session's project, so a commit hash in
 // its body links (T-19155): the entry itself carries no project column, only
 // entry.session.
-Deno.test('repoUrl follows an entry through its session', () => {
+test('repoUrl follows an entry through its session', () => {
   cache.value = {
     project: {
       entity: { eid: 'project', num: 1 },
@@ -338,7 +339,7 @@ let fill = (rows: [string, string | null][]) => {
 // scanFacets derives its lists from the byComp index, not four whole-cache
 // scans (D-18055). Parity: every facet output must equal the old cache-scan
 // logic, computed inline here as the reference — order included.
-Deno.test('facets: byComp derivation matches the whole-cache scan', () => {
+test('facets: byComp derivation matches the whole-cache scan', () => {
   cache.value = {
     // projects, nums OUT of order so the num-sort is exercised
     pB: { entity: { eid: 'pB', num: 9 }, project: { eid: 'pB' } },
@@ -400,7 +401,7 @@ Deno.test('facets: byComp derivation matches the whole-cache scan', () => {
   assertEquals(shelfFor('nope'), undefined)
 })
 
-Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
+test('agreement diagnostics are inert until explicitly enabled', () => {
   config.agreement = false
   cache.value = {
     board: {
@@ -438,7 +439,7 @@ Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
 // and lists them. `.entry.session=X` is satisfiable only by entries, so a hit
 // is proof the partition rendered; the eager path (tasks=true) still excludes
 // them, since an entry has no `task` component.
-Deno.test('a board naming the lazy partition lists its entries', () => {
+test('a board naming the lazy partition lists its entries', () => {
   cache.value = {
     lazyboard: {
       entity: { eid: 'lazyboard', num: 1 },
@@ -469,14 +470,14 @@ Deno.test('a board naming the lazy partition lists its entries', () => {
   assertEquals(boardTasks(ent('lazyboard')).map((e) => e.eid), [])
 })
 
-Deno.test('agreement diagnostics opt in through the named browser probe', () => {
+test('agreement diagnostics opt in through the named browser probe', () => {
   assertEquals(agreementProbe('?probe=subscriptions'), true)
   assertEquals(agreementProbe('?v=Board&probe=subscriptions'), true)
   assertEquals(agreementProbe('?probe=other'), false)
   assertEquals(agreementProbe(''), false)
 })
 
-Deno.test('a frame wakes only the readers of its own sub and rows', () => {
+test('a frame wakes only the readers of its own sub and rows', () => {
   let change = (eid: string) => [
     { eid, name: 'entity', comp: { eid, num: 1 } },
   ]
@@ -512,7 +513,7 @@ Deno.test('a frame wakes only the readers of its own sub and rows', () => {
   for (let s of stop) s()
 })
 
-Deno.test('a replacement frame forgets the prior query set', () => {
+test('a replacement frame forgets the prior query set', () => {
   let change = (eid: string) => [
     { eid, name: 'entity', comp: { eid, num: 1 } },
   ]
@@ -533,7 +534,7 @@ Deno.test('a replacement frame forgets the prior query set', () => {
 
 // Closing the last consumer is the only moment the cache can leak: the
 // departing set is gone from `subMembers` before anyone asks what it held.
-Deno.test('unsubscribing releases ownership into the single bounded payload floor', () => {
+test('unsubscribing releases ownership into the single bounded payload floor', () => {
   let ent = (eid: string) => [
     { eid, name: 'entity', comp: { eid, num: 1 } },
   ]
@@ -562,7 +563,7 @@ Deno.test('unsubscribing releases ownership into the single bounded payload floo
 
 // A shadow subscription rides beside the complete stream, which is still the
 // cache's owner — so closing one must take nothing with it.
-Deno.test('closing a shadow subscription evicts nothing', () => {
+test('closing a shadow subscription evicts nothing', () => {
   cache.value = {}
   landSub({
     sub: 'watching',
@@ -578,27 +579,27 @@ Deno.test('closing a shadow subscription evicts nothing', () => {
   assertEquals(Object.keys(cache.value), ['watched'])
 })
 
-Deno.test('domains: distinct, sorted, absent ones skipped', () => {
+test('domains: distinct, sorted, absent ones skipped', () => {
   fill([['T', 'Ops'], ['T', 'Eng'], ['T', 'Ops'], ['T', null], ['P', 'Fable']])
   assertEquals(domains.value, ['Eng', 'Ops'])
 })
 
-Deno.test('domains: an empty string is not a domain', () => {
+test('domains: an empty string is not a domain', () => {
   fill([['T', ''], ['T', 'Eng']])
   assertEquals(domains.value, ['Eng'])
 })
 
-Deno.test('domains: nothing to say about an empty graph', () => {
+test('domains: nothing to say about an empty graph', () => {
   fill([])
   assertEquals(domains.value, [])
 })
 
-Deno.test('projects: project rows only, oldest first, named by doc', () => {
+test('projects: project rows only, oldest first, named by doc', () => {
   fill([['T', 'Ops'], ['P', 'Sol'], ['P', 'Fable']])
   assertEquals(projects().map((p) => p.doc?.title), ['Sol', 'Fable'])
 })
 
-Deno.test('commentCount: every comment aimed at a target counts', () => {
+test('commentCount: every comment aimed at a target counts', () => {
   let comment = (eid: string, target: string) => ({
     comment: { eid, target },
   })
@@ -612,7 +613,7 @@ Deno.test('commentCount: every comment aimed at a target counts', () => {
   assertEquals(commentCount('silent').value, 0)
 })
 
-Deno.test('commentCount: cold targets share one graph scan', () => {
+test('commentCount: cold targets share one graph scan', () => {
   let scans = 0
   cache.value = new Proxy({
     one: { comment: { eid: 'one', target: 'cold_one' } },
@@ -632,7 +633,7 @@ Deno.test('commentCount: cold targets share one graph scan', () => {
 // query door (T-18101). Parity: the set equals the comments aimed here; the thread
 // wakes only when its own target gains, loses, or retargets a comment — never on a
 // comment to somewhere else or an unrelated row.
-Deno.test('comments: reverse-ref set, awake only for its own thread', () => {
+test('comments: reverse-ref set, awake only for its own thread', () => {
   let note = (eid: string, num: number, target: string) => ({
     entity: { eid, num },
     comment: { eid, target },
@@ -684,7 +685,7 @@ Deno.test('comments: reverse-ref set, awake only for its own thread', () => {
 // boardsOver reads a CONTAINS over `board.query` through the query door (T-18101):
 // a board query carries refs as text, so this names every board mentioning the
 // target and wakes only when a board's query gains or loses its eid.
-Deno.test('boardsOver: awake only when a board names or drops the target', () => {
+test('boardsOver: awake only when a board names or drops the target', () => {
   cache.value = {
     b1: {
       entity: { eid: 'b1', num: 1 },
@@ -746,7 +747,7 @@ Deno.test('boardsOver: awake only when a board names or drops the target', () =>
 // and reads its live `statuses` off that fold's own row signal (T-18099). So a
 // collapse/expand of MY fold wakes it, its birth/death wakes it, and another
 // client's fold or an unrelated row leaves it asleep.
-Deno.test('foldFor: query membership, live statuses off the row', () => {
+test('foldFor: query membership, live statuses off the row', () => {
   cache.value = {
     f1: {
       entity: { eid: 'f1', num: 1 },
@@ -797,7 +798,7 @@ Deno.test('foldFor: query membership, live statuses off the row', () => {
 // The presence/reference facets (projects/shelfFor) ride the query
 // door now (T-18099), so each wakes only when ITS membership changes — a project
 // born, a shelf claimed — never on a sibling facet or an unrelated row.
-Deno.test('facet reads wake only their own membership', () => {
+test('facet reads wake only their own membership', () => {
   cache.value = {
     proj: {
       entity: { eid: 'proj', num: 1 },
@@ -849,7 +850,7 @@ Deno.test('facet reads wake only their own membership', () => {
 
 // jobOf reads the claim.session reverse index rather than scanning the cache;
 // the answer is the newest claim-bearing task the session holds — unchanged.
-Deno.test('jobOf: newest claimed task, off the reverse index', () => {
+test('jobOf: newest claimed task, off the reverse index', () => {
   cache.value = {
     s1: { entity: { eid: 's1', num: 1 }, session: { eid: 's1', id: 'x' } },
     // two claims by s1; the newer at wins regardless of cache order
@@ -886,7 +887,7 @@ Deno.test('jobOf: newest claimed task, off the reverse index', () => {
 
 // myMode reads the subscription.target reverse index; the unique (actor,
 // target) row is found, foreign actors are screened, quarantined rows skipped.
-Deno.test("myMode: this actor's subscription, off the reverse index", () => {
+test("myMode: this actor's subscription, off the reverse index", () => {
   config.client = 'me_client'
   cache.value = {
     me_client: {
@@ -932,7 +933,7 @@ Deno.test("myMode: this actor's subscription, off the reverse index", () => {
 
 // The inbox signal is only a test/host seam now. Production membership comes
 // from useInbox's ordinary query subscriptions, never an HTTP side door.
-Deno.test('inbox: planted rows retain the shared unread derivation', () => {
+test('inbox: planted rows retain the shared unread derivation', () => {
   let item = (eid: string, opened = false) => ({
     eid,
     num: 1,
@@ -948,7 +949,7 @@ Deno.test('inbox: planted rows retain the shared unread derivation', () => {
   setInbox('actor', [])
 })
 
-Deno.test('relationship indices wake only their affected targets', () => {
+test('relationship indices wake only their affected targets', () => {
   cache.value = {
     index_target: {
       entity: { eid: 'index_target', num: 1 },
@@ -1037,7 +1038,7 @@ Deno.test('relationship indices wake only their affected targets', () => {
 
 // byWarmth: the .order=hot board sort — a well-recalled old thing
 // outranks a merely new one, and the unrecalled fade on their own.
-Deno.test('byWarmth: recalled-often beats merely-new beats faded', () => {
+test('byWarmth: recalled-often beats merely-new beats faded', () => {
   let NOW = Date.parse('2026-07-20T12:00:00Z')
   let iso = (d: number) => new Date(NOW - d * 86_400_000).toISOString()
   let old = {
@@ -1056,7 +1057,7 @@ Deno.test('byWarmth: recalled-often beats merely-new beats faded', () => {
 // The alarm is decoupled from deps (D-17094): gated() burns red ONLY on the
 // `blocked` facet — an external stuck. Open `requires` edges are normal work,
 // so they never redden the Dot; they surface as the calm openDeps() count.
-Deno.test('gated: red keys on the blocked facet, never an open requires', () => {
+test('gated: red keys on the blocked facet, never an open requires', () => {
   let mk = (status: string, extra = {}) => ({
     entity: { eid: `x`, num: 0, created_at: '' },
     task: { eid: 'x' },
@@ -1086,7 +1087,7 @@ Deno.test('gated: red keys on the blocked facet, never an open requires', () => 
 // ent(): edges partition into refs (non-contains, {type, child}) and kids
 // (contains, resolved). Open refs lead without disturbing the order inside
 // either half; kids preserve their graph order.
-Deno.test('ent: refs put open work before settled work', () => {
+test('ent: refs put open work before settled work', () => {
   let sp = (eid: string, status = 'open') => ({
     entity: { eid, num: 0, created_at: '' },
     task: { eid },
@@ -1123,7 +1124,7 @@ Deno.test('ent: refs put open work before settled work', () => {
 
 // Camera motion and card stacking have narrow live signals; publishing the
 // graph cache too would recompute every entity and board mounted around them.
-Deno.test('camera motion and card stacking stay off the graph signal', () => {
+test('camera motion and card stacking stay off the graph signal', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
@@ -1221,7 +1222,7 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
 // names its sentence AND the edge entity that says it; an entity death touches
 // the eid AND every edge it swept from deps — the cascade the shadow must drop
 // too.
-Deno.test('applyLocal: reports touched eids and edges', () => {
+test('applyLocal: reports touched eids and edges', () => {
   let sp = (eid: string) => ({
     entity: { eid, num: 0 },
     task: { eid },
@@ -1245,7 +1246,7 @@ Deno.test('applyLocal: reports touched eids and edges', () => {
   assertEquals(deps.value.length, 1)
 })
 
-Deno.test('applyLocal: an idempotent replay preserves cache identity', () => {
+test('applyLocal: an idempotent replay preserves cache identity', () => {
   cache.value = {
     a: {
       entity: { eid: 'a', num: 1 },
@@ -1261,7 +1262,7 @@ Deno.test('applyLocal: an idempotent replay preserves cache identity', () => {
   assertEquals(touched.eids, ['a'])
 })
 
-Deno.test('applyLocal: an idempotent entity death preserves cache identity', () => {
+test('applyLocal: an idempotent entity death preserves cache identity', () => {
   cache.value = {}
   deps.value = []
   let before = cache.value
@@ -1270,7 +1271,7 @@ Deno.test('applyLocal: an idempotent entity death preserves cache identity', () 
   assertEquals(touched.eids, ['gone'])
 })
 
-Deno.test('an empty sieve does not subscribe to the graph', () => {
+test('an empty sieve does not subscribe to the graph', () => {
   cache.value = {
     a: {
       entity: { eid: 'a', num: 1 },
@@ -1290,7 +1291,7 @@ Deno.test('an empty sieve does not subscribe to the graph', () => {
   }
 })
 
-Deno.test('applyLocal: narrow signals wake only touched graph slices', () => {
+test('applyLocal: narrow signals wake only touched graph slices', () => {
   let spine = (eid: string, num: number) => ({
     entity: { eid, num },
     doc: { eid, title: eid, body: '' },
@@ -1343,7 +1344,7 @@ Deno.test('applyLocal: narrow signals wake only touched graph slices', () => {
   }
 })
 
-Deno.test('narrow signals follow births, subscription eviction, and census', () => {
+test('narrow signals follow births, subscription eviction, and census', () => {
   cache.value = {
     narrow_keep: {
       entity: { eid: 'narrow_keep', num: 1 },
@@ -1373,7 +1374,7 @@ Deno.test('narrow signals follow births, subscription eviction, and census', () 
   assertEquals(census.value, ['narrow_keep'])
 })
 
-Deno.test('board membership sleeps through an unrelated row patch', () => {
+test('board membership sleeps through an unrelated row patch', () => {
   cache.value = {
     board_narrow: {
       entity: { eid: 'board_narrow', num: 1 },
@@ -1414,7 +1415,7 @@ Deno.test('board membership sleeps through an unrelated row patch', () => {
   }
 })
 
-Deno.test('a hot board sleeps through card births and deaths', () => {
+test('a hot board sleeps through card births and deaths', () => {
   cache.value = {
     board_hot: {
       entity: { eid: 'board_hot', num: 1 },
@@ -1457,7 +1458,7 @@ Deno.test('a hot board sleeps through card births and deaths', () => {
   }
 })
 
-Deno.test('applyLocal: a camera birth still publishes the cache', () => {
+test('applyLocal: a camera birth still publishes the cache', () => {
   cache.value = {}
   let before = cache.value
   applyLocal([{
@@ -1471,7 +1472,7 @@ Deno.test('applyLocal: a camera birth still publishes the cache', () => {
 // The cascade: deleting an entity reports the eid plus every edge that
 // touched it — as parent OR child — so persist() deletes the same rows the
 // signal filtered out (else a hydrate re-reads ghost edges).
-Deno.test('applyLocal: entity death sweeps its edges into the report', () => {
+test('applyLocal: entity death sweeps its edges into the report', () => {
   let sp = (eid: string) => ({ entity: { eid, num: 0 } })
   cache.value = { p: sp('p'), a: sp('a'), b: sp('b') }
   deps.value = [
@@ -1495,7 +1496,7 @@ Deno.test('applyLocal: entity death sweeps its edges into the report', () => {
 // live frame always ARRIVES after it. The client just applies frames in
 // arrival order — the socket handler is applyLocal(catchup) then applyLocal
 // (live) — and a shared column ends at the newer (live) value. No buffer.
-Deno.test('catch-up then live batch apply in arrival order', () => {
+test('catch-up then live batch apply in arrival order', () => {
   cache.value = {
     x: {
       entity: { eid: 'x', num: 1 },
@@ -1523,7 +1524,7 @@ Deno.test('catch-up then live batch apply in arrival order', () => {
 
 // boardAll: the board's List face — the query over the WHOLE graph.
 // Kind-agnostic matching, chrome and comments and the board itself out.
-Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async () => {
+test('boardAll: whole-graph match, chrome/comments/self excluded', async () => {
   let { boardAll } = await import('./live.ts')
   let spine = (eid: string, num: number) => ({ eid, num, created_at: '' })
   cache.value = {
@@ -1608,7 +1609,7 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
 // pinned: a pin comp cast from another client carries no eid — the cache
 // key is the identity, and a Pinned without one aims every raise/drag
 // write at eid undefined (T-7437).
-Deno.test('pinned: the cache key is the eid, a cast comp carries none', () => {
+test('pinned: the cache key is the eid, a cast comp carries none', () => {
   cache.value = {
     c1: {
       entity: { eid: 'c1', num: 1 },
@@ -1622,7 +1623,7 @@ Deno.test('pinned: the cache key is the eid, a cast comp carries none', () => {
 
 // topZ: a nullish canvas must match nothing — the old `?.` filter let
 // every PINLESS row through (undefined == null) and crashed on .z.
-Deno.test('topZ: pinless rows never ride, whatever the canvas', () => {
+test('topZ: pinless rows never ride, whatever the canvas', () => {
   cache.value = {
     t1: {
       entity: { eid: 't1', num: 1 },
@@ -1639,7 +1640,7 @@ Deno.test('topZ: pinless rows never ride, whatever the canvas', () => {
   assertEquals(topZ(undefined as unknown as string), 0)
 })
 
-Deno.test('pinned sleeps through an unrelated row patch', () => {
+test('pinned sleeps through an unrelated row patch', () => {
   cache.value = {
     pin_narrow: {
       entity: { eid: 'pin_narrow', num: 1 },
@@ -1682,7 +1683,7 @@ Deno.test('pinned sleeps through an unrelated row patch', () => {
 // The render source is the subscription plus each member's own row signal, never
 // `cache.value` — so an unrelated ordinary patch (no sub frame, not a member)
 // never wakes the board, while a member's own edit does.
-Deno.test('a subscribed board sleeps through an unrelated ordinary patch', () => {
+test('a subscribed board sleeps through an unrelated ordinary patch', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
@@ -1735,7 +1736,7 @@ Deno.test('a subscribed board sleeps through an unrelated ordinary patch', () =>
 // queryEids actually builds (has/eq/contains/refs) and REFUSE anything else, so a
 // shape the grammar can't spell exactly falls back to the local resolver instead
 // of putting a divergent query on the wire.
-Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => {
+test('predsToQuery round-trips membership shapes, refuses the rest', () => {
   let E = 'abcdef10-0000-4000-8000-000000000001'
   let F = 'abcdef10-0000-4000-8000-000000000002'
   cache.value = {
@@ -1821,7 +1822,7 @@ Deno.test('predsToQuery round-trips membership shapes, refuses the rest', () => 
 // on no hand-built one, so an identity that counted the tag made those two
 // different queries: the hand-built shape could not be spelled back, and the
 // read door refused the canvas its pins on every render. One query, one set.
-Deno.test('a hand-built query and its parsed spelling are one server set', () => {
+test('a hand-built query and its parsed spelling are one server set', () => {
   let prior = config.host
   let C = 'cccc0000-0000-4000-8000-000000000001'
   let hand = [
@@ -1868,7 +1869,7 @@ Deno.test('a hand-built query and its parsed spelling are one server set', () =>
 // throwing if it can't resolve a value? isn't it typical for a cache to not
 // resolve a value? how would the caller know not to seek the cache for certain
 // queries?"
-Deno.test('an unspellable query is a miss, and resolves when its rows land', () => {
+test('an unspellable query is a miss, and resolves when its rows land', () => {
   let prior = config.host
   let T = 'eeee0000-0000-4000-8000-000000000001'
   let preds = resolveRefs(parseQuery('.task|.board'), findEid)
@@ -1899,7 +1900,7 @@ Deno.test('an unspellable query is a miss, and resolves when its rows land', () 
 // (replace / add / drop) and asserts the per-sub signal tracks membership, the
 // same landSub path boards ride. A stub WebSocket keeps `holdQuery`'s sub-open
 // from dialing a real socket; the test drives landSub directly.
-Deno.test('serverQuery: a held membership query tracks its subscription', () => {
+test('serverQuery: a held membership query tracks its subscription', () => {
   let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -1953,7 +1954,7 @@ Deno.test('serverQuery: a held membership query tracks its subscription', () => 
   }
 })
 
-Deno.test('loaded: a row no projected sub holds is full', () => {
+test('loaded: a row no projected sub holds is full', () => {
   // The working-set seed and want() both land whole rows that belong to no sub;
   // saying "unloaded" for those would send every reader chasing a heal.
   let S = 'dddd0000-0000-4000-8000-000000000002'
@@ -1968,7 +1969,7 @@ Deno.test('loaded: a row no projected sub holds is full', () => {
 // tile, opened once at boot beside the socket — so a READ, any target, opens
 // nothing at all (T-33921: it used to open on first read, from inside the
 // computed, which dialled the wire from a render).
-Deno.test('commentCount shares one aggregate sub across targets (T-21283)', () => {
+test('commentCount shares one aggregate sub across targets (T-21283)', () => {
   let probe =
     (globalThis as unknown as { __probe: { subN: () => number } }).__probe
   let X = 'cccc0000-0000-4000-8000-000000000001'
@@ -2001,7 +2002,7 @@ Deno.test('commentCount shares one aggregate sub across targets (T-21283)', () =
 // eid-keyed server subs: opened once per open entity (the hook's mount), reused
 // by the plain doors and by later holders, and torn down with the LAST drop, so
 // cards accumulate no subs as they open and close.
-Deno.test('reverse subs: held per open card, torn down on close (T-21489)', () => {
+test('reverse subs: held per open card, torn down on close (T-21489)', () => {
   let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -2055,7 +2056,7 @@ Deno.test('reverse subs: held per open card, torn down on close (T-21489)', () =
 // server sub per component per tab (`.fold.client=<uuid>`, …), held for the
 // tab's life; the readers stay LOCAL lookups over the rows they stream, so
 // visiting boards or canvases opens no further wire subs.
-Deno.test('client singletons: four tab subs, local reads, isolation (T-21490)', () => {
+test('client singletons: four tab subs, local reads, isolation (T-21490)', () => {
   let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -2139,7 +2140,7 @@ Deno.test('client singletons: four tab subs, local reads, isolation (T-21490)', 
 })
 
 // An unheld local door must never resurrect a released view's subscription.
-Deno.test(
+test(
   'local reverse reads never dial, including one read per entry (T-37033)',
   () => {
     let frames: unknown[] = []
@@ -2172,7 +2173,7 @@ Deno.test(
   },
 )
 
-Deno.test('an empty browser query is locally empty, never an unsupported remote ask', () => {
+test('an empty browser query is locally empty, never an unsupported remote ask', () => {
   let prior = config.host
   config.host = 'browser.test'
   let preds = parseQuery('')
@@ -2185,7 +2186,7 @@ Deno.test('an empty browser query is locally empty, never an unsupported remote 
   }
 })
 
-Deno.test('comment badges share a target tally, refcount it, and reopen it', async () => {
+test('comment badges share a target tally, refcount it, and reopen it', async () => {
   let sent: Record<string, unknown>[] = []
   let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
   let a = crypto.randomUUID(), b = crypto.randomUUID()
@@ -2233,7 +2234,7 @@ Deno.test('comment badges share a target tally, refcount it, and reopen it', asy
 // default used to be the owner's dev port, so any test that mounted a view
 // streamed the live graph into the module-global cache and read it back as
 // fixture data. Two halves: the default is nothing, and nothing refuses.
-Deno.test('no location, no host: nothing dials a server we never named', () => {
+test('no location, no host: nothing dials a server we never named', () => {
   assertEquals(hostFrom(undefined), '')
   assertEquals(hostFrom({ host: 'graph.example:8080' }), 'graph.example:8080')
   let prior = config.host
@@ -2256,7 +2257,7 @@ Deno.test('no location, no host: nothing dials a server we never named', () => {
   }
 })
 
-Deno.test('findEid indexes human ids and short handles', () => {
+test('findEid indexes human ids and short handles', () => {
   let one = 'abcdef10-0000-4000-8000-000000000001'
   let two = 'abcdef10-0000-4000-8000-000000000002'
   cache.value = {
@@ -2272,7 +2273,7 @@ Deno.test('findEid indexes human ids and short handles', () => {
   assertEquals(findEid('#abcdef'), one)
 })
 
-Deno.test('server-resolve: an unloaded id resolves through one addressed sub', async () => {
+test('server-resolve: an unloaded id resolves through one addressed sub', async () => {
   clearResolved()
   cache.value = {}
   let eid = 'aaaaaaaa-0000-4000-8000-000000000099'
@@ -2296,7 +2297,7 @@ Deno.test('server-resolve: an unloaded id resolves through one addressed sub', a
   }
 })
 
-Deno.test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm', async () => {
+test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm', async () => {
   clearResolved()
   cache.value = {}
   let f = stubResolve(() => null)
@@ -2315,7 +2316,7 @@ Deno.test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm'
   }
 })
 
-Deno.test('server-resolve: a hanging server never stalls nav, never storms, and its late answer lands', async () => {
+test('server-resolve: a hanging server never stalls nav, never storms, and its late answer lands', async () => {
   clearResolved()
   cache.value = {}
   using time = new FakeTime()
@@ -2348,7 +2349,7 @@ Deno.test('server-resolve: a hanging server never stalls nav, never storms, and 
   }
 })
 
-Deno.test('server-resolve: a reconnect reseed clears the sidecar', async () => {
+test('server-resolve: a reconnect reseed clears the sidecar', async () => {
   clearResolved()
   cache.value = {}
   let eid = 'dddddddd-0000-4000-8000-000000000005'
@@ -2373,7 +2374,7 @@ let SOON = '2026-09-25T12:00:00Z', NOW = '2026-09-25T12:00:01Z'
 let pendingWakeQ = (session: string) =>
   resolveRefs(parseQuery(`.wake.target=${session} !fired`), findEid)
 
-Deno.test('queryEids resolves pending wakes off the reverse index, narrowly', () => {
+test('queryEids resolves pending wakes off the reverse index, narrowly', () => {
   cache.value = {
     session: {
       entity: { eid: 'session', num: 1 },
@@ -2423,7 +2424,7 @@ Deno.test('queryEids resolves pending wakes off the reverse index, narrowly', ()
 // T-37445: a strip of session dots asks the same per-row question once per
 // session; each resolves over the rows the strip's ONE defining sub holds, so
 // no dot opens a server sub of its own.
-Deno.test('holdLocal answers a per-row query off held rows, opening no server sub', () => {
+test('holdLocal answers a per-row query off held rows, opening no server sub', () => {
   let probe =
     (globalThis as unknown as { __probe: { subN: () => number } }).__probe
   cache.value = {
@@ -2450,7 +2451,7 @@ Deno.test('holdLocal answers a per-row query off held rows, opening no server su
   }
 })
 
-Deno.test('subscription failures persist until a successful replacement', () => {
+test('subscription failures persist until a successful replacement', () => {
   let sub = 'entries:failure-state-test'
   landSub({
     sub,
@@ -2483,7 +2484,7 @@ Deno.test('subscription failures persist until a successful replacement', () => 
 // answers `.distinct=filed.domain` the well reads THAT, with no task in the
 // cache to reduce. The local pass above is the pre-answer courtesy, not the
 // source of truth.
-Deno.test('domains: the server distinct wins over the working set', () => {
+test('domains: the server distinct wins over the working set', () => {
   fill([['T', 'Ops']])
   assertEquals(domains.value, ['Ops'])
   landSub({ sub: 'agg:domains', agg: { Fable: 1, Eng: 1 } })
@@ -2498,7 +2499,7 @@ Deno.test('domains: the server distinct wins over the working set', () => {
 // columns of the schema. Parity: the set equals who points here, each with its
 // via label; the face wakes only when a referrer starts or stops pointing here —
 // never on an unrelated row — and stays correct through a retarget.
-Deno.test('backlinks: reverse-union set + via, awake only for its own target', () => {
+test('backlinks: reverse-union set + via, awake only for its own target', () => {
   cache.value = {
     p1: { entity: { eid: 'p1', num: 1 }, project: { eid: 'p1' } },
     s1: {
@@ -2559,7 +2560,7 @@ Deno.test('backlinks: reverse-union set + via, awake only for its own target', (
 // Before the first sub frame the query door answers alone and there is nothing
 // to compare — the deferred counter stays null, which a probe must not mistake
 // for "no divergence found".
-Deno.test('a board cache prime opens no second unwindowed subscription', () => {
+test('a board cache prime opens no second unwindowed subscription', () => {
   cache.value = {
     board_prime: {
       entity: { eid: 'board_prime', num: 1 },
@@ -2600,7 +2601,7 @@ let whole = (...eids: string[]): Change[] =>
     }))
   )
 
-Deno.test('the agreement counter counts when both doors answer', async () => {
+test('the agreement counter counts when both doors answer', async () => {
   config.agreement = true
   cache.value = {
     board: {
@@ -2650,7 +2651,7 @@ Deno.test('the agreement counter counts when both doors answer', async () => {
 // render reads subEids, not a cache scan. The first frame paints it, and a
 // maintenance frame that adds or drops an eid moves the board live — the join/
 // leave the boot flip needs to keep working under a partial cache (T-18099).
-Deno.test('a board renders from the subscription and tracks joins and leaves', () => {
+test('a board renders from the subscription and tracks joins and leaves', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
@@ -2703,7 +2704,7 @@ Deno.test('a board renders from the subscription and tracks joins and leaves', (
 // stream the board's own eid and chrome (a comment, a card) into the sub's set,
 // and boardPost still keeps them out — the whole-graph face drops comment/card/
 // self, the tasks face keeps only task-bearing rows.
-Deno.test('boardPost excludes chrome and self from the subscription members', () => {
+test('boardPost excludes chrome and self from the subscription members', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
@@ -2743,7 +2744,7 @@ Deno.test('boardPost excludes chrome and self from the subscription members', ()
 // T-37450: a painted tab keeps what it painted through a lost socket. The
 // poller gets the SOCKET back once the server answers; it never reloads the
 // page, and the rows in the cache are untouched the whole time.
-Deno.test('a lost socket reconnects in place; the painted cache survives', async () => {
+test('a lost socket reconnects in place; the painted cache survives', async () => {
   let D = 'd0c00000-0000-4000-8000-0000000000d0'
   cache.value = {
     [D]: { entity: { eid: D, num: 1 }, doc: { eid: D, title: 't', body: 'b' } },
@@ -2774,7 +2775,7 @@ Deno.test('a lost socket reconnects in place; the painted cache survives', async
 
 // T-37445: every frame the socket carried by the time the timer turns lands
 // in one batch, so a burst of answers is one render pass, not one per frame.
-Deno.test('frames that arrive together land in one batch', async () => {
+test('frames that arrive together land in one batch', async () => {
   let ids = ['a', 'b', 'c'].map((c) =>
     `b0000000-0000-4000-8000-00000000000${c}`
   )
@@ -2810,7 +2811,7 @@ Deno.test('frames that arrive together land in one batch', async () => {
 // The client half of the aggregate wire (T-21283): the server's initial tally
 // REPLACES the local count and is authoritative from then on; delta frames
 // merge (n=0 drops the key); rows never ride, so the cache is untouched.
-Deno.test('each aggregate frame replaces the whole tally', () => {
+test('each aggregate frame replaces the whole tally', () => {
   let X = 'cccc0000-0000-4000-8000-000000000011'
   let Y = 'cccc0000-0000-4000-8000-000000000012'
   cache.value = {
@@ -2839,7 +2840,7 @@ Deno.test('each aggregate frame replaces the whole tally', () => {
 
 // T-37445: a list of tiles is ONE addressed sub, named by its ids, so ten
 // reference rows cost one serve and one frame instead of ten route subs.
-Deno.test('a list of rows is held in one sub and freed by its last holder', async () => {
+test('a list of rows is held in one sub and freed by its last holder', async () => {
   let sent: Record<string, unknown>[] = []
   let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
   let ids = ['a', 'b', 'c'].map((c) =>
@@ -2877,7 +2878,7 @@ Deno.test('a list of rows is held in one sub and freed by its last holder', asyn
 // T-37445: boot waits on nothing from disk. The durable outbox here never
 // answers, as a gigabyte legacy IndexedDB did for up to a minute in a long
 // profile; an answer still paints the moment the socket carries it.
-Deno.test('boot paints the first answer while the durable outbox never answers', async () => {
+test('boot paints the first answer while the durable outbox never answers', async () => {
   let restoreStore = useOutboxStore({
     park: () => {},
     unpark: () => {},
@@ -2906,7 +2907,7 @@ Deno.test('boot paints the first answer while the durable outbox never answers',
 // answered, nothing is made: a graph still loading may hold one. Once it says
 // there is none, the page makes the first, `/` names it, and asking again
 // makes nothing more.
-Deno.test('a graph that answers it has no canvas gets its first', async () => {
+test('a graph that answers it has no canvas gets its first', async () => {
   let prior = config.host
   let made: Change[] = []
   let restore = useRoute((frame) => {

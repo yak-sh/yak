@@ -2,6 +2,7 @@
 // The translation between the page's wire and the Store's (wire.ts). The
 // end-to-end proof is serving_test.ts; this is the grammar's own edges, where
 // a value carries the character the other wire writes structure with.
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { batched, lined, receipt } from './wire.ts'
 
@@ -31,11 +32,11 @@ let cases: [string, string][] = [
   ['', ''],
 ]
 
-Deno.test('a page line, as the store writes it', () => {
+test('a page line, as the store writes it', () => {
   for (let [page, store] of cases) assertEquals(lined(page), store, page)
 })
 
-Deno.test('a batch arrives in either envelope, and never as junk', () => {
+test('a batch arrives in either envelope, and never as junk', () => {
   let one = [{ entity: { eid: 'e1' }, doc: { title: 'x' } }]
   assertEquals(batched({ entities: one }), one)
   assertEquals(batched(one), one)
@@ -43,13 +44,13 @@ Deno.test('a batch arrives in either envelope, and never as junk', () => {
   assertThrows(() => batched(null), Error, 'entities')
 })
 
-Deno.test('a bundle that names no entity is given one', () => {
+test('a bundle that names no entity is given one', () => {
   assertEquals(batched([{ doc: { title: 'x' } }]), [
     { doc: { title: 'x' }, entity: { eid: '$new0' } },
   ])
 })
 
-Deno.test('the answer: the bundles as applied, in the wire they were sent in', () => {
+test('the answer: the bundles as applied, in the wire they were sent in', () => {
   let cake = {
     entity: { eid: 'e1', num: 4 },
     $alias: '$cake',

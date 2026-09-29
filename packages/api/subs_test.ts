@@ -2,6 +2,7 @@
 // Subscriptions over a bookshop: what a subscriber is told when the graph
 // moves under it, and — just as much the point — what it is never told.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -27,7 +28,7 @@ let ids = (f: Frame) => (f.bundles ?? []).map((b) => b.entity.eid)
 
 let shop = (): Graph => shopGraph()
 
-Deno.test('a subscription opens on the set it already selects', () => {
+test('a subscription opens on the set it already selects', () => {
   let graph = shop()
   graph.apply([
     { entity: { eid: 'b1' }, book: { price: 12 } },
@@ -41,7 +42,7 @@ Deno.test('a subscription opens on the set it already selects', () => {
   assertEquals(ids(first), ['b1'])
 })
 
-Deno.test('restoring shared watches reads each answer once and keeps each live', () => {
+test('restoring shared watches reads each answer once and keeps each live', () => {
   let g = shop()
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let reads = 0, counts = 0
@@ -92,7 +93,7 @@ Deno.test('restoring shared watches reads each answer once and keeps each live',
   assertEquals(reads, 2)
 })
 
-Deno.test('a commit pushes what the query selects, and nothing else', () => {
+test('a commit pushes what the query selects, and nothing else', () => {
   let graph = shop()
   let subs = subscriptions(graph)
   let { to, take } = ear()
@@ -109,7 +110,7 @@ Deno.test('a commit pushes what the query selects, and nothing else', () => {
   assertEquals(take(), [])
 })
 
-Deno.test('backlinks change only when a referrer changes', () => {
+test('backlinks change only when a referrer changes', () => {
   let g = shop()
   g.apply([{ entity: { eid: 'a1' }, doc: { title: 'Author' } }])
   let subs = subscriptions(g)
@@ -132,7 +133,7 @@ Deno.test('backlinks change only when a referrer changes', () => {
   assertEquals(take().map((f) => f.gone), [['b1']])
 })
 
-Deno.test('an aggregate is answered with its value, and again when it moves', () => {
+test('an aggregate is answered with its value, and again when it moves', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { status: 'shelved' } }])
   let subs = subscriptions(graph)
@@ -153,7 +154,7 @@ Deno.test('an aggregate is answered with its value, and again when it moves', ()
   assertEquals(take(), [])
 })
 
-Deno.test('a count without a component filter follows births and deaths', () => {
+test('a count without a component filter follows births and deaths', () => {
   let graph = shop(), subs = subscriptions(graph), e = ear()
   subs.open(e.to, 'all', '.count')
   assertEquals(e.take(), [{ id: 'all', count: 0 }])
@@ -167,7 +168,7 @@ Deno.test('a count without a component filter follows births and deaths', () => 
 // line wearing it subscribes exactly as the line without it does — incremental,
 // judged per bundle. Read as a text term instead, it matched nothing and the
 // subscription went silent (T-34070).
-Deno.test('`*` projects, and never narrows a subscription', () => {
+test('`*` projects, and never narrows a subscription', () => {
   let graph = shop()
   let subs = subscriptions(graph)
   let { to, take } = ear()
@@ -183,7 +184,7 @@ Deno.test('`*` projects, and never narrows a subscription', () => {
   assertEquals(take(), [])
 })
 
-Deno.test('an entity that stops matching is reported gone', () => {
+test('an entity that stops matching is reported gone', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -197,7 +198,7 @@ Deno.test('an entity that stops matching is reported gone', () => {
   assertEquals(ids(left), [])
 })
 
-Deno.test('a deleted member is reported gone', () => {
+test('a deleted member is reported gone', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -209,7 +210,7 @@ Deno.test('a deleted member is reported gone', () => {
   assertEquals(take()[0].gone, ['b1'])
 })
 
-Deno.test('the raw feed carries the batch exactly as it was applied', () => {
+test('the raw feed carries the batch exactly as it was applied', () => {
   let graph = shop()
   let subs = subscriptions(graph)
   let { to, take } = ear()
@@ -233,7 +234,7 @@ Deno.test('the raw feed carries the batch exactly as it was applied', () => {
   assertEquals(one.$actor, undefined)
 })
 
-Deno.test('a windowed query re-reads its whole answer', () => {
+test('a windowed query re-reads its whole answer', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -249,7 +250,7 @@ Deno.test('a windowed query re-reads its whole answer', () => {
   assertEquals(moved.gone, ['b1'])
 })
 
-Deno.test('a windowed query ignores writes outside its fixed owner', () => {
+test('a windowed query ignores writes outside its fixed owner', () => {
   let g = shop()
   g.apply([
     { entity: { eid: 'b1' }, book: { price: 12 } },
@@ -282,7 +283,7 @@ Deno.test('a windowed query ignores writes outside its fixed owner', () => {
   assertEquals(left.gone, ['r2'])
 })
 
-Deno.test('windowed property filters skip births without their components', () => {
+test('windowed property filters skip births without their components', () => {
   let g = shop()
   let reads: string[] = []
   let spy: Graph = {
@@ -320,7 +321,7 @@ Deno.test('windowed property filters skip births without their components', () =
   assertEquals(e.take().map((f) => [f.id, f.gone]), [['books', ['b1']]])
 })
 
-Deno.test('a created edit on a member refreshes its window', () => {
+test('a created edit on a member refreshes its window', () => {
   let g = graph({
     storage: ram(shopVocab),
     vocab: shopVocab,
@@ -352,7 +353,7 @@ Deno.test('a created edit on a member refreshes its window', () => {
   )
 })
 
-Deno.test('a derived value can join a window without its component', () => {
+test('a derived value can join a window without its component', () => {
   let store = storage(open(':memory:'), shopVocab, {
     derived: {
       'review.stars': {
@@ -381,7 +382,7 @@ Deno.test('a derived value can join a window without its component', () => {
   ])
 })
 
-Deno.test('OR and absence keep births eligible for a window', () => {
+test('OR and absence keep births eligible for a window', () => {
   let g = shop(), subs = subscriptions(g), e = ear()
   let heard = () => e.take().map((f) => [f.id, ids(f).sort()])
   subs.open(
@@ -449,7 +450,7 @@ let rated = (reads = ['review']): Graph => {
   return graph({ storage: store, vocab })
 }
 
-Deno.test('a referenced computed dependency refreshes only its owner', () => {
+test('a referenced computed dependency refreshes only its owner', () => {
   let g = rated(['review.book'])
   g.apply([
     { entity: { eid: 'b1' }, book: { price: 12 } },
@@ -491,7 +492,7 @@ Deno.test('a referenced computed dependency refreshes only its owner', () => {
   assertEquals(two.take().map(ids), [['b1', 'b2']])
 })
 
-Deno.test('a subscription to an entity’s history hears each change', () => {
+test('a subscription to an entity’s history hears each change', () => {
   let vocab = loadVocab([...shopVocab.docs, journalDoc])
   let sql = open(':memory:')
   let store = storage(sql, vocab, { backed: backed(vocab) })
@@ -512,7 +513,7 @@ Deno.test('a subscription to an entity’s history hears each change', () => {
   assertEquals(take().map(price), [[12, 9]])
 })
 
-Deno.test('a computed property reading its own row refreshes that row', () => {
+test('a computed property reading its own row refreshes that row', () => {
   let vocab = loadVocab([...shopVocab.docs, {
     $defs: {
       book: {
@@ -562,7 +563,7 @@ Deno.test('a computed property reading its own row refreshes that row', () => {
   assertEquals(ids(take()[0]), ['b2'])
 })
 
-Deno.test('a refresh follows its query onto the entities it reads', () => {
+test('a refresh follows its query onto the entities it reads', () => {
   let g = rated()
   g.apply([
     { entity: { eid: 'b1' }, book: { price: 12 } },
@@ -586,7 +587,7 @@ Deno.test('a refresh follows its query onto the entities it reads', () => {
   assertEquals(take().map(ids), [['b2']])
 })
 
-Deno.test('a commit that touches nothing a query reads does not run it', () => {
+test('a commit that touches nothing a query reads does not run it', () => {
   let g = shop()
   let runs = 0
   let spy: Graph = {
@@ -608,7 +609,7 @@ Deno.test('a commit that touches nothing a query reads does not run it', () => {
   assertEquals(take().map((f) => f.id), ['newest', 'n'])
 })
 
-Deno.test('an unrelated change to a member does not read or repeat its answer', () => {
+test('an unrelated change to a member does not read or repeat its answer', () => {
   let g = shop()
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let reads: string[] = []
@@ -648,7 +649,7 @@ Deno.test('an unrelated change to a member does not read or repeat its answer', 
   assertEquals(reads.filter((r) => r.startsWith('read ')).length, 2)
 })
 
-Deno.test('a component a query holds out is not one its members wear', () => {
+test('a component a query holds out is not one its members wear', () => {
   let g = shop()
   let subs = subscriptions(g)
   let { to, take } = ear()
@@ -661,7 +662,7 @@ Deno.test('a component a query holds out is not one its members wear', () => {
   assertEquals(take().map((f) => f.gone), [['b1']])
 })
 
-Deno.test('a query the graph cannot answer is refused, not held', () => {
+test('a query the graph cannot answer is refused, not held', () => {
   let graph = shop()
   let subs = subscriptions(graph)
   let { to, take } = ear()
@@ -675,7 +676,7 @@ Deno.test('a query the graph cannot answer is refused, not held', () => {
   assertEquals(take(), [])
 })
 
-Deno.test('closing and dropping stop the pushes', () => {
+test('closing and dropping stop the pushes', () => {
   let graph = shop()
   let subs = subscriptions(graph)
   let one = ear()
@@ -695,7 +696,7 @@ Deno.test('closing and dropping stop the pushes', () => {
   assertEquals(two.take(), [])
 })
 
-Deno.test('explicit dependency invalidation refreshes a query on unrelated writes', async () => {
+test('explicit dependency invalidation refreshes a query on unrelated writes', async () => {
   let g = shop()
   await g.apply([{ entity: { eid: 'book' }, book: { price: 3 } }])
   let subs = subscriptions(g, {

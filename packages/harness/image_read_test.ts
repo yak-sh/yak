@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { registered } from './artifact_tools.ts'
 import { artifactStore } from '@yaks/blob'
 import { at, harness, worker } from './testing.ts'
-Deno.test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {
+test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {
   let h = await harness()
   try {
     let bytes = new Uint8Array([1, 2, 3])
@@ -20,7 +21,7 @@ Deno.test('image reads resolve registered artifacts and verify bytes; no arbitra
   }
 })
 
-Deno.test('worker retrieves registered image bytes for the lazy attachment renderer', async () => {
+test('worker retrieves registered image bytes for the lazy attachment renderer', async () => {
   const { remote } = await import('./remote.ts')
   const { install, onPaint } = await import('../tui/dom.ts')
   const { ansiBackend } = await import('../tui/paint.ts')

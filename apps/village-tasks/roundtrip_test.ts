@@ -1,12 +1,13 @@
 // Two sibling stores in a scratch space: Vale owns its villagers and heroes;
 // Village Tasks owns a seeded task and visitor completions scoped to a hero.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { completion, WELCOME } from '../vale/village-tasks.ts'
 import { eidOf, greeting } from '../vale/villagers.ts'
 import { client, connector, kernel, seed } from '../../workers/yak/probe.ts'
 import { completionEid } from './state.js'
 
-Deno.test('a task completed in a sibling app changes Pip for one Vale hero', async () => {
+test('a task completed in a sibling app changes Pip for one Vale hero', async () => {
   let k = await kernel()
   try {
     let space = `village${crypto.randomUUID().slice(0, 8)}`

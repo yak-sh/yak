@@ -2,6 +2,7 @@
 // good connector answer, and a fault in a line of tail. The live site and the
 // wrangler subprocess are the impure edges and are not exercised here — the
 // point of the fake is that a check can be wrong without a deploy being wrong.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   connector,
@@ -40,11 +41,11 @@ let healthy = () => {
   return table
 }
 
-Deno.test('verify: public pages, connect sign-in, and about listed is silence', async () => {
+test('verify: public pages, connect sign-in, and about listed is silence', async () => {
   assertEquals(await verify(fake(healthy()), SITE), [])
 })
 
-Deno.test('verify: staging probes its own doors and tails its own worker', async () => {
+test('verify: staging probes its own doors and tails its own worker', async () => {
   for (let staging of [false, true]) {
     let seen: string[] = []
     let get = ((url, init) => {
@@ -73,13 +74,13 @@ Deno.test('verify: staging probes its own doors and tails its own worker', async
   }
 })
 
-Deno.test('verify: a door that moved names itself and its status', async () => {
+test('verify: a door that moved names itself and its status', async () => {
   let table = healthy()
   table['/pricing'] = [500, '']
   assertEquals(await verify(fake(table), SITE), ['/pricing: 500, want 200'])
 })
 
-Deno.test('verify: a door that vanished is a 404, not a crash', async () => {
+test('verify: a door that vanished is a 404, not a crash', async () => {
   let table = healthy()
   delete table['/connect']
   assertEquals(await verify(fake(table), SITE), [
@@ -87,7 +88,7 @@ Deno.test('verify: a door that vanished is a 404, not a crash', async () => {
   ])
 })
 
-Deno.test('verify: connect requires its precise anonymous sign-in redirect', async () => {
+test('verify: connect requires its precise anonymous sign-in redirect', async () => {
   for (
     let [status, location] of [
       [200, undefined],
@@ -108,7 +109,7 @@ Deno.test('verify: connect requires its precise anonymous sign-in redirect', asy
   }
 })
 
-Deno.test('verify: pricing must show the price and hide the checkout door', async () => {
+test('verify: pricing must show the price and hide the checkout door', async () => {
   let bare = healthy()
   bare['/pricing'] = [200, 'free forever']
   assertEquals(await verify(fake(bare), SITE), ['/pricing: no $9 on the page'])
@@ -120,7 +121,7 @@ Deno.test('verify: pricing must show the price and hide the checkout door', asyn
   ])
 })
 
-Deno.test('connector: 200 without `about` is a failure, and names what it got', async () => {
+test('connector: 200 without `about` is a failure, and names what it got', async () => {
   let table = healthy()
   table['POST /mcp'] = [
     200,
@@ -138,18 +139,18 @@ Deno.test('connector: 200 without `about` is a failure, and names what it got', 
   )
 })
 
-Deno.test('connector: the auth challenge is a failure here — this door is public', async () => {
+test('connector: the auth challenge is a failure here — this door is public', async () => {
   let table = healthy()
   table['POST /mcp'] = [401, '']
   assertEquals(await connector(fake(table), SITE), '/mcp: 401, want 200')
 })
 
-Deno.test('verify: a fetch that throws is reported, not thrown', async () => {
+test('verify: a fetch that throws is reported, not thrown', async () => {
   let dead = (() => Promise.reject(new Error('dns'))) as typeof fetch
   assertEquals((await verify(dead, SITE)).length, DOORS.length + 1)
 })
 
-Deno.test('events: pretty-printed objects, diagnostics skipped, tail kept', () => {
+test('events: pretty-printed objects, diagnostics skipped, tail kept', () => {
   let text = [
     'Successfully created tail',
     '{',
@@ -170,7 +171,7 @@ Deno.test('events: pretty-printed objects, diagnostics skipped, tail kept', () =
   assertEquals(events(rest + '\n}\n'), [[{ outcome: 'ok' }], ''])
 })
 
-Deno.test('fault: 5xx and exceptions are ours, 4xx is not', () => {
+test('fault: 5xx and exceptions are ours, 4xx is not', () => {
   assertEquals(fault({ event: { response: { status: 200 } } }), null)
   assertEquals(fault({ event: { response: { status: 404 } } }), null)
   assertEquals(fault({ event: { response: { status: 499 } } }), null)

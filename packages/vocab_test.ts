@@ -12,6 +12,7 @@
 // that declares that word. Which file that is, is looked up in the walked set,
 // never listed here.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { blobKeywords } from '@yaks/blob'
 import { edgeKeywords, edges } from '@yaks/edge'
@@ -89,7 +90,7 @@ let beforeOf = (d: VocabDoc) =>
 let home = new Map<string, VocabDoc>()
 for (let [, d] of files) for (let n of declaresOf(d)) home.set(n, d)
 
-Deno.test('packages: every vocab.json is plain JSON that loads', () => {
+test('packages: every vocab.json is plain JSON that loads', () => {
   assert(files.length >= 10, `only ${files.length} vocab.json files walked`)
   for (let [pkg, doc] of files) {
     // A `_` name is the system describing itself (the meta vocabulary, the
@@ -130,7 +131,7 @@ Deno.test('packages: every vocab.json is plain JSON that loads', () => {
   }
 })
 
-Deno.test('packages: every vocabulary goes through a graph as bundles and back', async () => {
+test('packages: every vocabulary goes through a graph as bundles and back', async () => {
   // Every package's words, each read on its own the way @yaks/code reads a
   // vocab.json, into one graph that holds them as `_comp`, `_prop` and
   // `_before`; what loads back from its rows is what loaded from the files.

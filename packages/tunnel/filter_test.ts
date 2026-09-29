@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { filter } from './filter.ts'
 import { GATEWAY, HEADER } from './gateway.ts'
@@ -16,7 +17,7 @@ let seen = (routes: string[] | undefined, path: string, marked: boolean) => {
   }
 }
 
-Deno.test('a request through the tunnel passes only at an opened path', () => {
+test('a request through the tunnel passes only at an opened path', () => {
   let routes = ['/mail/inbound', '/hooks/*']
   for (let path of ['/mail/inbound', '/mail/inbound?to=a', '/hooks/github']) {
     assertEquals(seen(routes, path, true), 'pass', path)
@@ -27,13 +28,13 @@ Deno.test('a request through the tunnel passes only at an opened path', () => {
   assertEquals(seen(undefined, '/mail/inbound', true), 'Denied')
 })
 
-Deno.test('a request that did not come through the tunnel is untouched', () => {
+test('a request that did not come through the tunnel is untouched', () => {
   for (let path of ['/apply', '/query', '/mail/inbound']) {
     assertEquals(seen([], path, false), 'pass', path)
   }
 })
 
-Deno.test('the gateway marks every request it passes on, whatever it said', async () => {
+test('the gateway marks every request it passes on, whatever it said', async () => {
   let { default: gateway } = await import(
     `data:application/javascript,${encodeURIComponent(GATEWAY)}`
   )

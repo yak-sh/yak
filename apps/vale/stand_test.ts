@@ -1,4 +1,5 @@
 // Props and nodes that reach across a chunk seam keep distinct depth planes.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { LODES } from './gather.ts'
 import { groundChunk } from './ground.ts'
@@ -11,7 +12,7 @@ import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
 
-Deno.test('adjacent crowns and a gathering node do not fight the ground or each other', () => {
+test('adjacent crowns and a gathering node do not fight the ground or each other', () => {
   let props = [15.25, 16.25].map((x, seed) => ({
     kind: 'oak',
     x,
@@ -35,7 +36,7 @@ Deno.test('adjacent crowns and a gathering node do not fight the ground or each 
   assertEquals(fights(pack(o)), [])
 })
 
-Deno.test('prop spacing profiles follow their drawn faces', () => {
+test('prop spacing profiles follow their drawn faces', () => {
   for (let voxel of [0.125, 0.25, 1]) {
     for (
       let [kind, seed, turn] of [
@@ -56,7 +57,7 @@ Deno.test('prop spacing profiles follow their drawn faces', () => {
   }
 })
 
-Deno.test('a node keeps its spacing from worker-provided prop placements', () => {
+test('a node keeps its spacing from worker-provided prop placements', () => {
   let p = { kind: 'oak', x: 50.25, z: 50.25, seed: 0 }
   let v = flat(5, [], [p])
   let at: [number, number, number] = [51, 5, 50.25]

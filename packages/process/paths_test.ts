@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { dirOf } from './run.ts'
 
-Deno.test('process files honor TASKS_HOME below explicit directory overrides', () => {
+test('process files honor TASKS_HOME below explicit directory overrides', () => {
   let values: Record<string, string> = { HOME: '/owner' }
   let env = (key: string) => values[key]
   assertEquals(dirOf({}, env), '/owner/.tasks/processes')

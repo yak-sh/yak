@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { instructions, pageFor, uriOf, whole } from './guide.ts'
 import { addresses, connector, llms, robots, security, sitemap } from './seo.ts'
 
-Deno.test('seo: staging metadata and guide addresses stay on its own host', () => {
+test('seo: staging metadata and guide addresses stay on its own host', () => {
   let env = { APEX: 'yaks.fyi' }
   let info = connector(env)
   assertEquals([info.name, info.title, info.websiteUrl], [
@@ -41,7 +42,7 @@ Deno.test('seo: staging metadata and guide addresses stay on its own host', () =
 // the file stops speaking for itself. Both belong to the deployment serving
 // it, and the date is computed at the moment it is asked for, so it is never
 // the stale year somebody typed in once.
-Deno.test('security.txt names an address, an expiry and its own canonical', () => {
+test('security.txt names an address, an expiry and its own canonical', () => {
   let now = new Date('2026-09-22T11:30:00Z')
   assertEquals(security(now, { APEX: 'yaks.fyi' }).split('\n'), [
     'Contact: mailto:hello@yaks.fyi',

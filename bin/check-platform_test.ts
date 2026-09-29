@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Config, mergeConfigs, platformConfig } from './check-platform.ts'
 
@@ -8,7 +9,7 @@ let config = (imports = {}, lib = ['dom', 'esnext']): Config => ({
 let a = new URL('file:///repo/packages/a/browser.json')
 let b = new URL('file:///repo/packages/b/browser.json')
 
-Deno.test('platform maps resolve at their own config, then share one program', () => {
+test('platform maps resolve at their own config, then share one program', () => {
   assertEquals(
     mergeConfigs([
       { url: a, config: config({ '@yaks/a': './mod.ts' }) },
@@ -33,7 +34,7 @@ Deno.test('platform maps resolve at their own config, then share one program', (
   )
 })
 
-Deno.test('platform merging refuses conflicts, hidden options and runtime libs', () => {
+test('platform merging refuses conflicts, hidden options and runtime libs', () => {
   assertThrows(() => mergeConfigs([]), Error, 'No platform configs')
   assertThrows(
     () =>
@@ -74,7 +75,7 @@ Deno.test('platform merging refuses conflicts, hidden options and runtime libs',
   )
 })
 
-Deno.test('platform entrypoints cover every standalone config and the tail Worker', async () => {
+test('platform entrypoints cover every standalone config and the tail Worker', async () => {
   let root = new URL('../', import.meta.url)
   for (let platform of ['browser', 'workers']) {
     let { config, entries } = await platformConfig(root, platform)

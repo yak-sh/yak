@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import {
   allowlist,
@@ -10,7 +11,7 @@ import type { Bound } from './wrangler_app.ts'
 
 let read = (value: unknown) => parse(JSON.stringify(value))
 
-Deno.test('app config: JSONC preserves quoted comment markers and trailing commas in strings', () => {
+test('app config: JSONC preserves quoted comment markers and trailing commas in strings', () => {
   let source = `{
     // The app source can use its own filename.
     "main": "app-entry.mjs",
@@ -46,7 +47,7 @@ Deno.test('app config: JSONC preserves quoted comment markers and trailing comma
   }
 })
 
-Deno.test('app config: each unknown key is reported and removed, including nested settings', () => {
+test('app config: each unknown key is reported and removed, including nested settings', () => {
   let parsed = read({
     name: 'ignored-name',
     workers_dev: true,
@@ -88,7 +89,7 @@ Deno.test('app config: each unknown key is reported and removed, including neste
   })
 })
 
-Deno.test('app config: refusals name the limitation and the available door, one line each', () => {
+test('app config: refusals name the limitation and the available door, one line each', () => {
   let parsed = read({
     vars: { KERNEL: 'override' },
     kv_namespaces: [{ binding: 'KV' }],
@@ -116,7 +117,7 @@ Deno.test('app config: refusals name the limitation and the available door, one 
   })
 })
 
-Deno.test('app config: KERNEL is reserved across binding types and duplicates refuse', () => {
+test('app config: KERNEL is reserved across binding types and duplicates refuse', () => {
   for (let key of ['d1_databases', 'r2_buckets', 'vectorize', 'services']) {
     let parsed = read({ [key]: [{ binding: 'KERNEL' }] })
     assertEquals(parsed.refused.length, 1, key)
@@ -147,7 +148,7 @@ Deno.test('app config: KERNEL is reserved across binding types and duplicates re
   assertEquals(read({ 'line\nbreak': 1 }).report[0].includes('\n'), false)
 })
 
-Deno.test('app config: wrong shapes refuse before provisioning or uploading', () => {
+test('app config: wrong shapes refuse before provisioning or uploading', () => {
   let cases: [unknown, string][] = [
     [{ main: '__yak_entry.js' }, 'main'],
     [{ main: '/lib/entry.js' }, 'main'],
@@ -198,7 +199,7 @@ Deno.test('app config: wrong shapes refuse before provisioning or uploading', ()
   }
 })
 
-Deno.test("app config: migrations stay intact, but cannot transfer another script's data", () => {
+test("app config: migrations stay intact, but cannot transfer another script's data", () => {
   let migrations = [{ tag: 'v1', new_sqlite_classes: ['Room'] }]
   assertEquals(read({ migrations }).config.migrations, migrations)
   let parsed = read({
@@ -216,7 +217,7 @@ Deno.test("app config: migrations stay intact, but cannot transfer another scrip
   ])
 })
 
-Deno.test('app config: Vectorize creation options become requests, not upload bindings', () => {
+test('app config: Vectorize creation options become requests, not upload bindings', () => {
   let parsed = read({
     vectorize: [
       { binding: 'SMALL', dimensions: 384, metric: 'cosine' },
@@ -232,7 +233,7 @@ Deno.test('app config: Vectorize creation options become requests, not upload bi
   ])
 })
 
-Deno.test('app metadata: no config keeps the current entry, compatibility date, kernel and limits', () => {
+test('app metadata: no config keeps the current entry, compatibility date, kernel and limits', () => {
   assertEquals(metadata(), {
     main_module: '__yak_entry.js',
     compatibility_date: '2025-05-08',
@@ -242,7 +243,7 @@ Deno.test('app metadata: no config keeps the current entry, compatibility date, 
   })
 })
 
-Deno.test('app metadata: every allowed binding uses its own shape and only graph resource ids', () => {
+test('app metadata: every allowed binding uses its own shape and only graph resource ids', () => {
   let migrations = [{ tag: 'v1', new_sqlite_classes: ['Room'] }]
   let parsed = read({
     main: 'custom.js',
@@ -318,7 +319,7 @@ Deno.test('app metadata: every allowed binding uses its own shape and only graph
   )
 })
 
-Deno.test('app allowlist: caller data is not mutated', () => {
+test('app allowlist: caller data is not mutated', () => {
   let value = {
     main: 'custom.js',
     vars: { URL: 'https://example.com' },
@@ -329,7 +330,7 @@ Deno.test('app allowlist: caller data is not mutated', () => {
   assertEquals(value, before)
 })
 
-Deno.test('main selects the app source, including directories and explicit worker.js', () => {
+test('main selects the app source, including directories and explicit worker.js', () => {
   for (
     let main of [
       'worker.js',
@@ -361,7 +362,7 @@ Deno.test('main selects the app source, including directories and explicit worke
   }
 })
 
-Deno.test('app metadata: a vpc_services door binds no service to the script', () => {
+test('app metadata: a vpc_services door binds no service to the script', () => {
   let parsed = read({
     vpc_services: [{ binding: 'BOX', service_id: 'theirs' }],
   })
@@ -371,7 +372,7 @@ Deno.test('app metadata: a vpc_services door binds no service to the script', ()
   assertEquals(bindings.filter((b) => b.type == 'vpc_service'), [])
 })
 
-Deno.test('app metadata: an ai door binds no Workers AI to the script', () => {
+test('app metadata: an ai door binds no Workers AI to the script', () => {
   let parsed = read({ ai: { binding: 'AI', remote: true } })
   assertEquals(parsed.refused, [])
   assertEquals(parsed.config.ai, { binding: 'AI' })

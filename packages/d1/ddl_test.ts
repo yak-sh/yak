@@ -2,6 +2,7 @@
 // same statements, constraints included, and a store over the stand-in holds
 // what the vocabulary said the way the reference adapter does.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { schema } from '@yaks/sqlite'
@@ -31,14 +32,14 @@ let strict = loadVocab({
   },
 })
 
-Deno.test('the d1 schema is the sqlite schema, constraints included', async () => {
+test('the d1 schema is the sqlite schema, constraints included', async () => {
   let s = storage(d1(), strict)
   assertEquals(s.ddl(), schema(strict))
   await s.install()
   await s.install() // a second install finds everything standing
 })
 
-Deno.test('a d1 install removes empty old columns but keeps written ones', async () => {
+test('a d1 install removes empty old columns but keeps written ones', async () => {
   let db = d1(), s = storage(db, strict)
   await s.install()
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, repo: {} }]))
@@ -76,7 +77,7 @@ Deno.test('a d1 install removes empty old columns but keeps written ones', async
   assertEquals((await has('used')).results.length, 1)
 })
 
-Deno.test('a d1 look survives reference upgrades and rollbacks', async () => {
+test('a d1 look survives reference upgrades and rollbacks', async () => {
   let words = (ref: boolean) =>
     loadVocab({
       $defs: {
@@ -117,7 +118,7 @@ Deno.test('a d1 look survives reference upgrades and rollbacks', async () => {
   })
 })
 
-Deno.test('a d1 store takes a state its vocabulary stopped listing', async () => {
+test('a d1 store takes a state its vocabulary stopped listing', async () => {
   let db = d1()
   let repo = (state: Record<string, unknown>) =>
     loadVocab({
@@ -145,7 +146,7 @@ Deno.test('a d1 store takes a state its vocabulary stopped listing', async () =>
   assertEquals(states, ['flying', 'running'])
 })
 
-Deno.test('a d1 store refuses what the vocabulary refuses', async () => {
+test('a d1 store refuses what the vocabulary refuses', async () => {
   let s = storage(d1(), strict)
   await s.install()
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, repo: { seq: 3 } }]))

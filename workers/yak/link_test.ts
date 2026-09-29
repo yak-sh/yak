@@ -3,6 +3,7 @@
 // unless somebody takes it back, and neither survives a foreign secret. Nothing
 // here imports a Cloudflare name, so the whole contract holds in plain Deno;
 // the door it hangs on is held through the kernel (identity_test.ts).
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { seal } from './lib/token.ts'
@@ -65,7 +66,7 @@ let store = () => {
   return at
 }
 
-Deno.test('a letter’s link carries the code, and what it was finishing', async () => {
+test('a letter’s link carries the code, and what it was finishing', async () => {
   let url = await onceLink(SECRET, {
     email: ME,
     code: '123456',
@@ -84,7 +85,7 @@ Deno.test('a letter’s link carries the code, and what it was finishing', async
   assertEquals(await passOf(t, ELSE), null)
 })
 
-Deno.test('following the link spends the code, and nothing spends it twice', async () => {
+test('following the link spends the code, and nothing spends it twice', async () => {
   let at = store()
   let code = (await mint(at, SECRET, ME))!
   let t = new URL(await onceLink(SECRET, { email: ME, code })).searchParams
@@ -95,7 +96,7 @@ Deno.test('following the link spends the code, and nothing spends it twice', asy
   assertEquals(await spend(at, SECRET, ME, code), false)
 })
 
-Deno.test('a standing link lives to its expiry, and not past it', async () => {
+test('a standing link lives to its expiry, and not past it', async () => {
   let now = Date.now()
   let { standing, url } = await stand(SECRET, book(), { person: 'p1' }, now)
   assertEquals(standing.exp, Math.floor(now / 1000) + DAYS * 86_400)
@@ -106,7 +107,7 @@ Deno.test('a standing link lives to its expiry, and not past it', async () => {
   )
 })
 
-Deno.test('a standing link needs its row: revoked, expired, or somebody else’s', async () => {
+test('a standing link needs its row: revoked, expired, or somebody else’s', async () => {
   let shelf = book()
   let now = Date.now()
   let { standing } = await stand(SECRET, shelf, { person: 'p1', days: 2 }, now)
@@ -125,7 +126,7 @@ Deno.test('a standing link needs its row: revoked, expired, or somebody else’s
   assertEquals(await revoke(shelf, 'p1', 'nothing'), [])
 })
 
-Deno.test('a life outside the ceiling is refused, never clamped', async () => {
+test('a life outside the ceiling is refused, never clamped', async () => {
   let shelf = book()
   for (let days of [0, -1, MOST + 1]) {
     await assertRejects(() => stand(SECRET, shelf, { person: 'p1', days }))
@@ -133,7 +134,7 @@ Deno.test('a life outside the ceiling is refused, never clamped', async () => {
   assert((await stand(SECRET, shelf, { person: 'p1', days: MOST })).standing)
 })
 
-Deno.test('nothing but a well-formed pass under this secret opens', async () => {
+test('nothing but a well-formed pass under this secret opens', async () => {
   assertEquals(await passOf('', SECRET), null)
   assertEquals(await passOf('not a token', SECRET), null)
   // Sealed by us, and still not a pass: neither half is whole.

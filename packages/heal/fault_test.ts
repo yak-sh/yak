@@ -1,9 +1,10 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { actionable, faultKey, normalize, recurred, severity } from './fault.ts'
 
 let same = (a: string, b: string) => assertEquals(normalize(a), normalize(b))
 
-Deno.test('the volatile parts of a message fold away', () => {
+test('the volatile parts of a message fold away', () => {
   same(
     'T-42 failed at /srv/app.ts:10:3 after 300 tries',
     'S-7 failed at /home/x/y.ts:99:1 after 2 tries',
@@ -23,7 +24,7 @@ Deno.test('the volatile parts of a message fold away', () => {
   )
 })
 
-Deno.test('the key is the kind, the message and the top frame', () => {
+test('the key is the kind, the message and the top frame', () => {
   let stack = 'Error: x\n    at run (/a.ts:4:1)\n    at main (/b.ts:1:1)'
   assertEquals(
     faultKey('session', 'exit 127 in S-9', stack),
@@ -39,7 +40,7 @@ Deno.test('the key is the kind, the message and the top frame', () => {
   assertEquals(faultKey('task', 'boom') == faultKey('session', 'boom'), false)
 })
 
-Deno.test('a transient is not worth a task', () => {
+test('a transient is not worth a task', () => {
   for (
     let m of [
       'fetch timed out',
@@ -52,14 +53,14 @@ Deno.test('a transient is not worth a task', () => {
   assertEquals(actionable('no such table: bug'), true)
 })
 
-Deno.test('a missing thing files ahead of an odd one', () => {
+test('a missing thing files ahead of an odd one', () => {
   assertEquals(severity('exit 127: codex not found'), 1)
   assertEquals(severity('unable to open database'), 1)
   assertEquals(severity('exit 0'), 2)
   assertEquals(severity('unexpected token'), 2)
 })
 
-Deno.test('the recurrence line is replaced, never stacked', () => {
+test('the recurrence line is replaced, never stacked', () => {
   let once = recurred('it broke', 2, 'noon')
   assertEquals(once, 'it broke\n\n— ↻ recurred 2× · last seen noon')
   assertEquals(

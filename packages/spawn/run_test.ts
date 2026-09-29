@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { claude } from './adapters.ts'
@@ -28,7 +29,7 @@ let entries = async (g: { read: (q: string) => unknown }) =>
 
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
-Deno.test('a request is the using on the transcript, read back as a job', async () => {
+test('a request is the using on the transcript, read back as a job', async () => {
   let { g } = tracked()
   await g.apply(asking('S1', 'E1', 'fix it', { effort: 'high' }))
   assertEquals(await asked(g, 'S1'), {
@@ -44,7 +45,7 @@ Deno.test('a request is the using on the transcript, read back as a job', async 
   assertEquals(await asked(g, 'S2'), null)
 })
 
-Deno.test('an effort the model does not serve is refused, not launched', async () => {
+test('an effort the model does not serve is refused, not launched', async () => {
   let { g } = tracked()
   await g.apply(asking('S1', 'E1', 'fix it', { effort: 'extreme' }))
   await g.apply([{
@@ -55,7 +56,7 @@ Deno.test('an effort the model does not serve is refused, not launched', async (
   assert(String(said).includes('unknown effort: extreme'), String(said))
 })
 
-Deno.test('the log becomes the transcript: one entry per line that says something', async () => {
+test('the log becomes the transcript: one entry per line that says something', async () => {
   let { g, dir, close } = await logged([
     { type: 'system', subtype: 'init', session_id: 'abc' },
     { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
@@ -89,7 +90,7 @@ Deno.test('the log becomes the transcript: one entry per line that says somethin
   }
 })
 
-Deno.test('a run that stopped talking is still over, and says so once', async () => {
+test('a run that stopped talking is still over, and says so once', async () => {
   let { g, dir, close } = await logged([
     { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
   ], 3)
@@ -113,7 +114,7 @@ let said = [
   { type: 'result', usage: { output_tokens: 3 } },
 ]
 
-Deno.test('a pass that fails is taken up again where the transcript stands', async () => {
+test('a pass that fails is taken up again where the transcript stands', async () => {
   let { g, dir, close } = await logged(said)
   try {
     // The first write finds the store locked past its busy timeout.
@@ -141,7 +142,7 @@ Deno.test('a pass that fails is taken up again where the transcript stands', asy
   }
 })
 
-Deno.test('a run that ended while nobody read its log is read to its end on start-up', async () => {
+test('a run that ended while nobody read its log is read to its end on start-up', async () => {
   let { g, dir, close } = await logged(said)
   try {
     await resume(g, { dir, adapters: { fake: claude } })

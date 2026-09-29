@@ -3,6 +3,7 @@
 // handed over as this client's `fetch`, so the JSON-RPC, the schemas and the
 // results are the real ones and nothing opens a socket.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { Unauthorized as Refuse } from '@yaks/api'
 import { mcp } from '@yaks/mcp'
@@ -37,7 +38,7 @@ let listed = async (): Promise<Tool[]> => {
   return (await ask('tools/list')).tools as Tool[]
 }
 
-Deno.test('a host becomes the /mcp door it names', () => {
+test('a host becomes the /mcp door it names', () => {
   assertEquals(doorUrl('yaks.app'), 'https://yaks.app/mcp')
   assertEquals(doorUrl('http://localhost:8787/'), 'http://localhost:8787/mcp')
   assertEquals(doorUrl('localhost:5173'), 'http://localhost:5173/mcp')
@@ -49,7 +50,7 @@ Deno.test('a host becomes the /mcp door it names', () => {
   )
 })
 
-Deno.test('a line says which run it speaks for, and nothing when it is nobody', async () => {
+test('a line says which run it speaks for, and nothing when it is nobody', async () => {
   let seen: (string | null)[] = []
   let door = (r: Request) => {
     seen.push(r.headers.get('x-via'))
@@ -63,7 +64,7 @@ Deno.test('a line says which run it speaks for, and nothing when it is nobody', 
   assertEquals(seen, ['s1', null])
 })
 
-Deno.test('the run a command line is part of is the one the environment named', () => {
+test('the run a command line is part of is the one the environment named', () => {
   let env = (of: Record<string, string>) => (name: string) => of[name]
   assertEquals(
     via(env({ CLAUDE_CODE_SESSION_ID: 'a', TASKS_SESSION: 'b' })),
@@ -74,7 +75,7 @@ Deno.test('the run a command line is part of is the one the environment named', 
   assertEquals(via(env({})), undefined)
 })
 
-Deno.test('the tool list is the subcommand list', async () => {
+test('the tool list is the subcommand list', async () => {
   let names = (await listed()).map((t) => t.name).sort()
   assertEquals(names, [
     'graph_apply',
@@ -84,13 +85,13 @@ Deno.test('the tool list is the subcommand list', async () => {
   ])
 })
 
-Deno.test('a tool is typed as the two words the server listed it with', async () => {
+test('a tool is typed as the two words the server listed it with', async () => {
   let schema = (await listed()).find((t) => t.name == 'graph_schema')!
   let { noun, verb } = spelling(schema)
   assertEquals([noun, verb], ['graph', 'schema'])
 })
 
-Deno.test('a command line goes through the published schema and answers', async () => {
+test('a command line goes through the published schema and answers', async () => {
   let ask = client()
   await initialize(ask)
   let tools = (await ask('tools/list')).tools as Tool[]
@@ -116,7 +117,7 @@ Deno.test('a command line goes through the published schema and answers', async 
   assertEquals(JSON.parse(text)[0].entity.eid, 'b1')
 })
 
-Deno.test('a tool that refused says so, and the words are what is printed', async () => {
+test('a tool that refused says so, and the words are what is printed', async () => {
   let ask = client()
   await initialize(ask)
   let said = await ask('tools/call', {
@@ -127,20 +128,20 @@ Deno.test('a tool that refused says so, and the words are what is printed', asyn
   assert(saidBy(said).text.includes('"entity"'))
 })
 
-Deno.test('a 401 is one sentence a person can act on', async () => {
+test('a 401 is one sentence a person can act on', async () => {
   let err = await assertRejects(() => client(false)('tools/list'), Unauthorized)
   // It names the command that signs in, as the command is spelled.
   assert(err.message.includes('`yak login <token>`'), err.message)
 })
 
-Deno.test('help is drawn from the schema the server published', async () => {
+test('help is drawn from the schema the server published', async () => {
   let query = (await listed()).find((t) => t.name == 'graph_query')!
   let help = toolHelp(query)
   assert(help.startsWith('yak graph_query --q <string>'), help)
   assert(help.includes('--limit'), help)
 })
 
-Deno.test('a reply framed as one SSE event reads the same', async () => {
+test('a reply framed as one SSE event reads the same', async () => {
   let ask = rpc({
     url: 'https://x.test/mcp',
     fetch: () =>
@@ -154,19 +155,19 @@ Deno.test('a reply framed as one SSE event reads the same', async () => {
   assertEquals(await ask('tools/list'), { tools: [] })
 })
 
-Deno.test('the timing flag is the program’s, and off unless asked', () => {
+test('the timing flag is the program’s, and off unless asked', () => {
   assertEquals(globals(['app_list']).timing, false)
   assertEquals(globals(['--timing', 'app_list']).rest, ['app_list'])
   assert(globals(['app_list', '--timing']).timing)
 })
 
-Deno.test('duties run unless the command line turns them off', () => {
+test('duties run unless the command line turns them off', () => {
   assert(globals(['serve']).duties)
   assertEquals(globals(['--no-duties', 'serve']).duties, false)
   assertEquals(globals(['serve', '--no-duties']).rest, ['serve'])
 })
 
-Deno.test('YAKS_TIMING enables timing only when set to 1', () => {
+test('YAKS_TIMING enables timing only when set to 1', () => {
   for (let value of ['1', '0', 'true', '']) {
     let env = (name: string) => name == 'YAKS_TIMING' ? value : undefined
     assertEquals(globals(['app_list'], env).timing, value == '1')

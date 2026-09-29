@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { ranged, type Served, served, servedVia } from './serve.ts'
 
-Deno.test('a served object is fenced, revalidated, and named safely', async () => {
+test('a served object is fenced, revalidated, and named safely', async () => {
   let res = served(new Uint8Array([1, 2, 3]), {
     mime: 'image/png',
     name: 'a "shot"\r\n.png',
@@ -27,7 +28,7 @@ Deno.test('a served object is fenced, revalidated, and named safely', async () =
   )
 })
 
-Deno.test('a byte response supports seeking, revalidation, and HEAD', async () => {
+test('a byte response supports seeking, revalidation, and HEAD', async () => {
   let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
   let at = 'https://blob.invalid/movie.mp4'
   let serve = (method: string, headers: HeadersInit = {}) =>
@@ -74,7 +75,7 @@ Deno.test('a byte response supports seeking, revalidation, and HEAD', async () =
   await head.body?.cancel()
 })
 
-Deno.test('a Unicode filename is a valid inline response header', () => {
+test('a Unicode filename is a valid inline response header', () => {
   let res = served(new Uint8Array([1]), { name: '旅行—draft.mp4' })
   assertEquals(res.status, 200)
   assertEquals(
@@ -83,13 +84,13 @@ Deno.test('a Unicode filename is a valid inline response header', () => {
   )
 })
 
-Deno.test('no mime means octet-stream, no name means no disposition', () => {
+test('no mime means octet-stream, no name means no disposition', () => {
   let res = served(new Uint8Array())
   assertEquals(res.headers.get('content-type'), 'application/octet-stream')
   assertEquals(res.headers.get('content-disposition'), null)
 })
 
-Deno.test('cached bytes keep range and condition semantics under the response fence', async () => {
+test('cached bytes keep range and condition semantics under the response fence', async () => {
   let body = new Uint8Array([0, 1, 2, 3, 4, 5])
   let calls: Request[] = []
   let read = (request: Request) => {
@@ -143,7 +144,7 @@ Deno.test('cached bytes keep range and condition semantics under the response fe
   assertEquals(await head.text(), '')
 })
 
-Deno.test('immutable and private policies follow the representation', () => {
+test('immutable and private policies follow the representation', () => {
   let bytes = new Uint8Array([1, 2, 3])
   let immutable = served(bytes, { mime: 'image/png', cache: 'immutable' })
   assertEquals(

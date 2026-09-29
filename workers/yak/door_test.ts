@@ -1,12 +1,13 @@
 // storeOf answers an eviction by taking a fresh stub and sending once more;
 // anything else it throws through untouched.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { doorOf, evicted, type Namespace, storeOf } from './door.ts'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
 import { metaOf } from './meta.ts'
 
-Deno.test('a request sums statement counts from each store response', async () => {
+test('a request sums statement counts from each store response', async () => {
   let tally = new Map<string, number>()
   let next = 0
   await tallying(tally, async () => {
@@ -55,7 +56,7 @@ let storageTimeout = () =>
     'Durable Object storage operation exceeded timeout which caused object to be reset.',
   )
 
-Deno.test('evicted: the runtime flag, or its words', () => {
+test('evicted: the runtime flag, or its words', () => {
   assertEquals(evicted(gone()), true)
   assertEquals(evicted(flagged()), true)
   assertEquals(evicted(storageTimeout()), true)
@@ -63,7 +64,7 @@ Deno.test('evicted: the runtime flag, or its words', () => {
   assertEquals(evicted(null), false)
 })
 
-Deno.test('an evicted POST is sent again with its body intact', async () => {
+test('an evicted POST is sent again with its body intact', async () => {
   for (let reset of [gone(), storageTimeout()]) {
     let n = ns([reset, 'ok'])
     let res = await storeOf(n, 'jeff')('/apply', {
@@ -75,7 +76,7 @@ Deno.test('an evicted POST is sent again with its body intact', async () => {
   }
 })
 
-Deno.test('an interrupted recovery command is not silently sent again', async () => {
+test('an interrupted recovery command is not silently sent again', async () => {
   let n = ns([storageTimeout(), Response.json({ writes: [] })])
   await assertRejects(
     () => retryWrite(storeOf(n, 'jeff'), 1),
@@ -85,7 +86,7 @@ Deno.test('an interrupted recovery command is not silently sent again', async ()
   assertEquals(n.seen.length, 1)
 })
 
-Deno.test('a bodiless GET retries once; a second eviction and other errors throw', async () => {
+test('a bodiless GET retries once; a second eviction and other errors throw', async () => {
   let n = ns([flagged(), 'ok'])
   assertEquals(await (await storeOf(n, 'jeff')('/query')).text(), 'ok')
   assertEquals(n.seen.length, 2)
@@ -95,7 +96,7 @@ Deno.test('a bodiless GET retries once; a second eviction and other errors throw
   assertEquals(other.seen.length, 1)
 })
 
-Deno.test('Store does not retry a streamed init or a Request with a body', async () => {
+test('Store does not retry a streamed init or a Request with a body', async () => {
   for (let request of [false, true]) {
     let init = { method: 'POST', body: new Blob(['body']).stream() }
     let n = ns([flagged(), 'unexpected retry'])
@@ -111,7 +112,7 @@ Deno.test('Store does not retry a streamed init or a Request with a body', async
 
 // A store the runtime resets mid-request can still answer, and says the reset
 // as a refusal; that is the same eviction, and any other 500 is not.
-Deno.test('an eviction a store answers is sent again; another 500 is its answer', async () => {
+test('an eviction a store answers is sent again; another 500 is its answer', async () => {
   let said = (message: string) =>
     Response.json({ error: 'Error', message }, { status: 500 })
   for (let reset of [gone(), storageTimeout()]) {
@@ -144,7 +145,7 @@ let brokenBody = (error: Error) => {
   )
 }
 
-Deno.test('a Store read retries a failed body, even after receiving bytes', async () => {
+test('a Store read retries a failed body, even after receiving bytes', async () => {
   let attempts = 0
   let store = storeOf({
     idFromName: (name) => name,
@@ -164,7 +165,7 @@ Deno.test('a Store read retries a failed body, even after receiving bytes', asyn
   assertEquals(attempts, 2)
 })
 
-Deno.test('a Store write retries a failed body with the same key and body', async () => {
+test('a Store write retries a failed body with the same key and body', async () => {
   let seen: [string, string | null][] = []
   let store = storeOf({
     idFromName: (name) => name,
@@ -188,7 +189,7 @@ Deno.test('a Store write retries a failed body with the same key and body', asyn
   assertEquals(seen[0], seen[1])
 })
 
-Deno.test('an opaque body failure does not replay a Store write', async () => {
+test('an opaque body failure does not replay a Store write', async () => {
   let attempts = 0
   let store = storeOf({
     idFromName: (name) => name,

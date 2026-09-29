@@ -1,4 +1,5 @@
 // A cave uses the same terrain for movement, camera clearance and meshes.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import * as THREE from 'three'
@@ -21,7 +22,7 @@ seedThemes()
 
 seedBuildings()
 
-Deno.test('the ridge cave is walkable from its mouth and back', () => {
+test('the ridge cave is walkable from its mouth and back', () => {
   let [x, z] = spotOf('mossvale', 'ridge')!
   let v = vale(0.5)
   let start = z - 26
@@ -48,7 +49,7 @@ Deno.test('the ridge cave is walkable from its mouth and back', () => {
   assertEquals(roofOver(v, b.x, b.y + 1, b.z), Infinity)
 })
 
-Deno.test('the cave has matching cold and grown layers and a clear camera', () => {
+test('the cave has matching cold and grown layers and a clear camera', () => {
   let [x, z] = spotOf('mossvale', 'ridge')!
   let v = vale(1)
   let points = [z - 20, z - 10, z]

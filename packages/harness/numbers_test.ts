@@ -1,7 +1,8 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { compactCount } from './numbers.ts'
 
-Deno.test('compact counts use lowercase units and promote rounded boundaries', () => {
+test('compact counts use lowercase units and promote rounded boundaries', () => {
   for (
     const [count, expected] of [
       [0, '0'],

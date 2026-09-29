@@ -1,5 +1,6 @@
 // The memory's list face: registry specificity and the three facts a row
 // promises.
+import { test } from '@yaks/testing'
 import '../../testing.ts'
 import { type ComponentChildren, type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
@@ -29,11 +30,11 @@ let children = (v: VNode) =>
 
 let text = (v: VNode): ComponentChildren => v.props.children
 
-Deno.test('memory owns its list tile', () => {
+test('memory owns its list tile', () => {
   assertEquals(resolve(memory, 'List.Tile').Render, MemoryTile)
 })
 
-Deno.test('memory tile says feedback, index, confirmation age, and id', () => {
+test('memory tile says feedback, index, confirmation age, and id', () => {
   let [tag, title, stamp, id] = children(MemoryTile({ e: memory }))
   assertEquals(text(tag), 'feedback')
   assertEquals(text(title), 'Prefer examples over prose')
@@ -48,7 +49,7 @@ Deno.test('memory tile says feedback, index, confirmation age, and id', () => {
 // A memory marked on a transcript entry, or a comment, has no title: its
 // index line is the words it marks, wherever the entity keeps them. A task
 // marked as one keeps its own face.
-Deno.test('a mark on an entry indexes by its words', () => {
+test('a mark on an entry indexes by its words', () => {
   let entry: Ent = {
     eid: 'entry',
     num: 0,
@@ -67,7 +68,7 @@ Deno.test('a mark on an entry indexes by its words', () => {
 
 // A memory that records nobody's correction shows no tag at all — the
 // retired enum's other three values said only what the row already held.
-Deno.test('memory tile: no feedback tag, no slot', () => {
+test('memory tile: no feedback tag, no slot', () => {
   let { feedback: _gone, ...plain } = memory
   let [tag] = children(MemoryTile({ e: plain }))
   assertEquals(tag, null)

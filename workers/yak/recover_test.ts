@@ -10,6 +10,7 @@
 // recovery" — so the probe kernel (probe.ts) cannot hold this gesture either.
 // testing.ts fakes the three calls; what that buys is the bookkeeping, which
 // is the half that can be wrong in a way we could have prevented.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
@@ -19,7 +20,7 @@ import { mark, moment, oldest, putBack, recorded, WINDOW } from './recover.ts'
 let DAY = 24 * 60 * 60_000
 let NOW = Date.parse('2026-09-06T14:20:00Z')
 
-Deno.test('the window is thirty days back from now', () => {
+test('the window is thirty days back from now', () => {
   assertEquals(WINDOW, 30 * DAY)
   assertEquals(
     oldest(NOW).toISOString(),
@@ -27,7 +28,7 @@ Deno.test('the window is thirty days back from now', () => {
   )
 })
 
-Deno.test('a moment outside the window is refused by name', () => {
+test('a moment outside the window is refused by name', () => {
   // A time in the window is simply the time.
   assertEquals(
     moment('2026-09-01T00:00:00Z', NOW).toISOString(),
@@ -67,7 +68,7 @@ let door = (answers: Record<string, unknown>) => {
   }
 }
 
-Deno.test('a restore writes down the way back before it moves anything', async () => {
+test('a restore writes down the way back before it moves anything', async () => {
   let d = door({
     'GET /restore?at': { from: 'at-now', to: 'at-then' },
     'POST /restore': { undo: 'undo-at-then' },
@@ -99,7 +100,7 @@ Deno.test('a restore writes down the way back before it moves anything', async (
   assertEquals(done.at, '2026-09-06T14:20:00.000Z')
 })
 
-Deno.test('nothing is written down when the store cannot be read', async () => {
+test('nothing is written down when the store cannot be read', async () => {
   let store = doorOf(() =>
     Promise.resolve(
       Response.json({ error: 'Refused', message: 'no recovery here' }, {
@@ -116,7 +117,7 @@ Deno.test('nothing is written down when the store cannot be read', async () => {
   assertEquals(wrote, 0)
 })
 
-Deno.test('the record is one entity per restore, about the app', () => {
+test('the record is one entity per restore, about the app', () => {
   assertEquals(
     recorded('app-1', {
       at: '2026-09-06T14:20:00.000Z',
@@ -149,7 +150,7 @@ let at = (store: Store, path: string, init: RequestInit = {}) =>
     }),
   )
 
-Deno.test('the store answers where it stands, and wakes where it is told', async () => {
+test('the store answers where it stands, and wakes where it is told', async () => {
   let ctx = state()
   let store = new Store(ctx)
   let stands = await (await at(store, '/restore')).json()
@@ -176,7 +177,7 @@ Deno.test('the store answers where it stands, and wakes where it is told', async
   assertEquals(ctx.pitr.aborts, 1)
 })
 
-Deno.test('a store outside the window refuses, and a client never asks at all', async () => {
+test('a store outside the window refuses, and a client never asks at all', async () => {
   let store = new Store(state())
   let old = new Date(Date.now() - 40 * DAY).toISOString()
   let no = await at(store, `/restore?at=${encodeURIComponent(old)}`)
@@ -192,7 +193,7 @@ Deno.test('a store outside the window refuses, and a client never asks at all', 
   assertEquals(outside.status, 404)
 })
 
-Deno.test('mark reads the bookmark off a store', async () => {
+test('mark reads the bookmark off a store', async () => {
   let store = new Store(state())
   let there = await mark(doorOf((req) => store.fetch(req), 'ada/cookbook'))
   assertStringIncludes(there.from, 'at-')

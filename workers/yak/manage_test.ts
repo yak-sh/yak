@@ -2,6 +2,7 @@
 // front page, and the old addresses on the space moving there. These requests
 // use the browser's cookie and form paths, including the boundaries that keep
 // another person, and another page, from changing this account.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import {
   client,
@@ -14,7 +15,7 @@ import {
 } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 
-Deno.test('the dashboard is at the apex, whatever serves the space', async () => {
+test('the dashboard is at the apex, whatever serves the space', async () => {
   let k = await kernel()
   try {
     let them = await signIn(k)
@@ -216,7 +217,7 @@ Deno.test('the dashboard is at the apex, whatever serves the space', async () =>
   }
 })
 
-Deno.test(
+test(
   'Billing management opens checkout and the customer portal for this space',
   async () => {
     // Stripe's sandbox, or the sentence saying how to supply it.

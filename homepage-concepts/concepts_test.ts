@@ -1,4 +1,5 @@
 // Contract checks for the five standalone concepts and their local navigation.
+import { test } from '@yaks/testing'
 let root = new URL('.', import.meta.url)
 let concepts = [
   'soft.html',
@@ -13,7 +14,7 @@ let assert = (condition: unknown, message = 'assertion failed') => {
   if (!condition) throw new Error(message)
 }
 
-Deno.test('all five concepts carry the product promise and accessibility basics', async () => {
+test('all five concepts carry the product promise and accessibility basics', async () => {
   for (let name of concepts) {
     let html = await read(name)
     assert(html.includes('<meta name="viewport"'))
@@ -26,7 +27,7 @@ Deno.test('all five concepts carry the product promise and accessibility basics'
   }
 })
 
-Deno.test('concept navigation resolves to local files', async () => {
+test('concept navigation resolves to local files', async () => {
   for (let name of ['index.html', ...concepts]) {
     let html = await read(name)
     for (let href of html.matchAll(/href="([^"#]+\.html)"/g)) {

@@ -3,6 +3,7 @@
 // vault and nowhere else, a seal's state reaches the page, an app calls out
 // with it only as its link allows, and a webhook lands in the app's store only
 // when its signature holds.
+import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -84,7 +85,7 @@ let setup = async (vault = true) => {
   return { p, at, dir, space, person, post, shown, dump }
 }
 
-Deno.test(
+test(
   'a pasted key is sealed in the vault, and the directory holds its handle',
   async () => {
     let s = await setup()
@@ -121,7 +122,7 @@ Deno.test(
   },
 )
 
-Deno.test('without a vault no key is taken, and the page says so', async () => {
+test('without a vault no key is taken, and the page says so', async () => {
   let s = await setup(false)
   assertEquals(
     await s.post({
@@ -135,7 +136,7 @@ Deno.test('without a vault no key is taken, and the page says so', async () => {
   assertEquals((await s.shown()).on, false)
 })
 
-Deno.test(
+test(
   'a built integration reached by OAuth is offered once this deploy holds its client',
   async () => {
     let s = await setup()
@@ -158,7 +159,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'a sign-in begun on a page opened with ?enable= comes back to that page',
   async () => {
     let s = await setup()
@@ -184,7 +185,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'the directory holds the built integrations, and a space cannot change where their tokens go',
   async () => {
     let s = await setup()
@@ -207,7 +208,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'the page tells a key being saved from one that could not be',
   async () => {
     let s = await setup()
@@ -235,7 +236,7 @@ Deno.test(
   },
 )
 
-Deno.test('a connection elsewhere is not this page to change', async () => {
+test('a connection elsewhere is not this page to change', async () => {
   let s = await setup()
   let eid = crypto.randomUUID()
   await s.at.apply([{
@@ -267,7 +268,7 @@ let liveApp = async (s: Awaited<ReturnType<typeof setup>>) => {
   return (await s.dir.app(s.space, 'notes'))!
 }
 
-Deno.test('the owner can attach a connected space key to a live app from the page', async () => {
+test('the owner can attach a connected space key to a live app from the page', async () => {
   let s = await setup()
   let key = 'private-weather-key'
   await s.post({
@@ -320,7 +321,7 @@ Deno.test('the owner can attach a connected space key to a live app from the pag
   assert(!s.dump().includes(key))
 })
 
-Deno.test('attaching a space connection is an owner tool, not an editor tool', async () => {
+test('attaching a space connection is an owner tool, not an editor tool', async () => {
   let s = await setup()
   await s.post({
     do: 'add',
@@ -418,7 +419,7 @@ let posted = (fields: Record<string, string> = {}) => {
 
 let to = (r: Response) => [r.status, r.headers.get('location')]
 
-Deno.test(
+test(
   'a person connects their own account for an app that asks each person, and the space holds only the ask',
   async () => {
     let s = await setup()
@@ -458,7 +459,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'a testing integration is asked for only on a page opened with ?enable=',
   async () => {
     let s = await setup()
@@ -474,7 +475,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'a person signs in for their own connection and comes back to the app',
   async () => {
     let s = await setup()
@@ -538,7 +539,7 @@ let wired = async (
   }
 }
 
-Deno.test(
+test(
   'an app calls out with the key in its sentinel’s place, for whom its link allows, and its worker is bound to it',
   async () => {
     let s = await setup()
@@ -658,7 +659,7 @@ let signed = async (secret: string, body: string) => {
     [...mac].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-Deno.test(
+test(
   'a webhook lands in the app that uses the connection, when it is signed',
   async () => {
     let s = await setup()
@@ -721,7 +722,7 @@ Deno.test(
   },
 )
 
-Deno.test(
+test(
   'the secret tools the directory listed keep a key the worker reads as itself, name it, and forget it',
   async () => {
     let s = await setup()

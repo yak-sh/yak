@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
 import { POOL } from './pool.ts'
@@ -46,7 +46,7 @@ let owed = async (g: Reads) =>
 let run = async (g: Reads, handler: string, target = 'p1') =>
   (await rows(g)).find((e) => e.handler == handler && e.target == target)!
 
-Deno.test('a commit writes down what it owes, and a writer working nothing runs none', async () => {
+test('a commit writes down what it owes, and a writer working nothing runs none', async () => {
   let a = proc(store())
   a.fx.handle({ post_note: a.note })
   await a.g.apply([post('p1')])
@@ -58,13 +58,13 @@ Deno.test('a commit writes down what it owes, and a writer working nothing runs 
   ])
 })
 
-Deno.test('a batch that never commits owes nothing', async () => {
+test('a batch that never commits owes nothing', async () => {
   let a = proc(store())
   await a.g.apply([post('p1')], { check: true })
   assertEquals(await owed(a.g), [])
 })
 
-Deno.test('a process working the pool runs what it writes, once committed', async () => {
+test('a process working the pool runs what it writes, once committed', async () => {
   let a = proc(store())
   a.fx.handle({ post_note: a.note })
   await a.fx.work(a.g)
@@ -79,7 +79,7 @@ Deno.test('a process working the pool runs what it writes, once committed', asyn
   ])
 })
 
-Deno.test('a pooled event retains all components moved on its target', async () => {
+test('a pooled event retains all components moved on its target', async () => {
   let a = proc(store())
   let touched: string[][] = []
   a.fx.handle({ post_note: (e) => void touched.push(e.touched ?? []) })
@@ -90,7 +90,7 @@ Deno.test('a pooled event retains all components moved on its target', async () 
   assert(touched[0].includes('created'))
 })
 
-Deno.test('what one process wrote, another runs, and only one of many', async () => {
+test('what one process wrote, another runs, and only one of many', async () => {
   let s = store()
   let [w, a, b] = [proc(s), proc(s), proc(s)]
   let ran: string[] = []
@@ -106,7 +106,7 @@ Deno.test('what one process wrote, another runs, and only one of many', async ()
 
 // Over a synchronous storage a backlog never waits on anything, so without a
 // pause it would hold its host's thread from the first run to the last.
-Deno.test('a worker clearing a backlog lets its host answer between passes', async () => {
+test('a worker clearing a backlog lets its host answer between passes', async () => {
   let a = proc(store(), { max: 1 })
   a.fx.handle({ post_note: a.note })
   await a.g.apply([post('p1'), post('p2'), post('p3')])
@@ -117,7 +117,7 @@ Deno.test('a worker clearing a backlog lets its host answer between passes', asy
   assert(heard[0] < 3, `answered after ${heard[0]} of 3 runs`)
 })
 
-Deno.test('a run that throws comes back due, and rests failed once its tries are spent', async () => {
+test('a run that throws comes back due, and rests failed once its tries are spent', async () => {
   let t = 0
   let a = proc(store(), { now: () => t })
   let tries = 0
@@ -145,7 +145,7 @@ Deno.test('a run that throws comes back due, and rests failed once its tries are
   assertEquals(a.oops.length, 2)
 })
 
-Deno.test('a run its worker dropped is run again, unless running twice is not safe', async () => {
+test('a run its worker dropped is run again, unless running twice is not safe', async () => {
   let s = store()
   // A worker that claims both runs as it writes them, and dies in both.
   let dead = proc(s, { lease: 10, now: () => 0 })
@@ -163,7 +163,7 @@ Deno.test('a run its worker dropped is run again, unless running twice is not sa
   assertEquals((await run(next.g, 'post_gone')).state, 'failed')
 })
 
-Deno.test('a sweep owes what it selects one run, however many workers start at once', async () => {
+test('a sweep owes what it selects one run, however many workers start at once', async () => {
   let s = store()
   // Written by a graph that owes nothing: no registry at all.
   let bare = graph({ storage: s, vocab: pooledBlog })
@@ -195,7 +195,7 @@ let every = (note: Handler) => ({
   post_swept: () => {},
 })
 
-Deno.test('a pass on the way through leaves the pool to a process that stays', async () => {
+test('a pass on the way through leaves the pool to a process that stays', async () => {
   let s = store()
   let server = proc(s, { owner: 'server' })
   let cli = proc(s, { owner: 'cli' })
@@ -219,7 +219,7 @@ Deno.test('a pass on the way through leaves the pool to a process that stays', a
   assertEquals(cli.ran, ['created p2'])
 })
 
-Deno.test('a process working only some effects leaves the rest to a pass through', async () => {
+test('a process working only some effects leaves the rest to a pass through', async () => {
   let s = store()
   let some = proc(s, { owner: 'some' })
   let cli = proc(s, { owner: 'cli' })
@@ -239,7 +239,7 @@ Deno.test('a process working only some effects leaves the rest to a pass through
   await serving
 })
 
-Deno.test('a thread that wrote runs down wakes the worker beside it', async () => {
+test('a thread that wrote runs down wakes the worker beside it', async () => {
   let s = store()
   let server = proc(s, { owner: 'server' })
   server.fx.handle(every(server.note))
@@ -255,7 +255,7 @@ Deno.test('a thread that wrote runs down wakes the worker beside it', async () =
   await serving
 })
 
-Deno.test('a process that stops leaves what it writes next for the others', async () => {
+test('a process that stops leaves what it writes next for the others', async () => {
   let a = proc(store())
   a.fx.handle({ post_note: a.note })
   await a.fx.work(a.g)
@@ -266,7 +266,7 @@ Deno.test('a process that stops leaves what it writes next for the others', asyn
   assert(!(await run(a.g, 'post_note')).lease_owner)
 })
 
-Deno.test("a run's write owes a generation on, and the chain stops at depth", async () => {
+test("a run's write owes a generation on, and the chain stops at depth", async () => {
   let a = proc(store())
   a.fx.handle({
     post_note: async (e, _tx, write) => {
@@ -315,7 +315,7 @@ let orphaned = async (dead: string[]) => {
   return next.ran
 }
 
-Deno.test('what a process that ended left claimed is run at once, not waited out', async () => {
+test('what a process that ended left claimed is run at once, not waited out', async () => {
   assertEquals(await orphaned([]), [])
   assertEquals(await orphaned(['w1']), ['created p1'])
 })

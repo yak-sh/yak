@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { scrub } from './scrub.ts'
 
@@ -21,7 +22,7 @@ let page = `<!doctype html><html><head>
 <svg><use xlink:href="https://cdn.example/i.svg#x"/></svg>
 </body></html>`
 
-Deno.test('a frozen page renders from its own bytes', () => {
+test('a frozen page renders from its own bytes', () => {
   let { html } = scrub(page)
   // Nothing addresses anything outside these bytes.
   assert(!/https?:\/\//i.test(html), html)
@@ -36,7 +37,7 @@ Deno.test('a frozen page renders from its own bytes', () => {
   assert(html.includes('url()'), html)
 })
 
-Deno.test('the archive says what the page called itself', () => {
+test('the archive says what the page called itself', () => {
   assertEquals(scrub(page).title, 'A Page')
   assertEquals(scrub('<p>no title</p>').title, undefined)
   assertEquals(scrub('<title>  </title>').title, undefined)

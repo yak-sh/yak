@@ -9,6 +9,7 @@
 // because the whole claim is that a deploy mints a commit: the plugin list, the
 // registration, the cross-store write and the vocabulary all have to be right
 // for this file to pass.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertObjectMatch } from '@std/assert'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
@@ -121,7 +122,7 @@ let chain = async (env: Env, git: ReturnType<typeof metaOf>, app: App) => {
   return out
 }
 
-Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
+test('a deploy mints one commit whose tree is the manifest', async () => {
   let { env } = platform('a probe secret')
   let { app, git } = await standing(env)
   let manifest = await deploy(env, app, 1, {
@@ -161,7 +162,7 @@ Deno.test('a deploy mints one commit whose tree is the manifest', async () => {
 
 // Every store notes its own breaks where it notes an app's (graph.ts
 // `#broke`), through the kernel's door, and the git store is one of them.
-Deno.test('the git object store can write down a break of its own', async () => {
+test('the git object store can write down a break of its own', async () => {
   let { env } = platform('a probe secret')
   let git = metaOf(storeOf(env.STORE, GIT_STORE))
   let [noted] = await git.apply([{
@@ -177,7 +178,7 @@ Deno.test('the git object store can write down a break of its own', async () => 
   assertObjectMatch(noted, { exception: { message: 'it broke' } })
 })
 
-Deno.test('the next deploy follows the last one and moves the branch', async () => {
+test('the next deploy follows the last one and moves the branch', async () => {
   let { env } = platform('a probe secret')
   let { app, git } = await standing(env)
   await deploy(env, app, 1, { 'index.html': 'one\n' })
@@ -190,7 +191,7 @@ Deno.test('the next deploy follows the last one and moves the branch', async () 
   assertEquals(body.match(/^parent ([0-9a-f]{40})$/m)?.[1], first)
 })
 
-Deno.test('the sweep commits what nothing committed, once', async () => {
+test('the sweep commits what nothing committed, once', async () => {
   let { env } = platform('a probe secret')
   let { app, git, platform: dir } = await standing(env)
   for (let v of [1, 2, 3]) {

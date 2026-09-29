@@ -1,6 +1,7 @@
 // The check: an index nobody is rebuilding, one that was just written, and a
 // host with no index at all.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { type Driver, val } from '@yaks/sql'
@@ -39,28 +40,28 @@ let aged = (sql: Driver, hours: number) => {
   return sql
 }
 
-Deno.test('an index the sweep cleaned is nothing to report', async () => {
+test('an index the sweep cleaned is nothing to report', async () => {
   let sql = aged(await stocked(), 3)
   clean(sql)
   assertEquals((await checkup(sql)).level, undefined)
 })
 
-Deno.test('a mark that outlived the sweep is a fail', async () => {
+test('a mark that outlived the sweep is a fail', async () => {
   let said = await checkup(aged(await stocked(), 3))
   assertEquals(said.level, 'fail')
   assert(said.body.includes('owed a rebuild since'), said.body)
   assert(said.body.includes('nothing '), said.body)
 })
 
-Deno.test('a mark set moments ago is the sweep having its turn', async () => {
+test('a mark set moments ago is the sweep having its turn', async () => {
   assertEquals((await checkup(await stocked())).level, undefined)
 })
 
-Deno.test('an empty index is not a stalled one', async () => {
+test('an empty index is not a stalled one', async () => {
   assertEquals((await checkup(shelf())).level, undefined)
 })
 
-Deno.test('a host still waiting for its config says what it is waiting for', async () => {
+test('a host still waiting for its config says what it is waiting for', async () => {
   let said = await checkup(shelf(), { embedder: undefined })
   assertEquals(said.level, 'warn')
   assert(said.body.includes('no `embedder` is named'), said.body)
@@ -76,7 +77,7 @@ Deno.test('a host still waiting for its config says what it is waiting for', asy
   assert(key.body.includes('waiting for a key'), key.body)
 })
 
-Deno.test('a host with no vector table says so rather than passing', async () => {
+test('a host with no vector table says so rather than passing', async () => {
   let said = await checkup(mem())
   assertEquals(said.level, 'warn')
   assert(said.body.includes('keeps no vector table'), said.body)

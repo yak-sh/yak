@@ -1,5 +1,6 @@
 // An alias is a key entity of its own: find() and aliasNames() read the name
 // off it and land on the entity it points at.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { aliasNames, find, type Row } from './client.ts'
@@ -17,7 +18,7 @@ let all = [
   row('x', { key: { of: 't', value: 'not-a-name' } }),
 ]
 
-Deno.test('an alias names the entity its key points at', () => {
+test('an alias names the entity its key points at', () => {
   assertEquals(find(all, 'scribe-desk')?.eid, 't')
   assertEquals(find(all, 'T-7')?.eid, 't')
   assertEquals(find(all, 'not-a-name'), undefined)

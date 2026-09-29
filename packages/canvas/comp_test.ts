@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadVocab, storable } from '@yaks/vocab'
 import { idKeywords } from '@yaks/id'
@@ -8,11 +9,11 @@ import { canvas } from './plugin.ts'
 
 let v = loadVocab([canvasDoc], [idKeywords, nameKeywords])
 
-Deno.test('the document is storable — every property lowers to a column', () => {
+test('the document is storable — every property lowers to a column', () => {
   assertEquals(storable(canvasDoc), [])
 })
 
-Deno.test('a card dies with what it shows', () => {
+test('a card dies with what it shows', () => {
   assertEquals(v.prop('card', 'target')!.death, 'cascade')
   assertEquals(
     v.deaths('cascade').some(([c, p]) => c == 'card' && p == 'target'),
@@ -20,12 +21,12 @@ Deno.test('a card dies with what it shows', () => {
   )
 })
 
-Deno.test('every component is wire — including the per-window ones', () => {
+test('every component is wire — including the per-window ones', () => {
   for (let name of v.all) assertEquals(syncOf(v, name), 'server', name)
   for (let name of PER_CLIENT) assertEquals(v.all.includes(name), true, name)
 })
 
-Deno.test('a camera is centre, scale and window size', () => {
+test('a camera is centre, scale and window size', () => {
   assertEquals(v.comp('camera')!.writable, [
     'client',
     'canvas',
@@ -37,17 +38,17 @@ Deno.test('a camera is centre, scale and window size', () => {
   ])
 })
 
-Deno.test("a client's ip is the server's to write", () => {
+test("a client's ip is the server's to write", () => {
   assertEquals(v.comp('client')!.stamped, ['ip'])
   assertEquals(v.comp('client')!.writable, ['user_agent', 'actor'])
 })
 
-Deno.test('pane.parent is said in full, never bare', () => {
+test('pane.parent is said in full, never bare', () => {
   assertThrows(() => v.route('parent'))
   assertEquals(v.route('zoom'), { comp: 'camera', prop: 'zoom' })
 })
 
-Deno.test('the plugin contributes the document and no hook', () => {
+test('the plugin contributes the document and no hook', () => {
   let p = canvas()
   assertEquals(p.vocab, [canvasDoc])
   assertEquals(p.hooks, undefined)

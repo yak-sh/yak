@@ -1,4 +1,5 @@
 // A villager's own line and app link stay visible beside their quest.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { talkHtml } from './hud.ts'
@@ -10,7 +11,7 @@ import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
 
-Deno.test('Pip reacts to this hero marking the welcome task in Village Tasks', async () => {
+test('Pip reacts to this hero marking the welcome task in Village Tasks', async () => {
   let quest = quests.find((q) => q.giver == 'pip')!
   let neutral = 'Still got room by the fire.'
   let panel = (line: string) =>
@@ -47,7 +48,7 @@ Deno.test('Pip reacts to this hero marking the welcome task in Village Tasks', a
   assertEquals(greeting('rowan', neutral, true), neutral)
 })
 
-Deno.test('a villager offer appears as a quest card with both choices', () => {
+test('a villager offer appears as a quest card with both choices', () => {
   let document = parseHTML(`<html><body>${
     talkHtml({
       offer: {
@@ -74,7 +75,7 @@ Deno.test('a villager offer appears as a quest card with both choices', () => {
   )
 })
 
-Deno.test('talking to another hero offers a party invitation', () => {
+test('talking to another hero offers a party invitation', () => {
   let document = parseHTML(`<html><body>${
     talkHtml({
       player: true,

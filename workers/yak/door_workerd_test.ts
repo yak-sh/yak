@@ -1,9 +1,10 @@
 // App and connector reads cross the Store response body in workerd. Their
 // replies are decoded at the Store door before another layer answers them.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { connector, seed, workerd } from './probe.ts'
 
-Deno.test('workerd reads app and connector data through the Store door', async () => {
+test('workerd reads app and connector data through the Store door', async () => {
   let k = workerd()
   let { cookie } = await seed(k, [{ slug: 'doorbodyprobe', apps: ['recipes'] }])
   let query = await k.at(

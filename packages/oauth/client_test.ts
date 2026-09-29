@@ -1,6 +1,7 @@
 // The authorization-code client against a scripted token endpoint: the link it
 // builds, the exchange it makes, what it keeps, and when it refreshes.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type AuthorizationStore,
@@ -108,7 +109,7 @@ let s256 = async (verifier: string) =>
     ),
   )).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 
-Deno.test('begin: the link carries the flow, and data cannot replace its state', async () => {
+test('begin: the link carries the flow, and data cannot replace its state', async () => {
   let { c } = setup()
   let { url, attempt } = await c.begin()
   let link = new URL(url)
@@ -125,12 +126,12 @@ Deno.test('begin: the link carries the flow, and data cannot replace its state',
   })
 })
 
-Deno.test("begin: the scopes asked for replace the provider's own", async () => {
+test("begin: the scopes asked for replace the provider's own", async () => {
   let { url } = await setup().c.begin(['one'])
   assertEquals(new URL(url).searchParams.get('scope'), 'one')
 })
 
-Deno.test('complete: exchanges the code with the verifier and keeps the grant', async () => {
+test('complete: exchanges the code with the verifier and keeps the grant', async () => {
   let { c, held, seen } = setup(undefined, [[200, {
     access_token: 'A1',
     token_type: 'Bearer',
@@ -157,7 +158,7 @@ Deno.test('complete: exchanges the code with the verifier and keeps the grant', 
   })
 })
 
-Deno.test('complete: a mismatched, refused, doubled or late return makes no request', async () => {
+test('complete: a mismatched, refused, doubled or late return makes no request', async () => {
   let { c, seen } = setup()
   let { attempt } = await c.begin()
   let back = (q: string) => `${REDIRECT}?${q}`
@@ -183,7 +184,7 @@ Deno.test('complete: a mismatched, refused, doubled or late return makes no requ
   assertEquals(seen.length, 0)
 })
 
-Deno.test('complete: an invalid return never exposes its contents', async () => {
+test('complete: an invalid return never exposes its contents', async () => {
   let { c } = setup()
   let { attempt } = await c.begin()
   let error = await assertRejects(
@@ -194,7 +195,7 @@ Deno.test('complete: an invalid return never exposes its contents', async () => 
   assertEquals(error.message.includes('private-code'), false)
 })
 
-Deno.test('complete: a token endpoint that redirects is refused, and the code goes nowhere else', async () => {
+test('complete: a token endpoint that redirects is refused, and the code goes nowhere else', async () => {
   let { c, held, seen } = setup(undefined, [[302, {}], [200, {
     access_token: 'A1',
   }]])
@@ -208,7 +209,7 @@ Deno.test('complete: a token endpoint that redirects is refused, and the code go
   assertEquals(held.get('k')?.access_token, undefined)
 })
 
-Deno.test('token: a fresh token needs no request; a stale one refreshes once, keeping the refresh token', async () => {
+test('token: a fresh token needs no request; a stale one refreshes once, keeping the refresh token', async () => {
   let fresh = setup({ access_token: 'A1', expires_at: 1_000_000 + 120_000 })
   assertEquals(await fresh.c.token(), 'A1')
   assertEquals(fresh.seen.length, 0)
@@ -230,7 +231,7 @@ Deno.test('token: a fresh token needs no request; a stale one refreshes once, ke
   assertEquals(await setup().c.token(), undefined)
 })
 
-Deno.test('a provider may exchange a code as form and refresh as JSON', async () => {
+test('a provider may exchange a code as form and refresh as JSON', async () => {
   let { c, seen } = setup(undefined, [
     [200, { access_token: 'A1', refresh_token: 'R1' }],
     [200, { access_token: 'A2', refresh_token: 'R2' }],
@@ -251,7 +252,7 @@ Deno.test('a provider may exchange a code as form and refresh as JSON', async ()
   })
 })
 
-Deno.test('refresh: after a refusal, unless another caller already replaced the token', async () => {
+test('refresh: after a refusal, unless another caller already replaced the token', async () => {
   let { c, seen } = setup(
     { access_token: 'A1', refresh_token: 'R1' },
     [[200, { access_token: 'A2', refresh_token: 'R2' }]],
@@ -261,7 +262,7 @@ Deno.test('refresh: after a refusal, unless another caller already replaced the 
   assertEquals(seen.length, 1)
 })
 
-Deno.test('the provider refusing, by status or by an error field, is its code', async () => {
+test('the provider refusing, by status or by an error field, is its code', async () => {
   for (
     let [reply, code] of [
       [[400, { error: 'invalid_grant' }], 'invalid_grant'],
@@ -280,7 +281,7 @@ Deno.test('the provider refusing, by status or by an error field, is its code', 
   )
 })
 
-Deno.test('a provider answering a key: its own link, a JSON exchange, the key kept for good', async () => {
+test('a provider answering a key: its own link, a JSON exchange, the key kept for good', async () => {
   let { c, held, seen } = setup(undefined, [[200, { key: 'sk-1' }]], {
     authorize: 'https://openrouter.ai/auth',
     token: 'https://openrouter.ai/api/v1/auth/keys',
@@ -303,7 +304,7 @@ Deno.test('a provider answering a key: its own link, a JSON exchange, the key ke
   assertEquals(await c.token(), 'sk-1')
 })
 
-Deno.test('a resource (RFC 8707) rides the link and every exchange', async () => {
+test('a resource (RFC 8707) rides the link and every exchange', async () => {
   let resource = 'https://mcp.example/mcp'
   let { c, seen } = setup(
     { access_token: 'A1', refresh_token: 'R1' },
@@ -316,7 +317,7 @@ Deno.test('a resource (RFC 8707) rides the link and every exchange', async () =>
   assertEquals(seen[0].body.get('resource'), resource)
 })
 
-Deno.test('an issuer (RFC 9207): a return naming another, or none, makes no request', async () => {
+test('an issuer (RFC 9207): a return naming another, or none, makes no request', async () => {
   let { c, seen } = setup(undefined, [], {
     ...PROVIDER,
     issuer: 'https://auth.example',
@@ -330,7 +331,7 @@ Deno.test('an issuer (RFC 9207): a return naming another, or none, makes no requ
   assertEquals(seen.length, 0)
 })
 
-Deno.test('client credentials: in the body for post, the id alone for a public client', async () => {
+test('client credentials: in the body for post, the id alone for a public client', async () => {
   let cases: [Provider, Record<string, string>][] = [
     [{ ...PROVIDER, auth: 'post' }, {
       client_id: 'app id',

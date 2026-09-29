@@ -4,10 +4,11 @@
 // cookie and borrows the space's words. Sandboxed, its page is walled, its API
 // hears its page token and never the cookie, one app's token opens no other,
 // it keeps its words to itself, and it keeps a page's storage.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { connector, kernel, signIn, txt, vocabFile } from './probe.ts'
 
-Deno.test('an installed copy runs like its space, or sandboxed', async () => {
+test('an installed copy runs like its space, or sandboxed', async () => {
   let k = await kernel()
   try {
     let me = await signIn(k)

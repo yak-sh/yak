@@ -1,11 +1,12 @@
 // The Shelf's write seam: first use mints the per-client canvas, while later
 // cards reuse it. UI gestures only choose when to send these graph facts.
 
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { shelfChanges } from './shelf.ts'
 
-Deno.test('shelfChanges mints client, shelf, and requested card atomically', () => {
+test('shelfChanges mints client, shelf, and requested card atomically', () => {
   let changes = shelfChanges(
     'client',
     'session',
@@ -29,7 +30,7 @@ Deno.test('shelfChanges mints client, shelf, and requested card atomically', () 
   ])
 })
 
-Deno.test('shelfChanges reuses an existing shelf', () => {
+test('shelfChanges reuses an existing shelf', () => {
   assertEquals(shelfChanges('client', 'task', 'Full', 'shelf', 'pin', 4), [
     { eid: 'pin', name: 'card', comp: { target: 'task', view: 'Full' } },
     {
@@ -40,7 +41,7 @@ Deno.test('shelfChanges reuses an existing shelf', () => {
   ])
 })
 
-Deno.test('two cold shelf writes derive one canvas, isolated per client', () => {
+test('two cold shelf writes derive one canvas, isolated per client', () => {
   let a = shelfChanges('cold-client', 'a', 'Full', undefined, 'a-pin')
   let b = shelfChanges('cold-client', 'b', 'Full', undefined, 'b-pin')
   let c = shelfChanges('other-client', 'b', 'Full', undefined, 'c-pin')

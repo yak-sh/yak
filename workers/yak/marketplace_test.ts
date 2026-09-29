@@ -18,6 +18,7 @@
 //   - every asset the manifest names is a file in the package. OpenAI's own
 //     validator refuses a logo that points at nothing, and it refuses it after
 //     the submission rather than here.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import market from '../../.agents/plugins/marketplace.json' with {
   type: 'json',
@@ -32,7 +33,7 @@ import { PAGES } from './content.ts'
 let inPackage = (path: string) =>
   new URL(`../../plugins/${manifest.name}/${path}`, import.meta.url)
 
-Deno.test('the marketplace offers one plugin, and it is where it says', () => {
+test('the marketplace offers one plugin, and it is where it says', () => {
   assertEquals(market.plugins.length, 1)
   let [entry] = market.plugins
   assertEquals(entry.name, manifest.name)
@@ -40,18 +41,18 @@ Deno.test('the marketplace offers one plugin, and it is where it says', () => {
   assert(Deno.statSync(inPackage('.codex-plugin/plugin.json')).isFile)
 })
 
-Deno.test("the plugin hands out this platform's own address", () => {
+test("the plugin hands out this platform's own address", () => {
   assertEquals(Object.values(servers.mcpServers).map((s) => s.url), [MCP])
 })
 
-Deno.test('every asset the manifest names is in the package', () => {
+test('every asset the manifest names is in the package', () => {
   for (let path of [manifest.interface.logo, manifest.interface.composerIcon]) {
     assert(path.startsWith('./'), `${path} must be relative to the package`)
     assert(Deno.statSync(inPackage(path)).isFile, `${path} is missing`)
   }
 })
 
-Deno.test('a skill travels for every guide page', () => {
+test('a skill travels for every guide page', () => {
   assertEquals(
     [...Deno.readDirSync(inPackage('skills'))].map((e) => e.name).sort(),
     Object.keys(PAGES).sort(),

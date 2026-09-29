@@ -1,5 +1,6 @@
 // The statusbar's command door and graph-backed spawn answer: its left side
 // enters command mode; session messages follow server-minted ids and lifecycle.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
@@ -7,13 +8,13 @@ import { assertEquals } from '@std/assert'
 import { applyLocal, cache, mode } from '../live.ts'
 import { commandFocus, commandMode, FixMessage, mirrorTail } from './Status.tsx'
 
-Deno.test('the statusbar left side enters command mode', () => {
+test('the statusbar left side enters command mode', () => {
   mode.value = 'normal'
   commandMode()
   assertEquals(mode.value, 'command')
 })
 
-Deno.test('colon refocuses an open command without consuming its own text', () => {
+test('colon refocuses an open command without consuming its own text', () => {
   let focused = 0
   let prevented = 0
   let input = { focus: () => focused++ } as unknown as HTMLTextAreaElement
@@ -29,13 +30,13 @@ Deno.test('colon refocuses an open command without consuming its own text', () =
   assertEquals({ focused, prevented }, { focused: 1, prevented: 1 })
 })
 
-Deno.test('the command mirror retains the empty row after a newline', () => {
+test('the command mirror retains the empty row after a newline', () => {
   assertEquals(mirrorTail('fix T-1\n', ''), '\u200b')
   assertEquals(mirrorTail('fix T-1\nbody', ''), '')
   assertEquals(mirrorTail('fix T-1\n', 'hint'), 'hint')
 })
 
-Deno.test('fix status links minted ids and follows the session lifecycle', async () => {
+test('fix status links minted ids and follows the session lifecycle', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

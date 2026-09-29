@@ -1,5 +1,6 @@
 // The traversal clauses, compiled through @yaks/sql and answered by SQLite.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, Unsupported } from '@yaks/sql'
@@ -34,7 +35,7 @@ let chain = (): Storage => {
 let found = (s: Storage, line: string): string[] =>
   (s.read(line) as Bundle[]).map((b) => b.entity.eid).sort()
 
-Deno.test('a walk follows the links, bounded by its cap', () => {
+test('a walk follows the links, bounded by its cap', () => {
   let s = chain()
   assertEquals(found(s, '.cites[<=1]->p1'), ['p2'])
   assertEquals(found(s, '.cites[<=2]->p1'), ['p2', 'p3'])
@@ -43,34 +44,34 @@ Deno.test('a walk follows the links, bounded by its cap', () => {
   assertEquals(found(s, '.cites->p1'), ['p2', 'p3', 'p4'])
 })
 
-Deno.test('<- walks the other way: what the target reaches', () => {
+test('<- walks the other way: what the target reaches', () => {
   let s = chain()
   assertEquals(found(s, '.cites[<=1]<-p4'), ['p3'])
   assertEquals(found(s, '.cites<-p4'), ['p1', 'p2', 'p3'])
   assertEquals(found(s, '.cites<-p1'), [])
 })
 
-Deno.test('a walk follows one relation, not every link', () => {
+test('a walk follows one relation, not every link', () => {
   // p9 links to p1 but does not cite it.
   assert(!found(chain(), '.cites[<=9]->p1').includes('p9'))
   assertEquals(found(chain(), '.linked[<=1]->p1'), ['p9'])
 })
 
-Deno.test('the target itself is not something it reaches', () => {
+test('the target itself is not something it reaches', () => {
   assert(!found(chain(), '.cites[<=9]->p1').includes('p1'))
 })
 
-Deno.test('a cycle terminates on the depth cap', () => {
+test('a cycle terminates on the depth cap', () => {
   let s = chain()
   blogGraph(s).apply([link('p1', 'cites', 'p4')])
   assertEquals(found(s, '.cites[<=9]->p1'), ['p1', 'p2', 'p3', 'p4'])
 })
 
-Deno.test('a walk narrows a filter like any other clause', () => {
+test('a walk narrows a filter like any other clause', () => {
   assertEquals(found(chain(), '.cites[<=9]->p1 .post.title=Three'), ['p3'])
 })
 
-Deno.test('.edges rides a query without narrowing it', () => {
+test('.edges rides a query without narrowing it', () => {
   // The rider asks for the links to be delivered, so it must not change which
   // entities the query selects.
   let s = chain()
@@ -78,12 +79,12 @@ Deno.test('.edges rides a query without narrowing it', () => {
   assertEquals(sql('.post&.edges').sql, sql('.post').sql)
 })
 
-Deno.test('a relation nothing declares is refused, not answered', () => {
+test('a relation nothing declares is refused, not answered', () => {
   assertThrows(() => sql('.admires[<=2]->p1'), Unsupported)
   assertThrows(() => sql('.edges[admires]'), Unsupported)
 })
 
-Deno.test('the walk seeks the edge table, never scans it', () => {
+test('the walk seeks the edge table, never scans it', () => {
   let { sql: s, params } = sql('.cites[<=3]->p1')
   assert(s.includes('with recursive'), s)
   assert(s.includes('join "cites" as "t" on "t"."entity" = "l"."entity"'), s)

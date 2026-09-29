@@ -2,10 +2,11 @@
 // header rolls the bucket's verbs into one number, and a nested tally is its
 // own. A read is made once a request, until the request writes to the store it
 // read, and never outlives the request.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { counts, hop, recall, type Tally, tallying, writing } from './hops.ts'
 
-Deno.test('a hop counts on the tally that is running, and nowhere else', () => {
+test('a hop counts on the tally that is running, and nowhere else', () => {
   let tally: Tally = new Map()
   // Outside every `tallying`, a hop is a no-op — a seam called by a script,
   // a boot, or a test is not a request and has nobody to report to.
@@ -25,7 +26,7 @@ Deno.test('a hop counts on the tally that is running, and nowhere else', () => {
   assertEquals(counts(tally).hops, 2)
 })
 
-Deno.test('a nested tally is the inner one, and the outer resumes', () => {
+test('a nested tally is the inner one, and the outer resumes', () => {
   let outer: Tally = new Map()
   let inner: Tally = new Map()
   tallying(outer, () => {
@@ -43,7 +44,7 @@ let asking = () => {
 }
 let wrote = (store: string) => writing(store, () => Promise.resolve())
 
-Deno.test('a request reads once, until it writes to what it read', async () => {
+test('a request reads once, until it writes to what it read', async () => {
   let read = asking()
   await tallying(new Map(), async () => {
     assertEquals([await read(), await read()], [1, 1])
@@ -57,7 +58,7 @@ Deno.test('a request reads once, until it writes to what it read', async () => {
   assertEquals([await read(), await read()], [4, 5])
 })
 
-Deno.test('a read made while a write is in flight is not the answer after it', async () => {
+test('a read made while a write is in flight is not the answer after it', async () => {
   let read = asking()
   let done = () => {}
   await tallying(new Map(), async () => {
@@ -69,7 +70,7 @@ Deno.test('a read made while a write is in flight is not the answer after it', a
   })
 })
 
-Deno.test('a fresh asking takes only a fresh answer, which answers every asking after it', async () => {
+test('a fresh asking takes only a fresh answer, which answers every asking after it', async () => {
   let asked = 0
   let read = (fresh = false) =>
     recall('ada/notes', '/vocab', () => Promise.resolve(++asked), fresh)
@@ -79,7 +80,7 @@ Deno.test('a fresh asking takes only a fresh answer, which answers every asking 
   })
 })
 
-Deno.test('a request remembers nothing once it has finished', async () => {
+test('a request remembers nothing once it has finished', async () => {
   let read = asking()
   let later: Promise<number[]> | undefined
   await tallying(new Map(), async () => {
@@ -91,7 +92,7 @@ Deno.test('a request remembers nothing once it has finished', async () => {
   assertEquals(await later, [2, 3])
 })
 
-Deno.test('a read that failed is asked again', async () => {
+test('a read that failed is asked again', async () => {
   let asked = 0
   let read = () =>
     recall(

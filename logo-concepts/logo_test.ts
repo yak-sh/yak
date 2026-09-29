@@ -1,4 +1,5 @@
 // Raster-logo contracts: square RGBA masters, ready to derive final icon crops.
+import { test } from '@yaks/testing'
 let files = [
   'yak-gouache.png',
   'yak-monoprint-head.png',
@@ -11,7 +12,7 @@ let assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message)
 }
 
-Deno.test('logo concepts are square PNG masters with alpha', async () => {
+test('logo concepts are square PNG masters with alpha', async () => {
   for (let file of files) {
     let bytes = await Deno.readFile(new URL(file, root))
     let view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)

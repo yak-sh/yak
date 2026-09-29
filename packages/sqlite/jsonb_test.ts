@@ -3,6 +3,7 @@
 // as a string. And a property declared `string` casts what it is sent, so the
 // row, the answer to the write and every read agree.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { kitchen, mem, PROJECTED, PROJECTED_ROW, RECIPE } from './testing.ts'
@@ -20,7 +21,7 @@ let kitchenStore = () => {
   return { driver, s }
 }
 
-Deno.test('an object and an array are written and read back as values', () => {
+test('an object and an array are written and read back as values', () => {
   let { driver, s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(
@@ -43,13 +44,13 @@ Deno.test('an object and an array are written and read back as values', () => {
   })
 })
 
-Deno.test('a projected boolean reads back as true or false', () => {
+test('a projected boolean reads back as true or false', () => {
   let { s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(s.rows(PROJECTED), [PROJECTED_ROW])
 })
 
-Deno.test('a string property holds what it was sent as a string', () => {
+test('a string property holds what it was sent as a string', () => {
   let g = graph({ storage: kitchenStore().s, vocab: kitchen })
   let [out] = g.apply([{
     entity: { eid: 'r1' },
@@ -65,7 +66,7 @@ Deno.test('a string property holds what it was sent as a string', () => {
   )
 })
 
-Deno.test('a JSON property answers presence, and refuses a filter by name', () => {
+test('a JSON property answers presence, and refuses a filter by name', () => {
   let { s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals((s.read('.recipe.tags') as Bundle[]).length, 1)
@@ -74,7 +75,7 @@ Deno.test('a JSON property answers presence, and refuses a filter by name', () =
   }
 })
 
-Deno.test('a batch reads its JSON values the way the store will', () => {
+test('a batch reads its JSON values the way the store will', () => {
   let { driver, s } = kitchenStore()
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   let over = overlay(driver, kitchen, [

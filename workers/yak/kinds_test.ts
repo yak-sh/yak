@@ -1,6 +1,7 @@
 // The two tools a kind is worth: what they are called, what they ask for, what
 // they say, and the two ways an app declines them. The kernel half — the same
 // manifest through app_deploy and a call at the MCP door — is in mcp_test.ts.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { withKinds } from './kinds.ts'
 import { appDoc } from './vocab.ts'
@@ -29,11 +30,11 @@ let box = {
 let tools = (doc: unknown = box, at = 'jeff/recipes') =>
   withKinds({}, appDoc(doc), at)
 
-Deno.test('every kind is two tools, and nothing else is', () => {
+test('every kind is two tools, and nothing else is', () => {
   assertEquals(Object.keys(tools()), ['add_recipe', 'find_recipe'])
 })
 
-Deno.test('the sentence says the app and what the vocabulary means', () => {
+test('the sentence says the app and what the vocabulary means', () => {
   assertEquals(
     tools().add_recipe.description,
     'Add a recipe to jeff/recipes: a dish somebody cooks, with what it takes ' +
@@ -63,7 +64,7 @@ Deno.test('the sentence says the app and what the vocabulary means', () => {
   )
 })
 
-Deno.test('add takes a title and the kind’s own properties', () => {
+test('add takes a title and the kind’s own properties', () => {
   let add = tools().add_recipe
   assertEquals(Object.keys(schemaOf(add).properties), [
     'title',
@@ -98,7 +99,7 @@ Deno.test('add takes a title and the kind’s own properties', () => {
   })
 })
 
-Deno.test('find is a filter line, one clause per argument given', () => {
+test('find is a filter line, one clause per argument given', () => {
   let find = tools().find_recipe
   assertEquals(schemaOf(find).required, [])
   assertEquals(
@@ -114,7 +115,7 @@ Deno.test('find is a filter line, one clause per argument given', () => {
   assertEquals(filled(find, {}).query, '.recipe&?doc')
 })
 
-Deno.test('a list is written whole, and is no filter to find by', () => {
+test('a list is written whole, and is no filter to find by', () => {
   let tags = { type: 'array', items: { type: 'string' } }
   let tagged = tools({
     $defs: {
@@ -140,7 +141,7 @@ Deno.test('a list is written whole, and is no filter to find by', () => {
   ])
 })
 
-Deno.test('an app declines them, or declares one itself', () => {
+test('an app declines them, or declares one itself', () => {
   // The manifest says so.
   assertEquals(withKinds({}, appDoc({ ...box, tools: false }), 'a/b'), {})
   assertEquals(

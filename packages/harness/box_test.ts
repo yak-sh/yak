@@ -3,6 +3,7 @@
 // 5ms and every child is short or killed, so the file runs in well under a
 // second.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { type Comp, graph } from '@yaks/graph'
 import { modelDoc } from '@yaks/model'
@@ -47,13 +48,13 @@ let eidIn = (said: string) => {
   return m[1]
 }
 
-Deno.test('a short command answers inline, with its output and its code', async () => {
+test('a short command answers inline, with its output and its code', async () => {
   let g = tracked()
   let said = await named(g).shell.run({ command: 'echo hi; exit 2' })
   assertMatch(said, /^process \S+ exited 2\nhi$/)
 })
 
-Deno.test('a command tail keeps a line wider than a read block whole', async () => {
+test('a command tail keeps a line wider than a read block whole', async () => {
   let g = tracked()
   let said = await named(g).shell.run({
     command: `printf 'x%.0s' {1..70000}; printf '\\n\\nlast'`,
@@ -65,7 +66,7 @@ Deno.test('a command tail keeps a line wider than a read block whole', async () 
   assertEquals(last, 'last')
 })
 
-Deno.test('a command that outlives its budget answers with the process, and stop ends it', async () => {
+test('a command that outlives its budget answers with the process, and stop ends it', async () => {
   let g = tracked()
   let { shell, stop } = named(g)
   let said = await shell.run({ command: 'sleep 30', timeout: 50 })
@@ -80,7 +81,7 @@ Deno.test('a command that outlives its budget answers with the process, and stop
   assertEquals(await g.read('.process&!exit&*'), [])
 })
 
-Deno.test('wait answers the code of a child that outlived its call', async () => {
+test('wait answers the code of a child that outlived its call', async () => {
   let g = tracked()
   let { shell, wait } = named(g)
   let eid = eidIn(
@@ -92,7 +93,7 @@ Deno.test('wait answers the code of a child that outlived its call', async () =>
   )
 })
 
-Deno.test('an interrupted shell call recovers its process without running twice', async () => {
+test('an interrupted shell call recovers its process without running twice', async () => {
   let g = tracked()
   let o = opts()
   let dir = await Deno.makeTempDir({ prefix: 'yaks-shell-recovery-' })
@@ -126,7 +127,7 @@ Deno.test('an interrupted shell call recovers its process without running twice'
   }
 })
 
-Deno.test('wait says still running when its own timeout passes, and names nothing it cannot find', async () => {
+test('wait says still running when its own timeout passes, and names nothing it cannot find', async () => {
   let g = tracked()
   let { shell, wait, stop } = named(g)
   let eid = eidIn(await shell.run({ command: 'sleep 30', timeout: 1 }))
@@ -138,7 +139,7 @@ Deno.test('wait says still running when its own timeout passes, and names nothin
   await stop.run({ process: eid })
 })
 
-Deno.test('shell uses bash and inherits the harness environment', async () => {
+test('shell uses bash and inherits the harness environment', async () => {
   // A variable the environment already carries, so the test sets none of the
   // state this process shares with every other test file.
   let said = await named(tracked()).shell.run({
@@ -147,7 +148,7 @@ Deno.test('shell uses bash and inherits the harness environment', async () => {
   assertEquals(said, `process ${eidIn(said)} exited 0\n${Deno.env.get('PATH')}`)
 })
 
-Deno.test('a session shell speaks as its transcript, not its launcher', async () => {
+test('a session shell speaks as its transcript, not its launcher', async () => {
   let g = tracked()
   let o = opts()
   let env = {
@@ -174,7 +175,7 @@ Deno.test('a session shell speaks as its transcript, not its launcher', async ()
   }
 })
 
-Deno.test('write makes the directory it needs, and read gives the text back', async () => {
+test('write makes the directory it needs, and read gives the text back', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yaks-machine-' })
   let { read, write } = named(tracked(), dir)
   assertEquals(

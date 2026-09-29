@@ -1,10 +1,11 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { edgeEid } from '@yaks/edge'
 import { event, hooked, hookEid, type Request } from './hooked.ts'
 
 let req = (r: Partial<Request>): Request => ({ id: '1', source: 'gh', ...r })
 
-Deno.test('event: the sender header, then the JSON body, then the route', () => {
+test('event: the sender header, then the JSON body, then the route', () => {
   assertEquals(
     [
       req({ headers: '{"X-GitHub-Event":"push"}', body: '{"type":"x"}' }),
@@ -16,7 +17,7 @@ Deno.test('event: the sender header, then the JSON body, then the route', () => 
   )
 })
 
-Deno.test('hooked: one entity per request, about whom it is for', () => {
+test('hooked: one entity per request, about whom it is for', () => {
   let r = req({ path: '/hook/a', body: '{}', verified: false })
   let eid = hookEid(r)
   assertEquals(hookEid(req({ path: '/elsewhere' })), eid)

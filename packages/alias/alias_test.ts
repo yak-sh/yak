@@ -2,6 +2,7 @@
 // writes one recipe, a reference by name follows, and a clash is refused with
 // the holder named.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
@@ -25,7 +26,7 @@ let seed = (title: string): Bundle[] => [{
   recipe: { serves: 8 },
 }]
 
-Deno.test('the sugar becomes a key entity of its own', () => {
+test('the sugar becomes a key entity of its own', () => {
   let g = cookbookGraph()
   let out = sync(g.apply(seed('Lemon cakes')))
   let r = out.find((b) => b.$alias == '$r')!.entity.eid
@@ -38,7 +39,7 @@ Deno.test('the sugar becomes a key entity of its own', () => {
   assertEquals((g.read(`.eid=${r}`) as Bundle[])[0].alias, undefined)
 })
 
-Deno.test('the same seed loaded twice writes one entity', () => {
+test('the same seed loaded twice writes one entity', () => {
   let g = cookbookGraph()
   let first = sync(g.apply(seed('Lemon cakes')))
   let r = first.find((b) => b.$alias == '$r')!.entity.eid
@@ -51,7 +52,7 @@ Deno.test('the same seed loaded twice writes one entity', () => {
   )
 })
 
-Deno.test('a reference by name resolves to the entity that holds it', () => {
+test('a reference by name resolves to the entity that holds it', () => {
   let g = cookbookGraph()
   let r = sync(g.apply(seed('Lemon cakes')))
     .find((b) => b.$alias == '$r')!.entity.eid
@@ -66,7 +67,7 @@ Deno.test('a reference by name resolves to the entity that holds it', () => {
   )
 })
 
-Deno.test('a bundle addressed by name patches that entity', () => {
+test('a bundle addressed by name patches that entity', () => {
   let g = cookbookGraph()
   let r = sync(g.apply(seed('Lemon cakes')))
     .find((b) => b.$alias == '$r')!.entity.eid
@@ -78,7 +79,7 @@ Deno.test('a bundle addressed by name patches that entity', () => {
   assertEquals(read(g, '.recipe'), [r])
 })
 
-Deno.test('an eid wins over a name that spells it', () => {
+test('an eid wins over a name that spells it', () => {
   let g = cookbookGraph()
   // an entity whose own id is a word, and a name pointing somewhere else
   sync(g.apply([
@@ -96,7 +97,7 @@ Deno.test('an eid wins over a name that spells it', () => {
   )
 })
 
-Deno.test('a second entity claiming a held name is refused, naming it', () => {
+test('a second entity claiming a held name is refused, naming it', () => {
   let g = cookbookGraph()
   let r = sync(g.apply(seed('Lemon cakes')))
     .find((b) => b.$alias == '$r')!.entity.eid
@@ -112,7 +113,7 @@ Deno.test('a second entity claiming a held name is refused, naming it', () => {
   )
 })
 
-Deno.test('a name is free again once the entity it named is deleted', () => {
+test('a name is free again once the entity it named is deleted', () => {
   let g = cookbookGraph()
   let r = sync(g.apply(seed('Lemon cakes')))
     .find((b) => b.$alias == '$r')!.entity.eid
@@ -124,7 +125,7 @@ Deno.test('a name is free again once the entity it named is deleted', () => {
   assertEquals(read(g, '.recipe'), [next])
 })
 
-Deno.test('a door reads ids and names through the same address()', () => {
+test('a door reads ids and names through the same address()', () => {
   let g = cookbookGraph()
   let r = sync(g.apply(seed('Lemon cakes')))
     .find((b) => b.$alias == '$r')!.entity.eid

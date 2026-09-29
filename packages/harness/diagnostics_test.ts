@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { createDiagnostics, uncaught } from './diagnostics.ts'
 import { harness } from './testing.ts'
 
-Deno.test('a defect is an exception entity, stack and cause kept, secrets redacted, and never an entry', async () => {
+test('a defect is an exception entity, stack and cause kept, secrets redacted, and never an entry', async () => {
   let h = await harness()
   let reporter = createDiagnostics({ secrets: ['secret-key-123'] })
   let detach = reporter.attach(h.g)
@@ -26,7 +27,7 @@ Deno.test('a defect is an exception entity, stack and cause kept, secrets redact
   h.close()
 })
 
-Deno.test('a defect nobody can take is said on the terminal, not lost', async () => {
+test('a defect nobody can take is said on the terminal, not lost', async () => {
   let warnings: string[] = []
   let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
   reporter.report(new Error('nowhere to write this'), { phase: 'startup' })
@@ -35,7 +36,7 @@ Deno.test('a defect nobody can take is said on the terminal, not lost', async ()
   assertMatch(JSON.parse(warnings[0]).body, /nowhere to write this/)
 })
 
-Deno.test('a database failure cannot recurse: the original is printed instead', async () => {
+test('a database failure cannot recurse: the original is printed instead', async () => {
   let warnings: string[] = []
   let attempts = 0
   let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
@@ -53,7 +54,7 @@ Deno.test('a database failure cannot recurse: the original is printed instead', 
   assertMatch(warnings[0], /Original exception:[\s\S]*original failure/)
 })
 
-Deno.test('global error hooks preserve fatal default, clean up, deduplicate, and uninstall', () => {
+test('global error hooks preserve fatal default, clean up, deduplicate, and uninstall', () => {
   let said: string[] = []
   let reporter = createDiagnostics({ warn: (s) => said.push(s) })
   let target = new EventTarget()
@@ -75,7 +76,7 @@ Deno.test('global error hooks preserve fatal default, clean up, deduplicate, and
   assertEquals(said.length, 1)
 })
 
-Deno.test('a graph shutdown drain is bounded', async () => {
+test('a graph shutdown drain is bounded', async () => {
   let warnings: string[] = []
   let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
   reporter.attach({ apply: () => new Promise(() => {}) })
@@ -84,7 +85,7 @@ Deno.test('a graph shutdown drain is bounded', async () => {
   assertMatch(warnings[0], /still pending/)
 })
 
-Deno.test('a fatal unhandled rejection really exits the subprocess, saying what it was', async () => {
+test('a fatal unhandled rejection really exits the subprocess, saying what it was', async () => {
   let module = new URL('./diagnostics.ts', import.meta.url).href
   let script = 'import {createDiagnostics,uncaught} from ' +
     JSON.stringify(module) + ';' +

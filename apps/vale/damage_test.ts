@@ -1,5 +1,6 @@
 // A hero rises at full health when damage is off, ignores a landed bite,
 // and can be hurt by the next bite after damage is turned on.
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { homesNear } from './homes.ts'
 import { type Intent } from './input.ts'
@@ -28,7 +29,7 @@ let still: Intent = {
   zoom: 0,
 }
 
-Deno.test('damage off revives and protects until damage is turned on', () => {
+test('damage off revives and protects until damage is turned on', () => {
   let home = homesNear(128, 128, 90).find((h) => h.kind == 'boar')!
   let [x, z] = home.home
   let hero = 'hero'

@@ -3,6 +3,7 @@
 // the same `apply()`, answered as each one commits — and a refusal that names
 // the line its bundle was on and what had already landed.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { CHUNK } from './doors.ts'
@@ -69,7 +70,7 @@ let load = (n: number, from = 1) =>
 
 let ask = (line: string) => req(`/query?q=${encodeURIComponent(line)}`)
 
-Deno.test('a load lands in chunks, and a blank line is not a bundle', async () => {
+test('a load lands in chunks, and a blank line is not a bundle', async () => {
   let { handler, widths } = shop()
   // A blank line between every bundle, and no newline at the end.
   let r = await handler(ndjson('/apply', load(120).join('\n\n')))
@@ -83,7 +84,7 @@ Deno.test('a load lands in chunks, and a blank line is not a bundle', async () =
   assertEquals((await (await handler(ask('.price>0'))).json()).length, 120)
 })
 
-Deno.test('the answer is line for line: bookkeeping stays out of it', async () => {
+test('the answer is line for line: bookkeeping stays out of it', async () => {
   let graph = shopGraph()
   let apply = graph.apply
   // A plugin that lands a descriptor beside every batch, the way archetypes do.
@@ -96,7 +97,7 @@ Deno.test('the answer is line for line: bookkeeping stays out of it', async () =
   assertEquals(answered.map((b) => b.entity.eid), ['b1', 'b2', 'b3'])
 })
 
-Deno.test('a refusal is the last line: which line, and what landed', async () => {
+test('a refusal is the last line: which line, and what landed', async () => {
   let { handler } = shop()
   let r = await handler(ndjson(
     '/apply',
@@ -121,7 +122,7 @@ Deno.test('a refusal is the last line: which line, and what landed', async () =>
   assertEquals((await (await handler(ask('.price>0'))).json()).length, CHUNK)
 })
 
-Deno.test('a line that is not JSON names itself', async () => {
+test('a line that is not JSON names itself', async () => {
   let { handler } = shop()
   let r = await handler(ndjson('/apply', `${load(1)[0]}\nnot json\n`))
   let no = (await rows(r)).at(-1)
@@ -130,7 +131,7 @@ Deno.test('a line that is not JSON names itself', async () => {
   assertEquals(no.committed, 0)
 })
 
-Deno.test('each chunk is answered as it commits, not at the end', async () => {
+test('each chunk is answered as it commits, not at the end', async () => {
   let third = Promise.withResolvers<void>()
   let { handler } = shop((nth) => (nth == 3 ? third.promise : undefined))
   let take = taking(await handler(ndjson('/apply', load(120).join('\n'))))
@@ -141,7 +142,7 @@ Deno.test('each chunk is answered as it commits, not at the end', async () => {
   assertEquals((await take(120)).length, 120)
 })
 
-Deno.test('an alias resolves within its own chunk and nowhere else', async () => {
+test('an alias resolves within its own chunk and nowhere else', async () => {
   let { handler } = shop()
   let near = await handler(ndjson(
     '/apply',

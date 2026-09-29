@@ -1,6 +1,7 @@
 // The write log (writes.ts) over one store's storage, woken as new
 // incarnations the way a deploy wakes it: writes kept while the store refuses
 // to start, then replayed in order, once, by the alarm alone.
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, sha256 } from '@yaks/graph'
 import { doorOf, IDEMPOTENCY, type Namespace, storeOf } from './door.ts'
@@ -94,7 +95,7 @@ let titled = (eid: string, title: string, was?: string | null) => ({
   ...(was === undefined ? {} : { $was: { doc: { title: was } } }),
 })
 
-Deno.test('inspection dry-runs a held write without changing it or the graph', async () => {
+test('inspection dry-runs a held write without changing it or the graph', async () => {
   let o = object()
   broken(o)
   await assertRejects(() => o.apply([titled('n1', 'once')]), Pending)
@@ -121,7 +122,7 @@ Deno.test('inspection dry-runs a held write without changing it or the graph', a
   assertEquals(o.writes('interrupted'), 1)
 })
 
-Deno.test('inspection refuses a streaming write without applying it', async () => {
+test('inspection refuses a streaming write without applying it', async () => {
   let o = object()
   assertEquals(await o.title('n1'), undefined)
   let body = JSON.stringify([titled('n1', 'must stay absent')])
@@ -147,7 +148,7 @@ Deno.test('inspection refuses a streaming write without applying it', async () =
   assertEquals(o.writes('interrupted'), 1)
 })
 
-Deno.test('writes a refusing store was sent apply in order, once, when it is mended', async () => {
+test('writes a refusing store was sent apply in order, once, when it is mended', async () => {
   let o = object()
   await o.apply([titled('n1', 'zero')])
   broken(o)
@@ -171,7 +172,7 @@ Deno.test('writes a refusing store was sent apply in order, once, when it is men
   assertEquals(await o.title('n1'), 'two')
 })
 
-Deno.test('a write the store fails on is set aside, and the writes behind it go through', async () => {
+test('a write the store fails on is set aside, and the writes behind it go through', async () => {
   let o = object()
   let cure = poisoned(o, 'poison')
   await assertRejects(() => o.apply([titled('n1', 'poison')]), Pending)
@@ -185,7 +186,7 @@ Deno.test('a write the store fails on is set aside, and the writes behind it go 
   assertEquals(o.writes(), 0)
 })
 
-Deno.test('a batch sent again after a reset lost its answer is applied once', async () => {
+test('a batch sent again after a reset lost its answer is applied once', async () => {
   let o = object()
   let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
     [{ entity: { eid: '$n' }, doc: { title: 'once' } }],
@@ -195,7 +196,7 @@ Deno.test('a batch sent again after a reset lost its answer is applied once', as
   assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
 })
 
-Deno.test('an interrupted write keeps its body while reads recover and explicit retry applies once', async () => {
+test('an interrupted write keeps its body while reads recover and explicit retry applies once', async () => {
   let o = object()
   broken(o)
   await assertRejects(() => o.apply([titled('n1', 'once')]), Pending)
@@ -258,7 +259,7 @@ Deno.test('an interrupted write keeps its body while reads recover and explicit 
   assertEquals(rows.map((r) => r.entity.eid).sort(), ['n1', 'n2'])
 })
 
-Deno.test('a failed reviewed attempt stays held until another explicit retry', async () => {
+test('a failed reviewed attempt stays held until another explicit retry', async () => {
   let o = object()
   broken(o)
   await assertRejects(() => o.apply([titled('n1', 'poison')]), Pending)
@@ -287,7 +288,7 @@ Deno.test('a failed reviewed attempt stays held until another explicit retry', a
   assertEquals(await o.title('n1'), 'poison')
 })
 
-Deno.test('a reviewed 307-bundle answer is retained across storage rows', async () => {
+test('a reviewed 307-bundle answer is retained across storage rows', async () => {
   let o = object()
   await o.query('.doc')
   let d = db(o.ctx)
@@ -331,7 +332,7 @@ Deno.test('a reviewed 307-bundle answer is retained across storage rows', async 
   assertEquals(JSON.parse(first(d, 'large-answer')!.answer), answer)
 })
 
-Deno.test('a reviewed write keeps the composed caller answer', async () => {
+test('a reviewed write keeps the composed caller answer', async () => {
   let o = object()
   await o.query('.doc')
   let d = db(o.ctx)
@@ -368,7 +369,7 @@ Deno.test('a reviewed write keeps the composed caller answer', async () => {
   ])
 })
 
-Deno.test('a legacy pending write waits for review before any replay', async () => {
+test('a legacy pending write waits for review before any replay', async () => {
   let o = object()
   broken(o)
   let batch = [titled('n0', 'one')]
@@ -421,7 +422,7 @@ Deno.test('a legacy pending write waits for review before any replay', async () 
   assertEquals(applied.body, named.body)
 })
 
-Deno.test('a write from an older log shape can be inspected and retried', async () => {
+test('a write from an older log shape can be inspected and retried', async () => {
   let o = object()
   broken(o)
   await assertRejects(() => o.apply([titled('n1', 'kept')]), Pending)
@@ -449,13 +450,13 @@ Deno.test('a write from an older log shape can be inspected and retried', async 
   assertEquals(o.writes('applied'), 1)
 })
 
-Deno.test('a write refused on its own input is answered and not kept', async () => {
+test('a write refused on its own input is answered and not kept', async () => {
   let o = object()
   await assertRejects(() => o.apply([titled('n1', 'one', sha256('nope'))]))
   assertEquals(o.writes(), 0)
 })
 
-Deno.test('a replay that no longer applies is kept as refused, and the rest go on', async () => {
+test('a replay that no longer applies is kept as refused, and the rest go on', async () => {
   let o = object()
   broken(o)
   await assertRejects(
@@ -473,7 +474,7 @@ Deno.test('a replay that no longer applies is kept as refused, and the rest go o
   }])
 })
 
-Deno.test('a body carrying a key is never kept', () => {
+test('a body carrying a key is never kept', () => {
   let key = { entity: { eid: 's' }, secret: { name: 'k', value: 'sk-1' } }
   let call = {
     entity: { eid: 'c' },

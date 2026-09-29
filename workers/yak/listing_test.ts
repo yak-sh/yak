@@ -1,12 +1,13 @@
 // One rule for a listing, at the one seam both doors read (listing.ts): the
 // tools' graph_query and the page's `/api/query` used to answer the same
 // filter line differently (C-32574 item 5).
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { asking, listing, mentions, named } from './listing.ts'
 
 let rows = (body: string) => JSON.parse(body) as Record<string, unknown>[]
 
-Deno.test('a listing carries what a person saved, not the stamps', () => {
+test('a listing carries what a person saved, not the stamps', () => {
   let body = JSON.stringify([
     {
       kind: 'book',
@@ -29,7 +30,7 @@ Deno.test('a listing carries what a person saved, not the stamps', () => {
   })
 })
 
-Deno.test("the kernel's own rows are not the person's", () => {
+test("the kernel's own rows are not the person's", () => {
   let body = JSON.stringify([
     { kind: 'doc', entity: { eid: 'a', num: 1 }, doc: { title: 'Pancakes' } },
     {
@@ -49,7 +50,7 @@ Deno.test("the kernel's own rows are not the person's", () => {
   ])
 })
 
-Deno.test('a session query and an eid include its error entry', () => {
+test('a session query and an eid include its error entry', () => {
   let error = {
     kind: 'entry',
     entity: { eid: 'failure' },
@@ -67,7 +68,7 @@ Deno.test('a session query and an eid include its error entry', () => {
 // A page's own ask carries the screen, so a `.count` counts what the list
 // beside it lists — a person the store minted wears a `doc` title now, and
 // would otherwise be one more recipe (T-32627).
-Deno.test("the platform's rows are left out of the question too", () => {
+test("the platform's rows are left out of the question too", () => {
   let words = ['error', 'person']
   assertEquals(asking('?.doc', words), '?.doc&!error&!person')
   // and out of every alternative, not just the last
@@ -79,14 +80,14 @@ Deno.test("the platform's rows are left out of the question too", () => {
   assertEquals(asking('?'), '?')
 })
 
-Deno.test('what is not a row listing passes through as it came', () => {
+test('what is not a row listing passes through as it came', () => {
   assertEquals(listing('{"count":3}', '.count'), '{"count":3}')
   assertEquals(listing('not json at all', '.doc'), 'not json at all')
 })
 
 // Outputs speak human: a reference to somebody the store knows carries their
 // name, so a view's one query draws a byline (C-32730 item 5).
-Deno.test('a reference to a person answers with a name', () => {
+test('a reference to a person answers with a name', () => {
   let rows = [
     {
       kind: 'jog',

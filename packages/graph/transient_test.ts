@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { graph, transient } from './mod.ts'
 import { ram } from '@yaks/ram'
@@ -11,7 +12,7 @@ const vocab = loadVocab([{
   },
 }])
 const make = () => graph({ vocab, storage: ram(vocab) })
-Deno.test('transient ordered text is projected but not stored, commit/discard and late frames', async () => {
+test('transient ordered text is projected but not stored, commit/discard and late frames', async () => {
   const g = make()
   await g.apply([{ entity: { eid: 'd' }, doc: { body: 'base' } }])
   const live = transient(g)
@@ -53,7 +54,7 @@ Deno.test('transient ordered text is projected but not stored, commit/discard an
     body: 'base' + '!'.repeat(1000),
   })
 })
-Deno.test('transient rejects gaps and conflicting durable commit', async () => {
+test('transient rejects gaps and conflicting durable commit', async () => {
   const g = make()
   await g.apply([{ entity: { eid: 'd' }, doc: { body: 'a' } }])
   const live = transient(g), w = await live.begin('d', 'doc', 'body', 'one')

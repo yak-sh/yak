@@ -4,6 +4,7 @@
 // own apply() — journaled, seen by the other effects, cast to whoever the host
 // pushes to — never a row put straight into a transaction that has finished.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { graph, isPromise } from '@yaks/graph'
@@ -37,7 +38,7 @@ let post = (eid: string, comp: Record<string, unknown> = { title: 'One' }) => ({
   post: comp,
 })
 
-Deno.test('an effect writes through apply(), so the write is stamped', () => {
+test('an effect writes through apply(), so the write is stamped', () => {
   let { fx, g, apply } = fixture()
   fx.created(
     'post',
@@ -51,7 +52,7 @@ Deno.test('an effect writes through apply(), so the write is stamped', () => {
   assert(sub.created, 'the write-back went through the whole pipeline')
 })
 
-Deno.test('an effect with no write door is reported, never written past', () => {
+test('an effect with no write door is reported, never written past', () => {
   let oops: unknown[] = []
   let fx = effects(blog, { report: (e) => oops.push(e) })
   let g = blogGraph([fx])
@@ -66,7 +67,7 @@ Deno.test('an effect with no write door is reported, never written past', () => 
   assert(String(oops[0]).includes('no write door'))
 })
 
-Deno.test("an effect's write is seen by the other effects", () => {
+test("an effect's write is seen by the other effects", () => {
   let { fx, apply } = fixture()
   let seen: string[] = []
   fx.created(
@@ -79,7 +80,7 @@ Deno.test("an effect's write is seen by the other effects", () => {
   assertEquals(seen, ['welcomed s1'])
 })
 
-Deno.test('a writing effect that triggers itself is stopped by the marker', () => {
+test('a writing effect that triggers itself is stopped by the marker', () => {
   let { fx, g, apply } = fixture()
   let n = 0
   // Each run writes a new post, so nothing about the data ever settles: only
@@ -96,7 +97,7 @@ Deno.test('a writing effect that triggers itself is stopped by the marker', () =
   assertEquals((g.read('.post') as Bundle[]).length, 4)
 })
 
-Deno.test('depth 0 lets an effect write without waking anything', () => {
+test('depth 0 lets an effect write without waking anything', () => {
   let oops: unknown[] = []
   let fx = effects(blog, {
     report: (e) => oops.push(e),
@@ -115,7 +116,7 @@ Deno.test('depth 0 lets an effect write without waking anything', () => {
   assertEquals(oops, [])
 })
 
-Deno.test('the generation marker never reaches the caller, or a property', () => {
+test('the generation marker never reaches the caller, or a property', () => {
   let { fx, g, apply } = fixture()
   fx.created(
     'post',
@@ -170,7 +171,7 @@ let logged = (): {
   return { g, fx, j }
 }
 
-Deno.test("the journal carries an effect's own write", () => {
+test("the journal carries an effect's own write", () => {
   let { g, fx, j } = logged()
   fx.created(
     'post',

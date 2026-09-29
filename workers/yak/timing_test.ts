@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { clock, timed } from './timing.ts'
 
-Deno.test('worker Server-Timing names wall time total', () => {
+test('worker Server-Timing names wall time total', () => {
   let now = 1000
   using _date = stub(Date, 'now', () => now)
   let c = clock()

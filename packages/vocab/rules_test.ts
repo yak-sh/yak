@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { rulesIn } from './rules.ts'
 import { loadVocab } from './vocab.ts'
@@ -19,7 +20,7 @@ let doc = {
   },
 }
 
-Deno.test('a rule declaration is a name, a query, and what it runs before', () => {
+test('a rule declaration is a name, a query, and what it runs before', () => {
   assertEquals(rulesIn(doc), [
     {
       name: 'settle',
@@ -31,13 +32,13 @@ Deno.test('a rule declaration is a name, a query, and what it runs before', () =
   ])
 })
 
-Deno.test('loadVocab passes over a rule, and plants no table for it', () => {
+test('loadVocab passes over a rule, and plants no table for it', () => {
   let v = loadVocab(doc)
   assertEquals(v.all.includes('settle'), false)
   assertEquals(v.all.sort(), ['call', 'entity'])
 })
 
-Deno.test('a rule with no match is a declaration that says nothing', () => {
+test('a rule with no match is a declaration that says nothing', () => {
   assertThrows(
     () => rulesIn({ $defs: { broke: { rule: true } } }),
     Error,
@@ -45,7 +46,7 @@ Deno.test('a rule with no match is a declaration that says nothing', () => {
   )
 })
 
-Deno.test('a rule declaration validates as one', () => {
+test('a rule declaration validates as one', () => {
   let check = new Ajv2020({ strict: false }).compile(metaSchema)
   assertEquals(check(doc), true)
   // The storable profile passes over it: a rule plants no table.

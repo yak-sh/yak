@@ -1,5 +1,6 @@
 // The write side: what actually lands, through a guarded `apply()`.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
 import { isPromise } from '@yaks/graph'
@@ -30,32 +31,32 @@ let writing = (
 
 let denied = (fn: () => unknown) => assertThrows(fn, Denied)
 
-Deno.test('an owner writes', () => {
+test('an owner writes', () => {
   let s = store()
   writing(s, ids.list, ids.dana)
   assertEquals((s.read('.pick') as Bundle[]).length, 1)
 })
 
-Deno.test('an editor writes, a viewer does not', () => {
+test('an editor writes, a viewer does not', () => {
   let s = store()
   writing(s, ids.list, ids.raj)
   denied(() => writing(s, ids.list, ids.mo, 'pick2'))
 })
 
-Deno.test('a stranger is refused on a private thing', () => {
+test('a stranger is refused on a private thing', () => {
   let s = store()
   setMode(s, ids.list, 'private')
   denied(() => writing(s, ids.list, ids.kim))
   assertEquals((s.read('.pick') as Bundle[]).length, 0)
 })
 
-Deno.test('a stranger is refused on a public thing too — public is a read', () => {
+test('a stranger is refused on a public thing too — public is a read', () => {
   let s = store()
   setMode(s, ids.list, 'public')
   denied(() => writing(s, ids.list, ids.kim))
 })
 
-Deno.test('anyone writes an open thing, as an anonymous actor', () => {
+test('anyone writes an open thing, as an anonymous actor', () => {
   let s = store()
   setMode(s, ids.list, 'open')
   writing(s, ids.list, ids.kim, 'pick1')
@@ -63,7 +64,7 @@ Deno.test('anyone writes an open thing, as an anonymous actor', () => {
   assertEquals((s.read('.pick') as Bundle[]).length, 2)
 })
 
-Deno.test('a grant admits a non-member to write', () => {
+test('a grant admits a non-member to write', () => {
   let s = store()
   setMode(s, ids.notes, 'private')
   denied(() => writing(s, ids.notes, ids.kim))
@@ -72,7 +73,7 @@ Deno.test('a grant admits a non-member to write', () => {
   assertEquals((s.read('.pick') as Bundle[]).length, 1)
 })
 
-Deno.test('a share link’s bearer writes when the link says editor', () => {
+test('a share link’s bearer writes when the link says editor', () => {
   let s = store()
   setMode(s, ids.notes, 'private')
   grant(s, 'share', { app: ids.notes, token: 'x7v2', access: 'editor' })
@@ -80,7 +81,7 @@ Deno.test('a share link’s bearer writes when the link says editor', () => {
   assertEquals((s.read('.pick') as Bundle[]).length, 1)
 })
 
-Deno.test('the refusal names who, what, and what would have been enough', () => {
+test('the refusal names who, what, and what would have been enough', () => {
   let s = store()
   let e = assertThrows(() => writing(s, ids.list, ids.mo)) as Denied
   assertEquals(e.name, 'Denied')
@@ -89,7 +90,7 @@ Deno.test('the refusal names who, what, and what would have been enough', () => 
   assertEquals(e.need, 'editor')
 })
 
-Deno.test('a refused batch lands nothing at all', () => {
+test('a refused batch lands nothing at all', () => {
   let s = store()
   denied(() =>
     sync(
@@ -110,7 +111,7 @@ Deno.test('a refused batch lands nothing at all', () => {
   assertEquals((s.read('.pick') as Bundle[]).length, 0)
 })
 
-Deno.test('only an owner writes the roster', () => {
+test('only an owner writes the roster', () => {
   let s = store()
   let seat = (who: string) =>
     sync(
@@ -126,7 +127,7 @@ Deno.test('only an owner writes the roster', () => {
   assertEquals((s.read('.member') as Bundle[]).length, 4)
 })
 
-Deno.test('an open thing does not open its own roster', () => {
+test('an open thing does not open its own roster', () => {
   let s = store()
   setMode(s, ids.list, 'open')
   // Kim may write picks all day, and may not make herself an owner.
@@ -142,7 +143,7 @@ Deno.test('an open thing does not open its own roster', () => {
   )
 })
 
-Deno.test('an owner may change what the thing says about everyone else', () => {
+test('an owner may change what the thing says about everyone else', () => {
   let s = store()
   sync(
     guarded(s, ids.list).apply([{
@@ -154,7 +155,7 @@ Deno.test('an owner may change what the thing says about everyone else', () => {
   denied(() => writing(s, ids.list, ids.kim))
 })
 
-Deno.test('an empty batch is nobody’s business', () => {
+test('an empty batch is nobody’s business', () => {
   let s = store()
   assertEquals(sync(guarded(s, ids.list).apply([])), [])
 })
@@ -179,7 +180,7 @@ let opened = () => {
 let titleOf = (s: Storage, eid: string) =>
   ((s.read(`.eid=${eid}`) as Bundle[])[0]?.pick as { title?: string })?.title
 
-Deno.test('a visitor adds to an open thing and changes nobody else’s row', () => {
+test('a visitor adds to an open thing and changes nobody else’s row', () => {
   let s = opened()
   for (let who of [null, ids.kim, ids.mo]) {
     denied(() => as(s, who, { entity: { eid: 'mine' }, pick: { title: 'x' } }))
@@ -191,7 +192,7 @@ Deno.test('a visitor adds to an open thing and changes nobody else’s row', () 
   assertEquals(titleOf(s, 'theirs'), 'Hi')
 })
 
-Deno.test('a signed-in visitor changes and deletes what they wrote', () => {
+test('a signed-in visitor changes and deletes what they wrote', () => {
   let s = opened()
   as(s, ids.kim, { entity: { eid: 'kims' }, pick: { title: 'One' } })
   as(s, ids.kim, { entity: { eid: 'kims' }, pick: { title: 'Two' } })
@@ -201,20 +202,20 @@ Deno.test('a signed-in visitor changes and deletes what they wrote', () => {
   assertEquals(titleOf(s, 'kims'), undefined)
 })
 
-Deno.test('an anonymous row is nobody’s, and saying it again is no change', () => {
+test('an anonymous row is nobody’s, and saying it again is no change', () => {
   let s = opened()
   as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Hi' } })
   as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Hi' } })
   denied(() => as(s, null, { entity: { eid: 'anon' }, pick: { title: 'Yo' } }))
 })
 
-Deno.test('an editor changes anyone’s row on an open thing', () => {
+test('an editor changes anyone’s row on an open thing', () => {
   let s = opened()
   as(s, ids.raj, { entity: { eid: 'mine' }, pick: { title: 'Raj’s' } })
   assertEquals(titleOf(s, 'mine'), 'Raj’s')
 })
 
-Deno.test('a floor holds whatever the mode', () => {
+test('a floor holds whatever the mode', () => {
   let s = opened()
   let row = { entity: { eid: 'p' }, pick: { title: 'priced' } }
   let floors: Floors = { pick: 'editor' }
@@ -233,7 +234,7 @@ let HOUR = 3_600_000
 let line = (eid: string, text = eid) => ({ entity: { eid }, line: { text } })
 let paced = (fn: () => unknown) => assertThrows(fn, Paced) as Paced
 
-Deno.test('a declared floor of person is anyone signed in', () => {
+test('a declared floor of person is anyone signed in', () => {
   let s = opened()
   let e = assertThrows(() => as(s, null, line('l1'))) as Denied
   assertEquals([e.need, e.comp], ['person', 'line'])
@@ -241,7 +242,7 @@ Deno.test('a declared floor of person is anyone signed in', () => {
   assertEquals((s.read('.line') as Bundle[]).length, 1)
 })
 
-Deno.test('a writer writes a paced component once a pace', () => {
+test('a writer writes a paced component once a pace', () => {
   let s = opened()
   as(s, ids.kim, line('l1'))
   let e = paced(() => as(s, ids.kim, line('l2')))
@@ -258,7 +259,7 @@ Deno.test('a writer writes a paced component once a pace', () => {
   assertEquals((s.read('.line') as Bundle[]).length, 3)
 })
 
-Deno.test('two at once is two inside a pace', () => {
+test('two at once is two inside a pace', () => {
   let s = opened()
   paced(() =>
     sync(
@@ -271,7 +272,7 @@ Deno.test('two at once is two inside a pace', () => {
   assertEquals((s.read('.line') as Bundle[]).length, 0)
 })
 
-Deno.test('a pace runs from the last write, made or changed', () => {
+test('a pace runs from the last write, made or changed', () => {
   let s = opened()
   seedAgo(s, 2 * HOUR, { ...line('old'), $actor: { by: ids.kim } })
   as(s, ids.kim, line('l1'))

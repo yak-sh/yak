@@ -1,6 +1,7 @@
 // No thing's look draws two faces the depth buffer cannot tell apart (mesh.ts
 // `fights`): arms and armour of every tier, what is gathered, and loot, as
 // each lies on the ground and flies to a hero (items.ts `meshed`).
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -19,14 +20,14 @@ import words from './vocab.json' with { type: 'json' }
 
 seedItems()
 
-Deno.test('no look fights itself', () => {
+test('no look fights itself', () => {
   let fighting = Object.entries(ITEMS)
     .map(([kind, t]) => [kind, fights(pack(meshed(t.look))).length])
     .filter(([, n]) => n)
   assertEquals(Object.fromEntries(fighting), {})
 })
 
-Deno.test('item designs in the store feed gear, recipes and stock', async () => {
+test('item designs in the store feed gear, recipes and stock', async () => {
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply(rows)

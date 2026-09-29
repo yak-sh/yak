@@ -3,6 +3,7 @@
 // No schema, no vocabulary, no storage appears anywhere here — if a case needed
 // one, the design leaked coupling.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
   absent,
@@ -171,12 +172,12 @@ let cases: [string, ReturnType<typeof and>][] = [
 ]
 
 for (let [q, want] of cases) {
-  Deno.test(`parse ${q}`, () => assertEquals(parse(q), want))
+  test(`parse ${q}`, () => assertEquals(parse(q), want))
 }
 
 // Every term stands alone: a pasted line parses to the same thing whether the
 // terms arrive together or one at a time (the shell-pasting property).
-Deno.test('each term stands alone', () => {
+test('each term stands alone', () => {
   let line = '.requires[<=3]->T-42 .status=open ?doc *task !done runner'
   assertEquals(
     parse(line),
@@ -185,7 +186,7 @@ Deno.test('each term stands alone', () => {
 })
 
 // The empty query selects nothing.
-Deno.test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
+test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
   assertEquals(
     parse('.a=1 .b=2|.c=3'),
     and(or(and(eq('a', '1'), eq('b', '2')), eq('c', '3'))),
@@ -210,7 +211,7 @@ Deno.test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
   assertThrows(() => parse('(.a=1'), Error, 'unclosed group')
 })
 
-Deno.test('a directive shapes the whole query, wherever it is written', () => {
+test('a directive shapes the whole query, wherever it is written', () => {
   let a = present('a')
   let b = present('b')
   for (
@@ -232,7 +233,7 @@ Deno.test('a directive shapes the whole query, wherever it is written', () => {
 
 // A compiler keys its compiled form on the tree, so the same text is read once
 // into one tree, and nobody holding it can change it under the others.
-Deno.test('the same text reads to one tree that no caller can change', () => {
+test('the same text reads to one tree that no caller can change', () => {
   let tree = parse('.status=open .priority<=1')
   assertEquals(parse('.status=open .priority<=1') === tree, true)
   assertThrows(() => tree.clauses.push(never()), TypeError)
@@ -244,14 +245,14 @@ Deno.test('the same text reads to one tree that no caller can change', () => {
   assertEquals(parse('open'), and(text('open')))
 })
 
-Deno.test('empty query is never', () => {
+test('empty query is never', () => {
   assertEquals(parse(''), and(never()))
   assertEquals(parse('   '), and(never()))
 })
 
 // A quoted value glues across '&' and whitespace into one predicate; unquoted,
 // whitespace ends the value and the rest is the next term.
-Deno.test('quotes glue a value across & and spaces', () => {
+test('quotes glue a value across & and spaces', () => {
   assertEquals(
     parse('.web.url="https://x/p?a=1&b=2"'),
     and(eq('web.url', 'https://x/p?a=1&b=2')),
@@ -277,7 +278,7 @@ Deno.test('quotes glue a value across & and spaces', () => {
 
 // A quoted bare word stays one phrase text term; an apostrophe inside a word
 // opens nothing.
-Deno.test('quoted phrase is one text term', () => {
+test('quoted phrase is one text term', () => {
   assertEquals(parse('"two words"'), and(text('two words')))
   assertEquals(parse("'two words'"), and(text('two words')))
   assertEquals(parse("jeff's"), and(text("jeff's")))
@@ -285,7 +286,7 @@ Deno.test('quoted phrase is one text term', () => {
 
 // A list is one token: a space beside its comma, or an empty member, is refused
 // rather than read as the caller's most likely meaning.
-Deno.test('a list has no spaces and no empty member', () => {
+test('a list has no spaces and no empty member', () => {
   assertThrows(() => parse('.status=open, wip'), Error, 'no spaces')
   assertThrows(() => parse('.status=open ,wip'), Error, 'no spaces')
   assertThrows(() => parse('.status=open,'), Error, 'no spaces')
@@ -303,7 +304,7 @@ Deno.test('a list has no spaces and no empty member', () => {
 
 // A bare word is one thing wherever it stands: a search term. The component it
 // might name is the dot-marked form.
-Deno.test('a comma between clauses means nothing', () => {
+test('a comma between clauses means nothing', () => {
   assertEquals(
     parse('!foo, bar hello there'),
     and(absent('foo'), text('bar'), text('hello'), text('there')),
@@ -313,14 +314,14 @@ Deno.test('a comma between clauses means nothing', () => {
 
 // A dot-marked word is the component, present; the same word bare is searched
 // for. Quotes make a text term of anything, operators included.
-Deno.test('the dot tells a component from a word', () => {
+test('the dot tells a component from a word', () => {
   assertEquals(parse('.env'), and(present('env')))
   assertEquals(parse('env'), and(text('env')))
   assertEquals(parse('"comp.prop=1"'), and(text('comp.prop=1')))
 })
 
 // `text: false` — a rule, or a saved filter, takes no bare-word search terms.
-Deno.test('text: false refuses a bare word', () => {
+test('text: false refuses a bare word', () => {
   assertEquals(
     parse('.doc, *task', { text: false }),
     and(present('doc'), mutable('task')),
@@ -331,7 +332,7 @@ Deno.test('text: false refuses a bare word', () => {
 })
 
 // A list of ranges, one value.
-Deno.test('list of ranges', () => {
+test('list of ranges', () => {
   assertEquals(
     parse('.priority=1..5,10..20'),
     and(eq('priority', list(range('1', '5'), range('10', '20')))),
@@ -341,7 +342,7 @@ Deno.test('list of ranges', () => {
 // The bracket binds to the path and each clause says what it accepts: the
 // walk takes one depth cap, nothing else takes any — an unknown qualifier is
 // refused by name, never dropped.
-Deno.test('qualifiers', () => {
+test('qualifiers', () => {
   assertThrows(() => parse('.status[<=3]=open'), Error, 'no qualifier')
   assertThrows(() => parse('.doc[x]'), Error, 'no qualifier')
   assertThrows(() => parse('.order[k=v]=hot'), Error, 'no qualifier')
@@ -367,7 +368,7 @@ Deno.test('qualifiers', () => {
 })
 
 // Malformed or ambiguous forms are refused at the format layer.
-Deno.test('refusals', () => {
+test('refusals', () => {
   assertThrows(() => parse('.limit=abc'), Error, 'whole number')
   assertThrows(() => parse('.distinct='), Error, 'names a property')
   assertThrows(() => parse('.refs<3'), Error, '.refs')
@@ -387,7 +388,7 @@ Deno.test('refusals', () => {
 
 // Each clause has one spelling (T-39341): the forms it had beside that one are
 // refused by the one it has.
-Deno.test('an old spelling is refused by the one it has now', () => {
+test('an old spelling is refused by the one it has now', () => {
   let said: [string, string][] = [
     ['.assignee!', '.assignee'],
     ['.assignee!=', '.assignee'],
@@ -416,11 +417,11 @@ Deno.test('an old spelling is refused by the one it has now', () => {
 
 // A reserved word without its bracket is just a raw path here — validating it
 // is schema. `.reaches=X` is an ordinary predicate, not a traversal.
-Deno.test('bracketless reserved word is a plain predicate', () => {
+test('bracketless reserved word is a plain predicate', () => {
   assertEquals(parse('.reaches=X'), and(eq('reaches', 'X')))
 })
 
-Deno.test('the edges rider has a nonnegative integer limit', () => {
+test('the edges rider has a nonnegative integer limit', () => {
   assertEquals(
     parse('.edges.limit=12'),
     and({ kind: 'edges', peers: [], limit: 12 }),
@@ -429,7 +430,7 @@ Deno.test('the edges rider has a nonnegative integer limit', () => {
   assertThrows(() => parse('.edges.limit=1.2'))
 })
 
-Deno.test('nested reverse negations preserve each quantifier', () => {
+test('nested reverse negations preserve each quantifier', () => {
   let one = parse('.reviews!.stars=5').clauses[0]
   assertEquals(
     parse('.comments!.reviews!.stars=5'),

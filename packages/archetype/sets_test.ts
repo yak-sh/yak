@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { derivedEid, sha256 } from '@yaks/graph'
 import {
   assertEquals,
@@ -7,7 +8,7 @@ import {
 } from '@std/assert'
 import { Archetypes, canonical, eidOf, satisfies, tablesOf } from './mod.ts'
 
-Deno.test('archetype identity is namespaced, bytewise, duplicate/order independent', () => {
+test('archetype identity is namespaced, bytewise, duplicate/order independent', () => {
   let names = ['\u{10000}', 'z', 'a', '\ue000', 'a']
   assertEquals(canonical(names), ['a', 'z', '\ue000', '\u{10000}'])
   let id = derivedEid('archetype|a,z,\ue000,\u{10000}')
@@ -30,7 +31,7 @@ Deno.test('archetype identity is namespaced, bytewise, duplicate/order independe
   }
 })
 
-Deno.test('archetype transitions and presence answers are cached and invalidate on new sets', () => {
+test('archetype transitions and presence answers are cached and invalidate on new sets', () => {
   let cache = new Archetypes()
   let a = cache.intern(['doc'])
   let b = cache.move(a, 'task', true)

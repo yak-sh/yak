@@ -1,5 +1,6 @@
 // A bridge uses the terrain layers for both the walkable deck and the river
 // below it; its meshed sides stay open to the water.
+import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import * as THREE from 'three'
@@ -36,7 +37,7 @@ let crossing = () => {
 
 seedBuildings()
 
-Deno.test('a bridge has a dry deck over the river in cold and grown ground', () => {
+test('a bridge has a dry deck over the river in cold and grown ground', () => {
   let { road, i, x, z } = crossing()
   let v = vale(0.5)
   let read = () => [
@@ -64,7 +65,7 @@ Deno.test('a bridge has a dry deck over the river in cold and grown ground', () 
   assertEquals(groundAt(v, ...bank), bankBefore)
 })
 
-Deno.test('a bridge retains water clearance at every terrain detail', () => {
+test('a bridge retains water clearance at every terrain detail', () => {
   let { x, z } = crossing()
   for (let voxel of VOXELS) {
     let v = vale(voxel)
@@ -82,7 +83,7 @@ Deno.test('a bridge retains water clearance at every terrain detail', () => {
   }
 })
 
-Deno.test('a bridge span meshes with an open side and matching chunk seams', () => {
+test('a bridge span meshes with an open side and matching chunk seams', () => {
   let { road, i, x, z } = crossing()
   let ci = chunkOf(x), ck = chunkOf(z)
   let dx = road.c.xs[i + 1] - road.c.xs[i - 1]

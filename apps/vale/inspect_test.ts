@@ -1,5 +1,6 @@
 // A command answer identifies a target and reports its useful public state
 // without returning the underlying store rows.
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from './net.ts'
 import { inspectOf } from './inspect.ts'
@@ -13,7 +14,7 @@ let row = (eid: string, more: Record<string, unknown> = {}): Bundle => ({
   ...more,
 })
 
-Deno.test('inspect prefers live position and summarizes a hero objective', () => {
+test('inspect prefers live position and summarizes a hero objective', () => {
   let [x, z] = arriveOf('tombsands')
   let hero = row('hero', {
     player: {},
@@ -41,7 +42,7 @@ Deno.test('inspect prefers live position and summarizes a hero objective', () =>
   assertEquals(text.includes('Last saved position'), false)
 })
 
-Deno.test('inspect describes a villager, objective, item, and land', () => {
+test('inspect describes a villager, objective, item, and land', () => {
   let villager = inspectOf({
     row: row('wren', {
       doc: { title: 'Elder Wren' },
@@ -71,7 +72,7 @@ Deno.test('inspect describes a villager, objective, item, and land', () => {
   assertStringIncludes(inspectOf({ level: 'tombsands' }), 'Land `tombsands`')
 })
 
-Deno.test('inspect reports saved heroes and live-only world targets', () => {
+test('inspect reports saved heroes and live-only world targets', () => {
   let saved = inspectOf({
     row: row('hero', {
       player: {},

@@ -1,6 +1,7 @@
 // A phrase searches by meaning and returns a short piece of the text that was
 // embedded, even when that text does not contain the phrase.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   among,
@@ -16,7 +17,7 @@ import { fields } from './fields.ts'
 import { excerpt, meaning } from './search.ts'
 import { embedder, shop, stocked } from './testing.ts'
 
-Deno.test('new words find ranked source excerpts, bounded by the limit', async () => {
+test('new words find ranked source excerpts, bounded by the limit', async () => {
   let db = await stocked()
   let hits = await meaning(
     db,
@@ -34,7 +35,7 @@ Deno.test('new words find ranked source excerpts, bounded by the limit', async (
   assert(hits.every((h) => !h.excerpt.includes('\x01')))
 })
 
-Deno.test('a screen narrows meaning search before ranking and limiting', async () => {
+test('a screen narrows meaning search before ranking and limiting', async () => {
   let db = await stocked()
   let screen = render(select({
     cols: [col('eid')],
@@ -48,7 +49,7 @@ Deno.test('a screen narrows meaning search before ranking and limiting', async (
   assertEquals(hits.map((h) => h.entity), ['review-4'])
 })
 
-Deno.test('an excerpt reads the configured, resolved source', async () => {
+test('an excerpt reads the configured, resolved source', async () => {
   let db = await stocked()
   let only = fields(shop, (p) => p.prop == 'blurb')
     .map((f) => ({
@@ -69,7 +70,7 @@ Deno.test('an excerpt reads the configured, resolved source', async () => {
   assert(!hit.excerpt.includes('THE HOBBIT'))
 })
 
-Deno.test('blank words do not ask the embedder', async () => {
+test('blank words do not ask the embedder', async () => {
   let db = await stocked()
   let no = {
     model: embedder.model,
@@ -80,7 +81,7 @@ Deno.test('blank words do not ask the embedder', async () => {
   assertEquals(await meaning(db, fields(shop), no, '   '), [])
 })
 
-Deno.test('an excerpt keeps a short, single line from long text', () => {
+test('an excerpt keeps a short, single line from long text', () => {
   let said = excerpt(`  first\n  ${'more words '.repeat(100)}`)
   assert(said.startsWith('first more words'))
   assert(said.endsWith('…'))

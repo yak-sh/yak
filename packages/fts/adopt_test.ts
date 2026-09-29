@@ -2,6 +2,7 @@
 // package — is brought to the schema without losing the words it indexed, and
 // a second pass changes nothing.
 
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import {
@@ -350,7 +351,7 @@ let triggers = (db: Driver) =>
 let found = (db: Driver, word: string) =>
   find(db, fields(post), word).map((h) => h.entity).sort()
 
-Deno.test('adopt keeps an index whose columns match, re-cuts one that does not, and drops the extra writers', () => {
+test('adopt keeps an index whose columns match, re-cuts one that does not, and drops the extra writers', () => {
   let db = mailbox()
   let log = objects(db).find((o) => o.name == 'content_fts')!.sql
   let done = adopt(db, fields(post), stashed)
@@ -400,7 +401,7 @@ Deno.test('adopt keeps an index whose columns match, re-cuts one that does not, 
   assertEquals(found(db, 'frodo'), ['letter'])
 })
 
-Deno.test('a second adopt changes nothing', () => {
+test('a second adopt changes nothing', () => {
   let db = mailbox()
   adopt(db, fields(post), stashed)
   let before = objects(db), cut = cookie(db)
@@ -413,7 +414,7 @@ Deno.test('a second adopt changes nothing', () => {
   assertEquals(cookie(db), cut)
 })
 
-Deno.test('a fresh schema is already adopted', () => {
+test('a fresh schema is already adopted', () => {
   let db = shelf()
   let before = objects(db), cut = cookie(db)
   assertEquals(adopt(db, fields(shop)), { recut: [], dropped: [], healed: [] })
@@ -421,7 +422,7 @@ Deno.test('a fresh schema is already adopted', () => {
   assertEquals(cookie(db), cut)
 })
 
-Deno.test('membership counts what the index holds, not what its table does', () => {
+test('membership counts what the index holds, not what its table does', () => {
   // An index cut after its table already had rows is born empty. Counting the
   // index itself reads the table it mirrors and calls them equal; the shadow
   // table knows better.

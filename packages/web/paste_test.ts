@@ -1,5 +1,6 @@
 // pasted(): text → entity spec. Pure over the cache signal — the seams
 // the canvas drop and the palette's board chip ride.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { pasted } from './paste.ts'
 import { cache } from './live.ts'
@@ -13,7 +14,7 @@ let comps = (text: string) => {
 
 // The board chip's drag payload: a {doc, board} JSON mints both comps on
 // ONE fresh eid — dropping the chip on the canvas lands a live board.
-Deno.test('pasted: doc+board JSON mints a board', () => {
+test('pasted: doc+board JSON mints a board', () => {
   cache.value = {}
   let q = 'fable .status=open'
   let spec = pasted(JSON.stringify({
@@ -26,13 +27,13 @@ Deno.test('pasted: doc+board JSON mints a board', () => {
   assertEquals(spec.changes[1].comp?.query, q)
 })
 
-Deno.test('pasted: a known id targets the existing entity', () => {
+test('pasted: a known id targets the existing entity', () => {
   cache.value = { e1: { entity: { eid: 'e1', num: 7 } } }
   assertEquals(pasted('T-7'), { changes: [], target: 'e1' })
   assertEquals(pasted('T-8'), null)
 })
 
-Deno.test('pasted: sigilled ids and full UUIDs target an unnumbered entity', () => {
+test('pasted: sigilled ids and full UUIDs target an unnumbered entity', () => {
   let eid = '3f9a1c2e-7b00-4000-8000-000000000001'
   cache.value = { [eid]: { entity: { eid, num: 0 }, task: { eid } } }
   try {
@@ -45,7 +46,7 @@ Deno.test('pasted: sigilled ids and full UUIDs target an unnumbered entity', () 
   }
 })
 
-Deno.test('pasted: plain text becomes a task, first line the title', () => {
+test('pasted: plain text becomes a task, first line the title', () => {
   cache.value = {}
   assertEquals(comps('fix the door\nit squeaks'), {
     names: ['doc', 'task'],
@@ -53,7 +54,7 @@ Deno.test('pasted: plain text becomes a task, first line the title', () => {
   })
 })
 
-Deno.test('pasted: terminal task status becomes a lifecycle mark', () => {
+test('pasted: terminal task status becomes a lifecycle mark', () => {
   cache.value = {}
   for (
     let [input, mark] of [

@@ -1,5 +1,6 @@
 // Scored resolution: the most specific renderer wins, ties go to
 // registration order, platform overrides beat the shared list on ties.
+import { test } from '@yaks/testing'
 import '../testing.ts'
 import { h } from 'preact'
 import { and, type Query } from '@yaks/query'
@@ -72,7 +73,7 @@ let CASES: [string, Record<string, unknown>, string | undefined, string][] = [
   ['unservable named view falls back to JSON', {}, 'Task', 'JSON'],
 ]
 
-Deno.test('resolution', () => {
+test('resolution', () => {
   using _ = fixtures()
   for (let [name, comps, view, want] of CASES) {
     assertEquals(resolve(ent(comps), view).view, want, name)
@@ -83,7 +84,7 @@ Deno.test('resolution', () => {
   assertEquals(tag({}, 'Card.Title'), 'any-title')
 })
 
-Deno.test('suffix walk: qualifiers fall leftward', () => {
+test('suffix walk: qualifiers fall leftward', () => {
   using _ = fixtures()
   let task = { doc: {}, task: {} }
   // place-qualified requests keep walking when no place specializes them
@@ -97,13 +98,13 @@ Deno.test('suffix walk: qualifiers fall leftward', () => {
   assertEquals(resolve(ent(task), 'Nope.Nada').view, 'JSON')
 })
 
-Deno.test('tabs = views with a live matcher', () => {
+test('tabs = views with a live matcher', () => {
   using _ = fixtures()
   assertEquals(applicable(ent({ doc: {}, task: {} })), ['Task', 'Doc', 'JSON'])
   assertEquals(applicable(ent({})), ['JSON'])
 })
 
-Deno.test('actions union across matching contributors, in order', () => {
+test('actions union across matching contributors, in order', () => {
   using _ = fixtures()
   defineActions([
     {
@@ -122,7 +123,7 @@ Deno.test('actions union across matching contributors, in order', () => {
   assertEquals(actionsFor(ent({})).map((a) => a.label), ['delete'])
 })
 
-Deno.test('override wins its tie', () => {
+test('override wins its tie', () => {
   using _ = fixtures()
   extend([R('Task', has('doc', 'task'), 'tui-task')])
   assertEquals(tag({ doc: {}, task: {} }, 'Task'), 'tui-task')

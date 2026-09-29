@@ -1,10 +1,11 @@
 // The model command reads each provider's catalog through its public shape.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { CODEX, OPENAI } from '@yaks/openai'
 import { modelCatalog } from './runs.ts'
 
-Deno.test('Codex model catalog supplies client version and lists slugs', async () => {
+test('Codex model catalog supplies client version and lists slugs', async () => {
   let seen: URL | undefined
   let names = await modelCatalog({
     token: 'secret',
@@ -24,7 +25,7 @@ Deno.test('Codex model catalog supplies client version and lists slugs', async (
   assertEquals(names, ['gpt-6-astra', 'gpt-6-sol'])
 })
 
-Deno.test('OpenAI model catalog lists ids without Codex query', async () => {
+test('OpenAI model catalog lists ids without Codex query', async () => {
   let names = await modelCatalog({ token: 'key', base: OPENAI }, (input) => {
     let url = new URL(String(input))
     assertEquals(url.pathname, '/v1/models')
@@ -34,7 +35,7 @@ Deno.test('OpenAI model catalog lists ids without Codex query', async () => {
   assertEquals(names, ['gpt-4.1'])
 })
 
-Deno.test('Codex model catalog refreshes a rejected connection once', async () => {
+test('Codex model catalog refreshes a rejected connection once', async () => {
   let tokens: string[] = []
   let refreshed = 0
   let names = await modelCatalog({
@@ -62,7 +63,7 @@ Deno.test('Codex model catalog refreshes a rejected connection once', async () =
   assertEquals(refreshed, 1)
 })
 
-Deno.test('model catalog errors do not repeat a credential', async () => {
+test('model catalog errors do not repeat a credential', async () => {
   let error = await assertRejects(
     () =>
       modelCatalog(

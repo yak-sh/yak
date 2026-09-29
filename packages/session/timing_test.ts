@@ -1,8 +1,9 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertMatch } from '@std/assert'
 import { duration, took, toolTiming } from './timing.ts'
 import { project } from './react.ts'
 
-Deno.test('wall-clock formats quick calls and flags only commands over a minute', () => {
+test('wall-clock formats quick calls and flags only commands over a minute', () => {
   assertEquals(duration(12.3), '12ms')
   assertEquals(duration(999), '999ms')
   assertEquals(took('', 850), 'took 850ms')
@@ -13,7 +14,7 @@ Deno.test('wall-clock formats quick calls and flags only commands over a minute'
   assertMatch(took('failed', 60_001), /failed\ntook 1m0s — over 60s/)
 })
 
-Deno.test('tool account sums measured calls once, ranks three, and ignores old results', () => {
+test('tool account sums measured calls once, ranks three, and ignores old results', () => {
   let calls = [90_000, 78_000, 551_000, 113_000].flatMap((ms, i) => [
     { eid: `c${i}`, comps: { bash: { command: `gate ${i}` } } },
     { eid: `r${i}`, comps: { result: { call: `c${i}`, ms } } },
@@ -34,7 +35,7 @@ Deno.test('tool account sums measured calls once, ranks three, and ignores old r
   assertEquals(toolTiming([]), '')
 })
 
-Deno.test('portable timing survives result bounding without changing raw JSON', () => {
+test('portable timing survives result bounding without changing raw JSON', () => {
   let entries = [
     { entity: { eid: 'call' }, call: { id: 'provider-call', to: 'tool' } },
     {

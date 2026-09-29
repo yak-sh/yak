@@ -1,6 +1,6 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import {
   connector,
   kernel,
@@ -17,7 +17,7 @@ import { hearing, HELLO } from './mcp-probe.ts'
 // different request opened — which is what makes the notification arrive at
 // all outside one isolate — and a client whose connection dropped picks up
 // what it missed from its `Last-Event-ID`.
-Deno.test('the stream names its session and replays a missed line', async () => {
+test('the stream names its session and replays a missed line', async () => {
   let k = await kernel()
   let ear: ReturnType<typeof hearing> | undefined
   try {
@@ -131,7 +131,7 @@ Deno.test('the stream names its session and replays a missed line', async () => 
 // tools that are always there, so a client's cached list stays right. `about`
 // still says what is here right now — the tools, the version naming them, and
 // the apps in reach with their commands.
-Deno.test(
+test(
   'a deploy leaves the roster where it was, and about says what is here',
   async () => {
     let k = await kernel()
@@ -195,7 +195,7 @@ Deno.test(
 // draw their answers in are what resources/list is made of, and a client
 // holding that list is told on the stream. The tool list is not told about,
 // because it did not move — an app's commands are not tools (T-34541).
-Deno.test(
+test(
   'a release whose views moved says resources, and never tools',
   async () => {
     let k = await kernel()
@@ -271,7 +271,7 @@ Deno.test(
 // A break is pushed to whoever is listening as it lands (T-33006, V-32361):
 // `notifications/message` on the members' streams — and the push marks
 // nothing, so the unseen block still carries it on the next tool reply.
-Deno.test(
+test(
   'a break is pushed as notifications/message and still rides the reply',
   async () => {
     let k = await kernel()

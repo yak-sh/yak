@@ -2,6 +2,7 @@
 // The assembly: one call, and a graph that renders at once, agrees with the
 // server afterwards, and keeps what the server will never send back.
 
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { aliasDoc, aliasEid, aliases } from '@yaks/alias'
 import { type Bundle, graph } from '@yaks/graph'
@@ -21,7 +22,7 @@ let dal = (eid = 'r1'): Bundle => ({
   recipe: { serves: 4, course: 'dinner' },
 })
 
-Deno.test('a client with no server is a whole graph on its own', () => {
+test('a client with no server is a whole graph on its own', () => {
   let c = boxClient()
   c.mutate([dal()])
   assertEquals(comp(c.ent('r1'), 'doc').title, 'Dal')
@@ -30,7 +31,7 @@ Deno.test('a client with no server is a whole graph on its own', () => {
   c.close()
 })
 
-Deno.test('a page writes a name already held outside its cache', async () => {
+test('a page writes a name already held outside its cache', async () => {
   let vocab = loadVocab([keyDoc, aliasDoc, {
     $defs: {
       doc: {
@@ -155,7 +156,7 @@ Deno.test('a page writes a name already held outside its cache', async () => {
 
 let note = { entity: { eid: 'n1' }, note: { stars: 5, recipe: 'r1' } }
 
-Deno.test('a read answers the rows a watch on the same query holds', () => {
+test('a read answers the rows a watch on the same query holds', () => {
   let c = boxClient()
   c.mutate([dal(), note])
   for (
@@ -168,7 +169,7 @@ Deno.test('a read answers the rows a watch on the same query holds', () => {
   c.close()
 })
 
-Deno.test('a read resolves the id a person types', () => {
+test('a read resolves the id a person types', () => {
   let c = client(box, [ids(box)], { vault: false })
   replicate(c.graph, [
     { ...dal(), entity: { eid: 'r1', num: 7 } },
@@ -178,13 +179,13 @@ Deno.test('a read resolves the id a person types', () => {
   c.close()
 })
 
-Deno.test('ent answers nothing for an entity this client never held', () => {
+test('ent answers nothing for an entity this client never held', () => {
   let c = boxClient()
   assertEquals(c.ent('nobody'), undefined)
   c.close()
 })
 
-Deno.test('a write lands locally first, then on the server', async () => {
+test('a write lands locally first, then on the server', async () => {
   let srv = server()
   let c = boxClient(srv)
   c.mutate([{ ...dal(), draft: { text: 'more cumin?' } }])
@@ -202,7 +203,7 @@ Deno.test('a write lands locally first, then on the server', async () => {
   c.close()
 })
 
-Deno.test("a caller's plugin runs on the client graph", () => {
+test("a caller's plugin runs on the client graph", () => {
   let seen: string[] = []
   let c = client(box, [{
     name: 'the cook',
@@ -218,7 +219,7 @@ Deno.test("a caller's plugin runs on the client graph", () => {
   c.close()
 })
 
-Deno.test('close stops the watches and the socket', async () => {
+test('close stops the watches and the socket', async () => {
   let srv = server()
   let c = boxClient(srv, { vault: stash() })
   c.watch('.course=dinner')
@@ -229,7 +230,7 @@ Deno.test('close stops the watches and the socket', async () => {
   assertEquals(c.wire?.connected(), false)
 })
 
-Deno.test("a watch sees a peer's value, and nothing stores it", async () => {
+test("a watch sees a peer's value, and nothing stores it", async () => {
   let srv = server()
   let disk = wireStash()
   let a = boxClient(srv)
@@ -258,7 +259,7 @@ Deno.test("a watch sees a peer's value, and nothing stores it", async () => {
   b.close()
 })
 
-Deno.test('a replica can leave provenance exclusively to its authority', () => {
+test('a replica can leave provenance exclusively to its authority', () => {
   let c = client(box, [], { vault: false, provenance: () => null })
   try {
     c.mutate([dal()])
@@ -289,7 +290,7 @@ let pointing = async () => {
   return { a, point, seen, done: () => [a, b].forEach((c) => c.close()) }
 }
 
-Deno.test('a watch opened later leaves what this page is saying', async () => {
+test('a watch opened later leaves what this page is saying', async () => {
   let { a, point, seen, done } = await pointing()
   point({ x: 3, y: 9 })
   await seen()
@@ -298,7 +299,7 @@ Deno.test('a watch opened later leaves what this page is saying', async () => {
   done()
 })
 
-Deno.test('a reconnect keeps what this page is saying, and the peers hear it again', async () => {
+test('a reconnect keeps what this page is saying, and the peers hear it again', async () => {
   let { a, point, seen, done } = await pointing()
   point({ x: 3, y: 9 })
   await seen()
@@ -308,7 +309,7 @@ Deno.test('a reconnect keeps what this page is saying, and the peers hear it aga
   done()
 })
 
-Deno.test("a page's newer value is never replaced by an older one of its own", async () => {
+test("a page's newer value is never replaced by an older one of its own", async () => {
   let { a, point, seen, done } = await pointing()
   point({ x: 1, y: 1 })
   await seen()

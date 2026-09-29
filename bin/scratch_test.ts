@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
   ours,
@@ -21,31 +22,31 @@ let base = (names: string[], body: (dir: string) => void) => {
   }
 }
 
-Deno.test('the base is TMPDIR, and /tmp only when nothing named one', () => {
+test('the base is TMPDIR, and /tmp only when nothing named one', () => {
   assertEquals(tmpBase({ TMPDIR: '/tmp/tasks-run-7' }), '/tmp/tasks-run-7')
   assertEquals(tmpBase({}), '/tmp')
 })
 
 // Naming a base is the whole claim to it: the shared /tmp carries other runs'
 // `tasks-*` entries, so a stray there is a warning and not this run's failure.
-Deno.test('a stray is blamed only on a base the caller named', () => {
+test('a stray is blamed only on a base the caller named', () => {
   assertEquals(ours({ TMPDIR: '/tmp/scratchpad' }), true)
   assertEquals(ours({}), false)
 })
 
-Deno.test('only the tasks-* family counts as ours', () =>
+test('only the tasks-* family counts as ours', () =>
   base(['tasks-door-a', 'chrome-profile', 'tasks-run-1'], (dir) => {
     assertEquals([...tasksEntries(dir)].sort(), ['tasks-door-a', 'tasks-run-1'])
   }))
 
-Deno.test('a run directory whose owner is gone is swept', () =>
+test('a run directory whose owner is gone is swept', () =>
   base(['tasks-run-1', 'tasks-run-2', 'tasks-door-a'], (dir) => {
     assertEquals(sweep(dir, (pid) => pid == 1), ['tasks-run-2'])
     // The live run keeps its directory, and a stray is not a run to sweep.
     assertEquals([...tasksEntries(dir)].sort(), ['tasks-door-a', 'tasks-run-1'])
   }))
 
-Deno.test('a stray is a tasks-* entry the run did not start with', () =>
+test('a stray is a tasks-* entry the run did not start with', () =>
   base(['tasks-door-a'], (dir) => {
     let before = tasksEntries(dir)
     Deno.mkdirSync(`${dir}/tasks-native-b`)
@@ -55,7 +56,7 @@ Deno.test('a stray is a tasks-* entry the run did not start with', () =>
     assertEquals(strays(dir, before), ['tasks-claim-c', 'tasks-native-b'])
   }))
 
-Deno.test('this very process is running; pid 0 names no process', () => {
+test('this very process is running; pid 0 names no process', () => {
   assertEquals(running(Deno.pid), true)
   assertEquals(running(0), false)
 })
@@ -82,7 +83,7 @@ let leaks = async (base: string, env: Record<string, string>) => {
   }
 }
 
-Deno.test(
+test(
   'a stray fails a named base and only warns on the shared one',
   async () => {
     // clearEnv is the only way to unset TMPDIR for a child, so the few names

@@ -5,6 +5,7 @@
 // The fixtures are built here rather than checked in (probe.ts `zipped`), so
 // what makes a case what it is — the folder prefix, the escaping path, the
 // method nobody reads — is readable in the test.
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { zipped } from './probe.ts'
 import { escapes, MAX, unzip } from './unzip.ts'
@@ -28,7 +29,7 @@ let refuses = async (
   )
 }
 
-Deno.test('a path that escapes the app is one, whatever shape it takes', () => {
+test('a path that escapes the app is one, whatever shape it takes', () => {
   assertEquals(escapes('index.html'), false)
   assertEquals(escapes('css/app.css'), false)
   assertEquals(escapes('..hidden.css'), false)
@@ -39,7 +40,7 @@ Deno.test('a path that escapes the app is one, whatever shape it takes', () => {
   assertEquals(escapes('C:/x'), true)
 })
 
-Deno.test('stored and deflated entries both come back whole', async () => {
+test('stored and deflated entries both come back whole', async () => {
   let out = await read([
     { path: 'index.html', content: '<h1>hi</h1>' },
     { path: 'style.css', content: 'body { color: red }', deflate: true },
@@ -51,7 +52,7 @@ Deno.test('stored and deflated entries both come back whole', async () => {
 
 // A zip made by right-clicking a folder holds the folder, and the app is
 // already named: `recipes/index.html` would serve at `/recipes/recipes/`.
-Deno.test('one shared top-level folder is stripped', async () => {
+test('one shared top-level folder is stripped', async () => {
   let out = await read([
     { path: 'recipes/' },
     { path: 'recipes/index.html', content: 'page' },
@@ -60,7 +61,7 @@ Deno.test('one shared top-level folder is stripped', async () => {
   assertEquals(out.map((e) => e.path), ['index.html', 'css/app.css'])
 })
 
-Deno.test('two top-level folders are both kept', async () => {
+test('two top-level folders are both kept', async () => {
   let out = await read([
     { path: 'index.html', content: 'page' },
     { path: 'css/app.css', content: 'css' },
@@ -68,7 +69,7 @@ Deno.test('two top-level folders are both kept', async () => {
   assertEquals(out.map((e) => e.path), ['index.html', 'css/app.css'])
 })
 
-Deno.test("macOS's own leavings never become files", async () => {
+test("macOS's own leavings never become files", async () => {
   let out = await read([
     { path: '__MACOSX/._index.html', content: 'junk' },
     { path: 'site/__MACOSX/._index.html', content: 'junk' },
@@ -82,7 +83,7 @@ Deno.test("macOS's own leavings never become files", async () => {
 // Written as a stream: the local header carries zeros and the index at the end
 // carries the sizes. Deflated too, so the packed length has to come from the
 // index for the walk to find the next header at all.
-Deno.test('a data descriptor sends the reader to the index', async () => {
+test('a data descriptor sends the reader to the index', async () => {
   let out = await read([
     { path: 'index.html', content: 'page', deflate: true, flags: 8 },
     { path: 'style.css', content: 'css', flags: 8 },
@@ -92,25 +93,25 @@ Deno.test('a data descriptor sends the reader to the index', async () => {
   assertEquals(text(out[1].bytes), 'css')
 })
 
-Deno.test('a path out of the app is refused, by name', () =>
+test('a path out of the app is refused, by name', () =>
   refuses([{ path: '../secrets.txt', content: 'no' }], 'points outside'))
 
-Deno.test('an absolute path is refused', () =>
+test('an absolute path is refused', () =>
   refuses([{ path: '/etc/passwd', content: 'no' }], 'points outside'))
 
-Deno.test('a method nobody reads is refused, and named', () =>
+test('a method nobody reads is refused, and named', () =>
   refuses([{ path: 'index.html', content: 'x', method: 12 }], 'method 12'))
 
-Deno.test('an encrypted entry is refused', () =>
+test('an encrypted entry is refused', () =>
   refuses([{ path: 'index.html', content: 'x', flags: 1 }], 'password'))
 
-Deno.test('more than the ceiling is refused', () =>
+test('more than the ceiling is refused', () =>
   refuses([{ path: 'big.txt', content: 'x'.repeat(600) }], 'more than', 500))
 
 // The ceiling is counted on the way out of the decompressor: 600 KB of one
 // letter deflates to almost nothing, so a zip that lies about its size is
 // still stopped by what it produces.
-Deno.test('a zip that unpacks past the ceiling is refused', () =>
+test('a zip that unpacks past the ceiling is refused', () =>
   refuses(
     [{ path: 'big.txt', content: 'x'.repeat(600_000), deflate: true }],
     'more than',
@@ -118,7 +119,7 @@ Deno.test('a zip that unpacks past the ceiling is refused', () =>
   ))
 
 // A zip of a folder and macOS's leavings holds no file anybody meant to send.
-Deno.test('a zip with nothing in it to serve is refused', () =>
+test('a zip with nothing in it to serve is refused', () =>
   refuses(
     [{ path: 'recipes/' }, { path: '__MACOSX/._index.html', content: 'x' }],
     'no files',
@@ -127,9 +128,9 @@ Deno.test('a zip with nothing in it to serve is refused', () =>
 // A zip with no entries at all is an end record and nothing else, so it never
 // reaches the walk: it is refused as not being a zip, which is what it looks
 // like to a person too.
-Deno.test('an empty zip is refused', () => refuses([], "isn't a zip"))
+test('an empty zip is refused', () => refuses([], "isn't a zip"))
 
-Deno.test('bytes that are not a zip are refused', async () => {
+test('bytes that are not a zip are refused', async () => {
   let page = new TextEncoder().encode('<h1>not a zip</h1>')
   await assertRejects(
     async () => {

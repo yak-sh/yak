@@ -1,4 +1,5 @@
 // A hero entering land keeps it uncovered across tabs and sessions.
+import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { exploration, visitedOf } from './explore.ts'
 import { regionsFromCells } from './explore-region.ts'
@@ -8,7 +9,7 @@ import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
 
-Deno.test('a hero visits whole regions once and keeps them across sessions', () => {
+test('a hero visits whole regions once and keeps them across sessions', () => {
   let previous = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage')
   let entries = new Map<string, string>()
   Object.defineProperty(globalThis, 'sessionStorage', {
@@ -82,7 +83,7 @@ Deno.test('a hero visits whole regions once and keeps them across sessions', () 
   }
 })
 
-Deno.test('saved cell circles become the regions they touched', () => {
+test('saved cell circles become the regions they touched', () => {
   let cell: [number, number] | null = null
   for (let z = -10; z < 20 && !cell; z++) {
     for (let x = -10; x < 20 && !cell; x++) {
@@ -97,7 +98,7 @@ Deno.test('saved cell circles become the regions they touched', () => {
   assertEquals(ids.has(regionOf((x + 0.5) * 20 + 26, (z + 0.5) * 20)), true)
 })
 
-Deno.test('transition map reads old cells while new visits arrive', () => {
+test('transition map reads old cells while new visits arrive', () => {
   let hero = 'old-hero'
   let old: Bundle[] = [{
     entity: { eid: 'old-cell' },

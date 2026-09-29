@@ -1,4 +1,5 @@
 // The encoded-word decoder, table-tested: Q and B, folds, fallbacks.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { unmime } from './rfc2047.ts'
 let { assertEquals } = await import('@std/assert')
@@ -57,6 +58,6 @@ let cases: [string, string, string][] = [
   ],
 ]
 
-Deno.test('unmime: the RFC 2047 display table', () => {
+test('unmime: the RFC 2047 display table', () => {
   for (let [name, input, want] of cases) assertEquals(unmime(input), want, name)
 })

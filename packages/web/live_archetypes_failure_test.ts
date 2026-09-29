@@ -1,5 +1,6 @@
 // A descriptor that does not hash to its id is never trusted, and a read the
 // host refused is asked again on the next render.
+import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import { eidOf } from '@yaks/archetype'
@@ -8,7 +9,7 @@ import { applyLocal, config } from './live.ts'
 import { host } from './host_testing.ts'
 import { tick } from './testing.ts'
 
-Deno.test('malformed or misaddressed descriptors are never trusted', () => {
+test('malformed or misaddressed descriptors are never trusted', () => {
   let descriptor = (id: string, tables: string) =>
     applyLocal([
       { eid: id, name: 'entity', comp: { eid: id } },
@@ -21,7 +22,7 @@ Deno.test('malformed or misaddressed descriptors are never trusted', () => {
   assertThrows(() => archetypeTables('wrong-id'), Error, 'wrong-id')
 })
 
-Deno.test('failed descriptor reads release and can retry on the next render', async () => {
+test('failed descriptor reads release and can retry on the next render', async () => {
   let prior = config.host
   config.host = 'archetypes.test'
   let answers = 0

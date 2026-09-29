@@ -1,3 +1,4 @@
+import { test } from '@yaks/testing'
 import { h } from 'preact'
 import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
@@ -10,7 +11,7 @@ import { transcriptViews } from './transcript.ts'
 
 let { vocab } = await words(at())
 
-Deno.test('transcript dims sequence and tool prose and colors each entry kind', async () => {
+test('transcript dims sequence and tool prose and colors each entry kind', async () => {
   let kinds = [
     'input',
     'output',
@@ -65,7 +66,7 @@ Deno.test('transcript dims sequence and tool prose and colors each entry kind', 
   }
 })
 
-Deno.test('queries outrank generic rows; overlapping facets use declared tie order', () => {
+test('queries outrank generic rows; overlapping facets use declared tie order', () => {
   let entry: Bundle = {
     entity: { eid: 'e' },
     entry: { seq: 1 },
@@ -108,7 +109,7 @@ Deno.test('queries outrank generic rows; overlapping facets use declared tie ord
   }
 })
 
-Deno.test('message markdown is semantic ANSI while tool results remain literal', async () => {
+test('message markdown is semantic ANSI while tool results remain literal', async () => {
   let source =
     '# Heading\n\n**bold** and *italic* and `code`\n\n- item\n\n[x](javascript:alert)\n\n<script>bad</script>'
   for (let result of [false, true]) {
@@ -141,7 +142,7 @@ Deno.test('message markdown is semantic ANSI while tool results remain literal',
   }
 })
 
-Deno.test('user inputs share composer borders, machine entries do not', async () => {
+test('user inputs share composer borders, machine entries do not', async () => {
   for (
     let [extra, boxed] of [
       [{}, true],
@@ -178,7 +179,7 @@ Deno.test('user inputs share composer borders, machine entries do not', async ()
   }
 })
 
-Deno.test('attachment renderer reserves lazy image cells only with explicit graphics configuration', async () => {
+test('attachment renderer reserves lazy image cells only with explicit graphics configuration', async () => {
   let loads = 0
   let entry = {
     entity: { eid: 'image-entry' },
@@ -208,7 +209,7 @@ Deno.test('attachment renderer reserves lazy image cells only with explicit grap
   }
 })
 
-Deno.test('ask entries carrying served using metadata are not empty inputs', async () => {
+test('ask entries carrying served using metadata are not empty inputs', async () => {
   let entry: Bundle = {
     entity: { eid: 'ask-with-using' },
     entry: { session: 's', seq: 3 },
@@ -230,7 +231,7 @@ Deno.test('ask entries carrying served using metadata are not empty inputs', asy
   }
 })
 
-Deno.test('boxed user Markdown preserves explicit newlines and paragraph separation', async () => {
+test('boxed user Markdown preserves explicit newlines and paragraph separation', async () => {
   let source = 'first\n**second**\n\nthird\n*fourth*'
   let entry: Bundle = {
     entity: { eid: 'multiline-user' },
@@ -258,7 +259,7 @@ Deno.test('boxed user Markdown preserves explicit newlines and paragraph separat
   }
 })
 
-Deno.test('instruction snapshots display one clipped provenance row without changing source', async () => {
+test('instruction snapshots display one clipped provenance row without changing source', async () => {
   let source = 'PRIVATE instruction\n\n'.repeat(10000)
   for (let scope of ['shared', 'local']) {
     for (let width of [80, 18, 1]) {
@@ -296,7 +297,7 @@ Deno.test('instruction snapshots display one clipped provenance row without chan
   }
 })
 
-Deno.test('prompt source metadata cannot insert extra transcript rows', async () => {
+test('prompt source metadata cannot insert extra transcript rows', async () => {
   let entry: Bundle = {
     entity: { eid: 'instruction' },
     entry: { seq: 2 },
@@ -322,7 +323,7 @@ Deno.test('prompt source metadata cannot insert extra transcript rows', async ()
   }
 })
 
-Deno.test('fenced code fills the boxed message interior without changing source', async () => {
+test('fenced code fills the boxed message interior without changing source', async () => {
   let source = '```text\nshort\n\nlast\n```'
   let entry: Bundle = {
     entity: { eid: 'code-message' },
@@ -347,7 +348,7 @@ Deno.test('fenced code fills the boxed message interior without changing source'
   }
 })
 
-Deno.test('shell call shows command arguments, and a call without them the ordinary view', async () => {
+test('shell call shows command arguments, and a call without them the ordinary view', async () => {
   for (const args of [{ command: 'printf hello\npwd' }, undefined]) {
     const entry: Bundle = {
       entity: { eid: 'shell-call' },
@@ -371,7 +372,7 @@ Deno.test('shell call shows command arguments, and a call without them the ordin
   }
 })
 
-Deno.test('result previews cap source and wrapped rows without changing stored text', async () => {
+test('result previews cap source and wrapped rows without changing stored text', async () => {
   for (
     const source of [
       Array.from({ length: 100 }, (_, i) => 'row ' + i).join('\n'),
@@ -403,7 +404,7 @@ Deno.test('result previews cap source and wrapped rows without changing stored t
   }
 })
 
-Deno.test('input Markdown uses normal brightness and preserves emphasis', async () => {
+test('input Markdown uses normal brightness and preserves emphasis', async () => {
   const entry: Bundle = {
     entity: { eid: 'input' },
     entry: { session: 's', seq: 1 },
