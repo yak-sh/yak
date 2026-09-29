@@ -145,15 +145,16 @@ to this low-level adapter: it joins the supplied key directly to the directory
 path.
 
 `objectBlobs` accepts the exported `Bucket` interface. Cloudflare R2 bindings
-satisfy that interface; other object storage clients may need a wrapper. The
-package imports no cloud SDK.
+satisfy that interface; other object storage clients may need a wrapper. Its
+`open(sha)` reads object metadata first, then streams only a requested byte
+span. The package imports no cloud SDK.
 
 `bucketObjects(bucket)` is the same bucket keyed by name rather than by content:
 an `Objects` store whose caller chooses each key, as a host does for an app's
 files. Besides `has`, `put` and `get` (which throws on a miss) it has `read`
-(null on a miss), `delete`, `list(prefix)` and `uploaded(prefix)`, which maps
-each key to the moment it landed so a sweep can spare what was written a moment
-ago. `list` and `uploaded` read every page of the listing.
+(null on a miss), `load` (bytes and a validator in one read), `open` (metadata
+then a streamed span), `delete`, `list(prefix)` and `uploaded(prefix)`, which
+maps each key to when it landed. `list` and `uploaded` read every page.
 
 ## Reading it back
 
@@ -234,13 +235,18 @@ signatures (`image/png`, `image/jpeg`, `image/gif`, `image/webp`), and
 `undefined` for anything else.
 
 `served(bytes, { mime?, name?, etag? }, request)` creates a byte-range capable
-HTTP response with `content-security-policy: sandbox; script-src 'none'`,
-`x-content-type-options: nosniff`, and an optional inline filename disposition.
+HTTP response with `x-content-type-options: nosniff` and an optional inline
+filename disposition. Documents keep `content-security-policy: sandbox;
+script-src 'none'`; audio and video keep their origin with `script-src 'none'`
+so a browser's native player can fetch them.
 The response can be cached but revalidates because its mime and name may change
 while the bytes keep their address. `validator(address, meta)` makes the ETag
 for those bytes and metadata. Scripts are blocked; the policy does not mean an
 HTML or SVG document cannot render. `ranged(bytes, request, headers)` serves the
 same byte-range behavior when a caller supplies its own response headers.
+`servedOpen` and `rangedOpen` accept an opened object and stream the selected
+span without loading the whole file; conditional responses and HEAD need no
+body read.
 `mimeOf(name)` gives deployed files and named uploads one media type lookup.
 
 `artifactDoc` declares `artifact { address, media_type, size }` and an
