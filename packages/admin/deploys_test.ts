@@ -1,6 +1,6 @@
 // The deploy history's pure seams: how Wrangler's JSON joins uploads to
 // commits, where a data boundary is, and which version a rollback may land on.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError } from '@yaks/tools'
 import { Refused } from './accounts.ts'
@@ -225,20 +225,28 @@ test('main history keeps a data boundary after Wrangler ages its deployment out'
 
 test('stopping a platform command interrupts its whole process group', async () => {
   let stopping = new AbortController()
-  let started = Date.now()
+  let dir = Deno.makeTempDirSync()
+  let mark = `${dir}/started`
+  // A shell whose pipeline outlives it: once the mark is written, a process
+  // of its own holds the output open, so only killing the group ends it.
   let ran = command(
-    Deno.cwd(),
-    Deno.execPath(),
-    [
-      'eval',
-      `new Deno.Command(Deno.execPath(), { args: ['eval', 'await new Promise(() => {})'] }).spawn(); await new Promise(() => {})`,
-    ],
+    dir,
+    'sh',
+    ['-c', 'sleep 60 | { touch "$0"; sleep 60; }', mark],
     stopping.signal,
   )
-  setTimeout(() => stopping.abort(), 50)
-  let error = await assertRejects(() => ran, CallError, 'was interrupted')
-  assertEquals(error.code, 'interrupted')
-  assert(Date.now() - started < 2_000, 'the child process group stayed alive')
+  try {
+    await until(() => Deno.lstat(mark).then(() => true, () => false), {
+      label: 'the pipeline',
+    })
+    let started = Date.now()
+    stopping.abort()
+    let error = await assertRejects(() => ran, CallError, 'was interrupted')
+    assertEquals(error.code, 'interrupted')
+    assert(Date.now() - started < 2_000, 'the child process group stayed alive')
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
 })
 
 test('a command failure is still a defect when the host is not stopping', async () => {
@@ -246,12 +254,12 @@ test('a command failure is still a defect when the host is not stopping', async 
     () =>
       command(
         Deno.cwd(),
-        Deno.execPath(),
-        ['eval', 'Deno.exit(143)'],
+        'sh',
+        ['-c', 'exit 143'],
         new AbortController().signal,
       ),
     Error,
-    'deno eval exited 143',
+    'sh -c exited 143',
   )
   assert(!(error instanceof CallError))
 })
