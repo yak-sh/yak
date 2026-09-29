@@ -21,11 +21,9 @@ import { timed } from '@yaks/api'
 import { type Registered, registration } from '@yaks/connections'
 import { type And, and, eq, ge, limit, want } from '@yaks/query'
 import { CallError, valueIn } from '@yaks/tools'
-import { LINK } from '../../workers/yak/link.ts'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
-import { PLATFORM, SLUG } from '../../workers/yak/route.ts'
+import { INVITE, LINK, PLATFORM, SLUG } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
-import { INVITE } from '../../workers/yak/invite.ts'
 
 // The zone this client points at, so a probe can aim somewhere else.
 export let zone = () => Deno.env.get('YAKS_ZONE') ?? PLATFORM

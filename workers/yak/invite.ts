@@ -26,10 +26,8 @@ import { reachChanged } from './declared.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost, url as hostUrl } from './host.ts'
 import { closed, invited, lost } from './pages.ts'
+import { INVITE } from './route.ts'
 import { refuse } from './tool.ts'
-
-/** Where an invitation is accepted, on the platform's own host. */
-export let INVITE = '/invite'
 
 /** Invitations one person may send in an hour. Enough to bring a whole team
  * or a class in at once, few enough that a loop aimed at strangers stops

@@ -100,7 +100,6 @@ import {
 } from './erase.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import {
-  LINK,
   links,
   type Once,
   onceLink,
@@ -111,7 +110,7 @@ import {
 } from './link.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { door, INVITE } from './invite.ts'
+import { door } from './invite.ts'
 import { mail, mailable } from './mail.ts'
 import { fault } from './unseen.ts'
 
@@ -136,7 +135,17 @@ import {
   deleted,
   lost,
 } from './pages.ts'
-import { hostOf, MANAGE, OAUTH, onZone, RESERVED, says, SLUG } from './route.ts'
+import {
+  hostOf,
+  INVITE,
+  LINK,
+  MANAGE,
+  OAUTH,
+  onZone,
+  RESERVED,
+  says,
+  SLUG,
+} from './route.ts'
 import { canon, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted } from './session.ts'

@@ -41,12 +41,8 @@
 // defend a 256-bit mac.
 import { opened, seal } from './lib/token.ts'
 import { type Row, shelf } from './grants.ts'
-import { PLATFORM } from './route.ts'
+import { LINK, PLATFORM } from './route.ts'
 import { refuse } from './tool.ts'
-
-// Where a link is spent. Under `/login/`, so index.ts already routes it to the
-// identity part with the rest of the sign-in surface.
-export let LINK = '/login/link'
 
 // A standing link's life: what a minter gets by asking for nothing, and the
 // most anyone may ask for. Thirty days is a review cycle; a year is the

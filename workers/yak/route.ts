@@ -66,6 +66,13 @@ export let enabling = (to: string, enable: string[] = []) =>
 // the apex.
 export let OURS = '/_yaks'
 
+// Where a sign-in link is spent (link.ts). Under `/login/`, so index.ts
+// already routes it to the identity part with the rest of the sign-in surface.
+export let LINK = '/login/link'
+
+/** Where an invitation is accepted, on the platform's own host (invite.ts). */
+export let INVITE = '/invite'
+
 // What the plans cost, as a page (public/pricing.html, D-32751). It lives here
 // — beside the platform's own name, in the module with no dependencies —
 // because both halves of the paid tier need it and they must not import each
