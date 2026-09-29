@@ -58,7 +58,7 @@ import type {
   Value,
   Walk,
 } from '@yaks/query'
-import { bare } from '@yaks/query'
+import { bare, directive } from '@yaks/query'
 import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab'
 import { Unknown } from '@yaks/vocab'
 import {
@@ -1002,18 +1002,6 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 // `*` add projected columns; near/edges are refused unless an extension claims
 // them, in which case they filter like any other clause.
 let UNREACHED = new Set(['near', 'edges'])
-let DIRECTIVES = new Set([
-  'order',
-  'near',
-  'count',
-  'distinct',
-  'tally',
-  'fields',
-  'every',
-  'limit',
-  'after',
-  'edges',
-])
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
 
@@ -1036,9 +1024,7 @@ let screen = (
   e: Extension,
 ): Raw | null => {
   let mine = new Set(Object.keys(e.compile))
-  let rest = ast.clauses.filter((c) =>
-    !mine.has(c.kind) && !DIRECTIVES.has(c.kind)
-  )
+  let rest = ast.clauses.filter((c) => !mine.has(c.kind) && !directive(c))
   if (!rest.length) return null
   let quiet = (opts.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
   return render(
@@ -1100,7 +1086,7 @@ export let bound = (
       throw new Unsupported(`.${c.kind}`)
     }
   }
-  let filters = cs.filter((c) => !DIRECTIVES.has(c.kind) || claims(ctx, c.kind))
+  let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
   let where = and(
     ...conjuncts(ctx, addressed(ctx, filters)),
     cond(ctx.d.live()),

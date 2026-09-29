@@ -72,7 +72,7 @@ The exported builders are:
 | composition   | `and or`                                                                            |
 | traversal     | `walk`                                                                              |
 | directives    | `order near refs hasRefs count distinct tally fields field every limit after edges` |
-| accessors     | `clauses orderOf nearOf windowOf declared bare`                                     |
+| accessors     | `clauses directive orderOf nearOf windowOf declared bare`                           |
 
 ## The query format
 
@@ -168,7 +168,9 @@ Between terms, whitespace, `&` and `,` all mean AND, and each term stands on its
 own; `&` is the form that survives in a URL query string. `|` between terms is
 OR, and it binds more loosely than the AND of adjacent terms, so
 `.a=1 .b=2|.c=3` is `(a and b) or c`. Parentheses group: `.a=1 (.b=2|.c=3)` is
-`a and (b or c)`. An empty alternative beside a `|` is refused.
+`a and (b or c)`. An empty alternative beside a `|` is refused. A directive
+(below) belongs to the whole query wherever it is written, so `.a|.b&.limit=2`
+is at most two of `a or b`, never `b` cut to two.
 
 Inside a value, `,` is the any-of operator. A list has no spaces and no empty
 member: `.p=a,b` is one clause, and `.p=a, b` is refused rather than repaired. A
@@ -188,7 +190,9 @@ component `env`, where `env` searches for the word.
 ### Directives
 
 Reserved directives appear beside component predicates. Most control ordering,
-projection, aggregation or pagination; `.refs` filters by references:
+projection, aggregation or pagination, and the parser lifts each of those to the
+top-level clause list, where `directive(clause)` finds it; `.refs` filters by
+references:
 
 | written                | meaning                                                                                                                                   |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |

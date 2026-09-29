@@ -304,6 +304,11 @@ export let QUERIES: string[] = [
   '.kind=book&.order=price&.after=9',
   // an anchor no entity has restarts from the first page
   '.kind=book&.order=price&.limit=2&.after=99999',
+  // alternation, and a window over all of it wherever it is written
+  '.kind=member|.kind=review',
+  '.kind=member|.kind=review&.limit=2',
+  '.kind=member&.limit=2|.kind=review',
+  '.kind=member|.kind=book&.order=price&.limit=2&.after=6',
   // combinations
   'spring .price<20',
   '.kind=book&.available=1&.price<10',

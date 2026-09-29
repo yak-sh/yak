@@ -32,6 +32,7 @@ import {
   type After,
   type And,
   type Clause,
+  directive,
   type Distinct,
   type Limit,
   type Order,
@@ -89,24 +90,12 @@ let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 let indexed = (from: Source): Index =>
   Array.isArray(from) ? index(from) : from as Index
 
-// The directives that sit in the clause list without filtering anything, and
-// the ones a selection refuses: an aggregate is a row shape, not a selection
-// of entities (rows() lifts it out first), and `.near` and `.edges` need an
-// index no bundle holds. A
+// The directives a selection refuses: an aggregate is a row shape, not a
+// selection of entities (rows() lifts it out first), and `.near` and `.edges`
+// need an index no bundle holds. Every other directive (@yaks/query
+// `directive()`) sits in the clause list without filtering anything: a
 // projection (`fields`, `*`) names which properties the result should carry and
 // nothing about which bundles match, so it is carried along and never tested.
-let DIRECTIVES = new Set([
-  'order',
-  'near',
-  'count',
-  'distinct',
-  'tally',
-  'fields',
-  'every',
-  'limit',
-  'after',
-  'edges',
-])
 let DECLINED = new Set([
   'near',
   'count',
@@ -186,7 +175,7 @@ let compiled = (
   for (let c of cs) {
     if (DECLINED.has(c.kind)) throw new Unsupported(`.${c.kind}`, '', BY)
   }
-  let filters = cs.filter((c) => !DIRECTIVES.has(c.kind))
+  let filters = cs.filter((c) => !directive(c))
   let { test, needs } = compile(ctx, { kind: 'and', clauses: filters })
   return { cs, test, needs }
 }

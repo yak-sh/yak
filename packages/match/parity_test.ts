@@ -84,6 +84,24 @@ Deno.test('every query selects the same entities', () => {
   }
 })
 
+Deno.test('a window cuts the whole alternation, on both sides', () => {
+  let s = sql()
+  let sides = [
+    (q: string) => eids(matcher(q, shop, { now: NOW })(bundles)),
+    (q: string) => eids(fromSql(s, q)),
+  ]
+  for (let side of sides) {
+    let whole = side('.kind=member|.kind=review&.limit=9')
+    assertEquals(whole.length, 4)
+    for (
+      let q of [
+        '.kind=member|.kind=review&.limit=2',
+        '.kind=member&.limit=2|.kind=review',
+      ]
+    ) assertEquals(side(q), whole.slice(0, 2), q)
+  }
+})
+
 Deno.test('an aggregate answers the same rows on both sides', () => {
   let s = sql()
   for (

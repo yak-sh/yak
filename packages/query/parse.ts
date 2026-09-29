@@ -29,6 +29,7 @@ import {
   and,
   Clause,
   Dir,
+  directive,
   every,
   Op,
   or,
@@ -657,8 +658,22 @@ let fresh = (q: string, opts: ParseOpts): And => {
   if (groups.length > 1 && groups.some((g) => !g.length)) {
     throw new SyntaxError(`an empty alternative beside |: ${q}`)
   }
-  let out = groups.length == 1
-    ? groups[0]
-    : [or(...groups.map((g) => g.length == 1 ? g[0] : and(...g)))]
+  let out = groups.length == 1 ? groups[0] : alternation(groups)
   return { kind: 'and', clauses: out.length ? out : [{ kind: 'never' }] }
+}
+
+// The alternatives beside `|`, with every directive lifted out to the whole
+// query: a directive shapes the answer, wherever it is written, so
+// `.a|.b&.limit=2` is at most two of (a or b), never b cut to two. An
+// alternative that held nothing but directives leaves nothing to choose by.
+let alternation = (groups: Clause[][]): Clause[] => {
+  let alts = groups
+    .map((g) => g.filter((c) => !directive(c)))
+    .filter((g) => g.length)
+  return [
+    ...(alts.length > 1
+      ? [or(...alts.map((g) => g.length == 1 ? g[0] : and(...g)))]
+      : alts.flat()),
+    ...groups.flatMap((g) => g.filter(directive)),
+  ]
 }

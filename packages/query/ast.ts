@@ -64,7 +64,7 @@ export type Never = { kind: 'never' }
 export type Order = { kind: 'order'; value: string }
 export type Near = { kind: 'near'; value: string }
 // `.refs=X` backlinks of X, `.refs` references anything, `!refs` references
-// nothing (op '=' with an empty value).
+// nothing (op '=' with an empty value). A reserved name, but a filter.
 export type Refs = { kind: 'refs'; op: '=' | '!'; value: string }
 export type Count = { kind: 'count' }
 export type Distinct = { kind: 'distinct'; path: string[] }
@@ -363,6 +363,34 @@ export let edges = (
 // the list by hand.
 
 export let clauses = (ast: Query): Clause[] => ast.clauses
+
+// The directives that shape an answer rather than choose it: they rank,
+// project, aggregate or window whatever the filters select, so each belongs to
+// the whole query and sits in its top-level list. `.refs` is a reserved name
+// too, but it filters.
+let SHAPES = new Set([
+  'order',
+  'near',
+  'count',
+  'distinct',
+  'tally',
+  'fields',
+  'every',
+  'limit',
+  'after',
+  'edges',
+])
+
+/** Whether a clause shapes the answer rather than choosing it.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * import { directive, eq, hasRefs, limit } from '@yaks/query'
+ *
+ * assert(directive(limit(2)) && !directive(eq('a', 1)) && !directive(hasRefs()))
+ * ```
+ */
+export let directive = (c: Clause): boolean => SHAPES.has(c.kind)
 
 export let orderOf = (ast: Query): string | undefined =>
   ast.clauses.find((c): c is Order => c.kind == 'order')?.value

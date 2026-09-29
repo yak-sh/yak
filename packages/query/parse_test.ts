@@ -210,6 +210,26 @@ Deno.test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
   assertThrows(() => parse('(.a=1'), Error, 'unclosed group')
 })
 
+Deno.test('a directive shapes the whole query, wherever it is written', () => {
+  let a = present('a')
+  let b = present('b')
+  for (
+    let q of [
+      '.a|.b&.limit=2',
+      '.a&.limit=2|.b',
+      '.a|.b|.limit=2',
+      '(.a|.b .limit=2)',
+      '(.a .limit=2)|.b',
+    ]
+  ) assertEquals(parse(q), and(or(a, b), limit(2)), q)
+  assertEquals(
+    parse('.c (.a|.b&.order=hot) *'),
+    and(present('c'), or(a, b), order('hot'), every()),
+  )
+  // `.refs` is a reserved name, but it filters
+  assertEquals(parse('.a|.refs=T-1'), and(or(a, refs('T-1'))))
+})
+
 // A compiler keys its compiled form on the tree, so the same text is read once
 // into one tree, and nobody holding it can change it under the others.
 Deno.test('the same text reads to one tree that no caller can change', () => {
