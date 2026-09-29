@@ -2,7 +2,8 @@
 // row, so two visits to the same fire agree on one fact. A signed-out hero's
 // discoveries stay in this tab, as their last-seen spot does (seen.ts).
 import { writer } from './chat.ts'
-import { type Bundle, comp, type Me } from './net.ts'
+import { comp } from './bundle.ts'
+import type { Bundle, Me } from './net.ts'
 import { type Village, villageOf, villagesNear } from './terrain.ts'
 
 // Close enough to tend a fire, in metres.

@@ -51,7 +51,8 @@ import { publish, pulses, replay } from './combat.ts'
 import type { Intent } from './input.ts'
 import { ITEMS } from './items.ts'
 import { HOME, type Spot } from './levels.ts'
-import { type Bundle, comp, type Net, num, str } from './net.ts'
+import { comp, num, str } from './bundle.ts'
+import type { Bundle, Net } from './net.ts'
 import { GIVERS, type Quest, QUESTS, questXp } from './quests.ts'
 import {
   biteOf,

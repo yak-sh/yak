@@ -15,7 +15,6 @@
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
 import { type Client, client, type Watch } from '@yaks/client'
 import { comp, num, str } from './bundle.ts'
-export { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, REACH } from './area.ts'
 import { writer } from './chat.ts'

@@ -909,6 +909,8 @@ export let goings = (
  * import { GIVERS } from './quests.ts'
  * import { lifeOf } from './lives.ts'
  * import { vale } from './terrain.ts'
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * let wren = GIVERS.find((g) => g.id == 'wren')!
  * let v = vale()
  * assertEquals(where(wren, v, [], 900_000), lifeOf(wren, v).home)

@@ -57,6 +57,8 @@ let boxOf = (id: string): Box => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * let west = exits('mossvale').find((e) => e.to == 'birchmere')!
  * assertEquals([west.side, west.at[0]], ['west', -32])
  * ```

@@ -45,6 +45,8 @@ let FOUND = 0x8e8b82
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { vale } from './terrain.ts'
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * let c = chunk(vale(1), 4, 4, true)
  * // Every corner lies within the chunk's square, give or take a prop's reach.
  * let xs = [...c.solid.pos].filter((_, i) => i % 3 == 0)

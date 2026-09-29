@@ -198,7 +198,9 @@ export let solo = (label: string, p: Piece): string =>
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedItems } from './items_fixture.ts'
  * import { piece } from './rarity.ts'
+ * seedItems()
  * let hero = { lvl: 3, learned: [] }
  * let h = { eid: 'a', kind: 'helm2', n: 1 }
  * let bag = { label: 'In your bag', p: piece(h), worn: { head: h } }

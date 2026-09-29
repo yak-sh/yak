@@ -37,11 +37,11 @@ Models in the catalog answer one of two shapes, and both are read: the binding's
 own (`response`, and a flat `tool_calls` of `{name, arguments}`) or OpenAI's
 chat completion (`choices[0].message`). A third-party model such as Jev answers
 inside AI Gateway's envelope, `{state, result}` (with optional
-`gatewayMetadata`), and `said()`
-takes its `result` out before anything is read. A call that arrives without an
-id is given one derived from the reply's, so a result can always name its call.
-`usage.prompt_tokens`, `completion_tokens`, `total_tokens` and `cached_tokens`
-become the reply's usage; a count the model leaves out stays unknown.
+`gatewayMetadata`), and `said()` takes its `result` out before anything is read.
+A call that arrives without an id is given one derived from the reply's, so a
+result can always name its call. `usage.prompt_tokens`, `completion_tokens`,
+`total_tokens` and `cached_tokens` become the reply's usage; a count the model
+leaves out stays unknown.
 
 `usageOf(answer)` is that reading, exported, for whoever holds a raw answer from
 the binding (a meter counting a call made without this package): it reads a chat

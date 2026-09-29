@@ -26,6 +26,8 @@ let bytes = (hex: number) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255]
  * ```ts
  * import { assert } from '@std/assert'
  * import { spotOf } from './regions.ts'
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * let px = chart(0, 0, 128, 2)
  * let at = ([x, z]: [number, number]) => {
  *   let i = (Math.floor(x / 2) + Math.floor(z / 2) * 64) * 4

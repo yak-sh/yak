@@ -1059,6 +1059,8 @@ let LAID = 5.5
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedBuildings } from './buildings_fixture.ts'
+ * seedBuildings()
  * let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
  * let b = v.buildings(64, 64, 0)[0]
  * assertEquals(lay(b, 63, 64, 7), { h: 5, path: false }) // inside
@@ -1192,6 +1194,8 @@ let housing = (
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedBuildings } from './buildings_fixture.ts'
+ * seedBuildings()
  * let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
  * assertEquals(stationsNear(v, 64, 64, 12).map((s) => s.craft), ['forge'])
  * assertEquals(stationsNear(v, 90, 64, 12), [])
@@ -1360,8 +1364,8 @@ export let installBuildingDesigns = (rows: Bundle[]): {
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { regionOf } from './regions.ts'
- * import { seedThemes } from './themes_fixture.ts'
- * seedThemes()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * // A chunk grown alone meets its neighbour at their seam: the column past
  * // its east edge is its neighbour's first, and its last is the column
  * // before the neighbour's.
@@ -1693,6 +1697,8 @@ export let standAt = (v: Vale, p: Prop): number => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedBuildings } from './buildings_fixture.ts'
+ * seedBuildings()
  * // Flat ground 5 m up, under a hall.
  * let hall = { kind: 'hall.plaster', x: 30, z: 30, seed: 0 }
  * let v = flat(5, [], [hall])

@@ -436,7 +436,9 @@ export let walled = (
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedBuildings } from './buildings_fixture.ts'
  * import { flat } from './terrain.ts'
+ * seedBuildings()
  * let v = flat(5, [], [{ kind: 'smithy.plaster', x: 64, z: 64, seed: 0 }])
  * let b = v.buildings(64, 64, 0)[0]
  * // Inside on the ground floor: everything over its ceiling fades.

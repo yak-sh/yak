@@ -143,7 +143,7 @@ export let bearing = (yaw: number) =>
  * let home = v.buildings(30, 30, 0)[0]
  * let cam = {
  *   yaw: 0, pitch: 1.1, dist: 9, reach: 9, x: 30, y: 7, z: 30,
- *   shake: 0, snap: false, lift: 0,
+ *   shake: 0, snap: false, orbiting: false, lift: 0,
  * }
  * let camera = new THREE.PerspectiveCamera()
  * aim(cam, camera, new THREE.Vector3(30, home.floors[0] + 1.5, 30),

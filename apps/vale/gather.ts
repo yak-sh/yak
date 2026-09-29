@@ -506,6 +506,8 @@ let placed = new Map<string, Node[]>()
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * let nodes = nodesOf('mossvale')
  * assert(nodes.length > 0)
  * // The same nodes, by the same names, however often asked.

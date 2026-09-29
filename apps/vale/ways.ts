@@ -319,6 +319,8 @@ export let bedAt = ({ bed }: Road, t: number) => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * // Mossvale's road west, to Birchmere, meets its village streets.
  * let [road] = roadsIn(65, 120, 90, 140, 10).filter((r) => r.to == 'mossvale')
  * assertEquals(road.from, 'birchmere')

@@ -217,6 +217,8 @@ let HEARD = 30
  * import { assertEquals } from '@std/assert'
  * import { originOf } from './regions.ts'
  * import { flat } from './terrain.ts'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * // A pool 8 m round a spot in a region's cell, in the vale and in a marsh.
  * let heard = (level: string, dx: number) => {
  *   let [ox, oz] = originOf(level), px = ox + 60, pz = oz + 60

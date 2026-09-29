@@ -344,7 +344,7 @@ export let workerOf = (v) => {
     seen = next
   }
   return {
-    async fetch(req, env) {
+    fetch(req, env) {
       let path = new URL(req.url).pathname
       if (req.method == 'POST' && path.endsWith('/companion/tick')) {
         return tick(req, env, v, themes)

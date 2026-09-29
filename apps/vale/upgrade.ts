@@ -22,6 +22,8 @@ export let MOST = 5
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * assertEquals(madeBy('sword2')?.at, 'forge')
  * assertEquals(madeBy('robe2')?.at, 'loom')
  * assertEquals(madeBy('blade4')?.makes, 'axe3')
@@ -40,6 +42,8 @@ export let madeBy = (kind: string): Recipe | undefined => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * assertEquals(upgradeOf('sword2', 0)?.needs, [['metal', 2]])
  * assertEquals(upgradeOf('robe1', 2)?.needs, [['cloth', 4], ['gems', 1]])
  * assertEquals(upgradeOf('bow3', 4), {
@@ -112,6 +116,8 @@ export let upgradeXp = (tier: number, to: number): number =>
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * let rows = [{ item: 'a', at: 2 }, { item: 'a', at: 1 }, { item: 'b', at: 3 }]
  * let kinds = new Map([['a', 'sword2'], ['b', 'bow1']])
  * assertEquals(upgradeWorth(rows, kinds), [

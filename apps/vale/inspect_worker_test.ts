@@ -91,7 +91,9 @@ Deno.test('inspect worker resolves land and villager names', async () => {
         let line = new URL(path, 'https://store.test/').searchParams.get('q') ??
           ''
         return Promise.resolve(Response.json(
-          line == '.theme_design' ? themeRows : line.startsWith('.eid=')
+          line == '.theme_design'
+            ? themeRows
+            : line.startsWith('.eid=')
             ? [project(elder, line)]
             : [],
         ))

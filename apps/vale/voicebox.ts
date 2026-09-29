@@ -13,7 +13,8 @@
 //
 // How loud each voice is heard is voice.ts's.
 import type { Call, Heard, Loop } from '@yaks/rtc'
-import { comp, type Net, str } from './net.ts'
+import { comp, str } from './bundle.ts'
+import type { Net } from './net.ts'
 import type { Frame } from './play.ts'
 import type { Body } from './sim.ts'
 import { sound } from './sound.ts'
