@@ -191,6 +191,19 @@ Deno.test('typed questions go as state and come back answered by name', async ()
   assertEquals(reply.items, [])
   assertEquals(reply.answers, { plan, greet: { type: 'noul', noul: 0 } })
   assertEquals(reply.usage, { input_tokens: 380, output_tokens: 45 })
+
+  // AI Gateway omits gatewayMetadata on some completed partner replies.
+  let withoutMetadata = binding({
+    state: 'Completed',
+    result: {
+      model: 'jev-1.13.0',
+      answers: { plan, greet: { type: 'noul', noul: 0 } },
+      usage: { input_tokens: 380, output_tokens: 45 },
+    },
+  })
+  let bare = await withoutMetadata.model(ask([], { questions }))
+  assertEquals(bare.answers, reply.answers)
+  assertEquals(bare.usage, reply.usage)
 })
 
 Deno.test('a reply to typed questions with no answers is a defect', async () => {

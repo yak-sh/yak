@@ -36,7 +36,8 @@ sent as `max_tokens`; without it the model's own default applies, and so does
 Models in the catalog answer one of two shapes, and both are read: the binding's
 own (`response`, and a flat `tool_calls` of `{name, arguments}`) or OpenAI's
 chat completion (`choices[0].message`). A third-party model such as Jev answers
-inside AI Gateway's envelope, `{state, result, gatewayMetadata}`, and `said()`
+inside AI Gateway's envelope, `{state, result}` (with optional
+`gatewayMetadata`), and `said()`
 takes its `result` out before anything is read. A call that arrives without an
 id is given one derived from the reply's, so a result can always name its call.
 `usage.prompt_tokens`, `completion_tokens`, `total_tokens` and `cached_tokens`

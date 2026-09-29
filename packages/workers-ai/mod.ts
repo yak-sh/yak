@@ -72,8 +72,8 @@ let count = (v: unknown) => typeof v == 'number' && v >= 0 ? v : undefined
 
 /**
  * What a model said, out of the envelope AI Gateway puts a third-party
- * model's answer in (`{state, result, gatewayMetadata}`); a model Workers AI
- * runs itself answers bare.
+ * model's answer in (`{state, result}`; `gatewayMetadata` is optional); a
+ * model Workers AI runs itself answers bare.
  *
  * ```ts
  * import { said } from '@yaks/workers-ai'
@@ -85,11 +85,15 @@ let count = (v: unknown) => typeof v == 'number' && v >= 0 ? v : undefined
  *   result: answer,
  *   gatewayMetadata: { keySource: 'Unified' },
  * }), answer)
+ * assertEquals(said({ state: 'Completed', result: answer }), answer)
+ * assertEquals(said({ result: answer, gatewayMetadata: {} }), answer)
  * assertEquals(said({ response: 'hi' }), { response: 'hi' })
  * ```
  */
 export let said = (answer: unknown): unknown =>
-  at(answer, 'gatewayMetadata') && at(answer, 'result')
+  at(answer, 'result') != undefined &&
+    (at(answer, 'state') == 'Completed' ||
+      at(answer, 'gatewayMetadata') != undefined)
     ? at(answer, 'result')
     : answer
 
