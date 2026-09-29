@@ -217,25 +217,13 @@ export let reverts = async (
   )
   if (!adds.size) return []
   let changed = [...adds.keys()]
-  // `--no-renames` as the diff above: a move names both paths, or the old one
-  // reads as the rebase's.
-  let touched = new Set(
-    lines(
-      await ask([
-        'log',
-        '--format=',
-        '--name-only',
-        '--no-renames',
-        `${base}..HEAD`,
-      ]),
-    ),
-  )
-  let found = changed.filter((f) => !touched.has(f))
-    .map((file) => ({ file, rewound: false }))
-  let rest = changed.filter((f) => touched.has(f))
-  if (!rest.length) return found
-  let past = held(
-    await ask([
+  // The rest needs nothing from itself, so it is asked at once: what the
+  // branch's commits touch, what the base's history held, and the landing
+  // tree. `--no-renames` as the diff above: a move names both paths, or the
+  // old one reads as the rebase's.
+  let [log, raw, tree] = await Promise.all([
+    ask(['log', '--format=', '--name-only', '--no-renames', `${base}..HEAD`]),
+    ask([
       'log',
       `-${DEPTH}`,
       '--format=',
@@ -246,8 +234,14 @@ export let reverts = async (
       '--no-renames',
       base,
     ]),
-  )
-  let now = blobs(await ask(['ls-tree', '-r', 'HEAD']))
+    ask(['ls-tree', '-r', 'HEAD']),
+  ])
+  let touched = new Set(lines(log))
+  let found = changed.filter((f) => !touched.has(f))
+    .map((file) => ({ file, rewound: false }))
+  let rest = changed.filter((f) => touched.has(f))
+  let past = held(raw)
+  let now = blobs(tree)
   for (let file of rest) {
     let blob = now.get(file)
     // A file the branch deletes has no landing blob and nothing to rewind to,
@@ -306,11 +300,12 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     }
     return r
   }
-  let need = async (label: string, at: string, args: string[]) => {
-    let r = await git(at, args, false)
+  let must = (label: string, r: Ran) => {
     if (r.code) throw new Error(message(label, r))
     return r.out.trim()
   }
+  let need = async (label: string, at: string, args: string[]) =>
+    must(label, await git(at, args, false))
   // What the guard reads: a git command run in this worktree whose output is
   // raw lines — a failure here is a broken read, never an answer.
   let read = async (args: string[]) => {
@@ -324,19 +319,21 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   // share one ref store — and the branch that primary worktree has checked out
   // is the base. A primary worktree with a detached HEAD has no base to land
   // onto, so refuse rather than guess. A directory git does not know is where
-  // the caller stood, and so is a worktree with no branch checked out.
+  // the caller stood, and so is a worktree with no branch checked out. The
+  // worktree's branch, the list and its status need nothing from each other,
+  // so they are asked at once and judged in that order.
   let top = await git(cwd, ['rev-parse', '--show-toplevel'], false)
   if (top.code) throw new LandError(message('land: find worktree', top))
   let tree = top.out.trim()
-  let on = await git(tree, ['symbolic-ref', '-q', '--short', 'HEAD'], false)
+  let [on, listed, status] = await Promise.all([
+    git(tree, ['symbolic-ref', '-q', '--short', 'HEAD'], false),
+    git(tree, ['worktree', 'list', '--porcelain'], false),
+    git(tree, ['status', '--porcelain=v1', '--untracked-files=all'], false),
+  ])
   if (on.code == 1) throw new LandError('land: the worktree is detached')
   if (on.code) throw new Error(message('read branch', on))
   let branch = on.out.trim()
-  let list = await need('list worktrees', tree, [
-    'worktree',
-    'list',
-    '--porcelain',
-  ])
+  let list = must('list worktrees', listed)
   let head = list.split('\n\n')[0].split('\n')
   let root = head.find((l) => l.startsWith('worktree '))?.slice(9) ?? ''
   let base = (head.find((l) => l.startsWith('branch '))?.slice(7) ?? '')
@@ -357,11 +354,7 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
 
   // Uncommitted work would not land and would break a rebase, so a dirty
   // worktree is refused: what you land must be what you tested.
-  let dirty = await need('git status', tree, [
-    'status',
-    '--porcelain=v1',
-    '--untracked-files=all',
-  ])
+  let dirty = must('git status', status)
   if (dirty) throw new LandError(`land: worktree is dirty:\n${dirty}`)
 
   // Ancestry decides which of the two things this invocation does, and it is
@@ -409,14 +402,17 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     let merged = await git(root, ['merge', '--ff-only', branch])
     if (merged.code) throw new Error(message('git merge', merged))
     let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
-    await publish(git, write, root, base)
     // The worktree and its branch survive landing: the caller does its own
     // cleanup afterwards, and a command whose working directory was unlinked
     // under it is refused by the kernel. Unlock it instead — whoever handed the
     // worktree out locked it to mark it as in use, and this is that worker
     // reporting it has finished. The unlock's exit code decides nothing: the
-    // only failure reachable is "not locked".
-    await git(root, ['worktree', 'unlock', tree], false)
+    // only failure reachable is "not locked". Neither it nor the publish
+    // needs the other, and neither throws.
+    await Promise.all([
+      publish(git, write, root, base),
+      git(root, ['worktree', 'unlock', tree], false),
+    ])
     return { landed: sha, root }
   }
 
@@ -424,14 +420,10 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
   // tests and land again. The guard runs on that second landing, once the
   // rebase is finished.
 
-  let fork = await need('find common ancestor', tree, [
-    'merge-base',
-    base,
-    branch,
-  ])
   write(`land: ${base} moved — rebasing ${branch} onto it, not merging.`)
   write(`land: changes pulled in from ${base}:`)
-  await git(tree, ['diff', '--stat', `${fork}..${base}`])
+  // Three dots: from where the branch forked to the base.
+  await git(tree, ['diff', '--stat', `${branch}...${base}`])
   let rebased = await git(tree, ['rebase', base])
   if (rebased.code) {
     // The rebase is left in progress on purpose: the caller resolves the
