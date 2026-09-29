@@ -256,26 +256,47 @@ let guarded = (dc: DerivedProp, present: string, expr: string): string =>
 // and also the component table's own owner column, so the component is present
 // exactly when that column is non-null. Returns null, declining, for a computed
 // property with no registered expression.
-type Read = { expr: string; tag: Tag; textAffinity?: boolean } | null
-let readProp = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
+export type Read = {
+  expr: string
+  tag: Tag
+  textAffinity?: boolean
+  deps?: string[]
+} | null
+
+// The same direct property read serves a filter, a projection and a rule
+// binding. The caller joins `deps` when the override needs other tables.
+export let readAt = (
+  v: Vocab,
+  d: Dialect,
+  derived: Derived,
+  comp: string,
+  prop: string,
+  owner: string,
+): Read => {
   let key = `${comp}.${prop}`
-  let dc = ctx.derived[key]
+  let dc = derived[key]
   if (dc) {
-    for (let dep of dc.deps ?? []) ctx.tables.add(dep)
     return {
       expr: guarded(dc, `${owner} is not null`, derive(dc, owner)),
       tag: dc.tag,
+      deps: dc.deps,
     }
   }
-  let def = ctx.v.prop(comp, prop)
+  let def = v.prop(comp, prop)
   if (def?.computed) return null // computed, no expression to read it
-  let expr = ctx.d.col(comp, prop, ctx.v)
+  let expr = d.col(comp, prop, v)
   if (expr == null) return null
   return {
     expr,
     tag: comp == 'entity' ? 'text' : prop == 'eid' ? 'eid' : tagOf(def!),
     textAffinity: def?.affinity == 'text' && def.category != 'ref',
   }
+}
+
+let readProp = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
+  let read = readAt(ctx.v, ctx.d, ctx.derived, comp, prop, owner)
+  for (let dep of read?.deps ?? []) ctx.tables.add(dep)
+  return read
 }
 
 // A property holding a JSON value (type object, array or a union) is read whole
@@ -1038,7 +1059,7 @@ let resolveField = (
   let h = hops[0]
   if (!h.prop) throw whole(ctx.v, h.comp)
   ctx.tables.add(h.comp)
-  let read = readProp(ctx, h.comp, h.prop, `"${h.comp}"."entity"`)
+  let read = readProp(ctx, h.comp, h.prop, ctx.d.ownerKey(h.comp))
   if (!read) throw new Unsupported('a computed property here', pathStr)
   opaque(read.tag, 'ordering or projecting by it', `${h.comp}.${h.prop}`)
   return { expr: read.expr, comp: h.comp }
@@ -1056,6 +1077,7 @@ export let bound = (
   vocab: Vocab,
   opts: BindOpts,
   d: Dialect,
+  needs: string[] = [],
 ): Select => {
   let ctx: Ctx = {
     v: vocab,
@@ -1083,6 +1105,9 @@ export let bound = (
     ...conjuncts(ctx, addressed(ctx, filters)),
     cond(ctx.d.live()),
   )
+  // Callers that read columns beside the filter ask for their joins here. A
+  // derived value can depend on another component even when no filter does.
+  for (let path of needs) resolveField(ctx, path)
 
   let count = find<Count>(cs, 'count')
   let distinct = find<Distinct>(cs, 'distinct')

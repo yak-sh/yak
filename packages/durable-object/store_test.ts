@@ -5,8 +5,12 @@
 // each of these fails loudly rather than only in production.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, match, reads } from '@yaks/graph'
+import { blobKeywords, blobRead, blobSchema } from '@yaks/blob'
+import { insert } from '@yaks/sql'
+import { loadVocab } from '@yaks/vocab'
 import { durable, shop, store } from './testing.ts'
+import { driver } from './sql.ts'
 import { storage } from './store.ts'
 import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 
@@ -42,6 +46,33 @@ Deno.test('a projected boolean reads back as true or false', () => {
   let s = store(kitchen)
   s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, recipe: RECIPE }]))
   assertEquals(s.rows(PROJECTED), [PROJECTED_ROW])
+})
+
+Deno.test('a hosted blob-backed binding projects text at every collection level', () => {
+  let vocab = loadVocab({
+    $defs: {
+      doc: {
+        component: true,
+        properties: { body: { type: 'string', store: 'blob' } },
+      },
+    },
+  }, [blobKeywords])
+  let held = durable()
+  let sql = driver(held)
+  for (let stmt of blobSchema()) sql.query(stmt)
+  let s = storage(held, vocab, { derived: blobRead(vocab) })
+  s.install()
+  s.tx((tx) => tx.patch([{ entity: { eid: 'd' }, doc: { body: 'address' } }]))
+  sql.query(insert('blob_text', { sha: 'address', value: 'hosted prose' }))
+  let flat = match('$d .doc, doc.body=$description')
+  let nested = match('[$d .doc, doc.body=$description]')
+  let found = s.tx((tx) => tx.bindings([flat, nested], [], reads(flat, vocab)))
+  assertEquals(s.read('.doc')[0].doc, { body: 'hosted prose' })
+  assertEquals(found[0][0].vars, { d: 'd', description: 'hosted prose' })
+  assertEquals(found[1][0].collections?.[0][0].vars, {
+    d: 'd',
+    description: 'hosted prose',
+  })
 })
 
 Deno.test('bytes go in as an ArrayBuffer and come back as bytes', () => {

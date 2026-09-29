@@ -49,7 +49,7 @@ import {
   table,
 } from './ast.ts'
 import { q } from './render.ts'
-import { type BindOpts, bound } from './bind.ts'
+import { type BindOpts, bound, readAt } from './bind.ts'
 import type { Extension } from './extend.ts'
 import { type Dialect, refEqAt, sqlite } from './sqlite.ts'
 
@@ -198,7 +198,18 @@ export let rule = (
         ...needs.map((hop) => present(hop.comp)),
       ],
     }
-    let r = bound(filter, vocab, { ...opts, extend, archetypes: undefined }, d)
+    // TODO: a multi-hop variable bind still reads its terminal component as
+    // though it belonged to the root entity. Route it through the binder's
+    // path projection when that interface supports bound paths.
+    let r = bound(
+      filter,
+      vocab,
+      { ...opts, extend, archetypes: undefined },
+      d,
+      p.binds.flatMap((b) =>
+        vocab.aim(b.path.join('.')).length == 1 ? [b.path.join('.')] : []
+      ),
+    )
     froms.push(...[r.from ?? []].flat())
     joins.push(...r.joins ?? [])
     if (r.where) conds.push(r.where)
@@ -233,11 +244,21 @@ export let rule = (
       if (!c) {
         throw new Error(`no property ${hop.comp}.${hop.prop} for $${b.name}`)
       }
-      let read = d.col(hop.comp, hop.prop, vocab)!
+      let read = readAt(
+        vocab,
+        d,
+        opts.derived ?? {},
+        hop.comp,
+        hop.prop,
+        d.ownerKey(hop.comp),
+      )
+      if (!read) {
+        throw new Error(`no read for ${hop.comp}.${hop.prop} in $${b.name}`)
+      }
       slot(b.name, {
         kind: c.category == 'ref' ? 'id' : 'value',
-        sql: c.category == 'ref' ? d.refCol!(hop.comp, hop.prop) : read,
-        read,
+        sql: c.category == 'ref' ? d.refCol!(hop.comp, hop.prop) : read.expr,
+        read: read.expr,
       })
     }
   })

@@ -3,6 +3,7 @@
 import { assertEquals } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
+import { match, reads } from '@yaks/graph'
 import { insert } from '@yaks/sql'
 import { mem } from './testing.ts'
 import { blobKeywords } from './keywords.ts'
@@ -57,4 +58,25 @@ Deno.test('doc predicates, paths, projections and bundles resolve the same blob'
     title: 'A title',
     body: 'resolved prose',
   })
+  let flat = match('$d .doc, doc.body=$description')
+  let nested = match(
+    '$n .note, note.target=$d; [$d .doc, doc.body=$description]',
+  )
+  let found = store.tx((tx) =>
+    tx.bindings([flat, nested], [], [
+      ...new Set([...reads(flat, vocab), ...reads(nested, vocab)]),
+    ])
+  )
+  assertEquals(found[0], [{
+    entities: ['d'],
+    vars: { d: 'd', description: 'resolved prose' },
+  }])
+  assertEquals(found[1], [{
+    entities: ['n'],
+    vars: { n: 'n', d: 'd' },
+    collections: [[{
+      entities: ['d'],
+      vars: { n: 'n', d: 'd', description: 'resolved prose' },
+    }]],
+  }])
 })
