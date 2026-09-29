@@ -14,7 +14,7 @@ import { type Index, indexOf, META } from './release_index.ts'
 import { appVocab } from './vocab.ts'
 import { verified } from './vale_sfx_seal.ts'
 import { type Args, type Ctx, refuse, type Tool } from './tool.ts'
-import { migrate } from '../../bin/migrate-vale-sfx.ts'
+import { batches, progress } from '../../bin/migrate-vale-sfx.ts'
 import {
   NEW_DESCRIPTION,
   OLD_DESCRIPTION,
@@ -203,21 +203,13 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
   }
   let { builders, builds, outputs, sounds, artifacts, citations } = before
   let store = appStore(ctx.env.STORE, space, app)
-  let [nowBuilders, nowBuilds, nowOutputs, nowSounds, allArtifacts, allCites] =
-    await Promise.all([
-      read(store, '.builder&*'),
-      read(store, '.build&*'),
-      read(store, '.built&*'),
-      read(store, '.sfx&*'),
-      read(store, '.artifact&*'),
-      read(store, '.cites&*'),
-    ])
-  let made = new Set(outputs.map((r) => r.entity.eid))
-  let nowCites = allCites.filter((r) =>
-    made.has(say((r.edge as { from?: string } | undefined)?.from))
-  )
+  let [nowBuilders, nowBuilds, nowOutputs, nowSounds] = await Promise.all([
+    read(store, '.builder&*'),
+    read(store, '.build&*'),
+    read(store, '.built&*'),
+    read(store, '.sfx&*'),
+  ])
   let blobs = new Set(artifacts.map((row) => row.entity.eid))
-  let nowArtifacts = allArtifacts.filter((row) => blobs.has(row.entity.eid))
   let declared = await json(await store('/vocab', {}, { 'x-yak-kernel': '1' }))
   let nextVocab = revisedVocab(declared)
   let ids = (rows: Bundle[]) =>
@@ -245,46 +237,6 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
     }
     return { text: `${space.slug}/${app.slug} has no sound builder rows` }
   }
-  if (
-    nowBuilders.length == 1 &&
-    nowBuilders[0].entity.eid == definition.entity.eid
-  ) {
-    let current = new Set(
-      nowOutputs.map((row) =>
-        say((row.built as { artifact?: string } | undefined)?.artifact)
-      ),
-    )
-    if (
-      before.outputs.some((row) =>
-        !current.has(say((row.built as { artifact?: string }).artifact))
-      )
-    ) throw refuse('conflict', 'a migrated sound artifact is missing')
-    if (args.check !== true && nextVocab) {
-      await json(
-        await store('/vocab', {
-          method: 'POST',
-          body: JSON.stringify(nextVocab),
-        }, { 'x-yak-kernel': '1' }),
-      )
-    }
-    return {
-      text: `Vale sound Store already migrated; audit ${audit}`,
-      value: {
-        builders: nowBuilders.length,
-        outputs: nowOutputs.length,
-        audit,
-      },
-    }
-  }
-  if (
-    ids(builders) != ids(nowBuilders) ||
-    ids(builds) != ids(nowBuilds) ||
-    ids(outputs) != ids(nowOutputs) ||
-    ids(sounds) != ids(nowSounds) ||
-    ids(artifacts) != ids(nowArtifacts) ||
-    ids(citations) != ids(nowCites) ||
-    soundRows(sounds) != soundRows(nowSounds)
-  ) throw refuse('conflict', 'Store changed after legacy snapshot')
   let [tool] = await read(
     store,
     `.eid=${say((definition.builder as { to: string }).to)}&*`,
@@ -311,16 +263,195 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
       using: definition.using as Record<string, unknown>,
     }
   })
-  let change = migrate(
+  let parts = batches(
     { builders, builds, outputs, sounds, artifacts, citations },
     definition,
     plans,
   )
+  let part = Number(args.part)
+  if (!Number.isSafeInteger(part) || part < 1 || part > parts.length + 1) {
+    throw refuse('arguments', `store part must be 1–${parts.length + 1}`)
+  }
+  let calls = new Set(
+    parts.flat().filter((row) => row.call).map((row) => row.entity.eid),
+  )
+  let added = new Set(
+    parts.flat().filter((row) => !row.$delete).map((row) => row.entity.eid),
+  )
+  let sessions = new Set(
+    parts.flat().filter((row) => row.session).map((row) => row.entity.eid),
+  )
+  let cited = new Set([
+    ...citations.map((row) => row.entity.eid),
+    ...parts.flat().filter((row) => row.cites).map((row) => row.entity.eid),
+  ])
+  let observed = async () => {
+    let [builder, build, built, cites, call, session, sfx, artifact] =
+      await Promise.all([
+        read(store, '.builder&*'),
+        read(store, '.build&*'),
+        read(store, '.built&*'),
+        read(store, '.cites&*'),
+        read(store, '.call&*'),
+        read(store, '.session&*'),
+        read(store, '.sfx&*'),
+        read(store, '.artifact&*'),
+      ])
+    return {
+      builder,
+      build,
+      built,
+      cites: cites.filter((row) => cited.has(row.entity.eid)),
+      call: call.filter((row) => calls.has(row.entity.eid)),
+      session: session.filter((row) =>
+        sessions.has(row.entity.eid) &&
+        calls.has(say((row.session as { source?: string }).source))
+      ),
+      sfx,
+      artifact: artifact.filter((row) => blobs.has(row.entity.eid)),
+    }
+  }
+  let expected = (count: number) => {
+    let rows = progress(
+      { builders, builds, outputs, sounds, artifacts, citations },
+      parts,
+      count,
+    )
+    let find = (name: string) => rows.filter((row) => row[name])
+    return {
+      builder: find('builder'),
+      build: find('build'),
+      built: find('built'),
+      cites: find('cites'),
+      call: find('call'),
+      session: find('session'),
+    }
+  }
+  let same = (
+    at: Awaited<ReturnType<typeof observed>>,
+    want: ReturnType<typeof expected>,
+  ) => {
+    let audio = new Map(at.artifact.map((row) => [row.entity.eid, row]))
+    if (
+      ids(sounds) != ids(at.sfx) ||
+      ids(artifacts) != ids(at.artifact) ||
+      soundRows(sounds) != soundRows(at.sfx) ||
+      artifacts.some((row) =>
+        JSON.stringify(row.artifact) !=
+          JSON.stringify(audio.get(row.entity.eid)?.artifact)
+      )
+    ) return false
+    for (
+      let name of [
+        'builder',
+        'build',
+        'built',
+        'cites',
+        'call',
+        'session',
+      ] as const
+    ) {
+      if (ids(want[name]) != ids(at[name])) return false
+    }
+    let rows = (
+      name: 'builder' | 'build' | 'built' | 'cites' | 'call' | 'session',
+    ) => new Map(at[name].map((row) => [row.entity.eid, row]))
+    let check = (
+      name: 'builder' | 'build' | 'built' | 'cites' | 'call' | 'session',
+      keys: string[],
+    ) => {
+      let current = rows(name)
+      return want[name].every((row) => {
+        if (
+          !calls.has(row.entity.eid) &&
+          !sessions.has(row.entity.eid) &&
+          row.entity.eid != definition.entity.eid &&
+          !added.has(row.entity.eid)
+        ) return true
+        let actual = object(current.get(row.entity.eid)?.[name])
+        let planned = object(row[name])
+        return keys.every((key) =>
+          JSON.stringify(actual[key] ?? null) ==
+            JSON.stringify(planned[key] ?? null)
+        )
+      })
+    }
+    let currentCites = rows('cites')
+    let citationsMatch = want.cites.every((row) => {
+      let actual = currentCites.get(row.entity.eid)
+      return actual &&
+        ['from', 'to'].every((key) =>
+          object(actual.edge)[key] == object(row.edge)[key]
+        ) &&
+        Object.entries(object(row.cites)).every(([key, value]) =>
+          object(actual.cites)[key] == value
+        )
+    })
+    return citationsMatch &&
+      check('builder', ['query', 'to', 'floor', 'immediate']) &&
+      check('build', ['builder', 'match', 'variant', 'key', 'call', 'stale']) &&
+      check('built', ['build', 'slot', 'key', 'call', 'artifact']) &&
+      check('call', ['to', 'source', 'args']) &&
+      check('session', ['source'])
+  }
+  let now = await observed()
+  let at = Array.from({ length: parts.length + 1 }, (_, n) => n)
+    .find((n) => same(now, expected(n)))
+  let final = expected(parts.length)
+  let activated = (state: Awaited<ReturnType<typeof observed>>) => {
+    let shared = state.builder.find((row) =>
+      row.entity.eid == definition.entity.eid
+    )
+    let oldBuilt = new Set(outputs.map((row) => row.entity.eid))
+    let oldCites = new Set(citations.map((row) => row.entity.eid))
+    return shared?.builder &&
+      (shared.builder as { immediate?: boolean }).immediate === true &&
+      ids(sounds) == ids(state.sfx) &&
+      soundRows(sounds) == soundRows(state.sfx) &&
+      ids(artifacts) == ids(state.artifact) &&
+      ids(state.builder) == ids(final.builder) &&
+      ids(state.build) == ids(final.build) &&
+      !state.built.some((row) => oldBuilt.has(row.entity.eid)) &&
+      !state.cites.some((row) => oldCites.has(row.entity.eid)) &&
+      final.built.every((row) => {
+        let kept = state.built.find((other) =>
+          other.entity.eid == row.entity.eid
+        )
+        return kept &&
+          (kept.built as { artifact?: string }).artifact ==
+            (row.built as { artifact?: string }).artifact
+      }) &&
+      final.cites.every((row) =>
+        state.cites.some((other) => other.entity.eid == row.entity.eid)
+      )
+  }
+  if (activated(now)) at = parts.length + 1
+  if (at == null) {
+    throw refuse('conflict', 'Store differs from every sealed migration step')
+  }
+  if (at >= part) {
+    if (part == parts.length + 1 && args.check !== true && nextVocab) {
+      await json(
+        await store('/vocab', {
+          method: 'POST',
+          body: JSON.stringify(nextVocab),
+        }, { 'x-yak-kernel': '1' }),
+      )
+    }
+    return { text: `Store part ${part}/${parts.length + 1} already applied` }
+  }
+  if (at != part - 1) {
+    throw refuse('conflict', `Store is at part ${at}; next is ${at + 1}`)
+  }
+  let change = part <= parts.length ? parts[part - 1] : [{
+    entity: definition.entity,
+    builder: { floor: null, immediate: true },
+  }]
   if (args.check === true) {
     return {
-      text:
-        `ready: ${builders.length} legacy builders, ${builds.length} builds, ${outputs.length} outputs, ${citations.length} citations; ${change.length} bundles`,
-      value: { bundles: change.length },
+      text: `ready part ${part}/${
+        parts.length + 1
+      }: ${change.length} bundles; ${outputs.length} preserved artifacts`,
     }
   }
   await json(
@@ -329,17 +460,25 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
       body: JSON.stringify(change),
     }, { 'x-yak-kernel': '1' }),
   )
-  if (nextVocab) {
-    await json(
-      await store('/vocab', {
-        method: 'POST',
-        body: JSON.stringify(nextVocab),
-      }, { 'x-yak-kernel': '1' }),
-    )
+  let after = await observed()
+  if (part <= parts.length && !same(after, expected(part))) {
+    throw refuse('conflict', `Store part ${part} did not read back exactly`)
+  }
+  if (part == parts.length + 1) {
+    if (!activated(after)) {
+      throw refuse('conflict', 'shared builder did not activate')
+    }
+    if (nextVocab) {
+      await json(
+        await store('/vocab', {
+          method: 'POST',
+          body: JSON.stringify(nextVocab),
+        }, { 'x-yak-kernel': '1' }),
+      )
+    }
   }
   return {
-    text:
-      `migrated ${builders.length} Vale sound builders to one shared builder; kept ${outputs.length} artifact references and ${citations.length} citations`,
+    text: `Store part ${part}/${parts.length + 1} applied and verified`,
   }
 }
 
@@ -628,6 +767,7 @@ export let valeMigration: Tool = {
       app: { type: 'string' },
       version: { type: 'number' },
       files: { type: 'object' },
+      part: { type: 'number' },
       check: { type: 'boolean' },
     },
     required: ['phase'],

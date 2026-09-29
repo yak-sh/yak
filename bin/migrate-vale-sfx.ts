@@ -169,3 +169,98 @@ export let migrate = (
     ...before.builders.map(old),
   ]
 }
+
+/** Keep each Store write small, with the shared builder asleep until the end. */
+export let batches = (
+  before: Snapshot,
+  definition: Bundle,
+  plans: Plan[],
+): Bundle[][] => {
+  let change = migrate(before, definition, plans)
+  let byId = new Map(change.map((row) => [row.entity.eid, row]))
+  let used = new Set<string>()
+  let take = (eid: string): Bundle => {
+    let row = byId.get(eid)
+    if (!row || used.has(eid)) {
+      throw new Error(`migration row ${eid} is missing`)
+    }
+    used.add(eid)
+    return row
+  }
+  let bySound = new Map(
+    plans.map((plan) => [one(plan.binding.entities, 'binding'), plan]),
+  )
+  let groups = before.builds.map((prior) => {
+    let build = get(prior, 'build')
+    let sound = one(build.inputs as string[], 'build inputs')
+    let plan = bySound.get(sound)
+    if (!plan) throw new Error(`no plan for ${sound}`)
+    let call = identityEid('call', [plan.build, 'vale-sfx-migration'])
+    let oldBuilder = String(build.builder)
+    let output = before.outputs.find((row) =>
+      get(row, 'built').builder == oldBuilder
+    )
+    let made = output
+      ? identityEid('built', [plan.build, String(get(output, 'built').slot)])
+      : null
+    let cite = made ? link(made, 'cites', sound).entity.eid : null
+    return [
+      take(plan.build),
+      take(call),
+      ...(build.session ? [take(String(build.session))] : []),
+      ...(made ? [take(made), take(cite!), take(output!.entity.eid)] : []),
+      take(prior.entity.eid),
+      take(oldBuilder),
+    ]
+  })
+  let shared = take(definition.entity.eid)
+  if (used.size != change.length) {
+    throw new Error('migration left an ungrouped row')
+  }
+  let asleep: Bundle = {
+    ...shared,
+    builder: {
+      ...get(shared, 'builder'),
+      floor: '9999-12-31T00:00:00.000Z',
+      immediate: false,
+    },
+  }
+  let parts: Bundle[][] = []
+  for (let i = 0; i < groups.length; i += 2) {
+    parts.push([
+      ...(i ? [] : [asleep]),
+      ...groups.slice(i, i + 2).flat(),
+    ])
+  }
+  return parts
+}
+
+/** The sound rows expected after a prefix of the guarded Store writes. */
+export let progress = (
+  before: Snapshot,
+  parts: Bundle[][],
+  count: number,
+): Bundle[] => {
+  let rows = new Map(
+    [
+      ...before.builders,
+      ...before.builds,
+      ...before.outputs,
+      ...before.citations,
+    ].map((row) => [row.entity.eid, row]),
+  )
+  for (let part of parts.slice(0, count)) {
+    for (let row of part) {
+      let eid = row.entity.eid
+      if (row.$delete) {
+        rows.delete(eid)
+        for (let cite of before.citations) {
+          if (get(cite, 'edge').from == eid) rows.delete(cite.entity.eid)
+        }
+      } else {
+        rows.set(eid, { ...rows.get(eid), ...row })
+      }
+    }
+  }
+  return [...rows.values()]
+}
