@@ -51,7 +51,8 @@ grouped approximately by function, **not** by dependency order.
 
 - **[@yaks/vocab](./vocab)** — describe a component vocabulary as JSON Schema
   (2020-12) plus a small custom keyword vocabulary, and interrogate it at
-  runtime: property types, path routing, display ordering, instance checks.
+  runtime: property types, path routing, display ordering, instance checks. It
+  also holds a vocabulary as `_comp`/`_prop` entities and reads it back.
 - **[@yaks/id](./id)** — entity ids: generate an eid, and turn the `prefix` a
   component declares plus a number into a human-readable id (`B-7`) and back. It
   also owns the number itself — the `num` property on the `entity` row, the

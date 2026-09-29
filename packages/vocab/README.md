@@ -4,10 +4,11 @@ A **vocabulary document** is a JSON Schema 2020-12 document whose `$defs`
 entries describe components (`component: true`), tools (`tool: true`), rules
 (`rule: true`), or effects (`effect: true`). This package defines that format
 and loads it: `loadVocab()` reads one or more such documents into a runtime
-model used for validation, query resolution, and storage schema generation. This
-package declares no components of its own — the components you declare use the
-format it defines. The loaded model lives in memory; this package creates no
-tables and stores no entity data.
+model used for validation, query resolution, and storage schema generation. The
+components you declare use the format it defines; the only ones it declares are
+the format's own, which hold a vocabulary as entities
+([below](#a-vocabulary-as-entities)). The loaded model lives in memory; this
+package creates no tables and stores no entity data.
 
 ## Use
 
@@ -81,6 +82,11 @@ component table needs on top:
 | `sync`      | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
 | `durable`   | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
 | `pace`      | comp  | how often a writer's value is taken: relayed, or stored (`1s`)          |
+
+A component whose name starts with `_` gives none of its properties a bare name,
+whatever `bare` says: `.name` never means `_prop.name`. An authored name starts
+with a letter, so `_` names only the components that describe a vocabulary
+itself ([below](#a-vocabulary-as-entities)).
 
 A computed property's `reads` can name `comp.ref` when that reference points
 back to the entity carrying the computed value. Subscriptions then refresh that
@@ -506,6 +512,48 @@ that exclude an entity from the trigger. `sweep` is a query whose matches are
 owed a `created` run again whenever a worker starts. `effectsIn(docs)` reads
 them, refuses a name declared twice, and `loadVocab` skips them.
 
+## A vocabulary as entities
+
+A vocabulary can be held in a graph, where it is read, searched and linked like
+anything else. The **meta vocabulary** (`meta/vocab.json`, `metaDoc`) declares
+the components it is held in:
+
+| component | one per                                                              | its `doc`                                 |
+| --------- | -------------------------------------------------------------------- | ----------------------------------------- |
+| `_comp`   | component a document declares                                        | title: the name; body: its description    |
+| `_prop`   | property, in `comp` at `ord`                                         | title: `comp.prop`; body: its description |
+| `_before` | kind a kind sorts before (@yaks/edge relation, `edge.ord` its place) | none                                      |
+
+A keyword with a column of its own is written there; every other keyword an
+entry says, another package's (`prefix`, `store`) or JSON Schema's own
+(`minLength`), rides verbatim in `keywords`. `_prop.type` holds a union as the
+list it is. `package` records which package declares each row, so a property
+another package adds with `extends` is told from the component's own. The
+components are `wire: false`: a graph fills them, and clients read them.
+
+`toBundles(doc, id)` reads one document into bundles, and `fromBundles(rows)`
+turns rows back into documents, one per package, that `loadVocab` loads as the
+vocabulary they came from. `id` is the graph's own derivation of a declared
+identity: a `_comp` is identified by its name and a `_prop` by its component and
+its name, so each document is read on its own and an extension's properties land
+on the component another document declares. A component a document only names
+(`before`, `extends`) gets a bare entity, so every reference lands.
+
+```ts ignore
+import { identities } from '@yaks/graph'
+
+let derive = identities(g.vocab)
+let id = (comp, values) => derive[comp](values, { entity: { eid: '' } })
+await g.apply(toBundles(doc, id), { trusted: true })
+await g.read('._comp ?doc') // every component, named
+await g.read('._prop.comp._comp.name=mail .order=_prop.ord ?doc') // mail's
+await g.read('._prop.ref=mail ?doc') // what refers to mail
+```
+
+A host composes the meta vocabulary by listing `@yaks/vocab` among its plugins
+(its `./vocab` export), beside `@yaks/edge` and `@yaks/doc`. `@yaks/code` fills
+it from each package's `vocab.json` as the files change.
+
 ## Exports
 
 The root export includes `loadVocab`, `Vocab`, schema and property types,
@@ -513,7 +561,8 @@ The root export includes `loadVocab`, `Vocab`, schema and property types,
 `kindOrder`, `composite`, state-lifetime helpers, `rulesIn`, `RuleDecl`,
 `effectsIn` and `EffectDecl`. `CORE_URI`, `coreVocabulary` and `metaSchema`
 expose the bundled schema documents; `Keywords`, `JsonSchema` and `extendMeta`
-support extensions.
+support extensions. `metaDoc`, `toBundles`, `fromBundles`, `Ids` and `Bundle`
+hold a vocabulary as entities.
 
 The `@yaks/vocab/tools` sub-module exports `ToolDefinition`, `toolDefinition`,
 `toolDefinitionSchema`, `toolsIn`, `toolsSaid`, `validateToolInput`,

@@ -14,18 +14,25 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { blobKeywords } from '@yaks/blob'
-import { edgeKeywords } from '@yaks/edge'
+import { edgeKeywords, edges } from '@yaks/edge'
+import { type Bundle, graph, identities } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
 import { keyKeywords } from '@yaks/key'
 import { kernelKeywords } from '@yaks/kernel'
 import { nameKeywords } from '@yaks/names'
+import { ram } from '@yaks/ram'
 import {
   CORE_URI,
+  fromBundles,
+  type Ids,
   type Keywords,
   loadVocab,
+  metaDoc,
   storable,
+  toBundles,
   type VocabDoc,
 } from '@yaks/vocab'
+import { facts } from './vocab/testing.ts'
 
 let here = new URL('./', import.meta.url)
 
@@ -118,4 +125,28 @@ Deno.test('packages: every vocab.json is plain JSON that loads', () => {
       assert(vocab.comp(name), `${pkg}/vocab.json: ${name} did not load`)
     }
   }
+})
+
+Deno.test('packages: every vocabulary goes through a graph as bundles and back', async () => {
+  // Every package's words, each read on its own the way @yaks/code reads a
+  // vocab.json, into one graph that holds them as `_comp`, `_prop` and
+  // `_before`; what loads back from its rows is what loaded from the files.
+  let docs = [
+    ...files.map(([pkg, d]) => ({ ...d, package: `@yaks/${pkg}` })),
+    { ...metaDoc, package: '@yaks/vocab' },
+  ]
+  let all = Object.values(words)
+  let vocab = loadVocab(docs, all)
+  let derive = identities(vocab)
+  let id: Ids = (comp, v) => derive[comp](v, { entity: { eid: '' } })
+  let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
+  await g.apply(docs.flatMap((d) => toBundles(d, id)) as Bundle[], {
+    trusted: true,
+  })
+  let rows = [
+    ...await g.read('._comp ?doc'),
+    ...await g.read('._prop ?doc'),
+    ...await g.read('._before ?edge'),
+  ]
+  assertEquals(facts(loadVocab(fromBundles(rows), all)), facts(vocab))
 })

@@ -2,13 +2,16 @@
 // as a JSON Schema (2020-12) document plus a small set of custom keywords, and
 // the runtime that loads such a document and answers questions about it.
 //
-// It declares zero components. The components you declare are an instance of
-// the format; a small app is a smaller instance in the same format — an app
-// just composes fewer documents.
+// The components you declare are an instance of the format; a small app is a
+// smaller instance in the same format — an app just composes fewer documents.
+// The only components it declares are the format's own: the meta vocabulary a
+// vocabulary is described in as entities, which a host composes through
+// `@yaks/vocab/vocab` like any plugin's words.
 //
 // The pieces:
-//   meta.ts      the core keyword set (a JSON Schema $vocabulary document) and
-//                the meta-schema a vocabulary document validates against
+//   meta.ts      the core keyword set (a JSON Schema $vocabulary document),
+//                the meta-schema a vocabulary document validates against, and
+//                the meta vocabulary (`_comp`, `_prop`, `_before`)
 //   keywords.ts  the extension point: another package registers its own
 //                keywords, and the loader carries them without interpreting
 //                them
@@ -28,6 +31,8 @@
 //   effects.ts   effectsIn(docs) → the effects a vocabulary declares: a
 //                `$defs` entry marked `effect: true` names what a commit owes,
 //                and a plugin's code runs it by that name
+//   bundles.ts   toBundles(doc) / fromBundles(bundles): a vocabulary as
+//                entities in the meta vocabulary, and back
 
 export * from './types.ts'
 export * from './order.ts'
@@ -39,3 +44,4 @@ export * from './meta.ts'
 export * from './keywords.ts'
 export * from './rules.ts'
 export * from './effects.ts'
+export * from './bundles.ts'

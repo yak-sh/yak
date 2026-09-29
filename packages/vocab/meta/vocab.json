@@ -1,0 +1,211 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/edge": true
+  },
+  "title": "vocab",
+  "description": "A vocabulary described as entities: a `_comp` per component, a `_prop` per property, a `_before` edge per kind a kind sorts before. Each wears `doc` for its name and its description. The names start with `_`, which no authored name can.",
+  "$defs": {
+    "_comp": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "wire": false,
+      "before": ["doc"],
+      "description": "a component a vocabulary declares: one aspect an entity carries. Its doc.title is its name, its doc.body its description",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "the name a bundle writes it under"
+        },
+        "package": {
+          "type": "string",
+          "description": "the package whose vocabulary declares it"
+        },
+        "kind": {
+          "type": "boolean",
+          "description": "true = it names a display kind"
+        },
+        "wire": {
+          "type": "boolean",
+          "description": "false = clients read it and never write it"
+        },
+        "bare": {
+          "type": "boolean",
+          "description": "false = its properties are reached by their qualified names only"
+        },
+        "sync": {
+          "type": "string",
+          "enum": ["none", "server", "peers"],
+          "description": "who is told about a write to it"
+        },
+        "durable": {
+          "type": "string",
+          "description": "how long one of its values lives: forever, connection, or a duration"
+        },
+        "pace": {
+          "type": "string",
+          "description": "how often a writer's value is taken, as a duration"
+        },
+        "search": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the text its entities are found by, as comp.prop names of another component"
+        },
+        "identity": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the properties, in order, its entities' ids are derived from"
+        },
+        "unique": {
+          "type": "array",
+          "description": "the property lists no two of its rows share"
+        },
+        "index": {
+          "type": "array",
+          "description": "the property lists kept indexed"
+        },
+        "constraints": {
+          "type": "array",
+          "description": "numeric bounds over a whole row"
+        },
+        "examples": {
+          "type": "array",
+          "description": "sample values"
+        },
+        "keywords": {
+          "type": "object",
+          "description": "every other keyword its entry says, as written: another package's (prefix, by_name, edge) and JSON Schema's own"
+        }
+      }
+    },
+    "_prop": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "wire": false,
+      "before": ["doc"],
+      "identity": ["comp", "name"],
+      "description": "a property of a component. Its doc.title is comp.prop, its doc.body its description",
+      "properties": {
+        "comp": {
+          "type": "string",
+          "ref": "_comp",
+          "death": "cascade",
+          "description": "the component it belongs to"
+        },
+        "name": {
+          "type": "string",
+          "description": "its name within the component"
+        },
+        "ord": {
+          "type": "integer",
+          "description": "its position among the properties its entry declares, from 0"
+        },
+        "package": {
+          "type": "string",
+          "description": "the package whose vocabulary declares it: the component's own, or one that extends it"
+        },
+        "type": {
+          "type": ["string", "array"],
+          "description": "the JSON type it holds, or a union of them: string, number, integer, boolean, object, array"
+        },
+        "format": {
+          "type": "string",
+          "description": "what a string or number means: date-time, uri, query, json, priority"
+        },
+        "enum": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the closed set of values it holds"
+        },
+        "const": {
+          "type": ["string", "number", "boolean", "object", "array"],
+          "description": "the one value it may hold"
+        },
+        "default": {
+          "type": ["string", "number", "boolean", "object", "array"],
+          "description": "what a row holds when its writer supplied nothing; {\"now\": true} is the clock"
+        },
+        "examples": {
+          "type": "array",
+          "description": "sample values"
+        },
+        "ref": {
+          "type": "string",
+          "description": "the component a reference names; entity is any"
+        },
+        "death": {
+          "type": "string",
+          "enum": ["cascade", "detach", "release", "keep"],
+          "description": "what deleting the referenced entity does to this one"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "true = every row holds it"
+        },
+        "stamped": {
+          "type": "boolean",
+          "description": "true = the server owns it: clients read it, never write it"
+        },
+        "computed": {
+          "type": "boolean",
+          "description": "true = derived, never stored"
+        },
+        "reads": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "on a computed property, the components on other entities it reads"
+        },
+        "search": {
+          "type": "boolean",
+          "description": "true = full-text indexed"
+        },
+        "bare": {
+          "type": "boolean",
+          "description": "false = reached by its qualified name only"
+        },
+        "unique": {
+          "type": "boolean",
+          "description": "true = no two rows share it"
+        },
+        "index": {
+          "type": "boolean",
+          "description": "true = kept indexed"
+        },
+        "identity": {
+          "type": "boolean",
+          "description": "true = its entity's id is derived from it"
+        },
+        "validate": {
+          "type": "boolean",
+          "description": "true = a write is checked against its whole JSON Schema"
+        },
+        "aliases": {
+          "type": "object",
+          "description": "input forms that resolve to an enum member"
+        },
+        "properties": {
+          "type": "object",
+          "description": "the declared structure of an object value, as written"
+        },
+        "items": {
+          "type": ["object", "boolean"],
+          "description": "the declared structure of an array's elements, as written"
+        },
+        "keywords": {
+          "type": "object",
+          "description": "every other keyword it says, as written: another package's (store) and JSON Schema's own (minLength, maximum)"
+        }
+      }
+    },
+    "_before": {
+      "component": true,
+      "type": "object",
+      "edge": true,
+      "wire": false,
+      "description": "the edge from a kind to a kind it sorts before; edge.ord keeps the order its entry lists them in"
+    }
+  }
+}
