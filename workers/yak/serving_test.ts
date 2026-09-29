@@ -105,6 +105,45 @@ Deno.test('a page is served with its base and its reporter', async () => {
   assert((await js.text()).includes('export let store ='))
 })
 
+Deno.test('a new release serves its files beside the old cached release', async () => {
+  using scenario = platform()
+  let { env, files } = scenario
+  let { app } = await seeded(env)
+  let old = `ada/.releases/${app.eid}/old`
+  let next = `ada/.releases/${app.eid}/next`
+  let bytes = (s: string) => new TextEncoder().encode(s)
+  files.held.set(`${old}/app.css`, bytes('old'))
+  files.held.set(`${next}/app.css`, bytes('new'))
+  files.held.set(`${next}/added.css`, bytes('added'))
+  let cache = new Map<string, Response>()
+  let misses = 0
+  env.FILES = {
+    fetch: async (req) => {
+      let hit = cache.get(req.url)
+      if (hit) return hit.clone()
+      let response = await fileDoor.fetch(req, env)
+      cache.set(req.url, response.clone())
+      misses++
+      return response
+    },
+  }
+  let serving = (source: string) =>
+    stamp(env, { entities: [{ entity: { eid: app.eid }, app: { source } }] })
+  let read = (path: string) => apps.fetch(visit(`/cookbook/${path}`), env)
+
+  await serving(old)
+  assertEquals(await (await read('app.css')).text(), 'old')
+  assertEquals(await (await read('app.css')).text(), 'old')
+  assertEquals((await read('added.css')).status, 404)
+  assertEquals((await read('added.css')).status, 404)
+  await serving(next)
+  assertEquals(await (await read('app.css')).text(), 'new')
+  assertEquals(await (await read('app.css')).text(), 'new')
+  assertEquals(await (await read('added.css')).text(), 'added')
+  assertEquals(await (await read('added.css')).text(), 'added')
+  assertEquals(misses, 4)
+})
+
 Deno.test('an app worker query can read a connected peer position', async () => {
   using scenario = platform()
   let { env, object, states } = scenario

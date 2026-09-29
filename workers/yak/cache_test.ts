@@ -13,7 +13,7 @@ import {
   assertNotEquals,
   assertStringIncludes,
 } from '@std/assert'
-import { at, keepable, sealed, tagsOf } from './cache.ts'
+import { at, sealed } from './cache.ts'
 
 let A = '11111111-1111-4111-8111-111111111111'
 let B = '22222222-2222-4222-8222-222222222222'
@@ -29,23 +29,6 @@ Deno.test('two apps at the same path are two cache entries', () => {
   assertEquals(at(A, '/app.js'), `https://files.invalid/${A}/app.js`)
   assertEquals(at(A, 'app.js'), `https://files.invalid/${A}/app.js`)
   assertEquals(at(A, '/'), `https://files.invalid/${A}/`)
-})
-
-Deno.test('one app is one tag, and the tag names the app', () => {
-  assertEquals(tagsOf(A), [`a:${A}`])
-  assertNotEquals(tagsOf(A), tagsOf(B))
-  // Cache tags are ASCII without spaces or Cloudflare drops them silently.
-  for (let tag of tagsOf(A)) assertEquals(/^[\x21-\x7e]+$/.test(tag), true)
-})
-
-Deno.test('a cached file is held indefinitely and can be purged', () => {
-  let keep = keepable(tagsOf(A))
-  assertStringIncludes(keep['cache-control'], 'public')
-  // A year in the shared cache, because the answer to "how long" is the purge,
-  // not the clock.
-  assertStringIncludes(keep['cache-control'], 'max-age=31536000')
-  assertStringIncludes(keep['cache-control'], 'stale-while-revalidate=')
-  assertEquals(keep['cache-tag'], `a:${A}`)
 })
 
 Deno.test('a door that says nothing is told not to be shared', async () => {

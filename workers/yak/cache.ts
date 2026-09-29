@@ -1,7 +1,6 @@
-// What Cloudflare's cache may keep of an app's bytes, and how it is emptied
-// (T-33197). `[cache]` in wrangler.toml puts a two-tier cache in front of a
-// Worker entrypoint; on a hit the entrypoint never runs. This file owns which
-// entrypoint that is, what the cached thing is, and who empties it.
+// What Cloudflare's cache may keep of an app's bytes (T-33197). `[cache]` in
+// wrangler.toml puts a two-tier cache in front of a Worker entrypoint; on a
+// hit the entrypoint never runs. This file owns the cache key and policy.
 //
 // ── Why the cache is NOT in front of the door the browser reaches ──────────
 //
@@ -42,27 +41,17 @@
 // decision more than a public one instead of a round trip to a bucket an ocean
 // away.
 
-// How long the cache holds a file, and how long it may answer from a stale
-// copy while it refreshes behind the request. A year, because the real answer
-// to "how long" is never time — it is `purged()`, called by every door that
-// changes what a visitor would see. Time is only the backstop for a purge that
-// was rate-limited or lost.
+// A release source never changes. A new release gets a new cache key, so old
+// entries can expire on their own without a purge.
 let YEAR = 31536000
-let SWR = 86400
 
 // What the inner entrypoint says about the bytes it is answering. Only `Files`
 // sends this, and `Files` is reachable only through the service binding, so
 // nothing a person or an app can address ever wears it.
-// Cloudflare disables stale-while-revalidate when s-maxage is present.
 import { type Host, url } from './host.ts'
-import { caught } from './sentry.ts'
-export let keepable = (tags: string[]) => ({
-  'cache-control': `public, max-age=${YEAR}, stale-while-revalidate=${SWR}`,
-  'cache-tag': tags.join(','),
-})
 
-// Content-addressed bytes cannot change under their key and need no purge.
-// Metadata and access are decided by the gateway, outside this cache.
+// Source-named files and content-addressed blobs cannot change under their
+// keys. Metadata and access are decided by the gateway, outside this cache.
 export let immutable = { 'cache-control': `public, max-age=${YEAR}, immutable` }
 
 // A browser may keep the exact asset it fetched, while a shared cache must
@@ -76,13 +65,15 @@ export let browserImmutable = `private, max-age=${YEAR}, immutable`
 // distinguishes one answer from another is in the path, because the path is
 // what the key is made of:
 //
-//   /<app eid>/<the app's own path>, or /blob/<app eid>/<sha>
+//   /<app eid>/<the app's own path>?source=<release source>, or
+//   /blob/<app eid>/<sha>
 //
 // The eid and not the slug, because an app answers at every address it has
 // ever had (`App.slugs`), a rename leaves the old one resolving, and a custom
 // domain is a third address for the same bytes. Keying on the eid means those
 // are one cache entry rather than three, and it means a rename cannot make one
-// app read another's entry.
+// app read another's entry. The release source in the query keeps old and new
+// bytes separate when the directory switches its serving pointer.
 export let at = (eid: string, path: string, source = '') =>
   `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}${
     source ? `?source=${encodeURIComponent(source)}` : ''
@@ -93,21 +84,6 @@ export let at = (eid: string, path: string, source = '') =>
 // can reuse another entry.
 export let blobAt = (eid: string, sha: string) =>
   `https://files.invalid/blob/${eid}/${sha}`
-
-// The tag a purge names for mutable app files. Immutable blobs need no purge.
-//
-// Everything else a door can change is about identity, and identity is decided
-// in front of the cache, on every request. An app going private needs no purge
-// — the access check that now says no runs before the bytes are asked for. A
-// slug moving needs none — the key is the eid, so the entry is already the
-// same entry at the new address. A member being removed needs none — their
-// next request is refused at the gateway. A per-space or per-member tag would
-// cost bytes on every response and buy nothing, because no door would ever
-// purge it.
-//
-// Cache tags must be ASCII without spaces; an eid is a uuid, so nothing needs
-// escaping.
-export let tagsOf = (eid: string) => [`a:${eid}`]
 
 // The default, made to stick. Omitting `Cache-Control` is NOT opting out of a
 // cache: Cloudflare applies RFC 9111 heuristic freshness and holds a bare
@@ -151,62 +127,4 @@ export let sealed = (res: Response, env: Host = {}) => {
     statusText: res.statusText,
     headers,
   })
-}
-
-// Emptying it, and the rule that makes this harder than it looks: a purge is
-// scoped to the entrypoint that calls it — "an entrypoint cannot reach into
-// another entrypoint's cache". So this is only ever called from inside
-// `Files`, the entrypoint that owns the entries. Called from the gateway,
-// where every write door actually runs, it empties the gateway's own cache —
-// which holds nothing — and reports success while the stale bytes go on being
-// served. That is not a theory: it is what shipped first, and what serving
-// version one after writing version two looked like. files.ts `purged` is the
-// door a write path uses, and the hop to `Files` is the whole reason it exists.
-//
-// `cache.purge` comes from `cloudflare:workers` rather than an
-// ExecutionContext because this Worker has none to thread: every part is a
-// plain `fetch(req, env)` (env.ts), and the `ctx` an MCP tool receives is the
-// kernel's own (tools.ts `Ctx`), not the runtime's.
-//
-// A purge never throws into the write that called it — failing `app_files`
-// because a cache was busy would be worse than the staleness. But a purge that
-// quietly fails is the "my edit did not appear" report this design exists to
-// prevent, so every way of failing is sent to Sentry (sentry.ts `caught`), the
-// runtime simply not having the API included. `s-maxage` is the backstop underneath.
-type Purger = {
-  purge: (
-    what: { tags?: string[]; pathPrefixes?: string[]; purgeEverything?: true },
-  ) => Promise<{ success: boolean; errors?: unknown[] }>
-}
-
-export let purge = async (tags: string[]) => {
-  let mod
-  try {
-    mod = await import('cloudflare:workers') as { cache?: Purger }
-  } catch (e) {
-    caught(e, { request: 'cache purge' })
-    return false
-  }
-  if (typeof mod.cache?.purge != 'function') {
-    // `wrangler dev` and the workerd probes land here, where there is no cache
-    // to empty and nothing is wrong. A deployed Worker landing here means every
-    // write is silently stale, so it is worth the line either way.
-    caught(new Error('this runtime has no cache.purge'), {
-      request: 'cache purge',
-    })
-    return false
-  }
-  try {
-    let out = await mod.cache.purge({ tags })
-    if (!out.success) {
-      caught(
-        new Error(`cache purge refused: ${JSON.stringify(out.errors ?? [])}`),
-        { request: 'cache purge' },
-      )
-    }
-    return out.success
-  } catch (e) {
-    caught(e, { request: 'cache purge' })
-    return false
-  }
 }

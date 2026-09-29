@@ -64,8 +64,7 @@ export let options = () => ({
   tracesSampleRate: 0.05,
   sendDefaultPii: false,
   // A `console.error` anywhere in the kernel is a defect someone wrote down
-  // (a Store answering 500, a purge refused), which is what the old tail
-  // worker paged on.
+  // (a Store answering 500), which is what the old tail worker paged on.
   integrations: [captureConsoleIntegration({ levels: ['error'] })],
   beforeSend: scrub,
 })

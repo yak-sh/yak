@@ -72,9 +72,8 @@ export class Sandbox extends Workbench<Env> {
 // in wrangler.toml name the default entrypoint, so nothing from the internet
 // arrives here.
 //
-// Wrapped for Sentry like the objects above: it is its own invocation, so a
-// defect it reports itself (a cache purge that failed, cache.ts) has no client
-// to reach otherwise.
+// Wrapped for Sentry like the objects above: an unexpected failure in this
+// entrypoint reaches the same reporter as one in the gateway.
 class Filed extends WorkerEntrypoint {
   // The runtime sets this; `declare` names its type without emitting a field
   // that would shadow what the base class already put there. env.ts keeps the

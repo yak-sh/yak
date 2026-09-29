@@ -17,9 +17,8 @@
 // has to be this Worker.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
-import { blobAt, immutable, keepable, purge, tagsOf } from './cache.ts'
+import { blobAt, immutable } from './cache.ts'
 import { releaseFiles } from './release.ts'
-import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { BUILT } from './versions.ts'
 import { parse, WORKER } from './wrangler_app.ts'
@@ -60,14 +59,12 @@ export let prefixOf = (
 // that is not there — a missing stylesheet must never answer HTML.
 let pretty = (path: string) => !path.split('/').pop()!.includes('.')
 
-// The 404 is cached too, and wears the same tag, so the write that finally
-// creates the file is the thing that clears it. Without that, a page that
-// asked for a file before it existed would be told it does not exist for as
-// long as the cache held the answer.
-let missing = (keep: Record<string, string>) =>
+// A release never gains a file after its source is selected. A later release
+// gets a different key, so its file can answer after this 404 was cached.
+let missing = () =>
   new Response('not found', {
     status: 404,
-    headers: { 'content-type': 'text/plain; charset=utf-8', ...keep },
+    headers: { 'content-type': 'text/plain; charset=utf-8', ...immutable },
   })
 
 // The app-relative path of its server source: `main` out of either wrangler
@@ -82,32 +79,6 @@ let mainOf = async (blobs: Objects, prefix: string) => {
   let config = jsonc ?? json
   if (!config) return WORKER
   return parse(new TextDecoder().decode(config)).config.main ?? WORKER
-}
-
-// The address the purge door answers at. A POST, so it can never be confused
-// with a file: only GET and head are cached, so this request runs the
-// entrypoint every time — which is exactly what a purge needs, since the purge
-// must be issued from in here (cache.ts).
-let PURGE = '/purge'
-
-// The purge a door calls when it has changed an app's files: one call empties
-// every mutable address this app answers at, at every edge. A door that changed only
-// who may read does not call this and does not need to (cache.ts `tagsOf`).
-//
-// It goes through the binding rather than calling `purge()` directly because a
-// purge only reaches the cache of the entrypoint that issues it, and every
-// write door runs in the gateway. Without the binding — `wrangler dev`, the
-// workerd probes — `bound` calls this module in-process, where there is no
-// cache and the purge is a logged no-op.
-export let purged = async (env: Env, app: App) => {
-  let r = await bound(env.FILES, fetch, env).fetch(
-    new Request(`https://files.invalid${PURGE}`, {
-      method: 'POST',
-      body: JSON.stringify(tagsOf(app.eid)),
-    }),
-  )
-  await r.body?.cancel()
-  return r.ok
 }
 
 // The gateway calls this only after checking access and resolving the blob's
@@ -131,23 +102,15 @@ export let blobBytes = (
 // The inner door. The gateway has already decided this request may be served;
 // everything here is about which bytes.
 //
-// The tag is derived from the same path segment the cache key is made of, so
-// the entry and the tag that purges it cannot disagree — the thing a purge
-// must reach and the thing it names come from one read of one string.
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
-  if (req.method == 'POST' && url.pathname == PURGE) {
-    let ok = await purge(await req.json() as string[])
-    return new Response(null, { status: ok ? 204 : 500 })
-  }
   if (url.pathname.startsWith('/blob/')) return blob(req, env, url.pathname)
   // `/<app eid>/<the app's own path>` (cache.ts `at`): the eid is the cache
   // key's tenant discriminator and is not part of the file's name.
   let eid = url.pathname.slice(1).split('/')[0] ?? ''
   let path = url.pathname.replace(/^\/[^/]+/, '') || '/'
-  let keep = keepable(tagsOf(eid))
   let prefix = req.headers.get(PREFIX)
-  if (!prefix || !eid) return missing(keep)
+  if (!prefix || !eid) return missing()
   let blobs = releaseFiles(r2Objects(env.BLOBS))
   // One read, not a stat and then a read (T-33176): the bucket is a round trip
   // away, and asking whether the file is there before asking for it paid that
@@ -167,15 +130,15 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     !pretty(path) && !type.startsWith('text/html')
   ) {
     if (source && key == keyed(prefix, `/${await source}`)) {
-      return missing(keep)
+      return missing()
     }
     let compiled = built ? await blobs.open(built) : null
     let object = compiled ?? await blobs.open(key)
-    if (!object) return missing(keep)
+    if (!object) return missing()
     return rangedOpen(object, req, {
       'content-type': compiled ? mimeOf('compiled.js') : type,
       [VERSION]: object.version,
-      ...keep,
+      ...immutable,
     })
   }
   // A page script the deploy compiled serves in its source's place, as
@@ -184,15 +147,15 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // same round trip.
   let made = built ? blobs.load(built) : null
   let file = await blobs.load(key)
-  if (source && key == keyed(prefix, `/${await source}`)) return missing(keep)
+  if (source && key == keyed(prefix, `/${await source}`)) return missing()
   let compiled = await made
-  if (compiled) return served(compiled, mimeOf('compiled.js'), keep)
+  if (compiled) return served(compiled, mimeOf('compiled.js'))
   if (!file && pretty(path)) {
     key = keyed(prefix, '/')
     file = await blobs.load(key)
   }
-  if (!file) return missing(keep)
-  return served(file, mimeOf(key), keep)
+  if (!file) return missing()
+  return served(file, mimeOf(key))
 }
 
 // Only content-addressed bytes cross this cached door. The gateway already
@@ -229,13 +192,12 @@ let SCRIPT = /\.(?:js|mjs|ts|mts|tsx|jsx)$/
 let served = (
   file: { bytes: Uint8Array<ArrayBuffer>; version: string },
   type: string,
-  keep: Record<string, string>,
 ) =>
   new Response(file.bytes, {
     headers: {
       'content-type': type,
       'content-length': String(file.bytes.byteLength),
       [VERSION]: file.version,
-      ...keep,
+      ...immutable,
     },
   })
