@@ -53,6 +53,11 @@ Deno.test('a graph tool writes and reads the harness graph', async () => {
 
 Deno.test('the merged wait preserves process output and child status alongside task waiting', async () => {
   let h = await harness()
+  // A process's output is its run's files (@yaks/process `tail`).
+  let was = Deno.env.get('PROCESS_DIR')
+  let dir = Deno.makeTempDirSync({ prefix: 'yaks-process-' })
+  Deno.env.set('PROCESS_DIR', dir)
+  Deno.writeTextFileSync(`${dir}/command.out`, 'process output\n')
   try {
     await h.g.apply([
       { entity: { eid: 'p' }, session: {} },
@@ -61,11 +66,6 @@ Deno.test('the merged wait preserves process output and child status alongside t
         entity: { eid: 'command' },
         process: { command: 'true' },
         exit: { code: 0 },
-      },
-      {
-        entity: { eid: 'output' },
-        content: { body: 'process output' },
-        output: { source: 'command' },
       },
     ])
     let wait = harnessTools(h.g).find((t) => t.name == 'wait')!
@@ -82,6 +82,9 @@ Deno.test('the merged wait preserves process output and child status alongside t
       output: '',
     }])
   } finally {
+    if (was == null) Deno.env.delete('PROCESS_DIR')
+    else Deno.env.set('PROCESS_DIR', was)
+    Deno.removeSync(dir, { recursive: true })
     h.close()
   }
 })

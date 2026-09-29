@@ -31,11 +31,9 @@
 // below is the whole difference, as data. Everything else here is POSIX: sh,
 // kill(1), and files.
 //
-// What the loop does not do yet: resume reading a launched process's output
-// files after a restart. `watch` adopts the process again and records its exit
-// code; the lines printed while we were away stay in the files. Importing them
-// exactly once needs a per-file read position on the row, and nothing asks for
-// one yet.
+// What a process prints stays in those two files, never in the graph: output
+// is a log, and the graph records the process, not its log. A caller reads the
+// end of it with `tail`, and cleans the files once it is done with them.
 
 import type { Bundle } from '@yaks/graph'
 import {
@@ -49,12 +47,8 @@ import {
 } from './comp.ts'
 import type { Store } from './store.ts'
 
-// Components other packages declare, which a host composes beside this one:
-// each output chunk is `content{body}` with an `output{source}`
-// naming the process (@yaks/tools), and a `stop` on a service's entity
-// (@yaks/session) is the wish that it stop.
-let CONTENT = 'content'
-let OUTPUT = 'output'
+// A component another package declares, which a host composes beside this
+// one: a `stop` on a service's entity (@yaks/session) is the wish that it stop.
 let STOP = 'stop'
 
 /** What to run. */
@@ -71,9 +65,6 @@ export type Spec = {
 
 /** How the supervisor works, all optional. */
 export type Opts = {
-  /** import the child's output chunks into the graph (default true); false
-   * keeps only the files, for a caller that publishes its own bounded result */
-  stream?: boolean
   /** where the pidfiles and output files live (default `$PROCESS_DIR`, else
    * `$TASKS_HOME/processes`, else `~/.tasks/processes`) */
   dir?: string
@@ -423,14 +414,6 @@ export let signal = (
   return kill(group ? -group : pid, sig)
 }
 
-let sizeOf = (path: string) => {
-  try {
-    return Deno.statSync(path).size
-  } catch {
-    return 0 // the file was never written
-  }
-}
-
 // Delete a file the previous attempt left behind, so this attempt is not
 // handed the previous attempt's result.
 let clear = (path: string) => {
@@ -442,100 +425,106 @@ let clear = (path: string) => {
 }
 
 /**
- * Remove a finished run's supervisor files.
+ * Remove a finished run's files: its output, and the supervisor's own.
  *
- * A caller that sets `stream: false` owns the raw output and calls this only
- * after it has published the final bytes. Streamed runs are cleaned by
- * {@link launch} once their final output and exit have reached the store.
+ * Whoever reads the output cleans once it is done with it, and nothing else
+ * does: a service's output files are its log, appended to across attempts.
  */
 export let clean = (eid: string, o: Opts = {}): void => {
   for (let path of Object.values(files(dirOf(o), eid))) clear(path)
 }
 
-// One output file, read forward from wherever it already stands. Starting at
-// the end is what keeps a restart onto the same entity correct: the output
-// files are appended to across attempts (one service, one log), so reading
-// from byte 0 would import every earlier byte a second time. Taking the size
-// before the child can write a byte makes the boundary exact. The decoder is
-// per-file and streaming, so a multi-byte character split across two reads
-// still decodes.
-type Tail = { path: string; at: number; rest: string; dec: TextDecoder }
-let tail = (path: string): Tail => ({
-  path,
-  at: sizeOf(path),
-  rest: '',
-  dec: new TextDecoder(),
-})
+/**
+ * Clean every run in the directory that ended more than `age` ms ago, by its
+ * exit-code file's time: what a reader that never cleaned leaves behind, such
+ * as a call nobody waited on or an answer lost to a crash. Answers how many.
+ *
+ * ```ts
+ * import { sweep } from '@yaks/process'
+ *
+ * // await sweep(24 * 60 * 60 * 1000)   // every run that ended a day ago
+ * ```
+ */
+export let sweep = async (age: number, o: Opts = {}): Promise<number> => {
+  let dir = dirOf(o)
+  let before = Date.now() - age
+  let n = 0
+  try {
+    for await (let e of Deno.readDir(dir)) {
+      if (!e.name.endsWith('.code')) continue
+      if ((mtimeOf(`${dir}/${e.name}`) ?? before) >= before) continue
+      clean(e.name.slice(0, -'.code'.length), o)
+      n++
+    }
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+  }
+  return n
+}
 
-let sip = (t: Tail) => {
+// The last `n` whole lines of one output file, read backward a block at a
+// time until the bytes hold n + 1 newlines or the file's start: enough that
+// the line the first block cuts in half is not among them, however long the
+// lines. The bytes are joined before they are decoded, so only that dropped
+// line can hold a character split at a block's edge.
+let BLOCK = 64 * 1024
+let ending = (path: string, n: number): string[] => {
   let f
   try {
-    f = Deno.openSync(t.path)
+    f = Deno.openSync(path)
   } catch {
-    return '' // the file does not exist yet: nothing has been printed
+    return [] // the file does not exist yet: nothing has been printed
   }
   try {
-    f.seekSync(t.at, Deno.SeekMode.Start)
-    let buf = new Uint8Array(64 * 1024)
-    let text = ''
-    for (let n = f.readSync(buf); n; n = f.readSync(buf)) {
-      t.at += n
-      text += t.dec.decode(buf.subarray(0, n), { stream: true })
+    let at = f.statSync().size
+    let blocks: Uint8Array[] = []
+    for (let breaks = 0; at > 0 && breaks <= n;) {
+      let from = Math.max(0, at - BLOCK)
+      let buf = new Uint8Array(at - from)
+      f.seekSync(from, Deno.SeekMode.Start)
+      for (let got = 0; got < buf.length;) {
+        let k = f.readSync(buf.subarray(got))
+        if (!k) break
+        got += k
+      }
+      blocks.unshift(buf)
+      breaks += buf.filter((c) => c == 10).length
+      at = from
     }
-    return text
+    let all = lines(new TextDecoder().decode(join(blocks)))
+    return (at > 0 ? all.slice(1) : all).slice(-n)
   } finally {
     f.close()
   }
 }
 
-// Pack complete logical lines near this size. Newline boundaries are also the
-// semantic boundaries a reader needs, so one oversized line stays one row
-// rather than acquiring false line breaks from storage.
-let CHUNK_CHARS = 64 * 1024
-let chunks = (t: Tail, final: boolean) => {
-  let text = t.rest + sip(t) + (final ? t.dec.decode() : '')
-  let at = final ? text.length : text.lastIndexOf('\n') + 1
-  let ready = text.slice(0, at)
-  t.rest = text.slice(at)
-  let out: string[] = []
-  let body = ''
-  for (let start = 0; start < ready.length;) {
-    let newline = ready.indexOf('\n', start)
-    let end = newline < 0 ? ready.length : newline + 1
-    let line = ready.slice(start, end)
-    if (body && body.length + line.length > CHUNK_CHARS) {
-      out.push(body)
-      body = ''
-    }
-    body += line
-    if (body.length >= CHUNK_CHARS) {
-      out.push(body)
-      body = ''
-    }
-    start = end
-  }
-  if (body) out.push(body)
+let join = (blocks: Uint8Array[]) => {
+  let out = new Uint8Array(blocks.reduce((sum, b) => sum + b.length, 0))
+  blocks.reduce((at, b) => (out.set(b, at), at + b.length), 0)
   return out
 }
 
-let drain = async (
-  store: Store,
-  source: string,
-  tails: Tail[],
-  final: boolean,
-  mint: () => string,
-) => {
-  let bundles: Bundle[] = []
-  for (let t of tails) {
-    for (let body of chunks(t, final)) {
-      bundles.push({
-        entity: { eid: mint() },
-        [CONTENT]: { body },
-        [OUTPUT]: { source },
-      })
-    }
-  }
-  if (bundles.length) await store.apply(bundles)
+let lines = (text: string) => {
+  if (!text) return []
+  let out = text.split('\n')
+  if (text.endsWith('\n')) out.pop()
+  return out
+}
+
+/**
+ * The last `n` lines a run printed: its stdout's, then its stderr's. Read from
+ * the run's files, so it answers whoever asks for as long as they are kept.
+ *
+ * ```ts
+ * import { tail } from '@yaks/process'
+ *
+ * // tail(run.eid, 40)   // ['hi']
+ * ```
+ */
+export let tail = (eid: string, n: number, o: Opts = {}): string[] => {
+  if (n <= 0) return []
+  let f = files(dirOf(o), eid)
+  return [...ending(f.out, n), ...ending(f.err, n)].slice(-n)
 }
 
 // The wrapper writes the exit-code file just after the child it waited on is
@@ -558,33 +547,24 @@ let reported = (f: ReturnType<typeof files>, poll: number) => async () => {
   }
 }
 
-// The one loop: watch the pid, write what the process printed, record how it
-// ended. Whether the process is gone is checked before the last read, so that
-// read sees the final bytes.
+// The one loop: watch the pid, record how it ended.
 let follow = async (
   store: Store,
   eid: string,
   pid: number,
-  tails: Tail[],
   code: () => number | null | Promise<number | null>,
   o: Opts,
 ) => {
   let poll = o.poll ?? 1000
-  let mint = o.mint ?? uuid
-  while (true) {
-    let gone = !pid || !(await alive(pid))
-    if (tails.length) await drain(store, eid, tails, gone, mint)
-    if (gone) break
-    await sleep(poll)
-  }
+  while (pid && await alive(pid)) await sleep(poll)
   let ended = await code()
   await store.apply([{ entity: { eid }, [EXIT]: { code: ended } }])
   return ended
 }
 
 /**
- * Start a process, write its row, import what it prints, and record how it
- * ended.
+ * Start a process, write its row, and record how it ended. What it prints
+ * stays in its files, for {@link tail} to read.
  *
  * ```ts
  * import { launch, store } from '@yaks/process'
@@ -609,11 +589,9 @@ export let launch = async (
   let argv = [spec.command, ...(spec.args ?? [])]
   let cwd = spec.cwd ?? Deno.cwd()
   // Deal with everything the last attempt on this row left behind before this
-  // one starts: the output files are read on from where they stand, and the
-  // pidfile and exit-code file are deleted — read as if they belonged to this
-  // attempt, they would report the previous process both alive and already
-  // finished.
-  let tails = o.stream === false ? [] : [tail(f.out), tail(f.err)]
+  // one starts: the pidfile and exit-code file are deleted — read as if they
+  // belonged to this attempt, they would report the previous process both
+  // alive and already finished. The output files are appended to.
   clear(f.pid)
   clear(f.code)
   Deno.writeTextFileSync(f.started, String(Date.now()))
@@ -631,17 +609,12 @@ export let launch = async (
     ...(o.eid ? { [EXIT]: null } : {}),
   }])
   let elapsed = elapsedOf(dir, eid)
-  let done = follow(store, eid, pid, tails, reported(f, beat(o)), o).then(
-    (code) => {
-      // Cache the ending before its file goes away, so a held Run keeps
-      // reporting the whole elapsed time after cleanup.
-      if (o.stream !== false) {
-        elapsed()
-        clean(eid, o)
-      }
-      return code
-    },
-  )
+  let done = follow(store, eid, pid, reported(f, beat(o)), o).then((code) => {
+    // Cache the ending before a caller cleans its file away, so a held Run
+    // keeps reporting the whole elapsed time after cleanup.
+    elapsed()
+    return code
+  })
   return { eid, pid, done, elapsed }
 }
 
@@ -669,7 +642,7 @@ export let adopt = async (
     eid,
     pid,
     elapsed: elapsedOf(dirOf(o), eid),
-    done: follow(store, eid, pid, [], o.code ?? (() => null), o),
+    done: follow(store, eid, pid, o.code ?? (() => null), o),
   }
 }
 
@@ -698,7 +671,7 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
       eid,
       pid,
       elapsed: elapsedOf(dir, eid),
-      done: follow(store, eid, pid, [], reported(f, beat(o)), o),
+      done: follow(store, eid, pid, reported(f, beat(o)), o),
     })
   }
   return runs

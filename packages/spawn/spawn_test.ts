@@ -301,7 +301,7 @@ Deno.test('a restart adopts the run and reads its log on from where it stands', 
       command: argv[0],
       args: argv.slice(1),
       env: Deno.env.toObject(),
-    }, { eid: 'S1', stream: false, dir: where, poll: 20 })
+    }, { eid: 'S1', dir: where, poll: 20 })
     // The wrapper opens the log after launch returns, so at first it is absent.
     await until(
       async () =>

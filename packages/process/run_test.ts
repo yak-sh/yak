@@ -8,7 +8,16 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { EXIT, PROCESS } from './comp.ts'
 import { launchers, reaped, tracked, until } from './testing.ts'
-import { adopt, clean, gone, launch, vanished, watch } from './run.ts'
+import {
+  adopt,
+  clean,
+  gone,
+  launch,
+  sweep,
+  tail,
+  vanished,
+  watch,
+} from './run.ts'
 import { store } from './store.ts'
 
 let dir = () => Deno.makeTempDirSync({ prefix: 'yaks-process-' })
@@ -16,7 +25,7 @@ let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
 
 for (let os of launchers) {
-  Deno.test(`${os}: a launched child streams both its streams and stamps its exit`, async () => {
+  Deno.test(`${os}: a launched child keeps both its streams and stamps its exit`, async () => {
     let g = tracked()
     let at = dir()
     let run = await launch(store(g), {
@@ -24,10 +33,7 @@ for (let os of launchers) {
       args: ['-c', 'echo out; echo err >&2; exit 3'],
     }, { dir: at, poll: 5, os })
     assertEquals(await run.done, 3)
-
-    let said = (await g.read(`.output.source=${run.eid}&*`))
-      .map((b) => String(comp(b, 'content')?.body)).sort()
-    assertEquals(said, ['err\n', 'out\n'])
+    assertEquals(tail(run.eid, 10, { dir: at }), ['out', 'err'])
 
     let row = (await g.read(`.${PROCESS}&*`))[0]
     assertEquals(row.entity.eid, run.eid)
@@ -37,36 +43,31 @@ for (let os of launchers) {
     )
     assert(Number(comp(row, PROCESS)?.pid) > 0)
     assertEquals(comp(row, EXIT)?.code, 3)
-    assertEquals([...Deno.readDirSync(at)].map((e) => e.name), ['wrapper.sh'])
   })
 
   // systemd expands the command line it launches, so an unescaped `$` reaches
   // the program as an empty string — a hosted shell wrote a heredoc with
   // every `${…}` deleted before anyone noticed (T-37332).
   Deno.test(`${os}: a command keeps every dollar the caller wrote`, async () => {
-    let g = tracked()
-    let run = await launch(store(g), {
+    let at = dir()
+    let run = await launch(store(tracked()), {
       command: 'sh',
       args: ['-c', 'printf %s "$1"', 'sh', '${backend} $defs $$ $'],
-    }, { dir: dir(), poll: 5, os })
+    }, { dir: at, poll: 5, os })
     assertEquals(await run.done, 0)
-    assertEquals(
-      (await g.read(`.output.source=${run.eid}&*`))
-        .map((b) => String(comp(b, 'content')?.body)),
-      ['${backend} $defs $$ $'],
-    )
+    assertEquals(tail(run.eid, 1, { dir: at }), ['${backend} $defs $$ $'])
   })
 
   Deno.test(`${os}: a document of an argument reaches the program whole, not the row`, async () => {
     let g = tracked()
+    let at = dir()
     let long = 'x'.repeat(100_000)
     let run = await launch(store(g), {
       command: 'sh',
       args: ['-c', 'printf %s "$1" | wc -c', 'sh', long],
-    }, { dir: dir(), poll: 5, os })
+    }, { dir: at, poll: 5, os })
     assertEquals(await run.done, 0)
-    let [said] = await g.read(`.output.source=${run.eid}&*`)
-    assertEquals(String(comp(said, 'content')?.body).trim(), '100000')
+    assertEquals(tail(run.eid, 1, { dir: at }).map((l) => l.trim()), ['100000'])
     let row = (await g.read(`.${PROCESS}&*`))[0]
     assert(String(comp(row, PROCESS)?.command).length < long.length)
   })
@@ -85,33 +86,58 @@ for (let os of launchers) {
   })
 }
 
-Deno.test('raw output stays until its caller cleans the finished run', async () => {
+Deno.test('output stays until its caller cleans the finished run', async () => {
   let at = dir()
   let run = await launch(store(tracked()), {
     command: 'sh',
     args: ['-c', 'echo kept'],
-  }, { dir: at, poll: 5, stream: false })
+  }, { dir: at, poll: 5 })
   assertEquals(await run.done, 0)
-  assertEquals(Deno.readTextFileSync(`${at}/${run.eid}.out`), 'kept\n')
+  assertEquals(tail(run.eid, 1, { dir: at }), ['kept'])
 
   clean(run.eid, { dir: at })
+  assertEquals(tail(run.eid, 1, { dir: at }), [])
   assertEquals([...Deno.readDirSync(at)].map((e) => e.name), ['wrapper.sh'])
 })
 
-Deno.test('many lines keep their newlines in bounded output chunks', async () => {
-  let g = tracked()
-  let expected = 'line\n'.repeat(20_000) + '\nlast'
-  let run = await launch(store(g), {
-    command: 'perl',
-    args: ['-e', 'print "line\\n" x 20000; print "\\nlast"'],
-  }, { dir: dir(), poll: 5 })
-  assertEquals(await run.done, 0)
+// A tail is read backward a block (64 KiB) at a time, so the cases that matter
+// are lines on either side of a block's edge.
+Deno.test('a tail answers the last whole lines, however long they are', async () => {
+  let at = dir()
+  let say = async (script: string) => {
+    let run = await launch(store(tracked()), {
+      command: 'perl',
+      args: ['-e', script],
+    }, { dir: at, poll: 5 })
+    await run.done
+    return (n: number) => tail(run.eid, n, { dir: at })
+  }
+  let many = await say('print "line $_\\n" for 1..20000; print "\\nlast"')
+  assertEquals(many(3), ['line 20000', '', 'last'])
+  assertEquals(many(0), [])
+  let wide = await say('print "a\\n", "x" x 200000, "\\nend\\n"')
+  assertEquals(wide(2), ['x'.repeat(200_000), 'end'])
+  assertEquals(wide(9), ['a', 'x'.repeat(200_000), 'end'])
+})
 
-  let bodies = (await g.read(`.output.source=${run.eid}&*`))
-    .map((b) => String(comp(b, 'content')?.body))
-  assertEquals(bodies.join(''), expected)
-  assert(bodies.length < 10, `${bodies.length} output rows`)
-  assert(bodies.every((body) => body.length <= 64 * 1024))
+Deno.test('a sweep cleans only the runs that ended longer ago than its age', async () => {
+  let at = dir()
+  let echo = async (word: string) => {
+    let run = await launch(store(tracked()), {
+      command: 'echo',
+      args: [word],
+    }, { dir: at, poll: 5 })
+    await run.done
+    return run.eid
+  }
+  let old = await echo('old'), fresh = await echo('fresh')
+  let past = new Date(Date.now() - 60_000)
+  Deno.utimeSync(`${at}/${old}.code`, past, past)
+
+  assertEquals(await sweep(30_000, { dir: at }), 1)
+  assertEquals(tail(old, 1, { dir: at }), [])
+  assertEquals(tail(fresh, 1, { dir: at }), ['fresh'])
+  assertEquals(await sweep(30_000, { dir: dir() + '/none' }), 0)
 })
 
 Deno.test('a machine with no launcher is refused before anything starts', async () => {

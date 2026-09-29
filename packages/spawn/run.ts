@@ -328,7 +328,6 @@ export let start = async (
   }, {
     ...o,
     eid: session, // one entity: the transcript is the thing running
-    stream: false, // the lines are entries, not anonymous output
   })
   // A stop can land while the wrapper starts, before its process row exists.
   // The stop effect had no pid then; now that launch has stamped one, answer it.

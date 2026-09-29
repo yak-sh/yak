@@ -21,10 +21,6 @@ import { processDoc } from './comp.ts'
  * let vocab = loadVocab([processDoc])
  * let g = graph({ storage: ram(vocab), vocab, plugins: [processes()] })
  * ```
- *
- * Output uses bounded, newline-preserving `content{body}` plus
- * `output{source}` from @yaks/session, so a caller that streams a process's
- * stdout into the graph loads that vocabulary document too.
  */
 export let processes = (): Plugin => ({
   name: '@yaks/process',

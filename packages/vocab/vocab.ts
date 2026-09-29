@@ -104,8 +104,8 @@ let extended = (
 
 // A component's `search` list: the text its entities are found by, read off
 // another component — `entry` names `content.body`, so a transcript entry is
-// found by what it says, while the tool results and process output that also
-// carry `content` are not. It is checked once every document is read, because
+// found by what it says, while the tool results that also carry `content` are
+// not. It is checked once every document is read, because
 // the text it names is usually declared by another package, and a name whose
 // component this load does not declare is text this graph cannot hold: it is
 // left out, the way a graph composed without that package has none of its

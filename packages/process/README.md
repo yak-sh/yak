@@ -29,24 +29,23 @@ previous `exit` in the same transaction. An unsupervised process retains its
 `never`. To stop a service, add the `stop` marker from `@yaks/session` to the
 same entity.
 
-Process output uses `content{body}` and `output{source}` from `@yaks/session`,
-where `source` is the process entity. Bodies are bounded near 64 KiB at newline
-boundaries, retain their newlines, and may contain several logical lines. One
-oversized logical line stays whole. The graph stores process state and output.
-Supervisor files are stored under `opts.dir`, then `$PROCESS_DIR`, then
-`$TASKS_HOME/processes`, then `~/.tasks/processes`. A streamed run removes them
-after its final output and exit reach the graph. A caller using `stream: false`
-calls `clean()` after publishing the final raw output. For tests, set
-`TASKS_HOME` instead of changing `HOME` so Deno can reuse its module cache. This
-changes supervisor file locations, not the child environment.
+The graph stores process state, never output. What a process prints stays in its
+stdout and stderr files: `tail(eid, n)` reads their last lines, and `clean(eid)`
+removes a finished run's files once its reader is done with them, and
+`sweep(age)` cleans every run that ended longer ago than that. A service's
+output files are its log, appended to across attempts. Supervisor files are
+stored under `opts.dir`, then `$PROCESS_DIR`, then `$TASKS_HOME/processes`, then
+`~/.tasks/processes`. For tests, set `TASKS_HOME` instead of changing `HOME` so
+Deno can reuse its module cache. This changes supervisor file locations, not the
+child environment.
 
 ## Launching and adopting processes
 
 <a id="the-process-you-are-in"></a>
 <a id="four-entry-points-one-loop"></a>
 
-Given an application graph loaded with the process and output vocabulary (the
-example starts a process under systemd, so it is not run as a test):
+Given an application graph loaded with the process vocabulary (the example
+starts a process under systemd, so it is not run as a test):
 
 ```ts ignore
 import { adopt, launch, store, watch } from '@yaks/process'

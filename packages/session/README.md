@@ -23,7 +23,7 @@ JSON object. The components beside `entry` determine its type:
 | ------------------------------------- | ---------------------------------- |
 | `content{body}` without `output`      | input from a person or system      |
 | `ask{to, through}`                    | a request to a model               |
-| `content{body}` with `output{source}` | model or process output            |
+| `content{body}` with `output{source}` | model output                       |
 | `call{to, id, args, source}`          | a tool call requested by a model   |
 | `result{call}` with `content`         | a tool result                      |
 | `using{provider, model, effort, …}`   | model selection on an input or ask |
@@ -86,8 +86,8 @@ Applications that run a session add components from other packages:
 `worktree{repository, path}` describes its checkout; `spawned{parent, call}`
 describes delegation; and `imported{source, line}` records imported log entries.
 Start, latest-input, and finish times are entry `created.at` values. The last
-`content`, `usage`, and process output record what the run produced. Persona and
-role remain referenced entities.
+`content` and `usage` record what the run produced. Persona and role remain
+referenced entities.
 
 `archived{at}` is the general `@yaks/kernel` visibility marker. Archiving a
 session does not stop its runner, release claims, remove entries, or change

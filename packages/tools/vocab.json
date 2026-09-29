@@ -59,13 +59,13 @@
     "output": {
       "component": true,
       "type": "object",
-      "description": "What produced the text beside it: the request, for a model’s own output; the call whose failure is being reported; or the stream it was read from (@yaks/process). Only output carries it — text a person or a system wrote has none.",
+      "description": "What produced the text beside it: the request, for a model’s own output, or the call whose failure is being reported. Only output carries it — text a person or a system wrote has none.",
       "properties": {
         "source": {
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "the entry or run that produced it"
+          "description": "the entry that produced it"
         },
         "id": {
           "type": "string",

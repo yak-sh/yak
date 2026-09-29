@@ -9,9 +9,9 @@
  * - `process{pid, command, cwd}` — a program running on this machine;
  *   `command` and `cwd` are present exactly when we launched it.
  * - `exit{code}` — it is over, and how. Absent means running.
- * - output is bounded, newline-preserving `content{body}` plus
- *   `output{source}` (@yaks/session); `source` names the process and one body
- *   may carry several logical lines.
+ * - output stays in the run's stdout and stderr files, never the graph:
+ *   {@link tail} reads their last lines, {@link clean} removes them, and
+ *   {@link sweep} removes every run's that ended long enough ago.
  *
  * The program doing the launching is one too: {@link started} and
  * {@link ended} return the components a process writes about itself on the way
@@ -19,11 +19,12 @@
  * writes with, and the one a start-up effect handler fires on.
  *
  * ```ts
- * import { launch, store, supervise, watch } from '@yaks/process'
+ * import { launch, store, supervise, tail, watch } from '@yaks/process'
  *
  * // let processes = store(graph)
  * // let run = await launch(processes, { command: 'sh', args: ['-c', 'echo hi'] })
- * // await run.done            // 0, and the line is a content entry
+ * // await run.done            // 0
+ * // tail(run.eid, 40)         // ['hi']
  * // await watch(processes)    // at start-up: pick the unfinished ones back up
  * // let pass = supervise(processes)   // then drive it from your own timer
  * ```

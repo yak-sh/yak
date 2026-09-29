@@ -35,10 +35,8 @@
 // fresh pid beside a stale exit code. An unsupervised process keeps its `exit`
 // forever, and running the program again creates a new entity.
 //
-// Output is not declared here. A bounded chunk a process printed is
-// `content{body}` with an `output{source}` naming the process — the same
-// components @yaks/session uses for a tool result and for a model's own text.
-// Bodies retain newlines and may contain several logical lines.
+// Output is not a component: what a process prints stays in its files, and
+// `tail` (./run.ts) reads it.
 
 import type { Entity } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'

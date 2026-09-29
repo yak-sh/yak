@@ -48,11 +48,11 @@ current.
 A component can also name text its entities are found by on another component,
 with a `search` list: `entry` says `"search": ["content.body"]`. That makes
 `entry_fts`, which indexes `content.body` for entities carrying `entry` and for
-no other entity carrying `content` (tool results, process output). It reads its
-text through the `entry_text` view, which joins the two tables, and two more
-triggers on `entry` index text already written when an entity becomes an entry
-and remove it when it stops being one. Whichever row a transaction writes second
-does the indexing, so the order of a bundle's components does not matter.
+no other entity carrying `content` (tool results). It reads its text through the
+`entry_text` view, which joins the two tables, and two more triggers on `entry`
+index text already written when an entity becomes an entry and remove it when it
+stops being one. Whichever row a transaction writes second does the indexing, so
+the order of a bundle's components does not matter.
 
 ## The four pieces
 

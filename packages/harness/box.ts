@@ -1,8 +1,10 @@
 // The box's machine: what @yaks/harness's machine tools (./machine.ts) run on
 // when the harness runs here. A command is a tracked process from the first
-// moment (`launch` writes the row before anything is waited on), its raw output
-// arrives as bounded `content{body}` plus `output{source}`, and its exit lands
-// on the same row as `exit{code}`.
+// moment (`launch` writes the row before anything is waited on), and its exit
+// lands on the same row as `exit{code}`. What it prints stays in the run's
+// files, never the graph: the tool's answer carries the lines the model reads.
+// The files stay for as long as a `wait` or a recovered call might read them
+// again, and are swept a day after the run ends.
 //
 // `look` reads that row rather than a handle held in memory, so a process the
 // server launched before a restart behaves exactly like one it launched a
@@ -11,7 +13,7 @@
 
 import { dirname } from '@std/path'
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
-import { CONTENT, OUTPUT, sessionEnv } from '@yaks/session'
+import { sessionEnv } from '@yaks/session'
 import {
   EXIT,
   type Exit,
@@ -20,17 +22,17 @@ import {
   PROCESS,
   type Process,
   store,
+  sweep,
+  tail,
 } from '@yaks/process'
+import { diagnostics } from './diagnostics.ts'
 import type { Machine, Proc } from './machine.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-let lines = (body: string) => {
-  let out = body.split('\n')
-  if (body.endsWith('\n')) out.pop()
-  return out
-}
+let HOUR = 60 * 60 * 1000
+let DAY = 24 * HOUR
 
 // Already gone is not a failure: the code watching the pid is recording it.
 let signal = (pid: number, sig: Deno.Signal) => {
@@ -53,6 +55,16 @@ export let boxMachine = (
   let opts: Opts = { ...o, poll: o.poll ?? 100 }
   let processes = store(g)
   let processFor = (call: string) => derivedEid(`shell process ${call}`)
+  // At most once an hour, as a command starts: nothing is left to sweep on a
+  // machine that runs none.
+  let swept = 0
+  let tidy = () => {
+    if (Date.now() - swept < HOUR) return
+    swept = Date.now()
+    sweep(DAY, opts).catch((e) =>
+      diagnostics().report(e, { phase: 'process-sweep' })
+    )
+  }
   let look = async (eid: string): Promise<Proc | null> => {
     let [self] = await g.get([eid])
     if (!self) return null
@@ -66,6 +78,7 @@ export let boxMachine = (
   return {
     poll: opts.poll,
     start: async (command, cwd, call, session) => {
+      tidy()
       let eid = call ? processFor(call) : undefined
       if (eid) {
         let [prior] = await g.get([eid])
@@ -87,10 +100,7 @@ export let boxMachine = (
       return row?.[PROCESS] ? eid : undefined
     },
     look,
-    tail: async (eid, n) =>
-      (await g.read(`.${OUTPUT}.source=${eid}&?${CONTENT}`))
-        .flatMap((b) => lines(String(comp(b, CONTENT)?.body ?? '')))
-        .slice(-n),
+    tail: (eid, n) => Promise.resolve(tail(eid, n, opts)),
     kill: async (eid, sig) => {
       let pid = (await look(eid))?.pid
       if (pid) signal(pid, sig)

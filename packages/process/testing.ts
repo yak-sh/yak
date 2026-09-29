@@ -3,7 +3,7 @@
 // The store is @yaks/ram: a Map holding the bundles, with the same `apply()`
 // and the same query grammar as a database, so a test needs no file and no
 // schema. The vocabulary is this package's loaded beside @yaks/session's,
-// because process-output chunks use that package's `content` component.
+// because a service's `stop` is that package's component.
 
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { type Graph, graph } from '@yaks/graph'
@@ -14,7 +14,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { processDoc } from './comp.ts'
 import { processes } from './plugin.ts'
 
-/** This package's components, plus the transcript components its output
+/** This package's components, plus the session components a service's stop
  * uses. */
 export let host: Vocab = loadVocab([processDoc, sessionDoc, toolsDoc, modelDoc])
 
