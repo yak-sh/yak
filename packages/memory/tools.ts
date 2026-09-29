@@ -1,7 +1,8 @@
 // What anybody may ask of a memory: the `@yaks/memory/tools` entry point — the
 // implementations behind the `tool: true` declarations in ./vocab.json. Two of
 // them are one loop: keep what somebody said, and get it back the next time it
-// matters. The rest read around a memory (./around.ts).
+// matters. A third finds where somebody said words, the place a save marks;
+// the rest read around a memory (./around.ts).
 //
 // Keeping marks. What somebody said is usually in the graph already — what they
 // typed is a transcript entry, what they wrote is a comment or a doc — so a
@@ -189,6 +190,17 @@ export let runs = (): Runs => ({
       ...(named.length ? { eids: await addressed(graph, named) } : {}),
     }
     return (await graph.read(line(asked))).map(witnessed)
+  },
+
+  memory_source: async (call, graph): Promise<Bundle[]> => {
+    let args = argsOf(call)
+    let said = str(args.said)
+    let by = str(args.by)
+    let found = await holding(graph, said, by)
+    if (!found) {
+      throw new Refused(`nothing ${by} wrote holds those words: ${said}`)
+    }
+    return [found]
   },
 
   ...around,

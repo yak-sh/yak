@@ -2,7 +2,7 @@
 
 Marks what a person said, in their own words, where the graph already holds it,
 reads it back at the start of the next conversation, and reads around it. This
-package supplies the `memory` component, the write and read helpers, and six
+package supplies the `memory` component, the write and read helpers, and seven
 tools; storage and optional semantic ranking come from elsewhere.
 
 An entity is a record identified by `entity.eid`. A bundle is a JSON object
@@ -134,7 +134,7 @@ strict total-output bound. If records are omitted, a notice names
 
 ## The tools
 
-`vocab.json` declares six tools, and `@yaks/memory/tools` exports the `runs()`
+`vocab.json` declares seven tools, and `@yaks/memory/tools` exports the `runs()`
 factory that implements them (`yak memory save`, `yak memory recall`, and the
 rest the same way, and each over `/mcp`):
 
@@ -143,6 +143,7 @@ yak memory save 'always commit your changes' --scope P-19 --feedback jeff
 yak memory save --on C-38041 --context 'on the persona gates'
 yak memory recall 'commit'
 yak memory recall --near T-37666
+yak memory source 'always commit your changes' --by jeff
 yak memory around '#c625160bfa' -B 5 -A 2
 yak memory target C-38041
 yak memory thread C-38041
@@ -166,6 +167,11 @@ about it. Those terms are filters, not a guaranteed exact phrase or a relevance
 ranking. `near` names an existing entity for semantic ranking when
 [@yaks/embedding](https://jsr.io/@yaks/embedding) is configured. Without that
 ranking or explicit ids, the newest words come first.
+
+`memory source` answers where a person said words: the earliest entity they
+wrote holding them verbatim, the same entity a save given `said` and `feedback`
+marks, or a refusal where there is none. A model finding the source of a quote
+marks it with `on`, and never makes a doc for words it could not place.
 
 The other four read around a memory, the way `grep -C` reads around a line, for
 a model building beliefs from memories. Each takes any entity and answers

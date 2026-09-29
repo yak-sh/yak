@@ -179,6 +179,34 @@
       },
       "readOnly": true
     },
+    "memory_source": {
+      "tool": true,
+      "noun": "memory",
+      "verb": "source",
+      "title": "Where somebody said these words",
+      "description": "Where a person said these words: the earliest entity they wrote whose text holds them verbatim (the session entry they typed, a comment, a doc), whole. The same words in anybody else's text are a quote of them and never count. Use it on words quoted from somebody to find where they said them, then mark that entity with memory_save's on. Returns bundles (JSON objects with entity ids and component fields). Refuses where nothing that person wrote holds the words.",
+      "input": {
+        "said": {
+          "type": "string",
+          "description": "the words, exactly as they were written; line breaks and runs of spaces do not count"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "description": "who said them: their id or registered name"
+        }
+      },
+      "required": [
+        "said",
+        "by"
+      ],
+      "options": {
+        "positional": [
+          "said"
+        ]
+      },
+      "readOnly": true
+    },
     "memory_around": {
       "tool": true,
       "noun": "memory",

@@ -114,6 +114,7 @@ test('every memory tool is declared and implemented', () => {
     'memory_recall',
     'memory_save',
     'memory_session',
+    'memory_source',
     'memory_target',
     'memory_thread',
   ])
@@ -165,6 +166,18 @@ test('the words are marked where their speaker first said them', async () => {
     part(await read(g, kept), 'doc').body,
     'always commit your changes',
   )
+})
+
+test('source is where a person said the words, never a quote of them', async () => {
+  let g = fresh()
+  await write(g, [{
+    entity: { eid: 'quote' },
+    doc: { body: 'Jeff says: "always commit your changes"' },
+  }], agent)
+  await write(g, [said('s1', 1, 'ok. always commit\nyour  changes')], jeff)
+  let source = (said: string) => ask('memory_source', { said, by: 'jeff' }, g)
+  assertEquals(eids(await source('always commit your changes')), ['s1.1'])
+  await assertRejects(() => source('Jeff says'), Refused, 'nothing jeff wrote')
 })
 
 test('on marks the entity named, only for words it holds', async () => {
