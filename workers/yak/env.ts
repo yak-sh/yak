@@ -161,6 +161,9 @@ export type Env = {
   // Worker's production branch and able to do nothing but start a build.
   // Production's alone, like the queue that uses it.
   BUILD_HOOK?: string
+  // User-scoped Workers CI Read token for the failed-build queue consumer.
+  // It reads the build log before reporting a safe summary to Sentry.
+  BUILD_LOG_TOKEN?: string
   // A person's own domain (domains.ts, T-33038): the yaks.app zone the
   // Cloudflare for SaaS custom hostnames are created on — not a secret, it
   // rides wrangler.toml's `[vars]` beside the account tag — and a token that

@@ -28,6 +28,7 @@ import { Stale } from '@yaks/graph'
 import type { Env } from './env.ts'
 import { caught, defect } from './sentry.ts'
 import { type Breaks, exceptionOf, metaBreaks } from './unseen.ts'
+import { accountUrl } from './workers_api.ts'
 
 /** The part of a Workers Builds event this reads. */
 export type Built = {
@@ -62,6 +63,7 @@ export let broke = (b: Built) => {
   let short = commitHash?.slice(0, 8) || 'unknown'
   return {
     build: b.payload?.buildUuid ?? short,
+    uuid: b.payload?.buildUuid,
     commit: commitHash || undefined,
     request: `BUILD ${worker} ${short}`,
     error: new BuildFailed(
@@ -73,6 +75,130 @@ export let broke = (b: Built) => {
 }
 
 type Broke = NonNullable<ReturnType<typeof broke>>
+
+/** The dashboard's build details page; its last segment is the build UUID. */
+export let buildUrl = (env: Env, b: Broke) =>
+  env.CF_ACCOUNT && b.uuid
+    ? `https://dash.cloudflare.com/${encodeURIComponent(env.CF_ACCOUNT)}` +
+      `/workers/services/view/${encodeURIComponent(b.tags.worker)}` +
+      `/production/builds/${encodeURIComponent(b.uuid)}`
+    : undefined
+
+type Logs = {
+  success?: boolean
+  result?: {
+    lines?: (string | number)[][]
+    cursor?: string
+    truncated?: boolean
+  }
+}
+
+// Build output can print credentials. Only fixed labels and numeric status
+// codes leave this function; no log line is sent to Sentry or the meta store.
+export let failure = (
+  lines: string[],
+  prior = { step: 'Workers Builds setup', reason: 'see build log' },
+) => {
+  let { step, reason } = prior
+  for (let line of lines) {
+    if (line.includes('--- installing deno')) step = 'install Deno'
+    if (line.includes('--- deno task check')) step = 'deno task check'
+    if (line.includes('--- deno task test --only=deno workers')) {
+      step = 'deno task test'
+    }
+    if (line.includes('Executing user deploy command')) step = 'deploy command'
+    if (/Task deploy:yak-staging\b/.test(line)) step = 'deploy staging'
+    else if (/Task deploy:yak\b/.test(line)) step = 'deploy yak'
+
+    let type = line.match(/\bTS\d{4}\b/)?.[0]
+    let http = line.match(
+      /\b(?:HTTP|status|returned(?: error:)?|response)\s*(4\d\d|5\d\d)\b/i,
+    )?.[1]
+    if (type) reason = `TypeScript ${type}`
+    else if (http) reason = `HTTP ${http}`
+    else if (/\binternal server error\b/i.test(line)) {
+      reason = 'Cloudflare internal error'
+    } else if (/\bcould not resolve file type\b/i.test(line)) {
+      reason = 'file type could not be resolved'
+    } else if (/\b(?:timed? out|timeout|ETIMEDOUT)\b/i.test(line)) {
+      reason = 'timeout'
+    } else if (
+      /\b(?:ENOTFOUND|could not resolve host|DNS lookup failed)\b/i.test(line)
+    ) {
+      reason = 'DNS failure'
+    } else if (/\b(?:ECONNRESET|connection reset)\b/i.test(line)) {
+      reason = 'connection reset'
+    } else if (/\b(?:ENOSPC|no space left on device)\b/i.test(line)) {
+      reason = 'disk full'
+    } else if (/\b(?:out of memory|OOM)\b/i.test(line)) {
+      reason = 'out of memory'
+    } else if (/\b(?:test failed|failed test|FAILURES)\b/i.test(line)) {
+      reason = 'test failure'
+    }
+  }
+  return { step, reason }
+}
+
+/** Read every log page so the failing step at the end is visible. A broken
+ * logs API leaves the build report intact and says why details are absent. */
+export let logsOf = async (env: Env, uuid?: string) => {
+  if (!uuid || !env.CF_ACCOUNT) return 'build UUID or account unavailable'
+  if (!env.BUILD_LOG_TOKEN) return 'BUILD_LOG_TOKEN unavailable'
+  let detail = failure([])
+  let seen = new Set<string>()
+  let cursor: string | undefined
+  let signal = AbortSignal.timeout(20_000)
+  try {
+    do {
+      let url = accountUrl(
+        env,
+        `/builds/builds/${encodeURIComponent(uuid)}/logs`,
+      )
+      let at = new URL(url)
+      if (cursor) at.searchParams.set('cursor', cursor)
+      let res = await fetch(at, {
+        headers: { authorization: `Bearer ${env.BUILD_LOG_TOKEN}` },
+        signal,
+      })
+      if (!res.ok) return `build logs returned HTTP ${res.status}`
+      let page = await res.json() as Logs
+      if (!page.success || !page.result) return 'build logs response failed'
+      detail = failure(
+        (page.result.lines ?? []).flatMap((row) => {
+          let line = row.at(-1)
+          return typeof line == 'string' ? [line] : []
+        }),
+        detail,
+      )
+      cursor = page.result.truncated ? page.result.cursor : undefined
+      if (page.result.truncated && !cursor) {
+        return 'build logs pagination failed'
+      }
+      if (cursor && seen.has(cursor)) return 'build logs repeated a page'
+      if (cursor) seen.add(cursor)
+    } while (cursor)
+    return detail
+  } catch {
+    return signal.aborted ? 'build logs timed out' : 'build logs request failed'
+  }
+}
+
+/** Enrich one failure at the reporting boundary, leaving raw logs behind. */
+export let diagnosed = async (env: Env, b: Broke): Promise<Broke> => {
+  let detail = await logsOf(env, b.uuid)
+  let summary = typeof detail == 'string'
+    ? `Details unavailable: ${detail}`
+    : `Step: ${detail.step}; error: ${detail.reason}`
+  let link = buildUrl(env, b)
+  return {
+    ...b,
+    error: new BuildFailed(
+      `${b.error.message}. ${summary}. Build log: ${
+        link ?? 'location unavailable'
+      }`,
+    ),
+  }
+}
 
 /** Note a failed build in the meta store, and say whether it earns a retry:
  * only the first note of a commit does. A build with no commit is noted under
@@ -110,8 +236,8 @@ export let rebuild = async (env: Env): Promise<string> => {
   try {
     let r = await fetch(env.BUILD_HOOK, { method: 'POST' })
     return r.ok ? 'started' : `refused ${r.status}`
-  } catch (e) {
-    return `failed: ${e instanceof Error ? e.message : e}`
+  } catch {
+    return 'failed to reach deploy hook'
   }
 }
 
@@ -123,16 +249,23 @@ type Batch = { messages: readonly { body: Built; ack(): void }[] }
  * retry: a retry nobody recorded is how the loop starts. */
 export let builds = async (batch: Batch, env: Env) => {
   for (let m of batch.messages) {
-    let b = broke(m.body)
-    if (b) {
-      let once = await first(metaBreaks(env), b).catch((why) => {
-        caught(why, { request: `file ${b.request}` })
+    let event = broke(m.body)
+    if (event) {
+      let detail = diagnosed(env, event)
+      let once = await first(metaBreaks(env), event).catch((why) => {
+        caught(why, { request: `file ${event.request}` })
         return false
       })
       let retry = once ? await rebuild(env) : undefined
+      let b = await detail
       withScope((scope) => {
         scope.setFingerprint(['build failed', b.build])
-        defect(b.error, { request: b.request, ...b.tags, retry })
+        defect(b.error, {
+          request: b.request,
+          ...b.tags,
+          build_log: buildUrl(env, b),
+          retry,
+        })
       })
     }
     m.ack()

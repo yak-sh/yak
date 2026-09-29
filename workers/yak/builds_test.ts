@@ -1,9 +1,20 @@
 // A failed Workers Build is filed with its commit; nothing else is filed. A
 // commit's first failure is built once more, and nothing else is.
-import { assertEquals, assertInstanceOf } from '@std/assert'
+import {
+  assertEquals,
+  assertInstanceOf,
+  assertStringIncludes,
+} from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { broke, BuildFailed, builds, type Built, rebuild } from './builds.ts'
+import {
+  broke,
+  BuildFailed,
+  builds,
+  type Built,
+  diagnosed,
+  rebuild,
+} from './builds.ts'
 import type { Env } from './env.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
 import { Store } from './graph.ts'
@@ -33,6 +44,70 @@ Deno.test('builds: a failure is filed under its build, with its commit', () => {
     'the Workers Build of yak at 191f7134 (main) failed, so it never ' +
       'deployed: @yaks/mail pulls what arrived',
   )
+})
+
+Deno.test('builds: report links to the failing build and summarizes its log safely', async () => {
+  let env = {
+    CF_ACCOUNT: 'account',
+    BUILD_LOG_TOKEN: 'secret-build-token',
+    WORKERS_API: 'https://cloudflare.test',
+  } as Env
+  let urls: string[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = (input, init) => {
+    let url = String(input)
+    urls.push(url)
+    assertEquals(
+      new Headers(init?.headers).get('authorization'),
+      'Bearer secret-build-token',
+    )
+    let first = urls.length == 1
+    return Promise.resolve(Response.json({
+      success: true,
+      result: {
+        cursor: first ? 'next-page' : undefined,
+        truncated: first,
+        lines: first
+          ? [[1, '--- deno task check']]
+          : [[2, 'error: TS2322 at sk-proj-private-value']],
+      },
+    }))
+  }
+  try {
+    let report = await diagnosed(env, broke(event('failed'))!)
+    assertEquals(urls, [
+      'https://cloudflare.test/accounts/account/builds/builds/build-1/logs',
+      'https://cloudflare.test/accounts/account/builds/builds/build-1/logs?cursor=next-page',
+    ])
+    assertStringIncludes(
+      report.error.message,
+      'Step: deno task check; error: TypeScript TS2322',
+    )
+    assertStringIncludes(
+      report.error.message,
+      'https://dash.cloudflare.com/account/workers/services/view/yak/production/builds/build-1',
+    )
+    assertEquals(report.error.message.includes('sk-proj-private-value'), false)
+    assertEquals(report.error.message.includes('secret-build-token'), false)
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
+Deno.test('builds: a logs API failure keeps the build link in the report', async () => {
+  let env = { CF_ACCOUNT: 'account', BUILD_LOG_TOKEN: 'test-token' } as Env
+  let was = globalThis.fetch
+  globalThis.fetch = () => Promise.resolve(new Response('', { status: 403 }))
+  try {
+    let report = await diagnosed(env, broke(event('failed'))!)
+    assertStringIncludes(
+      report.error.message,
+      'Details unavailable: build logs returned HTTP 403',
+    )
+    assertStringIncludes(report.error.message, '/production/builds/build-1')
+  } finally {
+    globalThis.fetch = was
+  }
 })
 
 Deno.test('builds: any other event is nothing to file', () => {
@@ -98,4 +173,17 @@ Deno.test('builds: a build with no commit is never built again', async () => {
 
 Deno.test('builds: with no hook there is nothing to start', async () => {
   assertEquals(await rebuild({} as Env), 'no BUILD_HOOK')
+})
+
+Deno.test('builds: a failed hook request does not disclose its credential', async () => {
+  let was = globalThis.fetch
+  globalThis.fetch = () => Promise.reject(new Error('https://hook.test/secret'))
+  try {
+    assertEquals(
+      await rebuild({ BUILD_HOOK: 'https://hook.test/secret' } as Env),
+      'failed to reach deploy hook',
+    )
+  } finally {
+    globalThis.fetch = was
+  }
 })
