@@ -26,6 +26,24 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let at = (out: Bundle[], eid: string, name: string) =>
   comp(out.find((b) => b.entity.eid == eid && b[name] !== undefined), name)
 
+Deno.test('a traced dry run reports phases and leaves the graph unchanged', () => {
+  let one = g()
+  let phases: string[] = []
+  let out = sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 7 } }], {
+    check: true,
+    trace: (phase, ms) => {
+      phases.push(phase)
+      assert(ms >= 0)
+    },
+  }))
+  assertEquals(at(out, 'b1', 'book').pages, 7)
+  assertEquals(one.get(['b1']), [])
+  assert(phases.includes('gather'))
+  assert(phases.includes('mutate'))
+  assert(phases.includes('transaction'))
+  assert(phases.includes('compose'))
+})
+
 for (let async of [false, true]) {
   Deno.test(`failed effect snapshots log at error level (${async ? 'async' : 'sync'})`, async () => {
     let storage = memory()

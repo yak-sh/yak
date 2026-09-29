@@ -229,6 +229,23 @@ export let retry = (db: Driver, seq: number): boolean =>
 /** One kept write. */
 export type Kept = { seq: number; headers: string; body: string }
 
+/** A write still held for review, without changing its state. */
+export let kept = (db: Driver, seq: number): Kept | undefined => {
+  let [row] = db.query(select({
+    cols: [col('seq'), col('headers'), col('body')],
+    from: table(LOG),
+    where: and(at(seq), or(INTERRUPTED, UNREVIEWED, and(FAILED, AUDIT))),
+    limit: lit(1),
+  }))
+  return row
+    ? {
+      seq: Number(row.seq),
+      headers: String(row.headers),
+      body: String(row.body),
+    }
+    : undefined
+}
+
 /** Whether a request is a write the log keeps: a batch to apply. A dry run
  * (`?check=1`) writes nothing. */
 export let logged = (req: Request): boolean => {

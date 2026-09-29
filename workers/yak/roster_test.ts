@@ -279,6 +279,10 @@ Deno.test(
         'no kept writes',
       )
       assertStringIncludes(
+        await tool('store_inspect', { space: mine, app }),
+        '"physical"',
+      )
+      assertStringIncludes(
         await refused(tool, 'store_retry', { space: mine, app, seq: 999 }),
         'not held for review',
       )

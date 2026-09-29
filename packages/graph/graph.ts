@@ -95,6 +95,11 @@ export type ApplyOpts = {
    * refusal still throws, which is the whole point of asking. The audit hooks
    * see the rollback (see {@link Checked}). */
   check?: boolean
+  /** Observe phase duration without changing the result. */
+  trace?: (
+    phase: Phase | 'gather' | 'transaction' | 'compose',
+    ms: number,
+  ) => void
 }
 
 /**
@@ -320,6 +325,31 @@ export let graph = (opts: Options): Graph => {
     // One registry for the whole apply, so `#Now` is one instant however many
     // phases and rules read it.
     let resources = resourced(() => instant ??= o.now ?? opts.clock?.() ?? now)
+    let timed = <T>(
+      name: Phase | 'gather' | 'transaction' | 'compose',
+      run: () => T | Promise<T>,
+    ): T | Promise<T> => {
+      if (!o.trace) return run()
+      let start = performance.now()
+      let done = () => {
+        try {
+          o.trace?.(name, performance.now() - start)
+        } catch (e) {
+          console.error('graph trace observer failed', e)
+        }
+      }
+      try {
+        let out = run()
+        if (isPromise(out)) return out.finally(done)
+        done()
+        return out
+      } catch (e) {
+        done()
+        throw e
+      }
+    }
+    let gathering = (tx: Tx, b: Bundle[]) =>
+      timed('gather', () => gather(tx, vocab, asking(b)))
 
     // A phase: the core's own work first (it is what the rules and hooks
     // extend), then the rules evaluated together, then each hook, each seeing
@@ -341,7 +371,7 @@ export let graph = (opts: Options): Graph => {
         )
       }
       for (let [, h] of hooks(name)) steps.push((b) => h(b, tx))
-      return each(steps, bundles, (b, step) => step(b))
+      return timed(name, () => each(steps, bundles, (b, step) => step(b)))
     }
 
     // After the transaction: every effect rule, then every hook, each isolated
@@ -456,7 +486,7 @@ export let graph = (opts: Options): Graph => {
         // writes anything, and a patch made through the gathered transaction
         // is folded back into the snapshot, so those phases still see each
         // other's writes.
-        then(gather(tx, vocab, asking(bundles)), (snap) => {
+        then(gathering(tx, bundles), (snap) => {
           let trackers: Tracker[] = []
           for (let p of plugins) {
             if (!p.track) continue
@@ -557,7 +587,7 @@ export let graph = (opts: Options): Graph => {
           : audited(bundles, e)
       let committed: Bundle[] | Promise<Bundle[]>
       try {
-        committed = storage.tx(run)
+        committed = timed('transaction', () => storage.tx(run))
       } catch (e) {
         return fell(e)
       }
@@ -615,7 +645,7 @@ export let graph = (opts: Options): Graph => {
           (b) => identified(resolve(b, vocab, derives(), mint), vocab),
         ),
         inside,
-        composed,
+        (b) => timed('compose', () => composed(b)),
       ],
       owned(formed(bundles)),
       (b, step) => step(b),

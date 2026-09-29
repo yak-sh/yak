@@ -344,6 +344,13 @@ store_restore:
     those back. To undo: another store_restore, to the moment just before
     this one, which the response names. Documentation:
     https://yaks.app/docs/files.
+store_inspect:
+  title: Inspect store size and dry-run cost
+  description: >-
+    Show bounded table row counts and index names for an app's store. With seq,
+    dry-run one held write and report phase durations and bundle count. Only
+    the space owner can inspect it. The dry run rolls back every graph change;
+    this tool never retries or applies the write.
 store_writes:
   title: Inspect kept store writes
   description: >-

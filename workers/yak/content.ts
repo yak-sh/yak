@@ -333,6 +333,11 @@ export let WORDS: Record<string, Words> = {
     'description':
       "Put everything the app has saved back to how it was at a moment: the whole store, every row of it, as of that time. For a write that went wrong: a bad import, rows deleted by mistake, a change that turned out to be wrong. Cloudflare keeps the last 30 days of the store, so any moment in those 30 days can be restored; at is that moment, as a timestamp (2026-09-06T14:20:00Z). Called with no at, it reports the oldest moment still available and every restore already made. It is reversible: where the store stood before is recorded before anything moves, so a restore is undone by restoring again to a moment just before it, and the response names that moment. Everything written since the named moment is lost, so the latest moment that will do costs the least. The app is briefly restarted to pick up the restored store. The app's files are not part of this; app_rollback and app_files op: restore put those back. To undo: another store_restore, to the moment just before this one, which the response names. Documentation: https://yaks.app/docs/files.",
   },
+  'store_inspect': {
+    'title': 'Inspect store size and dry-run cost',
+    'description':
+      "Show bounded table row counts and index names for an app's store. With seq, dry-run one held write and report phase durations and bundle count. Only the space owner can inspect it. The dry run rolls back every graph change; this tool never retries or applies the write.",
+  },
   'store_writes': {
     'title': 'Inspect kept store writes',
     'description':

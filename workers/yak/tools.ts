@@ -95,6 +95,7 @@ import {
 // app_rollback does for an app's files.
 import { mark, moment, oldest, putBack, recorded } from './recover.ts'
 import { inspect as inspectWrites, retry as retryWrite } from './write-log.ts'
+import { inspect as inspectStore } from './store-inspect.ts'
 // Only the ceiling, and only ever called: tools.ts and standing.ts are a
 // cycle through declared.ts, so nothing from there may be read while this
 // module's own body runs.
@@ -3157,6 +3158,32 @@ let OURS: Row[] = [
           `it — to undo this restore, store_restore(app: '${app.slug}', at: ` +
           `'${done.at}'), which is the moment just before it happened.` +
           story,
+        space,
+      }
+    },
+  },
+  {
+    name: 'store_inspect',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        seq: { type: 'integer', minimum: 1 },
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, store } = await ownsApp(ctx, args)
+      let seq = args.seq == null ? undefined : Number(args.seq)
+      if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
+        throw refuse('arguments', 'seq must be a positive integer')
+      }
+      let result = await inspectStore(store, seq)
+      return {
+        text: JSON.stringify(result),
+        value: result,
         space,
       }
     },

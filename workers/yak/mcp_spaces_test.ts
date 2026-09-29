@@ -44,7 +44,7 @@ Deno.test('only a space owner can inspect and retry held store writes', async ()
     })
     await accepted(k, guest.email, guest.cookie)
     let editor = connector(k, guest.cookie)
-    for (let name of ['store_writes', 'store_retry']) {
+    for (let name of ['store_writes', 'store_retry', 'store_inspect']) {
       let args = { space: slug, app: 'notes', seq: 1 }
       assertStringIncludes(
         (await assertRejects(() => editor.tool(name, args), Error)).message,
@@ -54,6 +54,10 @@ Deno.test('only a space owner can inspect and retry held store writes', async ()
     assertStringIncludes(
       await owner.tool('store_writes', { space: slug, app: 'notes' }),
       'no kept writes',
+    )
+    assertStringIncludes(
+      await owner.tool('store_inspect', { space: slug, app: 'notes' }),
+      '"physical"',
     )
   } finally {
     await k.stop()

@@ -39,6 +39,7 @@ let READS = [
   'sandbox_read',
   'sandbox_wait',
   'store_writes',
+  'store_inspect',
 ]
 
 // It can delete, or change something no second call takes back. A create is

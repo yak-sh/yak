@@ -102,7 +102,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { FIT, schema } from '@yaks/sqlite'
+import { FIT, inspect as inspectStorage, schema } from '@yaks/sqlite'
 import {
   driver,
   type DurableSql,
@@ -206,6 +206,7 @@ import {
   interrupted,
   keep,
   type Kept,
+  kept,
   keyed,
   landed,
   logged,
@@ -1811,7 +1812,9 @@ export class Store {
               // Writes kept during an outage land before a read is answered.
               // Recovery must be reachable even when a pending write cannot
               // finish: inspecting it is how a caller learns what to fix.
-              if (new URL(request.url).pathname != '/writes') {
+              if (
+                !['/writes', '/inspect'].includes(new URL(request.url).pathname)
+              ) {
                 await this.#settle()
               }
               answer = await this.#serve(request)
@@ -2029,8 +2032,17 @@ export class Store {
    * handed, so it can never arrive from outside. An NDJSON import is
    * @yaks/api's `pour`, chunk by chunk.
    */
-  async #commit(request: Request, seq: number | null = null) {
-    if (poured(request)) return await this.#route(request)
+  async #commit(
+    request: Request,
+    seq: number | null = null,
+    opts: ApplyOpts = {},
+  ) {
+    if (poured(request)) {
+      if (opts.check) {
+        return refuse(new Refused('streaming writes cannot be dry-run'))
+      }
+      return await this.#route(request)
+    }
     try {
       let body = JSON.parse(await request.text())
       if (!Array.isArray(body)) {
@@ -2042,8 +2054,8 @@ export class Store {
       this.#landing = seq
       try {
         out = kernel
-          ? this.#trust(body as Bundle[], vouchOf(request).person)
-          : this.#graph.apply(signed(body as Bundle[], who))
+          ? this.#trust(body as Bundle[], vouchOf(request).person, opts)
+          : this.#graph.apply(signed(body as Bundle[], who), opts)
       } finally {
         this.#landing = null
       }
@@ -2109,6 +2121,55 @@ export class Store {
       return Response.json({
         db: `do:${this.#get('name') ?? ''}`,
         bytes: this.#ctx.storage.sql.databaseSize,
+      })
+    }
+    if (path == '/inspect') {
+      if (!kernel || request.method != 'GET') {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let seq = new URL(request.url).searchParams.get('seq')
+      if (seq == null) {
+        return Response.json({ physical: inspectStorage(this.#sql) })
+      }
+      let n = Number(seq)
+      if (!Number.isSafeInteger(n) || n < 1) {
+        return refuse(new Refused('/inspect needs a positive seq'))
+      }
+      let row = kept(this.#sql, n)
+      if (!row) return refuse(new Refused(`write ${n} is not held for review`))
+      let original = replayed(row)
+      if (poured(original)) {
+        return refuse(new Refused('streaming writes cannot be dry-run'))
+      }
+      let change: Bundle[]
+      try {
+        change = JSON.parse(row.body)
+        if (!Array.isArray(change)) throw new Error('not a batch')
+      } catch {
+        return refuse(new Refused('held write is not a JSON batch'))
+      }
+      let names = change.flatMap((b) =>
+        Object.keys(b).filter((name) =>
+          name != 'entity' && !name.startsWith('$')
+        )
+      )
+      let physical = inspectStorage(this.#sql, 160, names)
+      let phases: Record<string, number> = {}
+      let start = performance.now()
+      let answer = await this.#commit(original, null, {
+        check: true,
+        trace: (phase, ms) => phases[phase] = (phases[phase] ?? 0) + ms,
+      })
+      let applied = answer.ok ? (await answer.json() as Bundle[]).length : null
+      return Response.json({
+        physical,
+        dryRun: {
+          seq: n,
+          status: answer.status,
+          bundles: applied,
+          ms: performance.now() - start,
+          phases,
+        },
       })
     }
     if (path == '/writes') {

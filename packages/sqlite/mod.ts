@@ -79,6 +79,7 @@ import { bindings } from './rules.ts'
 
 export * from './archetype.ts'
 export { catalog } from './catalog.ts'
+export { inspect, type StoreSize, type TableSize } from './inspect.ts'
 export {
   asked,
   checks,

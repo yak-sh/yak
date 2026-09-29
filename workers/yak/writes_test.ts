@@ -94,6 +94,59 @@ let titled = (eid: string, title: string, was?: string | null) => ({
   ...(was === undefined ? {} : { $was: { doc: { title: was } } }),
 })
 
+Deno.test('inspection dry-runs a held write without changing it or the graph', async () => {
+  let o = object()
+  broken(o)
+  await assertRejects(() => o.apply([titled('n1', 'once')]), Pending)
+  db(o.ctx).query({
+    t: 'update',
+    table: 'yak_writes',
+    set: { state: lit('running') },
+  })
+  mended(o)
+  assertEquals(await o.title('n1'), undefined)
+  let path = 'http://store/inspect?seq=1'
+  assertEquals((await o.fetch(new Request(path))).status, 404)
+  let r = await o.fetch(new Request(path, { headers: KERNEL }))
+  assertEquals(r.status, 200)
+  let result = await r.json()
+  assertEquals(result.dryRun.seq, 1)
+  assertEquals(result.dryRun.status, 200)
+  assertEquals(result.dryRun.bundles, 1)
+  assert(result.dryRun.phases.mutate >= 0)
+  assert(
+    result.physical.shown.some((t: { name: string }) => t.name == 'yak_writes'),
+  )
+  assertEquals(await o.title('n1'), undefined)
+  assertEquals(o.writes('interrupted'), 1)
+})
+
+Deno.test('inspection refuses a streaming write without applying it', async () => {
+  let o = object()
+  assertEquals(await o.title('n1'), undefined)
+  let body = JSON.stringify([titled('n1', 'must stay absent')])
+  let request = new Request('http://store/apply', {
+    method: 'POST',
+    headers: { ...KERNEL, 'content-type': 'application/x-ndjson' },
+    body,
+  })
+  let d = db(o.ctx)
+  let seq = keepWrite(d, request, body)
+  d.query({
+    t: 'update',
+    table: 'yak_writes',
+    set: { state: lit('interrupted') },
+  })
+  let r = await o.fetch(
+    new Request(`http://store/inspect?seq=${seq}`, {
+      headers: KERNEL,
+    }),
+  )
+  assertEquals(r.status, 400)
+  assertEquals(await o.title('n1'), undefined)
+  assertEquals(o.writes('interrupted'), 1)
+})
+
 Deno.test('writes a refusing store was sent apply in order, once, when it is mended', async () => {
   let o = object()
   await o.apply([titled('n1', 'zero')])
