@@ -923,13 +923,13 @@
       },
       "required": ["villager", "go"]
     },
-    "explored": {
+    "visited_region": {
       "component": true,
       "type": "object",
       "kind": false,
       "floor": "person",
-      "identity": ["player", "x", "z"],
-      "description": "One twenty-metre world cell visited by a hero. Each hero uncovers their own map. The identity lets visits from several tabs agree on one discovery.",
+      "identity": ["player", "region"],
+      "description": "One world region visited by a hero. Each hero uncovers their own map. The identity lets visits from several tabs agree on one discovery.",
       "properties": {
         "player": {
           "type": "string",
@@ -937,10 +937,9 @@
           "death": "cascade",
           "index": true
         },
-        "x": { "type": "integer" },
-        "z": { "type": "integer" }
+        "region": { "type": "string" }
       },
-      "required": ["player", "x", "z"]
+      "required": ["player", "region"]
     },
     "fire": {
       "component": true,

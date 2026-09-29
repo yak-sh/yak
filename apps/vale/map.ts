@@ -7,7 +7,7 @@
 // by their trade and hollow while spent, where each road leaves the map and
 // the region it leads to, and a ring where each quest tracked goes next
 // (journal.ts). M or the compass opens its panel.
-import { charted, chartVersion } from './grown.ts'
+import { charted, chartVersion, fogged } from './grown.ts'
 import { Top } from './features.ts'
 import { glyph } from './glyphs.ts'
 import { paletteOf } from './ground.ts'
@@ -31,7 +31,7 @@ import { arriveOf, roadsOf } from './ways.ts'
 import type { Seen } from './work.ts'
 import { fireNear } from './fires.ts'
 import { villageOf } from './terrain.ts'
-import { mapped, REACH, revealed } from './explore.ts'
+import { FOG_SIZE } from './mapfog.ts'
 
 // How far past a region's cell road exits are marked, in metres.
 let MARGIN = 32
@@ -125,16 +125,12 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     cache.delete(oldest)
   }
   let was = ''
-  let fogWas: ReadonlyArray<Spot> | null = null
-  let local: Spot[] = []
-  let localWas: ReadonlyArray<Spot> | null = null
-  let boxWas = ''
-  let labels: { id: string; at: Spot }[] = []
-  let labelsWas: ReadonlyArray<Spot> | null = null
+  let fogWas = ''
+  let fogCtx = fog.getContext('2d')!
   let choicesWas = ''
   let pending: ReturnType<typeof setTimeout> | undefined
   canvas.width = canvas.height = 320
-  fog.width = fog.height = 320
+  fog.width = fog.height = FOG_SIZE
   let ctx = canvas.getContext('2d')!
   let key = () => box.join(',')
   let moveGround = () => {
@@ -147,9 +143,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let setView = (next: Box) => {
     if (next.join() == box.join()) return
     box = next
-    boxWas = ''
     was = ''
-    fogWas = null
+    fogWas = ''
+    fogCtx.fillStyle = 'rgba(34, 35, 31, 0.9)'
+    fogCtx.fillRect(0, 0, FOG_SIZE, FOG_SIZE)
     moveGround()
   }
   let overview = () => {
@@ -250,38 +247,19 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   // Where a point sits on the map, as a percentage across and down.
   let pct = (m: number, from: number) =>
     `${((m - from) / box[2] * 100).toFixed(2)}%`
-  let uncover = (points: ReadonlyArray<Spot>) => {
-    if (points == fogWas) return
-    fogWas = points
-    let ctx = fog.getContext('2d')!
-    ctx.globalCompositeOperation = 'source-over'
-    ctx.fillStyle = '#22231f'
-    ctx.fillRect(0, 0, fog.width, fog.height)
-    ctx.globalCompositeOperation = 'destination-out'
-    for (let [x, z] of points) {
-      let m = box[2] / 320
-      let cx = (x - box[0]) / m, cz = (z - box[1]) / m
-      let r = REACH / m
-      if (
-        cx + r < 0 || cz + r < 0 || cx - r > fog.width ||
-        cz - r > fog.height
-      ) continue
-      let shade = ctx.createRadialGradient(
-        cx,
-        cz,
-        Math.max(0, r - 5 / m),
-        cx,
-        cz,
-        r,
-      )
-      shade.addColorStop(0, '#000')
-      shade.addColorStop(1, 'transparent')
-      ctx.fillStyle = shade
-      ctx.beginPath()
-      ctx.arc(cx, cz, r, 0, 2 * Math.PI)
-      ctx.fill()
-    }
-    ctx.globalCompositeOperation = 'source-over'
+  let uncover = (visited: ReadonlySet<string>) => {
+    let id = `${key()}/${[...visited].sort().join(',')}`
+    if (id == fogWas) return
+    fogWas = id
+    fogged(box, visited).then((px) => {
+      if (id == fogWas) {
+        fogCtx.putImageData(
+          new ImageData(px, FOG_SIZE, FOG_SIZE),
+          0,
+          0,
+        )
+      }
+    }).catch(reportError)
   }
 
   tools.addEventListener('click', (e) => {
@@ -348,7 +326,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       nodes: Seen[] = [],
       goals: Mark[] = [],
       visited: ReadonlySet<string> = new Set(),
-      explored: ReadonlyArray<Spot> = [],
+      regions: ReadonlySet<string> = new Set(),
     ) => {
       if (!panel.open) {
         openWas = false
@@ -368,30 +346,12 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       scale.textContent = box[2] == WORLD[2]
         ? `${box[2]} m across`
         : `${box[2]} m across`
-      if (localWas != explored || boxWas != key()) {
-        localWas = explored
-        boxWas = key()
-        local = mapped(explored, box)
-      }
-      uncover(local)
+      if (!drag && pending == undefined) uncover(regions)
       let inside = (x: number, z: number) =>
         x >= box[0] && x <= box[0] + box[2] &&
         z >= box[1] && z <= box[1] + box[2]
       let visible = (x: number, z: number) =>
-        inside(x, z) && revealed([x, z], local)
-      if (box[2] > 320 && labelsWas != explored) {
-        labelsWas = explored
-        let closest = new Map<string, { at: Spot; d: number }>()
-        for (let p of explored) {
-          let id = regionOf(...p)
-          let [ox, oz] = originOf(id)
-          let d = Math.hypot(p[0] - ox - SIZE / 2, p[1] - oz - SIZE / 2)
-          if (d < (closest.get(id)?.d ?? Infinity)) {
-            closest.set(id, { at: p, d })
-          }
-        }
-        labels = [...closest].map(([id, { at }]) => ({ id, at }))
-      }
+        inside(x, z) && regions.has(regionOf(x, z))
       let here = f.down ? null : fireNear(f.body.x, f.body.z)
       near = !!here
       known = new Set(visited)
@@ -426,7 +386,10 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
           : []
       }).join('') +
         (box[2] > 320
-          ? labels.filter(({ at: p }) => visible(...p)).map(({ id, at: p }) =>
+          ? [...regions].map((id) => ({
+            id,
+            at: originOf(id).map((m) => m + SIZE / 2) as Spot,
+          })).filter(({ at: p }) => visible(...p)).map(({ id, at: p }) =>
             `<span class=Map_Region style="${at(...p)}"${
               tipped({ name: levelOf(id)!.name })
             }>${esc(levelOf(id)!.name)}</span>`

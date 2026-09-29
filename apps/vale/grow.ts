@@ -6,6 +6,7 @@
 // deploy compiles this file as an entry of its own, since the page script
 // starts it.
 import { chart } from './chart.ts'
+import { veil } from './mapfog.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import { buffers, pack, type Packed } from './mesh.ts'
 import type { Bundle } from './net.ts'
@@ -19,6 +20,7 @@ import { installBuildingDesigns, installThemeDesigns, vale } from './terrain.ts'
 export type Ask =
   | { voxel: number; ci: number; ck: number; small: boolean }
   | { chart: [number, number, number]; m: number }
+  | { fog: [number, number, number]; visited: string[] }
   | { template: [string, number, number, boolean] }
 
 type Init = { buildingDesigns: Bundle[] } | { themes: Bundle[] }
@@ -29,6 +31,7 @@ export type Answer = {
   n: number
   drawn?: Chunk
   px?: Uint8ClampedArray<ArrayBuffer>
+  fog?: Uint8ClampedArray<ArrayBuffer>
   template?: Packed
 }
 
@@ -51,6 +54,11 @@ addEventListener('message', (e: MessageEvent<Init | (Ask & { n: number })>) => {
     let px = chart(...a.chart, a.m)
     let answer: Answer = { n: a.n, px }
     return postMessage(answer, { transfer: [px.buffer] })
+  }
+  if ('fog' in a) {
+    let fog = veil(a.fog, new Set(a.visited))
+    let answer: Answer = { n: a.n, fog }
+    return postMessage(answer, { transfer: [fog.buffer] })
   }
   let drawn = chunk(vale(a.voxel), a.ci, a.ck, a.small)
   let handed = [

@@ -5,6 +5,7 @@
 // Where the workers cannot start or fail, the page grows and paints itself,
 // and the reason is reported.
 import { chart } from './chart.ts'
+import { veil } from './mapfog.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
 import { pack, type Packed } from './mesh.ts'
@@ -153,5 +154,19 @@ export let charted = async (
   } catch (e) {
     broke(e)
     return chart(x, z, size, m)
+  }
+}
+
+/** The irregular region veil, sampled by the world's worker. */
+export let fogged = async (
+  box: [number, number, number],
+  visited: ReadonlySet<string>,
+): Promise<Uint8ClampedArray<ArrayBuffer>> => {
+  try {
+    let a = await ask({ fog: box, visited: [...visited] })
+    return a.fog ?? veil(box, visited)
+  } catch (e) {
+    broke(e)
+    return veil(box, visited)
   }
 }
