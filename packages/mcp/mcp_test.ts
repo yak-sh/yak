@@ -195,7 +195,7 @@ Deno.test('an applied batch may drop a component, and says so', async () => {
   assertEquals(bundles(result(out))[0].doc, null)
 })
 
-Deno.test('filters and limit join the query line', async () => {
+Deno.test('filters and limit narrow the whole query line', async () => {
   let client = await connect()
   await called(client, 'graph_apply', {
     change: [spring, { entity: { eid: 'b2' }, book: { price: 40 } }],
@@ -217,6 +217,14 @@ Deno.test('filters and limit join the query line', async () => {
     )),
     [],
   )
+  // a filter narrows every alternative, not just the last one
+  let either = bundles(result(
+    await called(client, 'graph_query', {
+      q: '.price=40|.price=12',
+      filters: ['.price<20'],
+    }),
+  ))
+  assertEquals(either.map((b) => b.entity.eid), ['b1'])
 })
 
 Deno.test('the server signs the batch, never the client', async () => {

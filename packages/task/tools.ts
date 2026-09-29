@@ -21,6 +21,7 @@
 
 import { argsOf, type Bundle, type Comp } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
+import { conjoin } from '@yaks/query'
 
 // Where the work is filed, as arguments. The two that name an entity arrive
 // as eids: a person types `P-19`, and the runner resolves every argument the
@@ -63,18 +64,17 @@ export let marked: Record<string, Record<string, Comp | null>> = {
  * The default names `.task.status`, not `.status`: a graph that also keeps
  * transcripts has a `session.status` too, so a bare `.status` there would be
  * ambiguous — the query grammar reporting a genuine ambiguity, not a bug to
- * work around. A caller's own query is passed through as typed, and every
- * task comes back whole (`*`): a listing shows tasks, not the words it matched.
+ * work around. A caller's own query is passed through as typed and narrowed
+ * to tasks as a whole (`.a|.b` lists the tasks that are either), and every task
+ * comes back whole (`*`): a listing shows tasks, not the words it matched.
  */
-export let listing = (query?: unknown, limit?: unknown): string => {
-  let said = String(query ?? '').trim()
-  return [
+export let listing = (query?: unknown, limit?: unknown): string =>
+  conjoin(
     '.task',
-    said || '.task.status=open',
-    ...(limit == null ? [] : [`.limit=${Number(limit)}`]),
+    String(query ?? '').trim() || '.task.status=open',
+    limit == null ? '' : `.limit=${Number(limit)}`,
     '*',
-  ].join('&')
-}
+  )
 
 /** The implementations behind the tools ./vocab.json declares. It is a factory,
  * like every subpath export in these packages, though this one needs nothing

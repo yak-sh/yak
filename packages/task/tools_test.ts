@@ -48,6 +48,19 @@ Deno.test('a listing always says .task, and open unless told otherwise', () => {
   assertEquals(listing('hobbit', 5), '.task&hobbit&.limit=5&*')
 })
 
+Deno.test('a listing of alternatives lists only tasks', async () => {
+  let { g } = teamGraph()
+  await g.apply([
+    { entity: { eid: 't' }, task: {}, doc: { title: 'fig' } },
+    { entity: { eid: 'd' }, doc: { title: 'pear' } },
+  ])
+  let found = await tools.task_list!(
+    { entity: { eid: 'c1' }, call: { args: { query: 'fig|pear' } } },
+    g,
+  ) as Bundle[]
+  assertEquals(found.map((b) => b.entity.eid), ['t'])
+})
+
 Deno.test('a status is the marks that mean it', async () => {
   let { g } = teamGraph()
   await g.apply([{ entity: { eid: 't' }, task: {}, doc: { title: 'a task' } }])

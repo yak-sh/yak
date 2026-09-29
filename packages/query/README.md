@@ -170,7 +170,9 @@ OR, and it binds more loosely than the AND of adjacent terms, so
 `.a=1 .b=2|.c=3` is `(a and b) or c`. Parentheses group: `.a=1 (.b=2|.c=3)` is
 `a and (b or c)`. An empty alternative beside a `|` is refused. A directive
 (below) belongs to the whole query wherever it is written, so `.a|.b&.limit=2`
-is at most two of `a or b`, never `b` cut to two.
+is at most two of `a or b`, never `b` cut to two. To narrow a line with another,
+`conjoin('.a|.b', '.c')` writes `(.a|.b)&.c`, grouping a line that holds a
+top-level `|`.
 
 Inside a value, `,` is the any-of operator. A list has no spaces and no empty
 member: `.p=a,b` is one clause, and `.p=a, b` is refused rather than repaired. A

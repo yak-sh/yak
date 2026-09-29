@@ -14,6 +14,8 @@
 // what was asked for. Anything that is not a row listing (an aggregate, a
 // count) passes through as it came.
 
+import { conjoin } from '@yaks/query'
+
 // The platform's bookkeeping about a row — who wrote it and when, whether it
 // has been served. `archived` is not here: an app's agent reads and writes it
 // (it is how an error is marked fixed), so it is the person's business too.
@@ -66,12 +68,15 @@ export let names = (line: string, word: string) =>
 // table for would refuse the whole read rather than narrow it. A caller that
 // knows the store's vocabulary passes the ones it declares; the default is
 // every platform word.
+// The screen narrows the whole ask, so `.a|.b` leaves the platform's rows out
+// of both alternatives (@yaks/query `conjoin`).
 export let asking = (line: string, words: string[] = PLATFORM) => {
-  if (!line.replace(/^[?&]+/, '') || line.includes('id=')) return line
+  let ask = line.replace(/^[?&]+/, '')
+  if (!ask || line.includes('id=')) return line
   let screen = words.filter((k) =>
     !names(line, k) && !(k == 'error' && names(line, 'entry'))
   ).map((k) => `!${k}`)
-  return screen.length ? `${line}&${screen.join('&')}` : line
+  return line.slice(0, line.length - ask.length) + conjoin(ask, ...screen)
 }
 
 // The rule itself, over rows: what this filter line's answer carries.

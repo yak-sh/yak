@@ -521,6 +521,26 @@ let tokens = (q: string): string[] => {
   return out
 }
 
+/**
+ * Query lines joined so that each narrows the whole of the others. `&` binds
+ * tighter than `|`, so a line joined bare onto `.a|.b` would narrow `.b` alone;
+ * a line holding a top-level `|` is grouped first. Blank lines are dropped.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { conjoin } from '@yaks/query'
+ *
+ * assertEquals(conjoin('.a|.b', '.c', ''), '(.a|.b)&.c')
+ * assertEquals(conjoin('.a|.b'), '.a|.b')
+ * ```
+ */
+export let conjoin = (...lines: string[]): string => {
+  let ls = lines.map((l) => l.trim()).filter(Boolean)
+  return ls
+    .map((l) => ls.length > 1 && tokens(l).includes('|') ? `(${l})` : l)
+    .join('&')
+}
+
 /** How `parse` should read the query it is given. */
 export type ParseOpts = {
   /** whether a bare word is a full-text term (default true). A rule, or a saved

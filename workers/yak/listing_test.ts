@@ -70,6 +70,8 @@ Deno.test('a session query and an eid include its error entry', () => {
 Deno.test("the platform's rows are left out of the question too", () => {
   let words = ['error', 'person']
   assertEquals(asking('?.doc', words), '?.doc&!error&!person')
+  // and out of every alternative, not just the last
+  assertEquals(asking('?.a|.b', words), '?(.a|.b)&!error&!person')
   // Naming one asks for it, and an address asks for its row whatever it is.
   assertEquals(asking('?.person', words), '?.person&!error')
   assertEquals(asking('?id=abc'), '?id=abc')

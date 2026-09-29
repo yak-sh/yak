@@ -245,7 +245,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
 // arrives, and the tool sees one shape.
 //
 // The `app`/`space` pair that named one app moves too: on a write it becomes
-// `$app` on each bundle, on a read the `.in=` prefix on the filter — both the
+// `$app` on each bundle, on a read an `.in=` filter — both the
 // platform's own forms, each written where the thing it is about is
 // (agent.ts). Signed out it moves nowhere: the pair is the call's scope there,
 // read off the arguments before any graph exists (anon.ts `opened`), so
@@ -292,7 +292,10 @@ let heard = (
     )
   }
   if (name == 'graph_query' && typeof rest.q == 'string') {
-    rest.q = `.in=${at}&${rest.q}`
+    rest.filters = [
+      `.in=${at}`,
+      ...(Array.isArray(rest.filters) ? rest.filters : []),
+    ]
   }
   return rest
 }
