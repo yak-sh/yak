@@ -139,6 +139,11 @@ export let cut = (v: Float32Array, dim: number): Float32Array => {
   return unit(v.slice(0, dim))
 }
 
+/** The space a remote's vectors live in: the model, and its width when
+ * {@link cut}, since two widths of one model are two spaces. */
+export let space = (said: Remote): string =>
+  said.dim ? `${said.model}#${said.dim}` : said.model
+
 /** An {@link Embedder} that asks a server for every vector, batching the
  * calls made together. */
 export let remote = (said: Remote): Embedder => {
@@ -206,7 +211,7 @@ export let remote = (said: Remote): Embedder => {
     }
   }
   return {
-    model: said.model,
+    model: space(said),
     embed: (text) =>
       new Promise((ok, no) => {
         if (!waiting.length) setTimeout(flush)

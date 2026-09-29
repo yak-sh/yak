@@ -30,21 +30,30 @@
 // it into an embedder — but it is reported, once, where it is read, rather than
 // taking the server down with it. `{"via": "hash"}` is the offline embedder
 // shipped here — instant, deterministic, and no model at all — which is what a
-// development machine and a test want.
+// development machine and a test want. `{"via": "model2vec"}` is a static model
+// run in this process (@yaks/model2vec): about a millisecond a text, fast
+// enough to embed every prompt.
 
 import type { Vocab } from '@yaks/vocab'
+import { type Model2Vec, model2vec } from '@yaks/model2vec'
 import type { Embedder } from './embedder.ts'
 import { hashEmbedder } from './embedder.ts'
 import { type Field, fields, searched } from './fields.ts'
-import { type Remote, remote } from './remote.ts'
+import { type Remote, remote, space } from './remote.ts'
 
 /** An embedder, as a config names one. */
-export type Named = Remote | {
-  /** the offline embedder: word buckets, no model, no network */
-  via: 'hash'
-  /** how many buckets (default 64) */
-  dim?: number
-}
+export type Named =
+  | Remote
+  | {
+    /** the offline embedder: word buckets, no model, no network */
+    via: 'hash'
+    /** how many buckets (default 64) */
+    dim?: number
+  }
+  | (
+    /** a static model on the Hugging Face hub, run in this process */
+    { via: 'model2vec' } & Omit<Model2Vec, 'fetch'>
+  )
 
 /** What a config declares to `@yaks/embedding`. */
 export type Options = {
@@ -94,8 +103,8 @@ export let embedderOf = (options: Options): Ready => {
         'no `embedder` is named — `{"via": "hash"}` is the offline one, and a model is named beside the plugin',
     }
   }
-  if (said.via == 'hash') {
-    let embedder = hashEmbedder(said.dim)
+  if (said.via == 'hash' || said.via == 'model2vec') {
+    let embedder = said.via == 'hash' ? hashEmbedder(said.dim) : model2vec(said)
     return { model: embedder.model, embedder }
   }
   if (said.via == 'ollama' || said.via == 'openai') {
@@ -105,11 +114,11 @@ export let embedderOf = (options: Options): Ready => {
     // wanted one — a machine on your own network — and goes straight through.
     return 'key' in said && said.key == null
       ? {
-        model: said.model,
+        model: space(said),
         waiting:
           `waiting for a key: ${said.via} at ${said.base} is named with one the environment has not got`,
       }
-      : { model: said.model, embedder: remote(said) }
+      : { model: space(said), embedder: remote(said) }
   }
   return {
     waiting: `no embedder called ${JSON.stringify((said as Named).via)}`,

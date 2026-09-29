@@ -1,0 +1,14 @@
+{
+  "_": "The browser gate: a static model is arithmetic over two fetched files, so the whole package must type-check with only the web platform in scope.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@huggingface/tokenizers": "npm:@huggingface/tokenizers@0.2.0"
+  }
+}

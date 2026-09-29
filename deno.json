@@ -133,6 +133,7 @@
     "./packages/blob",
     "./packages/fts",
     "./packages/embedding",
+    "./packages/model2vec",
     "./packages/api",
     "./packages/mcp",
     "./packages/cli",
@@ -218,7 +219,6 @@
     }
   },
   "imports": {
-    "@huggingface/transformers": "npm:@huggingface/transformers@^3",
     "es-module-lexer": "npm:es-module-lexer@1.7.0",
     "lucide": "npm:lucide@1.31.0",
     "preact": "npm:preact@^10.29.1",

@@ -98,6 +98,11 @@ grouped approximately by function, **not** by dependency order.
   write touched, from any process, and the plugin's service settles the queue a
   batch at a time.
 
+- **[@yaks/model2vec](./model2vec)** — Embed text in-process with a Model2Vec
+  static model read from the Hugging Face hub: a millisecond a text, no native
+  code, the same vector on a server, in a Worker and in a browser. The embedder
+  `@yaks/embedding` names `via: "model2vec"`.
+
 - **[@yaks/match](./match)** — Evaluate supported query AST clauses against
   bundles in memory. Tests compare shared behavior with SQL, but search,
   ordering and unsupported queries differ; see the package's compatibility

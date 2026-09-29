@@ -116,7 +116,7 @@ Options:
 
 | Option       | Meaning                                                                               |
 | ------------ | ------------------------------------------------------------------------------------- |
-| `embedder`   | `{ via: 'hash', dim? }`, or a remote embedder configuration                           |
+| `embedder`   | `{ via: 'hash', dim? }`, `{ via: 'model2vec', model, dim? }`, or a remote embedder    |
 | `text`       | Selected `component.property` names; defaults to the properties marked `search: true` |
 | `neighbours` | Maximum `.near` results, default 8                                                    |
 | `floor`      | Minimum similarity for `.near`, default 0                                             |
@@ -180,10 +180,18 @@ endpoint; the calls made in one turn of the event loop ride in one request, up
 to `count` (64) inputs and `load` (128,000) characters each. Credentials are
 arguments; `remote()` itself reads no environment variables. Optional `dim`
 truncates and renormalizes vectors; use it with a model that supports that
-operation. `chars` (default 30,000) bounds the text sent for one vector: a
-server refuses input past its model's context rather than truncating it. A
-status saying the input was refused (400, 413, 422) rejects with `Refused`; any
-other failure rejects with the error.
+operation. Two widths of one model are two spaces, so a `dim` is part of the
+stored model name (`qwen3-embedding:0.6b#384`). `chars` (default 30,000) bounds
+the text sent for one vector: a server refuses input past its model's context
+rather than truncating it. A status saying the input was refused (400, 413, 422)
+rejects with `Refused`; any other failure rejects with the error.
+
+`{ via: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`
+runs a Model2Vec static model in this process ([@yaks/model2vec](../model2vec)):
+about a millisecond for a 500-token text on one core, fast enough to embed every
+prompt. The model is fetched from the Hugging Face hub on the first embed and
+kept in the platform's cache. Its space is the pinned model and its width
+(`minishlab/potion-retrieval-32M@6fc8051#256`).
 
 ## The sweep
 

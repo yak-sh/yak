@@ -2,8 +2,13 @@
 // chose.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
-import { chosen, embedderOf, ready } from './options.ts'
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertThrows,
+} from '@std/assert'
+import { chosen, embedderOf, type Named, ready } from './options.ts'
 import { shop } from './testing.ts'
 
 test('the offline embedder is named like any other', () => {
@@ -23,6 +28,17 @@ test('a hosted one carries its model name into the vector space', () => {
   })
   assertEquals(said.embedder?.model, 'qwen3')
   assertEquals(said.model, 'qwen3')
+})
+
+test('two widths of one model are two spaces', () => {
+  let named = (embedder: Named) => embedderOf({ embedder }).model
+  let qwen = { via: 'ollama', model: 'qwen3', base: 'https://box' } as const
+  assertNotEquals(named({ ...qwen, dim: 256 }), named({ ...qwen, dim: 384 }))
+  let potion = { via: 'model2vec', model: 'o/potion@abc' } as const
+  assertNotEquals(named({ ...potion, dim: 256 }), named(potion))
+  // the space is known from the config alone, before a model is loaded
+  let said = embedderOf({ embedder: { ...potion, dim: 256 } })
+  assertEquals(said.model, said.embedder?.model)
 })
 
 test('config that has not arrived is waiting, never a boot failure', () => {
