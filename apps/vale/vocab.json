@@ -22,16 +22,17 @@
       "description": "A hero belonging to the person who made it, as the row's created stamp says. Their appearance lives in look rows; everything else they earn lives in rows of its own.",
       "properties": {}
     },
-    "party": {
+    "party_step": {
       "component": true,
       "type": "object",
-      "kind": false,
       "floor": "person",
-      "description": "The party a signed-in hero has joined. It lives on that hero's player row so leaving or joining another party changes one current membership.",
+      "description": "One signed-in hero joining or leaving a party. The newest row written by that hero's owner decides membership; an empty group leaves. A step is a new row so its created.by stamp proves who chose it.",
       "properties": {
-        "group": { "type": "string", "index": true }
+        "player": { "type": "string", "ref": "player", "index": true },
+        "group": { "type": "string", "index": true },
+        "at": { "type": "number" }
       },
-      "required": ["group"]
+      "required": ["player", "group", "at"]
     },
     "party_invite": {
       "component": true,

@@ -19,6 +19,7 @@ export { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
+import { groupOf } from './party-state.ts'
 import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
@@ -300,6 +301,7 @@ export let connect = (base: URL) => {
     }
     let result = read()
     asking.set(eid, result)
+    void result.catch(() => asking.delete(eid))
     return result
   }
 
@@ -350,11 +352,13 @@ export let connect = (base: URL) => {
     /** One named hero beyond the page's area, including their newest look
      * and the person who made them. */
     about,
-    /** The party a named hero belongs to, read from their current row even
-     * when they are beyond the page's world watch. */
+    /** The party a named hero belongs to, from steps written by that hero's
+     * owner even when they are beyond the page's world watch. */
     partyOf: async (eid: string): Promise<string> => {
-      let b = (await once(`.eid=${JSON.stringify(eid)}&.player&?party&*`))[0]
-      return str(comp(b, 'party').group)
+      let { by } = await about(eid)
+      if (!by) return ''
+      let rows = await once(`.party_step.player=${JSON.stringify(eid)}&*`)
+      return groupOf(rows, eid, by)
     },
     /** Whether the hero this tab remembers is still in the store. */
     known: async (eid: string): Promise<boolean> =>
