@@ -246,12 +246,11 @@ test('git clones it, and finds nothing wrong with what it got', async () => {
 test('a pack too big for one packet arrives whole', async () => {
   let { g, git: index, bytes } = fixture()
   // 64k is all the entropy one call gives, and hex of random bytes deflates to
-  // about half its length — so four of them is a pack of a few packets.
-  let big = Array.from({ length: 4 }, () =>
-    Array.from(
-      crypto.getRandomValues(new Uint8Array(65536)),
-      (b) => b.toString(16).padStart(2, '0'),
-    ).join('')).join('')
+  // about half its length — so two of them is a pack of three packets.
+  let big = Array.from(
+    { length: 2 },
+    () => crypto.getRandomValues(new Uint8Array(65536)).toHex(),
+  ).join('')
   let tree = await index.files({ 'big.txt': file(bytes, big) })
   let head = await index.commit({
     tree,

@@ -3,38 +3,43 @@
 // checkouts cut from it.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { holds, lost, reclaim } from './host.ts'
+import { holds, idleFor, lost, reclaim } from './host.ts'
+import { git, template } from './testing.ts'
 
-let git = async (cwd: string, ...args: string[]) => {
-  let p = await new Deno.Command('git', {
-    cwd,
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!p.success) throw new Error(new TextDecoder().decode(p.stderr))
-  return new TextDecoder().decode(p.stdout).trim()
-}
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
-/** A repository, a worktree root beside it, and one cut checkout per name. */
-let fixture = async () => {
-  let dir = await Deno.makeTempDir()
+let seeded = template(async (dir) => {
   let repo = dir + '/repo'
-  let root = dir + '/worktrees'
   await Deno.mkdir(repo)
-  await Deno.mkdir(root)
+  await Deno.mkdir(dir + '/worktrees')
   await git(repo, 'init', '-q', '-b', 'main', '.')
   await git(repo, 'config', 'user.email', 'test@example.org')
   await git(repo, 'config', 'user.name', 'Test')
   await Deno.writeTextFile(repo + '/file', 'committed')
   await git(repo, 'add', '.')
   await git(repo, 'commit', '-qm', 'initial')
+})
+
+/** A repository, a worktree root beside it, and one cut checkout per name,
+ * linked the way Git does by default or by a path relative to itself. */
+let fixture = async () => {
+  let dir = await seeded()
+  let repo = dir + '/repo'
+  let root = dir + '/worktrees'
   return {
     repo,
-    cut: async (name: string) => {
+    cut: async (name: string, ...how: string[]) => {
       let path = root + '/' + name
-      await git(repo, 'worktree', 'add', '-q', '-b', 'task-' + name, path)
+      await git(
+        repo,
+        'worktree',
+        'add',
+        '-q',
+        ...how,
+        '-b',
+        'task-' + name,
+        path,
+      )
       return path
     },
     commit: async (path: string, text: string) => {
@@ -105,6 +110,20 @@ test('a checkout whose gitdir is gone is removed outright', async () => {
     assertEquals(await there(path), false)
     // A live checkout is not lost, whatever it holds.
     assertEquals(await lost(await f.cut('live')), false)
+  } finally {
+    await f.free()
+  }
+})
+
+test('a worktree linked by a relative path is live, and just touched', async () => {
+  let f = await fixture()
+  try {
+    let path = await f.cut('relative', '--relative-paths')
+    await Deno.writeTextFile(path + '/scratch', 'not committed')
+    assertEquals(await lost(path), false)
+    assert(await idleFor(path) < 60_000)
+    assertEquals(await reclaim(path), 'dirty')
+    assert(await there(path + '/scratch'))
   } finally {
     await f.free()
   }

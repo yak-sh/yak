@@ -390,7 +390,12 @@ export let land = async (ops: LandOps = {}): Promise<Outcome> => {
     // alone. `read-tree` runs the same two-tree/worktree safety check as the
     // fast-forward, without changing the index or files. A refusal here is the
     // checkout's state, while a merge that fails after it passed remains a
-    // fault (a hook, corruption, or a race somebody has to hear about).
+    // fault (a hook, corruption, or a race somebody has to hear about). The
+    // fast-forward refreshes the index before its check and `read-tree` does
+    // not, so the refresh comes first: a file touched but not changed is not
+    // in the way. Its exit code only says some file differs, which the check
+    // reads for itself.
+    await git(root, ['update-index', '-q', '--refresh'], false)
     let ready = await git(
       root,
       ['read-tree', '-n', '-m', '-u', 'HEAD', branch],

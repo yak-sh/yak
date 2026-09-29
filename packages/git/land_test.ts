@@ -7,21 +7,9 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { land, reverts } from './land.ts'
 import { runs } from './tools.ts'
+import { git as command, template } from './testing.ts'
 import { CallError } from '@yaks/tools'
 import type { Graph } from '@yaks/graph'
-
-let command = async (cwd: string, ...args: string[]) => {
-  let r = await new Deno.Command('git', {
-    args,
-    cwd,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  let out = new TextDecoder().decode(r.stdout).trim()
-  let err = new TextDecoder().decode(r.stderr).trim()
-  if (r.code) throw new Error(`git ${args.join(' ')}: ${err || out}`)
-  return out
-}
 
 let result = async (cwd: string, ...args: string[]) =>
   await new Deno.Command('git', {
@@ -42,15 +30,19 @@ let exists = (path: string) => {
 
 type Repo = { root: string; repo: string; tree: string }
 
+let at = (root: string): Repo => ({
+  root,
+  repo: `${root}/repo`,
+  tree: `${root}/work`,
+})
+
 // A primary checkout on `main` and one locked linked worktree on `work` with a
 // commit to land — the shape a worker's checkout arrives in (whoever hands one
 // out locks it). land derives `main` as the base and the primary as the shared
 // checkout from `git worktree list`, so nothing here is a graph entity: the
 // whole test proves land needs no graph, no server and no config.
-let setup = async (): Promise<Repo> => {
-  let root = Deno.makeTempDirSync({ prefix: 'yaks-land-' })
-  let repo = `${root}/repo`
-  let tree = `${root}/work`
+let base = async (root: string) => {
+  let { repo, tree } = at(root)
   Deno.mkdirSync(repo)
   await command(repo, 'init', '--initial-branch=main')
   await command(repo, 'config', 'user.email', 'test@example.com')
@@ -58,25 +50,56 @@ let setup = async (): Promise<Repo> => {
   Deno.writeTextFileSync(`${repo}/base.txt`, 'base\n')
   await command(repo, 'add', 'base.txt')
   await command(repo, 'commit', '-m', 'base')
-  await command(repo, 'worktree', 'add', '-b', 'work', tree, 'main')
+  await command(
+    repo,
+    'worktree',
+    'add',
+    '--relative-paths',
+    '-b',
+    'work',
+    tree,
+    'main',
+  )
   await command(repo, 'worktree', 'lock', '--reason', 'someone works', tree)
   Deno.writeTextFileSync(`${tree}/candidate.txt`, 'candidate\n')
   await command(tree, 'add', 'candidate.txt')
   await command(tree, 'commit', '-m', 'candidate')
-  return { root, repo, tree }
 }
+
+// Each shape a test starts from is built once and copied to each test.
+let repo = (build: (r: Repo) => Promise<unknown>) => {
+  let made = template((root) => build(at(root)))
+  return async () => at(await made())
+}
+
+let setup = repo((r) => base(r.root))
 
 // A rival lands on `main` first — exactly what land does from another worktree:
 // its own branch, fast-forwarded into the shared checkout. This is how the base
 // moves out from under a pending lander.
 let rivalLands = async (r: Repo, file: string, body: string) => {
   let rival = `${r.root}/rival`
-  await command(r.repo, 'worktree', 'add', '-b', 'rival', rival, 'main')
+  await command(
+    r.repo,
+    'worktree',
+    'add',
+    '--relative-paths',
+    '-b',
+    'rival',
+    rival,
+    'main',
+  )
   Deno.writeTextFileSync(`${rival}/${file}`, body)
   await command(rival, 'add', file)
   await command(rival, 'commit', '-m', 'rival')
   await command(r.repo, 'merge', '--ff-only', 'rival')
 }
+
+// The candidate waiting while a rival has landed `rival.txt` on `main`.
+let moved = repo(async (r) => {
+  await base(r.root)
+  await rivalLands(r, 'rival.txt', 'rival\n')
+})
 
 // main moves on its own, the way it does when anyone else lands: a commit made
 // in the shared checkout itself.
@@ -137,7 +160,7 @@ test(
 test(
   'the `land` tool answers the sha; a divergence is a refusal',
   async () => {
-    let r = await setup()
+    let r = await moved()
     try {
       // The tool acts on the checkout its call stands in — the `cwd` of the
       // process that made it, which a command line fills with where the
@@ -148,7 +171,6 @@ test(
         process: { cwd: r.tree },
       }
       let graph = {} as Graph
-      await rivalLands(r, 'rival.txt', 'rival\n')
       let refused = await assertRejects(
         () => Promise.resolve(runs().land(call, graph)),
         CallError,
@@ -217,18 +239,15 @@ test(
 test(
   'a moved base makes land rebase and RETURN without merging; a second land fast-forwards',
   async () => {
-    let r = await setup()
+    let r = await moved()
     try {
-      let before = await command(r.repo, 'rev-parse', 'main')
-      await rivalLands(r, 'rival.txt', 'rival\n')
-      let moved = await command(r.repo, 'rev-parse', 'main')
-      assert(moved != before)
+      let tip = await command(r.repo, 'rev-parse', 'main')
 
       let out: string[] = []
       let first = await land({ cwd: r.tree, write: (t) => out.push(t) })
       assert('diverged' in first && !first.conflict, JSON.stringify(first))
       // The base is untouched — land did not merge.
-      assertEquals(await command(r.repo, 'rev-parse', 'main'), moved)
+      assertEquals(await command(r.repo, 'rev-parse', 'main'), tip)
       let text = out.join('\n')
       assert(text.includes('moved'), text)
       // The `git diff --stat` names what the base pulled in.
@@ -315,6 +334,20 @@ test(
     }
   },
 )
+
+test('a file the shared checkout only touched is not in the way', async () => {
+  let r = await setup()
+  try {
+    Deno.writeTextFileSync(`${r.tree}/base.txt`, 'rewritten\n')
+    await command(r.tree, 'commit', '-am', 'rewrite base')
+    Deno.utimeSync(`${r.repo}/base.txt`, 0, 0)
+    let outcome = await land({ cwd: r.tree, ...quiet })
+    assert('landed' in outcome, JSON.stringify(outcome))
+    assertEquals(Deno.readTextFileSync(`${r.repo}/base.txt`), 'rewritten\n')
+  } finally {
+    Deno.removeSync(r.root, { recursive: true })
+  }
+})
 
 test(
   'land refuses to run in the shared checkout, not a linked worktree',
@@ -568,7 +601,8 @@ test(
 // by taking the branch's side wholesale — which puts the file back to its
 // pre-base content and undoes the base commit in between. A gate cannot see it
 // (the tests rewind with the code); land must.
-let stale = async (r: Repo) => {
+let stale = repo(async (r) => {
+  await base(r.root)
   Deno.writeTextFileSync(`${r.tree}/base.txt`, 'branch\n')
   Deno.writeTextFileSync(`${r.tree}/mine.txt`, 'mine\n')
   await command(r.tree, 'add', '-A')
@@ -580,7 +614,7 @@ let stale = async (r: Repo) => {
   Deno.writeTextFileSync(`${r.tree}/base.txt`, 'base\n')
   await command(r.tree, 'add', 'base.txt')
   await command(r.tree, '-c', 'core.editor=true', 'rebase', '--continue')
-}
+})
 
 // A move deletes the old path in the landing diff; the branch's own log must
 // say so too, not only name the new path, or every rename reads as the rebase's.
@@ -597,9 +631,8 @@ test('a file the branch moves is the branch', async () => {
 })
 
 test('land refuses a rebase that rewound a file past the base', async () => {
-  let r = await setup()
+  let r = await stale()
   try {
-    await stale(r)
     let e = await assertRejects(() => land({ cwd: r.tree, write: () => {} }))
     let said = (e as Error).message
     assert(said.includes('base.txt'), said)
@@ -612,9 +645,8 @@ test('land refuses a rebase that rewound a file past the base', async () => {
 })
 
 test('--allow-revert lands the rewind, with a warning', async () => {
-  let r = await setup()
+  let r = await stale()
   try {
-    await stale(r)
     let warned: string[] = []
     let outcome = await land({
       cwd: r.tree,
@@ -630,9 +662,8 @@ test('--allow-revert lands the rewind, with a warning', async () => {
 })
 
 test('a clean rebase still lands', async () => {
-  let r = await setup()
+  let r = await moved()
   try {
-    await rivalLands(r, 'other.txt', 'rival\n')
     let first = await land({ cwd: r.tree, write: () => {} })
     assertEquals(first, { diverged: true, conflict: false })
     let outcome = await land({ cwd: r.tree, write: () => {} })

@@ -16,6 +16,7 @@ import { keyDoc, keyKeywords } from '@yaks/key'
 import { loadVocab } from '@yaks/vocab'
 import { gitDoc } from './comp.ts'
 import { runs } from './tools.ts'
+import { git, template } from './testing.ts'
 
 let tools = runs()
 let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, keyDoc, gitDoc], [
@@ -200,30 +201,21 @@ test('verify refuses a symbol whose file is missing', async () => {
 
 // ---- against a repository ---------------------------------------------------
 
-let command = async (cwd: string, ...args: string[]) => {
-  let r = await new Deno.Command('git', {
-    args,
-    cwd,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  let out = new TextDecoder().decode(r.stdout).trim()
-  if (r.code) throw new Error(`git ${args.join(' ')}: ${out}`)
-  return out
-}
+// `f.js` committed twice: a citation verified at the first commit, `at`.
+let made = template(async (cwd) => {
+  await git(cwd, 'init', '-q', '--initial-branch=main')
+  await git(cwd, 'config', 'user.email', 'test@example.com')
+  await git(cwd, 'config', 'user.name', 'Test')
+  Deno.writeTextFileSync(`${cwd}/f.js`, 'let cap = 1\n')
+  await git(cwd, 'add', 'f.js')
+  await git(cwd, 'commit', '-qm', 'one')
+  Deno.writeTextFileSync(`${cwd}/f.js`, 'let cap = 2\n')
+  await git(cwd, 'commit', '-qam', 'two')
+})
 
 let repo = async () => {
-  let cwd = Deno.makeTempDirSync({ prefix: 'yaks-cites-tools-' })
-  await command(cwd, 'init', '-q', '--initial-branch=main')
-  await command(cwd, 'config', 'user.email', 'test@example.com')
-  await command(cwd, 'config', 'user.name', 'Test')
-  Deno.writeTextFileSync(`${cwd}/f.js`, 'let cap = 1\n')
-  await command(cwd, 'add', 'f.js')
-  await command(cwd, 'commit', '-qm', 'one')
-  let at = await command(cwd, 'rev-parse', 'HEAD')
-  Deno.writeTextFileSync(`${cwd}/f.js`, 'let cap = 2\n')
-  await command(cwd, 'commit', '-qam', 'two')
-  return { cwd, at }
+  let cwd = await made()
+  return { cwd, at: await git(cwd, 'rev-parse', 'HEAD~') }
 }
 
 test(
@@ -249,7 +241,7 @@ test(
   'verify marks the citation and moves its revision to the commit checked out',
   async () => {
     let { cwd, at } = await repo()
-    let head = await command(cwd, 'rev-parse', 'HEAD')
+    let head = await git(cwd, 'rev-parse', 'HEAD')
     let bundles = [
       doc('doc-1', 1),
       fileAt('file-1', 'f.js'),

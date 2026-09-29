@@ -5,23 +5,11 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { discover } from './host.ts'
 import { collect, IDLE, service } from './service.ts'
-import { fixture as graphed } from './testing.ts'
+import { fixture as graphed, git, template } from './testing.ts'
 
-let git = async (cwd: string, ...args: string[]) => {
-  let p = await new Deno.Command('git', {
-    cwd,
-    args,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!p.success) throw new Error(new TextDecoder().decode(p.stderr))
-  return new TextDecoder().decode(p.stdout).trim()
-}
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
-/** A repository with one checkout cut per name, and its graph. */
-let fixture = async () => {
-  let dir = await Deno.realPath(await Deno.makeTempDir())
+let seeded = template(async (dir) => {
   let repo = dir + '/repo'
   await Deno.mkdir(repo)
   await git(repo, 'init', '-q', '-b', 'main', '.')
@@ -30,6 +18,12 @@ let fixture = async () => {
   await Deno.writeTextFile(repo + '/file', 'committed')
   await git(repo, 'add', '.')
   await git(repo, 'commit', '-qm', 'initial')
+})
+
+/** A repository with one checkout cut per name, and its graph. */
+let fixture = async () => {
+  let dir = await seeded()
+  let repo = dir + '/repo'
   return {
     repo,
     common: repo + '/.git',

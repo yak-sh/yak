@@ -14,6 +14,7 @@ import { loadVocab } from '@yaks/vocab'
 import { gitDoc } from './comp.ts'
 import type { Ran, Run } from './land.ts'
 import { status } from './cites.ts'
+import { git, template } from './testing.ts'
 
 let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, keyDoc, gitDoc], [
   edgeKeywords,
@@ -226,34 +227,24 @@ test('a symbol without its file cannot appear current as a graph entity', async 
 
 // ---- against a repository ---------------------------------------------------
 
-let command = async (cwd: string, ...args: string[]) => {
-  let r = await new Deno.Command('git', {
-    args,
-    cwd,
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  let out = new TextDecoder().decode(r.stdout).trim()
-  if (r.code) throw new Error(`git ${args.join(' ')}: ${out}`)
-  return out
-}
-
 // A file with two independent places in it: a constant at the top and a
 // function below. The first commit is what a citation was verified at; the
 // second touches only the function.
-let setup = async () => {
-  let cwd = Deno.makeTempDirSync({ prefix: 'yaks-cites-' })
-  await command(cwd, 'init', '-q', '--initial-branch=main')
-  await command(cwd, 'config', 'user.email', 'test@example.com')
-  await command(cwd, 'config', 'user.name', 'Test')
+let made = template(async (cwd) => {
+  await git(cwd, 'init', '-q', '--initial-branch=main')
+  await git(cwd, 'config', 'user.email', 'test@example.com')
+  await git(cwd, 'config', 'user.name', 'Test')
   let write = (body: string) => Deno.writeTextFileSync(`${cwd}/f.js`, body)
   write('let cap = 1\n\nfunction greet() {\n  return 1\n}\n')
-  await command(cwd, 'add', 'f.js')
-  await command(cwd, 'commit', '-qm', 'one')
-  let at = await command(cwd, 'rev-parse', 'HEAD')
+  await git(cwd, 'add', 'f.js')
+  await git(cwd, 'commit', '-qm', 'one')
   write('let cap = 1\n\nfunction greet() {\n  return 2\n}\n')
-  await command(cwd, 'commit', '-qam', 'two')
-  return { cwd, at }
+  await git(cwd, 'commit', '-qam', 'two')
+})
+
+let setup = async () => {
+  let cwd = await made()
+  return { cwd, at: await git(cwd, 'rev-parse', 'HEAD~') }
 }
 
 test(

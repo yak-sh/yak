@@ -347,11 +347,14 @@ let quiet = (cwd: string, args: string[]): Promise<string | undefined> =>
   git(cwd, args, true).catch(() => undefined)
 
 // The gitdir a linked worktree's `.git` file names, or nothing for a primary
-// checkout or a path that is not a checkout at all.
-let gitdirOf = async (path: string): Promise<string | undefined> =>
-  /^gitdir:\s*(.+)$/m.exec(
+// checkout or a path that is not a checkout at all. A worktree linked with
+// `--relative-paths` names it relative to itself, never to this process.
+let gitdirOf = async (path: string): Promise<string | undefined> => {
+  let named = /^gitdir:\s*(.+)$/m.exec(
     await Deno.readTextFile(path + '/.git').catch(() => ''),
   )?.[1]?.trim()
+  return named && !named.startsWith('/') ? `${path}/${named}` : named
+}
 
 /** A worktree Git has already lost: the gitdir its `.git` file names is gone,
  * so nothing can be committed from it and nothing read out of it. */

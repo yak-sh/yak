@@ -16,7 +16,6 @@ import {
   COMMITTER,
   file,
   fixture,
-  git,
   HELLO,
   HELLO_OID,
   HELLO_OID256,
@@ -26,6 +25,7 @@ import {
   ROOT_OID256,
   store,
   TWO_OID,
+  vocab,
   X,
 } from './testing.ts'
 
@@ -128,12 +128,12 @@ test('a large manifest reuses stored Git blobs under a 100-bind limit', async ()
   let db = spy(mem(), (_, params) => {
     if (params.length > 100) throw new Error('too many SQL variables')
   })
-  let s = storage(db, git)
+  let s = storage(db, vocab)
   s.install()
   let g = graph({
     storage: s,
-    vocab: git,
-    plugins: [edges(git), keys(git)],
+    vocab,
+    plugins: [edges(vocab), keys(vocab)],
   })
   let bytes = store()
   let objects = index(g, bytes)
