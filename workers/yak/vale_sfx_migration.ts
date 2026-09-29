@@ -1,7 +1,7 @@
 // One-time admin door for the Vale sound cutover. It is removed after the
 // migration; ordinary Store and release doors keep no legacy translation.
 
-import { type Bundle } from '@yaks/graph'
+import { type Bundle, token } from '@yaks/graph'
 import { key, run } from '@yaks/builders'
 import { type Files, pins, sha256 } from './versions.ts'
 import { r2Objects } from './lib/objects.ts'
@@ -753,6 +753,60 @@ let restore = async (ctx: Ctx, args: Args) => {
   return { text: `restored v${release.version} from ${audit}` }
 }
 
+let activate = async (ctx: Ctx, args: Args) => {
+  let { app } = await selected(ctx, say(args.app))
+  let release = (await ctx.dir.deploys(app)).find((v) =>
+    v.version == app.version
+  )
+  if (!release) throw refuse('missing', 'the live release is missing')
+  let raw = r2Objects(ctx.env.BLOBS)
+  let audit = `${AUDIT}releases/${release.eid}.json`
+  let saved = await raw.read(audit)
+  if (!saved) throw refuse('missing', `audit ${audit} is missing`)
+  let proof = JSON.parse(decode(saved)) as {
+    app: string
+    version: number
+    before: { source: string; index: Index | null }
+    after: { source: string; files: Files; index: Index | null }
+  }
+  let oldIndex = await indexOf(raw, proof.before.source + '/')
+  let newIndex = await indexOf(raw, proof.after.source + '/')
+  if (
+    proof.app != app.eid || proof.version != app.version ||
+    release.source != proof.after.source ||
+    JSON.stringify(release.files) != JSON.stringify(proof.after.files) ||
+    JSON.stringify(oldIndex) != JSON.stringify(proof.before.index) ||
+    JSON.stringify(newIndex) != JSON.stringify(proof.after.index) ||
+    ![proof.before.source, proof.after.source].includes(app.source ?? '') ||
+    app.draft || app.fence
+  ) throw refuse('conflict', 'the serving release changed after its audit')
+  if (app.source == proof.after.source) {
+    return { text: `v${release.version} already serves its revised source` }
+  }
+  if (args.check === true) {
+    return { text: `ready to serve revised v${release.version}` }
+  }
+  await ctx.dir.stamp({
+    entities: [{
+      entity: { eid: app.eid },
+      app: { source: proof.after.source },
+      $was: {
+        app: {
+          version: token(app.version),
+          source: token(app.source),
+          draft: token(app.draft),
+          fence: token(app.fence),
+        },
+      },
+    }],
+  })
+  let { app: served } = await selected(ctx, app.eid)
+  if (served.source != proof.after.source) {
+    throw new Error(`v${release.version} did not select its revised source`)
+  }
+  return { text: `v${release.version} serves its revised source` }
+}
+
 /** Temporary platform-admin tool; remove with the one-time scripts. */
 export let valeMigration: Tool = {
   name: 'vale_sfx_migrate',
@@ -780,6 +834,7 @@ export let valeMigration: Tool = {
     if (phase == 'store') return migrateStore(ctx, args)
     if (phase == 'repack') return repack(ctx, args)
     if (phase == 'restore') return restore(ctx, args)
+    if (phase == 'activate') return activate(ctx, args)
     throw refuse('arguments', `unknown Vale migration phase ${phase}`)
   },
 }
