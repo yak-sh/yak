@@ -124,6 +124,7 @@ test('a real worker transfers transient text before model completion', async () 
   const a = await remote({
     worker: worker(),
     config: at(),
+    cwd: repo(),
     streaming: true,
     fake: { held: true, deltas: 30 },
   })

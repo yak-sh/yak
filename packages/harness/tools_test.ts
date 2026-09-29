@@ -4,7 +4,7 @@ import { graphTools, harnessTools, parametersOf } from './tools.ts'
 import { core } from '@yaks/mcp'
 import { identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { harness } from './testing.ts'
+import { harness, repo } from './testing.ts'
 import { local } from './local.ts'
 
 let schemas = async () => {
@@ -117,6 +117,7 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
   let offered: string[][] = []
   let worktrees = Deno.makeTempDirSync({ prefix: 'yaks-named-' })
   let a = local({
+    cwd: repo(),
     h: await harness(),
     tools: [],
     worktrees,

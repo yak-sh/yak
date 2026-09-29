@@ -10,7 +10,7 @@ import { compose } from '@yaks/cli/host'
 import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
 import { hosted } from './store.ts'
-import { at, harness, worker } from './testing.ts'
+import { at, harness, repo, worker } from './testing.ts'
 
 const png =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII='
@@ -163,6 +163,7 @@ test('a model row sends OpenRouter audio to the graph as an artifact', async () 
     },
   })
   let a = local({
+    cwd: repo(),
     h,
     provider: 'openrouter',
     name: 'google/lyria-3-clip-preview',

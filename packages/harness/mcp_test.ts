@@ -94,7 +94,12 @@ test('worker owns MCP connection and preserves exact configured tool schemas', a
     },
   }])
   seed.close()
-  const a = await remote({ worker: worker(), config: at(db), fake: true })
+  const a = await remote({
+    worker: worker(),
+    config: at(db),
+    cwd: repo(),
+    fake: true,
+  })
   try {
     const id = await a.agent.start('hello')
     await a.idle(id)

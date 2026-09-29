@@ -190,6 +190,7 @@ test('worker runtime projection and scoped continuation use explicit commands', 
   let connection = await remote({
     worker: worker(),
     config: at(':memory:'),
+    cwd: repo(),
     fake: true,
   })
   try {

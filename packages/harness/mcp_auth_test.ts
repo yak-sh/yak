@@ -8,7 +8,7 @@ import { signins } from './signin.ts'
 import type { UIAgent } from './panels.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { remote } from './remote.ts'
-import { at, harness, mount, worker } from './testing.ts'
+import { at, harness, mount, repo, worker } from './testing.ts'
 
 test('authorization UI captures pasted callback privately, preserving draft and never sending it', async () => {
   const ui = frontend()
@@ -97,7 +97,12 @@ test('local HTTP OAuth exchange reconnects MCP discovery and works through worke
     mcp_server: { name: 'site', url: origin + '/mcp' },
   }])
   seed.close()
-  const backend = await remote({ worker: worker(), config: at(db), fake: true })
+  const backend = await remote({
+    worker: worker(),
+    config: at(db),
+    cwd: repo(),
+    fake: true,
+  })
   try {
     assert(
       (await backend.agent.authorizeMCP!('list')).servers?.includes(

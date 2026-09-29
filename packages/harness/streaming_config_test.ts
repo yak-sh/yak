@@ -100,6 +100,7 @@ test('worker streaming options reach the model request', async () => {
     const a = await remote({
       worker: worker(),
       config: at(),
+      cwd: repo(),
       fake: true,
       env: streamAs(value),
       ...options,
