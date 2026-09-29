@@ -252,5 +252,5 @@ Deno, Node, browsers, and workers. Depends on `@yaks/query`, `@yaks/match`, and
 
 ## Verification
 
-From the repository root, `deno test packages/render/` covers matching, view
+From the repository root, `deno task test packages/render` covers matching, view
 selection, actions, property types, parsing, and editors.

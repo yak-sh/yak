@@ -2,8 +2,8 @@
 // test-budget — the deno platform's 1ms budget (M-39441).
 //
 // The rule: no test on the deno platform may run slower than 1ms (`deno task
-// test --only=deno`). deno's reporter prints each test's duration — sub-ms as `(NNNµs)`,
-// then `(Nms)` once it rounds to a whole millisecond. So an offender is any test
+// test --all --tag=deno`). The runner prints each test's duration — sub-ms as
+// `(NNNµs)`, then `(Nms)` once it rounds to a whole millisecond. So an offender is any test
 // line reporting `(Nms)` with N >= 2: a µs line is always < 1ms, and `(1ms)` is
 // the boundary the rule allows. (deno rounds to the nearest ms, so a `(1ms)`
 // line can hide up to ~1.4ms — the slack that lets one freshDb + one apply pass.)
@@ -25,11 +25,16 @@
 
 // deno-lint-ignore no-control-regex -- ESC is the ANSI escape we strip
 let ansi = /\x1b\[[0-9;]*m/g
-let done = /^(.+?) \.\.\. ok \((\d+)ms\)$/ // a passing test's duration line
+// A passing test's duration line: `(12ms)`, `(3s)` or `(2m32s)`; a line in
+// µs is under the budget.
+let done = /^(.+?) \.\.\. ok \((?:(\d+)m)?(?:(\d+)s)?(?:(\d+)ms)?\)$/
+let ms = (m: RegExpMatchArray) =>
+  +(m[2] ?? 0) * 60_000 + +(m[3] ?? 0) * 1000 +
+  +(m[4] ?? 0)
 
 if (import.meta.main) {
   let child = new Deno.Command('deno', {
-    args: ['task', 'test', '--only=deno'],
+    args: ['task', 'test', '--all', '--tag=deno'],
     stdout: 'piped',
     stderr: 'inherit',
   }).spawn()
@@ -46,7 +51,7 @@ if (import.meta.main) {
       let line = buf.slice(0, nl)
       buf = buf.slice(nl + 1)
       let m = line.match(done)
-      if (m && +m[2] >= 2) offenders.push({ name: m[1], ms: +m[2] })
+      if (m && ms(m) >= 2) offenders.push({ name: m[1], ms: ms(m) })
     }
   }
 

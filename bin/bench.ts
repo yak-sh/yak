@@ -115,12 +115,12 @@ async function measure() {
     if (!ps.success) throw new Error('ps failed')
     for (let line of new TextDecoder().decode(ps.stdout).split('\n')) {
       let match = line.match(
-        /^\s*(\d+)\s+(?:\S*\/)?deno\s+(bench|test)(?:\s|$)/,
+        /^\s*(\d+)\s+(?:\S*\/)?deno\s+(?:(bench|test)(?:\s|$)|run\s.*\/testing\/main\.ts)/,
       )
       if (match && Number(match[1]) != Deno.pid) {
         console.error(
           `bench: WARNING: other deno ${
-            match[2]
+            match[2] ?? 'test'
           } process running at start (pid ${
             match[1]
           }); timings may be contended`,

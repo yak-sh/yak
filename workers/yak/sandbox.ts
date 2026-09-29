@@ -190,7 +190,7 @@ export let egress = (env: Host = {}) => [
  * after. Well under the day grants.ts allows at most. */
 export let LIFE = (BUDGET + NAP) / 3600
 
-/** No container bound here — the workerd probes and `deno test`, where the
+/** No container bound here — the workerd probes and a test run, where the
  * binding does not exist. Said as a sentence, because a model reads it. */
 export let NO_BOX =
   'No sandbox is running here: the workbench is a Cloudflare Container and ' +

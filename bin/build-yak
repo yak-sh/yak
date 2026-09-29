@@ -71,7 +71,7 @@ esac
 echo "--- deno task check"
 deno task check
 
-echo "--- deno task test --only=deno workers"
-deno task test --only=deno workers
+echo "--- deno task test --all --tag=deno workers"
+deno task test --all --tag=deno workers
 
 echo "--- build ok; Workers Builds deploys from here"

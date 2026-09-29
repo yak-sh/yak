@@ -242,7 +242,7 @@ export type Env = {
   BUILDER_MODEL_PAID?: string
   // The builder's workbench (sandbox.ts, T-34264): the Cloudflare Container
   // one build compiles in, bound as a Durable Object namespace
-  // (wrangler.toml `[[containers]]`). Absent under `deno test` and the
+  // (wrangler.toml `[[containers]]`). Absent in a test run and the
   // workerd probes, where the sandbox tools say so rather than half-running —
   // and absent under `wrangler dev` on a machine with no container engine.
   SANDBOX?: Sandboxes
@@ -259,14 +259,14 @@ export type Env = {
   // The one binding that is not a part waiting to be split out: `Files` is a
   // second entrypoint of this same Worker (index.ts), bound here so that
   // Cloudflare's cache sits between the gateway and the bucket (cache.ts,
-  // T-33197). Absent under `deno test`; there, and wherever Cloudflare
+  // T-33197). Absent in a test run; there, and wherever Cloudflare
   // refuses the hop, files.ts `door` reads the module in-process and nothing
   // is cached.
   FILES?: Fetcher
   // The apex's public home and gallery, cached behind the uncached gateway.
   SITE?: Fetcher
   // yak-esbuild, which compiles an app's TypeScript and npm imports at deploy
-  // (esbuild.ts). Absent under `deno test` and the workerd probes.
+  // (esbuild.ts). Absent in a test run and the workerd probes.
   ESBUILD?: Fetcher
   // Voice (rtc.ts): the platform's one Cloudflare Realtime SFU app, its id and
   // its secret, and one TURN key and its token. All four are secrets, kept in

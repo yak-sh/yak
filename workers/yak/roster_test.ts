@@ -31,7 +31,8 @@
 //   check:
 //
 //     YAK_PROBE_URL=https://yaks.app YAK_PROBE_TOKEN=<bearer> \
-//       deno test -A --unstable-net workers/yak/roster_test.ts
+//       deno run -A --unstable-net packages/testing/main.ts --all \
+//         workers/yak/roster_test.ts
 //
 //   The bearer is an ordinary OAuth token for a test account, an address on
 //   the bot domain (lib/bots.ts), got the way a host gets one (probe.ts

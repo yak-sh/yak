@@ -46,5 +46,5 @@ fill('Hello, {{name}}. {{unknown}}', { name: 'Ada' })
 
 The root exports `read`, `front`, `fill`, and the `Front` result type.
 
-Run `deno test packages/yaml/` from the repository root to check parsing and
+Run `deno task test packages/yaml` from the repository root to check parsing and
 frontmatter boundaries.

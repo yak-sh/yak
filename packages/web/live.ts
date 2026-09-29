@@ -841,7 +841,7 @@ let loc = (globalThis as { location?: { host: string; protocol?: string } })
 // The host a process starts with: a page's own, or NONE. A location-less
 // process names its server (the TUI, from TASKS_HOST) or has none. This used
 // to fall back to the dev port, which made every location-less process that
-// mounted a view — every `deno test` — stream the owner's live graph into
+// mounted a view — every test run — stream the owner's live graph into
 // `cache` and read it back as fixture data.
 export let hostFrom = (loc?: { host: string }) => loc?.host ?? ''
 export let config: {

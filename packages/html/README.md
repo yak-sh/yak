@@ -44,6 +44,6 @@ Deno, Node, browsers and workers. No DOM or runtime globals are required.
 
 ## Verification
 
-`deno test packages/html/` checks escaping and registry behavior, and compares
-the serialized DOM with the same renderer mounted through `@yaks/preact`.
-`deno test --doc packages/html/mod.ts` runs the example.
+`deno task test packages/html` checks escaping and registry behavior, compares
+the serialized DOM with the same renderer mounted through `@yaks/preact`, and
+runs the example.

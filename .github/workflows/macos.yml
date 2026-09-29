@@ -33,4 +33,4 @@ jobs:
       - name: the tools the launcher runs
         run: sw_vers; ls -l /usr/bin/perl /bin/sh /bin/kill; perl -MPOSIX=setsid -e 1
       - name: '@yaks/process tests'
-        run: deno test -A packages/process
+        run: deno run -A packages/testing/main.ts --all packages/process

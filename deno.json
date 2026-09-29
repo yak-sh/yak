@@ -202,7 +202,11 @@
     "CLAUDE.md",
     "workers/yak/.content.gen.ts",
     "plugins/.gen",
-    "apps/vale/rtc.bundle.js"
+    "apps/vale/rtc.bundle.js",
+    "**/.*.example.ts",
+    "**/.*.example.tsx",
+    "**/.*.example.js",
+    "**/.*.example.jsx"
   ],
   "fmt": {
     "semiColons": false,

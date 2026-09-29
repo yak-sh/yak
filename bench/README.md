@@ -94,7 +94,7 @@ lock on process exit; stale PID text is harmless. Never delete the lock file,
 even after a crash: doing so would let new runs bypass waiters on the old inode.
 
 The runner prints the sample count and warns at measurement start if `ps` finds
-other `deno bench` or `deno test` processes (with their PIDs). This is
+other `deno bench` processes or test runs (with their PIDs). This is
 best-effort, not a CPU-idleness guarantee: tests, direct `deno bench` calls,
 other benchmark gates, and jobs started later do not acquire this lock. Keep the
 box quiet. Calling `bin/bench.ts` directly also bypasses serialization; use the

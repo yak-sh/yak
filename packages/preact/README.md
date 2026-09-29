@@ -80,5 +80,5 @@ and never installs a global document.
 
 ## Verification
 
-`deno test packages/preact/` mounts through Preact using a temporary LinkeDOM
-document. `deno test --doc packages/preact/mod.ts` checks the node example.
+`deno task test packages/preact` mounts through Preact using a temporary
+LinkeDOM document, and checks the node example.

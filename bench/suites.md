@@ -3,7 +3,7 @@
 `deno task check` and `deno task test` time the complete command (including Deno
 startup and discovery). Their original commands live under `:run`; use those
 only when intentionally bypassing timing. Arguments and exit statuses pass
-through, and a run given arguments (`deno task test --only=deno workers`) is a
+through, and a run given arguments (`deno task test --tag=deno workers`) is a
 suite of its own, named with them, so a narrowed run never becomes the whole
 suite's floor. Timing is **report-only**, matching the performance steps in CI:
 a regression is printed as `REGRESSION`, not turned into a failing test or a

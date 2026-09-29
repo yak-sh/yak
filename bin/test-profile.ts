@@ -1,7 +1,12 @@
-// Per-file wall clocks, including cold process/module startup, under bounded
-// contention. Diagnostic only: these do not sum to the sharded suite's clock.
+// Per-file wall clocks, each file in a runtime of its own, including cold
+// process and module startup, under bounded contention. Diagnostic only:
+// these do not sum to the suite's clock, whose platforms load their files
+// into one runtime each.
 // deno run -A bin/test-profile.ts /tmp/fleet-profile [jobs=4]
-import { inventory, workerd } from './test.ts'
+import { find } from '@yaks/testing/find'
+import { ROOTS, workerd } from './test.ts'
+
+let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
 if (import.meta.main) {
   let [directory, count = '4'] = Deno.args
@@ -11,7 +16,7 @@ if (import.meta.main) {
   }
   await Deno.mkdir(directory, { recursive: true })
   // The deno platform's files: a workerd test needs the run's kernel.
-  let files = (await inventory()).filter((f) => !workerd(f))
+  let files = (await find(ROOTS)).tests.filter((f) => !workerd(f))
   let at = 0
   let rows: { file: string; seconds: number; code: number }[] = []
   let load = () => Deno.readTextFileSync('/proc/loadavg').trim()
@@ -23,12 +28,13 @@ if (import.meta.main) {
         let start = performance.now()
         let out = await new Deno.Command(Deno.execPath(), {
           args: [
-            'test',
+            'run',
             '--frozen',
-            '--no-check',
             '-A',
             '--unstable-net',
             '--unstable-worker-options',
+            RUNNER,
+            '--all',
             file,
           ],
           env: {

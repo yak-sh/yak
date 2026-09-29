@@ -40,5 +40,5 @@ highlighted. Graph-entity linkification and repository-specific commit links are
 not provided. Applications can add those behaviors separately. Rendering does
 not fetch images or other remote content.
 
-Run `deno test packages/markdown/` from the repository root for parser,
+Run `deno task test packages/markdown` from the repository root for parser,
 structural rendering and URL-safety tests.

@@ -77,7 +77,7 @@ parser are used only in tests.
 
 ## Verification
 
-`deno test --doc packages/text/mod.ts packages/text/tree.ts` runs an example for
-every element kind. `deno test packages/text/` covers the control ranges and
-formatting edges, plus one fixture renderer mounted through Preact and emitted
-as Markdown, comparing the resulting document structure and words.
+`deno task test packages/text` runs an example for every element kind, and
+covers the control ranges and formatting edges, plus one fixture renderer
+mounted through Preact and emitted as Markdown, comparing the resulting document
+structure and words.

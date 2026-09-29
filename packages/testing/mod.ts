@@ -25,6 +25,9 @@
  * await until(() => ready, { label: 'ready' })
  * ```
  *
+ * The runner, `@yaks/testing/main`, loads test modules and the examples
+ * beside the code into one runtime and runs them.
+ *
  * @module
  */
 export { equal, match, ok, throws } from './assert.ts'

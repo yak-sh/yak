@@ -464,8 +464,11 @@ grouped approximately by function, **not** by dependency order.
   declared `sync: none` with `durable: forever` are kept in IndexedDB between
   page loads when local persistence is enabled.
 
-- **[@yaks/testing](./testing)** — what a test needs beside the code it tests:
-  `tick` yields one macrotask and `until` waits on a fact, never a guessed span.
+- **[@yaks/testing](./testing)** — declare tests (`test`, `suite`), check them
+  (`equal`, `ok`, `match`, `throws`) and wait on facts (`tick`, `until`); its
+  runner loads every test module into one runtime, runs the examples beside the
+  code (fenced blocks and `///` doctests) as tests, and leaves out a file that
+  passed while nothing it depends on has changed.
 
 ## Domain plugins
 

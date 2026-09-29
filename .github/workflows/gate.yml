@@ -80,7 +80,6 @@ jobs:
       - name: deno task check
         env:
           SUITE_STEP: deno task check
-          DENO_JOBS: 4
         run: deno task check
 
       # Every platform's tests (bin/test.ts), workerd's included: the money
@@ -90,8 +89,8 @@ jobs:
       - name: tests
         env:
           SUITE_STEP: tests
-          DENO_JOBS: 4
-        run: 'DB_PATH=:memory: deno task test'
+        # All of it: this machine keeps no record of what passed before.
+        run: 'DB_PATH=:memory: deno task test --all'
 
       # Reads the row `deploy time` wrote; needs no credentials. Until
       # T-35336 rows were only written when someone hand-ran deploy:time, so

@@ -29,6 +29,13 @@ node_modules.lock/
 # wrangler dev secrets beside a Worker (workers/*)
 .dev.vars
 
+# An example @yaks/testing writes beside its page while it loads; one is left
+# only by a run that was killed, and the next run removes it.
+.*.example.ts
+.*.example.tsx
+.*.example.js
+.*.example.jsx
+
 # Fresh throughput measurements are local; only the accepted baseline is versioned.
 /bench/results.json
 /bench/*.json.tmp

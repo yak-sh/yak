@@ -15,9 +15,8 @@ if (import.meta.main) {
         new URL('./test.ts', import.meta.url).pathname,
         '--bulk',
         `${dir}/a_test.ts`,
-        `${dir}/b_test.ts`,
+        `${dir}/packages/web/b_test.ts`,
       ],
-      env: { DENO_JOBS: '2' },
     }])
     Deno.exit(result.code ?? 1)
   } else if (mode === 'grandchild') {

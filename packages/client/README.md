@@ -409,9 +409,9 @@ membership. Ordinary subscriptions keep that behavior enabled.
 
 ## Verification
 
-From the repository root, `deno test packages/client/` checks local and remote
-watches, persistence, cache limits, query coverage, and restoration with both
-in-memory and simulated IndexedDB storage.
+From the repository root, `deno task test packages/client` checks local and
+remote watches, persistence, cache limits, query coverage, and restoration with
+both in-memory and simulated IndexedDB storage.
 
 ## License
 

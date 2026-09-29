@@ -103,7 +103,7 @@ export let failure = (
   for (let line of lines) {
     if (line.includes('--- installing deno')) step = 'install Deno'
     if (line.includes('--- deno task check')) step = 'deno task check'
-    if (line.includes('--- deno task test --only=deno workers')) {
+    if (line.includes('--- deno task test')) {
       step = 'deno task test'
     }
     if (line.includes('Executing user deploy command')) step = 'deploy command'

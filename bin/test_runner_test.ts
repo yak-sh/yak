@@ -1,17 +1,14 @@
-import { until } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
-import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
-import {
-  denoDir,
-  groups,
-  observe,
-  pages,
-  RUN,
-  shards,
-  timesIn,
-} from './test.ts'
+import { assert, assertEquals, assertMatch } from '@std/assert'
+import { denoDir, observe, RUN } from './test.ts'
 
-Deno.test('denoDir is the cache deno runs on, and a child moving HOME keeps it', async () => {
+// What a test file running under the runner imports, for one written here.
+let TESTING = JSON.stringify(
+  new URL('../packages/testing/mod.ts', import.meta.url).href,
+)
+
+test('denoDir is the cache deno runs on, and a child moving HOME keeps it', async () => {
   let cache = async (env: Record<string, string>) => {
     let out = await new Deno.Command(Deno.execPath(), {
       args: ['info', '--json'],
@@ -35,7 +32,7 @@ Deno.test('denoDir is the cache deno runs on, and a child moving HOME keeps it',
   }
 })
 
-Deno.test('colored test results count as completed', async () => {
+test('colored test results count as completed', async () => {
   let progress = { name: 'loading tests', completed: 0, count: 0 }
   let encoder = new TextEncoder()
   let output = new ReadableStream<Uint8Array>({
@@ -51,28 +48,7 @@ Deno.test('colored test results count as completed', async () => {
   assertEquals(progress.count, 1)
 })
 
-Deno.test('examples come from every root, and never a module by name', async () => {
-  let got = await pages([
-    'workers',
-    'packages',
-    'packages/graph',
-    'packages/graph/graph.ts',
-    'packages/graph/README.md',
-    'apps',
-  ])
-  assertEquals(got.some((p) => /\.tsx?$/.test(p)), false, got.join())
-  // The Worker's examples are the Worker's piece.
-  assertEquals(got.includes('workers/yak'), true)
-  // `packages` holds only tests of its own, so each package is its own piece.
-  assertEquals(got.includes('packages'), false)
-  assertEquals(got.filter((p) => p == 'packages/graph').length, 1)
-  assertEquals(got.includes('packages/graph/README.md'), true)
-  // An app written in TypeScript is a piece; one of plain files has none.
-  assertEquals(got.includes('apps/vale'), true)
-  assertEquals(got.includes('apps/yak-sh'), false)
-})
-
-Deno.test('a run started inside a run refuses at once', async () => {
+test('a run started inside a run refuses at once', async () => {
   let out = await new Deno.Command(Deno.execPath(), {
     // A path that names nothing: a runner without the refusal fails on it
     // at once, rather than starting the suite from inside this test.
@@ -88,125 +64,43 @@ Deno.test('a run started inside a run refuses at once', async () => {
   assertEquals(/refused/.test(new TextDecoder().decode(out.stderr)), true)
 })
 
-Deno.test('a file that cannot load fails as a test of its own, and the rest run', async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'test-shard-' })
-  try {
-    await Deno.writeTextFile(`${dir}/broken_test.ts`, "import './gone.ts'")
-    await Deno.writeTextFile(
-      `${dir}/fine_test.ts`,
-      "Deno.test('fine', () => {})",
-    )
-    let out = await new Deno.Command(Deno.execPath(), {
-      args: [
-        'test',
-        '--no-check',
-        '-A',
-        fileURLToPath(new URL('./shard.ts', import.meta.url)),
-        '--',
-        `${dir}/broken_test.ts`,
-        `${dir}/fine_test.ts`,
-      ],
-      env: { NO_COLOR: '1' },
-    }).output()
-    let text = new TextDecoder().decode(out.stdout)
-    assertEquals(out.code, 1, text)
-    assertMatch(text, /broken_test\.ts loads \.\.\. FAILED/)
-    assertMatch(text, /^fine \.\.\. ok/m)
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
-})
-
-Deno.test('bulk shards are bounded, deterministic and run every module once', () => {
-  assertEquals(shards([], 8), [])
-  assertEquals(shards(['a', 'b'], 8), [['a'], ['b']])
-  let five = shards(['a', 'b', 'c', 'd', 'e'], 2)
-  assertEquals(five.flat().sort(), ['a', 'b', 'c', 'd', 'e'])
-  assertEquals(five.map((s) => s.length).sort(), [2, 3])
-  assertEquals(shards(['a', 'b'], 1), [['a', 'b']])
-  for (let n of [0, -1, NaN, Infinity, 1.5]) {
-    assertThrows(() => shards(['a'], n))
-  }
-  let files = [
-    'bin/a_test.ts',
-    'packages/web/b_test.ts',
-    'packages/web/tui/c_test.ts',
-    'packages/web/d_test.ts',
-    'workers/e_test.ts',
-  ]
-  assertEquals(groups(files, 2).flat().sort(), files.sort())
-})
-
-Deno.test('shards deal the heaviest first, so a slow file runs alongside the rest', () => {
-  let weight = (f: string) => f == 'slow' ? 10 : 1
-  assertEquals(shards(['a', 'b', 'slow', 'c'], 2, weight), [['slow'], [
-    'a',
-    'b',
-    'c',
-  ]])
-  let xml = `<testsuites>
-    <testcase name="one" classname="./bin/a_test.ts" time="0.250"></testcase>
-    <testcase name="two" classname="./bin/a_test.ts" time="1.000"></testcase>
-    <testcase name="&quot;x&quot;" classname="./packages/b_test.ts" time="2.5">
-    </testcase></testsuites>`
-  assertEquals(timesIn(xml), {
-    'bin/a_test.ts': 1.25,
-    'packages/b_test.ts': 2.5,
-  })
-})
-
-Deno.test("a directory's files share a shard where the shards stay even", () => {
-  assertEquals(shards(['x/a', 'x/b', 'y/c', 'y/d'], 2), [
-    ['x/a', 'x/b'],
-    ['y/c', 'y/d'],
-  ])
-  let weight = (f: string) => f.startsWith('x/') ? 3 : 1
-  let dealt = shards(['x/a', 'x/b', 'y/c', 'y/d', 'y/e', 'y/f'], 2, weight)
-  assertEquals(dealt.map((s) => s.reduce((n, f) => n + weight(f), 0)), [5, 5])
-})
-
-// A failing shard no longer cancels its siblings: every shard runs to its own
-// end and prints its own report, and the coordinator fails afterwards.
+// A failing platform does not cancel the others: each runs to its own end
+// and prints its own report, and the coordinator fails afterwards.
 for (let failure of [false, true]) {
-  Deno.test(`bulk processes run every shard${failure ? ' past a failing one' : ''}`, async () => {
-    let dir = await Deno.makeTempDir({ prefix: 'test-shards-' })
+  test(`every platform runs to its end${failure ? ' past a failing one' : ''}`, async () => {
+    let dir = await Deno.makeTempDir({ prefix: 'test-platforms-' })
     try {
-      let testing = new URL('../packages/testing/wait.ts', import.meta.url).href
+      let pid = JSON.stringify(`${dir}/b.pid`)
+      // a, on deno, waits for b, on the browser platform: they run at once.
       await Deno.writeTextFile(
         `${dir}/a_test.ts`,
-        `
-        import { until } from ${JSON.stringify(testing)};
-        Deno.test('a', async () => {
-          await until(() => { try { Deno.statSync(${
-          JSON.stringify(`${dir}/b.pid`)
-        }); return true } catch { return false } }, { timeout: 15000 });
-          ${failure ? "throw new Error('expected shard failure')" : ''}
-        });
-      `,
+        `import { test, until } from ${TESTING}
+        test('a', async () => {
+          await until(() => { try { Deno.statSync(${pid}); return true }
+            catch { return false } }, { timeout: 15000 })
+          ${failure ? "throw new Error('expected platform failure')" : ''}
+        })`,
       )
-      // b reports the shard's own pid and passes in both cases: the sibling of
-      // a failing shard is expected to finish, not to be killed mid-run.
+      // b reports its runtime's pid and passes in both cases: the sibling of
+      // a failing platform is expected to finish, not to be killed mid-run.
+      await Deno.mkdir(`${dir}/packages/web`, { recursive: true })
       await Deno.writeTextFile(
-        `${dir}/b_test.ts`,
-        `
-        Deno.test('b', () => {
-          Deno.writeTextFileSync(${
-          JSON.stringify(`${dir}/b.pid`)
-        }, String(Deno.pid));
-        });
-      `,
+        `${dir}/packages/web/b_test.ts`,
+        `import { test } from ${TESTING}
+        test('b', () => Deno.writeTextFileSync(${pid}, String(Deno.pid)))`,
       )
       let out = await new Deno.Command(Deno.execPath(), {
         args: ['run', '-A', fixture, 'bulk', 'broad', dir],
+        env: { XDG_CACHE_HOME: `${dir}/.cache` },
       }).output()
       assertEquals(
         out.code,
         failure ? 1 : 0,
         new TextDecoder().decode(out.stderr),
       )
-      let pid = Number(await Deno.readTextFile(`${dir}/b.pid`))
+      let b = Number(await Deno.readTextFile(`${dir}/b.pid`))
       assertEquals(
-        await Deno.stat(`/proc/${pid}`).then(() => true, () => false),
+        await Deno.stat(`/proc/${b}`).then(() => true, () => false),
         false,
       )
       let text = new TextDecoder().decode(out.stdout)
@@ -223,7 +117,8 @@ let waiting = async (dir: string) => {
   let held = JSON.stringify(`${dir}/held.pid`)
   await Deno.writeTextFile(
     file,
-    `Deno.test('waiting on a lost reply', async () => {
+    `import { test } from ${TESTING}
+    test('waiting on a lost reply', async () => {
       let held = new Deno.Command('sleep', { args: ['60'] }).spawn()
       Deno.writeTextFileSync(${held}, String(held.pid))
       await held.status
@@ -262,7 +157,7 @@ let killChild = (child: Deno.ChildProcess) => {
   }
 }
 
-Deno.test('a test that stops completing is named and its descendants end', async () => {
+test('a test that stops completing is named and its descendants end', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'test-idle-' })
   let child: Deno.ChildProcess | undefined
   try {
@@ -294,7 +189,7 @@ Deno.test('a test that stops completing is named and its descendants end', async
   }
 })
 
-Deno.test('a shard ends when its parent is killed', async () => {
+test('a platform run ends when its parent is killed', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'test-orphan-' })
   let parent: Deno.ChildProcess | undefined
   let bulk = 0
@@ -335,7 +230,7 @@ Deno.test('a shard ends when its parent is killed', async () => {
   }
 })
 
-Deno.test('a phase ends with its runner killed outright', async () => {
+test('a phase ends with its runner killed outright', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'test-phase-orphan-' })
   let runner: Deno.ChildProcess | undefined
   let leader = 0
@@ -505,7 +400,7 @@ async function overlappingCancellationCase(
 // Declare separately so every phase/signal combination is visible in output.
 for (let phase of ['broad', 'isolated']) {
   for (let signal of ['SIGTERM', 'SIGINT'] as const) {
-    Deno.test(`runner preserves ${signal} and cleans ${phase} descendants`, () =>
+    test(`runner preserves ${signal} and cleans ${phase} descendants`, () =>
       cancellationCase(phase, signal))
   }
 
@@ -517,7 +412,7 @@ for (let phase of ['broad', 'isolated']) {
       ['SIGINT', 'SIGINT'],
     ] as const
   ) {
-    Deno.test(
+    test(
       `runner keeps ${phase} ${first} outcome after ${later}`,
       () => overlappingCancellationCase(phase, first, later),
     )
@@ -536,7 +431,7 @@ for (let phase of ['broad', 'isolated']) {
       ['SIGINT', 'SIGINT'],
     ] as const
   ) {
-    Deno.test(
+    test(
       `runner bounds stubborn ${phase} ${first} after ${later}`,
       () => overlappingCancellationCase(phase, first, later, true),
     )
@@ -546,7 +441,7 @@ for (let phase of ['broad', 'isolated']) {
 for (
   let [phase, code] of [['broad-code', 23], ['isolated-code', 24]] as const
 ) {
-  Deno.test(`runner runs every phase and preserves ${phase}'s status`, async () => {
+  test(`runner runs every phase and preserves ${phase}'s status`, async () => {
     let dir = await Deno.makeTempDir({ prefix: 'test-runner-' })
     try {
       let status = await new Deno.Command(Deno.execPath(), {
