@@ -1,4 +1,4 @@
-// What Cloudflare's cache may keep of an app's files, and how it is emptied
+// What Cloudflare's cache may keep of an app's bytes, and how it is emptied
 // (T-33197). `[cache]` in wrangler.toml puts a two-tier cache in front of a
 // Worker entrypoint; on a hit the entrypoint never runs. This file owns which
 // entrypoint that is, what the cached thing is, and who empties it.
@@ -71,7 +71,7 @@ export let immutable = { 'cache-control': `public, max-age=${YEAR}, immutable` }
 // distinguishes one answer from another is in the path, because the path is
 // what the key is made of:
 //
-//   /<app eid>/<the app's own path>
+//   /<app eid>/<the app's own path>, or /blob/<app eid>/<sha>
 //
 // The eid and not the slug, because an app answers at every address it has
 // ever had (`App.slugs`), a rename leaves the old one resolving, and a custom
@@ -89,9 +89,7 @@ export let at = (eid: string, path: string, source = '') =>
 export let blobAt = (eid: string, sha: string) =>
   `https://files.invalid/blob/${eid}/${sha}`
 
-// The tag a purge names. One tag, the app's eid, and the reason there is only
-// one is the reason this design is safe: what is cached is bytes, so the only
-// thing that can make a cache entry wrong is a write that changes the bytes.
+// The tag a purge names for mutable app files. Immutable blobs need no purge.
 //
 // Everything else a door can change is about identity, and identity is decided
 // in front of the cache, on every request. An app going private needs no purge

@@ -2,7 +2,7 @@
 // runtime without Workers Caching, the same door streams bounded R2 ranges.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { blobAt } from './cache.ts'
-import { fetch, PREFIX } from './files.ts'
+import { blobBytes, fetch } from './files.ts'
 import { platform } from './serving-probe.ts'
 
 Deno.test('the cached blob door streams bytes and bounds uncached seeks', async () => {
@@ -13,14 +13,15 @@ Deno.test('the cached blob door streams bytes and bounds uncached seeks', async 
   let prefix = 'ada/cookbook/blobs/'
   let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
   files.held.set(prefix + sha, bytes)
+  let calls: Request[] = []
+  env.FILES = {
+    fetch: (req) => {
+      calls.push(req)
+      return fetch(req, env)
+    },
+  }
   let get = (method = 'GET', headers: Record<string, string> = {}) =>
-    fetch(
-      new Request(blobAt(eid, sha), {
-        method,
-        headers: { [PREFIX]: prefix, ...headers },
-      }),
-      env,
-    )
+    blobBytes(env, { eid }, prefix, sha, headers.range, method)
 
   let full = await get()
   assertEquals(full.status, 200)
@@ -33,6 +34,9 @@ Deno.test('the cached blob door streams bytes and bounds uncached seeks', async 
   assertEquals(part.headers.get('content-range'), 'bytes 2-4/6')
   assertEquals(new Uint8Array(await part.arrayBuffer()), bytes.slice(2, 5))
   assertEquals(files.gets.at(-1)?.range, { offset: 2, length: 3 })
+  assertEquals(calls[0].url, blobAt(eid, sha))
+  assertEquals(calls[1].url, calls[0].url)
+  assertEquals(calls[1].headers.get('range'), 'bytes=2-4')
 
   let before = files.gets.length
   let head = await get('HEAD')

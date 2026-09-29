@@ -1,6 +1,6 @@
-// The cached half of serving an app's file (T-33197): bytes out of R2, and
-// nothing else. This part knows an app's eid, the R2 prefix its files live
-// under, and a path. It does not know who is asking, and that is the whole
+// The cached half of serving an app's files and blobs: bytes out of R2, and
+// nothing else. This part knows an app's eid, the R2 prefix its bytes live
+// under, and their address. It does not know who is asking, and that is the whole
 // point — Cloudflare's cache sits in front of this entrypoint (cache.ts), so
 // anything this part could learn about a person would end up shared with
 // strangers.
@@ -17,7 +17,7 @@
 // has to be this Worker.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
-import { immutable, keepable, purge, tagsOf } from './cache.ts'
+import { blobAt, immutable, keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { BUILT } from './versions.ts'
@@ -89,8 +89,8 @@ let mainOf = async (blobs: Objects, prefix: string) => {
 // must be issued from in here (cache.ts).
 let PURGE = '/purge'
 
-// The purge a door calls when it has changed an app's bytes: one call empties
-// every address this app answers at, at every edge. A door that changed only
+// The purge a door calls when it has changed an app's files: one call empties
+// every mutable address this app answers at, at every edge. A door that changed only
 // who may read does not call this and does not need to (cache.ts `tagsOf`).
 //
 // It goes through the binding rather than calling `purge()` directly because a
@@ -108,6 +108,24 @@ export let purged = async (env: Env, app: App) => {
   await r.body?.cancel()
   return r.ok
 }
+
+// The gateway calls this only after checking access and resolving the blob's
+// metadata. Range stays a request header: Workers Caching removes it on a
+// miss, keeps the full 200 response, and slices a 206 from that one entry.
+export let blobBytes = (
+  env: Env,
+  app: { eid: string },
+  prefix: string,
+  sha: string,
+  range?: string | null,
+  method = 'GET',
+) =>
+  bound(env.FILES, fetch, env).fetch(
+    new Request(blobAt(app.eid, sha), {
+      method,
+      headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
+    }),
+  )
 
 // The inner door. The gateway has already decided this request may be served;
 // everything here is about which bytes.
@@ -187,6 +205,12 @@ let blob = async (req: Request, env: Env, path: string) => {
       status: 404,
       headers: { 'cache-control': 'private, no-store' },
     })
+  if (req.method != 'GET' && req.method != 'HEAD') {
+    return new Response(null, {
+      status: 405,
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  }
   if (!match || !prefix || !prefix.endsWith('/')) return missing()
   let [, sha] = match
   let object = await r2RawObjects(env.BLOBS).open(prefix + sha)
