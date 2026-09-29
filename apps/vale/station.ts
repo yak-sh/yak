@@ -12,7 +12,7 @@ import {
   have,
   plan,
   type Recipe,
-  RECIPES,
+  recipes,
   serves,
   spare,
   STATIONS,
@@ -76,7 +76,7 @@ export let station = (panel: Panel, acts: Acts) => {
   let tiers = (c: Craft) =>
     [
       ...new Set(
-        Object.values(RECIPES).filter((r) => r.at == c).map((r) => r.tier),
+        Object.values(recipes()).filter((r) => r.at == c).map((r) => r.tier),
       ),
     ].sort((a, b) => a - b)
 
@@ -201,7 +201,7 @@ export let station = (panel: Panel, acts: Acts) => {
   }
 
   let card = (s: Sheet, trades: Trades, job: Job) => {
-    let r = picked ? RECIPES[picked] : null
+    let r = picked ? recipes()[picked] : null
     if (!r) return `<p class=Pack_Hint>Tap something to see what it needs.</p>`
     let t = ITEMS[r.makes]
     let bag = spare(s.bag, Object.values(s.worn))
@@ -246,7 +246,7 @@ export let station = (panel: Panel, acts: Acts) => {
           mine.lvl >= least(n) ? '' : glyphText('lock')
         }${tierName(n)}</span></button>`
       ).join('') +
-      (Object.values(RECIPES).some((r) => r.at == c && ITEMS[r.makes]?.slot)
+      (Object.values(recipes()).some((r) => r.at == c && ITEMS[r.makes]?.slot)
         ? `<button class="Pack_Tile Craft_Up${
           up ? ' Pack_Tile-on' : ''
         }" data-tier=up${tipped({ name: 'Upgrade what you carry' })}>${
@@ -267,7 +267,7 @@ export let station = (panel: Panel, acts: Acts) => {
         }</i>${h.plus ? `<b>+${h.plus}</b>` : ''}</button>`
       }).join('') ||
         `<span class=Pack_Hint>Nothing you carry is upgraded here.</span>`
-      : Object.values(RECIPES)
+      : Object.values(recipes())
         .filter((r) => r.at == c && r.tier == tier)
         .map((r) => {
           let t = ITEMS[r.makes]
@@ -311,7 +311,7 @@ export let station = (panel: Panel, acts: Acts) => {
       sheet = s
       if (!panel.open || !at) return
       let k = job.doing?.recipe ? job.doing.k.toFixed(2) : ''
-      let key = [s, job.trades, k, at, tier, up, picked]
+      let key = [s, job.trades, k, at, tier, up, picked, ITEMS]
       if (key.every((v, i) => v === was[i])) return
       was = key
       draw(at, s, job.trades, job)

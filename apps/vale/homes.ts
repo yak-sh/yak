@@ -24,8 +24,8 @@ export type Den = { kind: string; haunt: Haunt; name: string; place: Place }
  * level selects a habitat here; danger.ts gives each encounter its level.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * import { BEASTS } from './beasts.ts'
  * let at = (kind: string, hops: number) => suits(BEASTS[kind], hops)
@@ -46,8 +46,8 @@ export let suits = (b: Beast, hops: number): boolean =>
  * asking is cheap.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * import { LEVELS } from './levels.ts'
  * let where = (kind: string) =>

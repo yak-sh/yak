@@ -12,7 +12,6 @@
 // less items spent. A hero's crafting trades are counted from the crafted
 // rows on their items, as their gathering trades are from the gathered ones,
 // and from their upgrades (upgrade.ts).
-import { ARMS } from './arms.ts'
 import { LODES } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { type Craft, type Gather, least } from './trades.ts'
@@ -158,16 +157,25 @@ let BREWS: Recipe[] = [
   },
 ]
 
+// The store may add or change a plain piece while the page is open. Rebuild
+// only when its item index changes.
+let made: { items: typeof ITEMS; by: Record<string, Recipe> } | null = null
+
 /** Every recipe, by the kind of item it makes. */
-export let RECIPES: Record<string, Recipe> = Object.fromEntries([
-  ...Object.entries(ARMS).flatMap(([kind, t]) => {
-    let sort = SORTS[kind.replace(/\d+$/, '')]
-    return sort && t.tier
-      ? [{ makes: kind, at: sort[0], tier: t.tier, needs: sort[1] }]
-      : []
-  }),
-  ...BREWS,
-].map((r) => [r.makes, r]))
+export let recipes = (): Record<string, Recipe> => {
+  if (made?.items == ITEMS) return made.by
+  let by = Object.fromEntries([
+    ...Object.entries(ITEMS).flatMap(([kind, t]) => {
+      let sort = t.recipe && SORTS[t.recipe]
+      return sort && t.tier
+        ? [{ makes: kind, at: sort[0], tier: t.tier, needs: sort[1] }]
+        : []
+    }),
+    ...BREWS,
+  ].map((r) => [r.makes, r]))
+  made = { items: ITEMS, by }
+  return by
+}
 
 /** What making a thing of `tier` is worth to its trade. */
 export let madeXp = (tier: number): number => 10 * tier
@@ -193,17 +201,19 @@ export let have = (bag: Held[], what: string, tier: number): number => {
  * nothing, when the bag is short.
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * let bag = [
  *   { eid: 'a', kind: 'silver', n: 2 },
  *   { eid: 'b', kind: 'copper', n: 2 },
  *   { eid: 'c', kind: 'oaklog', n: 1 },
  * ]
- * assertEquals(plan(RECIPES.sword1, bag), {
+ * assertEquals(plan(recipes().sword1, bag), {
  *   spend: ['b', 'a', 'c'],
  *   change: [['silver', 1]],
  * })
- * assertEquals(plan(RECIPES.sword2, bag), null)
+ * assertEquals(plan(recipes().sword2, bag), null)
  * ```
  */
 export let plan = (

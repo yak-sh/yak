@@ -1,5 +1,5 @@
 // Upgrading a piece of gear, +1 and up to +5, at the station that makes one
-// like it (craft.ts `RECIPES`): what is smithed at the forge, what is made at
+// like it (craft.ts `recipes`): what is smithed at the forge, what is made at
 // the bench there, and wherever a recipe moves, its upgrades follow. Each
 // step asks more of the stuff the piece is made from, and from +3 a gem too.
 // Its rolled gain lives on the upgraded row (rarity.ts `piece`).
@@ -9,7 +9,7 @@
 // less items spent; how far a piece is upgraded is how many rows name it
 // (`upgradesOf`), so a guest, who can only add rows, keeps theirs. Each step is
 // worth xp to the station's trade, as making is (`upgradeWorth`).
-import { madeXp, type Recipe, RECIPES } from './craft.ts'
+import { madeXp, type Recipe, recipes } from './craft.ts'
 import { ITEMS } from './items.ts'
 import { UP } from './rarity.ts'
 import type { Trade } from './trades.ts'
@@ -30,7 +30,7 @@ export let MOST = 5
  */
 export let madeBy = (kind: string): Recipe | undefined => {
   let t = ITEMS[kind]
-  return RECIPES[kind] ?? RECIPES[`${t?.family}${t?.tier}`]
+  return recipes()[kind] ?? recipes()[`${t?.family}${t?.tier}`]
 }
 
 /** What taking a piece of `kind` from +`plus` to the next step asks, as a

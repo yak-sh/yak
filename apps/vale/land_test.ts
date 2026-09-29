@@ -5,9 +5,9 @@ import { Top } from './features.ts'
 import { homesOf } from './homes.ts'
 import { LEVELS, SIZE } from './levels.ts'
 import { CHUNK, patchOf, propsIn, vale } from './terrain.ts'
-import { seedBeasts } from './beasts_fixture.ts'
+import { seedDesigns } from './designs_fixture.ts'
 
-seedBeasts()
+seedDesigns()
 
 let ground = (id: string, x: number, z: number) => {
   let [gx, gz] = LEVELS[id].cell

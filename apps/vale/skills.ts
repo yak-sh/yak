@@ -469,6 +469,8 @@ export let formOf = (id: string, known: string[]): Ability | undefined => {
  * health their level gives, for the passives that add a share of it.
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
  * import { kitOf } from './gear.ts'

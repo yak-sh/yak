@@ -31,7 +31,7 @@ import type { bits, overlay } from './fx.ts'
 import { halo } from './halo.ts'
 import { focus, type Gaze, gaze, neck } from './gaze.ts'
 import { type Hand, handOf, kitOf } from './gear.ts'
-import { ITEMS, meshed, onGround } from './items.ts'
+import { ITEMS, itemVersion, meshed, onGround, type Thing } from './items.ts'
 import { laid } from './laid.ts'
 import { levelOf } from './levels.ts'
 import { pack } from './mesh.ts'
@@ -174,7 +174,10 @@ export let cast = (
 ) => {
   let actors = new Map<string, Actor>()
   let lootMat = soft({ speckle: 0.05 })
-  let lootGeo = new Map<string, THREE.BufferGeometry>()
+  let lootGeo = new Map<
+    string,
+    { item: Thing | undefined; geo: THREE.BufferGeometry }
+  >()
   let loot = new Map<string, THREE.Mesh>()
   let glowing = new THREE.MeshBasicMaterial({
     vertexColors: true,
@@ -448,7 +451,7 @@ export let cast = (
       let a = actor(
         eid,
         () => hero(build, look, dress),
-        JSON.stringify([look, dress]),
+        JSON.stringify([look, dress, itemVersion]),
       )
       a.fig.root.visible = false
     },
@@ -472,7 +475,7 @@ export let cast = (
       let mine = actor(
         me,
         () => hero(build, look, dress),
-        JSON.stringify([look, dress]),
+        JSON.stringify([look, dress, itemVersion]),
       )
       mine.fig.root.visible = true
       let facing = work
@@ -519,7 +522,7 @@ export let cast = (
         let a = actor(
           o.eid,
           () => hero(build, o.look, o.gear),
-          JSON.stringify([o.look, o.gear]),
+          JSON.stringify([o.look, o.gear, itemVersion]),
         )
         a.remote = follow(a.remote, b, now, dt)
         ;[a.x, a.y, a.z, a.yaw, a.speed, a.ahead] = [
@@ -698,20 +701,23 @@ export let cast = (
       let lying = new Set<string>()
       for (let d of f.drops) {
         lying.add(d.eid)
+        let item = ITEMS[d.kind] ?? ITEMS.coin
+        let look = item?.look ?? []
+        let model = lootGeo.get(d.kind)
+        if (!model || model.item != item) {
+          model?.geo.dispose()
+          model = { item, geo: geometry(pack(meshed(look))) }
+          lootGeo.set(d.kind, model)
+        }
         let mesh = loot.get(d.eid)
         if (!mesh) {
-          let look = (ITEMS[d.kind] ?? ITEMS.coin).look
-          let g = lootGeo.get(d.kind)
-          if (!g) {
-            g = geometry(pack(meshed(look)))
-            lootGeo.set(d.kind, g)
-          }
-          mesh = new THREE.Mesh(g, lootMat)
-          mesh.scale.setScalar(onGround(look))
+          mesh = new THREE.Mesh(model.geo, lootMat)
           mesh.castShadow = true
           scene.add(mesh)
           loot.set(d.eid, mesh)
         }
+        mesh.geometry = model.geo
+        mesh.scale.setScalar(onGround(look))
         let bob = Math.sin(t * 3 + d.at) * 0.08
         mesh.position.set(d.x, d.y + 0.25 + bob, d.z)
         mesh.rotation.y = t * 1.8 + d.at

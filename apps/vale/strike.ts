@@ -67,8 +67,8 @@ export let farOf = (a: Ability): number =>
  * another is a good deal nearer (`HOLD`).
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * import { ABILITIES } from './abilities.ts'
  * import { HANDLES } from './arms.ts'

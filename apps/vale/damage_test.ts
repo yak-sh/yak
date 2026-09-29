@@ -6,9 +6,9 @@ import { type Intent } from './input.ts'
 import { type Bundle, type Net } from './net.ts'
 import { game } from './play.ts'
 import { flat } from './terrain.ts'
-import { seedBeasts } from './beasts_fixture.ts'
+import { seedDesigns } from './designs_fixture.ts'
 
-seedBeasts()
+seedDesigns()
 
 let still: Intent = {
   move: [0, 0],

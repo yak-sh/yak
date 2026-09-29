@@ -5,6 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { BEASTS, useBeasts } from './beasts.ts'
 import { rows } from './beasts_fixture.ts'
+import { seedItems } from './items_fixture.ts'
 import { foeOf } from './danger.ts'
 import { dens, homesNear } from './homes.ts'
 import { LEVELS } from './levels.ts'
@@ -16,6 +17,7 @@ Deno.test('a creature design added to the store inhabits its chosen land', async
   let vocab = loadVocab([words])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply(rows)
+  seedItems()
   useBeasts(await g.read('.beast_design'))
   assertEquals(Object.keys(BEASTS).length, rows.length)
   assertEquals(wares('mossvale').has('moonmoth'), false)

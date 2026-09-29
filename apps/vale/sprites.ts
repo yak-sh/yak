@@ -180,15 +180,15 @@ let hex = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 let SIZE = 96
 let INK = 'rgba(38, 32, 22, 0.9)'
 
-let drawn = new Map<string, string>()
+let drawn = new Map<string, { thing: typeof ITEMS[string]; url: string }>()
 
 /** The picture of a kind of thing, as a URL an image can show; '' for a kind
  * nothing knows. */
 export let sprite = (kind: string): string => {
-  let url = drawn.get(kind)
-  if (url != null) return url
   let thing = ITEMS[kind]
-  url = ''
+  let had = drawn.get(kind)
+  if (had && had.thing == thing) return had.url
+  let url = ''
   if (thing?.look.length) {
     let canvas = document.createElement('canvas')
     canvas.width = canvas.height = SIZE
@@ -250,7 +250,7 @@ export let sprite = (kind: string): string => {
     }
     url = canvas.toDataURL()
   }
-  drawn.set(kind, url)
+  drawn.set(kind, { thing, url })
   return url
 }
 

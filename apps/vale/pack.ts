@@ -23,7 +23,7 @@ import {
   trying,
   versus,
 } from './compare.ts'
-import { canWear, RACK } from './gear.ts'
+import { canWear, rack as rackKinds } from './gear.ts'
 import { glyphText } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
 import { piece, RARITIES, tint } from './rarity.ts'
@@ -277,7 +277,7 @@ export let pack = (panel: Page, acts: Acts) => {
     ).join('')
     let rack = f.rack
       ? `<h3 class=Pack_Head>By the fire: plain arms for anyone to try</h3><div class=Pack_Grid>${
-        RACK.map((k) =>
+        rackKinds().map((k) =>
           tile(
             `rack:${k}`,
             { eid: k, kind: k, n: 1 },
@@ -307,7 +307,7 @@ export let pack = (panel: Page, acts: Acts) => {
         was = []
         return
       }
-      let key = [f.sheet, f.rack, picked]
+      let key = [f.sheet, f.rack, picked, ITEMS]
       if (key.every((k, i) => k === was[i])) return
       was = key
       draw(f.sheet, f)

@@ -5,7 +5,10 @@ import { tierRange } from './arms.ts'
 import { sortLine } from './compare.ts'
 import { canWear, firsts, wornOf } from './gear.ts'
 import { ITEMS } from './items.ts'
+import { seedItems } from './items_fixture.ts'
 import { itemLevel, piece } from './rarity.ts'
+
+seedItems()
 
 Deno.test('item levels stay with their piece and refine its power', () => {
   for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {

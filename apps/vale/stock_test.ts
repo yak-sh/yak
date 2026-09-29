@@ -4,7 +4,7 @@
 // allow, a job on the board goes to one hero, and every page that reads the
 // same rows reaches the same answer.
 import { assertEquals } from '@std/assert'
-import { seedBeasts } from './beasts_fixture.ts'
+import { seedDesigns } from './designs_fixture.ts'
 import { GIVERS } from './quests.ts'
 import {
   BOARD,
@@ -20,7 +20,7 @@ import {
   type Reply,
 } from './stock.ts'
 
-seedBeasts()
+seedDesigns()
 
 let MIN = 60_000
 

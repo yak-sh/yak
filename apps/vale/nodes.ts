@@ -16,7 +16,7 @@ import type { bits, overlay } from './fx.ts'
 import { STATIONS } from './craft.ts'
 import { chipOf, GATHER, type Look } from './gather.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
-import { ITEMS, meshed } from './items.ts'
+import { ITEMS, meshed, type Thing } from './items.ts'
 import { LIFT } from './laid.ts'
 import { type Box, cuboids } from './boxes.ts'
 import { baseline, type ChunkProps, natureMesh } from './nature_mesh.ts'
@@ -267,6 +267,10 @@ export let nodes = (
   })
   let ringGeo = new THREE.RingGeometry(0.9, 1, 40)
   let made = new Map<string, THREE.BufferGeometry>()
+  let itemGeo = new Map<
+    string,
+    { item: Thing | undefined; geo: THREE.BufferGeometry }
+  >()
   let models = new Map<string, Out>()
   let modelFor = (n: Seen, whole: boolean, shape: number): Out => {
     let id = `${n.kind}:${whole}:${shape}`
@@ -302,11 +306,15 @@ export let nodes = (
   let flying: { obj: THREE.Mesh; from: THREE.Vector3; t: number }[] = []
 
   // What an item looks like, as loot does (cast.ts).
-  let thing = (kind: string) =>
-    new THREE.Mesh(
-      geo(`item:${kind}`, () => meshed(ITEMS[kind]?.look ?? [])),
-      mat,
-    )
+  let itemModel = (kind: string) => {
+    let item = ITEMS[kind], had = itemGeo.get(kind)
+    if (had && had.item == item) return had.geo
+    had?.geo.dispose()
+    let geo = geometry(pack(meshed(item?.look ?? [])))
+    itemGeo.set(kind, { item, geo })
+    return geo
+  }
+  let thing = (kind: string) => new THREE.Mesh(itemModel(kind), mat)
 
   // A node's model, whole or spent, sharing geometry with its kind and shape.
   let body = (n: Seen, whole: boolean): Body | null => {
@@ -457,6 +465,7 @@ export let nodes = (
           d.group.position.set(n.at[0] + dx, n.at[1] + dy, n.at[2] + dz)
         }
         d.seen = true
+        if (d.whole?.fish) d.whole.fish.geometry = itemModel(n.lode.gives)
         let whole = !n.spent
         if (d.was != whole) {
           // Felled while in sight: a tree topples away from the hero, and

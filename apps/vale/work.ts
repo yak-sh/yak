@@ -10,7 +10,7 @@
 // is upgraded, the `upgraded` row naming it, and the `used` rows. Each is xp
 // to its trade. The work stops when the hero walks off, strikes, rolls, jumps
 // or faints, or someone else gathers the node first.
-import { isStation, madeXp, plan, RECIPES, spare, STATIONS } from './craft.ts'
+import { isStation, madeXp, plan, recipes, spare, STATIONS } from './craft.ts'
 import { placeOf, REACH } from './area.ts'
 import {
   chipOf,
@@ -172,7 +172,7 @@ let making = (tier: number) => 1400 + 300 * tier
 let worth = (b: Bundle): [Trade, number][] => {
   let gathered = comp(b, 'gathered')
   let lode = LODES[str(gathered.kind)]
-  let r = RECIPES[str(comp(b, 'crafted').recipe)]
+  let r = recipes()[str(comp(b, 'crafted').recipe)]
   let out: [Trade, number][] = []
   if (lode) out.push([lode.trade, num(gathered.xp, gatherXp(lode.tier))])
   if (r) out.push([r.at, madeXp(r.tier)])
@@ -311,7 +311,7 @@ export let working = (
     f: WorkFrame,
     lvl: number,
   ): Work => {
-    let r = RECIPES[key]
+    let r = recipes()[key]
     let took = plan(r, spare(f.sheet.bag, Object.values(f.sheet.worn)))
     if (!took) return short
     let piece = crypto.randomUUID()
@@ -517,7 +517,7 @@ export let working = (
       let held = f.sheet.bag.find((h) => h.eid == asked?.piece)
       let r = held
         ? upgradeOf(held.kind, held.plus ?? 0)
-        : RECIPES[asked?.recipe ?? '']
+        : recipes()[asked?.recipe ?? '']
       asked = null
       if (r && !job && !f.down && me && bench?.craft == r.at) {
         if (mine[r.at].lvl < least(r.tier)) {

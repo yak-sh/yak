@@ -430,6 +430,8 @@ export let OFF: Record<string, string> = {
  * weapon's two, then the other hand's; empty where nothing gives one.
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
  * let worn = (...kinds: string[]) =>

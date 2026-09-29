@@ -21,7 +21,7 @@ import { BEASTS } from './beasts.ts'
 import { foeOf, landLevel } from './danger.ts'
 import { isA } from './features.ts'
 import { LODES, yieldKinds } from './gather.ts'
-import { RACK } from './gear.ts'
+import { rack } from './gear.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
 import { hopsOf, levelOf, LEVELS } from './levels.ts'
@@ -71,8 +71,8 @@ let kindOf = (word: string): string | null => {
  * nothing the vale has.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * assertEquals(goods('12 coins, a Mossberry tonic and 2 tusk'), [
  *   { kind: 'coin', n: 12 },
@@ -105,8 +105,8 @@ export let goods = (text: string): Goods | null => {
  * Goods in words a person reads.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * assertEquals(said([{ kind: 'coin', n: 12 }, { kind: 'tonic', n: 1 }]),
  *   '12 Coins, Mossberry tonic')
@@ -164,8 +164,8 @@ let values = () => {
  * any village's rack gives away.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assert, assertEquals } from '@std/assert'
  * assertEquals(valueOf('sword1'), 0)
  * assert(valueOf('coin') < valueOf('jelly'))
@@ -176,7 +176,7 @@ let values = () => {
 export let valueOf = (kind: string): number => {
   let tier = GATHERED.get(kind) ?? ITEMS[kind]?.tier
   let { kill, drops } = values()
-  return RACK.includes(kind) ? 0 : drops.get(kind) ??
+  return rack().includes(kind) ? 0 : drops.get(kind) ??
     (GATHERED.has(kind)
       ? kill[tier! - 1]
       : tier
@@ -223,6 +223,7 @@ let potion = (level: string) => POTIONS[tierOf(lvlOf(level)) - 1]
 
 let WARES = {
   beasts: BEASTS,
+  items: ITEMS,
   byLevel: new Map<string, Set<string>>(),
 }
 
@@ -232,8 +233,8 @@ let WARES = {
  * nodes give, coin and its potion.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assert } from '@std/assert'
  * let vale = wares('mossvale')
  * assert(vale.has('thornback') && vale.has('tusk') && vale.has('sword1'))
@@ -241,8 +242,8 @@ let WARES = {
  * ```
  */
 export let wares = (level: string): Set<string> => {
-  if (WARES.beasts != BEASTS) {
-    WARES = { beasts: BEASTS, byLevel: new Map() }
+  if (WARES.beasts != BEASTS || WARES.items != ITEMS) {
+    WARES = { beasts: BEASTS, items: ITEMS, byLevel: new Map() }
   }
   let had = WARES.byLevel.get(level)
   if (had) return had
@@ -278,8 +279,8 @@ export let most = (level: string): number => 8 * taught(level)
  * felling them teaches a hero of the villager's land (rules.ts `worth`).
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * assertEquals(worthOf([{ kind: 'slime', n: 2 }], 'mossvale'), 2 * 11)
  * ```
@@ -327,8 +328,8 @@ let FAMILIES = ['sword', 'axe', 'hammer', 'dagger', 'bow', 'staff']
  * is only their row of GIVERS.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * import { GIVERS } from './quests.ts'
  * let wren = GIVERS.find((g) => g.id == 'wren')!
@@ -722,8 +723,8 @@ export type Step = { kind: string; n: number; have: number; deed: boolean }
  * How far a hero has come with each step of what a deal asks.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * let kills = [{ kind: 'thornback', at: 5 }, { kind: 'thornback', at: 1 }]
  * let bag = [{ eid: 'a', kind: 'tusk', n: 1 }]
@@ -754,8 +755,8 @@ export let steps = (
  * not hold it all.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * let bag = [
  *   { eid: 'c1', kind: 'coin', n: 8 },

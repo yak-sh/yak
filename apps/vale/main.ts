@@ -45,7 +45,7 @@ import { listen } from './input.ts'
 import { nodes } from './nodes.ts'
 import { type Board, noticeboard, notices } from './notices.ts'
 import { papers } from './papers.ts'
-import { ITEMS } from './items.ts'
+import { ITEMS, useItems } from './items.ts'
 import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { HOME, levelOf, LEVELS, type Spot } from './levels.ts'
@@ -115,7 +115,16 @@ fit()
 addEventListener('resize', fit)
 
 let net = connect(new URL('api/', document.baseURI))
-let designed = net.designs('beast_design', useBeasts)
+// The world, shops, crafting and item pictures all read these indexes. Load
+// both before constructing them; subscriptions keep later edits current.
+let asking = net.me().then(async (me) => ({
+  me,
+  heroes: me.person ? await net.heroes(me.person) : [],
+}))
+await Promise.all([
+  net.designs('beast_design', useBeasts),
+  net.designs('item_design', useItems),
+])
 let deal = deals(net)
 let folk = village(net, deal)
 let seen = sighting(net)
@@ -126,15 +135,6 @@ let g = game(net, folk.at)
 let toil = working(net)
 let walking = withoutSpent(v, (p) => toil.spent(p, net.now()))
 let helper = companion(net)
-// Who you are and your heroes, asked while the level grows.
-let asking = Promise.all([
-  net.me().then(async (me) => ({
-    me,
-    heroes: me.person ? await net.heroes(me.person) : [],
-  })),
-  designed,
-]).then(([known]) => known)
-
 let typing = false
 // The keyboard is someone else's while a name or a line is written, or while
 // someone is talked to.

@@ -2,9 +2,80 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. Levels and quests are the app's own data; creature and item designs are store rows seeded from files and watched by every page.",
   "models": "open",
   "$defs": {
+    "item_design": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "unique": [["kind"]],
+      "description": "One kind of thing a hero can carry, wear, gather or receive. Its created stamp records who designed it.",
+      "properties": {
+        "kind": { "type": "string", "minLength": 1, "index": true },
+        "name": { "type": "string", "minLength": 1 },
+        "heals": { "type": "number", "minimum": 0 },
+        "slot": {
+          "type": "string",
+          "enum": ["main", "off", "head", "body", "feet", "trinket"]
+        },
+        "tier": { "type": "number", "minimum": 1 },
+        "family": { "type": "string" },
+        "weight": { "type": "string" },
+        "dmg": { "type": "number" },
+        "armour": { "type": "number" },
+        "hp": { "type": "number" },
+        "speed": { "type": "number" },
+        "haste": { "type": "number" },
+        "force": { "type": "number" },
+        "luck": { "type": "number" },
+        "plain": { "type": "boolean" },
+        "recipe": { "type": "string" },
+        "look": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              { "type": "integer", "minimum": 0 },
+              { "type": "number", "minimum": 0 }
+            ],
+            "minItems": 3,
+            "maxItems": 4
+          }
+        },
+        "aura": {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "color": { "type": "integer", "minimum": 0 },
+            "size": { "type": "number", "minimum": 0 }
+          },
+          "required": ["at", "color", "size"]
+        },
+        "view": {
+          "type": "string",
+          "enum": ["corner", "front", "side", "top", "lying", "chop"]
+        }
+      },
+      "required": ["kind", "name", "look"]
+    },
     "beast_design": {
       "component": true,
       "type": "object",

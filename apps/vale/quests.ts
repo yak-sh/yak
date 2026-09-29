@@ -81,8 +81,8 @@ export let GIVERS: Giver[] = LANDS.flatMap((l) => l.givers)
  * lives in its level (homes.ts `dens`), or drops from something that does.
  *
  * ```ts
- * import { seedBeasts } from './beasts_fixture.ts'
- * seedBeasts()
+ * import { seedDesigns } from './designs_fixture.ts'
+ * seedDesigns()
  * import { assertEquals } from '@std/assert'
  * import { BEASTS } from './beasts.ts'
  * import { dens } from './homes.ts'

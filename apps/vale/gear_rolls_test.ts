@@ -4,6 +4,7 @@ import { assert, assertEquals } from '@std/assert'
 import { tierRange } from './arms.ts'
 import { itemStats, numbers, statValue, stepRange, versus } from './compare.ts'
 import { ITEMS } from './items.ts'
+import { seedItems } from './items_fixture.ts'
 import {
   GEAR_STATS,
   piece,
@@ -15,6 +16,8 @@ import {
   upgradeRange,
 } from './rarity.ts'
 import { MOST, upgradesOf } from './upgrade.ts'
+
+seedItems()
 
 Deno.test('upgrade rows preserve old steps and replay new rolls', () => {
   let row = upgradeGain('upgrade-one')

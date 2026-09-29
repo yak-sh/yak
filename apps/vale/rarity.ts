@@ -487,6 +487,7 @@ let hone = (p: Piece, plus: number, gain?: number): Piece => {
 }
 
 let rolled = new Map<string, Piece>()
+let designs = ITEMS
 
 /** A piece of gear as it rolled, from its item row, and as far as it was
  * upgraded: the same eid always rolls the same, and a common piece, or a
@@ -495,6 +496,8 @@ let rolled = new Map<string, Piece>()
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * let p = (rarity: Rarity, eid = 'e1', kind = 'sword3') =>
  *   piece({ eid, kind, rarity })
  * assertEquals(p('epic').bonuses, p('epic').bonuses)
@@ -544,6 +547,10 @@ export type PieceRow = {
 }
 
 export let piece = (h: PieceRow): Piece => {
+  if (designs != ITEMS) {
+    designs = ITEMS
+    rolled.clear()
+  }
   let rarity = h.rarity ?? 'common', plus = h.plus ?? 0
   let key = `${h.eid}:${h.kind}:${rarity}:${h.lvl ?? ''}:${plus}:${
     h.gain ?? ''

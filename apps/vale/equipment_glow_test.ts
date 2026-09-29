@@ -4,6 +4,9 @@ import * as THREE from 'three'
 import { assertEquals } from '@std/assert'
 import { BUILD, hero } from './figures.ts'
 import { ITEMS } from './items.ts'
+import { seedItems } from './items_fixture.ts'
+
+seedItems()
 
 Deno.test('a staff and tome carry their own soft light', () => {
   let f = hero(BUILD, { tint: '#668866', hair: '#443322', skin: '#ddbb99' }, {

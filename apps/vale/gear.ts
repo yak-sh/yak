@@ -12,7 +12,7 @@
 // A slot the hero never chose for takes the best they carry for it
 // (`firsts`), so a hero handed a sword holds it without opening their bag.
 // Once chosen, a slot holds what was chosen.
-import { ARMS, HANDLES, type Slot, SLOTS } from './arms.ts'
+import { HANDLES, type Slot, SLOTS } from './arms.ts'
 import { ITEMS } from './items.ts'
 import { piece, POWERS, type Powers, RARITIES } from './rarity.ts'
 import type { Held } from './rules.ts'
@@ -48,6 +48,8 @@ let lets = (skill: string, family = '') =>
  * and a weapon for both hands alone.
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * let h = (kind: string, eid = kind) => ({ eid, kind, n: 1 })
  * let kinds = (w: Worn) => Object.values(w).map((x) => x!.kind)
@@ -80,6 +82,8 @@ export let hands = (worn: Worn, last: Hand): Worn => {
  * `learnedOf`).
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * import { type Learned, learnedOf } from './skills.ts'
  * type Row = [string, string, number]
@@ -153,6 +157,8 @@ export let wornOf = (
  * in the first.
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * let w = { main: { eid: 'a', kind: 'dagger1', n: 1 } }
  * assertEquals(twins('dagger2', w, ['keen', 'cuts', 'twin']), true)
@@ -197,6 +203,8 @@ let TWIN = 0.8
 /** A hero's kit: each piece worn as it rolled (rarity.ts).
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assert, assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
  * import type { Rarity } from './rarity.ts'
@@ -308,6 +316,8 @@ export let kitOf = (worn: Worn): Kit => {
  * `fight.swing`), so every page sees the same hand.
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * let a = { eid: 'a', kind: 'dagger1', n: 1 }
  * let one = kitOf({ main: a }), two = kitOf({ main: a, off: { ...a, eid: 'b' } })
@@ -334,6 +344,8 @@ let rank = (h: Held) => {
  * carry for it. The other hand is left alone while both hands are full.
  *
  * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * let bag = [
  *   { eid: 'a', kind: 'sword1', n: 1 },
@@ -372,8 +384,17 @@ export let firsts = (rows: Equip[], bag: Held[], lvl: number) => {
   return out
 }
 
+let stocked: { items: typeof ITEMS; kinds: string[] } | null = null
+
 /** What the rack by a village's fire holds: a plain thing of the first tier
  * for every hand and every weight, for any hero to take and try. */
-export let RACK: string[] = Object.keys(ARMS).filter((k) =>
-  ARMS[k].tier == 1 && ARMS[k].slot != 'trinket'
-)
+export let rack = (): string[] => {
+  if (stocked?.items == ITEMS) return stocked.kinds
+  let kinds = Object.keys(ITEMS).filter((kind) =>
+    ITEMS[kind].plain && ITEMS[kind].tier == 1 &&
+    ITEMS[kind].slot &&
+    ITEMS[kind].slot != 'trinket'
+  )
+  stocked = { items: ITEMS, kinds }
+  return kinds
+}

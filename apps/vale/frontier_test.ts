@@ -6,9 +6,9 @@ import { frontierId } from './frontier.ts'
 import { hopsOf, levelAt, levelOf, LEVELS, SIZE } from './levels.ts'
 import { regionOf } from './regions.ts'
 import { roadsOf } from './ways.ts'
-import { seedBeasts } from './beasts_fixture.ts'
+import { seedDesigns } from './designs_fixture.ts'
 
-seedBeasts()
+seedDesigns()
 
 Deno.test('frontier cells grow named lands with their own terrain and wildlife', () => {
   let near = levelAt(5, 0), far = levelAt(10, 0)

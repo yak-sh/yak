@@ -40,7 +40,7 @@ import {
   handOf,
   type Kit,
   kitOf,
-  RACK,
+  rack,
   twins,
   type Worn,
   wornOf,
@@ -748,7 +748,7 @@ export let game = (
     take: (kind: string) => {
       let me = net.hero, s = sheet
       let slot = s && twins(kind, s.worn, s.learned) ? 'off' : ITEMS[kind]?.slot
-      if (!me || !slot || !RACK.includes(kind)) return
+      if (!me || !slot || !rack().includes(kind)) return
       wear(me, slot, keepItem(me, kind, 1, net.now(), undefined, 1))
     },
     /** spend a point on a skill, if one is left and it can be learned */
