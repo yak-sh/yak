@@ -2541,7 +2541,7 @@ export class Store {
       )
     }
     let now = JSON.stringify(held)
-    if (now != (this.#get(key) ?? '{}')) this.#put(key, now)
+    if (now != this.#get(key)) this.#put(key, now)
     return Response.json({ ok: true, [word]: Object.keys(held) })
   }
 

@@ -949,6 +949,26 @@ Deno.test('a page queries a borrowed word at its home', async () => {
     let after = await page('query?.fire')
     assertEquals(after.status, 200)
     assertEquals(await after.json(), [])
+
+    let newFire = await agent.tool('graph_apply', {
+      space: 'flame74',
+      app: 'vale',
+      entities: [{ entity: { eid: '$new' }, fire: { village: 'New' } }],
+    })
+    let newEid = minted(newFire, '$new')
+    assertEquals(
+      (await (await page('query?.fire')).json()).map((
+        r: { entity: { eid: string } },
+      ) => r.entity.eid),
+      [newEid],
+    )
+
+    await agent.tool('app_restore', { space: 'flame74', app: 'probe' })
+    let kept = await k.at('flame74.yaks.app', '/probe/api/query?.fire', {
+      headers: { cookie: them.cookie },
+    })
+    assertEquals(kept.status, 200)
+    assertEquals((await kept.json())[0].entity.eid, eid)
   } finally {
     await k.stop()
   }
