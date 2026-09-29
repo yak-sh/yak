@@ -44,7 +44,7 @@
 
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
-import { comps, TOMBSTONE } from '@yaks/graph'
+import { comps, Refused, TOMBSTONE } from '@yaks/graph'
 import {
   among,
   and,
@@ -75,6 +75,7 @@ import {
   type Write,
 } from '@yaks/sql'
 import { componentTables } from './physical.ts'
+import { tables } from './ddl.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
 import { get } from './read.ts'
 
@@ -426,6 +427,15 @@ export let patch = (
   number: boolean | { except: readonly string[] } = false,
   adopt = false,
 ): Entity[] => {
+  // A computed component's rows are another package's (@yaks/sql `Backing`):
+  // there is no table here to write one to.
+  for (let b of bundles) {
+    for (let [name] of comps(b)) {
+      if (vocab.comp(name)?.computed) {
+        throw new Refused(`${name} is computed: it is read, never written`)
+      }
+    }
+  }
   let known = spines(driver, [...new Set(touched(vocab, bundles))])
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
 
@@ -572,8 +582,6 @@ export let remove = (
   let now = new Date().toISOString()
   // With table-based identities enabled, deletion must honor that same
   // physical set even when this writer has a narrower vocabulary.
-  let tables = vocab.comp('archetype')
-    ? componentTables(driver)
-    : [...vocab.all]
-  for (let s of removeSql(tables, entities, now)) effect(driver, s)
+  let held = vocab.comp('archetype') ? componentTables(driver) : tables(vocab)
+  for (let s of removeSql(held, entities, now)) effect(driver, s)
 }

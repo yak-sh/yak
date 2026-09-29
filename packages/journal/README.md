@@ -40,9 +40,9 @@ for the fields known to the journal, keeping their history continuous across
 removal and recreation. Previous values are reconstructed from the entity's own
 indexed history rather than stored alongside each new value.
 
-These tables do not contain graph entities of their own and are not included in
-ordinary graph snapshots or client caches. Normal writes append records;
-explicit redaction methods can modify stored history.
+The tables hold no rows of the entity table and are not included in graph
+snapshots. Normal writes append records; explicit redaction methods can modify
+stored history. The graph reads the records as entities, below.
 
 The plugin skips a transaction with no recorded component changes. Its `journal`
 hook runs inside the graph's transaction. It opens no transaction and uses the
@@ -50,6 +50,38 @@ synchronous `rows(statement)` callback supplied to `log()`, which runs a
 @yaks/sql statement and returns its rows. Atomic recording requires that
 callback to use the graph's active transaction on the same connection. A
 separate unrelated database connection does not provide that guarantee.
+
+## Read as entities
+
+The vocabulary declares two computed components, read from these tables and
+never written:
+
+| Component | Properties                               | One per                                |
+| --------- | ---------------------------------------- | -------------------------------------- |
+| `_tx`     | `seq`, `at`, `by`, `via`, `host`, `note` | row of `journal_tx`: a transaction     |
+| `_change` | `tx`, `target`, `comp`, `value`          | row of `journal_change`: one operation |
+
+`_change.value` is the operation's after-image, the properties it wrote as one
+object; it is absent where the operation removed the component. `comp` refers to
+the `_comp` entity describing the component (@yaks/vocab), found by its name,
+and a deletion is the change whose `comp` is `entity`'s; where the graph
+describes no such component (no @yaks/vocab, or a component since renamed) a
+change has no `comp`. `tx` refers to the `_tx` entity, and `target`, `by` and
+`via` to entities of the graph.
+
+So history is asked in the query grammar, at every door: `._change.target=T-5`
+is an entity's history, oldest first, and `._change.target=T-5&.limit=20` its
+latest twenty; `._tx.via=S-7` is what one session wrote, and
+`._change.tx._tx.via=S-7` the changes it made. Each record's eid is its row id
+written ahead of a tag for the store and the component, so `yak graph show` and
+a link open one directly.
+
+`backed(vocab)`, exported by the root and by `@yaks/journal/vocab`, is what a
+store reads them through: `storage(driver, vocab, { backed: backed(vocab) })`
+(@yaks/sql `Backing`). A host composed from a config passes it. Nothing is
+copied: a query reads the journal's tables through their indexes, and the
+journal records no transaction of its own. A subscription over one is read again
+after every commit.
 
 ## Who a recorded write is attributed to
 
@@ -76,9 +108,8 @@ Add the package to a compatible `yak` plugin configuration:
 ```
 
 `@yaks/journal/rules` creates the SQL tables on the host's connection and
-returns the journal plugin. `@yaks/journal/vocab` declares the `history` tool,
-and `@yaks/journal/tools` implements it. The package declares no graph
-component.
+returns the journal plugin. `@yaks/journal/vocab` declares `_tx`, `_change` and
+the `history` tool, and `@yaks/journal/tools` implements the tool.
 
 ```sh
 yak history T-5 -n 10
@@ -225,13 +256,13 @@ makes `undo()` throw an `Error`; a batch with no reversible changes returns
 
 ## Exports
 
-The root exports `ddl`, `log`, `journal`, `applied`, `undone`, `undo`, `Final`,
-value encoding helpers, and types including `Log`, `LogOpts`, `Batch`, `Entry`,
-`Patch`, `Delta` and `Cas`.
+The root exports `ddl`, `log`, `journal`, `backed`, `applied`, `undone`, `undo`,
+`Final`, value encoding helpers, and types including `Log`, `LogOpts`, `Batch`,
+`Entry`, `Patch`, `Delta` and `Cas`.
 
 | Sub-module export     | Purpose                                                          |
 | --------------------- | ---------------------------------------------------------------- |
-| `@yaks/journal/vocab` | `journalDoc` and `docs`, declaring the history tool              |
+| `@yaks/journal/vocab` | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `history`   |
 | `@yaks/journal/rules` | `rules(host)` installs tables/plugin; `logFor(host)` binds a log |
 | `@yaks/journal/tools` | `runs(host)` implements the history tool                         |
 

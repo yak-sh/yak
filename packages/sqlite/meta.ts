@@ -57,13 +57,21 @@ export let SCHEMA = 'schema'
  * for a file no install has finished in — one that may not have this table
  * yet. */
 export let installed = (driver: Driver): string | undefined =>
+  kept(driver, SCHEMA)
+
+// A key's value, read without assuming the table is there yet.
+let kept = (driver: Driver, k: string): string | undefined =>
   driver.query(select({
       cols: [col('name')],
       from: table('sqlite_schema'),
       where: eq(col('name'), val(META)),
     })).length
-    ? meta(driver).get(SCHEMA)
+    ? meta(driver).get(k)
     : undefined
+
+/** The store's epoch where one was minted, read without minting it: what a
+ * read asks, where {@link epoch} writes. */
+export let epochAt = (driver: Driver): string | undefined => kept(driver, EPOCH)
 
 /**
  * The store's lineage identity: a string minted once and persisted, so it

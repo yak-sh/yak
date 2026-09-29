@@ -158,11 +158,18 @@ with `file: true` starts the outer transaction with `BEGIN IMMEDIATE`, acquiring
 the write lock before reads. A driver supplying its own `tx` controls
 transaction behavior; Durable Object callbacks must remain synchronous.
 
-`base` includes `@yaks/sql` bind options (`derived`, `extend`, `now`, and a
-custom dialect), merged with per-read options. A `derived` entry's `text`
-expression also resolves its column in the `doc_value` view. `number` controls
-human numbering, and `adopt: true` accepts numbers supplied in patches when
-mirroring another store.
+`base` includes `@yaks/sql` bind options (`derived`, `backed`, `extend`, `now`,
+and a custom dialect), merged with per-read options. A `derived` entry's `text`
+expression also resolves its column in the `doc_value` view.
+
+A component declared `computed: true` gets no table: it is read through the
+`backed` rows another package supplies (@yaks/sql `Backing`), as @yaks/journal's
+`_tx` and `_change` are. The store tags each backing with `tagOf(epoch, comp)`
+once the first install has minted its epoch (`epochAt` reads it without
+minting), so a backed entity's eid names it in this store and no other. `read`
+and `get` return such entities like any other; `patch` refuses one, since
+nothing writes it. `number` controls human numbering, and `adopt: true` accepts
+numbers supplied in patches when mirroring another store.
 
 ### The driver
 
@@ -202,10 +209,10 @@ export list.
 
 - `entity`: integer `id`, public `eid`, optional `num`, and archetype pointer.
 - `tombstone`: deletion records excluded from normal queries.
-- One table per stored component, keyed by integer `entity`. References store
-  integer target ids; ordinary references have foreign keys, while `keep`
-  references can preserve historical ids. A component without properties is
-  represented by the existence of its row.
+- One table per stored component, keyed by integer `entity`, and none for a
+  computed one. References store integer target ids; ordinary references have
+  foreign keys, while `keep` references can preserve historical ids. A component
+  without properties is represented by the existence of its row.
 - Indexes from vocabulary `unique`/`index` declarations. SQLite enforces unique
   constraints, including competing inserts.
 - `doc_value`: a read view when the vocabulary declares `doc`.

@@ -65,7 +65,7 @@ component table needs on top:
 | `input`     | tool  | one schema per named argument, as a component declares properties       |
 | `ref`       | prop  | the entity kind a string references (`"project"`, `"entity"`)           |
 | `death`     | prop  | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
-| `computed`  | prop  | `true` = derived, never stored (a query-only rank)                      |
+| `computed`  | both  | `true` = derived, never stored: a query-only rank, a journal record     |
 | `reads`     | prop  | on a computed prop: components on other entities it reads; `[]` = none  |
 | `stamped`   | prop  | `true` = the server owns it: clients read it, never write it            |
 | `search`    | both  | prop: `true` = full-text indexed. comp: `["content.body"]`, found by it |
@@ -91,6 +91,12 @@ itself ([below](#a-vocabulary-as-entities)).
 A computed property's `reads` can name `comp.ref` when that reference points
 back to the entity carrying the computed value. Subscriptions then refresh that
 entity when the referenced component changes.
+
+A computed component (`computed: true` on the component) has no table and
+nothing writes it: its entities are rows another package keeps, read through the
+backing that package supplies (@yaks/sql `Backing`), as @yaks/journal's `_tx`
+and `_change` are. It is never wire-writable, and `refProps()` leaves out its
+references, which no reverse read over stored rows can find.
 
 Storage adapters interpret the loaded metadata: `type: integer` stores with
 integer affinity where a plain `number` uses SQLite REAL affinity, `enum`

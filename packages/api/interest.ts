@@ -14,6 +14,10 @@
 //   fixed exact reference values every member has, which exclude unrelated
 //         writes from a window's whole-answer refresh.
 //
+//   unseen the query reads a computed component, whose entities are in no
+//         commit's bundles: the journal's `_change` gains rows with every
+//         commit, beside what it applied. Every commit reads it again, whole.
+//
 // `null` is a query this cannot place — a text term, a neighbour, a walk, a
 // computed property that declares no `reads` — and every commit reaches it.
 
@@ -28,6 +32,7 @@ export type Interest = {
   via: Map<string, string>
   fixed: { comp: string; prop: string; value: string }[]
   whole: boolean
+  unseen: boolean
 }
 
 // Clauses that shape or bound the answer without reading any component.
@@ -81,12 +86,14 @@ export let interest = (
   let far = new Set<string>()
   let via = new Map<string, string>()
   let whole = false
+  let unseen = false
   let path = (p: string[], facet: boolean, into: Set<string>) => {
     let assoc = v.assoc(p[0])
     let hops = assoc
       ? [assoc, ...p.length > 1 ? v.aim(p.slice(1).join('.')) : []]
       : v.aim(p.join('.'), facet)
     hops.forEach((h, i) => {
+      if (v.comp(h.comp)?.computed) unseen = true
       ;(i || assoc ? far : into).add(h.comp)
       let d = v.prop(h.comp, h.prop)
       if (!d?.computed) return
@@ -146,7 +153,7 @@ export let interest = (
         ? [{ ...hop, value: c.value.raw }]
         : []
     })
-    return { own, near, far, via, fixed, whole }
+    return { own, near, far, via, fixed, whole, unseen }
   } catch {
     return null
   }

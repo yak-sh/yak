@@ -211,7 +211,7 @@ contributes nothing to that process.
 
 | Subpath     | Role       | Expected exports                                                                        |
 | ----------- | ---------- | --------------------------------------------------------------------------------------- |
-| `./vocab`   | `graph`    | `docs?`, `keywords?`, and `derived?` declarations                                       |
+| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations                             |
 | `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, and at most one `authenticate?` |
 | `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                           |
 | `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                |
@@ -302,9 +302,9 @@ process that started holds a lease instead.
    process serves `graph`.
 2. Combines vocabulary documents and keywords, rejecting duplicate component
    declarations.
-3. Opens SQLite, runs migrations, and builds storage with derived columns, query
-   extensions, optional entity numbers, and full-text indexes for fields
-   declared with `search: true`.
+3. Opens SQLite, runs migrations, and builds storage with derived columns, the
+   backings of computed components, query extensions, optional entity numbers,
+   and full-text indexes for fields declared with `search: true`.
 4. Builds the graph from plugin rules and the effect registry. Every process
    writes down the runs its commits owe, whatever roles it serves.
 5. Joins tool declarations to their `runs` implementations; a declared tool

@@ -42,9 +42,9 @@ their returned order.
 
 ## Terms used here
 
-- **Entity table:** every entity has a row containing its integer primary key
-  `id`, public string `eid`, optional human-readable number `num`, and
-  `archetype` pointer.
+- **Entity table:** every entity the graph writes has a row containing its
+  integer primary key `id`, public string `eid`, optional human-readable number
+  `num`, and `archetype` pointer.
 - **Component table:** a table named for a component, with an integer `entity`
   owner column and the component's declared columns. A LEFT JOIN returns NULL
   for an absent component's columns. Presence checks distinguish a missing row
@@ -148,6 +148,46 @@ without looking up its owner, for example in full-text index triggers.
 A qualified derived property returns NULL when its entity lacks that component
 unless `worn: false` is set. Use that option for expressions intended to work
 without the component, such as an update time that falls back to creation time.
+
+## Computed components
+
+A component declared `computed: true` has no table: its entities are rows of
+another package's tables, and they have no row in the entity table either.
+@yaks/journal's `_tx` and `_change` are its transactions and its changes. The
+package that owns the rows supplies a `Backing`: a select with one row per
+entity, its integer id as `entity` and a column per property, the shape of a
+component table. Pass the backings in `backed`, each with the `tag` its eids end
+with (@yaks/sqlite derives one per store):
+
+```ts
+import { as, type Backings, col, select, table } from '@yaks/sql'
+
+let backed: Backings = {
+  _tx: {
+    rows: select({
+      cols: [as(col('id'), 'entity'), as(col('ts'), 'at')],
+      from: table('journal_tx'),
+    }),
+    tag: '3f1c9e0d7b5a4c2e8f6d1b3a5c7e9f0a',
+  },
+}
+// With _tx declared computed in your vocabulary:
+// compile(parse('._tx.at>2026-09-01'), vocab, { backed })
+```
+
+A query that asks for a computed component reads its backing's rows in place of
+the entity table: `._change.target=T-5` selects from the journal's changes,
+through their index on `target`. Every other query reads the entity table as
+before, and none of its entities wears a computed component. A clause about a
+component the query's entities never wear is answered without a join: false
+where it needs the component, true where it holds without it. A reference into
+the backing (`_change.tx`) holds the row's id, and paths follow it
+(`._change.tx._tx.via=S-7`).
+
+An entity's eid is its id in eight or more hex digits, then the tag
+(`eidOf(tag, 42)` is `0000002a` and the tag), so nothing stores it and `.eid=`,
+a reference equality and a `.after` cursor read the id back out (`idOf`). A
+computed component's entities have no number.
 
 ## Extensions
 

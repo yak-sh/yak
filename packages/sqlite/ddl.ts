@@ -286,6 +286,12 @@ let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
   ]
 }
 
+/** The components that have a table of their own: every one but the spine
+ * and the computed ones, whose rows another package keeps (@yaks/sql
+ * `Backing`). */
+export let tables = (vocab: Vocab): string[] =>
+  vocab.all.filter((name) => name != 'entity' && !vocab.comp(name)?.computed)
+
 // The whole schema as an ordered list of statements: the spine, then one table
 // per component (the `entity` spine component is the identity table above, not
 // a component table), the doc view, and the indexes those tables declare.
@@ -302,8 +308,7 @@ export let schema = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
 // index may need to already exist.
 export let tabled = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
   ...SPINE,
-  ...vocab.all.filter((name) => name != 'entity')
-    .map((name) => tableDdl(vocab, name)),
+  ...tables(vocab).map((name) => tableDdl(vocab, name)),
   ...docDdl(vocab, derived),
 ]
 
@@ -319,8 +324,7 @@ export let indexed = (vocab: Vocab): CreateIndex[] => [
       indexDdl('entity', { props: ['archetype', 'num'], unique: false }),
     ]
     : []),
-  ...vocab.all
-    .filter((name) => name != 'entity')
+  ...tables(vocab)
     .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
 ]
 
@@ -388,7 +392,7 @@ export type Standing = Record<string, Stood>
 
 /** Whether fitting asks a file about the table `name`. */
 export let fitting = (vocab: Vocab) => (name: string): boolean =>
-  name == 'entity' || !!vocab.comp(name)
+  name == 'entity' || tables(vocab).includes(name)
 
 /** The {@link Standing} a file holds now, read through a driver that answers
  * at once. */
@@ -397,7 +401,7 @@ export let standing = (driver: Driver, vocab: Vocab): Standing =>
 
 // The component tables that stood.
 let comps = (vocab: Vocab, was: Standing): string[] =>
-  vocab.all.filter((name) => name != 'entity' && name in was)
+  tables(vocab).filter((name) => name in was)
 
 // Whether a table that stood already says what its fresh statement says about
 // the two things only a rebuild changes: which columns are keyed to another

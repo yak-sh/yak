@@ -69,7 +69,7 @@
       "type": "string"
     },
     "computed": {
-      "description": "true = this property is derived, never stored: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). Default false \u2014 a property nobody declares so is stored.",
+      "description": "true = derived, never stored. On a property: no column holds it, nobody writes it, a reader still sees it (a query-only rank, an aggregate, a status read off marks). On a component: no table holds it and nobody writes it; its entities are rows another package keeps, which the store reads through that package's backing (the journal's `_tx` and `_change`). Default false \u2014 what nobody declares so is stored.",
       "type": "boolean",
       "default": false
     },

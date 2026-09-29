@@ -124,11 +124,12 @@ let searched = (comp: string, prop: string, s: PropSchema): string[] =>
 // graph fills all three from the batch's clock and actor (@yaks/graph
 // stamp.ts), so a client-writable one is a property anyone may forge and
 // nothing will correct. Two of the three is somebody's own vocabulary and
-// means nothing here.
+// means nothing here. A computed component is written by nobody, so it is no
+// one's to forge: the journal's `_tx` reads who wrote a transaction.
 let PROVENANCE = ['at', 'by', 'via']
 let signed = (comp: string, s: PropSchema): string[] => {
   let props = s.properties ?? {}
-  if (!PROVENANCE.every((c) => props[c])) return []
+  if (s.computed === true || !PROVENANCE.every((c) => props[c])) return []
   return PROVENANCE.filter((c) => !props[c].stamped).map((c) =>
     `${comp}.${c} is wire-writable — a component carrying the whole {at, by, via} is a mark the server signs, so mark every one of them "stamped": true`
   )

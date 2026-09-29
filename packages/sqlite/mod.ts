@@ -70,8 +70,8 @@ import {
   standing,
   tabled,
 } from './ddl.ts'
-import { epoch, installed, meta, SCHEMA } from './meta.ts'
-import { doom, get, read, rows } from './read.ts'
+import { epoch, epochAt, installed, meta, SCHEMA } from './meta.ts'
+import { doom, get, read, rows, tagOf } from './read.ts'
 import { unit } from './unit.ts'
 import { backfill } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
@@ -113,7 +113,7 @@ export {
   unresolved,
   vacant,
 } from './ddl.ts'
-export { EPOCH, epoch, type Meta, meta } from './meta.ts'
+export { EPOCH, epoch, epochAt, type Meta, meta } from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
 export {
   compSql,
@@ -125,6 +125,7 @@ export {
   rows,
   setSql,
   spine,
+  tagOf,
 } from './read.ts'
 export {
   buried,
@@ -281,11 +282,26 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
+  // Every read's options: what the store was bound with, and each computed
+  // component's backing tagged for this store (./read.ts `tagOf`) once the
+  // first install has minted its epoch. Until then its entities have no names.
+  let tagged: Opts | undefined
+  let opts = (): Opts => {
+    if (tagged || !base.backed) return tagged ?? base
+    let e = epochAt(driver)
+    if (!e) return base
+    let backed = Object.fromEntries(
+      Object.entries(base.backed).map((
+        [c, b],
+      ) => [c, { ...b, tag: tagOf(e, c) }]),
+    )
+    return tagged = { ...base, backed }
+  }
   let identity = (eids: string[], comps?: string[]) =>
-    get(driver, vocab, eids, base, comps)
+    get(driver, vocab, eids, opts(), comps)
   let report = base.report ?? logged
   let tx: Tx = {
-    read: (query, opts) => read(driver, vocab, query, { ...base, ...opts }),
+    read: (query, o) => read(driver, vocab, query, { ...opts(), ...o }),
     get: identity,
     doom: (eids) => doom(driver, vocab, eids),
     bindings: (matches, batch, covers) =>
@@ -385,9 +401,9 @@ export let storage = (
       // the statements above just raised.
       analyzed(driver)
     },
-    read: (query, opts, comps) =>
-      read(driver, vocab, query, { ...base, ...opts }, comps),
-    rows: (query, opts) => rows(driver, vocab, query, { ...base, ...opts }),
+    read: (query, o, comps) =>
+      read(driver, vocab, query, { ...opts(), ...o }, comps),
+    rows: (query, o) => rows(driver, vocab, query, { ...opts(), ...o }),
     get: (eids, comps) => unit(driver, () => identity(eids, comps), 'read'),
     tx: (body) => unit(driver, () => body(tx)),
   }

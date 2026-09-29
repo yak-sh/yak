@@ -92,11 +92,10 @@ for (let [, d] of files) for (let n of declaresOf(d)) home.set(n, d)
 Deno.test('packages: every vocab.json is plain JSON that loads', () => {
   assert(files.length >= 10, `only ${files.length} vocab.json files walked`)
   for (let [pkg, doc] of files) {
-    // The meta vocabulary names its components with `_`, which no document a
-    // person writes may: it is loaded, never stored as somebody's app.
-    let errors = storable(doc).filter((e) =>
-      pkg != 'vocab' || !e.startsWith('"_')
-    )
+    // A `_` name is the system describing itself (the meta vocabulary, the
+    // journal), which no document a person writes may declare: a package's
+    // words are loaded, never stored as somebody's app.
+    let errors = storable(doc).filter((e) => !e.startsWith('"_'))
     assertEquals(errors, [], `${pkg}/vocab.json is not storable`)
     let mine = new Set(compsOf(doc))
     // A document says words, and a tool is one: `@yaks/sqlite` and

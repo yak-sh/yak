@@ -64,6 +64,7 @@ import { Unknown } from '@yaks/vocab'
 import {
   and,
   type Bind,
+  col,
   cond,
   type Expr as Cond,
   FALSE,
@@ -79,46 +80,24 @@ import {
 import { inline, render } from './render.ts'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
 import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
-import type { Derived, DerivedProp } from './derived.ts'
+import {
+  type Backings,
+  type Derived,
+  type DerivedProp,
+  eidAt,
+  idOf,
+} from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
 import { walk as walked } from './walk.ts'
+import { Unsupported, whole } from './unsupported.ts'
+import { backedDialect, backingOf, computed } from './spine.ts'
 import type { ArchetypeSet } from './archetype.ts'
-
-// Thrown for a clause the binder cannot express exactly. A caller catches it to
-// fall back to another evaluator, or to report the gap. `by` names the package
-// that declined, so that another evaluator of the same grammar (@yaks/match
-// compiles the AST to an in-memory predicate) can refuse through this same
-// class, leaving every caller with one error type to catch.
-export class Unsupported extends Error {
-  feature: string
-  by: string
-  constructor(feature: string, detail = '', by = '@yaks/sql') {
-    super(`${by} cannot compile ${feature}${detail ? `: ${detail}` : ''}`)
-    this.feature = feature
-    this.by = by
-    this.name = 'Unsupported'
-  }
-}
-
-/** The refusal for a directive naming a whole component (`.order=created`)
- * where one of its properties belongs; it names them, so the next line the
- * caller writes is the one that compiles. `by` is as for {@link Unsupported}. */
-export let whole = (
-  v: Vocab,
-  comp: string,
-  by = '@yaks/sql',
-): Unsupported => {
-  let props = v.comp(comp) ? v.props(comp).map((p) => `${comp}.${p}`) : []
-  return new Unsupported(
-    'a component where a property belongs',
-    props.length ? `${comp} — try ${props.join(', ')}` : comp,
-    by,
-  )
-}
 
 export type BindOpts = {
   derived?: Derived
+  /** the rows each computed component is read from (./derived.ts) */
+  backed?: Backings
   extend?: Extension[]
   now?: number
   /** Matching against a current snapshot of this database file's archetypes,
@@ -134,11 +113,15 @@ type Ctx = {
   v: Vocab
   d: Dialect
   derived: Derived
+  backed: Backings
   ext: Extension[]
   now: number
   tables: Set<string>
   owner?: string
   archetypes?: ArchetypeSet
+  /** the computed component whose rows this query reads as its spine, when it
+   * reads a backing's rather than the entity table */
+  spine?: string
 }
 
 // Presence means the component row EXISTS, never that one of its columns is
@@ -228,6 +211,28 @@ let opOf = (p: Pred): string =>
     : p.op == '~='
     ? '~'
     : p.op
+
+// Whether a test on a property can hold only for an entity wearing its
+// component: presence, a comparison, or an equality or containment with a
+// value. A test for absence (`=` with nothing) and a not-equals hold without
+// it. Every read here is NULL for an entity without the component, which is
+// what lets a caller narrow to the component's rows when this holds.
+let needs = (op: string, value: string): boolean =>
+  op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
+  ((op == '' || op == '~') && value != '')
+
+// Whether this query's entities can wear `comp`. The entity table's never wear
+// a computed component, and a backed spine's wear their own and nothing else
+// (./spine.ts): a clause about any other is answered outright rather than
+// joined across two id spaces.
+let worn = (ctx: Ctx, comp: string): boolean =>
+  comp == 'entity' ||
+  (ctx.spine ? comp == ctx.spine : !computed(ctx.v, comp))
+
+// The answer to a test on a component the entity cannot wear: false where the
+// test needs it, true where it holds without it.
+let unworn = (op: string, value: string, prop: string): Cond =>
+  (prop ? needs(op, value) : op == '~' || op == EXISTS) ? FALSE : TRUE
 
 // A qualified path names its component as much as its property:
 // `.session.status` asks about sessions. Every read in this compiler returns
@@ -344,6 +349,15 @@ let lowerScalar = (
 // the numbers a `.num=` or a human-readable id named. An operand list that
 // names nothing at all compiles to a constant false.
 let inSet = (ctx: Ctx, set: Identity): Frag => {
+  // A backed spine's eids are its ids written out, so naming one is reading
+  // the id back; it has no numbers.
+  if (ctx.spine) {
+    let { tag } = backingOf(ctx.backed, ctx.spine)
+    let ids = set.eids.map((e) => idOf(tag, e)).filter((id) => id != null)
+    return ids.length
+      ? ctx.d.among(ctx.d.ownerKey('entity'), ids)
+      : { sql: '0', params: [] }
+  }
   let arm = (prop: string, vals: Bind[]): Frag =>
     ctx.d.among(ctx.d.col('entity', prop, ctx.v)!, vals)
   let arms = [
@@ -355,6 +369,19 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
     sql: `(${arms.map((a) => a.sql).join(' or ')})`,
     params: arms.flatMap((a) => a.params),
   }
+}
+
+// A reference equal to any of these eids, compared as the integer ids the
+// column stores. An ordinary entity's id is looked up once in the entity table;
+// a backed entity's is read back out of its eid (./derived.ts), and an eid that
+// is not one of its names nothing.
+let refEq = (ctx: Ctx, comp: string, prop: string, eids: string[]): Frag => {
+  let key = ctx.d.refCol!(comp, prop)
+  let target = ctx.v.prop(comp, prop)?.ref
+  if (!target || !computed(ctx.v, target)) return ctx.d.refEq(key, eids, false)
+  let { tag } = backingOf(ctx.backed, target)
+  let ids = eids.map((e) => idOf(tag, e)).filter((id) => id != null)
+  return ids.length ? ctx.d.among(key, ids) : { sql: '0', params: [] }
 }
 
 // A predicate one hop long: either a property of a component, or a presence
@@ -371,6 +398,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     // vocabulary's own — the same message `route()` produces, so the CLI, the
     // HTTP endpoint and the MCP server all report it identically.
     if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
+    if (!worn(ctx, hop.comp)) return unworn(op, '', '')
     let present = op == '~' || op == EXISTS
     let shape = hop.comp == 'entity' ? null : byArchetype(
       ctx,
@@ -393,6 +421,8 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     if (op != '' || !value || value.includes(',') || value.includes('..')) {
       throw new Unsupported('a shared reference', `.${hop.prop} ${p.op}`)
     }
+    // The owners are stored components, which a backed spine never wears.
+    if (ctx.spine) return FALSE
     return inRefs(
       ctx,
       ctx.v.refProps().filter(([, prop]) => prop == hop.prop),
@@ -403,10 +433,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // set first keeps a sparse component query off the entity spine even before
   // the planner has table statistics; it also leaves the outer row's order
   // and tombstone check where every query keeps them.
+  if (!worn(ctx, hop.comp)) return unworn(op, flat(p.value), hop.prop)
   let stored = ctx.v.prop(hop.comp, hop.prop)
   if (
     op == EXISTS && hop.comp != 'entity' && stored && !stored.computed &&
-    !ctx.derived[`${hop.comp}.${hop.prop}`]
+    !computed(ctx.v, hop.comp) && !ctx.derived[`${hop.comp}.${hop.prop}`]
   ) {
     let value = ctx.d.col(hop.comp, hop.prop, ctx.v)
     if (value) {
@@ -440,7 +471,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     opaque(read.tag, 'a filter on it', `${hop.comp}.${hop.prop}`)
   }
   let frag = refs
-    ? ctx.d.refEq(ctx.d.refCol!(hop.comp, hop.prop), value.split(','), false)
+    ? refEq(ctx, hop.comp, hop.prop, value.split(','))
     : lowerScalar(
       ctx,
       read.expr,
@@ -466,10 +497,8 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // returns a value for an entity without it (`worn: false`): `updated.at`
   // falls back to `created.at`.
   let needsComp = hop.comp != 'entity' &&
-    ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false && (
-      op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
-      ((op == '' || op == '~') && flat(p.value) != '')
-    )
+    ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false &&
+    needs(op, flat(p.value))
   if (!needsComp) return cond(frag)
   let owner = ctx.d.col(hop.comp, 'eid', ctx.v)!
   return cond({
@@ -500,6 +529,18 @@ let refKey = (ctx: Ctx, comp: string, prop: string): string =>
 let isRef = (v: Vocab, comp: string, prop: string) =>
   v.prop(comp, prop)?.category == 'ref'
 
+// The spine a reference lands on: the computed component it names, whose
+// entities are that backing's rows, or undefined for the entity table.
+let lands = (v: Vocab, comp: string, prop: string): string | undefined => {
+  let target = v.prop(comp, prop)?.ref
+  return target && computed(v, target) ? target : undefined
+}
+
+// Whether an entity on the spine `at` can wear `comp` (`worn`, for a spine a
+// path reached rather than the one the query selects from).
+let wears = (v: Vocab, at: string | undefined, comp: string): boolean =>
+  at ? comp == at : comp == 'entity' || !computed(v, comp)
+
 let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let op = opOf(p)
   if (op == 'want') return TRUE
@@ -509,6 +550,19 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
       'a path',
       `.${root.comp}.${root.prop} is not a reference`,
     )
+  }
+  // Each hop lands on the spine its reference names (./spine.ts): an entity
+  // there cannot wear a component of the other, so a path that crosses reads
+  // nothing, and is answered as such.
+  let value = flat(p.value)
+  let last = hops[hops.length - 1].prop
+  if (!worn(ctx, root.comp)) return unworn(op, value, last)
+  let at = lands(ctx.v, root.comp, root.prop)
+  for (let h of hops.slice(1)) {
+    if (h.comp && !wears(ctx.v, at, h.comp)) return unworn(op, value, last)
+    if (h.prop && isRef(ctx.v, h.comp, h.prop)) {
+      at = lands(ctx.v, h.comp, h.prop)
+    }
   }
   ctx.tables.add(root.comp)
   let target = refKey(ctx, root.comp, root.prop)
@@ -569,9 +623,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   // The narrowing a rooted path keeps: the row must have the component the path
   // starts from, which lets the query planner drive from that component's
   // table.
-  let needsRoot = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
-    ((op == '' || op == '~') && flat(p.value) != '')
-  return needsRoot
+  return needs(op, value)
     ? cond({
       sql: `(${ctx.d.presence(root.comp).sql} and ${frag.sql})`,
       params: frag.params,
@@ -603,6 +655,15 @@ let leafRead = (ctx: Ctx, leaf: Hop, target: string): Read => {
       tag: 'text',
     }
   }
+  if (def?.category == 'ref' && lands(ctx.v, leaf.comp, leaf.prop)) {
+    let { tag } = backingOf(ctx.backed, def.ref!)
+    return {
+      expr: `(select ${inline(eidAt(tag, col(leaf.prop, '__pl')))} from ${
+        source(ctx, leaf.comp)
+      } as "__pl" where "__pl"."entity" = ${target})`,
+      tag: 'eid',
+    }
+  }
   if (def?.category == 'ref') {
     return {
       expr: `(select "__pr"."eid" from ${source(ctx, leaf.comp)} as "__pl"` +
@@ -632,12 +693,15 @@ let kindScope = (ctx: Ctx, value: string): Cond => {
     ? value.slice(0, -1)
     : null
   if (!k) throw new Unsupported('.kind', `${value} names no kind`)
+  // A backed spine's entities wear their one component and no other.
+  if (ctx.spine || !worn(ctx, k)) return ctx.spine == k ? TRUE : FALSE
   let i = kinds.indexOf(k)
   let shape = byArchetype(ctx, { all: [k], none: kinds.slice(0, i) })
   if (shape) return shape
   ctx.tables.add(k)
   let parts: Cond[] = [cond(ctx.d.presence(k))]
-  for (let earlier of kinds.slice(0, i)) {
+  // A computed kind is never worn here, so it is absent without asking.
+  for (let earlier of kinds.slice(0, i).filter((e) => worn(ctx, e))) {
     ctx.tables.add(earlier)
     parts.push(cond({ sql: `"${earlier}"."entity" is null`, params: [] }))
   }
@@ -659,6 +723,7 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
   if (r.op != '=' || !r.value) {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
   }
+  if (ctx.spine) throw new Unsupported('.refs', `over ${ctx.spine} entities`)
   return inRefs(ctx, ctx.v.refProps(), r.value)
 }
 
@@ -727,7 +792,7 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
 type Link = { source: string; on: string }
 let joinsOf = (ctx: Ctx, base = 'entity'): Link[] =>
   [...ctx.tables]
-    .filter((t) => t != 'entity' && t != base)
+    .filter((t) => t != 'entity' && t != base && t != ctx.spine)
     .map((t) => ({ source: ctx.d.table(t), on: ctx.d.joinOn(t, base) }))
 
 // The joins written out as they appear after the from.
@@ -787,7 +852,20 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
   let corr = `${refKey(ctx, a.comp, a.prop)} = ${ctx.d.ownerKey('entity')}`
   let rest = p.path.slice(1)
   let value = flat(p.value)
+  // A reference that lands on the other spine never points at an entity on
+  // this one: there are no children, so each test is answered as for none.
+  let far = lands(ctx.v, a.comp, a.prop) != ctx.spine
   if (!rest.length && !p.where) {
+    if (far) {
+      let op = COUNT_OPS[p.op]
+      return p.op == '!' || (p.op == '~=' && !value)
+        ? FALSE
+        : p.op == '=' && !value
+        ? TRUE
+        : op && /^\d+$/.test(value)
+        ? cond({ sql: `0 ${op} ?`, params: [Number(value)] })
+        : FALSE
+    }
     if (p.op == '!' || (p.op == '~=' && !value)) {
       return cond({
         sql: `exists (select 1 from ${child} where ${corr})`,
@@ -820,7 +898,13 @@ let reverse = (ctx: Ctx, name: string, a: Assoc, p: Pred): Cond => {
       `.${name}.${rest.join('.')}`,
     )
   }
-  let sub: Ctx = { ...ctx, tables: new Set(), owner: ctx.d.ownerKey(a.comp) }
+  if (far) return p.not ? TRUE : FALSE
+  let sub: Ctx = {
+    ...ctx,
+    tables: new Set(),
+    owner: ctx.d.ownerKey(a.comp),
+    spine: computed(ctx.v, a.comp) ? a.comp : undefined,
+  }
   let inner = render(
     clause(sub, p.where ?? { ...p, path: rest, not: undefined }),
   )
@@ -849,8 +933,9 @@ let walk = (ctx: Ctx, c: Walk): Cond => {
   try {
     hops = ctx.v.aim(c.path.join('.'))
   } catch { /* a name this vocabulary does not have: refused below */ }
-  let ref = (h: Hop) => h.prop && isRef(ctx.v, h.comp, h.prop)
-  if (!hops.length || !hops.every(ref)) {
+  let ref = (h: Hop) =>
+    h.prop && isRef(ctx.v, h.comp, h.prop) && !computed(ctx.v, h.comp)
+  if (ctx.spine || !hops.length || !hops.every(ref)) {
     throw new Unsupported(
       'a walk',
       `${spelled} is neither a relation nor a chain of reference properties`,
@@ -890,8 +975,62 @@ let facetOf = (
     return null // a name that does not route: clause() owns the refusal
   }
   if (hop.prop || hop.comp == 'entity' || !ctx.v.comp(hop.comp)) return null
+  // A computed component is in no archetype: single() answers it.
+  if (computed(ctx.v, hop.comp)) return null
   return { comp: hop.comp, present: op == '~' || op == EXISTS }
 }
+
+// The computed components a clause holds only for an entity wearing — what
+// decides the spine a query reads (./spine.ts). A conjunction wants what any of
+// its parts wants and an alternation what all of them want; `.eid=` naming
+// only one backing's entities wants that backing.
+let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
+  if (c.kind == 'and') return c.clauses.flatMap((x) => wants(v, backed, x))
+  if (c.kind == 'or') {
+    let [head = [], ...rest] = c.clauses.map((x) => wants(v, backed, x))
+    return head.filter((k) => rest.every((r) => r.includes(k)))
+  }
+  if (c.kind != 'pred' || c.not || c.where || v.assoc(c.path[0])) return []
+  let op = opOf(c)
+  if (c.path.join('.') == 'kind') {
+    let k = flat(c.value)
+    k = v.kinds.includes(k) ? k : k.replace(/s$/, '')
+    return op == '' && computed(v, k) ? [k] : []
+  }
+  let hop: Hop | undefined
+  try {
+    hop = !c.facet
+      ? v.aim(c.path.join('.'), bare(c))[0]
+      : c.path.length > 1
+      ? v.aim(c.path.slice(0, -1).join('.'))[0]
+      : { comp: c.path[0], prop: '' }
+  } catch {
+    return [] // a name that does not route: clause() owns the refusal
+  }
+  if (!hop || op == 'want') return []
+  let value = flat(c.value)
+  if (hop.comp == 'entity' && op == '') {
+    let set = identity(hop.prop, value)
+    let eids = set && !set.nums.length ? set.eids : []
+    return Object.keys(backed).filter((k) =>
+      eids.length &&
+      eids.every((e) => backed[k].tag && idOf(backed[k].tag!, e) != null)
+    )
+  }
+  if (!computed(v, hop.comp)) return []
+  return (hop.prop ? needs(op, value) : op == '~' || op == EXISTS)
+    ? [hop.comp]
+    : []
+}
+
+// The one backed spine a query reads, or none for the entity table. A query
+// that wants two wants entities that wear both, which none do: it reads the
+// first, and the other's clauses answer false (`worn`).
+let spineOf = (
+  v: Vocab,
+  backed: Backings,
+  cs: Clause[],
+): string | undefined => cs.flatMap((c) => wants(v, backed, c))[0]
 
 // A conjunction of presence tests is one lookup on the archetype column.
 // Compiled one clause at a time, what `.kind=memory` expands to — the kind
@@ -1044,6 +1183,8 @@ let resolveField = (
   }
   let h = hops[0]
   if (!h.prop) throw whole(ctx.v, h.comp)
+  // A component these entities never wear holds nothing to read.
+  if (!worn(ctx, h.comp)) return { expr: 'null', comp: h.comp }
   ctx.tables.add(h.comp)
   let read = readProp(ctx, h.comp, h.prop, ctx.d.ownerKey(h.comp))
   if (!read) throw new Unsupported('a computed property here', pathStr)
@@ -1063,16 +1204,23 @@ export let bound = (
   vocab: Vocab,
   opts: BindOpts,
   d: Dialect,
-  needs: string[] = [],
+  reads: string[] = [],
 ): Select => {
+  // The spine first (./spine.ts): a query that asks for a computed component's
+  // entities reads that backing's rows, which no extension indexes and no
+  // archetype describes.
+  let backed = opts.backed ?? {}
+  let spine = spineOf(vocab, backed, ast.clauses)
   let ctx: Ctx = {
     v: vocab,
-    d,
+    d: backedDialect(d, vocab, backed, spine),
     derived: opts.derived ?? {},
-    ext: opts.extend ?? [],
+    backed,
+    ext: spine ? [] : opts.extend ?? [],
     now: opts.now ?? Date.now(),
     tables: new Set(),
-    archetypes: opts.archetypes,
+    archetypes: spine ? undefined : opts.archetypes,
+    spine,
   }
   // A new query, and what the rest of it selects. An extension that remembers
   // what it resolved for one query is told here, before any clause compiles, so
@@ -1093,7 +1241,7 @@ export let bound = (
   )
   // Callers that read columns beside the filter ask for their joins here. A
   // derived value can depend on another component even when no filter does.
-  for (let path of needs) resolveField(ctx, path)
+  for (let path of reads) resolveField(ctx, path)
 
   let count = find<Count>(cs, 'count')
   let distinct = find<Distinct>(cs, 'distinct')
@@ -1174,12 +1322,17 @@ export let bound = (
   // Whether this store numbers its entities: @yaks/id's document declares the
   // property, so a vocabulary that loaded it has numbers and one that did not
   // has none (the spine table holds the column either way).
-  let numbered = !!ctx.v.prop('entity', 'num')
+  let numbered = !ctx.spine && !!ctx.v.prop('entity', 'num')
   // The cursor names its anchor by that entity's number, so a store which
   // mints none has nothing for it to name: `num < n` over a column of NULLs
   // answers with an empty page instead of saying so.
   if (after && 'n' in after && !numbered) {
-    throw new Unsupported('.after', 'this store does not number its entities')
+    throw new Unsupported(
+      '.after',
+      ctx.spine
+        ? `${ctx.spine} entities have no number`
+        : 'this store does not number its entities',
+    )
   }
   let ordered = sort ? [`${sort.row}${sort.desc ? ' desc' : ''}`] : []
   // A window is newest first, which is what makes taking a prefix meaningful
@@ -1198,7 +1351,7 @@ export let bound = (
   // which is to say by whatever the planner chose.
   let down = sort || limit || after ? ' desc' : ''
   if (numbered) ordered.push(`"entity"."num"${down}`)
-  ordered.push(`"entity"."id"${down}`)
+  ordered.push(`${ctx.d.ownerKey('entity')}${down}`)
   return {
     ...rel(ctx.d.spine, {
       cols,
@@ -1278,6 +1431,7 @@ let keyset = (
   after: After,
   numbered: boolean,
 ): Frag => {
+  if (ctx.spine && 'eid' in after) return backedKeyset(ctx, sort, after.eid)
   let owner = anchor(ctx, after)
   let exists = `exists (select 1 from ${ctx.d.spine} as "__cur" where ${
     anchorWhere(after)
@@ -1300,14 +1454,35 @@ let keyset = (
       ? tie
       : { sql: `(not ${exists} or ${tie.sql})`, params: tie.params }
   }
+  return past(sort, owner, exists, tie)
+}
+
+// Past the anchor in an explicit order: its value first, the tie after.
+let past = (sort: Sort, owner: string, exists: string, tie: Frag): Frag => {
   let a = sort.at(owner)
   let v = sort.row
-  let past = sort.desc
+  let beyond = sort.desc
     ? `(${v} is null and ${a} is not null) or ${v} < ${a}`
     : `(${a} is null and ${v} is not null) or ${v} > ${a}`
   return {
     sql: `(not ${exists}` +
-      ` or ${past} or (${v} is ${a} and ${tie.sql}))`,
+      ` or ${beyond} or (${v} is ${a} and ${tie.sql}))`,
     params: tie.params,
   }
+}
+
+// The same keyset on a backed spine, whose eid is its id written out: the
+// anchor is that id, and there is no number to page by. An eid that is not
+// one of the spine's names nothing, which is the first page.
+let backedKeyset = (ctx: Ctx, sort: Sort | null, eid: string): Frag => {
+  let id = idOf(backingOf(ctx.backed, ctx.spine!).tag, eid)
+  if (id == null) return { sql: '1', params: [] }
+  let key = ctx.d.ownerKey('entity')
+  let exists = `exists (select 1 from ${
+    source(ctx, ctx.spine!)
+  } as "__cur" where "__cur"."entity" = ${id})`
+  let tie = { sql: `${key} < ${id}`, params: [] }
+  return sort
+    ? past(sort, String(id), exists, tie)
+    : { sql: `(not ${exists} or ${tie.sql})`, params: [] }
 }

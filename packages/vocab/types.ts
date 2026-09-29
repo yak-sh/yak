@@ -101,6 +101,10 @@ export type CompInfo = {
   name: string
   description?: string // what the component means, as its schema describes it
   wire: boolean // false = a component clients read but cannot write
+  /** derived, never stored: no table holds it and nobody writes it — its
+   * entities are rows another package keeps, read through that package's
+   * backing (@yaks/sql `Backing`). Never wire-writable. */
+  computed: boolean
   kind: boolean // this comp names a display kind
   package?: string // the package whose document declared it, where one says
   before: string[] // kinds this kind sorts before (feeds kindOrder)
@@ -211,7 +215,8 @@ export type PropSchema = {
   // string; the storable check is what rejects a value outside the four)
   ref?: string
   death?: string
-  // true = derived, never stored (on a property)
+  // true = derived, never stored: a property no column holds, or a component
+  // no table holds (its rows are another package's, read through a backing)
   computed?: boolean
   // On a computed property: the components on other entities it reads.
   reads?: string[]

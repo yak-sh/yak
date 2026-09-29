@@ -263,6 +263,9 @@
         "wire": {
           "type": "boolean"
         },
+        "computed": {
+          "type": "boolean"
+        },
         "sync": {
           "enum": [
             "none",

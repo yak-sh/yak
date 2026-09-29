@@ -52,6 +52,10 @@
           "type": "boolean",
           "description": "false = its properties are reached by their qualified names only"
         },
+        "computed": {
+          "type": "boolean",
+          "description": "true = no table holds it: its entities are another package's rows, read and never written"
+        },
         "sync": {
           "type": "string",
           "enum": ["none", "server", "peers"],

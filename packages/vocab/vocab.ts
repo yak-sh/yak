@@ -623,7 +623,9 @@ export let loadVocab = (
   let propFor = (comp: string, prop: string): Prop | undefined =>
     read.get(comp)?.get(prop)
 
-  let wire = (name: string) => defs[name].wire !== false
+  // A computed component is written by nobody, so no client writes it either.
+  let wire = (name: string) =>
+    defs[name].wire !== false && defs[name].computed !== true
   let compNames = names.filter(wire)
 
   let info = (name: string): CompInfo => {
@@ -632,7 +634,8 @@ export let loadVocab = (
     return {
       name,
       description: d.description,
-      wire: d.wire !== false,
+      wire: wire(name),
+      computed: d.computed === true,
       kind: !!d.kind,
       ...(from[name] ? { package: from[name] } : {}),
       before: d.before ?? [],
@@ -668,8 +671,9 @@ export let loadVocab = (
   // (or whole component) marked `bare: false` never claims a bare name — it is
   // reached qualified only — so it stays out of this index entirely. So does
   // every property of a component whose name starts with `_`: those describe
-  // the vocabulary itself (`_prop.name`, `_prop.type`, ./bundles.ts), and a
-  // `name` or a `type` in a query means the application's own.
+  // the system itself (`_prop.name`, `_prop.type`, ./bundles.ts; the journal's
+  // `_change.target`), and a `name` or a `type` in a query means the
+  // application's own.
   let owners = new Map<string, string[]>()
   for (let [comp, ps] of routes) {
     if (defs[comp].bare === false || comp.startsWith('_')) continue
@@ -703,7 +707,13 @@ export let loadVocab = (
     }
   }
 
-  let refs = names.flatMap((comp) =>
+  // A computed component's references are columns of another package's rows,
+  // owned by entities outside the entity table: a reverse read over stored
+  // rows (a delete's, `.refs=`) has nothing to find there, so they are not
+  // listed. Its reverse associations are derived all the same, above.
+  let refs = names.filter((comp) => defs[comp].computed !== true).flatMap((
+    comp,
+  ) =>
     [...read.get(comp)!.values()].flatMap((c) =>
       c.category == 'ref' ? [[comp, c.prop] as [string, string]] : []
     )
@@ -820,8 +830,9 @@ export let loadVocab = (
       }
       return got
     },
-    // Every reference property, client-writable or stamped — index derivation
-    // and reverse-hop grammar key off this one list.
+    // Every reference property a stored component holds, client-writable or
+    // stamped — index derivation and reverse-hop grammar key off this one
+    // list.
     refProps: () => refs,
     // Ordinary well-formedness of an instance: a known component, an object of
     // known properties (client-writable unless stamped properties are allowed),

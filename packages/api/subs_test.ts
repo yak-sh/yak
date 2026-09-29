@@ -9,6 +9,8 @@ import { col, count, eq, lit, select, sub, table } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
+import { backed, ddl, journal, log } from '@yaks/journal'
+import { journalDoc } from '@yaks/journal/vocab'
 import { comp, shop as shopVocab, shopGraph } from './testing.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
@@ -487,6 +489,27 @@ Deno.test('a referenced computed dependency refreshes only its owner', () => {
   assertEquals(reads, [query])
   assertEquals(one.take().map(ids), [['b1', 'b2']])
   assertEquals(two.take().map(ids), [['b1', 'b2']])
+})
+
+Deno.test('a subscription to an entity’s history hears each change', () => {
+  let vocab = loadVocab([...shopVocab.docs, journalDoc])
+  let sql = open(':memory:')
+  let store = storage(sql, vocab, { backed: backed(vocab) })
+  store.install()
+  for (let s of ddl()) sql.query(s)
+  let j = journal(log({ rows: (s) => sql.query(s) }))
+  let g = graph({ storage: store, vocab, plugins: [j] })
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(g)
+  let { to, take } = ear()
+  let price = (f: Frame) =>
+    (f.bundles ?? []).map((b) =>
+      (comp(b, '_change').value as { price: number }).price
+    )
+  subs.open(to, 'history', '._change.target=b1')
+  assertEquals(take().map(price), [[12]])
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 9 } }])
+  assertEquals(take().map(price), [[12, 9]])
 })
 
 Deno.test('a computed property reading its own row refreshes that row', () => {

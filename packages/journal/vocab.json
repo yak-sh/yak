@@ -4,6 +4,75 @@
   },
   "title": "journal",
   "$defs": {
+    "_tx": {
+      "component": true,
+      "computed": true,
+      "kind": true,
+      "type": "object",
+      "description": "A committed transaction, read from the journal: one call to apply(), whose changes all committed together.",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "description": "its place in the journal's total order, the cursor a feed holds"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when it committed"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "whom the write acted for"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the session, connector or other entity it was made through"
+        },
+        "host": {
+          "type": "string",
+          "description": "the process that wrote it"
+        },
+        "note": {
+          "type": "string",
+          "description": "a note its writer left"
+        }
+      }
+    },
+    "_change": {
+      "component": true,
+      "computed": true,
+      "kind": true,
+      "type": "object",
+      "description": "One component a transaction wrote or removed, read from the journal.",
+      "properties": {
+        "tx": {
+          "type": "string",
+          "ref": "_tx",
+          "death": "keep",
+          "description": "the transaction it belongs to"
+        },
+        "target": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the entity it changed"
+        },
+        "comp": {
+          "type": "string",
+          "ref": "_comp",
+          "death": "keep",
+          "description": "the component it wrote or removed; entity for a deletion"
+        },
+        "value": {
+          "type": "object",
+          "description": "the properties it wrote; absent where it removed the component"
+        }
+      }
+    },
     "history": {
       "tool": true,
       "noun": "history",

@@ -184,6 +184,8 @@ export let ddl = (spine = 'entity'): Stmt[] => {
       text('value'),
       { name: 'ref', ...to(spine) },
     ]),
+    index('journal_tx_actor', 'journal_tx', ['actor']),
+    index('journal_tx_via', 'journal_tx', ['via']),
     index('journal_change_tx', 'journal_change', ['tx', 'ordinal']),
     index('journal_change_ent', 'journal_change', ['entity', 'component']),
     index('journal_field_change', 'journal_field', ['change', 'ordinal']),

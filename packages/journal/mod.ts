@@ -72,6 +72,9 @@
  *   applied ({@link recast}). Each log writes as one host
  *   ({@link LogOpts.host}), so a graph's subscribers can be told of the commits
  *   its own `effect` phase never saw: another process's, another thread's.
+ * - {@link backed} — the journal read as entities: `_tx` and `_change`, the
+ *   computed components its vocabulary declares, queried like any other
+ *   (`._change.target=T-5`) from the journal's own rows.
  *
  * ## What it is not
  * It is not a backup and not a state machine: it records what moved, not the
@@ -89,3 +92,4 @@ export * from './batch.ts'
 export * from './log.ts'
 export * from './undo.ts'
 export * from './feed.ts'
+export * from './backed.ts'

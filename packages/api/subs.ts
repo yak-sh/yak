@@ -178,7 +178,7 @@ type Touch = Map<Eid, {
 // A write matters when it changes what the query tests or sends. A whole-row
 // projection also observes every component of an entity already in its set.
 let notices = (sub: Sub, b: Bundle): boolean => {
-  if (sub.peer || !sub.reads || b.$delete) return true
+  if (sub.peer || !sub.reads || sub.reads.unseen || b.$delete) return true
   if (sub.want === null && sub.members.has(b.entity.eid)) return true
   let i = sub.reads
   if (b.created && !i.own.length) return true
@@ -246,7 +246,7 @@ let affected = (
   relevant: Set<Eid>,
 ): Set<Eid> | null | undefined => {
   let i = sub.reads
-  if (!i) return null
+  if (!i || i.unseen) return null
   let ids = new Set<Eid>()
   for (let [eid, t] of touch) {
     if (!relevant.has(eid)) continue
@@ -450,7 +450,9 @@ export let subscriptions = (graph: Graph, opts: {
       }
       return then(loaded, (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
-        if (held.get(sink)?.get(id) === sub) {
+        // A query over a computed component is never routed: the entities it
+        // selects move without a bundle that names them (./interest.ts).
+        if (held.get(sink)?.get(id) === sub && !sub.reads?.unseen) {
           sub.routed = network(sub).add(sub, ast, sub.members)
         }
         rememberFields(sub, bundles)

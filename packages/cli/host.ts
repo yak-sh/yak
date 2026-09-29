@@ -80,7 +80,7 @@ import {
   store as machine,
   vanished,
 } from '@yaks/process'
-import type { Derived, Driver, Extension } from '@yaks/sql'
+import type { Backings, Derived, Driver, Extension } from '@yaks/sql'
 import { migrations, storage, type Store } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 // Types only. A route and a request handler are @yaks/api's words, and a host
@@ -288,6 +288,9 @@ export type VocabFacet = {
   keywords?: Keywords[]
   /** properties the store computes rather than stores, written as SQL */
   derived?: (vocab: Vocab) => Derived
+  /** the rows each computed component this plugin declares is read from
+   * (@yaks/sql `Backing`) */
+  backed?: (vocab: Vocab) => Backings
 }
 
 /** `<plugin>/rules` — what a write means, what a query may ask for, and who
@@ -683,6 +686,8 @@ export type Words = {
   vocab: Vocab
   /** the properties the store computes rather than stores */
   derived: Derived
+  /** the rows the computed components are read from */
+  backed: Backings
   /** the tools the graph these words describe offers, declared and not
    * implemented: the generic tier where the vocabulary gives it one, then every
    * plugin's */
@@ -712,6 +717,7 @@ let wordsOf = (vocabs: Taken<'vocab'>): Words => {
     docs,
     vocab,
     derived: Object.assign({}, ...vocabs.map(([v]) => v.derived?.(vocab))),
+    backed: Object.assign({}, ...vocabs.map(([v]) => v.backed?.(vocab))),
     // The generic tier lists `search` only where a property is indexed, so its
     // declarations are read off the tier the graph would build. Read on asking,
     // since checking every declaration costs what a graph opened to answer one
@@ -794,7 +800,7 @@ export let compose = async (
     take('web', 'routes'),
     taking(plugins.filter(([p]) => services.includes(p)), 'service', load),
   ])
-  let { vocab, derived } = wordsOf(vocabs)
+  let { vocab, derived, backed } = wordsOf(vocabs)
 
   let sql = open(path)
   try {
@@ -936,6 +942,7 @@ export let compose = async (
     )
     store = storage(sql, vocab, {
       derived,
+      backed,
       extend: text.length ? [...extend, search(text, sql)] : extend,
       number: config.numbers ?? false,
       adopt: config.adopt ?? false,

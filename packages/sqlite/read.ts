@@ -16,6 +16,7 @@ import {
   among,
   and,
   as,
+  type Backings,
   type BindOpts,
   col,
   compile,
@@ -25,10 +26,13 @@ import {
   doomSql,
   type Driver,
   each,
+  eidAt,
+  eidOf,
   eq,
   exists,
   type Expr,
   from,
+  idOf,
   type Join,
   join,
   left,
@@ -45,10 +49,11 @@ import {
 } from '@yaks/sql'
 import type { Bundle, Comp } from './bundle.ts'
 import type { Doom, Gone } from '@yaks/graph'
-import { tombstoned } from '@yaks/graph'
+import { sha256, tombstoned } from '@yaks/graph'
 import { catalog, descriptor } from './catalog.ts'
 import { unit } from './unit.ts'
 import { decoded, jsonOut, projected } from './jsonb.ts'
+import { tables } from './ddl.ts'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
 // through, so a caller may hand-build one with @yaks/query's builders.
@@ -107,10 +112,15 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
 // So the component table is aliased by its own name here, exactly as the binder
 // joins it, and an override's `deps` are left-joined the same way: a registered
 // expression is written once and reads the same in both places.
+//
+// A reference to a computed component's entity (the journal's `_change.tx`)
+// reads as that entity's eid, written out from the id it holds: such an
+// entity has no row in the entity table to join (@yaks/sql `Backing`).
 let project = (
   v: Vocab,
   comp: string,
   derived: Derived,
+  backed: Backings = {},
 ): { sel: Expr[]; joins: Join[] } => {
   let own = (prop: string) => col(prop, comp)
   let sel: Expr[] = []
@@ -118,9 +128,12 @@ let project = (
   let deps = new Set<string>()
   for (let c of read1(v, comp, derived)) {
     let over = derived[`${comp}.${c.prop}`]
+    let tag = c.ref ? backed[c.ref]?.tag : undefined
     if (over) {
       for (let d of over.deps ?? []) deps.add(d)
       sel.push(as(over.expr(own('entity')), c.prop))
+    } else if (tag) {
+      sel.push(as(eidAt(tag, own(c.prop)), c.prop))
     } else if (c.category == 'ref') {
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
       joins.push(left(table('entity', a), eq(col('id', a), own(c.prop))))
@@ -282,9 +295,7 @@ export let get = (
   comps?: string[],
 ): Bundle[] => {
   // The tables this read may touch: every component's, or the named ones'.
-  let names = vocab.all.filter((c) =>
-    c != 'entity' && (!comps || comps.includes(c))
-  )
+  let names = tables(vocab).filter((c) => !comps || comps.includes(c))
   let asked = new Set(names)
   let found = new Map<string, Bundle>()
   // Whether a number is this store's to show. The spine table holds the column
@@ -357,7 +368,12 @@ export let get = (
       // The spine pass already resolved every owner's storage id. Do not join
       // it again for each component just to recover the eid we already hold.
       // References still use project()'s joins; only ownership stays numeric.
-      let { sel, joins } = project(vocab, comp, opts.derived ?? {})
+      let { sel, joins } = project(
+        vocab,
+        comp,
+        opts.derived ?? {},
+        opts.backed,
+      )
       for (
         let row of driver.query(select({
           cols: [as(col('entity', comp), '@id'), ...sel],
@@ -373,8 +389,46 @@ export let get = (
       }
     }
   }
+  backedGet(driver, vocab, eids.filter((e) => !found.has(e)), opts, comps)
+    .forEach((b) => found.set(b.entity.eid, b))
   return eids.flatMap((eid) => found.has(eid) ? [found.get(eid)!] : [])
 }
+
+// The entities a computed component's rows hold, among eids the entity table
+// does not: each backing's own, read back out of the eid and gathered from its
+// rows (@yaks/sql `Backing`). An eid no backing's tag names is left out, as an
+// unknown one is; one whose row is gone is absent too.
+let backedGet = (
+  driver: Driver,
+  vocab: Vocab,
+  eids: string[],
+  opts: BindOpts,
+  comps?: string[],
+): Bundle[] =>
+  Object.entries(opts.backed ?? {}).flatMap(([comp, b]) => {
+    let tag = b.tag
+    let ids = tag
+      ? eids.map((e) => idOf(tag, e)).filter((id) => id != null)
+      : []
+    if (!tag || !ids.length) return []
+    let { sel, joins } = project(vocab, comp, opts.derived ?? {}, opts.backed)
+    let asked = !comps || comps.includes(comp)
+    return driver.query(select({
+      cols: [as(col('entity', comp), '@id'), ...sel],
+      from: from(b.rows, comp),
+      joins,
+      where: among(col('entity', comp), each(ids)),
+    })).map(({ '@id': id, ...value }): Bundle => ({
+      entity: { eid: eidOf(tag, Number(id)) },
+      ...asked ? { [comp]: decoded(vocab, comp, value) as Comp } : {},
+    }))
+  })
+
+/** The tag a computed component's eids end with in a store: the store's epoch
+ * and the component, hashed (@yaks/sql `eidOf`) — so a record's eid names it
+ * in this store and no other. */
+export let tagOf = (epoch: string, comp: string): string =>
+  sha256(`${epoch}|${comp}`).slice(0, 32)
 
 /**
  * The whole death cascade, computed by one statement rather than walked:
