@@ -10,10 +10,10 @@ import {
   ServerRuntimeClient,
   setCurrentClient,
 } from '@sentry/core'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, identityEid } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { at, fn, insert, lit, type Stmt } from '@yaks/sql'
+import { at, col, fn, insert, lit, type Stmt } from '@yaks/sql'
 import { objects as catalogue } from '@yaks/sqlite'
 import { Store } from './graph.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
@@ -89,6 +89,43 @@ Deno.test('an app deploy turns stored player eids into queryable look references
     APP,
   )
   assertEquals(restored.look, { player: ONE, name: 'Ada' })
+})
+
+Deno.test('a Store retires an old build identity index on its next schema wake', async () => {
+  let ctx = state(), app = newer(ctx, 'ada/vale')
+  await app.query('.build&*', APP)
+  run(ctx, {
+    t: 'create index',
+    name: 'build_builder_variant',
+    on: 'build',
+    cols: [col('builder'), col('variant')],
+    unique: true,
+  })
+  keep(ctx, 'schema', 'older schema')
+
+  let moved = newer(ctx, 'ada/vale')
+  await moved.query('.build&*', APP)
+  let indexes = catalogue(db(ctx), { type: 'index' }).map((i) => i.name)
+  assert(!indexes.includes('build_builder_variant'))
+  let builder = 'b0000000-0000-4000-8000-000000000001'
+  assertEquals(
+    (await moved.apply([{
+      entity: { eid: builder },
+      builder: {},
+    }], APP)).status,
+    200,
+  )
+  assertEquals(
+    (await moved.apply(
+      ['a', 'b'].map((name) => ({
+        entity: { eid: identityEid('build', [builder, `["${name}"]`, 'main']) },
+        build: { builder, match: `["${name}"]`, variant: 'main' },
+      })),
+      APP,
+    )).status,
+    200,
+  )
+  assertEquals((await moved.query('.build&*', APP)).length, 2)
 })
 
 // A Store over the object, as a new incarnation, driven through its own doors.

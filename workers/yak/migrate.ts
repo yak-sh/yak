@@ -23,7 +23,7 @@ import {
   tally,
   val,
 } from '@yaks/sql'
-import { backfill, fit, indexed, standing, tabled } from '@yaks/sqlite'
+import { backfill, fit, indexed, retired, standing, tabled } from '@yaks/sqlite'
 import type { Index, Vocab } from '@yaks/vocab'
 
 /** The five type words the short manifest used, and the JSON Schema each
@@ -395,6 +395,7 @@ export let install = (
   let stood = new Set(named(d, 'index').map((i) => i.name))
   for (let stmt of tabled(vocab, derived)) d.query(stmt)
   let unfit = fit(d, vocab, before)
+  for (let stmt of retired(d, vocab)) d.query(stmt)
   let held = new Set(named(d, 'index').map((i) => i.name))
   let ready = {
     ...vocab,
