@@ -23,12 +23,13 @@
 // place builds stands round its middle, laid out once for its level. A
 // building among it is raised on the ground at its middle, as rounded to
 // voxels, and lays the ground round it as it needs (`lay`).
-import { dressed } from './buildings.ts'
+import { dressed, PLANS } from './buildings.ts'
 import { caveAt } from './caves.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
 import { NATURE } from './nature.ts'
+import type { Bundle } from './net.ts'
 import { levelAt, levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
-import { bulk, halfOf, KINDS, raisedOf } from './props.ts'
+import { bulk, halfOf, KINDS, raisedOf, useBuildingKinds } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 import {
   type Blend,
@@ -443,6 +444,16 @@ export let hearthOf = (id: string): Spot | null => villageOf(id)?.at ?? null
 // row, or foot.
 let raised = new Map<string, Prop[]>()
 let paths = new WeakMap<Vale, Map<string, Street>>()
+let plans = PLANS
+let builtReach = -1
+let refreshBuildings = () => {
+  if (plans == PLANS) return
+  raised.clear()
+  paths = new WeakMap()
+  raising = new WeakMap()
+  builtReach = -1
+  plans = PLANS
+}
 /** The ground a structure stands on, metres east–west and north–south, as it
  * stands turned. */
 export let spanOf = (p: Prop): [number, number] | undefined => {
@@ -455,6 +466,7 @@ let half = (p: Prop): [number, number] => {
 /** What a level builds, in world metres: what its places build round their
  * middles, and the signpost beside each road out. */
 export let builtOf = (id: string): Prop[] => {
+  refreshBuildings()
   let got = raised.get(id)
   if (got) return got
   let built: Prop[] = []
@@ -518,8 +530,10 @@ export let builtOf = (id: string): Prop[] => {
 // the farthest clear plot an aside build may take. A chunk uses this bound to
 // find builds beyond a level's cell edge.
 let SHIFT = Math.max(...STEPS.flatMap(([x, z]) => [Math.abs(x), Math.abs(z)]))
-let BUILT = Math.ceil(
-  Math.max(
+let builtBound = () => {
+  refreshBuildings()
+  if (builtReach >= 0) return builtReach
+  builtReach = Math.ceil(Math.max(
     ...Object.values(FEATURES).flatMap((f) =>
       (f.builds ?? []).map((b) => {
         let p = { ...b, kind: dressed(b.kind, f.dress) }
@@ -528,8 +542,9 @@ let BUILT = Math.ceil(
           (KINDS[p.kind].aside ? SHIFT : 0)
       })
     ),
-  ),
-)
+  ))
+  return builtReach
+}
 
 /** What is built within the box from (x0, z0) to (x1, z1), in metres. */
 export let builtIn = (
@@ -539,14 +554,15 @@ export let builtIn = (
   z1: number,
 ): Prop[] => {
   let out: Prop[] = []
+  let reach = builtBound()
   for (
-    let gz = Math.floor((z0 - BUILT) / SIZE);
-    gz <= Math.floor((z1 + BUILT) / SIZE);
+    let gz = Math.floor((z0 - reach) / SIZE);
+    gz <= Math.floor((z1 + reach) / SIZE);
     gz++
   ) {
     for (
-      let gx = Math.floor((x0 - BUILT) / SIZE);
-      gx <= Math.floor((x1 + BUILT) / SIZE);
+      let gx = Math.floor((x0 - reach) / SIZE);
+      gx <= Math.floor((x1 + reach) / SIZE);
       gx++
     ) {
       for (let p of builtOf(levelAt(gx, gz).id)) {
@@ -1053,6 +1069,7 @@ let raising = new WeakMap<Vale, WeakMap<Prop, Building | null>>()
 /** The building prop `p` is in vale `v`, raised on the ground at its middle
  * as rounded to the vale's voxels; null for any other prop. */
 export let buildingOf = (v: Vale, p: Prop): Building | null => {
+  refreshBuildings()
   if (!KINDS[p.kind].raise) return null
   let got = raising.get(v)
   if (!got) raising.set(v, got = new WeakMap())
@@ -1210,8 +1227,9 @@ let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
 // The world's ground at each voxel size asked for, made once.
 let vales = new Map<number, Vale>()
 
-/** A changed region design retires ground grown under the previous theme. */
+/** Retire ground and collision derived from the previous designs. */
 export let refreshTerrain = () => {
+  refreshBuildings()
   planted.clear()
   for (let v of vales.values()) {
     v.patches.clear()
@@ -1219,6 +1237,12 @@ export let refreshTerrain = () => {
     v.buildings = housing(v, builtIn)
     v.bump = kept(200, bumping(v))
   }
+}
+
+/** Install the store's building plans throughout this world's derived data. */
+export let installBuildingDesigns = (rows: Bundle[]) => {
+  useBuildingKinds(rows)
+  refreshTerrain()
 }
 
 /** The world's ground grown at a voxel edge of `voxel` metres, which must

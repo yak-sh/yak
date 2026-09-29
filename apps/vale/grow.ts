@@ -8,10 +8,10 @@
 import { chart } from './chart.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import { buffers, pack, type Packed } from './mesh.ts'
-import { model } from './props.ts'
 import { useThemes } from './levels.ts'
 import type { Bundle } from './net.ts'
-import { refreshTerrain, vale } from './terrain.ts'
+import { model } from './props.ts'
+import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
 
 /** What the page asks of a worker: one chunk, grown at a voxel edge, with
  * its small things or without; or a chart of the square `size` metres on a
@@ -22,6 +22,8 @@ export type Ask =
   | { chart: [number, number, number]; m: number }
   | { template: [string, number, number, boolean] }
 
+type Init = { buildingDesigns: Bundle[] } | { themes: Bundle[] }
+
 /** What a worker answers: the number of the ask, and the chunk or the chart
  * it asked for. */
 export type Answer = {
@@ -31,14 +33,12 @@ export type Answer = {
   template?: Packed
 }
 
-addEventListener('message', (
-  e: MessageEvent<
-    (Ask & { n: number }) | {
-      themes: Bundle[]
-    }
-  >,
-) => {
+addEventListener('message', (e: MessageEvent<Init | (Ask & { n: number })>) => {
   let a = e.data
+  if ('buildingDesigns' in a) {
+    installBuildingDesigns(a.buildingDesigns)
+    return
+  }
   if ('themes' in a) {
     useThemes(a.themes)
     refreshTerrain()

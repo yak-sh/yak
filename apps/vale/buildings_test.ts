@@ -6,6 +6,7 @@
 // used.
 import { assert, assertEquals } from '@std/assert'
 import { BUILDINGS } from './buildings.ts'
+import { seedBuildings } from './buildings_fixture.ts'
 import type { Use } from './buildings/kit.ts'
 import { isA } from './features.ts'
 import { homesOf } from './homes.ts'
@@ -30,6 +31,7 @@ import { seedThemes } from './themes_fixture.ts'
 
 seedDesigns()
 seedThemes()
+seedBuildings()
 
 let town = (kind = 'smithy.plaster', turn = 0) =>
   flat(5, [], [{ kind, x: 64, z: 64, seed: 0, turn }])

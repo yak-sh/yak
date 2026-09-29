@@ -1,5 +1,6 @@
 // The villages' square and streets and the ways between places shelter a
 // traveler, while creatures still live in the country beside them.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { BEASTS } from './beasts.ts'
 import { homesOf } from './homes.ts'
@@ -12,6 +13,8 @@ import { seedThemes } from './themes_fixture.ts'
 
 seedDesigns()
 seedThemes()
+
+seedBuildings()
 
 Deno.test('the fire and traveled paths shelter a traveler', () => {
   let v = vale(), hearth = hearthOf('mossvale')!

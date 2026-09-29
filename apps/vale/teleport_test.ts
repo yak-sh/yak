@@ -1,5 +1,6 @@
 // The owner can request a safe move; the hero answers only the latest request,
 // and a saved acknowledgment keeps that move from replaying on another page.
+import { seedBuildings } from './buildings_fixture.ts'
 import {
   assertEquals,
   assertObjectMatch,
@@ -16,6 +17,8 @@ import { workerOf } from './worker.js'
 import { rows as themeRows, seedThemes } from './themes_fixture.ts'
 
 seedThemes()
+
+seedBuildings()
 
 Deno.test('teleport destinations stay in their land and refuse unsafe coordinates', () => {
   let world = vale()

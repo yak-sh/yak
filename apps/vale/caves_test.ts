@@ -1,4 +1,5 @@
 // A cave uses the same terrain for movement, camera clearance and meshes.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { aim } from './cam.ts'
@@ -17,6 +18,8 @@ import {
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
+
+seedBuildings()
 
 Deno.test('the ridge cave is walkable from its mouth and back', () => {
   let [x, z] = spotOf('mossvale', 'ridge')!

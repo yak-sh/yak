@@ -2,6 +2,7 @@
 // `fights`): every kind that stands on the ground, the village's buildings
 // among them, in its first shape.
 import { assert, assertEquals, assertStrictEquals } from '@std/assert'
+import { seedBuildings } from './buildings_fixture.ts'
 import { fights, key, pack, profileOf, unkey } from './mesh.ts'
 import { KINDS, model, modelKey } from './props.ts'
 import { walk } from './sim.ts'
@@ -9,6 +10,8 @@ import { groundAt, hearthNear, propsNear, vale } from './terrain.ts'
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
+
+seedBuildings()
 
 Deno.test('no prop fights itself', () => {
   let fighting = Object.keys(KINDS)

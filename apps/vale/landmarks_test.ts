@@ -1,4 +1,5 @@
 // Frontier landmarks grow through the world's ordinary ground and prop doors.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert } from '@std/assert'
 import { levelAt } from './levels.ts'
 import { spotOf } from './regions.ts'
@@ -20,6 +21,8 @@ let landmark = (kind: string) => {
   }
   throw new Error(`No ${kind} grew in the nearby frontier`)
 }
+
+seedBuildings()
 
 Deno.test('frontier valleys shape the ground and castles stand in it', () => {
   let valley = landmark('valley')

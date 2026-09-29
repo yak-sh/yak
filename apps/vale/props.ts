@@ -5,9 +5,10 @@
 // makes of it. A model is meshed once per shape, turn and detail, then copied
 // wherever a level places one (terrain.ts `props`). Its authored shape is
 // measured for collision (`bulk`) at every visible detail.
-import { BUILDINGS } from './buildings.ts'
+import { BUILDINGS, useBuildings } from './buildings.ts'
 import { type Glow, type Raised, spin, spun } from './buildings/kit.ts'
 import { light } from './buildings/light.ts'
+import type { Bundle } from './net.ts'
 import { blob, type Out, out, type Profile, profileOf, unkey } from './mesh.ts'
 import { COAST } from './props/coast.ts'
 import { DEEP } from './props/deep.ts'
@@ -24,7 +25,7 @@ import { VILLAGE } from './props/village.ts'
 export type { Kind }
 
 /** Every kind of prop, by its name. */
-export let KINDS: Record<string, Kind> = {
+let natural: Record<string, Kind> = {
   ...VILLAGE,
   ...VALE,
   ...COAST,
@@ -35,7 +36,17 @@ export let KINDS: Record<string, Kind> = {
   ...DEEP,
   ...FROST,
   ...FIRE,
-  ...BUILDINGS,
+}
+
+export let KINDS: Record<string, Kind> = natural
+
+/** Install the current building shapes beside the natural props. */
+export let useBuildingKinds = (rows: Bundle[]) => {
+  useBuildings(rows)
+  KINDS = { ...natural, ...BUILDINGS }
+  made.clear()
+  meshed.clear()
+  profiled.clear()
 }
 
 /** Half the ground a placed kind takes, after a quarter turn. */

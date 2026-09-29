@@ -8,6 +8,7 @@
 // size. The same list on every page, and each creature's eid is named by its
 // generated slot, so no page has to be told what another grew.
 import { type Beast, BEASTS, type Haunt } from './beasts.ts'
+import { PLANS } from './buildings.ts'
 import { isA } from './features.ts'
 import { hopsOf, type Level, levelOf, type Place } from './levels.ts'
 import { hashOf, rand, uuidOf } from './rand.ts'
@@ -85,14 +86,16 @@ export type Home = {
 
 let listed = new Map<string, Home[]>()
 let from = BEASTS
+let buildings = PLANS
 
 // Both caches are views of the creature index, so a new store answer gives
 // each land fresh homes, including the levels already visited.
 let refresh = () => {
-  if (from == BEASTS) return
+  if (from == BEASTS && buildings == PLANS) return
   listed.clear()
   near = nearby(homesOf)
   from = BEASTS
+  buildings = PLANS
 }
 
 /** Every creature a level grows, and where. */

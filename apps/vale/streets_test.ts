@@ -1,6 +1,7 @@
 // Village streets reach the buildings as placed, and their grown ground is
 // walkable at the voxel size a nearby hero sees.
 import { assert, assertEquals } from '@std/assert'
+import { seedBuildings } from './buildings_fixture.ts'
 import { LEVELS } from './levels.ts'
 import { halfOf, KINDS } from './props.ts'
 import { EDGE } from './streets.ts'
@@ -20,6 +21,8 @@ import {
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
+
+seedBuildings()
 
 let villages = Object.keys(LEVELS).flatMap((id) => {
   let at = hearthOf(id)

@@ -3,6 +3,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { assert, assertEquals } from '@std/assert'
+import { seedBuildings } from './buildings_fixture.ts'
 import { cuboids } from './boxes.ts'
 import type { Chunk } from './chunks.ts'
 import { SIZE } from './levels.ts'
@@ -13,6 +14,8 @@ import { wanted } from './stream.ts'
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
+
+seedBuildings()
 
 let bare = (ci: number, ck: number): Chunk => ({
   ci,
@@ -90,6 +93,39 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
   w.tick(0, 0)
   assertEquals(disposed, 1)
   assertEquals(w.props().flatMap((c) => c.stood), [])
+  w.dispose()
+})
+
+Deno.test('an edited design redraws a visible building', async () => {
+  let mid = SIZE / 2, calls = 0
+  let w = world(flat(5), {
+    capacity: 4,
+    chunk: (ci, ck) =>
+      Promise.resolve({
+        ...bare(ci, ck),
+        buildings: ci == chunkOf(mid) && ck == chunkOf(mid)
+          ? [{ kind: 'cottage.plaster', seed: 0, turn: 0, at: [mid, 5, mid] }]
+          : [],
+      }),
+    template: () => {
+      calls++
+      return Promise.resolve(pack(cuboids(
+        out(),
+        [[[0, 0, 0], [1, 1, 1], calls]],
+      )))
+    },
+  })
+  await w.near()
+  let first = w.scene.children.find((o): o is THREE.InstancedMesh =>
+    o instanceof THREE.InstancedMesh && o.geometry.userData.bytes != null
+  )!
+  w.refresh()
+  await w.near()
+  let next = w.scene.children.find((o): o is THREE.InstancedMesh =>
+    o instanceof THREE.InstancedMesh && o.geometry.userData.bytes != null
+  )!
+  assert(first.geometry != next.geometry)
+  assert(calls > 1)
   w.dispose()
 })
 

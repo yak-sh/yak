@@ -1,5 +1,6 @@
 // A sign's wooden finger follows the road it names, on either approach to a
 // land, even where the road bends beside it.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert } from '@std/assert'
 import { spin } from './buildings/kit.ts'
 import { LEVELS } from './levels.ts'
@@ -10,6 +11,8 @@ import { roadsOf } from './ways.ts'
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
+
+seedBuildings()
 
 Deno.test('signpost fingers point along their named roads', () => {
   for (let id of Object.keys(LEVELS)) {

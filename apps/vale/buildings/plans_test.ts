@@ -2,12 +2,18 @@
 // roof/grain seed. Raising catches any overlap with a wall, door, stair,
 // piece or the room needed to use one.
 import { DRESSES } from './dress.ts'
-import { BARN, STABLE } from './farm.ts'
-import { COTTAGE, FARMHOUSE, HOUSE } from './homes.ts'
+import { PLANS } from '../buildings.ts'
+import { seedBuildings } from '../buildings_fixture.ts'
 import { raise } from './kit.ts'
 
+seedBuildings()
+
 Deno.test('homes and farm buildings raise in every dress and seed', () => {
-  for (let plan of [COTTAGE, HOUSE, FARMHOUSE, STABLE, BARN]) {
+  for (
+    let plan of ['cottage', 'house', 'farmhouse', 'stable', 'barn'].map(
+      (kind) => PLANS[kind],
+    )
+  ) {
     for (let [name, dress] of Object.entries(DRESSES)) {
       for (let seed = 0; seed < 4; seed++) {
         let label = `${plan.name}.${name}:${seed}`

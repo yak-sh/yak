@@ -31,7 +31,13 @@ import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
-import { capacity, meshed, template, useThemeRows } from './grown.ts'
+import {
+  capacity,
+  meshed,
+  template,
+  useBuildingDesigns,
+  useThemeRows,
+} from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
@@ -122,16 +128,23 @@ let asking = net.me().then(async (me) => ({
   heroes: me.person ? await net.heroes(me.person) : [],
 }))
 let hadThemes = false
-let redrawThemes = () => {}
+let hadBuildings = false
+let redraw = () => {}
 let themeReady = net.designs('theme_design', (rows) => {
   useThemeRows(rows)
-  if (hadThemes) redrawThemes()
+  if (hadThemes) redraw()
   hadThemes = true
+})
+let buildingReady = net.designs('building_design', (rows) => {
+  useBuildingDesigns(rows)
+  if (hadBuildings) redraw()
+  hadBuildings = true
 })
 await Promise.all([
   net.designs('beast_design', useBeasts),
   net.designs('item_design', useItems),
   themeReady,
+  buildingReady,
 ])
 let deal = deals(net)
 let folk = village(net, deal)
@@ -224,7 +237,7 @@ let w = world(
     template,
   },
 )
-redrawThemes = () => w.refresh()
+redraw = () => w.refresh()
 depth(camera, w.fog)
 // Where the hearth is by which the page first looks, and a new hero first
 // stands: home's fire.

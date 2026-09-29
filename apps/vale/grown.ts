@@ -8,10 +8,10 @@ import { chart } from './chart.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
 import { pack, type Packed } from './mesh.ts'
+import type { Bundle } from './net.ts'
 import { model } from './props.ts'
 import { useThemes } from './levels.ts'
-import type { Bundle } from './net.ts'
-import { refreshTerrain, vale } from './terrain.ts'
+import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
 
 // How many workers mesh at once: a core each, less the page's own, up to four.
 export let capacity = Math.max(
@@ -24,6 +24,14 @@ export let capacity = Math.max(
 type Hand = { w: Worker; load: number }
 let pool: Hand[] = []
 let themes: Bundle[] = []
+let buildingDesigns: Bundle[] | null = null
+
+/** Give each world Worker the same building plans the page is using. */
+export let useBuildingDesigns = (rows: Bundle[]) => {
+  buildingDesigns = rows
+  installBuildingDesigns(rows)
+  for (let hand of pool) hand.w.postMessage({ buildingDesigns: rows })
+}
 let asks = new Map<
   number,
   { done: (a: Answer) => void; fail: (e: Error) => void }
@@ -53,6 +61,7 @@ let hands = () =>
       w: new Worker(new URL('./grow.ts', import.meta.url), { type: 'module' }),
       load: 0,
     }
+    if (buildingDesigns) hand.w.postMessage({ buildingDesigns })
     hand.w.onmessage = (e) => {
       hand.load--
       let a = asks.get(e.data.n)

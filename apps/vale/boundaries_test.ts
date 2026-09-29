@@ -1,4 +1,5 @@
 // Region borders shape the land without closing the roads between villages.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { blend, borderOf } from './regions.ts'
 import { CHUNK, rise, vale, WATER } from './terrain.ts'
@@ -16,6 +17,8 @@ let crossing = (from: string, to: string) => {
   })!
   return { road, at, x: road.c.xs[at], z: road.c.zs[at] }
 }
+
+seedBuildings()
 
 Deno.test('a ridge has a road pass and a river has a dry ford', () => {
   let ridge = crossing('mossvale', 'reedmarsh')

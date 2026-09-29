@@ -1,0 +1,1726 @@
+[
+  {
+    "entity": {
+      "eid": "6523c486-53b9-4ab7-a3e0-770dae665c28"
+    },
+    "building_design": {
+      "kind": "smithy",
+      "size": [
+        8,
+        6
+      ],
+      "works": "smith",
+      "chimney": {
+        "on": "west",
+        "at": -0.25
+      },
+      "storeys": [
+        {
+          "height": 3,
+          "walls": "stone",
+          "doors": [
+            {
+              "side": "south",
+              "at": 1.5,
+              "wide": 1.5
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.5
+            },
+            {
+              "side": "north",
+              "at": 2.5
+            },
+            {
+              "side": "east",
+              "at": -2
+            }
+          ],
+          "stairs": {
+            "on": "east",
+            "from": 2,
+            "to": "north"
+          },
+          "furnish": [
+            {
+              "piece": "forge",
+              "on": "west",
+              "at": -0.25
+            },
+            {
+              "piece": "coal bin",
+              "on": "west",
+              "at": -2.25
+            },
+            {
+              "piece": "anvil",
+              "at": [
+                -1.25,
+                0
+              ],
+              "face": "west"
+            },
+            {
+              "piece": "quench tub",
+              "at": [
+                -2.75,
+                1.75
+              ]
+            },
+            {
+              "piece": "tool rack",
+              "on": "north",
+              "at": -2.75
+            },
+            {
+              "piece": "bench",
+              "on": "north",
+              "at": -0.25
+            },
+            {
+              "piece": "weapon rack",
+              "on": "south",
+              "at": -0.75
+            },
+            {
+              "piece": "barrel",
+              "at": [
+                0.75,
+                1.75
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "north",
+              "at": 1
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -2.5
+            }
+          ]
+        },
+        {
+          "height": 2,
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.5
+            },
+            {
+              "side": "south",
+              "at": 1.5
+            },
+            {
+              "side": "north",
+              "at": -1
+            },
+            {
+              "side": "east",
+              "at": 0.5
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "bed",
+              "on": "north",
+              "at": -2.75
+            },
+            {
+              "piece": "chest",
+              "at": [
+                -2.75,
+                0.25
+              ],
+              "face": "north"
+            },
+            {
+              "piece": "rug",
+              "at": [
+                -0.5,
+                0.25
+              ]
+            },
+            {
+              "piece": "table",
+              "at": [
+                0.75,
+                2.25
+              ]
+            },
+            {
+              "piece": "stool",
+              "at": [
+                0.75,
+                1.5
+              ],
+              "face": "north"
+            },
+            {
+              "piece": "shelf",
+              "on": "west",
+              "at": 1.75
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -0.5
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "projecting_sign",
+          "on": "south",
+          "at": 11,
+          "height": 10,
+          "icon": [
+            "XXXX.",
+            ".XX..",
+            "XXX..",
+            "....."
+          ],
+          "ink": 3816000,
+          "board": 15260864,
+          "iron": 4079174
+        },
+        {
+          "kind": "place",
+          "piece": "woodpile",
+          "at": [
+            4.25,
+            -1.5
+          ],
+          "face": "east"
+        },
+        {
+          "kind": "place",
+          "piece": "grindstone",
+          "at": [
+            -1.25,
+            3.75
+          ]
+        },
+        {
+          "kind": "place",
+          "piece": "barrel",
+          "at": [
+            -3.5,
+            3.5
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "cb992592-3340-472b-ad8e-c238d23ad997"
+    },
+    "building_design": {
+      "kind": "cottage",
+      "size": [
+        5.5,
+        5
+      ],
+      "chimney": {
+        "on": "west",
+        "at": -0.5
+      },
+      "storeys": [
+        {
+          "height": 2.75,
+          "doors": [
+            {
+              "side": "south",
+              "at": 0
+            }
+          ],
+          "windows": [
+            {
+              "side": "east",
+              "at": 0
+            },
+            {
+              "side": "north",
+              "at": 1.25
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "hearth",
+              "on": "west",
+              "at": -0.5
+            },
+            {
+              "piece": "bed",
+              "on": "north",
+              "at": 0.25
+            },
+            {
+              "piece": "table",
+              "at": [
+                0,
+                0.25
+              ]
+            },
+            {
+              "piece": "stool",
+              "at": [
+                1.25,
+                1.25
+              ],
+              "face": "south"
+            },
+            {
+              "piece": "chest",
+              "on": "east",
+              "at": 1.25
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -1.5
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "place",
+          "piece": "woodpile",
+          "at": [
+            0,
+            -3
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "acd5d348-d000-48f2-a694-c741b284a170"
+    },
+    "building_design": {
+      "kind": "house",
+      "size": [
+        7,
+        6
+      ],
+      "chimney": {
+        "on": "west",
+        "at": -0.75
+      },
+      "storeys": [
+        {
+          "height": 2.75,
+          "doors": [
+            {
+              "side": "south",
+              "at": 0
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.25
+            },
+            {
+              "side": "north",
+              "at": 1.5
+            },
+            {
+              "side": "west",
+              "at": 1.5
+            }
+          ],
+          "stairs": {
+            "on": "east",
+            "from": 2,
+            "to": "north"
+          },
+          "furnish": [
+            {
+              "piece": "hearth",
+              "on": "west",
+              "at": -0.75
+            },
+            {
+              "piece": "table",
+              "at": [
+                0.25,
+                -0.5
+              ]
+            },
+            {
+              "piece": "stool",
+              "at": [
+                1.5,
+                0.75
+              ],
+              "face": "south"
+            },
+            {
+              "piece": "shelf",
+              "on": "north",
+              "at": 0
+            },
+            {
+              "piece": "chest",
+              "on": "south",
+              "at": -2.5
+            },
+            {
+              "piece": "lamp",
+              "on": "north",
+              "at": 2.5
+            }
+          ]
+        },
+        {
+          "height": 2.25,
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.25
+            },
+            {
+              "side": "north",
+              "at": 1.5
+            },
+            {
+              "side": "west",
+              "at": 1.5
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "bed",
+              "on": "north",
+              "at": -2.25
+            },
+            {
+              "piece": "bed",
+              "on": "south",
+              "at": 0.25
+            },
+            {
+              "piece": "chest",
+              "on": "west",
+              "at": 1.5
+            },
+            {
+              "piece": "rug",
+              "at": [
+                0,
+                0
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": 1.5
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "3e772189-7e1f-45cb-9eff-8142758b30de"
+    },
+    "building_design": {
+      "kind": "farmhouse",
+      "size": [
+        9,
+        6.5
+      ],
+      "chimney": {
+        "on": "west",
+        "at": -1
+      },
+      "storeys": [
+        {
+          "height": 3,
+          "doors": [
+            {
+              "side": "south",
+              "at": 0,
+              "wide": 1.25
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.75
+            },
+            {
+              "side": "south",
+              "at": 2.75
+            },
+            {
+              "side": "north",
+              "at": -2.75
+            },
+            {
+              "side": "west",
+              "at": 2
+            }
+          ],
+          "stairs": {
+            "on": "east",
+            "from": 2.25,
+            "to": "north"
+          },
+          "furnish": [
+            {
+              "piece": "hearth",
+              "on": "west",
+              "at": -1
+            },
+            {
+              "piece": "table",
+              "at": [
+                -0.5,
+                -0.75
+              ]
+            },
+            {
+              "piece": "stool",
+              "at": [
+                -1.5,
+                0.25
+              ],
+              "face": "north"
+            },
+            {
+              "piece": "stool",
+              "at": [
+                0.5,
+                0.25
+              ],
+              "face": "north"
+            },
+            {
+              "piece": "shelf",
+              "on": "north",
+              "at": 0.5
+            },
+            {
+              "piece": "chest",
+              "on": "south",
+              "at": -3
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": 3
+            }
+          ]
+        },
+        {
+          "height": 2.5,
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.75
+            },
+            {
+              "side": "south",
+              "at": 2.75
+            },
+            {
+              "side": "north",
+              "at": -2.75
+            },
+            {
+              "side": "west",
+              "at": 1.75
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "bed",
+              "on": "north",
+              "at": -3
+            },
+            {
+              "piece": "bed",
+              "on": "south",
+              "at": -3
+            },
+            {
+              "piece": "bed",
+              "on": "north",
+              "at": 0.5
+            },
+            {
+              "piece": "chest",
+              "on": "south",
+              "at": 3
+            },
+            {
+              "piece": "rug",
+              "at": [
+                -1,
+                0
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": 1.25
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "place",
+          "piece": "woodpile",
+          "at": [
+            0,
+            -4
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "9be32e9a-0465-4ec1-b612-b7a8e5940799"
+    },
+    "building_design": {
+      "kind": "carpentry",
+      "size": [
+        8,
+        6
+      ],
+      "works": "carpenter",
+      "storeys": [
+        {
+          "height": 3.25,
+          "doors": [
+            {
+              "side": "south",
+              "at": 1.5,
+              "wide": 1.5
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.5
+            },
+            {
+              "side": "north",
+              "at": 2.5
+            },
+            {
+              "side": "west",
+              "at": -1.5
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "joiner bench",
+              "on": "north",
+              "at": -1.25
+            },
+            {
+              "piece": "tool rack",
+              "on": "west",
+              "at": -1.5
+            },
+            {
+              "piece": "woodpile",
+              "on": "east",
+              "at": -1.5
+            },
+            {
+              "piece": "barrel",
+              "at": [
+                -2.5,
+                1.75
+              ]
+            },
+            {
+              "piece": "chest",
+              "on": "east",
+              "at": 1.75
+            },
+            {
+              "piece": "shelf",
+              "on": "north",
+              "at": 2.5
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -2.5
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": -3.25,
+              "icon": [
+                "XXXX.",
+                "...X.",
+                "..X..",
+                ".X...",
+                "X...."
+              ],
+              "ink": 15784352,
+              "board": 7162670
+            },
+            "awning": {
+              "at": 1.5,
+              "wide": 2.75,
+              "colors": [
+                10971964,
+                14004603
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "5f90ddfb-92cc-4c15-a3d6-dbce33ac8971"
+    },
+    "building_design": {
+      "kind": "apothecary",
+      "size": [
+        7,
+        6
+      ],
+      "works": "apothecary",
+      "chimney": {
+        "on": "north",
+        "at": 0
+      },
+      "storeys": [
+        {
+          "height": 3.25,
+          "doors": [
+            {
+              "side": "south",
+              "at": 0
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.25
+            },
+            {
+              "side": "south",
+              "at": 2.25
+            },
+            {
+              "side": "west",
+              "at": -1.25
+            },
+            {
+              "side": "east",
+              "at": 1.25
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "cauldron",
+              "on": "north",
+              "at": 0
+            },
+            {
+              "piece": "shelf",
+              "on": "west",
+              "at": 1.5
+            },
+            {
+              "piece": "shelf",
+              "on": "east",
+              "at": -1.5
+            },
+            {
+              "piece": "chest",
+              "on": "west",
+              "at": -1.75
+            },
+            {
+              "piece": "barrel",
+              "on": "east",
+              "at": 1.75
+            },
+            {
+              "piece": "table",
+              "at": [
+                -1.5,
+                1.5
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "north",
+              "at": 2
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": 2.75,
+              "icon": [
+                "..X..",
+                "..X..",
+                ".XXX.",
+                ".XXX.",
+                "..X.."
+              ],
+              "ink": 13165729,
+              "board": 3889737
+            },
+            "awning": {
+              "at": 0,
+              "wide": 2.25,
+              "colors": [
+                5406550,
+                11842680
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "ea60c19d-a5c5-4fad-bc9a-d2b72db75a5b"
+    },
+    "building_design": {
+      "kind": "tailor",
+      "size": [
+        8,
+        6
+      ],
+      "works": "tailor",
+      "storeys": [
+        {
+          "height": 3,
+          "doors": [
+            {
+              "side": "south",
+              "at": 1.5
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.5
+            },
+            {
+              "side": "north",
+              "at": 2.5
+            },
+            {
+              "side": "west",
+              "at": -1.5
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "loom",
+              "on": "north",
+              "at": -1
+            },
+            {
+              "piece": "table",
+              "at": [
+                -2,
+                1
+              ]
+            },
+            {
+              "piece": "chest",
+              "on": "east",
+              "at": 1.5
+            },
+            {
+              "piece": "shelf",
+              "on": "east",
+              "at": -1.5
+            },
+            {
+              "piece": "rug",
+              "at": [
+                0.5,
+                0.25
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "north",
+              "at": 2.5
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": -3.25,
+              "icon": [
+                "X...X",
+                ".X.X.",
+                "..X..",
+                ".X.X.",
+                "X...X"
+              ],
+              "ink": 16047278,
+              "board": 6507133
+            },
+            "awning": {
+              "at": 1.5,
+              "wide": 2.5,
+              "colors": [
+                9724319,
+                15062721
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "e269c387-1cf2-452d-8e02-c33c20d66884"
+    },
+    "building_design": {
+      "kind": "inn",
+      "size": [
+        12,
+        9
+      ],
+      "works": "inn",
+      "storeys": [
+        {
+          "height": 3.5,
+          "doors": [
+            {
+              "side": "south",
+              "at": -2.5,
+              "wide": 1.5
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": 2.5
+            },
+            {
+              "side": "north",
+              "at": -3.5
+            },
+            {
+              "side": "north",
+              "at": 3.5
+            },
+            {
+              "side": "west",
+              "at": 0
+            }
+          ],
+          "stairs": {
+            "on": "east",
+            "from": 2.75,
+            "to": "north"
+          },
+          "furnish": [
+            {
+              "piece": "counter",
+              "on": "north",
+              "at": -1.5
+            },
+            {
+              "piece": "shelf",
+              "on": "north",
+              "at": 2.5
+            },
+            {
+              "piece": "table",
+              "at": [
+                -2,
+                -0.5
+              ]
+            },
+            {
+              "piece": "stool",
+              "at": [
+                -3,
+                0.5
+              ],
+              "face": "west"
+            },
+            {
+              "piece": "table",
+              "at": [
+                1.5,
+                1
+              ]
+            },
+            {
+              "piece": "stool",
+              "at": [
+                2.75,
+                1
+              ],
+              "face": "east"
+            },
+            {
+              "piece": "barrel",
+              "on": "west",
+              "at": 2.75
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": 3.5
+            },
+            {
+              "piece": "lamp",
+              "on": "north",
+              "at": -4.5
+            }
+          ]
+        },
+        {
+          "height": 2.75,
+          "windows": [
+            {
+              "side": "south",
+              "at": -3.5
+            },
+            {
+              "side": "south",
+              "at": 2.5
+            },
+            {
+              "side": "north",
+              "at": -3.5
+            },
+            {
+              "side": "west",
+              "at": 0
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "bed",
+              "on": "north",
+              "at": -3.75
+            },
+            {
+              "piece": "bed",
+              "on": "west",
+              "at": -0.5
+            },
+            {
+              "piece": "chest",
+              "at": [
+                0,
+                -2.5
+              ]
+            },
+            {
+              "piece": "rug",
+              "at": [
+                -1,
+                1
+              ]
+            },
+            {
+              "piece": "table",
+              "at": [
+                1,
+                2.5
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -0.5
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": 4.5,
+              "icon": [
+                ".XXX.",
+                "XX..X",
+                "XX..X",
+                "XX..X",
+                ".XXX."
+              ],
+              "ink": 15980442,
+              "board": 6830125
+            },
+            "awning": {
+              "at": -2.5,
+              "wide": 3.5,
+              "colors": [
+                10370870,
+                15254931
+              ]
+            }
+          }
+        },
+        {
+          "kind": "place",
+          "piece": "barrel",
+          "at": [
+            -4.5,
+            5.5
+          ]
+        },
+        {
+          "kind": "place",
+          "piece": "barrel",
+          "at": [
+            -3.75,
+            5.5
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "93b147c5-3c55-4a45-953e-6c4a6ba03d7f"
+    },
+    "building_design": {
+      "kind": "store",
+      "size": [
+        9,
+        7
+      ],
+      "works": "store",
+      "storeys": [
+        {
+          "height": 3,
+          "doors": [
+            {
+              "side": "south",
+              "at": -1.5,
+              "wide": 1.5
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": 2.5
+            },
+            {
+              "side": "north",
+              "at": -2.5
+            },
+            {
+              "side": "west",
+              "at": 0.5
+            }
+          ],
+          "stairs": {
+            "on": "east",
+            "from": 1.75,
+            "to": "north"
+          },
+          "furnish": [
+            {
+              "piece": "counter",
+              "on": "north",
+              "at": -1.5
+            },
+            {
+              "piece": "goods shelves",
+              "on": "west",
+              "at": -1.75
+            },
+            {
+              "piece": "shelf",
+              "on": "west",
+              "at": 1.75
+            },
+            {
+              "piece": "barrel",
+              "at": [
+                0.25,
+                -1.75
+              ]
+            },
+            {
+              "piece": "chest",
+              "on": "south",
+              "at": 2.25
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -3.25
+            }
+          ]
+        },
+        {
+          "height": 2.5,
+          "windows": [
+            {
+              "side": "south",
+              "at": -2.5
+            },
+            {
+              "side": "north",
+              "at": -2.5
+            },
+            {
+              "side": "west",
+              "at": 1.5
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "bed",
+              "on": "north",
+              "at": -2
+            },
+            {
+              "piece": "chest",
+              "on": "west",
+              "at": -1.5
+            },
+            {
+              "piece": "rug",
+              "at": [
+                -0.5,
+                1
+              ]
+            },
+            {
+              "piece": "table",
+              "at": [
+                1,
+                1.75
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -2.75
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": 3.5,
+              "icon": [
+                "XXXXX",
+                "X...X",
+                "X.X.X",
+                "X...X",
+                "XXXXX"
+              ],
+              "ink": 15913877,
+              "board": 3233898
+            },
+            "awning": {
+              "at": -1.5,
+              "wide": 3.5,
+              "colors": [
+                3435899,
+                15258796
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "3a4583b1-1d13-4aca-a83d-4cd37d3680d3"
+    },
+    "building_design": {
+      "kind": "hall",
+      "size": [
+        13,
+        9
+      ],
+      "works": "hall",
+      "storeys": [
+        {
+          "height": 4,
+          "walls": "stone",
+          "doors": [
+            {
+              "side": "south",
+              "at": 0,
+              "wide": 2
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": -4
+            },
+            {
+              "side": "south",
+              "at": 4
+            },
+            {
+              "side": "north",
+              "at": -4
+            },
+            {
+              "side": "north",
+              "at": 4
+            },
+            {
+              "side": "east",
+              "at": -0.5
+            },
+            {
+              "side": "west",
+              "at": -0.5
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "council table",
+              "at": [
+                0,
+                -1.25
+              ]
+            },
+            {
+              "piece": "banner",
+              "on": "north",
+              "at": -2
+            },
+            {
+              "piece": "banner",
+              "on": "north",
+              "at": 2
+            },
+            {
+              "piece": "shelf",
+              "on": "east",
+              "at": -2.5
+            },
+            {
+              "piece": "chest",
+              "on": "west",
+              "at": -2.5
+            },
+            {
+              "piece": "rug",
+              "at": [
+                0,
+                2.25
+              ]
+            },
+            {
+              "piece": "table",
+              "at": [
+                -4,
+                1.5
+              ]
+            },
+            {
+              "piece": "stool",
+              "at": [
+                -4.75,
+                2.5
+              ],
+              "face": "west"
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -5
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": 5
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": 0,
+              "height": 10,
+              "icon": [
+                "X...X",
+                "XX.XX",
+                "XXXXX",
+                ".XXX.",
+                "..X.."
+              ],
+              "ink": 15715184,
+              "board": 3953515
+            }
+          }
+        },
+        {
+          "kind": "banners",
+          "at": [
+            -2.75,
+            2.75
+          ],
+          "color": 9322818
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "33ad7e2c-6cf0-4895-93a4-60ddeea9edd7"
+    },
+    "building_design": {
+      "kind": "mill",
+      "size": [
+        8,
+        7
+      ],
+      "works": "mill",
+      "storeys": [
+        {
+          "height": 3.5,
+          "walls": "stone",
+          "doors": [
+            {
+              "side": "south",
+              "at": -1.5,
+              "wide": 1.5
+            }
+          ],
+          "windows": [
+            {
+              "side": "south",
+              "at": 2
+            },
+            {
+              "side": "north",
+              "at": -2
+            },
+            {
+              "side": "west",
+              "at": 1
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "millstone",
+              "at": [
+                -1.5,
+                -0.5
+              ]
+            },
+            {
+              "piece": "flour sacks",
+              "on": "north",
+              "at": 1.5
+            },
+            {
+              "piece": "shelf",
+              "on": "west",
+              "at": -2
+            },
+            {
+              "piece": "barrel",
+              "at": [
+                1.5,
+                1
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -3
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "wheel",
+          "on": "east",
+          "at": 0,
+          "height": 3,
+          "radius": 6
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "6ecee18f-2030-4931-83c1-b1909b0c1df7"
+    },
+    "building_design": {
+      "kind": "stable",
+      "size": [
+        9,
+        6
+      ],
+      "storeys": [
+        {
+          "height": 3.25,
+          "doors": [
+            {
+              "side": "south",
+              "at": 0,
+              "wide": 2.5,
+              "tall": 2.75
+            }
+          ],
+          "windows": [
+            {
+              "side": "north",
+              "at": -2.75
+            },
+            {
+              "side": "north",
+              "at": 2.75
+            },
+            {
+              "side": "west",
+              "at": 0
+            },
+            {
+              "side": "east",
+              "at": 0
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "manger",
+              "on": "north",
+              "at": -2.5
+            },
+            {
+              "piece": "manger",
+              "on": "north",
+              "at": 2.5
+            },
+            {
+              "piece": "trough",
+              "on": "west",
+              "at": 1.25
+            },
+            {
+              "piece": "hay bale",
+              "at": [
+                -3,
+                1.75
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -3.5
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": 3.5
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": 4,
+              "height": 8,
+              "icon": [
+                "X...X",
+                "X...X",
+                ".X.X.",
+                ".XXX.",
+                "..X.."
+              ],
+              "ink": 14860672,
+              "board": 5061420
+            },
+            "awning": {
+              "at": 0,
+              "wide": 3.5,
+              "height": 13,
+              "colors": [
+                7623738,
+                10385741
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "8e70c1fb-8ea4-42b0-8f35-f8b8f417cc59"
+    },
+    "building_design": {
+      "kind": "barn",
+      "size": [
+        11,
+        8
+      ],
+      "storeys": [
+        {
+          "height": 4,
+          "doors": [
+            {
+              "side": "south",
+              "at": 0,
+              "wide": 3,
+              "tall": 3
+            }
+          ],
+          "windows": [
+            {
+              "side": "north",
+              "at": -3.5
+            },
+            {
+              "side": "north",
+              "at": 3.5
+            },
+            {
+              "side": "east",
+              "at": -2.25
+            },
+            {
+              "side": "west",
+              "at": 2.25
+            }
+          ],
+          "furnish": [
+            {
+              "piece": "manger",
+              "on": "north",
+              "at": -3.5
+            },
+            {
+              "piece": "manger",
+              "on": "north",
+              "at": 3.5
+            },
+            {
+              "piece": "hay bale",
+              "at": [
+                -3.75,
+                -0.5
+              ]
+            },
+            {
+              "piece": "hay bale",
+              "at": [
+                -3.75,
+                0.5
+              ]
+            },
+            {
+              "piece": "hay bale",
+              "at": [
+                3.75,
+                0
+              ]
+            },
+            {
+              "piece": "trough",
+              "on": "east",
+              "at": 2
+            },
+            {
+              "piece": "barrel",
+              "at": [
+                3.75,
+                2.75
+              ]
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": -4
+            },
+            {
+              "piece": "lamp",
+              "on": "south",
+              "at": 4
+            }
+          ]
+        }
+      ],
+      "details": [
+        {
+          "kind": "facade",
+          "front": {
+            "mark": {
+              "at": 4.5,
+              "height": 9,
+              "icon": [
+                "..X..",
+                ".XXX.",
+                "XXXXX",
+                "..X..",
+                ".X.X."
+              ],
+              "ink": 15187299,
+              "board": 6834484
+            },
+            "awning": {
+              "at": 0,
+              "wide": 4,
+              "height": 15,
+              "colors": [
+                7426610,
+                9990211
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+]

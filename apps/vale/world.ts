@@ -82,14 +82,14 @@ export type World = {
   swing: (near: Vec[], dt: number) => void
   /** once every chunk within FIRST of the focus is drawn, at any detail */
   near: () => Promise<void>
+  /** redraw visible chunks after a design changes */
+  refresh: () => void
   /** how many chunks within sight are not yet drawn as finely as wanted */
   pending: number
   /** how many chunks are drawn at each detail */
   chunks: number[]
   /** props and their worker-chosen placements in the chunks now drawn */
   props: () => ChunkProps[]
-  /** redraw streamed ground after a region design changes */
-  refresh: () => void
   /** let the GPU go of everything the world drew */
   dispose: () => void
 }
@@ -257,11 +257,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
   }
   let drawn = new Map<string, Drawn>()
   let props: ChunkProps[] | null = null
-  let asked = new Set<string>()
+  let asked = new Map<string, number>()
+  let revision = 0
   let wants = new Map<string, Want>()
   let waiting: (() => void)[] = []
   let gone = false
-  let epoch = 0
   let key = (ci: number, ck: number) => `${ci} ${ck}`
 
   let meshOf = (
@@ -355,13 +355,13 @@ export let world = (v: Vale, mesh: Mesher): World => {
     }
     d.doors.drop()
   }
-  let put = async (c: Chunk, lod: number, version: number) => {
+  let put = async (c: Chunk, lod: number, rev: number) => {
     let k = key(c.ci, c.ck)
     let prepared = buildings.prepare(c.buildings, lod == 0)
     try {
       await prepared.ready
       if (
-        gone || version != epoch || !wants.has(k) ||
+        gone || rev != revision || !wants.has(k) ||
         (drawn.has(k) && wants.get(k)?.lod != lod)
       ) return
       if (c.patch.voxel == v.voxel) adopt(v, c.patch)
@@ -431,7 +431,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
       return d && d.lod != lod
     })
     w.pending = missing.length + finer.length
-    let detailing = [...asked].filter((k) => drawn.has(k)).length
+    let detailing = [...asked.keys()].filter((k) => drawn.has(k)).length
     // Cover the ground round the hero first, and keep one worker available
     // for new ground while nearby detail catches up. An undrawn chunk keeps
     // its coarsest mesh until its wanted detail is ready.
@@ -448,17 +448,15 @@ export let world = (v: Vale, mesh: Mesher): World => {
       let lod = covered ? want : COARSER.length - 1
       if (asked.has(k) || asked.size >= mesh.capacity) continue
       if (covered && detailing >= Math.max(1, mesh.capacity - 1)) continue
-      asked.add(k)
+      let rev = revision
+      asked.set(k, rev)
       if (covered) detailing++
-      let askedAt = epoch
       mesh.chunk(ci, ck, lod).then(async (c) => {
-        if (!gone && askedAt == epoch && wants.has(k)) {
-          await put(c, lod, askedAt)
-        }
-        asked.delete(k)
+        if (!gone && rev == revision && wants.has(k)) await put(c, lod, rev)
+        if (asked.get(k) == rev) asked.delete(k)
         stream()
       }).catch((e) => {
-        asked.delete(k)
+        if (asked.get(k) == rev) asked.delete(k)
         reportError(e)
       })
     }
@@ -580,12 +578,6 @@ export let world = (v: Vale, mesh: Mesher): World => {
     pending: 0,
     chunks: [0, 0, 0],
     props: () => props ??= [...drawn.values()].map((d) => d.props),
-    refresh: () => {
-      epoch++
-      v.patches.clear()
-      for (let k of [...drawn.keys()]) drop(k)
-      stream()
-    },
     see: (from, feet, tall, dt = 1 / 60, foes = []) => {
       sight(ground, from, feet, tall, foes)
       sight(caveRoof, from, feet, tall, foes)
@@ -630,6 +622,18 @@ export let world = (v: Vale, mesh: Mesher): World => {
         waiting.push(done)
         stream()
       }),
+    refresh: () => {
+      if (gone) return
+      revision++
+      v.patches.clear()
+      asked.clear()
+      for (let k of [...drawn.keys()]) drop(k)
+      buildings.dispose()
+      hanging.dispose()
+      buildings = instances(scene, ground, mesh.template)
+      hanging = doors(scene, ground)
+      stream()
+    },
     dispose: () => {
       if (gone) return
       gone = true

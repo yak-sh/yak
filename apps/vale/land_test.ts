@@ -1,5 +1,6 @@
 // The land beyond each village: its ground, what grows there, and the
 // creatures a traveler meets after leaving the old center.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert } from '@std/assert'
 import { Top } from './features.ts'
 import { homesOf } from './homes.ts'
@@ -19,6 +20,8 @@ let ground = (id: string, x: number, z: number) => {
   let [i, k] = [Math.floor(wx - ci * CHUNK), Math.floor(wz - ck * CHUNK)]
   return p.top[i + k * CHUNK]
 }
+
+seedBuildings()
 
 Deno.test('each land has creatures beyond its old center', () => {
   let mid = SIZE / 2, outer = SIZE / 4

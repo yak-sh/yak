@@ -1,5 +1,6 @@
 // Villagers find the furnishings of placed buildings and walk through their
 // doors and stairs under the same collision rules as the hero.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { lifeOf } from './lives.ts'
 import { GIVERS } from './quests.ts'
@@ -10,6 +11,8 @@ import { walk } from './walk.ts'
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
+
+seedBuildings()
 
 Deno.test('the tailor works beside the loom and can walk there from home', () => {
   let v = vale(), elsie = GIVERS.find((g) => g.id == 'elsie')!

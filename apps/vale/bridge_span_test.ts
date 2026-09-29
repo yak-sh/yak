@@ -1,5 +1,6 @@
 // A bridge uses the terrain layers for both the walkable deck and the river
 // below it; its meshed sides stay open to the water.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { chunk } from './chunks.ts'
@@ -32,6 +33,8 @@ let crossing = () => {
   )!
   return { road, i, x: road.c.xs[i], z: road.c.zs[i] }
 }
+
+seedBuildings()
 
 Deno.test('a bridge has a dry deck over the river in cold and grown ground', () => {
   let { road, i, x, z } = crossing()

@@ -1,4 +1,5 @@
 // Generated country remains the same on every page and gets harder outward.
+import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertEquals } from '@std/assert'
 import { foeOf } from './danger.ts'
 import { dens, homesOf } from './homes.ts'
@@ -12,6 +13,8 @@ import { roadsOf } from './ways.ts'
 import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
+
+seedBuildings()
 
 Deno.test('frontier cells grow named lands with their own terrain and wildlife', () => {
   let near = levelAt(5, 0), far = levelAt(10, 0)
