@@ -1,0 +1,18 @@
+{
+  "sound": "done-fish",
+  "sha256": "de6ea8063d30ef69db9d9eeb4d0bb6d7290e0241e5f3af5cc0c2777f9ad393b8",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A caught fish is hauled from water: lively small splash, line tug and brief wet flop. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654969-pGMbrt18aCkw5VE3IRoF"
+  },
+  "playback": {
+    "loop": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "sound": "done-loom",
+  "sha256": "eef3cb82ca02014099d1e59dc8652d60355b200bf62c86e6469800160a758798",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A finished length of cloth is lifted from the loom: wooden click and soft fabric sweep. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655025-i24BGNooVJQzAzf3Pi3M"
+  },
+  "playback": {
+    "loop": false
+  }
+}

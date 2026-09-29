@@ -1,0 +1,18 @@
+{
+  "sound": "done-cauldron",
+  "sha256": "e28ea55b8201220ec41605e7bbee6e619859692feb50aaf4ee207be6aca17ee3",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A finished brew is poured off: liquid glug, glass touch and a subtle confirming chime. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655011-4jIIyGaDlSXR8UrM1yW8"
+  },
+  "playback": {
+    "loop": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "sound": "done-forge",
+  "sha256": "d7be7e443d99b1020ab9089ea267d0bd4dca0b0d959e727a74484beb486e366b",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A forged piece is quenched: hot iron enters water with a brief bright hiss and a fading metallic ring. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654984-FCbCleaLD7uWtiXnkmEo"
+  },
+  "playback": {
+    "loop": false
+  }
+}

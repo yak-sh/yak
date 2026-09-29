@@ -1,0 +1,18 @@
+{
+  "sound": "step-biped",
+  "sha256": "4501ed8bc73d66d57c0364ae233b4a958e3fad56595efe9eea0ade98fa83a4ae",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One firm biped creature footfall on soil: heavier than a person, short dull thud. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655063-if3ukE2doEoVRPwcNCnS"
+  },
+  "playback": {
+    "loop": false
+  }
+}

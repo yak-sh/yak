@@ -1,0 +1,18 @@
+{
+  "sound": "step-hero",
+  "sha256": "5bad3c1e6ef5f0f5e34c2ac09badf95780ba117f951601629a6e2bb1d3df7600",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One light leather-boot footstep on packed earth, close and dry, no speech or ambience. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655037-zn7yXxoIb7g7s5MLsqzI"
+  },
+  "playback": {
+    "loop": false
+  }
+}

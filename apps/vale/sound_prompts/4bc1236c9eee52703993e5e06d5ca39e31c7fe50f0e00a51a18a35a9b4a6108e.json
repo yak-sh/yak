@@ -1,0 +1,18 @@
+{
+  "sound": "done-bench",
+  "sha256": "4bc1236c9eee52703993e5e06d5ca39e31c7fe50f0e00a51a18a35a9b4a6108e",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A finished board is set down: two neat mallet taps on wood, warm and dry. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654998-aceqezsWGgqMthY0TirX"
+  },
+  "playback": {
+    "loop": false
+  }
+}
