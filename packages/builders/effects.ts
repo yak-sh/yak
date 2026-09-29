@@ -108,7 +108,9 @@ export let modeling = (): Handler => async (event, tx, write) => {
   if (said.error && said.entry) {
     let [session] = await tx.get([str(comp(said, 'entry'), 'session')])
     let call = str(comp(session, 'session'), 'source')
-    if (!call) return
+    // Only a turn that failed for good ends the call: a tool's refusal is
+    // answered to the model, and a failed request is asked again.
+    if (!call || str(comp(session, 'session'), 'status') != 'failed') return
     let [asked] = await tx.get([call])
     let [build] = await tx.get([str(comp(asked, 'call'), 'source')])
     if (str(comp(build, BUILD), 'call') != call) return

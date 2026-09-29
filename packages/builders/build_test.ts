@@ -333,7 +333,7 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
   ])
 })
 
-test('a failed model turn leaves its key retryable without another call', async () => {
+test('a model turn failed for good leaves its key retryable without another call', async () => {
   let { g, runner } = await shop()
   await g.apply([source('a'), {
     ...builder('$s .doc.title=Source', toolEid('builder_model')),
@@ -342,12 +342,16 @@ test('a failed model turn leaves its key retryable without another call', async 
   let build = run(ids.builder, ['a'])
   await drive(g, runner, build)
   let [session] = await rows(g, '.session')
-  await g.apply([{
+  let failed = (seq: number, code: string): Bundle => ({
     entity: { eid: crypto.randomUUID() },
-    entry: { session: session.entity.eid, seq: 2 },
+    entry: { session: session.entity.eid, seq },
     content: { body: 'Connection unavailable' },
-    error: { code: 'connection' },
-  }])
+    error: { code },
+  })
+  // A request the runner asks again is not the end of the turn.
+  await g.apply([failed(2, 'connection')])
+  assert(comp(await one(g, build), 'build')?.key)
+  await g.apply([failed(3, 'limit')])
   assertEquals(comp(await one(g, build), 'build')?.key, null)
   assertEquals((await calls(g, build)).length, 1)
 })
