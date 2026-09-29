@@ -14,7 +14,6 @@ let LOOK: Record<
     size: number
     opacity: number
     rate: number
-    mote: number
     life: number
     speed: number
     up: number
@@ -25,7 +24,6 @@ let LOOK: Record<
     size: 2.5,
     opacity: 0.5,
     rate: 8,
-    mote: 0.21,
     life: 1.4,
     speed: 0.35,
     up: 0.45,
@@ -35,7 +33,6 @@ let LOOK: Record<
     size: 3.4,
     opacity: 0.65,
     rate: 11,
-    mote: 0.25,
     life: 1.5,
     speed: 0.5,
     up: 0.7,
@@ -45,7 +42,6 @@ let LOOK: Record<
     size: 4.5,
     opacity: 0.8,
     rate: 16,
-    mote: 0.28,
     life: 1.7,
     speed: 0.65,
     up: 0.9,
@@ -55,7 +51,6 @@ let LOOK: Record<
     size: 5.8,
     opacity: 1,
     rate: 20,
-    mote: 0.31,
     life: 1.8,
     speed: 0.8,
     up: 1.1,
@@ -64,6 +59,9 @@ let LOOK: Record<
 }
 let HEIGHT = { tree: 2.1, seam: 0.9, herb: 0.7, shoal: 0.25 }
 let SPREAD = { tree: 1.5, seam: 1.2, herb: 0.9, shoal: 1 }
+// The core of a mote is the size of the fireflies in air.ts. Flame cones
+// stretch vertically in fx.ts, so their base is smaller.
+let MOTE = 0.05
 type Light = {
   sprite: THREE.Sprite
   ground: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
@@ -169,7 +167,7 @@ export let nodeGlow = (
             speed: look.speed,
             up: look.up,
             life: look.life,
-            size: flame ? look.mote * 0.8 : look.mote,
+            size: flame ? MOTE * 0.5 : MOTE,
             fall: 0,
             halo: Math.random() < look.halo,
             flame,

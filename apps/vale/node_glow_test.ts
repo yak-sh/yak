@@ -2,6 +2,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { assert, assertEquals } from '@std/assert'
+import { AIRS } from './air.ts'
 import { LODES } from './gather.ts'
 import { nodeGlow } from './node_glow.ts'
 import type { Rarity } from './rarity.ts'
@@ -47,10 +48,16 @@ Deno.test('finer resources send more visible, distinct moving motes', () => {
   let counts = outputs.map((o) => o.emitted.length)
   assert(counts[0] > 2)
   assert(counts.every((n, i) => i == 0 || n > counts[i - 1]))
-  let sizes = outputs.map((o) =>
-    Math.max(...o.emitted.map((e) => e.options.size ?? 0))
+  assert(
+    outputs.every((o) =>
+      o.emitted.every((e) => (e.options.size ?? 0) <= AIRS.fireflies.size)
+    ),
   )
-  assert(sizes.every((n, i) => i == 0 || n > sizes[i - 1]))
+  assert(
+    outputs.every((o) =>
+      o.emitted.some((e) => e.options.size == AIRS.fireflies.size)
+    ),
+  )
   assert(outputs[2].emitted.some((e) => e.options.halo))
   assert(outputs[3].emitted.some((e) => e.options.flame))
   assert(outputs[3].emitted.some((e) => !e.options.flame))
