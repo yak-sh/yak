@@ -16,6 +16,7 @@
 // answers with a promise and makes it asynchronous.
 
 import { sha256 } from '@yaks/graph'
+import type { Opened } from './object.ts'
 
 /**
  * A content-addressed byte store. `sha` is always the lowercase-hex SHA-256 of
@@ -29,6 +30,8 @@ export type Blobs = {
   get: (
     sha: string,
   ) => Uint8Array | undefined | Promise<Uint8Array | undefined>
+  /** Stores that can stream a requested span expose it here. */
+  open?: (sha: string) => Promise<Opened | null>
   /** store these bytes under this hash; storing the same pair twice is a
    * no-op, because the second copy is the first one */
   put: (sha: string, bytes: Uint8Array) => void | Promise<void>

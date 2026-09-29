@@ -8,6 +8,7 @@
 //
 // `Response` is the web platform's own, so this loads anywhere the package
 // does.
+import type { Opened } from './object.ts'
 
 /** What the response needs to know about the object besides its bytes. */
 export type Served = {
@@ -41,45 +42,68 @@ let unchanged = (request: Request, etag: string | null) =>
     value.trim().replace(/^W\//, '') == etag.replace(/^W\//, '')
   )
 
+let plan = (size: number, request: Request, headers: HeadersInit) => {
+  let head = new Headers(headers)
+  head.set('accept-ranges', 'bytes')
+  let etag = head.get('etag')
+  if (unchanged(request, etag)) return { status: 304, head }
+  let ifRange = request.headers.get('if-range')
+  let match = request.method == 'GET' &&
+    (!ifRange || (etag && !etag.startsWith('W/') && ifRange == etag))
+  let range = match ? span(request.headers.get('range'), size) : null
+  if (range === false) {
+    head.set('content-range', `bytes */${size}`)
+    head.set('content-length', '0')
+    return { status: 416, head }
+  }
+  if (range) {
+    head.set('content-range', `bytes ${range.from}-${range.to}/${size}`)
+    head.set('content-length', String(range.to - range.from + 1))
+    return { status: 206, head, range }
+  }
+  head.set('content-length', String(size))
+  return { status: 200, head }
+}
+
 /** Answer one byte range with the same headers as the whole byte response. */
 export let ranged = (
   bytes: Uint8Array,
   request: Request,
   headers: HeadersInit = {},
 ): Response => {
-  let head = new Headers(headers)
-  head.set('accept-ranges', 'bytes')
-  let etag = head.get('etag')
-  if (unchanged(request, etag)) {
-    return new Response(null, { status: 304, headers: head })
+  let { status, head, range } = plan(bytes.byteLength, request, headers)
+  if (status == 304 || status == 416) {
+    return new Response(null, { status, headers: head })
   }
-  let ifRange = request.headers.get('if-range')
-  let match = request.method == 'GET' &&
-    (!ifRange || (etag && !etag.startsWith('W/') && ifRange == etag))
-  let range = match
-    ? span(request.headers.get('range'), bytes.byteLength)
-    : null
-  if (range === false) {
-    head.set('content-range', `bytes */${bytes.byteLength}`)
-    head.set('content-length', '0')
-    return new Response(null, { status: 416, headers: head })
-  }
-  if (range) {
-    head.set(
-      'content-range',
-      `bytes ${range.from}-${range.to}/${bytes.byteLength}`,
-    )
-    let part = bytes.subarray(range.from, range.to + 1)
-    head.set('content-length', String(part.byteLength))
-    return new Response(part as Uint8Array<ArrayBuffer>, {
-      status: 206,
-      headers: head,
-    })
-  }
-  head.set('content-length', String(bytes.byteLength))
+  let body = range ? bytes.subarray(range.from, range.to + 1) : bytes
   // Deno.serve replaces Content-Length with 0 for a null HEAD body. The
   // runtime omits this body on the wire while retaining the GET length.
-  return new Response(bytes as Uint8Array<ArrayBuffer>, { headers: head })
+  return new Response(body as Uint8Array<ArrayBuffer>, {
+    status,
+    headers: head,
+  })
+}
+
+/** Serve a stored object without reading bytes before range selection. */
+export let rangedOpen = async (
+  object: Opened,
+  request: Request,
+  headers: HeadersInit = {},
+): Promise<Response> => {
+  let { status, head, range } = plan(object.size, request, headers)
+  if (status == 304 || status == 416) {
+    return new Response(null, { status, headers: head })
+  }
+  // Deno.serve rewrites Content-Length to zero for a null HEAD body. An
+  // empty stream preserves the object's length without fetching its bytes.
+  let body = request.method == 'HEAD'
+    ? new ReadableStream({
+      start(controller) {
+        controller.close()
+      },
+    })
+    : await object.read(range)
+  return new Response(body, { status, headers: head })
 }
 
 // The address names only bytes; a validator also names the metadata that
@@ -109,25 +133,32 @@ let disposition = (name: string) => {
 }
 
 /** The bytes as a fenced HTTP response. */
+let headersOf = (meta: Served): HeadersInit => ({
+  'content-type': meta.mime || 'application/octet-stream',
+  'cache-control': 'public, no-cache',
+  // A sandbox makes Chrome's native media viewer an opaque origin. Its
+  // crossorigin fetch of this same URL then fails. Inert media keeps its
+  // origin; document formats remain sandboxed.
+  'content-security-policy': /^(audio|video)\//.test(meta.mime ?? '')
+    ? "script-src 'none'"
+    : "sandbox; script-src 'none'",
+  'x-content-type-options': 'nosniff',
+  ...(meta.etag ? { etag: meta.etag } : {}),
+  ...meta.name
+    ? {
+      'content-disposition': disposition(meta.name),
+    }
+    : {},
+})
+
 export let served = (
   bytes: Uint8Array,
   meta: Served = {},
   request: Request = new Request('https://blob.invalid/'),
-): Response =>
-  ranged(bytes, request, {
-    'content-type': meta.mime || 'application/octet-stream',
-    'cache-control': 'public, no-cache',
-    // A sandbox makes Chrome's native media viewer an opaque origin. Its
-    // crossorigin fetch of this same URL then fails. Inert media keeps its
-    // origin; document formats remain sandboxed.
-    'content-security-policy': /^(audio|video)\//.test(meta.mime ?? '')
-      ? "script-src 'none'"
-      : "sandbox; script-src 'none'",
-    'x-content-type-options': 'nosniff',
-    ...(meta.etag ? { etag: meta.etag } : {}),
-    ...meta.name
-      ? {
-        'content-disposition': disposition(meta.name),
-      }
-      : {},
-  })
+): Response => ranged(bytes, request, headersOf(meta))
+
+export let servedOpen = (
+  object: Opened,
+  meta: Served = {},
+  request: Request = new Request('https://blob.invalid/'),
+): Promise<Response> => rangedOpen(object, request, headersOf(meta))

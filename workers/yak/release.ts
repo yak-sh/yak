@@ -30,8 +30,29 @@ export let releaseFiles = (blobs: Objects): Objects => {
     let at = await physical(key)
     return at ? blobs.read(at) : null
   }
+  let versioned = async (key: string) => {
+    let at = await physical(key)
+    if (!at) return null
+    let found = await blobs.load(at)
+    if (!found) return null
+    let prefix = release(key)
+    let held = prefix ? await index(prefix) : null
+    let sha = held?.[key.slice(prefix?.length ?? 0)]?.sha
+    return sha ? { ...found, version: sha.slice(0, 24) } : found
+  }
   return {
     read,
+    load: versioned,
+    open: async (key) => {
+      let at = await physical(key)
+      if (!at) return null
+      let object = await blobs.open(at)
+      if (!object) return null
+      let prefix = release(key)
+      let held = prefix ? await index(prefix) : null
+      let sha = held?.[key.slice(prefix?.length ?? 0)]?.sha
+      return sha ? { ...object, version: sha.slice(0, 24) } : object
+    },
     get: async (key) => {
       let bytes = await read(key)
       if (!bytes) throw new Error(`no object at ${key}`)
@@ -115,6 +136,18 @@ export let staged = async (
       : files.read(key)
   let view: Objects = {
     read,
+    load: (key) =>
+      key.startsWith(root)
+        ? (index[key.slice(root.length)]
+          ? raw.load(space + index[key.slice(root.length)].key)
+          : Promise.resolve(null))
+        : files.load(key),
+    open: (key) =>
+      key.startsWith(root)
+        ? (index[key.slice(root.length)]
+          ? raw.open(space + index[key.slice(root.length)].key)
+          : Promise.resolve(null))
+        : files.open(key),
     get: async (key) => {
       let bytes = await read(key)
       if (!bytes) throw new Error(`no object at ${key}`)

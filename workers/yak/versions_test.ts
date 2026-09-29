@@ -76,6 +76,35 @@ let memory = () => {
       },
       read: (k) =>
         Promise.resolve((m.get(k) ?? null) as Uint8Array<ArrayBuffer> | null),
+      load: async (k) => {
+        let bytes = m.get(k)
+        return bytes
+          ? {
+            bytes: bytes as Uint8Array<ArrayBuffer>,
+            version: await sha256(new Uint8Array(bytes)),
+          }
+          : null
+      },
+      open: async (k) => {
+        let bytes = m.get(k)
+        return bytes
+          ? {
+            size: bytes.byteLength,
+            version: await sha256(new Uint8Array(bytes)),
+            read: (range?: { from: number; to: number }) =>
+              Promise.resolve(
+                new ReadableStream<Uint8Array>({
+                  start(controller) {
+                    controller.enqueue(
+                      range ? bytes.slice(range.from, range.to + 1) : bytes,
+                    )
+                    controller.close()
+                  },
+                }),
+              ),
+          }
+          : null
+      },
       get: (k) => {
         let v = m.get(k)
         if (!v) throw new Error(`no blob at ${k}`)

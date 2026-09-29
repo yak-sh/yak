@@ -16,6 +16,30 @@ let memory = () => {
       return Promise.resolve()
     },
     read: (key) => Promise.resolve(held.get(key) ?? null),
+    load: async (key) => {
+      let bytes = held.get(key)
+      return bytes ? { bytes, version: await sha256(bytes) } : null
+    },
+    open: async (key) => {
+      let bytes = held.get(key)
+      return bytes
+        ? {
+          size: bytes.byteLength,
+          version: await sha256(bytes),
+          read: (range?: { from: number; to: number }) =>
+            Promise.resolve(
+              new ReadableStream<Uint8Array>({
+                start(controller) {
+                  controller.enqueue(
+                    range ? bytes.slice(range.from, range.to + 1) : bytes,
+                  )
+                  controller.close()
+                },
+              }),
+            ),
+        }
+        : null
+    },
     get: (key) => {
       let bytes = held.get(key)
       if (!bytes) throw new Error(`no object at ${key}`)

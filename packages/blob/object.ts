@@ -24,11 +24,18 @@ import type { Blobs } from './store.ts'
  */
 export type Bucket = {
   /** whether an object exists under this key (its metadata, or null) */
-  head: (key: string) => Promise<unknown>
+  head: (key: string) => Promise<{ size: number; etag: string } | null>
   /** the object under this key, or null */
   get: (
     key: string,
-  ) => Promise<{ arrayBuffer: () => Promise<ArrayBuffer> } | null>
+    options?: { range: { offset: number; length: number } },
+  ) => Promise<
+    {
+      etag: string
+      body: ReadableStream<Uint8Array>
+      arrayBuffer: () => Promise<ArrayBuffer>
+    } | null
+  >
   /** write an object under this key */
   put: (
     key: string,
@@ -44,6 +51,36 @@ export type Bucket = {
     truncated: boolean
     cursor?: string
   }>
+}
+
+/** A stored object's length and validator, with its body read on demand. */
+export type Opened = {
+  size: number
+  version: string
+  read: (
+    range?: { from: number; to: number },
+  ) => Promise<ReadableStream<Uint8Array>>
+}
+
+export type Loaded = { bytes: Uint8Array<ArrayBuffer>; version: string }
+
+let open = async (bucket: Pick<Bucket, 'head' | 'get'>, key: string) => {
+  let head = await bucket.head(key)
+  if (!head) return null
+  return {
+    size: head.size,
+    version: head.etag.replace(/^"|"$/g, ''),
+    read: async (range?: { from: number; to: number }) => {
+      let object = await bucket.get(
+        key,
+        range
+          ? { range: { offset: range.from, length: range.to - range.from + 1 } }
+          : undefined,
+      )
+      if (!object) throw new Error(`no object at ${key}`)
+      return object.body
+    },
+  }
 }
 
 /**
@@ -68,6 +105,7 @@ export let objectBlobs = (
     let found = await bucket.get(prefix + sha)
     return found ? new Uint8Array(await found.arrayBuffer()) : undefined
   },
+  open: (sha) => open(bucket, prefix + sha),
   put: async (sha, bytes) => {
     await bucket.put(prefix + sha, bytes)
   },
@@ -86,8 +124,12 @@ export type Objects = {
   /** the bytes under this key, or null; a miss is one round trip, like a hit,
    * where `has` then `get` is two */
   read(key: string): Promise<Uint8Array<ArrayBuffer> | null>
+  /** bytes and their validator in the same object-store read */
+  load(key: string): Promise<Loaded | null>
   /** the bytes under a key the caller knows is there; a miss throws */
   get(key: string): Promise<Uint8Array<ArrayBuffer>>
+  /** length and validator first, then stream only the bytes the caller needs */
+  open(key: string): Promise<Opened | null>
   /** remove the object under this key */
   delete(key: string): Promise<void>
   /** every key under a prefix, sorted */
@@ -131,11 +173,21 @@ export let bucketObjects = (bucket: Bucket): Objects => ({
     let object = await bucket.get(key)
     return object ? new Uint8Array(await object.arrayBuffer()) : null
   },
+  load: async (key) => {
+    let object = await bucket.get(key)
+    return object
+      ? {
+        bytes: new Uint8Array(await object.arrayBuffer()),
+        version: object.etag.replace(/^"|"$/g, ''),
+      }
+      : null
+  },
   get: async (key) => {
     let object = await bucket.get(key)
     if (!object) throw new Error(`no object at ${key}`)
     return new Uint8Array(await object.arrayBuffer())
   },
+  open: (key) => open(bucket, key),
   delete: async (key) => {
     await bucket.delete(key)
   },

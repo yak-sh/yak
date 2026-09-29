@@ -179,6 +179,7 @@ Deno.test('an app serves audio and video with byte ranges', async () => {
     assertEquals(whole.headers.get('content-length'), '6')
     assertEquals(whole.headers.get('accept-ranges'), 'bytes')
     assertEquals(new Uint8Array(await whole.arrayBuffer()), bytes)
+    let before = files.gets.length
     let part = await apps.fetch(
       visit(url, {
         headers: { range: 'bytes=2-4' },
@@ -189,6 +190,10 @@ Deno.test('an app serves audio and video with byte ranges', async () => {
     assertEquals(part.headers.get('content-range'), 'bytes 2-4/6')
     assertEquals(part.headers.get('content-length'), '3')
     assertEquals(new Uint8Array(await part.arrayBuffer()), bytes.slice(2, 5))
+    assertEquals(
+      files.gets.slice(before).find((get) => get.key.endsWith(name))?.range,
+      { offset: 2, length: 3 },
+    )
   }
   let url = '/cookbook/movie.MP4'
   let first = await apps.fetch(visit(url), env)

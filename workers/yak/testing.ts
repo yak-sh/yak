@@ -37,6 +37,7 @@ import type { Env, Inbound } from './env.ts'
 import { Store } from './graph.ts'
 import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
+import { sha256 } from './versions.ts'
 
 // The streaming HTML rewriter, in the one shape apps.ts asks for it
 // (`reported` weaves the reporter into every page): a tag prepended inside the
@@ -242,17 +243,42 @@ export let ai = (script: Turn[]) => {
 export let bucket = () => {
   let held = new Map<string, Uint8Array>()
   let at = new Map<string, number>()
+  let gets: { key: string; range?: { offset: number; length: number } }[] = []
   return {
     held,
     at,
+    gets,
     r2: {
-      head: (k: string) => Promise.resolve(held.get(k) ?? null),
-      get: (k: string) =>
-        Promise.resolve(
-          held.has(k)
-            ? { arrayBuffer: () => Promise.resolve(held.get(k)!.buffer) }
-            : null,
-        ),
+      head: async (k: string) => {
+        let bytes = held.get(k)
+        return bytes
+          ? {
+            size: bytes.byteLength,
+            etag: await sha256(new Uint8Array(bytes)),
+          }
+          : null
+      },
+      get: async (
+        k: string,
+        options?: { range: { offset: number; length: number } },
+      ) => {
+        gets.push({ key: k, range: options?.range })
+        let bytes = held.get(k)
+        if (!bytes) return null
+        let at = options?.range.offset ?? 0
+        let end = at + (options?.range.length ?? bytes.length)
+        let part = bytes.slice(at, end)
+        return {
+          etag: await sha256(new Uint8Array(bytes)),
+          body: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(part)
+              controller.close()
+            },
+          }),
+          arrayBuffer: () => Promise.resolve(part.buffer as ArrayBuffer),
+        }
+      },
       put: (k: string, v: ArrayBuffer | Uint8Array) => {
         held.set(k, v instanceof Uint8Array ? v : new Uint8Array(v))
         if (!at.has(k)) at.set(k, Date.now())

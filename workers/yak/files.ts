@@ -16,11 +16,11 @@
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
 import { r2Objects } from './lib/objects.ts'
-import { mimeOf, type Objects } from '@yaks/blob'
+import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
 import { keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { BUILT, sha256 } from './versions.ts'
+import { BUILT } from './versions.ts'
 import { parse, WORKER } from './wrangler_app.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
@@ -31,10 +31,10 @@ import { parse, WORKER } from './wrangler_app.ts'
 // for a rename that changed nothing a visitor sees.
 export let PREFIX = 'x-yak-prefix'
 
-// The bytes' own name, handed back so the gateway can build an ETag without
-// hashing the body on every request. It is cached along with the bytes, so a
-// hit costs no hash at all.
-export let SHA = 'x-yak-sha'
+// The bytes' version, handed back so the gateway can build an ETag without
+// hashing a response body. A release index carries its SHA; older files use
+// the object store's ETag. The full and partial doors use the same version.
+export let VERSION = 'x-yak-version'
 
 export { mimeOf } from '@yaks/blob'
 
@@ -140,38 +140,55 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // round trip as the bytes rather than in front of every script an app serves.
   let script = SCRIPT.test(key)
   let source = script ? mainOf(blobs, prefix) : null
+  let type = mimeOf(key)
+  if (
+    (req.method == 'HEAD' || req.headers.has('range')) &&
+    (!script || type.startsWith('video/')) &&
+    !pretty(path) && !type.startsWith('text/html')
+  ) {
+    if (source && key == keyed(prefix, `/${await source}`)) {
+      return missing(keep)
+    }
+    let object = await blobs.open(key)
+    if (!object) return missing(keep)
+    return rangedOpen(object, req, {
+      'content-type': type,
+      [VERSION]: object.version,
+      ...keep,
+    })
+  }
   // A page script the deploy compiled serves in its source's place, as
   // JavaScript whatever its extension (esbuild.ts): `<script type="module"
   // src="main.ts">` gets main.ts compiled. Asked for beside the source, in the
   // same round trip.
   let made = script
-    ? blobs.read(keyed(prefix, `/${BUILT}${path.slice(1)}`))
+    ? blobs.load(keyed(prefix, `/${BUILT}${path.slice(1)}`))
     : null
-  let bytes = await blobs.read(key)
+  let file = await blobs.load(key)
   if (source && key == keyed(prefix, `/${await source}`)) return missing(keep)
   let compiled = await made
   if (compiled) return served(compiled, mimeOf('compiled.js'), keep)
-  if (!bytes && pretty(path)) {
+  if (!file && pretty(path)) {
     key = keyed(prefix, '/')
-    bytes = await blobs.read(key)
+    file = await blobs.load(key)
   }
-  if (!bytes) return missing(keep)
-  return served(bytes, mimeOf(key), keep)
+  if (!file) return missing(keep)
+  return served(file, mimeOf(key), keep)
 }
 
 // What a module script can be written in, and what a page may load as one.
 let SCRIPT = /\.(?:js|mjs|ts|mts|tsx|jsx)$/
 
-let served = async (
-  bytes: Uint8Array<ArrayBuffer>,
+let served = (
+  file: { bytes: Uint8Array<ArrayBuffer>; version: string },
   type: string,
   keep: Record<string, string>,
 ) =>
-  new Response(bytes, {
+  new Response(file.bytes, {
     headers: {
       'content-type': type,
-      'content-length': String(bytes.byteLength),
-      [SHA]: (await sha256(bytes)).slice(0, 24),
+      'content-length': String(file.bytes.byteLength),
+      [VERSION]: file.version,
       ...keep,
     },
   })

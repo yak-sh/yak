@@ -30,7 +30,7 @@ import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt } from './cache.ts'
 import * as files from './files.ts'
-import { keyed, PREFIX, prefixOf, SHA } from './files.ts'
+import { keyed, PREFIX, prefixOf, VERSION } from './files.ts'
 import { blobPrefix } from './blob-key.ts'
 import {
   type App,
@@ -59,8 +59,8 @@ import {
 } from './sell.ts'
 import {
   mimeOf,
-  ranged,
   served as fenced,
+  servedOpen as fencedOpen,
   type Size,
   sizeOf,
   validator,
@@ -424,13 +424,14 @@ let keeping = (app: App) =>
 // because an HTML page is served with a `<base href>` woven in: the same
 // bytes at `/` and at `/recipes/` are two different documents.
 //
-// The bytes' half arrives already hashed from files.ts (`SHA`), so it is
-// computed on a cache miss and never again — a warm request hashes only the
-// mount, which is a handful of characters.
-let etagOf = async (sha: string, at: string, html: boolean) =>
+// The bytes' version arrives from files.ts (`VERSION`), so a warm request
+// hashes only the mount, which is a handful of characters.
+let etagOf = async (version: string, at: string, html: boolean) =>
   html
-    ? `W/"${sha}${(await sha256(new TextEncoder().encode(at))).slice(0, 8)}"`
-    : `"${sha}"`
+    ? `W/"${version}${
+      (await sha256(new TextEncoder().encode(at))).slice(0, 8)
+    }"`
+    : `"${version}"`
 
 let unchanged = (req: Request, etag: string) =>
   (req.headers.get('if-none-match') ?? '').split(',')
@@ -445,12 +446,25 @@ let unchanged = (req: Request, etag: string) =>
 //
 // Absent the binding (under `wrangler dev` and the workerd probes) `bound`
 // calls the module in-process: the same bytes, no cache.
-let bytes = (env: Env, app: App, prefix: string, path: string) =>
-  bound(env.FILES, files.fetch, env).fetch(
-    new Request(cachedAt(app.eid, path, app.source ?? ''), {
-      headers: { [PREFIX]: prefix },
-    }),
-  )
+let bytes = (
+  env: Env,
+  app: App,
+  prefix: string,
+  path: string,
+  range?: string | null,
+  method = 'GET',
+) => {
+  let req = new Request(cachedAt(app.eid, path, app.source ?? ''), {
+    method,
+    headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
+  })
+  // Workers Caching strips Range on a miss and requires a full 200 response.
+  // A seek or HEAD goes to the same file door without that cache; ordinary
+  // GETs still fill and read the shared full-file cache.
+  return range || method == 'HEAD'
+    ? files.fetch(req, env)
+    : bound(env.FILES, files.fetch, env).fetch(req)
+}
 
 // The two addresses the kernel answers for an app that wrote neither file
 // (T-34493), so the links `pinned` wove in are never dead. Both are the
@@ -510,15 +524,16 @@ let asset = async (
 ) => {
   let prefix = prefixOf(space, app)
   if (inside(keyed(prefix, path).slice(prefix.length))) return nothingHere(env)
+  let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',
-    () => bytes(env, app, prefix, path),
+    () => bytes(env, app, prefix, path, range, req.method),
     // Whether that trip stopped at the edge or went on to the bucket, in the
     // same Server-Timing entry as the time it took: a slow `bytes` stage and a
     // fast one are the same call, and this is the word for which happened.
     (r) => r.headers.get('cf-cache-status'),
   )
-  if (got.status != 200) {
+  if (![200, 206, 416].includes(got.status)) {
     await got.body?.cancel()
     return await unwritten(req, env, app, path, bare) ?? nothingHere(env)
   }
@@ -536,7 +551,7 @@ let asset = async (
       }),
     )
   }
-  let etag = await etagOf(got.headers.get(SHA) ?? '', at, html)
+  let etag = await etagOf(got.headers.get(VERSION) ?? '', at, html)
   let headers = { 'content-type': type, 'cache-control': keeping(app), etag }
   // The browser already has these bytes, so it is told so and sent none.
   if (unchanged(req, etag)) {
@@ -544,16 +559,28 @@ let asset = async (
     return new Response(null, { status: 304, headers })
   }
   if (!html) {
+    let ifRange = req.headers.get('if-range')
+    if (got.status != 200 && ifRange && ifRange != etag) {
+      await got.body?.cancel()
+      got = await bytes(env, app, prefix, path)
+      if (got.status != 200) return nothingHere(env)
+      type = got.headers.get('content-type') ?? type
+      etag = await etagOf(got.headers.get(VERSION) ?? '', at, false)
+      headers = { 'content-type': type, 'cache-control': keeping(app), etag }
+    }
     let length = got.headers.get('content-length')
     let media = {
       ...headers,
       'accept-ranges': 'bytes',
       ...(length ? { 'content-length': length } : {}),
+      ...(got.headers.has('content-range')
+        ? { 'content-range': got.headers.get('content-range')! }
+        : {}),
     }
-    if (req.headers.has('range') && req.method == 'GET') {
-      return ranged(new Uint8Array(await got.arrayBuffer()), req, media)
-    }
-    return new Response(got.body, { headers: media })
+    return new Response(got.status == 416 ? null : got.body, {
+      status: got.status,
+      headers: media,
+    })
   }
   if (req.method == 'HEAD') {
     await got.body?.cancel()
@@ -841,9 +868,15 @@ let gave = async (
   sha: string,
 ) => {
   if (!/^[0-9a-f]{64}$/.test(sha)) return json(404, 'no_such_file')
+  let partial = req.method == 'HEAD' ||
+    req.headers.has('range') || req.headers.has('if-none-match')
+  let object
   let bytes
   try {
-    bytes = await r2Objects(env.BLOBS).get(blobKey(space, app, sha))
+    let blobs = r2Objects(env.BLOBS)
+    if (partial) object = await blobs.open(blobKey(space, app, sha))
+    else bytes = await blobs.get(blobKey(space, app, sha))
+    if (partial && !object) return json(404, 'no_such_file')
   } catch (e) {
     caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
     return json(404, 'no_such_file')
@@ -856,10 +889,13 @@ let gave = async (
   let generated = (rows as { artifact?: { media_type?: string } }[])
     .find((r) => r.artifact)?.artifact
   let meta = file ?? { mime: generated?.media_type }
-  return fenced(bytes, {
+  let response = {
     ...meta,
     etag: await validator(sha, meta),
-  }, req)
+  }
+  return object
+    ? fencedOpen(object, response, req)
+    : fenced(bytes!, response, req)
 }
 
 // What to call this person, for the store to write beside their rows: the

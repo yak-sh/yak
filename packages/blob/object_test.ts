@@ -13,14 +13,30 @@ let fake = (): Bucket & { keys: () => string[] } => {
   let held = new Map<string, Uint8Array>()
   return {
     keys: () => [...held.keys()],
-    head: (key) => Promise.resolve(held.get(key) ?? null),
-    get: (key) => {
+    head: (key) => {
       let bytes = held.get(key)
       return Promise.resolve(
         bytes
+          ? { size: bytes.byteLength, etag: String(bytes.byteLength) }
+          : null,
+      )
+    },
+    get: (key, options) => {
+      let bytes = held.get(key)
+      let at = options?.range.offset ?? 0
+      let end = at + (options?.range.length ?? bytes?.byteLength ?? 0)
+      let part = bytes?.slice(at, end)
+      return Promise.resolve(
+        part
           ? {
-            arrayBuffer: () =>
-              Promise.resolve(bytes.slice().buffer as ArrayBuffer),
+            etag: String(bytes!.byteLength),
+            body: new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(part)
+                controller.close()
+              },
+            }),
+            arrayBuffer: () => Promise.resolve(part.buffer as ArrayBuffer),
           }
           : null,
       )
@@ -65,6 +81,25 @@ Deno.test('a prefix namespaces the keys without changing the address', async () 
   await store.put('abc', encode('hello'))
   assertEquals(bucket.keys(), ['bodies/abc'])
   assertEquals(decode((await store.get('abc')) as Uint8Array), 'hello')
+})
+
+Deno.test('an object-store read fetches only the requested byte span', async () => {
+  let bucket = fake()
+  let calls: { offset: number; length: number }[] = []
+  let get = bucket.get
+  bucket.get = (key, options) => {
+    if (options) calls.push(options.range)
+    return get(key, options)
+  }
+  let store = objectBlobs(bucket)
+  await store.put('abc', encode('a long essay'))
+  let object = await store.open?.('abc')
+  assertEquals(object?.size, 12)
+  assertEquals(
+    await new Response(await object!.read({ from: 2, to: 5 })).text(),
+    'long',
+  )
+  assertEquals(calls, [{ offset: 2, length: 4 }])
 })
 
 Deno.test('a store keyed by name reads, deletes and lists every page', async () => {

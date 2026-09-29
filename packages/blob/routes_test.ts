@@ -166,12 +166,29 @@ Deno.test('a text store that cannot keep the bytes says so at the write', async 
 Deno.test('the store a host names is where the bytes land', async () => {
   let cells = new Map<string, Uint8Array>()
   let bucket: Pick<Bucket, 'head' | 'get' | 'put'> = {
-    head: (key) => Promise.resolve(cells.get(key) ?? null),
-    get: (key) => {
-      let found = cells.get(key)
+    head: (key) => {
+      let bytes = cells.get(key)
       return Promise.resolve(
-        found
-          ? { arrayBuffer: () => Promise.resolve(found.slice().buffer) }
+        bytes ? { size: bytes.byteLength, etag: key } : null,
+      )
+    },
+    get: (key, options) => {
+      let found = cells.get(key)
+      let at = options?.range.offset ?? 0
+      let end = at + (options?.range.length ?? found?.byteLength ?? 0)
+      let part = found?.slice(at, end)
+      return Promise.resolve(
+        part
+          ? {
+            etag: key,
+            body: new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(part)
+                controller.close()
+              },
+            }),
+            arrayBuffer: () => Promise.resolve(part.buffer as ArrayBuffer),
+          }
           : null,
       )
     },

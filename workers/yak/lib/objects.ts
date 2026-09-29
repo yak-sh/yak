@@ -35,9 +35,17 @@ export let counted = (objects: Objects, tally?: Tally): Objects => {
       trip('read')
       return objects.read(key)
     },
+    load: (key) => {
+      trip('load')
+      return objects.load(key)
+    },
     get: (key) => {
       trip('get')
       return objects.get(key)
+    },
+    open: (key) => {
+      trip('open')
+      return objects.open(key)
     },
     delete: (key) => {
       trip('delete')

@@ -27,7 +27,7 @@ import type { Graph } from '@yaks/graph'
 import type { Driver } from '@yaks/sql'
 import { addressOf, type Artifact, keep } from './artifact.ts'
 import { type Backend, backend } from './backend.ts'
-import { served, validator } from './serve.ts'
+import { served, servedOpen, validator } from './serve.ts'
 import type { Blobs } from './store.ts'
 
 export { type Backend, backend } from './backend.ts'
@@ -126,13 +126,20 @@ export let routes = (
   let read: Route['handle'] = async (request) => {
     let sha = addressed(request)
     if (!sha) return missing()
-    let bytes = await store.get(sha)
-    if (!bytes) return missing()
+    let partial = request.method == 'HEAD' ||
+      request.headers.has('range') || request.headers.has('if-none-match')
+    let object = partial ? await store.open?.(sha) : null
+    if (partial && store.open && !object) return missing()
+    let bytes = object ? null : await store.get(sha)
+    if (!object && !bytes) return missing()
     let mime = await mimeOf(sha)
-    return served(bytes, {
+    let meta = {
       mime,
       etag: await validator(sha, { mime }),
-    }, request)
+    }
+    return object
+      ? servedOpen(object, meta, request)
+      : served(bytes!, meta, request)
   }
 
   return [{ method: 'GET', path: `${PREFIX}*`, handle: read }, {

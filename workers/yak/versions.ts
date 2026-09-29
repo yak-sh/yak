@@ -131,6 +131,26 @@ export let draftFiles = (
   }
   return {
     read,
+    load: async (key) => {
+      if (!inDraft(key)) return blobs.load(key)
+      if (known) {
+        if (known.own.has(path(key))) return blobs.load(key)
+        return known.gone.has(path(key)) ? null : blobs.load(original(key))
+      }
+      let own = await blobs.load(key)
+      if (own || await blobs.has(deleted(key))) return own
+      return blobs.load(original(key))
+    },
+    open: async (key) => {
+      if (!inDraft(key)) return blobs.open(key)
+      if (known) {
+        if (known.own.has(path(key))) return blobs.open(key)
+        return known.gone.has(path(key)) ? null : blobs.open(original(key))
+      }
+      let own = await blobs.open(key)
+      if (own || await blobs.has(deleted(key))) return own
+      return blobs.open(original(key))
+    },
     get: async (key) => {
       let bytes = await read(key)
       if (!bytes) throw new Error(`no object at ${key}`)
