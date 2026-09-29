@@ -4,9 +4,11 @@
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
+import { effectsIn, loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
+import { storage as held } from '@yaks/durable-object'
 import { mem } from '../sqlite/testing.ts'
+import { durable } from '../durable-object/testing.ts'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
@@ -351,4 +353,22 @@ Deno.test('a harness ending stays ended while its importer catches up, then clea
   g.apply([{ entity: { eid: S }, session: { ended: null } }])
   g.apply([input(3)], { trusted: true })
   assertEquals((g.read('.session.status=running') as Bundle[]).length, 1)
+})
+
+// Where an app's transcripts live, a Durable Object's SQLite, workerd refuses
+// an expression past 100 deep, and the runner's sweep nests the status inside
+// a union: the query a worker coming up asks for the turns nobody wrote down.
+Deno.test("the runner's sweep finds a transcript owed a turn in a Durable Object", () => {
+  let [run] = effectsIn(sessionDoc).filter((e) => e.name == 'session_run')
+  let s = held(durable(), vocab, { derived: sessionDerived })
+  s.install()
+  let g = graph({ storage: s, vocab })
+  g.apply([
+    { entity: { eid: S }, session: { id: 'one' } },
+    { entity: { eid: 'idle' }, session: { id: 'idle' } },
+    { entity: { eid: M }, model: { name: 'fake' } },
+    request(1),
+  ], { trusted: true })
+  let owed = (g.read(run.sweep!) as Bundle[]).map((b) => b.entity.eid)
+  assertEquals(owed, [S])
 })

@@ -14,6 +14,8 @@
 //                                      SQLITE_AUTH, the way workerd's
 //                                      authorizer does — see {@link prohibited}
 //   a blob comes back as an ArrayBuffer
+//   it holds workerd's SQLite limits   100 binds, an expression 100 deep, a
+//                                      compound select of 5: see {@link LIMITS}
 //
 // so a bug this stand-in cannot see is a bug the runtime would not have shown
 // either.
@@ -30,7 +32,7 @@ import {
   table,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { shop, textual } from '../sqlite/testing.ts'
+import { type Limits, shop, textual } from '../sqlite/testing.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
 import { storage, type Store } from './store.ts'
 
@@ -53,6 +55,24 @@ let refused = (query: string): string | undefined =>
   /cf_/i.test(query)
     ? query.replaceAll('"', ' ').match(WORD)?.find(prohibited)
     : undefined
+
+/** The limits workerd sets on every object's SQLite, from its
+ * src/workerd/util/sqlite.c++. A statement past one is refused in production
+ * however stock SQLite would take it. */
+let LIMITS: Limits = {
+  length: 8 * 1024 * 1024 + 34,
+  sqlLength: 100_000,
+  column: 100,
+  exprDepth: 100,
+  compoundSelect: 5,
+  vdbeOp: 25_000,
+  functionArg: 127,
+  attached: 0,
+  likePatternLength: 50,
+  variableNumber: 100,
+  triggerDepth: 10,
+  workerThreads: 0,
+}
 
 let ok = (value: unknown): value is SqlValue =>
   value === null || typeof value == 'string' || typeof value == 'number' ||
@@ -98,7 +118,7 @@ export let durable = (): DurableStorage & {
   // The one alarm, as the runtime holds it: an instant or nothing, cleared by
   // the delivery that fires it.
   let alarm: number | null = null
-  let db = textual()
+  let db = textual(LIMITS)
   let closed = false
   let depth = 0
   // The runtime takes an ArrayBuffer; the engine underneath takes bytes.

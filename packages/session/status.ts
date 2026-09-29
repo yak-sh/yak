@@ -43,6 +43,7 @@
 import type { Bundle, Comp } from '@yaks/graph'
 import {
   and,
+  as,
   col,
   count,
   desc,
@@ -50,6 +51,7 @@ import {
   exists,
   type Expr,
   fn,
+  from,
   ge,
   gt,
   iff,
@@ -280,7 +282,7 @@ export let sessionStatus = {
         where: and(eq(col('entity', 'k'), of), ...(also ? [also] : [])),
       }))
     let lacks = (comp: string, of: Expr) => not(has(comp, of))
-    // The newest entry is the row this scalar subquery reads, `n`, so each
+    // The newest entry is the row the verdict below reads, `n`, so each
     // branch looks at it without finding it again.
     let n = col('entity', 'n')
     let wears = (comp: string, also?: Expr) => has(comp, n, also)
@@ -446,50 +448,58 @@ export let sessionStatus = {
       order: [desc(col('seq', 'p'))],
       limit: lit(1),
     }))
+    // What the newest entry, `n`, says the transcript is doing.
+    let verdict = when(
+      [
+        [wears(STOP_ENTRY), lit('stopped')],
+        [abandoned, lit('running')],
+        [wears(EXCEPTION), lit('failed')],
+        [inflight, lit('running')],
+        [queued, lit('queued')],
+        [
+          and(
+            wears(ERROR),
+            has(ASK, prior),
+            has(
+              'attempt',
+              prior,
+              eq(col('state', 'k'), lit('completed')),
+            ),
+          ),
+          iff(input(asked), lit('pending'), lit('failed')),
+        ],
+        [
+          wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
+          iff(input(asked), lit('pending'), lit('failed')),
+        ],
+        [wears(ERROR, eq(col('code', 'k'), lit(LIMIT))), lit('failed')],
+        [wears(ERROR), iff(allErrors, lit('failed'), lit('pending'))],
+        [open, lit('running')],
+        [and(wears(ASK), settled), lit('settled')],
+        [or(wears(ASK), wears(CALL)), lit('running')],
+        [wears(RESULT), owed],
+        [wears(OUTPUT), iff(unread, lit('pending'), lit('settled'))],
+      ],
+      owed,
+    )
+    // SQLite charges an expression on top of every expression enclosing it,
+    // and workerd refuses a statement past 100 deep (SQLITE_LIMIT_EXPR_DEPTH).
+    // A FROM subquery is no part of the height of the expression it sits in,
+    // so the verdict is read out of one, which leaves room for a query that
+    // nests this status inside another select, as an alternation's union does.
+    let newest = select({
+      cols: [as(verdict, 'v')],
+      from: table('entry', 'n'),
+      where: and(mine('n'), lacks('notice', n)),
+      order: [desc(col('seq', 'n'))],
+      limit: lit(1),
+    })
     return iff(
       has('session', owner, eq(col('ended', 'k'), lit(true))),
       lit('stopped'),
       fn(
         'coalesce',
-        sub(select({
-          cols: [when(
-            [
-              [wears(STOP_ENTRY), lit('stopped')],
-              [abandoned, lit('running')],
-              [wears(EXCEPTION), lit('failed')],
-              [inflight, lit('running')],
-              [queued, lit('queued')],
-              [
-                and(
-                  wears(ERROR),
-                  has(ASK, prior),
-                  has(
-                    'attempt',
-                    prior,
-                    eq(col('state', 'k'), lit('completed')),
-                  ),
-                ),
-                iff(input(asked), lit('pending'), lit('failed')),
-              ],
-              [
-                wears(ERROR, eq(col('code', 'k'), lit('interrupted'))),
-                iff(input(asked), lit('pending'), lit('failed')),
-              ],
-              [wears(ERROR, eq(col('code', 'k'), lit(LIMIT))), lit('failed')],
-              [wears(ERROR), iff(allErrors, lit('failed'), lit('pending'))],
-              [open, lit('running')],
-              [and(wears(ASK), settled), lit('settled')],
-              [or(wears(ASK), wears(CALL)), lit('running')],
-              [wears(RESULT), owed],
-              [wears(OUTPUT), iff(unread, lit('pending'), lit('settled'))],
-            ],
-            owed,
-          )],
-          from: table('entry', 'n'),
-          where: and(mine('n'), lacks('notice', n)),
-          order: [desc(col('seq', 'n'))],
-          limit: lit(1),
-        })),
+        sub(select({ cols: [col('v', 'x')], from: from(newest, 'x') })),
         lit('empty'),
       ),
     )

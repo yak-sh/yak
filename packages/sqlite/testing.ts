@@ -7,7 +7,7 @@
 // forms (a product's unique sku, a shelf's composite slot) without any
 // knowledge outside this file.
 
-import './sqlitepath.ts'
+import { sqlitePath } from './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { open } from './db.ts'
 import { prepared } from './native.ts'
@@ -28,14 +28,52 @@ import { storage, type Store } from './mod.ts'
 // reference is rejected the way it would be in production.
 export let mem = (): Driver => open(':memory:')
 
+/** SQLite's run-time limits by name, each a `sqlite3_limit` category
+ * (https://sqlite.org/c3ref/c_limit_attached.html). */
+export type Limits = Record<string, number>
+
+let LIMIT: Limits = {
+  length: 0,
+  sqlLength: 1,
+  column: 2,
+  exprDepth: 3,
+  compoundSelect: 4,
+  vdbeOp: 5,
+  functionArg: 6,
+  attached: 7,
+  likePatternLength: 8,
+  variableNumber: 9,
+  triggerDepth: 10,
+  workerThreads: 11,
+}
+
+// `sqlite3_limit`, which @db/sqlite does not bind, out of the library it
+// opened (./sqlitepath.ts): the same library, so its handle is good here.
+let lib: ReturnType<typeof bind> | undefined
+let bind = () =>
+  Deno.dlopen(sqlitePath, {
+    sqlite3_limit: { parameters: ['pointer', 'i32', 'i32'], result: 'i32' },
+  })
+let limit = (db: Database, limits: Limits) => {
+  lib ??= bind()
+  for (let [name, value] of Object.entries(limits)) {
+    let category = LIMIT[name]
+    if (category == null) throw new Error(`SQLite has no limit ${name}`)
+    lib.symbols.sqlite3_limit(db.unsafeHandle, category, value)
+  }
+}
+
 /**
  * An in-memory database that takes text, for a stand-in imitating an engine
  * whose own API is text: a Durable Object's `sql.exec`, D1's `prepare`. Only a
  * stand-in needs this door, and nothing published has one: @yaks/sqlite runs
- * what @yaks/sql renders. Keys are enforced, as `open()` enforces them.
+ * what @yaks/sql renders. Keys are enforced, as `open()` enforces them, and
+ * the engine's own `limits` hold, so a statement it would refuse is refused
+ * here too.
  */
-export let textual = () => {
+export let textual = (limits: Limits = {}) => {
   let db = new Database(':memory:')
+  limit(db, limits)
   let run = prepared(db)
   let keys = render({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   run(keys.sql, keys.params)
