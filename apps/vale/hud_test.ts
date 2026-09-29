@@ -70,3 +70,25 @@ Deno.test('a villager offer appears as a quest card with both choices', () => {
     ['accept', 'refuse', 'close'],
   )
 })
+
+Deno.test('talking to another hero offers a party invitation', () => {
+  let document = parseHTML(`<html><body>${
+    talkHtml({
+      player: true,
+      name: 'Ada <the Bold>',
+      message: 'Travel together.',
+      invite: true,
+    })
+  }</body></html>`).document
+  assertEquals(
+    document.querySelector('.Talk_Who')!.textContent,
+    'Ada <the Bold>',
+  )
+  assertEquals(
+    [...document.querySelectorAll('.Talk_Acts button')].map((b) =>
+      b.getAttribute('data-do')
+    ),
+    ['invite', 'close'],
+  )
+  assertEquals(document.querySelector('the')?.textContent, undefined)
+})

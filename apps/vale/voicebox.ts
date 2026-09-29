@@ -362,7 +362,7 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
     /** Each frame: the vale played through the loop while the microphone is
      * on, the voices within earshot asked for, the ones out of it let go, and
      * each one heard placed and faded. */
-    tick: (f: Frame) => {
+    tick: (f: Frame, party: { eid: string; body: Body }[] = []) => {
       // The session belongs to the hero that joined it. Never keep a live
       // microphone (or an old RTC presence) when this tab changes heroes.
       if (as && as != net.hero) {
@@ -389,15 +389,23 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
         }).finally(() => checking = false)
       }
       echo()
-      let want = new Map<string, { session: string; body: Body }>()
+      let want = new Map<
+        string,
+        { session: string; body: Body; party: boolean }
+      >()
       if (!sound.muted && mic != 'spent') {
-        for (let o of f.others) {
+        let members = new Set(party.map((o) => o.eid))
+        for (let o of [...party, ...f.others]) {
           let r = comp(net.client.ent(o.eid), 'rtc')
           let session = str(r.session)
           let talks = Array.isArray(r.tracks) && r.tracks.includes('voice')
           let d = apart(f.body, o.body)
-          if (session && talks && !r.muted && near(d, held.has(o.eid))) {
-            want.set(o.eid, { session, body: o.body })
+          let inParty = members.has(o.eid)
+          if (
+            session && talks && !r.muted &&
+            near(d, held.has(o.eid), inParty)
+          ) {
+            want.set(o.eid, { session, body: o.body, party: inParty })
           }
         }
       }
@@ -413,7 +421,7 @@ export let voices = (net: Net, told: (m: Mic) => void) => {
         else if (v.heard) {
           if (!v.gain) keep(eid, v)
           v.gain?.gain.setTargetAtTime(
-            loud(w.body, f.body),
+            loud(w.body, f.body, w.party),
             v.gain.context.currentTime,
             0.05,
           )

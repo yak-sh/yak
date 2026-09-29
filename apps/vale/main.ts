@@ -35,6 +35,8 @@ import { meshed, template } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
+import { parties } from './party.ts'
+import { partybox } from './partybox.ts'
 import { character } from './character.ts'
 import { anyLook, anyName, fields, picks } from './make.ts'
 import { portrait } from './portrait.ts'
@@ -117,6 +119,7 @@ let folk = village(net, deal)
 let seen = sighting(net)
 let camp = fires(net)
 let explored = exploration(net)
+let party = parties(net)
 let g = game(net, folk.at)
 let toil = working(net)
 let walking = withoutSpent(v, (p) => toil.spent(p, net.now()))
@@ -196,6 +199,7 @@ let chooseDeal = (a: Act, v: View) => {
   sound.quest()
 }
 let dealt = dealbox(h.panels.deal, chooseDeal)
+let roster = partybox(h.panels.party, party, h.toast)
 
 // What is drawn of the world: its chunks grown and meshed in the workers at
 // the detail asked (stream.ts `COARSER`).
@@ -743,7 +747,9 @@ let worked = (e: Work) => {
 }
 
 let greeted = new Map<string, boolean>()
+let talkingPeer: string | null = null
 let offerTalk = (giver: NonNullable<Frame['talk']>, offer: View) => {
+  talkingPeer = null
   h.panels.deal.close()
   h.talk(
     {
@@ -768,6 +774,7 @@ let talkTo = async () => {
     greeted.get(player ?? ''),
   )
   if (last?.talk?.id != giver.id || net.hero != player) return
+  talkingPeer = null
   let next = giver.next
   let standing = last ? deal.standing(last.sheet, giver.id) : []
   let offer = standing.find((v) => v.state == 'open')
@@ -817,6 +824,32 @@ let talkTo = async () => {
   )
   if (giver.id == 'pip' && player && done != null) greeted.set(player, done)
   chat.converse()
+}
+let talkToPeer = () => {
+  let peer = last?.peer
+  if (!peer) return
+  talkingPeer = peer.eid
+  let together = party.members.some((m) => m.eid == peer.eid)
+  h.talk({
+    player: true,
+    name: peer.name,
+    message: !party.canJoin
+      ? 'Sign in to invite heroes to a party.'
+      : together
+      ? 'You are in the same party. Open the party sheet to see where everyone is.'
+      : 'Travel and talk together, wherever the road takes you.',
+    invite: party.canJoin && !together,
+  }, {
+    invite: () => {
+      void party.invite(peer.eid).then((sent) =>
+        h.toast(
+          sent
+            ? `Invited ${peer.name} to your party.`
+            : 'Could not send the invitation. Try again.',
+        )
+      )
+    },
+  })
 }
 
 let last: Frame | null = null
@@ -889,7 +922,7 @@ let loop = (t: number) => {
       job = toil.tick(
         v,
         f,
-        i.gather || (i.talk && (!f.talk || !!job?.bench)),
+        i.gather || (i.talk && (!f.talk && !f.peer || !!job?.bench)),
         i.strike || i.dodge || i.jump || i.ability > 0,
         natural,
       )
@@ -927,7 +960,13 @@ let loop = (t: number) => {
         net.now(),
       )
       chat.tick(f, stage.headOf)
-      voice.tick(f)
+      for (let invite of party.tick(f)) {
+        h.toast(
+          `${party.name(invite.from)} invited you to a party. Open Party (O).`,
+        )
+      }
+      h.partyBadge(party.invites.length)
+      voice.tick(f, party.voices)
       let k = 1 - Math.exp(-dt * 10)
       if (Number.isNaN(cam.x)) {
         ;[cam.x, cam.y, cam.z] = [f.body.x, f.body.y, f.body.z]
@@ -951,7 +990,10 @@ let loop = (t: number) => {
       for (let e of job.events) worked(e)
       for (let e of helping.events) worked(e)
       if (i.talk && f.talk && !job.bench) talkTo()
-      if (h.talking && !f.talk) h.talk(null)
+      else if (i.talk && f.peer && !job.bench) talkToPeer()
+      if (h.talking && (talkingPeer ? f.peer?.eid != talkingPeer : !f.talk)) {
+        h.talk(null)
+      }
       if (!h.talking) folk.leave()
       if (f.body.gait == 'run' && Math.random() < 0.35) {
         dust.emit(
@@ -1030,6 +1072,7 @@ let loop = (t: number) => {
         return false
       })
       h.work(job)
+      roster.paint(f)
       m.show(f, job.nodes, way.marks, camp.known(), explored.known())
       p.show(f)
       you.show(f.sheet, mine)
@@ -1091,7 +1134,7 @@ let loop = (t: number) => {
   w.see(camera.position, feet, stature(BUILD), dt, foes)
   bounty.see(camera.position, feet, stature(BUILD))
   pins.see(camera.position, feet, stature(BUILD))
-  sound.listen(camera, v, playing ? last : null, net.hero, dt)
+  sound.listen(camera, v, playing ? last : null, net.hero, dt, party.spots)
   // Embers off the fire near, and at night fireflies about the player.
   let fire = hearthNear(target.x, target.z, 60)
   if (fire && Math.random() < 0.5) {
@@ -1158,6 +1201,7 @@ Object.assign(globalThis, {
     net,
     game: g,
     voice,
+    party,
     village: folk,
     deals: deal,
     get frame() {
@@ -1187,6 +1231,7 @@ if (busy) busy.textContent = 'Finding the others…'
 let { me, heroes } = await asking
 chat.me(me)
 folk.me(me)
+party.me(me)
 seen.me(me)
 camp.me(me)
 explored.me(me)

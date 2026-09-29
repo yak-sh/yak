@@ -86,13 +86,19 @@ export type Talk =
   & (
     | { quest: Quest | null; state: string; have: number; greets: string }
     | { offer: View }
+    | { player: true; message: string; invite: boolean }
   )
 
 /** The words and choices of a villager, including a note beside a quest. */
 export let talkHtml = (t: Talk): string => {
   let html = ''
   let act = ''
-  if ('offer' in t) {
+  if ('player' in t) {
+    html = `<p>${esc(t.message)}</p>`
+    if (t.invite) {
+      act = '<button class="Btn Btn-go" data-do=invite>Invite to party</button>'
+    }
+  } else if ('offer' in t) {
     let v = t.offer
     html = `<h3>An errand for ${esc(v.giver.name)}</h3><p>${
       v.steps.map((s) =>
@@ -168,6 +174,7 @@ let MICS: Record<Mic, string> = {
 export let SHEETS = {
   about: { title: 'Make this world yours', tall: 'auto' },
   map: { title: 'Map', keys: ['KeyM'], tall: 'auto' },
+  party: { title: 'Party', keys: ['KeyO'], tall: 'auto' },
   hero: {
     title: 'Your hero',
     tabs: {
@@ -244,6 +251,7 @@ export let hud = (
   let panel = {
     about: shelf.add('about', SHEETS.about),
     map: shelf.add('map', SHEETS.map),
+    party: shelf.add('party', SHEETS.party),
     ...shelf.book('hero', SHEETS.hero),
     menu: shelf.add('menu', SHEETS.menu),
     craft: shelf.add('craft', SHEETS.craft),
@@ -338,6 +346,17 @@ export let hud = (
     },
     panel.skills.toggle,
     panel.skills,
+  )
+  let party = tray(
+    'party',
+    'users',
+    {
+      name: 'Party',
+      key: cap(SHEETS.party.keys[0]),
+      says: 'Invitations, members, and where they are.',
+    },
+    panel.party.toggle,
+    panel.party,
   )
   let micKey = cap(keysOf('mic')[0])
   let mic = tray('mic', 'micOff', {
@@ -504,8 +523,12 @@ export let hud = (
     /** someone's words, or none */
     talk: (
       t: Talk | null,
-      acts: { accept?: () => void; hand?: () => void; refuse?: () => void } =
-        {},
+      acts: {
+        accept?: () => void
+        hand?: () => void
+        refuse?: () => void
+        invite?: () => void
+      } = {},
     ) => {
       talk.hidden = !t
       if (!t) return
@@ -515,12 +538,16 @@ export let hud = (
           if (b.dataset.do == 'accept') acts.accept?.()
           if (b.dataset.do == 'hand') acts.hand?.()
           if (b.dataset.do == 'refuse') acts.refuse?.()
+          if (b.dataset.do == 'invite') acts.invite?.()
           hush()
         })
       )
     },
     get talking() {
       return !talk.hidden
+    },
+    partyBadge: (n: number) => {
+      party.classList.toggle('Orb-new', n > 0 && !panel.party.open)
     },
     /** the gather button, for this frame's work: its trade's icon while a node
      * or a station is near enough to work, dim while a node cannot be, and
@@ -699,7 +726,7 @@ export let hud = (
           ? `${first.name}: mends ${first.heals}. ${tonics} in your bag.`
           : 'Nothing in your bag mends.',
       })
-      talkPad.classList.toggle('Pad-none', !f.talk || !!nearBench)
+      talkPad.classList.toggle('Pad-none', !f.talk && !f.peer || !!nearBench)
       faint.hidden = !f.down
     },
   }

@@ -350,6 +350,12 @@ export let connect = (base: URL) => {
     /** One named hero beyond the page's area, including their newest look
      * and the person who made them. */
     about,
+    /** The party a named hero belongs to, read from their current row even
+     * when they are beyond the page's world watch. */
+    partyOf: async (eid: string): Promise<string> => {
+      let b = (await once(`.eid=${JSON.stringify(eid)}&.player&?party&*`))[0]
+      return str(comp(b, 'party').group)
+    },
     /** Whether the hero this tab remembers is still in the store. */
     known: async (eid: string): Promise<boolean> =>
       (await once(`.eid=${JSON.stringify(eid)}&.player`)).length > 0,

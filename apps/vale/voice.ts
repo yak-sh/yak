@@ -26,8 +26,8 @@ export let TALK = {
 } satisfies Falloff
 
 /** Level delivered to a listener. Whole through 20 m, then fading to zero
- * at 30 m; behind the speaker it is half as loud as in front. The panner
- * supplies direction only, not an additional attenuation.
+ * at 30 m; party members keep a quiet floor everywhere. The panner supplies
+ * direction only, not an additional attenuation.
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
@@ -41,7 +41,7 @@ export let TALK = {
  * assertEquals(loud(at(0, 0), at(0, 30)), 0)
  * ```
  */
-export let loud = (them: Body, me: Body) => {
+export let loud = (them: Body, me: Body, party = false) => {
   let dx = me.x - them.x, dz = me.z - them.z
   let d = Math.hypot(dx, me.y - them.y, dz)
   let flat = Math.hypot(dx, dz)
@@ -49,8 +49,9 @@ export let loud = (them: Body, me: Body) => {
     ? (Math.sin(them.yaw) * dx + Math.cos(them.yaw) * dz) / flat
     : 1
   let fade = Math.min(1, Math.max(0, (EAR - d) / (EAR - FADE)))
-  return fade * (0.75 + 0.25 * facing)
+  return Math.max(party ? 0.18 : 0, fade * (0.75 + 0.25 * facing))
 }
 
 /** Whether a voice at `d` metres is wanted, given whether it is heard now. */
-export let near = (d: number, held: boolean) => d < (held ? FAR : EAR)
+export let near = (d: number, held: boolean, party = false) =>
+  party || d < (held ? FAR : EAR)

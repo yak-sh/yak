@@ -276,6 +276,8 @@ export type Frame = {
   givers: Giver[]
   /** the giver close enough to talk to */
   talk: Giver | null
+  /** the nearest hero close enough to speak with */
+  peer: Other | null
   /** the creature being fought, if one */
   foe: Mob | null
   /** what my next blow or ability would take (strike.ts `aimOf`), which the
@@ -1697,6 +1699,17 @@ export let game = (
       let talk = down ? null : givers
         .filter((g) => g.near < TALK)
         .sort((a, b) => a.near - b.near)[0] ?? null
+      let peer = down ? null : others
+        .filter((o) =>
+          Math.hypot(
+            o.body.x - body.x,
+            o.body.z - body.z,
+          ) < TALK
+        )
+        .sort((a, b) =>
+          Math.hypot(a.body.x - body.x, a.body.z - body.z) -
+          Math.hypot(b.body.x - body.x, b.body.z - body.z)
+        )[0] ?? null
 
       // Into another region: its name, as the hero comes into it.
       let level = regionOf(body.x, body.z)
@@ -1762,6 +1775,7 @@ export let game = (
         drops: lying,
         givers,
         talk,
+        peer,
         foe,
         aim,
         rack: !down && inVillage(body.x, body.z),

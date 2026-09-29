@@ -22,6 +22,42 @@
       "description": "A hero belonging to the person who made it, as the row's created stamp says. Their appearance lives in look rows; everything else they earn lives in rows of its own.",
       "properties": {}
     },
+    "party": {
+      "component": true,
+      "type": "object",
+      "kind": false,
+      "floor": "person",
+      "description": "The party a signed-in hero has joined. It lives on that hero's player row so leaving or joining another party changes one current membership.",
+      "properties": {
+        "group": { "type": "string", "index": true }
+      },
+      "required": ["group"]
+    },
+    "party_invite": {
+      "component": true,
+      "type": "object",
+      "floor": "person",
+      "description": "One hero's invitation to another to join their party. The invited hero alone answers it with a party_reply row.",
+      "properties": {
+        "from": { "type": "string", "ref": "player" },
+        "to": { "type": "string", "ref": "player", "index": true },
+        "group": { "type": "string" },
+        "at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["from", "to", "group", "at"]
+    },
+    "party_reply": {
+      "component": true,
+      "type": "object",
+      "floor": "person",
+      "description": "An invited hero accepting or declining an invitation. A reply keeps it out of their inbox after they leave the party.",
+      "properties": {
+        "invite": { "type": "string", "ref": "party_invite" },
+        "to": { "type": "string", "ref": "player", "index": true },
+        "accept": { "type": "boolean" }
+      },
+      "required": ["invite", "to", "accept"]
+    },
     "damageable": {
       "component": true,
       "type": "object",

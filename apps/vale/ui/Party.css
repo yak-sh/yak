@@ -1,0 +1,55 @@
+/* Invitations and membership in the party sheet. */
+.Party_List {
+  display: grid;
+  gap: 0.35rem;
+
+  & + & {
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--line);
+  }
+}
+
+.Party_Row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 0.45rem 0;
+
+  & > div:first-child {
+    display: grid;
+    gap: 0.15rem;
+  }
+
+  & small,
+  & .Party_Empty {
+    color: var(--muted);
+  }
+}
+
+.Party_Acts {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.Party_Empty {
+  margin: 0.5rem 0;
+  color: var(--muted);
+}
+
+.Party_Dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border-radius: 50%;
+  background: var(--muted);
+
+  &.Party_Dot-on {
+    background: var(--deep);
+  }
+}
+
+.Party_Leave {
+  margin-top: 0.9rem;
+}

@@ -1,5 +1,5 @@
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
-import { loud, TALK } from './voice.ts'
+import { loud, near, TALK } from './voice.ts'
 import type { Body } from './sim.ts'
 
 const at = (x: number, z: number, yaw = 0) =>
@@ -20,4 +20,12 @@ Deno.test('voice distance has one owner: full through 20 m and a fade to 30 m', 
   assertEquals(loud(at(0, 0), at(0, 31)), 0)
   assertEquals(loud(at(0, 0), at(0, -20)), 0.5)
   assert(loud(at(0, 0), at(10, 0)) > 0.5)
+})
+
+Deno.test('party speech stays audible when its speaker crosses the vale', () => {
+  assertEquals(loud(at(0, 0), at(0, 10), true), 1)
+  assertEquals(loud(at(0, 0), at(0, 30), true), 0.18)
+  assertEquals(loud(at(0, 0), at(0, 300), true), 0.18)
+  assertEquals(near(300, false, true), true)
+  assertEquals(near(300, false), false)
 })

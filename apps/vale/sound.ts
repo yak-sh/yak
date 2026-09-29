@@ -397,9 +397,11 @@ export let sound = {
     f: Frame | null,
     me: string | null,
     dt: number,
+    partySpots: ReadonlyMap<string, Vec3> = new Map(),
   ) => {
     if (!ctx) return
     spots = f && me ? where(f, me) : new Map()
+    for (let [id, at] of partySpots) if (!spots.has(id)) spots.set(id, at)
     ears = ear(camera, me ? spots.get(me) : undefined)
     listenAt(ctx.listener, ears)
     music.at(ears.at)
