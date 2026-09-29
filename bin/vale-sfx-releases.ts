@@ -22,7 +22,7 @@ export let LEGACY: Files = {
   'data/sfx/02.json':
     '86099cf3c4eac02fad5a4db20c8932a37aa56747dbbc84d8a598eee575cc2f1d',
   'data/sfx/03.json':
-    '91d31b40aace84660f758d6f8e9332693a6145b769d2340ff4d8d160e813b4',
+    '91d31b40aace84660f758d6f8e9332693a6145b769d2340ff4d8d8d160e813b4',
   'data/sfx/04.json':
     '1a0450e93a929af75b8bc0334156a2e7dc5b301c83c3a8e19ae730e535475b0e',
   'data/sfx/05.json':
@@ -86,7 +86,8 @@ export let repackage = (
       old.length != Object.keys(LEGACY).length ||
       required.some((path) => !(path in version.files)) ||
       !vocabs[version.files['vocab.json']] ||
-      !/^[-\w]+\/\.releases\/[^/]+\/[^/]+$/.test(version.source)
+      (version.source &&
+        !/^[-\w]+\/\.releases\/[^/]+\/[^/]+$/.test(version.source))
     ) {
       throw new Error(
         `partial legacy release v${version.version} ${version.app}`,

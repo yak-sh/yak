@@ -20,7 +20,7 @@ let complete = (index: Index | null): index is Index =>
 // A release made before every file was pinned can be promoted in place. The
 // source path stays the same, and the index changes only after every byte has
 // its content address. A repeated call on a promoted release is one read.
-export let prepare = async (raw: Objects, source: string): Promise<Index> => {
+let pinned = async (raw: Objects, source: string): Promise<Index> => {
   let root = `${source}/`
   let space = spaceOf(root)
   let prior = await indexOf(raw, root)
@@ -43,6 +43,12 @@ export let prepare = async (raw: Objects, source: string): Promise<Index> => {
       }),
     ),
   )
+  return index
+}
+export let prepare = async (raw: Objects, source: string): Promise<Index> => {
+  let prior = await indexOf(raw, `${source}/`)
+  if (complete(prior)) return prior
+  let index = await pinned(raw, source)
   await raw.put(source + META, encode(index))
   return index
 }
@@ -129,7 +135,7 @@ export let staged = async (
   let old = source ? `${source}/` : ''
   let index: Index = {}
   if (sparse && old) {
-    index = { ...await prepare(raw, source!) }
+    index = { ...await pinned(raw, source!) }
   }
   let pin = pins(raw, space)
   let put = async (key: string, bytes: Uint8Array) => {

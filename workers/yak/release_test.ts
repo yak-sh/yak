@@ -143,3 +143,22 @@ Deno.test('a live indexed release keeps its bytes when promoted', async () => {
   )
   assertEquals(await prepare(files, source), index)
 })
+
+Deno.test('copying a legacy release leaves its source index untouched', async () => {
+  let { files } = memory()
+  let source = 'alice/.releases/app/legacy'
+  let copy = 'alice/.releases/app/repacked'
+  let old = encode({
+    'index.html': { key: '.releases/app/legacy/index.html' },
+  })
+  await files.put(`${source}/index.html`, bytes('original'))
+  await files.put(source + '.json', old)
+  let stage = await staged(files, source, 'alice/.drafts/empty', copy, true)
+  await stage.files.put(`${copy}/extra.txt`, bytes('changed'))
+  await stage.finish()
+  assertEquals(text(await files.read(source + '.json')), text(old))
+  assertEquals(
+    text(await releaseFiles(files).read(`${copy}/index.html`)),
+    'original',
+  )
+})

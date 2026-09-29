@@ -38,7 +38,7 @@ Deno.test('repackage keeps complete prior manifests and changes only sound files
       ...version,
       eid: 'release-2',
       files: { 'index.html': sha('e') },
-    }],
+    }, { ...version, eid: 'release-3', source: '' }],
     changes,
     vocabs,
   )
@@ -47,6 +47,12 @@ Deno.test('repackage keeps complete prior manifests and changes only sound files
   assertEquals(made.files['samples.ts'], sha('f'))
   assertEquals(made.changed.length, Object.keys(changes).length + 1)
   assertEquals(files['samples.ts'], sha('b'))
+  let historical = repackage(
+    [{ ...version, eid: 'release-3', source: '' }],
+    changes,
+    vocabs,
+  )[0]
+  assertEquals(historical.files['samples.ts'], sha('f'))
 })
 
 Deno.test('repackage refuses a partial legacy release', () => {
@@ -71,5 +77,8 @@ Deno.test('sound vocabulary repackage leaves the other declarations in place', (
     soundVocab(new TextEncoder().encode(JSON.stringify(before))),
   ))
   assertEquals(after.$defs.region, before.$defs.region)
-  assertEquals(after.$defs.sfx.description.includes('shared sound builder'), true)
+  assertEquals(
+    after.$defs.sfx.description.includes('shared sound builder'),
+    true,
+  )
 })
