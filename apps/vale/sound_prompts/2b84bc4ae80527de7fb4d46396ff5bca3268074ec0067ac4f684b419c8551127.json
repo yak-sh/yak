@@ -1,0 +1,18 @@
+{
+  "sound": "hit-great",
+  "sha256": "2b84bc4ae80527de7fb4d46396ff5bca3268074ec0067ac4f684b419c8551127",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A powerful melee blow lands on a creature: heavier low body impact, sharper bright crack and brief satisfying decay. One impact only. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790647790-soPsFPzEnRxUmPthfv6K"
+  },
+  "playback": {
+    "loop": false
+  }
+}

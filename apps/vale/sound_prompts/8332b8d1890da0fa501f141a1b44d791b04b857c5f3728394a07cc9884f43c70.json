@@ -1,0 +1,18 @@
+{
+  "sound": "pick",
+  "sha256": "8332b8d1890da0fa501f141a1b44d791b04b857c5f3728394a07cc9884f43c70",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A small useful item is picked up: a delicate two-note bright chime with a short natural tail, warm fantasy game feel. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790648568-tAMn5dPdknEm8dfUj2Ze"
+  },
+  "playback": {
+    "loop": false
+  }
+}

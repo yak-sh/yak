@@ -1,0 +1,18 @@
+{
+  "sound": "heal",
+  "sha256": "348de92b94ecfef0a63dddf463cc9708473850b32bc94cf0c7261df19285ee1e",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A healing ability restores a hero: a warm, brief ascending shimmer of gentle glassy tones, no music phrase. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790648605-9cJeBxza2A3y6E9Y7eK7"
+  },
+  "playback": {
+    "loop": false
+  }
+}

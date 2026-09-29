@@ -1,0 +1,18 @@
+{
+  "sound": "roll",
+  "sha256": "daef0d19d008b3592bc727b79e1d988d893bf8322edf1b5c3070696cec6d8b0a",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A hero rolls across packed earth: short rush of cloth and scuff of boots, low and soft, under half a second. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790648505-egbw6k0CoYwIq8NnAM8Y"
+  },
+  "playback": {
+    "loop": false
+  }
+}

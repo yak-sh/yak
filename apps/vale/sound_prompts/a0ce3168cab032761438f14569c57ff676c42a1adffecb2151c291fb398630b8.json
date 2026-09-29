@@ -1,0 +1,18 @@
+{
+  "sound": "fall",
+  "sha256": "a0ce3168cab032761438f14569c57ff676c42a1adffecb2151c291fb398630b8",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A hero falls to the ground: one low soft thud followed by a short settling scrape. No voice. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790648579-zqojrCsSFbbqaL2soNQM"
+  },
+  "playback": {
+    "loop": false
+  }
+}

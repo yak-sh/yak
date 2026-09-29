@@ -1,0 +1,18 @@
+{
+  "sound": "dodge",
+  "sha256": "499189dadf60d3b8939fbb0d10bda57c00fc4d50d7a47e48caac94d2d089b3d1",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A hero evades a blow with one nimble sidestep: quick airy swish, boot scrape and a faint high accent. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790648540-Uw7gasFbqOXI704Uk2OV"
+  },
+  "playback": {
+    "loop": false
+  }
+}

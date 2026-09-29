@@ -1,0 +1,18 @@
+{
+  "sound": "swing",
+  "sha256": "6eede1244a11c5d1162c0ccd87a62654ce5b960c0ee33ebf8b47695ffcba4a0b",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One quick unarmed or light-weapon swing misses through air: a brief soft swish that dies immediately. No impact. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790647839-LK9MroEXU0shODpSZrRq"
+  },
+  "playback": {
+    "loop": false
+  }
+}

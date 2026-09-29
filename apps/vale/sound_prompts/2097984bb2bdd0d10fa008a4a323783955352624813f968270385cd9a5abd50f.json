@@ -1,0 +1,18 @@
+{
+  "sound": "frog",
+  "sha256": "2097984bb2bdd0d10fa008a4a323783955352624813f968270385cd9a5abd50f",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A nearby marsh frog gives two or three short raspy croaks, each pulsing from its throat, the last lower. Isolated animal call, no ambience. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790647762-e8EBD6d8RJMkxDShGa1T"
+  },
+  "playback": {
+    "loop": false
+  }
+}

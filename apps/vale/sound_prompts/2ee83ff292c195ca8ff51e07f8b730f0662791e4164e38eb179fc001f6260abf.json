@@ -1,0 +1,18 @@
+{
+  "sound": "hurt",
+  "sha256": "2ee83ff292c195ca8ff51e07f8b730f0662791e4164e38eb179fc001f6260abf",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A hero is hurt: one restrained low human pain grunt with a brief body-impact thud. No words or prolonged cry. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790648555-LqJgaiKU1sijEDU2eaEe"
+  },
+  "playback": {
+    "loop": false
+  }
+}

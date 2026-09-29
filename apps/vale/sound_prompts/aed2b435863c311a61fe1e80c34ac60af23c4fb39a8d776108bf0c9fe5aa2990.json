@@ -1,0 +1,18 @@
+{
+  "sound": "struck",
+  "sha256": "aed2b435863c311a61fe1e80c34ac60af23c4fb39a8d776108bf0c9fe5aa2990",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: Another hero receives a melee blow nearby: a solid but somewhat distant body impact, quick dry decay. One hit only. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790647825-zfuJnrQN3TS5qhsZlWJw"
+  },
+  "playback": {
+    "loop": false
+  }
+}
