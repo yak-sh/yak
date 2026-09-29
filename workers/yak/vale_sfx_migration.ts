@@ -18,15 +18,25 @@ import {
   META,
 } from './release_index.ts'
 import { appVocab } from './vocab.ts'
+import { verified } from './vale_sfx_seal.ts'
 import { type Args, type Ctx, refuse, type Tool } from './tool.ts'
 import { migrate } from '../../bin/migrate-vale-sfx.ts'
 import {
+  NEW_DESCRIPTION,
+  OLD_DESCRIPTION,
   repackage,
   soundVocab,
   type Version,
 } from '../../bin/vale-sfx-releases.ts'
 
 let VALE = '0f562744-e91e-4958-bfb7-1ef06af52dc2'
+let APPS = new Set([
+  VALE,
+  '989e10e8-f6fe-411f-aefa-accdde8c2b7b',
+  'a9bb6c62-7af5-49cd-9d13-c5f888be63e3',
+  '9b237d64-e96e-47a9-ae56-f1993e5df3fc',
+  '3017ecba-fed4-44a8-9899-17629a696f93',
+])
 let AUDIT = 'audit/vale-sfx-44666/'
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 let encode = (text: string) => new TextEncoder().encode(text)
@@ -35,6 +45,18 @@ let object = (value: unknown): Record<string, unknown> =>
     ? value as Record<string, unknown>
     : {}
 let say = (value: unknown) => String(value ?? '')
+let description = (doc: unknown) =>
+  say(
+    (object(object(doc).$defs).sfx as { description?: string } | undefined)
+      ?.description,
+  )
+let revisedVocab = (doc: unknown) => {
+  if (description(doc) == NEW_DESCRIPTION) return null
+  if (description(doc) != OLD_DESCRIPTION) {
+    throw refuse('arguments', 'Store has an unfamiliar sound vocabulary')
+  }
+  return JSON.parse(decode(soundVocab(encode(JSON.stringify(doc)))))
+}
 let json = async (r: Response) => {
   if (!r.ok) throw new Error(`Store ${r.status}: ${await r.text()}`)
   return r.json()
@@ -52,6 +74,9 @@ let versionOf = (v: {
   files: v.files,
 })
 let selected = async (ctx: Ctx, app: string) => {
+  if (!APPS.has(app)) {
+    throw refuse('arguments', 'app is outside Vale sound scope')
+  }
   let found = await ctx.dir.appAt(app)
   if (!found) throw refuse('missing', `app ${app} is missing`)
   return found
@@ -84,6 +109,7 @@ let STAGED = [
 ]
 
 let stage = async (ctx: Ctx, args: Args) => {
+  let { space } = await selected(ctx, say(args.app) || VALE)
   let files = object(args.files)
   if (
     Object.keys(files).length != STAGED.length ||
@@ -100,7 +126,7 @@ let stage = async (ctx: Ctx, args: Args) => {
     throw refuse('arguments', 'source files must contain the shared builder')
   }
   let raw = r2Objects(ctx.env.BLOBS)
-  let pin = pins(raw, 'yourname/')
+  let pin = pins(raw, `${space.slug}/`)
   let hashes: Files = {}
   for (let path of STAGED) {
     let bytes = encode(say(files[path]))
@@ -118,6 +144,7 @@ let scan = async (ctx: Ctx, args: Args) => {
   let builds = await read(store, '.build&*')
   let outputs = await read(store, '.built&*')
   let sounds = await read(store, '.sfx&*')
+  let declared = await json(await store('/vocab', {}, { 'x-yak-kernel': '1' }))
   let recovery = await json(
     await store(
       '/restore',
@@ -133,6 +160,11 @@ let scan = async (ctx: Ctx, args: Args) => {
       builds: builds.length,
       outputs: outputs.length,
       sounds: sounds.length,
+      vocabulary: description(declared) == OLD_DESCRIPTION
+        ? 'legacy'
+        : description(declared) == NEW_DESCRIPTION
+        ? 'shared'
+        : 'other',
       recovery,
     },
   }
@@ -140,8 +172,10 @@ let scan = async (ctx: Ctx, args: Args) => {
 
 let migrateStore = async (ctx: Ctx, args: Args) => {
   let { space, app } = await selected(ctx, say(args.app) || VALE)
+  if (!app.store) throw refuse('missing', `app ${app.eid} has no Store`)
   let raw = r2Objects(ctx.env.BLOBS)
   let audit = `${AUDIT}stores/${app.eid}.json`
+  let proof = `${AUDIT}stores/${app.eid}.seal.json`
   let hashes = object(args.files)
   let source = await pins(raw, `${space.slug}/`).get(
     say(hashes['data/sfx/01.json']),
@@ -151,9 +185,32 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
     r.builder
   )
   if (!definition) throw refuse('arguments', 'shared builder is missing')
+  let saved = await raw.read(audit)
+  if (!saved) {
+    throw refuse('missing', `legacy Store snapshot ${audit} is missing`)
+  }
+  let held = await raw.read(proof)
+  if (!held) throw refuse('missing', `legacy Store seal ${proof} is missing`)
+  let before = await verified(
+    saved,
+    JSON.parse(decode(held)),
+    app.eid,
+    app.store,
+  ) as {
+    app: string
+    store: string
+    builders: Bundle[]
+    builds: Bundle[]
+    outputs: Bundle[]
+    sounds: Bundle[]
+    artifacts: Bundle[]
+    citations: Bundle[]
+    vocab: unknown
+  }
+  let { builders, builds, outputs, sounds, artifacts, citations } = before
   let store = appStore(ctx.env.STORE, space, app)
-  let [builders, builds, outputs, sounds, artifacts, allCites] = await Promise
-    .all([
+  let [nowBuilders, nowBuilds, nowOutputs, nowSounds, allArtifacts, allCites] =
+    await Promise.all([
       read(store, '.builder&*'),
       read(store, '.build&*'),
       read(store, '.built&*'),
@@ -162,23 +219,44 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
       read(store, '.cites&*'),
     ])
   let made = new Set(outputs.map((r) => r.entity.eid))
-  let citations = allCites.filter((r) =>
+  let nowCites = allCites.filter((r) =>
     made.has(say((r.edge as { from?: string } | undefined)?.from))
   )
+  let blobs = new Set(artifacts.map((row) => row.entity.eid))
+  let nowArtifacts = allArtifacts.filter((row) => blobs.has(row.entity.eid))
+  let declared = await json(await store('/vocab', {}, { 'x-yak-kernel': '1' }))
+  let nextVocab = revisedVocab(declared)
+  let ids = (rows: Bundle[]) =>
+    JSON.stringify(rows.map((row) => row.entity.eid).sort())
+  let soundRows = (rows: Bundle[]) =>
+    JSON.stringify(
+      rows.map((row) => [row.entity.eid, row.doc, row.sfx])
+        .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    )
   if (
     !builders.length && !builds.length && !outputs.length &&
     !sounds.length
   ) {
+    if (
+      nowBuilders.length || nowBuilds.length || nowOutputs.length ||
+      nowSounds.length
+    ) throw refuse('conflict', 'empty Store changed after snapshot')
+    if (args.check !== true && nextVocab) {
+      await json(
+        await store('/vocab', {
+          method: 'POST',
+          body: JSON.stringify(nextVocab),
+        }, { 'x-yak-kernel': '1' }),
+      )
+    }
     return { text: `${space.slug}/${app.slug} has no sound builder rows` }
   }
-  let saved = await raw.read(audit)
   if (
-    saved && builders.length == 1 &&
-    builders[0].entity.eid == definition.entity.eid
+    nowBuilders.length == 1 &&
+    nowBuilders[0].entity.eid == definition.entity.eid
   ) {
-    let before = JSON.parse(decode(saved)) as { outputs: Bundle[] }
     let current = new Set(
-      outputs.map((row) =>
+      nowOutputs.map((row) =>
         say((row.built as { artifact?: string } | undefined)?.artifact)
       ),
     )
@@ -187,29 +265,37 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
         !current.has(say((row.built as { artifact?: string }).artifact))
       )
     ) throw refuse('conflict', 'a migrated sound artifact is missing')
+    if (args.check !== true && nextVocab) {
+      await json(
+        await store('/vocab', {
+          method: 'POST',
+          body: JSON.stringify(nextVocab),
+        }, { 'x-yak-kernel': '1' }),
+      )
+    }
     return {
       text: `Vale sound Store already migrated; audit ${audit}`,
-      value: { builders: builders.length, outputs: outputs.length, audit },
+      value: {
+        builders: nowBuilders.length,
+        outputs: nowOutputs.length,
+        audit,
+      },
     }
   }
-  if (saved) {
-    let before = JSON.parse(decode(saved)) as {
-      builders: Bundle[]
-      builds: Bundle[]
-    }
-    let ids = (rows: Bundle[]) =>
-      JSON.stringify(rows.map((row) => row.entity.eid).sort())
-    if (
-      ids(before.builders) != ids(builders) ||
-      ids(before.builds) != ids(builds)
-    ) throw refuse('conflict', 'Store state changed after migration audit')
-  }
+  if (
+    ids(builders) != ids(nowBuilders) ||
+    ids(builds) != ids(nowBuilds) ||
+    ids(outputs) != ids(nowOutputs) ||
+    ids(sounds) != ids(nowSounds) ||
+    ids(artifacts) != ids(nowArtifacts) ||
+    ids(citations) != ids(nowCites) ||
+    soundRows(sounds) != soundRows(nowSounds)
+  ) throw refuse('conflict', 'Store changed after legacy snapshot')
   let [tool] = await read(
     store,
     `.eid=${say((definition.builder as { to: string }).to)}&*`,
   )
   if (!tool?.tool) throw refuse('missing', 'builder model tool is missing')
-  let declared = await json(await store('/vocab', {}, { 'x-yak-kernel': '1' }))
   let vocab = appVocab(declared)
   let plans = sounds.map((sound) => {
     let eid = sound.entity.eid
@@ -243,26 +329,20 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
       value: { bundles: change.length },
     }
   }
-  if (!saved) {
-    await raw.put(
-      audit,
-      encode(JSON.stringify({
-        at: new Date().toISOString(),
-        builders,
-        builds,
-        outputs,
-        sounds,
-        artifacts,
-        citations,
-      })),
-    )
-  }
   await json(
     await store('/apply', {
       method: 'POST',
       body: JSON.stringify(change),
     }, { 'x-yak-kernel': '1' }),
   )
+  if (nextVocab) {
+    await json(
+      await store('/vocab', {
+        method: 'POST',
+        body: JSON.stringify(nextVocab),
+      }, { 'x-yak-kernel': '1' }),
+    )
+  }
   return {
     text:
       `migrated ${builders.length} Vale sound builders to one shared builder; kept ${outputs.length} artifact references and ${citations.length} citations`,

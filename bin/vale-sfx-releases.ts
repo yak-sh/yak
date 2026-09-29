@@ -37,9 +37,9 @@ export let LEGACY: Files = {
     '5f627075482a27e3022dcf5a21ff97f96fdb6ad102c957b0228360c606f786bd',
 }
 
-let OLD_DESCRIPTION =
+export let OLD_DESCRIPTION =
   'The description of one sound Vale needs. Its own builder reads this row and cites it in the generated recording.'
-let NEW_DESCRIPTION =
+export let NEW_DESCRIPTION =
   'The description of one sound Vale needs. The shared sound builder reads this row and cites it in the generated recording.'
 
 /** Change only the sound wording in each version's own vocabulary. */
