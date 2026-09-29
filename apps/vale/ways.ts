@@ -270,6 +270,30 @@ let neighbours = (id: string): Road[] => {
     .map((to) => frontierRoad(id, to.id))
 }
 
+// A point's road candidates change only when its search box crosses a level
+// cell. Ground generation asks for many points inside the same cells.
+let nearRoads = new Map<string, Road[]>()
+let candidates = (x0: number, z0: number, x1: number, z1: number): Road[] => {
+  let key = [
+    Math.floor(x0 / SIZE) - 1,
+    Math.floor(z0 / SIZE) - 1,
+    Math.floor(x1 / SIZE) + 1,
+    Math.floor(z1 / SIZE) + 1,
+  ].join(' ')
+  let got = nearRoads.get(key)
+  if (got) return got
+  got = [
+    ...ROADS(),
+    ...new Map(
+      levelsIn(x0, z0, x1, z1).flatMap((lv) => neighbours(lv.id))
+        .map((road) => [`${road.from}/${road.to}`, road]),
+    ).values(),
+  ]
+  if (nearRoads.size >= 128) nearRoads.delete(nearRoads.keys().next().value!)
+  nearRoads.set(key, got)
+  return got
+}
+
 /** The height of a road's bed `t` of the way along it, in metres. */
 export let bedAt = ({ bed }: Road, t: number) => {
   let f = t * (bed.length - 1)
@@ -295,18 +319,9 @@ export let roadsIn = (
   z1: number,
   r: number,
 ): Road[] =>
-  [
-    ...ROADS(),
-    ...new Map(
-      levelsIn(x0 - r, z0 - r, x1 + r, z1 + r).flatMap((lv) =>
-        neighbours(lv.id)
-      )
-        .map((road) => [`${road.from}/${road.to}`, road]),
-    ).values(),
-  ]
-    .filter(({ c: { box } }) =>
-      box[0] - r < x1 && box[2] + r > x0 && box[1] - r < z1 && box[3] + r > z0
-    )
+  candidates(x0 - r, z0 - r, x1 + r, z1 + r).filter(({ c: { box } }) =>
+    box[0] - r < x1 && box[2] + r > x0 && box[1] - r < z1 && box[3] + r > z0
+  )
 
 /** Every signpost within `r` metres of (x, z). */
 export let signsNear = (x: number, z: number, r: number): Sign[] =>
