@@ -1,5 +1,5 @@
-/* The map (map.ts): the region's chart, as big as the panel has room for, and
-   who is where over it. A road's label sits inside the edge it leaves by. */
+/* The map (map.ts): nearby ground with a zoomable world overview. A road's
+   label sits inside the edge it leaves by. */
 .Map {
   position: relative;
   width: min(36rem, 100cqw - 2rem, 100cqh - 5rem);
@@ -8,6 +8,12 @@
   overflow: hidden;
   border-radius: var(--radius-small);
   box-shadow: inset 0 0 0 2px var(--line);
+  touch-action: none;
+  cursor: grab;
+}
+
+.Map:active {
+  cursor: grabbing;
 }
 
 .Map_Wrap {
@@ -18,6 +24,20 @@
 
 .Map_Wrap .Map {
   width: min(100%, 100cqh - 11rem);
+}
+
+.Map_Tools {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.Map_Scale {
+  flex: 1;
+  color: var(--deep);
+  font-size: 0.8rem;
+  text-align: center;
 }
 
 .Map_Travel {
@@ -56,6 +76,7 @@
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+  transform-origin: top left;
 }
 
 .Map_Fog {
@@ -200,4 +221,17 @@
   &::after {
     content: ' →';
   }
+}
+
+.Map_Region {
+  max-width: 5rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  box-shadow: 0 1px 2px rgba(25, 20, 12, 0.3);
+  color: var(--deep);
+  font-size: 0.68rem;
+  line-height: 1.1;
+  text-align: center;
+  pointer-events: none;
 }
