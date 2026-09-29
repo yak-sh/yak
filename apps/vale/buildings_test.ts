@@ -133,8 +133,19 @@ test('a walker stands on the floor above the room below', () => {
 // Everywhere a walker can go from `from` a quarter metre at a time, as a
 // set of cells by height.
 let reach = (v: Vale, from: Vec) => {
+  // The town lies within 256 m of the origin, so a cell is one small number.
   let key = (x: number, y: number, z: number) =>
-    `${Math.round(x * 4)} ${Math.round(y * 4)} ${Math.round(z * 4)}`
+    (Math.round(x * 4) * 1024 + Math.round(y * 4)) * 1024 + Math.round(z * 4)
+  // Where a walker whose feet are at y lands at (x, z), or null where it
+  // does not fit: each cell is asked from every side, so answered once.
+  let steps = new Map<number, number | null>()
+  let step = (x: number, y: number, z: number) => {
+    let k = key(x, y, z), got = steps.get(k)
+    if (got === undefined) {
+      steps.set(k, got = fits(v, x, z, y) ? floorAt(v, x, z, y) : null)
+    }
+    return got
+  }
   let seen = new Set([key(...from)]), todo: Vec[] = [from]
   let [w, n, e, s] = v.buildings(64, 64, 0)[0].box
   while (todo.length) {
@@ -142,8 +153,9 @@ let reach = (v: Vale, from: Vec) => {
     for (let [dx, dz] of [[0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]]) {
       let nx = x + dx, nz = z + dz
       if (nx < w - 2 || nx > e + 2 || nz < n - 2 || nz > s + 2) continue
-      if (!fits(v, nx, nz, y)) continue
-      let ny = floorAt(v, nx, nz, y), k = key(nx, ny, nz)
+      let ny = step(nx, y, nz)
+      if (ny == null) continue
+      let k = key(nx, ny, nz)
       if (seen.has(k)) continue
       seen.add(k)
       todo.push([nx, ny, nz])

@@ -87,8 +87,13 @@ export type Beast = {
 // so a newly invented kind is visible without a reload.
 export let BEASTS: Record<string, Beast> = {}
 
-/** Install the store's current creature designs. */
+let installed: Bundle[] | undefined
+
+/** Install the store's current creature designs. The same rows again keep
+ * the index, and so what is found from it (homes.ts). */
 export let useBeasts = (rows: Bundle[]) => {
+  if (rows == installed) return
+  installed = rows
   BEASTS = Object.fromEntries(rows.flatMap((row) => {
     let design = comp(row, 'beast_design'), kind = str(design.kind)
     return kind ? [[kind, design as Beast]] : []

@@ -339,38 +339,57 @@ export let borderOf = ({ a, b, t }: Blend): Border => {
 // Heights ask about a border at every voxel corner. Sample it on the world's
 // metre grid and blend between samples, so finer voxels do not repeat the
 // search for nearby sites. The grid is global, not a chunk's, so seams agree.
+// Samples are kept in square tiles of the grid, each sample's ridge and river
+// side by side, NaN until asked for: a map keyed by every metre costs more
+// than the blend it saves.
 export type Boundary = { ridge: number; river: number }
-let boundaryGrid = new Map<number, Boundary>()
+let TILE = 16
+let TILES = 512
+let tiles = new Map<number, Float64Array<ArrayBuffer>>()
+let tileKey = NaN, tile = new Float64Array(0)
 /** Frontier models change the sites and the border heights derived from them. */
 export let refreshRegions = () => {
   grown.clear()
   reaching.clear()
-  boundaryGrid.clear()
+  tiles.clear()
+  tileKey = NaN
   sites.clear()
   arounds.clear()
 }
-let sampleBoundary = (x: number, z: number): Boundary => {
-  let key = pairKey(x, z)
-  let got = boundaryGrid.get(key)
-  if (got) return got
-  let { kind, strength } = borderOf(blend(x, z))
-  if (boundaryGrid.size >= 32768) boundaryGrid.clear()
-  boundaryGrid.set(
-    key,
-    got = {
-      ridge: kind == 'ridge' ? strength : 0,
-      river: kind == 'river' ? strength : 0,
-    },
-  )
-  return got
+// Make sure sample (i, k) of the grid is in `tile`, and say where in it: its
+// ridge, and its river after it.
+let sample = (i: number, k: number): number => {
+  let ti = Math.floor(i / TILE), tk = Math.floor(k / TILE)
+  let key = pairKey(ti, tk)
+  if (key !== tileKey) {
+    let got = tiles.get(key)
+    if (!got) {
+      if (tiles.size >= TILES) tiles.delete(tiles.keys().next().value!)
+      tiles.set(key, got = new Float64Array(2 * TILE * TILE).fill(NaN))
+    }
+    tileKey = key
+    tile = got
+  }
+  let j = 2 * (i - ti * TILE + (k - tk * TILE) * TILE)
+  if (Number.isNaN(tile[j])) {
+    let { kind, strength } = borderOf(blend(i, k))
+    tile[j] = kind == 'ridge' ? strength : 0
+    tile[j + 1] = kind == 'river' ? strength : 0
+  }
+  return j
 }
 export let boundaryAt = (x: number, z: number): Boundary => {
   let i = Math.floor(x), k = Math.floor(z), u = x - i, v = z - k
-  let a = sampleBoundary(i, k), b = sampleBoundary(i + 1, k)
-  let c = sampleBoundary(i, k + 1), d = sampleBoundary(i + 1, k + 1)
+  let j = sample(i, k), ar = tile[j], av = tile[j + 1]
+  j = sample(i + 1, k)
+  let br = tile[j], bv = tile[j + 1]
+  j = sample(i, k + 1)
+  let cr = tile[j], cv = tile[j + 1]
+  j = sample(i + 1, k + 1)
+  let dr = tile[j], dv = tile[j + 1]
   return {
-    ridge: lerp(lerp(a.ridge, b.ridge, u), lerp(c.ridge, d.ridge, u), v),
-    river: lerp(lerp(a.river, b.river, u), lerp(c.river, d.river, u), v),
+    ridge: lerp(lerp(ar, br, u), lerp(cr, dr, u), v),
+    river: lerp(lerp(av, bv, u), lerp(cv, dv, u), v),
   }
 }
 
@@ -382,10 +401,9 @@ export let boundariesIn = (x0: number, z0: number, x1: number, z1: number) => {
   let river = new Float32Array(width * depth)
   for (let k = 0; k < depth; k++) {
     for (let i = 0; i < width; i++) {
-      let b = sampleBoundary(ix + i, iz + k)
-      let j = i + k * width
-      ridge[j] = b.ridge
-      river[j] = b.river
+      let j = sample(ix + i, iz + k), n = i + k * width
+      ridge[n] = tile[j]
+      river[n] = tile[j + 1]
     }
   }
   return (x: number, z: number): Boundary => {

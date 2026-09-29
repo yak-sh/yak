@@ -1217,28 +1217,26 @@ export let stationsNear = (
 ]
 
 // What a walker bumps into in a chunk: solid props, trunks and posts. A
-// building's voxels answer beside these in solid.ts.
+// building's voxels answer beside these in solid.ts. Where a prop stands is
+// found only for one that reaches the chunk, as it costs more than the rest.
 let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
   let x0 = ci * CHUNK, z0 = ck * CHUNK, x1 = x0 + CHUNK, z1 = z0 + CHUNK
   let walls: Wall[] = []
-  let add = (w: Wall) => {
-    let dx = Math.max(x0 - w.x, 0, w.x - x1)
-    let dz = Math.max(z0 - w.z, 0, w.z - z1)
-    if (norm(dx, dz) < w.r + 1) walls.push(w)
-  }
+  let reaches = (x: number, z: number, r: number) =>
+    norm(Math.max(x0 - x, 0, x - x1), Math.max(z0 - z, 0, z - z1)) < r + 1
   for (let k = ck - 1; k <= ck + 1; k++) {
     for (let i = ci - 1; i <= ci + 1; i++) {
       for (let p of v.plant(i, k)) {
-        let y = standAt(v, p), kind = KINDS[p.kind]
+        let kind = KINDS[p.kind], y: number | undefined
+        let prop = p.natural ? p : undefined
+        let add = (x: number, z: number, r: number, tall: number) => {
+          if (reaches(x, z, r)) {
+            walls.push({ x, z, r, top: (y ??= standAt(v, p)) + tall, prop })
+          }
+        }
         if (kind.solid) {
           let { r, tall } = bulk(p.kind, p.seed)
-          add({
-            x: p.x,
-            z: p.z,
-            r,
-            top: y + tall,
-            prop: p.natural ? p : undefined,
-          })
+          add(p.x, p.z, r, tall)
         } else if (kind.girth) {
           // A trunk or a post is too tall to jump; a row as tall as it is
           // drawn.
@@ -1246,13 +1244,12 @@ let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
           let row = kind.row ?? 0
           let across = !!((p.turn ?? 0) & 1)
           for (let dx = -row; dx <= row + 1e-9; dx += kind.girth) {
-            add({
-              x: p.x + (across ? 0 : dx),
-              z: p.z + (across ? dx : 0),
-              r: kind.girth,
-              top: y + tall,
-              prop: p.natural ? p : undefined,
-            })
+            add(
+              p.x + (across ? 0 : dx),
+              p.z + (across ? dx : 0),
+              kind.girth,
+              tall,
+            )
           }
         }
       }
@@ -1591,10 +1588,15 @@ let layersAt = (v: Vale, x: number, z: number): number[] => {
   return layers
 }
 
-// The open space a point at height y is in: the floor it stands over and
-// the roof over it (Infinity under the sky). A point in rock is in the space
-// over it.
-let spaceOf = (v: Vale, x: number, y: number, z: number): [number, number] => {
+/** The open space a point at height y is in: the floor it stands over and
+ * the roof over it (Infinity under the sky). A point in rock is in the space
+ * over it. */
+export let spaceOf = (
+  v: Vale,
+  x: number,
+  y: number,
+  z: number,
+): [number, number] => {
   let ls = layersAt(v, x, z)
   if (ls[0] == NONE) return [ls[2], Infinity]
   let roof = Infinity

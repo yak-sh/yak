@@ -17,6 +17,7 @@ import {
   groundAt,
   hearthNear,
   roofOver,
+  spaceOf,
   streetsOf,
   type Vale,
   villagesNear,
@@ -75,7 +76,7 @@ export let fits = (
   r = RADIUS,
   opens = true,
 ) => {
-  let g = floorUnder(v, x, y + STEP, z), roof = roofOver(v, x, y + STEP, z)
+  let [g, roof] = spaceOf(v, x, y + STEP, z)
   if (g > y + STEP || roof < y + HEAD) return false
   if (roof == Infinity && g < WATER - 0.7) return false
   for (let w of wallsNear(v, x, z)) {

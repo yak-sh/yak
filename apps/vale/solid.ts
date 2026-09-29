@@ -16,7 +16,6 @@ import {
   type Glow,
   type Raised,
   spin,
-  spun,
   type Use,
 } from './buildings/kit.ts'
 import { unkey, type Vec, type Vox } from './mesh.ts'
@@ -76,6 +75,24 @@ export let solidOf = (vox: Vox): Solid => {
   return { i0, k0, w, d, at, runs: Int16Array.from(runs) }
 }
 
+// A solid a quarter turn on, as kit.ts `spun` turns its voxels about the
+// corner at their origin: column (i, k) moves to (k, −i − 1), and its runs
+// go with it, so turning never sorts a voxel again.
+let quarter = ({ i0, k0, w, d, at, runs }: Solid): Solid => {
+  let cols = new Uint32Array(w * d + 1), out = new Int16Array(runs.length)
+  let n = 0
+  for (let k = 0; k < w; k++) {
+    for (let i = 0; i < d; i++) {
+      let c = w - 1 - k + i * w
+      cols[i + k * d] = n
+      out.set(runs.subarray(at[c], at[c + 1]), n)
+      n += at[c + 1] - at[c]
+    }
+  }
+  cols[w * d] = n
+  return { i0: k0, k0: -i0 - w, w: d, d: w, at: cols, runs: out }
+}
+
 /** A station a hero works at, where it stands, in metres. */
 export type Station = { craft: Craft; x: number; y: number; z: number }
 
@@ -115,7 +132,9 @@ export let placed = (
   turn = ((turn % 4) + 4) % 4
   let got = solids.get(r.vox) ?? []
   solids.set(r.vox, got)
-  let solid = got[turn] ??= solidOf(spun(r.vox, turn))
+  let solidAt = (t: number): Solid =>
+    got[t] ??= t ? quarter(solidAt(t - 1)) : solidOf(r.vox)
+  let solid = solidAt(turn)
   let S = r.size
   let to = ([a, b, c]: Vec): Vec => {
     let [p, q] = spin(a, c, turn)
@@ -124,7 +143,9 @@ export let placed = (
   let way = ([a, b]: [number, number]) => spin(a, b, turn)
   let [fw, fd] = turn & 1 ? [r.foot[1], r.foot[0]] : r.foot
   let top = 0
-  for (let k of r.vox.keys()) top = Math.max(top, unkey(k)[1] + 1)
+  for (let n = 1; n < solid.runs.length; n += 2) {
+    top = Math.max(top, solid.runs[n])
+  }
   return {
     kind,
     x,
