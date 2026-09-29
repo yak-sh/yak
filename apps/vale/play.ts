@@ -895,7 +895,6 @@ export let game = (
           rollTo = len < 0.2
             ? { x: -Math.sin(body.yaw), z: -Math.cos(body.yaw) }
             : { x: push.x / len, z: push.z / len }
-          if (len >= 0.2) body.yaw = Math.atan2(rollTo.x, rollTo.z)
           swingAt = -1e9
           struck = true
           doing = ''
