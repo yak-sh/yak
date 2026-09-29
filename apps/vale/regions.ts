@@ -36,6 +36,12 @@ export type Placed = {
 
 let norm = (x: number, z: number) => Math.sqrt(x * x + z * z)
 
+/** Two whole numbers as one, to key a map by: one of its own while each lies
+ * within 2^24 of zero either way. The maps here are read at every metre of
+ * the ground, where a key built as a string costs more than what it finds. */
+export let pairKey = (i: number, k: number) =>
+  (i + 0x1000000) * 0x2000000 + k + 0x1000000
+
 // How far in from its reach a place's shape fades out, in metres, so that
 // past its reach it changes nothing and a point that leaves it off sees no
 // step.
@@ -155,7 +161,7 @@ export let spotOf = (id: string, place: string): Spot | undefined => {
 
 // The places whose shape or hold may reach into each cell of the lattice, in
 // order, found the first time a cell is asked about.
-let reaching = new Map<string, Placed[]>()
+let reaching = new Map<number, Placed[]>()
 let measured = false
 let cellOf = (m: number) => Math.floor(m / SIZE)
 let reachingIn = (gx: number, gz: number): Placed[] => {
@@ -163,7 +169,7 @@ let reachingIn = (gx: number, gz: number): Placed[] => {
     measured = true
     for (let p of PLACES) [p.reach, p.holds] = reachOf(p.kind)
   }
-  let key = `${gx} ${gz}`
+  let key = pairKey(gx, gz)
   let got = reaching.get(key)
   if (got) return got
   let candidates = [
@@ -254,14 +260,14 @@ let SITES: Site[] = Object.values(LEVELS).flatMap((lv) => {
     })),
   ]
 })
-let sited = new Map<string, Site[]>()
+let sited = new Map<number, Site[]>()
 for (let s of SITES) {
-  let key = `${cellOf(s.x)} ${cellOf(s.z)}`
+  let key = pairKey(cellOf(s.x), cellOf(s.z))
   sited.set(key, [...sited.get(key) ?? [], s])
 }
-let sites = new Map<string, Site[]>()
+let sites = new Map<number, Site[]>()
 let sitesIn = (gx: number, gz: number): Site[] => {
-  let key = `${gx} ${gz}`
+  let key = pairKey(gx, gz)
   let got = sites.get(key)
   if (got) return got
   let lv = levelAt(gx, gz)
@@ -277,6 +283,29 @@ let sitesIn = (gx: number, gz: number): Site[] => {
   ]
   if (sites.size >= 512) sites.delete(sites.keys().next().value!)
   sites.set(key, got)
+  return got
+}
+
+// The sites of the nine cells round a cell, in the order `blend` weighs them,
+// kept as columns: `blend` is asked at every metre of the ground, and the
+// nine lookups and the objects behind them cost more than the weighing.
+type Around = { xs: Float64Array; zs: Float64Array; levels: string[] }
+let arounds = new Map<number, Around>()
+let around = (gx: number, gz: number): Around => {
+  let key = pairKey(gx, gz)
+  let got = arounds.get(key)
+  if (got) return got
+  let all: Site[] = []
+  for (let k = gz - 1; k <= gz + 1; k++) {
+    for (let i = gx - 1; i <= gx + 1; i++) all.push(...sitesIn(i, k))
+  }
+  got = {
+    xs: Float64Array.from(all, (s) => s.x),
+    zs: Float64Array.from(all, (s) => s.z),
+    levels: all.map((s) => s.level),
+  }
+  if (arounds.size >= 512) arounds.delete(arounds.keys().next().value!)
+  arounds.set(key, got)
   return got
 }
 
@@ -311,16 +340,17 @@ export let borderOf = ({ a, b, t }: Blend): Border => {
 // metre grid and blend between samples, so finer voxels do not repeat the
 // search for nearby sites. The grid is global, not a chunk's, so seams agree.
 export type Boundary = { ridge: number; river: number }
-let boundaryGrid = new Map<string, Boundary>()
+let boundaryGrid = new Map<number, Boundary>()
 /** Frontier models change the sites and the border heights derived from them. */
 export let refreshRegions = () => {
   grown.clear()
   reaching.clear()
   boundaryGrid.clear()
   sites.clear()
+  arounds.clear()
 }
 let sampleBoundary = (x: number, z: number): Boundary => {
-  let key = `${x} ${z}`
+  let key = pairKey(x, z)
   let got = boundaryGrid.get(key)
   if (got) return got
   let { kind, strength } = borderOf(blend(x, z))
@@ -393,18 +423,13 @@ export let blend = (x: number, z: number): Blend => {
   let wx = x + (fbm(x / SWING, z / SWING, 71, 3) - 0.5) * WARP
   let wz = z + (fbm(x / SWING, z / SWING, 79, 3) - 0.5) * WARP
   let a = '', b = '', d1 = Infinity, d2 = Infinity
-  let see = (s: Site) => {
-    let d = norm(s.x - wx, s.z - wz)
+  let { xs, zs, levels } = around(cellOf(wx), cellOf(wz))
+  for (let j = 0; j < xs.length; j++) {
+    let d = norm(xs[j] - wx, zs[j] - wz), level = levels[j]
     if (d < d1) {
-      if (s.level != a) [d2, b] = [d1, a]
-      ;[d1, a] = [d, s.level]
-    } else if (d < d2 && s.level != a) [d2, b] = [d, s.level]
-  }
-  let gx = cellOf(wx), gz = cellOf(wz)
-  for (let k = gz - 1; k <= gz + 1; k++) {
-    for (let i = gx - 1; i <= gx + 1; i++) {
-      for (let s of sitesIn(i, k)) see(s)
-    }
+      if (level != a) d2 = d1, b = a
+      d1 = d, a = level
+    } else if (d < d2 && level != a) d2 = d, b = level
   }
   // A site further out than the cells looked at is two cells off at least:
   // look at every one when the two nearest found are further than that.

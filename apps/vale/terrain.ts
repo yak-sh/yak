@@ -48,6 +48,7 @@ import {
   boundaryAt,
   levelsNear,
   lie,
+  pairKey,
   pick,
   type Placed,
   placesAt,
@@ -186,8 +187,7 @@ export type Vale = {
 export let chunkOf = (m: number): number => Math.floor(m / CHUNK)
 // A chunk as one number, to key it by: one of its own while it lies within
 // 2^24 chunks of the origin either way.
-export let chunkKey = (ci: number, ck: number) =>
-  (ci + 0x1000000) * 0x2000000 + ck + 0x1000000
+export let chunkKey = pairKey
 
 // A cache of the last `most` things asked for, most recent last. What a
 // walker asks it asks again and again of the one chunk it is in, so the last
@@ -1542,10 +1542,10 @@ export let groundAt = (v: Vale, x: number, z: number): number => {
 // The layers at a column, deepest last, in metres; NONE where a cave is not.
 let columns = new WeakMap<
   Vale,
-  Map<string, { patch?: Patch; layers: number[] }>
+  Map<number, { patch?: Patch; layers: number[] }>
 >()
 let layersAt = (v: Vale, x: number, z: number): number[] => {
-  let key = `${Math.floor(x / v.voxel)}:${Math.floor(z / v.voxel)}`
+  let key = pairKey(Math.floor(x / v.voxel), Math.floor(z / v.voxel))
   let c = column(v, x, z)
   let cache = columns.get(v)
   if (!cache) columns.set(v, cache = new Map())
