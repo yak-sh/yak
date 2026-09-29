@@ -157,7 +157,7 @@ Deno.test('a page invokes declared commands as its owner; the command door refus
   assertEquals(failure.exception.request, 'worker POST /cookbook/owner-fail')
   assertEquals(
     failure.exception.message,
-    "the app's worker answered 503 (command CPU limit 5000 ms)",
+    'app worker answered 503 (command CPU limit 5000 ms): ',
   )
   let editor = await post(await as(ELI), 'owner_word')
   assertEquals(editor.status, 403)

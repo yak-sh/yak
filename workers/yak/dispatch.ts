@@ -67,7 +67,7 @@ import {
   WRAPPER,
 } from './wrangler_app.ts'
 import { refuse, rejected } from './tool.ts'
-import { caught } from './sentry.ts'
+import { caught, refused } from './sentry.ts'
 import { modules } from '@yaks/esbuild'
 export { WORKER } from './wrangler_app.ts'
 
@@ -346,16 +346,19 @@ export let workerBreak = async (
   space: Space,
   app: App,
   req: Request,
-  said: { message: string; stack?: string },
+  error: Error,
 ) => {
+  if (refused(error) || refusal(error.message)) return
   let request = `worker ${req.method} ${new URL(req.url).pathname}`
+  caught(error, { request, space: space.slug, app: app.slug })
   let version = await serving(env, space, app)
   await noted((bundles) =>
     metaOf(appStore(env.STORE, space, app))
       .apply(bundles, KERNEL), {
     request,
     version,
-    ...said,
+    message: error.message,
+    stack: error.stack ?? '',
   }, { env, space, app })
     .catch((why) =>
       caught(why, {
@@ -498,10 +501,7 @@ export let commandWorker = async (
     call?: string
     at?: string
     source?: string
-    report?: (
-      req: Request,
-      said: { message: string; stack?: string },
-    ) => Promise<void>
+    report?: (req: Request, error: Error) => Promise<void>
   } = {},
 ): Promise<Response> => {
   let endpoint = new URL(path.slice(1), url(space, app, env))
@@ -524,29 +524,25 @@ export let commandWorker = async (
       5_000,
     )
   } catch (e) {
-    let message = e instanceof Error ? e.message : String(e)
-    if (!refusal(message)) {
-      await opts.report?.(req, {
-        message,
-        stack: e instanceof Error ? e.stack ?? '' : '',
-      })
-    }
-    throw e
+    let error = e instanceof Error ? e : new Error(String(e))
+    await opts.report?.(req, error)
+    throw error
   }
-  if (!res) throw new Error('app worker is unavailable')
+  if (!res) {
+    let error = new Error('app worker is unavailable')
+    await opts.report?.(req, error)
+    throw error
+  }
   if (!res.ok) {
     let body = await res.text()
-    if (failed(res.status)) {
-      await opts.report?.(req, {
-        message: `the app's worker answered ${res.status} ` +
-          '(command CPU limit 5000 ms)',
-        stack: '',
-      })
-    }
-    throw rejected(
+    let error = rejected(
       res.status,
-      `app worker answered ${res.status}: ${body}`,
+      `app worker answered ${res.status}${
+        failed(res.status) ? ' (command CPU limit 5000 ms)' : ''
+      }: ${body}`,
     )
+    if (failed(res.status)) await opts.report?.(req, error)
+    throw error
   }
   return res
 }
@@ -561,17 +557,8 @@ let threw = async (
   req: Request,
   e: unknown,
 ) => {
-  let said = e instanceof Error ? e.message : String(e)
-  if (refusal(said)) return
-  caught(e, {
-    request: `worker ${req.method} ${new URL(req.url).pathname}`,
-    space: space.slug,
-    app: app.slug,
-  })
-  await workerBreak(env, space, app, req, {
-    message: said,
-    stack: e instanceof Error ? e.stack ?? '' : '',
-  })
+  let error = e instanceof Error ? e : new Error(String(e))
+  await workerBreak(env, space, app, req, error)
 }
 
 // What the worker's answer means, whichever caller asked for it: a 404 is the
@@ -592,15 +579,7 @@ let verdict = async (
   }
   if (failed(res.status)) {
     let message = `the app's worker answered ${res.status}`
-    caught(new Error(message), {
-      request: `worker ${req.method} ${new URL(req.url).pathname}`,
-      space: space.slug,
-      app: app.slug,
-    })
-    await workerBreak(env, space, app, req, {
-      message,
-      stack: '',
-    })
+    await workerBreak(env, space, app, req, new Error(message))
   }
   return res
 }

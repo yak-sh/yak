@@ -43,7 +43,9 @@ import {
   shim,
   upload,
   WORKER,
+  workerBreak,
 } from './dispatch.ts'
+import { caught } from './sentry.ts'
 import type { Env } from './env.ts'
 import { nobody } from './session.ts'
 
@@ -144,6 +146,20 @@ let mirror = (status = 200) => {
   }
 }
 
+let sentry = () => {
+  let seen: ErrorEvent[] = []
+  let client = new ServerRuntimeClient({
+    dsn: 'https://key@example.ingest.sentry.io/1',
+    integrations: [],
+    stackParser: () => [],
+    transport: (o) => createTransport(o, () => Promise.resolve({})),
+    beforeSend: (event) => (seen.push(event), null),
+  })
+  setCurrentClient(client)
+  client.init()
+  return { seen, done: () => client.flush(1_000) }
+}
+
 Deno.test('a script is named for the store, which a rename never moves', () => {
   assertEquals(scriptName('jeff/recipes'), 'jeff_recipes')
 })
@@ -226,8 +242,8 @@ Deno.test('declared commands have bounded CPU and only scheduled calls have cont
 
 Deno.test('a command worker failure calls its reporter once', async () => {
   let notes: string[] = []
-  let report = (req: Request, said: { message: string }) => {
-    notes.push(`${req.method} ${new URL(req.url).pathname}: ${said.message}`)
+  let report = (req: Request, error: Error) => {
+    notes.push(`${req.method} ${new URL(req.url).pathname}: ${error.message}`)
     return Promise.resolve()
   }
   await assertRejects(
@@ -239,8 +255,8 @@ Deno.test('a command worker failure calls its reporter once', async () => {
     '503',
   )
   assertEquals(notes, [
-    "POST /recipes/inspect: the app's worker answered 503 " +
-    '(command CPU limit 5000 ms)',
+    'POST /recipes/inspect: app worker answered 503 ' +
+    '(command CPU limit 5000 ms): from the worker',
   ])
   notes = []
   await assertRejects(
@@ -252,6 +268,49 @@ Deno.test('a command worker failure calls its reporter once', async () => {
     '403',
   )
   assertEquals(notes, [])
+  await assertRejects(
+    () =>
+      commandWorker(
+        envOf(() => {
+          throw new Error("Worker not found: 'jeff_recipes'")
+        }),
+        space,
+        app,
+        who,
+        '/inspect',
+        {},
+        { report },
+      ),
+    Error,
+    'app worker is unavailable',
+  )
+  assertEquals(notes, [
+    'POST /recipes/inspect: app worker is unavailable',
+  ])
+})
+
+Deno.test('a command failure is captured once across worker and caller', async () => {
+  let { seen, done } = sentry()
+  let env = envOf(mirror(503).get)
+  wrote = []
+  let failure: unknown
+  try {
+    await commandWorker(env, space, app, who, '/inspect', {}, {
+      report: (req, error) => workerBreak(env, space, app, req, error),
+    })
+  } catch (e) {
+    failure = e
+    caught(e, { request: 'outer command reporter' })
+  }
+  assert(failure instanceof Error)
+  await done()
+  assertEquals(wrote.length, 1)
+  assertEquals(seen.length, 1)
+  assertEquals(seen[0].tags, {
+    request: 'worker POST /recipes/inspect',
+    space: 'jeff',
+    app: 'recipes',
+  })
 })
 
 Deno.test('an app sets cookies for its own host, and none for the zone', async () => {
@@ -426,18 +485,9 @@ Deno.test("a worker's own no is not a break; its 5xx is", async () => {
 })
 
 Deno.test('an answered worker 5xx reaches Sentry with its app', async () => {
-  let seen: ErrorEvent[] = []
-  let client = new ServerRuntimeClient({
-    dsn: 'https://key@example.ingest.sentry.io/1',
-    integrations: [],
-    stackParser: () => [],
-    transport: (o) => createTransport(o, () => Promise.resolve({})),
-    beforeSend: (event) => (seen.push(event), null),
-  })
-  setCurrentClient(client)
-  client.init()
+  let { seen, done } = sentry()
   await ran(envOf(mirror(503).get), space, app, visit(), who)
-  await client.flush(1_000)
+  await done()
   assertEquals(seen.length, 1)
   assertEquals(seen[0].tags, {
     request: 'worker GET /recipes/hello',
