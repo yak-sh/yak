@@ -2,13 +2,20 @@
 // incarnations the way a deploy wakes it: writes kept while the store refuses
 // to start, then replayed in order, once, by the alarm alone.
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { sha256 } from '@yaks/graph'
-import { doorOf, type Namespace, storeOf } from './door.ts'
+import { type Bundle, sha256 } from '@yaks/graph'
+import { doorOf, IDEMPOTENCY, type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
 import { by, lit, scan, tally } from '@yaks/sql'
 import { db, keep, named, state } from './testing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
-import { keyed, Pending } from './writes.ts'
+import {
+  first,
+  keep as keepWrite,
+  keyed,
+  landed,
+  Pending,
+  retry as retryWrite,
+} from './writes.ts'
 
 let NAME = 'ada/notes'
 
@@ -225,6 +232,87 @@ Deno.test('a failed reviewed attempt stays held until another explicit retry', a
   assertEquals(o.writes('failed'), 1)
   assertEquals((await retry()).status, 200)
   assertEquals(await o.title('n1'), 'poison')
+})
+
+Deno.test('a reviewed 307-bundle answer is retained across storage rows', async () => {
+  let o = object()
+  await o.query('.doc')
+  let d = db(o.ctx)
+  let body = JSON.stringify([titled('n0', 'request')])
+  let request = new Request('http://store/apply', {
+    method: 'POST',
+    headers: { [IDEMPOTENCY]: 'large-answer' },
+    body,
+  })
+  let seq = keepWrite(d, request, body)
+  d.query({
+    t: 'update',
+    table: 'yak_writes',
+    set: { state: lit('interrupted') },
+  })
+  assert(retryWrite(d, seq))
+  let answer = Array.from(
+    { length: 307 },
+    (_, i) => titled(`n${i}`, 'x'.repeat(8_000)),
+  )
+  assert(JSON.stringify(answer).length > 1_900_000)
+  landed(d, seq, () => answer)
+  let parts = scan(d, 'yak_write_answers', undefined, ['body'])
+  assert(parts.length > 1)
+  for (let part of parts) {
+    assert(new TextEncoder().encode(String(part.body)).length < 1_900_000)
+  }
+  o.wake()
+  let [write] = await (await o.fetch(
+    new Request(
+      `http://store/writes?seq=${seq}`,
+      { headers: KERNEL },
+    ),
+  )).json()
+  assertEquals([write.state, write.body, write.status], [
+    'applied',
+    body,
+    200,
+  ])
+  assertEquals(JSON.parse(write.answer), answer)
+  assertEquals(JSON.parse(first(d, 'large-answer')!.answer), answer)
+})
+
+Deno.test('a reviewed write keeps the composed caller answer', async () => {
+  let o = object()
+  await o.query('.doc')
+  let d = db(o.ctx)
+  let body = JSON.stringify([titled('n1', 'request')])
+  let seq = keepWrite(
+    d,
+    new Request('http://store/apply', {
+      method: 'POST',
+      body,
+    }),
+    body,
+  )
+  d.query({
+    t: 'update',
+    table: 'yak_writes',
+    set: { state: lit('interrupted') },
+  })
+  assert(retryWrite(d, seq))
+  let patches: Bundle[] = Array.from(
+    { length: 307 },
+    () => titled('n1', 'x'.repeat(8_000)),
+  )
+  patches.push({ entity: { eid: 'n1' }, tombstone: {} })
+  assert(JSON.stringify(patches).length > 1_900_000)
+  landed(d, seq, () => patches)
+  let [write] = await (await o.fetch(
+    new Request(
+      `http://store/writes?seq=${seq}`,
+      { headers: KERNEL },
+    ),
+  )).json()
+  assertEquals(JSON.parse(write.answer), [
+    { entity: { eid: 'n1' }, tombstone: {} },
+  ])
 })
 
 Deno.test('a legacy pending write waits for review before any replay', async () => {

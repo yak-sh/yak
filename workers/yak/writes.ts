@@ -8,11 +8,11 @@
 // a Queue: what fails is the graph above the storage — a schema that will not
 // stand, a build that throws — never the SQLite under it, and this table is raised
 // before either runs (graph.ts `#start`). Each app's writes stay in its own
-// object, nothing global sits on the write path, and a row leaves the log in
-// the very transaction that commits its batch (graph.ts `yak/writes`), which
-// is what makes a replay exactly once: a Queue or another object could only
+// object, nothing global sits on the write path, and a row is removed or
+// marked applied in the transaction that commits its batch (`yak/writes`),
+// which makes a replay exactly once: a Queue or another object could only
 // mark it done after the fact.
-// The table is a plain one that no vocabulary, migration or code version owns,
+// The log tables are plain ones that no vocabulary or app migration owns,
 // so whichever code wakes the object next can read it.
 //
 // A row is a request as the kernel sent it: its headers (the vouch — who
@@ -35,7 +35,7 @@
 // repeats: told that answer once applied, and otherwise waiting where the first
 // waits. So a write the store committed just before a deploy reset it, and
 // that the kernel sent again, is applied once.
-import { type Bundle, Refused } from '@yaks/graph'
+import { type Bundle, composed, Refused } from '@yaks/graph'
 import { carries } from '@yaks/secrets'
 import {
   and,
@@ -58,6 +58,7 @@ import { IDEMPOTENCY } from './door.ts'
 
 let LOG = 'yak_writes'
 let KEY = 'idempotency_key'
+let ANSWERS = 'yak_write_answers'
 
 export let WRITES: CreateTable = {
   t: 'create table',
@@ -79,10 +80,22 @@ export let WRITES: CreateTable = {
   ],
 }
 
+let PARTS: CreateTable = {
+  t: 'create table',
+  name: ANSWERS,
+  ifNot: true,
+  cols: [
+    { name: 'seq', type: 'integer', notNull: true },
+    { name: 'part', type: 'integer', notNull: true },
+    { name: 'body', type: 'text', notNull: true },
+  ],
+}
+
 /** The log, raised, with every column it predates added: an object keeps its
  * log across code versions, and whichever code wakes it next reads it. */
 export let raise = (db: Driver) => {
   db.query(WRITES)
+  db.query(PARTS)
   let has = db.query({ t: 'pragma', name: 'table_info', arg: LOG })
     .map((r) => String(r.name))
   for (let add of WRITES.cols) {
@@ -93,6 +106,14 @@ export let raise = (db: Driver) => {
     name: `${LOG}_${KEY}`,
     on: LOG,
     cols: [col(KEY)],
+    unique: true,
+    ifNot: true,
+  })
+  db.query({
+    t: 'create index',
+    name: `${ANSWERS}_seq_part`,
+    on: ANSWERS,
+    cols: [col('seq'), col('part')],
     unique: true,
     ifNot: true,
   })
@@ -110,6 +131,17 @@ let INTERRUPTED = eq(col('state'), lit('interrupted'))
 let UNREVIEWED = eq(col('state'), lit('unreviewed'))
 let AUDIT = eq(col('audit'), lit(1))
 let at = (seq: number) => eq(col('seq'), val(seq))
+
+let outcome = (db: Driver, seq: number) => {
+  let rows = db.query(select({
+    cols: [col('body')],
+    from: table(ANSWERS),
+    where: at(seq),
+    order: [col('part')],
+  }))
+  if (!rows.length) throw new Error(`audited write ${seq} has no outcome`)
+  return rows.map((r) => String(r.body)).join('')
+}
 
 // A reset rolls the graph transaction back, but not this earlier marker. A
 // committed write changes or removes its log row in the graph transaction.
@@ -163,13 +195,18 @@ export let writes = (db: Driver, seq?: number) =>
       col('tries'),
       col('why'),
       col('status'),
+      col('audit'),
       ...(seq == null ? [] : [col('body'), col(KEY), col('answer')]),
     ],
     from: table(LOG),
     where: seq == null ? not(APPLIED) : at(seq),
     order: [col('seq')],
     limit: lit(seq == null ? 100 : 1),
-  }))
+  })).map((r) =>
+    seq != null && r.audit == 1 && r.state == 'applied'
+      ? { ...r, answer: outcome(db, seq) }
+      : r
+  )
 
 /** Explicitly retry an interrupted or unreviewed write, keeping its body and
  * key, and keeping its final answer beside them when it commits. */
@@ -270,16 +307,32 @@ export let first = (db: Driver, key: string): Sent | null => {
       seq: Number(row.seq),
       state: String(row.state),
       why: String(row.why ?? ''),
-      answer: String(row.answer ?? '[]'),
+      answer: row.audit == 1 && row.state == 'applied'
+        ? outcome(db, Number(row.seq))
+        : String(row.answer ?? '[]'),
       audit: row.audit == 1,
     }
     : null
 }
 
+// Split on Unicode boundaries so every SQLite text value fits the Store's
+// row limit and joining the values reproduces the answer byte for byte.
+let pieces = function* (text: string) {
+  for (let i = 0; i < text.length;) {
+    let end = Math.min(i + 300_000, text.length)
+    let last = text.charCodeAt(end - 1)
+    if (end < text.length && last >= 0xD800 && last <= 0xDBFF) end--
+    yield text.slice(i, end)
+    i = end
+  }
+}
+
 /** A committed write, in its batch's own transaction: out of the log, or,
  * sent with a key, kept as `applied` with its answer for a resend to be told.
- * An audited retry keeps its original body and full answer permanently. An
- * ordinary keyed answer too big for a row keeps each entity's identity,
+ * The hook receives phase patches; compose them here to keep exactly what
+ * `apply()` returns after the transaction. An audited retry keeps its original
+ * body and full answer in chunks. An ordinary keyed answer too big for a row
+ * keeps each entity's identity,
  * which is what a caller reads to learn what its aliases minted. */
 export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
   let [row] = db.query(select({
@@ -288,10 +341,24 @@ export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
     where: at(seq),
   }))
   if (row?.[KEY] == null && row?.audit != 1) return done(db, seq)
-  let all = answer()
+  let all = composed(answer())
   let text = JSON.stringify(all)
-  if (row.audit == 1 && !fits(text)) {
-    throw new Error(`audited write ${seq} answer exceeds one storage row`)
+  if (row.audit == 1) {
+    for (let [part, body] of [...pieces(text)].entries()) {
+      db.query({
+        t: 'insert',
+        into: ANSWERS,
+        cols: ['seq', 'part', 'body'],
+        rows: [[val(seq), val(part), val(body)]],
+      })
+    }
+    db.query({
+      t: 'update',
+      table: LOG,
+      set: { state: lit('applied'), answer: lit(null), status: lit(200) },
+      where: at(seq),
+    })
+    return
   }
   let kept = fits(text) ? text : JSON.stringify(
     all.map(({ entity, $alias }) => ({ entity, $alias })),
