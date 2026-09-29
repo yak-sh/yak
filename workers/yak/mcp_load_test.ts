@@ -11,10 +11,10 @@ import {
   charged,
   connector,
   delivered,
+  fakeSub,
   kernel,
   meta,
   num,
-  plus,
   plusPrice,
   seed,
   sessionAt,
@@ -731,7 +731,17 @@ test('space_sell connects an account and hands back one link', async () => {
       purchase.cancel_url,
       `https://yaks.app${managePath('billing', 'ada39')}&paid=0`,
     )
-    let sub = await plus(k, eids.ada39)
+    // Plus is what selling asks for, not this test's subject, so the space is
+    // moved onto it by the webhook the way onPlus does — carrying a fabricated
+    // subscription the door reads whole — and cancelled the same way below.
+    let sub = fakeSub(eids.ada39)
+    await delivered(
+      k,
+      '/stripe/webhook',
+      WEBHOOK_SECRET,
+      'customer.subscription.updated',
+      sub,
+    )
     await page('Connect Stripe')
     let paid = await subscribe()
     assertEquals(paid.status, 409)
@@ -794,13 +804,11 @@ test('space_sell connects an account and hands back one link', async () => {
     )
     assertEquals(await seller(), acct, 'one account, ever')
 
-    let ended = await charged(
-      key,
-      `/v1/subscriptions/${sub.id}`,
-      undefined,
-      undefined,
-      'DELETE',
-    )
+    let ended = {
+      ...sub,
+      status: 'canceled',
+      ended_at: Math.floor(Date.now() / 1000),
+    }
     await delivered(
       k,
       '/stripe/webhook',

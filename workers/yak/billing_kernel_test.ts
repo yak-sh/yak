@@ -5,31 +5,30 @@
 // Origin guard lets a server-to-server POST through, and that a duplicate and
 // an out-of-order delivery leave the graph exactly where it was.
 //
-// The subscription in each event is one Stripe's sandbox holds (probe.ts
-// `subscribed`), so the test needs STRIPE_KEY set to a test-mode key. The
-// kernel itself boots with a webhook secret and no STRIPE_KEY — the events
-// carry the whole subscription and the door reads nothing back — which is also
-// the shape a deploy has before the owner sets one. Stripe cannot reach a
-// loopback kernel, so the test signs each delivery with that secret.
+// The door reads the whole subscription off the event and asks Stripe nothing
+// back, so the subscription each event carries is a fabricated one ({@link
+// fakeSub}), the shape billing.ts `planOf` reads — the subject here is the
+// route, the Origin guard and idempotent, out-of-order delivery, none of which
+// is the purchase (roster_test.ts holds that against Stripe). The kernel boots
+// with a webhook secret and no STRIPE_KEY, the shape a deploy has before the
+// owner sets one; Stripe cannot reach a loopback kernel, so the test signs each
+// delivery with that secret.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
-  charged,
   connector,
   delivered,
+  fakeSub,
   kernel,
   meta,
   seed,
   signed,
-  stripeKey,
-  subscribed,
   WEBHOOK_SECRET,
 } from './probe.ts'
 
 test(
   'the webhook flips a plan, once, whatever order it arrives in',
   async () => {
-    let key = stripeKey()
     let k = await kernel()
     try {
       let { eids } = await seed(k, [{
@@ -61,11 +60,7 @@ test(
       assertEquals(await plan(), undefined)
 
       // ---- the subscription starts ----
-      let sub = await subscribed(k, key, { space }) as {
-        id: string
-        customer: string
-        items: { data: { current_period_end: number }[] }
-      }
+      let sub = fakeSub(space)
       let now = Math.floor(Date.now() / 1000)
       let updated = 'customer.subscription.updated'
       assertEquals(await post(updated, sub, now), 'jeff2 is plus')
@@ -76,7 +71,7 @@ test(
       assertEquals(paid?.status, 'active')
       assertEquals(
         paid?.until,
-        new Date(sub.items.data[0].current_period_end * 1000).toISOString(),
+        new Date(sub.current_period_end * 1000).toISOString(),
       )
 
       // ---- the same event again. At-least-once delivery is the normal case,
@@ -86,20 +81,17 @@ test(
 
       // ---- deleted, then the older updated. Stripe delivers out of order, and
       // the second of these was written before the cancellation: a system that
-      // applied events as transitions would put this space back on Plus.
-      let ended = await charged(
-        key,
-        `/v1/subscriptions/${sub.id}`,
-        undefined,
-        undefined,
-        'DELETE',
-      ) as { ended_at: number }
+      // applied events as transitions would put this space back on Plus. The
+      // cancellation is the same subscription Stripe never moves out of
+      // `canceled` (billing.ts rule 1), carrying when it ended.
+      let endedAt = now + 30
+      let ended = { ...sub, status: 'canceled', ended_at: endedAt }
       let deleted = 'customer.subscription.deleted'
       assertEquals(await post(deleted, ended, now + 60), 'jeff2 is free')
       let dead = await plan()
       assertEquals(dead?.tier, 'free')
       assertEquals(dead?.status, 'canceled')
-      assertEquals(dead?.ending, new Date(ended.ended_at * 1000).toISOString())
+      assertEquals(dead?.ending, new Date(endedAt * 1000).toISOString())
 
       assertEquals(await post(updated, sub, now), 'stale')
       assertEquals(await plan(), dead, 'a cancelled plan does not come back')

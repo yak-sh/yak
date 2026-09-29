@@ -924,48 +924,40 @@ export let attached = async (
 }
 
 /**
- * A space on Plus, the one way a space gets there: Stripe holds an active
- * subscription for it and the webhook moves the plan (billing.ts). `plan` is
- * stamped, so no door a test can reach writes it — the kernel is leased with
- * this `STRIPE_WEBHOOK_SECRET` and the event is signed with it. The
- * subscription comes back, for a test that goes on to cancel it; the kernel
- * cancels it on stop otherwise.
+ * A subscription object shaped the way the webhook door reads one — the fields
+ * billing.ts `planOf` touches, and no more. The door reads the whole
+ * subscription off the event and never asks Stripe back, so this stands in for
+ * one Stripe holds wherever a test's subject is what the plan allows or how the
+ * door behaves rather than the purchase itself. `over` sets the fields a
+ * particular delivery turns on — a cancellation's `status` and `ended_at`.
  */
-export let plus = async (k: Pick<Kernel, 'at' | 'made'>, space: string) => {
-  let sub = await subscribed(k, stripeKey(), { space })
-  await delivered(
-    k,
-    '/stripe/webhook',
-    WEBHOOK_SECRET,
-    'customer.subscription.updated',
-    sub,
-  )
-  return sub
+export let fakeSub = (space: string, over: Record<string, unknown> = {}) => {
+  let id = crypto.randomUUID().replaceAll('-', '')
+  return {
+    id: `sub_probe${id}`,
+    customer: `cus_probe${id}`,
+    status: 'active',
+    metadata: { space, apex: apex() },
+    current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+    ...over,
+  }
 }
 
 /**
- * A space on Plus for a test whose subject is what the plan allows, not how
- * it is bought: the same signed webhook {@link plus} delivers, carrying an
- * active subscription Stripe never held. Nothing is asked of the sandbox, so
- * nothing is left in it. `billing_kernel_test.ts` and `roster_test.ts` buy
- * the plan at Stripe.
+ * A space on Plus for a test whose subject is what the plan allows, not how it
+ * is bought: a signed `subscription.updated` carrying an active subscription
+ * ({@link fakeSub}) Stripe never held. Nothing is asked of the sandbox, so
+ * nothing is left in it. `roster_test.ts` buys the plan at Stripe, since its
+ * subject is the whole purchase against a deployed kernel.
  */
-export let onPlus = async (k: Pick<Kernel, 'at'>, space: string) => {
-  let id = crypto.randomUUID().replaceAll('-', '')
-  await delivered(
+export let onPlus = (k: Pick<Kernel, 'at'>, space: string) =>
+  delivered(
     k,
     '/stripe/webhook',
     WEBHOOK_SECRET,
     'customer.subscription.updated',
-    {
-      id: `sub_probe${id}`,
-      customer: `cus_probe${id}`,
-      status: 'active',
-      metadata: { space, apex: apex() },
-      current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
-    },
+    fakeSub(space),
   )
-}
 
 /**
  * A `Stripe-Signature` header over exactly these bytes: HMAC-SHA256 of
