@@ -398,7 +398,9 @@ instead — `seed/01-places.json`, `seed/02-menu.json` — and upload them a cal
 a time. All of them are _one_ batch, read in filename order, so an alias minted
 in one file resolves in the next and the pieces can point at each other. Either
 layout works, and a `seed.json` with a `seed/` folder beside it is still that
-one batch, the file first.
+one batch, the file first. One batch holds at most 2,000 entities, or 1.9 MB of
+them; a seed bigger than that refuses the deploy, and the rest of the data
+belongs in a data folder that `store_load` writes.
 
 Four things to know:
 
@@ -443,6 +445,14 @@ may. That makes an import two calls and nothing transcribed:
 `app_files(op: 'fetch')` writes the bytes of a public dataset into the app, and
 `store_load` puts them in the store, reporting the files it read and how many
 entities it wrote.
+
+One call writes at most 2,000 entities, or 1.9 MB of them, because a store
+answers nothing else while it writes one batch. A bigger load is refused before
+anything is written, and loads in parts instead: the same call with `part: 1`,
+then `part: 2`, and so on. Each part is its own batch, written whole or not at
+all, and each answer names the next part. An alias like `$here` resolves within
+its own part only; a row that later parts point at wants an `alias{name}`, which
+resolves across calls.
 
 Most data a person already has is a spreadsheet, and a `.csv` is the same call
 with one more argument: a spreadsheet does not state what a row is, so `as`

@@ -3,9 +3,27 @@
 // read in, the entry a bad file names, and the entry a refused batch is blamed
 // on. The end-to-end proof — a deploy seeding a store and a redeploy seeding
 // nothing — is mcp_test.ts.
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { type Applying, asked, load, loaded, seedy, sow, sown } from './seed.ts'
+import {
+  type Applying,
+  asked,
+  load,
+  loaded,
+  PART,
+  parts,
+  seedy,
+  sow,
+  type Sown,
+  sown,
+} from './seed.ts'
+import { fits, ROOM } from './writes.ts'
 
 let file = (path: string, bundles: unknown[]) => ({
   path,
@@ -168,6 +186,47 @@ Deno.test('a CSV among the files is rows of the component `as` names', () => {
     alias: { name: 'soup' },
     recipe: { serves: 4 },
   })
+})
+
+// One batch is one transaction, so a load is cut where a batch would outgrow
+// what a store writes at once: every bundle once, in order, and no part more
+// than PART bundles or more bytes than the store's write log keeps.
+Deno.test('a load is cut into parts a store writes whole', () => {
+  let rows = (n: number, body = ''): Sown[] =>
+    Array.from({ length: n }, (_, index) => ({
+      file: 'data/rows.json',
+      index,
+      bundle: { entity: { eid: `$${index}` }, doc: { title: 'row', body } },
+    }))
+  let cut = (all: Sown[]) => {
+    let them = parts(all)
+    assertEquals(them.flat(), all)
+    for (let part of them) {
+      assert(part.length <= PART)
+      assert(
+        part.length == 1 || fits(JSON.stringify(part.map((s) => s.bundle))),
+      )
+    }
+    return them.length
+  }
+  assertEquals(cut([]), 0)
+  assertEquals(cut(rows(PART)), 1)
+  assertEquals(cut(rows(PART + 1)), 2)
+  assertEquals(cut(rows(3, 'x'.repeat(ROOM * 0.4))), 2)
+  assertEquals(cut(rows(2, 'x'.repeat(ROOM))), 2)
+})
+
+Deno.test('a seed bigger than one part refuses and writes nothing', async () => {
+  let { asked, apply } = door()
+  let seed = file(
+    'seed.json',
+    Array.from({ length: PART + 1 }, (_, i) => one(`$${i}`, `${i}`)),
+  )
+  assertStringIncludes(
+    (await assertRejects(() => sow([seed], apply), Error)).message,
+    `the seed holds ${PART + 1} entities`,
+  )
+  assertEquals(asked.length, 0)
 })
 
 Deno.test('an app with no seed writes nothing at all', async () => {

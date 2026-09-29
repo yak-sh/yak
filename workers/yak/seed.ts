@@ -27,10 +27,17 @@
 // being a seed at all. A `.csv` at that path is the same reading of a
 // spreadsheet — one row per bundle, once the caller has said which component a
 // row is (csv.ts, T-34393).
+//
+// One batch is one transaction, and a store answers nothing else while it
+// writes one: the runtime resets a Durable Object whose write outlasts its
+// storage timeout, taking every request in flight with it. So a batch is never
+// bigger than a part (`parts`). A seed is one part at most; a load bigger than
+// one is written a part per call, each whole or not at all.
 import type { Bundle } from '@yaks/graph'
 import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
 import { refuse } from './tool.ts'
+import { ROOM } from './writes.ts'
 
 /** What a seed is written in: YAML first — the warm path (M-34605) — then
  * JSON, which YAML reads anyway, and a spreadsheet (csv.ts). */
@@ -118,9 +125,45 @@ export let loaded = (files: Text[], as?: Sheet): Sown[] =>
 export let sown = (files: Text[]): Sown[] =>
   loaded(files.filter((f) => seedy(f.path)))
 
+/** The most bundles one batch carries: few enough that the busiest store, with
+ * rules on every write and players on every socket, writes them in seconds. */
+export let PART = 2_000
+
+/** What one part holds at most, as a refusal says it. */
+export let CARRIES = `${PART} entities or ${ROOM / 1_000_000} MB`
+
+let utf8 = new TextEncoder()
+
+/**
+ * The batches a load is written in, in order: each at most {@link PART}
+ * bundles, and small enough for the store's write log to keep before it
+ * applies it (writes.ts `ROOM`), so a reset mid-write loses nothing and a
+ * resend is not applied twice. A bundle bigger than the log is a part of its
+ * own.
+ */
+export let parts = (all: Sown[]): Sown[][] => {
+  let cut: Sown[][] = []
+  let bytes = 0
+  for (let one of all) {
+    // The bundle and the comma after it; a part's body is `[` these `]`.
+    let size = utf8.encode(JSON.stringify(one.bundle)).length + 1
+    let last = cut.at(-1)
+    if (!last || last.length == PART || bytes + size > ROOM) {
+      cut.push([one])
+      bytes = size + 1
+    } else {
+      last.push(one)
+      bytes += size
+    }
+  }
+  return cut
+}
+
 /** The door a seed is written through: a batch in, the refusal's own sentence
  * out, or null when the store took it. `check` asks only whether it would —
- * every phase runs and the transaction rolls back. */
+ * every phase runs and the transaction rolls back. A batch the store kept but
+ * has not applied yet throws (writes.ts `Pending`): it is neither taken nor
+ * refused, and sending it again would only wait beside it. */
 export type Applying = (
   batch: Bundle[],
   check: boolean,
@@ -169,6 +212,19 @@ export let load = async (all: Sown[], apply: Applying): Promise<Sown[]> => {
   )
 }
 
-/** The app's seed applied, once — the whole of it as one batch. */
-export let sow = (files: Text[], apply: Applying): Promise<Sown[]> =>
-  load(sown(files), apply)
+/** The app's seed applied, once — the whole of it as one batch, so a seed is
+ * one part at most. The rest of a dataset is data, which `store_load` writes a
+ * part at a time. */
+export let sow = async (files: Text[], apply: Applying): Promise<Sown[]> => {
+  let all = sown(files)
+  let [, more] = parts(all)
+  if (more) {
+    throw refuse(
+      'limit',
+      `the seed holds ${all.length} entities, more than one write carries ` +
+        `(${CARRIES}) — keep the seed to what a new copy of the app opens ` +
+        'with, and put the rest in a data folder for store_load',
+    )
+  }
+  return await load(all, apply)
+}

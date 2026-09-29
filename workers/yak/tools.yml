@@ -289,7 +289,12 @@ store_load:
     header. All the files are loaded in one transaction, read in filename
     order, so an alias created in one file resolves in the next; if the
     store refuses a bundle nothing is written and the refusal names the file
-    and the entry that caused it. A large dataset gets in without being
+    and the entry that caused it. One call writes at most 2000 entities or
+    1.9 MB. A bigger load is refused before anything is written and loads in
+    parts instead: part: 1, then part: 2, and so on, each its own
+    transaction, written whole or not at all, and each answer names the next
+    part. An alias resolves only within its own part, unless it carries
+    alias: {name}. A large dataset gets in without being
     typed into a call: app_files op: fetch downloads the file into the app,
     and store_load writes it into the store. Unlike a seed it is not
     once-only: each call patches and adds as the caller, so the rows carry

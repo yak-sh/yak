@@ -23,7 +23,10 @@ import {
   vocabFile,
   WEBHOOK_SECRET,
 } from './probe.ts'
+import type { Plugin } from './plugin.ts'
+import { PLUGINS } from './plugins.ts'
 import { HAS_NOTES } from './standing.ts'
+import { ROOM } from './writes.ts'
 import { managePath } from './route.ts'
 import { HELLO } from './mcp-probe.ts'
 
@@ -363,6 +366,101 @@ Deno.test('store_load reads a CSV as rows of one component', async () => {
       'as: dish is not a component',
     )
   } finally {
+    await k.stop()
+  }
+})
+
+// A store answers nothing else while it writes a batch, and the runtime resets
+// one that writes too long, so no call writes more than a part (seed.ts
+// `parts`). A bigger load asked for whole is refused before any of it is
+// written; a part at a time, each whole, all of it lands.
+Deno.test('store_load writes a load too big for one call a part at a time', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'census', title: 'Census' })
+    let app = { app: 'census' }
+    // Three rows two of which fill a part: a part is as big as a store's
+    // write log keeps.
+    let body = 'x'.repeat(ROOM * 0.4)
+    let rows = [1, 2, 3].map((i) => `town ${i},${body}`)
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        { path: 'index.html', content: '<!doctype html><h1>Census' },
+        {
+          path: 'data/towns.csv',
+          content: ['title,body', ...rows].join('\n'),
+        },
+      ],
+    })
+    let load = (part?: number) =>
+      agent.tool('store_load', { ...app, path: 'data', as: 'doc', part })
+    let held = async () =>
+      JSON.parse(await agent.tool('graph_query', { q: '.doc&.count' })).count
+    let why = (await assertRejects(() => load(), Error)).message
+    assertStringIncludes(why, 'holds 3 entities')
+    assertStringIncludes(why, 'nothing was written')
+    assertStringIncludes(why, 'part: 2')
+    assertEquals(await held(), 0)
+    let first = await load(1)
+    assertStringIncludes(first, 'loaded 2 entities into')
+    assertStringIncludes(first, 'part: 2 loads the next')
+    assertStringIncludes(await load(2), 'loaded 1 entity into')
+    assertEquals(await held(), 3)
+    assertStringIncludes(
+      (await assertRejects(() => load(3), Error)).message,
+      'is 2 parts',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// A write the store's log keeps for fixed code (writes.ts) has not landed, and
+// a load that says it did sends the person looking for rows that are not
+// there. A rule that breaks is such a failure, the platform's and not theirs.
+Deno.test('a load the store keeps for later is pending, not loaded', async () => {
+  let k = await kernel()
+  let plugin: Plugin = {
+    name: 'fixture',
+    rules: [{
+      name: 'fixture/stray',
+      phase: 'stamp',
+      match: '*shelf',
+      run: () => ({ doc: { title: 'stray' } }),
+    }],
+  }
+  PLUGINS.push(plugin)
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'pantry', title: 'Pantry' })
+    let app = { app: 'pantry' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        { path: 'index.html', content: '<!doctype html><h1>Pantry' },
+        { path: 'vocab.json', content: vocabFile({ shelf: { n: num } }) },
+        {
+          path: 'data/shelves.json',
+          content: JSON.stringify([{ entity: { eid: '$a' }, shelf: { n: 1 } }]),
+        },
+      ],
+    })
+    await agent.tool('app_deploy', app)
+    let why = (await assertRejects(
+      () => agent.tool('store_load', { ...app, path: 'data' }),
+      Error,
+    )).message
+    assertStringIncludes(why, 'the write is kept')
+    assertEquals(
+      await agent.tool('graph_query', { q: '.shelf' }),
+      '[]',
+    )
+  } finally {
+    PLUGINS.splice(PLUGINS.indexOf(plugin), 1)
     await k.stop()
   }
 })

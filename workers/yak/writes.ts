@@ -257,7 +257,7 @@ export let logged = (req: Request): boolean => {
 // A Durable Object's SQLite holds at most 2 MB in one row. A bigger body —
 // an NDJSON import, which the caller holds as a file and is answered line by
 // line — is applied as it comes, without a place in the log.
-let ROOM = 1_900_000
+export let ROOM = 1_900_000
 
 /** Whether a body fits in the log. */
 export let fits = (body: string): boolean =>

@@ -199,13 +199,16 @@ import type { Door } from './door.ts'
 import {
   type Applying,
   asked,
+  CARRIES,
   load,
   loaded,
+  parts,
   seedy,
   sow,
   type Sown,
   type Text,
 } from './seed.ts'
+import { Pending, said as sentence } from './writes.ts'
 import { archive, healed, line, openIn, serve } from './unseen.ts'
 import {
   atCeiling,
@@ -732,24 +735,45 @@ let texts = (
   })))
 
 // A data batch through the app's write door, as the caller: the refusal's
-// sentence back where the store said no, null where it took the batch.
+// sentence back where the store said no, null where it took the batch, and
+// `Pending` thrown where the store's log kept it to apply later (a 202).
 // `check` asks for a dry run, which identifies the refused bundle.
 let applying =
   (store: Door, head: Record<string, string>, path = '/apply'): Applying =>
   (batch, check) => {
     return store.consume(`${path}${check ? '?check=1' : ''}`, async (r) => {
-      let body = await r.text()
-      if (r.ok) return null
-      try {
-        return (JSON.parse(body) as { message?: string }).message ?? body
-      } catch {
-        return body
-      }
+      let no = await sentence(r)
+      if (r.status == 202) throw new Pending(no)
+      return r.ok ? null : no
     }, {
       method: 'POST',
       body: JSON.stringify(batch),
     }, head)
   }
+
+// The part of a load one store_load call writes (seed.ts `parts`), counting
+// from 1, or the whole load where it is one part and none was named. One call
+// is one transaction, so a load bigger than a part named without one is
+// refused before anything is written: a batch the store cannot finish in time
+// resets it, for everyone using the app.
+let partOf = (cut: Sown[][], n: number, path: string): Sown[] => {
+  if (n > Math.max(cut.length, 1)) {
+    throw refuse(
+      'arguments',
+      `part: ${n} — ${path} is ${cut.length} part${cut.length == 1 ? '' : 's'}`,
+    )
+  }
+  if (!n && cut.length > 1) {
+    throw refuse(
+      'limit',
+      `${path} holds ${cut.flat().length} entities, more than one call ` +
+        `writes (${CARRIES}), so nothing was written. It loads in ` +
+        `${cut.length} parts, each whole or not at all: call store_load ` +
+        `again with part: 1, then part: 2, up to part: ${cut.length}`,
+    )
+  }
+  return cut[Math.max(n, 1) - 1] ?? []
+}
 
 // `map {header: property}` as one argument: its shape, checked once, so a model
 // that sent a list or a nested object hears that rather than a header that
@@ -2917,12 +2941,24 @@ let OURS: Row[] = [
             'headers that do not match a property, renamed: {"Serves how ' +
             'many": "serves"}. A header that already matches needs no entry',
         },
+        part: {
+          type: 'integer',
+          minimum: 1,
+          description:
+            'which part of a load too big for one call to write, counting ' +
+            'from 1; each part is written whole or not at all, and the ' +
+            'answer names the next',
+        },
       },
       required: ['app', 'path'],
     },
     run: async (ctx, args) => {
       let { space, app, who, store } = await inApp(ctx, args, true)
       let path = text(args.path, 'path')
+      let n = args.part == null ? 0 : Number(args.part)
+      if (args.part != null && !(Number.isSafeInteger(n) && n >= 1)) {
+        throw refuse('arguments', `part: ${args.part} — a whole number from 1`)
+      }
       let blobs = r2Objects(ctx.env.BLOBS)
       let source = working(app, prefixOf(space, app))
       let prefix = `${source}/`
@@ -2940,19 +2976,25 @@ let OURS: Row[] = [
             'is there',
         )
       }
-      let all = await load(
-        loaded(
-          files,
-          args.as == null ? undefined : await sheetOf(
-            store,
-            text(args.as, 'as'),
-            mapping(args.map),
-            ctx.env,
-          ),
+      let cut = parts(loaded(
+        files,
+        args.as == null ? undefined : await sheetOf(
+          store,
+          text(args.as, 'as'),
+          mapping(args.map),
+          ctx.env,
         ),
+      ))
+      let all = await load(
+        partOf(cut, n, path),
         applying(store, await byCaller(ctx, who)),
       )
       let names = [...new Set(all.map((s) => s.file))]
+      let of = !n
+        ? ''
+        : ` — part ${n} of ${cut.length}${
+          n < cut.length ? `; part: ${n + 1} loads the next` : ''
+        }`
       return {
         text: `loaded ${all.length} ${
           all.length == 1 ? 'entity' : 'entities'
@@ -2960,7 +3002,7 @@ let OURS: Row[] = [
           names.length > 6 ? `${names.length} files under ${path}` : (
             names.join(', ') || path
           )
-        }`,
+        }${of}`,
         space,
       }
     },
