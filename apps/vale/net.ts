@@ -26,7 +26,6 @@ import { SIZE } from './levels.ts'
 import { type Look, lookOf } from './make.ts'
 import { type Seen, seenOf } from './seen.ts'
 import { once as read } from './once.ts'
-import words from './vocab.json' with { type: 'json' }
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
 
@@ -51,21 +50,12 @@ export type Hero = Look & { eid: string; seen: Seen | null }
 // The words the store speaks, as it serves them (./api/vocab.json): this app's
 // own and every word the platform gives it, the byline `created` among them,
 // so the client asks and writes what the store takes. Loaded at the top of the
-// module, so everything that imports it evaluates with them. A page that cannot
-// reach the door still plays on its own words; only the gate's heroes wait for
-// the next load.
-let spoken = async (): Promise<VocabDoc[]> => {
-  try {
-    let r = await fetch(new URL('api/vocab.json', document.baseURI))
-    if (r.ok) return await r.json()
-    console.warn('mossvale store: no words,', r.status)
-  } catch (e) {
-    console.warn('mossvale store: no words,', e)
-  }
-  return [words]
-}
-
-export let vocab = loadVocab(await spoken())
+// module, so everything that imports it evaluates with them. A failed request
+// waits here for the store to recover; an incomplete vocabulary cannot make
+// the page issue queries it cannot understand.
+export let vocab = loadVocab(
+  await read<VocabDoc>(new URL('api/vocab.json', document.baseURI)),
+)
 
 /** A hero, off their player row and their newest look row. */
 let heroOf = (b: Bundle, look?: Bundle): Hero => ({

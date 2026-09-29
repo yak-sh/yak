@@ -1,6 +1,7 @@
 // A one-time store read for a page that keeps its current view while the
 // store wakes. An unanswered read is never an empty result: the gate uses an
-// empty result to decide that this person has no hero yet.
+// empty result to decide that this person has no hero yet, and the local graph
+// needs every word before it can answer a query.
 
 type Get = (url: URL, init: RequestInit) => Promise<Response>
 
@@ -16,12 +17,12 @@ export let once = async <T>(
     try {
       answer = await get(url, { signal: AbortSignal.timeout(8000) })
     } catch (e) {
-      console.warn('mossvale store:', url.search, e)
+      console.warn('mossvale store:', url.pathname + url.search, e)
       await rest()
       continue
     }
     if (answer.status >= 500) {
-      console.warn('mossvale store:', url.search, answer.status)
+      console.warn('mossvale store:', url.pathname + url.search, answer.status)
       await rest()
       continue
     }
