@@ -23,6 +23,7 @@ import {
   decode,
   type Frame,
   json,
+  type Opening,
   queue,
   receive,
   refusal,
@@ -321,7 +322,7 @@ export let sockets = (
   // before may still be one it inherited, so its stored subscriptions are
   // re-opened here — the client is sent its current results, which is the
   // resync.
-  let sink = (ws: Wire): Sink => {
+  let sink = (ws: Wire, openings?: Opening[]): Sink => {
     let to = sinks.get(ws)?.send
     if (to) return to
     let held = ws.deserializeAttachment() as Held | null
@@ -373,7 +374,8 @@ export let sockets = (
     // know what it is saying before a close can stop saying it.
     subs.relayed(send, relayOf(ws))
     for (let [id, ask] of Object.entries(asks(ws))) {
-      subs.open(send, id, ask)
+      if (openings) openings.push({ sink: send, id, query: ask })
+      else subs.open(send, id, ask)
     }
     return send
   }
@@ -449,14 +451,16 @@ export let sockets = (
     close: drop,
 
     wake: () => {
+      let openings: Opening[] = []
       for (let ws of ctx.getWebSockets()) {
         if (closed.has(ws) || !open(ws)) continue
         try {
-          sink(ws)
+          sink(ws, openings)
         } catch (error) {
           retire(ws, error)
         }
       }
+      if (openings.length) subs.restore(openings)
     },
   }
 }

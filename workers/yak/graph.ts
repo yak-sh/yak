@@ -2418,6 +2418,12 @@ export class Store {
           id,
           query === true ? query : asking(query, words),
         ),
+      restore: (openings) =>
+        subs.restore(openings.map(({ sink, id, query }) => ({
+          sink: by(sink),
+          id,
+          query: query === true ? query : asking(query, words),
+        }))),
       close: (sink, id) => subs.close(by(sink), id),
       drop: (sink) => subs.drop(by(sink)),
       commit: subs.commit,

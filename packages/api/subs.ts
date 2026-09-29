@@ -96,6 +96,9 @@ export type Sink = (frame: Frame) => void
  * every committed transaction. */
 export type Ask = string | true
 
+/** Saved watches recovered together after their owner lost its memory. */
+export type Opening = { sink: Sink; id: string; query: Ask }
+
 /** The subscription registry: what the socket layer talks to, and what an
  * application can drive directly. */
 export type Subs = {
@@ -103,6 +106,8 @@ export type Subs = {
   snapshot: (query: string) => Bundle[] | Reduced | Promise<Bundle[] | Reduced>
   /** open (or replace) a subscription and send its current set */
   open: (sink: Sink, id: string, query: Ask) => void | Promise<void>
+  /** Reopen saved watches, reading each distinct initial query once. */
+  restore: (openings: Opening[]) => void | Promise<void>
   /** close one subscription */
   close: (sink: Sink, id: string) => void | Promise<void>
   /** close every subscription a sink holds — a client went away */
@@ -400,7 +405,13 @@ export let subscriptions = (graph: Graph, opts: {
     sub.members.has(f.entity) &&
     sub.fields.get(f.entity)?.has(f.component + '.' + f.property)
 
-  let open = (sink: Sink, id: string, query: Ask) => {
+  let open = (
+    sink: Sink,
+    id: string,
+    query: Ask,
+    rows?: Map<string, Bundle[] | Promise<Bundle[]>>,
+    answers?: Map<string, Reduced | Promise<Reduced>>,
+  ) => {
     flush()
     let mine = held.get(sink) ?? new Map<string, Sub>()
     held.set(sink, mine)
@@ -430,9 +441,14 @@ export let subscriptions = (graph: Graph, opts: {
       sub.durable = plan.durable
       sub.ref = plan.ref
       sub.agg = aggregate(ast)
-      if (sub.agg) return tell(sub, true)
+      if (sub.agg) return tell(sub, true, answers)
       sub.want = wanted(graph.vocab, line)
-      return then(read(sub), (bundles) => {
+      let loaded = rows?.get(line)
+      if (!loaded) {
+        loaded = read(sub)
+        rows?.set(line, loaded)
+      }
+      return then(loaded, (bundles) => {
         for (let b of bundles) sub.members.add(b.entity.eid)
         if (held.get(sink)?.get(id) === sub) {
           sub.routed = network(sub).add(sub, ast, sub.members)
@@ -457,22 +473,33 @@ export let subscriptions = (graph: Graph, opts: {
   // An aggregate's answer, sent when it is new: always on open, and after a
   // commit only when the value moved. A count or a tally is a question about
   // the whole set, so it is asked again after every commit.
-  let tell = (sub: Sub, first = false) =>
-    then(
-      sub.peer
-        ? then(source(sub), (bundles) =>
-          matchRows(sub.query, graph.vocab)(bundles))
-        : graph.rows(parse(sub.query), { durable: true }),
-      (rows) => {
-        let value = reduced(sub.agg!, rows)
-        let answer = JSON.stringify(value)
-        if (!first && answer == sub.answer) {
-          return
-        }
-        sub.answer = answer
-        sub.sink({ id: sub.id, ...value })
-      },
-    )
+  let tell = (
+    sub: Sub,
+    first = false,
+    answers?: Map<string, Reduced | Promise<Reduced>>,
+  ) => {
+    let value = answers?.get(sub.query)
+    if (!value) {
+      value = then(
+        sub.peer
+          ? then(
+            source(sub),
+            (bundles) => matchRows(sub.query, graph.vocab)(bundles),
+          )
+          : graph.rows(parse(sub.query), { durable: true }),
+        (rows) => reduced(sub.agg!, rows),
+      )
+      answers?.set(sub.query, value)
+    }
+    return then(value, (value) => {
+      let answer = JSON.stringify(value)
+      if (!first && answer == sub.answer) {
+        return
+      }
+      sub.answer = answer
+      sub.sink({ id: sub.id, ...value })
+    })
+  }
 
   // What a commit did to one routed subscription, sent cut to what the query
   // names.
@@ -946,6 +973,18 @@ export let subscriptions = (graph: Graph, opts: {
   return {
     snapshot: (query) => ordered(() => snapshot(query)),
     open: (sink, id, query) => ordered(() => open(sink, id, query)),
+    restore: (openings) =>
+      ordered(() => {
+        let rows = new Map<string, Bundle[] | Promise<Bundle[]>>()
+        let answers = new Map<string, Reduced | Promise<Reduced>>()
+        return then(
+          over(
+            openings,
+            ({ sink, id, query }) => open(sink, id, query, rows, answers),
+          ),
+          () => {},
+        )
+      }),
     close: (sink, id) =>
       ordered(() => {
         pending.get(sink)?.delete(id)

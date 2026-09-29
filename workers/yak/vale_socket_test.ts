@@ -8,6 +8,7 @@ import { sockets, storage, type Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { graph } from '@yaks/graph'
 import { areaOf, looksOf } from '../../apps/vale/area.ts'
+import { seedThemes } from '../../apps/vale/themes_fixture.ts'
 import { GIVERS } from '../../apps/vale/quests.ts'
 import { eidOf } from '../../apps/vale/villagers.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
@@ -15,6 +16,7 @@ import { appVocab } from './vocab.ts'
 
 let hero = '12345678-1234-1234-1234-123456789abc'
 let level = 'mossvale'
+seedThemes()
 let area = areaOf(128, 128, 120)
 let eids = GIVERS.filter((g) => g.level == level).map((g) => eidOf(g.id))
 

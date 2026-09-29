@@ -39,6 +39,57 @@ Deno.test('a subscription opens on the set it already selects', () => {
   assertEquals(ids(first), ['b1'])
 })
 
+Deno.test('restoring shared watches reads each answer once and keeps each live', () => {
+  let g = shop()
+  g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let reads = 0, counts = 0
+  let spy: Graph = {
+    ...g,
+    read: (q, opts) => (reads++, g.read(q, opts)),
+    rows: (q, opts) => (counts++, g.rows(q, opts)),
+  }
+  let subs = subscriptions(spy)
+  let ears = Array.from({ length: 4 }, ear)
+  subs.restore(ears.flatMap(({ to }, i) => [
+    { sink: to, id: `books${i}`, query: '.price<20' },
+    { sink: to, id: `count${i}`, query: '.book&.count' },
+  ]))
+  assertEquals([reads, counts], [1, 1])
+  for (let [i, e] of ears.entries()) {
+    assertEquals(
+      e.take().map((f) => [
+        f.id,
+        ids(f),
+        'count' in f ? f.count : undefined,
+      ]),
+      [
+        [`books${i}`, ['b1'], undefined],
+        [`count${i}`, [], 1],
+      ],
+    )
+  }
+
+  g.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
+  for (let [i, e] of ears.entries()) {
+    assertEquals(
+      e.take().map((f) => [
+        f.id,
+        ids(f),
+        'count' in f ? f.count : undefined,
+      ]),
+      [
+        [`books${i}`, ['b2'], undefined],
+        [`count${i}`, [], 2],
+      ],
+    )
+  }
+
+  let later = ear()
+  subs.open(later.to, 'later', '.price<20')
+  assertEquals(ids(later.take()[0]), ['b1', 'b2'])
+  assertEquals(reads, 2)
+})
+
 Deno.test('a commit pushes what the query selects, and nothing else', () => {
   let graph = shop()
   let subs = subscriptions(graph)

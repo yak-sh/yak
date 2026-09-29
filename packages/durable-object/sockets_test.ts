@@ -115,6 +115,37 @@ Deno.test('a woken object serves the socket it inherited', () => {
   assertEquals((ws.sent.at(-1)!.bundles as Bundle[])[0].entity.eid, 'p1')
 })
 
+Deno.test('shared cold snapshots keep separate ACKs and live membership', () => {
+  let storage = store(), ctx = hibernation()
+  let [g, first] = instance(storage, ctx)
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  let clients = Array.from({ length: 4 }, wire)
+  ctx.live.push(...clients)
+  for (let ws of clients) {
+    send(first, ws, { subscribe: '.kind=product', id: 'p', acks: true })
+    send(first, ws, { ack: ws.sent.at(-1)!.ack })
+    ws.sent.length = 0
+  }
+
+  let [wokenGraph, woken] = instance(storage, ctx)
+  woken.wake()
+  let tokens = clients.map((ws) => {
+    let [frame] = ws.sent
+    assertEquals(frame.reset, true)
+    assertEquals(frame.bundles?.map((b) => b.entity.eid), ['p1'])
+    assert(typeof frame.ack == 'string')
+    return frame.ack
+  })
+  assertEquals(new Set(tokens).size, clients.length)
+
+  wokenGraph.apply([{ entity: { eid: 'p2' }, product: { price: 5 } }])
+  assertEquals(clients.map((ws) => ws.sent.length), [1, 1, 1, 1])
+  for (let [i, ws] of clients.entries()) {
+    send(woken, ws, { ack: tokens[i] })
+    assertEquals(ws.sent.at(-1)?.bundles?.[0].entity.eid, 'p2')
+  }
+})
+
 Deno.test('acknowledgement survives hibernation and gates later pushes', () => {
   let storage = store()
   let ctx = hibernation()

@@ -75,6 +75,7 @@ export {
 export {
   type Ask,
   type Frame,
+  type Opening,
   type Sink,
   type Subs,
   subscriptions,
