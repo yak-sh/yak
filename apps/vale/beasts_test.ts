@@ -13,8 +13,10 @@ import { uuidOf } from './rand.ts'
 import { wares } from './stock.ts'
 import words from './vocab.json' with { type: 'json' }
 import { seedThemes } from './themes_fixture.ts'
+import { seedBuildings } from './buildings_fixture.ts'
 
 seedThemes()
+seedBuildings()
 
 Deno.test('a creature design added to the store inhabits its chosen land', async () => {
   let vocab = loadVocab([words])

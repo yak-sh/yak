@@ -6,6 +6,9 @@ import { GIVERS } from './quests.ts'
 import { quests } from './quests/vale.ts'
 import { completion, WELCOME } from './village-tasks.ts'
 import { greeting } from './villagers.ts'
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 Deno.test('Pip reacts to this hero marking the welcome task in Village Tasks', async () => {
   let quest = quests.find((q) => q.giver == 'pip')!

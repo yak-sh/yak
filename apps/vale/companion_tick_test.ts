@@ -5,6 +5,9 @@ import { companionTick, type Snapshot } from './companion-tick.ts'
 import { comp } from './bundle.ts'
 import type { Bundle } from './net.ts'
 import { flat, type Prop } from './terrain.ts'
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 let row = (eid: string, by: string, part: Record<string, unknown>): Bundle => ({
   entity: { eid },

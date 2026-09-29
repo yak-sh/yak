@@ -5,6 +5,9 @@ import { assertEquals } from '@std/assert'
 import { cuboids } from './boxes.ts'
 import { instances } from './instances.ts'
 import { out, pack } from './mesh.ts'
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 Deno.test('building template is shared between chunks and disposed after both leave', async () => {
   let scene = new THREE.Scene(), material = new THREE.MeshBasicMaterial()

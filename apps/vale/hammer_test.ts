@@ -3,6 +3,9 @@ import { assert } from '@std/assert'
 import * as THREE from 'three'
 import { BUILD, hero } from './figures.ts'
 import { LAND } from './strike.ts'
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 Deno.test('hammer head descends through the hit', () => {
   let f = hero(

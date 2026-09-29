@@ -19,6 +19,9 @@ import { flat, type Prop, withoutSpent } from './terrain.ts'
 import { fits } from './sim.ts'
 import { type WorkFrame, working } from './work.ts'
 import words from './vocab.json' with { type: 'json' }
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 let row = (eid: string, by: string, at: number, part: Bundle): Bundle => ({
   ...part,

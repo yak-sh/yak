@@ -5,6 +5,9 @@ import { flat } from './terrain.ts'
 import { eidOf } from './villager-id.ts'
 import { workerOf } from './worker.js'
 import { rows as themeRows } from './themes_fixture.ts'
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 let HERO = '01234567-89ab-cdef-0123-456789abcdef'
 let hero = {

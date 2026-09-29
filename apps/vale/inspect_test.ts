@@ -4,6 +4,9 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Bundle } from './net.ts'
 import { inspectOf } from './inspect.ts'
 import { arriveOf } from './ways.ts'
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 let row = (eid: string, more: Record<string, unknown> = {}): Bundle => ({
   entity: { eid },

@@ -9,6 +9,9 @@ import { comp } from './bundle.ts'
 import { eidOf } from './villager-id.ts'
 import { resolveTarget } from './target.ts'
 import words from './vocab.json' with { type: 'json' }
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 let row = (eid: string, player: string, name: string, at: number): Bundle => ({
   entity: { eid },

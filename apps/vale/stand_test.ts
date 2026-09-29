@@ -7,6 +7,9 @@ import { modelOf } from './nodes.ts'
 import { model } from './props.ts'
 import { among, off, propAt, step, thingAt } from './stand.ts'
 import { flat, standAt } from './terrain.ts'
+import { seedDesigns } from './designs_fixture.ts'
+
+seedDesigns()
 
 Deno.test('adjacent crowns and a gathering node do not fight the ground or each other', () => {
   let props = [15.25, 16.25].map((x, seed) => ({
