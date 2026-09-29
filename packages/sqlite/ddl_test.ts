@@ -126,6 +126,42 @@ Deno.test('a changed identity retires its old unique index', () => {
   assert(names.includes('build_lookup'))
 })
 
+Deno.test('a changed constraint replaces the index with the same name', () => {
+  let words = (unique: boolean) =>
+    loadVocab({
+      $defs: {
+        label: {
+          component: true,
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              ...unique ? { unique: true } : { index: true },
+            },
+          },
+        },
+      },
+    })
+  let d = mem(), old = words(false)
+  let before = storage(d, old)
+  before.install()
+  graph({ storage: before, vocab: old }).apply([{
+    entity: { eid: 'one' },
+    label: { name: 'north' },
+  }])
+  let next = words(true), after = storage(d, next)
+  after.install()
+  let index = d.query({ t: 'pragma', name: 'index_list', arg: 'label' })
+    .find((i) => i.name == 'label_name')
+  assertEquals(index?.unique, 1)
+  assertThrows(() =>
+    graph({ storage: after, vocab: next }).apply([{
+      entity: { eid: 'two' },
+      label: { name: 'north' },
+    }])
+  )
+})
+
 Deno.test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
   let d = mem(), old = lookWords(), next = lookWords(true)
   let before = storage(d, old)

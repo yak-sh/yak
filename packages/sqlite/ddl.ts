@@ -335,9 +335,23 @@ let managed = (driver: Driver, table: string, name: string): boolean => {
     name == `${table}_${cols.join('_')}`
 }
 
-let same = (a: string, b: string): boolean =>
-  a.toLowerCase().replace(/\s+/g, ' ').trim() ==
-    b.toLowerCase().replace(/\s+/g, ' ').trim()
+let predicate = (sql: string): string =>
+  (sql.match(/\bwhere\b([\s\S]*)$/i)?.[1] ?? '')
+    .toLowerCase().replace(/\s+/g, ' ').trim()
+
+let fitsIndex = (
+  driver: Driver,
+  table: string,
+  name: string,
+  sql: string,
+  now: CreateIndex,
+): boolean => {
+  let held = driver.query({ t: 'pragma', name: 'index_list', arg: table })
+    .find((row) => row.name == name)
+  return !!held && Number(held.unique) == Number(!!now.unique) &&
+    Number(held.partial) == Number(!!now.where) &&
+    (!now.where || predicate(sql) == predicate(render(now).sql))
+}
 
 /** Retire vocabulary indexes whose declaration disappeared or changed. */
 export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
@@ -347,7 +361,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
     if (!(table == 'entity' || vocab.comp(table))) return []
     if (!managed(driver, table, name)) return []
     let now = wanted.get(name)
-    if (now && same(String(row.sql), render({ ...now, ifNot: false }).sql)) {
+    if (now && fitsIndex(driver, table, name, String(row.sql), now)) {
       return []
     }
     return [{ t: 'drop' as const, kind: 'index' as const, name }]
