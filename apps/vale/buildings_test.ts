@@ -130,9 +130,10 @@ test('a walker stands on the floor above the room below', () => {
   assertEquals(go(v, down.at, [ax, az]).y, b.floors[1])
 })
 
-// Everywhere a walker can go from `from` a quarter metre at a time, as a
-// set of cells by height.
-let reach = (v: Vale, from: Vec) => {
+// The uses a walker cannot get to from `from`, going a quarter metre at a
+// time: it gets to one when it comes within a cell of it at its height, and
+// stops going once it has got to them all.
+let unreached = (v: Vale, from: Vec, uses: Use[]) => {
   // The town lies within 256 m of the origin, so a cell is one small number.
   let key = (x: number, y: number, z: number) =>
     (Math.round(x * 4) * 1024 + Math.round(y * 4)) * 1024 + Math.round(z * 4)
@@ -146,27 +147,36 @@ let reach = (v: Vale, from: Vec) => {
     }
     return got
   }
-  let seen = new Set([key(...from)]), todo: Vec[] = [from]
+  // Each use by the cells within one of it.
+  let near = new Map<number, Use[]>()
+  for (let u of uses) {
+    for (let dx of [0, 0.25, -0.25]) {
+      for (let dz of [0, 0.25, -0.25]) {
+        let k = key(u.at[0] + dx, u.at[1], u.at[2] + dz)
+        near.set(k, [...near.get(k) ?? [], u])
+      }
+    }
+  }
+  let left = new Set(uses), seen = new Set<number>(), todo: Vec[] = []
+  let go = (at: Vec) => {
+    let k = key(...at)
+    if (seen.has(k)) return
+    seen.add(k)
+    for (let u of near.get(k) ?? []) left.delete(u)
+    todo.push(at)
+  }
+  go(from)
   let [w, n, e, s] = v.buildings(64, 64, 0)[0].box
-  while (todo.length) {
+  while (todo.length && left.size) {
     let [x, y, z] = todo.pop()!
     for (let [dx, dz] of [[0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]]) {
       let nx = x + dx, nz = z + dz
       if (nx < w - 2 || nx > e + 2 || nz < n - 2 || nz > s + 2) continue
       let ny = step(nx, y, nz)
-      if (ny == null) continue
-      let k = key(nx, ny, nz)
-      if (seen.has(k)) continue
-      seen.add(k)
-      todo.push([nx, ny, nz])
+      if (ny != null) go([nx, ny, nz])
     }
   }
-  return (at: Vec) =>
-    [0, 0.25, -0.25].some((dx) =>
-      [0, 0.25, -0.25].some((dz) =>
-        seen.has(key(at[0] + dx, at[1], at[2] + dz))
-      )
-    )
+  return [...left]
 }
 
 // Every plan in every dress, turned each way.
@@ -177,10 +187,11 @@ let ALL: [string, number][] = Object.keys(BUILDINGS).flatMap((kind) =>
 test('every building can be walked into, up, and to all it has', () => {
   for (let [kind, turn] of ALL) {
     let v = town(kind, turn), b = v.buildings(64, 64, 0)[0]
-    let got = reach(v, use(b, 'door').at)
-    for (let u of b.uses) {
-      assert(got(u.at), `${kind} turned ${turn}: where to ${u.for} at ${u.at}`)
-    }
+    assertEquals(
+      unreached(v, use(b, 'door').at, b.uses).map((u) => `${u.for} at ${u.at}`),
+      [],
+      `${kind} turned ${turn}: where to`,
+    )
   }
 })
 
