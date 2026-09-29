@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { TElement, TText } from './dom.ts'
-import { ansi, ansiBackend, type Line, screenful } from './paint.ts'
+import { ansi, ansiBackend, lay, type Line, screenful } from './paint.ts'
 
 let el = (
   name: string,
@@ -72,6 +72,28 @@ test('an href is sanitized and rides in an OSC 8', () => {
   let a = el('a', { href: 'https://x/\x07evil' }, 'link')
   let line = screenful(el('root', {}, el('div', {}, a)), 20, 1).lines[0]
   assertEquals(ansi(line), '\x1b]8;;https://x/evil\x07link\x1b]8;;\x07')
+  // A link its sheet lays out as a block links all the same.
+  let row = el('a', { href: '/T-1', class: 'Row' }, el('span', {}, 'T-1'))
+  let laid = screenful(el('root', {}, row), 20, 1, { Row: { block: true } })
+  assertEquals(ansi(laid.lines[0]), '\x1b]8;;/T-1\x07T-1\x1b]8;;\x07')
+})
+
+test('a spaced layout keeps the parts of a sheet block apart, even in a dd', () => {
+  let tile = () =>
+    el(
+      'a',
+      { href: '/T-1', class: 'Tile' },
+      el('span', {}, 'T-1'),
+      el('span', {}, 'task'),
+    )
+  let tree = el(
+    'root',
+    {},
+    tile(),
+    el('dl', {}, el('dt', {}, 'to'), el('dd', {}, tile())),
+  )
+  let c = { sheet: { Tile: { block: true } }, metrics: {}, spaced: true }
+  assertEquals(words(lay(tree, {}, 20, null, c)), ['T-1 task', 'to: T-1 task'])
 })
 
 test('a row puts a fixed sidebar beside a growing column', () => {

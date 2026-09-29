@@ -100,10 +100,17 @@ let semantic = (el: TElement, sheet: Sheet): Style => {
   return {}
 }
 
+// A link's href is part of its style, however it is laid out: inline, or as
+// a block its sheet makes of it. An href is content too, and it is emitted
+// inside an OSC 8 sequence, where a single BEL byte ends the sequence and lets
+// the rest of the URL be interpreted as terminal input.
 let own = (el: TElement, sheet: Sheet): Style =>
   Object.assign(
     semantic(el, sheet),
     ...el.className.split(/\s+/).filter(Boolean).map((c) => sheet[c] ?? {}),
+    el.localName == 'a' && el.attr('href')
+      ? { href: safeHref(el.attr('href')!) }
+      : {},
   )
 
 // Inherit text style down the tree; glyph/indent/gap act only where set.
@@ -149,6 +156,12 @@ let runs = (n: TNode, sheet: Sheet) =>
 // inside an `Md_Code` run, where every character is the code's.
 type Ctx = { sheet: Sheet; metrics: Metrics; spaced?: boolean }
 
+// Whether a spaced layout puts a space between what a line holds and the run
+// that follows it: when neither side brings its own.
+let apart = (cur: Seg[], next: Seg[]): boolean =>
+  !!cur.length && !!next.length && !/\s$/.test(cur[cur.length - 1].text) &&
+  !/^\s/.test(next[0].text)
+
 let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   if (n instanceof TText) {
     let text = safe(n.data)
@@ -157,18 +170,19 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   let el = n as TElement
   if (el.localName == 'br') return [{ text: '\n', style: st, owner: el }]
   let o = own(el, c.sheet)
-  // An href is content too, and it is emitted inside an OSC 8 sequence, where a
-  // single BEL byte ends the sequence and lets the rest of the URL be
-  // interpreted as terminal input.
-  if (el.localName == 'a' && el.attr('href')) {
-    o.href = safeHref(el.attr('href')!)
-  }
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s, owner: el }]
   if (el.localName == 'input' || el.localName == 'textarea') {
     return field(el, s, c)
   }
-  return el.childNodes.flatMap((k) => inline(k, s, c))
+  // A block the sheet makes of an element keeps its runs apart, as it would
+  // on a line of its own, even where it is painted inline (a `dd`).
+  let spaced = c.spaced && o.block
+  return el.childNodes.reduce<Seg[]>((out, k) => {
+    let segs = inline(k, s, c)
+    if (spaced && apart(out, segs)) out.push({ text: ' ', style: s })
+    return out.concat(segs)
+  }, [])
 }
 
 // A text field paints what a browser shows in it: its value, its placeholder
@@ -274,10 +288,7 @@ let flow = (
       let segs = inline(n, s, c)
       if (!segs.length) continue
       previousParagraph = false
-      if (
-        spaced && cur.length && !/\s$/.test(cur[cur.length - 1].text) &&
-        !/^\s/.test(segs[0].text)
-      ) cur.push({ text: ' ', style: s })
+      if (spaced && apart(cur, segs)) cur.push({ text: ' ', style: s })
       for (let seg of segs) {
         // Newlines inside a text node are line breaks.
         seg.text.split('\n').forEach((part, i) => {
