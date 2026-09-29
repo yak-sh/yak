@@ -4,7 +4,7 @@
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
-import type { Runner } from '@yaks/tools'
+import { CallError, type Runner } from '@yaks/tools'
 import { PORT, runs, type Serving } from './tools.ts'
 
 // A port this box is not using, asked for and given back.
@@ -15,8 +15,8 @@ let free = (): number => {
   return port
 }
 
-// The tool reconciles and takes the duties before it binds, so the
-// port is not up on the first tick. Retry rather than count the ticks.
+// The tool reconciles before it binds, so the port is not up on the first
+// tick. Retry rather than count the ticks.
 let said = async (url: string, ms = 2000): Promise<string> => {
   let end = Date.now() + ms
   for (;;) {
@@ -86,6 +86,23 @@ Deno.test('a host that composed no handler has nothing to serve', async () => {
     Error,
     'compose @yaks/api',
   )
+})
+
+Deno.test('an address in use is refused without starting duties', async () => {
+  let listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let port = (listener.addr as Deno.NetAddr).port
+  try {
+    let { host, told } = fake(port)
+    let error = await assertRejects(
+      () => runs(host).serve(asked(), graph) as Promise<Bundle[]>,
+      CallError,
+      `${port} is already in use`,
+    )
+    assertEquals(error.code, 'address')
+    assertEquals(told.duties, 0)
+  } finally {
+    listener.close()
+  }
 })
 
 Deno.test('the call names the port, over the one the config named', async () => {

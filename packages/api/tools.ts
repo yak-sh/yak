@@ -30,7 +30,7 @@
 
 import { argsOf, type Bundle } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { reconcile, type Runner } from '@yaks/tools'
+import { CallError, reconcile, type Runner } from '@yaks/tools'
 import { denoListen } from './deno.ts'
 import type { Handler } from './route.ts'
 
@@ -82,33 +82,38 @@ export let runs = (host: Serving): Runs => ({
     // up is the one that can afford to.
     await host.bury?.()
     await reconcile(host.runner)
+    let at = ''
+    let began = Date.now()
+    let server
+    try {
+      server = denoListen({
+        port,
+        hostname,
+        onListen: (addr) => {
+          at = `http://${addr.hostname}:${addr.port}`
+          // The one thing printed while the call is still running, because a
+          // person who just started a server wants the address now and the
+          // result is a long way off.
+          console.error(`serve — ${at} · ${host.config.db ?? 'no db'}`)
+        },
+      }, handler)
+    } catch (error) {
+      if (error instanceof Error && error.name == 'AddrInUse') {
+        throw new CallError('address', `${hostname}:${port} is already in use`)
+      }
+      throw error
+    }
     // And the duties in their long-lived form: the effect pool, where this
     // process serves `effects`, and the plugins' services, each under its own
     // lease, for as long as this process is up. Commands passing through
     // leave these roles to a host that stays up.
     // Not awaited: it returns when the host closes.
-    void host.duties()
-    let at = ''
-    let began = Date.now()
-    let server = denoListen({
-      port,
-      hostname,
-      onListen: (addr) => {
-        at = `http://${addr.hostname}:${addr.port}`
-        // The one thing printed while the call is still running, because a
-        // person who just started a server wants the address now and the
-        // result is a long way off.
-        console.error(`serve — ${at} · ${host.config.db ?? 'no db'}`)
-      },
-    }, handler)
-    // A host closing while this is up stops the server too, so a program that
-    // shuts its graph down does not leave a port bound over a closed database.
-    // It is the unusual way round: a program closes its graph after the call
-    // has returned, and a result written while the file is closing is a result
-    // nobody stored.
-    host.stopping.addEventListener('abort', () => void server.shutdown(), {
-      once: true,
-    })
+    let stop = () => void server.shutdown()
+    if (host.stopping.aborted) stop()
+    else {
+      host.stopping.addEventListener('abort', stop, { once: true })
+      void host.duties()
+    }
     await server.finished
     return [{
       entity: { eid: '$served' },
