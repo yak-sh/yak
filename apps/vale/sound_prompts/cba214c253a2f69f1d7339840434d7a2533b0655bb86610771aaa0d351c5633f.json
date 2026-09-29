@@ -1,0 +1,18 @@
+{
+  "sound": "step-crawler",
+  "sha256": "cba214c253a2f69f1d7339840434d7a2533b0655bb86610771aaa0d351c5633f",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One many-legged crawler movement on dirt: quick small taps and a dry scrape. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655419-b0o84GGNWPs32uB010F6"
+  },
+  "playback": {
+    "loop": false
+  }
+}

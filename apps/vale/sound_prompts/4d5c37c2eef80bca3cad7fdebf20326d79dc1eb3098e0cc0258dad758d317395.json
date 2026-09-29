@@ -1,0 +1,18 @@
+{
+  "sound": "step-bird",
+  "sha256": "4d5c37c2eef80bca3cad7fdebf20326d79dc1eb3098e0cc0258dad758d317395",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One small bird hop on earth: tiny tap and soft feather shuffle. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655474-SgnKFYL5QUi6Xku7ihQJ"
+  },
+  "playback": {
+    "loop": false
+  }
+}

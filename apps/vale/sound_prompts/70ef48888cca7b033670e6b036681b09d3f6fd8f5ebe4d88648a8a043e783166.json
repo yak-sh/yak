@@ -1,0 +1,18 @@
+{
+  "sound": "step-slime",
+  "sha256": "70ef48888cca7b033670e6b036681b09d3f6fd8f5ebe4d88648a8a043e783166",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One gelatinous slime movement: low wet squelch with a tiny bubble pop. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655446-zya7Zv6QM3BPmbDP9q8a"
+  },
+  "playback": {
+    "loop": false
+  }
+}

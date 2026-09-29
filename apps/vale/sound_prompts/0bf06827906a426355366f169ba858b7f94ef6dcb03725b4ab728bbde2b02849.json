@@ -1,0 +1,18 @@
+{
+  "sound": "step-quadruped",
+  "sha256": "0bf06827906a426355366f169ba858b7f94ef6dcb03725b4ab728bbde2b02849",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One padded four-legged beast paw landing on soil: soft low thump with a little claw scrape. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655407-q4P69hyN9aMV4BnQqsfC"
+  },
+  "playback": {
+    "loop": false
+  }
+}

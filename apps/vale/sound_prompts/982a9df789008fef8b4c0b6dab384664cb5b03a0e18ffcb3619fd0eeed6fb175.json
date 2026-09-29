@@ -1,0 +1,18 @@
+{
+  "sound": "step-hopper",
+  "sha256": "982a9df789008fef8b4c0b6dab384664cb5b03a0e18ffcb3619fd0eeed6fb175",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One small hopping creature landing: springy light thump and brief settling rustle. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790655432-hBkZkKZqSqzuvktkmrMr"
+  },
+  "playback": {
+    "loop": false
+  }
+}
