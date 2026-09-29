@@ -103,9 +103,9 @@ let tab = {
   },
 }
 
-export type Net = ReturnType<typeof connect>
+export type Net = ReturnType<ReturnType<typeof connect>['world']>
 
-/** Open the store. `base` is the app's api directory. */
+/** Open the store. World queries start after its designs have arrived. */
 export let connect = (base: URL) => {
   let c = client(vocab, [], {
     url: base.href.replace(/\/$/, ''),
@@ -157,11 +157,11 @@ export let connect = (base: URL) => {
   let lookQuery = ''
   let lookWatch: Watch | null = null
   let lookBy = new Map<string, Bundle>()
-  let area = areaOf(SIZE / 2, SIZE / 2, REACH)
-  let near = c.watch(area.query)
+  let area: ReturnType<typeof areaOf>
+  let near: Watch
   // The remote watch brings rows here; the local view also sees a write this
   // page just made, before the server adds it to the remote watch's members.
-  let nearby = c.watch(area.query, { remote: false })
+  let nearby: Watch
   let pending: { area: typeof area; watch: Watch; off: () => void } | null =
     null
   let follow = (x: number, z: number) => {
@@ -465,5 +465,19 @@ export let connect = (base: URL) => {
     },
   }
   addEventListener('pagehide', flush)
-  return net
+  let opened = false
+  return {
+    designs,
+    me: net.me,
+    heroes: net.heroes,
+    world: () => {
+      if (!opened) {
+        area = areaOf(SIZE / 2, SIZE / 2, REACH)
+        near = c.watch(area.query)
+        nearby = c.watch(area.query, { remote: false })
+        opened = true
+      }
+      return net
+    },
+  }
 }

@@ -118,33 +118,34 @@ let fit = () => {
 fit()
 addEventListener('resize', fit)
 
-let net = connect(new URL('api/', document.baseURI))
+let opening = connect(new URL('api/', document.baseURI))
 // The world, shops, crafting and item pictures read store designs. Start
 // asking about the hero alongside the watches, then grow ground from them.
-let asking = net.me().then(async (me) => ({
+let asking = opening.me().then(async (me) => ({
   me,
-  heroes: me.person ? await net.heroes(me.person) : [],
+  heroes: me.person ? await opening.heroes(me.person) : [],
 }))
 let hadThemes = false
 let hadBuildings = false
 let redraw = () => {}
-let themeReady = net.designs('theme_design', (rows) => {
+let themeReady = opening.designs('theme_design', (rows) => {
   useThemeRows(rows)
   if (hadThemes) redraw()
   hadThemes = true
 })
-let buildingReady = net.designs('building_design', (rows) => {
+let buildingReady = opening.designs('building_design', (rows) => {
   useBuildingDesigns(rows)
   if (hadBuildings) redraw()
   hadBuildings = true
 })
 await Promise.all([
-  net.designs('beast_design', useBeasts),
-  net.designs('item_design', useItems),
+  opening.designs('beast_design', useBeasts),
+  opening.designs('item_design', useItems),
   themeReady,
   buildingReady,
 ])
 // Terrain and its first chunk use the store's region and building designs.
+let net = opening.world()
 let v = vale(VOX)
 let deal = deals(net)
 let folk = village(net, deal)

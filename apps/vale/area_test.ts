@@ -7,7 +7,10 @@ import { storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { mem, spy } from '../../packages/sqlite/testing.ts'
 import { areaOf, looksOf, placeOf, REACH } from './area.ts'
+import { seedThemes } from './themes_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
+
+seedThemes()
 
 Deno.test('a page sees nearby world rows and moving heroes', () => {
   let at = areaOf(64, 64, REACH)
