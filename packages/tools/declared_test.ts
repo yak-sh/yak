@@ -3,7 +3,14 @@
 // arguments do to a template. The kernel half — the same file through
 // app_deploy and a call at the MCP door — is in workers/yak/mcp_test.ts.
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
-import { filled, parseTools, schemaOf, viewsOf } from '@yaks/tools/declared'
+import {
+  commands,
+  filled,
+  parseTools,
+  schemaOf,
+  viewsOf,
+} from '@yaks/tools/declared'
+import { mayCall } from '@yaks/tools/access'
 
 // The components the app's store knows, which a template may write.
 let runs = ['jog']
@@ -76,6 +83,21 @@ Deno.test('a worker command takes its typed arguments to one local path', () => 
       }), Error).message,
     'tick.worker is an absolute path',
   )
+})
+
+Deno.test('declared command access and read-only behavior reach its doors', () => {
+  let [tool] = Object.values(parsed({
+    position: {
+      description: 'Show a position',
+      worker: '/position',
+      floor: 'owner',
+      readOnly: true,
+    },
+  }))
+  assertEquals([tool.floor, tool.readOnly], ['owner', true])
+  assertEquals(mayCall(tool.floor, 'hero', 'editor'), false)
+  assertEquals(mayCall(tool.floor, 'hero', 'owner'), true)
+  assertEquals(commands({ position: tool })[0].readOnly, true)
 })
 
 Deno.test('a manifest: one refusal names every problem', () => {

@@ -58,6 +58,8 @@
 // calling it could do on the page, and never more.
 import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
 import { CallError } from './args.ts'
+import type { Floor } from './access.ts'
+export { mayCall } from './access.ts'
 
 /** One argument's JSON Schema. */
 export type Arg = Record<string, unknown>
@@ -74,6 +76,12 @@ export type ToolDef = {
   description: string
   input: Record<string, Arg>
   required?: string[]
+  /** Least caller authority for page and connector commands. */
+  floor?: Floor
+  /** Internal commands remain callable by scheduled graph work. */
+  discoverable?: boolean
+  /** A worker command that promises to leave the store unchanged. */
+  readOnly?: boolean
   drop?: string[]
   apply?: unknown
   query?: string
@@ -85,6 +93,7 @@ export type ToolDef = {
 
 export type Tools = Record<string, ToolDef>
 
+/** The declared caller floor; store and worker doors still check each act. */
 /** Where a call runs, as the variables it binds that no caller sends:
  * `session`, the transcript a model's turn is in. */
 export type Context = { session?: string }
@@ -110,6 +119,9 @@ let KEYS = [
   'worker',
   'view',
   'model',
+  'floor',
+  'discoverable',
+  'readOnly',
 ]
 
 // A `view` names a page in the app's OWN files (T-32687) — a relative path
@@ -287,6 +299,24 @@ export let parseTools = (
     if (entry.model != null && typeof entry.model != 'boolean') {
       wrong.push(`${name}.model is true, to offer it to the app's models`)
     }
+    if (
+      entry.floor != null && entry.floor != 'person' &&
+      entry.floor != 'editor' && entry.floor != 'owner'
+    ) {
+      wrong.push(`${name}.floor is person, editor, or owner`)
+    }
+    if (
+      entry.discoverable != null &&
+      typeof entry.discoverable != 'boolean'
+    ) {
+      wrong.push(`${name}.discoverable is false to hide an internal command`)
+    }
+    if (entry.readOnly != null && entry.readOnly !== true) {
+      wrong.push(`${name}.readOnly is true for a worker that only reads`)
+    }
+    if (entry.readOnly === true && entry.worker == null) {
+      wrong.push(`${name}.readOnly is only for a worker command`)
+    }
     if (entry.query != null && typeof entry.query != 'string') {
       wrong.push(`${name}.query is a filter line, like ".run"`)
     }
@@ -332,6 +362,13 @@ export let parseTools = (
         )
       }
     }
+    let floor: Floor | undefined = entry.floor == 'person'
+      ? 'person'
+      : entry.floor == 'editor'
+      ? 'editor'
+      : entry.floor == 'owner'
+      ? 'owner'
+      : undefined
     out[name] = {
       description: String(entry.description ?? ''),
       input,
@@ -343,6 +380,11 @@ export let parseTools = (
         ? { view: entry.view }
         : {}),
       ...(entry.model === true ? { model: true } : {}),
+      ...(floor ? { floor } : {}),
+      ...(entry.discoverable === false ? { discoverable: false } : {}),
+      ...(entry.readOnly === true && typeof entry.worker == 'string'
+        ? { readOnly: true }
+        : {}),
     }
   }
   if (wrong.length) {
@@ -592,7 +634,7 @@ export let commands = (
     name,
     description: def.description,
     inputSchema: schemaOf(def),
-    readOnly: def.query != null,
+    readOnly: def.query != null || def.readOnly === true,
     run: (call: Bundle, graph: Graph) =>
       invoke(def, argsOf(call), {
         worker: (path, args) => {

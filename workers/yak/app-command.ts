@@ -1,6 +1,6 @@
 // One app's stored commands and the effect boundary that runs one. The MCP
 // command and a page's /api/command supply the same caller-scoped store acts.
-import { invoke, type ToolDef, type Tools } from '@yaks/tools/declared'
+import { invoke, mayCall, type ToolDef, type Tools } from '@yaks/tools/declared'
 import { CallError, display } from '@yaks/tools'
 import { type Bundle } from '@yaks/graph'
 import { type App, appStore, type Space, storeName } from './directory.ts'
@@ -42,6 +42,9 @@ export let commandAt = async (
   args: Record<string, unknown>,
   door: Acts,
 ): Promise<{ text: string; value: Record<string, unknown> }> => {
+  if (!mayCall(tool.floor, who.person, who.role)) {
+    throw new CallError('access', `${name} requires the app ${tool.floor}`)
+  }
   let at = `${space.slug}/${app.slug}`
   return await invoke<{ text: string; value: Record<string, unknown> }>(
     tool,

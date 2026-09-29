@@ -20,6 +20,7 @@ let words = {
     owner_word: {
       tool: true,
       description: 'Ask the app owner for a word',
+      floor: 'owner',
       worker: '/owner-word',
     },
     notes: {
@@ -30,7 +31,7 @@ let words = {
   },
 }
 
-Deno.test('a page invokes declared commands as its owner; an editor receives the worker refusal', async () => {
+Deno.test('a page invokes declared commands as its owner; the command door refuses an editor', async () => {
   using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env, 'private')
@@ -101,5 +102,5 @@ Deno.test('a page invokes declared commands as its owner; an editor receives the
   let editor = await post(await as(ELI), 'owner_word')
   assertEquals(editor.status, 403)
   assertEquals(editor.body.error.code, 'access')
-  assertEquals(editor.body.error.message, 'app worker answered 403: owner only')
+  assertEquals(editor.body.error.message, 'owner_word requires the app owner')
 })

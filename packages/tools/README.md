@@ -9,7 +9,11 @@ For app-declared commands, `@yaks/tools/declared` parses `tool: true` entries,
 fills their arguments, and invokes the host's apply, query, or worker effect.
 `@yaks/tools/routes` contributes `POST /command` when the host supplies a
 caller-scoped `command(name, args)` function. The host resolves the app and
-authorizes the caller; [@yaks/api](../api/README.md) serves the route.
+authorizes the caller; [@yaks/api](../api/README.md) serves the route. An app
+command may declare `floor: "person"`, `"editor"`, or `"owner"` to restrict
+callers at that door. `discoverable: false` keeps scheduled internal commands
+out of command listings. A worker command that only reads may say
+`readOnly: true`; query commands are read-only by their act.
 
 ```sh
 deno add jsr:@yaks/tools

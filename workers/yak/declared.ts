@@ -34,7 +34,7 @@ import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
 import { commandAt, toolsOf } from './app-command.ts'
 export { toolsOf } from './app-command.ts'
-import { schemaOf, type ToolDef } from '@yaks/tools/declared'
+import { mayCall, schemaOf, type ToolDef } from '@yaks/tools/declared'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
 import { refuse } from './tool.ts'
 import type { Who } from './session.ts'
@@ -97,7 +97,12 @@ let picked = (all: { space: Space; app: App }[], said: string) => {
 let offered = async (ctx: Ctx, mine: { space: Space; app: App }[]) => {
   let said: string[] = []
   for (let { space, app } of mine) {
-    let names = Object.keys(await toolsOf(ctx.env, space, app))
+    let who = await whoIn(ctx, space)
+    let names = Object.entries(await toolsOf(ctx.env, space, app))
+      .filter(([, tool]) =>
+        tool.discoverable !== false &&
+        mayCall(tool.floor, who.person, who.role)
+      ).map(([name]) => name)
     if (names.length) said.push(`${at(space, app)}: ${names.join(', ')}`)
   }
   return said
@@ -206,8 +211,14 @@ export let listCommands = async (
   let tools = await Promise.all(
     apps.map(({ space, app }) => toolsOf(ctx.env, space, app)),
   )
+  let callers = await Promise.all(apps.map(({ space }) => whoIn(ctx, space)))
   for (let [i, { space, app }] of apps.entries()) {
     for (let [name, tool] of Object.entries(tools[i])) {
+      let who = callers[i]
+      if (
+        tool.discoverable === false ||
+        !mayCall(tool.floor, who.person, who.role)
+      ) continue
       out.push({
         at: at(space, app),
         name,
@@ -219,7 +230,7 @@ export let listCommands = async (
         // writes here leaves the platform, so none of them is open-world, and
         // a template carrying nulls can drop a component — so a writer takes
         // the destructive default rather than a promise this side cannot keep.
-        readOnly: tool.query != null,
+        readOnly: tool.query != null || tool.readOnly === true,
         input: schemaOf(tool),
         // The page this command's answer draws itself in, where it named one
         // (T-32687). It is still a `ui://` resource of this door's — the

@@ -3,6 +3,7 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./access": "./access.ts",
     "./declared": "./declared.ts",
     "./routes": "./routes.ts",
     "./vocab": "./vocab.ts",
