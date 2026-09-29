@@ -199,11 +199,17 @@ export let chatbox = (
     input.blur()
   }
   addEventListener('keydown', (e) => {
-    if (e.key != 'Enter' || open || glass.hidden) return
-    if (e.target instanceof HTMLInputElement) return
-    // Kept from the input it is about to focus, which would send it.
+    if ((e.key != 'Enter' && e.key != '/') || open || glass.hidden) return
+    if (
+      e.target instanceof HTMLElement &&
+      (e.target.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName))
+    ) return
+    if (e.key == '/' && (e.altKey || e.ctrlKey || e.metaKey)) return
+    // Keep the opening key from the input it is about to focus.
     e.preventDefault()
     show()
+    if (e.key == '/' && open) input.value = '/'
   })
   input.addEventListener('keydown', (e) => {
     if (e.key == 'Escape') hide()
