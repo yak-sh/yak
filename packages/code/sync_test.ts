@@ -125,7 +125,7 @@ Deno.test(
     })
     Deno.mkdirSync(`${dir}/q`)
     write(dir, {
-      'deno.json': '{"name": "@t/p"}',
+      'deno.json': '{"name": "@t/p", "description": "Notes."}',
       'vocab.json': vocab({
         note: note({ a: { type: 'string' }, b: { type: 'number' } }),
       }),
@@ -145,7 +145,11 @@ Deno.test(
       (await g.read(`${q} ?doc`)).map((b) => (b.doc as Comp).title).sort()
 
     await pass()
+    assertEquals(await titles('._package'), ['@t/p', '@t/q'])
+    let [p] = await g.read('._package.name=@t/p ?doc')
+    assertEquals((p.doc as Comp).body, 'Notes.')
     assertEquals(await titles('._comp'), ['note'])
+    assertEquals(await titles('._prop.package._package.name=@t/q'), ['note.c'])
     assertEquals(await titles('._prop'), ['note.a', 'note.b', 'note.c'])
     assertEquals((await g.read('._before')).length, 1)
 
@@ -164,6 +168,7 @@ Deno.test(
     await commit(dir)
     await pass()
     assertEquals(await titles('._prop'), ['note.a'])
+    assertEquals(await titles('._package'), ['@t/p'])
     Deno.removeSync(dir, { recursive: true })
   },
 )

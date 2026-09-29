@@ -27,7 +27,6 @@ import {
   type Ids,
   type Keywords,
   loadVocab,
-  metaDoc,
   storable,
   toBundles,
   type VocabDoc,
@@ -93,7 +92,12 @@ for (let [, d] of files) for (let n of declaresOf(d)) home.set(n, d)
 Deno.test('packages: every vocab.json is plain JSON that loads', () => {
   assert(files.length >= 10, `only ${files.length} vocab.json files walked`)
   for (let [pkg, doc] of files) {
-    assertEquals(storable(doc), [], `${pkg}/vocab.json is not storable`)
+    // The meta vocabulary names its components with `_`, which no document a
+    // person writes may: it is loaded, never stored as somebody's app.
+    let errors = storable(doc).filter((e) =>
+      pkg != 'vocab' || !e.startsWith('"_')
+    )
+    assertEquals(errors, [], `${pkg}/vocab.json is not storable`)
     let mine = new Set(compsOf(doc))
     // A document says words, and a tool is one: `@yaks/sqlite` and
     // `@yaks/embedding` declare only their checks, because a store and a
@@ -131,10 +135,7 @@ Deno.test('packages: every vocabulary goes through a graph as bundles and back',
   // Every package's words, each read on its own the way @yaks/code reads a
   // vocab.json, into one graph that holds them as `_comp`, `_prop` and
   // `_before`; what loads back from its rows is what loaded from the files.
-  let docs = [
-    ...files.map(([pkg, d]) => ({ ...d, package: `@yaks/${pkg}` })),
-    { ...metaDoc, package: '@yaks/vocab' },
-  ]
+  let docs = files.map(([pkg, d]) => ({ ...d, package: `@yaks/${pkg}` }))
   let all = Object.values(words)
   let vocab = loadVocab(docs, all)
   let derive = identities(vocab)
@@ -144,6 +145,7 @@ Deno.test('packages: every vocabulary goes through a graph as bundles and back',
     trusted: true,
   })
   let rows = [
+    ...await g.read('._package'),
     ...await g.read('._comp ?doc'),
     ...await g.read('._prop ?doc'),
     ...await g.read('._before ?edge'),

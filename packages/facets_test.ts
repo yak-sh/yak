@@ -136,19 +136,23 @@ Deno.test('every other facet a package exports is shaped the way a host reads it
     // whose whole job is the vector table and the `.near` compiler, and
     // declares no component at all — the only word in its vocabulary is its
     // check. So every package's facets are walked. The one exemption is
-    // `./tools` on a package with no words:
-    // the core's `@yaks/vocab/tools` is the tool mechanism under that name and
-    // predates the facets, and nobody composes it as a plugin. (`@yaks/graph`
+    // `./tools` on a package whose words declare no tool: `./tools` is the code
+    // behind declared tools, and the core's `@yaks/vocab/tools` is the tool
+    // mechanism under that name, which predates the facets. (`@yaks/graph`
     // has words now — the generic tier — so its `./tools` carries the runs
     // behind them like any other.) See packages/README.md, the misfit list.
     let words = true
+    let tools = false
     try {
-      Deno.statSync(new URL(`${p.dir}/vocab.json`, here))
+      let doc = JSON.parse(
+        Deno.readTextFileSync(new URL(`${p.dir}/vocab.json`, here)),
+      ) as VocabDoc
+      tools = Object.values(doc.$defs ?? {}).some((s) => s.tool === true)
     } catch {
       words = false
     }
     for (let [facet, names] of Object.entries(shapes)) {
-      if (!has(p, facet) || (facet == 'tools' && !words)) continue
+      if (!has(p, facet) || (facet == 'tools' && !tools)) continue
       let mod = await import(file(p, facet).href) as Record<string, unknown>
       assert(
         names.some((name) => name in mod),

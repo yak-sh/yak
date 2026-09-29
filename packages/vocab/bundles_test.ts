@@ -22,6 +22,7 @@ import { facts } from './testing.ts'
 // them and a component found by a recipe's text.
 let kitchen: VocabDoc = {
   package: '@t/kitchen',
+  description: 'recipes and notes',
   $defs: {
     recipe: {
       component: true,
@@ -158,6 +159,7 @@ Deno.test('the queries that describe a vocabulary answer from its entities', asy
   assertEquals((await titles('._comp')).sort(), [
     '_before',
     '_comp',
+    '_package',
     '_prop',
     'doc',
     'note',
@@ -168,7 +170,8 @@ Deno.test('the queries that describe a vocabulary answer from its entities', asy
   // order its package declares them; another package's come after.
   assertEquals(
     await titles(
-      '._prop.comp._comp.name=recipe ._prop.package=@t/kitchen .order=_prop.ord',
+      '._prop.comp._comp.name=recipe ._prop.package._package.name=@t/kitchen ' +
+        '.order=_prop.ord',
     ),
     [
       'recipe.slug',
@@ -182,7 +185,10 @@ Deno.test('the queries that describe a vocabulary answer from its entities', asy
     ],
   )
   // What extends a component, what refers to it, and what it sorts before.
-  assertEquals(await titles('._prop.package=@t/tags'), ['recipe.tagged'])
+  assertEquals(
+    await titles('._prop.package._package.name=@t/tags'),
+    ['recipe.tagged'],
+  )
   assertEquals(await titles('._prop.ref=note'), ['recipe.book'])
   let before = await g.read(
     `._before .edge.from=${id('_comp', { name: 'recipe' })} .order=edge.ord`,
@@ -194,7 +200,11 @@ Deno.test('the queries that describe a vocabulary answer from its entities', asy
   // A word is found in a description.
   assertEquals(await titles('dish'), ['recipe'])
   // And what the graph holds is the vocabulary it was given.
+  // Each package, described.
+  let [pkg] = await g.read('._package.name=@t/kitchen ?doc')
+  assertEquals((pkg.doc as { body: string }).body, 'recipes and notes')
   let rows = [
+    ...await g.read('._package'),
     ...await g.read('._comp ?doc'),
     ...await g.read('._prop ?doc'),
     ...await g.read('._before ?edge'),

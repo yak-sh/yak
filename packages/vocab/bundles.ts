@@ -1,21 +1,23 @@
-// A vocabulary described as entities, in the meta vocabulary (./meta/vocab.json):
-// a `_comp` per component a document declares, a `_prop` per property, and a
-// `_before` edge per kind a kind sorts before, each wearing `doc` for its name
-// and its description. A vocabulary is then read, searched and linked like
-// anything else in a graph, and what `graph_schema` answers is a query:
+// A vocabulary described as entities, in the meta vocabulary (./vocab.json): a
+// `_package` for the package a document is, a `_comp` per component it
+// declares, a `_prop` per property it declares or extends, and a `_before`
+// edge per kind a kind sorts before, each wearing `doc` for its name and its
+// description. A vocabulary is then read, searched and linked like anything
+// else in a graph, and what `graph_schema` answers is a query:
 //
 //   ._comp ?doc                    every component, by name
 //   ._prop.comp._comp.name=mail    mail's properties (`.order=_prop.ord`)
 //   ._prop.ref=mail                what refers to mail
 //   ._before .edge.from=<mail>     the kinds mail sorts before
+//   ._prop.package=<@yaks/id>      what a package declares and extends
 //
 // `toBundles` reads one document on its own, so a file is read on its own
 // (@yaks/code reads each package's vocab.json this way). What joins two
-// documents is their ids: a `_comp` is identified by its name, a `_prop` by
-// its component and its name — declared identities a graph derives — so an
-// `extends` entry's properties land on the component another package
-// declares, and neither document knows the other. `fromBundles` goes back, to
-// documents `loadVocab` takes.
+// documents is their ids: a `_package` and a `_comp` are identified by their
+// names, a `_prop` by its component and its name — declared identities a
+// graph derives — so an `extends` entry's properties land on the component
+// another package declares, and neither document knows the other.
+// `fromBundles` goes back, to documents `loadVocab` takes.
 //
 // A keyword with a column of its own is written there, and every other one an
 // entry says — another package's (`prefix`, `store`) or JSON Schema's own
@@ -41,7 +43,7 @@ export type Bundle = {
  * entities in every graph that reads it.
  */
 export type Ids = (
-  comp: '_comp' | '_prop',
+  comp: '_package' | '_comp' | '_prop',
   values: Record<string, unknown>,
 ) => string
 
@@ -80,11 +82,13 @@ let row = (s: PropSchema, cols: string[], skip: string[]) => {
 }
 
 /**
- * One document's components as bundles: a `_comp` for each it declares, a
- * `_prop` for each property it declares or adds (`extends`), a `_before` edge
- * for each kind its `before` names, and a bare `{entity}` for each component
- * it only names, so every reference lands on an entity that exists. A tool, a
- * rule or any other entry that is not a component is left out.
+ * One document's components as bundles: a `_package` where the document names
+ * its `package` (its `description` the package's), a `_comp` for each component
+ * it declares, a `_prop` for each property it declares or adds (`extends`), a
+ * `_before` edge for each kind its `before` names. A component it only names
+ * (`before`, `extends`) is referred to by the id its name derives, whichever
+ * document declares it. A tool, a rule or any other entry that is not a
+ * component is left out.
  *
  * ```ts
  * let id = (comp: string, v: Record<string, unknown>) =>
@@ -99,13 +103,15 @@ let row = (s: PropSchema, cols: string[], skip: string[]) => {
  * ```
  */
 export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
-  let pkg = doc.package ?? null
-  let named = new Set<string>()
-  let comp = (name: string) => {
-    let eid = id('_comp', { name })
-    named.add(eid)
-    return eid
-  }
+  let pkg = doc.package ? id('_package', { name: doc.package }) : null
+  let comp = (name: string) => id('_comp', { name })
+  let packages: Bundle[] = pkg
+    ? [{
+      entity: { eid: pkg },
+      _package: { name: doc.package },
+      doc: { title: doc.package, body: doc.description ?? null },
+    }]
+    : []
   let comps: Bundle[] = []
   let props: Bundle[] = []
   let edges: Bundle[] = []
@@ -142,10 +148,7 @@ export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
       })
     )
   }
-  let declared = new Set(comps.map((b) => b.entity.eid))
-  let mentions = [...named].filter((eid) => !declared.has(eid))
-    .map((eid) => ({ entity: { eid } }))
-  return [...mentions, ...comps, ...props, ...edges]
+  return [...packages, ...comps, ...props, ...edges]
 }
 
 // A component's columns as read back, without the nulls a store fills an
@@ -167,18 +170,26 @@ let described = (b: Bundle) => {
  * components, and an `extends` entry wherever a package added properties to a
  * component another one declares. `loadVocab` of what it returns is the
  * vocabulary the bundles were projected from. It reads the rows a graph holds
- * (`._comp`, `._prop`, `._before`), with whatever else those entities wear.
- * An edge to an entity no `_comp` names is a kind these bundles never declared,
- * and is left out.
+ * (`._package`, `._comp`, `._prop`, `._before`), with whatever else those
+ * entities wear. An edge to an entity no `_comp` names is a kind these bundles
+ * never declared, and is left out.
  */
 export let fromBundles = (bundles: Bundle[]): VocabDoc[] => {
+  let packages = new Map(
+    bundles.filter((b) => b._package).map((b) => [
+      b.entity.eid,
+      String(kept(b, '_package').name),
+    ]),
+  )
+  let packageOf = (eid: unknown) => packages.get(String(eid)) ?? ''
   let named = new Map<string, { name: string; pkg: string }>()
   let docs = new Map<string, Record<string, PropSchema>>()
   let defs = (pkg: string) => docs.get(pkg) ?? docs.set(pkg, {}).get(pkg)!
   for (let b of bundles.filter((b) => b._comp)) {
-    let { name, package: pkg = '', keywords, ...cols } = kept(b, '_comp')
-    named.set(b.entity.eid, { name: String(name), pkg: String(pkg) })
-    defs(String(pkg))[String(name)] = {
+    let { name, package: at, keywords, ...cols } = kept(b, '_comp')
+    let pkg = packageOf(at)
+    named.set(b.entity.eid, { name: String(name), pkg })
+    defs(pkg)[String(name)] = {
       component: true,
       type: 'object',
       ...keywords as object,
@@ -192,12 +203,13 @@ export let fromBundles = (bundles: Bundle[]): VocabDoc[] => {
   let props = bundles.filter((b) => b._prop)
     .sort((a, b) => ord(a, '_prop', 'ord') - ord(b, '_prop', 'ord'))
   for (let b of props) {
-    let { comp, name, ord: _, package: pkg = '', required, keywords, ...cols } =
-      kept(b, '_prop')
+    let { comp, name, ord: _, package: at, required, keywords, ...cols } = kept(
+      b,
+      '_prop',
+    )
     let home = named.get(String(comp))
     if (!home) continue
-    let at = defs(String(pkg))
-    let entry = at[home.name] ??= {
+    let entry = defs(packageOf(at))[home.name] ??= {
       component: true,
       extends: true,
       properties: {},

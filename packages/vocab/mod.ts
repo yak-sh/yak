@@ -11,7 +11,7 @@
 // The pieces:
 //   meta.ts      the core keyword set (a JSON Schema $vocabulary document),
 //                the meta-schema a vocabulary document validates against, and
-//                the meta vocabulary (`_comp`, `_prop`, `_before`)
+//                the meta vocabulary (`_package`, `_comp`, `_prop`, `_before`)
 //   keywords.ts  the extension point: another package registers its own
 //                keywords, and the loader carries them without interpreting
 //                them

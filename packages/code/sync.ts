@@ -236,14 +236,15 @@ export let codeMirror = async (
     }
     // The package a path is the own vocabulary of: `vocab.json` beside a
     // manifest that names one, now or when it was last read.
-    let vocabOf = (path: string): string | undefined => {
+    let vocabOf = (path: string): Said | undefined => {
       if (!describes || !/(^|\/)vocab\.json$/.test(path)) return
       let at = path.replace(/vocab\.json$/, 'deno.json')
+      let now = pkgs.find((p) => p.path == at)
+      if (now) return { pkg: now.name, description: now.description }
       let was = wasPkgs.find((b) =>
         comp(b, 'package')?.manifest == moduleOf(at)
       )
-      return pkgs.find((p) => p.path == at)?.name ??
-        (was ? str(comp(was, 'package')?.name) : undefined)
+      return was ? { pkg: str(comp(was, 'package')?.name) } : undefined
     }
     let vocabs: Said[] = []
 
@@ -262,7 +263,7 @@ export let codeMirror = async (
       if (gone.includes(path)) {
         change.push({ entity: { eid: m }, file: null, module: null, doc: null })
         let pkg = vocabOf(path)
-        if (pkg) vocabs.push({ pkg })
+        if (pkg) vocabs.push(pkg)
         continue
       }
       let body = text(path)
@@ -271,7 +272,7 @@ export let codeMirror = async (
       let pkg = vocabOf(path)
       if (pkg) {
         try {
-          vocabs.push({ pkg, doc: JSON.parse(body) as VocabDoc })
+          vocabs.push({ ...pkg, doc: JSON.parse(body) as VocabDoc })
         } catch {
           said.unparsed.push(path)
         }

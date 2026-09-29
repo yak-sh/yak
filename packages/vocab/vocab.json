@@ -4,8 +4,23 @@
     "https://yak.sh/vocab/edge": true
   },
   "title": "vocab",
-  "description": "A vocabulary described as entities: a `_comp` per component, a `_prop` per property, a `_before` edge per kind a kind sorts before. Each wears `doc` for its name and its description. The names start with `_`, which no authored name can.",
+  "description": "A vocabulary described as entities: a `_package` per document, a `_comp` per component it declares, a `_prop` per property, a `_before` edge per kind a kind sorts before. Each wears `doc` for its name and its description. The names start with `_`, which no authored name can.",
   "$defs": {
+    "_package": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "wire": false,
+      "before": ["doc"],
+      "description": "a package whose vocabulary declares components or extends them. Its doc.title is its name, its doc.body its description",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "the name it is published under"
+        }
+      }
+    },
     "_comp": {
       "component": true,
       "type": "object",
@@ -21,6 +36,8 @@
         },
         "package": {
           "type": "string",
+          "ref": "_package",
+          "death": "cascade",
           "description": "the package whose vocabulary declares it"
         },
         "kind": {
@@ -105,6 +122,8 @@
         },
         "package": {
           "type": "string",
+          "ref": "_package",
+          "death": "cascade",
           "description": "the package whose vocabulary declares it: the component's own, or one that extends it"
         },
         "type": {

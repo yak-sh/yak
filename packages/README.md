@@ -657,14 +657,15 @@ distinguish implemented behavior from remaining proposals.
 - **`./tools` is a reserved subpath that one core package still uses for
   something else.** `@yaks/vocab/tools` is the tool mechanism — validating a
   declaration's input — rather than one plugin's implementations, and it
-  predates this convention. Nothing loads it as a plugin, so nothing breaks; the
-  check in `packages/facets_test.ts` reserves these subpath names only on
-  packages that declare components of their own. `@yaks/graph/tools` was the
-  same until the generic tool tier moved into that package's own `vocab.json`:
-  it now exports `loadTools` and the implementations behind `graph apply` and
-  the rest, which is exactly what the subpath name means. The proposal, if the
-  remaining one ever causes a problem: rename it to `./tool`, singular — one
-  declaration, not a table of implementations.
+  predates this convention. @yaks/vocab is a plugin now (its `./vocab` is the
+  meta vocabulary) but declares no tool, so a host never asks it for tool code
+  and nothing breaks; the check in `packages/facets_test.ts` reads `./tools` as
+  a facet only on packages whose words declare a tool. `@yaks/graph/tools` was
+  the same until the generic tool tier moved into that package's own
+  `vocab.json`: it now exports `loadTools` and the implementations behind
+  `graph apply` and the rest, which is exactly what the subpath name means. The
+  proposal, if the remaining one ever causes a problem: rename it to `./tool`,
+  singular — one declaration, not a table of implementations.
 - **A tool call that another process already ran.** A provider CLI's transcript
   is full of them, and `call{to, args}` plus `result{call}` are exactly the
   right components to describe what it did — except that a `call` in this graph

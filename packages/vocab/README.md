@@ -515,29 +515,34 @@ them, refuses a name declared twice, and `loadVocab` skips them.
 ## A vocabulary as entities
 
 A vocabulary can be held in a graph, where it is read, searched and linked like
-anything else. The **meta vocabulary** (`meta/vocab.json`, `metaDoc`) declares
-the components it is held in:
+anything else. The **meta vocabulary** (this package's `vocab.json`, `metaDoc`)
+declares the components it is held in:
 
-| component | one per                                                              | its `doc`                                 |
-| --------- | -------------------------------------------------------------------- | ----------------------------------------- |
-| `_comp`   | component a document declares                                        | title: the name; body: its description    |
-| `_prop`   | property, in `comp` at `ord`                                         | title: `comp.prop`; body: its description |
-| `_before` | kind a kind sorts before (@yaks/edge relation, `edge.ord` its place) | none                                      |
+| component  | one per                                                                    | its `doc`                    |
+| ---------- | -------------------------------------------------------------------------- | ---------------------------- |
+| `_package` | package a document is (`VocabDoc.package`)                                 | its name; its description    |
+| `_comp`    | component a document declares, in `package`                                | its name; its description    |
+| `_prop`    | property, in `comp` at `ord`, from `package`                               | `comp.prop`; its description |
+| `_before`  | kind a kind sorts before, an @yaks/edge relation with `edge.ord` its place | none                         |
 
 A keyword with a column of its own is written there; every other keyword an
 entry says, another package's (`prefix`, `store`) or JSON Schema's own
 (`minLength`), rides verbatim in `keywords`. `_prop.type` holds a union as the
-list it is. `package` records which package declares each row, so a property
-another package adds with `extends` is told from the component's own. The
-components are `wire: false`: a graph fills them, and clients read them.
+list it is. `_prop.package` names the package that declares the property, so a
+property another package adds with `extends` is told from the component's own,
+and a `_package` shows what it declares and what it extends. The components are
+`wire: false`: a graph fills them, and clients read them. Their names start with
+`_`, which no authored name can, and a `_` component's properties never take a
+bare name in a query.
 
 `toBundles(doc, id)` reads one document into bundles, and `fromBundles(rows)`
 turns rows back into documents, one per package, that `loadVocab` loads as the
 vocabulary they came from. `id` is the graph's own derivation of a declared
-identity: a `_comp` is identified by its name and a `_prop` by its component and
-its name, so each document is read on its own and an extension's properties land
-on the component another document declares. A component a document only names
-(`before`, `extends`) gets a bare entity, so every reference lands.
+identity: a `_package` and a `_comp` are identified by their names and a `_prop`
+by its component and its name, so each document is read on its own and an
+extension's properties land on the component another document declares,
+whichever is read first. A `before` naming a kind no document declares does not
+come back from `fromBundles`; it constrains nothing in `kindOrder` either.
 
 ```ts ignore
 import { identities } from '@yaks/graph'
@@ -548,6 +553,7 @@ await g.apply(toBundles(doc, id), { trusted: true })
 await g.read('._comp ?doc') // every component, named
 await g.read('._prop.comp._comp.name=mail .order=_prop.ord ?doc') // mail's
 await g.read('._prop.ref=mail ?doc') // what refers to mail
+await g.read('._prop.package._package.name=@yaks/id ?doc') // what @yaks/id adds
 ```
 
 A host composes the meta vocabulary by listing `@yaks/vocab` among its plugins
