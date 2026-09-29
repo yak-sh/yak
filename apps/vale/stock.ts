@@ -51,16 +51,19 @@ export let BAND = 1.5
 export type Goods = { kind: string; n: number }[]
 
 // Every word a kind goes by: its own, and its name.
-let WORDS = new Map<string, string>(
-  [...Object.entries(ITEMS), ...Object.entries(BEASTS)].flatMap((
-    [kind, t],
-  ) => [[kind, kind], [t.name.toLowerCase(), kind]]),
-)
+let words = () =>
+  new Map<string, string>(
+    [...Object.entries(ITEMS), ...Object.entries(BEASTS)].flatMap((
+      [kind, t],
+    ) => [[kind, kind], [t.name.toLowerCase(), kind]]),
+  )
 
-let kindOf = (word: string): string | null =>
-  WORDS.get(word) ?? WORDS.get(word.replace(/s$/, '')) ??
-    WORDS.get(word.replace(/es$/, '')) ??
-    WORDS.get(word.replace(/ies$/, 'y')) ?? null
+let kindOf = (word: string): string | null => {
+  let known = words()
+  return known.get(word) ?? known.get(word.replace(/s$/, '')) ??
+    known.get(word.replace(/es$/, '')) ??
+    known.get(word.replace(/ies$/, 'y')) ?? null
+}
 
 /**
  * Goods as a villager says them: parts split by commas or "and", each a count
@@ -68,6 +71,8 @@ let kindOf = (word: string): string | null =>
  * nothing the vale has.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals(goods('12 coins, a Mossberry tonic and 2 tusk'), [
  *   { kind: 'coin', n: 12 },
@@ -100,6 +105,8 @@ export let goods = (text: string): Goods | null => {
  * Goods in words a person reads.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals(said([{ kind: 'coin', n: 12 }, { kind: 'tonic', n: 1 }]),
  *   '12 Coins, Mossberry tonic')
@@ -113,30 +120,36 @@ export let said = (g: Goods): string =>
 
 let mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1)
 
-// What felling one creature of each material tier's lands teaches, on
-// average: what a gathered thing or a piece of gear costs to earn.
-let ENCOUNTERS = Object.values(LEVELS).flatMap((lv) =>
-  [...new Set(dens(lv).map((d) => d.kind))].map((kind) => foeOf(kind, lv.id))
-)
-let KILL = [1, 2, 3, 4, 5].map((t) =>
-  mean(
-    ENCOUNTERS.filter((b) => !b.boss && tierOf(b.lvl) == t)
-      .map((b) => b.xp),
-  )
-)
-
 // What each land's nodes give, by the tier of the node.
 let GATHERED = new Map(Object.values(LODES).map((l) => [l.gives, l.tier]))
 
-// What each kind that falls from a creature is worth: the least a hero
-// spends, in xp of felling, until one falls to them.
-let DROPS = new Map<string, number>()
-for (let b of ENCOUNTERS) {
-  for (let [kind, chance] of b.loot) {
-    let each = kind == 'coin' ? (3 * b.lvl + 1) / 2 : 1
-    let v = b.xp / (chance * each)
-    if (!(v >= (DROPS.get(kind) ?? Infinity))) DROPS.set(kind, v)
+// The costs of the current creature designs, kept until the store replaces
+// their index. An invented creature's spoils then enter the same pricing.
+let valued: {
+  beasts: typeof BEASTS
+  kill: number[]
+  drops: Map<string, number>
+} | null = null
+let values = () => {
+  if (valued?.beasts == BEASTS) return valued
+  let encounters = Object.values(LEVELS).flatMap((lv) =>
+    [...new Set(dens(lv).map((d) => d.kind))].map((kind) => foeOf(kind, lv.id))
+  )
+  let kill = [1, 2, 3, 4, 5].map((t) =>
+    mean(
+      encounters.filter((b) => !b.boss && tierOf(b.lvl) == t)
+        .map((b) => b.xp),
+    )
+  )
+  let drops = new Map<string, number>()
+  for (let b of encounters) {
+    for (let [kind, chance] of b.loot) {
+      let each = kind == 'coin' ? (3 * b.lvl + 1) / 2 : 1
+      let v = b.xp / (chance * each)
+      if (!(v >= (drops.get(kind) ?? Infinity))) drops.set(kind, v)
+    }
   }
+  return valued = { beasts: BEASTS, kill, drops }
 }
 
 /**
@@ -146,6 +159,8 @@ for (let b of ENCOUNTERS) {
  * any village's rack gives away.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assert, assertEquals } from '@std/assert'
  * assertEquals(valueOf('sword1'), 0)
  * assert(valueOf('coin') < valueOf('jelly'))
@@ -155,12 +170,13 @@ for (let b of ENCOUNTERS) {
  */
 export let valueOf = (kind: string): number => {
   let tier = GATHERED.get(kind) ?? ITEMS[kind]?.tier
-  return RACK.includes(kind) ? 0 : DROPS.get(kind) ??
+  let { kill, drops } = values()
+  return RACK.includes(kind) ? 0 : drops.get(kind) ??
     (GATHERED.has(kind)
-      ? KILL[tier! - 1]
+      ? kill[tier! - 1]
       : tier
-      ? KILL[tier - 1] / SPOILS
-      : DROPS.get('coin')!)
+      ? kill[tier - 1] / SPOILS
+      : drops.get('coin')!)
 }
 
 /** A thing's worth in coins, as a villager haggles. */
@@ -208,6 +224,8 @@ let WARES = new Map<string, Set<string>>()
  * nodes give, coin and its potion.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assert } from '@std/assert'
  * let vale = wares('mossvale')
  * assert(vale.has('thornback') && vale.has('tusk') && vale.has('sword1'))
@@ -249,6 +267,8 @@ export let most = (level: string): number => 8 * taught(level)
  * felling them teaches a hero of the villager's land (rules.ts `worth`).
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals(worthOf([{ kind: 'slime', n: 2 }], 'mossvale'), 2 * 11)
  * ```
@@ -296,6 +316,8 @@ let FAMILIES = ['sword', 'axe', 'hammer', 'dagger', 'bow', 'staff']
  * is only their row of GIVERS.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * import { GIVERS } from './quests.ts'
  * let wren = GIVERS.find((g) => g.id == 'wren')!
@@ -689,6 +711,8 @@ export type Step = { kind: string; n: number; have: number; deed: boolean }
  * How far a hero has come with each step of what a deal asks.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let kills = [{ kind: 'thornback', at: 5 }, { kind: 'thornback', at: 1 }]
  * let bag = [{ eid: 'a', kind: 'tusk', n: 1 }]
@@ -719,6 +743,8 @@ export let steps = (
  * not hold it all.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let bag = [
  *   { eid: 'c1', kind: 'coin', n: 8 },

@@ -1,0 +1,1156 @@
+[
+  {
+    "entity": {
+      "eid": "71c04e7f-1ab3-8036-a8bc-ab61ae9d3721"
+    },
+    "beast_design": {
+      "kind": "slime",
+      "name": "Moss slime",
+      "lvl": 1,
+      "hp": 32,
+      "dmg": 4,
+      "speed": 2.2,
+      "xp": 14,
+      "reach": 1.3,
+      "aggro": 0,
+      "respawn": 40,
+      "loot": [
+        [
+          "jelly",
+          0.8
+        ],
+        [
+          "coin",
+          0.5
+        ]
+      ],
+      "size": 0.9,
+      "dust": 8836700,
+      "haunts": [
+        {
+          "near": "village",
+          "count": 10,
+          "beyond": 17,
+          "within": 40,
+          "apart": 6,
+          "roam": 5
+        }
+      ],
+      "look": {
+        "plan": "slime",
+        "body": 8178773,
+        "moss": 5216826,
+        "bloom": 15193178
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "5c7411ec-9c12-8ead-9f1c-52268c021cf0"
+    },
+    "beast_design": {
+      "kind": "hen",
+      "name": "Stray hen",
+      "lvl": 1,
+      "hp": 20,
+      "dmg": 2,
+      "speed": 2.6,
+      "xp": 10,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 36,
+      "loot": [
+        [
+          "egg",
+          0.6
+        ],
+        [
+          "feather",
+          0.5
+        ]
+      ],
+      "size": 0.55,
+      "dust": 13140042,
+      "haunts": [
+        {
+          "near": "village",
+          "count": 3,
+          "beyond": 18,
+          "within": 36,
+          "apart": 5,
+          "roam": 4
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 12614212,
+        "wing": 10115632,
+        "beak": 15249472,
+        "eye": 2103312,
+        "crest": 14172202,
+        "belly": 14727312,
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "075e8b04-2dc2-8cfc-8071-9eb661b88a37"
+    },
+    "beast_design": {
+      "kind": "hare",
+      "name": "Meadow hare",
+      "lvl": 1,
+      "hp": 22,
+      "dmg": 3,
+      "speed": 4.6,
+      "xp": 12,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 36,
+      "loot": [
+        [
+          "hide",
+          0.5
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.55,
+      "dust": 11045478,
+      "haunts": [
+        {
+          "near": "village",
+          "count": 3,
+          "beyond": 20,
+          "within": 40,
+          "apart": 6,
+          "roam": 6
+        },
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 22,
+          "apart": 6,
+          "roam": 6
+        },
+        {
+          "near": "meadow",
+          "count": 3,
+          "within": 26,
+          "apart": 6,
+          "roam": 6
+        },
+        {
+          "near": "moor",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 6,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "hopper",
+        "fur": 11045478,
+        "belly": 15721680,
+        "eye": 2103832,
+        "ears": "long",
+        "tail": "puff",
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "6d359a48-ada5-8005-a931-b34f0000ce6c"
+    },
+    "beast_design": {
+      "kind": "toad",
+      "name": "Garden toad",
+      "lvl": 1,
+      "hp": 24,
+      "dmg": 3,
+      "speed": 1.8,
+      "xp": 12,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 40,
+      "loot": [
+        [
+          "toadstone",
+          0.06
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 0.5,
+      "dust": 8026690,
+      "haunts": [
+        {
+          "near": "village",
+          "count": 2,
+          "beyond": 18,
+          "within": 34,
+          "apart": 7,
+          "roam": 3,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "hopper",
+        "fur": 8026690,
+        "belly": 14208928,
+        "eye": 1710608,
+        "frog": true,
+        "scale": 1.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "f478578e-da3f-81a2-b7a9-4c80c2adb500"
+    },
+    "beast_design": {
+      "kind": "gander",
+      "name": "Cross gander",
+      "lvl": 2,
+      "hp": 48,
+      "dmg": 6,
+      "speed": 3.4,
+      "xp": 26,
+      "reach": 1.2,
+      "aggro": 5,
+      "respawn": 50,
+      "loot": [
+        [
+          "feather",
+          0.7
+        ],
+        [
+          "egg",
+          0.3
+        ]
+      ],
+      "size": 0.8,
+      "dust": 15263968,
+      "haunts": [
+        {
+          "near": "village",
+          "count": 3,
+          "beyond": 20,
+          "within": 38,
+          "apart": 8,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 15658726,
+        "wing": 13684936,
+        "beak": 15765546,
+        "eye": 1710618,
+        "neck": 2.6,
+        "legs": 1.1,
+        "bill": "flat",
+        "scale": 1.5
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "58dc071e-fe18-8fb9-82d4-94424b59b676"
+    },
+    "beast_design": {
+      "kind": "honeyslime",
+      "name": "Honey slime",
+      "lvl": 2,
+      "hp": 50,
+      "dmg": 5,
+      "speed": 2.2,
+      "xp": 26,
+      "reach": 1.3,
+      "aggro": 0,
+      "respawn": 44,
+      "loot": [
+        [
+          "honey",
+          0.6
+        ],
+        [
+          "jelly",
+          0.4
+        ]
+      ],
+      "size": 0.9,
+      "dust": 15775808,
+      "haunts": [
+        {
+          "near": "village",
+          "count": 3,
+          "beyond": 20,
+          "within": 40,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.5
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "slime",
+        "body": 15775808,
+        "moss": 13142568,
+        "bloom": 16773280
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "29ec341d-d128-8781-9231-5d2ebd9878e9"
+    },
+    "beast_design": {
+      "kind": "moth",
+      "name": "Lamp moth",
+      "lvl": 1,
+      "hp": 18,
+      "dmg": 2,
+      "speed": 2.4,
+      "xp": 10,
+      "reach": 1.2,
+      "aggro": 0,
+      "respawn": 32,
+      "loot": [
+        [
+          "dust",
+          0.7
+        ]
+      ],
+      "size": 0.6,
+      "dust": 14208176,
+      "haunts": [
+        {
+          "near": "village",
+          "count": 3,
+          "beyond": 17,
+          "within": 30,
+          "apart": 7,
+          "roam": 6,
+          "odds": 0.6
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 6,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "flier",
+        "body": 13154456,
+        "wing": 15260864,
+        "eye": 3154968,
+        "wings": "dust",
+        "fly": 1.4,
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "a738e3e4-fd90-8931-be9c-5b4994cc32ab"
+    },
+    "beast_design": {
+      "kind": "pheasant",
+      "name": "Ring pheasant",
+      "lvl": 1,
+      "hp": 22,
+      "dmg": 2,
+      "speed": 3.8,
+      "xp": 12,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 36,
+      "loot": [
+        [
+          "feather",
+          0.8
+        ],
+        [
+          "egg",
+          0.2
+        ]
+      ],
+      "size": 0.6,
+      "dust": 12084270,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 22,
+          "apart": 6,
+          "roam": 6
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 26,
+          "apart": 6,
+          "roam": 6,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 12084270,
+        "wing": 9067058,
+        "beak": 14207120,
+        "eye": 1708048,
+        "crest": 13122090,
+        "belly": 9062952,
+        "neck": 1.4,
+        "tail": "long",
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "f4d9ee55-8462-8577-9374-9174c76d1720"
+    },
+    "beast_design": {
+      "kind": "bee",
+      "name": "Clover bee",
+      "lvl": 2,
+      "hp": 36,
+      "dmg": 5,
+      "speed": 3.2,
+      "xp": 24,
+      "reach": 1.2,
+      "aggro": 3,
+      "respawn": 40,
+      "loot": [
+        [
+          "honey",
+          0.5
+        ],
+        [
+          "sting",
+          0.25
+        ]
+      ],
+      "size": 0.6,
+      "dust": 15777840,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 3,
+          "within": 20,
+          "apart": 5,
+          "roam": 7,
+          "odds": 0.7
+        },
+        {
+          "near": "meadow",
+          "count": 3,
+          "within": 24,
+          "apart": 5,
+          "roam": 7,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "flier",
+        "body": 15777840,
+        "wing": 15267064,
+        "eye": 1710618,
+        "wings": "clear",
+        "stripe": 2761240,
+        "sting": 2761240,
+        "fly": 1.1,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "ad5134e9-2f4e-8c70-8280-4e92b203f17f"
+    },
+    "beast_design": {
+      "kind": "hornet",
+      "name": "Red hornet",
+      "lvl": 4,
+      "hp": 100,
+      "dmg": 12,
+      "speed": 4.6,
+      "xp": 60,
+      "reach": 1.3,
+      "aggro": 8,
+      "respawn": 60,
+      "loot": [
+        [
+          "sting",
+          0.6
+        ],
+        [
+          "venom",
+          0.15
+        ],
+        [
+          "coin",
+          0.4
+        ]
+      ],
+      "size": 0.7,
+      "dust": 13652010,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 3,
+          "within": 16,
+          "apart": 6,
+          "roam": 6,
+          "odds": 0.45
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 20,
+          "apart": 6,
+          "roam": 6,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "flier",
+        "body": 13128746,
+        "wing": 15788248,
+        "eye": 2756624,
+        "wings": "clear",
+        "stripe": 2759188,
+        "sting": 2101264,
+        "fly": 1.2,
+        "scale": 1.6
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "84ea4951-1e3a-8fa7-a800-7a36b05fc0d8"
+    },
+    "beast_design": {
+      "kind": "crow",
+      "name": "Field crow",
+      "lvl": 2,
+      "hp": 44,
+      "dmg": 6,
+      "speed": 4.2,
+      "xp": 26,
+      "reach": 1.2,
+      "aggro": 5,
+      "respawn": 44,
+      "loot": [
+        [
+          "feather",
+          0.7
+        ],
+        [
+          "coin",
+          0.45
+        ]
+      ],
+      "size": 0.6,
+      "dust": 2763314,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 22,
+          "apart": 6,
+          "roam": 8,
+          "odds": 0.8
+        },
+        {
+          "near": "moor",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 8,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 2763316,
+        "wing": 2236972,
+        "beak": 3816000,
+        "eye": 9079440,
+        "fly": 1.8,
+        "span": 1,
+        "tail": "fan",
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "25411c4c-5212-8e4d-88b7-abfa5743a304"
+    },
+    "beast_design": {
+      "kind": "hedgehog",
+      "name": "Hedgehog",
+      "lvl": 2,
+      "hp": 50,
+      "dmg": 4,
+      "speed": 2,
+      "xp": 24,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 44,
+      "loot": [
+        [
+          "quill",
+          0.6
+        ]
+      ],
+      "size": 0.5,
+      "dust": 9072720,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 22,
+          "apart": 6,
+          "roam": 4
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 26,
+          "apart": 6,
+          "roam": 4,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 9072720,
+        "ridge": 5916210,
+        "snout": 14203024,
+        "eye": 1708048,
+        "thorns": true,
+        "legs": 0.5,
+        "build": [
+          1.1,
+          0.8,
+          0.8
+        ],
+        "muzzle": 1.3,
+        "scale": 0.5
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "e0a8d275-2983-85db-b1c8-9aa170714aa7"
+    },
+    "beast_design": {
+      "kind": "ram",
+      "name": "Wild ram",
+      "lvl": 6,
+      "hp": 253,
+      "dmg": 15,
+      "speed": 3.8,
+      "xp": 105,
+      "reach": 1.6,
+      "aggro": 0,
+      "respawn": 60,
+      "loot": [
+        [
+          "fleece",
+          0.7
+        ],
+        [
+          "horn",
+          0.3
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 1.1,
+      "dust": 15261900,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 3,
+          "within": 22,
+          "apart": 7,
+          "roam": 7,
+          "odds": 0.7
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 7,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 15261900,
+        "ridge": 14209212,
+        "snout": 4866112,
+        "eye": 1708048,
+        "horns": "curl",
+        "horn": 13154448,
+        "tail": "stub",
+        "belly": 14209212,
+        "legs": 1.1,
+        "build": [
+          1.15,
+          1.1,
+          1
+        ],
+        "muzzle": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "82c510e2-b0e5-8370-851d-2cdea0fc2bc8"
+    },
+    "beast_design": {
+      "kind": "aurochs",
+      "name": "Longhorn aurochs",
+      "lvl": 7,
+      "hp": 340,
+      "dmg": 20,
+      "speed": 3.6,
+      "xp": 150,
+      "reach": 2.2,
+      "aggro": 0,
+      "respawn": 100,
+      "loot": [
+        [
+          "hide",
+          0.8
+        ],
+        [
+          "horn",
+          0.5
+        ],
+        [
+          "coin",
+          0.7
+        ]
+      ],
+      "size": 1.7,
+      "dust": 6965814,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 20,
+          "apart": 10,
+          "roam": 8,
+          "odds": 0.4
+        },
+        {
+          "near": "meadow",
+          "count": 1,
+          "within": 24,
+          "apart": 10,
+          "roam": 8,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 6964274,
+        "ridge": 4861474,
+        "snout": 12098176,
+        "eye": 1708048,
+        "horns": "spike",
+        "horn": 15721676,
+        "tail": "thin",
+        "legs": 1.2,
+        "build": [
+          1.3,
+          1.3,
+          1.25
+        ],
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "5a20d36e-4079-877e-a731-b3329c005060"
+    },
+    "beast_design": {
+      "kind": "fox",
+      "name": "Red fox",
+      "lvl": 3,
+      "hp": 70,
+      "dmg": 8,
+      "speed": 5,
+      "xp": 40,
+      "reach": 1.3,
+      "aggro": 0,
+      "respawn": 50,
+      "loot": [
+        [
+          "pelt",
+          0.5
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.8,
+      "dust": 13660218,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 22,
+          "apart": 8,
+          "roam": 8,
+          "odds": 0.8
+        },
+        {
+          "near": "meadow",
+          "count": 1,
+          "within": 26,
+          "apart": 8,
+          "roam": 8,
+          "odds": 0.6
+        },
+        {
+          "near": "woods",
+          "count": 1,
+          "beyond": 14,
+          "within": 26,
+          "apart": 8,
+          "roam": 8,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 13660218,
+        "ridge": 11030570,
+        "snout": 15787734,
+        "eye": 1708048,
+        "ears": "point",
+        "tail": "bush",
+        "belly": 16051424,
+        "legs": 1.1,
+        "build": [
+          0.7,
+          0.75,
+          1
+        ],
+        "muzzle": 1.9,
+        "scale": 0.85
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "1cf61874-eae4-8a9b-a957-8bbbfbd5042b"
+    },
+    "beast_design": {
+      "kind": "grasssnake",
+      "name": "Grass snake",
+      "lvl": 2,
+      "hp": 44,
+      "dmg": 6,
+      "speed": 2.6,
+      "xp": 26,
+      "reach": 1.3,
+      "aggro": 3,
+      "respawn": 44,
+      "loot": [
+        [
+          "scale",
+          0.5
+        ]
+      ],
+      "size": 0.7,
+      "dust": 6982202,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 22,
+          "apart": 6,
+          "roam": 5,
+          "odds": 0.7
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 26,
+          "apart": 6,
+          "roam": 5,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "serpent",
+        "skin": 5933626,
+        "belly": 14209184,
+        "eye": 1710608
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "533ff4b1-aa5e-8042-a182-a98fe82e57b8"
+    },
+    "beast_design": {
+      "kind": "adder",
+      "name": "Heath adder",
+      "lvl": 5,
+      "hp": 150,
+      "dmg": 15,
+      "speed": 3.4,
+      "xp": 84,
+      "reach": 1.5,
+      "aggro": 7,
+      "respawn": 60,
+      "loot": [
+        [
+          "venom",
+          0.4
+        ],
+        [
+          "scale",
+          0.5
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 0.9,
+      "dust": 9075290,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 18,
+          "apart": 8,
+          "roam": 5,
+          "odds": 0.5
+        },
+        {
+          "near": "moor",
+          "count": 2,
+          "within": 26,
+          "apart": 8,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "serpent",
+        "skin": 10127978,
+        "belly": 4866104,
+        "eye": 14172192,
+        "band": 2761760,
+        "length": 7,
+        "girth": 1.1,
+        "scale": 1.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "065fb2f5-6847-803b-bc5c-1971fe0c03ec"
+    },
+    "beast_design": {
+      "kind": "wisp",
+      "name": "Will-o\u2019-the-wisp",
+      "lvl": 9,
+      "hp": 332,
+      "dmg": 23,
+      "speed": 3,
+      "xp": 180,
+      "reach": 1.5,
+      "aggro": 7,
+      "respawn": 80,
+      "loot": [
+        [
+          "glow",
+          0.6
+        ],
+        [
+          "dust",
+          0.3
+        ]
+      ],
+      "size": 0.8,
+      "dust": 12120319,
+      "haunts": [
+        {
+          "near": "moor",
+          "count": 4,
+          "within": 26,
+          "apart": 10,
+          "roam": 8,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "wisp",
+        "core": 16777215,
+        "glow": 9099519,
+        "mote": 13694207
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d7156ff8-8f6b-8ebf-8a55-dd2db0941cb0"
+    },
+    "beast_design": {
+      "kind": "rollbeetle",
+      "name": "Rollbeetle",
+      "lvl": 3,
+      "hp": 100,
+      "dmg": 7,
+      "speed": 2,
+      "xp": 42,
+      "reach": 1.3,
+      "aggro": 0,
+      "respawn": 50,
+      "loot": [
+        [
+          "chitin",
+          0.6
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.8,
+      "dust": 3824202,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 2,
+          "within": 22,
+          "apart": 7,
+          "roam": 4
+        },
+        {
+          "near": "meadow",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 4,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 3037774,
+        "under": 1714724,
+        "leg": 1710618,
+        "eye": 1052688,
+        "mark": 5937786,
+        "scale": 1.5
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "137f2089-b954-8385-ba58-ecd32ca5fcb9"
+    },
+    "beast_design": {
+      "kind": "bogle",
+      "name": "Straw bogle",
+      "lvl": 7,
+      "hp": 282,
+      "dmg": 17,
+      "speed": 2.8,
+      "xp": 139,
+      "reach": 1.8,
+      "aggro": 6,
+      "respawn": 70,
+      "loot": [
+        [
+          "coin",
+          0.8
+        ],
+        [
+          "tonic",
+          0.15
+        ]
+      ],
+      "size": 1.2,
+      "dust": 14205048,
+      "haunts": [
+        {
+          "near": "fields",
+          "count": 1,
+          "within": 14,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.4
+        },
+        {
+          "near": "moor",
+          "count": 1,
+          "within": 22,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.5
+        },
+        {
+          "near": "ruins",
+          "count": 1,
+          "within": 16,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 13153418,
+        "garb": 6969994,
+        "eye": 2759184,
+        "head": "hat",
+        "top": 12098122,
+        "build": [
+          0.85,
+          1.05
+        ],
+        "long": true,
+        "stoop": 0.15
+      }
+    }
+  }
+]

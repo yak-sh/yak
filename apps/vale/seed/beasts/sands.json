@@ -1,0 +1,462 @@
+[
+  {
+    "entity": {
+      "eid": "bf4fe13f-c80c-86a5-acf5-1ba495382596"
+    },
+    "beast_design": {
+      "kind": "fennec",
+      "name": "Fennec fox",
+      "lvl": 8,
+      "hp": 264,
+      "dmg": 17,
+      "speed": 5.2,
+      "xp": 138,
+      "reach": 1.3,
+      "aggro": 0,
+      "respawn": 60,
+      "loot": [
+        [
+          "pelt",
+          0.6
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 0.7,
+      "dust": 15255696,
+      "haunts": [
+        {
+          "near": "dunes",
+          "count": 4,
+          "within": 28,
+          "apart": 8,
+          "roam": 7,
+          "odds": 0.8
+        },
+        {
+          "near": "oasis",
+          "count": 2,
+          "within": 20,
+          "apart": 8,
+          "roam": 7,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 15255696,
+        "ridge": 13148272,
+        "snout": 16314592,
+        "eye": 1708048,
+        "ears": "point",
+        "tail": "bush",
+        "belly": 16314592,
+        "build": [
+          0.65,
+          0.7,
+          0.9
+        ],
+        "muzzle": 1.6,
+        "scale": 0.75
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "eb6c395c-15d8-8c6d-bdd5-b2690817b4fe"
+    },
+    "beast_design": {
+      "kind": "scarab",
+      "name": "Tomb scarab",
+      "lvl": 12,
+      "hp": 612,
+      "dmg": 26,
+      "speed": 2.8,
+      "xp": 263,
+      "reach": 1.6,
+      "aggro": 6,
+      "respawn": 80,
+      "loot": [
+        [
+          "chitin",
+          0.8
+        ],
+        [
+          "coin",
+          0.8
+        ],
+        [
+          "draught",
+          0.1
+        ]
+      ],
+      "size": 1.1,
+      "dust": 14198832,
+      "haunts": [
+        {
+          "near": "dunes",
+          "count": 4,
+          "within": 28,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.8
+        },
+        {
+          "near": "ruins",
+          "count": 4,
+          "within": 16,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 14198832,
+        "under": 5914656,
+        "leg": 3811860,
+        "eye": 1052688,
+        "jaws": 12093984,
+        "mark": 2787978,
+        "scale": 1.8
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "48ddc7d2-04c7-89e7-b003-95f5b8585d6a"
+    },
+    "beast_design": {
+      "kind": "vulture",
+      "name": "Dune vulture",
+      "lvl": 11,
+      "hp": 474,
+      "dmg": 27,
+      "speed": 4.4,
+      "xp": 234,
+      "reach": 1.6,
+      "aggro": 8,
+      "respawn": 80,
+      "loot": [
+        [
+          "feather",
+          0.8
+        ],
+        [
+          "talon",
+          0.4
+        ],
+        [
+          "bone",
+          0.3
+        ]
+      ],
+      "size": 1.1,
+      "dust": 4864564,
+      "haunts": [
+        {
+          "near": "dunes",
+          "count": 4,
+          "within": 28,
+          "apart": 8,
+          "roam": 9,
+          "odds": 0.8
+        },
+        {
+          "near": "mesa",
+          "count": 4,
+          "within": 22,
+          "apart": 8,
+          "roam": 9,
+          "odds": 0.7
+        },
+        {
+          "near": "ashfield",
+          "count": 2,
+          "within": 26,
+          "apart": 8,
+          "roam": 9,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 4864564,
+        "wing": 3812392,
+        "beak": 14207136,
+        "eye": 14696480,
+        "belly": 6969936,
+        "crest": 14192768,
+        "neck": 1.6,
+        "bill": "hook",
+        "tail": "fan",
+        "fly": 2,
+        "span": 1.6,
+        "scale": 1.5
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "34f3c8ec-e32a-865e-916e-8e5355585611"
+    },
+    "beast_design": {
+      "kind": "sandwyrm",
+      "name": "Sand wyrm",
+      "lvl": 15,
+      "hp": 1620,
+      "dmg": 45,
+      "speed": 3.4,
+      "xp": 774,
+      "reach": 2.6,
+      "aggro": 9,
+      "respawn": 240,
+      "loot": [
+        [
+          "scale",
+          1
+        ],
+        [
+          "fang",
+          0.5
+        ],
+        [
+          "draught",
+          0.4
+        ],
+        [
+          "blade5",
+          0.05
+        ]
+      ],
+      "size": 2.2,
+      "dust": 13150320,
+      "haunts": [
+        {
+          "near": "dunes",
+          "count": 2,
+          "within": 20,
+          "apart": 1,
+          "roam": 6,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "serpent",
+        "skin": 13150320,
+        "belly": 15259824,
+        "eye": 2101264,
+        "band": 10123848,
+        "frill": 13134394,
+        "length": 9,
+        "girth": 2,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "35a07040-84da-840d-a08e-85c66be4d7c4"
+    },
+    "beast_design": {
+      "kind": "strider",
+      "name": "Sand strider",
+      "lvl": 9,
+      "hp": 378,
+      "dmg": 22,
+      "speed": 5,
+      "xp": 180,
+      "reach": 1.8,
+      "aggro": 0,
+      "respawn": 80,
+      "loot": [
+        [
+          "hide",
+          0.7
+        ],
+        [
+          "pelt",
+          0.3
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 1.4,
+      "dust": 14203016,
+      "haunts": [
+        {
+          "near": "oasis",
+          "count": 4,
+          "within": 20,
+          "apart": 8,
+          "roam": 8
+        },
+        {
+          "near": "dunes",
+          "count": 4,
+          "within": 28,
+          "apart": 10,
+          "roam": 9,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 14203016,
+        "ridge": 12097640,
+        "snout": 13150328,
+        "eye": 1708048,
+        "ears": "long",
+        "tail": "thin",
+        "legs": 1.6,
+        "build": [
+          0.8,
+          0.9,
+          1.1
+        ],
+        "muzzle": 1.3,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "9c170fd7-4bbb-841c-b1e5-ca4d77c7c5cf"
+    },
+    "beast_design": {
+      "kind": "warden",
+      "name": "Tomb warden",
+      "lvl": 17,
+      "hp": 1972,
+      "dmg": 49,
+      "speed": 3,
+      "xp": 918,
+      "reach": 2.4,
+      "aggro": 9,
+      "respawn": 240,
+      "loot": [
+        [
+          "coin",
+          1
+        ],
+        [
+          "gem",
+          0.3
+        ],
+        [
+          "elixir",
+          0.2
+        ],
+        [
+          "blade6",
+          0.05
+        ]
+      ],
+      "size": 1.6,
+      "dust": 14207136,
+      "haunts": [
+        {
+          "near": "ruins",
+          "count": 2,
+          "within": 14,
+          "apart": 10,
+          "roam": 4
+        },
+        {
+          "near": "dunes",
+          "count": 2,
+          "within": 20,
+          "apart": 14,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 14207136,
+        "garb": 9071162,
+        "eye": 4251856,
+        "build": [
+          1.2,
+          1.3
+        ],
+        "head": "crown",
+        "top": 14725184,
+        "club": 13148224,
+        "stoop": 0.05
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d4ad3db8-0e49-866f-a8c8-3d50242c69d6"
+    },
+    "beast_design": {
+      "kind": "deathstalker",
+      "name": "Deathstalker",
+      "lvl": 16,
+      "hp": 896,
+      "dmg": 37,
+      "speed": 3.8,
+      "xp": 387,
+      "reach": 2.2,
+      "aggro": 9,
+      "respawn": 120,
+      "loot": [
+        [
+          "chitin",
+          0.8
+        ],
+        [
+          "sting",
+          0.5
+        ],
+        [
+          "venom",
+          0.4
+        ],
+        [
+          "coin",
+          0.6
+        ]
+      ],
+      "size": 1.6,
+      "dust": 2760736,
+      "haunts": [
+        {
+          "near": "dunes",
+          "count": 4,
+          "within": 28,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.9
+        },
+        {
+          "near": "mesa",
+          "count": 2,
+          "within": 22,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 2761254,
+        "under": 5904922,
+        "leg": 1709078,
+        "eye": 16728096,
+        "pairs": 4,
+        "claws": 3811886,
+        "sting": 13119530,
+        "tail": true,
+        "mark": 10493984,
+        "scale": 1.9
+      }
+    }
+  }
+]

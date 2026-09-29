@@ -8,6 +8,9 @@ import { HANDLES, WEIGHTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { beast, BUILD, CHILD, type Figure, hero, person } from './figures.ts'
 import { fights, type Out, out, pack, place } from './mesh.ts'
+import { seedBeasts } from './beasts_fixture.ts'
+
+seedBeasts()
 
 let parts = (f: Figure) => {
   let got: THREE.Bone[] = []

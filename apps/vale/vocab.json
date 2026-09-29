@@ -5,6 +5,96 @@
   "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. The levels, creatures, quests and items themselves are the app's own data, grown the same on every page.",
   "models": "open",
   "$defs": {
+    "beast_design": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "unique": [["kind"]],
+      "description": "One creature kind: its body, fight, loot and habitats. Its created stamp records who invented it.",
+      "properties": {
+        "kind": { "type": "string", "minLength": 1, "index": true },
+        "name": { "type": "string", "minLength": 1 },
+        "lvl": { "type": "number", "minimum": 1 },
+        "hp": { "type": "number", "exclusiveMinimum": 0 },
+        "dmg": { "type": "number", "minimum": 0 },
+        "speed": { "type": "number", "minimum": 0 },
+        "xp": { "type": "number", "minimum": 0 },
+        "reach": { "type": "number", "exclusiveMinimum": 0 },
+        "aggro": { "type": "number", "minimum": 0 },
+        "respawn": { "type": "number", "minimum": 0 },
+        "loot": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              { "type": "string" },
+              { "type": "number", "minimum": 0, "maximum": 1 }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "size": { "type": "number", "exclusiveMinimum": 0 },
+        "dust": { "type": "integer", "minimum": 0, "maximum": 16777215 },
+        "haunts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "near": { "type": "string" },
+              "count": { "type": "integer", "minimum": 0 },
+              "within": { "type": "number", "exclusiveMinimum": 0 },
+              "beyond": { "type": "number", "minimum": 0 },
+              "apart": { "type": "number", "minimum": 0 },
+              "roam": { "type": "number", "minimum": 0 },
+              "odds": { "type": "number", "minimum": 0, "maximum": 1 }
+            },
+            "required": ["near", "count", "within", "apart", "roam"]
+          }
+        },
+        "look": {
+          "type": "object",
+          "description": "A body plan and that plan's colours and proportions.",
+          "properties": {
+            "plan": {
+              "type": "string",
+              "enum": [
+                "biped",
+                "bird",
+                "crag",
+                "crawler",
+                "flier",
+                "hopper",
+                "quadruped",
+                "seal",
+                "serpent",
+                "slime",
+                "wisp"
+              ]
+            }
+          },
+          "required": ["plan"]
+        },
+        "boss": { "type": "boolean" }
+      },
+      "required": [
+        "kind",
+        "name",
+        "lvl",
+        "hp",
+        "dmg",
+        "speed",
+        "xp",
+        "reach",
+        "aggro",
+        "respawn",
+        "loot",
+        "size",
+        "dust",
+        "haunts",
+        "look"
+      ]
+    },
     "sfx": {
       "component": true,
       "type": "object",

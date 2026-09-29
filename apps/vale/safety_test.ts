@@ -7,6 +7,9 @@ import { inVillage, prowl, rest, sheltered } from './sim.ts'
 import { EDGE } from './streets.ts'
 import { flat, hearthOf, streetsOf, vale, villageOf } from './terrain.ts'
 import { lanesIn, nearWay, roadsOf } from './ways.ts'
+import { seedBeasts } from './beasts_fixture.ts'
+
+seedBeasts()
 
 Deno.test('the fire and traveled paths shelter a traveler', () => {
   let v = vale(), hearth = hearthOf('mossvale')!

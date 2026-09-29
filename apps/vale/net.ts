@@ -244,6 +244,19 @@ export let connect = (base: URL) => {
       })
     })
 
+  // A design family is a store query. A page starts with its rows and keeps
+  // the same readers current when an editor adds or changes a design.
+  let designs = (
+    name: string,
+    use: (rows: Bundle[]) => void,
+  ): Promise<void> => {
+    let watch = c.watch(`.${name}`)
+    let update = () => watch.ready && use(watch.value)
+    watch.subscribe(update)
+    update()
+    return ready(watch)
+  }
+
   // One indexed watch holds the looks of this hero and nearby heroes. Its
   // answer is cached across area changes so a new watch need not flash the
   // creation colours while it loads.
@@ -310,6 +323,7 @@ export let connect = (base: URL) => {
   let net = {
     client: c,
     now,
+    designs,
     /** Keep the world rows and moving players near this point. */
     follow,
     players: () => rows('player'),

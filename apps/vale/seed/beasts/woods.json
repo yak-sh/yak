@@ -1,0 +1,1088 @@
+[
+  {
+    "entity": {
+      "eid": "cbfc1251-233d-8120-9aaf-7d21284e5e42"
+    },
+    "beast_design": {
+      "kind": "boar",
+      "name": "Bristleboar",
+      "lvl": 3,
+      "hp": 80,
+      "dmg": 8,
+      "speed": 4,
+      "xp": 34,
+      "reach": 1.7,
+      "aggro": 7,
+      "respawn": 60,
+      "loot": [
+        [
+          "tusk",
+          0.65
+        ],
+        [
+          "coin",
+          0.7
+        ],
+        [
+          "tonic",
+          0.12
+        ]
+      ],
+      "size": 1.1,
+      "dust": 9067068,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 7,
+          "within": 20,
+          "apart": 5.5,
+          "roam": 7
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 9067068,
+        "ridge": 5913126,
+        "snout": 14260874,
+        "tusk": 16051416,
+        "eye": 2826272
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "071f8475-e0c5-8c2b-bf4c-769e84d439ca"
+    },
+    "beast_design": {
+      "kind": "squirrel",
+      "name": "Red squirrel",
+      "lvl": 1,
+      "hp": 20,
+      "dmg": 2,
+      "speed": 4.4,
+      "xp": 11,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 32,
+      "loot": [
+        [
+          "acorn",
+          0.5
+        ],
+        [
+          "coin",
+          0.15
+        ]
+      ],
+      "size": 0.45,
+      "dust": 12081706,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 24,
+          "apart": 6,
+          "roam": 5
+        }
+      ],
+      "look": {
+        "plan": "hopper",
+        "fur": 12081706,
+        "belly": 15786184,
+        "eye": 1708048,
+        "ears": "round",
+        "tail": "bush"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "53480471-4954-8c8a-bedc-f42625f7506c"
+    },
+    "beast_design": {
+      "kind": "deer",
+      "name": "Fallow deer",
+      "lvl": 2,
+      "hp": 50,
+      "dmg": 5,
+      "speed": 5.2,
+      "xp": 26,
+      "reach": 1.3,
+      "aggro": 0,
+      "respawn": 44,
+      "loot": [
+        [
+          "hide",
+          0.6
+        ],
+        [
+          "coin",
+          0.15
+        ]
+      ],
+      "size": 1,
+      "dust": 12094040,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "beyond": 8,
+          "within": 26,
+          "apart": 8,
+          "roam": 8
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 12092494,
+        "ridge": 9068086,
+        "snout": 3811876,
+        "eye": 1708048,
+        "ears": "long",
+        "tail": "stub",
+        "belly": 15919318,
+        "legs": 1.8,
+        "build": [
+          0.75,
+          0.85,
+          1.05
+        ],
+        "muzzle": 1.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "fe250f6f-99bc-894e-9e7f-5bffb37f49ad"
+    },
+    "beast_design": {
+      "kind": "stag",
+      "name": "Great stag",
+      "lvl": 6,
+      "hp": 230,
+      "dmg": 16,
+      "speed": 4.8,
+      "xp": 110,
+      "reach": 2,
+      "aggro": 0,
+      "respawn": 80,
+      "loot": [
+        [
+          "antler",
+          0.6
+        ],
+        [
+          "hide",
+          0.5
+        ],
+        [
+          "coin",
+          0.4
+        ]
+      ],
+      "size": 1.4,
+      "dust": 9068086,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 1,
+          "beyond": 6,
+          "within": 22,
+          "apart": 12,
+          "roam": 9,
+          "odds": 0.5
+        },
+        {
+          "near": "pinewood",
+          "count": 1,
+          "within": 24,
+          "apart": 12,
+          "roam": 9,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 9068090,
+        "ridge": 6964264,
+        "snout": 3811876,
+        "eye": 1708048,
+        "ears": "long",
+        "horns": "antler",
+        "horn": 14733488,
+        "tail": "stub",
+        "belly": 15260872,
+        "legs": 1.9,
+        "build": [
+          0.85,
+          0.95,
+          1.15
+        ],
+        "muzzle": 1.4,
+        "scale": 1.25
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "ff301aa3-93da-8bff-babe-c084012ab3d0"
+    },
+    "beast_design": {
+      "kind": "wolf",
+      "name": "Grey wolf",
+      "lvl": 4,
+      "hp": 120,
+      "dmg": 12,
+      "speed": 5,
+      "xp": 63,
+      "reach": 1.5,
+      "aggro": 9,
+      "respawn": 60,
+      "loot": [
+        [
+          "fang",
+          0.5
+        ],
+        [
+          "pelt",
+          0.5
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 1,
+      "dust": 9079432,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 3,
+          "within": 22,
+          "apart": 5,
+          "roam": 7,
+          "odds": 0.6
+        },
+        {
+          "near": "pinewood",
+          "count": 3,
+          "within": 24,
+          "apart": 5,
+          "roam": 7,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 9079430,
+        "ridge": 5921368,
+        "snout": 14210252,
+        "eye": 15253568,
+        "ears": "point",
+        "tail": "bush",
+        "belly": 14210252,
+        "legs": 1.25,
+        "build": [
+          0.8,
+          0.85,
+          1.15
+        ],
+        "muzzle": 2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "064f370b-2a9e-8d76-b008-90b345c0478c"
+    },
+    "beast_design": {
+      "kind": "direwolf",
+      "name": "Dire wolf",
+      "lvl": 9,
+      "hp": 760,
+      "dmg": 28,
+      "speed": 5.3,
+      "xp": 400,
+      "reach": 2,
+      "aggro": 11,
+      "respawn": 180,
+      "loot": [
+        [
+          "fang",
+          1
+        ],
+        [
+          "pelt",
+          1
+        ],
+        [
+          "draught",
+          0.3
+        ],
+        [
+          "blade4",
+          0.06
+        ]
+      ],
+      "size": 1.7,
+      "dust": 4868690,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 12,
+          "apart": 10,
+          "roam": 7,
+          "odds": 0.5
+        },
+        {
+          "near": "pinewood",
+          "count": 2,
+          "within": 14,
+          "apart": 10,
+          "roam": 7,
+          "odds": 0.55
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 3816004,
+        "ridge": 2236970,
+        "snout": 9079440,
+        "eye": 16738874,
+        "ears": "point",
+        "tail": "bush",
+        "belly": 6974068,
+        "legs": 1.3,
+        "build": [
+          0.85,
+          0.9,
+          1.3
+        ],
+        "muzzle": 2.1,
+        "scale": 1.6
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "90892f91-3075-8e18-abb6-75e20ffa5a5d"
+    },
+    "beast_design": {
+      "kind": "bear",
+      "name": "Brown bear",
+      "lvl": 8,
+      "hp": 481,
+      "dmg": 23,
+      "speed": 3.8,
+      "xp": 178,
+      "reach": 2,
+      "aggro": 5,
+      "respawn": 90,
+      "loot": [
+        [
+          "claw",
+          0.6
+        ],
+        [
+          "pelt",
+          0.5
+        ],
+        [
+          "honey",
+          0.3
+        ],
+        [
+          "coin",
+          0.5
+        ]
+      ],
+      "size": 1.6,
+      "dust": 6965808,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 22,
+          "apart": 12,
+          "roam": 8,
+          "odds": 0.65
+        },
+        {
+          "near": "pinewood",
+          "count": 2,
+          "within": 24,
+          "apart": 12,
+          "roam": 8,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 7227950,
+        "ridge": 5913122,
+        "snout": 11045480,
+        "eye": 1708048,
+        "ears": "round",
+        "tail": "stub",
+        "belly": 5913124,
+        "legs": 1.05,
+        "build": [
+          1.4,
+          1.3,
+          1.1
+        ],
+        "muzzle": 1.3,
+        "scale": 1.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "3ee7670e-d17c-8508-9027-f77a7e6aa858"
+    },
+    "beast_design": {
+      "kind": "spider",
+      "name": "Wood spider",
+      "lvl": 3,
+      "hp": 80,
+      "dmg": 9,
+      "speed": 4,
+      "xp": 45,
+      "reach": 1.3,
+      "aggro": 7,
+      "respawn": 50,
+      "loot": [
+        [
+          "silk",
+          0.6
+        ],
+        [
+          "venom",
+          0.1
+        ]
+      ],
+      "size": 0.8,
+      "dust": 3813416,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 20,
+          "apart": 6,
+          "roam": 5,
+          "odds": 0.6
+        },
+        {
+          "near": "pinewood",
+          "count": 2,
+          "within": 22,
+          "apart": 6,
+          "roam": 5,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 4864556,
+        "under": 2760730,
+        "leg": 3812386,
+        "eye": 14168096,
+        "pairs": 4,
+        "abdomen": true,
+        "mark": 14196800,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "904a3437-a566-8045-9e13-3c2b1df3147f"
+    },
+    "beast_design": {
+      "kind": "broodmother",
+      "name": "Broodmother",
+      "lvl": 11,
+      "hp": 1010,
+      "dmg": 33,
+      "speed": 3.6,
+      "xp": 515,
+      "reach": 2.2,
+      "aggro": 9,
+      "respawn": 240,
+      "loot": [
+        [
+          "silk",
+          1
+        ],
+        [
+          "venom",
+          0.7
+        ],
+        [
+          "draught",
+          0.4
+        ],
+        [
+          "blade4",
+          0.08
+        ]
+      ],
+      "size": 2,
+      "dust": 2760752,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 10,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.45
+        },
+        {
+          "near": "shroomwood",
+          "count": 2,
+          "within": 12,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.45
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 2892336,
+        "under": 1709086,
+        "leg": 2366504,
+        "eye": 16726586,
+        "pairs": 4,
+        "abdomen": true,
+        "mark": 11549290,
+        "scale": 2.6
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "c3cd7471-1155-8138-ad0d-3e9ff348627b"
+    },
+    "beast_design": {
+      "kind": "owl",
+      "name": "Tawny owl",
+      "lvl": 3,
+      "hp": 70,
+      "dmg": 7,
+      "speed": 4,
+      "xp": 40,
+      "reach": 1.2,
+      "aggro": 0,
+      "respawn": 50,
+      "loot": [
+        [
+          "feather",
+          0.6
+        ],
+        [
+          "quill",
+          0.2
+        ]
+      ],
+      "size": 0.7,
+      "dust": 10123858,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 24,
+          "apart": 8,
+          "roam": 6,
+          "odds": 0.6
+        },
+        {
+          "near": "pinewood",
+          "count": 2,
+          "within": 24,
+          "apart": 8,
+          "roam": 6,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 10122832,
+        "wing": 8018490,
+        "beak": 3815984,
+        "eye": 2759178,
+        "face": 14732456,
+        "neck": 0.3,
+        "fly": 2.2,
+        "span": 1.2,
+        "tail": "fan",
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "b5e9deb5-a619-852f-b85b-a04d12296860"
+    },
+    "beast_design": {
+      "kind": "barkling",
+      "name": "Barkling",
+      "lvl": 5,
+      "hp": 190,
+      "dmg": 13,
+      "speed": 2.6,
+      "xp": 84,
+      "reach": 1.8,
+      "aggro": 4,
+      "respawn": 70,
+      "loot": [
+        [
+          "bark",
+          0.6
+        ],
+        [
+          "acorn",
+          0.3
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 1.2,
+      "dust": 6969914,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 20,
+          "apart": 8,
+          "roam": 4,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 8020546,
+        "garb": 6967860,
+        "eye": 14217328,
+        "head": "crown",
+        "top": 5933626,
+        "build": [
+          1,
+          1.05
+        ],
+        "long": true,
+        "scale": 1.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "fa6a4b8d-f7ab-8c70-b9b2-3f8a152fce8d"
+    },
+    "beast_design": {
+      "kind": "grimbark",
+      "name": "Grimbark",
+      "lvl": 12,
+      "hp": 2020,
+      "dmg": 32,
+      "speed": 2.6,
+      "xp": 1050,
+      "reach": 3,
+      "aggro": 8,
+      "respawn": 480,
+      "loot": [
+        [
+          "heartwood",
+          1
+        ],
+        [
+          "bark",
+          1
+        ],
+        [
+          "draught",
+          1
+        ],
+        [
+          "blade4",
+          0.3
+        ]
+      ],
+      "size": 2.8,
+      "dust": 5917232,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 1,
+          "within": 5,
+          "apart": 1,
+          "roam": 4,
+          "odds": 0.3
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 5917234,
+        "garb": 4865064,
+        "eye": 16765514,
+        "head": "crown",
+        "top": 4090414,
+        "build": [
+          1.3,
+          1.2
+        ],
+        "long": true,
+        "stoop": 0.1,
+        "scale": 2.2
+      },
+      "boss": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "1c7e119c-404a-83a0-b01c-cd2765618210"
+    },
+    "beast_design": {
+      "kind": "badger",
+      "name": "Brock badger",
+      "lvl": 3,
+      "hp": 100,
+      "dmg": 9,
+      "speed": 3,
+      "xp": 45,
+      "reach": 1.3,
+      "aggro": 4,
+      "respawn": 50,
+      "loot": [
+        [
+          "claw",
+          0.4
+        ],
+        [
+          "hide",
+          0.4
+        ]
+      ],
+      "size": 0.8,
+      "dust": 8026744,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 24,
+          "apart": 8,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 8026744,
+        "ridge": 3815994,
+        "snout": 15789284,
+        "eye": 1708048,
+        "mask": 15789284,
+        "belly": 2763306,
+        "ears": "round",
+        "tail": "stub",
+        "legs": 0.6,
+        "build": [
+          1.1,
+          0.8,
+          1
+        ],
+        "muzzle": 1.5,
+        "scale": 0.8
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "74f86758-9310-81c7-ba2d-dcef15e839b8"
+    },
+    "beast_design": {
+      "kind": "quillback",
+      "name": "Quillback",
+      "lvl": 4,
+      "hp": 140,
+      "dmg": 10,
+      "speed": 2.4,
+      "xp": 63,
+      "reach": 1.4,
+      "aggro": 3,
+      "respawn": 60,
+      "loot": [
+        [
+          "quill",
+          0.8
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.9,
+      "dust": 5917242,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 22,
+          "apart": 8,
+          "roam": 4,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 5917242,
+        "ridge": 3813416,
+        "snout": 9075304,
+        "eye": 1708048,
+        "thorns": true,
+        "ears": "round",
+        "legs": 0.7,
+        "build": [
+          1.1,
+          1,
+          0.9
+        ],
+        "scale": 0.85
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "2488691b-91f4-871d-b68d-e0d64d340409"
+    },
+    "beast_design": {
+      "kind": "goblin",
+      "name": "Bramble goblin",
+      "lvl": 5,
+      "hp": 170,
+      "dmg": 13,
+      "speed": 4,
+      "xp": 83,
+      "reach": 1.5,
+      "aggro": 8,
+      "respawn": 60,
+      "loot": [
+        [
+          "coin",
+          0.9
+        ],
+        [
+          "tonic",
+          0.12
+        ],
+        [
+          "fang",
+          0.1
+        ]
+      ],
+      "size": 1,
+      "dust": 6982202,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 3,
+          "within": 18,
+          "apart": 4,
+          "roam": 5,
+          "odds": 0.5
+        },
+        {
+          "near": "ruins",
+          "count": 3,
+          "within": 16,
+          "apart": 4,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 8034890,
+        "garb": 6965808,
+        "eye": 15781952,
+        "head": "ears",
+        "club": 8018488,
+        "build": [
+          0.85,
+          0.72
+        ],
+        "stoop": 0.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "ce099620-02bd-87eb-9004-a7ad0a7dd4d4"
+    },
+    "beast_design": {
+      "kind": "warchief",
+      "name": "Goblin warchief",
+      "lvl": 8,
+      "hp": 640,
+      "dmg": 25,
+      "speed": 3.8,
+      "xp": 340,
+      "reach": 2,
+      "aggro": 10,
+      "respawn": 180,
+      "loot": [
+        [
+          "coin",
+          1
+        ],
+        [
+          "draught",
+          0.4
+        ],
+        [
+          "tonic",
+          0.6
+        ],
+        [
+          "blade4",
+          0.05
+        ]
+      ],
+      "size": 1.4,
+      "dust": 5929514,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 10,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.45
+        },
+        {
+          "near": "ruins",
+          "count": 2,
+          "within": 10,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 6982202,
+        "garb": 9054756,
+        "eye": 16756784,
+        "head": "horns",
+        "top": 15260864,
+        "club": 5921376,
+        "build": [
+          1.2,
+          0.95
+        ],
+        "stoop": 0.15,
+        "scale": 1.25
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "9eb78570-2eb1-895c-b3ac-ad8eb4e413d1"
+    },
+    "beast_design": {
+      "kind": "stagbeetle",
+      "name": "Stag beetle",
+      "lvl": 4,
+      "hp": 140,
+      "dmg": 11,
+      "speed": 2.6,
+      "xp": 63,
+      "reach": 1.5,
+      "aggro": 5,
+      "respawn": 60,
+      "loot": [
+        [
+          "chitin",
+          0.7
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.9,
+      "dust": 4860442,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 22,
+          "apart": 8,
+          "roam": 4,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 5910044,
+        "under": 2758672,
+        "leg": 2758672,
+        "eye": 1052688,
+        "jaws": 6961698,
+        "scale": 1.6
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "ea056523-9be6-8ece-8282-224da502ace1"
+    },
+    "beast_design": {
+      "kind": "bat",
+      "name": "Hollow bat",
+      "lvl": 3,
+      "hp": 80,
+      "dmg": 9,
+      "speed": 4.6,
+      "xp": 45,
+      "reach": 1.3,
+      "aggro": 7,
+      "respawn": 50,
+      "loot": [
+        [
+          "hide",
+          0.4
+        ],
+        [
+          "fang",
+          0.2
+        ]
+      ],
+      "size": 0.7,
+      "dust": 4864580,
+      "haunts": [
+        {
+          "near": "woods",
+          "count": 2,
+          "within": 22,
+          "apart": 6,
+          "roam": 7,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "flier",
+        "body": 4864576,
+        "wing": 5915728,
+        "eye": 16765024,
+        "wings": "leather",
+        "ears": true,
+        "fly": 1.6,
+        "scale": 1.3
+      }
+    }
+  }
+]

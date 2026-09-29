@@ -1,0 +1,937 @@
+[
+  {
+    "entity": {
+      "eid": "2f9a0525-a828-8ae6-b581-57606c1fe02a"
+    },
+    "beast_design": {
+      "kind": "crag",
+      "name": "Cragback",
+      "lvl": 5,
+      "hp": 170,
+      "dmg": 13,
+      "speed": 2.4,
+      "xp": 80,
+      "reach": 2,
+      "aggro": 6,
+      "respawn": 80,
+      "loot": [
+        [
+          "shard",
+          0.6
+        ],
+        [
+          "coin",
+          0.9
+        ],
+        [
+          "tonic",
+          0.25
+        ]
+      ],
+      "size": 1.5,
+      "dust": 10131600,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 4,
+          "within": 18,
+          "apart": 6,
+          "roam": 5
+        }
+      ],
+      "look": {
+        "plan": "crag",
+        "stone": 9342084,
+        "light": 10789528,
+        "moss": 6986312,
+        "eye": 16757575
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "b88f47fd-8b62-84d6-8b01-a208db321007"
+    },
+    "beast_design": {
+      "kind": "goat",
+      "name": "Crag goat",
+      "lvl": 3,
+      "hp": 84,
+      "dmg": 9,
+      "speed": 4.4,
+      "xp": 45,
+      "reach": 1.4,
+      "aggro": 0,
+      "respawn": 48,
+      "loot": [
+        [
+          "horn",
+          0.5
+        ],
+        [
+          "fleece",
+          0.3
+        ]
+      ],
+      "size": 0.8,
+      "dust": 14209216,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 2,
+          "within": 20,
+          "apart": 6,
+          "roam": 6
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 14209216,
+        "ridge": 11050120,
+        "snout": 6970960,
+        "eye": 14196784,
+        "horns": "spike",
+        "horn": 5918792,
+        "ears": "long",
+        "tail": "stub",
+        "legs": 1.3,
+        "build": [
+          0.8,
+          0.85,
+          0.95
+        ],
+        "muzzle": 1.4,
+        "scale": 0.8
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "fba496fd-c633-8c80-9389-1ea33dba6965"
+    },
+    "beast_design": {
+      "kind": "marmot",
+      "name": "Rock marmot",
+      "lvl": 2,
+      "hp": 44,
+      "dmg": 4,
+      "speed": 3.6,
+      "xp": 22,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 36,
+      "loot": [
+        [
+          "hide",
+          0.5
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.5,
+      "dust": 10123864,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 2,
+          "within": 20,
+          "apart": 6,
+          "roam": 4
+        }
+      ],
+      "look": {
+        "plan": "hopper",
+        "fur": 10123864,
+        "belly": 14205088,
+        "eye": 1708048,
+        "ears": "round",
+        "tail": "puff",
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "8ba9cd6f-3822-88f2-82e0-c7988613d5b1"
+    },
+    "beast_design": {
+      "kind": "lizard",
+      "name": "Rock lizard",
+      "lvl": 3,
+      "hp": 84,
+      "dmg": 9,
+      "speed": 4,
+      "xp": 45,
+      "reach": 1.3,
+      "aggro": 4,
+      "respawn": 48,
+      "loot": [
+        [
+          "scale",
+          0.5
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.7,
+      "dust": 9079386,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 2,
+          "within": 20,
+          "apart": 6,
+          "roam": 5,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 9079378,
+        "under": 14209184,
+        "leg": 8026696,
+        "eye": 14721056,
+        "pairs": 2,
+        "tail": true,
+        "mark": 5921332,
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "9c7f02da-6d41-8461-ae01-7c54ae006613"
+    },
+    "beast_design": {
+      "kind": "kobold",
+      "name": "Crag kobold",
+      "lvl": 5,
+      "hp": 160,
+      "dmg": 13,
+      "speed": 3.8,
+      "xp": 84,
+      "reach": 1.6,
+      "aggro": 8,
+      "respawn": 60,
+      "loot": [
+        [
+          "ore",
+          0.5
+        ],
+        [
+          "coin",
+          0.8
+        ],
+        [
+          "tonic",
+          0.1
+        ]
+      ],
+      "size": 1,
+      "dust": 11033146,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 3,
+          "within": 18,
+          "apart": 5,
+          "roam": 5,
+          "odds": 0.5
+        },
+        {
+          "near": "ruins",
+          "count": 2,
+          "within": 16,
+          "apart": 5,
+          "roam": 5,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 12083258,
+        "garb": 5917242,
+        "eye": 16769088,
+        "head": "snout",
+        "top": 15260864,
+        "club": 6974064,
+        "build": [
+          0.8,
+          0.7
+        ],
+        "stoop": 0.25
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "1fbff789-27e9-8aa1-8489-c58c98b870fd"
+    },
+    "beast_design": {
+      "kind": "golem",
+      "name": "Stone golem",
+      "lvl": 9,
+      "hp": 700,
+      "dmg": 26,
+      "speed": 2,
+      "xp": 360,
+      "reach": 2.4,
+      "aggro": 5,
+      "respawn": 160,
+      "loot": [
+        [
+          "ore",
+          0.8
+        ],
+        [
+          "shard",
+          0.4
+        ],
+        [
+          "coin",
+          0.8
+        ]
+      ],
+      "size": 2,
+      "dust": 9342084,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 2,
+          "within": 16,
+          "apart": 10,
+          "roam": 4,
+          "odds": 0.6
+        },
+        {
+          "near": "ruins",
+          "count": 2,
+          "within": 14,
+          "apart": 10,
+          "roam": 4,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 9342084,
+        "garb": 8026224,
+        "eye": 7000319,
+        "build": [
+          1.7,
+          1.2
+        ],
+        "long": true,
+        "stoop": 0.1,
+        "scale": 1.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "ab8647e3-d264-8135-bba0-36eab5936cc9"
+    },
+    "beast_design": {
+      "kind": "scorpion",
+      "name": "Rock scorpion",
+      "lvl": 10,
+      "hp": 440,
+      "dmg": 25,
+      "speed": 3.6,
+      "xp": 206,
+      "reach": 1.6,
+      "aggro": 8,
+      "respawn": 70,
+      "loot": [
+        [
+          "venom",
+          0.4
+        ],
+        [
+          "chitin",
+          0.5
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 1,
+      "dust": 11042890,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 4,
+          "within": 20,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.6
+        },
+        {
+          "near": "mesa",
+          "count": 4,
+          "within": 22,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.7
+        },
+        {
+          "near": "dunes",
+          "count": 4,
+          "within": 28,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.9
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 11042890,
+        "under": 6967344,
+        "leg": 9071166,
+        "eye": 1708048,
+        "pairs": 4,
+        "claws": 12094032,
+        "sting": 3811866,
+        "scale": 1.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "2f9c430e-1c48-83f3-9e08-bb938e0db300"
+    },
+    "beast_design": {
+      "kind": "basilisk",
+      "name": "Basilisk",
+      "lvl": 12,
+      "hp": 1150,
+      "dmg": 35,
+      "speed": 3.4,
+      "xp": 580,
+      "reach": 2.4,
+      "aggro": 9,
+      "respawn": 240,
+      "loot": [
+        [
+          "scale",
+          1
+        ],
+        [
+          "venom",
+          0.7
+        ],
+        [
+          "draught",
+          0.4
+        ],
+        [
+          "blade4",
+          0.1
+        ]
+      ],
+      "size": 2,
+      "dust": 4876858,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 2,
+          "within": 12,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.45
+        },
+        {
+          "near": "ruins",
+          "count": 2,
+          "within": 12,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "serpent",
+        "skin": 4876858,
+        "belly": 13154416,
+        "eye": 16769088,
+        "band": 3032100,
+        "frill": 13126186,
+        "horns": 15260864,
+        "length": 8,
+        "girth": 1.6,
+        "scale": 1.5
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "5088a4b8-139a-89d1-9481-719173263b95"
+    },
+    "beast_design": {
+      "kind": "stonewyrm",
+      "name": "Stonewyrm",
+      "lvl": 10,
+      "hp": 480,
+      "dmg": 24,
+      "speed": 2.6,
+      "xp": 206,
+      "reach": 2.2,
+      "aggro": 6,
+      "respawn": 120,
+      "loot": [
+        [
+          "ore",
+          0.7
+        ],
+        [
+          "scale",
+          0.5
+        ],
+        [
+          "coin",
+          0.7
+        ]
+      ],
+      "size": 1.8,
+      "dust": 9078400,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 2,
+          "within": 18,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.55
+        },
+        {
+          "near": "mesa",
+          "count": 2,
+          "within": 20,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "serpent",
+        "skin": 8288882,
+        "belly": 11052184,
+        "eye": 16756800,
+        "band": 6183508,
+        "length": 7,
+        "girth": 1.8,
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "22b2b136-1f3d-851f-af76-79204960c240"
+    },
+    "beast_design": {
+      "kind": "thornback",
+      "name": "Old Thornback",
+      "lvl": 8,
+      "hp": 1100,
+      "dmg": 21,
+      "speed": 3.6,
+      "xp": 600,
+      "reach": 3,
+      "aggro": 10,
+      "respawn": 360,
+      "loot": [
+        [
+          "crown",
+          1
+        ],
+        [
+          "coin",
+          1
+        ],
+        [
+          "tonic",
+          1
+        ]
+      ],
+      "size": 2.4,
+      "dust": 8011567,
+      "haunts": [
+        {
+          "near": "ridge",
+          "count": 1,
+          "within": 3,
+          "apart": 0.5,
+          "roam": 5
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 8011567,
+        "ridge": 4858905,
+        "snout": 12089962,
+        "tusk": 15853263,
+        "eye": 16734778,
+        "thorns": true,
+        "scale": 2.3
+      },
+      "boss": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "5b911288-0aa3-8145-8de3-8cba144536af"
+    },
+    "beast_design": {
+      "kind": "hawk",
+      "name": "Ridge hawk",
+      "lvl": 5,
+      "hp": 150,
+      "dmg": 14,
+      "speed": 4.8,
+      "xp": 84,
+      "reach": 1.4,
+      "aggro": 8,
+      "respawn": 60,
+      "loot": [
+        [
+          "talon",
+          0.5
+        ],
+        [
+          "feather",
+          0.6
+        ]
+      ],
+      "size": 0.8,
+      "dust": 9071178,
+      "haunts": [
+        {
+          "near": "ridge",
+          "count": 2,
+          "within": 18,
+          "apart": 7,
+          "roam": 8,
+          "odds": 0.7
+        },
+        {
+          "near": "moor",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 8,
+          "odds": 0.6
+        },
+        {
+          "near": "crags",
+          "count": 1,
+          "within": 18,
+          "apart": 7,
+          "roam": 8,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 9069630,
+        "wing": 6965806,
+        "beak": 3815994,
+        "eye": 15777840,
+        "belly": 15260872,
+        "bill": "hook",
+        "tail": "fan",
+        "fly": 2.2,
+        "span": 1.3,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "48f2d058-5308-893b-81d5-eba5c62a50fd"
+    },
+    "beast_design": {
+      "kind": "griffin",
+      "name": "Griffin",
+      "lvl": 11,
+      "hp": 1010,
+      "dmg": 33,
+      "speed": 4.6,
+      "xp": 515,
+      "reach": 2.4,
+      "aggro": 9,
+      "respawn": 240,
+      "loot": [
+        [
+          "talon",
+          1
+        ],
+        [
+          "plume",
+          0.5
+        ],
+        [
+          "draught",
+          0.4
+        ],
+        [
+          "blade4",
+          0.08
+        ]
+      ],
+      "size": 2,
+      "dust": 14200928,
+      "haunts": [
+        {
+          "near": "mesa",
+          "count": 2,
+          "within": 16,
+          "apart": 10,
+          "roam": 7,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 15261904,
+        "wing": 13146704,
+        "beak": 15249456,
+        "eye": 15751722,
+        "belly": 14198880,
+        "bill": "hook",
+        "tail": "fan",
+        "fly": 1.2,
+        "span": 1.8,
+        "scale": 2.6
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "8769401d-14b8-8e6f-a8ca-38da7fd2d5d5"
+    },
+    "beast_design": {
+      "kind": "ridgeram",
+      "name": "Ridge ram",
+      "lvl": 8,
+      "hp": 341,
+      "dmg": 21,
+      "speed": 4.2,
+      "xp": 154,
+      "reach": 1.8,
+      "aggro": 6,
+      "respawn": 70,
+      "loot": [
+        [
+          "horn",
+          0.7
+        ],
+        [
+          "fleece",
+          0.5
+        ],
+        [
+          "coin",
+          0.4
+        ]
+      ],
+      "size": 1.2,
+      "dust": 9075306,
+      "haunts": [
+        {
+          "near": "moor",
+          "count": 4,
+          "within": 26,
+          "apart": 7,
+          "roam": 6,
+          "odds": 0.8
+        },
+        {
+          "near": "snowfield",
+          "count": 4,
+          "within": 26,
+          "apart": 7,
+          "roam": 6,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 10127992,
+        "ridge": 6969932,
+        "snout": 4865590,
+        "eye": 14196784,
+        "horns": "curl",
+        "horn": 14207144,
+        "tail": "stub",
+        "belly": 14734528,
+        "legs": 1.2,
+        "build": [
+          1.1,
+          1.1,
+          1
+        ],
+        "muzzle": 1.3,
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "12b9760a-af67-819e-a43c-5ec28a7e8a86"
+    },
+    "beast_design": {
+      "kind": "lynx",
+      "name": "Ridge lynx",
+      "lvl": 7,
+      "hp": 250,
+      "dmg": 19,
+      "speed": 5.2,
+      "xp": 129,
+      "reach": 1.6,
+      "aggro": 9,
+      "respawn": 80,
+      "loot": [
+        [
+          "pelt",
+          0.6
+        ],
+        [
+          "fang",
+          0.4
+        ],
+        [
+          "coin",
+          0.3
+        ]
+      ],
+      "size": 1,
+      "dust": 13148272,
+      "haunts": [
+        {
+          "near": "crags",
+          "count": 1,
+          "within": 18,
+          "apart": 8,
+          "roam": 7,
+          "odds": 0.3
+        },
+        {
+          "near": "pinewood",
+          "count": 1,
+          "within": 24,
+          "apart": 8,
+          "roam": 7,
+          "odds": 0.6
+        },
+        {
+          "near": "snowfield",
+          "count": 1,
+          "within": 26,
+          "apart": 8,
+          "roam": 7,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 13148272,
+        "ridge": 9071176,
+        "snout": 15787732,
+        "eye": 14213184,
+        "ears": "tuft",
+        "tail": "stub",
+        "belly": 15787732,
+        "legs": 1.3,
+        "build": [
+          0.8,
+          0.85,
+          0.95
+        ],
+        "muzzle": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "836d5578-1751-81b1-b5a1-7c67304d212e"
+    },
+    "beast_design": {
+      "kind": "wight",
+      "name": "Barrow wight",
+      "lvl": 14,
+      "hp": 1456,
+      "dmg": 41,
+      "speed": 3.2,
+      "xp": 709,
+      "reach": 2,
+      "aggro": 9,
+      "respawn": 180,
+      "loot": [
+        [
+          "bone",
+          0.6
+        ],
+        [
+          "coin",
+          1
+        ],
+        [
+          "gem",
+          0.1
+        ],
+        [
+          "elixir",
+          0.05
+        ]
+      ],
+      "size": 1.3,
+      "dust": 10135728,
+      "haunts": [
+        {
+          "near": "moor",
+          "count": 2,
+          "within": 20,
+          "apart": 12,
+          "roam": 5,
+          "odds": 0.8
+        },
+        {
+          "near": "ruins",
+          "count": 2,
+          "within": 14,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.9
+        },
+        {
+          "near": "marsh",
+          "count": 2,
+          "within": 24,
+          "apart": 12,
+          "roam": 5,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 11056316,
+        "garb": 2764344,
+        "eye": 10154239,
+        "build": [
+          0.95,
+          1.15
+        ],
+        "head": "crown",
+        "top": 12098128,
+        "club": 8028296,
+        "long": true,
+        "stoop": 0.25
+      }
+    }
+  }
+]

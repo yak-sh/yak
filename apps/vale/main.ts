@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import { ABILITIES, type Ability } from './abilities.ts'
 import { bar } from './bar.ts'
 import { board } from './board.ts'
-import { BEASTS } from './beasts.ts'
+import { BEASTS, useBeasts } from './beasts.ts'
 import { aim, bearing, type Cam, depth, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
@@ -33,6 +33,7 @@ import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
 import { meshed, template } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
+import { clearHomes } from './homes.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
 import { parties } from './party.ts'
@@ -114,6 +115,10 @@ fit()
 addEventListener('resize', fit)
 
 let net = connect(new URL('api/', document.baseURI))
+let designed = net.designs('beast_design', (rows) => {
+  useBeasts(rows)
+  clearHomes()
+})
 let deal = deals(net)
 let folk = village(net, deal)
 let seen = sighting(net)
@@ -125,10 +130,13 @@ let toil = working(net)
 let walking = withoutSpent(v, (p) => toil.spent(p, net.now()))
 let helper = companion(net)
 // Who you are and your heroes, asked while the level grows.
-let asking = net.me().then(async (me) => ({
-  me,
-  heroes: me.person ? await net.heroes(me.person) : [],
-}))
+let asking = Promise.all([
+  net.me().then(async (me) => ({
+    me,
+    heroes: me.person ? await net.heroes(me.person) : [],
+  })),
+  designed,
+]).then(([known]) => known)
 
 let typing = false
 // The keyboard is someone else's while a name or a line is written, or while

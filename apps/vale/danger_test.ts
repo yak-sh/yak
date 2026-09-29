@@ -16,6 +16,9 @@ import {
   xpOf,
 } from './rules.ts'
 import { skilled } from './skills.ts'
+import { seedBeasts } from './beasts_fixture.ts'
+
+seedBeasts()
 
 let wear = (lvl: number, tier: number, full: boolean, known: string[]) => {
   let kinds = full

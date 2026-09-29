@@ -25,6 +25,9 @@ import {
   vale,
   WATER,
 } from './terrain.ts'
+import { seedBeasts } from './beasts_fixture.ts'
+
+seedBeasts()
 
 let town = (kind = 'smithy.plaster', turn = 0) =>
   flat(5, [], [{ kind, x: 64, z: 64, seed: 0, turn }])

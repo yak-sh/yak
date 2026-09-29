@@ -19,6 +19,8 @@ import { dropped, type Rarity } from './rarity.ts'
  * arrives at the next one about its level.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals(need(1), 0)
  * assertEquals(levelOf(need(4)), 4)
@@ -43,6 +45,8 @@ export let levelOf = (xp: number): number => {
  * more of its bites to fall than they would bare. A boss wants friends.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assert } from '@std/assert'
  * import { tierOf } from './arms.ts'
  * import { BEASTS } from './beasts.ts'
@@ -65,6 +69,8 @@ export let levelOf = (xp: number): number => {
  * whatever their skills and gear add to it (`force`).
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals(blowOf(1, { dmg: 2, force: 0.5 }), 16.5)
  * // A second dagger's blow is as hard as its own blade.
@@ -82,6 +88,8 @@ export let blowOf = (
  * number in [0, 1).
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals(blow(12, 0.95).great, true)
  * assertEquals(blow(12, 0.5).great, false)
@@ -99,6 +107,8 @@ export let blow = (might: number, roll: number, sure = false, luck = 0) => {
  * harmless. Each point helps, but the next helps less.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals([through(20, 0), through(20, 10), through(20, 30)], [20, 13, 8])
  * ```
@@ -130,6 +140,8 @@ export type Slain = {
  * one is somebody else's share of the same fall.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let rows = [{ at: 1000 }, { at: 1500 }]
  * assertEquals(fallOf(rows, 20, 10000), { down: true, fell: 1000 })
@@ -169,6 +181,8 @@ export type Dealing = Dealt & { by: string }
  * this life.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let d = (by: string, dmg: number, life = 5) => ({ by, foe: 'c1', life, dmg, held: 0 })
  * assertEquals(hpOf('c1', 32, 5, [d('a', 10), d('b', 4)]), 18)
@@ -189,6 +203,8 @@ export let hpOf = (
 /** Who a creature is after: the player who has dealt it most in this life.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let d = (by: string, dmg: number) => ({ by, foe: 'c1', life: 5, dmg, held: 0 })
  * assertEquals(hunter('c1', 5, [d('a', 10), d('b', 14)]), 'b')
@@ -214,6 +230,8 @@ export let hunter = (
  * knocked senseless. It neither moves nor bites while it is held.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let d = { by: 'a', foe: 'c1', life: 5, dmg: 3, held: 2000 }
  * assertEquals(heldOf('c1', 5, [d], 1500), true)
@@ -242,6 +260,8 @@ export type Found = { kind: string; n: number; rarity?: Rarity }
  * (rarity.ts).
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assert, assertEquals } from '@std/assert'
  * import { BEASTS } from './beasts.ts'
  * import { foeOf } from './danger.ts'
@@ -334,6 +354,8 @@ let wordsOf = (journal: Entry[]): Map<string, Entry> => {
  * word in their journal, pinned or unpinned, is unpinned.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let e = (quest: string, step: string, at: number) => ({ quest, step, at })
  * assertEquals([...unpinnedOf([e('c', 'unpinned', 2)])], ['c'])
@@ -353,6 +375,8 @@ export let unpinnedOf = (journal: Entry[]): Set<string> =>
 /** Where one player stands with each quest, in the order given.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let q = (id: string, after?: string) => ({
  *   id, giver: 'g', after, goal: 'gather' as const, target: 'jelly',
@@ -426,6 +450,8 @@ export let questsOf = (
  * them.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * assertEquals(worth(100, 5, 5), 100)
  * assertEquals(worth(100, 3, 5), 60)
@@ -441,6 +467,8 @@ export let worth = (xp: number, lvl: number, hero: number): number =>
  * to the hero they were then.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assert, assertEquals } from '@std/assert'
  * import { BEASTS } from './beasts.ts'
  * let slimes = (n: number) =>

@@ -1,0 +1,1019 @@
+[
+  {
+    "entity": {
+      "eid": "b8741f62-ee1e-8a00-8be4-fde4bf922679"
+    },
+    "beast_design": {
+      "kind": "frog",
+      "name": "Mere frog",
+      "lvl": 1,
+      "hp": 22,
+      "dmg": 3,
+      "speed": 2.4,
+      "xp": 12,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 32,
+      "loot": [
+        [
+          "toadstone",
+          0.04
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.45,
+      "dust": 5939274,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 3,
+          "beyond": 9,
+          "within": 22,
+          "apart": 5,
+          "roam": 4
+        },
+        {
+          "near": "marsh",
+          "count": 3,
+          "within": 28,
+          "apart": 5,
+          "roam": 4
+        }
+      ],
+      "look": {
+        "plan": "hopper",
+        "fur": 5939274,
+        "belly": 14739616,
+        "eye": 1710608,
+        "frog": true
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "0b845eed-e1ed-889f-86d1-2e4fbd7bcb52"
+    },
+    "beast_design": {
+      "kind": "duck",
+      "name": "Mallard",
+      "lvl": 1,
+      "hp": 20,
+      "dmg": 2,
+      "speed": 2.8,
+      "xp": 11,
+      "reach": 1,
+      "aggro": 0,
+      "respawn": 32,
+      "loot": [
+        [
+          "feather",
+          0.7
+        ],
+        [
+          "egg",
+          0.3
+        ]
+      ],
+      "size": 0.55,
+      "dust": 9075290,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 2,
+          "beyond": 10,
+          "within": 22,
+          "apart": 5,
+          "roam": 5
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 9073240,
+        "wing": 6969928,
+        "beak": 15253568,
+        "eye": 1710618,
+        "belly": 12100744,
+        "bill": "flat",
+        "neck": 1.2,
+        "legs": 0.7,
+        "scale": 1.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "8b3201dc-a5df-86a7-a6c6-fb4dce7b2c48"
+    },
+    "beast_design": {
+      "kind": "heron",
+      "name": "Grey heron",
+      "lvl": 3,
+      "hp": 70,
+      "dmg": 8,
+      "speed": 3.6,
+      "xp": 42,
+      "reach": 1.6,
+      "aggro": 0,
+      "respawn": 50,
+      "loot": [
+        [
+          "feather",
+          0.8
+        ],
+        [
+          "quill",
+          0.2
+        ]
+      ],
+      "size": 0.9,
+      "dust": 12106944,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 1,
+          "beyond": 10,
+          "within": 20,
+          "apart": 8,
+          "roam": 5,
+          "odds": 0.7
+        },
+        {
+          "near": "marsh",
+          "count": 1,
+          "within": 26,
+          "apart": 8,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 12106948,
+        "wing": 9080472,
+        "beak": 14729296,
+        "eye": 15781952,
+        "crest": 2763312,
+        "bill": "long",
+        "neck": 3.5,
+        "legs": 3,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "05f0fdfc-d7b7-8511-b41a-665d03d3b4b4"
+    },
+    "beast_design": {
+      "kind": "swan",
+      "name": "Mute swan",
+      "lvl": 6,
+      "hp": 216,
+      "dmg": 15,
+      "speed": 3.4,
+      "xp": 105,
+      "reach": 1.5,
+      "aggro": 6,
+      "respawn": 60,
+      "loot": [
+        [
+          "feather",
+          0.8
+        ],
+        [
+          "plume",
+          0.04
+        ]
+      ],
+      "size": 1,
+      "dust": 16053488,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 1,
+          "beyond": 11,
+          "within": 20,
+          "apart": 9,
+          "roam": 5,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 16185072,
+        "wing": 15395556,
+        "beak": 15231530,
+        "eye": 1710618,
+        "bill": "flat",
+        "neck": 3,
+        "legs": 0.8,
+        "scale": 1.6
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d38de34d-9bbf-8849-874f-ac86d30afbe6"
+    },
+    "beast_design": {
+      "kind": "crab",
+      "name": "Shore crab",
+      "lvl": 5,
+      "hp": 170,
+      "dmg": 12,
+      "speed": 2.6,
+      "xp": 84,
+      "reach": 1.2,
+      "aggro": 5,
+      "respawn": 40,
+      "loot": [
+        [
+          "shell",
+          0.6
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.6,
+      "dust": 13131834,
+      "haunts": [
+        {
+          "near": "coast",
+          "count": 3,
+          "within": 38,
+          "apart": 5,
+          "roam": 4,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 13131834,
+        "under": 15255712,
+        "leg": 12079150,
+        "eye": 1708048,
+        "claws": 14182976,
+        "scale": 1.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d32aa347-dd07-8505-a408-90df18b97974"
+    },
+    "beast_design": {
+      "kind": "snapclaw",
+      "name": "Snapclaw",
+      "lvl": 10,
+      "hp": 629,
+      "dmg": 26,
+      "speed": 2.6,
+      "xp": 239,
+      "reach": 2,
+      "aggro": 7,
+      "respawn": 90,
+      "loot": [
+        [
+          "shell",
+          0.8
+        ],
+        [
+          "pearl",
+          0.15
+        ],
+        [
+          "coin",
+          0.6
+        ]
+      ],
+      "size": 1.4,
+      "dust": 9058906,
+      "haunts": [
+        {
+          "near": "coast",
+          "count": 2,
+          "within": 36,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.7
+        },
+        {
+          "near": "isles",
+          "count": 2,
+          "within": 24,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 8010328,
+        "under": 14203056,
+        "leg": 6958664,
+        "eye": 16764992,
+        "claws": 10111594,
+        "mark": 12085898,
+        "scale": 2.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d919b009-46b5-8272-8eff-92181c6923a8"
+    },
+    "beast_design": {
+      "kind": "turtle",
+      "name": "Mossback turtle",
+      "lvl": 4,
+      "hp": 190,
+      "dmg": 9,
+      "speed": 1.4,
+      "xp": 63,
+      "reach": 1.3,
+      "aggro": 0,
+      "respawn": 60,
+      "loot": [
+        [
+          "shell",
+          0.8
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.9,
+      "dust": 5929530,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 1,
+          "beyond": 9,
+          "within": 20,
+          "apart": 8,
+          "roam": 3,
+          "odds": 0.5
+        },
+        {
+          "near": "coast",
+          "count": 2,
+          "within": 38,
+          "apart": 8,
+          "roam": 3,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "crawler",
+        "shell": 4876852,
+        "under": 13154440,
+        "leg": 8030810,
+        "eye": 1710608,
+        "dome": true,
+        "pairs": 2,
+        "mark": 6986312,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "4ccb3093-0fb6-8b9f-a0a2-4742105305eb"
+    },
+    "beast_design": {
+      "kind": "otter",
+      "name": "River otter",
+      "lvl": 2,
+      "hp": 50,
+      "dmg": 5,
+      "speed": 4.2,
+      "xp": 26,
+      "reach": 1.2,
+      "aggro": 0,
+      "respawn": 40,
+      "loot": [
+        [
+          "pelt",
+          0.6
+        ]
+      ],
+      "size": 0.6,
+      "dust": 6965808,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 1,
+          "beyond": 10,
+          "within": 20,
+          "apart": 7,
+          "roam": 6,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 6965808,
+        "ridge": 5913124,
+        "snout": 13152408,
+        "eye": 1708048,
+        "belly": 13152408,
+        "ears": "round",
+        "tail": "thin",
+        "legs": 0.55,
+        "build": [
+          0.7,
+          0.7,
+          1.35
+        ],
+        "muzzle": 1.2,
+        "scale": 0.7
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "bf9101ce-2a30-8471-8a00-141c0b7d7d1c"
+    },
+    "beast_design": {
+      "kind": "beaver",
+      "name": "Dam beaver",
+      "lvl": 3,
+      "hp": 90,
+      "dmg": 7,
+      "speed": 2.6,
+      "xp": 42,
+      "reach": 1.2,
+      "aggro": 0,
+      "respawn": 48,
+      "loot": [
+        [
+          "pelt",
+          0.5
+        ],
+        [
+          "bark",
+          0.4
+        ]
+      ],
+      "size": 0.7,
+      "dust": 8016434,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 1,
+          "beyond": 10,
+          "within": 22,
+          "apart": 8,
+          "roam": 4,
+          "odds": 0.5
+        }
+      ],
+      "look": {
+        "plan": "quadruped",
+        "hide": 8016434,
+        "ridge": 5913122,
+        "snout": 9071178,
+        "eye": 1708048,
+        "tusk": 15769664,
+        "ears": "round",
+        "tail": "flat",
+        "legs": 0.55,
+        "build": [
+          1,
+          0.9,
+          0.9
+        ],
+        "scale": 0.75
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "61b46033-3e84-86c4-8f55-16937f2d2d54"
+    },
+    "beast_design": {
+      "kind": "watersnake",
+      "name": "Water snake",
+      "lvl": 6,
+      "hp": 202,
+      "dmg": 16,
+      "speed": 3,
+      "xp": 107,
+      "reach": 1.4,
+      "aggro": 5,
+      "respawn": 48,
+      "loot": [
+        [
+          "scale",
+          0.6
+        ],
+        [
+          "coin",
+          0.2
+        ]
+      ],
+      "size": 0.8,
+      "dust": 3824234,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 1,
+          "beyond": 9,
+          "within": 20,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.6
+        },
+        {
+          "near": "marsh",
+          "count": 2,
+          "within": 26,
+          "apart": 7,
+          "roam": 5,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "serpent",
+        "skin": 3824234,
+        "belly": 13158568,
+        "eye": 14729280,
+        "band": 2767428,
+        "length": 7,
+        "scale": 1.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "b41419ec-e24b-844f-b284-040b918442ed"
+    },
+    "beast_design": {
+      "kind": "bogslime",
+      "name": "Bog slime",
+      "lvl": 5,
+      "hp": 181,
+      "dmg": 14,
+      "speed": 2,
+      "xp": 85,
+      "reach": 1.3,
+      "aggro": 4,
+      "respawn": 50,
+      "loot": [
+        [
+          "jelly",
+          0.7
+        ],
+        [
+          "spore",
+          0.3
+        ]
+      ],
+      "size": 1,
+      "dust": 6974010,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 1,
+          "beyond": 10,
+          "within": 22,
+          "apart": 7,
+          "roam": 4,
+          "odds": 0.5
+        },
+        {
+          "near": "marsh",
+          "count": 2,
+          "within": 28,
+          "apart": 7,
+          "roam": 4,
+          "odds": 0.7
+        },
+        {
+          "near": "shroomwood",
+          "count": 1,
+          "within": 24,
+          "apart": 7,
+          "roam": 4,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "slime",
+        "body": 6974010,
+        "moss": 4872746,
+        "bloom": 13150432,
+        "scale": 1.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "145825eb-fc8b-8273-afe0-29afe18f7763"
+    },
+    "beast_design": {
+      "kind": "darter",
+      "name": "Blue darter",
+      "lvl": 2,
+      "hp": 36,
+      "dmg": 5,
+      "speed": 4.4,
+      "xp": 24,
+      "reach": 1.2,
+      "aggro": 0,
+      "respawn": 36,
+      "loot": [
+        [
+          "dust",
+          0.5
+        ],
+        [
+          "glow",
+          0.05
+        ]
+      ],
+      "size": 0.6,
+      "dust": 3836632,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 2,
+          "beyond": 8,
+          "within": 20,
+          "apart": 6,
+          "roam": 7,
+          "odds": 0.6
+        },
+        {
+          "near": "marsh",
+          "count": 2,
+          "within": 26,
+          "apart": 6,
+          "roam": 7,
+          "odds": 0.6
+        }
+      ],
+      "look": {
+        "plan": "flier",
+        "body": 3836632,
+        "wing": 14741752,
+        "eye": 1718874,
+        "wings": "clear",
+        "long": true,
+        "stripe": 1723002,
+        "fly": 1.2,
+        "scale": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "504d8226-0b1c-8b36-a466-49c77684594c"
+    },
+    "beast_design": {
+      "kind": "lantern",
+      "name": "Mire lantern",
+      "lvl": 8,
+      "hp": 296,
+      "dmg": 21,
+      "speed": 3,
+      "xp": 154,
+      "reach": 1.5,
+      "aggro": 8,
+      "respawn": 80,
+      "loot": [
+        [
+          "glow",
+          0.7
+        ],
+        [
+          "coin",
+          0.4
+        ]
+      ],
+      "size": 0.8,
+      "dust": 10547392,
+      "haunts": [
+        {
+          "near": "lake",
+          "count": 2,
+          "beyond": 8,
+          "within": 18,
+          "apart": 10,
+          "roam": 7,
+          "odds": 0.5
+        },
+        {
+          "near": "marsh",
+          "count": 2,
+          "within": 26,
+          "apart": 10,
+          "roam": 7,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "wisp",
+        "core": 15794160,
+        "glow": 7004320,
+        "mote": 12648408,
+        "fly": 0.8
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "4e76e34b-20be-8a14-b59c-77c9cf22155f"
+    },
+    "beast_design": {
+      "kind": "troll",
+      "name": "Mire troll",
+      "lvl": 11,
+      "hp": 1017,
+      "dmg": 34,
+      "speed": 3,
+      "xp": 516,
+      "reach": 2.4,
+      "aggro": 7,
+      "respawn": 180,
+      "loot": [
+        [
+          "bone",
+          0.6
+        ],
+        [
+          "coin",
+          1
+        ],
+        [
+          "draught",
+          0.3
+        ],
+        [
+          "blade4",
+          0.05
+        ]
+      ],
+      "size": 2,
+      "dust": 4872772,
+      "haunts": [
+        {
+          "near": "marsh",
+          "count": 2,
+          "within": 24,
+          "apart": 10,
+          "roam": 5,
+          "odds": 0.7
+        }
+      ],
+      "look": {
+        "plan": "biped",
+        "skin": 5927012,
+        "garb": 5925434,
+        "eye": 16760896,
+        "head": "snout",
+        "top": 9076848,
+        "club": 5916210,
+        "build": [
+          1.5,
+          1.35
+        ],
+        "long": true,
+        "stoop": 0.3,
+        "scale": 1.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "7d2719c7-2dc7-8596-a6b5-6d9a0ff00997"
+    },
+    "beast_design": {
+      "kind": "mudjaw",
+      "name": "Old Mudjaw",
+      "lvl": 13,
+      "hp": 2275,
+      "dmg": 36,
+      "speed": 2.4,
+      "xp": 1160,
+      "reach": 3,
+      "aggro": 6,
+      "respawn": 400,
+      "loot": [
+        [
+          "toadstone",
+          1
+        ],
+        [
+          "pearl",
+          0.5
+        ],
+        [
+          "draught",
+          1
+        ],
+        [
+          "coin",
+          1
+        ]
+      ],
+      "size": 2.6,
+      "dust": 5921330,
+      "haunts": [
+        {
+          "near": "marsh",
+          "count": 1,
+          "within": 14,
+          "apart": 1,
+          "roam": 4,
+          "odds": 0.4
+        }
+      ],
+      "look": {
+        "plan": "hopper",
+        "fur": 6183986,
+        "belly": 13156496,
+        "eye": 16747050,
+        "frog": true,
+        "scale": 4.2
+      },
+      "boss": true
+    }
+  },
+  {
+    "entity": {
+      "eid": "c1039b6c-c5e2-8730-8f7d-8d5a9793912e"
+    },
+    "beast_design": {
+      "kind": "gull",
+      "name": "Harbour gull",
+      "lvl": 5,
+      "hp": 132,
+      "dmg": 12,
+      "speed": 4.4,
+      "xp": 79,
+      "reach": 1.2,
+      "aggro": 4,
+      "respawn": 48,
+      "loot": [
+        [
+          "feather",
+          0.8
+        ],
+        [
+          "coin",
+          0.3
+        ],
+        [
+          "egg",
+          0.2
+        ]
+      ],
+      "size": 0.7,
+      "dust": 15790316,
+      "haunts": [
+        {
+          "near": "coast",
+          "count": 3,
+          "within": 40,
+          "apart": 6,
+          "roam": 8,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "bird",
+        "feather": 16053488,
+        "wing": 11055288,
+        "beak": 15777856,
+        "eye": 1710618,
+        "fly": 1.8,
+        "span": 1.4,
+        "scale": 1.2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "46260b0a-6452-8164-ad30-e99602b3010d"
+    },
+    "beast_design": {
+      "kind": "seal",
+      "name": "Grey seal",
+      "lvl": 7,
+      "hp": 332,
+      "dmg": 14,
+      "speed": 2.2,
+      "xp": 122,
+      "reach": 1.4,
+      "aggro": 0,
+      "respawn": 60,
+      "loot": [
+        [
+          "pelt",
+          0.6
+        ],
+        [
+          "pearl",
+          0.05
+        ]
+      ],
+      "size": 1,
+      "dust": 8028296,
+      "haunts": [
+        {
+          "near": "coast",
+          "count": 2,
+          "within": 38,
+          "apart": 8,
+          "roam": 4,
+          "odds": 0.7
+        },
+        {
+          "near": "isles",
+          "count": 2,
+          "within": 26,
+          "apart": 8,
+          "roam": 4,
+          "odds": 0.8
+        }
+      ],
+      "look": {
+        "plan": "seal",
+        "hide": 8028296,
+        "ridge": 5922920,
+        "snout": 11055288,
+        "eye": 1052688,
+        "belly": 12107976,
+        "scale": 0.9
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d9e9bfc5-18b6-8de9-a89c-b192707a3361"
+    },
+    "beast_design": {
+      "kind": "seaserpent",
+      "name": "Sea serpent",
+      "lvl": 12,
+      "hp": 576,
+      "dmg": 28,
+      "speed": 3.8,
+      "xp": 263,
+      "reach": 2.4,
+      "aggro": 8,
+      "respawn": 120,
+      "loot": [
+        [
+          "scale",
+          0.8
+        ],
+        [
+          "fang",
+          0.3
+        ],
+        [
+          "pearl",
+          0.2
+        ]
+      ],
+      "size": 1.8,
+      "dust": 2779770,
+      "haunts": [
+        {
+          "near": "coast",
+          "count": 2,
+          "within": 40,
+          "apart": 12,
+          "roam": 6,
+          "odds": 0.9
+        },
+        {
+          "near": "isles",
+          "count": 4,
+          "within": 26,
+          "apart": 12,
+          "roam": 6
+        }
+      ],
+      "look": {
+        "plan": "serpent",
+        "skin": 2779770,
+        "belly": 10145992,
+        "eye": 16769088,
+        "band": 1722968,
+        "frill": 4894880,
+        "length": 10,
+        "girth": 2.2,
+        "scale": 1.2
+      }
+    }
+  }
+]

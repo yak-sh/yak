@@ -1,24 +1,14 @@
-// The creatures of the vale: one row per kind. A row says what the creature
-// is in a fight, what it leaves behind, where it lives, and how it is drawn:
-// a body plan from bodies/ in colours of its own. The rows live in beasts/,
-// a file for each kind of country: the meadows, the woods, the waters, the
-// heights, the deep places under the woods, the sands, the frost and the
-// fire. A new creature is a row there, and a new body plan, when none of the
-// existing ones will do, is one more file in bodies/.
+// The creatures of the vale are store rows, seeded from seed/beasts/.
+// Each row says how it fights, what it leaves, where it lives, and how it is
+// drawn. Body plans remain code in bodies/; a new kind picks one by name.
 //
 // Where it lives is by the kind of place (`haunts`) and by its level: every
 // land whose habitat it suits (homes.ts `suits`) and that has a place of that
 // kind (levels.ts) grows that
 // many of it around each one, or around the share of them its odds pick, so
 // a new creature appears wherever it belongs without any level naming it.
-import { DEEP } from './beasts/deep.ts'
-import { FIRE } from './beasts/fire.ts'
-import { FROST } from './beasts/frost.ts'
-import { HEIGHTS } from './beasts/heights.ts'
-import { MEADOW } from './beasts/meadow.ts'
-import { SANDS } from './beasts/sands.ts'
-import { WATERS } from './beasts/waters.ts'
-import { WOODS } from './beasts/woods.ts'
+import { comp, str } from './bundle.ts'
+import type { Bundle } from './net.ts'
 import type { Biped } from './bodies/biped.ts'
 import type { Bird } from './bodies/bird.ts'
 import type { Crag } from './bodies/crag.ts'
@@ -93,13 +83,14 @@ export type Beast = {
   boss?: boolean
 }
 
-export let BEASTS: Record<string, Beast> = {
-  ...MEADOW,
-  ...WOODS,
-  ...WATERS,
-  ...HEIGHTS,
-  ...DEEP,
-  ...SANDS,
-  ...FROST,
-  ...FIRE,
+// Each consumer reads the same index. The store subscription replaces it,
+// so a newly invented kind is visible without a reload.
+export let BEASTS: Record<string, Beast> = {}
+
+/** Install the store's current creature designs. */
+export let useBeasts = (rows: Bundle[]) => {
+  BEASTS = Object.fromEntries(rows.flatMap((row) => {
+    let design = comp(row, 'beast_design'), kind = str(design.kind)
+    return kind ? [[kind, design as Beast]] : []
+  }))
 }

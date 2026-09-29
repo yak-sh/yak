@@ -6,6 +6,9 @@ import type { Intent } from './input.ts'
 import type { Net } from './net.ts'
 import { type Event, game } from './play.ts'
 import { flat } from './terrain.ts'
+import { seedBeasts } from './beasts_fixture.ts'
+
+seedBeasts()
 
 let encounter = (item: string, gap: number) => {
   let home = homesOf('mossvale').find((h) => h.kind == 'wolf')!
