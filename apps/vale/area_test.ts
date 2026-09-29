@@ -44,8 +44,11 @@ Deno.test('an area query finds stored rows in generated regions', () => {
     slain: { creature: 'hare-1', by: 'hero-1' },
     place: placeOf(px, pz),
   })
-  assertEquals(select([row('near', x + 3, z), row('far', x + 500, z)])
-    .map((b) => b.entity.eid), ['near'])
+  assertEquals(
+    select([row('near', x + 3, z), row('far', x + 500, z)])
+      .map((b) => b.entity.eid),
+    ['near'],
+  )
 })
 
 Deno.test('a nearby creature reaches another page without a stored row', () => {
