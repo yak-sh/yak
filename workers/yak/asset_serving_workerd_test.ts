@@ -1,10 +1,10 @@
 // Published app assets keep their release bytes through later deploys and a
 // rollback, while the page and ordinary file paths follow the live release.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
-import { connector, kernel, seed } from './probe.ts'
+import { connector, seed, workerd } from './probe.ts'
 
 Deno.test('a page uses release assets whose bytes survive deploy and rollback', async () => {
-  let k = await kernel()
+  let k = workerd()
   try {
     let space = 'releaseassets'
     let app = { space, app: 'page' }
@@ -114,6 +114,33 @@ Deno.test('a page uses release assets whose bytes survive deploy and rollback', 
     let member = await at(css1, { headers: { cookie } })
     assertEquals(member.status, 200)
     assertStringIncludes(await member.text(), '/*first*/')
+
+    await agent.tool('app_set', { ...app, access: 'public' })
+    let name = `asset-release-${crypto.randomUUID()}`
+    await agent.tool('app_publish', { ...app, name })
+    await agent.tool('app_install', { space, name, as: 'copy' })
+    let copy = { space, app: 'copy' }
+    await agent.tool('app_set', { ...copy, sandboxed: true })
+    await agent.tool('app_deploy', copy)
+    await agent.tool('app_set', { ...copy, access: 'private' })
+    let sandboxPage = await at('/copy/', { headers: { cookie } })
+    let sandboxHtml = await sandboxPage.text()
+    let tokenAsset = sandboxHtml.match(
+      /\/copy\/~[^/]+\/api\/assets\/[0-9a-f-]+\/styles\/main\.css/,
+    )?.[0]
+    if (!tokenAsset) {
+      throw new Error(`sandbox page has no asset: ${sandboxHtml}`)
+    }
+    let tokenRead = await at(tokenAsset)
+    assertEquals(tokenRead.status, 200)
+    assertStringIncludes(await tokenRead.text(), '/*first*/')
+    let failed = tokenAsset.replace(
+      /\/assets\/[0-9a-f-]+\//,
+      `/assets/${crypto.randomUUID()}/`,
+    )
+    assertEquals((await at(failed)).status, 404)
+    assertEquals((await at(tokenAsset.replace(/~[^/]+/, '~bogus'))).status, 401)
+    assertEquals((await at(tokenAsset.replace(/~[^/]+\//, ''))).status, 401)
   } finally {
     await k.stop()
   }

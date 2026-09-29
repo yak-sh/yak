@@ -32,6 +32,7 @@ import {
 import type { Wire } from '@yaks/durable-object'
 import { until } from '../../bin/testing.ts'
 import * as apps from './apps.ts'
+import * as fileDoor from './files.ts'
 import { directory, stamp, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
@@ -1346,7 +1347,10 @@ Deno.test('photo and file uploads enforce space R2 limits from actual bytes', as
   let { dir, space, app } = await seeded(env)
   let cookie = await as(ADA)
   env.FILES = {
-    fetch: () => Promise.resolve(new Response(null, { status: 204 })),
+    fetch: (req) =>
+      req.method == 'POST'
+        ? Promise.resolve(new Response(null, { status: 204 }))
+        : fileDoor.fetch(req, env),
   }
   let list = env.BLOBS.list.bind(env.BLOBS)
   let occupied = 0
