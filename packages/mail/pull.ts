@@ -85,26 +85,45 @@ export type Edge = {
   processed: (ids: string[]) => Promise<void>
 }
 
+/** How long one request to the edge may make no answer. */
+export let WAIT = 10_000
+
 /** The edge's HTTP API, with the bearer token it asks for. */
-export let edge = ({ url, token }: Pull, go: Fetch = fetch): Edge => {
+export let edge = (
+  { url, token }: Pull,
+  go: Fetch = fetch,
+  stop?: AbortSignal,
+  wait = WAIT,
+): Edge => {
   let root = url.replace(/\/+$/, '')
   // The answer's body, parsed, or null where the edge has no such tray.
   let call = async (method: string, path: string, body?: unknown) => {
-    let res = await go(`${root}${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${token}`,
-        ...(body ? { 'content-type': 'application/json' } : {}),
-      },
-      ...(body ? { body: JSON.stringify(body) } : {}),
-    })
-    if (res.status == 404) {
-      await res.body?.cancel()
-      return null
+    let late = AbortSignal.timeout(wait)
+    let signal = stop ? AbortSignal.any([stop, late]) : late
+    try {
+      let res = await go(`${root}${path}`, {
+        method,
+        signal,
+        headers: {
+          authorization: `Bearer ${token}`,
+          ...(body ? { 'content-type': 'application/json' } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      })
+      if (res.status == 404) {
+        await res.body?.cancel()
+        return null
+      }
+      let raw = await res.text()
+      if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${raw}`)
+      return raw ? JSON.parse(raw) : null
+    } catch (error) {
+      // A host stopping is not a failed pull, including while the body is
+      // arriving. A timeout still throws, so the tray reports it and the
+      // service tries again on its next pass.
+      if (stop?.aborted) return null
+      throw error
     }
-    let raw = await res.text()
-    if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${raw}`)
-    return raw ? JSON.parse(raw) : null
   }
   // The edge binds one SQL variable per id, and its store caps a statement at
   // a hundred, so an acknowledgement goes in bites.

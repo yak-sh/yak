@@ -1,6 +1,6 @@
 // The thread a `yak` process runs its duties in: the effect pool and the
-// plugins' services, where no process that stays up is running them, kept off
-// the thread that runs the command and draws its answer.
+// plugins' services, kept off the thread that runs the command and draws its
+// answer.
 //
 // It is a thread of the same process, and a host of its own: it opens the same
 // graph through its own connection for the roles it is handed (./worker.ts),
@@ -32,6 +32,7 @@ export type Start = Plan & { me: Eid }
 /** What the process says to its thread. */
 export type Said =
   | { start: Start }
+  | { pass: true }
   | { live: true }
   | { stop: true }
   | { nudge: true }
@@ -108,12 +109,19 @@ export let thread = (): Aside => {
       if (!await planned.promise) return
       spawn()
       if (!worker) return
-      if (signal.aborted) return passed.promise
+      if (signal.aborted) {
+        tell({ pass: true })
+        return passed.promise
+      }
       tell({ live: true })
-      signal.addEventListener('abort', () => tell({ stop: true }), {
-        once: true,
-      })
-      await stopped.promise
+      let stop = () => tell({ stop: true })
+      signal.addEventListener('abort', stop, { once: true })
+      if (signal.aborted) stop()
+      try {
+        await stopped.promise
+      } finally {
+        signal.removeEventListener('abort', stop)
+      }
     },
     nudge: () => tell({ nudge: true }),
     end: () => end(),

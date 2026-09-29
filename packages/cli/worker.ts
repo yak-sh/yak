@@ -4,10 +4,12 @@
 // names for the duty roles it is handed, as a host of its own under the name
 // the process gave it, and runs those duties until it is told to close.
 //
-// On the way in it runs one pass of its roles; told to go live, it keeps at
-// every one until told to stop. A command passing through never starts it.
-// Told to close, it runs one last pass over the pool for what the process
-// wrote while it ran, then closes its graph. Failures go back to the process.
+// It either runs one pass of its roles or goes live and keeps at every one
+// until told to stop. Live duties do their first pass themselves: putting a
+// separate pass in front would let one slow sweep hold every service closed.
+// A command passing through never starts it. Told to close, it runs one last
+// pass over the pool for what the process wrote while it ran, then closes its
+// graph. Failures go back to the process.
 
 import { become } from '@yaks/process'
 import { read } from './config.ts'
@@ -39,11 +41,12 @@ self.onmessage = async ({ data }: MessageEvent<Said>) => {
     become(me)
     mine = roles
     host = compose(read(config), ['graph', ...roles], facet)
-    going = host.then((h) => h.duties(AbortSignal.abort(), mine))
+  } else if ('pass' in data) {
+    going = open().then((h) => h.duties(AbortSignal.abort(), mine))
       .then(() => tell({ passed: true }), failed)
   } else if ('live' in data) {
     let signal = (live = new AbortController()).signal
-    going = going.then(open).then((h) => h.duties(signal))
+    going = open().then((h) => h.duties(signal))
       .then(() => tell({ stopped: true }), failed)
   } else if ('stop' in data) live?.abort()
   else if ('nudge' in data) host?.then((h) => h.fx.wake(), () => {})

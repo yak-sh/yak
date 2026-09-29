@@ -294,10 +294,9 @@ process with a sender. `mail check` reports the configuration problem too.
 ## Pulling from an edge
 
 A graph behind a perimeter cannot be posted to. Its edge keeps what arrived
-instead, and `@yaks/mail/service` pulls it: a duty the host runs under the
-`@yaks/mail` lease, so one process over the graph pulls at a time, and a
-one-shot `yak` command pulls once when nobody else is. Name the edge under
-`pull`:
+instead, and `@yaks/mail/service` pulls it: a duty a host runs under the
+`@yaks/mail` lease, so one process over the graph pulls at a time. Name the edge
+under `pull`:
 
 ```json
 {

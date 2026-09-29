@@ -1,4 +1,4 @@
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -201,6 +201,132 @@ Deno.test('edge: the HTTP API, a missing tray, and acknowledgements in bites', a
     'POST https://inbox.example/messages/notified {"ids',
     'POST https://inbox.example/messages/notified {"ids',
   ])
+})
+
+let waiting = (_url: string, init: RequestInit): Promise<Response> =>
+  new Promise((_resolve, reject) => {
+    let signal = init.signal!
+    let stop = () => reject(signal.reason)
+    signal.addEventListener('abort', stop, { once: true })
+    if (signal.aborted) stop()
+  })
+
+let streaming = (_url: string, init: RequestInit): Promise<Response> =>
+  Promise.resolve(
+    new Response(
+      new ReadableStream({
+        start: (body) => {
+          let signal = init.signal!
+          let stop = () => body.error(signal.reason)
+          signal.addEventListener('abort', stop, { once: true })
+          if (signal.aborted) stop()
+        },
+      }),
+    ),
+  )
+
+Deno.test('edge: a response that never finishes times out', async () => {
+  let at = edge(
+    { url: 'https://inbox.example', token: 't' },
+    streaming,
+    undefined,
+    1,
+  )
+  await assertRejects(() => at.messages(), DOMException, 'timeout')
+})
+
+Deno.test('edge: stopping its service ends an in-flight request quietly', async () => {
+  let stop = new AbortController()
+  let at = edge(
+    { url: 'https://inbox.example', token: 't' },
+    waiting,
+    stop.signal,
+    1000,
+  )
+  let messages = at.messages()
+  stop.abort()
+  assertEquals(await messages, [])
+})
+
+let pulled = (stop?: AbortController) => {
+  let messages = 0
+  let go = (url: string, init: RequestInit): Promise<Response> => {
+    if (url.includes('/messages?')) {
+      messages++
+      return Promise.resolve(
+        new Response(JSON.stringify([letter(1)]), {
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    }
+    if (url.endsWith('/messages/notified')) stop?.abort()
+    return Promise.resolve(
+      new Response('', { status: url.includes('/requests?') ? 404 : 200 }),
+    )
+  }
+  return { go, messages: () => messages }
+}
+
+Deno.test('service: an already-ended signal is one complete pull', async () => {
+  let g = await club()
+  let at = pulled()
+  let options = {
+    domain,
+    pull: { url: 'https://inbox.example', token: 't' },
+  }
+  await service(
+    { graph: g },
+    options,
+    AbortSignal.abort(),
+    (pull, stop) => edge(pull, at.go, stop),
+  )
+  assertEquals(at.messages(), 1)
+  assertEquals((await mails(g)).length, 1)
+})
+
+Deno.test('service: a timed-out pull is tried again', async () => {
+  let g = await club()
+  let stop = new AbortController()
+  let at = pulled(stop)
+  let calls = 0
+  let go = (url: string, init: RequestInit) => {
+    if (url.includes('/messages?') && calls++ == 0) return waiting(url, init)
+    return at.go(url, init)
+  }
+  let options = {
+    domain,
+    pull: { url: 'https://inbox.example', token: 't', every: 0 },
+  }
+  await service(
+    { graph: g },
+    options,
+    stop.signal,
+    (pull, signal) => edge(pull, go, signal, 1),
+  )
+  assertEquals(calls, 2)
+  assertEquals((await mails(g)).length, 1)
+})
+
+Deno.test('service: stopping ends an in-flight pull', async () => {
+  let stop = new AbortController()
+  let began = Promise.withResolvers<void>()
+  let go = (url: string, init: RequestInit) => {
+    began.resolve()
+    return waiting(url, init)
+  }
+  let options = {
+    domain,
+    pull: { url: 'https://inbox.example', token: 't' },
+  }
+  let running = service(
+    { graph: await club() },
+    options,
+    stop.signal,
+    (pull, signal) => edge(pull, go, signal, 1000),
+  )
+  await began.promise
+  stop.abort()
+  await running
 })
 
 Deno.test('service: a config naming no pull has nothing to take', async () => {
