@@ -64,7 +64,7 @@ import { formOf, SKILLS } from './skills.ts'
 import { within } from './solid.ts'
 import { sound } from './sound.ts'
 import { spellFx } from './spell_fx.ts'
-import { icon } from './sprites.ts'
+import { icon, refreshSprites } from './sprites.ts'
 import { station } from './station.ts'
 import { voices } from './voicebox.ts'
 import { COARSER } from './stream.ts'
@@ -140,10 +140,14 @@ let buildingReady = opening.designs('building_design', (rows) => {
   if (hadBuildings) redraw(affects, kinds)
   hadBuildings = true
 })
+let itemReady = opening.designs('item_design', (rows) => {
+  useItems(rows)
+  refreshSprites()
+})
 await Promise.all([
   opening.designs('ability_design', useAbilities),
   opening.designs('beast_design', useBeasts),
-  opening.designs('item_design', useItems),
+  itemReady,
   themeReady,
   buildingReady,
 ])
