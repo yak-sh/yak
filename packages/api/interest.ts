@@ -1,11 +1,13 @@
 // What a subscription's answer is read from, taken off its query once when it
 // opens, so a commit that touches none of it does not run the query again. A
 // refresh subscription runs its whole query on every commit it is asked about,
-// and every writer waits for that inside the effect phase: before this, each
-// tool call's bookkeeping rows paid for every open tab's session tray.
+// so a commit that could not change the answer is a read wasted on the read
+// thread every tab and every `/query` shares.
 //
 //   own   components every member wears: presence and direct positive property
-//         tests required by the query. An entity missing one cannot join.
+//         tests required by the query, a computed property's among them when
+//         its value needs the component (the store's `worn`). An entity
+//         missing one cannot join.
 //   near  the components the query reads on each entity itself, which stand
 //         in for `own` when there is no presence test to narrow it.
 //   far   components read on other entities whose owner cannot be located.
@@ -53,13 +55,13 @@ let missing = (c: Clause): boolean =>
 let required = (
   c: Clause,
   v: Vocab,
-  stored: (comp: string, prop: string) => boolean,
+  worn: (comp: string, prop: string) => boolean,
 ): Set<string> => {
   if (c.kind == 'and') {
-    return new Set(c.clauses.flatMap((part) => [...required(part, v, stored)]))
+    return new Set(c.clauses.flatMap((part) => [...required(part, v, worn)]))
   }
   if (c.kind == 'or') {
-    let [first, ...rest] = c.clauses.map((part) => required(part, v, stored))
+    let [first, ...rest] = c.clauses.map((part) => required(part, v, worn))
     return new Set(
       [...first].filter((comp) => rest.every((arm) => arm.has(comp))),
     )
@@ -71,7 +73,7 @@ let required = (
   if (c.facet && c.path.length != 1) return new Set()
   let hops = v.aim(c.path.join('.'), bare(c) || !!c.facet)
   return hops.length == 1 && hops[0].comp != 'entity' &&
-      (!hops[0].prop || stored(hops[0].comp, hops[0].prop))
+      (!hops[0].prop || worn(hops[0].comp, hops[0].prop))
     ? new Set([hops[0].comp])
     : new Set()
 }
@@ -80,7 +82,7 @@ let required = (
 export let interest = (
   ast: And,
   v: Vocab,
-  stored: (comp: string, prop: string) => boolean,
+  worn: (comp: string, prop: string) => boolean,
 ): Interest | null => {
   let near = new Set<string>()
   let far = new Set<string>()
@@ -138,7 +140,7 @@ export let interest = (
   }
   try {
     walk(ast.clauses, near)
-    let own = [...required(ast, v, stored)]
+    let own = [...required(ast, v, worn)]
     // An exact reference at the top level of an AND belongs to every
     // member. It can rule out a changed nonmember before a window re-reads.
     let fixed = ast.clauses.flatMap((c) => {
@@ -148,7 +150,7 @@ export let interest = (
         v.assoc(c.path[0])
       ) return []
       let [hop, ...more] = v.aim(c.path.join('.'))
-      return !more.length && stored(hop.comp, hop.prop) &&
+      return !more.length && worn(hop.comp, hop.prop) &&
           v.prop(hop.comp, hop.prop)?.category == 'ref'
         ? [{ ...hop, value: c.value.raw }]
         : []

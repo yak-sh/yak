@@ -118,9 +118,10 @@ export type Tx = {
  * promise.
  */
 export type Storage = {
-  /** Whether a query reads this property as stored on its component.
-   * Derived reads may answer from elsewhere. */
-  stored?: (comp: string, prop: string) => boolean
+  /** Whether a value this store reads for the property means its entity
+   * wears the component. A stored property's does; a computed one's may be
+   * answered from elsewhere (@yaks/sql `worn`). */
+  worn?: (comp: string, prop: string) => boolean
   /** make the store ready for the bound vocabulary: its schema, where it has
    * one */
   install: () => void | Promise<void>

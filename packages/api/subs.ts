@@ -7,6 +7,12 @@
 // steps: read the changed entities once, whole, then test them against each
 // subscription.
 //
+// The writer does not wait for that. The hook starts the pass and returns, so a
+// tool call's bookkeeping rows are answered at their commit, however many tabs
+// are open and however long their windows take to read. Commits that arrive
+// while a pass is still reading join the next one, so a busy writer costs the
+// subscribers one more pass, not one per commit.
+//
 // Two modes, chosen when the subscription opens:
 //
 //   Routed       the query asks only about each entity itself, so it joins
@@ -510,7 +516,7 @@ export let subscriptions = (graph: Graph, opts: {
       // parsed is refused rather than quietly demoted to a subscription that
       // runs it again on every commit forever.
       let ast = parse(line)
-      sub.reads = interest(ast, graph.vocab, graph.stored)
+      sub.reads = interest(ast, graph.vocab, graph.worn)
       let plan = peerPlan(ast, graph.vocab)
       sub.peer = plan.peers
       sub.durable = plan.durable
@@ -663,20 +669,23 @@ export let subscriptions = (graph: Graph, opts: {
     })
   }
 
-  let commitNow = (applied: Bundle[]) => {
+  // One pass over the transactions that committed since the last: each one
+  // to the raw feeds, then all of them at once to the queries.
+  let commitNow = (txs: Bundle[][]) => {
     flush()
     backlinks.clear()
     let subs = all()
-    // A raw feed sends the transaction to a client, and this hook is handed
+    // A raw feed sends each transaction to a client, and this hook is handed
     // what the phases passed to each other — one patch each, with the `$`
     // keys still on them. So it is composed here, the same way `apply()`
     // composes what it returns: a subscriber receives exactly what the writer
     // did.
     let raw = subs.filter((s) => s.raw)
-    if (raw.length) {
-      let batch = composed(applied)
+    for (let tx of raw.length ? txs : []) {
+      let batch = composed(tx)
       for (let s of raw) s.sink({ id: s.id, bundles: batch })
     }
+    let applied = txs.flat()
     let queries = subs.filter((s) => !s.raw)
     for (let s of queries) if (s.peer) s.candidates = undefined
     let invalidated = new Set(
@@ -763,7 +772,23 @@ export let subscriptions = (graph: Graph, opts: {
       )
     })
   }
-  let commit = (applied: Bundle[]) => ordered(() => commitNow(applied))
+  // A commit that finds earlier work still running waits for it, beside every
+  // commit that arrives meanwhile: when their turn comes they are one pass.
+  let waiting: { txs: Bundle[][]; done: Promise<void> } | undefined
+  let commit = (applied: Bundle[]): void | Promise<void> => {
+    if (waiting) {
+      waiting.txs.push(applied)
+      return waiting.done
+    }
+    if (!pendingWork) return ordered(() => commitNow([applied]))
+    let next = { txs: [applied], done: Promise.resolve() }
+    waiting = next
+    next.done = ordered(() => {
+      waiting = undefined
+      return commitNow(next.txs)
+    }) as Promise<void>
+    return next.done
+  }
 
   // The entities a transaction changed, read whole, each moved through the
   // network once: what joined and what left every routed subscription.
@@ -1081,9 +1106,17 @@ export let subscriptions = (graph: Graph, opts: {
     }
   })
 
+  // The writer is answered at its commit, and the pass it starts goes on
+  // without it. A pass that fails is said here, where nobody waits on it.
   graph.use({
     name: '@yaks/api',
-    hooks: { effect: (bundles) => then(commit(bundles), () => bundles) },
+    hooks: {
+      effect: (bundles) => {
+        let pass = commit(bundles)
+        if (isPromise(pass)) pass.catch((err) => fault(err, 'subscriptions'))
+        return bundles
+      },
+    },
   })
 
   return {

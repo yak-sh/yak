@@ -470,6 +470,56 @@ test('a derived value can join a window without its component', () => {
   ])
 })
 
+test('a derived value that needs its component skips births without it', () => {
+  let store = storage(open(':memory:'), shopVocab, {
+    derived: { 'review.stars': { tag: 'number', expr: () => lit(3) } },
+  })
+  store.install()
+  let g = graph({ storage: store, vocab: shopVocab })
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(String(q)), g.read(q, o)),
+  }
+  let subs = subscriptions(spy), e = ear()
+  let query = '.review.stars=3&?created&.order=-created.at&.limit=10'
+  subs.open(e.to, 'derived', query)
+  e.take()
+  reads = []
+
+  g.apply([{ entity: { eid: 'note' }, doc: { title: 'A note' } }])
+  assertEquals([reads, e.take()], [[], []])
+  g.apply([{ entity: { eid: 'r1' }, review: { book: null } }])
+  assertEquals(e.take().map((f) => [f.id, ids(f)]), [['derived', ['r1']]])
+})
+
+test('commits made while a pass reads are one pass after it', async () => {
+  let g = shop()
+  let gate: Promise<void> | undefined
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => {
+      reads.push(String(q))
+      return gate ? gate.then(() => g.read(q, o)) : g.read(q, o)
+    },
+  }
+  let subs = subscriptions(spy), e = ear()
+  let window = '.book&.order=price&.limit=2'
+  subs.open(e.to, 'cheapest', window)
+  e.take()
+  reads = []
+  let hold = Promise.withResolvers<void>()
+  gate = hold.promise
+  for (let [eid, price] of [['b1', 9], ['b2', 5], ['b3', 7]] as const) {
+    g.apply([{ entity: { eid }, book: { price } }])
+  }
+  hold.resolve()
+  await subs.snapshot('.book')
+  assertEquals(reads.filter((q) => q == window).length, 2)
+  assertEquals(e.take().map(ids).at(-1), ['b2', 'b3'])
+})
+
 test('OR and absence keep births eligible for a window', () => {
   let g = shop(), subs = subscriptions(g), e = ear()
   let heard = () => e.take().map((f) => [f.id, ids(f).sort()])

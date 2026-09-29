@@ -74,6 +74,7 @@ import {
   looseSql,
   narrow,
   type Stmt,
+  worn,
 } from '@yaks/sql'
 import {
   asked,
@@ -112,8 +113,9 @@ export type { Query }
  * promise, and it resolves only once the write batch has committed.
  */
 export type Store = {
-  /** Whether a query reads this property from its stored column. */
-  stored: (comp: string, prop: string) => boolean
+  /** Whether a value this store reads for the property means its entity
+   * wears the component (@yaks/sql `worn`). */
+  worn: (comp: string, prop: string) => boolean
   /** the schema statements the bound vocabulary implies */
   ddl: () => Stmt[]
   /** run them — create the tables, indexes and triggers the vocabulary needs */
@@ -531,9 +533,7 @@ export let storage = <S extends Prepared<S>>(
   }
 
   return {
-    stored: (comp, prop) =>
-      !!vocab.prop(comp, prop) && !vocab.prop(comp, prop)?.computed &&
-      !base.derived?.[`${comp}.${prop}`],
+    worn: worn(vocab, base.derived),
     ddl: () => schema(vocab),
     install: async () => {
       // What stood before, which only a table that did can be behind its

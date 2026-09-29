@@ -47,6 +47,7 @@ import {
   render,
   type Row,
   type Stmt,
+  worn,
 } from '@yaks/sql'
 import type {
   Binding,
@@ -191,8 +192,9 @@ export type Tx = {
 // signature still satisfies `Storage` wherever the generic contract is what is
 // wanted.
 export type Store = {
-  /** Whether a query reads this property from its stored column. */
-  stored: (comp: string, prop: string) => boolean
+  /** Whether a value this store reads for the property means its entity
+   * wears the component (@yaks/sql `worn`). */
+  worn: (comp: string, prop: string) => boolean
   /** the schema statements the bound vocabulary implies */
   ddl: () => Stmt[]
   /**
@@ -311,9 +313,7 @@ export let storage = (
     revive: (eids) => revive(driver, eids),
   }
   return {
-    stored: (comp, prop) =>
-      !!vocab.prop(comp, prop) && !vocab.prop(comp, prop)?.computed &&
-      !base.derived?.[`${comp}.${prop}`],
+    worn: worn(vocab, base.derived),
     // A caller replaying these statements over a standing file must add new
     // columns before creating their indexes. `schema()` alone describes a
     // fresh file; it cannot see what a standing table still lacks.

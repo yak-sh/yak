@@ -3,12 +3,12 @@
 // the door and nowhere else, and every other shape of request refused in its
 // own words.
 
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { type Bundle, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
-import { Unauthorized } from '@yaks/api'
+import { subscriptions, Unauthorized } from '@yaks/api'
 import { ram } from '@yaks/ram'
 import { sessionDoc } from '@yaks/session'
 import { authenticate as sessionAuth } from '@yaks/session/rules'
@@ -309,6 +309,43 @@ test('what the host owes a direct call rides after the answer, which is unchange
   assertEquals([made.entity.eid, made.book], ['b1', { price: 12 }])
   assertEquals(near.entity.eid, 'b0')
   assert(said.result.content[0].text.includes('near b1: b0 · book'))
+})
+
+test('a call is answered while a subscriber is still reading what it wrote', async () => {
+  let g = shopGraph()
+  // A host's subscribers read through its read thread (@yaks/api `handler`);
+  // this one is held there, the way a busy thread holds it.
+  let gate: Promise<void> | undefined
+  let held = <T>(v: T | Promise<T>) => gate ? gate.then(() => v) : v
+  let subs = subscriptions({
+    ...g,
+    read: (q, o) => held(g.read(q, o)),
+    get: (eids, comps) => held(g.get(eids, comps)),
+  })
+  let heard: string[] = []
+  await subs.open(
+    (f) => heard.push(...(f.bundles ?? []).map((b) => b.entity.eid)),
+    'books',
+    '.book',
+  )
+  let hold = Promise.withResolvers<void>()
+  gate = hold.promise
+  let door = routes({ config: {}, graph: g, who: () => ada, tools: [] })[0]
+    .handle
+  let said: { result: { structuredContent: { result: Bundle[] } } } | undefined
+  let asked = door(call('graph_apply', {
+    change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+  }))
+  Promise.resolve(asked).then(async (r) => said = await r.json())
+  try {
+    await until(() => said, { label: 'the answer' })
+    assertEquals(said!.result.structuredContent.result[0].entity.eid, 'b1')
+    assertEquals(heard, [])
+  } finally {
+    hold.resolve()
+  }
+  await subs.snapshot('.book')
+  assertEquals(heard, ['b1'])
 })
 
 test('initialize carries instructions from the loaded vocabularies', async () => {

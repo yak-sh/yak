@@ -93,8 +93,9 @@ export type Tx = {
  * a row.
  */
 export type Store = {
-  /** Whether a query reads this property from its stored component. */
-  stored: (comp: string, prop: string) => boolean
+  /** Whether a value this store reads for the property means its entity
+   * wears the component. */
+  worn: (comp: string, prop: string) => boolean
   /** nothing to create — installing a map is a no-op */
   install: () => void
   /** a query → its entities, with `comps` only where named */
@@ -513,8 +514,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   return {
     // A computed override may read another component, even when its named
-    // component is absent. Without one, the matcher reads that row itself.
-    stored: (comp, prop) =>
+    // component is absent, so only a stored property's value says it is worn.
+    worn: (comp, prop) =>
       !!vocab.prop(comp, prop) && !vocab.prop(comp, prop)?.computed &&
       !base.computed?.[`${comp}.${prop}`],
     install: () => {},

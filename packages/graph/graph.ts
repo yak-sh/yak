@@ -170,8 +170,9 @@ export type Options = {
 export type Graph = {
   /** the component vocabulary this graph uses */
   vocab: Vocab
-  /** Whether a query reads this property as stored on its component. */
-  stored: (comp: string, prop: string) => boolean
+  /** Whether a value of this property means its entity wears the
+   * component (its storage's `worn`; no by default). */
+  worn: (comp: string, prop: string) => boolean
   /** the adapter that stores the data */
   storage: Storage
   /** the plugins registered on this graph, in order */
@@ -703,7 +704,7 @@ export let graph = (opts: Options): Graph => {
 
   let g: Graph = {
     vocab,
-    stored: (comp, prop) => storage.stored?.(comp, prop) ?? false,
+    worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
     storage,
     plugins,
     address,

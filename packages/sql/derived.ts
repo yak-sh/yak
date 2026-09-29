@@ -26,6 +26,7 @@
 //   }
 //   compile(ast, vocab, { derived: { 'order.total': total } })
 
+import type { Vocab } from '@yaks/vocab'
 import { type Expr, fn, lit, notNull, op, type Select, when } from './ast.ts'
 import type { Tag } from './sqlite.ts'
 
@@ -59,6 +60,41 @@ export type DerivedProp = {
 // has no derived properties by default; an application with computed properties
 // passes its own in.
 export type Derived = Record<string, DerivedProp>
+
+/**
+ * Whether a value a store reads for `comp.prop` means its entity wears `comp`:
+ * a stored property's does, a derived one's does unless its expression answers
+ * without the component (`worn: false`), and a computed property no
+ * expression reads has no value to go by.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { lit } from '@yaks/sql'
+ *
+ * let vocab = loadVocab({ $defs: { page: { component: true, properties: {
+ *   title: { type: 'string' },
+ *   views: { type: 'number' },
+ *   rank: { type: 'number', computed: true },
+ *   seen: { type: 'number', computed: true },
+ * } } } })
+ * let wears = worn(vocab, {
+ *   'page.rank': { tag: 'number', expr: () => lit(1) },
+ *   'page.title': { tag: 'text', worn: false, expr: () => lit('') },
+ * })
+ * assertEquals(
+ *   ['views', 'rank', 'title', 'seen'].map((p) => wears('page', p)),
+ *   [true, true, false, false],
+ * )
+ * ```
+ */
+export let worn =
+  (vocab: Vocab, derived: Derived = {}) =>
+  (comp: string, prop: string): boolean => {
+    let d = derived[`${comp}.${prop}`]
+    let p = vocab.prop(comp, prop)
+    return d ? d.worn !== false : !!p && !p.computed
+  }
 
 // ---- whole components ----
 //

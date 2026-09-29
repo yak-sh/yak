@@ -252,6 +252,11 @@ by the application. For queries that can be tested one entity at a time,
 references, ordering, limits, or other unsupported incremental conditions run
 again. The strategy is selected when the subscription opens.
 
+A writer is answered at its commit and does not wait for subscribers to be told.
+Commits that land while a pass is still reading are handled together in the next
+pass, so a burst of writes costs subscribers one more pass rather than one per
+commit.
+
 ### Queries that depend on entities outside their result
 
 For dependencies the query itself does not express, create a registry with
