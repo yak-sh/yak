@@ -63,7 +63,7 @@ test('results preserve bench data and other suites; committed floors survive res
   }
 })
 test('timer preserves nonzero command status and handles short commands', async () => {
-  let result = await timed(Deno.execPath(), ['eval', 'Deno.exit(7)'])
+  let result = await timed('sh', ['-c', 'exit 7'])
   assertEquals(result.code, 7)
   assertEquals(result.samples > 0, true)
   assertEquals(result.controlSeconds > 0, true)

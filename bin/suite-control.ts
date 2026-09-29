@@ -8,8 +8,9 @@ function sample(): number {
   return (performance.now() - start) / 1000
 }
 if (import.meta.main) {
-  // Warm the JIT before timing the command.
-  for (let i = 0; i < 5; i++) sample()
+  // Warm the JIT before timing the command. One run does it: the loop is
+  // compiled within its first run, which is already as fast as the tenth.
+  sample()
   postMessage({ ready: true })
   let tick = () => {
     postMessage({ seconds: sample() })
