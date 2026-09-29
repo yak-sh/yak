@@ -3,6 +3,10 @@
     "cloudflare-api-yak": {
       "type": "http",
       "url": "https://mcp.cloudflare.com/mcp"
+    },
+    "sentry": {
+      "type": "http",
+      "url": "https://mcp.sentry.dev/mcp"
     }
   }
 }
