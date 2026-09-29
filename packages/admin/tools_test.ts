@@ -335,8 +335,10 @@ test('upload sends local bytes through an app blob door as the named account', a
 
 // A throwaway's code is a letter in this graph, and the session it buys is
 // answered sealed under the account, beside the words: the write that records
-// the call keeps the session, and nothing else does.
+// the call keeps the session, and nothing else does. The box is shared, so the
+// account a bare command acts as stays the one `use` chose.
 test('a throwaway signs in with the code from the graph', async () => {
+  let at = box()
   let letter = {
     entity: { eid: 'l1' },
     doc: { title: '123456 is your yaks.app code' },
@@ -345,19 +347,31 @@ test('a throwaway signs in with the code from the graph', async () => {
       at: new Date(Date.now() + 1000).toISOString(),
     },
   }
-  let answer = await answering(
-    (url) =>
-      url.endsWith('/login/code')
-        ? new Response(null, {
-          status: 302,
-          headers: { 'set-cookie': 'yak_session=cook.token; Path=/' },
-        })
-        : new Response('card'),
-    () => ask('admin_throwaway', { name: 'cook' }, { read: () => [letter] }),
-  )
-  assertEquals(answer.find((b) => b.secret)?.secret, {
-    name: sessionName('cook@bot.yak.sh'),
-    value: 'cook.token',
-  })
-  assertEquals(body(answer), 'signed in as cook@bot.yak.sh — current')
+  try {
+    kept(at, 'keep@bot.yak.sh', 'keep.token')
+    await ask('admin_use', { account: 'keep' }, { at })
+    let answer = await answering(
+      (url) =>
+        url.endsWith('/login/code')
+          ? new Response(null, {
+            status: 302,
+            headers: { 'set-cookie': 'yak_session=cook.token; Path=/' },
+          })
+          : new Response('card'),
+      () =>
+        ask('admin_throwaway', { name: 'cook' }, { at, read: () => [letter] }),
+    )
+    assertEquals(answer.find((b) => b.secret)?.secret, {
+      name: sessionName('cook@bot.yak.sh'),
+      value: 'cook.token',
+    })
+    assertStringIncludes(body(answer), '--as=cook')
+    kept(at, 'cook@bot.yak.sh', 'cook.token')
+    let current = body(await ask('admin_accounts', {}, { at })).split('\n')
+      .filter((line) => line.includes('current'))
+    assertEquals(current.length, 1)
+    assertStringIncludes(current[0], 'keep@bot.yak.sh')
+  } finally {
+    Deno.removeSync(at.dir, { recursive: true })
+  }
 })

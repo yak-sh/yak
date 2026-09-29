@@ -315,16 +315,17 @@ account (T-34351). A standing link signs its holder in until it expires and is
 worth a session and nothing more — so it is minted by the account it signs in,
 with `yak admin` (link.ts, identity.ts `/login/link`):
 
-| act    | command                                                            |
-| ------ | ------------------------------------------------------------------ |
-| mint   | `yak admin throwaway chatgpt-reviewer && yak admin link --days=90` |
-| revoke | `yak admin link --revoke=<id> --as=chatgpt-reviewer`               |
+| act    | command                                                                                  |
+| ------ | ---------------------------------------------------------------------------------------- |
+| mint   | `yak admin throwaway chatgpt-reviewer && yak admin link --days=90 --as=chatgpt-reviewer` |
+| revoke | `yak admin link --revoke=<id> --as=chatgpt-reviewer`                                     |
 
-`yak admin throwaway <name>` mints `<name>@bot.yak.sh`, signs it in, and makes
-it current; `yak admin link` prints the URL, the id that revokes it, and when it
-dies (30 days by asking for nothing, a year at most). Build the account out — an
-app or two — before handing the link over, since a reviewer is asked to walk a
-working account. `--as` picks the account when it is not the current one.
+`yak admin throwaway <name>` mints `<name>@bot.yak.sh` and signs it in, leaving
+the box's current account as it was; `--as` names it on each command after.
+`yak admin link` prints the URL, the id that revokes it, and when it dies (30
+days by asking for nothing, a year at most). Build the account out — an app or
+two — before handing the link over, since a reviewer is asked to walk a working
+account.
 
 ## STRIPE_WEBHOOK_SECRET — the billing door's events
 

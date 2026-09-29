@@ -35,7 +35,7 @@
       "noun": "admin",
       "verb": "throwaway",
       "title": "Sign in as a throwaway test account",
-      "description": "Sign this box in as a throwaway test account, <name>@bot.yak.sh, and make it current: every later admin command acts as it unless it names another account. Without a name, a fresh probe-<random> address. The sign-in code is read from the letter in this graph.\n\n  yak admin throwaway\n  yak admin throwaway cookbook",
+      "description": "Sign this box in as a throwaway test account, <name>@bot.yak.sh. Without a name, a fresh probe-<random> address. The sign-in code is read from the letter in this graph. The current account stays as it was: name the new one per command with --as.\n\n  yak admin throwaway cookbook\n  yak admin tool app_list --as=cookbook",
       "input": {
         "name": {
           "type": "string",
@@ -93,7 +93,7 @@
       "noun": "admin",
       "verb": "use",
       "title": "Make a test account current",
-      "description": "Remember a test account as the one every later admin command acts as. An owner or admin account is refused: those are reached per command, with --owner or --admin.",
+      "description": "Remember a test account as the one every later admin command acts as unless it names another. Nothing else changes it: a sign-in never does. An owner or admin account is refused: those are reached per command, with --owner or --admin.",
       "input": {
         "account": {
           "type": "string",
@@ -124,7 +124,7 @@
       "noun": "admin",
       "verb": "link",
       "title": "Make a standing sign-in link",
-      "description": "One URL that signs its holder in as this account until it expires, or --revoke to take one back by its id.\n\n  yak admin throwaway reviewer && yak admin link --days=90\n  yak admin link --revoke=3f2a --as=reviewer",
+      "description": "One URL that signs its holder in as this account until it expires, or --revoke to take one back by its id.\n\n  yak admin throwaway reviewer && yak admin link --days=90 --as=reviewer\n  yak admin link --revoke=3f2a --as=reviewer",
       "input": {
         "days": { "type": "number", "description": "how long it stands" },
         "revoke": {

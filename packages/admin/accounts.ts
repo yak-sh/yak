@@ -54,10 +54,12 @@ export let accountsIn = (vault: Local, at = zone()): Account[] =>
       : []
   }).sort((a, b) => a.name.localeCompare(b.name))
 
-// The remembered test account a bare command runs as, one per zone. It is not
-// a secret, so it is not kept with the sessions: it is one more thing this
-// machine remembers between commands, in the directory the host keeps those in
-// (@yaks/cli `Host.state`).
+// The remembered test account a bare command runs as, one per zone. Only
+// `yak admin use` chooses it; signing in never does, since the box is shared
+// and a probe's fresh account must not become every other agent's default. It
+// is not a secret, so it is not kept with the sessions: it is one more thing
+// this machine remembers between commands, in the directory the host keeps
+// those in (@yaks/cli `Host.state`).
 let currentFile = (dir: string, at: string) => `${dir}/current.${at}`
 
 export let current = (dir: string, at = zone()): string => {

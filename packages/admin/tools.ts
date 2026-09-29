@@ -16,6 +16,10 @@
 // `--admin` on that command line, and every command that runs as either wears
 // a banner on stderr (./accounts.ts). `--admin` is what an agent uses for a
 // platform act, so the act is recorded as the admin and not as Jeff (D-35373).
+// The default test account is the one `yak admin use` remembered, and only
+// that verb moves it: a sign-in never does, so one agent's throwaway never
+// becomes the account another agent's bare command acts as. A probe names its
+// own with `--as`.
 //
 // Sessions are secrets (@yaks/secrets) in this graph: a verb that signs in or
 // out answers the sealed session beside its words, so the write that records
@@ -51,6 +55,7 @@ import {
   current,
   isAdmin,
   isTest,
+  localPart,
   named,
   pick,
   Refused,
@@ -168,7 +173,6 @@ let signIn = async (
   graph: Graph,
   address: string,
   given: string | undefined,
-  state: string,
 ): Promise<Bundle> => {
   let since = Date.now()
   await askCode(address)
@@ -176,11 +180,7 @@ let signIn = async (
     (address.endsWith(BOT)
       ? await waited(graph, address, since)
       : await asked(address))
-  let session = await spendCode(address, code)
-  // Only a throwaway is ever remembered as the default (./accounts.ts) — the
-  // admin wears a bot address and is still not one.
-  if (isTestAddress(address)) choose(address, state)
-  return sealed(sessionName(address), session)
+  return sealed(sessionName(address), await spendCode(address, code))
 }
 
 let waited = (graph: Graph, address: string, since: number) => {
@@ -313,8 +313,11 @@ export let runs = (
       let name = word(argsOf(call), 'name')
       let address = name ? `${name}${BOT}` : throwaway()
       return [
-        await signIn(graph, address, undefined, host.state),
-        said(call, `signed in as ${address} — current`),
+        await signIn(graph, address, undefined),
+        said(
+          call,
+          `signed in as ${address} — act as it with --as=${localPart(address)}`,
+        ),
       ]
     }),
 
@@ -340,7 +343,7 @@ export let runs = (
         )
       }
       return [
-        await signIn(graph, address, word(a, 'code'), host.state),
+        await signIn(graph, address, word(a, 'code')),
         said(call, `signed in as ${address}`),
       ]
     }),
