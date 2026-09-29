@@ -62,7 +62,7 @@ import {
   sub,
   table,
 } from '@yaks/sql'
-import { checks, type Stood, stood } from './physical.ts'
+import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
 
 /**
@@ -310,7 +310,7 @@ export let tabled = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
 // Declared and automatic reference indexes. Created last, after `grown()`: an
 // index may name a column its table only gained on this boot, and SQLite
 // rejects one over a column that is not there yet.
-export let indexed = (vocab: Vocab): Stmt[] => [
+export let indexed = (vocab: Vocab): CreateIndex[] => [
   // Adapters that only replay schema() may still have the old spine. Until
   // they opt into archetypes/migration, do not index a column they lack.
   ...(vocab.comp('archetype')
@@ -324,6 +324,36 @@ export let indexed = (vocab: Vocab): Stmt[] => [
     .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
 ]
 
+// A vocabulary index has the name of its table and indexed columns. Inspect
+// the engine's column list too: another package's index on a component table
+// is not ours to retire merely because its name starts with that table's name.
+let managed = (driver: Driver, table: string, name: string): boolean => {
+  let cols = driver.query({ t: 'pragma', name: 'index_info', arg: name })
+    .toSorted((a, b) => Number(a.seqno) - Number(b.seqno))
+    .map((r) => r.name)
+  return !!cols.length && cols.every((c) => typeof c == 'string') &&
+    name == `${table}_${cols.join('_')}`
+}
+
+let same = (a: string, b: string): boolean =>
+  a.toLowerCase().replace(/\s+/g, ' ').trim() ==
+    b.toLowerCase().replace(/\s+/g, ' ').trim()
+
+/** Retire vocabulary indexes whose declaration disappeared or changed. */
+export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
+  let wanted = new Map(indexed(vocab).map((i) => [i.name, i]))
+  return objects(driver, { type: 'index' }).flatMap((row) => {
+    let table = String(row.tbl_name), name = String(row.name)
+    if (!(table == 'entity' || vocab.comp(table))) return []
+    if (!managed(driver, table, name)) return []
+    let now = wanted.get(name)
+    if (now && same(String(row.sql), render({ ...now, ifNot: false }).sql)) {
+      return []
+    }
+    return [{ t: 'drop' as const, kind: 'index' as const, name }]
+  })
+}
+
 /**
  * Which revision of fitting ({@link grown}, {@link refit}) brings a standing
  * file to its vocabulary. What fitting changes it reads off the file, not off
@@ -332,7 +362,7 @@ export let indexed = (vocab: Vocab): Stmt[] => [
  * fingerprint instead, and moving it fits every store once more: move it when
  * fitting learns to see something it did not.
  */
-export let FIT = 2
+export let FIT = 3
 
 /**
  * What fitting reads off a file before an install creates anything: each

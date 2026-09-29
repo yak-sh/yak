@@ -66,6 +66,7 @@ import {
   grown,
   indexed,
   logged,
+  retired,
   standing,
   tabled,
 } from './ddl.ts'
@@ -103,6 +104,7 @@ export {
   logged,
   META,
   refit,
+  retired,
   schema,
   type Standing,
   standing,
@@ -351,8 +353,13 @@ export let storage = (
         }
         unfit.forEach(report)
         // The indexes last: one may name a column this boot just added, or
-        // stand on a table it just rebuilt.
-        for (let stmt of indexed(vocab)) driver.query(stmt)
+        // stand on a table it just rebuilt. Retire old vocabulary constraints
+        // before raising the new ones, in one unit so a rejected new unique
+        // constraint leaves the standing indexes intact.
+        unit(driver, () => {
+          for (let stmt of retired(driver, vocab)) driver.query(stmt)
+          for (let stmt of indexed(vocab)) driver.query(stmt)
+        })
         // The store's lineage identity, minted on the first install (meta.ts
         // `epoch`).
         epoch(driver)

@@ -2,7 +2,7 @@
 // per component, and the doc view (search indexes belong to @yaks/fts).
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { graph } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import {
@@ -73,6 +73,57 @@ Deno.test('a look survives reference upgrades and rollbacks', () => {
     player: 'hero',
     name: 'Ada',
   })
+})
+
+Deno.test('a changed identity retires its old unique index', () => {
+  let shape = (identity: string[]) =>
+    loadVocab({
+      $defs: {
+        build: {
+          component: true,
+          type: 'object',
+          identity,
+          properties: {
+            builder: { type: 'string' },
+            match: { type: 'string' },
+            variant: { type: 'string' },
+          },
+        },
+      },
+    })
+  let d = mem()
+  let old = shape(['builder', 'variant'])
+  let before = storage(d, old)
+  before.install()
+  graph({ storage: before, vocab: old }).apply([{
+    entity: { eid: identityEid('build', ['b', 'main']) },
+    build: { builder: 'b', variant: 'main' },
+  }])
+  d.query({
+    t: 'create index',
+    name: 'build_lookup',
+    on: 'build',
+    cols: [col('builder')],
+  })
+
+  let next = shape(['builder', 'match', 'variant'])
+  let after = storage(d, next)
+  after.install()
+  graph({ storage: after, vocab: next }).apply([
+    {
+      entity: { eid: identityEid('build', ['b', '["a"]', 'main']) },
+      build: { builder: 'b', match: '["a"]', variant: 'main' },
+    },
+    {
+      entity: { eid: identityEid('build', ['b', '["c"]', 'main']) },
+      build: { builder: 'b', match: '["c"]', variant: 'main' },
+    },
+  ])
+  assertEquals(after.read('.build&*').length, 3)
+  let names = objects(d, { type: 'index' }).map((i) => i.name)
+  assert(!names.includes('build_builder_variant'))
+  assert(names.includes('build_builder_match_variant'))
+  assert(names.includes('build_lookup'))
 })
 
 Deno.test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
