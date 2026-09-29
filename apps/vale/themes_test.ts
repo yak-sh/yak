@@ -2,7 +2,13 @@
 import { assertEquals, assertNotEquals } from '@std/assert'
 import { seedBuildings } from './buildings_fixture.ts'
 import { levelAt, levelOf, useThemes } from './levels.ts'
-import { patchOf, refreshTerrain, vale } from './terrain.ts'
+import { blend } from './regions.ts'
+import {
+  installThemeDesigns,
+  patchOf,
+  refreshTerrain,
+  vale,
+} from './terrain.ts'
 import rows from './seed/themes.json' with { type: 'json' }
 
 Deno.test('region themes replace the cover and look of a land and its frontier', () => {
@@ -42,5 +48,23 @@ Deno.test('a changed ground cover repaints an already-grown chunk', () => {
   } finally {
     useThemes(rows)
     refreshTerrain()
+  }
+})
+
+Deno.test('frontier boundaries follow changed region themes', () => {
+  installThemeDesigns(rows)
+  let before = blend(1280, -128)
+  let changed = rows.map((row) => ({
+    ...row,
+    theme_design: {
+      ...row.theme_design,
+      frontier: row.theme_design.land == 'fernwood' ? 0 : undefined,
+    },
+  }))
+  try {
+    installThemeDesigns(changed)
+    assertNotEquals(blend(1280, -128), before)
+  } finally {
+    installThemeDesigns(rows)
   }
 })

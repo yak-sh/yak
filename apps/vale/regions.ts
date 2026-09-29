@@ -259,11 +259,14 @@ for (let s of SITES) {
   let key = `${cellOf(s.x)} ${cellOf(s.z)}`
   sited.set(key, [...sited.get(key) ?? [], s])
 }
+let sites = new Map<string, Site[]>()
 let sitesIn = (gx: number, gz: number): Site[] => {
+  let key = `${gx} ${gz}`
+  let got = sites.get(key)
+  if (got) return got
   let lv = levelAt(gx, gz)
-  let known = sited.get(`${gx} ${gz}`) ?? []
-  if (LEVELS[lv.id]) return known
-  return [
+  let known = sited.get(key) ?? []
+  got = LEVELS[lv.id] ? known : [
     ...known,
     { level: lv.id, x: (gx + 0.5) * SIZE, z: (gz + 0.5) * SIZE },
     ...Object.values(lv.places).map((p) => ({
@@ -272,6 +275,9 @@ let sitesIn = (gx: number, gz: number): Site[] => {
       z: gz * SIZE + p.at[1],
     })),
   ]
+  if (sites.size >= 512) sites.delete(sites.keys().next().value!)
+  sites.set(key, got)
+  return got
 }
 
 // How far noise pushes the ground about before a border is decided, at most,
@@ -311,6 +317,7 @@ export let refreshRegions = () => {
   grown.clear()
   reaching.clear()
   boundaryGrid.clear()
+  sites.clear()
 }
 let sampleBoundary = (x: number, z: number): Boundary => {
   let key = `${x} ${z}`
