@@ -181,12 +181,22 @@ export let located = (
 }
 
 /** `import('<plugin>/<name>')`, or `null` where the package does not export
- * that subpath — a facet, or the `./views` a caller draws with. */
-export let subpath = async <M>(
-  plugin: string,
-  name: string,
-): Promise<M | null> => {
-  let spec = located(`${plugin}/${name}`)
+ * that subpath — a facet, or the `./views` a caller draws with. Each answer is
+ * asked for once: a module is imported once a process whoever asks, and a
+ * subpath a package does not export stays unexported, where finding that out
+ * again costs an import that throws. */
+export let subpath = <M>(plugin: string, name: string): Promise<M | null> => {
+  let key = `${plugin}/${name}`
+  let known = imported.get(key) as Promise<M | null> | undefined
+  if (known) return known
+  let asked = importing<M>(key, name)
+  imported.set(key, asked)
+  asked.catch(() => imported.delete(key))
+  return asked
+}
+let imported = new Map<string, Promise<unknown>>()
+let importing = async <M>(key: string, name: string): Promise<M | null> => {
+  let spec = located(key)
   try {
     return await import(spec)
   } catch (error) {

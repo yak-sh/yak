@@ -699,8 +699,25 @@ export type Words = {
 /** A tool as declared, without the code behind it. */
 export type Declared = Omit<NamedTool, 'run'>
 
-// The words, from the `./vocab` facets already imported.
+// The words of these facets, made once while every facet lives. A vocabulary
+// is a value nobody changes once it is loaded, so each graph a process opens
+// over the same plugins shares one, and with it all that is kept per
+// vocabulary: a store's install plan, a read's rendered statements.
+type Worded = { next: WeakMap<VocabFacet, Map<string, Worded>>; words?: Words }
+let worded: Worded = { next: new WeakMap() }
 let wordsOf = (vocabs: Taken<'vocab'>): Words => {
+  let at = vocabs.reduce((node, [v, , plugin]) => {
+    let named = node.next.get(v)
+    if (!named) node.next.set(v, named = new Map())
+    let next = named.get(plugin)
+    if (!next) named.set(plugin, next = { next: new WeakMap() })
+    return next
+  }, worded)
+  return at.words ??= spoken(vocabs)
+}
+
+// The words, from the `./vocab` facets already imported.
+let spoken = (vocabs: Taken<'vocab'>): Words => {
   // The components a tool call is recorded in belong to the host, not to
   // whichever plugin happened to declare them: what was asked of this host is
   // its own record. A plugin that already declares them — a harness, whose
