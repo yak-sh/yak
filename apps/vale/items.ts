@@ -62,7 +62,12 @@ export let itemVersion = 0
 export let useItems = (rows: Bundle[]) => {
   ITEMS = Object.fromEntries(rows.flatMap((row) => {
     let design = comp(row, 'item_design'), kind = str(design.kind)
-    return kind ? [[kind, design as Thing]] : []
+    // Store reads include absent optional properties as null. A Thing uses
+    // omission for those properties, including the default picture view.
+    let item = Object.fromEntries(
+      Object.entries(design).filter(([, value]) => value != null),
+    ) as Thing
+    return kind ? [[kind, item]] : []
   }))
   itemVersion++
 }

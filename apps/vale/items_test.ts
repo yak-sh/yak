@@ -13,6 +13,7 @@ import { rows, seedItems } from './items_fixture.ts'
 import { fights, pack } from './mesh.ts'
 import { uuidOf } from './rand.ts'
 import { piece } from './rarity.ts'
+import { faces } from './sprites.ts'
 import { wares } from './stock.ts'
 import words from './vocab.json' with { type: 'json' }
 
@@ -32,6 +33,7 @@ Deno.test('item designs in the store feed gear, recipes and stock', async () => 
   useItems(await g.read('.item_design'))
   seedBeasts()
   assertEquals(Object.keys(ITEMS).length, rows.length)
+  assert(faces(ITEMS.jelly.look, 64, 4, ITEMS.jelly.view).length > 0)
 
   let base = rows.find((row) => row.item_design.kind == 'sword1')!
   let eid = uuidOf('mossvale/item/moonblade1')
