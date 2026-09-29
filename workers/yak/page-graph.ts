@@ -6,9 +6,10 @@ import { type App, appStore, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { sandboxed } from './installed.ts'
-import { metaOf } from './meta.ts'
+import { answered, metaOf } from './meta.ts'
 import { type Reach, read, split, vocabAt } from './reach.ts'
 import { vouched, type Who } from './session.ts'
+import { caught } from './sentry.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import { mode, reads } from '@yaks/member'
 
@@ -77,8 +78,16 @@ export let vocabulary = async (
 ) => {
   let { uses, reach } = await sources(env, space, app, who)
   let store = appStore(env.STORE, space, app, env)
-  let docs = await (await store('/vocab.json', {}, vouched(who)))
-    .json() as VocabDoc[]
+  let response = await store('/vocab.json', {}, vouched(who))
+  if (!response.ok) {
+    caught(await answered(response.clone()), {
+      request: 'GET /api/vocab.json',
+      space: space.slug,
+      app: app.slug,
+    })
+    return response
+  }
+  let docs = await response.json() as VocabDoc[]
   let borrowed = await Promise.all(
     reach.slice(1).map(async ({ app: home }) => {
       let doc = await vocabAt(env, space, home)
@@ -90,5 +99,8 @@ export let vocabulary = async (
       return { title: home.slug, $defs: defs } as VocabDoc
     }),
   )
-  return [...docs, ...borrowed.filter((doc) => Object.keys(doc.$defs!).length)]
+  return Response.json([
+    ...docs,
+    ...borrowed.filter((doc) => Object.keys(doc.$defs!).length),
+  ])
 }

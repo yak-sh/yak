@@ -1420,7 +1420,7 @@ let api = async (
   // borrowed words its own manifest uses, from their component homes.
   if (path == '/vocab.json') {
     if (!mayRead) return refused('not_a_reader')
-    return Response.json(await vocabulary(env, space, app, who))
+    return vocabulary(env, space, app, who)
   }
   if (path == '/query') {
     if (!mayRead) return refused('not_a_reader')
