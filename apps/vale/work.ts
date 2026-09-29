@@ -443,7 +443,7 @@ export let working = (
       )
       let near = nodes
         .filter((n) =>
-          n.near <= GATHER[n.lode.trade].reach &&
+          !n.spent && n.near <= GATHER[n.lode.trade].reach &&
           (!as || n.eid == as.target)
         )
         .sort((a, b) => a.near - b.near)[0] ?? null
@@ -490,11 +490,6 @@ export let working = (
           events.push({ type: 'board' })
         } else if (!near) {
           events.push({ type: 'say', text: 'Nothing to gather here.' })
-        } else if (near.spent) {
-          events.push({
-            type: 'say',
-            text: `${near.name}: spent.`,
-          })
         } else {
           job = {
             trade: near.lode.trade,

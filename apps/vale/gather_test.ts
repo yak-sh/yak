@@ -117,6 +117,47 @@ Deno.test('a harvested tree stays spent for everyone until its next life', () =>
   assertEquals(nodeRarity('tree', at), nodeRarity('tree', at))
 })
 
+Deno.test('spent resources do not capture gathering interaction', () => {
+  let close: Prop = { kind: 'oak', x: 5, z: 5, seed: 1, natural: true }
+  let farther: Prop = { kind: 'oak', x: 6, z: 5, seed: 2, natural: true }
+  let natural: Natural[] = [close, farther].map((prop) => ({
+    prop,
+    at: [prop.x, 5, prop.z],
+  }))
+  let rows: Bundle[] = []
+  let toil = working({
+    hero: 'hero',
+    mine: () => [],
+    gathered: () => rows,
+    keep: (...bundles: Bundle[]) => rows = [...rows, ...bundles],
+  })
+  let v = flat(5, [], [close, farther])
+  let frame: WorkFrame = {
+    body: { x: 4.5, y: 5, z: 5 },
+    sheet: { bag: [], worn: {} },
+    down: false,
+    now: 1000,
+  }
+  let spend = (prop: Prop) => {
+    rows = [...rows, {
+      entity: { eid: crypto.randomUUID() },
+      gathered: { node: naturalEid(prop), kind: 'oak', at: 999 },
+    }]
+  }
+  spend(close)
+  let available = toil.tick(v, frame, true, false, natural)
+  assertEquals(available.near?.eid, naturalEid(farther))
+  assertEquals(available.doing?.node?.eid, naturalEid(farther))
+
+  spend(farther)
+  let spent = toil.tick(v, frame, false, true, natural)
+  assertEquals(spent.near, null)
+  assertEquals(spent.doing, null)
+  assertEquals(toil.tick(v, frame, true, false, natural).events, [
+    { type: 'say', text: 'Nothing to gather here.' },
+  ])
+})
+
 Deno.test('node respawns are shared, varied, and never short', () => {
   for (let trade of ['wood', 'ore', 'herb', 'fish'] as const) {
     let times = Array.from(
