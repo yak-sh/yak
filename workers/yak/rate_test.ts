@@ -5,7 +5,7 @@
 // the door's number from one address, of which exactly one is turned away,
 // and then another address that is still let in.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { connector, kernel, seed } from './probe.ts'
 
 let from = (ip: string) => ({ 'cf-connecting-ip': ip })

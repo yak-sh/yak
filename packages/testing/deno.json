@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/testing",
+  "version": "0.2.10",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "Waits a test on a fact instead of a guessed span.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@std/testing": "jsr:@std/testing@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

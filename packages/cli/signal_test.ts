@@ -2,7 +2,7 @@
 // second signal ends, and a command with nothing open ending at once.
 
 import { assertEquals } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { winding } from './signal.ts'
 
 let wound = (open = true, grace = 60_000) => {

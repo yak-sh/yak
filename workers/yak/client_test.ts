@@ -15,7 +15,7 @@ import {
 } from '@std/assert'
 import { client as keeper } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { browser, client, connector, kernel, seed } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a

@@ -1,4 +1,4 @@
-import { tick, until } from './testing.ts'
+import { tick, until } from '@yaks/testing'
 import { runTestCommands, type TestCommand } from './phases.ts'
 
 if (import.meta.main) {

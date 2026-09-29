@@ -31,7 +31,7 @@ import { kindOf, sessionDerived, statusOf } from './status.ts'
 import { answers } from './providers.ts'
 import { sessionTools } from './children.ts'
 import { RUN, type Runner, running, settle } from './run.ts'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 
 let worker: VocabDoc = {
   $defs: {

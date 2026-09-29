@@ -5,7 +5,7 @@
 // on the socket rather than kept in the object's memory.
 
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { subscriptions } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab, type Vocab } from '@yaks/vocab'

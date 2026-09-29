@@ -3,7 +3,7 @@
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'

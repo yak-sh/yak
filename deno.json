@@ -182,7 +182,8 @@
     "./packages/admin",
     "./packages/heal",
     "./packages/esbuild",
-    "./packages/rtc"
+    "./packages/rtc",
+    "./packages/testing"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

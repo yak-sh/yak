@@ -454,6 +454,9 @@ grouped approximately by function, **not** by dependency order.
   declared `sync: none` with `durable: forever` are kept in IndexedDB between
   page loads when local persistence is enabled.
 
+- **[@yaks/testing](./testing)** — what a test needs beside the code it tests:
+  `tick` yields one macrotask and `until` waits on a fact, never a guessed span.
+
 ## Domain plugins
 
 Domain packages declare application data: documents, tasks, sessions, processes,

@@ -16,7 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import {
   allowed,
   connector,

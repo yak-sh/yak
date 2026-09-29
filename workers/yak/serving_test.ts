@@ -30,7 +30,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
 import { directory, stamp, storeName } from './directory.ts'

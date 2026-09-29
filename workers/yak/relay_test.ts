@@ -14,7 +14,7 @@ import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import { Store } from './graph.ts'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 
 let wire = () => {
   let sent: Frame[] = []

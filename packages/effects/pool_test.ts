@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
 import { POOL } from './pool.ts'

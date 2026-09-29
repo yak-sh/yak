@@ -4,7 +4,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { client, seed, workerd } from './probe.ts'
 
 let ANA = 'c0000000-0000-4000-8000-000000000003'

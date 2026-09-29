@@ -6,7 +6,7 @@ import { seed, sessionTitle, titleOf } from './agent.ts'
 import { sessionTree } from './tree.ts'
 import { local } from './local.ts'
 import { harness, repo } from './testing.ts'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 
 // A model that answers with whatever it was last told, so a test can see the
 // transcript go round.

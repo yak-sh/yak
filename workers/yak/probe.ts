@@ -15,7 +15,7 @@
 import { apex } from './host.ts'
 import { ask } from './stripe.ts'
 import { b64u } from './mcp-probe.ts'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'

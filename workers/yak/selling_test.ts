@@ -12,7 +12,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'

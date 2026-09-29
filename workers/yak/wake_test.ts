@@ -6,7 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bound, Bundle } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { Store } from './graph.ts'
 import { platform, state } from './testing.ts'
 import { meta } from './meta.ts'

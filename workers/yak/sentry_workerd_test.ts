@@ -1,7 +1,7 @@
 // A caught defect must leave the workerd invocation through the SDK wrapper's
 // waitUntil flush. The probe's DSN is a local capture endpoint, never Sentry.
 import { assertEquals } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { workerd } from './probe.ts'
 
 let events = async (log: string) =>

@@ -1,7 +1,39 @@
-import { until } from './testing.ts'
+import { until } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
-import { groups, observe, pages, RUN, shards, timesIn } from './test.ts'
+import {
+  denoDir,
+  groups,
+  observe,
+  pages,
+  RUN,
+  shards,
+  timesIn,
+} from './test.ts'
+
+Deno.test('denoDir is the cache deno runs on, and a child moving HOME keeps it', async () => {
+  let cache = async (env: Record<string, string>) => {
+    let out = await new Deno.Command(Deno.execPath(), {
+      args: ['info', '--json'],
+      env,
+      clearEnv: true,
+      stdout: 'piped',
+    }).output()
+    let { denoDir } = JSON.parse(new TextDecoder().decode(out.stdout))
+    return Deno.realPathSync(denoDir)
+  }
+  let { HOME = '', XDG_CACHE_HOME } = Deno.env.toObject()
+  let unpinned = { HOME, ...XDG_CACHE_HOME ? { XDG_CACHE_HOME } : {} }
+  assertEquals(await cache(unpinned), Deno.realPathSync(denoDir(unpinned)))
+  let home = await Deno.makeTempDir({ prefix: 'tasks-cache-probe-' })
+  try {
+    let pinned = { HOME: home, DENO_DIR: denoDir() }
+    assertEquals(await cache(pinned), Deno.realPathSync(denoDir()))
+    assertEquals(Array.from(Deno.readDirSync(home)), [])
+  } finally {
+    await Deno.remove(home, { recursive: true })
+  }
+})
 
 Deno.test('colored test results count as completed', async () => {
   let progress = { name: 'loading tests', completed: 0, count: 0 }
@@ -139,7 +171,7 @@ for (let failure of [false, true]) {
   Deno.test(`bulk processes run every shard${failure ? ' past a failing one' : ''}`, async () => {
     let dir = await Deno.makeTempDir({ prefix: 'test-shards-' })
     try {
-      let testing = new URL('./testing.ts', import.meta.url).href
+      let testing = new URL('../packages/testing/wait.ts', import.meta.url).href
       await Deno.writeTextFile(
         `${dir}/a_test.ts`,
         `

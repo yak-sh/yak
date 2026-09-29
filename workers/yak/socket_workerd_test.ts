@@ -7,7 +7,7 @@
 import { assertEquals, assertObjectMatch } from '@std/assert'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { minted } from './mcp-probe.ts'
 import {
   arrives,

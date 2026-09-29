@@ -4,7 +4,7 @@
 // erase gives back. The pure seams are erase_test.ts's.
 
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { ticket } from './erase.ts'
 import type { Space } from './directory.ts'
 import {

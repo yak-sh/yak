@@ -12,13 +12,27 @@
 // paths given, or all of it, on every platform or the one named.
 
 import { type Result, runTestCommands, type TestCommand } from './phases.ts'
-import { denoDir } from './testing.ts'
 
 export let ROOTS = ['packages', 'bin', 'workers', 'apps']
 
 /** Set in a run's environment, naming the run: every process it starts
  * inherits it, so a run started from inside one refuses. */
 export let RUN = 'TASKS_TEST_RUN'
+
+/** The module cache this process runs on: DENO_DIR where the environment
+ * pins it, and Deno's own default for the platform otherwise. The run pins
+ * it for every process it starts, so a test that moves HOME still hands its
+ * deno children the cache the run was invoked with. */
+export let denoDir = (
+  env: Record<string, string | undefined> = Deno.env.toObject(),
+  os: string = Deno.build.os,
+) =>
+  env.DENO_DIR ||
+  (os == 'darwin'
+    ? `${env.HOME}/Library/Caches/deno`
+    : os == 'windows'
+    ? `${env.LOCALAPPDATA}\\deno`
+    : `${env.XDG_CACHE_HOME ?? `${env.HOME}/.cache`}/deno`)
 
 /** A test that runs against the run's kernel, in workerd. */
 export let workerd = (file: string) => /_workerd_test\.tsx?$/.test(file)
@@ -449,7 +463,6 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
   }
   let env: Record<string, string> = {
-    TEST_DENO_DIR: denoDir(),
     DENO_DIR: denoDir(),
   }
   let wd = files.filter(workerd)

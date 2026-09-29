@@ -23,7 +23,7 @@ import { platform } from './testing.ts'
 import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BOB = 'b0000000-0000-4000-8000-0000000000b0'

@@ -27,7 +27,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, platform, state, type Turn } from './testing.ts'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { sign } from './lib/token.ts'
 
 let SECRET = 'a probe secret'

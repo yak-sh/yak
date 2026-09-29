@@ -1,6 +1,6 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
 import { assertEquals, assertMatch, assertStringIncludes } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import {
   connector,
   kernel,

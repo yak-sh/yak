@@ -18,7 +18,7 @@
 // A page subscribed to its own store hears the letter arrive: that is a
 // socket, and socket_workerd_test.ts's.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { monthOf } from './meter.ts'
 import {
   arrives,

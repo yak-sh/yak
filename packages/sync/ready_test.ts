@@ -1,7 +1,7 @@
 /// <reference lib="deno.ns" />
 
 import { assertEquals, assertThrows } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { boxGraph, pair } from './testing.ts'
 import { sync } from './sync.ts'

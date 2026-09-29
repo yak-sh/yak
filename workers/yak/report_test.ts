@@ -13,7 +13,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { tick } from '../../bin/testing.ts'
+import { tick } from '@yaks/testing'
 import { client, connector, kernel, meta, seed } from './probe.ts'
 
 Deno.test('a page reports its own breaks, and the agent hears', async () => {

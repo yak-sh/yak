@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import { deliverChild, sessionTools, textOf, transcript } from '@yaks/session'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { harnessTools } from './tools.ts'
 import { local } from './local.ts'
 import { harness, repo, working } from './testing.ts'

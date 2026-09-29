@@ -4,7 +4,7 @@
 // month's letters are shared by every free space the owner has. usage_test.ts
 // holds the sums at their seam; this holds that the doors ask them.
 import { assertStringIncludes } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { connector, kernel, meta, onPlus, signIn } from './probe.ts'
 
 let eidIn = (said: { value?: Record<string, unknown> }) =>

@@ -2,7 +2,7 @@
 
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { until as soon } from '../../bin/testing.ts'
+import { until as soon } from '@yaks/testing'
 import { blogGraph, pooledBlog } from './testing.ts'
 import { drop, held, holding, LEASE, leaseEid, take, until } from './lease.ts'
 

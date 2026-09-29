@@ -4,7 +4,7 @@
 // allowance refuses a new call, and that a lease nobody renewed closes its
 // call at Realtime.
 import { assert, assertEquals } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { BUDGET, monthOf } from './meter.ts'
 import {
   cloudflare,

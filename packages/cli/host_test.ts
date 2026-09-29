@@ -25,7 +25,7 @@ import {
 } from './host.ts'
 import { sealed } from '@yaks/secrets'
 import { signer } from './local.ts'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.

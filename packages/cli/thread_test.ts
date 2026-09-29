@@ -2,7 +2,7 @@
 // tests exercise the worker boundary, where an eager pass once gated service.
 
 import { assertEquals } from '@std/assert'
-import { until } from '../../bin/testing.ts'
+import { until } from '@yaks/testing'
 import { thread } from './thread.ts'
 
 let clock = async (pass = false) => {
