@@ -249,7 +249,7 @@ Deno.test('kindOf: prose alone is an input, prose with an output is one', () => 
 })
 
 let store = (): Graph => {
-  let s = storage(mem(), vocab, { derived: sessionDerived })
+  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   s.install()
   let g = graph({ storage: s, vocab })
   g.apply([
@@ -360,7 +360,7 @@ Deno.test('a harness ending stays ended while its importer catches up, then clea
 // a union: the query a worker coming up asks for the turns nobody wrote down.
 Deno.test("the runner's sweep finds a transcript owed a turn in a Durable Object", () => {
   let [run] = effectsIn(sessionDoc).filter((e) => e.name == 'session_run')
-  let s = held(durable(), vocab, { derived: sessionDerived })
+  let s = held(durable(), vocab, { derived: sessionDerived(vocab) })
   s.install()
   let g = graph({ storage: s, vocab })
   g.apply([

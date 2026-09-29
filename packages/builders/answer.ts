@@ -28,6 +28,13 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 let str = (v: unknown): string => v == null ? '' : String(v)
 
+// The dollars an answer says its call spent, where it says any.
+let dollars = (value: unknown): number | undefined =>
+  object(value) && typeof value.cost == 'number' &&
+    Number.isFinite(value.cost) && value.cost >= 0
+    ? value.cost
+    : undefined
+
 /** The one output contract for a model adapter and any registered code tool. */
 export let parse = (
   value: unknown,
@@ -36,6 +43,9 @@ export let parse = (
 ): Spec[] => {
   if (!object(value) || !Array.isArray(value.outputs)) {
     throw new Error('builder tool answer needs an outputs array')
+  }
+  if (value.cost != null && dollars(value) == null) {
+    throw new Error('builder tool answer cost must be dollars')
   }
   let allowed = new Set(selected)
   let slots = new Set<string>()
@@ -83,6 +93,16 @@ export let parse = (
     })
   }
   return out
+}
+
+/** What a tool's answer says its call spent (`cost` beside `outputs`, in
+ * dollars), as the `cost` the call stores. It is the call's whatever became of
+ * the build: a moved key or a malformed output spent it all the same. */
+export let spent = (call: Bundle, value: unknown): Bundle[] => {
+  let n = dollars(value)
+  return n == null
+    ? []
+    : [{ entity: call.entity, cost: { dollars: n, reported: true } }]
 }
 
 /** A completed call's output value, with its build as a concurrency guard. */

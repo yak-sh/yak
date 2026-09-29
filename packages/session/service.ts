@@ -165,7 +165,8 @@ export let look = async (
 
 // What a strip takes from an imported entry: all of it where there is no
 // prose (a call), and each whose prose sits beside a kind the prose-only read
-// leaves out (`prose` in ./tail.ts), of the kinds the vocabulary has.
+// leaves out (`prose` in ./tail.ts), of the kinds the vocabulary has. An entry
+// that records what a turn cost stays, since the session's `cost` is its sum.
 let STRIPPED = [
   'reasoning',
   'notice',
@@ -176,7 +177,7 @@ let STRIPPED = [
   'usage',
 ]
 let stripped = (g: Graph) =>
-  `.imported&(${
+  `.imported${g.vocab.comp('cost') ? '&!cost' : ''}&(${
     ['!content', ...STRIPPED.filter((c) => g.vocab.comp(c)).map((c) => `.${c}`)]
       .join('|')
   })`

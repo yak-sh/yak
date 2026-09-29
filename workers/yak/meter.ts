@@ -29,10 +29,10 @@ import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
 import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
-import { ModelError } from '@yaks/model'
+import { ModelError, weigh } from '@yaks/model'
 import { LIMIT } from '@yaks/session/status'
 import { type Binding, failure, usageOf } from '@yaks/workers-ai'
-import { CATALOGUE, guess, priceOf, weigh } from './models.ts'
+import { CATALOGUE, guess, priceOf } from './models.ts'
 import { defect } from './sentry.ts'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */

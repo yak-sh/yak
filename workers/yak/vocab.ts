@@ -61,7 +61,7 @@ import {
 } from '@yaks/vocab'
 import { aliasDoc } from '@yaks/alias'
 import { blobKeywords } from '@yaks/blob'
-import { builderDoc } from '@yaks/builders/vocab'
+import { builderDoc, derived as builds } from '@yaks/builders/vocab'
 import { docDoc } from '@yaks/doc'
 import { dreamingDoc } from '@yaks/dreaming/vocab'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
@@ -421,20 +421,22 @@ let transcriptDoc: VocabDoc = pick(sessionDoc, [
 
 /**
  * What a transcript asks, and what comes back (@yaks/model): the provider and
- * the models it serves, which the platform plants from its catalogue
- * (models.ts) and nobody else writes, and the usage, the typed questions and
- * the answers an entry carries.
+ * the models it serves at their prices, which the platform plants from its
+ * catalogue (models.ts) and nobody else writes, and the usage, the cost, the
+ * typed questions and the answers an entry carries.
  */
 let askingDoc: VocabDoc = sealed(
   pick(modelDoc, [
     'provider',
     'model',
     'serves',
+    'price',
     'usage',
+    'cost',
     'questions',
     'answer',
   ]),
-  ['provider', 'model', 'serves'],
+  ['provider', 'model', 'serves', 'price'],
 )
 
 // A hosted builder uses this store's session runner. Its command-line tool is
@@ -455,10 +457,15 @@ let hostedBuilderDoc = pick(builderDoc, [
 /**
  * The properties an app's store reads rather than stores, as the SQL that
  * reads them (@yaks/sql `Derived`), from the packages that declare them: a
- * task's `status`, which @yaks/task reads off the marks the entity wears, and
- * a transcript's, which @yaks/session reads off its newest entry.
+ * task's `status`, which @yaks/task reads off the marks the entity wears, a
+ * transcript's status and cost, which @yaks/session reads off its entries, and
+ * a build's cost, which @yaks/builders sums over its calls.
  */
-export let appDerived = (): Derived => ({ ...statuses(), ...sessionDerived })
+export let appDerived = (vocab: Vocab): Derived => ({
+  ...statuses(),
+  ...sessionDerived(vocab),
+  ...builds(vocab),
+})
 
 /** Derived classification metadata is readable but never client-authored. */
 export const classificationDoc: VocabDoc = sealed(

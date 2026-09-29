@@ -135,8 +135,13 @@ export let adapted = async (
       }],
     }
   } else if (kindOf(said) == 'output') {
+    // Its outputs alone: what a model session spent is its entries', never
+    // what its answer says (./cost.ts).
     try {
-      value = JSON.parse(textOf(said))
+      let told = JSON.parse(textOf(said))
+      value = told && typeof told == 'object' && !Array.isArray(told)
+        ? { outputs: told.outputs }
+        : told
     } catch {
       value = textOf(said)
     }

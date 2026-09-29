@@ -52,7 +52,7 @@ let CLI = identityEid('provider', ['claude'])
 let M = identityEid('model', ['fake-1'])
 
 let store = (): Storage => {
-  let s = storage(mem(), vocab, { derived: sessionDerived })
+  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   s.install()
   graph({ storage: s, vocab }).apply([
     { entity: { eid: P }, provider: { name: 'fake' } },
@@ -393,7 +393,7 @@ Deno.test('a graph with tasks and no claims runs its transcripts', async () => {
     toolsDoc,
     modelDoc,
   ])
-  let s = storage(mem(), words, { derived: sessionDerived })
+  let s = storage(mem(), words, { derived: sessionDerived(words) })
   s.install()
   let reported: unknown[] = []
   let fx = effects(words, { report: (e) => void reported.push(e) })

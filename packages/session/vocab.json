@@ -354,6 +354,15 @@
             "session.ended"
           ],
           "description": "what the newest entry implies: pending is waiting on the model, running is waiting on an answer, settled has nothing to do"
+        },
+        "cost": {
+          "type": "number",
+          "computed": true,
+          "reads": [
+            "entry.session",
+            "cost.dollars"
+          ],
+          "description": "the dollars its entries' `cost` records, summed; absent where none records any"
         }
       }
     },

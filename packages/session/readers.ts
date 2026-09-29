@@ -20,7 +20,7 @@
 //   call{to, id, args}       a tool it called, by the tool's name
 //   result{call} + content   what the tool returned, and `execution{state}`
 //                            saying whether the call went through
-//   stop, usage, error       the end of a managed turn, and what it cost
+//   stop, usage, cost, error the end of a managed turn, and what it cost
 //
 // A tool's arguments and output pass through `scrub()`, since a command's
 // output is where a credential turns up. A person's words and the model's are
@@ -129,17 +129,47 @@ let count = (v: unknown): number | undefined => {
 
 let put = (k: string, v?: number) => v == null ? {} : { [k]: v }
 
-// @yaks/model's `usage`, from the two shapes the two vendors report. Claude
-// reports cache reads separately; codex counts them inside `input_tokens`, and
-// that is the vendor's own arithmetic, kept rather than corrected.
-let usage = (raw: unknown, cached: string): Comps => {
-  let u = obj(raw)
+// @yaks/model's `usage`, whose `input_tokens` counts every input token, cached
+// ones included: what Codex reports. Claude reports its cache reads and writes
+// beside an `input_tokens` that counts only the rest, so they are added in.
+let usage = (input?: number, output?: number, cached?: number): Comps => {
   let told = {
-    ...put('input_tokens', count(u.input_tokens)),
-    ...put('output_tokens', count(u.output_tokens)),
-    ...put('cached_tokens', count(u[cached])),
+    ...put('input_tokens', input),
+    ...put('output_tokens', output),
+    ...put('cached_tokens', cached),
   }
   return Object.keys(told).length ? { usage: told } : {}
+}
+
+let claudeUsage = (raw: unknown): Comps => {
+  let u = obj(raw)
+  let parts = [
+    u.input_tokens,
+    u.cache_read_input_tokens,
+    u.cache_creation_input_tokens,
+  ].map(count)
+  return usage(
+    parts.every((n) => n == null)
+      ? undefined
+      : parts.reduce((a: number, n) => a + (n ?? 0), 0),
+    count(u.output_tokens),
+    count(u.cache_read_input_tokens),
+  )
+}
+
+let codexUsage = (raw: unknown): Comps => {
+  let u = obj(raw)
+  return usage(
+    count(u.input_tokens),
+    count(u.output_tokens),
+    count(u.cached_input_tokens),
+  )
+}
+
+// What Claude Code says a run cost, in dollars: its own figure, at list price.
+let spent = (dollars: unknown): Comps => {
+  let n = count(dollars)
+  return n == null ? {} : { cost: { dollars: n, reported: true } }
 }
 
 // A slash command is recorded as its wrapper; the person typed the command.
@@ -220,7 +250,8 @@ export let claude: Reader = (e) => {
         }
         : {}),
       stop: {},
-      ...usage(e.usage, 'cache_read_input_tokens'),
+      ...claudeUsage(e.usage),
+      ...spent(e.total_cost_usd),
     }]
     : []
   let about = e.type == 'system' && e.subtype == 'init' && e.session_id
@@ -287,7 +318,7 @@ export let codex: Reader = (e) => {
       result(it.id, answered(it), failed(it)),
     ]
     : e.type == 'turn.completed'
-    ? [{ stop: {}, ...usage(e.usage, 'cached_input_tokens') }]
+    ? [{ stop: {}, ...codexUsage(e.usage) }]
     : e.type == 'turn.failed'
     ? [{
       error: { code: 'turn.failed' },

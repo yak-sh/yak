@@ -36,6 +36,17 @@ Three things, and no transport:
   not this vocabulary. `Tool` here is the provider-neutral TypeScript type for a
   callable tool description.
 
+What a request cost is two more components. `price{input, output, cached}` on a
+model's row is what it costs, in dollars per million tokens;
+`weigh(price,
+usage)` turns a request's counts into dollars at it.
+`cost{dollars, reported}` is what one request or tool call cost, stored on the
+entity that spent it: a request's entry beside its `usage`, or a call. A
+provider that reports its own dollars (OpenRouter does) answers them as
+`Reply.cost`, and the record says `reported: true`; otherwise the caller weighs
+the usage at the model's price and says `reported: false`. A model with no price
+leaves a request unweighed.
+
 A request may also carry typed `questions` about the conversation, in Jev's
 terms: each named question is a `noul` (answered with the probability that it
 holds), a `choice` (one of its criteria's names) or a `score` (a number along
@@ -59,13 +70,14 @@ binding; an Ollama package would sit beside them. A conversation package
 ([@yaks/session](../session)) turns its stored transcript into items and calls
 the model. Neither imports the other.
 
-The root module exports these types, `ModelError`, `modelDoc`, the `models()`
-graph plugin, and the `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS` and `ANSWER`
-component-name constants. `@yaks/model/vocab` exports `modelDoc` and
-`docs: [modelDoc]` for plugin loaders. `@yaks/model/rules` exports `rules()`,
-which supplies that plugin: the schema and the name lookup, and no other
-write-time behavior. The package has no database or conversation storage; the
-calling application stores the provider and model records if it needs them.
+The root module exports these types, `ModelError`, `weigh`, `modelDoc`, the
+`models()` graph plugin, and the `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`,
+`ANSWER`, `USAGE`, `PRICE` and `COST` component-name constants.
+`@yaks/model/vocab` exports `modelDoc` and `docs: [modelDoc]` for plugin
+loaders. `@yaks/model/rules` exports `rules()`, which supplies that plugin: the
+schema and the name lookup, and no other write-time behavior. The package has no
+database or conversation storage; the calling application stores the provider
+and model records if it needs them.
 
 A model that throws `ModelError` failed in a way the caller expects — a refusal,
 a rate limit, a missing credential. Other exceptions are unexpected failures

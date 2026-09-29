@@ -528,12 +528,12 @@ These are the names, all of them:
     builder_answer builder_change builder_dep builder_edit builder_model_answer
     builder_open builder_ring built call call_ready
     call_woken cancel cancelled checkout
-    cites comment commit compat completed connection contains content created
+    cites comment commit compat completed connection contains content cost created
     delegates deliver delivered deploy dispatch doc edge effect email entity entry
     error exception execution favorite fee feedback file filed fired former
     gallery gitobj grant home hook hostname image installed integration
     integration_install invite inviting key lease lines mail mail_post member memory
-    meter model notice notified opened openrouter order output parent person plan product
+    meter model notice notified opened openrouter order output parent person plan price product
     project provider provisional published quarantined questions quote reads
     recalled ref referenced report repository representation requires restored
     result retired

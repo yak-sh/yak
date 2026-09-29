@@ -5,7 +5,9 @@
 // components a run's process needs (pid, pane, a log to tail) belong to the
 // application that runs processes, never here.
 //
-//   session{id, status}      identity only; `status` is computed, never stored
+//   session{id, status, cost}
+//                            identity only; `status` and `cost` are computed,
+//                            never stored
 //   spawned{parent, call}    delegated by a parent, from a tool call
 //   fork{from}               continues another transcript from one entry
 //   claim{session}           the session's lock on the entity it rides

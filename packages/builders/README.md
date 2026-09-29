@@ -53,6 +53,15 @@ id; the value has one shape:
 }
 ```
 
+A tool that spent money producing its answer says so beside `outputs`, as
+`"cost": 0.012` in dollars; the call stores it as
+`cost{dollars, reported:
+true}` (@yaks/model), whatever becomes of the build.
+The model adapter keeps only the outputs of a model's answer: what its session
+spent is its entries'. `build.cost` is computed, never stored: every call the
+build made, each call's own `cost` and the entries of the session the model tool
+opened for it, summed. `derived()` in `@yaks/builders/vocab` is its SQL.
+
 Each output lists only the selected input entities it used. The package
 validates writable components, the artifact reference and citations before
 writing all outputs as one graph change. `cites` edges record each output's used
@@ -77,7 +86,8 @@ call. A scheduled wake checks the builder again. A configured `rest` advances
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
 - `@yaks/builders/effects`: `watches` and `effects`.
 - `@yaks/builders/tools`: the on-demand `builder build` tool.
-- `@yaks/builders/vocab`: the schema in `builderDoc`.
+- `@yaks/builders/vocab`: the schema in `builderDoc`, and `derived`, the SQL of
+  `build.cost`.
 
 Compose @yaks/kernel, @yaks/tools, @yaks/edge, @yaks/session, @yaks/blob,
 @yaks/model and @yaks/wake vocabulary where the model adapter runs. Storage must

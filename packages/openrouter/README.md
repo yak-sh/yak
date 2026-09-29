@@ -4,8 +4,9 @@ OpenRouter model access through `@yaks/model`. Text requests use its stateless
 Responses API, including streaming text and function calls. A request whose
 model row asks for image or audio output uses Chat Completions instead. A model
 listed in `speech` uses OpenRouter's binary speech endpoint. The text and chat
-routes accept image input and report usage. They share media decoding and SSE
-parsing with `@yaks/openai`, but use only OpenRouter credentials.
+routes accept image input and report usage, and the dollars OpenRouter says each
+request cost as the reply's `cost`. They share media decoding and SSE parsing
+with `@yaks/openai`, but use only OpenRouter credentials.
 
 This fragment assumes `myPrivateKey` was obtained from private application
 configuration. Do not store it in graph entities or shared configuration files.

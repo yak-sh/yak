@@ -10,7 +10,7 @@
 // composing both puts @yaks/session after @yaks/task and gets the wider
 // reading.
 
-import type { VocabDoc } from '@yaks/vocab'
+import type { Vocab, VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
 import { derived as ladder } from '@yaks/task'
 import { sessionDoc, taskMarks } from './comp.ts'
@@ -21,8 +21,9 @@ export { sessionDoc, taskMarks }
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [sessionDoc]
 
-/** A transcript's status, and a task's read with the lease rung in it. */
-export let derived = (): Derived => ({
-  ...sessionDerived,
+/** A transcript's status and cost, and a task's read with the lease rung in
+ * it. */
+export let derived = (vocab: Vocab): Derived => ({
+  ...sessionDerived(vocab),
   ...ladder(taskMarks),
 })

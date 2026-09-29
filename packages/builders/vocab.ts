@@ -5,10 +5,12 @@
 //
 // A builder's query selects inputs, and each output cites what it used. A build
 // writes @yaks/session's components, so a graph loading this document loads
-// those beside it.
+// those beside it. `build.cost` is computed, and `derived` is its SQL.
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
+
+export { buildCost, derived } from './cost.ts'
 
 /** The builders vocabulary, as the document `loadVocab` accepts. */
 export let builderDoc: VocabDoc = doc as VocabDoc

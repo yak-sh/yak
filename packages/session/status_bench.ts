@@ -5,11 +5,12 @@ import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 
-let vocab = loadVocab([sessionDoc, toolsDoc])
-let store = storage(mem(), vocab, { derived: sessionDerived })
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
+let store = storage(mem(), vocab, { derived: sessionDerived(vocab) })
 store.install()
 let g = graph({ storage: store, vocab })
 store.tx((tx) =>

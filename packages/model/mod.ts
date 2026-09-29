@@ -64,6 +64,9 @@ export let MODEL = 'model'
 export let TOOL = 'tool'
 export let QUESTIONS = 'questions'
 export let ANSWER = 'answer'
+export let USAGE = 'usage'
+export let PRICE = 'price'
+export let COST = 'cost'
 
 /**
  * A provider or a model named where an eid is expected: `gpt-6-astra` in
@@ -158,6 +161,36 @@ export type Usage = {
   reasoning_tokens?: number
 }
 
+/** What a model costs, in dollars per million tokens: the `price` component
+ * on its row. `cached` is the price of an input token the provider read from
+ * its cache, where it has one. */
+export type Price = { input: number; output: number; cached?: number }
+
+/**
+ * What a request cost, in dollars, weighed at its model's price: its cached
+ * input at the cached price, the rest of its input and all of its output at
+ * theirs.
+ *
+ * ```ts
+ * import { assertAlmostEquals } from '@std/assert'
+ * import { weigh } from '@yaks/model'
+ *
+ * let flash = { input: 0.15, cached: 0.03, output: 0.5 }
+ * let cost = weigh(flash, {
+ *   input_tokens: 2_000_000,
+ *   cached_tokens: 1_000_000,
+ *   output_tokens: 1_000_000,
+ * })
+ * assertAlmostEquals(cost, 0.15 + 0.03 + 0.5)
+ * ```
+ */
+export let weigh = (price: Price, n: Usage): number => {
+  let cached = Math.min(n.cached_tokens ?? 0, n.input_tokens ?? 0)
+  let fresh = (n.input_tokens ?? 0) - cached
+  return (fresh * price.input + cached * (price.cached ?? price.input) +
+    (n.output_tokens ?? 0) * price.output) / 1e6
+}
+
 /** One typed question, in Jev's terms: a `noul` is answered with the
  * probability that it holds, a `choice` with one of its criteria's names, and
  * a `score` with a number along its criteria, which are ordered. */
@@ -192,6 +225,9 @@ export type Reply = {
   /** the answer to each of the request's questions, by the question's name */
   answers?: Record<string, Answer>
   usage?: Usage
+  /** the dollars the provider reported this request cost, where it reports
+   * them; a caller weighs `usage` at the model's {@link Price} otherwise */
+  cost?: number
   artifacts?: (Artifact & { call: string; revised_prompt?: string })[]
 }
 

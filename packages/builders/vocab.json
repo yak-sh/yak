@@ -91,6 +91,17 @@
           "type": "boolean",
           "stamped": true,
           "description": "outer binding no longer matches"
+        },
+        "cost": {
+          "type": "number",
+          "computed": true,
+          "reads": [
+            "call.source",
+            "session.source",
+            "entry.session",
+            "cost.dollars"
+          ],
+          "description": "the dollars its calls spent, summed: each call's own `cost` and the entries of each session a call opened; absent where none records any"
         }
       },
       "description": "one stable instance of a builder for an outer query binding"

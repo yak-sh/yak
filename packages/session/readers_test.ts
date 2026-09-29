@@ -104,6 +104,24 @@ Deno.test('claude: a managed run opens with its id and ends with its cost', () =
     entries(claude, { type: 'result', usage: { input_tokens: 12 } }),
     [{ stop: {}, usage: { input_tokens: 12 } }],
   )
+  // Its own dollars, and its cache reads and writes counted as input.
+  assertEquals(
+    entries(claude, {
+      type: 'result',
+      total_cost_usd: 0.0185394,
+      usage: {
+        input_tokens: 10,
+        cache_creation_input_tokens: 8476,
+        cache_read_input_tokens: 13724,
+        output_tokens: 41,
+      },
+    }),
+    [{
+      stop: {},
+      usage: { input_tokens: 22210, output_tokens: 41, cached_tokens: 13724 },
+      cost: { dollars: 0.0185394, reported: true },
+    }],
+  )
   // A refusal is an ending too — with the diagnosis it carried.
   assertEquals(
     entries(claude, {

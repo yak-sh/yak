@@ -127,9 +127,16 @@ Deno.test('a managed run is read from its own output, not its transcript file', 
     assertEquals(await told(g, 'one'), ['do it'])
   }))
 
-Deno.test('a session quiet past its full depth is stripped to its prose', () =>
+// A turn's ending, with what it cost.
+let ended = JSON.stringify({
+  type: 'result',
+  total_cost_usd: 0.25,
+  usage: { input_tokens: 10, output_tokens: 5 },
+}) + '\n'
+
+Deno.test('a session quiet past its full depth is stripped to its prose and its cost', () =>
   projects({
-    past: { text: dated(lines('long ago') + tool, 30 * DAY) },
+    past: { text: dated(lines('long ago') + tool + ended, 30 * DAY) },
     today: { text: lines('hello') + tool },
   }, async (dir) => {
     let g = locked(store())
@@ -137,7 +144,10 @@ Deno.test('a session quiet past its full depth is stripped to its prose', () =>
       person: ids.ada,
     })
     await strip(g, await stale(g))
-    assertEquals(await told(g, 'past'), ['long ago', 'said 0'])
+    assertEquals(await told(g, 'past'), ['long ago', 'said 0', '(call)'])
+    let [past] = await g.read('.session.id=past')
+    let [spent] = await g.read(`.entry.session=${past.entity.eid}&.cost&*`)
+    assertEquals(spent.cost, { dollars: 0.25, reported: true })
     assertEquals(await told(g, 'today'), [
       'hello',
       'thought 0',

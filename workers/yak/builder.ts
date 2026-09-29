@@ -41,7 +41,13 @@
 // the account budget is asked before every round, since a
 // conversation that never deploys spends it all the same. What the meter is holding is meter.ts's (T-34241); the page is
 // somebody else's (T-34242).
-import { type Item, ModelError, type Reply } from '@yaks/model'
+import {
+  type Item,
+  ModelError,
+  type Price,
+  type Reply,
+  weigh,
+} from '@yaks/model'
 import { worded } from '@yaks/tools'
 import { workersAi } from '@yaks/workers-ai'
 import { running } from './agent.ts'
@@ -58,7 +64,7 @@ import {
   over,
   pooled,
 } from './meter.ts'
-import { type Price, priceOf, weigh } from './models.ts'
+import { priceOf } from './models.ts'
 import { asset } from './preauth.ts'
 import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
@@ -67,7 +73,7 @@ import { standing } from './standing.ts'
 import { caught } from './sentry.ts'
 
 /** What one response used, in tokens; its model's price weighs it in dollars
- * (models.ts `weigh`). */
+ * (@yaks/model `weigh`). */
 export type Usage = { input: number; output: number; cached: number }
 
 /** One tool the model asked for, with its arguments still as the JSON text

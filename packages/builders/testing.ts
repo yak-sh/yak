@@ -9,12 +9,12 @@ import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { artifactDoc } from '@yaks/blob/vocab'
 import { modelDoc } from '@yaks/model'
 import { wakeDoc } from '@yaks/wake'
-import { sessionDoc, sessions } from '@yaks/session'
+import { sessionDerived, sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { type Runner, runner } from '@yaks/tools'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
-import { builderDoc } from './vocab.ts'
+import { builderDoc, derived } from './vocab.ts'
 import { type Options } from './build.ts'
 import { watches } from './effects.ts'
 import { modelTool } from './model.ts'
@@ -99,7 +99,9 @@ export let shop = async (
     write: (b) => g.apply(b, { trusted: true }),
     report: (err) => void failed.push(err),
   })
-  let db = storage(mem(), vocab)
+  let db = storage(mem(), vocab, {
+    derived: { ...sessionDerived(vocab), ...derived(vocab) },
+  })
   db.install()
   let g = graph({
     storage: db,

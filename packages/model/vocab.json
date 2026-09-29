@@ -127,6 +127,39 @@
         }
       }
     },
+    "price": {
+      "component": true,
+      "type": "object",
+      "description": "what a model costs, in dollars per million tokens, on the model's own row; a request its provider reports no dollars for is weighed at it",
+      "properties": {
+        "input": {
+          "type": "number",
+          "description": "dollars per million input tokens"
+        },
+        "output": {
+          "type": "number",
+          "description": "dollars per million output tokens, reasoning included"
+        },
+        "cached": {
+          "type": "number",
+          "description": "dollars per million input tokens read from the provider cache; the input price where absent"
+        }
+      }
+    },
+    "cost": {
+      "component": true,
+      "type": "object",
+      "description": "what one model request or tool call cost, in dollars, on the entity that spent it: a request's entry beside its `usage`, or a call",
+      "properties": {
+        "dollars": {
+          "type": "number"
+        },
+        "reported": {
+          "type": "boolean",
+          "description": "true when the provider reported the dollars; false when they were weighed from the model's `price`"
+        }
+      }
+    },
     "questions": {
       "component": true,
       "type": "object",

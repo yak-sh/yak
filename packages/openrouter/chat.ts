@@ -79,7 +79,14 @@ let usage = (raw: unknown) => {
   let entries = Object.entries(counts).filter(([, v]) =>
     typeof v == 'number' && Number.isFinite(v)
   )
-  return entries.length ? { usage: Object.fromEntries(entries) } : {}
+  // OpenRouter reports what every request cost, in dollars.
+  let cost = u.cost
+  return {
+    ...entries.length ? { usage: Object.fromEntries(entries) } : {},
+    ...typeof cost == 'number' && Number.isFinite(cost) && cost >= 0
+      ? { cost }
+      : {},
+  }
 }
 
 let image = (v: unknown, call: string, options: MediaOptions) => {

@@ -77,6 +77,10 @@ import {
   STOP_ENTRY,
   USING,
 } from './native.ts'
+import { sessionCost } from './cost.ts'
+import { COST } from '@yaks/model'
+import type { Derived } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 
 /** The kinds of entry: the component stored beside `entry`, or for prose,
  * `output` when an `output` is stored beside it and `input` when none is. */
@@ -256,7 +260,7 @@ export let usingBefore = (
 
 /**
  * The same rule as SQL, for @yaks/sqlite's derived-property registry
- * (`storage(driver, vocab, { derived: sessionDerived })`), so
+ * (`storage(driver, vocab, { derived: sessionDerived(vocab) })`), so
  * `.session.status=running` compiles through the index. `owner` is the SQL
  * naming the session's integer id; a reference column stores the referent's
  * integer id, which is what `entry.session` is compared against.
@@ -507,5 +511,9 @@ export let sessionStatus = {
 }
 
 /** The derived-property registry a SQLite store loads to read
- * `session.status`. */
-export let sessionDerived = { 'session.status': sessionStatus }
+ * `session.status`, and `session.cost` (./cost.ts) where the vocabulary
+ * declares @yaks/model's `cost`. */
+export let sessionDerived = (vocab: Vocab): Derived => ({
+  'session.status': sessionStatus,
+  ...vocab.comp(COST) ? { 'session.cost': sessionCost } : {},
+})

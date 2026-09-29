@@ -8,7 +8,7 @@ import type { Vocab } from '@yaks/vocab'
 import { and, eq } from '@yaks/query'
 import { next, WAKE } from '@yaks/wake'
 import { BUILD, clock, type Options, reconcile } from './build.ts'
-import { answer } from './answer.ts'
+import { answer, spent } from './answer.ts'
 import { adapted } from './model.ts'
 import { candidates } from './deps.ts'
 
@@ -133,14 +133,19 @@ export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
   if (!call?.call) return
   let [build] = await tx.get([str(comp(call, 'call'), 'source')])
   if (!build?.[BUILD]) return
+  let cost = spent(call, value)
   try {
-    let writes = await answer(tx, call, value, vocab)
+    let writes = [...cost, ...await answer(tx, call, value, vocab)]
     if (writes.length) await write(writes)
   } catch (err) {
-    if (err instanceof Stale) return
+    // A build that moved on refuses the outputs, never what the call spent.
+    if (err instanceof Stale) {
+      if (cost.length) await write(cost)
+      return
+    }
     // A malformed output remains a recorded call result, but its key may be
     // tried again on the next explicit or scheduled reconciliation.
-    await write([{
+    await write([...cost, {
       entity: build.entity,
       [BUILD]: { key: null },
       $was: { [BUILD]: { call: token(call.entity.eid) } },

@@ -7,12 +7,13 @@ import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { admit } from './children.ts'
 import { ToolError } from './react.ts'
 import { sessionDerived } from './status.ts'
 
-let vocab = loadVocab([sessionDoc, toolsDoc])
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
 
 let entry = (session: string, seq: number, kind: object): Bundle => ({
   entity: { eid: `${session}${seq}` },
@@ -36,7 +37,7 @@ let shapes: [string, Bundle[], boolean][] = [
 
 Deno.test('the session cap counts the transcripts the runner is running', async () => {
   for (let [name, entries, fills] of shapes) {
-    let s = storage(mem(), vocab, { derived: sessionDerived })
+    let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
     s.install()
     let g = graph({ storage: s, vocab })
     g.apply([{ entity: { eid: 's' }, session: { id: 's' } }, ...entries], {

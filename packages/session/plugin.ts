@@ -1,5 +1,6 @@
 import { resultEntries } from './result-entry.ts'
 import { sequencing } from './append.ts'
+import { weighing } from './cost.ts'
 // The package as a graph plugin: the vocabulary, the rules, and the audit.
 //
 // It needs nothing from the application — no app to speak for, no roster to
@@ -26,9 +27,10 @@ export type SessionOpts = AuditOpts
 
 /**
  * The session plugin: the vocabulary ({@link sessionDoc}), a `precondition`
- * hook that refuses a take of a held lock and refuses a component of this
- * package's that names the wrong kind of entity, and an `audit` hook that
- * records a collision after the rollback.
+ * hook that refuses a take of a held lock, refuses a component of this
+ * package's that names the wrong kind of entity, and weighs a request's `cost`
+ * at its model's price where the provider reported none ({@link weighing});
+ * and an `audit` hook that records a collision after the rollback.
  *
  * ```ts
  * import { loadVocab } from '@yaks/vocab'
@@ -56,7 +58,11 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
       (b) =>
         then(naming(b, tx, err), (named) =>
           then(resultEntries(named, tx, err), (joined) =>
-            sequencing(joined, tx, err))),
+            then(
+              sequencing(joined, tx, err),
+              (placed) =>
+                weighing(placed, tx, err),
+            ))),
     )
   return {
     name: '@yaks/session',

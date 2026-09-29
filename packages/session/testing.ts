@@ -12,6 +12,7 @@ import type { Bundle } from '@yaks/graph'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { type SessionOpts, sessions } from './plugin.ts'
 
@@ -60,7 +61,7 @@ let doc: VocabDoc = {
 
 /** The editor's vocabulary: people, pages, and the session domain loaded
  * beside them. */
-export let pages: Vocab = loadVocab([sessionDoc, toolsDoc, doc])
+export let pages: Vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, doc])
 
 /** The ids the tests share: two people, two of their runs, a run the graph
  * never saw, two pages. */

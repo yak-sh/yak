@@ -1,8 +1,8 @@
 // The models an account may spend its budget on, each with its price:
 // the platform's catalogue (D-40545). A model with no row here has no price,
-// so nothing asks it: a call is weighed in dollars by its row and counted on
-// the space's meter (meter.ts `models`), and a call that could not be weighed
-// could not be counted.
+// so nothing asks it: a call is weighed in dollars by its row (@yaks/model
+// `weigh`) and counted on the space's meter (meter.ts `models`), and a call
+// that could not be weighed could not be counted.
 //
 // Prices are Workers AI's own, in dollars per million tokens, from each
 // model's page at developers.cloudflare.com/workers-ai/models. A row an app
@@ -10,7 +10,8 @@
 //
 // It is also how an app asks one, as a plugin (plugin.ts): the catalogue's
 // offered rows planted in every app's store as @yaks/model's provider, model
-// and serves rows, and that store's own transcript runner (@yaks/session),
+// (with its `price`, so each ask records its `cost`) and serves rows, and that
+// store's own transcript runner (@yaks/session),
 // lent providers through one resolver, with Workers AI on the metered binding
 // (meter.ts `metered`) and OpenRouter through a connected integration, and the
 // commands the app marks `"model": true` as its tools. A page writes an entry
@@ -27,7 +28,7 @@ import {
 } from '@yaks/session'
 import { worded } from '@yaks/tools'
 import { edits, mode, writes } from '@yaks/member'
-import { ModelError } from '@yaks/model'
+import { ModelError, type Price } from '@yaks/model'
 import type { VocabDoc } from '@yaks/vocab'
 import { said, workersAi } from '@yaks/workers-ai'
 import { artifactStore, objectBlobs } from '@yaks/blob'
@@ -48,10 +49,6 @@ import {
   type Plugin,
   type Stored,
 } from './plugin.ts'
-
-/** What a model costs, in dollars per million tokens. `cached` is the price
- * of an input token the provider read from its cache, where it has one. */
-export type Price = { input: number; output: number; cached?: number }
 
 /** One model in the catalogue, by the name Workers AI runs it under. */
 export type Row = Price & { name: string; label: string; offered: boolean }
@@ -94,38 +91,6 @@ let priced = new Map(CATALOGUE.map((r) => [r.name, r]))
 /** A model's row, or undefined for one the catalogue does not price. */
 export let priceOf = (name: string): Row | undefined => priced.get(name)
 
-/** The token counts a call is weighed by: @yaks/model's `Usage`, which is what
- * @yaks/workers-ai `usageOf` reads off an answer. */
-export type Counts = {
-  input_tokens?: number
-  output_tokens?: number
-  cached_tokens?: number
-}
-
-/**
- * What a call cost, in dollars: its cached input at the cached price, the rest
- * of its input and all of its output at theirs.
- *
- * ```ts
- * import { assertAlmostEquals } from '@std/assert'
- * import { weigh } from './models.ts'
- *
- * let flash = { input: 0.15, cached: 0.03, output: 0.5 }
- * let cost = weigh(flash, {
- *   input_tokens: 2_000_000,
- *   cached_tokens: 1_000_000,
- *   output_tokens: 1_000_000,
- * })
- * assertAlmostEquals(cost, 0.15 + 0.03 + 0.5)
- * ```
- */
-export let weigh = (price: Price, n: Counts) => {
-  let cached = Math.min(n.cached_tokens ?? 0, n.input_tokens ?? 0)
-  let fresh = (n.input_tokens ?? 0) - cached
-  return (fresh * price.input + cached * (price.cached ?? price.input) +
-    (n.output_tokens ?? 0) * price.output) / 1e6
-}
-
 /** A count a model left unsaid, estimated from what was sent or said: four
  * characters to a token, the usual rule for English. An embedding model
  * reports no usage at all, and its text is what it is billed on. */
@@ -164,6 +129,11 @@ export let catalogued = (): Bundle[] => [
       provider: PROVIDER,
       name: r.name,
       label: r.label,
+      price: {
+        input: r.input,
+        output: r.output,
+        ...r.cached == null ? {} : { cached: r.cached },
+      },
     })),
     ...integrated,
   ].flatMap((r): Bundle[] => [
@@ -175,6 +145,7 @@ export let catalogued = (): Bundle[] => [
         offered: true,
         ...'modalities' in r ? { modalities: r.modalities } : {},
       },
+      ...'price' in r ? { price: r.price } : {},
     },
     {
       entity: {

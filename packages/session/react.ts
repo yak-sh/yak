@@ -849,6 +849,9 @@ export let react = async (
     ...ask,
     ...providerModel.mark?.(reply) ?? {},
     ...reply.usage ? { usage: reply.usage } : {},
+    ...reply.cost == null
+      ? {}
+      : { cost: { dollars: reply.cost, reported: true } },
     attempt: { state: 'completed' },
   }
   let added: Bundle[] = [finalAsk]

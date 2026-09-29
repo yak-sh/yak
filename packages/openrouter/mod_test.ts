@@ -37,6 +37,7 @@ const events = [
         output_tokens: 3,
         total_tokens: 13,
         input_tokens_details: { cached_tokens: 4 },
+        cost: 0.00042,
       },
     },
   },
@@ -75,6 +76,7 @@ Deno.test('OpenRouter shares Responses transport but not credentials, anchors or
   ])
   assertEquals(deltas[0].text, 'Hello')
   assertEquals(reply.usage?.cached_tokens, 4)
+  assertEquals(reply.cost, 0.00042)
   assertEquals(reply.items[1], {
     kind: 'call',
     id: 'c1',

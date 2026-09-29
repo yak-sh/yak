@@ -382,6 +382,51 @@ Deno.test('model tool opens a session using content.body, then adapts its reply'
   assertEquals(comp(await one(g, output(build)), 'doc')?.body, 'From model')
 })
 
+Deno.test("a build's cost sums what its calls said and its sessions spent", async () => {
+  let paid: Tool = {
+    ...code(),
+    run: (call) => {
+      let [said] = answer(call)
+      let value = (said.output as Comp).value as Comp
+      return [{
+        ...said,
+        output: { ...said.output as Comp, value: { ...value, cost: 0.25 } },
+      }]
+    },
+  }
+  let { g, runner } = await shop({}, [], [paid])
+  let cost = async (build: string) => comp(await one(g, build), 'build')?.cost
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  assertEquals(await cost(build), null)
+  await drive(g, runner, build)
+  let [asked] = await calls(g, build)
+  assertEquals(comp(await one(g, asked.entity.eid), 'cost'), {
+    dollars: 0.25,
+    reported: true,
+  })
+  await g.apply([source('a', 'second')])
+  await drive(g, runner, build)
+  assertEquals(await cost(build), 0.5)
+
+  let { g: m, runner: r } = await shop()
+  await m.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    using: { model: ids.model },
+  }])
+  let modeled = run(ids.builder, ['a'])
+  await drive(m, r, modeled)
+  let [session] = await rows(m, '.session')
+  await m.apply([{
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: session.entity.eid, seq: 2 },
+    ask: { to: ids.model },
+    usage: { input_tokens: 10 },
+    cost: { dollars: 0.125, reported: true },
+  }])
+  assertEquals(comp(await one(m, modeled), 'build')?.cost, 0.125)
+})
+
 Deno.test('template substitution reads variables in nested bindings', () => {
   assertEquals(
     render('$s: $n and $$', {

@@ -260,8 +260,10 @@ let ask = (opts: Options) => {
   }
 }
 
-/** Preserve absence: an unreported cache count is not a cache miss. */
-export let tokenUsage = (raw: unknown) => {
+/** Preserve absence: an unreported cache count is not a cache miss. A
+ * provider that reports what the request cost in dollars (OpenRouter's
+ * `usage.cost`) answers it as the reply's `cost`; OpenAI reports none. */
+export let tokenUsage = (raw: unknown): Pick<Reply, 'usage' | 'cost'> => {
   if (!raw || typeof raw != 'object') return {}
   let u = raw as Record<string, unknown>
   let detail = (key: string, field: string) => {
@@ -281,7 +283,13 @@ export let tokenUsage = (raw: unknown) => {
       typeof n == 'number' && Number.isSafeInteger(n) && n >= 0
     ),
   ) as Usage
-  return Object.keys(usage).length ? { usage } : {}
+  let cost = u.cost
+  return {
+    ...Object.keys(usage).length ? { usage } : {},
+    ...typeof cost == 'number' && Number.isFinite(cost) && cost >= 0
+      ? { cost }
+      : {},
+  }
 }
 
 /** Remove binary result fields from event observers, including nested response output. */

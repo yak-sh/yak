@@ -27,6 +27,7 @@ JSON object. The components beside `entry` determine its type:
 | `call{to, id, args, source}`          | a tool call requested by a model   |
 | `result{call}` with `content`         | a tool result                      |
 | `using{provider, model, effort, …}`   | model selection on an input or ask |
+| `usage` and `cost` beside an ask      | what the request used and cost     |
 | `questions{asked}`                    | typed questions for the next ask   |
 | `answer{question, …}` with `output`   | a model's answer to one question   |
 | `stop`                                | no further transcript work         |
@@ -80,6 +81,13 @@ ask/call means `running`, output means `settled`, stop means `stopped`, and
 exception, three consecutive errors, or one error coded `limit` (`LIMIT`, a
 request refused at a ceiling, which asking again would meet too) means `failed`.
 No entries means `empty`. There is no separate `input` component.
+
+A request's `cost{dollars, reported}` (@yaks/model) is written beside its
+`usage`: the provider's own dollars where it reports them, and otherwise, in the
+same transaction, the usage weighed at the `price` on the row of the model that
+answered it (`weighing`, a precondition of `sessions()`). `session.cost` is
+computed, never stored: the sum of its entries' `cost`, absent where none
+records any. `sessionCost` is its SQL, registered in `sessionDerived`.
 
 Applications that run a session add components from other packages:
 `process{pid, command, cwd}` and `exit{code}` describe its program;
@@ -286,7 +294,8 @@ Once an hour the duty finds the imported sessions whose newest entry is older
 than `full` (`stale()`), from any importer, and strips each to its prose
 (`strip()`, a small batch between looks): calls, results, thoughts, notices and
 a turn's ending go; what a person typed and what the model said stay. Compaction
-summaries stay too, so an older transcript can still resume.
+summaries stay too, so an older transcript can still resume, and so does an
+entry that records what a turn cost, since the session's cost is their sum.
 
 | Option        | Default              | Meaning                                 |
 | ------------- | -------------------- | --------------------------------------- |

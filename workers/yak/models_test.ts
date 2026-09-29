@@ -15,7 +15,8 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { BUDGET, monthOf } from './meter.ts'
-import { priceOf, weigh } from './models.ts'
+import { priceOf } from './models.ts'
+import { weigh } from '@yaks/model'
 import { parseTools } from '@yaks/tools/declared'
 import type { VocabDoc } from '@yaks/vocab'
 import { platform } from './testing.ts'
@@ -292,6 +293,12 @@ Deno.test('a page asks its store for a turn and the answer lands beside it', asy
   let cost = weigh(priceOf(FLASH)!, { input_tokens: 1_000, output_tokens: 100 })
   await until(async () => (await v.spent()).meter?.models)
   assertAlmostEquals((await v.spent()).meter!.models, cost)
+  // And the transcript records it, on the ask and summed on the session.
+  let [ask] = await v.landed(`.entry.session=${s}&.cost&*`)
+  assertEquals((ask.cost as Comp).reported, false)
+  assertAlmostEquals(Number((ask.cost as Comp).dollars), cost)
+  let [session] = await v.landed(`.eid=${s}&*`)
+  assertAlmostEquals(Number((session.session as Comp).cost), cost)
 })
 
 Deno.test('a typed question comes back as an answer entry', async () => {
