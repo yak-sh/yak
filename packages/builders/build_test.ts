@@ -388,6 +388,32 @@ test('model tool opens a session using content.body, then adapts its reply', asy
   assertEquals(comp(await one(g, output(build)), 'doc')?.body, 'From model')
 })
 
+test('prose a model writes beside a tool call is not its answer', async () => {
+  let { g, runner, failed } = await shop()
+  await g.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    using: { model: ids.model },
+  }])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  let said = (seq: number, ask: string, body: string): Bundle => ({
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: session.entity.eid, seq },
+    content: { body },
+    output: { source: ask },
+  })
+  await g.apply([said(2, 'ask-1', 'Let me read around it first.'), {
+    entity: { eid: 'look' },
+    entry: { session: session.entity.eid, seq: 3 },
+    call: { to: toolEid('code'), source: 'ask-1' },
+  }])
+  let answer = { slot: 'main', inputs: ['a'], components: { doc: {} } }
+  await g.apply([said(4, 'ask-2', JSON.stringify({ outputs: [answer] }))])
+  assertEquals(failed, [])
+  assert(await one(g, output(build)))
+})
+
 test("a build's cost sums what its calls said and its sessions spent", async () => {
   let paid: Tool = {
     ...code(),

@@ -8,6 +8,7 @@ import {
   type Eid,
   type Graph,
   type Tool,
+  type Tx,
 } from '@yaks/graph'
 import { link } from '@yaks/edge'
 import { kindOf, textOf } from '@yaks/session'
@@ -110,7 +111,7 @@ export let modelTool = (desk: Desk = {}): Tool => ({
 
 /** Convert one transcript answer into the shared builder output value. */
 export let adapted = async (
-  tx: { get: (ids: Eid[]) => Bundle[] | Promise<Bundle[]> },
+  tx: Pick<Tx, 'get' | 'read'>,
   said: Bundle,
 ): Promise<Bundle | undefined> => {
   let session = str(comp(said, 'entry')?.session)
@@ -135,6 +136,10 @@ export let adapted = async (
       }],
     }
   } else if (kindOf(said) == 'output') {
+    // Prose a model writes beside the tool calls it asks for is the model at
+    // work; its answer is the output of an ask that asked for nothing more.
+    let ask = str(comp(said, 'output')?.source)
+    if (ask && (await tx.read(`.call.source=${ask}&.limit=1`)).length) return
     // Its outputs alone: what a model session spent is its entries', never
     // what its answer says (./cost.ts).
     try {
