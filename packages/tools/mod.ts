@@ -43,3 +43,4 @@ export {
   WORDS,
 } from './runner.ts'
 export { valueIn } from './value.ts'
+export { display } from './display.ts'

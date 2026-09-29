@@ -164,6 +164,7 @@ Deno.test('an app declares its own commands, and command runs them', async () =>
     // through the declared tool's own query.
     let board = await agent.answer('command', { name: 'leaderboard' })
     assertStringIncludes(board.text, 'leaderboard: 1 row')
+    assertStringIncludes(board.text, '**jog\\.who**: `"Ada"`')
     // The rows ride as data beside the sentence, and they still carry who
     // wrote them: a command runs as the person who asked for it.
     assertEquals(rowsOf<Run>(board)[0].created.by, {

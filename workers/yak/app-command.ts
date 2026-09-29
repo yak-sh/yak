@@ -1,7 +1,7 @@
 // One app's stored commands and the effect boundary that runs one. The MCP
 // command and a page's /api/command supply the same caller-scoped store acts.
 import { invoke, type ToolDef, type Tools } from '@yaks/tools/declared'
-import { CallError } from '@yaks/tools'
+import { CallError, display } from '@yaks/tools'
 import { type Bundle } from '@yaks/graph'
 import { type App, appStore, type Space, storeName } from './directory.ts'
 import { commandWorker } from './dispatch.ts'
@@ -61,7 +61,7 @@ export let commandAt = async (
         return {
           text: `${name}: ${
             Array.isArray(rows) ? `${n} ${n == 1 ? 'row' : 'rows'}` : 'answered'
-          } in ${at}\n\n${JSON.stringify(rows, null, 2)}`,
+          } in ${at}\n\n${display(rows)}`,
           value: { rows },
         }
       },

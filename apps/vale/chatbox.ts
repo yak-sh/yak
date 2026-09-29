@@ -31,6 +31,7 @@ import {
   writer,
 } from './chat.ts'
 import type { overlay } from './fx.ts'
+import { commandBody } from './command-body.ts'
 import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'
 import { type Command, slash } from './slash.ts'
@@ -56,7 +57,7 @@ let FADE = 4000
 
 // A line of mine, and the rest of its row when it is said to a villager.
 type Said = Line & { level: string; to: Record<string, unknown> | null }
-type Notice = { eid: string; text: string; at: number }
+type Notice = { eid: string; text: string; at: number; markdown: boolean }
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -138,7 +139,7 @@ export let chatbox = (
   let waiting: Said[] = []
   let notices: Notice[] = []
   let notice = (text: string) => {
-    let n = { eid: crypto.randomUUID(), text, at: net.now() }
+    let n = { eid: crypto.randomUUID(), text, at: net.now(), markdown: false }
     notices = [...notices, n].slice(-ASKED)
     return n
   }
@@ -146,6 +147,7 @@ export let chatbox = (
     let n = notice('Running command…')
     try {
       n.text = command ? await command(cmd) : 'Commands are unavailable.'
+      n.markdown = !!command
     } catch (e) {
       n.text = clean(e instanceof Error ? e.message : String(e)) ||
         'The command failed.'
@@ -257,6 +259,7 @@ export let chatbox = (
         name: v?.name ?? p?.name ?? 'Wanderer',
         tint: v?.tint ?? p?.tint ?? '#dff5c8',
         text: l.text,
+        markdown: false,
         wait: mine.has(l.eid),
         at: l.at,
         fades: fades(l),
@@ -267,6 +270,7 @@ export let chatbox = (
       name: 'Mossvale',
       tint: '#dff5c8',
       text: n.text,
+      markdown: n.markdown,
       wait: false,
       at: n.at,
       fades: fades(n),
@@ -280,7 +284,12 @@ export let chatbox = (
     let position = log.scrollTop
     wasOpen = open
     log.replaceChildren(...rows.map((r) => {
-      let li = el('li', `Chat_Line${r.wait ? ' Chat_Line-wait' : ''}`)
+      let li = el(
+        'li',
+        `Chat_Line${r.wait ? ' Chat_Line-wait' : ''}${
+          r.markdown ? ' Chat_Line-command' : ''
+        }`,
+      )
       if (!open) {
         li.style.animationDelay = `${Math.min(0, r.at - now).toFixed(0)}ms, ${
           (r.fades - now).toFixed(0)
@@ -289,7 +298,10 @@ export let chatbox = (
       let name = el('b', 'Chat_Name')
       name.textContent = r.name
       name.style.setProperty('--tint', r.tint)
-      li.append(name, document.createTextNode(r.text))
+      li.append(
+        name,
+        r.markdown ? commandBody(r.text) : document.createTextNode(r.text),
+      )
       return li
     }))
     if (open) {
