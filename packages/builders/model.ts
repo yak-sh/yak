@@ -61,8 +61,10 @@ let request = (template: string, binding: Binding): string =>
   `${render(template, binding)}\n\nInputs: ${
     ids(binding).join(', ') || '(none)'
   }\n` +
-  'Return JSON with {"outputs":[{"slot":"stable-name",' +
-  '"inputs":["input-id"],"components":{"doc":{"body":"text"}}}]}. ' +
+  'Answer with JSON: {"outputs": [...]}, one output for each the ' +
+  'instructions above ask for, each {"slot":"stable-name",' +
+  '"inputs":["input-id"],"components":{"doc":{"body":"text"}}}, ' +
+  'or {"outputs": []} where they ask for none. ' +
   'Cite only selected input ids.'
 
 /** Run the adapter through @yaks/tools; no model execution lives here. */
