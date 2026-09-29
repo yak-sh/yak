@@ -1,7 +1,7 @@
 // The D1 vault, handed to @yaks/secrets the way yaks.app hands it: the plugin
 // seals into it, the value reads back, and the rows hold only ciphertext.
 
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -77,16 +77,26 @@ test('the lock holds a read, a change and the write back as one step', async () 
 
 test('a lease held by another isolate is waited for', async () => {
   let db = d1()
+  // Each ask for the lock, counted as it reaches D1.
+  let asks = 0
+  let counted = {
+    ...db,
+    prepare: (sql: string) => {
+      if (/^insert into "yak_vault_lock"/.test(sql)) asks++
+      return db.prepare(sql)
+    },
+  }
   let k = await key()
-  let one = d1Vault(db, k)
-  let two = d1Vault(db, k)
+  let one = d1Vault(counted, k)
+  let two = d1Vault(counted, k)
   let order: string[] = []
   let first = one.lock('x', async () => {
     order.push('one in')
-    await new Promise((r) => setTimeout(r, 20))
+    // Held until the other isolate has asked too, and been refused.
+    await until(() => asks >= 2, { poll: 1, label: 'the second ask' })
     order.push('one out')
   })
-  await new Promise((r) => setTimeout(r, 1))
+  await until(() => order.length, { poll: 1 })
   await two.lock('x', () => Promise.resolve(void order.push('two')))
   await first
   assertEquals(order, ['one in', 'one out', 'two'])
