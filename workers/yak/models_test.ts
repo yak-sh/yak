@@ -163,7 +163,13 @@ Deno.test('a connected OpenRouter model puts generated audio in the app store', 
     attempt,
     callback: 'https://yaks.app/connections/callback?code=probe',
   })
-  let bytes = new TextEncoder().encode('ID3sound')
+  let bytes = new Uint8Array([
+    0xff,
+    0xfb,
+    0x90,
+    0x64,
+    ...new Array(400).fill(0),
+  ])
   let calls = 0
   let original = globalThis.fetch
   globalThis.fetch =
@@ -187,8 +193,15 @@ Deno.test('a connected OpenRouter model puts generated audio in the app store', 
     let eid = (attachment.attachment as Comp).artifact as string
     let [artifact] = await v.read(`.eid=${eid}&.artifact&*`)
     assertEquals((artifact.artifact as Comp).media_type, 'audio/mpeg')
-    let file = await apps.fetch(
+    let alias = await apps.fetch(
       visit(`/vale/api/blob/${eid}`, {
+        headers: { cookie: await signedIn(ADA) },
+      }),
+      v.env,
+    )
+    assertEquals(alias.status, 302)
+    let file = await apps.fetch(
+      visit(new URL(alias.headers.get('location')!).pathname, {
         headers: { cookie: await signedIn(ADA) },
       }),
       v.env,

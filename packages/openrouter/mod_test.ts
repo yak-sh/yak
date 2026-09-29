@@ -243,7 +243,13 @@ Deno.test('OpenRouter image output shares the artifact path', async () => {
 })
 
 Deno.test('a speech model uses the audio door and stores its bytes as an artifact', async () => {
-  let bytes = new TextEncoder().encode('ID3sound')
+  let bytes = new Uint8Array([
+    0xff,
+    0xfb,
+    0x90,
+    0x64,
+    ...new Array(400).fill(0),
+  ])
   let model = responses({
     key: () => 'probe-key',
     speech: ['vendor/speech'],
@@ -275,7 +281,7 @@ Deno.test('a speech model uses the audio door and stores its bytes as an artifac
   assertEquals(reply.id, 'gen-1')
   assertEquals(reply.artifacts?.[0].media_type, 'audio/mpeg')
   assertEquals(reply.artifacts?.[0].size, bytes.length)
-  assert(!JSON.stringify(reply).includes('ID3sound'))
+  assert(!JSON.stringify(reply).includes('255,251,144,100'))
 })
 
 Deno.test('media connection faults are bounded without exposing credentials', async () => {
