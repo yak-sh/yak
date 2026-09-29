@@ -349,6 +349,9 @@ export let past = (app: { version?: number | null }, h: Hit) => {
 // the fresh ones only. A stale break is still stamped here — it was offered
 // and passed over, and offering it again on the next reply would be the same
 // noise a reply later.
+//
+// Every app at once: the rider rides every write in the space, and asked in
+// turn it paid each store's latency one after another.
 export let serve = async (
   env: Env,
   space: Space,
@@ -357,16 +360,14 @@ export let serve = async (
   all = false,
 ) => {
   let apps = app ? [app] : await appsOf(env, space)
-  let seen: Seen[] = []
-  for (let a of apps) {
+  let each = await Promise.all(apps.map(async (a): Promise<Seen[]> => {
     let hits = await openIn(env, space, a, who, all)
-    let said = all ? hits : hits.filter((h) => !past(a, h))
-    seen.push(...said.map((hit) => ({ app: a, hit })))
     let fresh = hits.filter((h) => !('notified' in h))
-    if (!fresh.length) continue
-    await graphAt(env, space, a, who).mark(fresh, 'notified')
-  }
-  return seen
+    if (fresh.length) await graphAt(env, space, a, who).mark(fresh, 'notified')
+    let said = all ? hits : hits.filter((h) => !past(a, h))
+    return said.map((hit) => ({ app: a, hit }))
+  }))
+  return each.flat()
 }
 
 // Closed: the mark that stops an item showing, here and in the unseen
