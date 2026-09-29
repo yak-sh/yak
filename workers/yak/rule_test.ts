@@ -58,15 +58,16 @@ test(
       assertEquals(r.status, 200, await r.text())
       assertEquals(((await app.get('.watered')) as Bundle[]).length, 0)
 
-      // A plant that asks to be come back to, a second from now. Nobody polls
+      // A plant that asks to be come back to, a moment from now. Nobody polls
       // for it: the store arms its object, the runtime delivers the alarm, the
       // tick writes `fired`, and the rule matches that batch as though it had
-      // landed — which is the overlay.
+      // landed — which is the overlay. The moment is short so the test waits on
+      // the firing, not on a clock (the path is the same at any offset).
       await app.post([{
         entity: { eid: 'fern' },
         plant: { name: 'fern' },
         wake: {
-          at: new Date(Date.now() + 1000).toISOString(),
+          at: new Date(Date.now() + 50).toISOString(),
           note: 'water me',
         },
       }])
@@ -75,7 +76,7 @@ test(
           let rows = (await app.get('.watered&?wake&?fired')) as Bundle[]
           return rows.length ? rows : undefined
         },
-        { timeout: 20_000, poll: 250, label: 'the fern to be watered' },
+        { timeout: 20_000, poll: 20, label: 'the fern to be watered' },
       ) as Bundle[]
       assertEquals(watered.length, 1)
       assertEquals(watered[0].entity.eid, 'fern')
@@ -90,7 +91,7 @@ test(
       // And it fires once: waking the plant again finds the gate closed.
       await app.post([{
         entity: { eid: 'fern' },
-        wake: { at: new Date(Date.now() + 500).toISOString() },
+        wake: { at: new Date(Date.now() + 50).toISOString() },
       }])
       let first = (watered[0].fired as { at: string }).at
       await until(
@@ -98,7 +99,7 @@ test(
           let [row] = (await app.get('.fired&?plant')) as Bundle[]
           return (row?.fired as { at: string } | undefined)?.at != first
         },
-        { timeout: 20_000, poll: 250, label: 'the second firing' },
+        { timeout: 20_000, poll: 20, label: 'the second firing' },
       )
       let again = (await app.get('.watered')) as Bundle[]
       assertEquals(again.length, 1)
