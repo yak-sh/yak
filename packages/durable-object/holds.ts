@@ -7,6 +7,12 @@ import { driver, type DurableStorage } from './sql.ts'
 
 let NAME = 'socket_subscriptions'
 
+export class MissingSubscriptions extends Error {
+  constructor(id: string) {
+    super(`socket subscriptions missing: ${id}`)
+  }
+}
+
 export let holds = (storage: DurableStorage) => {
   let sql = driver(storage)
   sql.query({
@@ -25,7 +31,7 @@ export let holds = (storage: DurableStorage) => {
         from: table(NAME),
         where: eq(col('id'), val(id)),
       }))
-      if (!row) throw new Error(`socket subscriptions missing: ${id}`)
+      if (!row) throw new MissingSubscriptions(id)
       return JSON.parse(String(row.queries))
     },
     write: (id: string, queries: Record<string, string | true>) =>

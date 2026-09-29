@@ -960,7 +960,11 @@ export class Store {
     // Only an app's store answers a page, and the platform's own two are made
     // of the rows an app's page is spared.
     let spared = own ? [] : PLATFORM.filter((w) => vocab.comp(w))
-    this.#live = sockets(this.#naming(subs, spared), ctx)
+    this.#live = sockets(
+      this.#naming(subs, spared),
+      ctx,
+      (error) => defect(error, { request: 'socket restore', store: name }),
+    )
     // The one `Authenticate` (T-33813). The app is read at request time — the
     // object may learn which app it holds from the request being answered —
     // and the mode with it, so a store told its access changed follows the

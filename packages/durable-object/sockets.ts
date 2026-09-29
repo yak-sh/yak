@@ -30,7 +30,7 @@ import {
   type Subs,
 } from '@yaks/api'
 import type { DurableStorage } from './sql.ts'
-import { holds } from './holds.ts'
+import { holds, MissingSubscriptions } from './holds.ts'
 
 /**
  * The part of a hibernatable WebSocket this package uses: a frame out, and the
@@ -232,7 +232,11 @@ let messageKind = (msg: unknown): SocketKind => {
  * The one exception is a `sync: peers` relay, which crosses here because its
  * lifetime is this socket's — see @yaks/api's `receive`.
  */
-export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
+export let sockets = (
+  subs: Subs,
+  ctx: Hibernation,
+  report?: (error: Error) => void,
+): Sockets => {
   let sinks = new Map<
     Wire,
     ReturnType<typeof queue> & { forget: (id: string) => void }
@@ -292,7 +296,21 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
     sinks.delete(ws)
     queries.delete(ws)
     let held = ws.deserializeAttachment() as Held | null
-    if (held?.subref) backing().delete(held.subref)
+    if (held?.subref) {
+      // The socket can outlive this incarnation. Clear its pointer before
+      // deleting the row, so a later wake cannot read a row we removed.
+      ws.serializeAttachment({ ...held, subref: undefined, subs: undefined })
+      backing().delete(held.subref)
+    }
+  }
+
+  let retire = (ws: Wire, error: unknown) => {
+    if (!(error instanceof MissingSubscriptions)) throw error
+    drop(ws)
+    try {
+      ws.close?.(1012, 'subscriptions lost')
+    } catch { /* the socket may already be closed */ }
+    report?.(error)
   }
 
   // The sink for a socket, created once. A socket this object has not seen
@@ -413,13 +431,27 @@ export let sockets = (subs: Subs, ctx: Hibernation): Sockets => {
         })
       }
       let kind = messageKind('value' in input ? input.value : null)
-      return scope ? scope(kind, run) : run()
+      let recover = () => {
+        try {
+          run()
+        } catch (error) {
+          retire(ws, error)
+        }
+      }
+      return scope ? scope(kind, recover) : recover()
     },
 
     close: drop,
 
     wake: () => {
-      for (let ws of ctx.getWebSockets()) sink(ws)
+      for (let ws of ctx.getWebSockets()) {
+        if (closed.has(ws)) continue
+        try {
+          sink(ws)
+        } catch (error) {
+          retire(ws, error)
+        }
+      }
     },
   }
 }

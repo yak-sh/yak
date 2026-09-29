@@ -18,12 +18,15 @@ import { holds } from './holds.ts'
 // hibernation.
 let wire = () => {
   let sent: (Frame & { frames?: Frame[] })[] = []
+  let closed: [number | undefined, string | undefined][] = []
   let held: unknown = null
   let writes = 0
   return {
     sent,
+    closed,
     writes: () => writes,
     send: (data: string) => void sent.push(JSON.parse(data)),
+    close: (code?: number, reason?: string) => void closed.push([code, reason]),
     serializeAttachment: (value: unknown) => {
       writes++
       held = JSON.parse(JSON.stringify(value))
@@ -50,9 +53,10 @@ let instance = (
   storage: ReturnType<typeof store>,
   ctx: ReturnType<typeof hibernation>,
   vocab: Vocab = shop,
+  report?: (error: Error) => void,
 ): [Graph, Sockets] => {
   let g = graph({ storage, vocab })
-  return [g, sockets(subscriptions(g), ctx)]
+  return [g, sockets(subscriptions(g), ctx, report)]
 }
 
 let ask = (id: string, query: string) =>
@@ -352,6 +356,62 @@ Deno.test('a subscription bigger than an attachment survives hibernation', () =>
   assert(later)
   woken.close(ws)
   assertThrows(() => holds(ctx.storage).read(later), Error, 'missing')
+  assertEquals(
+    (ws.deserializeAttachment() as { subref?: string }).subref,
+    undefined,
+  )
+})
+
+Deno.test('a lost subscription row retires its socket without blocking other subscribers', () => {
+  let storage = store(), ctx = hibernation()
+  let [, first] = instance(storage, ctx)
+  let stale = wire(), healthy = wire()
+  ctx.live.push(stale, healthy)
+  send(first, stale, {
+    subscribe: `.doc.title=${JSON.stringify('x'.repeat(3000))}`,
+    id: 'big',
+  })
+  send(first, healthy, { subscribe: '.kind=product', id: 'p' })
+  let ref = (stale.deserializeAttachment() as { subref: string }).subref
+  holds(ctx.storage).delete(ref)
+
+  let errors: Error[] = []
+  let [g, woken] = instance(storage, ctx, shop, (error) => errors.push(error))
+  woken.wake()
+  assertEquals(stale.closed, [[1012, 'subscriptions lost']])
+  assertEquals(errors.map((error) => error.message), [
+    `socket subscriptions missing: ${ref}`,
+  ])
+  assertEquals(
+    (stale.deserializeAttachment() as { subref?: string }).subref,
+    undefined,
+  )
+  assertEquals(healthy.sent.at(-1)?.reset, true)
+  let sent = stale.sent.length
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  assertEquals(stale.sent.length, sent)
+  assertEquals(healthy.sent.at(-1)?.bundles?.[0].entity.eid, 'p1')
+
+  // The runtime may still enumerate a socket while its close is in flight.
+  let [, later] = instance(storage, ctx)
+  later.wake()
+  assertEquals(stale.closed.length, 1)
+})
+
+Deno.test('a frame on a hibernated socket with a lost row closes it', () => {
+  let storage = store(), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let [, first] = instance(storage, ctx)
+  send(first, ws, {
+    subscribe: `.doc.title=${JSON.stringify('x'.repeat(3000))}`,
+    id: 'big',
+  })
+  let ref = (ws.deserializeAttachment() as { subref: string }).subref
+  holds(ctx.storage).delete(ref)
+
+  let [, woken] = instance(storage, ctx)
+  send(woken, ws, { ack: 'unknown' })
+  assertEquals(ws.closed, [[1012, 'subscriptions lost']])
 })
 
 Deno.test('a hibernated frame includes subscription restore in its scope', () => {
