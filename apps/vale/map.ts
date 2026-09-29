@@ -109,7 +109,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let labels: { id: string; at: Spot }[] = []
   let labelsWas: ReadonlyArray<Spot> | null = null
   let choicesWas = ''
-  let pending: number | undefined
+  let pending: ReturnType<typeof setTimeout> | undefined
   canvas.width = canvas.height = 320
   fog.width = fog.height = 320
   let ctx = canvas.getContext('2d')!
