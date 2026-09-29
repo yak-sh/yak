@@ -64,6 +64,7 @@ export let exploration = (net: Store) => {
   let heroWas = ''
   let known = new Set<string>()
   let held: Bundle[] | null = null
+  let heldOld: Bundle[] | null = null
   let sent = new Set<string>()
   let read = () => {
     let hero = net.hero
@@ -71,6 +72,7 @@ export let exploration = (net: Store) => {
       heroWas = ''
       known = new Set()
       held = null
+      heldOld = null
       sent.clear()
       return
     }
@@ -78,16 +80,32 @@ export let exploration = (net: Store) => {
       heroWas = hero
       known = tab.get(hero)
       held = null
+      heldOld = null
       sent.clear()
     }
     let next = net.mine('visited_region')
-    if (held == next) return
+    let old = net.mine('explored')
+    if (held == next && heldOld == old) return
     held = next
+    heldOld = old
     let changed = false
     for (let b of next) {
       let id = visitedOf(b, hero)
       if (!id) continue
       sent.add(id)
+      if (!known.has(id)) changed = true
+      known.add(id)
+    }
+    let cells: Spot[] = []
+    for (let b of old) {
+      let e = comp(b, 'explored')
+      if (
+        e.player == hero && typeof e.x == 'number' &&
+        typeof e.z == 'number' && Number.isInteger(e.x) &&
+        Number.isInteger(e.z)
+      ) cells.push([e.x, e.z])
+    }
+    for (let id of regionsFromCells(cells)) {
       if (!known.has(id)) changed = true
       known.add(id)
     }

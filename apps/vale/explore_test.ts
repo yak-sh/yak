@@ -96,3 +96,27 @@ Deno.test('saved cell circles become the regions they touched', () => {
   assertEquals(ids.has(regionOf((x + 0.5) * 20, (z + 0.5) * 20)), true)
   assertEquals(ids.has(regionOf((x + 0.5) * 20 + 26, (z + 0.5) * 20)), true)
 })
+
+Deno.test('transition map reads old cells while new visits arrive', () => {
+  let hero = 'old-hero'
+  let old: Bundle[] = [{
+    entity: { eid: 'old-cell' },
+    explored: { player: hero, x: 2, z: 2 },
+  }]
+  let visits: Bundle[] = []
+  let net = {
+    hero,
+    client: { ent: () => undefined },
+    mine: (name: string) => name == 'explored' ? old : visits,
+    keep: () => {},
+    settled: () => true,
+  }
+  let map = exploration(net)
+  assertEquals([...map.known()], [...regionsFromCells([[2, 2]])])
+  old = []
+  visits = [{
+    entity: { eid: 'new-visit' },
+    visited_region: { player: hero, region: 'mossvale' },
+  }]
+  assertEquals([...map.known()].includes('mossvale'), true)
+})
