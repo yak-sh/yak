@@ -791,7 +791,7 @@ export class Store {
       // index is then rebuilt off the content it mirrors. Nothing to do the
       // first time: there is no older shape to be wearing.
       if (held) recut(drive)
-      requestIds(drive)
+      requestIds(drive, vocab)
       for (let stmt of blobSchema()) drive.query(stmt)
       let unfit = install(drive, vocab, blobRead(vocab))
       for (let e of unfit) defect(e, { request: 'schema fit', store: name })
@@ -2509,7 +2509,8 @@ export class Store {
           next,
           (name, prop) => this.#rows(name, prop),
         )
-        appVocab(doc)
+        let before = appVocab(was)
+        let after = appVocab(doc)
         // The declaration and its DDL must roll back together on boot failure.
         // A retyped property's column held nothing, and goes for the boot to
         // raise again at its new type.
@@ -2517,7 +2518,7 @@ export class Store {
           this.#put('vocab', JSON.stringify(doc))
           for (let name of [...dropped, ...retyped]) {
             let [comp, prop] = name.split('.')
-            if (prop) shed(this.#sql, comp, prop)
+            if (prop) shed(this.#sql, before, after, comp, prop)
             else {
               this.#sql.query({
                 t: 'drop',

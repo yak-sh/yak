@@ -272,7 +272,7 @@ let columns = (d: Driver, name: string): string[] =>
     .map((r) => String(r.name))
 
 /** Keep request ids filed before exception's property took its wire name. */
-export let requestIds = (d: Driver) => {
+export let requestIds = (d: Driver, vocab: Vocab) => {
   let cols = columns(d, 'exception')
   if (!cols.includes('requestId')) return
   if (!cols.includes('request_id')) {
@@ -289,7 +289,7 @@ export let requestIds = (d: Driver) => {
     set: { request_id: col('requestId') },
     where: isNull(col('request_id')),
   })
-  shed(d, 'exception', 'requestId')
+  shed(d, vocab, vocab, 'exception', 'requestId')
 }
 
 /**
@@ -314,17 +314,38 @@ export let recut = (d: Driver) => {
 /**
  * A column its vocabulary stopped naming, dropped (vocab.ts `grew`). SQLite
  * refuses to drop a column an index, a trigger or a view names, so `recut()`
- * runs first and every index of the table goes with it; `install()` raises
- * again the ones the vocabulary still declares, in the same transaction.
+ * runs first and indexes no longer declared, changed, or naming the column go
+ * with it. The vocabularies say which indexes remain; `install()` must not
+ * mistake an unchanged unique constraint for a new one after this column is
+ * shed.
  */
-export let shed = (d: Driver, name: string, prop: string) => {
+export let shed = (
+  d: Driver,
+  before: Vocab,
+  after: Vocab,
+  name: string,
+  prop: string,
+) => {
   if (!columns(d, name).includes(prop)) return
   recut(d)
   let indexes = d.query(catalogued(
     'index',
     and(eq(col('tbl_name'), val(name)), notNull(col('sql'))),
   ))
+  let kept = new Set(
+    before.indexes(name)
+      .filter((old) =>
+        ![...old.props, ...(old.present ?? [])].includes(prop) &&
+        after.indexes(name).some((now) =>
+          old.unique == now.unique &&
+          old.props.join('\0') == now.props.join('\0') &&
+          (old.present ?? []).join('\0') == (now.present ?? []).join('\0')
+        )
+      )
+      .map((i) => `${name}_${i.props.join('_')}`),
+  )
   for (let i of indexes) {
+    if (kept.has(String(i.name))) continue
     d.query({ t: 'drop', kind: 'index', name: String(i.name), ifExists: true })
   }
   d.query(unseat(name, prop))

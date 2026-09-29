@@ -604,6 +604,51 @@ Deno.test('a nullable unique key is raised over older rows without one', async (
   )
 })
 
+Deno.test('a unique index survives dropping another column on its table', async () => {
+  let ctx = state()
+  let now = newer(ctx, 'ada/vale')
+  let deploy = (old: boolean) =>
+    now.door('/vocab', {
+      method: 'POST',
+      body: JSON.stringify({
+        $defs: {
+          ability_design: {
+            component: true,
+            unique: [['kind']],
+            properties: {
+              kind: { type: 'string', index: true },
+              ...old ? { old: { type: 'string' } } : {},
+            },
+          },
+        },
+      }),
+    }, APP)
+  assertEquals((await deploy(true)).status, 200)
+  assertEquals(
+    (await now.apply([{
+      entity: { eid: ONE },
+      ability_design: { kind: 'dash', old: 'legacy' },
+    }], APP)).status,
+    200,
+  )
+  assertEquals(
+    (await now.apply([{
+      entity: { eid: ONE },
+      ability_design: { old: null },
+    }], APP)).status,
+    200,
+  )
+  assertEquals((await deploy(false)).status, 200)
+  assertEquals(
+    (await now.apply([{
+      entity: { eid: TWO },
+      ability_design: { kind: 'dash' },
+    }], APP)).status,
+    400,
+  )
+  assertEquals((await now.query('.ability_design', APP)).length, 1)
+})
+
 Deno.test('a raw index creation failure still refuses an empty store', async () => {
   let ctx = state()
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
