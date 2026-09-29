@@ -62,6 +62,18 @@ export let platform = (file: string) =>
     ? 'browser'
     : 'deno'
 
+/**
+ * Git as every process a run starts sees it: none of the machine's config
+ * (its hooks template, rerere, its default branch), and never a prompt. The
+ * global scope holds only an identity, beneath whatever a repository or a
+ * command sets.
+ */
+export let GIT = {
+  GIT_CONFIG_GLOBAL: new URL('./test.gitconfig', import.meta.url).pathname,
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_TERMINAL_PROMPT: '0',
+}
+
 /** The runner every platform's runtime runs. */
 let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
@@ -276,7 +288,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     Deno.env.set('STRIPE_KEY', stripe)
     Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
   }
-  let env: Record<string, string> = { DENO_DIR: denoDir() }
+  let env: Record<string, string> = { DENO_DIR: denoDir(), ...GIT }
   // The kernel starts while the deno pass runs, and is ready by its end.
   let started = wd.length
     ? import('../workers/yak/probe-suite.ts').then((m) => m.probeSuite())

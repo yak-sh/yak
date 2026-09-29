@@ -185,16 +185,11 @@ test('the packfile section is side-band framed, band 1', async () => {
   assertEquals(said.endsWith('0000'), true)
 })
 
-// git itself, with the exit code as the assertion and no config of the
-// machine's own in scope.
+// git itself, with the exit code as the assertion (the run keeps the
+// machine's config out of scope: bin/test.ts `GIT`).
 let run = async (...args: string[]) => {
   let { code, stdout, stderr } = await new Deno.Command('git', {
     args,
-    env: {
-      GIT_CONFIG_GLOBAL: '/dev/null',
-      GIT_CONFIG_SYSTEM: '/dev/null',
-      GIT_TERMINAL_PROMPT: '0',
-    },
     stdout: 'piped',
     stderr: 'piped',
   }).output()

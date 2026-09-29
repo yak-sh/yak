@@ -1,0 +1,5 @@
+# The global git config of every process a test run starts (bin/test.ts
+# `GIT`): an identity for what a test commits, and nothing of the machine.
+[user]
+	name = Test
+	email = test@example.com

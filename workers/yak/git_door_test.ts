@@ -104,11 +104,6 @@ let basic = (token: string) => ({
 let run = async (...args: string[]) => {
   let { code, stdout, stderr } = await new Deno.Command('git', {
     args,
-    env: {
-      GIT_CONFIG_GLOBAL: '/dev/null',
-      GIT_CONFIG_SYSTEM: '/dev/null',
-      GIT_TERMINAL_PROMPT: '0',
-    },
     stdout: 'piped',
     stderr: 'piped',
   }).output()
