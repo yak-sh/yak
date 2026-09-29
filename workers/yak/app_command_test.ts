@@ -23,6 +23,12 @@ let words = {
       floor: 'owner',
       worker: '/owner-word',
     },
+    owner_json: {
+      tool: true,
+      description: 'Ask the app owner for a record',
+      floor: 'owner',
+      worker: '/owner-json',
+    },
     notes: {
       tool: true,
       description: 'Read the notes',
@@ -54,10 +60,14 @@ Deno.test('a page invokes declared commands as its owner; the command door refus
     get: () => ({
       fetch: (req: Request) =>
         Promise.resolve(
-          new Response(
-            req.headers.get('x-yak-role') == 'owner' ? 'welcome' : 'owner only',
-            { status: req.headers.get('x-yak-role') == 'owner' ? 200 : 403 },
-          ),
+          req.url.endsWith('/owner-json')
+            ? Response.json({ name: 'Elder Wren', land: 'tombsands' })
+            : new Response(
+              req.headers.get('x-yak-role') == 'owner'
+                ? 'welcome'
+                : 'owner only',
+              { status: req.headers.get('x-yak-role') == 'owner' ? 200 : 403 },
+            ),
         ),
     }),
   } as Dispatch
@@ -120,6 +130,14 @@ Deno.test('a page invokes declared commands as its owner; the command door refus
       value: { answer: 'welcome' },
     },
   })
+  let json = await post(await as(ADA), 'owner_json')
+  assertEquals(json.status, 200)
+  assertEquals(
+    json.body.value.answer,
+    '{"name":"Elder Wren","land":"tombsands"}',
+  )
+  assertEquals(json.body.text.includes('{"name":'), false)
+  assertEquals(json.body.text.includes('**name**: `"Elder Wren"`'), true)
   let editor = await post(await as(ELI), 'owner_word')
   assertEquals(editor.status, 403)
   assertEquals(editor.body.error.code, 'access')

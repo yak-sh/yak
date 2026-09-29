@@ -16,6 +16,19 @@ type Acts = {
   query: (line: string) => Promise<unknown>
 }
 
+/** Keep the worker's bytes for clients and show JSON as readable fields. */
+export let workerReply = async (res: Response, name: string, at: string) => {
+  let answer = await res.text()
+  let mime = res.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
+  let json = mime == 'application/json' || mime?.endsWith('+json')
+  return {
+    text: json && answer
+      ? `${name}: answered in ${at}\n\n${display(JSON.parse(answer))}`
+      : `${name}: ${answer || 'done'} in ${at}`,
+    value: { answer },
+  }
+}
+
 export let toolsOf = async (
   env: Env,
   space: Space,
@@ -73,11 +86,7 @@ export let commandAt = async (
     {
       worker: async (path, args) => {
         let res = await commandWorker(env, space, app, who, path, args)
-        let answer = await res.text()
-        return {
-          text: `${name}: ${answer || 'done'} in ${at}`,
-          value: { answer },
-        }
+        return workerReply(res, name, at)
       },
       query: async (line) => {
         let rows = await door.query(line)
