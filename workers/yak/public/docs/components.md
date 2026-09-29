@@ -533,16 +533,18 @@ These are the names, all of them:
 
     about access account_alert account_usage alias answer app archetype
     archived artifact ask attachment attempt binding blob bounced build builder
-    builder_answer builder_change builder_open builder_ring built call call_ready
+    builder_answer builder_change builder_dep builder_edit builder_model_answer
+    builder_open builder_ring built call call_ready
     call_woken cancel cancelled checkout
     cites comment commit compat completed connection contains content created
-    delegates deliver delivered deploy dispatch doc edge email entity entry
+    delegates deliver delivered deploy dispatch doc edge effect email entity entry
     error exception execution favorite fee feedback file filed fired former
     gallery gitobj grant home hook hostname image installed integration
-    integration_install invite inviting key lines mail mail_post member memory
+    integration_install invite inviting key lease lines mail mail_post member memory
     meter model notice notified opened openrouter order output parent person plan product
     project provider provisional published quarantined questions quote reads
-    recalled ref referenced report repository requires restored result retired
+    recalled ref referenced report repository representation requires restored
+    result retired
     revision rtc satisfies screenshot secret seeded serves session session_run sfu
     signed_in signin space spend stop stripe supersedes supervises sweep task
     theme tool trashed tree_entry tunnel updated usage uses using verified wake
