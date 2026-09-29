@@ -161,34 +161,34 @@ type Flat = {
 
 // Every face of a packed mesh: each quad `quad` wrote, four vertices and two
 // triangles, looking the way its first triangle winds.
-let facesOf = (p: Packed): Flat[] => {
-  let at = (i: number, a: number) => p.pos[i * 3 + a]
+let facesOf = ({ pos, idx }: Packed): Flat[] => {
   let faces: Flat[] = []
-  for (let q = 0; q < p.idx.length; q += 6) {
-    let [a, b, c] = [p.idx[q], p.idx[q + 1], p.idx[q + 2]]
-    let e = [0, 1, 2].map((k) => at(b, k) - at(a, k))
-    let f = [0, 1, 2].map((k) => at(c, k) - at(a, k))
-    let n = [
-      e[1] * f[2] - e[2] * f[1],
-      e[2] * f[0] - e[0] * f[2],
-      e[0] * f[1] - e[1] * f[0],
-    ]
-    let axis = [1, 2].reduce(
-      (m, k) => Math.abs(n[k]) > Math.abs(n[m]) ? k : m,
-      0,
-    )
+  for (let q = 0; q < idx.length; q += 6) {
+    let a = idx[q] * 3, b = idx[q + 1] * 3, c = idx[q + 2] * 3
+    let ex = pos[b] - pos[a], ey = pos[b + 1] - pos[a + 1]
+    let ez = pos[b + 2] - pos[a + 2]
+    let fx = pos[c] - pos[a], fy = pos[c + 1] - pos[a + 1]
+    let fz = pos[c + 2] - pos[a + 2]
+    let n = [ey * fz - ez * fy, ez * fx - ex * fz, ex * fy - ey * fx]
+    let axis = 0
+    if (Math.abs(n[1]) > Math.abs(n[axis])) axis = 1
+    if (Math.abs(n[2]) > Math.abs(n[axis])) axis = 2
     let [ua, va] = axes(axis)
-    let base = Math.min(...p.idx.subarray(q, q + 6))
-    let us = [0, 1, 2, 3].map((i) => at(base + i, ua))
-    let vs = [0, 1, 2, 3].map((i) => at(base + i, va))
+    let base = idx[q]
+    for (let i = 1; i < 6; i++) base = Math.min(base, idx[q + i])
+    let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity
+    for (let i = base * 3; i < base * 3 + 12; i += 3) {
+      u0 = Math.min(u0, pos[i + ua]), u1 = Math.max(u1, pos[i + ua])
+      v0 = Math.min(v0, pos[i + va]), v1 = Math.max(v1, pos[i + va])
+    }
     faces.push({
       axis,
       sign: Math.sign(n[axis]),
-      at: at(base, axis),
-      u0: Math.min(...us),
-      v0: Math.min(...vs),
-      u1: Math.max(...us),
-      v1: Math.max(...vs),
+      at: pos[base * 3 + axis],
+      u0,
+      v0,
+      u1,
+      v1,
     })
   }
   return faces
@@ -227,17 +227,16 @@ export let fights = (p: Packed): [number, number][] => {
   let faces = facesOf(p)
   // Faces by axis and slab of planes a step deep: a pair closer than a step
   // lies in one slab or two neighbouring.
-  let slabs = new Map<string, number[]>()
+  let slabs = new Map<number, number[]>()
   for (let [i, f] of faces.entries()) {
-    let k = `${f.axis} ${Math.floor(f.at / STEP)}`
+    let k = Math.floor(f.at / STEP) * 3 + f.axis
     let slab = slabs.get(k)
     if (slab) slab.push(i)
     else slabs.set(k, [i])
   }
   let got: [number, number][] = []
   for (let [k, own] of slabs) {
-    let [axis, n] = k.split(' ').map(Number)
-    let next = slabs.get(`${axis} ${n + 1}`) ?? []
+    let next = slabs.get(k + 3) ?? []
     let near = [...own, ...next].sort((a, b) => faces[a].u0 - faces[b].u0)
     let mine = new Set(own)
     for (let x = 0; x < near.length; x++) {
@@ -365,11 +364,13 @@ export let quad = (
   }
 }
 
-// One sRGB channel as the linear light three.js blends vertex colours in, and
-// back: linear light as an sRGB byte, looked up, since a level writes
+// One sRGB byte as the linear light three.js blends vertex colours in, and
+// back: linear light as an sRGB byte, each looked up, since a level writes
 // millions (the soft shader decodes it again).
-let linear = (c: number) =>
-  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+let LINEAR = Float64Array.from({ length: 256 }, (_, i) => {
+  let c = i / 255
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+})
 let STEPS = 4096
 let SRGB = Uint8Array.from({ length: STEPS + 1 }, (_, i) => {
   let c = i / STEPS
@@ -382,9 +383,9 @@ let srgb = (c: number) =>
 
 /** A colour, written as sRGB hex, as three linear numbers in [0, 1]. */
 export let rgb = (hex: number): Vec => [
-  linear(((hex >> 16) & 255) / 255),
-  linear(((hex >> 8) & 255) / 255),
-  linear((hex & 255) / 255),
+  LINEAR[(hex >> 16) & 255],
+  LINEAR[(hex >> 8) & 255],
+  LINEAR[hex & 255],
 ]
 
 /** A small voxel model: voxel coordinates, packed, to a colour, and what the
@@ -442,6 +443,14 @@ export let ball = (
 // One exposed voxel face, before merging: where it lies in its plane, and
 // everything that must match for two faces to merge.
 type Face = { u: number; v: number; color: number; rim: number; ao: number }
+// The exposed faces in one plane: the axis it looks along, which way, and
+// its depth, in voxels.
+type Plane = {
+  axis: number
+  sign: number
+  depth: number
+  faces: Map<number, Face>
+}
 
 /**
  * Mesh a voxel model into `o`: voxel `size`, placed with its origin at `at`.
@@ -457,41 +466,57 @@ export let blob = (
   round = 0.22,
   cell = size,
 ) => {
-  let solid = (p: Vec) => v.has(key(p[0], p[1], p[2]))
+  // The voxels as a grid over their bounds and one more all round, 1 where
+  // solid: each face asks a score of its neighbours, and a grid answers
+  // sooner than the map. A neighbour's cell is a step along its axis.
+  let ps = [...v.keys()].map(unkey)
+  let lo = [Infinity, Infinity, Infinity],
+    hi = [-Infinity, -Infinity, -Infinity]
+  for (let p of ps) {
+    for (let a = 0; a < 3; a++) {
+      lo[a] = Math.min(lo[a], p[a])
+      hi[a] = Math.max(hi[a], p[a])
+    }
+  }
+  let H = hi[1] - lo[1] + 3, D = hi[2] - lo[2] + 3, along = [H * D, D, 1]
+  let cells = new Uint8Array(ps.length ? (hi[0] - lo[0] + 3) * H * D : 0)
+  let cellOf = (p: Vec) =>
+    (p[0] - lo[0] + 1) * H * D + (p[1] - lo[1] + 1) * D + p[2] - lo[2] + 1
+  for (let p of ps) cells[cellOf(p)] = 1
+  let solid = (c: number) => cells[c] == 1
   // Faces by plane: axis, sign and depth.
-  let planes = new Map<string, Map<number, Face>>()
-  for (let [k, color] of v) {
-    let p = unkey(k)
+  let planes = new Map<number, Plane>()
+  let n = 0
+  for (let color of v.values()) {
+    let p = ps[n++], k = cellOf(p)
     for (let axis = 0; axis < 3; axis++) {
-      let [ua, va] = axes(axis)
-      for (let sign of [-1, 1]) {
-        let q: Vec = [p[0], p[1], p[2]]
-        q[axis] += sign
+      let [ua, va] = axes(axis), du = along[ua], dv = along[va]
+      for (let sign = -1; sign <= 1; sign += 2) {
+        let q = k + sign * along[axis]
         if (solid(q)) continue
         // What stands on the ground never shows its underside.
         if (axis == 1 && sign < 0 && p[1] == 0) continue
-        let step = (from: Vec, a: number, s: number): Vec => {
-          let r: Vec = [from[0], from[1], from[2]]
-          r[a] += s
-          return r
-        }
         // An edge is convex where the voxel beyond it, and the one diagonally
         // out past it, are both empty.
-        let open = (a: number, s: number) =>
-          !solid(step(p, a, s)) && !solid(step(q, a, s)) ? 1 : 0
-        let rim = open(ua, -1) | open(ua, 1) << 1 | open(va, -1) << 2 |
-          open(va, 1) << 3
+        let open = (d: number) => !solid(k + d) && !solid(q + d) ? 1 : 0
+        let rim = open(-du) | open(du) << 1 | open(-dv) << 2 | open(dv) << 3
         // Ambient occlusion from the voxels just outside the face.
         let occ = (su: number, sv: number) => {
-          let a = step(q, ua, su), b = step(q, va, sv)
+          let a = q + su * du, b = q + sv * dv
           let s1 = solid(a) ? 1 : 0, s2 = solid(b) ? 1 : 0
-          return s1 && s2 ? 0 : 3 - (s1 + s2 + (solid(step(a, va, sv)) ? 1 : 0))
+          return s1 && s2 ? 0 : 3 - (s1 + s2 + (solid(a + sv * dv) ? 1 : 0))
         }
         let ao = occ(-1, -1) | occ(1, -1) << 2 | occ(1, 1) << 4 |
           occ(-1, 1) << 6
-        let plane = `${axis} ${sign} ${p[axis]}`
-        if (!planes.has(plane)) planes.set(plane, new Map())
-        planes.get(plane)!.set(p[ua] * 4096 + p[va], {
+        let id = (axis * 2 + (sign + 1) / 2) * 1024 + p[axis] + B
+        let plane = planes.get(id)
+        if (!plane) {
+          planes.set(
+            id,
+            plane = { axis, sign, depth: p[axis], faces: new Map() },
+          )
+        }
+        plane.faces.set(p[ua] * 4096 + p[va], {
           u: p[ua],
           v: p[va],
           color,
@@ -501,8 +526,7 @@ export let blob = (
       }
     }
   }
-  for (let [plane, faces] of planes) {
-    let [axis, sign, depth] = plane.split(' ').map(Number)
+  for (let { axis, sign, depth, faces } of planes.values()) {
     let [ua, va] = axes(axis)
     // Runs along u: neighbouring faces alike in colour, shade and their
     // rounding across the run. Inside a run no edge is convex (each face's
