@@ -116,6 +116,10 @@ test('a vocabulary carries tool declarations beside its components', async () =>
   assertEquals(t.name, 'session_list')
   assertEquals(t.readOnly, true)
   assertEquals(t.surfaces, ['cli'])
+  assertEquals(
+    toolDefinition({ description: 'Code calls it.', surfaces: [] }).surfaces,
+    [],
+  )
   assertThrows(
     () => toolDefinition({ description: 'No.', surfaces: ['fax'] }),
     Error,

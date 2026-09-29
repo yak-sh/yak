@@ -408,9 +408,9 @@ to the handler the module supplies, and rejects a declaration without a handler.
 
 `surfaces` says where a tool is offered: `["cli"]` on the `yak` command line
 only, `["mcp"]` in an MCP server's listing only. Without it, a tool is offered
-on both. A tool that keeps its process, such as `serve` or a stream that never
-returns, is `["cli"]`. `offered(surface)` in `@yaks/graph` is the test each door
-applies.
+on both; `[]` offers it on neither, for a tool only code calls. A tool that
+keeps its process, such as `serve` or a stream that never returns, is `["cli"]`.
+`offered(surface)` in `@yaks/graph` is the test each door applies.
 
 `roles` names the roles the process running a tool serves (@yaks/cli `ROLES`:
 `graph`, `web`, `effects`), for a tool that needs more than the graph every tool

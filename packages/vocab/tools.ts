@@ -133,10 +133,10 @@ export type ToolDefinition = {
 /** A role a process serves over a graph (@yaks/cli `ROLES`). */
 export type Role = 'graph' | 'web' | 'effects'
 
-// Where a tool is offered; the same list the meta-schema allows.
+// Where a tool is offered; the same list the meta-schema allows. An empty
+// list is a tool no door offers, which only code calls.
 let SURFACES = {
   type: 'array',
-  minItems: 1,
   uniqueItems: true,
   items: { enum: ['cli', 'mcp'] },
 }
