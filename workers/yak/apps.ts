@@ -29,7 +29,7 @@ import { apex, spaceHost, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt, browserImmutable } from './cache.ts'
-import { assetPath, assetUrl, releaseId } from './asset_url.ts'
+import { assetMaps, assetPath, assetUrl, releaseId } from './asset_url.ts'
 import * as files from './files.ts'
 import { keyed, PREFIX, prefixOf, VERSION } from './files.ts'
 import { blobPrefix } from './blob-key.ts'
@@ -254,6 +254,20 @@ let reported = (at: string, page: Response) => {
 // release. CSS URLs and module imports then resolve below the same release
 // address without rewriting their contents. Authenticated API calls and page
 // navigation keep their ordinary addresses.
+let hasBase = (html: string) => /<base[\s>][^>]*\bhref\b/i.test(html)
+let assetReserved = (path: string) =>
+  path == `${BUILD}.js` || PLATFORM_PATHS.some((p) => covers(p, path))
+let mapped = (
+  html: string,
+  at: string,
+  bare: string,
+  source: string | null | undefined,
+) => {
+  let id = releaseId(source)
+  return id && !hasBase(html)
+    ? assetMaps(html, at, bare, id, assetReserved)
+    : html
+}
 let released = (
   page: Response,
   html: string,
@@ -262,10 +276,8 @@ let released = (
   source: string | null | undefined,
 ) => {
   let id = releaseId(source)
-  if (!id || /<base[\s>][^>]*\bhref\b/i.test(html)) return page
+  if (!id || hasBase(html)) return page
   let rewrite = new HTMLRewriter()
-  let skip = (path: string) =>
-    path == `${BUILD}.js` || PLATFORM_PATHS.some((p) => covers(p, path))
   let move = (attr: string) => ({
     element: (el: {
       getAttribute(name: string): string | null
@@ -273,7 +285,7 @@ let released = (
     }) => {
       let ref = el.getAttribute(attr)
       if (!ref) return
-      let next = assetUrl(ref, at, bare, id, skip)
+      let next = assetUrl(ref, at, bare, id, assetReserved)
       if (next != ref) el.setAttribute(attr, next)
     },
   })
@@ -324,9 +336,7 @@ let intoHead = (page: string, tag: string) => {
 // declared.ts hands a view to an MCP host by the same rule, at that app's
 // absolute address.
 export let based = (href: string, page: string) =>
-  /<base[\s>][^>]*\bhref\b/i.test(page)
-    ? page
-    : intoHead(page, `<base href="${href}">`)
+  hasBase(page) ? page : intoHead(page, `<base href="${href}">`)
 
 // Whether the page already names a tag — one token of the attribute that
 // says what it IS, so `rel="shortcut icon"` and `rel="apple-touch-icon-
@@ -647,7 +657,7 @@ let asset = async (
   // them: it is sent whole every time, and no cache on the way may keep it.
   if (sandbox && html) {
     let original = await got.text()
-    let own = pinned(at, original, app)
+    let own = pinned(at, mapped(original, at, bare, app.source), app)
     return reported(
       at,
       released(
@@ -694,7 +704,10 @@ let asset = async (
   // cache because the same file is a different document at each mount, and one
   // cached copy of the bytes serving every mount beats one copy per mount.
   let original = await got.text()
-  let page = based(at, pinned(at, original, app))
+  let page = based(
+    at,
+    pinned(at, mapped(original, at, bare, app.source), app),
+  )
   return reported(
     at,
     released(new Response(page, { headers }), original, at, bare, app.source),
@@ -707,12 +720,17 @@ let versionedAsset = async (
   app: App,
   source: string,
   path: string,
+  c: Clock,
 ) => {
   if (inside(keyed(source, path).slice(source.length))) {
     return json(404, 'no_such_file')
   }
   let range = req.method == 'GET' ? req.headers.get('range') : null
-  let got = await bytes(env, app, source, path, range, req.method, source)
+  let got = await c.time(
+    'bytes',
+    () => bytes(env, app, source, path, range, req.method, source),
+    (r) => r.headers.get('cf-cache-status'),
+  )
   if (![200, 206, 416].includes(got.status)) {
     await got.body?.cancel()
     return json(404, 'no_such_file')
@@ -1250,6 +1268,7 @@ let api = async (
   app: App,
   path: string,
   who: Who,
+  c: Clock,
 ) => {
   // The store client an app's pages import (public/client.js), served beside
   // the doors it wraps so a page needs no address but its own. One file for
@@ -1300,7 +1319,7 @@ let api = async (
     if (source != app.source && !await dir.released(app, source)) {
       return json(404, 'no_such_file')
     }
-    return versionedAsset(req, env, app, source, versioned.path)
+    return versionedAsset(req, env, app, source, versioned.path, c)
   }
   if (path == '/commands') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
@@ -2283,7 +2302,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     return wall(reporting(
       await c.time(
         'api',
-        () => api(req, env, dir, space!, app!, path.slice(4), who),
+        () => api(req, env, dir, space!, app!, path.slice(4), who, c),
       ),
       req,
       at,

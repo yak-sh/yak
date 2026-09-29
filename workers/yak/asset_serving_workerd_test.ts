@@ -19,6 +19,10 @@ Deno.test('a page uses release assets whose bytes survive deploy and rollback', 
           {
             path: 'index.html',
             content: '<link rel="stylesheet" href="./styles/main.css">' +
+              '<script type=importmap>{"imports":{' +
+              '"@local":"./scripts/chunk.js"},"scopes":{' +
+              '"./scripts/":{"@scope":"./scripts/worker.js"}}}' +
+              '</script>' +
               '<script type="module" src="./scripts/main.js"></script>' +
               '<a href="./next.html">next</a>' +
               '<form action="./api/apply"></form><h1>page</h1>',
@@ -58,7 +62,13 @@ Deno.test('a page uses release assets whose bytes survive deploy and rollback', 
     let first = await firstPage.text()
     let css1 = asset(first, 'css')
     let js1 = asset(first, 'js')
+    let release1 = css1.match(/\/assets\/([0-9a-f-]+)\//)![1]
     assertStringIncludes(first, '<h1>page</h1>')
+    assertStringIncludes(
+      first,
+      `"@local":"/page/api/assets/${release1}/scripts/chunk.js"`,
+    )
+    assertStringIncludes(first, `"/page/api/assets/${release1}/scripts/":`)
     assertStringIncludes(first, '<a href="./next.html">')
     assertStringIncludes(first, '<form action="./api/apply">')
     let custom = await (await at('/page/custom.html')).text()
@@ -95,8 +105,13 @@ Deno.test('a page uses release assets whose bytes survive deploy and rollback', 
     assertEquals(conditional.status, 200)
     let second = await conditional.text()
     let css2 = asset(second, 'css')
+    let release2 = css2.match(/\/assets\/([0-9a-f-]+)\//)![1]
     assertMatch(second, /<h1>page<\/h1>/)
     assertEquals(css1 == css2, false)
+    assertStringIncludes(
+      second,
+      `"@local":"/page/api/assets/${release2}/scripts/chunk.js"`,
+    )
     assertStringIncludes(await (await at(css1)).text(), '/*first*/')
     assertStringIncludes(await (await at(css2)).text(), '/*second*/')
     assertStringIncludes(

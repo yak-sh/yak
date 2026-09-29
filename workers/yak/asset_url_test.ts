@@ -1,7 +1,7 @@
 // A page's static references move as a release, while its app calls and links
 // stay where the page put them.
 import { assertEquals } from '@std/assert'
-import { assetPath, assetUrl, releaseId } from './asset_url.ts'
+import { assetMaps, assetPath, assetUrl, releaseId } from './asset_url.ts'
 
 Deno.test('release URLs keep local assets under their mount', () => {
   let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
@@ -36,5 +36,37 @@ Deno.test('release URLs keep local assets under their mount', () => {
   assertEquals(
     assetUrl('./main.js', '/cookbook/~ticket/', '/cookbook/', id),
     `/cookbook/~ticket/api/assets/${id}/main.js`,
+  )
+})
+
+Deno.test('local import-map values, URL keys, and scopes follow a release', () => {
+  let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
+  let html = `<script type=importmap>{"imports":{` +
+    `"@local":"./scripts/chunk.js",` +
+    `"./scripts/direct.js":"./scripts/chunk.js",` +
+    `"@remote":"https://cdn.example/lib.js",` +
+    `"pkg/":"./scripts/","root/":"./"},` +
+    `"scopes":{"./scripts/":{"@scope":"./shared.js"}}` +
+    `}</script>`
+  let served = assetMaps(html, '/cookbook/', '/cookbook/', id)
+  let map = JSON.parse(served.match(/<script[^>]*>(.*?)<\/script>/)![1])
+  let root = `/cookbook/api/assets/${id}/`
+  assertEquals(map.imports['@local'], `${root}scripts/chunk.js`)
+  assertEquals(
+    map.imports[`${root}scripts/direct.js`],
+    `${root}scripts/chunk.js`,
+  )
+  assertEquals(map.imports['@remote'], 'https://cdn.example/lib.js')
+  assertEquals(map.imports['pkg/'], `${root}scripts/`)
+  assertEquals(map.imports['root/'], root)
+  assertEquals(map.scopes[`${root}scripts/`]['@scope'], `${root}shared.js`)
+  assertEquals(
+    assetMaps(
+      '<script type=importmap>{bad}</script>',
+      '/cookbook/',
+      '/cookbook/',
+      id,
+    ),
+    '<script type=importmap>{bad}</script>',
   )
 })
