@@ -435,19 +435,19 @@ let called = async (
   call?: string,
   at?: string,
   source?: string,
+  cpuMs?: number,
 ): Promise<Response | null> => {
   if (!env.DISPATCH || !env.SESSION_SECRET) return null
   let store = storeName(space, app)
   let worker
   try {
-    // Scheduled code has the same app sandbox and grants, but may spend more
-    // CPU on a bounded world step. A normal page request keeps its 50 ms.
+    // Declared commands may do bounded work beyond a page's 50 ms budget.
     worker = script(
       env.DISPATCH,
       scriptName(app.script ?? store),
       app,
       who,
-      call ? 5_000 : undefined,
+      cpuMs,
     )
   } catch (e) {
     // Not the app's code — the namespace refusing to hand it over is ours.
@@ -495,7 +495,7 @@ export let commandWorker = async (
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(args),
   })
-  let res = await called(env, space, app, req, who, call, at, source)
+  let res = await called(env, space, app, req, who, call, at, source, 5_000)
   if (!res) throw new Error('app worker is unavailable')
   if (!res.ok) {
     throw rejected(

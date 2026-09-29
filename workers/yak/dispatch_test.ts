@@ -170,7 +170,7 @@ Deno.test('what the worker sends out is said to be the app’s, for this visitor
   }])
 })
 
-Deno.test('a scheduled command has its own bounded CPU and kernel context', async () => {
+Deno.test('declared commands have bounded CPU and only scheduled calls have context', async () => {
   let m = mirror()
   let asked: unknown[] = []
   let env = envOf((...args: unknown[]) => (asked = args, m.get()))
@@ -195,6 +195,12 @@ Deno.test('a scheduled command has its own bounded CPU and kernel context', asyn
     m.seen().headers.get('x-yak-command-at'),
     '2026-09-28T00:00:00Z',
   )
+  await commandWorker(env, space, app, who, '/inspect', {})
+  assertEquals((asked[2] as { limits: unknown }).limits, {
+    cpuMs: 5_000,
+    subRequests: 50,
+  })
+  assertEquals(m.seen().headers.get('x-yak-command-call'), null)
   await ran(
     env,
     space,
