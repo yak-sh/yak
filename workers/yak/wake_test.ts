@@ -6,6 +6,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bound, Bundle } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
+import { until } from '../../bin/testing.ts'
 import { Store } from './graph.ts'
 import { platform, state } from './testing.ts'
 import { meta } from './meta.ts'
@@ -461,7 +462,13 @@ let app = (name = 'ada/chores', ctx = state()) => {
     )
   let rows = async (line: string) =>
     await (await ask(`/query?q=${encodeURIComponent(line)}`)).json() as Bundle[]
-  return { ctx, store, ask, rows }
+  // A call runs in the store's effect pool once the write that owes it
+  // commits, so what it writes is waited for rather than read at once.
+  let holds = (line: string, n: number) =>
+    until(async () => (await rows(line)).length == n, {
+      label: `${n} of ${line}`,
+    })
+  return { ctx, store, ask, rows, holds }
 }
 
 let chores = async () => {
@@ -478,7 +485,7 @@ Deno.test('a call wearing a wake waits for it, and answers when it fires', async
     entity: { eid: 'now' },
     call: { to: toolEid('add_chore'), args: { name: 'take the bins out' } },
   }])
-  assertEquals((await a.rows('.result.call=now')).length, 1)
+  await a.holds('.result.call=now', 1)
   let now = Date.now() - 1
   assertEquals(
     (await a.ask('/apply', [{
@@ -496,12 +503,12 @@ Deno.test('a call wearing a wake waits for it, and answers when it fires', async
   await a.store.alarm()
   // The firing is what ran it: the chore the template names is written, and
   // the answer is beside the ask.
+  await a.holds('.result.call=later', 1)
   assertEquals(
     (await a.rows('.chore')).map((b) => (b.chore as { name: string }).name)
       .sort(),
     ['take the bins out', 'water the plants'],
   )
-  assertEquals((await a.rows('.result.call=later')).length, 1)
   assertEquals(
     (await a.rows('.execution'))[0].execution,
     // Nobody named a runner here, so the claim is anonymous.
@@ -523,14 +530,14 @@ Deno.test('a recurring call is one invocation per firing, never a re-run', async
   // wrote a call of its own.
   assertEquals((await a.rows('.result.call=daily')).length, 0)
   assertEquals((await a.rows('.call.source=daily')).length, 1)
-  assertEquals((await a.rows('.chore')).length, 1)
+  await a.holds('.chore', 1)
   // The next occurrence, a day on, is its own invocation and its own answer.
   let [row] = await a.rows('.eid=daily&?wake')
   await a.ctx.storage.setAlarm(Date.parse((row.wake as { at: string }).at))
   await a.store.tick(Date.parse((row.wake as { at: string }).at))
   assertEquals((await a.rows('.call.source=daily')).length, 2)
+  await a.holds('.result', 2)
   assertEquals((await a.rows('.chore')).length, 2)
-  assertEquals((await a.rows('.result')).length, 2)
 })
 
 // The offline simulation, as the guide writes it (docs/wakes.md, T-37613).
@@ -575,7 +582,7 @@ Deno.test('an idle world advances offline, a missed stretch in one firing', asyn
       fired: { at: string }
     }
   await a.store.tick(at('09:05'))
-  assertEquals((await a.rows('.tick')).length, 1)
+  await a.holds('.tick', 1)
   assertEquals((await a.rows('.call.source=world')).length, 1)
   assertEquals((await world()).fired.at, iso('09:05'))
   assertEquals((await world()).wake.at, iso('09:10'))
@@ -583,7 +590,7 @@ Deno.test('an idle world advances offline, a missed stretch in one firing', asyn
   // between are one firing, so the command runs once more and not seven
   // times, and the cadence carries on from where the catch-up left it.
   await a.store.tick(at('09:40'))
-  assertEquals((await a.rows('.tick')).length, 2)
+  await a.holds('.tick', 2)
   let calls = await a.rows('.call.source=world&?created')
   assertEquals(calls.length, 2)
   // Each invocation says when it was asked for, so the stretch a firing
@@ -614,7 +621,6 @@ Deno.test('a world with nobody in it stops ticking, and a player arriving wakes 
     a.ask('/apply', [{ entity: { eid: 'bea' }, ...bundle }])
   let owed = async () =>
     ((await a.rows('.eid=world&?wake'))[0].wake as { at: string | null }).at
-  let ticks = async () => (await a.rows('.tick')).length
   // Half-minute instants, which `at` and `iso` do not write.
   let sec = (time: string) => Date.parse(`2026-09-07T${time}Z`)
   let stamp = (time: string) => new Date(sec(time)).toISOString()
@@ -638,13 +644,13 @@ Deno.test('a world with nobody in it stops ticking, and a player arriving wakes 
   assertEquals(await owed(), stamp('09:10:30'))
   // Half an hour nobody ticked through is one firing, on the cadence's phase.
   await a.store.tick(at('09:40'))
-  assertEquals(await ticks(), 3)
+  await a.holds('.tick', 3)
   assertEquals(await owed(), stamp('09:40:30'))
   // Nobody is left: the firing owed goes off, and nothing is owed after it.
   await player({ $delete: true })
   await a.ctx.storage.deleteAlarm()
   await a.store.tick(sec('09:40:30'))
-  assertEquals(await ticks(), 4)
+  await a.holds('.tick', 4)
   assertEquals(await owed(), null)
   assertEquals(await a.ctx.storage.getAlarm(), null)
   assertEquals((await a.store.tick(at('12:00'))).fired, [])

@@ -941,8 +941,10 @@ export class Store {
     // nobody scheduled, one for a call whose wake has fired — and a host
     // handles both. That is the whole of the scheduled case: a page writes a
     // `call` wearing a `wake{at}`, the object comes back at that instant, the
-    // firing makes the second hold, and the answer lands beside the ask. This
-    // store keeps no `effect` rows, so each runs here once the write commits.
+    // firing makes the second hold, and the answer lands beside the ask. Each
+    // is an `effect` row this store's pool works once the write commits
+    // (`#workingEffects`), so the answer follows the write rather than riding
+    // its response.
     let due = (e: { entity: { eid: string } }) =>
       this.#runner().due(e.entity.eid)
     let declared = new Set(effectsIn(vocab.docs).map((e) => e.name))

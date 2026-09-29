@@ -18,8 +18,11 @@ export let buildersPlugin: Plugin = {
       ? []
       : [row]
   }],
+  // Handled wherever the vocabulary declares builders, app or not: an effect
+  // row owed to a handler this store never registers stays pending for good,
+  // and keeps the store's alarm coming back for it.
   effects: [(on, at) => {
-    if (at.meta || !at.app) return
-    on.handle(watches({ vocab: at.graph.vocab }))
+    let { vocab } = at.graph
+    if (vocab.comp('builder')) on.handle(watches({ vocab }))
   }],
 }

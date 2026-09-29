@@ -3,6 +3,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { flat } from '../../apps/vale/terrain.ts'
+import { rows as themes } from '../../apps/vale/themes_fixture.ts'
 import { workerOf } from '../../apps/vale/worker.js'
 import { appStore, storeName } from './directory.ts'
 import { runCommand } from './declared.ts'
@@ -52,6 +53,9 @@ Deno.test('a companion works off-page across pause, restart and retry', async ()
       'notice',
     ]),
   )
+  // The region themes the app's seed gives its store, which its worker reads
+  // before any terrain it grows.
+  await write('/apply', { entities: themes })
   let hero = 'c0000000-0000-4000-8000-000000000003'
   await write('/apply', {
     entities: [{
@@ -79,30 +83,31 @@ Deno.test('a companion works off-page across pause, restart and retry', async ()
             await granted(req, p.env.SESSION_SECRET, name),
             { person: k.app.eid, role: 'editor' },
           )
-          return worker.fetch(req, {
-            APP: {
-              fetch: (path: string, init?: RequestInit) => {
-                if (path == 'ai/run') {
-                  asks++
-                  return Promise.resolve(Response.json({
-                    answers: { tree: { choice: 'tree1' } },
-                  }))
+          let app = {
+            fetch: (path: string, init?: RequestInit) => {
+              if (path == 'ai/run') {
+                asks++
+                return Promise.resolve(Response.json({
+                  answers: { tree: { choice: 'tree1' } },
+                }))
+              }
+              let content = path == 'apply'
+                ? {
+                  ...init,
+                  body: JSON.stringify(
+                    JSON.parse(String(init?.body)).entities,
+                  ),
                 }
-                let content = path == 'apply'
-                  ? {
-                    ...init,
-                    body: JSON.stringify(
-                      JSON.parse(String(init?.body)).entities,
-                    ),
-                  }
-                  : init
-                return door(`/${path}`, content, {
-                  'x-yak-person': k.app.eid,
-                  'x-yak-role': 'editor',
-                })
-              },
+                : init
+              return door(`/${path}`, content, {
+                'x-yak-person': k.app.eid,
+                'x-yak-role': 'editor',
+              })
             },
-          })
+          }
+          // The dispatcher's two doors (dispatch.ts): `STORE` as the caller,
+          // `APP` as the app. A firing's caller is the app, so both are it.
+          return worker.fetch(req, { APP: app, STORE: app })
         },
       }
     },
@@ -118,8 +123,24 @@ Deno.test('a companion works off-page across pause, restart and retry', async ()
   assert(order)
   let eid = order.entity.eid
   let store = p.object(name)
+  // A firing's call runs in the Store's effect pool after the firing commits,
+  // so a tick is read once every call its firings asked for has run.
+  let asked = 0
+  let fire = async () => {
+    let ticked = await store.tick(Date.now())
+    asked += ticked.fired.length
+    for (let i = 0; i < 1000; i++) {
+      let calls = await read(door, `.call.source=${eid}&?execution`)
+      let ran = calls.filter((c: { execution?: { state: string } }) =>
+        c.execution && c.execution.state != 'running'
+      )
+      if (ran.length == asked) return ticked
+      await time.tickAsync(0)
+    }
+    throw new Error(`the ${asked} calls the firings asked for never ran`)
+  }
   time.tick(5_000)
-  let first = await store.tick(Date.now())
+  let first = await fire()
   let [chosen] = await read(door, `.eid=${eid}&?companion`)
   assert(
     chosen.companion,
@@ -152,7 +173,7 @@ Deno.test('a companion works off-page across pause, restart and retry', async ()
       String(id) == name ? { fetch: (req) => store.fetch(req) } : ns.get(id),
   }
   door = appStore(p.env.STORE, k.space, k.app)
-  await store.tick(Date.now())
+  await fire()
   let [paused] = await read(door, `.eid=${eid}&?companion`)
   assertEquals(paused.companion.call, chosen.companion.call)
   await write('/apply', {
@@ -164,7 +185,7 @@ Deno.test('a companion works off-page across pause, restart and retry', async ()
   })
   for (let i = 0; i < 8; i++) {
     time.tick(5_000)
-    await store.tick(Date.now())
+    await fire()
     let [current] = await read(door, `.eid=${eid}&?companion`)
     if (current.companion.status == 'Done') break
   }
