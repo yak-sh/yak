@@ -355,7 +355,7 @@ const monitor = watchMigrations(control, (reason) => {
   // Stop accepting work, drain current callbacks, close the connection, and
   // tell the operator to restart. The monitor does not own those resources.
   console.error(reason.message)
-}, 1000)
+}, 50)
 
 // On a separate, quiescent migrator connection (not inside another transaction):
 await control.run('documents/add-summary-v1', (db) => {
@@ -364,7 +364,7 @@ await control.run('documents/add-summary-v1', (db) => {
     table: 'doc',
     add: { name: 'summary', type: 'text' },
   })
-}, { intervalMs: 1000, marginMs: 100 })
+}, { intervalMs: 50, marginMs: 10 })
 
 monitor.stop() // before closing the application connection
 app.close()

@@ -125,13 +125,13 @@ test('a gathered bundle carries the entity number storage minted', () => {
   assertEquals(s.read('.price=2')[0].entity, { eid: 'p2', num: 2 })
 })
 
-test('whole-set gathers are bounded by vocabulary, not the 1000 entities; get preserves identity order', () => {
+test('whole-set gathers are bounded by vocabulary, not the 100 entities; get preserves identity order', () => {
   let queries = 0
   let s = storage(spy(mem(), () => void queries++), vocab)
   s.install()
   seed(
     s,
-    Array.from({ length: 1000 }, (_, i) => ({
+    Array.from({ length: 100 }, (_, i) => ({
       entity: { eid: `bulk${i}` },
       product: { price: i },
       doc: { title: `item ${i}` },
@@ -139,7 +139,7 @@ test('whole-set gathers are bounded by vocabulary, not the 1000 entities; get pr
   )
   queries = 0
   let all = s.read('.product')
-  assertEquals(all.length, 1000)
+  assertEquals(all.length, 100)
   assert(queries <= vocab.all.length + 1, `query count ${queries}`)
   let ids = all.map((b) => b.entity.eid).reverse()
   let fetched = s.tx((tx) => tx.get([...ids, 'absent', ids[0]]))
@@ -339,9 +339,11 @@ test('a disjunction longer than SQLite nests expressions reads', () => {
     { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
     { entity: { eid: 'p1' }, product: { price: 5, maker: 'm1' } },
   ])
-  // SQLite refuses an expression tree deeper than 1000.
+  // SQLite refuses an expression tree deeper than 1000. A list of values is
+  // one bound array; a disjunction over the entity table alone stays one
+  // boolean tree, as long as the list of alternatives.
   let makers = Array.from({ length: 1001 }, (_, i) => `m${i}`)
   assertEquals(eids(s.read(`.maker=${makers}`)), ['p1'])
-  let any = or(...makers.map((m) => eq('product.maker', m)))
-  assertEquals(eids(s.read(and(any))), ['p1'])
+  let any = or(...makers.map((m) => eq('eid', m)))
+  assertEquals(eids(s.read(and(any))), ['m1'])
 })

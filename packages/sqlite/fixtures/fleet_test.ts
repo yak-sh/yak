@@ -4,7 +4,7 @@ import { BATCH_SIZE, CHAIN, eid, TASKS, workload } from './fleet.ts'
 
 test('throughput workload is deterministic, bounded, and every reference exists', () => {
   let data = workload()
-  assertEquals(data, workload())
+  assertEquals(JSON.stringify(data), JSON.stringify(workload()))
   let ids = new Set(data.bundles.map((b) => b.entity.eid))
   assertEquals(ids.size, data.bundles.length)
   assertEquals(ids.size, 1 + TASKS + TASKS + TASKS - TASKS / CHAIN)

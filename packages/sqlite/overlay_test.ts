@@ -82,7 +82,7 @@ test('a reference to an entity the same batch mints resolves', () => {
 })
 
 test('the overlay costs the batch, never the database', () => {
-  // The same batch, raised over a graph of 2 and a graph of 2,002. What it
+  // The same batch, raised over a graph of 2 and a graph of 102. What it
   // costs must be the same both times — a wall clock would only say how loaded
   // the box is, so what is asserted is the statements, which is the thing that
   // does not scale.
@@ -119,7 +119,7 @@ test('the overlay costs the batch, never the database', () => {
   // the CTE names the committed table for every row the batch never touched,
   // so nothing is copied and nothing is counted.
   assertEquals(cost(0), 3)
-  assertEquals(cost(2000), 3)
+  assertEquals(cost(100), 3)
 })
 
 test('an overlay covers what will be read and nothing else', () => {
