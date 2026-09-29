@@ -3176,7 +3176,7 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, store } = await ownsApp(ctx, args)
+      let { space, store } = await ownsApp(ctx, args)
       let seq = args.seq == null ? undefined : Number(args.seq)
       if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
         throw refuse('arguments', 'seq must be a positive integer')
