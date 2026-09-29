@@ -107,9 +107,16 @@ let pattern = (query: And): Pattern => {
   let binds: Bind[] = []
   let clauses = d.filter.clauses.filter((c) => {
     if (c.kind != 'pred') return true
-    let name = variable((c as Pred).value)
+    let { path, op, value } = c as Pred
+    let name = variable(value)
     if (!name) return true
-    binds.push({ path: (c as Pred).path, name })
+    // A variable is a slot two places share, so it joins on `=` alone:
+    // `.at<$now` would otherwise read as `.at=$now`.
+    if (op != '=') {
+      let written = `${path.join('.')}${op}$${name}`
+      throw new Error(`a variable joins on =, not ${op}: ${written}`)
+    }
+    binds.push({ path, name })
     return false
   })
   if (d.vars.length > 1) {

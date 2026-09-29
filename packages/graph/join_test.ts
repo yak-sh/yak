@@ -70,6 +70,15 @@ test('a pattern names one entity', () => {
   assertThrows(() => match('$a $b .call'), Error, 'names one entity')
 })
 
+test('a variable joins on equality alone', () => {
+  assertThrows(() => match('$c .call; .result, result.call<$c'), Error, 'not <')
+  assertThrows(
+    () => match('$c .call; .result, result.call!=$c'),
+    Error,
+    'not !=',
+  )
+})
+
 test('a rule needs a pattern', () => {
   assertThrows(() => match('  ;  '), Error, 'needs a pattern')
 })
