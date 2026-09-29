@@ -65,6 +65,11 @@ export let keepable = (tags: string[]) => ({
 // Metadata and access are decided by the gateway, outside this cache.
 export let immutable = { 'cache-control': `public, max-age=${YEAR}, immutable` }
 
+// A browser may keep the exact asset it fetched, while a shared cache must
+// never retain the app gateway's response for a person. The inner Files entry
+// still caches the tenant-keyed bytes under `immutable` above.
+export let browserImmutable = `private, max-age=${YEAR}, immutable`
+
 // The address the gateway asks the inner entrypoint at, and therefore the
 // cache key. The hostname is a placeholder that never resolves — the request
 // goes over the service binding, not the network — and everything that

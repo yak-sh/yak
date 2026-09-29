@@ -18,6 +18,7 @@
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
 import { blobAt, immutable, keepable, purge, tagsOf } from './cache.ts'
+import { releaseFiles } from './release.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { BUILT } from './versions.ts'
@@ -147,7 +148,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let keep = keepable(tagsOf(eid))
   let prefix = req.headers.get(PREFIX)
   if (!prefix || !eid) return missing(keep)
-  let blobs = r2Objects(env.BLOBS)
+  let blobs = releaseFiles(r2Objects(env.BLOBS))
   // One read, not a stat and then a read (T-33176): the bucket is a round trip
   // away, and asking whether the file is there before asking for it paid that
   // trip twice for every file the app serves.

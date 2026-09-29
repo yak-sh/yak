@@ -28,7 +28,8 @@
 import { apex, spaceHost, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
-import { at as cachedAt } from './cache.ts'
+import { at as cachedAt, browserImmutable } from './cache.ts'
+import { assetPath, assetUrl, releaseId } from './asset_url.ts'
 import * as files from './files.ts'
 import { keyed, PREFIX, prefixOf, VERSION } from './files.ts'
 import { blobPrefix } from './blob-key.ts'
@@ -135,7 +136,13 @@ type Html = { html: boolean }
 type Rewriter = {
   on(
     selector: string,
-    handlers: { element(el: { prepend(s: string, o: Html): void }): void },
+    handlers: {
+      element(el: {
+        getAttribute(name: string): string | null
+        setAttribute(name: string, value: string): void
+        prepend(s: string, o: Html): void
+      }): void
+    },
   ): Rewriter
   onDocument(
     handlers: { end(end: { append(s: string, o: Html): void }): void },
@@ -241,6 +248,53 @@ let reported = (at: string, page: Response) => {
     .on('body', { element: (el) => once((s, o) => el.prepend(s, o)) })
     .onDocument({ end: (end) => once((s, o) => end.append(s, o)) })
     .transform(page)
+}
+
+// A page stays mutable, but its local static files belong to its immutable
+// release. CSS URLs and module imports then resolve below the same release
+// address without rewriting their contents. Authenticated API calls and page
+// navigation keep their ordinary addresses.
+let released = (
+  page: Response,
+  html: string,
+  at: string,
+  bare: string,
+  source: string | null | undefined,
+) => {
+  let id = releaseId(source)
+  if (!id || /<base[\s>][^>]*\bhref\b/i.test(html)) return page
+  let rewrite = new HTMLRewriter()
+  let skip = (path: string) =>
+    path == `${BUILD}.js` || PLATFORM_PATHS.some((p) => covers(p, path))
+  let move = (attr: string) => ({
+    element: (el: {
+      getAttribute(name: string): string | null
+      setAttribute(name: string, value: string): void
+    }) => {
+      let ref = el.getAttribute(attr)
+      if (!ref) return
+      let next = assetUrl(ref, at, bare, id, skip)
+      if (next != ref) el.setAttribute(attr, next)
+    },
+  })
+  rewrite.on('script[src]', move('src'))
+  rewrite.on('img[src]', move('src'))
+  rewrite.on('audio[src]', move('src'))
+  rewrite.on('video[src]', move('src'))
+  rewrite.on('video[poster]', move('poster'))
+  rewrite.on('source[src]', move('src'))
+  rewrite.on('link[href]', {
+    element: (el) => {
+      let rel = (el.getAttribute('rel') ?? '').split(/\s+/)
+      let as = el.getAttribute('as') ?? ''
+      if (
+        rel.includes('stylesheet') || rel.includes('modulepreload') ||
+        (rel.includes('preload') &&
+          ['style', 'script', 'font', 'image', 'audio', 'video'].includes(as))
+      ) move('href').element(el)
+    },
+  })
+  return rewrite.transform(page)
 }
 
 // Where the parser will read a tag the kernel weaves in: inside the head if
@@ -418,7 +472,8 @@ let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 // person reading them, which is the whole of the rule: a private app's bytes
 // belong to its members and to no proxy.
 //
-// The validator is the content: the same bytes may serve in two releases.
+// A file's validator is its content. HTML also names the release whose asset
+// URLs are woven into it, even when the authored HTML bytes stayed the same.
 let keeping = (app: App) =>
   `${app.access == null || app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
@@ -427,12 +482,19 @@ let keeping = (app: App) =>
 // because an HTML page is served with a `<base href>` woven in: the same
 // bytes at `/` and at `/recipes/` are two different documents.
 //
-// The bytes' version arrives from files.ts (`VERSION`), so a warm request
-// hashes only the mount, which is a handful of characters.
-let etagOf = async (version: string, at: string, html: boolean) =>
+// The bytes' version arrives from files.ts (`VERSION`). An HTML response also
+// names its mount and release: the same HTML bytes can point at a new CSS or
+// script release, and must not answer a conditional request with 304 then.
+let etagOf = async (
+  version: string,
+  at: string,
+  html: boolean,
+  source = '',
+) =>
   html
     ? `W/"${version}${
-      (await sha256(new TextEncoder().encode(at))).slice(0, 8)
+      (await sha256(new TextEncoder().encode(`${at}\0${source}\0assets-v1`)))
+        .slice(0, 8)
     }"`
     : `"${version}"`
 
@@ -456,8 +518,9 @@ let bytes = (
   path: string,
   range?: string | null,
   method = 'GET',
+  source = app.source ?? '',
 ) => {
-  let req = new Request(cachedAt(app.eid, path, app.source ?? ''), {
+  let req = new Request(cachedAt(app.eid, path, source), {
     method,
     headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
   })
@@ -467,6 +530,43 @@ let bytes = (
   return range || method == 'HEAD'
     ? files.fetch(req, env)
     : bound(env.FILES, files.fetch, env).fetch(req)
+}
+
+let media = async (
+  req: Request,
+  got: Response,
+  cache: string,
+  at: string,
+  whole: () => Promise<Response>,
+) => {
+  let type = got.headers.get('content-type') ?? 'application/octet-stream'
+  let etag = await etagOf(got.headers.get(VERSION) ?? '', at, false)
+  let headers = { 'content-type': type, 'cache-control': cache, etag }
+  if (unchanged(req, etag)) {
+    await got.body?.cancel()
+    return new Response(null, { status: 304, headers })
+  }
+  let ifRange = req.headers.get('if-range')
+  if (got.status != 200 && ifRange && ifRange != etag) {
+    await got.body?.cancel()
+    got = await whole()
+    if (got.status != 200) return null
+    type = got.headers.get('content-type') ?? type
+    etag = await etagOf(got.headers.get(VERSION) ?? '', at, false)
+    headers = { 'content-type': type, 'cache-control': cache, etag }
+  }
+  let length = got.headers.get('content-length')
+  return new Response(got.status == 416 ? null : got.body, {
+    status: got.status,
+    headers: {
+      ...headers,
+      'accept-ranges': 'bytes',
+      ...(length ? { 'content-length': length } : {}),
+      ...(got.headers.has('content-range')
+        ? { 'content-range': got.headers.get('content-range')! }
+        : {}),
+    },
+  })
 }
 
 // The two addresses the kernel answers for an app that wrote neither file
@@ -546,44 +646,44 @@ let asset = async (
   // `stored`), which the bytes' tag knows nothing of, and carries a token for
   // them: it is sent whole every time, and no cache on the way may keep it.
   if (sandbox && html) {
-    let own = pinned(at, await got.text(), app)
+    let original = await got.text()
+    let own = pinned(at, original, app)
     return reported(
       at,
-      new Response(based(at, intoHead(own, await sandbox())), {
-        headers: { 'content-type': type, 'cache-control': 'private, no-store' },
-      }),
+      released(
+        new Response(based(at, intoHead(own, await sandbox())), {
+          headers: {
+            'content-type': type,
+            'cache-control': 'private, no-store',
+          },
+        }),
+        original,
+        at,
+        bare,
+        app.source,
+      ),
     )
   }
-  let etag = await etagOf(got.headers.get(VERSION) ?? '', at, html)
+  if (!html) {
+    return await media(
+      req,
+      got,
+      keeping(app),
+      at,
+      () => bytes(env, app, prefix, path),
+    ) ?? nothingHere(env)
+  }
+  let etag = await etagOf(
+    got.headers.get(VERSION) ?? '',
+    at,
+    true,
+    app.source ?? '',
+  )
   let headers = { 'content-type': type, 'cache-control': keeping(app), etag }
   // The browser already has these bytes, so it is told so and sent none.
   if (unchanged(req, etag)) {
     await got.body?.cancel()
     return new Response(null, { status: 304, headers })
-  }
-  if (!html) {
-    let ifRange = req.headers.get('if-range')
-    if (got.status != 200 && ifRange && ifRange != etag) {
-      await got.body?.cancel()
-      got = await bytes(env, app, prefix, path)
-      if (got.status != 200) return nothingHere(env)
-      type = got.headers.get('content-type') ?? type
-      etag = await etagOf(got.headers.get(VERSION) ?? '', at, false)
-      headers = { 'content-type': type, 'cache-control': keeping(app), etag }
-    }
-    let length = got.headers.get('content-length')
-    let media = {
-      ...headers,
-      'accept-ranges': 'bytes',
-      ...(length ? { 'content-length': length } : {}),
-      ...(got.headers.has('content-range')
-        ? { 'content-range': got.headers.get('content-range')! }
-        : {}),
-    }
-    return new Response(got.status == 416 ? null : got.body, {
-      status: got.status,
-      headers: media,
-    })
   }
   if (req.method == 'HEAD') {
     await got.body?.cancel()
@@ -593,8 +693,41 @@ let asset = async (
   // and the reporter after it. The weaving is done here rather than behind the
   // cache because the same file is a different document at each mount, and one
   // cached copy of the bytes serving every mount beats one copy per mount.
-  let page = based(at, pinned(at, await got.text(), app))
-  return reported(at, new Response(page, { headers }))
+  let original = await got.text()
+  let page = based(at, pinned(at, original, app))
+  return reported(
+    at,
+    released(new Response(page, { headers }), original, at, bare, app.source),
+  )
+}
+
+let versionedAsset = async (
+  req: Request,
+  env: Env,
+  app: App,
+  source: string,
+  path: string,
+) => {
+  if (inside(keyed(source, path).slice(source.length))) {
+    return json(404, 'no_such_file')
+  }
+  let range = req.method == 'GET' ? req.headers.get('range') : null
+  let got = await bytes(env, app, source, path, range, req.method, source)
+  if (![200, 206, 416].includes(got.status)) {
+    await got.body?.cancel()
+    return json(404, 'no_such_file')
+  }
+  if ((got.headers.get('content-type') ?? '').startsWith('text/html')) {
+    await got.body?.cancel()
+    return json(404, 'no_such_file')
+  }
+  return await media(
+    req,
+    got,
+    browserImmutable,
+    '',
+    () => bytes(env, app, source, path, null, 'GET', source),
+  ) ?? json(404, 'no_such_file')
 }
 
 // Where the browser sends what it notices on its own: the app's own report
@@ -1112,6 +1245,7 @@ export let acting = (env: Env, space: Space, app: App, who: Who) => {
 let api = async (
   req: Request,
   env: Env,
+  dir: ReturnType<typeof directory>,
   space: Space,
   app: App,
   path: string,
@@ -1156,6 +1290,18 @@ let api = async (
     )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
+  let versioned = assetPath(path)
+  if (versioned) {
+    if (req.method != 'GET' && req.method != 'HEAD') {
+      return json(405, 'method_not_allowed')
+    }
+    if (!mayRead) return refused('not_a_reader')
+    let source = `${space.slug}/.releases/${app.eid}/${versioned.release}`
+    if (source != app.source && !await dir.released(app, source)) {
+      return json(404, 'no_such_file')
+    }
+    return versionedAsset(req, env, app, source, versioned.path)
+  }
   if (path == '/commands') {
     if (req.method != 'GET') return json(405, 'method_not_allowed')
     if (!mayRead) return refused('not_a_reader')
@@ -2137,7 +2283,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     return wall(reporting(
       await c.time(
         'api',
-        () => api(req, env, space!, app!, path.slice(4), who),
+        () => api(req, env, dir, space!, app!, path.slice(4), who),
       ),
       req,
       at,

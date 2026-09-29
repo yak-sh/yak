@@ -69,6 +69,15 @@ pinned to the bytes this fetch got. The content type the app serves it as comes
 from the path's extension, not from the response — name it `.js` and it is
 javascript.
 
+After `app_deploy`, local scripts, stylesheets, images, audio and video named by
+the page use a URL under `./api/assets/<release>/`. Relative URLs inside
+stylesheets and module scripts stay in that release too. Those URLs keep the
+same bytes even after another deploy or a rollback, so a browser may keep them
+for a year. The page itself, app data, and the ordinary file addresses still
+revalidate; they show the current release. A page with its own `<base>` keeps
+its chosen URL behavior. App access is checked whenever a request reaches the
+server, including a request for an older release.
+
 ## Every write keeps what it replaced
 
 **No write and no delete throws bytes away.** Before anything lands at a path,
@@ -178,8 +187,10 @@ same object, and the same row — so a page need not remember what it has sent; 
 may send again and read what comes back.
 
 **The bytes at an address can never change.** The mime and filename can change
-if the file is uploaded again, so `GET ./api/blob/<eid>` uses
-`cache-control: public, no-cache` and an ETag that changes with those fields.
+if the file is uploaded again, so `GET ./api/blob/<eid>` redirects to a URL that
+also names that representation. The alias revalidates, and the versioned URL
+keeps its MIME and filename. An app checks access before serving either URL; its
+browser responses are private to that browser's cache.
 
 **The address is not a secret.** Anyone who may read the app may read any blob
 in it, and someone holding the identical file can compute its eid without
