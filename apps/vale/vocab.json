@@ -782,12 +782,17 @@
     },
     "teleport": {
       "tool": true,
-      "description": "Teleport a Mossvale hero to a named land or exact world coordinates. Only the app owner may do this. The hero moves now if their game page is open, or when they next play. Pass either level (such as tombsands) or both x and z in world metres. Coordinates must be inside a known land and walkable.",
+      "floor": "owner",
+      "description": "Teleport a Mossvale hero to a land, exact coordinates, or any entity with a live position. Only the app owner may do this. The hero moves now if their game page is open, or when they next play. Pass a land id or name as level, both x and z in world metres, or an entity eid or current name as to. A bare /teleport destination also accepts a land or entity name. Entity destinations require a live position; coordinates must be inside a known land and walkable.",
       "input": {
         "player": { "type": "string", "description": "The hero's eid." },
         "level": {
           "type": "string",
-          "description": "A land id, such as tombsands."
+          "description": "A land id or name, such as tombsands or Cinderreach; a bare /teleport name may also name an entity."
+        },
+        "to": {
+          "type": "string",
+          "description": "An entity eid or current name to teleport to. The entity must have a live position."
         },
         "x": {
           "type": "number",
@@ -800,6 +805,19 @@
       },
       "required": ["player"],
       "worker": "/teleport"
+    },
+    "where": {
+      "tool": true,
+      "readOnly": true,
+      "description": "Show the selected Mossvale hero's land and world coordinates. A live position is shown while their game connection is active; otherwise the last saved position is shown. The app owner can locate any hero; other people can locate their own hero.",
+      "input": {
+        "player": {
+          "type": "string",
+          "description": "The hero's eid. A game page supplies its selected hero."
+        }
+      },
+      "required": ["player"],
+      "worker": "/where"
     },
     "gather_wood": {
       "tool": true,

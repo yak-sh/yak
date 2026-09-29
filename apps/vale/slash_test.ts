@@ -10,8 +10,17 @@ Deno.test('slash adapts declared app commands and leaves chat alone', () => {
   assertEquals(slash('/damage off'), {
     command: { name: 'damage', args: { on: false } },
   })
+  assertEquals(slash('/where'), {
+    command: { name: 'where', args: {} },
+  })
   assertEquals(slash('/teleport tombsands'), {
     command: { name: 'teleport', args: { level: 'tombsands' } },
+  })
+  assertEquals(slash('/teleport to=01234567-89ab-cdef-0123-456789abcdef'), {
+    command: {
+      name: 'teleport',
+      args: { to: '01234567-89ab-cdef-0123-456789abcdef' },
+    },
   })
   assertEquals(slash('/teleport x=-1152 z=624'), {
     command: { name: 'teleport', args: { x: -1152, z: 624 } },

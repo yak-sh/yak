@@ -25,7 +25,9 @@ import { type Life, lifeOf } from './lives.ts'
 import { LEVELS, type Spot } from './levels.ts'
 import type { Vec } from './mesh.ts'
 import { type Giver, GIVERS, type Quest } from './quests.ts'
-import { hashOf, stream, uuidOf } from './rand.ts'
+import { hashOf, stream } from './rand.ts'
+import { eidOf } from './villager-id.ts'
+export { eidOf }
 import { originOf, spotOf } from './regions.ts'
 import { fits, floorAt } from './sim.ts'
 import { groundAt, type Vale } from './terrain.ts'
@@ -57,9 +59,6 @@ let SPEED = 1.2
 
 /** How long a villager follows one choice before their daily rhythm returns. */
 let STAY = 4 * 60_000
-
-/** A villager's row, by their giver id: the same on every page. */
-export let eidOf = (id: string): string => uuidOf(`villager/${id}`)
 
 /** Pip notices a hero's first visit and the first time their mark appears. */
 export let greeting = (

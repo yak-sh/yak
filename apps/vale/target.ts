@@ -4,7 +4,7 @@ import type { Bundle } from './net.ts'
 import { comp } from './bundle.ts'
 import { LEVELS } from './levels.ts'
 import { GIVERS } from './quests.ts'
-import { eidOf } from './villagers.ts'
+import { eidOf } from './villager-id.ts'
 
 export type Target = { level: string } | { eid: string }
 export type Query = (line: string) => Promise<Bundle[]>

@@ -4,13 +4,19 @@ import { companionTick } from './companion-tick.ts'
 import { LODES } from './gather.ts'
 import { destinationOf } from './teleport.ts'
 import { vale } from './terrain.ts'
+import { placeOf, placeText } from './place.ts'
+import { resolveTarget } from './target.ts'
 
-let query = async (env, line) => {
-  let search = line.split('&').map(encodeURIComponent).join('&')
-  let res = await env.APP.fetch(`query?${search}`)
+let read = async (door, line, live = false) => {
+  let search = live
+    ? `live=1&q=${encodeURIComponent(line)}`
+    : `q=${encodeURIComponent(line)}`
+  let res = await door.fetch(`query?${search}`)
   if (!res.ok) throw new Error(`store query ${res.status}: ${await res.text()}`)
   return await res.json()
 }
+let query = (env, line) => read(env.APP, line)
+let live = (env, line) => read(env.STORE, line, true)
 
 let apply = async (env, rows) => {
   if (!rows.length) return
@@ -96,6 +102,39 @@ let tick = async (req, env, v) => {
   return Response.json({ wrote: rows.length })
 }
 
+let where = async (req, env) => {
+  let args = await req.json().catch(() => null)
+  let player = args?.player
+  if (typeof player != 'string' || !player) {
+    return new Response('Pass a hero.', { status: 400 })
+  }
+  let [hero] = await read(
+    env.STORE,
+    `.eid=${JSON.stringify(player)}&.player&?created&?seen`,
+  )
+  if (!hero) return new Response('No hero has that id.', { status: 404 })
+  let owner = req.headers.get('x-yak-role') == 'owner'
+  let person = req.headers.get('x-yak-person')
+  if (!owner && (!person || hero.created?.by != person)) {
+    return new Response('You can only locate your own hero.', { status: 403 })
+  }
+  let [current] = await live(
+    env,
+    `.eid=${JSON.stringify(player)}&.position`,
+  )
+  let place = placeOf(current, 'position')
+  let source = 'live'
+  if (!place) {
+    place = placeOf(hero, 'seen')
+    source = 'saved'
+  }
+  return new Response(
+    place
+      ? `Hero ${player}: ${placeText(place, source)}`
+      : `Hero ${player} has no known position yet.`,
+  )
+}
+
 let teleport = async (req, env, v) => {
   if (req.headers.get('x-yak-role') != 'owner') {
     return new Response('Only the app owner can teleport a hero.', {
@@ -106,23 +145,54 @@ let teleport = async (req, env, v) => {
   let player = args?.player
   let named = typeof args?.level == 'string'
   let point = args?.x !== undefined || args?.z !== undefined
-  if (typeof player != 'string' || named == point) {
-    return new Response('Pass a hero and either a land or both x and z.', {
-      status: 400,
-    })
+  let toward = typeof args?.to == 'string'
+  if (
+    typeof player != 'string' || !player ||
+    Number(named) + Number(point) + Number(toward) != 1
+  ) {
+    return new Response(
+      'Pass a hero and one destination: a land, x and z, or to=entity.',
+      { status: 400 },
+    )
   }
-  let target = named ? { level: args.level } : { x: args.x, z: args.z }
   let at
   try {
-    at = destinationOf(v, target)
+    if (point) {
+      at = destinationOf(v, { x: args.x, z: args.z })
+    } else {
+      let to = await resolveTarget(
+        named ? args.level : args.to,
+        (line) => read(env.STORE, line),
+      )
+      if (!to) {
+        return new Response('No land or entity has that name.', {
+          status: 404,
+        })
+      }
+      if ('level' in to) {
+        at = destinationOf(v, to)
+      } else {
+        let [row] = await live(
+          env,
+          `.eid=${JSON.stringify(to.eid)}&.position`,
+        )
+        let place = placeOf(row, 'position')
+        if (!place) {
+          return new Response('That entity has no live position.', {
+            status: 404,
+          })
+        }
+        at = destinationOf(v, { x: place.x, z: place.z })
+      }
+    }
   } catch (e) {
     return new Response(e.message, { status: 400 })
   }
-  let found = await env.STORE.fetch(
-    `query?${encodeURIComponent(`.eid=${JSON.stringify(player)}`)}&.player`,
+  let found = await read(
+    env.STORE,
+    `.eid=${JSON.stringify(player)}&.player`,
   )
-  if (!found.ok) return found
-  if (!(await found.json()).length) {
+  if (!found.length) {
     return new Response('No hero has that id.', { status: 404 })
   }
   let request = crypto.randomUUID()
@@ -149,6 +219,9 @@ export let workerOf = (v) => ({
     }
     if (req.method == 'POST' && path.endsWith('/teleport')) {
       return teleport(req, env, v)
+    }
+    if (req.method == 'POST' && path.endsWith('/where')) {
+      return where(req, env)
     }
     return new Response('Not found', { status: 404 })
   },
