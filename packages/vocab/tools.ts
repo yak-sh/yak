@@ -279,9 +279,18 @@ export let toolsSaid = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
   return out
 }
 
+// A document is checked once however many graphs load it, and its argument
+// schemas stay the same objects, so each one's check compiles once.
+let checked = new WeakMap<object, ToolDefinition[]>()
+
 /** The tool declarations one or more vocab documents carry, checked: every
  * entry {@link toolsSaid} read, put through {@link toolDefinition} — the
  * meta-schema, the dialect of each argument schema, and the options naming
- * properties that exist. */
-export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] =>
-  toolsSaid(input).map((said) => toolDefinition(said))
+ * properties that exist. The same input answers the same definitions. */
+export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
+  let kept = checked.get(input)
+  if (kept) return kept
+  let defs = toolsSaid(input).map((said) => toolDefinition(said))
+  checked.set(input, defs)
+  return defs
+}
