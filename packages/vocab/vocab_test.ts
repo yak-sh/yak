@@ -88,6 +88,23 @@ Deno.test('bare props route to their home', () => {
   assertThrows(() => v.route('nonsense'), Error, 'unknown prop')
 })
 
+Deno.test('a `_` component’s properties are reached qualified only', () => {
+  let v = loadVocab({
+    $defs: {
+      _comp: {
+        component: true,
+        properties: { name: { type: 'string' }, kind: { type: 'boolean' } },
+      },
+      _prop: { component: true, properties: { type: { type: 'string' } } },
+      recipe: { component: true, properties: { name: { type: 'string' } } },
+    },
+  })
+  assertEquals(v.route('name'), { comp: 'recipe', prop: 'name' })
+  assertThrows(() => v.route('type'), Unknown)
+  assertEquals(v.route('_comp'), { comp: '_comp', prop: '' })
+  assertEquals(v.aim('_comp.kind'), [{ comp: '_comp', prop: 'kind' }])
+})
+
 Deno.test('dotted paths aim to hops', () => {
   assertEquals(v.aim('comment.target.doc.title'), [
     { comp: 'comment', prop: 'target' },

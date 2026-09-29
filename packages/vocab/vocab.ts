@@ -666,10 +666,13 @@ export let loadVocab = (
 
   // Reverse index: a bare prop to the components that declare it. A property
   // (or whole component) marked `bare: false` never claims a bare name — it is
-  // reached qualified only — so it stays out of this index entirely.
+  // reached qualified only — so it stays out of this index entirely. So does
+  // every property of a component whose name starts with `_`: those describe
+  // the vocabulary itself (`_prop.name`, `_prop.type`, ./bundles.ts), and a
+  // `name` or a `type` in a query means the application's own.
   let owners = new Map<string, string[]>()
   for (let [comp, ps] of routes) {
-    if (defs[comp].bare === false) continue
+    if (defs[comp].bare === false || comp.startsWith('_')) continue
     for (let p of ps) {
       if (props(comp)[p].bare === false) continue
       owners.set(p, [...(owners.get(p) ?? []), comp])
