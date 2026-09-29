@@ -85,6 +85,8 @@ let levelOf = new Map(GIVERS.map((g) => [g.id, g.level]))
  * the board stands.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * import { GIVERS, QUESTS } from './quests.ts'
  * import { questsOf } from './rules.ts'

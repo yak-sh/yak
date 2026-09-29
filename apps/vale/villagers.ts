@@ -355,6 +355,8 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  * hundred tokens, however long they have lived.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertStringIncludes } from '@std/assert'
  * import { GIVERS } from './quests.ts'
  * let wren = GIVERS.find((g) => g.id == 'wren')!
@@ -506,6 +508,8 @@ export type Fall = { by: string; kind: string; at: number }
  * first, since `since`.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let falls = [
  *   { by: 'Tansy', kind: 'slime', at: 5 },

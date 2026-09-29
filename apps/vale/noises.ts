@@ -78,6 +78,8 @@ let WATERS: [string, 'water' | 'marsh' | 'surf'][] = [
  * since the last.
  *
  * ```ts
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * seedBeasts()
  * import { assertEquals } from '@std/assert'
  * let body = (x: number, gait = 'walk') =>
  *   ({ x, y: 5, z: 0, vy: 0, yaw: 0, speed: 3, gait })
