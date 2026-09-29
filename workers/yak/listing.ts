@@ -34,9 +34,18 @@ export let KERNEL = ['exception', 'error']
 // reads that through the same listing. So a person is screened out of the
 // question, which only a page's doors ask, and never out of an answer.
 //
-// And the models a store may ask (models.ts `catalogued`): planted in every
-// app's store by the platform, and saved by nobody.
-export let PLATFORM = [...KERNEL, 'person', 'provider', 'model', 'serves']
+// And the models a store may ask (models.ts `catalogued`) and the commands it
+// answers (graph.ts `#planting`: the app's manifest, and the platform's own
+// `builder_model`): planted in every app's store by the platform, and saved by
+// nobody.
+export let PLATFORM = [
+  ...KERNEL,
+  'person',
+  'provider',
+  'model',
+  'serves',
+  'tool',
+]
 
 export type Row = Record<string, unknown>
 
