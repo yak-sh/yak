@@ -1,0 +1,847 @@
+[
+  {
+    "entity": {
+      "eid": "870c334b-0a64-8f54-8671-1ecd5ad508ce"
+    },
+    "character": {
+      "story": "She once failed to bring a traveller home before nightfall. Since then she keeps track of every road and waits up for those still on it.",
+      "traits": [
+        "watchful",
+        "patient",
+        "quietly generous"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "744b934d-ac04-8713-88f3-539fce751517"
+    },
+    "character": {
+      "story": "Pip lost a welcome note three times, then made a place where nobody could lose it. They hope every newcomer finds the fire.",
+      "traits": [
+        "eager",
+        "forgetful",
+        "inventive"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "838e5f82-a0d1-86ca-b8d4-dc4f60a0462a"
+    },
+    "character": {
+      "story": "A blade Rowan rushed to finish once cracked on the road. Now every piece leaves the forge only after a second inspection.",
+      "traits": [
+        "exacting",
+        "proud",
+        "slow to trust praise"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "6226f363-a863-845a-9507-152a6127f848"
+    },
+    "character": {
+      "story": "Elsie learned to mend coats by repairing one that passed from traveller to traveller. She remembers people by the wear on their sleeves.",
+      "traits": [
+        "observant",
+        "gentle",
+        "dryly funny"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "ba19dfcf-0657-821c-8da3-7cfa2fffe00f"
+    },
+    "character": {
+      "story": "Juniper rebuilt a bridge after a flood and still checks its joints whenever rain comes. They prefer showing a craft to boasting of it.",
+      "traits": [
+        "practical",
+        "steady",
+        "modest"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "9420545c-f7d1-8141-a836-4816fc146b7a"
+    },
+    "character": {
+      "story": "Maren first studied herbs when an old neighbour fell ill far from any healer. She labels every jar so nobody has to guess in a hurry.",
+      "traits": [
+        "careful",
+        "compassionate",
+        "inquisitive"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "474939e8-5cac-8f93-9b26-e784a775f71c"
+    },
+    "character": {
+      "story": "Alder keeps an extra seat at his table for Wren, who rarely visits. He settles quarrels over supper before they reach the road.",
+      "traits": [
+        "hospitable",
+        "diplomatic",
+        "a little lonely"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "4f4eae89-a022-8211-a7b0-defe3bbb829a"
+    },
+    "character": {
+      "story": "Sorrel learned the herbs of the mere from her grandmother and still tests every new remedy on herself first.",
+      "traits": [
+        "blunt",
+        "curious",
+        "protective"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "b062e95f-3971-8420-a2d5-253dba63d3ed"
+    },
+    "character": {
+      "story": "Mira spent a summer searching the bottom of the mere for a lost keepsake. She found something else and never speaks of it at once.",
+      "traits": [
+        "reserved",
+        "perceptive",
+        "stubborn"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "a6fb952a-457e-8c7a-b985-471fda37c222"
+    },
+    "character": {
+      "story": "Fenn knows each sheep by its call. The one he rescued from a storm follows him even when the flock is safe.",
+      "traits": [
+        "soft-spoken",
+        "loyal",
+        "wary of storms"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "13285160-1a5f-8d79-b3f5-804724e16545"
+    },
+    "character": {
+      "story": "Hazel once felled the wrong tree and planted ten in apology. She marks the old trunks before lifting her axe now.",
+      "traits": [
+        "direct",
+        "conscientious",
+        "restless"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "eee54e43-5e19-85f3-9f91-8f021d3d05e8"
+    },
+    "character": {
+      "story": "Mab moved a wild hive out of a farmer’s roof by hand. She believes most trouble settles when given enough space.",
+      "traits": [
+        "calm",
+        "firm",
+        "fond of small creatures"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "76567b57-12e8-8cf4-8249-cf084ad01c36"
+    },
+    "character": {
+      "story": "Oriel learned the quiet of Fernwood can mean danger. She walks its paths at dawn so other people can sleep.",
+      "traits": [
+        "vigilant",
+        "skeptical",
+        "devoted"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "cdb8e7d2-d062-8bd2-a798-15fb6ffc1420"
+    },
+    "character": {
+      "story": "Bryony keeps a map of good foraging spots, but shares it only with people who leave enough behind for the forest.",
+      "traits": [
+        "cheerful",
+        "shrewd",
+        "protective of the woods"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "f21b543b-4777-8a96-b1e4-eeb707b868b9"
+    },
+    "character": {
+      "story": "Hollis watched one stand of saplings grow into shelter for a whole path. He measures time by trees, not seasons.",
+      "traits": [
+        "reflective",
+        "patient",
+        "slow to anger"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "5febbb5a-c880-8494-9dd5-914b68c5733a"
+    },
+    "character": {
+      "story": "Ysolde has tended the Elder Heart since it first faltered under her watch. Every new leaf feels like a promise she must keep.",
+      "traits": [
+        "solemn",
+        "hopeful",
+        "unyielding"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "8f75556f-0eef-8fcf-b761-18e8c95a1a01"
+    },
+    "character": {
+      "story": "Hake learned trapping from a father who always set one more snare than needed. He now releases what his neighbours cannot use.",
+      "traits": [
+        "laconic",
+        "resourceful",
+        "fair"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "279fd7c3-389b-8b89-b237-80fb0230d34d"
+    },
+    "character": {
+      "story": "Brenna opened the Den fire to a stranger on a bitter night and found a friend. She keeps it lit for the next one.",
+      "traits": [
+        "fierce",
+        "welcoming",
+        "loyal"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "f5ac2fff-985a-8e04-a61d-261982f8dc3f"
+    },
+    "character": {
+      "story": "Nell helped raise the stilt boards after the last deep flood. She still tests each plank before letting visitors cross.",
+      "traits": [
+        "cautious",
+        "capable",
+        "warm once known"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "fcacc37b-36b2-8756-bfc6-48a136cb2628"
+    },
+    "character": {
+      "story": "Wade cuts reeds where his family has cut them for generations. He can tell the season by their sound in the wind.",
+      "traits": [
+        "methodical",
+        "proud of his trade",
+        "dryly humorous"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "ce9a6caa-b621-8655-867f-bb467e8c4bc8"
+    },
+    "character": {
+      "story": "Tamsin once fished with a friend who no longer comes to the bank. She keeps a second place beside her all the same.",
+      "traits": [
+        "quiet",
+        "kind",
+        "wistful"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "898d7eea-c580-8801-8025-33348d6a728e"
+    },
+    "character": {
+      "story": "Sedge has spent years retrieving things the mire swallowed. He knows that asking who lost them is sometimes unkind.",
+      "traits": [
+        "guarded",
+        "patient",
+        "unexpectedly tender"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "68ff4ec5-3c58-82f5-9ef2-84571e995df4"
+    },
+    "character": {
+      "story": "Maud dug drains when Fenhollow nearly drowned. She reads every stone as a clue to where water will go next.",
+      "traits": [
+        "tenacious",
+        "plainspoken",
+        "proud"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "65b50cfa-cd53-8e9c-a088-e9217a447b87"
+    },
+    "character": {
+      "story": "Tobin rings the kirk bell for people who cannot make the journey to it. He listens to its echo as carefully as its toll.",
+      "traits": [
+        "reverent",
+        "gentle",
+        "troubled by silence"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "6219b9f1-b93d-84ce-bff1-249f47f4dfbd"
+    },
+    "character": {
+      "story": "Rush began keeping a kettle on for lost travellers and never found a reason to stop. She learns their news over the first cup.",
+      "traits": [
+        "charming",
+        "nosy",
+        "generous"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "d9971704-9910-8170-b0b1-cc6b54176c34"
+    },
+    "character": {
+      "story": "Puffball once sneezed away a whole basket of spores. Now every harvest is a careful little ceremony.",
+      "traits": [
+        "anxious",
+        "earnest",
+        "delighted by fungi"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "ef314b23-81a8-82a9-a00f-b8088c5473ec"
+    },
+    "character": {
+      "story": "Kett held the harbour through a gale that took the old breakwater. He counts the boats back in before calling any day good.",
+      "traits": [
+        "commanding",
+        "superstitious",
+        "protective"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "58b82d3a-4abc-8509-8bb1-68d7b769c96f"
+    },
+    "character": {
+      "story": "Marigold reclaimed a salty field one row at a time. She keeps its first good harvest seed in a jar by the door.",
+      "traits": [
+        "industrious",
+        "optimistic",
+        "particular"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "6910a8ed-c533-8e2b-861b-cb96347ece56"
+    },
+    "character": {
+      "story": "Corrie followed a stray sheep along the cliffs and discovered a sheltered grazing path. She prefers the company of her flock.",
+      "traits": [
+        "shy",
+        "brave when needed",
+        "gentle"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "7a718c71-48c7-8e89-9bbe-00b10d133325"
+    },
+    "character": {
+      "story": "Isla dives where her mother once found a pearl and has yet to match it. The search matters more to her than the sale.",
+      "traits": [
+        "bold",
+        "secretive",
+        "playful"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "8e0735ee-35b7-884b-b3e6-489b69b18b6f"
+    },
+    "character": {
+      "story": "Morrow kept the lighthouse burning through a night when no ship was seen. One sailor later said that light brought him home.",
+      "traits": [
+        "steadfast",
+        "sparing with words",
+        "hopeful"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "af6b81f9-db89-8440-ba48-fabe282717e2"
+    },
+    "character": {
+      "story": "Maddock salvages what storms leave behind and returns anything with a name on it. He keeps a box of names he cannot yet find.",
+      "traits": [
+        "rough",
+        "scrupulous",
+        "sentimental"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "5d9f7ecd-cf31-8b89-9e01-af5381a6cf8b"
+    },
+    "character": {
+      "story": "Anneke rebuilt a wreck into a boat that sailed again. She sees possibility in timber everyone else would burn.",
+      "traits": [
+        "ingenious",
+        "impatient",
+        "generous with lessons"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "1d5062a1-df0f-8b16-8b87-973326604ef6"
+    },
+    "character": {
+      "story": "Dunn once ignored a shifting wind and came home a day late. He now watches the sky before believing any chart.",
+      "traits": [
+        "wry",
+        "alert",
+        "slow to promise"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "0ba0f7a9-2587-8cc3-8d40-4fe1c8fa70db"
+    },
+    "character": {
+      "story": "Hale inherited a wall with gaps and made the watch mend each one. He still walks the length of it after every sunset.",
+      "traits": [
+        "disciplined",
+        "wary",
+        "fair"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "e07bf3b9-d50a-8448-997e-1acc5b7c3711"
+    },
+    "character": {
+      "story": "Bram forged a sword that outlasted its owner. He would rather make a sound hinge, but he knows what the road asks for.",
+      "traits": [
+        "pragmatic",
+        "sombre",
+        "skilled"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "65c68cbc-d232-897d-81d9-acffc6310113"
+    },
+    "character": {
+      "story": "Greta learned to stack stone beside a mason who never raised his voice. She still pauses before placing the last piece.",
+      "traits": [
+        "patient",
+        "precise",
+        "difficult to impress"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "451241a0-d22b-8e8d-8981-c9363749a824"
+    },
+    "character": {
+      "story": "Lark stayed with a lamb through a heather storm and learned every hollow that gives shelter. She sings directions better than she gives them.",
+      "traits": [
+        "bright",
+        "resilient",
+        "easily distracted"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "acaa13a4-1915-8075-a599-f43bf2a30482"
+    },
+    "character": {
+      "story": "Quill found an inscription beneath the old wall that no one had copied. He fears rain will erase more history before he can record it.",
+      "traits": [
+        "inquisitive",
+        "fussy",
+        "eager to teach"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "757ef08c-5ae5-8aa1-a158-6b6c5bfad9c1"
+    },
+    "character": {
+      "story": "Grey cares for the barrow because someone cared for his ancestors. He distrusts people who disturb old stones for a quick reward.",
+      "traits": [
+        "grave",
+        "loyal",
+        "suspicious"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "9cec2c92-f404-8a97-89aa-2987526599e8"
+    },
+    "character": {
+      "story": "Gorm once heard a stone shift before anyone saw the slope give way. Since then he listens first and speaks second.",
+      "traits": [
+        "patient",
+        "cryptic",
+        "protective"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "922e3245-eaf1-8c42-abe7-a3f6387352a9"
+    },
+    "character": {
+      "story": "Morel learned to grow food under the caps when the upper paths became dangerous. She keeps a place for anyone who needs shelter.",
+      "traits": [
+        "maternal",
+        "resourceful",
+        "firm"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "6436b917-5410-8639-bdc7-3a7736f530ce"
+    },
+    "character": {
+      "story": "Nib took over the lamps after one dark walk frightened him. He tends them so nobody else needs to stumble home.",
+      "traits": [
+        "nervous",
+        "dutiful",
+        "curious"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "56b238d7-2827-8663-92aa-b3999340c58e"
+    },
+    "character": {
+      "story": "Dunstan broke a crystal by striking too hard and heard its song stop. He now teaches miners to listen before they swing.",
+      "traits": [
+        "proud",
+        "meticulous",
+        "soft-spoken"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "8b6ca850-e148-8c09-aef8-c20279527f93"
+    },
+    "character": {
+      "story": "Ondine has watched one shard change colour with the seasons. She is still deciding whether it reflects the world or remembers it.",
+      "traits": [
+        "enigmatic",
+        "patient",
+        "observant"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "7ec306fe-fead-8931-b639-053be416bd83"
+    },
+    "character": {
+      "story": "Zahra rationed water through a long dry spell and still offers the first cup freely. The well is a trust she will not sell.",
+      "traits": [
+        "resolute",
+        "hospitable",
+        "strict"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "61debaa0-ab19-871e-a94c-9f8f33f3ff67"
+    },
+    "character": {
+      "story": "Hesper began taking stories in payment from people without coin. His favourite ones are about places he has never seen.",
+      "traits": [
+        "charming",
+        "curious",
+        "shrewd"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "5bc00cdb-371a-8c74-809f-39c4b26c3f91"
+    },
+    "character": {
+      "story": "Idris once pushed a caravan through a sandstorm and lost the road. Now he waits an extra day whenever the sky looks wrong.",
+      "traits": [
+        "patient",
+        "responsible",
+        "cautious"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "9e22f68e-bade-8009-944b-9faac6245ede"
+    },
+    "character": {
+      "story": "Rafi planted palms with his mother and still waters the oldest tree first. He knows a harvest belongs to those who wait.",
+      "traits": [
+        "unhurried",
+        "affectionate",
+        "stubborn"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "666c4b1f-dec0-801f-ba2a-ef1741334d16"
+    },
+    "character": {
+      "story": "Sef crossed the Sunscar alone to prove he could. He now tells travellers the safe paths, whether they thank him or not.",
+      "traits": [
+        "independent",
+        "blunt",
+        "secretly helpful"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "d9305815-ac31-8cd7-af41-7354b5d5ee71"
+    },
+    "character": {
+      "story": "Tali nursed an injured hawk that returned to the mesa each year. She knows which birds will stay and which must fly.",
+      "traits": [
+        "fierce",
+        "tender",
+        "keen-eyed"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "e9003ac2-856d-8d51-bf24-5bd0a5f3f95a"
+    },
+    "character": {
+      "story": "Nadim traded salt for a rumour that saved a caravan. He learned that news can be worth more than the sacks on his back.",
+      "traits": [
+        "gregarious",
+        "calculating",
+        "reliable"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "6ad525ff-64aa-8fe1-a1ea-6484a795e298"
+    },
+    "character": {
+      "story": "Sabra came to guard the tombs after finding signs of a disturbed grave. She names each old resting place before taking the watch.",
+      "traits": [
+        "stern",
+        "reverent",
+        "unafraid"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "7c9a1a36-1801-8638-967a-24383156958c"
+    },
+    "character": {
+      "story": "Ulf survived his first winter by following tracks to shelter. He leaves markers now for people who cannot read snow as he does.",
+      "traits": [
+        "stoic",
+        "helpful in quiet ways",
+        "observant"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "09e8d921-92b7-8fad-b199-1107cc86e029"
+    },
+    "character": {
+      "story": "Gudrun learned to cut winter ice beside a sister who left for warmer lands. She saves the first clear block for her return.",
+      "traits": [
+        "hardworking",
+        "wistful",
+        "forthright"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "b924b281-15a8-8e6d-be24-ae8bbc6dd381"
+    },
+    "character": {
+      "story": "Sigrun kept Rimeholt’s fire through three days of blizzard. She counts every guest as one more reason it must keep burning.",
+      "traits": [
+        "steadfast",
+        "welcoming",
+        "commanding"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "c146414d-e726-8edd-9073-0e70ccaf91eb"
+    },
+    "character": {
+      "story": "Hilde learned to sew furs for children before she made anything for sale. She checks every seam against the wind.",
+      "traits": [
+        "meticulous",
+        "maternal",
+        "sharp-tongued"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "375c5edd-9a18-8018-8067-fba1f94a1862"
+    },
+    "character": {
+      "story": "Birgit found a stand of dry pine when the holt had no fuel. She guards its young growth more fiercely than its timber.",
+      "traits": [
+        "tough",
+        "far-sighted",
+        "generous"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "c705a6ad-f795-8a7c-bfea-dfa4ba3cc07f"
+    },
+    "character": {
+      "story": "Ansel reached a high ridge by a route everyone called impossible. He still climbs because the next peak may prove him wrong.",
+      "traits": [
+        "reckless",
+        "curious",
+        "boastful"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "ee297b6f-26f9-888a-8f9e-a3ce864492e7"
+    },
+    "character": {
+      "story": "Aud climbed to Whitepeak long ago and stayed to watch the snow change. She gives advice only to those who make the climb.",
+      "traits": [
+        "wry",
+        "self-reliant",
+        "perceptive"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "baaba89d-c925-888b-bac1-81eb8355adbe"
+    },
+    "character": {
+      "story": "Brannagh kept the forge alive when ash buried its hearth. She treats every fresh flame as a victory shared by Emberfall.",
+      "traits": [
+        "unyielding",
+        "warm beneath the grit",
+        "proud"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "0eaaecbd-3a88-81b9-918f-37799755b025"
+    },
+    "character": {
+      "story": "Ashby learned the bellows because he was too small to lift a hammer. He measures his growth in how long he can keep the fire bright.",
+      "traits": [
+        "competitive",
+        "eager",
+        "kind"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "b08df78d-1d2e-81a9-b93f-9150bdd382ca"
+    },
+    "character": {
+      "story": "Cole crossed hot ash to lead a lost neighbour home. He reads the ground now because he knows a safe trail can vanish overnight.",
+      "traits": [
+        "vigilant",
+        "reserved",
+        "courageous"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "12293c4b-b805-8ac1-a8de-5b7bb3d7b724"
+    },
+    "character": {
+      "story": "Garrow remains at Ashkeep after most of its guard departed. He mends one room at a time and refuses to call the keep lost.",
+      "traits": [
+        "prideful",
+        "weary",
+        "dutiful"
+      ]
+    }
+  },
+  {
+    "entity": {
+      "eid": "12a67c19-2d98-81bd-af4e-1057bb73c770"
+    },
+    "character": {
+      "story": "Esk walked from Mossvale to see the Maw after hearing too many stories about it. She intends to bring back one account she can trust.",
+      "traits": [
+        "brave",
+        "skeptical",
+        "wonderstruck"
+      ]
+    }
+  }
+]

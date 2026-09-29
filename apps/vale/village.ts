@@ -22,9 +22,9 @@ import { GIVERS } from './quests.ts'
 import { welcomed } from './village-tasks.ts'
 import { wares } from './stock.ts'
 import {
-  type About,
   aboutOf,
   born,
+  characterOf,
   CHAT,
   decided,
   deeds,
@@ -34,6 +34,7 @@ import {
   hears,
   looks,
   named,
+  type Person,
   persona,
   said,
   where,
@@ -152,12 +153,15 @@ export let village = (net: Net, deal: Deals) => {
   let held = (id: string) =>
     !!rows?.value.some((b) => b.entity.eid == eidOf(id))
 
-  let people = (): Map<string, About> => {
+  let people = (): Map<string, Person> => {
     let byId = new Map(rows?.value.map((b) => [b.entity.eid, b]) ?? [])
     return new Map(
       GIVERS.filter((g) => g.level == level).map((g) => [
         g.id,
-        aboutOf(g, comp(byId.get(eidOf(g.id)), 'villager')),
+        {
+          ...aboutOf(g, comp(byId.get(eidOf(g.id)), 'villager')),
+          ...characterOf(comp(byId.get(eidOf(g.id)), 'character')),
+        },
       ]),
     )
   }

@@ -87,6 +87,18 @@ export let neighbours = (g: Giver): Giver[] =>
 /** The places and work a villager knows as their own. The name tells us a
  * role only when it says one; a building's `works` names their workplace. */
 export type About = { home: string; workplace?: string; role?: string }
+export type Character = { story: string; traits: string[] }
+export type Person = About & Partial<Character>
+
+export let characterOf = (
+  saved: Record<string, unknown>,
+): Partial<Character> => ({
+  ...typeof saved.story == 'string' ? { story: saved.story } : {},
+  ...Array.isArray(saved.traits) &&
+      saved.traits.every((trait) => typeof trait == 'string')
+    ? { traits: saved.traits }
+    : {},
+})
 
 let titles = new Set([
   'elder',
@@ -237,7 +249,7 @@ export type Facts = {
   /** whether this hero checked Pip's welcome sign in Village Tasks */
   welcomeDone?: boolean
   /** the villagers' lives as their rows in the store say them */
-  people: Map<string, About>
+  people: Map<string, Person>
   /** how this hero’s words reached the villager */
   heard?: 'addressed' | 'mentioned'
   /** what they hold free to give, by kind (stock.ts `ledger`) */
@@ -397,7 +409,7 @@ let stores = (g: Giver, holds: Map<string, number>) => {
  */
 export let persona = (g: Giver, f: Facts): string => {
   let land = LEVELS[g.level]?.name ?? g.level
-  let self = f.people.get(g.id) ?? aboutOf(g)
+  let self: Person = f.people.get(g.id) ?? aboutOf(g)
   let others = neighbours(g).map((n) => {
     let role = f.people.get(n.id)?.role
     return `${n.name} (${eidOf(n.id)})${role ? `, role: ${role}` : ''}`
@@ -431,6 +443,13 @@ export let persona = (g: Giver, f: Facts): string => {
     ...self.role ? [`Your role here is ${self.role}.`] : [],
     ...self.workplace
       ? [`You work at the ${self.workplace} near the ${self.home}.`]
+      : [],
+    ...self.story ? [`Your own story: ${self.story}`] : [],
+    ...self.traits?.length
+      ? [
+        `Your traits: ${self.traits.join(', ')}. Let them shape what you ` +
+        'notice, say and choose; do not recite them unless it fits the moment.',
+      ]
       : [],
     `Roads out of ${land}: ${roadsOf(g.level) || 'none'}.`,
     `Your neighbours here: ${others.join(', ') || 'none'}.`,

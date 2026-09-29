@@ -492,6 +492,24 @@
         }
       }
     },
+    "character": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "description": "A villager's personal history and lasting temperament. This lives on the same entity as their transcript, and colours what they say and choose. Seeded once into the app store, then editable there without a code deploy.",
+      "properties": {
+        "story": {
+          "type": "string",
+          "description": "A short event or relationship that shaped this person."
+        },
+        "traits": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "A few distinctive traits that guide their speech and choices."
+        }
+      },
+      "required": ["story", "traits"]
+    },
     "going": {
       "component": true,
       "type": "object",
