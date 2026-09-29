@@ -14,7 +14,10 @@ if (import.meta.main) {
   } catch (error) {
     if (!(error instanceof Deno.errors.NotFound)) throw error
   }
-  await new Promise((resolve) => setTimeout(resolve, 2_000))
+  // The group's grace to shut down on SIGTERM before it is killed outright. A
+  // test that provokes this path sets it small.
+  let grace = Number(Deno.env.get('TASKS_PHASE_GUARD_GRACE_MS') ?? 2_000)
+  await new Promise((resolve) => setTimeout(resolve, grace))
   try {
     Deno.kill(-group, 'SIGKILL')
   } catch (error) {

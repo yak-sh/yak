@@ -135,6 +135,13 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   if (!Number.isFinite(idleLimit) || idleLimit < 1) {
     throw new Error('invalid test idle limit')
   }
+  // How often the watch looks: at each tick it detects a vanished parent and
+  // an idle platform, so its granularity bounds how fast either is caught. A
+  // second in a run; a test that provokes one of those sets it small.
+  let pulse = Number(Deno.env.get('TASKS_TEST_WATCH_MS') ?? 1_000)
+  if (!Number.isFinite(pulse) || pulse < 1) {
+    throw new Error('invalid test watch interval')
+  }
   let runs = PLATFORMS.map((p) =>
     [
       p,
@@ -203,7 +210,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
         return
       }
     }
-  }, 1_000)
+  }, pulse)
   try {
     await Promise.all(children.map(async (child, i) => {
       let [stdout, preview] = child.stdout.tee()

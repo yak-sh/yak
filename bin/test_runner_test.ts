@@ -117,7 +117,11 @@ let waiting = async (dir: string) => {
   let held = JSON.stringify(`${dir}/held.pid`)
   await Deno.writeTextFile(
     file,
+    // One test completes, then the next never does: idle is measured from the
+    // last completion, so this decouples the short limit from how long the
+    // file took to load on a busy box.
     `import { test } from ${TESTING}
+    test('a first test completes', () => {})
     test('waiting on a lost reply', async () => {
       let held = new Deno.Command('sleep', { args: ['60'] }).spawn()
       Deno.writeTextFileSync(${held}, String(held.pid))
@@ -171,7 +175,9 @@ test('a test that stops completing is named and its descendants end', async () =
         '--bulk',
         file,
       ],
-      env: { TASKS_TEST_IDLE_MS: '3000' },
+      // A short idle limit and a fast watch: the run's defaults are seconds,
+      // and this proves detection, not the wait itself.
+      env: { TASKS_TEST_IDLE_MS: '300', TASKS_TEST_WATCH_MS: '20' },
       stdout: 'piped',
       stderr: 'piped',
     }).spawn()
@@ -206,6 +212,9 @@ test('a platform run ends when its parent is killed', async () => {
         args: [Deno.execPath(), 'run', '-A', ${runner}, '--bulk', ${
         JSON.stringify(file)
       }],
+        // A fast watch catches the vanished parent at once; the run's default
+        // is a second, and this proves detection, not the wait.
+        env: { TASKS_TEST_WATCH_MS: '20' },
         stdout: 'null', stderr: 'null',
       }).spawn()
       Deno.writeTextFileSync(${pid}, String(child.pid))
@@ -237,6 +246,9 @@ test('a phase ends with its runner killed outright', async () => {
   try {
     runner = new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', fixture, 'orchestrator', 'broad', dir],
+      // The guard's SIGTERM-then-kill grace is seconds in a run; a grandchild
+      // that ignores SIGTERM makes the kill the point, so hurry to it.
+      env: { TASKS_PHASE_GUARD_GRACE_MS: '100' },
       stdout: 'null',
       stderr: 'null',
     }).spawn()
