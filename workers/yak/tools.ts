@@ -33,6 +33,7 @@
 // app's files serve live from its blob store — and the version it bumps to is
 // kept, files and all, so app_rollback can put it back.
 import { configured, deployWorker } from './deploy_worker.ts'
+import { valeSnapshot } from './vale_sfx_snapshot.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, bindings } from './bindings.ts'
 import { mediaTypeOf, type Objects } from '@yaks/blob'
@@ -5171,4 +5172,8 @@ let OURS: Row[] = [
  * one per person, which is the whole reason a plugin's tools are data here and
  * not a function of who is asking.
  */
-export let TOOLS: Tool[] = [...OURS.map(worded), ...pluginTools(PLUGINS)]
+export let TOOLS: Tool[] = [
+  ...OURS.map(worded),
+  ...pluginTools(PLUGINS),
+  valeSnapshot,
+]
