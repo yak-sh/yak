@@ -146,7 +146,9 @@ written. It returns the tool's output together with runner bookkeeping. Use
 `answerOf(records, id)` to remove this call's own record (the call and its
 result) before displaying the answer; it goes by the call's eid, never by shape,
 since a tool that reads transcripts answers other calls and results. `worded()`
-joins `content.body` values, or returns formatted JSON when no text is present.
+says a text answer (a row carrying only its words and the call it answers) as
+its `content.body`, a search hit as one line, and any other entity whole as
+JSON, so an entry or a comment is said with its eid and its writer.
 `structured(tool, answer)` is the answer as data: the bundles under `result`, or
 the `output.value` of a tool that declares an `outputSchema`. `valueIn(answer)`
 is the `output.value` an answer carries: the same answer as data, which a caller

@@ -313,19 +313,39 @@ let hitLine = (b: Bundle, hit: Comp): string => {
   }`
 }
 
-// A bundle said as a line of its own: the words it carries, or its hit. Null
-// for one that is only data.
+// What a tool's text answer carries: the spine every row has (@yaks/kernel),
+// its words, the call it answers, and a fault's `error` or `exception`. An
+// entity carrying more (a transcript entry, a comment, a memory, a row a tool
+// made) is data, and its words alone would drop which one it is and who wrote
+// it.
+let SPOKEN = new Set([
+  'entity',
+  'created',
+  'updated',
+  'content',
+  'output',
+  'error',
+  'exception',
+])
+
+// A bundle said as a line of its own: the words a text answer carries, or its
+// hit. Null for one that is data, said whole.
 let line = (b: Bundle): string | null => {
   let body = (b.content as Comp | undefined)?.body
-  if (typeof body == 'string') return body
+  if (
+    typeof body == 'string' &&
+    Object.keys(b).every((k) => k[0] == '$' || SPOKEN.has(k))
+  ) return body
   let hit = hitOf(b)
   return hit ? hitLine(b, hit) : null
 }
 
 /**
- * A tool's answer as text: each bundle as a line where it is one — its
- * `content{body}`, or a compact `hit` line for a search result — and as JSON
- * where it is only data, or the bundles as JSON where none is a line. It is
+ * A tool's answer as text: each bundle as a line where it is one — a text
+ * answer's `content{body}`, or a compact `hit` line for a search result — and
+ * as JSON where it is data, or the bundles as JSON where none is a line. An
+ * entity that carries words among other components (a transcript entry, a
+ * comment) is data: said whole, its eid and its writer with its words. It is
  * copied onto the result entity as `content{body}` so a model, a terminal and
  * a transcript all read the answer the same way. It says at most `most`
  * characters and counts the rest, so an answer of any size words in bounded
@@ -335,6 +355,9 @@ let line = (b: Bundle): string | null => {
  * import { assertEquals } from '@std/assert'
  * let said = (body: string) => ({ entity: { eid: body }, content: { body } })
  * assertEquals(worded([said('one'), said('two')]), 'one\ntwo')
+ * let entry = { ...said('hi'), entry: { session: 's', seq: 2 } }
+ * assertEquals(worded([said('one'), entry]), 'one\n' +
+ *   '  ' + JSON.stringify(entry, null, 2).replaceAll('\n', '\n  '))
  * assertEquals(
  *   worded([said('one'), said('two'), said('three')], 5),
  *   'one\nt\n… 2 of 3 not said: an answer is worded in 5 characters',
@@ -342,9 +365,7 @@ let line = (b: Bundle): string | null => {
  * ```
  */
 export let worded = (answer: Bundle[], most = WORDS): string => {
-  let lines = answer.some((b) =>
-    typeof (b.content as Comp | undefined)?.body == 'string' || hitOf(b)
-  )
+  let lines = answer.some((b) => line(b) != null)
   let { text, left } = lines
     ? spent(answer, (b) => line(b) ?? inset(b), '\n', most)
     : spent(answer, inset, ',\n', most)

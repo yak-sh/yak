@@ -1,4 +1,10 @@
-import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { argsOf, type Bundle, type Comp, detached, mint } from '@yaks/graph'
 import { answerOf, toolEid } from '@yaks/tools'
@@ -688,7 +694,7 @@ test('the door calls the tool, and the call is the transcript', async () => {
     let reply = await said.json() as {
       result: { content: { text: string }[] }
     }
-    assertEquals(reply.result.content[0].text, 'shelved Spring')
+    let text = reply.result.content[0].text
 
     // What was asked, and what came back, both written down — and the book
     // the tool answered is signed as the person who asked, not the server.
@@ -700,6 +706,9 @@ test('the door calls the tool, and the call is the transcript', async () => {
     assertEquals((result.result as Comp).call, call.entity.eid)
     let [book] = await host.graph.read('.book&?created')
     assertEquals((book.created as Comp).by, me)
+    // The reply says the book it made, with the id to find it by.
+    assertStringIncludes(text, book.entity.eid)
+    assertStringIncludes(text, 'shelved Spring')
   } finally {
     host.close()
   }
