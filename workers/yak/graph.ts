@@ -295,7 +295,14 @@ let shapeOf = (name: string, declared: string | null): Shape => {
   let own = name == PLATFORM_STORE || name == GIT_STORE
   let key = own ? name : declared == null ? 'app' : `app ${declared}`
   let held = shapes.get(key)
-  if (held) return held
+  if (held) {
+    // Keep the shape the isolate reaches for — the platform's own, and the app
+    // core every store that declares nothing shares — hot: a hit is the most
+    // recently used, so a burst of one-off declarations never evicts it.
+    shapes.delete(key)
+    shapes.set(key, held)
+    return held
+  }
   let vocab = vocabOfStore(name, declared ?? {})
   let read = blobRead(vocab)
   let derived = { ...read, ...(own ? {} : appDerived(vocab)) }

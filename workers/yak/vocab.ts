@@ -1061,8 +1061,13 @@ export let platformDocs: VocabDoc[] = storeDocs([
  * The directory's whole vocabulary: the core documents plus the platform's own
  * words. The Store loads it instead of {@link appVocab} when the object it woke
  * in is the meta store (graph.ts).
+ *
+ * A vocabulary never changes once loaded, and the platform's is one fixed list,
+ * so it is loaded once and shared by every meta store in this isolate.
  */
-export let platformVocab = (): Vocab => loadVocab(platformDocs, metaKeywords)
+let metaLoaded: Vocab | undefined
+export let platformVocab = (): Vocab =>
+  metaLoaded ??= loadVocab(platformDocs, metaKeywords)
 
 // ---- the git object graph's store (D-34943) ---------------------------------
 
@@ -1083,8 +1088,11 @@ export let platformVocab = (): Vocab => loadVocab(platformDocs, metaKeywords)
  * nothing. */
 export let gitDocs: VocabDoc[] = storeDocs([idDoc, gitDoc])
 
-/** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). */
-export let gitVocab = (): Vocab => loadVocab(gitDocs, metaKeywords)
+/** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). One
+ * fixed list, loaded once and shared like {@link platformVocab}. */
+let gitLoaded: Vocab | undefined
+export let gitVocab = (): Vocab =>
+  gitLoaded ??= loadVocab(gitDocs, metaKeywords)
 
 // What a property admits, as a comparison makes it: the closed set, or the
 // type. The same rule reach.ts `propsOf` holds two spaces to.
@@ -1543,9 +1551,29 @@ export let meant = (said: unknown): VocabDoc => {
  * loaded into the `Vocab` a Store reads its DDL, routing and admission out of.
  * The source is the file as written — text or already parsed — and an app that
  * declares nothing gets the core alone.
+ *
+ * A vocabulary never changes once loaded, and the core it is built on dwarfs an
+ * app's own words, so it is loaded once per declaration and shared: every app
+ * that declares nothing, the same `vocab.json` deployed again, and the two
+ * declarations a deploy diffs (graph.ts `#prepared`, the `/vocab` door) all
+ * read one loaded vocabulary. Keyed by the validated declaration, so a bad one
+ * still refuses ({@link appDoc}) and is never kept.
  */
-export let appVocab = (source: unknown = {}): Vocab =>
-  loadVocab([...coreDocs, appDoc(source)], appKeywords)
+let appVocabs = new Map<string, Vocab>()
+export let appVocab = (source: unknown = {}): Vocab => {
+  let doc = appDoc(source)
+  let key = JSON.stringify(doc)
+  let held = appVocabs.get(key)
+  if (held) {
+    appVocabs.delete(key)
+    appVocabs.set(key, held)
+    return held
+  }
+  let v = loadVocab([...coreDocs, doc], appKeywords)
+  appVocabs.set(key, v)
+  if (appVocabs.size > 64) appVocabs.delete(appVocabs.keys().next().value!)
+  return v
+}
 
 /**
  * Whether this store numbers its entities, read off the vocabulary it woke
