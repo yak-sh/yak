@@ -1333,23 +1333,39 @@ export let groundAt = (v: Vale, x: number, z: number): number => {
 }
 
 // The layers at a column, deepest last, in metres; NONE where a cave is not.
+let columns = new WeakMap<
+  Vale,
+  Map<string, { patch?: Patch; layers: number[] }>
+>()
 let layersAt = (v: Vale, x: number, z: number): number[] => {
+  let key = `${Math.floor(x / v.voxel)}:${Math.floor(z / v.voxel)}`
   let c = column(v, x, z)
-  if (c) return c.p.layers.map((l) => l[c.j] == NONE ? NONE : l[c.j] * v.voxel)
-  let surface = surfaceAt(v, x, z)
-  let mx = (Math.floor(x / v.voxel) + 0.5) * v.voxel
-  let mz = (Math.floor(z / v.voxel) + 0.5) * v.voxel
-  let cave = caveAt(mx, mz, surface)
-  return cave
-    ? [
-      cave.mouth ? NONE : surface,
-      cave.ceiling == null ? NONE : Math.min(
-        Math.round(cave.ceiling / v.voxel),
-        Math.round(surface / v.voxel) - 1,
-      ) * v.voxel,
-      Math.round(cave.floor / v.voxel) * v.voxel,
-    ]
-    : [surface]
+  let cache = columns.get(v)
+  if (!cache) columns.set(v, cache = new Map())
+  let known = cache.get(key)
+  if (known && known.patch == c?.p) return known.layers
+  let layers: number[]
+  if (c) {
+    layers = c.p.layers.map((l) => l[c.j] == NONE ? NONE : l[c.j] * v.voxel)
+  } else {
+    let surface = surfaceAt(v, x, z)
+    let mx = (Math.floor(x / v.voxel) + 0.5) * v.voxel
+    let mz = (Math.floor(z / v.voxel) + 0.5) * v.voxel
+    let cave = caveAt(mx, mz, surface)
+    layers = cave
+      ? [
+        cave.mouth ? NONE : surface,
+        cave.ceiling == null ? NONE : Math.min(
+          Math.round(cave.ceiling / v.voxel),
+          Math.round(surface / v.voxel) - 1,
+        ) * v.voxel,
+        Math.round(cave.floor / v.voxel) * v.voxel,
+      ]
+      : [surface]
+  }
+  cache.set(key, { patch: c?.p, layers })
+  if (cache.size > 20_000) cache.delete(cache.keys().next().value!)
+  return layers
 }
 
 // The open space a point at height y is in: the floor it stands over and

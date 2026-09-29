@@ -67,6 +67,17 @@ export let walk = (v: Vale, from: Vec, to: Vec): Vec[] => {
     Math.abs(x(i) - to[0]) + Math.abs(z(k) - to[2])
   let first: Step = { i: 0, k: 0, y: from[1], cost: 0, score: away(0, 0) }
   let heap = [first], best = new Map([[key(first), first]])
+  let ground = new Map<string, number | null>()
+  let stand = (i: number, k: number, y: number): number | null => {
+    let name = `${i}:${k}:${y}`
+    let known = ground.get(name)
+    if (known !== undefined) return known
+    let px = x(i), pz = z(k), next = floorAt(v, px, pz, y)
+    let fit = next <= y + 0.5 && next >= y - 0.75 &&
+      fits(v, px, pz, next)
+    ground.set(name, fit ? next : null)
+    return fit ? next : null
+  }
   let end: Step | undefined
   for (let seen = 0; heap.length && seen < 60000; seen++) {
     let s = pop(heap)
@@ -81,8 +92,8 @@ export let walk = (v: Vale, from: Vec, to: Vec): Vec[] => {
     for (let [di, dk] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       let i = s.i + di, k = s.k + dk, px = x(i), pz = z(k)
       if (px < x0 || px > x1 || pz < z0 || pz > z1) continue
-      let y = floorAt(v, px, pz, s.y)
-      if (y > s.y + 0.5 || y < s.y - 0.75 || !fits(v, px, pz, y)) continue
+      let y = stand(i, k, s.y)
+      if (y == null) continue
       let cost = s.cost + unit + Math.abs(y - s.y) * 0.3
       let next: Step = { i, k, y, cost, score: cost + away(i, k), prev: s }
       let was = best.get(key(next))
