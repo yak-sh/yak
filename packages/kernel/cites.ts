@@ -2,6 +2,7 @@
 // The hash ignores server-owned stamps, so bookkeeping cannot make a claim
 // stale. File and symbol citations have a narrower answer in @yaks/git.
 
+import { cmp } from '@yaks/fp'
 import { type Bundle, type Comp, comps, Refused, sha256 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 
@@ -22,7 +23,7 @@ export let content = (vocab: Vocab) => (b: Bundle): string => {
     if (!info.writable.length && info.stamped.length) continue
     kept.push([name, written(c, info.writable)])
   }
-  kept.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
+  kept.sort(([a], [b]) => cmp(a, b))
   return sha256(JSON.stringify(kept))
 }
 

@@ -469,6 +469,10 @@ grouped approximately by function, **not** by dependency order.
   runner loads every test module into one runtime, runs the examples beside the
   code (fenced blocks and `///` doctests) as tests, and leaves out a file that
   passed while nothing it depends on has changed.
+- **[@yaks/fp](./fp)** — a vocabulary of small curried functions, each made of
+  the ones before it: `compose`, a `pipe` that stops on nil, `when` dispatch
+  tables, copy-tweak-return (`beget`, `update`, `defaults`), `tally`, `fold`,
+  and `cmp` and `bsearch` for order. No dependencies.
 
 ## Domain plugins
 

@@ -29,10 +29,11 @@
 // component sets and moves, not tables — so it lives here, where the file is.
 
 import type { Runs } from '@yaks/graph/tools'
+import { tally } from '@yaks/fp'
 import { checked, type Finding } from '@yaks/tools'
 import { drift } from './archetype.ts'
 import { componentTables } from './physical.ts'
-import type { Driver, Row } from '@yaks/sql'
+import type { Driver } from '@yaks/sql'
 
 /** What configuration this package's checks accept. */
 export type Options = {
@@ -46,14 +47,7 @@ let SAMPLE = 12
 // it, its rowid, and which of that table's foreign keys it broke.
 type Violation = { table?: unknown; parent?: unknown; rowid?: unknown }
 
-let tally = (rows: Row[]): Map<string, number> => {
-  let out = new Map<string, number>()
-  for (let r of rows as Violation[]) {
-    let said = `${String(r.table)} → ${String(r.parent)}`
-    out.set(said, (out.get(said) ?? 0) + 1)
-  }
-  return out
-}
+let broken = tally((r: Violation) => `${String(r.table)} → ${String(r.parent)}`)
 
 /** The implementations behind the tools ./vocab.json declares — over the
  * calling application's own connection, which is why this is a factory. */
@@ -76,9 +70,9 @@ export let runs = (
       })
     }
     for (
-      let [said, n] of tally(
+      let [said, n] of Object.entries(broken(
         host.sql.query({ t: 'pragma', name: 'foreign_key_check' }),
-      )
+      ))
     ) {
       found.push({
         level: 'fail',

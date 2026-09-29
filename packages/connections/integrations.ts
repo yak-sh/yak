@@ -14,6 +14,7 @@
 // where no integration holds the name yet — so no verb a space can reach
 // writes over a built integration, or changes where its tokens are sent.
 
+import { cmp } from '@yaks/fp'
 import {
   type Bundle,
   type Eid,
@@ -119,7 +120,7 @@ let canon = (v: unknown): unknown =>
     ? v.map(canon)
     : v && typeof v == 'object'
     ? Object.entries(v).filter(([, x]) => x != null)
-      .sort(([a], [b]) => a < b ? -1 : 1).map(([k, x]) => [k, canon(x)])
+      .sort(([a], [b]) => cmp(a, b)).map(([k, x]) => [k, canon(x)])
     : v
 let said = (v: unknown) => JSON.stringify(canon(v))
 

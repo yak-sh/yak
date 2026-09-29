@@ -22,6 +22,7 @@
 // file stays pure. A source that answers with a promise makes the whole answer
 // a promise; one that answers at once keeps it synchronous.
 
+import { cmp } from '@yaks/fp'
 import { Ambiguous, type Hop, type Vocab } from '@yaks/vocab'
 import { DIRECTIVES, OPERATORS } from './teach.ts'
 import { parse, valued } from './parse.ts'
@@ -176,7 +177,7 @@ let next = (at: At, segs: string[]): Next => {
 // A `_` component describes the vocabulary itself (`_comp`, `_prop`), so it
 // follows the application's own components.
 let inner = (a: string, b: string): number =>
-  Number(a.startsWith('_')) - Number(b.startsWith('_')) || (a < b ? -1 : 1)
+  Number(a.startsWith('_')) - Number(b.startsWith('_')) || cmp(a, b)
 
 // The names that can follow `lead` (a prefix character and the settled
 // segments), by family: components (`dot` leads on to their properties),

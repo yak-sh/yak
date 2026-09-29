@@ -19,6 +19,7 @@
 // PATCH takes one field per request — the API's UpdatePackageRequest is a
 // oneOf (https://api.jsr.io/.well-known/openapi) — so an edit here is a field
 // and a value, and a package with three stale fields is three requests.
+import { cmp } from '@yaks/fp'
 import { configs } from './release.ts'
 
 export let API = 'https://api.jsr.io'
@@ -131,7 +132,7 @@ export let mine = (page: Record<string, unknown>): Details => {
 let canon = (value: unknown) =>
   value && typeof value == 'object'
     ? JSON.stringify(
-      Object.entries(value).sort(([a], [b]) => a < b ? -1 : 1),
+      Object.entries(value).sort(([a], [b]) => cmp(a, b)),
     )
     : JSON.stringify(value)
 

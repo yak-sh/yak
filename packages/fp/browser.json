@@ -1,0 +1,13 @@
+{
+  "_": "The browser gate: @yaks/fp is pure functions over plain values, so the whole package must type-check with only the web platform in scope.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/fp": "./mod.ts"
+  }
+}
