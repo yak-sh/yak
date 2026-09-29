@@ -115,9 +115,26 @@ export type Lode = {
   trade: Gather
   tier: number
   gives: string
+  finds?: string[]
   near: string[]
   hops: [number, number]
   look: Look
+}
+
+/** Every material a node can yield. Its usual find comes first. */
+export let yieldKinds = (
+  lode: Lode,
+): string[] => [lode.gives, ...(lode.finds ?? [])]
+
+/** One mineral for this shared node life, independent of who mines it. */
+export let yieldOf = (eid: string, life: number, lode: Lode): string => {
+  let finds = lode.finds
+  if (!finds?.length) return lode.gives
+  let seed = hashOf(`${eid}:${life}:mineral`)
+  let roll = rand(seed)
+  return roll < 0.8 ? lode.gives : finds[
+    Math.floor(rand(seed, 1) * finds.length)
+  ]
 }
 
 /** A node's visible form, which can differ for props with the same haul. */
@@ -231,6 +248,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 1,
     gives: 'copper',
+    finds: ['shard'],
     near: ['crags', 'ridge'],
     hops: [0, 1],
     look: seam([0x8f8e86, 0xa3a198, 0x7f7e77], 0xc8783a),
@@ -240,6 +258,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 2,
     gives: 'ore',
+    finds: ['silver'],
     near: ['crags', 'ridge'],
     hops: [2, 3],
     look: seam([0x6e6c68, 0x7e7c76, 0x5e5c58], 0xa86a4a),
@@ -249,6 +268,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 2,
     gives: 'silver',
+    finds: ['ore'],
     near: ['crags', 'moor', 'ruins'],
     hops: [2, 3],
     look: seam([0x7a7a80, 0x8a8a90, 0x6a6a70], 0xe8ecf2),
@@ -258,6 +278,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 3,
     gives: 'gold',
+    finds: ['gleamstone'],
     near: ['crags', 'moor', 'ruins'],
     hops: [4, 5],
     look: seam([0x7a6a58, 0x8a7a66, 0x6a5a4a], 0xf2c14e),
@@ -267,6 +288,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 3,
     gives: 'gleamstone',
+    finds: ['gold'],
     near: ['crystals'],
     hops: [3, 5],
     look: seam([0x4a4a6a, 0x5a5a7a, 0x3a3a5a], 0x9ad8ff),
@@ -276,6 +298,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 3,
     gives: 'iceore',
+    finds: ['gleamstone'],
     near: ['glacier', 'snowfield'],
     hops: [4, 5],
     look: seam([0x8aa0b0, 0x9ab0c0, 0x7a90a0], 0xc8f0ff),
@@ -285,6 +308,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 3,
     gives: 'sunstone',
+    finds: ['gold'],
     near: ['mesa', 'dunes'],
     hops: [4, 7],
     look: seam([0xc89a6a, 0xd8aa7a, 0xb88a5a], 0xff9030),
@@ -294,6 +318,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 4,
     gives: 'starsilver',
+    finds: ['iceore'],
     near: ['glacier', 'snowfield'],
     hops: [6, 7],
     look: seam([0x505868, 0x606878, 0x404858], 0xf0f8ff),
@@ -303,6 +328,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 4,
     gives: 'obsidian',
+    finds: ['sunstone'],
     near: ['volcano', 'ashfield'],
     hops: [6, 7],
     look: seam([0x2a2624, 0x3a3432, 0x221e1c], 0x7a5aa8),
@@ -312,6 +338,7 @@ export let LODES: Record<string, Lode> = {
     trade: 'ore',
     tier: 5,
     gives: 'emberstone',
+    finds: ['obsidian'],
     near: ['volcano', 'ashfield', 'ruins'],
     hops: [8, 8],
     look: seam([0x3a2420, 0x4a302a, 0x2a1a18], 0xff5a2a),

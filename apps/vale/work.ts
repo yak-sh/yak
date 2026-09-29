@@ -25,6 +25,7 @@ import {
   nodeName,
   nodeRarity,
   nodesNear,
+  yieldOf,
 } from './gather.ts'
 import { ITEMS } from './items.ts'
 import { comp, num, str } from './bundle.ts'
@@ -272,9 +273,10 @@ export let working = (
     let lvl = mine[n.lode.trade].lvl
     let count = haulOf(n.eid, now, me, n.kind, lvl, n.rarity)
     let xp = gatherXp(n.lode.tier, n.rarity, lvl)
+    let item = yieldOf(n.eid, n.life, n.lode)
     net.keep({
       entity: { eid: crypto.randomUUID() },
-      item: { kind: n.lode.gives, n: count, owner: me, at: now },
+      item: { kind: item, n: count, owner: me, at: now },
       gathered: {
         node: n.eid,
         life: n.life,
@@ -289,7 +291,7 @@ export let working = (
     return {
       type: 'got',
       eid: n.eid,
-      item: n.lode.gives,
+      item,
       n: count,
       trade: n.lode.trade,
       xp,

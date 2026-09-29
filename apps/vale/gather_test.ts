@@ -7,15 +7,19 @@ import {
   gatherXp,
   haulOf,
   LODES,
+  naturalEid,
   nodeLife,
   nodeName,
   nodeRarity,
   nodesNear,
   respawnOf,
+  yieldOf,
 } from './gather.ts'
 import { natureMesh } from './nature_mesh.ts'
 import type { Natural } from './nature.ts'
-import { propsIn } from './terrain.ts'
+import { flat, type Prop, propsIn } from './terrain.ts'
+import { type Bundle, comp } from './net.ts'
+import { type WorkFrame, working } from './work.ts'
 
 Deno.test('a natural prop is the same gatherable node on every read', () => {
   let prop = propsIn(2, 2).find((p) => p.natural)!
@@ -34,6 +38,63 @@ Deno.test('a rock is named for its form even when its haul is the same', () => {
   assertEquals(nodeName(LODES.copper, { kind: 'cairn' }), 'Cairn')
   assertEquals(nodeName(LODES.copper, { kind: 'menhir' }), 'Standing stone')
   assertEquals(nodeName(LODES.copper), 'Stone')
+})
+
+Deno.test('one rock life gives the same possible mineral to a player and companion', () => {
+  let x = Array.from({ length: 100 }, (_, i) => i + 5).find((x) =>
+    yieldOf(
+      naturalEid({ kind: 'rock', x, z: 5, seed: 1, natural: true }),
+      0,
+      LODES.copper,
+    ) == 'shard'
+  )!
+  let prop: Prop = { kind: 'rock', x, z: 5, seed: 1, natural: true }
+  let natural: Natural[] = [{ prop, at: [x, 5, 5] }]
+  let eid = naturalEid(prop), v = flat(5, [], [prop])
+  let work = (hero: string, now: number, directive?: string) => {
+    let rows: Bundle[] = []
+    let toil = working({
+      hero,
+      mine: () => rows,
+      gathered: () => rows,
+      keep: (...bundles: Bundle[]) => {
+        rows = [...rows, ...bundles]
+      },
+    })
+    let frame: WorkFrame = {
+      body: { x: x - 1, y: 5, z: 5 },
+      sheet: { bag: [], worn: {} },
+      down: false,
+      now,
+    }
+    let as = directive ? { target: eid, directive } : undefined
+    assert(toil.tick(v, frame, true, false, natural, as).doing)
+    frame.now += effort(LODES.copper, 1)
+    let events = toil.tick(v, frame, false, false, natural, as).events
+    return { rows, got: events.find((e) => e.type == 'got') }
+  }
+  let player = work('player', 1000)
+  let companion = work('player', 2000, 'order')
+  assertEquals(player.rows.length, 1)
+  assertEquals(comp(player.rows[0], 'item').kind, 'shard')
+  assertEquals(comp(companion.rows[0], 'item').kind, 'shard')
+  assertEquals(comp(player.rows[0], 'gathered').node, eid)
+  assertEquals(comp(companion.rows[0], 'gathered').directive, 'order')
+  assertEquals(player.got?.type == 'got' && player.got.item, 'shard')
+  assertEquals(companion.got?.type == 'got' && companion.got.item, 'shard')
+  assertEquals(
+    comp(player.rows[0], 'gathered').xp,
+    comp(companion.rows[0], 'gathered').xp,
+  )
+  assertEquals(
+    new Set(
+      Array.from(
+        { length: 100 },
+        (_, i) => yieldOf(`stone-${i}`, 0, LODES.copper),
+      ),
+    ),
+    new Set(['copper', 'shard']),
+  )
 })
 
 Deno.test('a harvested tree stays spent for everyone until its next life', () => {

@@ -20,7 +20,7 @@ import { tierOf } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { foeOf, landLevel } from './danger.ts'
 import { isA } from './features.ts'
-import { LODES } from './gather.ts'
+import { LODES, yieldKinds } from './gather.ts'
 import { RACK } from './gear.ts'
 import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
@@ -121,7 +121,12 @@ export let said = (g: Goods): string =>
 let mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1)
 
 // What each land's nodes give, by the tier of the node.
-let GATHERED = new Map(Object.values(LODES).map((l) => [l.gives, l.tier]))
+let GATHERED = new Map<string, number>()
+for (let l of Object.values(LODES)) {
+  for (let kind of yieldKinds(l)) {
+    GATHERED.set(kind, Math.min(GATHERED.get(kind) ?? Infinity, l.tier))
+  }
+}
 
 // The costs of the current creature designs, kept until the store replaces
 // their index. An invented creature's spoils then enter the same pricing.
@@ -198,7 +203,7 @@ let found = (level: string): string[] => {
   let gathered = Object.values(LODES).filter((l) =>
     hops >= l.hops[0] && hops <= l.hops[1] &&
     places.some((p) => l.near.some((near) => isA(p.kind, near)))
-  ).map((l) => l.gives)
+  ).flatMap(yieldKinds)
   return [
     ...new Set([
       ...bred(level).flatMap((k) => BEASTS[k].loot.map(([kind]) => kind)),
