@@ -1007,6 +1007,17 @@ Deno.test('a woken object serves the same app, and the same sockets', async () =
   assertEquals((ws.sent[1] as { id: string }).id, 'r')
 })
 
+// A wake plants what the platform ships before any door answers (`#sow`), so a
+// row it rewrites for nothing makes every read wait on a durable write.
+Deno.test('a woken object rewrites nothing it already holds', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  await get(await cookbook(ctx), '/query?q=.model', owner)
+  let woken = new Store(ctx)
+  let moved = await (await get(woken, '/query?q=.updated', owner)).json()
+  assertEquals(moved, [])
+})
+
 Deno.test('a stranger is refused on a private app', async () => {
   let mine: Vouch = { ...owner, access: 'private' }
   let store = await cookbook(state(), SCHEMA, mine)

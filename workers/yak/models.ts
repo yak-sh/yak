@@ -16,7 +16,7 @@
 // commands the app marks `"model": true` as its tools. A page writes an entry
 // wearing `using{model}` and the answer lands beside it.
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { identityEid } from '@yaks/graph'
+import { identityEid, token } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import {
   answers,
@@ -193,12 +193,14 @@ export let catalogued = (): Bundle[] => [
   ]),
 ]
 
-// Whether a store's row already says everything a wanted one does.
+// Whether a store's row already says everything a wanted one does: each value
+// the same by the graph's own measure (`token`), so a list read back is the
+// list it was written as, not a different array.
 let says = (want: Bundle, held: Bundle | undefined) =>
   !!held && Object.entries(want).every(([name, comp]) =>
     name == 'entity' ||
     Object.entries(comp as Comp).every(([prop, v]) =>
-      (held[name] as Comp | undefined)?.[prop] == v
+      token((held[name] as Comp | undefined)?.[prop]) == token(v)
     )
   )
 
