@@ -141,18 +141,19 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let script = SCRIPT.test(key)
   let source = script ? mainOf(blobs, prefix) : null
   let type = mimeOf(key)
+  let built = script ? keyed(prefix, `/${BUILT}${path.slice(1)}`) : null
   if (
     (req.method == 'HEAD' || req.headers.has('range')) &&
-    (!script || type.startsWith('video/')) &&
     !pretty(path) && !type.startsWith('text/html')
   ) {
     if (source && key == keyed(prefix, `/${await source}`)) {
       return missing(keep)
     }
-    let object = await blobs.open(key)
+    let compiled = built ? await blobs.open(built) : null
+    let object = compiled ?? await blobs.open(key)
     if (!object) return missing(keep)
     return rangedOpen(object, req, {
-      'content-type': type,
+      'content-type': compiled ? mimeOf('compiled.js') : type,
       [VERSION]: object.version,
       ...keep,
     })
@@ -161,9 +162,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // JavaScript whatever its extension (esbuild.ts): `<script type="module"
   // src="main.ts">` gets main.ts compiled. Asked for beside the source, in the
   // same round trip.
-  let made = script
-    ? blobs.load(keyed(prefix, `/${BUILT}${path.slice(1)}`))
-    : null
+  let made = built ? blobs.load(built) : null
   let file = await blobs.load(key)
   if (source && key == keyed(prefix, `/${await source}`)) return missing(keep)
   let compiled = await made

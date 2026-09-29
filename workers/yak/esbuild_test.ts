@@ -61,9 +61,11 @@ let scenario = async (
     return Response.json({ success: true, errors: [], result: {} })
   }) as typeof fetch
   let served = async (path: string) => {
-    let res = await apps.fetch(visit(`/cookbook/${path}`), p.env)
+    let res = await response(path)
     return { type: res.headers.get('content-type'), body: await res.text() }
   }
+  let response = (path: string, init: RequestInit = {}) =>
+    apps.fetch(visit(`/cookbook/${path}`, init), p.env)
   let seconds = async () => (await dir.space('ada'))!.meter?.seconds ?? 0
   return {
     env: p.env,
@@ -72,6 +74,7 @@ let scenario = async (
     tool,
     write,
     served,
+    response,
     seconds,
     [Symbol.dispose]: () => {
       globalThis.fetch = was
@@ -92,6 +95,7 @@ Deno.test('TypeScript and npm imports compile at deploy, and serve as JavaScript
   await s.write({
     'index.html': PAGE,
     'main.ts': `import * as THREE from 'three'\nlet n: number = 1`,
+    'clip.ts': 'ABCDEFGH',
     'worker.ts': `export default { fetch: (r: Request) => new Response('') }`,
     'package.json': '{"dependencies": {"three": "^0.186.0"}}',
   })
@@ -106,6 +110,25 @@ Deno.test('TypeScript and npm imports compile at deploy, and serve as JavaScript
     type: 'text/javascript; charset=utf-8',
     body: '/* main.ts */',
   })
+  let head = await s.response('main.ts', { method: 'HEAD' })
+  assertEquals(
+    head.headers.get('content-type'),
+    'text/javascript; charset=utf-8',
+  )
+  assertEquals(head.headers.get('content-length'), '13')
+  assertEquals(await head.text(), '')
+  let part = await s.response('main.ts', {
+    headers: { range: 'bytes=0-3' },
+  })
+  assertEquals(part.status, 206)
+  assertEquals(
+    part.headers.get('content-type'),
+    'text/javascript; charset=utf-8',
+  )
+  assertEquals(await part.text(), '/* m')
+  let video = await s.response('clip.ts', { method: 'HEAD' })
+  assertEquals(video.headers.get('content-type'), 'video/mp2t')
+  assertEquals(video.headers.get('content-length'), '8')
   assert((await s.tool('app_files', { op: 'read', path: 'main.ts' }))
     .includes('let n: number'))
   // The lock the compile left is an app file, so the version pins it.
