@@ -174,6 +174,7 @@ let wire = () => {
   let held: unknown = null
   return {
     sent,
+    readyState: 1,
     send: (data: string) => void sent.push(JSON.parse(data)),
     serializeAttachment: (v: unknown) => {
       held = JSON.parse(JSON.stringify(v))

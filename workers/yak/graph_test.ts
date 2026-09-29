@@ -37,9 +37,19 @@ import { db, slot, unclassified } from './testing.ts'
 let wire = () => {
   let sent: Frame[] = []
   let held: unknown = null
+  let state = 1
   return {
     sent,
-    send: (data: string) => void sent.push(JSON.parse(data)),
+    get readyState() {
+      return state
+    },
+    send: (data: string) => {
+      if (state != 1) {
+        throw new TypeError("Can't call WebSocket send() after close().")
+      }
+      sent.push(JSON.parse(data))
+    },
+    close: () => state = 2,
     serializeAttachment: (v: unknown) => {
       held = JSON.parse(JSON.stringify(v))
     },
@@ -193,6 +203,27 @@ let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   assertEquals((await post(store, '/vocab', manifest, v)).status, 200)
   return store
 }
+
+Deno.test('erasing a Store closes its subscribers and serves the empty Store', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = await cookbook(ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  store.webSocketMessage(ws, JSON.stringify({ subscribe: '.recipe', id: 'r' }))
+  assertEquals(ws.sent.length, 1)
+
+  let erased = await store.fetch(
+    new Request('http://store/', {
+      method: 'DELETE',
+      headers: headers({ ...owner, kernel: true }),
+    }),
+  )
+  assertEquals(erased.status, 200, await erased.text())
+  assertEquals(ws.readyState, 2)
+  assertEquals(ws.sent.length, 1)
+  assertEquals((await get(store, '/vocab', owner)).status, 200)
+})
 
 Deno.test('a Store checks a large delete as one batch', async () => {
   let ctx = state()

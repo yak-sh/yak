@@ -38,6 +38,9 @@ import { holds, MissingSubscriptions } from './holds.ts'
  * server-side `WebSocket` satisfies it.
  */
 export type Wire = {
+  /** only an open socket can receive a frame; closing sockets may still be
+   * returned by `getWebSockets()` */
+  readyState: number
   /** send one frame, already serialized */
   send(data: string): void
   /** close a connection whose messages keep exceeding its relay allowance */
@@ -112,6 +115,7 @@ let CAP = 2048
 // it.
 let KEYS = 16
 let bytes = new TextEncoder()
+let open = (ws: Wire) => ws.readyState == 1
 
 let fits = (held: Held, subs = held.subs ?? {}) => {
   // Serial ACKs allow only one snapshot on the wire at a time. Reserve its
@@ -325,7 +329,7 @@ export let sockets = (
     if (!held?.owed && held?.seen?.length) {
       delivery(ws, undefined, [], asks(ws))
     }
-    let fresh = queue(ws, undefined, undefined, {
+    let fresh = queue(ws, undefined, () => open(ws), {
       owed: held?.owed,
       fits: (frames) => {
         let held = ws.deserializeAttachment() as Held | null
@@ -399,6 +403,7 @@ export let sockets = (
 
     message: (ws, data, scope) => {
       if (closed.has(ws)) return
+      if (!open(ws)) return
       let input = decode(data)
       let run = () => {
         let to = sink(ws)
@@ -445,7 +450,7 @@ export let sockets = (
 
     wake: () => {
       for (let ws of ctx.getWebSockets()) {
-        if (closed.has(ws)) continue
+        if (closed.has(ws) || !open(ws)) continue
         try {
           sink(ws)
         } catch (error) {

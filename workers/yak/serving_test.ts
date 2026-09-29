@@ -176,6 +176,7 @@ Deno.test('an app worker query can read a connected peer position', async () => 
   )
   assertEquals(deployed.status, 200)
   let ws = {
+    readyState: 1,
     send: () => {},
     serializeAttachment: () => {},
     deserializeAttachment: () => null,
@@ -658,6 +659,7 @@ Deno.test('a subscription is that query still answering', async () => {
   // runtime drives a hibernated one.
   let sent: Record<string, unknown>[] = []
   let ws: Wire = {
+    readyState: 1,
     send: (data: string) => void sent.push(JSON.parse(data)),
     serializeAttachment: () => {},
     deserializeAttachment: () => null,

@@ -121,7 +121,7 @@ export let queue = (
   }
   let flush = () => {
     if (!ready() || closed) return
-    while (waiting.length && (socket.bufferedAmount ?? 0) < BUFFER) {
+    while (waiting.length && ready() && (socket.bufferedAmount ?? 0) < BUFFER) {
       if (owed && !peerOnly(waiting[0])) break
       let frame = waiting.shift()!
       let batch = relays.get(frame)
@@ -147,7 +147,9 @@ export let queue = (
         socket.send(JSON.stringify(frame))
       }
     }
-    if (waiting.length && (!owed || peerOnly(waiting[0]))) schedule()
+    if (ready() && waiting.length && (!owed || peerOnly(waiting[0]))) {
+      schedule()
+    }
   }
   let send: Sink = (frame) => {
     if (closed) return

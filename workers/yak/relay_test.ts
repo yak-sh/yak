@@ -23,6 +23,7 @@ let wire = () => {
   return {
     sent,
     closed,
+    readyState: 1,
     send: (data: string) => void sent.push(JSON.parse(data)),
     close: (code: number) => void closed.push(code),
     serializeAttachment: (v: unknown) => {

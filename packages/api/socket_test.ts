@@ -13,6 +13,32 @@ let ids = (frames: { bundles?: { entity: { eid: string } }[] }[]) =>
 
 let ws = () => req('/ws', { headers: { upgrade: 'websocket' } })
 
+Deno.test('subscriber queue stops when the socket closes during a flush', () => {
+  let open = false
+  let sent: string[] = []
+  let q = queue(
+    {
+      send: (data) => {
+        if (!open) {
+          throw new TypeError(
+            "Can't call WebSocket send() after close().",
+          )
+        }
+        sent.push(data)
+        open = false
+      },
+    },
+    undefined,
+    () => open,
+  )
+  q.send({ id: 'one', bundles: [] })
+  q.send({ id: 'two', bundles: [] })
+
+  open = true
+  q.flush()
+  assertEquals(sent.map((data) => JSON.parse(data).id), ['one'])
+})
+
 Deno.test('subscriber queue folds relay patches without crossing a data frame', () => {
   let socket = fake()
   let due: (() => void)[] = []

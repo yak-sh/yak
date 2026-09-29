@@ -21,12 +21,25 @@ let wire = () => {
   let closed: [number | undefined, string | undefined][] = []
   let held: unknown = null
   let writes = 0
+  let state = 1
   return {
     sent,
     closed,
     writes: () => writes,
-    send: (data: string) => void sent.push(JSON.parse(data)),
-    close: (code?: number, reason?: string) => void closed.push([code, reason]),
+    get readyState() {
+      return state
+    },
+    closing: () => state = 2,
+    send: (data: string) => {
+      if (state != 1) {
+        throw new TypeError("Can't call WebSocket send() after close().")
+      }
+      sent.push(JSON.parse(data))
+    },
+    close: (code?: number, reason?: string) => {
+      state = 2
+      closed.push([code, reason])
+    },
     serializeAttachment: (value: unknown) => {
       writes++
       held = JSON.parse(JSON.stringify(value))
@@ -315,6 +328,34 @@ Deno.test('a closed socket drops its subscriptions', () => {
 
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
   assertEquals(ws.sent, [])
+})
+
+Deno.test('a socket closing before its close event does not break a commit', () => {
+  let ctx = hibernation()
+  let [g, live] = instance(store(), ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  live.message(ws, ask('p', '.kind=product'))
+  ws.closing()
+
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  live.message(ws, ask('q', '.kind=product'))
+  assertEquals(ws.sent.length, 1)
+  live.close(ws)
+})
+
+Deno.test('wake ignores a closing socket still returned by the runtime', () => {
+  let storage = store(), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let [, first] = instance(storage, ctx)
+  first.message(ws, ask('p', '.kind=product'))
+  first.close(ws)
+  ws.close(1000, 'deleted')
+
+  let [g, woken] = instance(storage, ctx)
+  woken.wake()
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  assertEquals(ws.sent.length, 1)
 })
 
 Deno.test('a subscription bigger than an attachment survives hibernation', () => {
