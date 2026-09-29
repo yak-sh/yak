@@ -15,9 +15,9 @@
 // bound to this named entrypoint. The routes in wrangler.toml address the
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
-import { r2Objects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
-import { keepable, purge, tagsOf } from './cache.ts'
+import { immutable, keepable, purge, tagsOf } from './cache.ts'
 import type { App } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { BUILT } from './versions.ts'
@@ -121,6 +121,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     let ok = await purge(await req.json() as string[])
     return new Response(null, { status: ok ? 204 : 500 })
   }
+  if (url.pathname.startsWith('/blob/')) return blob(req, env, url.pathname)
   // `/<app eid>/<the app's own path>` (cache.ts `at`): the eid is the cache
   // key's tenant discriminator and is not part of the file's name.
   let eid = url.pathname.slice(1).split('/')[0] ?? ''
@@ -173,6 +174,28 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   if (!file) return missing(keep)
   return served(file, mimeOf(key), keep)
+}
+
+// Only content-addressed bytes cross this cached door. The gateway already
+// checked access and keeps the MIME, name and response fence; a missing object
+// is not immutable and must never be cached ahead of its upload.
+let blob = async (req: Request, env: Env, path: string) => {
+  let match = /^\/blob\/[^/]+\/([0-9a-f]{64})$/.exec(path)
+  let prefix = req.headers.get(PREFIX)
+  let missing = () =>
+    new Response('not found', {
+      status: 404,
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  if (!match || !prefix || !prefix.endsWith('/')) return missing()
+  let [, sha] = match
+  let object = await r2RawObjects(env.BLOBS).open(prefix + sha)
+  if (!object) return missing()
+  return rangedOpen(object, req, {
+    'content-type': 'application/octet-stream',
+    etag: `"${sha}"`,
+    ...immutable,
+  })
 }
 
 // What a module script can be written in, and what a page may load as one.

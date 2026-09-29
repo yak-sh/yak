@@ -61,6 +61,10 @@ export let keepable = (tags: string[]) => ({
   'cache-tag': tags.join(','),
 })
 
+// Content-addressed bytes cannot change under their key and need no purge.
+// Metadata and access are decided by the gateway, outside this cache.
+export let immutable = { 'cache-control': `public, max-age=${YEAR}, immutable` }
+
 // The address the gateway asks the inner entrypoint at, and therefore the
 // cache key. The hostname is a placeholder that never resolves — the request
 // goes over the service binding, not the network — and everything that
@@ -78,6 +82,12 @@ export let at = (eid: string, path: string, source = '') =>
   `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}${
     source ? `?source=${encodeURIComponent(source)}` : ''
   }`
+
+// A blob has no mutable file path. Keep its byte cache separate from app
+// files, and name both the app and the content so neither tenant nor upload
+// can reuse another entry.
+export let blobAt = (eid: string, sha: string) =>
+  `https://files.invalid/blob/${eid}/${sha}`
 
 // The tag a purge names. One tag, the app's eid, and the reason there is only
 // one is the reason this design is safe: what is cached is bytes, so the only
