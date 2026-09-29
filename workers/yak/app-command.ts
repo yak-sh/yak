@@ -4,7 +4,7 @@ import { invoke, mayCall, type ToolDef, type Tools } from '@yaks/tools/declared'
 import { CallError, display } from '@yaks/tools'
 import { type Bundle } from '@yaks/graph'
 import { type App, appStore, type Space, storeName } from './directory.ts'
-import { commandWorker } from './dispatch.ts'
+import { commandWorker, workerBreak } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { recall } from './lib/hops.ts'
 import type { Who } from './session.ts'
@@ -85,7 +85,9 @@ export let commandAt = async (
     args,
     {
       worker: async (path, args) => {
-        let res = await commandWorker(env, space, app, who, path, args)
+        let res = await commandWorker(env, space, app, who, path, args, {
+          report: (req, said) => workerBreak(env, space, app, req, said),
+        })
         return workerReply(res, name, at)
       },
       query: async (line) => {

@@ -96,15 +96,7 @@ Deno.test('a companion works off-page across pause, restart and retry', async ()
                     ),
                   }
                   : init
-                let route = path.startsWith('query?')
-                  ? `/query?q=${
-                    encodeURIComponent(
-                      path.slice(6).split('&')
-                        .map(decodeURIComponent).join('&'),
-                    )
-                  }`
-                  : `/${path}`
-                return door(route, content, {
+                return door(`/${path}`, content, {
                   'x-yak-person': k.app.eid,
                   'x-yak-role': 'editor',
                 })
@@ -192,9 +184,7 @@ Deno.test('a companion works off-page across pause, restart and retry', async ()
     { person: k.app.eid, role: 'editor' },
     '/companion/tick',
     {},
-    old.entity.eid,
-    old.created.at,
-    eid,
+    { call: old.entity.eid, at: old.created.at, source: eid },
   )
   assertEquals(res.status, 200)
   assertEquals((await read(door, `.item.owner=${hero}`)).length, 1)

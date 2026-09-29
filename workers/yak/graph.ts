@@ -1379,15 +1379,17 @@ export class Store {
                 { person: appId, role: 'editor' },
                 path,
                 args,
-                call.entity.eid,
-                typeof call.created == 'object' && call.created != null &&
-                  'at' in call.created
-                  ? String(call.created.at ?? '')
-                  : '',
-                typeof call.call == 'object' && call.call != null &&
-                  'source' in call.call
-                  ? String(call.call.source ?? call.entity.eid)
-                  : call.entity.eid,
+                {
+                  call: call.entity.eid,
+                  at: typeof call.created == 'object' &&
+                      call.created != null && 'at' in call.created
+                    ? String(call.created.at ?? '')
+                    : '',
+                  source: typeof call.call == 'object' && call.call != null &&
+                      'source' in call.call
+                    ? String(call.call.source ?? call.entity.eid)
+                    : call.entity.eid,
+                },
               )
               await res.body?.cancel()
               return []

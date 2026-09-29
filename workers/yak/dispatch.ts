@@ -67,6 +67,7 @@ import {
   WRAPPER,
 } from './wrangler_app.ts'
 import { refuse, rejected } from './tool.ts'
+import { caught } from './sentry.ts'
 import { modules } from '@yaks/esbuild'
 export { WORKER } from './wrangler_app.ts'
 
@@ -340,22 +341,30 @@ export let nowhere = (e: unknown) => missing(e) || unreachable(e)
 // store, its serving version, and the members told. Both ways the app's code
 // can fall over come through here, because they are one event: a worker that
 // answers 500 and a worker that throws are the same app not working.
-let broke = (
+export let workerBreak = async (
   env: Env,
   space: Space,
   app: App,
   req: Request,
   said: { message: string; stack?: string },
-) =>
-  serving(env, space, app).then((version) =>
-    noted((bundles) =>
-      metaOf(appStore(env.STORE, space, app))
-        .apply(bundles, KERNEL), {
-      request: `worker ${req.method} ${new URL(req.url).pathname}`,
-      version,
-      ...said,
-    }, { env, space, app })
-  )
+) => {
+  let request = `worker ${req.method} ${new URL(req.url).pathname}`
+  let version = await serving(env, space, app)
+  await noted((bundles) =>
+    metaOf(appStore(env.STORE, space, app))
+      .apply(bundles, KERNEL), {
+    request,
+    version,
+    ...said,
+  }, { env, space, app })
+    .catch((why) =>
+      caught(why, {
+        request: `file ${request}`,
+        space: space.slug,
+        app: app.slug,
+      })
+    )
+}
 
 // A cookie an app's code may set: one for its own hostname and no wider. A
 // `Domain` attribute is always wider — `Domain=ada.yaks.app` reaches every
@@ -485,9 +494,15 @@ export let commandWorker = async (
   who: Who,
   path: string,
   args: Record<string, unknown>,
-  call?: string,
-  at?: string,
-  source?: string,
+  opts: {
+    call?: string
+    at?: string
+    source?: string
+    report?: (
+      req: Request,
+      said: { message: string; stack?: string },
+    ) => Promise<void>
+  } = {},
 ): Promise<Response> => {
   let endpoint = new URL(path.slice(1), url(space, app, env))
   let req = new Request(endpoint, {
@@ -495,12 +510,42 @@ export let commandWorker = async (
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(args),
   })
-  let res = await called(env, space, app, req, who, call, at, source, 5_000)
+  let res
+  try {
+    res = await called(
+      env,
+      space,
+      app,
+      req,
+      who,
+      opts.call,
+      opts.at,
+      opts.source,
+      5_000,
+    )
+  } catch (e) {
+    let message = e instanceof Error ? e.message : String(e)
+    if (!refusal(message)) {
+      await opts.report?.(req, {
+        message,
+        stack: e instanceof Error ? e.stack ?? '' : '',
+      })
+    }
+    throw e
+  }
   if (!res) throw new Error('app worker is unavailable')
   if (!res.ok) {
+    let body = await res.text()
+    if (failed(res.status)) {
+      await opts.report?.(req, {
+        message: `the app's worker answered ${res.status} ` +
+          '(command CPU limit 5000 ms)',
+        stack: '',
+      })
+    }
     throw rejected(
       res.status,
-      `app worker answered ${res.status}: ${await res.text()}`,
+      `app worker answered ${res.status}: ${body}`,
     )
   }
   return res
@@ -518,7 +563,12 @@ let threw = async (
 ) => {
   let said = e instanceof Error ? e.message : String(e)
   if (refusal(said)) return
-  await broke(env, space, app, req, {
+  caught(e, {
+    request: `worker ${req.method} ${new URL(req.url).pathname}`,
+    space: space.slug,
+    app: app.slug,
+  })
+  await workerBreak(env, space, app, req, {
     message: said,
     stack: e instanceof Error ? e.stack ?? '' : '',
   })
@@ -541,8 +591,14 @@ let verdict = async (
     return null
   }
   if (failed(res.status)) {
-    await broke(env, space, app, req, {
-      message: `the app's worker answered ${res.status}`,
+    let message = `the app's worker answered ${res.status}`
+    caught(new Error(message), {
+      request: `worker ${req.method} ${new URL(req.url).pathname}`,
+      space: space.slug,
+      app: app.slug,
+    })
+    await workerBreak(env, space, app, req, {
+      message,
       stack: '',
     })
   }

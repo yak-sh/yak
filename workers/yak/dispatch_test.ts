@@ -18,6 +18,12 @@
 //   - the script carries every module the app's worker imports, each typed by
 //     what the runtime must do with it — a wasm compiled, a `.js` linked
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import {
+  createTransport,
+  type ErrorEvent,
+  ServerRuntimeClient,
+  setCurrentClient,
+} from '@sentry/core'
 import { COOKIE, seal, sign } from './lib/token.ts'
 import type { App, Space } from './directory.ts'
 import {
@@ -181,9 +187,11 @@ Deno.test('declared commands have bounded CPU and only scheduled calls have cont
     { person: app.eid, role: 'editor' },
     '/tick',
     {},
-    'call-1',
-    '2026-09-28T00:00:00Z',
-    'world-1',
+    {
+      call: 'call-1',
+      at: '2026-09-28T00:00:00Z',
+      source: 'world-1',
+    },
   )
   assertEquals((asked[2] as { limits: unknown }).limits, {
     cpuMs: 5_000,
@@ -214,6 +222,36 @@ Deno.test('declared commands have bounded CPU and only scheduled calls have cont
   assertEquals((asked[2] as { limits?: unknown }).limits, undefined)
   assertEquals(m.seen().headers.get('x-yak-command-call'), null)
   assertEquals(m.seen().headers.get('x-yak-command-source'), null)
+})
+
+Deno.test('a command worker failure calls its reporter once', async () => {
+  let notes: string[] = []
+  let report = (req: Request, said: { message: string }) => {
+    notes.push(`${req.method} ${new URL(req.url).pathname}: ${said.message}`)
+    return Promise.resolve()
+  }
+  await assertRejects(
+    () =>
+      commandWorker(envOf(mirror(503).get), space, app, who, '/inspect', {}, {
+        report,
+      }),
+    Error,
+    '503',
+  )
+  assertEquals(notes, [
+    "POST /recipes/inspect: the app's worker answered 503 " +
+    '(command CPU limit 5000 ms)',
+  ])
+  notes = []
+  await assertRejects(
+    () =>
+      commandWorker(envOf(mirror(403).get), space, app, who, '/inspect', {}, {
+        report,
+      }),
+    Error,
+    '403',
+  )
+  assertEquals(notes, [])
 })
 
 Deno.test('an app sets cookies for its own host, and none for the zone', async () => {
@@ -385,6 +423,27 @@ Deno.test("a worker's own no is not a break; its 5xx is", async () => {
   assertEquals(broke.version, 7)
   assertEquals(broke.request, 'worker GET /recipes/hello')
   assertEquals(broke.message, "the app's worker answered 503")
+})
+
+Deno.test('an answered worker 5xx reaches Sentry with its app', async () => {
+  let seen: ErrorEvent[] = []
+  let client = new ServerRuntimeClient({
+    dsn: 'https://key@example.ingest.sentry.io/1',
+    integrations: [],
+    stackParser: () => [],
+    transport: (o) => createTransport(o, () => Promise.resolve({})),
+    beforeSend: (event) => (seen.push(event), null),
+  })
+  setCurrentClient(client)
+  client.init()
+  await ran(envOf(mirror(503).get), space, app, visit(), who)
+  await client.flush(1_000)
+  assertEquals(seen.length, 1)
+  assertEquals(seen[0].tags, {
+    request: 'worker GET /recipes/hello',
+    space: 'jeff',
+    app: 'recipes',
+  })
 })
 
 // The seam (T-33234). `worker.fetch` is the one line in the kernel where the

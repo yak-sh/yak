@@ -1,6 +1,6 @@
 // A page and an agent invoke the same declared app command with their caller's
 // authority. The page door exercises the stored declaration and HTTP result.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { parseTools } from '@yaks/tools/declared'
 import * as apps from './apps.ts'
 import { appStore } from './directory.ts'
@@ -28,6 +28,12 @@ let words = {
       description: 'Ask the app owner for a record',
       floor: 'owner',
       worker: '/owner-json',
+    },
+    owner_fail: {
+      tool: true,
+      description: 'A worker that cannot answer',
+      floor: 'owner',
+      worker: '/owner-fail',
     },
     notes: {
       tool: true,
@@ -62,6 +68,8 @@ Deno.test('a page invokes declared commands as its owner; the command door refus
         Promise.resolve(
           req.url.endsWith('/owner-json')
             ? Response.json({ name: 'Elder Wren', land: 'tombsands' })
+            : req.url.endsWith('/owner-fail')
+            ? new Response(null, { status: 503 })
             : new Response(
               req.headers.get('x-yak-role') == 'owner'
                 ? 'welcome'
@@ -138,6 +146,19 @@ Deno.test('a page invokes declared commands as its owner; the command door refus
   )
   assertEquals(json.body.text.includes('{"name":'), false)
   assertEquals(json.body.text.includes('**name**: `"Elder Wren"`'), true)
+  let ownerCookie = await as(ADA)
+  await assertRejects(
+    () => post(ownerCookie, 'owner_fail'),
+    Error,
+    '503',
+  )
+  let errors = await store('/query?q=.exception', {}, ADA_OWNS)
+  let [failure] = await errors.json()
+  assertEquals(failure.exception.request, 'worker POST /cookbook/owner-fail')
+  assertEquals(
+    failure.exception.message,
+    "the app's worker answered 503 (command CPU limit 5000 ms)",
+  )
   let editor = await post(await as(ELI), 'owner_word')
   assertEquals(editor.status, 403)
   assertEquals(editor.body.error.code, 'access')
