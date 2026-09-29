@@ -208,11 +208,23 @@ export let usable = (exports: string[], taken: string[] = []) =>
   )
 
 // The first line of a compiled module: the imports it hoists, all on one
-// line, and the opening of the test's body. `$module`, `$test` and the
-// checks are named with a `$` so an example's own names never meet them.
+// line, and the opening of the test's body. `$test` and the checks are
+// named with a `$` so an example's own names never meet them.
 let head = (parts: string[]) =>
   parts.map((p) => p.replace(/\s*\n\s*/g, ' '))
     .join('; ')
+
+/// imported(['a', 'b'], 'm.ts') -> "import { a, b } from './m.ts'"
+/// imported([], 'm.ts') -> "import './m.ts'"
+/**
+ * The page, with the exports an example uses unimported imported by name, so
+ * each stays the live binding the page's own code assigns. The example's code
+ * is a function's body, so it may declare one of those names again.
+ */
+export let imported = (names: string[], base: string): string =>
+  names.length
+    ? `import { ${names.join(', ')} } from './${base}'`
+    : `import './${base}'`
 
 // Lines `from` up to where a page's line `to` stands in a compiled module.
 let pad = (from: number, to: number) => '\n'.repeat(Math.max(1, to - from))
@@ -231,17 +243,15 @@ export let compileFence = (
   exports: string[] = [],
 ) => {
   let { imports, rest } = hoist(fence.code)
-  let names = usable(exports, imports.flatMap(bound))
   let base = page.slice(page.lastIndexOf('/') + 1)
+  let names = usable(exports, imports.flatMap(bound))
   return head([
     ...imports,
     `import { test as $test } from ${JSON.stringify(own('suite.ts'))}`,
-    ...module(page) ? [`import * as $module from './${base}'`] : [],
-    `$test(${JSON.stringify(name)}, (({ ${
-      names.join(', ')
-    } }) => async () => {`,
+    ...module(page) ? [imported(names, base)] : [],
+    `$test(${JSON.stringify(name)}, async () => {`,
   ]) + pad(1, fence.line + 1) + rest.join('\n') +
-    `\n})(${module(page) ? '$module' : '{}'}), { skip: ${fence.skip} })\n`
+    `\n}, { skip: ${fence.skip} })\n`
 }
 
 /**
@@ -282,9 +292,7 @@ export let compileDoctests = (
     `import { equal as $equal, match as $match, throws as $throws } from ${
       JSON.stringify(own('assert.ts'))
     }`,
-    `import * as $module from './${base}'`,
-    // The exports are the outer function's, so a statement in the body may
-    // declare a name again.
-    `await (({ ${usable(exports).join(', ')} }) => (async () => {`,
-  ]) + body + '\n})())($module)\n'
+    imported(usable(exports), base),
+    'await (async () => {',
+  ]) + body + '\n})()\n'
 }

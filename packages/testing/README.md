@@ -87,9 +87,10 @@ test in the runtime carries.
 
 A file whose tests all passed is left out while nothing it depends on has
 changed. What it depends on is its module graph as `deno info` resolves it,
-every file or directory a module in that graph names beside itself
+every file a module in that graph names beside itself
 (`new URL('./fixture.json', import.meta.url)`), the runner, the config and lock,
-the Deno version, and whatever `--also` names. The record of passes is
+the Deno version, and whatever `--also` names. A directory named is a place (a
+root, a working directory), not what lies in it. The record of passes is
 `~/.cache/yak/tests-passed.json`, shared by every checkout on the machine. A
 file read any other way is not seen; `--all` runs everything, and a run picked
 by tag records nothing.

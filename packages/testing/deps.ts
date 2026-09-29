@@ -1,11 +1,12 @@
 // Which files a run can leave out: one whose tests all passed, when nothing
 // it depends on has changed since. A file depends on its module graph, as
 // `deno info` resolves it (a dynamic import of a literal specifier
-// included); on every file or directory a module in that graph names beside
-// itself (`new URL('./fixture.json', import.meta.url)`); and on what every
-// file shares: the runner, the config and lock it runs under, the runtime,
-// and whatever the caller adds. A file read any other way is not seen, so a
-// run that must not trust the record asks for all of it.
+// included); on every file a module in that graph names beside itself
+// (`new URL('./fixture.json', import.meta.url)`); and on what every file
+// shares: the runner, the config and lock it runs under, the runtime, and
+// whatever the caller adds. A directory named is a place (a root, a working
+// directory), not what lies in it, and a file read any other way is not
+// seen, so a run that must not trust the record asks for all of it.
 //
 // A key is a digest of all that. A passed key is kept in a file every
 // checkout on the machine shares, so the same sources passing in one
@@ -79,21 +80,14 @@ export let named = (source: string, path: string): string[] =>
     ),
   ].map((m) => rel(new URL(m[2], url(path)).href).replace(/\/$/, '') || '.')
 
-let SKIP = ['node_modules', '.wrangler', 'vendor']
-
-// A digest of a file's bytes, or of every file under a directory.
+// A digest of a file's bytes; a directory is only a place.
 let digest = async (path: string): Promise<string> => {
   let info = await Deno.stat(path).catch(() => undefined)
-  if (!info) return 'absent'
-  if (info.isFile) return await hex(await Deno.readFile(path))
-  let names: string[] = []
-  for await (let e of Deno.readDir(path)) {
-    if (!e.name.startsWith('.') && !SKIP.includes(e.name)) names.push(e.name)
-  }
-  let parts = await Promise.all(
-    names.sort().map(async (n) => `${n} ${await digest(`${path}/${n}`)}`),
-  )
-  return await hex(parts.join('\n'))
+  return !info
+    ? 'absent'
+    : info.isFile
+    ? await hex(await Deno.readFile(path))
+    : 'place'
 }
 
 /**
@@ -158,10 +152,11 @@ export let keys = async (
     paths.forEach((p) => visit(url(p)))
     return [...[...seen].filter((s) => !s.startsWith('file:')), ...files]
   }
-  let digestOf = async (paths: string[]) =>
+  // A root standing for another file is that file's, not a file of its own.
+  let digestOf = async (paths: string[], stand = '') =>
     await hex(
       (await Promise.all(
-        reach(paths).map(async (f) =>
+        reach(paths).filter((f) => f != stand).map(async (f) =>
           f.includes(':') ? f : `${f} ${(await fact(f)).digest}`
         ),
       )).sort().join('\n'),
@@ -170,7 +165,8 @@ export let keys = async (
   let out = new Map<string, string>()
   for (let r of roots) {
     let name = as.get(r) ?? r
-    out.set(r, await hex(`${shared}\n${name}\n${await digestOf([r, name])}`))
+    let own = await digestOf([r, name], as.has(r) ? r : '')
+    out.set(r, await hex(`${shared}\n${name}\n${own}`))
   }
   return out
 }

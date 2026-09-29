@@ -80,6 +80,10 @@ test('the examples beside the code run: fences, and a module’s doctests', asyn
       '///   -> 3',
       "/// JSON.parse('{') throws 'JSON'",
       '// / later() -> 1',
+      'export let seen = 0',
+      'export let see = () => seen = 1',
+      '/// see()',
+      '/// seen -> 1',
     ].join('\n'),
   })
   let { said } = await dir.run()
@@ -91,6 +95,7 @@ test('the examples beside the code run: fences, and a module’s doctests', asyn
     'm.ts:10 twice(1)': 'FAILED',
     "m.ts:12 JSON.parse('{') throws 'JSON'": 'ok',
     'm.ts:13 later() -> 1': 'ignored',
+    'm.ts:17 seen -> 1': 'ok',
   })
 })
 
@@ -98,22 +103,28 @@ test('a file that passed is left out until what it depends on changes', async ()
   await using dir = await fixture({
     'a_test.ts': `import { test } from '@yaks/testing'
 import { one } from './one.ts'
-test('a', () => one)`,
+let here = new URL('./', import.meta.url)
+test('a', () => one && here)`,
     'b_test.ts': `import { test } from '@yaks/testing'
 let data = new URL('./data.json', import.meta.url)
 test('b', () => Deno.readTextFile(data))`,
     'one.ts': 'export let one = 1',
     'data.json': '{}',
+    'README.md': "```ts\nimport { one } from './one.ts'\n```\n",
   })
-  equal(Object.keys((await dir.run()).said), ['a', 'b'])
+  let ran = async (...args: string[]) =>
+    Object.keys((await dir.run(...args)).said)
+  equal(await ran(), ['a', 'b', 'README.md:1'])
   let again = await dir.run()
   equal(again.said, {})
-  match(again.text, /2 unchanged since they passed/)
+  match(again.text, /3 unchanged since they passed/)
   await dir.write('one.ts', 'export let one = 2')
-  equal(Object.keys((await dir.run()).said), ['a'])
+  equal(await ran(), ['a', 'README.md:1'])
+  // A directory a module names is a place, not what lies in it.
   await dir.write('data.json', '[]')
-  equal(Object.keys((await dir.run()).said), ['b'])
-  equal(Object.keys((await dir.run('--all')).said), ['a', 'b'])
+  await dir.write('other.txt', '')
+  equal(await ran(), ['b'])
+  equal(await ran('--all'), ['a', 'b', 'README.md:1'])
 })
 
 test('tags pick tests, and a test that never ends fails alone', async () => {
