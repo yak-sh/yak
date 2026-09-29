@@ -159,8 +159,8 @@ Deno.test('a second Resolver implementation satisfies the same interface', () =>
   }))
   // One consumer, typed to the seam, drives either backing.
   let count = (res: Resolver, preds: Pred[]) => res.resolve(preds).length
-  assertEquals(count(stub, q('.status=open')), 2)
-  assertEquals(count(mem, q('.status=open')), 1)
-  assertEquals(stub.subscribe(q('.status=open')).value, ['a', 'b'])
-  assertEquals(mem.subscribe(q('.status=open')).value, ['a'])
+  assertEquals(count(stub, q('.task.status=open')), 2)
+  assertEquals(count(mem, q('.task.status=open')), 1)
+  assertEquals(stub.subscribe(q('.task.status=open')).value, ['a', 'b'])
+  assertEquals(mem.subscribe(q('.task.status=open')).value, ['a'])
 })

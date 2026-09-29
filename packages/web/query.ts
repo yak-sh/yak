@@ -45,11 +45,11 @@
 // midnight-to-midnight, .updated.at>="1 hour ago" is the last hour.
 // Schedulers want one moment instead — that's instant(), below span.
 //
-// Unqualified props route by component, same rule as writes; `.task.status`
-// is the explicit spelling. A component name by itself tests the facet:
-// `!proposed` means absent, `.proposed` present. `.num` routes to the entity
-// spine; `at`/`by` are shared by the stamps — created, updated, decided,
-// proposed, archived — so spell those out (`.created.at`, `.archived.at`).
+// Names resolve the way the host resolves them: @yaks/vocab routes each one,
+// and a bare property several components declare takes the component the rest
+// of the line names (@yaks/query's meant.ts: `.task .status=open`);
+// `.task.status` is the explicit spelling. A component name by itself tests
+// the facet: `!proposed` means absent, `.proposed` present.
 //
 // References are ordinary props: `.assignee=jeff`; the VALUE resolves like
 // any id (alias, T-3, raw eid) at whichever door or evaluator holds the graph
@@ -59,30 +59,30 @@
 // dereferences the eid column and predicates the target's prop. A path is an
 // N-hop CHAIN: each `{eid}` deref moves to the target entity and the next
 // segment(s) read there, so `.comment.target.doc.title~=foo` walks
-// comment→target then tests doc.title, arbitrarily deep (groupsOf).
+// comment→target then tests doc.title, arbitrarily deep (@yaks/vocab `aim`).
 import { IdError } from './types.ts'
-import { isRef, parseProp, type Prop } from './props.ts'
-import { edges, kindOrder, kindWord, sessionComps, statusOf } from './types.ts'
-import type { Vocab } from './route.ts'
+import { anyRef, isRef, parseProp, type Prop, typed } from './props.ts'
 import {
-  groupsOf,
-  kind,
-  NONE,
-  owned,
-  refCols,
-  REFS_PROP,
-  reverseAssocs,
-  routed,
-  routes,
-  tagOf,
-  taught,
-  typeAt,
-  typed,
-} from './route.ts'
+  edges,
+  kindOrder,
+  kindWord,
+  resultComps,
+  sessionComps,
+  statusOf,
+  vocab,
+} from './types.ts'
+import { Unknown } from '@yaks/vocab'
 import { term as ftsTerm } from '@yaks/fts'
 import { type Check, check } from '@yaks/match'
-import type { Tag } from '@yaks/sql'
-import { type Clause, parse, parseDot, timeSpan, type Value } from '@yaks/query'
+import { type Tag, tagOf } from '@yaks/sql'
+import {
+  bare,
+  type Clause,
+  meant,
+  parse,
+  timeSpan,
+  type Value,
+} from '@yaks/query'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 
@@ -126,8 +126,9 @@ export type Pred = {
   // A MULTI-COLUMN reverse-union: match any entity that references `value`
   // through SOME `{eid}` column — the backlinks of `value`, the union of every
   // reverse lookup the vocabulary implies (`.refs=T-3`). comp/prop stay empty:
-  // the union spans refCols, so anchor unions the reverse index and sql.ts
-  // unions the ref tables. `.comment.target=T-3` is one column of this.
+  // the union spans every reference property, so anchor unions the reverse
+  // index and sql.ts unions the ref tables. `.comment.target=T-3` is one
+  // column of this.
   refs?: boolean
   // An AGGREGATE projection rather than a filter: `agg` names the reduction
   // over this pred's column — `distinct` its non-empty values, `tally` each
@@ -218,6 +219,8 @@ export type Field = { comp: string; prop: string; wake: boolean }
 export type Rev = {
   comp: string
   prop: string
+  // the association's own name (`comments`), the spelling a line writes back
+  name: string
   preds: Pred[]
   not: boolean
   count?: boolean
@@ -252,12 +255,14 @@ let OPS: Record<string, string> = {
   '>=': '>=',
 }
 
-// `.order=hot`, `.order=search`, and `.order=similar` are rankings, not filters: matchQuery lets
-// them through, adopt() ignores them, and orderOf() hands the value to whoever
-// sorts. Search is explicit so a filter-only picker can request recent-first
-// results without changing ordinary query order. Similar asks the evaluator
-// that owns the embedding service for vector-neighbor rank.
+// `.order=hot`, `.order=search`, and `.order=similar` are rankings, not
+// filters: matchQuery lets them through, adopt() ignores them, and orderOf()
+// hands the value to whoever sorts. Search is explicit so a filter-only picker
+// can request recent-first results without changing ordinary query order.
+// Similar asks the evaluator that owns the embedding service for
+// vector-neighbor rank.
 export let ORDER = 'order'
+export let RANKS = ['hot', 'search', 'similar']
 
 export let orderOf = (preds: Pred[]) => preds.find((p) => p.op == ORDER)?.value
 
@@ -547,57 +552,14 @@ export let kindPreds = (kind: string): Pred[] | null => {
   ]
 }
 
-// A SCOPE is a virtual/derived prop: a named `(value) => Pred[]` resolver that
-// folds into the AND-list and composes like any column filter — the
-// ActiveRecord-scope shape, one filter grammar. `.kind=memory` is the first
-// member: it resolves through kindPreds to the exact presence Pred[], which is
-// why the bespoke `kind` parameter that threaded five layers is gone. A
-// resolver returns null for a value it cannot name (`.kind=typo`); the pred
-// seam turns that into the refusal any bad filter earns. Real column/component
-// props resolve FIRST in pred(), so a scope never shadows `.status`/`.project`:
-// where a host's vocabulary has a real `kind` column, that column is what
-// `.kind=` filters.
-export let scopes: Record<string, (value: string) => Pred[] | null> = {
-  // kindWord folds the plural in (`.kind=projects` reads like `.kind=project`),
-  // the leniency the bare-word listing already granted.
-  kind: (value) => kindPreds(kindWord(value) ?? value),
-}
-
-// `doc` sits in kindOrder as the fallback NAME for a bare document, but
-// every kind wears one — so a doc pred is never the cross-kind mistake.
-// Anything outside kindOrder (created, updated, recall) is a facet too.
-let facet = (comp: string) => comp == 'doc' || !kindOrder.includes(comp)
-
-// An empty result is the one moment a caller cannot tell INTERPRETATION
-// from data. A pred naming another kind's column is perfectly valid, so it
-// matches nothing and prints exactly like a truthful "none" — `.from=jeff`
-// routes to mail.from and answers "no matches" for TASKS; `.to=holdco`
-// routes to deliver.to (a reference, so the id sugar resolves holdco) and
-// answers "none" for TASKS. Both were read as evidence of absence.
-//
-// So on empty — and only on empty — a door says how the filters actually
-// routed. This reports what route() DID, never what COULD match: an entity
-// may carry `task` and `mail` both and still be NAMED a task (kindOf takes
-// the first component in kindOrder), so impossibility is not derivable and
-// a refusal here would be a policy wearing a fact's clothes. Being advisory
-// is what makes it safe to add: a legitimate "none" is unchanged.
-export let resolution = (preds: Pred[], kind?: string) => {
-  let crossed = preds.filter((p) =>
-    p.op != ORDER && p.op != NEAR && p.op != AGG && p.op != WANT && !p.refs &&
-    p.comp && p.comp != kind && !facet(p.comp)
-  )
-  // The suggestion is composed through the routing table, so it can only
-  // name a spelling that parses — an error naming a door owes that much.
-  let alt = (prop: string) => {
-    let cols = (kind ? routes[kind] : undefined) ?? []
-    return cols.includes(prop) ? `.${kind}.${prop}` : ''
-  }
-  return crossed
-    .map((p) => {
-      let mean = alt(p.prop)
-      return `${p.comp}.${p.prop}${mean ? ` — did you mean ${mean}=?` : ''}`
-    })
-    .join(', ')
+// `.kind=memory` is a SCOPE, not a column: kind is derived (the first
+// kindOrder component an entity wears), so it reads as the exact presence
+// clauses kindPreds builds, as @yaks/sql reads it. kindWord folds the plural
+// in (`.kind=projects` reads like `.kind=project`).
+let kindScope = (value: string): Pred[] => {
+  let out = kindPreds(kindWord(value) ?? value)
+  if (!out) throw new Error(`no such kind: ${value || '(empty)'}`)
+  return out
 }
 
 // Time phrases stay authored: a saved `today` must advance tomorrow. timeSpan()
@@ -605,8 +567,8 @@ export let resolution = (preds: Pred[], kind?: string) => {
 // canonical comparison string through the same parser writes use.
 let atom = (p: Prop, value: string): string => {
   if (!value) return value
-  if (kind(p) == 'time' && timeSpan(value)) return value
-  if (kind(p) == 'eid') {
+  if (tagFor(p) == 'time' && timeSpan(value)) return value
+  if (tagFor(p) == 'eid') {
     try {
       return String(parseProp(p, value))
     } catch {
@@ -636,10 +598,18 @@ let flatValue = (v: Value | null): string => {
   return `${flatValue(v.lo)}..${v.exclusiveEnd ? '.' : ''}${flatValue(v.hi)}`
 }
 
-let columnOf = (path: string[], vocab: Vocab, directive: string): Hop => {
-  let groups = groupsOf(path, vocab)
-  let at = groups[groups.length - 1]
-  if (groups.length != 1 || !at.prop) {
+// What a column is to a value comparison, as @yaks/sql reads it: a shared
+// reference names entities, and a column no component declares is text.
+let tagFor = (hop: Hop): Tag => {
+  if (!hop.comp) return 'eid'
+  let p = vocab.prop(hop.comp, hop.prop)
+  return p ? tagOf(p) : 'text'
+}
+
+let columnOf = (path: string[], directive: string): Hop => {
+  let hops = vocab.aim(path.join('.'))
+  let at = hops[hops.length - 1]
+  if (hops.length != 1 || !at.prop) {
     throw new Error(
       `${directive} names one column, not a path: ${path.join('.')}`,
     )
@@ -660,7 +630,7 @@ let alternative = (preds: Pred[]): Pred[] => {
   return preds
 }
 
-export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
+let bindClause = (c: Clause): Pred[] => {
   let rider = (extra: Partial<Pred>): Pred[] => [{
     comp: '',
     prop: '',
@@ -671,14 +641,14 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
   }]
   switch (c.kind) {
     case 'and':
-      return c.clauses.flatMap((c) => bindClause(c, vocab))
+      return c.clauses.flatMap((c) => bindClause(c))
     case 'or':
       return [{
         comp: '',
         prop: '',
         op: OR,
         value: '',
-        alts: c.clauses.map((a) => alternative(bindClause(a, vocab))),
+        alts: c.clauses.map((a) => alternative(bindClause(a))),
       }]
     case 'never':
       return [never()]
@@ -686,7 +656,7 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
       return [text(c.value)]
     case 'resource':
       if (/^[0-9a-f]{6,64}$/i.test(c.comp)) {
-        return bindClause(parse(`.eid=#${c.comp}`), vocab)
+        return bindClause(parse(`.eid=#${c.comp}`))
       }
       throw new Error(`a fleet read cannot evaluate resource #${c.comp}`)
     case 'every':
@@ -708,7 +678,7 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
     case 'distinct':
     case 'tally':
       return [{
-        ...columnOf(c.path, vocab, `.${c.kind}`),
+        ...columnOf(c.path, `.${c.kind}`),
         op: AGG,
         value: '',
         agg: c.kind,
@@ -720,7 +690,7 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
         op: PROJECT,
         value: '',
         fields: c.fields.filter((f) => f.path.join('.') != 'eid').map((f) => ({
-          ...columnOf(f.path, vocab, '.fields'),
+          ...columnOf(f.path, '.fields'),
           wake: f.wake,
         })),
       }]
@@ -742,14 +712,14 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
         if (!(edges as readonly string[]).includes(type)) {
           throw new Error(`.edges selects one edge type (${edges.join(', ')})`)
         }
-        let via = path && columnOf(path, vocab, '.edges endpoint projection')
+        let via = path && columnOf(path, '.edges endpoint projection')
         if (via && !isRef(via.comp, via.prop)) {
           throw new Error('.edges endpoint projection must be one {eid} column')
         }
         edge = { type, ...(via ? { via } : {}) }
       }
       return rider({
-        peers: c.peers.map((p) => columnOf(p, vocab, '.edges.peers')),
+        peers: c.peers.map((p) => columnOf(p, '.edges.peers')),
         ...(edge ? { edge } : {}),
         ...(c.limit != null ? { limit: c.limit } : {}),
       })
@@ -758,7 +728,7 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
       let path = c.path.join('.')
       let reach: Reach = { type: path, depth: c.depth, dir: c.dir }
       if (!(edges as readonly string[]).includes(path)) {
-        let via = columnOf(c.path, vocab, 'a walk')
+        let via = columnOf(c.path, 'a walk')
         if (!isRef(via.comp, via.prop)) {
           throw new Error(
             `a walk follows an edge type (${
@@ -776,12 +746,12 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
       throw new Error(`a fleet read cannot evaluate ${c.kind}`)
   }
   let segs = c.path, op = c.op, value = flatValue(c.value)
-  let assoc = reverseAssocs.get(segs[0])
+  let assoc = vocab.assoc(segs[0])
   if (assoc) {
     let inner = c.where
-      ? bindClause(c.where, vocab)
+      ? bindClause(c.where)
       : segs.length > 1
-      ? bindClause({ ...c, path: segs.slice(1), not: undefined }, vocab)
+      ? bindClause({ ...c, path: segs.slice(1), not: undefined })
       : []
     let count = !inner.length &&
       !(op == '!' || (op == '~=' && !value) || (op == '=' && !value))
@@ -798,6 +768,7 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
       value: count ? value : '',
       rev: {
         ...assoc,
+        name: segs[0],
         preds: inner,
         not: inner.length ? !!c.not : op == '=' && !value,
         ...(count ? { count: true } : {}),
@@ -807,42 +778,22 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
   if (c.not || c.where) {
     throw new Error(`.${segs[0]} is not a reverse association`)
   }
-  if (segs.length == 1 && segs[0] in scopes && !owned(segs[0])) {
-    let out = scopes[segs[0]](value)
-    if (!out) throw new Error(`no such ${segs[0]}: ${value || '(empty)'}`)
-    return out
-  }
-  if (op == '?') {
-    if (
-      segs.length != 1 || value || (owned(segs[0]) && !routed(segs[0], vocab))
-    ) {
+  if (segs.length == 1 && segs[0] == 'kind') return kindScope(value)
+  if (op == '?') return [{ ...wanted(c), op: WANT, value: '' }]
+  let hops = aimed(c)
+  let leaf = hops[hops.length - 1], derefs = hops.slice(0, -1)
+  for (let d of derefs) {
+    if (!isRef(d.comp, d.prop)) {
       throw new Error(
-        `?${
-          segs.join('.')
-        }: ? asks for a whole component beside the filter, as .book&?loan does`,
+        `.${
+          d.prop || d.comp
+        } is not a reference — paths walk reference columns`,
       )
     }
-    return [{ comp: segs[0], prop: '', op: WANT, value: '' }]
   }
-  let p: Pred
-  if (segs.length == 1 && !value && op == '!' && routed(segs[0], vocab)) {
-    p = { comp: segs[0], prop: '', op: OPS[op], value }
-  } else {
-    let groups = groupsOf(segs, vocab)
-    let leaf = groups[groups.length - 1], derefs = groups.slice(0, -1)
-    for (let d of derefs) {
-      if (!isRef(d.comp, d.prop)) {
-        throw new Error(
-          `.${
-            d.prop || d.comp
-          } is not a reference — paths walk reference columns`,
-        )
-      }
-    }
-    p = derefs.length
-      ? { ...derefs[0], op: OPS[op], value, at: [...derefs.slice(1), leaf] }
-      : { ...leaf, op: OPS[op], value }
-  }
+  let p: Pred = derefs.length
+    ? { ...derefs[0], op: OPS[op], value, at: [...derefs.slice(1), leaf] }
+    : { ...leaf, op: OPS[op], value }
   if (!p.prop) {
     if (p.value || (p.op != '' && p.op != '~' && p.op != EXISTS)) {
       throw new Error(
@@ -851,42 +802,47 @@ export let bindClause = (c: Clause, vocab: Vocab = NONE): Pred[] => {
     }
     return [p]
   }
-  let leaf = leafOf(p)
-  let type = typed(leaf.comp, leaf.prop) ??
-    // Dynamic scalar columns are inline and type against THIS store too.
-    (typeAt(leaf.comp, leaf.prop, vocab) && {
-      ...leaf,
-      name: leaf.prop,
-      type: typeAt(leaf.comp, leaf.prop, vocab)!,
-    })
-  if (type) p.tag = tagOf(type)
+  p.tag = tagFor(leaf)
+  let type = typed(leaf.comp, leaf.prop)
   if (type && p.op != '~' && p.value != '') p.value = typedValue(type, p.value)
   return [p]
 }
 
-export let preds = (token: string, vocab: Vocab = NONE): Pred[] | null => {
-  // Strict filter/write doors still require the dotted or presence spelling.
-  if (!/^[.?!]/.test(token)) return null
-  let clauses = parseDot(token)
-  return clauses && clauses.flatMap((c) => bindClause(c, vocab))
+// A clause's path as the hops it names (@yaks/vocab `aim`). A presence test
+// names a component even where a property shares its name; one naming a
+// component nothing declares is refused, as @yaks/sql refuses it, unless it is
+// a component a query answers beside a row (resultComps).
+let aimed = (c: Clause & { kind: 'pred' }): Hop[] => {
+  let segs = c.path
+  let hops = c.facet
+    ? [
+      ...(segs.length > 1 ? vocab.aim(segs.slice(0, -1).join('.')) : []),
+      { comp: segs[segs.length - 1], prop: '' },
+    ]
+    : vocab.aim(segs.join('.'), bare(c))
+  let leaf = hops[hops.length - 1]
+  if (!leaf.prop && !vocab.comp(leaf.comp) && !(leaf.comp in resultComps)) {
+    throw new Unknown(leaf.comp)
+  }
+  return hops
 }
 
-// One scalar pred, or null — the door for writes' param check and unit
-// assertions, where a token names a single filter. A multi-pred SCOPE belongs
-// in a filter LIST (preds() is that door); this returns the scope's first pred.
-export let pred = (token: string, vocab: Vocab = NONE): Pred | null => {
-  let out = preds(token, vocab)
-  return out ? out[0] : null
+// `?loan` asks for a whole component beside the filter. A component this
+// vocabulary does not declare is still a fair question: a store without it
+// answers by leaving it off the row.
+let wanted = (c: Clause & { kind: 'pred' }): Hop => {
+  let hop = c.path.length == 1 && !c.value
+    ? vocab.aim(c.path[0], true)[0]
+    : undefined
+  if (!hop || hop.prop) {
+    throw new Error(
+      `?${
+        c.path.join('.')
+      }: ? asks for a whole component beside the filter, as .book&?loan does`,
+    )
+  }
+  return hop
 }
-
-// The rejection every strict door throws when preds() shrugs: the error is the
-// teaching moment, so it names where a stray predicate lives — a bare `kind=K`
-// is the warm mistake, and the door says the dotted spelling that now works —
-// and sketches the dot-param shape.
-export let noFilter = (f: string) =>
-  `not a filter: ${f} — ${
-    f.startsWith('kind=') ? `write it dotted: .${f}; ` : ''
-  }${taught}`
 
 // A bare word: an FTS5 term over doc title/body. comp/prop are for show —
 // matchQuery treats TEXT specially (one pred, two columns).
@@ -923,18 +879,12 @@ export let NEVER = 'never'
 // recurses into the alternatives; every reader of directives ignores it.
 export let OR = 'or'
 export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
-export let parseQuery = (q: string, vocab: Vocab = NONE): Pred[] =>
-  bindClause(parse(q), vocab)
+export let parseQuery = (q: string): Pred[] =>
+  bindClause(meant(vocab, parse(q)))
 
-// The column's declared type, as the value rules read it. A BOUND pred carries
-// the tag its binder resolved, which is the only way a hosted store's own
-// columns are typed at all (bindClause holds that vocabulary; nothing here
-// does). A pred built by hand falls back to the platform vocabulary.
-let tagAt = (p: Pred): Tag => {
-  if (p.tag) return p.tag
-  let leaf = leafOf(p)
-  return tagOf(typed(leaf.comp, leaf.prop))
-}
+// The column's declared type, as the value rules read it: the tag its binder
+// resolved, or for a pred built by hand, the vocabulary's.
+let tagAt = (p: Pred): Tag => p.tag ?? tagFor(leafOf(p))
 
 // One compile per pred, because a sweep asks the same question of every row in
 // the set and the answer depends only on op, operand and tag. A time column is
@@ -980,7 +930,7 @@ export let resolveRefs = (
     if (p.refs || p.op == REACHES) {
       if ((p.op != '' && p.op != REACHES) || !p.value) return p
       try {
-        let value = String(parseProp(REFS_PROP, p.value, { resolve: lookup }))
+        let value = String(parseProp(anyRef, p.value, { resolve: lookup }))
         return value == p.value ? p : { ...p, value }
       } catch (error) {
         if (error instanceof IdError) throw error
@@ -1003,7 +953,7 @@ export let resolveRefs = (
       return p
     }
     if (!p.value || /\.\./.test(p.value)) return p
-    let type = spine ? REFS_PROP : typed(comp, target)
+    let type = spine ? anyRef : typed(comp, target)
     if (!type) return p
     let value = p.value.split(',')
       .map((part) => {
@@ -1124,7 +1074,7 @@ export let matchQuery = (
       // The multi-column reverse-union: read every {eid} column this bag
       // carries. `.refs=X` holds when any equals X; `.refs` when any is set;
       // `!refs` when none is — the same tri-state a reverse association marks.
-      let vals = refCols
+      let vals = vocab.refProps()
         .map(([comp, prop]) => c[comp]?.[prop])
         .filter((v) => v != null)
       if (p.op == EXISTS) return vals.length > 0

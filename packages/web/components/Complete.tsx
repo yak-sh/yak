@@ -1,17 +1,19 @@
-// The vocabulary at the caret: wire any query input to suggest() in
-// query.ts and get a dropdown of the grammar's own candidates — comps,
-// props, ops, enum values, wells. The hook owns token detection (the
-// dot-token under the caret), selection, and acceptance (splice the
-// token, re-fire input so the host reacts); the host input keeps its own
-// handlers — call key() FIRST in onKeyDown and stop when it returns true
-// (the dropdown consumed the press), track() from onInput. Wells and the
-// resident entities (for `{eid}` params) are read here, at the browser
-// boundary, so suggest() itself stays pure. Resident-only, like wells: a
-// picker that must reach non-loaded entities asks the server (suggest.ts).
+// The vocabulary at the caret: wire any query input to @yaks/query's
+// complete() and get a dropdown of the grammar's own candidates — comps,
+// props, ops, enum values, wells. The hook owns selection and acceptance
+// (splice the word, re-fire input so the host reacts); the host input keeps
+// its own handlers — call key() FIRST in onKeyDown and stop when it returns
+// true (the dropdown consumed the press), track() from onInput. Wells and the
+// resident entities (for `{eid}` params) are the source read here, at the
+// browser boundary, so complete() itself stays pure. Resident-only, like
+// wells: a picker that must reach non-loaded entities asks the server
+// (suggest.ts).
 import { useMemo, useRef, useState } from 'preact/hooks'
-import { type Cand, type EntId, suggest } from '../suggest.ts'
+import { type Cand, complete, type Source } from '@yaks/query'
 import { cache, domains } from '../live.ts'
-import { idOf, kindOf } from '../types.ts'
+import { idOf, kindOf, vocab } from '../types.ts'
+import { propAt } from '../props.ts'
+import { RANKS } from '../query.ts'
 import { block } from '@yaks/ui'
 import { Overlay } from './overlay.tsx'
 
@@ -20,14 +22,8 @@ let { Row, Text, Kind } = Frame
 
 let CAP = 8
 
-// the dot-token from its start to the caret — back past anything that
-// isn't a separator; a token not starting with '.' is nobody's business
-let tokenAt = (value: string, caret: number) => {
-  let start = caret
-  while (start > 0 && !/[\s&]/.test(value[start - 1])) start--
-  let tok = value.slice(start, caret)
-  return tok.startsWith('.') ? { start, tok } : null
-}
+let starts = (s: string, pre: string) =>
+  s.toLowerCase().startsWith(pre.toLowerCase())
 
 type Box = HTMLInputElement | HTMLTextAreaElement
 
@@ -39,7 +35,7 @@ export let useComplete = () => {
 
   // The resident graph as reference candidates, rebuilt only when the cache
   // turns over (not per keystroke) — one human id + kind per loaded entity.
-  let ents = useMemo<EntId[]>(
+  let ents = useMemo(
     () =>
       Object.entries(cache.value).map(([eid, comps]) => ({
         id: idOf({ eid, kind: kindOf(comps), num: comps.entity?.num }),
@@ -47,6 +43,23 @@ export let useComplete = () => {
       })),
     [cache.value],
   )
+  // Wells are read when asked, never at render: a well the server has not
+  // answered yet fills in by the next keystroke.
+  let wells: Record<string, () => string[]> = { domains: () => domains.value }
+  let source: Source<Cand[]> = {
+    ids: (ref, pre) =>
+      ents.filter((e) =>
+        (ref == 'entity' || e.kind == ref) && starts(e.id, pre)
+      )
+        .map((e) => ({ text: e.id, kind: e.kind })),
+    values: (comp, prop, pre) => {
+      let t = propAt(comp, prop)?.type
+      let well = t && typeof t == 'object' && 'text' in t ? t.text : ''
+      return (wells[well]?.() ?? []).filter((v) => starts(v, pre))
+        .map((text) => ({ text, kind: well }))
+    },
+    ranks: RANKS,
+  }
 
   let close = () => {
     setCands([])
@@ -55,11 +68,10 @@ export let useComplete = () => {
   let track = (el: Box) => {
     anchor.current = el
     let caret = el.selectionStart ?? el.value.length
-    let hit = tokenAt(el.value, caret)
-    if (!hit) return close()
-    at.current = { el, start: hit.start, end: caret }
-    let list = suggest(hit.tok, { domains: domains.value }, ents).slice(0, CAP)
-    setCands(list)
+    let found = complete(vocab, el.value, caret, source)
+    if (!found.cands.length) return close()
+    at.current = { el, start: found.from, end: found.to }
+    setCands(found.cands.slice(0, CAP))
     setSel(0)
   }
   let accept = (c: Cand) => {

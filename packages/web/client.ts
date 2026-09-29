@@ -25,6 +25,7 @@ import {
   statusOf,
   uuid,
   verdictName,
+  vocab,
 } from './types.ts'
 import { aliasOf, idOf, shortHex } from './types.ts'
 import { short } from '@yaks/id'
@@ -34,7 +35,6 @@ import { local } from './time.ts'
 import { nearest, offer } from './near.ts'
 import { matchQuery, parseQuery, type Pred } from './query.ts'
 import { hot } from './warmth.ts'
-import { route } from './route.ts'
 import { catalog, type Provider, spawnDefault } from './providers.ts'
 import { channelEvents, type Event as InboxEvent } from './channel.ts'
 export { idOf }
@@ -339,8 +339,8 @@ export type ComponentPatches = Record<
 >
 
 // '.title=Hello' | '.doc.title=Hello' → {comp, prop, value}; null if the
-// argument isn't a dot-param at all (a bare word). Bare props ride
-// query.ts route(), so '.assignee=jeff' patches filed.assignee and
+// argument isn't a dot-param at all (a bare word). Bare props route through
+// the vocabulary (@yaks/vocab), so '.assignee=jeff' patches filed.assignee and
 // derefParams turns the value into an eid at the door.
 // A hyphen is admitted into the NAME so a hyphenated spelling reaches
 // route() and earns the same `unknown prop` error as any other unknown.
@@ -362,8 +362,8 @@ export let param = (
   let p: Param
   if (b) {
     if (!(b in (comps[a] ?? {}))) {
-      // The same teaching the query door gives (route.ts groupsOf): a refusal
-      // names the component's columns and their types.
+      // The same teaching the query door gives: a refusal names the
+      // component's columns and their types.
       throw new Error(
         `no such prop: .${a}.${b}${
           comps[a]
@@ -374,8 +374,8 @@ export let param = (
     }
     p = { comp: a, prop: b, value: raw }
   } else {
-    let r = route(a)
-    // route()'s any-of ('' comp) serves FILTERS; a write must aim at one
+    let r = vocab.route(a)
+    // A shared reference ('' comp) serves FILTERS; a write must aim at one
     // component, so demand the explicit spelling.
     if (!r.comp) {
       let owners = Object.keys(comps).filter((c) => r.prop in comps[c])

@@ -25,6 +25,8 @@ import {
   type EntCore,
   idOf,
   type Pinned,
+  type ResultComp,
+  resultComps,
   settled,
   shortHex,
   type Snapshot,
@@ -54,14 +56,12 @@ import {
   WANT,
   windowOf,
 } from './query.ts'
-import { type ResultComp, resultComps, reverseAssocs } from './route.ts'
 import { warm } from './warmth.ts'
 import {
   anchor,
   children,
   emptyIndex,
   indexAll,
-  refCols,
   reindex,
   reindexEdge,
 } from './index.ts'
@@ -422,10 +422,7 @@ let predLine = (p: Pred): string | undefined => {
   }
   if (p.rev) {
     let r = p.rev
-    let assoc = [...reverseAssocs].find(([, h]) =>
-      h.comp === r.comp && h.prop === r.prop
-    )?.[0]
-    if (!assoc) return undefined
+    let assoc = r.name
     if (r.count) return op ? `.${assoc}${op}${value}` : undefined
     if (!r.preds.length) return r.not ? `!${assoc}` : `.${assoc}`
     // A simple reverse path has one leaf. Compound/grouped predicates require
@@ -668,8 +665,8 @@ let contains = (comp: string, prop: string, value: string): Pred => ({
   value,
 })
 // The multi-column reverse-union (query.ts): every entity referencing `value`
-// through SOME {eid} column — the backlinks of one eid, across the whole `refCols`
-// vocabulary at once. `value` is already an eid the caller holds, so no
+// through SOME {eid} column — the backlinks of one eid, across every reference
+// in the vocabulary at once. `value` is already an eid the caller holds, so no
 // ref-resolution pass is needed.
 let refsTo = (value: string): Pred => ({
   comp: '',
@@ -3125,7 +3122,7 @@ export let pinned = (canvas: string): Pinned[] =>
 export type Backlink = { from: string; via: string }
 export let linksVia = (from: string, target: string): Backlink[] => {
   let r = row(from).value
-  return !r ? [] : refCols
+  return !r ? [] : vocab.refProps()
     .filter(([c, p]) =>
       (r[c as keyof typeof r] as Record<string, unknown>)?.[p] == target
     )

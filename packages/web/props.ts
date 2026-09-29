@@ -99,6 +99,14 @@ export let refOf = (comp: string, prop: string): string | undefined => {
 export let isRef = (comp: string, prop: string): boolean =>
   refOf(comp, prop) != null
 
+// A column as a Prop, where a shared reference (comp '') is typed by its name.
+export let typed = (comp: string, prop: string): Prop | undefined => {
+  let p = propAt(comp, prop)
+  if (p) return p
+  let type = !comp ? bareType(prop) : undefined
+  return type ? { comp, prop, name: prop, type } : undefined
+}
+
 // What the caller sent, quoted back. An object says its shape rather than
 // '[object Object]': a refusal is read by whoever wrote the value.
 let got = (v: unknown) =>
@@ -258,6 +266,11 @@ let ref = (name: string): Prop => ({
   name,
   type: { eid: 'entity', death: 'keep' },
 })
+
+// What an id with no column to type it resolves through: `.refs=T-3`, a walk's
+// target, `.eid=T-3`. A plain entity reference, so the id turns into its eid
+// at delivery exactly as a declared reference's would.
+export let anyRef: Prop = ref('refs')
 let requiredRef = (
   p: Prop,
   value: unknown,

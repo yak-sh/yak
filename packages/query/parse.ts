@@ -555,6 +555,18 @@ let VALUED = new RegExp(
   `^\\.?${WORD}(?:\\[[^\\]]*\\])?(?:!=|~=|<=|>=|->|<-|<|>|=)`,
 )
 
+/**
+ * Whether a token has taken an operator, so a comma after it is part of its
+ * value rather than a separator between clauses.
+ *
+ * ```ts
+ * import { valued } from '@yaks/query'
+ * valued('.status=open') // true
+ * valued('.entity') // false
+ * ```
+ */
+export let valued = (tok: string): boolean => VALUED.test(tok)
+
 // The clause parts of one token. A `,` between clauses is an optional
 // separator; a `,` inside a value means any-of, and position is what tells them
 // apart: commas separate until a clause takes an operator, and from there the

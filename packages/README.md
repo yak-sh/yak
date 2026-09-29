@@ -42,7 +42,9 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/query](./query)** — Parse query strings into an abstract syntax tree
   (AST), or build the same tree from code. It understands operators, lists,
   ranges and directives, not application field meanings. Time-parsing helpers
-  are separate from parsing scalar query values.
+  are separate from parsing scalar query values. Given a loaded vocabulary, it
+  resolves a bare property from the rest of the line and completes a query at
+  the caret.
 
 - **[@yaks/yaml](./yaml)** — Parse YAML or JSON text and split Markdown
   frontmatter from its body. Frontmatter can contain a partial bundle. Its graph

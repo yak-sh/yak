@@ -1,34 +1,10 @@
-// The derived index (index.ts): refCols flows from the vocabulary, the reverse
+// The derived index (index.ts): the reverse
 // {eid} index and edge endpoints maintain incrementally, and anchor() picks the
 // smallest candidate set for a query. Pure — no cache, no DOM.
 import './testing.ts'
-import {
-  anchor,
-  emptyIndex,
-  indexAll,
-  refCols,
-  reindex,
-  reindexEdge,
-} from './index.ts'
+import { anchor, emptyIndex, indexAll, reindex, reindexEdge } from './index.ts'
 import { parseQuery } from './query.ts'
 import { assertEquals } from '@std/assert'
-
-// refCols is DERIVED from comps/stamped — every {eid} column, nothing else.
-Deno.test('refCols names every {eid} reference from the vocabulary', () => {
-  let has = (comp: string, prop: string) =>
-    refCols.some(([c, p]) => c == comp && p == prop)
-  // wire-writable references
-  assertEquals(has('deliver', 'to'), true)
-  assertEquals(has('comment', 'target'), true)
-  assertEquals(has('claim', 'session'), true)
-  assertEquals(has('filed', 'project'), true)
-  assertEquals(has('filed', 'assignee'), true)
-  // a server-stamped reference joins from `stamped`
-  assertEquals(has('created', 'via'), true)
-  // scalars never do
-  assertEquals(has('task', 'status'), false)
-  assertEquals(has('doc', 'title'), false)
-})
 
 Deno.test('reindex builds and maintains the reverse {eid} index', () => {
   let ix = emptyIndex()
@@ -93,7 +69,10 @@ Deno.test('anchor falls back to component presence, and to nothing', () => {
     d1: { doc: { title: 'x' } },
   }, [])
   // a scalar pred requires its component present -> byComp[task]
-  assertEquals(anchor(ix, parseQuery('.status=open')), new Set(['t1', 't2']))
+  assertEquals(
+    anchor(ix, parseQuery('.task.status=open')),
+    new Set(['t1', 't2']),
+  )
   // a pure absence pred implies no presence -> whole-cache fallback
   assertEquals(anchor(ix, parseQuery('!delivered')), undefined)
 })

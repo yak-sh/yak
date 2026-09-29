@@ -32,9 +32,7 @@ import {
   type SubscriptionRead,
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
-import { type ResultComp } from '../route.ts'
-import { refCols } from '../index.ts'
-import { type Ent, vocab } from '../types.ts'
+import { type Ent, type ResultComp, vocab } from '../types.ts'
 import { dotFields } from '../tray_query.ts'
 
 // A query that does not parse fails where it was asked, never in the render
@@ -171,10 +169,11 @@ export let useCommitsOn: (target: string) => Ent[] = vocab.comp('commit')
 
 // `via` — WHICH column points here — reads off each referrer's own row signal
 // (linksVia), so a retarget wakes the face without a membership change.
-let backlinkComps = [...new Set(refCols.map(([comp]) => comp))]
-  .map((comp) => `&?${comp}`).join('')
+let backlinkComps = () =>
+  [...new Set(vocab.refProps().map(([comp]) => comp))]
+    .map((comp) => `&?${comp}`).join('')
 export let useBacklinks = (target: string): Backlink[] =>
-  useQueryEids(`.refs=${target}${backlinkComps}`)
+  useQueryEids(`.refs=${target}${backlinkComps()}`)
     .flatMap((from) => linksVia(from, target))
 
 // EID-keyed lookups belong to the mounted view, never an unheld render read.

@@ -25,7 +25,7 @@ for (let i = 0; i < 2000; i++) {
 }
 let snap: Snapshot = { changes, deps: [] }
 let all = rows(snap)
-let ps = parseQuery('.status=open&.priority<=1')
+let ps = parseQuery('.task.status=open&.priority<=1')
 
 Deno.bench('rows: 2k-task snapshot', () => {
   rows(snap)

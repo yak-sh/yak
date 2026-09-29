@@ -1,13 +1,18 @@
 # @yaks/query
 
-A parser and a set of builders for the yaks query format, with no knowledge of
-any schema. `parse()` turns a query string into a serializable abstract syntax
-tree (AST); the builders construct the same tree from code. The parser checks
-syntax only — not whether a property exists, and not whether a given backend can
-answer the query. Use [@yaks/sql](../sql/README.md) to compile the tree to SQL,
-or [@yaks/match](../match/README.md) to evaluate it over bundles in memory. A
+A parser and a set of builders for the yaks query format. `parse()` turns a
+query string into a serializable abstract syntax tree (AST); the builders
+construct the same tree from code. The parser checks syntax only — not whether a
+property exists, and not whether a given backend can answer the query. Use
+[@yaks/sql](../sql/README.md) to compile the tree to SQL, or
+[@yaks/match](../match/README.md) to evaluate it over bundles in memory. A
 bundle is one entity's components represented as a JSON object. This package
 stores no entities and opens no database; its output is plain JSON data.
+
+Given a loaded [@yaks/vocab](../vocab/README.md) vocabulary, two functions read
+a query the way it will be answered: `meant()` decides what a bare property
+means from the rest of the line, and `complete()` offers what can be typed next
+at a caret.
 
 ## Install
 
@@ -253,13 +258,60 @@ timeEdges('>', '1 hour ago') // [[['>', an hour ago]]]: what `>` asks of a stamp
 The `time(raw)` builder creates the explicit node that a promoted AST, or a
 hand-written query, carries.
 
+## Reading a query against a vocabulary
+
+A bare property several components declare (`status`, on a graph holding tasks
+and sessions) is ambiguous to the vocabulary, which refuses it and names the
+candidates. `meant(vocab, ast)` resolves it to the component the rest of the
+line names outright, when exactly one candidate is named: `.task&.status=open`
+reads as `.task&.task.status=open`. A branch of an `|` sees its own clauses and
+what encloses it, never its sibling's. `meaning(vocab)` does the same for a
+query as typed, and returns the very string when nothing changed.
+
+`complete(vocab, text, caret?, source?)` is the one completion engine for every
+place a query is typed. It reads the word under the caret and returns its span
+(`from`, `to`) and the candidates to replace it with, each the whole word as it
+reads once taken and labeled with where it comes from:
+
+```ts
+import { loadVocab } from '@yaks/vocab'
+import { complete } from '@yaks/query'
+
+let v = loadVocab({
+  $defs: {
+    task: {
+      component: true,
+      properties: { status: { type: 'string', enum: ['open', 'done'] } },
+    },
+  },
+})
+complete(v, '.sta').cands // [..., { text: '.status', kind: 'task' }]
+complete(v, '.status').cands // the operators: '.status=' equals, '.status!=' not, …
+complete(v, '.status=o').cands // [{ text: '.status=open', kind: 'status' }]
+```
+
+It offers components, properties (`· stamped` for a server-owned one, `· ref`
+for a reference), reverse associations, operators, the dotted directives and
+their values, enum members, `1`/`0` for a flag and time phrases for a time. A
+bare property is offered only where it stands: resolved by the vocabulary, or by
+the rest of the line as `meant()` would read it. The properties of a `_`
+component, and one marked `bare: false`, are reached through their component.
+
+What only a graph knows comes from a `source` the caller supplies:
+`ids(ref,
+prefix)` for the entities a reference could name,
+`values(comp, prop, prefix)` for the values a property holds, and `ranks` for
+the `.order=` rankings its evaluator answers. A source that answers with a
+promise makes the whole answer a promise; one that answers at once keeps it
+synchronous.
+
 ## What this package leaves to a schema-aware compiler
 
 Schema-dependent interpretation belongs to a compiler such as `@yaks/sql`:
 
-- **Field routing** — mapping a bare `.status` to the record type that owns it,
-  and resolving alternate names for the same field to the right hop. Paths stay
-  raw segments here.
+- **Field routing** — mapping a bare `.status` to the record type that owns it
+  (@yaks/vocab's `route` and `aim`). Paths stay raw segments in the AST;
+  `meant()` above only qualifies a bare name the line decides.
 - **Reference resolution** — turning an id or a name (`.author=alice`) into a
   reference id, and resolving the targets of `.refs` and of reverse unions.
 - **Type coercion** — reading a scalar as a number, an enum, a boolean or a
@@ -308,5 +360,5 @@ The root export also includes AST types, `coerce()` for builder values,
 `parseDot()` for one clause token, `cursor()` for entity-number cursors, and
 `unitMs()` for time-unit conversion. `WALK_LIMIT` is the standard 10,000-node
 traversal limit; `WALK_DEPTH` is the older exported depth constant (16), not the
-default for a walk without a depth qualifier. The package has no runtime
-dependencies or platform-specific APIs.
+default for a walk without a depth qualifier. The package's one dependency is
+@yaks/vocab, for `meant()` and `complete()`; it uses no platform-specific APIs.

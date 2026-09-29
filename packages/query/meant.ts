@@ -27,14 +27,9 @@
 // not describe the same row, so a branch sees its own clauses and whatever
 // encloses it, never its sibling branch's.
 
-import {
-  type Clause,
-  type FieldSel,
-  parse,
-  type Query as Ast,
-} from '@yaks/query'
+import type { Clause, FieldSel, Query } from './ast.ts'
+import { parse } from './parse.ts'
 import { Ambiguous, type Vocab } from '@yaks/vocab'
-import type { Query } from './storage.ts'
 
 /** A bare component names its facet, even when a property has that name. */
 let facet = (c: Clause & { kind: 'pred' }): boolean =>
@@ -73,7 +68,7 @@ let selects = (v: Vocab, c: Clause, out: Set<string>): void => {
 
 /** The components a whole clause list selects — the scope its bare properties
  * resolve against. */
-let scope = (v: Vocab, clauses: Clause[]): Set<string> => {
+export let about = (v: Vocab, clauses: Clause[]): Set<string> => {
   let out = new Set<string>()
   for (let c of clauses) selects(v, c, out)
   return out
@@ -81,7 +76,7 @@ let scope = (v: Vocab, clauses: Clause[]): Set<string> => {
 
 /** One bare property, qualified by the scope, or left as it is. A property name
  * the vocabulary can resolve on its own never consults the scope at all. */
-let resolve = (
+export let qualify = (
   v: Vocab,
   path: string[],
   within: Set<string>,
@@ -99,7 +94,7 @@ let resolve = (
 
 /** A field selector, resolved in place. */
 let selected = (v: Vocab, f: FieldSel, within: Set<string>): FieldSel => {
-  let path = resolve(v, f.path, within)
+  let path = qualify(v, f.path, within)
   return path == f.path ? f : { ...f, path }
 }
 
@@ -109,7 +104,7 @@ let selected = (v: Vocab, f: FieldSel, within: Set<string>): FieldSel => {
 let ordered = (v: Vocab, value: string, within: Set<string>): string => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value
-  let path = resolve(v, [field], within)
+  let path = qualify(v, [field], within)
   return path.length == 1 ? value : `${desc ? '-' : ''}${path.join('.')}`
 }
 
@@ -129,25 +124,25 @@ let read = (v: Vocab, c: Clause, within: Set<string>): Clause => {
   // scope; a disjunction's branches describe different rows, so each branch
   // resolves against its own clauses alone.
   if (c.kind == 'and') {
-    let inner = new Set([...within, ...scope(v, c.clauses)])
+    let inner = new Set([...within, ...about(v, c.clauses)])
     let clauses = all(c.clauses, (k) => read(v, k, inner))
     return clauses == c.clauses ? c : { ...c, clauses }
   }
   if (c.kind == 'or') {
     let clauses = all(
       c.clauses,
-      (k) => read(v, k, new Set([...within, ...scope(v, [k])])),
+      (k) => read(v, k, new Set([...within, ...about(v, [k])])),
     )
     return clauses == c.clauses ? c : { ...c, clauses }
   }
   if (c.kind == 'pred') {
-    let path = facet(c) ? c.path : resolve(v, c.path, within)
+    let path = facet(c) ? c.path : qualify(v, c.path, within)
     let where = c.where ? read(v, c.where, within) : undefined
     if (path == c.path && where == c.where) return c
     return { ...c, path, ...(where ? { where } : {}) }
   }
   if (c.kind == 'distinct' || c.kind == 'tally') {
-    let path = resolve(v, c.path, within)
+    let path = qualify(v, c.path, within)
     return path == c.path ? c : { ...c, path }
   }
   if (c.kind == 'fields') {
@@ -162,21 +157,29 @@ let read = (v: Vocab, c: Clause, within: Set<string>): Clause => {
 }
 
 /**
- * The read side of property resolution: a query in, the same query with every
- * bare property resolved to the component the query already selects.
- *
- * The query comes back unchanged when nothing was resolved, so a query written
- * with qualified paths costs one traversal, and the exact text the caller
- * passed is what storage still sees.
+ * The read side of property resolution: a tree in, the same tree with every
+ * bare property resolved to the component the query already selects. The tree
+ * itself comes back when nothing was resolved.
+ */
+export let meant = (vocab: Vocab, ast: Query): Query => {
+  let within = about(vocab, ast.clauses)
+  let clauses = all(ast.clauses, (c) => read(vocab, c, within))
+  return clauses == ast.clauses ? ast : { ...ast, clauses }
+}
+
+/**
+ * {@link meant} over a query as it was typed. The query comes back unchanged
+ * when nothing was resolved, so a query written with qualified paths costs one
+ * traversal, and the exact text the caller passed is what storage still sees.
  *
  * ```ts
  * // let mean = meaning(vocab)
  * // mean('.task&.status=open')  // → the AST, over `.task.status`
  * ```
  */
-export let meaning = (vocab: Vocab) => (query: Query): Query => {
-  let ast: Ast = typeof query == 'string' ? parse(query) : query
-  let within = scope(vocab, ast.clauses)
-  let clauses = all(ast.clauses, (c) => read(vocab, c, within))
-  return clauses == ast.clauses ? query : { ...ast, clauses }
-}
+export let meaning =
+  (vocab: Vocab) => (query: string | Query): string | Query => {
+    let ast = typeof query == 'string' ? parse(query) : query
+    let out = meant(vocab, ast)
+    return out == ast ? query : out
+  }

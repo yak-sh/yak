@@ -194,7 +194,7 @@ Deno.test('server-resolve: a cache hit never touches the wire', () => {
 
 // The auto-derivation proof: filed.assignee is an {eid} reference with NO
 // hand-written index anywhere — yet it is queryable through the same reverse
-// index, because refCols flows from comps. Adding an {eid} field needs no
+// index, because the reference list flows from the vocabulary. Adding an {eid} field needs no
 // index code (T-17036 done-when).
 Deno.test('queryEids indexes any {eid} reference with no bespoke index', () => {
   cache.value = {
@@ -405,7 +405,7 @@ Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
-      board: { eid: 'board', query: '.status=open' },
+      board: { eid: 'board', query: '.task.status=open' },
     },
     task: {
       entity: { eid: 'task', num: 2 },
@@ -421,7 +421,7 @@ Deno.test('agreement diagnostics are inert until explicitly enabled', () => {
   }) as typeof setTimeout
   try {
     assertEquals(boardTasks(ent('board')).map((e) => e.eid), ['task'])
-    assertAgree('board:board', '.status=open', ['task'], [])
+    assertAgree('board:board', '.task.status=open', ['task'], [])
   } finally {
     globalThis.setTimeout = timer
   }
@@ -692,7 +692,7 @@ Deno.test('boardsOver: awake only when a board names or drops the target', () =>
     },
     b2: {
       entity: { eid: 'b2', num: 2 },
-      board: { eid: 'b2', query: '.status=open' },
+      board: { eid: 'b2', query: '.task.status=open' },
     },
     plain: {
       entity: { eid: 'plain', num: 3 },
@@ -723,14 +723,18 @@ Deno.test('boardsOver: awake only when a board names or drops the target', () =>
       {
         eid: 'b3',
         name: 'board',
-        comp: { query: '.project=P-9&.status=open' },
+        comp: { query: '.project=P-9&.task.status=open' },
       },
     ])
     assertEquals(runs, 2)
     assertEquals(boardsOver('P-9').toSorted(), ['b1', 'b3'])
 
     // b1 drops P-9 — wakes, leaves the answer
-    applyLocal([{ eid: 'b1', name: 'board', comp: { query: '.status=wip' } }])
+    applyLocal([{
+      eid: 'b1',
+      name: 'board',
+      comp: { query: '.task.status=wip' },
+    }])
     assertEquals(runs, 3)
     assertEquals(boardsOver('P-9'), ['b3'])
   } finally {
@@ -1123,7 +1127,7 @@ Deno.test('camera motion and card stacking stay off the graph signal', () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
-      board: { eid: 'board', query: '.status=open' },
+      board: { eid: 'board', query: '.task.status=open' },
     },
     task: {
       entity: { eid: 'task', num: 2 },
@@ -1373,7 +1377,7 @@ Deno.test('board membership sleeps through an unrelated row patch', () => {
   cache.value = {
     board_narrow: {
       entity: { eid: 'board_narrow', num: 1 },
-      board: { eid: 'board_narrow', query: '.status=open' },
+      board: { eid: 'board_narrow', query: '.task.status=open' },
     },
     task_narrow: {
       entity: { eid: 'task_narrow', num: 2 },
@@ -1414,7 +1418,7 @@ Deno.test('a hot board sleeps through card births and deaths', () => {
   cache.value = {
     board_hot: {
       entity: { eid: 'board_hot', num: 1 },
-      board: { eid: 'board_hot', query: '.status=open&.order=hot' },
+      board: { eid: 'board_hot', query: '.task.status=open&.order=hot' },
     },
     task_hot: {
       entity: { eid: 'task_hot', num: 2 },
@@ -1597,7 +1601,7 @@ Deno.test('boardAll: whole-graph match, chrome/comments/self excluded', async ()
   )
   assertEquals(boardPost(board, true, Object.keys(cache.value)), ['task'])
   // preds still screen: a task-shaped query matches only tasks
-  cache.value.board.board!.query = '.status=open'
+  cache.value.board.board!.query = '.task.status=open'
   assertEquals(boardAll(ent('board')).map((e) => e.eid), ['task'])
 })
 
@@ -1682,7 +1686,7 @@ Deno.test('a subscribed board sleeps through an unrelated ordinary patch', () =>
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
-      board: { eid: 'board', query: '.status=open' },
+      board: { eid: 'board', query: '.task.status=open' },
     },
     t1: {
       entity: { eid: 't1', num: 2 },
@@ -2601,7 +2605,7 @@ Deno.test('the agreement counter counts when both doors answer', async () => {
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
-      board: { eid: 'board', query: '.status=open' },
+      board: { eid: 'board', query: '.task.status=open' },
     },
     t1: {
       entity: { eid: 't1', num: 2 },
@@ -2650,7 +2654,7 @@ Deno.test('a board renders from the subscription and tracks joins and leaves', (
   cache.value = {
     board: {
       entity: { eid: 'board', num: 1 },
-      board: { eid: 'board', query: '.status=open' },
+      board: { eid: 'board', query: '.task.status=open' },
     },
     t1: {
       entity: { eid: 't1', num: 2 },

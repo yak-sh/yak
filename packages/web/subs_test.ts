@@ -7,10 +7,10 @@ import { diff, gaps } from './subs.ts'
 
 Deno.test('the only agreement gap is moving time', () => {
   let cases: [string, string[]][] = [
-    ['.status=open', []],
+    ['.task.status=open', []],
     ['.domain=Ops,Eng', []],
     ['.priority=1..3', []],
-    ['.status!=done', []],
+    ['.task.status!=done', []],
     ['.title~=flux', []],
     ['.created.at=2026-07-01', []],
     ['.order=hot', []],

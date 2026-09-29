@@ -75,7 +75,7 @@ import { ready, settle } from './declared.ts'
 import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 import { addressing } from './said.ts'
-import { meaning } from './meant.ts'
+import { meaning } from '@yaks/query'
 import { named, only } from './projection.ts'
 
 /** The options one `apply()` call can pass. */
@@ -662,7 +662,7 @@ export let graph = (opts: Options): Graph => {
 
   // The other half of reading a query the way it was meant: a bare property
   // name the vocabulary cannot place on its own is resolved to the component
-  // the query already selects (meant.ts). Both run before storage sees the
+  // the query already selects (@yaks/query's meant.ts). Both run before storage sees the
   // query, so every caller reading through this graph gets the same
   // interpretation.
   let mean = meaning(vocab)

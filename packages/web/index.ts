@@ -7,34 +7,28 @@
 // dot-param router (CLAUDE.md, "the vocabulary is one list").
 //
 // This is the IN-MEMORY realization of that derivation. The DERIVATION
-// (`refCols`) is the reusable, backend-agnostic piece — it is what a SQLite
+// (@yaks/vocab's `refProps`) is the reusable, backend-agnostic piece — it is what a SQLite
 // `create index` / IndexedDB store set is generated from too (T-17046/T-12764).
 // live.ts drives maintenance from the eids each patch touches, and `anchor()`
 // turns a query's `Pred[]` into the smallest candidate set. When the store
 // moves to IDB, `anchor` swaps its lookup; the derivation and callers stay put.
-import { type Dep, type Idx, indexes } from './types.ts'
+import { type Dep, type Idx, indexes, vocab } from './types.ts'
 import { isRef } from './props.ts'
 import { EXISTS, ORDER, type Pred, TEXT, WANT } from './query.ts'
-import { refCols } from './route.ts'
 
 // A row as the index reads it — the merged-components shape both the live cache
 // and a client Row speak. Kept structural so index.ts carries no cycle back to
 // live.ts's `Comps`.
 type Row = Record<string, Record<string, unknown> | undefined>
 
-// The `{eid}` reference columns of the vocabulary live in query.ts (the reverse
-// grammar and this index derive from the one list); re-export so callers that
-// think of it as the INDEX derivation keep their import.
-export { refCols }
-
 // Every index a component declares — the ONE index vocabulary the cache, the
 // SQL DDL (T-12764) and the IDB stores (T-17125) all read, so no backend
 // hand-keeps its own set. Two sources merge: the composite/unique declarations
 // in `indexes` (types.ts), and one single-column index per `{eid}` reference,
-// auto-derived from `refCols` (never hand-listed). A single-column declaration
+// auto-derived from the vocabulary's reference properties (never hand-listed). A single-column declaration
 // OVERRIDES its auto twin — that is how a lone ref column earns the
 // `unique`/`where` the plain derivation can't give it. The cache below realizes
-// only the single-column half (its `refs` map maintains exactly `refCols`); the
+// only the single-column half (its `refs` map maintains exactly those); the
 // composites are for the durable backends. Nothing generates yet — this is the
 // source those generators will read.
 export let indexesFor = (comp: string): Idx[] => {
@@ -42,7 +36,7 @@ export let indexesFor = (comp: string): Idx[] => {
   let overridden = new Set(
     declared.filter((i) => i.cols.length == 1).map((i) => i.cols[0]),
   )
-  let auto = refCols
+  let auto = vocab.refProps()
     .filter(([c, p]) => c == comp && !overridden.has(p))
     .map(([, p]): Idx => ({ cols: [p] }))
   return [...declared, ...auto]
@@ -94,7 +88,7 @@ export let reindex = (
   before: Row | undefined,
   after: Row | undefined,
 ) => {
-  for (let [c, p] of refCols) {
+  for (let [c, p] of vocab.refProps()) {
     let was = refVal(before, c, p)
     let now = refVal(after, c, p)
     if (was == now) continue
@@ -209,7 +203,7 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
       // all, not in any reverse map, so they anchor nothing.
       if (p.op == '' && p.value) {
         let out = new Set<string>()
-        for (let [c, pr] of refCols) {
+        for (let [c, pr] of vocab.refProps()) {
           for (let e of ix.refs.get(refKey(c, pr))?.get(p.value) ?? []) {
             out.add(e)
           }

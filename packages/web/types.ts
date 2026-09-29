@@ -337,6 +337,14 @@ export let spineProps: Record<string, Record<string, PropType>> = {
   entity: { eid: 'text' },
 }
 
+// Query-result-only components: a query answers them beside a row, and they
+// are never stored or written, so neither the cache nor IndexedDB keeps them
+// (live.ts resultComponent).
+export let resultComps = {
+  materialized: { text: true, scoped: true },
+} as const
+export type ResultComp = keyof typeof resultComps
+
 // Task status is derived, never stored (D-24102). The rule is @yaks/task's
 // `statusOf` over @yaks/session's ladder: `cancelled`, then `completed`, then a
 // held `claim` reads wip, then the `task.status` the row carries, else open. The

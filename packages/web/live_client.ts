@@ -15,8 +15,7 @@ import { type Client, client, type Watch, wireIdb } from '@yaks/client'
 import { type Bundle, type Comp, dead } from '@yaks/graph'
 import { type Coverage, type Frame, replicate, type Socket } from '@yaks/sync'
 import { loadVocab } from '@yaks/vocab'
-import { resultComps } from './route.ts'
-import { type Change, keywords, vocab } from './types.ts'
+import { type Change, keywords, resultComps, vocab } from './types.ts'
 import type { Sub } from './live.ts'
 
 // Server-derived columns are ordinary received data in a browser replica.

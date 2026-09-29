@@ -329,6 +329,8 @@ export type Vocab = {
    * component too, since a presence test needs no property schema. */
   aim: (path: string, facet?: boolean) => Hop[]
   assoc: (name: string) => Assoc | undefined
+  /** Every reverse association, by name. */
+  assocs: () => [string, Assoc][]
   kindOf: (has: Record<string, unknown>) => string
   deaths: (word: Death) => [string, string][]
   refProps: () => [string, string][]
@@ -806,6 +808,7 @@ export let loadVocab = (
     // A plural name → the reverse association it names, or undefined when the
     // name is no association (a caller then reads the name its own way).
     assoc: (name) => assocs.get(name),
+    assocs: () => [...assocs],
     // The most specific kind an entity carries names it — first present in
     // kindOrder, else the bare spine component.
     kindOf: (has) => kinds.find((k) => has[k]) ?? 'entity',

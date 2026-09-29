@@ -90,7 +90,6 @@ export * from './graph.ts'
 export * from './aggregate.ts'
 export * from './said.ts'
 export * from './status.ts'
-export * from './meant.ts'
 
 export * from './edit.ts'
 

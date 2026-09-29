@@ -16,11 +16,10 @@
 // tables. `only` keeps the answer true for an adapter that cannot narrow its
 // read.
 
-import { parse } from '@yaks/query'
+import { meaning, parse } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, reserved } from './bundle.ts'
 import type { Query } from './storage.ts'
-import { meaning } from './meant.ts'
 
 /** The components a meant query's rows carry, or `null` for every one of
  * them. A component asserted absent (`!archived`) names nothing the answer
@@ -46,7 +45,7 @@ export let named = (vocab: Vocab, query: Query): Set<string> | null => {
 }
 
 /** The same for a query as it was typed: a bare property counts for the
- * component it resolves to (./meant.ts). `Graph.read` has meant its query
+ * component it resolves to (@yaks/query's meant.ts). `Graph.read` has meant its query
  * already, so it asks {@link named}. */
 export let wanted = (vocab: Vocab, query: Query): Set<string> | null =>
   named(vocab, meaning(vocab)(query))
