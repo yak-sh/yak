@@ -210,6 +210,53 @@ test('a page watches its store and hears what others write', async () => {
   }
 })
 
+test('a page watching a projection hears what its paths reach', async () => {
+  let k = workerd()
+  let p = await page(k)
+  try {
+    await connector(k, p.them.cookie).tool('app_files', {
+      space: p.slug,
+      app: 'recipes',
+      op: 'write',
+      path: 'vocab.json',
+      content: vocabFile({
+        step: { recipe: { type: 'string', ref: 'doc', death: 'detach' } },
+      }),
+    })
+    await connector(k, p.them.cookie).tool('app_deploy', {
+      space: p.slug,
+      app: 'recipes',
+    })
+    let saved = await p.store.apply([
+      { entity: { eid: '$cake' }, doc: { title: 'Lemon cake' } },
+      { doc: { title: 'Zest three lemons' }, step: { recipe: '$cake' } },
+    ])
+    let cake = saved.aliases.$cake
+    let filter = '.step&.fields=doc.title,step.recipe.doc.title'
+    let steps = heard(p.live, filter)
+    try {
+      // The step names its recipe, and the recipe it reaches rides beside it
+      // with its title: the rows `query()` answers.
+      let first = await steps.next(1)
+      assertEquals(titles(first), ['Zest three lemons', 'Lemon cake'])
+      assertEquals(first, await p.store.query(filter))
+      // A write to the recipe moves no step, and the page still hears it.
+      await p.store.apply({
+        entity: { eid: cake },
+        doc: { title: 'Lime cake' },
+      })
+      let next = await steps.next(2)
+      assertEquals(titles(next), ['Zest three lemons', 'Lime cake'])
+      assertEquals(next, await p.store.query(filter))
+    } finally {
+      steps.stop()
+    }
+  } finally {
+    await p.stop()
+    await k.stop()
+  }
+})
+
 test('a workerd socket waits for the page to acknowledge its frame', async () => {
   let k = workerd()
   let p = await page(k)

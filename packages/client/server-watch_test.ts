@@ -384,17 +384,17 @@ test('body omission is unloaded while covered omission is a known absence', () =
   c.close()
 })
 
-test('peer-only payloads are pinned, never members; each role releases independently', () => {
+test('a rider is answered and held, never a member; each role releases independently', () => {
   let { c, frame } = fixture({ retention: 0 })
   let w = c.watch('riders', server)
   frame({
     id: 's1',
     peers: [{ ...row('peer'), doc: { title: 'peer', body: 'rider' } }],
   })
-  assertEquals(w.value, [])
+  assertEquals(ids(w.value), ['peer'])
   assertEquals(w.ready, true)
   assert(c.ent('peer'))
-  assertEquals(c.cache.includes('s1', 'peer'), false)
+  assertEquals(c.cache.includes('s1', 'peer'), true)
   assertEquals(c.cache.loaded('peer', 'recipe', 'serves'), false)
   let other = c.watch('also rider', server)
   frame({ id: 's2', peers: [row('peer')] })
@@ -403,8 +403,8 @@ test('peer-only payloads are pinned, never members; each role releases independe
   assertEquals(comp(c.ent('peer'), 'doc').body, undefined)
   frame({ id: 's2', bundles: [row('peer')] })
   frame({ id: 's2', gone: ['peer'] })
-  assertEquals(other.value, [])
-  assert(c.ent('peer')) // same sub still owns the rider role
+  assertEquals(ids(other.value), ['peer']) // it still rides
+  assert(c.ent('peer'))
   frame({ id: 's2', reset: true, bundles: [] })
   assertEquals(c.ent('peer'), undefined)
   c.close()
@@ -462,10 +462,9 @@ for (let disk of ['memory', 'indexedDB']) {
       }
       let reopen = next.c.watch('opaque ranking', server)
       await next.c.ready
-      assertEquals(ids(reopen.value), ['b', 'a'])
+      assertEquals(ids(reopen.value), ['b', 'a', 'peer'])
       assertEquals(reopen.ready, false)
       assert(next.c.ent('peer'))
-      assertEquals(next.c.cache.includes('s1', 'peer'), false)
       next.frame({ id: 's1', bundles: [] })
       assertEquals(reopen.value, [])
       assertEquals(reopen.ready, true)
@@ -645,8 +644,7 @@ test('one frame may give an eid two different projected role scopes', () => {
   assertEquals(ids(w.value), ['a'])
   assertEquals(comp(c.ent('a'), 'doc'), { title: 'a', body: 'rider' })
   frame({ id: 's1', gone: ['a'] })
-  assertEquals(w.value, [])
-  assertEquals(comp(c.ent('a'), 'doc'), { body: 'rider' })
+  assertEquals(w.value, [{ entity: { eid: 'a' }, doc: { body: 'rider' } }])
   assertEquals(c.cache.loaded('a', 'doc', 'title'), false)
   assertEquals(c.cache.loaded('a', 'doc', 'body'), true)
   frame({ id: 's1', peerGone: ['a'] })

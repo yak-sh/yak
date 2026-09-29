@@ -230,6 +230,58 @@ test('close stops the watches and the socket', async () => {
   assertEquals(c.wire?.connected(), false)
 })
 
+test('a projected watch holds what it names, and keeps what it reaches', async () => {
+  let srv = server()
+  await srv.graph.apply([
+    { entity: { eid: 'c1' }, doc: { title: 'Ada', body: 'bakes' } },
+    { entity: { eid: 'c2' }, doc: { title: 'Bo' } },
+    { ...dal(), recipe: { serves: 4, cook: 'c1' } },
+  ])
+  let c = boxClient(srv, { retention: 0 })
+  let cook = c.watch('.eid=c1')
+  let w = c.watch('.recipe&.fields=recipe.serves,recipe.cook.doc.title')
+  await c.idle()
+  let dal4 = (cook: string) => ({
+    entity: { eid: 'r1' },
+    recipe: { serves: 4, cook },
+  })
+  let named = (eid: string, title: string) => ({
+    entity: { eid },
+    doc: { title },
+  })
+  assertEquals(w.value, [dal4('c1'), named('c1', 'Ada')])
+  // what the projection loaded, and what it never read
+  assertEquals(
+    [['r1', 'recipe', 'serves'], ['r1', 'doc'], ['c1', 'doc', 'title']]
+      .map(([eid, name, prop]) => c.cache.loaded(eid, name, prop)),
+    [true, false, true],
+  )
+
+  // What another watch holds of an entity the projection reaches stays put
+  // while the projection's own property moves.
+  await srv.graph.apply([{ entity: { eid: 'c1' }, doc: { title: 'Ada L' } }])
+  await c.idle()
+  assertEquals(w.value, [dal4('c1'), named('c1', 'Ada L')])
+  assertEquals(comp(c.ent('c1'), 'doc'), { title: 'Ada L', body: 'bakes' })
+
+  // The reference moves: the new cook rides in, and the old one is held
+  // only by the watch still on it, until that closes too.
+  await srv.graph.apply([{ entity: { eid: 'r1' }, recipe: { cook: 'c2' } }])
+  await c.idle()
+  assertEquals(w.value, [dal4('c2'), named('c2', 'Bo')])
+  assertEquals(comp(c.ent('c1'), 'doc').body, 'bakes')
+  // A property the projection names and the entity no longer has is gone.
+  await srv.graph.apply([{ entity: { eid: 'c2' }, doc: { title: null } }])
+  await c.idle()
+  assertEquals(w.value, [dal4('c2'), { entity: { eid: 'c2' } }])
+  assertEquals(comp(c.ent('c2'), 'doc').title ?? null, null)
+  cook.close()
+  assertEquals(c.ent('c1'), undefined)
+  w.close()
+  assertEquals([c.ent('r1'), c.ent('c2')], [undefined, undefined])
+  c.close()
+})
+
 test("a watch sees a peer's value, and nothing stores it", async () => {
   let srv = server()
   let disk = wireStash()

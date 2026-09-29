@@ -2471,12 +2471,16 @@ export class Store {
           sink,
           held = (f) => {
             if (!f.bundles) return sink(f)
+            // What a projection reaches rides beside the rows, in the same
+            // words.
             let bundles = f.bundles.map(this.#kind)
-            then(this.#names(bundles), (said) => {
+            let peers = f.peers?.map(this.#kind)
+            let rode = peers ? { peers } : {}
+            then(this.#names([...bundles, ...peers ?? []]), (said) => {
               let spoken: Frame & Partial<Names> =
                 Object.keys(said.names).length
-                  ? { ...f, bundles, ...said }
-                  : { ...f, bundles }
+                  ? { ...f, bundles, ...rode, ...said }
+                  : { ...f, bundles, ...rode }
               sink(spoken)
             })
           },

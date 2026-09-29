@@ -76,7 +76,7 @@ import { state } from './state.ts'
 import { each, isPromise, then } from './pipe.ts'
 import { addressing } from './said.ts'
 import { meaning } from '@yaks/query'
-import { named, only } from './projection.ts'
+import { flat, named, only, projection } from './projection.ts'
 
 /** The options one `apply()` call can pass. */
 export type ApplyOpts = {
@@ -713,11 +713,19 @@ export let graph = (opts: Options): Graph => {
     },
     install: () => storage.install(),
     // The rows carry what the query names (./projection.ts), the same answer
-    // at every door.
+    // at every door. A `.fields` projection is read as its rows, and answers
+    // the entities its paths reach beside the ones it selects.
     read: (query, readOpts) =>
       then(
         aim(mean(query), address),
         (q) => {
+          let p = projection(vocab, q)
+          if (p) {
+            return then(
+              storage.rows(p.query, readOpts),
+              (rows) => flat(p.fold(rows)),
+            )
+          }
           let want = named(vocab, q)
           return then(
             storage.read(q, readOpts, want ? [...want] : undefined),

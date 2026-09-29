@@ -58,8 +58,8 @@ export type Frame = {
   transientReset?: string[]
   /** the subscription this frame answers */
   id: string
-  /** the entities now in the set (whole rows), or, for a raw feed, the
-   * bundles as applied */
+  /** the entities now in the set (whole rows, unless `coverage` says what
+   * each answers for), or, for a raw feed, the bundles as applied */
   bundles?: Bundle[]
   /** Per-row coverage for result bundles. Omitted entries are full rows. Each delivery
    * replaces that role's coverage. Adapters must repeat projected coverage on
@@ -68,7 +68,8 @@ export type Frame = {
   /** Rider coverage, independent even when an eid has both roles in a frame.
    * Omitted entries cover only delivered properties. */
   peerCoverage?: Record<Eid, Coverage>
-  /** Payload riders, pinned by this subscription but never query members. */
+  /** Payload riders, pinned by this subscription but never query members:
+   * the entities a `.fields` projection's paths reach (@yaks/api). */
   peers?: Bundle[]
   /** Rider departures, independent of result membership. reset replaces both. */
   peerGone?: Eid[]
@@ -81,9 +82,8 @@ export type Frame = {
    * or by that writer's connection closing — arrives as the component set to
    * `null`.
    *
-   * Not to be confused with `peers` above, which is this package's older name
-   * for a join's payload riders. The two are unrelated; this one carries the
-   * `sync: peers` components.
+   * Not to be confused with `peers` above, the payload riders. The two are
+   * unrelated; this one carries the `sync: peers` components.
    */
   relay?: Bundle[]
   /** why the subscription was refused, when it was */

@@ -116,6 +116,14 @@ selects entities that have that component, and `.book.pages>400` filters on a
 property. See [@yaks/query](../query/README.md) for the syntax and which parts
 each adapter supports. An empty query does not mean "dump the database".
 
+Each bundle carries the components the query names. A `.fields` projection names
+properties instead: each bundle carries only those, and each entity a path
+reaches through a reference comes back as a bundle of its own, after the
+selected ones. `.review&.fields=review.stars,review.book.doc.title` answers each
+review with its `stars` and `book`, then each book with its `title`.
+`projection(vocab, query)` plans such a read, and `project(graph, plan)` answers
+it with the selected entities apart from the ones reached, and what each covers.
+
 `apply(change, { check: true })` runs the write phases and rolls back instead of
 committing; it returns the proposed patches, runs audit hooks, and skips
 effects. `apply(change, { replica: true })` lands rows another graph already

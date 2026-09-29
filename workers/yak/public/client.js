@@ -203,6 +203,7 @@ export let store = (base) => {
       tries = 0
       for (let [name, sub] of subs) {
         sub.rows.clear()
+        sub.riders = []
         s.send(JSON.stringify({ subscribe: sub.q, id: name }))
       }
     }
@@ -213,8 +214,8 @@ export let store = (base) => {
       // The store's own sentence about a query it could not serve; uncaught
       // on purpose, so the reporter tells the person's agent about it.
       if (f.refused) throw new Error(f.refused.message ?? f.refused.error)
-      fold(sub.rows, f)
-      sub.cb(rows(sub.rows))
+      fold(sub, f)
+      sub.cb(rows(sub))
     }
     s.onclose = () => {
       sock = null
@@ -235,7 +236,7 @@ export let store = (base) => {
   let subscribe = (filter, cb) => {
     let name = `${++n}:${filter}`
     let q = asked(filter)
-    subs.set(name, { q, rows: new Map(), cb })
+    subs.set(name, { q, rows: new Map(), riders: [], cb })
     tell({ subscribe: q, id: name })
     return () => {
       if (!subs.delete(name)) return
@@ -255,10 +256,13 @@ export let store = (base) => {
 // One subscription frame folded into its rows. A frame carries whole rows —
 // the rows `query()` gives, once they are `named` — so folding is just keeping
 // them: a row replaces the one it names, and one that is `gone` (it died, or it
-// stopped matching) leaves.
-let fold = (rows, f) => {
-  for (let row of f.bundles ?? []) rows.set(row.entity.eid, named(row, f))
-  for (let eid of f.gone ?? []) rows.delete(eid)
+// stopped matching) leaves. A `.fields` projection whose paths cross a
+// reference also brings its riders, the entities those paths reach, every one
+// of them in every frame, so they are kept as they come.
+let fold = (sub, f) => {
+  for (let row of f.bundles ?? []) sub.rows.set(row.entity.eid, named(row, f))
+  for (let eid of f.gone ?? []) sub.rows.delete(eid)
+  if (f.peers) sub.riders = f.peers.map((row) => named(row, f))
 }
 
 // A frame's row as `query()` answers it. The socket keeps each row in the
@@ -328,8 +332,22 @@ let asked = (filter = '') =>
     }).join('&')
 
 // Oldest first — `query()`'s own order, which is the order the fill arrived
-// in and the order a live row is added at, so the map already holds it.
-let rows = (held) => [...held.values()]
+// in and the order a live row is added at, so the map already holds it. The
+// riders follow, as `query()` lists them: one the query also selects is one
+// row, carrying what both said of it.
+let rows = ({ rows, riders }) => {
+  let out = new Map(rows)
+  for (let r of riders) {
+    let held = out.get(r.entity.eid) ?? {}
+    let row = { ...held, ...r }
+    for (let k in held) {
+      let both = [held[k], r[k]].every((v) => v && typeof v == 'object')
+      if (both) row[k] = { ...held[k], ...r[k] }
+    }
+    out.set(r.entity.eid, row)
+  }
+  return [...out.values()]
+}
 
 export let { apply, me, query, search, subscribe, upload } = store(
   new URL('.', import.meta.url),

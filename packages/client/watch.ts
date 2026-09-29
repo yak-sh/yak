@@ -27,10 +27,12 @@
 // states it (`.order=title`), and stating it puts the watch in refresh mode,
 // where the order is the one the store returned. Either way a watch's rows
 // carry what its query names, the answer `graph.read` gives (@yaks/graph
-// `only`).
+// `only`), a `.fields` projection's the entities its paths reach too. Those
+// move without the entities the query selects moving, so a projection that
+// reaches runs again rather than being routed.
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
-import { only, over, then, transient, wanted } from '@yaks/graph'
+import { only, over, projection, then, transient, wanted } from '@yaks/graph'
 import { type Net, net } from '@yaks/match'
 import { parse } from '@yaks/query'
 
@@ -218,12 +220,12 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     parse(query)
     let active = true
     let now = opts.now ?? base.now
-    let want = wanted(graph.vocab, query)
+    let p = projection(graph.vocab, query)
     let w: Live = {
       query,
       now,
       routed: false,
-      cut: only(want),
+      cut: p?.cut ?? only(wanted(graph.vocab, query)),
       members: new Map(),
       hold: make<Bundle[]>([]),
       ready: make(false),
@@ -235,7 +237,8 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     then(graph.read(query, { now, durable: true }), (set) => {
       if (!active || closed) return
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
-      w.routed = netFor(now).add(w, query, w.members.keys())
+      w.routed = !p?.reaches.length &&
+        netFor(now).add(w, query, w.members.keys())
       w.hold.value = live.project(set)
       w.ready.value = true
       held.add(w)

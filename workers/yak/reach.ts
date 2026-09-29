@@ -26,7 +26,15 @@
 // about each other. And the space's vocabulary is the union of what its apps
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
-import { asking, listed, names, PLATFORM, type Row, STAMPS } from './listing.ts'
+import {
+  asking,
+  listed,
+  names,
+  PLATFORM,
+  projects,
+  type Row,
+  STAMPS,
+} from './listing.ts'
 import { bare } from './wire.ts'
 import { archetypes } from '@yaks/archetype'
 import { edges } from '@yaks/edge'
@@ -34,7 +42,10 @@ import {
   type Bundle,
   dead,
   type Entity,
+  flat,
   identities,
+  type Projection,
+  projection,
   requested,
   resolve,
   status,
@@ -53,7 +64,7 @@ import { vouched, type Who } from './session.ts'
 import { edits, mode } from '@yaks/member'
 import { recall } from './lib/hops.ts'
 import { appKeywords, coreDocs, meant, platformDocs } from './vocab.ts'
-import { matcher } from '@yaks/match'
+import { matcher, rows } from '@yaks/match'
 import { parse } from '@yaks/query'
 import {
   loadVocab,
@@ -143,7 +154,7 @@ async (line: string) => {
 // grammar's own riders and its aggregates. Everything else after a dot is a
 // component or a prop that routes to one, and either way it is the segment's
 // part.
-let RIDERS = ['order', 'near', 'limit', 'after', 'edges', 'kind']
+let RIDERS = ['order', 'near', 'limit', 'after', 'edges', 'kind', 'fields']
 let AGGS = ['count', 'distinct', 'tally']
 
 let firstWord = (seg: string) => /^[.!?]([a-z0-9_]+)/i.exec(seg)?.[1] ?? ''
@@ -604,8 +615,11 @@ export let read = async (
   }
   let { parts, global } = split(line)
   let orders = window(line)
+  // A projection is read off the merge (`projected`), so the stores are asked
+  // only which entities the filter selects.
   let plain = global.filter((s) =>
-    !AGGS.includes(firstWord(s)) && !(orders.order && orderWord(s))
+    !AGGS.includes(firstWord(s)) && !(orders.order && orderWord(s)) &&
+    firstWord(s) != 'fields'
   )
   // Which stores a word is asked of: the ones whose vocabulary declares it
   // (T-32728 — a word has one home, and a second app declaring it uses that
@@ -613,6 +627,7 @@ export let read = async (
   // platform's and spoken everywhere.
   let { words, apart, vocab } = await spoken(env, reach)
   let sorted = sorting(orders, vocab)
+  let p = planned(line, vocab)
   let speak = (name: string) => words.get(name) ?? reach
   let need = [...parts].filter(([, part]) => !part.asks)
   let lines: [Reach[], string][] = need.length
@@ -651,12 +666,13 @@ export let read = async (
   // prop, a reference path) asks for the whole bundle rather than guess. `*` is
   // the grammar's widest projection (@yaks/query `every`, T-34070), read off the
   // parsed line the way the store reads it, so both doors agree about one word.
+  // A projection reads its properties off the whole merge, wherever they live.
   let named = [...parts.keys()]
-  let want = named.length && !every(line) &&
+  let want = named.length && !every(line) && !p &&
       named.every((n) => words.has(n) || CORE.all.includes(n))
     ? new Set(named)
     : null
-  let from = named.length ? [...new Set(named.flatMap(speak))] : reach
+  let from = named.length && !p ? [...new Set(named.flatMap(speak))] : reach
   let by = orderedBy(orders, vocab)
   let bundles = await composed(
     env,
@@ -676,7 +692,59 @@ export let read = async (
       return rank ? { ...b, rank } : b
     }),
   )
+  if (p) return await projected(env, reach, vocab, p, out, live)
   return by ? out.map(unasked(by, want, line)) : out
+}
+
+// The line's `.fields` projection in the space's words, or none. A path those
+// words cannot read is the caller's line refused, as a store refuses it.
+let planned = (line: string, vocab: Vocab): Projection | null => {
+  if (!projects(line).length) return null
+  try {
+    return projection(vocab, line)
+  } catch (e) {
+    throw status(e) < 500 ? rejected(status(e), (e as Error).message) : e
+  }
+}
+
+// A `.fields` projection over the merge. The stores chose the entities and the
+// merge holds them whole, so each entity a path reaches is gathered here, hop
+// by hop and from every store, and the paths are read off the lot the way a
+// store reads them off its own rows (@yaks/match `rows`, @yaks/graph
+// `projection`): one answer, whichever stores the path crosses.
+let projected = async (
+  env: Env,
+  reach: Reach[],
+  vocab: Vocab,
+  p: Projection,
+  found: Bundle[],
+  live: boolean,
+): Promise<Bundle[]> => {
+  if (!found.length) return []
+  let held = new Map(found.map((b) => [eidOf(b), b]))
+  let read = rows({
+    kind: 'and',
+    clauses: [
+      ...parse(`.eid=${[...held.keys()].join(',')}`).clauses,
+      ...p.query.clauses.filter((c) => c.kind == 'fields'),
+    ],
+  }, vocab)
+  let asked = new Set(held.keys())
+  while (true) {
+    let got = read([...held.values()])
+    let more = [...new Set(got.flatMap((r) => p.reaches.map((c) => r[c])))]
+      .filter((e): e is string => typeof e == 'string' && !asked.has(e))
+    if (!more.length) {
+      return flat(p.fold(got)).map((b) => {
+        let kind = held.get(eidOf(b))?.kind
+        return kind ? { kind, ...b } : b
+      })
+    }
+    for (let e of more) asked.add(e)
+    for (let b of await composed(env, reach, more, { live })) {
+      held.set(eidOf(b), b)
+    }
+  }
 }
 
 // A write is routed the same way a read is composed (T-32700): a bundle is

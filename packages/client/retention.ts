@@ -47,12 +47,14 @@ export type Retained = Replica & {
   /** how many bytes the retained subscription results take once encoded —
    * a budget separate from the row limit */
   answerBytes: () => number
-  /** whether that server subscription's result includes this entity, or this
-   * page's accepted write has not reached that subscription yet */
+  /** whether that server subscription's result includes this entity, as a
+   * member or as one its projection reaches, or this page's accepted write has
+   * not reached that subscription yet */
   includes: (id: string, eid: Eid) => boolean
   /** the subscription's current members, in the order the server delivered
-   * them, with the entities read from memory. Nothing is matched locally and
-   * no unrelated pending write is added to it. */
+   * them, then the entities its projection reaches, read from memory: the
+   * answer `graph.read` gives. Nothing is matched locally and no unrelated
+   * pending write is added to it. */
   answer: (id: string) => Bundle[]
   /** called when entity data changed, including when a row was evicted from
    * memory. Read the current row from the client: an entity missing here was
@@ -435,13 +437,13 @@ export let retention = (
       listeners.clear()
       rowListeners.clear()
     },
-    answer: (id) =>
-      transient(graph).project(
-        store.tx((tx) =>
-          tx.get([...(subscriptions.get(id)?.members.keys() ?? [])])
-        )
+    answer: (id) => {
+      let sub = subscriptions.get(id)
+      return transient(graph).project(
+        store.tx((tx) => tx.get(sub ? [...payloads(sub)] : []))
           .filter((b) => !dead(b)),
-      ),
+      )
+    },
     onRows: (fn) => {
       rowListeners.add(fn)
       return () => {
@@ -449,7 +451,8 @@ export let retention = (
       }
     },
     includes: (id, eid) =>
-      !!subscriptions.get(id)?.members.has(eid) || pins.has(eid) ||
+      !!subscriptions.get(id)?.members.has(eid) ||
+      !!subscriptions.get(id)?.peers.has(eid) || pins.has(eid) ||
       !!accepted.get(id)?.has(eid),
     onMembership: (fn) => {
       listeners.add(fn)

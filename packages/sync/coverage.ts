@@ -2,12 +2,9 @@
 // It is not a second copy of the data: a property missing from a bundle but
 // outside the delivery's coverage has simply not been loaded, and must not be
 // read as a null the server asserted.
-import { type Bundle, comps } from '@yaks/graph'
+import { type Bundle, comps, type Coverage } from '@yaks/graph'
 
-/** `true` = the whole row, every server-owned component and property;
- * otherwise only the components and properties named. A component mapped to
- * `true` is covered whole, and `[]` covers only the fact that it is present. */
-export type Coverage = true | Record<string, true | string[]>
+export type { Coverage }
 
 /** Whether a delivery covers a component's presence or a particular
  * property. */

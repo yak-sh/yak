@@ -184,6 +184,94 @@ test('`*` projects, and never narrows a subscription', () => {
   assertEquals(take(), [])
 })
 
+// What a frame says about its bundles, riders and coverage, and nothing else.
+let told = (f: Frame) =>
+  Object.fromEntries(
+    Object.entries({
+      bundles: f.bundles,
+      coverage: f.coverage,
+      peers: f.peers,
+      peerCoverage: f.peerCoverage,
+      peerGone: f.peerGone,
+      gone: f.gone?.length ? f.gone : undefined,
+    }).filter(([, v]) => v !== undefined),
+  )
+let author = (eid: string, title: string) => ({
+  entity: { eid },
+  doc: { title },
+})
+
+test('a projection sends what it names, and says what that covers', () => {
+  let graph = shop()
+  graph.apply([
+    { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { price: 12 } },
+  ])
+  let subs = subscriptions(graph)
+  let { to, take } = ear()
+  subs.open(to, 'cheap', '.price<20&.fields=doc.title')
+  let dune = { entity: { eid: 'b1' }, doc: { title: 'Dune' } }
+  assertEquals(take().map(told), [{
+    bundles: [dune],
+    coverage: { b1: { doc: ['title'] } },
+  }])
+
+  graph.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
+  assertEquals(take().map(told), [{
+    bundles: [{ entity: { eid: 'b2' } }],
+    coverage: { b2: { doc: ['title'] } },
+  }])
+})
+
+test('a projection carries what its paths reach, and follows it', () => {
+  let graph = shop()
+  graph.apply([
+    author('a1', 'Ada'),
+    author('a2', 'Bo'),
+    { entity: { eid: 'b1' }, book: { price: 12, author: 'a1' } },
+  ])
+  let subs = subscriptions(graph)
+  let { to, take } = ear()
+  subs.open(to, 'by', '.book&.fields=book.price,book.author.doc.title')
+  let book = (author: string) => ({
+    entity: { eid: 'b1' },
+    book: { price: 12, author },
+  })
+  let covered = {
+    coverage: { b1: { book: ['price', 'author'] } },
+  }
+  assertEquals(take().map(told), [{
+    bundles: [book('a1')],
+    ...covered,
+    peers: [author('a1', 'Ada')],
+    peerCoverage: { a1: { doc: ['title'] } },
+  }])
+
+  // a rename where a path reaches
+  graph.apply([author('a1', 'Ada L')])
+  assertEquals(take().map((f) => f.peers), [[author('a1', 'Ada L')]])
+
+  // the reference moves: the new author rides and the old one leaves
+  graph.apply([{ entity: { eid: 'b1' }, book: { author: 'a2' } }])
+  assertEquals(take().map(told), [{
+    bundles: [book('a2')],
+    ...covered,
+    peers: [author('a2', 'Bo')],
+    peerCoverage: { a2: { doc: ['title'] } },
+    peerGone: ['a1'],
+  }])
+
+  // and nothing rides once nothing selects the book
+  graph.apply([{ entity: { eid: 'b1' }, $delete: true }])
+  assertEquals(take().map(told), [{
+    bundles: [],
+    coverage: {},
+    peers: [],
+    peerCoverage: {},
+    peerGone: ['a2'],
+    gone: ['b1'],
+  }])
+})
+
 test('an entity that stops matching is reported gone', () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])

@@ -287,9 +287,13 @@ Subscriptions can share rows and cover different properties. A query reporting
 an entity as `gone` removes its own membership without removing another
 subscription's data. Query snapshots replace fields within their declared
 coverage; raw change feeds apply patches. Other subscriptions' covered fields,
-local components, and unacknowledged writes are preserved. A transport failure
-with an unknown outcome keeps pending writes protected; it is not an
-acknowledgement. Durable queuing and retry policy remain application concerns.
+local components, and unacknowledged writes are preserved. A `.fields`
+projection covers only the properties it names, so it never clears one it did
+not read; the entities its paths reach are held while it reaches them, and its
+watch's `value` lists them after the selected ones, as `read()` does. A
+transport failure with an unknown outcome keeps pending writes protected; it is
+not an acknowledgement. Durable queuing and retry policy remain application
+concerns.
 
 ### Restoring server data
 

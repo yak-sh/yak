@@ -69,6 +69,18 @@ instead of bundles: `.count` returns `{"count":n}`, `.distinct=prop` returns
 `{"distinct":[…]}`, and `.tally=prop` returns `{"tally":{…}}`. The storage
 adapter must support the requested query.
 
+A `.fields` projection still answers bundles. Each selected entity carries only
+the properties named, and each entity a path reaches through a reference comes
+back as a bundle of its own, after the selected ones, carrying what was read off
+it. A property the entity lacks is left out:
+
+```sh
+curl -G http://localhost:8000/query \
+  --data-urlencode 'q=.review&.fields=review.stars,review.book.doc.title'
+# [{"entity":{"eid":"r1"},"review":{"stars":5,"book":"b1"}},
+#  {"entity":{"eid":"b1"},"doc":{"title":"Dune"}}]
+```
+
 ## Exports
 
 All exports are available from `@yaks/api`:
@@ -172,6 +184,7 @@ socket.send(
 → { unsubscribe: "<id>" }
 → { relay: Bundle[] }
 ← { id, bundles: Bundle[], gone?: Eid[] }
+← { id, bundles, coverage, peers?, peerCoverage?, peerGone?, gone? }
 ← { id, count: n } | { id, distinct: […] } | { id, tally: {…} }
 ← { id, relay: Bundle[] }
 ← { id, transient: TransientFrame[] }
@@ -195,12 +208,21 @@ in place until it clears or the connection closes.
 
 Query updates contain current bundles for matching entities and `gone` IDs for
 entities that were deleted or stopped matching. A refreshed query can return its
-whole current set. An aggregate query (`.count`, `.distinct=prop`,
-`.tally=prop`) is answered with its value in the shape `/query` answers it,
-first when it opens and again after a commit that changes it; it carries no
-bundles. `subscribe: true` selects the committed-change feed, with no initial
-snapshot: each message contains the combined transaction changes, like the JSON
-`/apply` result.
+whole current set.
+
+A `.fields` projection's frames carry its bundles narrowed, as `/query` answers
+them, with `coverage`: for each bundle, the properties it answers for. A covered
+property the bundle leaves out is absent; one not covered was never read, so a
+client merging the bundle into a cache keeps it. The entities a path reaches
+ride beside the set rather than in it: `peers` carries them, `peerCoverage` what
+each covers, and `peerGone` the ones no path reaches any more. A projection that
+reaches is read again whole after any commit that touches an entity along its
+paths, and each such frame carries every rider. An aggregate query (`.count`,
+`.distinct=prop`, `.tally=prop`) is answered with its value in the shape
+`/query` answers it, first when it opens and again after a commit that changes
+it; it carries no bundles. `subscribe: true` selects the committed-change feed,
+with no initial snapshot: each message contains the combined transaction
+changes, like the JSON `/apply` result.
 
 Initial query messages also contain `transientReset` IDs and may include
 `transient` snapshots or existing peer values. `transient` messages carry

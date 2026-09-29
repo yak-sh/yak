@@ -273,6 +273,21 @@ test('/query answers an aggregate with its value, not a row set', async () => {
   assertEquals(found.map((b) => b.entity.eid).sort(), ['b1', 'b3'])
 })
 
+test('/query answers a projection as bundles, with what its paths reach', async () => {
+  let handler = shop()
+  await handler(post('/apply', [
+    { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { price: 12 } },
+    { entity: { eid: 'r1' }, review: { stars: 5, book: 'b1' } },
+  ]))
+  assertEquals(
+    await body(await handler(ask('.review&.fields=review.book.doc.title'))),
+    [
+      { entity: { eid: 'r1' }, review: { book: 'b1' } },
+      { entity: { eid: 'b1' }, doc: { title: 'Dune' } },
+    ],
+  )
+})
+
 test('a count over nothing is zero, never an empty list', async () => {
   assertEquals(await body(await shop()(ask('.book&.count'))), { count: 0 })
 })

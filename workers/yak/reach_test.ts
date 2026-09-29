@@ -455,7 +455,10 @@ let where = async () => {
     $defs: {
       loan: {
         component: true,
-        properties: { to: { type: 'string' } },
+        properties: {
+          to: { type: 'string' },
+          of: { type: 'string', ref: 'book', death: 'detach' },
+        },
       },
     },
   })
@@ -625,4 +628,29 @@ test('the space speaks one vocabulary, and a word nobody declares is the platfor
     bundles(await read(env, [reach[0]], '.doc&?book')).length,
     1,
   )
+})
+
+test('a projection answers what it names, and what its paths reach across the stores', async () => {
+  let { env, reach } = await where()
+  let dune = eid(), lent = eid()
+  await written(env, reach, undefined, [
+    { entity: { eid: dune }, doc: { title: 'Dune' }, book: { pages: 412 } },
+  ])
+  await written(env, reach, undefined, [
+    { entity: { eid: lent }, loan: { to: 'Ada', of: dune } },
+  ])
+  let asked = async (line: string, where = reach) =>
+    bundles(await read(env, where, line))
+  // One store narrows its own rows.
+  assertEquals(await asked('.book&.fields=book.pages', [reach[0]]), [
+    { kind: 'book', entity: { eid: dune }, book: { pages: 412 } },
+  ])
+  // The loan is one app's and the title of the book it names another's.
+  assertEquals(await asked('.loan&.fields=loan.to,loan.of.doc.title'), [
+    { kind: 'loan', entity: { eid: lent }, loan: { to: 'Ada', of: dune } },
+    { kind: 'book', entity: { eid: dune }, doc: { title: 'Dune' } },
+  ])
+  // A stamp the projection names is answered, as a filter naming it is.
+  let [stamped] = await asked('.book&.fields=book.pages,created.at')
+  assertEquals(Object.keys(stamped), ['kind', 'entity', 'book', 'created'])
 })

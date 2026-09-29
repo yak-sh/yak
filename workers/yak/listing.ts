@@ -51,10 +51,18 @@ export let PLATFORM = [
 
 export type Row = Record<string, unknown>
 
+/** The paths a line's `.fields` projection names, each a list of segments, or
+ * none when it projects nothing. */
+export let projects = (line: string): string[][] =>
+  /(?:^|&)\.fields=([^&]*)/.exec(line)?.[1].split(',')
+    .map((path) => path.replace(/~$/, '').split('.')) ?? []
+
 /** Whether a filter line names a component, in any of the three ways a clause
- * can: present (`.created`), absent (`!created`) or wanted (`?created`). */
+ * can: present (`.created`), absent (`!created`) or wanted (`?created`), or on
+ * a path its projection reads (`.fields=created.at`). */
 export let names = (line: string, word: string) =>
-  ['.', '!', '?'].some((mark) => line.includes(mark + word))
+  ['.', '!', '?'].some((mark) => line.includes(mark + word)) ||
+  projects(line).some((path) => path.includes(word))
 
 // The same rule, asked instead of answered: the platform's own rows left out
 // of the question. A listing can only screen an answer's rows, so a `.count`
@@ -79,9 +87,12 @@ export let asking = (line: string, words: string[] = PLATFORM) => {
   return line.slice(0, line.length - ask.length) + conjoin(ask, ...screen)
 }
 
-// The rule itself, over rows: what this filter line's answer carries.
+// The rule itself, over rows: what this filter line's answer carries. A
+// projection's row is narrowed on purpose, so one carrying nothing but its
+// name is still an answer: an entity whose named properties it lacks.
 export let listed = (rows: Row[], asked: string): Row[] => {
   let hidden = STAMPS.filter((s) => !names(asked, s))
+  let narrowed = projects(asked).length > 0
   let out: Row[] = []
   for (let row of rows) {
     let kernel = KERNEL.filter((k) => k in row)
@@ -94,7 +105,9 @@ export let listed = (rows: Row[], asked: string): Row[] => {
       Object.entries(row).filter(([k]) => !hidden.includes(k)),
     )
     // `entity` and `kind` name a row; one with nothing else left was a stamp.
-    if (Object.keys(kept).some((k) => k != 'entity' && k != 'kind')) {
+    if (
+      narrowed || Object.keys(kept).some((k) => k != 'entity' && k != 'kind')
+    ) {
       out.push(kept)
     }
   }

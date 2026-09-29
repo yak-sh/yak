@@ -201,19 +201,19 @@ projection, aggregation or pagination, and the parser lifts each of those to the
 top-level clause list, where `directive(clause)` finds it; `.refs` filters by
 references:
 
-| written                | meaning                                                                                                                                   |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `.order=hot`           | the order the answer comes back in                                                                                                        |
-| `.near=42`             | rank by similarity to this entity                                                                                                         |
-| `.refs=42`             | everything that references entity 42; `.refs` references anything, `!refs` references nothing                                             |
-| `.count`               | how many rows match, instead of the rows                                                                                                  |
-| `.distinct=prop`       | the distinct values of one property                                                                                                       |
-| `.tally=prop`          | each value of one property with its count                                                                                                 |
-| `.fields=pin.x,pin.z~` | the properties each row carries; a trailing `~` excludes changes to that property from subscription notifications                         |
-| `*`                    | every component of each selected entity                                                                                                   |
-| `.limit=200`           | at most this many rows                                                                                                                    |
-| `.after=13882`         | continue past this entity                                                                                                                 |
-| `.edges`               | the edges touching the answer; `.edges.peers=status,title` projects the far endpoint; `.edges[watches,author.team]` selects one edge type |
+| written                | meaning                                                                                                                                                                                                               |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.order=hot`           | the order the answer comes back in                                                                                                                                                                                    |
+| `.near=42`             | rank by similarity to this entity                                                                                                                                                                                     |
+| `.refs=42`             | everything that references entity 42; `.refs` references anything, `!refs` references nothing                                                                                                                         |
+| `.count`               | how many rows match, instead of the rows                                                                                                                                                                              |
+| `.distinct=prop`       | the distinct values of one property                                                                                                                                                                                   |
+| `.tally=prop`          | each value of one property with its count                                                                                                                                                                             |
+| `.fields=pin.x,pin.z~` | the properties each row carries; a path through a reference (`review.book.doc.title`) brings what it reaches as a bundle of its own; a trailing `~` excludes changes to that property from subscription notifications |
+| `*`                    | every component of each selected entity                                                                                                                                                                               |
+| `.limit=200`           | at most this many rows                                                                                                                                                                                                |
+| `.after=13882`         | continue past this entity                                                                                                                                                                                             |
+| `.edges`               | the edges touching the answer; `.edges.peers=status,title` projects the far endpoint; `.edges[watches,author.team]` selects one edge type                                                                             |
 
 `.after=<id>` is the paging cursor: an entity number, human id, or eid to
 continue past (`.after=T-13882` names the same number as `.after=13882`). An eid

@@ -228,6 +228,28 @@ test('filters and limit narrow the whole query line', async () => {
   assertEquals(either.map((b) => b.entity.eid), ['b1'])
 })
 
+test('graph_query answers a projection as bundles, with what its paths reach', async () => {
+  let client = await connect()
+  await called(client, 'graph_apply', {
+    change: [
+      { entity: { eid: 'a1' }, doc: { title: 'Ursula' } },
+      { ...spring, book: { price: 12, author: 'a1' } },
+    ],
+  })
+  assertEquals(
+    result(
+      await called(client, 'graph_query', {
+        q: '.book&.fields=book.price,book.author.doc.title',
+      }),
+    ),
+    [
+      { entity: { eid: 'b1' }, book: { price: 12, author: 'a1' } },
+      { entity: { eid: 'a1' }, doc: { title: 'Ursula' } },
+    ],
+  )
+  await client.close()
+})
+
 test('the server signs the batch, never the client', async () => {
   let graph = shopGraph()
   let client = await connect({ graph, actor: ada })
