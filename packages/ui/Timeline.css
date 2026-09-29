@@ -1,0 +1,36 @@
+/* Moments down a rule: each a line of when and who, what it was under it. */
+.Timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--half-gap);
+  border-left: 1px solid var(--border2);
+  display: grid;
+  gap: var(--half-gap);
+}
+.Timeline_Item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--half-gap);
+  min-width: 0;
+}
+.Timeline_When,
+.Timeline_Who {
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.Timeline_When {
+  color: var(--dim);
+}
+.Timeline_Who {
+  color: var(--blue);
+}
+.Timeline_What {
+  flex-basis: 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}

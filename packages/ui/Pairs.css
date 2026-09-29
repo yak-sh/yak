@@ -1,0 +1,21 @@
+/* Keys beside their values: the keys a column as wide as the widest, the
+   values the rest of the row. */
+.Pairs {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px var(--gap);
+  align-items: baseline;
+  margin: 0;
+}
+.Pairs_Key {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+}
+.Pairs_Value {
+  margin: 0;
+  min-width: 0;
+}

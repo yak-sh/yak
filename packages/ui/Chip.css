@@ -1,0 +1,42 @@
+/* A name as a token: mono, small, in its hue, on a faint wash of it. The hue
+   rides --hue, so a variant only re-points it. */
+.Chip {
+  --hue: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 12%, transparent);
+  border-radius: calc(var(--radius) - 2px);
+  padding: 0 4px;
+  text-decoration: none;
+}
+a.Chip:hover,
+.Chip[data-href]:hover {
+  text-decoration: underline;
+}
+.Chip-0 {
+  --hue: var(--blue);
+}
+.Chip-1 {
+  --hue: var(--yellow);
+}
+.Chip-2 {
+  --hue: var(--purple);
+}
+.Chip-3 {
+  --hue: var(--green);
+}
+.Chip-4 {
+  --hue: var(--orange);
+}
+.Chip-5 {
+  --hue: var(--red);
+}
+/* only a possibility: absent, or not added yet */
+.Chip-ghost {
+  --hue: var(--dim);
+  background: none;
+  outline: 1px dashed var(--border2);
+  outline-offset: -1px;
+}

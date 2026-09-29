@@ -1,0 +1,33 @@
+/* A stored value, coloured by its shape. Stored bytes show as stored: a
+   string keeps its newlines, and an unbroken token breaks anywhere. */
+.Value {
+  color: var(--text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.Value-num {
+  color: var(--purple);
+  font-variant-numeric: tabular-nums;
+}
+.Value-bool {
+  color: var(--orange);
+}
+.Value-id,
+.Value-time,
+.Value-json {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.Value-id {
+  color: var(--dim);
+}
+.Value-time {
+  color: var(--blue);
+}
+.Value-json {
+  color: var(--muted);
+}
+.Value-nil {
+  color: var(--dim);
+  font-style: italic;
+}

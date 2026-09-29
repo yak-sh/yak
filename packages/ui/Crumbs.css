@@ -1,0 +1,26 @@
+/* The way here, one line: small dim steps, the one here in ink. */
+.Crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  min-width: 0;
+}
+.Crumbs_Item {
+  color: var(--dim);
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.Crumbs_Item:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.Crumbs_Item-here {
+  color: var(--text);
+}
+.Crumbs_Sep {
+  color: var(--border2);
+}

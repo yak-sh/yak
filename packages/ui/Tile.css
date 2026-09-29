@@ -1,0 +1,45 @@
+/* One thing on one line: id and kind small and dim, the title taking the
+   room and cut short before it wraps, a note after it, a count at the end.
+   As a link, the whole line is the target. */
+.Tile {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+  padding: 1px 0;
+  min-height: var(--tap);
+}
+a.Tile:hover,
+.Tile[data-href]:hover {
+  background: var(--soft);
+}
+.Tile_Id,
+.Tile_Kind {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.Tile_Title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Tile_Note {
+  color: var(--muted);
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.Tile_Count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--purple);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

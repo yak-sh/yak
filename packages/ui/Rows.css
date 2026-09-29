@@ -1,0 +1,19 @@
+/* A list of rows, close together. A nested list hangs off a rule. */
+.Rows {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.Rows-nested {
+  margin-left: var(--half-gap);
+  padding-left: var(--half-gap);
+  border-left: 1px solid var(--border2);
+}
+.Rows_Item {
+  min-width: 0;
+}
+.Rows_More {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}

@@ -1,0 +1,50 @@
+/* A titled section: a title line (fold, words, count, note), then its body.
+   Sections stack with a gap between them; the page decides the rest. */
+.Section {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Section + .Section {
+  margin-top: var(--gap);
+}
+.Section_Title {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--green);
+}
+.Section_Count,
+.Section_Note {
+  font-weight: normal;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+.Section_Count {
+  font-variant-numeric: tabular-nums;
+}
+/* The caret a folding section turns: sideways shut, down open. */
+.Section_Fold {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  width: 1em;
+  color: var(--dim);
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.Section_Fold::before {
+  content: '▸';
+}
+.Section_Fold-open::before {
+  content: '▾';
+}
+.Section_Fold:hover {
+  color: var(--text);
+}

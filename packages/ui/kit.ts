@@ -9,13 +9,22 @@
 import type { Sheet } from '@yaks/tui/theme'
 import * as base from './base.ts'
 import * as choices from './Choices.ts'
+import * as button from './Button.ts'
+import * as chip from './Chip.ts'
+import * as crumbs from './Crumbs.ts'
 import * as dot from './Dot.ts'
 import * as field from './Field.ts'
 import * as id from './Id.ts'
 import * as menu from './Menu.ts'
+import * as pairs from './Pairs.ts'
+import * as rows from './Rows.ts'
+import * as section from './Section.ts'
 import * as stamp from './Stamp.ts'
 import * as tabs from './Tabs.ts'
+import * as tile from './Tile.ts'
+import * as timeline from './Timeline.ts'
 import * as tip from './Tip.ts'
+import * as value from './Value.ts'
 import type { Kit, Theme } from './theme.ts'
 
 /** Every part: the document's defaults first, then each component. */
@@ -29,6 +38,15 @@ export let kit: Record<string, Kit> = {
   Tip: tip,
   Field: field,
   Choices: choices,
+  Button: button,
+  Chip: chip,
+  Value: value,
+  Pairs: pairs,
+  Tile: tile,
+  Rows: rows,
+  Section: section,
+  Timeline: timeline,
+  Crumbs: crumbs,
 }
 
 /** What @yaks/tui's painter dresses the kit with, in `theme`'s colours. */
