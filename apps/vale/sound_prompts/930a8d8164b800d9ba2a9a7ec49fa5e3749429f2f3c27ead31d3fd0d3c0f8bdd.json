@@ -1,0 +1,18 @@
+{
+  "sound": "spoil-rare",
+  "sha256": "930a8d8164b800d9ba2a9a7ec49fa5e3749429f2f3c27ead31d3fd0d3c0f8bdd",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A rare gear piece drops: one delicate high metal chime with a second answering overtone, brief tail. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790653316-8vTPoxjq7l2dYRq2wobn"
+  },
+  "playback": {
+    "loop": false
+  }
+}

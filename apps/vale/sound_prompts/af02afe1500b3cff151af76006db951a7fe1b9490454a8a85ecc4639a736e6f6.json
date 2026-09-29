@@ -1,0 +1,18 @@
+{
+  "sound": "stroke-wood",
+  "sha256": "af02afe1500b3cff151af76006db951a7fe1b9490454a8a85ecc4639a736e6f6",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One axe strike bites into a tree trunk: sharp woody chop, fiber split and short leaf rustle. No falling tree. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790653363-6L8J822RZ2Ca0h0Sbyv8"
+  },
+  "playback": {
+    "loop": false
+  }
+}

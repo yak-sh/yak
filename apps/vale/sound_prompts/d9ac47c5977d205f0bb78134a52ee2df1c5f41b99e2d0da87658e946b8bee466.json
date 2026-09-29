@@ -1,0 +1,18 @@
+{
+  "sound": "spoil-epic",
+  "sha256": "d9ac47c5977d205f0bb78134a52ee2df1c5f41b99e2d0da87658e946b8bee466",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: An epic gear piece drops: four ascending resonant metal chimes, bright and celebratory but brief. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790653329-qzNCOVrL9LzEvxKFz6cZ"
+  },
+  "playback": {
+    "loop": false
+  }
+}

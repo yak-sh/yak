@@ -1,0 +1,18 @@
+{
+  "sound": "quest",
+  "sha256": "e88dfb0cd78911a0d58f32627b274411003b9be31c080c7d73162c71b400f0d4",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A quest is accepted or finished: a small warm three-note chime, distinct from the level-up flourish. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790653300-H7WGc3PAbXU2s6jSksi2"
+  },
+  "playback": {
+    "loop": false
+  }
+}

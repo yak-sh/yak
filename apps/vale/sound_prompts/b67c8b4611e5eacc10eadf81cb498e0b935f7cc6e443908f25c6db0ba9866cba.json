@@ -1,0 +1,18 @@
+{
+  "sound": "stroke-ore",
+  "sha256": "b67c8b4611e5eacc10eadf81cb498e0b935f7cc6e443908f25c6db0ba9866cba",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One pickaxe strike on a mineral seam: bright stone-and-metal clink with tiny grit scattering. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790653385-aXKJUJAvB6FqkLPYk1OS"
+  },
+  "playback": {
+    "loop": false
+  }
+}

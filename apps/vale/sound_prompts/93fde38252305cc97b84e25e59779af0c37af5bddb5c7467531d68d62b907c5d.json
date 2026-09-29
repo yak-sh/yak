@@ -1,0 +1,18 @@
+{
+  "sound": "stroke-herb",
+  "sha256": "93fde38252305cc97b84e25e59779af0c37af5bddb5c7467531d68d62b907c5d",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A small clump of herbs is pulled: soft leaf swish and root fibers loosening from soil. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790653398-e3DgXvutOOfkE62YC0Xb"
+  },
+  "playback": {
+    "loop": false
+  }
+}
