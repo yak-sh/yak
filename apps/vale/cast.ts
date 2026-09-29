@@ -15,6 +15,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES } from './abilities.ts'
+import { effect } from './ability-effects.ts'
 import { BEASTS } from './beasts.ts'
 import { skull } from './danger.ts'
 import {
@@ -546,7 +547,7 @@ export let cast = (
         a.hp = o.vitals.hp
         // An ability takes its own time, and is posed its own way.
         let d = a.doing, ab = d ? ABILITIES[d.id] : undefined
-        let took = ab?.guard ?? ab?.time ?? k.pace
+        let took = (ab && effect(ab.effects, 'guard')?.ms) || ab?.time || k.pace
         let since = now - (d && ab ? d.at : a.swingAt)
         if (d && since >= took) a.doing = null
         play(

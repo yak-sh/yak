@@ -12,6 +12,7 @@
 // out from the rows alone (`learnedOf`), the same on every page, so a row
 // for a skill they could not learn then counts for nothing.
 import { ABILITIES, type Ability } from './abilities.ts'
+import { changed, type Effect } from './ability-effects.ts'
 import type { Kit } from './gear.ts'
 import type { Glyph } from './glyphs.ts'
 
@@ -61,7 +62,7 @@ export type Skill = {
   with?: string[]
   /** the ability it makes stronger, and how */
   ability?: string
-  form?: Partial<Ability>
+  form?: Partial<Omit<Ability, 'effects'>> & { effects?: Effect[] }
   /** the family of weapon it lets the other hand hold too, beside one of its
    * own in the first (gear.ts) */
   hand?: string
@@ -105,7 +106,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'heft',
     ability: 'quake',
-    form: { far: 4.2, held: 3000 },
+    form: { far: 4.2, effects: [{ kind: 'stun', ms: 3000 }] },
   },
   butcher: {
     name: "Butcher's cut",
@@ -115,7 +116,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'heft',
     ability: 'rend',
-    form: { bleed: 3.2 },
+    form: { effects: [{ kind: 'bleed', scale: 3.2 }] },
   },
   bulwark: {
     name: 'Bulwark',
@@ -125,7 +126,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 3,
     after: 'hide',
     ability: 'block',
-    form: { guard: 2500, cool: 4500 },
+    form: { cool: 4500, effects: [{ kind: 'guard', ms: 2500 }] },
   },
   momentum: {
     name: 'Momentum',
@@ -145,7 +146,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 3,
     after: 'butcher',
     ability: 'whirl',
-    form: { far: 3.6, dmg: 1.5, cool: 6000 },
+    form: { far: 3.6, cool: 6000, effects: [{ kind: 'damage', scale: 1.5 }] },
   },
   titan: {
     name: 'Titan',
@@ -164,7 +165,9 @@ export let SKILLS: Record<string, Skill> = {
     row: 4,
     after: 'momentum',
     ability: 'crush',
-    form: { dmg: 3.2, held: 1500 },
+    form: {
+      effects: [{ kind: 'damage', scale: 3.2 }, { kind: 'stun', ms: 1500 }],
+    },
   },
 
   fleet: {
@@ -201,7 +204,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'keen',
     ability: 'cleave',
-    form: { arc: 1.9, dmg: 1.5 },
+    form: { arc: 1.9, effects: [{ kind: 'damage', scale: 1.5 }] },
   },
   cuts: {
     name: 'Thousand cuts',
@@ -211,7 +214,10 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'keen',
     ability: 'flurry',
-    form: { hits: 5, time: 800 },
+    form: {
+      time: 800,
+      effects: [{ kind: 'damage', scale: 0.8, hits: 5, sure: true }],
+    },
   },
   deadeye: {
     name: 'Deadeye',
@@ -240,7 +246,9 @@ export let SKILLS: Record<string, Skill> = {
     row: 3,
     after: 'sweep',
     ability: 'lunge',
-    form: { dash: 7, dmg: 2.5 },
+    form: {
+      effects: [{ kind: 'damage', scale: 2.5 }, { kind: 'dash', metres: 7 }],
+    },
   },
   rain: {
     name: 'Rain of arrows',
@@ -250,7 +258,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 3,
     after: 'deadeye',
     ability: 'volley',
-    form: { shots: 10, far: 4, dmg: 1.1 },
+    form: { shots: 10, far: 4, effects: [{ kind: 'damage', scale: 1.1 }] },
   },
   assassin: {
     name: 'Assassin',
@@ -260,7 +268,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 4,
     after: 'nimble',
     ability: 'shadowstep',
-    form: { dmg: 1.6, cool: 7000 },
+    form: { cool: 7000, effects: [{ kind: 'damage', scale: 1.6, sure: true }] },
   },
   twin: {
     name: 'Twin daggers',
@@ -280,7 +288,10 @@ export let SKILLS: Record<string, Skill> = {
     row: 4,
     after: 'rain',
     ability: 'pin',
-    form: { held: 4500, dmg: 1.5, cool: 7000 },
+    form: {
+      cool: 7000,
+      effects: [{ kind: 'damage', scale: 1.5 }, { kind: 'stun', ms: 4500 }],
+    },
   },
   relentless: {
     name: 'Relentless',
@@ -290,7 +301,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 5,
     after: 'charge',
     ability: 'lunge',
-    form: { renew: true },
+    form: { effects: [{ kind: 'renew' }] },
   },
 
   focus: {
@@ -310,7 +321,7 @@ export let SKILLS: Record<string, Skill> = {
     discipline: 'arcana',
     row: 1,
     ability: 'mend',
-    form: { heal: 0.45 },
+    form: { effects: [{ kind: 'heal', share: 0.45 }] },
   },
   inferno: {
     name: 'Inferno',
@@ -320,7 +331,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'focus',
     ability: 'blaze',
-    form: { far: 3.5, dmg: 1.8 },
+    form: { far: 3.5, effects: [{ kind: 'damage', scale: 1.8 }] },
   },
   wildfire: {
     name: 'Wildfire',
@@ -330,7 +341,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'focus',
     ability: 'scorch',
-    form: { far: 1.8, bleed: 2.4 },
+    form: { far: 1.8, effects: [{ kind: 'bleed', scale: 2.4 }] },
   },
   aegis: {
     name: 'Aegis',
@@ -340,7 +351,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 2,
     after: 'kindness',
     ability: 'ward',
-    form: { ward: 0.5 },
+    form: { effects: [{ kind: 'ward', share: 0.5 }] },
   },
   flow: {
     name: 'Flow',
@@ -378,7 +389,7 @@ export let SKILLS: Record<string, Skill> = {
     row: 4,
     after: 'vigil',
     ability: 'mend',
-    form: { heal: 0.6, cool: 12000 },
+    form: { cool: 12000, effects: [{ kind: 'heal', share: 0.6 }] },
   },
 }
 
@@ -448,11 +459,12 @@ export let canLearn = (skill: string, known: string[], lvl: number) => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { effect } from './ability-effects.ts'
  * import { seedAbilities } from './abilities_fixture.ts'
  * seedAbilities()
- * assertEquals(formOf('mend', [])?.heal, 0.3)
- * assertEquals(formOf('mend', ['kindness'])?.heal, 0.45)
- * assertEquals(formOf('mend', ['kindness', 'aegis', 'vigil', 'sanctuary'])?.heal, 0.6)
+ * assertEquals(effect(formOf('mend', [])!.effects, 'heal')?.share, 0.3)
+ * assertEquals(effect(formOf('mend', ['kindness'])!.effects, 'heal')?.share, 0.45)
+ * assertEquals(effect(formOf('mend', ['kindness', 'aegis', 'vigil', 'sanctuary'])!.effects, 'heal')?.share, 0.6)
  * assertEquals(formOf('nothing', []), undefined)
  * ```
  */
@@ -461,7 +473,9 @@ export let formOf = (id: string, known: string[]): Ability | undefined => {
   if (!a) return undefined
   for (let k of known) {
     let s = SKILLS[k]
-    if (s?.ability == id) a = { ...a, ...s.form }
+    if (s?.ability == id && s.form) {
+      a = { ...a, ...s.form, effects: changed(a.effects, s.form.effects ?? []) }
+    }
   }
   return a
 }

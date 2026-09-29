@@ -7,6 +7,7 @@
 // shot is loosed then at the creature it was aimed at, and lands when it gets
 // there (`FLIGHT`). An ability takes what its shape covers (`takenBy`).
 import type { Ability } from './abilities.ts'
+import { effect } from './ability-effects.ts'
 import { BEASTS } from './beasts.ts'
 import type { Kit } from './gear.ts'
 
@@ -57,7 +58,8 @@ export let aims = (a: Ability): boolean =>
  * a dash's length, or its own `far` for `one` or an `arc`. A `burst`'s `far`
  * is how wide it bursts, not how far it goes. */
 export let farOf = (a: Ability): number =>
-  a.dash ?? (a.shape == 'one' || a.shape == 'arc' ? a.far ?? 0 : 0)
+  effect(a.effects, 'dash')?.metres ??
+    (a.shape == 'one' || a.shape == 'arc' ? a.far ?? 0 : 0)
 
 /** What my next blow or ability would take, or none, worked out once a
  * frame for the mark and every act to share: of the creatures up and before

@@ -14,6 +14,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES, type Ability, useAbilities } from './abilities.ts'
+import { effect } from './ability-effects.ts'
 import { bar } from './bar.ts'
 import { board } from './board.ts'
 import { BEASTS, useBeasts } from './beasts.ts'
@@ -500,7 +501,7 @@ let flourish = (id: string, a: Ability, at: THREE.Vector3, yaw: number) => {
       halo: true,
     })
   }
-  if (a.dash && a.element != 'shadow') {
+  if (effect(a.effects, 'dash') && a.element != 'shadow') {
     dust.emit(at.clone().setY(at.y + 0.2), tint, 10, {
       speed: 2,
       up: 1,

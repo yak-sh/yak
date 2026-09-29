@@ -9,12 +9,20 @@
       "icon": "handFist",
       "shape": "one",
       "pose": "swing",
-      "dmg": 2,
-      "held": 1000,
       "cool": 6000,
       "description": "A heavy swing",
       "weapon": "fists",
-      "slot": 1
+      "slot": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 2
+        },
+        {
+          "kind": "stun",
+          "ms": 1000
+        }
+      ]
     }
   },
   {
@@ -29,11 +37,16 @@
       "pose": "swing",
       "far": 0.5,
       "arc": 1.4,
-      "dmg": 1.3,
       "cool": 6000,
       "description": "A sweep across foes in front of you",
       "weapon": "sword",
-      "slot": 1
+      "slot": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 1.3
+        }
+      ]
     }
   },
   {
@@ -46,13 +59,23 @@
       "icon": "zap",
       "shape": "one",
       "pose": "swing",
-      "dash": 4.5,
-      "dmg": 2,
       "cool": 9000,
-      "refund": true,
       "description": "Dash toward one foe and run it through",
       "weapon": "sword",
-      "slot": 2
+      "slot": 2,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 2
+        },
+        {
+          "kind": "dash",
+          "metres": 4.5
+        },
+        {
+          "kind": "refund"
+        }
+      ]
     }
   },
   {
@@ -66,11 +89,16 @@
       "shape": "ring",
       "pose": "spin",
       "far": 2.8,
-      "dmg": 1.25,
       "cool": 8000,
       "description": "Spin and strike nearby foes",
       "weapon": "axe",
-      "slot": 1
+      "slot": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 1.25
+        }
+      ]
     }
   },
   {
@@ -83,13 +111,21 @@
       "icon": "droplet",
       "shape": "one",
       "pose": "swing",
-      "dmg": 1.4,
-      "bleed": 1.6,
       "cool": 10000,
       "tint": 14174266,
       "description": "A deep cut",
       "weapon": "axe",
-      "slot": 2
+      "slot": 2,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 1.4
+        },
+        {
+          "kind": "bleed",
+          "scale": 1.6
+        }
+      ]
     }
   },
   {
@@ -104,13 +140,21 @@
       "shape": "ring",
       "pose": "swing",
       "far": 3.4,
-      "dmg": 1,
-      "held": 2000,
       "cool": 11000,
       "tint": 12099706,
       "description": "Slam the ground",
       "weapon": "hammer",
-      "slot": 1
+      "slot": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 1
+        },
+        {
+          "kind": "stun",
+          "ms": 2000
+        }
+      ]
     }
   },
   {
@@ -123,11 +167,16 @@
       "icon": "hammer",
       "shape": "one",
       "pose": "swing",
-      "dmg": 2.6,
       "cool": 9000,
       "description": "An enormous overhead blow",
       "weapon": "hammer",
-      "slot": 2
+      "slot": 2,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 2.6
+        }
+      ]
     }
   },
   {
@@ -140,14 +189,19 @@
       "icon": "blow",
       "shape": "one",
       "pose": "swing",
-      "dmg": 0.8,
-      "hits": 3,
-      "sure": true,
       "time": 600,
       "cool": 6000,
       "description": "Rapid dagger strikes",
       "weapon": "dagger",
-      "slot": 1
+      "slot": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 0.8,
+          "hits": 3,
+          "sure": true
+        }
+      ]
     }
   },
   {
@@ -160,14 +214,22 @@
       "icon": "scissors",
       "shape": "one",
       "pose": "cross",
-      "dmg": 0.9,
-      "hits": 2,
-      "bleed": 1.2,
       "time": 450,
       "cool": 8000,
       "tint": 14174266,
       "description": "Cross both daggers against one foe",
-      "offhand": "dagger"
+      "offhand": "dagger",
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 0.9,
+          "hits": 2
+        },
+        {
+          "kind": "bleed",
+          "scale": 1.2
+        }
+      ]
     }
   },
   {
@@ -181,15 +243,23 @@
       "icon": "mask",
       "shape": "one",
       "pose": "swing",
-      "dash": 6,
-      "behind": true,
-      "dmg": 1,
-      "sure": true,
       "cool": 10000,
       "tint": 6969994,
       "description": "Step behind one foe and strike",
       "weapon": "dagger",
-      "slot": 2
+      "slot": 2,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 1,
+          "sure": true
+        },
+        {
+          "kind": "dash",
+          "metres": 6,
+          "behind": true
+        }
+      ]
     }
   },
   {
@@ -203,12 +273,17 @@
       "shape": "burst",
       "pose": "swing",
       "far": 3,
-      "dmg": 0.9,
       "shots": 6,
       "cool": 8000,
       "description": "Rain arrows around your target",
       "weapon": "bow",
-      "slot": 1
+      "slot": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 0.9
+        }
+      ]
     }
   },
   {
@@ -221,12 +296,20 @@
       "icon": "locateFixed",
       "shape": "one",
       "pose": "swing",
-      "dmg": 1.2,
-      "held": 3000,
       "cool": 10000,
       "description": "Pin one foe in place",
       "weapon": "bow",
-      "slot": 2
+      "slot": 2,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 1.2
+        },
+        {
+          "kind": "stun",
+          "ms": 3000
+        }
+      ]
     }
   },
   {
@@ -241,12 +324,17 @@
       "shape": "burst",
       "pose": "swing",
       "far": 2.5,
-      "dmg": 1.4,
       "cool": 7000,
       "tint": 16747066,
       "description": "A bolt bursts into flame around your target",
       "weapon": "staff",
-      "slot": 1
+      "slot": 1,
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 1.4
+        }
+      ]
     }
   },
   {
@@ -260,12 +348,17 @@
       "icon": "shieldCheck",
       "shape": "self",
       "pose": "cast",
-      "ward": 0.3,
       "cool": 16000,
       "tint": 10475775,
       "description": "Raise a ward of light",
       "weapon": "staff",
-      "slot": 2
+      "slot": 2,
+      "effects": [
+        {
+          "kind": "ward",
+          "share": 0.3
+        }
+      ]
     }
   },
   {
@@ -278,12 +371,17 @@
       "icon": "shield",
       "shape": "self",
       "pose": "guard",
-      "guard": 1500,
       "time": 400,
       "cool": 6000,
       "tint": 16769162,
       "description": "Raise your shield and leave a blocked foe open to a great blow",
-      "offhand": "shield"
+      "offhand": "shield",
+      "effects": [
+        {
+          "kind": "guard",
+          "ms": 1500
+        }
+      ]
     }
   },
   {
@@ -297,11 +395,16 @@
       "icon": "handHeart",
       "shape": "self",
       "pose": "cast",
-      "heal": 0.3,
       "cool": 18000,
       "tint": 9433210,
       "description": "Read a word of healing",
-      "offhand": "tome"
+      "offhand": "tome",
+      "effects": [
+        {
+          "kind": "heal",
+          "share": 0.3
+        }
+      ]
     }
   },
   {
@@ -317,12 +420,20 @@
       "pose": "swing",
       "far": 1.2,
       "arc": 1,
-      "dmg": 0.6,
-      "bleed": 1.2,
       "cool": 9000,
       "tint": 16742954,
       "description": "Sweep flame across foes in front of you",
-      "offhand": "torch"
+      "offhand": "torch",
+      "effects": [
+        {
+          "kind": "damage",
+          "scale": 0.6
+        },
+        {
+          "kind": "bleed",
+          "scale": 1.2
+        }
+      ]
     }
   }
 ]

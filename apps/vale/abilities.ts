@@ -16,6 +16,7 @@
 // Its short description comes from the row; its effects are named from the
 // current numbers (`does`), including what a skill changed.
 import { comp, str } from './bundle.ts'
+import { type Effect, effect } from './ability-effects.ts'
 import type { Glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Worn } from './gear.ts'
@@ -48,39 +49,14 @@ export type Ability = {
   far?: number
   /** how far either side of ahead an `arc` takes, in radians */
   arc?: number
-  /** how hard it lands on each it takes, against a blow */
-  dmg?: number
-  /** how many times it lands on its foe, a moment apart */
-  hits?: number
   /** how many shots it looses, over where it lands */
   shots?: number
-  /** its last blow is always a great one */
-  sure?: boolean
-  /** how long what it takes is held still, unable to move or bite, in ms */
-  held?: number
-  /** how hard what it takes bleeds or burns over the next few seconds,
-   * against a blow */
-  bleed?: number
-  /** how far the hero goes: at the foe before landing, or behind it */
-  dash?: number
-  behind?: boolean
-  /** how long bites are turned aside, in ms, unless a blow lowers the guard
-   * sooner */
-  guard?: number
-  /** a share of the hero's most health turned before any is taken, for a
-   * while */
-  ward?: number
-  /** a share of the hero's most health back at once */
-  heal?: number
+  /** What happens to the hero or to each creature the shape takes. */
+  effects: Effect[]
   /** how long it keeps the weapon busy, in ms, when not its pace */
   time?: number
   /** ms before it can be done again */
   cool: number
-  /** a killing blow with it makes it ready again at once */
-  renew?: boolean
-  /** its cooldown is given back when it takes nothing it was aimed at:
-   * stopped short by the world, or its foe gone before it lands */
-  refund?: boolean
   /** the colour of its dust and light, when not the dust's own */
   tint?: number
 }
@@ -134,13 +110,23 @@ export let secs = (ms: number): string => `${+(ms / 1000).toFixed(1)} s`
  * ```
  */
 export let does = (a: Ability, d: Doer): string => {
-  let when = [a.renew && 'after a killing blow', a.refund && 'if it misses']
+  let damage = effect(a.effects, 'damage')
+  let bleed = effect(a.effects, 'bleed')
+  let stun = effect(a.effects, 'stun')
+  let dash = effect(a.effects, 'dash')
+  let guard = effect(a.effects, 'guard')
+  let ward = effect(a.effects, 'ward')
+  let heal = effect(a.effects, 'heal')
+  let when = [
+    effect(a.effects, 'renew') && 'after a killing blow',
+    effect(a.effects, 'refund') && 'if it misses',
+  ]
     .filter(Boolean)
   let effects = [
-    a.hits && a.hits > 1 ? `${a.hits} hits` : '',
-    a.dmg
-      ? `${Math.round(d.blow * a.dmg)} Damage${
-        a.hits && a.hits > 1 ? ' each' : ''
+    damage?.hits && damage.hits > 1 ? `${damage.hits} hits` : '',
+    damage
+      ? `${Math.round(d.blow * damage.scale)} Damage${
+        damage.hits && damage.hits > 1 ? ' each' : ''
       }`
       : '',
     a.arc ? `${Math.round((a.arc * 360) / Math.PI)}° arc` : '',
@@ -149,20 +135,20 @@ export let does = (a: Ability, d: Doer): string => {
         ? `${a.far} m radius`
         : `Extends reach by ${a.far} m`
       : '',
-    a.dash ? `${a.dash} m dash` : '',
-    a.held ? `${secs(a.held)} Stun` : '',
-    a.bleed
-      ? `${Math.round((d.blow * a.bleed) / BLEEDS) * BLEEDS} ${
+    dash ? `${dash.metres} m dash` : '',
+    stun ? `${secs(stun.ms)} Stun` : '',
+    bleed
+      ? `${Math.round((d.blow * bleed.scale) / BLEEDS) * BLEEDS} ${
         a.element == 'fire' ? 'Burn' : 'Bleed'
       } Damage over ${secs(BLEEDS * 1000)}`
       : '',
-    a.guard ? `${secs(a.guard)} Guard` : '',
-    a.ward
-      ? `Absorbs ${Math.round(d.max * a.ward)} Damage for ${secs(WARD)}`
+    guard ? `${secs(guard.ms)} Guard` : '',
+    ward
+      ? `Absorbs ${Math.round(d.max * ward.share)} Damage for ${secs(WARD)}`
       : '',
-    a.heal ? `Restores ${Math.round(d.max * a.heal)} Health` : '',
-    a.sure
-      ? a.hits && a.hits > 1
+    heal ? `Restores ${Math.round(d.max * heal.share)} Health` : '',
+    damage?.sure
+      ? damage.hits && damage.hits > 1
         ? 'Final hit is a great blow'
         : 'Always a great blow'
       : '',
@@ -182,17 +168,18 @@ export type Went = 'kill' | 'miss'
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { changed } from './ability-effects.ts'
  * import { seedAbilities } from './abilities_fixture.ts'
  * seedAbilities()
  * let a = ABILITIES.crush
  * let went = (b: Ability) => [again(b, 'kill'), again(b, 'miss')]
  * assertEquals(went(a), [false, false])
- * assertEquals(went({ ...a, renew: true }), [true, false])
- * assertEquals(went({ ...a, refund: true }), [false, true])
+ * assertEquals(went({ ...a, effects: changed(a.effects, [{ kind: 'renew' }]) }), [true, false])
+ * assertEquals(went({ ...a, effects: changed(a.effects, [{ kind: 'refund' }]) }), [false, true])
  * ```
  */
 export let again = (a: Ability, went: Went): boolean =>
-  went == 'kill' ? !!a.renew : !!a.refund
+  !!effect(a.effects, went == 'kill' ? 'renew' : 'refund')
 
 // All page consumers read the same current Store design index. A watch
 // replaces it, so new abilities and changes to existing ones take effect.

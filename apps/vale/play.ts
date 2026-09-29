@@ -29,6 +29,7 @@
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
 import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
+import { effect } from './ability-effects.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { foeOf } from './danger.ts'
@@ -1406,13 +1407,14 @@ export let game = (
           fought.swing++
           hand = handOf(k, fought.swing)
           if (target) face(target)
-          if (target && a.dash) {
+          let dashEffect = effect(a.effects, 'dash')
+          if (target && dashEffect) {
             let gap = BEASTS[target.kind].size * 0.5 + 0.9
             let ang = Math.atan2(
               target.body.x - body.x,
               target.body.z - body.z,
             )
-            if (a.behind) {
+            if (dashEffect.behind) {
               // Behind it, facing it.
               body.x = target.body.x + Math.sin(ang) * gap
               body.z = target.body.z + Math.cos(ang) * gap
@@ -1427,13 +1429,16 @@ export let game = (
               }
             }
           }
-          if (a.guard) guardUntil = now + a.guard
-          if (a.ward) {
-            let n = Math.round(s.max * a.ward)
+          let guardEffect = effect(a.effects, 'guard')
+          let wardEffect = effect(a.effects, 'ward')
+          let healEffect = effect(a.effects, 'heal')
+          if (guardEffect) guardUntil = now + guardEffect.ms
+          if (wardEffect) {
+            let n = Math.round(s.max * wardEffect.share)
             ward = { left: n, of: n, until: now + WARD }
           }
-          if (a.heal) {
-            let n = Math.min(s.max - hp, Math.round(s.max * a.heal))
+          if (healEffect) {
+            let n = Math.min(s.max - hp, Math.round(s.max * healEffect.share))
             hp += n
             if (n) events.push({ type: 'heal', n, at: at(body, 2) })
           }
@@ -1442,7 +1447,7 @@ export let game = (
             id,
             by: me,
             at: at(body, 0),
-            ...a.dash && { from },
+            ...dashEffect && { from },
             yaw: body.yaw,
           })
         }
@@ -1513,14 +1518,19 @@ export let game = (
           events.push({ type: 'whiff', family: k.family })
         }
         let might = blowOf(s.lvl, k, !a && hand == 'off' ? k.twin : k.dmg)
+        let damage = a && effect(a.effects, 'damage')
+        let stun = a && effect(a.effects, 'stun')
+        let bleeding = a && effect(a.effects, 'bleed')
         for (let [j, m] of taken.entries()) {
-          let hits = (a?.hits ?? 1) + +(Math.random() < (k.powers.echo ?? 0))
+          let hits = !a || damage
+            ? (damage?.hits ?? 1) + +(Math.random() < (k.powers.echo ?? 0))
+            : 0
           for (let i = 0; i < hits; i++) {
             let last = i == hits - 1
             let { dmg, great } = blow(
-              might * (a?.dmg ?? 1),
+              might * (damage?.scale ?? 1),
               Math.random(),
-              (sure && !j && !i) || (!!a?.sure && last),
+              (sure && !j && !i) || (!!damage?.sure && last),
               k.luck,
             )
             blows.push({
@@ -1530,11 +1540,22 @@ export let game = (
               great,
               held: i
                 ? 0
-                : Math.max(a?.held ?? 0, great ? k.powers.hold ?? 0 : 0),
+                : Math.max(stun?.ms ?? 0, great ? k.powers.hold ?? 0 : 0),
               by: doing,
             })
           }
-          let burns = (a?.bleed ?? 0) + (k.powers.burn ?? 0)
+          if (a && !damage && stun) {
+            blows.push({
+              eid: m.eid,
+              lands: now + ms,
+              dmg: 0,
+              great: false,
+              held: stun.ms,
+              by: doing,
+            })
+          }
+          let burns = (bleeding?.scale ?? 0) +
+            ((!a || damage) ? k.powers.burn ?? 0 : 0)
           let bleed = Math.round((might * burns) / BLEEDS)
           for (let i = 1; bleed && i <= BLEEDS; i++) {
             blows.push({

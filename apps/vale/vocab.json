@@ -12,53 +12,116 @@
       "unique": [["kind"]],
       "description": "An ability's combat rules, description and equipment grant.",
       "properties": {
-        "kind": { "type": "string", "minLength": 1, "index": true },
-        "name": { "type": "string", "minLength": 1 },
-        "icon": { "type": "string", "minLength": 1 },
-        "description": { "type": "string", "minLength": 1 },
-        "weapon": { "type": "string", "minLength": 1 },
-        "slot": { "type": "integer", "minimum": 1, "maximum": 2 },
-        "offhand": { "type": "string", "minLength": 1 },
-        "shape": {
-          "type": "string",
-          "enum": ["one", "arc", "ring", "burst", "self"]
+        "kind": {"type": "string", "minLength": 1, "index": true},
+        "name": {"type": "string", "minLength": 1},
+        "icon": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "weapon": {"type": "string", "minLength": 1},
+        "slot": {"type": "integer", "minimum": 1, "maximum": 2},
+        "offhand": {"type": "string", "minLength": 1},
+        "shape": {"type": "string", "enum": ["one", "arc", "ring", "burst", "self"]},
+        "pose": {"type": "string", "enum": ["swing", "spin", "guard", "cast", "cross"]},
+        "element": {"type": "string", "enum": ["fire", "earth", "shadow", "light", "life"]},
+        "far": {"type": "number", "minimum": 0, "maximum": 12, "validate": true},
+        "arc": {"type": "number", "minimum": 0, "maximum": 3.141592653589793, "validate": true},
+        "shots": {"type": "integer", "minimum": 1, "maximum": 12, "validate": true},
+        "effects": {
+          "type": "array", "validate": true,
+          "minItems": 1, "maxItems": 9,
+          "items": {"oneOf": [
+            {"type": "object", "properties": {
+              "kind": {"const": "damage"},
+              "scale": {"type": "number", "minimum": 0.01, "maximum": 10},
+              "hits": {"type": "integer", "minimum": 1, "maximum": 10},
+              "sure": {"type": "boolean"}
+            }, "required": ["kind", "scale"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "bleed"},
+              "scale": {"type": "number", "minimum": 0.01, "maximum": 10}
+            }, "required": ["kind", "scale"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "stun"},
+              "ms": {"type": "number", "minimum": 1, "maximum": 10000}
+            }, "required": ["kind", "ms"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "dash"},
+              "metres": {"type": "number", "minimum": 0.01, "maximum": 12},
+              "behind": {"type": "boolean"}
+            }, "required": ["kind", "metres"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "guard"},
+              "ms": {"type": "number", "minimum": 1, "maximum": 10000}
+            }, "required": ["kind", "ms"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "ward"},
+              "share": {"type": "number", "maximum": 1, "minimum": 0.01}
+            }, "required": ["kind", "share"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "heal"},
+              "share": {"type": "number", "maximum": 1, "minimum": 0.01}
+            }, "required": ["kind", "share"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "renew"}
+            }, "required": ["kind"],
+             "additionalProperties": false},
+            {"type": "object", "properties": {
+              "kind": {"const": "refund"}
+            }, "required": ["kind"],
+             "additionalProperties": false}
+          ]},
+          "allOf": [
+            {"contains": {"properties": {"kind": {"const": "damage"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "bleed"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "stun"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "dash"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "guard"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "ward"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "heal"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "renew"}}}, "minContains": 0, "maxContains": 1},
+            {"contains": {"properties": {"kind": {"const": "refund"}}}, "minContains": 0, "maxContains": 1}
+          ]
         },
-        "pose": {
-          "type": "string",
-          "enum": ["swing", "spin", "guard", "cast", "cross"]
-        },
-        "element": {
-          "type": "string",
-          "enum": ["fire", "earth", "shadow", "light", "life"]
-        },
-        "far": { "type": "number", "minimum": 0 },
-        "arc": { "type": "number", "minimum": 0 },
-        "dmg": { "type": "number", "minimum": 0 },
-        "hits": { "type": "integer", "minimum": 1 },
-        "shots": { "type": "integer", "minimum": 1 },
-        "sure": { "type": "boolean" },
-        "held": { "type": "number", "minimum": 0 },
-        "bleed": { "type": "number", "minimum": 0 },
-        "dash": { "type": "number", "minimum": 0 },
-        "behind": { "type": "boolean" },
-        "guard": { "type": "number", "minimum": 0 },
-        "ward": { "type": "number", "minimum": 0 },
-        "heal": { "type": "number", "minimum": 0 },
-        "time": { "type": "number", "minimum": 0 },
-        "cool": { "type": "number", "minimum": 0 },
-        "renew": { "type": "boolean" },
-        "refund": { "type": "boolean" },
-        "tint": { "type": "integer", "minimum": 0, "maximum": 16777215 }
+        "time": {"type": "number", "minimum": 300, "maximum": 5000, "validate": true},
+        "cool": {"type": "number", "minimum": 500, "maximum": 60000, "validate": true},
+        "tint": {"type": "integer", "minimum": 0, "maximum": 16777215}
       },
-      "required": [
-        "kind",
-        "name",
-        "icon",
-        "description",
-        "shape",
-        "pose",
-        "cool"
-      ]
+      "required": ["kind", "name", "icon", "description", "shape", "pose", "effects", "cool"],
+      "constraints": [{
+        "name": "cost", "value": {"sum": [
+          {"each": "effects", "where": {"kind": "damage"}, "product": [{"field": "scale"}, {"field": "hits", "default": 1}]},
+          {"each": "effects", "where": {"kind": "damage", "sure": true}, "product": [0.35]},
+          {"each": "effects", "where": {"kind": "bleed"}, "product": [0.5, {"field": "scale"}]},
+          {"each": "effects", "where": {"kind": "stun"}, "product": [0.00035, {"field": "ms"}]},
+          {"each": "effects", "where": {"kind": "dash"}, "product": [0.12, {"field": "metres"}]},
+          {"each": "effects", "where": {"kind": "dash", "behind": true}, "product": [0.35]},
+          {"each": "effects", "where": {"kind": "guard"}, "product": [0.00025, {"field": "ms"}]},
+          {"each": "effects", "where": {"kind": "ward"}, "product": [3, {"field": "share"}]},
+          {"each": "effects", "where": {"kind": "heal"}, "product": [3, {"field": "share"}]},
+          {"each": "effects", "where": {"kind": "renew"}, "product": [0.35]},
+          {"each": "effects", "where": {"kind": "refund"}, "product": [0.35]},
+          {"where": {"shape": "arc"}, "product": [0.2]},
+          {"where": {"shape": "arc"}, "product": [0.2, {"field": "arc", "default": 1.2}]},
+          {"where": {"shape": "arc"}, "product": [0.2, {"field": "far", "default": 0}]},
+          {"where": {"shape": "ring"}, "product": [0.35]},
+          {"where": {"shape": "ring"}, "product": [0.2, {"field": "far", "default": 0}]},
+          {"where": {"shape": "burst"}, "product": [0.25]},
+          {"where": {"shape": "burst"}, "product": [0.15, {"field": "far", "default": 0}]},
+          {"where": {"shape": "one"}, "product": [0.1, {"field": "far", "default": 0}]},
+          {"product": [0.04, {"field": "shots", "default": 1}]},
+          {"product": [-0.04]},
+          {"product": [3000, {"field": "cool", "inverse": true}]},
+          {"product": [300, {"field": "time", "default": 600, "inverse": true}]}
+        ]},
+        "maximum": 4,
+        "message": "Ability exceeds its power budget"
+      }]
     },
     "building_design": {
       "component": true,
