@@ -3,6 +3,7 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./schema": "./admit_schema.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts"
   },

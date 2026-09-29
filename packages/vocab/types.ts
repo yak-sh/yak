@@ -7,6 +7,7 @@
 // names describe the format, and any set of components is one instance of it.
 
 import type { Sync } from './lifetime.ts'
+import type { NumericConstraint } from './constraints.ts'
 
 // What the cascading delete (@yaks/graph cascade.ts) does to a reference
 // property when its target entity is deleted. These four values are the whole
@@ -215,6 +216,10 @@ export type PropSchema = {
   // On a computed property: the components on other entities it reads.
   reads?: string[]
   stamped?: boolean
+  /** Opt in to full JSON Schema validation by a graph's schema plugin. */
+  validate?: true
+  /** Bounds over numeric expressions evaluated against the complete row. */
+  constraints?: NumericConstraint[]
   // On a component: who is told about a write, how long the value lives, and
   // how often a writer's value is taken (lifetime.ts).
   sync?: string

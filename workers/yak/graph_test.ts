@@ -194,6 +194,187 @@ let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   return store
 }
 
+Deno.test('an app store admits only values matching opted-in nested schemas', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = await cookbook(
+    ctx,
+    JSON.stringify({
+      $defs: {
+        move: {
+          component: true,
+          properties: {
+            reach: { type: 'number', minimum: 0, maximum: 3, validate: true },
+            effects: {
+              type: 'array',
+              validate: true,
+              minItems: 1,
+              allOf: [{
+                contains: {
+                  type: 'object',
+                  properties: { kind: { const: 'damage' } },
+                  required: ['kind'],
+                },
+                minContains: 0,
+                maxContains: 1,
+              }],
+              items: {
+                oneOf: [
+                  {
+                    type: 'object',
+                    required: ['kind', 'scale'],
+                    additionalProperties: false,
+                    properties: {
+                      kind: { const: 'damage' },
+                      scale: { type: 'number', exclusiveMinimum: 0 },
+                    },
+                  },
+                  {
+                    type: 'object',
+                    required: ['kind', 'ms'],
+                    additionalProperties: false,
+                    properties: {
+                      kind: { const: 'stun' },
+                      ms: { type: 'number', minimum: 0 },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+          required: ['effects'],
+        },
+      },
+    }),
+  )
+  let row = (effects: unknown) => [{
+    entity: { eid: CAKE },
+    move: { effects, reach: 2 },
+  }]
+  assertEquals(
+    (await post(store, '/apply', row([{ kind: 'damage', scale: 2 }]), owner))
+      .status,
+    200,
+  )
+  for (
+    let invalid of [
+      [],
+      [{ kind: 'damage', scale: -1 }],
+      [{ kind: 'damage', scale: 2, ms: 50 }],
+      [{ kind: 'damage', scale: 2 }, { kind: 'damage', scale: 1 }],
+      [{ kind: 'other', scale: 2 }],
+    ]
+  ) {
+    let refused = await post(store, '/apply', row(invalid), owner)
+    assertEquals(refused.status, 400, await refused.text())
+  }
+  let missing = await post(store, '/apply', [{
+    entity: { eid: APP },
+    move: {},
+  }], owner)
+  let said = await missing.json()
+  assertEquals(missing.status, 400, JSON.stringify(said))
+  assertStringIncludes(said.message, 'move.effects is required')
+  let far = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    move: { reach: 4 },
+  }], owner)
+  assertEquals(far.status, 400, await far.text())
+  let saved = await get(store, '/query?q=.move', owner)
+  assertEquals((await saved.json())[0].move.effects, [{
+    kind: 'damage',
+    scale: 2,
+  }])
+})
+
+Deno.test('an app store bounds a derived value over the final patched row', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = await cookbook(
+    ctx,
+    JSON.stringify({
+      $defs: {
+        move: {
+          component: true,
+          properties: {
+            effects: {
+              type: 'array',
+              validate: true,
+              minItems: 1,
+              items: {
+                type: 'object',
+                required: ['scale'],
+                properties: { scale: { type: 'number', minimum: 0 } },
+              },
+            },
+          },
+          constraints: [{
+            name: 'cost',
+            value: {
+              sum: [{
+                each: 'effects',
+                product: [{ field: 'scale' }],
+              }],
+            },
+            maximum: 3,
+            message: 'move exceeds its budget',
+          }],
+        },
+      },
+    }),
+  )
+  let row = (eid: string, scale: number) => ({
+    entity: { eid },
+    move: { effects: [{ scale }] },
+  })
+  assertEquals((await post(store, '/apply', [row(CAKE, 2)], owner)).status, 200)
+  let denied = await post(store, '/apply', [row('too-strong', 4)], owner)
+  assertEquals(denied.status, 400, await denied.text())
+  denied = await post(store, '/apply', [row(CAKE, 4)], owner)
+  assertEquals(denied.status, 400, await denied.text())
+  // The invalid intermediate write cannot be hidden by a later patch.
+  denied = await post(store, '/apply', [row(CAKE, 4), row(CAKE, 1)], owner)
+  assertEquals(denied.status, 400, await denied.text())
+  assertEquals(
+    (await post(store, '/apply', [row(CAKE, 1), row(CAKE, 2)], owner))
+      .status,
+    200,
+  )
+  let saved = await get(store, '/query?q=.move', owner)
+  assertEquals((await saved.json())[0].move.effects, [{ scale: 2 }])
+})
+
+Deno.test('a declared rule cannot write a value outside an app constraint', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = await cookbook(
+    ctx,
+    JSON.stringify({
+      $defs: {
+        move: {
+          component: true,
+          properties: { cost: { type: 'number' } },
+          constraints: [{
+            name: 'cost',
+            value: { sum: [{ product: [{ field: 'cost' }] }] },
+            maximum: 3,
+            message: 'move exceeds its budget',
+          }],
+        },
+        trigger: { component: true, properties: {} },
+        inflate: { rule: true, match: '.trigger, +!move, +move.cost=4' },
+      },
+    }),
+  )
+  let denied = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    trigger: {},
+  }], owner)
+  assertEquals(denied.status, 400, await denied.text())
+  let saved = await get(store, '/query?q=.trigger', owner)
+  assertEquals(await saved.json(), [])
+})
+
 for (let aggregate of [false, true]) {
   Deno.test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door`, async () => {
     let store = await cookbook()
@@ -336,6 +517,27 @@ Deno.test('a manifest the vocabulary refuses leaves the store as it was', async 
   assertEquals(no.status, 400)
   assert((await no.json()).message.includes('doc'))
   assertEquals(await words(store), was)
+})
+
+Deno.test('an app store refuses a malformed score declaration', async () => {
+  let store = new Store(state())
+  let manifest = JSON.stringify({
+    $defs: {
+      move: {
+        component: true,
+        properties: { cost: { type: 'number' } },
+        constraints: [{
+          name: 'cost',
+          value: { sum: [{ product: [{ unknown: 'cost' }] }] },
+          maximum: 3,
+          message: 'move exceeds its budget',
+        }],
+      },
+    },
+  })
+  let refused = await post(store, '/vocab', manifest, owner)
+  assertEquals(refused.status, 400)
+  assertStringIncludes((await refused.json()).message, 'move.constraints')
 })
 
 Deno.test('a property says its type', async () => {

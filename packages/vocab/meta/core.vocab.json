@@ -84,6 +84,25 @@
       "description": "true = the server owns this property: clients can read it, never write it.",
       "type": "boolean"
     },
+    "validate": {
+      "description": "true = a graph with the schema admission plugin checks this property's whole JSON Schema on every write, including nested values. Other properties keep the lightweight type check.",
+      "const": true
+    },
+    "constraints": {
+      "description": "Numeric bounds over a component's complete row, expressed as a bounded sum of products and checked before a write lands. Each names its computed value, a fixed maximum and a refusal message.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value", "maximum", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "value": {},
+          "maximum": { "type": "number" },
+          "message": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "search": {
       "description": "On a property, true = this text property is full-text indexed: a bare word in a query matches it, and a hit is ranked by it. A property nobody declares is stored and readable but never searched. On a component, the text its entities are found by, as `comp.prop` names of one other component's properties: `entry` says [\"content.body\"], so a transcript entry is found by what it says, and other entities carrying `content` are not.",
       "anyOf": [

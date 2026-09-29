@@ -192,9 +192,25 @@ A property whose type is `object` or `array`, or a union of types
 (`["string", "object"]`), holds a JSON value. The runtime reports scalar `jsonb`
 with blob affinity: SQLite stores it as binary JSON, a write takes the value and
 a read returns it. Such a property may declare its structure with `properties`
-or `items`; the structure is accepted as written and not validated yet, while
-`check` does hold the value to the declared type. A query filter on one is
-refused for now.
+or `items`; `check` holds the value to the declared type, and a graph can opt
+into checking the whole structure. A query filter on one is refused for now.
+
+An app can set `validate: true` on a property to have the hosted Store check its
+complete JSON Schema, including nested items and numeric bounds, before each
+write. The Store also checks the component's `required` list for these rows.
+`v.check` remains a lightweight type check for other graphs.
+
+A component can declare a numeric `constraints` entry with `name`, `value`,
+`maximum` and `message`. `value` is a finite weighted sum:
+`{ "sum": [
+{ "each": "effects", "where": { "kind": "damage" }, "product": [
+{ "field": "scale" }, { "field": "hits", "default": 1 } ] } ] }`.
+Each term multiplies its factors and adds the result; `each` selects members of
+a bounded array, and `where` matches exact field values. A factor can be a
+number or a field, optionally with `default` and `inverse: true` for a
+reciprocal. `numberOf(value, row)` from `@yaks/vocab/constraints` evaluates the
+same table in app code. The hosted Store checks the score on the complete
+patched row and refuses scores over the fixed maximum.
 
 `{ "type": "string", "format": "json" }` is JSON text in a string: scalar
 `json`, text affinity, and a string containing any valid JSON value. A null

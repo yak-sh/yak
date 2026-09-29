@@ -240,6 +240,20 @@
         "kind": {
           "type": "boolean"
         },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "value", "maximum", "message"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "value": { "$ref": "#/$defs/score" },
+              "maximum": { "type": "number" },
+              "message": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
         "before": {
           "type": "array",
           "items": {
@@ -302,6 +316,52 @@
       "additionalProperties": false,
       "required": [
         "component"
+      ]
+    },
+    "score": {
+      "type": "object",
+      "required": ["sum"],
+      "additionalProperties": false,
+      "properties": {
+        "sum": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/score_term" }
+        }
+      }
+    },
+    "score_term": {
+      "type": "object",
+      "required": ["product"],
+      "additionalProperties": false,
+      "properties": {
+        "each": { "type": "string", "minLength": 1 },
+        "where": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean", "null"]
+          }
+        },
+        "product": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/score_factor" }
+        }
+      }
+    },
+    "score_factor": {
+      "oneOf": [
+        { "type": "number" },
+        {
+          "type": "object",
+          "required": ["field"],
+          "additionalProperties": false,
+          "properties": {
+            "field": { "type": "string", "minLength": 1 },
+            "default": { "type": "number" },
+            "inverse": { "type": "boolean" }
+          }
+        }
       ]
     },
     "tool": {
@@ -414,7 +474,7 @@
       "additionalProperties": false
     },
     "prop": {
-      "description": "One property. Every property declares its `type`. A property whose type is object or array, or a union of types, holds a JSON value and may declare its structure with `properties` or `items`; that structure is accepted as written and not validated yet.",
+      "description": "One property. Every property declares its `type`. A property whose type is object or array, or a union of types, holds a JSON value and may declare its structure with `properties` or `items`; a graph checks that structure when the property declares `validate: true`.",
       "type": "object",
       "properties": {
         "type": {
@@ -480,6 +540,9 @@
         },
         "stamped": {
           "type": "boolean"
+        },
+        "validate": {
+          "const": true
         },
         "search": {
           "type": "boolean"

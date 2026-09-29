@@ -4,7 +4,8 @@
   "description": "Loads and validates component vocabularies expressed as JSON Schema with custom keywords, exposing property types, path routing, and display ordering.",
   "exports": {
     ".": "./mod.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./constraints": "./constraints.ts"
   },
   "license": "Apache-2.0",
   "imports": {

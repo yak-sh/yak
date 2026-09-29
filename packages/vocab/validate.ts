@@ -16,6 +16,7 @@
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
 import { composite, jsonb, TYPES, typesOf } from './vocab.ts'
 import { lives, paced, SYNC, type Sync } from './lifetime.ts'
+import { constraintErrors } from './constraints.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
 
@@ -26,7 +27,7 @@ let object = (v: unknown): v is Record<string, unknown> =>
 // closed set, or a JSON value — an object, an array, or a union of types,
 // which a table holds in one column as binary JSON. Every property says its
 // type. A JSON property may declare its structure (`properties`, `items`);
-// nothing validates that structure yet.
+// graphs opt into checking that structure with `validate: true`.
 let storableProp = (
   comp: string,
   prop: string,
@@ -203,6 +204,13 @@ export let storable = (doc: VocabDoc): string[] => {
     }
     if (schema.type != null && schema.type != 'object') {
       errs.push(`${comp} is an object schema (type 'object')`)
+    }
+    if (schema.constraints !== undefined) {
+      errs.push(
+        ...constraintErrors(schema.constraints).map((error) =>
+          `${comp}.constraints: ${error}`
+        ),
+      )
     }
     for (let [prop, s] of Object.entries(schema.properties ?? {})) {
       if (!NAME.test(prop) || prop == 'entity' || prop == 'eid') {

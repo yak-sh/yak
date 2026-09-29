@@ -126,6 +126,7 @@ import {
   schema as ftsSchema,
   search,
 } from '@yaks/fts'
+import { admitSchema } from '@yaks/graph/schema'
 import {
   type ApplyOpts,
   type Bundle,
@@ -910,6 +911,7 @@ export class Store {
         // Last, so the answer a keyed write keeps is the batch as every other
         // commit hook left it (`#logging`).
         this.#logging,
+        ...(own ? [] : [admitSchema(vocab)]),
       ],
     })
     // What every domain of this Worker does about data this store committed
