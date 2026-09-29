@@ -1,14 +1,52 @@
 // The native driver's statement cache: what a store repeats stays prepared, and
-// a fault only the handle itself can produce is recovered from.
+// a fault only the handle itself can produce is recovered from. A store in
+// memory is made from the template the first one like it left.
 
 import { test } from '@yaks/testing'
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { assertEquals, assertThrows } from '@std/assert'
-import { col, type Insert, render, scan, type Tx, val } from '@yaks/sql'
+import {
+  col,
+  type Driver,
+  type Insert,
+  render,
+  scan,
+  type Tx,
+  val,
+} from '@yaks/sql'
 import { driver } from './native.ts'
 import { storage } from './mod.ts'
-import { shop } from './testing.ts'
+import { mem, shop } from './testing.ts'
+
+// Stores in memory past the first are copies of the schema it made: each has
+// every object a store made by its statements has, and only its own rows.
+test('a store in memory made from a template has the whole schema and only its own rows', () => {
+  let names = (d: Driver) =>
+    scan(d, 'sqlite_schema', undefined, ['name']).map((o) => o.name)
+  let made = mem()
+  for (let s of storage(made, shop).ddl()) made.query(s)
+  let [a, b] = [mem(), mem()]
+  for (let d of [a, b]) storage(d, shop).install()
+  for (let name of names(made)) assertEquals(names(b).includes(name), true)
+  storage(a, shop).tx((tx) =>
+    tx.patch([{ entity: { eid: 'mine' }, doc: { title: 'a' } }])
+  )
+  assertEquals(scan(b, 'doc'), [])
+})
+
+// A database that already holds rows is made in place: a copy would lose them.
+test('a store in memory that already holds rows keeps them through install', () => {
+  let kept = (d: Driver) =>
+    d.query({ t: 'create table', name: 'kept', cols: [{ name: 'v' }] })
+  let [empty, held] = [mem(), mem()]
+  kept(empty)
+  storage(empty, shop).install()
+  kept(held)
+  held.query({ t: 'insert', into: 'kept', cols: ['v'], rows: [[val(1)]] })
+  storage(held, shop).install()
+  assertEquals(scan(held, 'kept'), [{ v: 1 }])
+})
 
 test('a store in memory prepares nothing more for the same writes, however many units run them', () => {
   let db = new Database(':memory:')

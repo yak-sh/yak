@@ -45,6 +45,16 @@ export type Driver = {
    * refuses.
    */
   arms?: number
+  /**
+   * Make a schema from a template. Where another database of this process
+   * already ran `make` for the same `key`, holding the same objects this one
+   * holds and no rows, this one becomes a copy of what that one made, and
+   * `make` does not run; otherwise it runs, and what it made is kept as the
+   * template for the next. For an engine where copying a schema costs far less
+   * than making one: an embedded database in memory, which a test suite opens
+   * thousands of. A driver that leaves it out makes every schema itself.
+   */
+  template?: (key: string, make: () => void) => void
 }
 
 /** A statement run for its effect, through `run` where the driver has one. */

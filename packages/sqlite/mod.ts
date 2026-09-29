@@ -347,35 +347,46 @@ export let storage = (
         // What stood before: only those tables can be behind the vocabulary,
         // so a fresh file is asked nothing about its columns, keys or checks.
         let before = standing(driver, vocab)
-        for (let stmt of tabled(vocab, base.derived)) driver.query(stmt)
-        // Then the columns a component gained since its table was created, the
-        // half `create table if not exists` cannot add, and a rebuild of each
-        // table whose keys or checks the vocabulary has since changed its mind
-        // about (ddl.ts `fit`). A rebuild runs outside the enforcement, which
-        // SQLite switches only between transactions: a copy that re-checks a
-        // key the vocabulary only now declares would reject the rows it exists
-        // to keep.
-        let keys = (value: string): Stmt => ({
-          t: 'pragma',
-          name: 'foreign_keys',
-          value,
-        })
         let unfit: Error[] = []
-        driver.query(keys('off'))
-        try {
-          unfit = fit(driver, vocab, before)
-        } finally {
-          driver.query(keys('on'))
+        let make = () => {
+          // The tables in one unit: a file commits them once, not once each.
+          unit(driver, () => {
+            for (let stmt of tabled(vocab, base.derived)) driver.query(stmt)
+          })
+          // Then the columns a component gained since its table was created,
+          // the half `create table if not exists` cannot add, and a rebuild of
+          // each table whose keys or checks the vocabulary has since changed
+          // its mind about (ddl.ts `fit`). A rebuild runs outside the
+          // enforcement, which SQLite switches only between transactions: a
+          // copy that re-checks a key the vocabulary only now declares would
+          // reject the rows it exists to keep.
+          let keys = (value: string): Stmt => ({
+            t: 'pragma',
+            name: 'foreign_keys',
+            value,
+          })
+          driver.query(keys('off'))
+          try {
+            unfit = fit(driver, vocab, before)
+          } finally {
+            driver.query(keys('on'))
+          }
+          // The indexes last: one may name a column this boot just added, or
+          // stand on a table it just rebuilt. Retire old vocabulary
+          // constraints before raising the new ones, in one unit so a
+          // rejected new unique constraint leaves the standing indexes intact.
+          unit(driver, () => {
+            for (let stmt of retired(driver, vocab)) driver.query(stmt)
+            for (let stmt of indexed(vocab)) driver.query(stmt)
+          })
         }
+        // A database nothing has installed into, with none of the tables
+        // standing, is made the way the last one like it was, where its driver
+        // keeps templates: nothing stood to fit, so nothing it did depends on
+        // what this one holds.
+        let fresh = !was && !Object.keys(before).length
+        fresh && driver.template ? driver.template(print, make) : make()
         unfit.forEach(report)
-        // The indexes last: one may name a column this boot just added, or
-        // stand on a table it just rebuilt. Retire old vocabulary constraints
-        // before raising the new ones, in one unit so a rejected new unique
-        // constraint leaves the standing indexes intact.
-        unit(driver, () => {
-          for (let stmt of retired(driver, vocab)) driver.query(stmt)
-          for (let stmt of indexed(vocab)) driver.query(stmt)
-        })
         // The store's lineage identity, minted on the first install (meta.ts
         // `epoch`).
         epoch(driver)

@@ -143,7 +143,10 @@ refuse, such as a value an enum no longer lists, is left as it stood and
 reported through `base.report` (the console by default): its rows need a
 migration that prepares them. It initializes the store epoch and number sequence
 and runs bounded `PRAGMA optimize` for file-backed drivers, so the planner can
-use table statistics.
+use table statistics. A database in memory that nothing has installed into is
+made from a template: the first one a process makes for a vocabulary is kept,
+and each later one is a copy of it, since copying a schema is a page copy and
+making one is hundreds of statements (@yaks/sql `Driver.template`).
 
 A transaction provides `read`, `get(eids, comps?)`, `patch`, `remove`, `revive`,
 `doom`, and `bindings`. `get` retrieves entities including tombstones, whole or

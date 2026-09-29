@@ -4,18 +4,21 @@
 // text.
 
 import './sqlitepath.ts'
-import type { Database } from '@db/sqlite'
+import { Database } from '@db/sqlite'
 import {
   call,
   col,
   type Driver,
   eq,
   type Expr,
+  lit,
   type Param,
   render,
   type Row,
   select,
+  type Stmt,
   STOCK,
+  table,
   val,
 } from '@yaks/sql'
 
@@ -83,6 +86,10 @@ export let prepared = (db: Database) => {
     render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,
   )
   let version: unknown
+  let forget = () => {
+    for (let statement of cache.values()) statement.finalize()
+    cache.clear()
+  }
   let live = () => {
     // @db/sqlite closes and finalizes its native handles without invalidating
     // the JS Statement objects. Calling a cached one after close is a SIGSEGV,
@@ -90,11 +97,12 @@ export let prepared = (db: Database) => {
     if (!db.open) throw new Error('the database is closed')
     let now = schema.value()![0]
     if (now === version) return
-    for (let statement of cache.values()) statement.finalize()
-    cache.clear()
+    forget()
     version = now
   }
-  return (sql: string, params: Param[] = []): Row[] => {
+  // `forget` drops every kept statement, for a database whose whole content
+  // was just replaced under them.
+  return Object.assign((sql: string, params: Param[] = []): Row[] => {
     live()
     let statement = cache.get(sql)
     if (!statement) {
@@ -129,7 +137,27 @@ export let prepared = (db: Database) => {
       } catch { /* the step's error, repeated */ }
       throw error
     }
-  }
+  }, { forget })
+}
+
+// The schemas this process's databases in memory were made with, each kept as
+// a database of its own under what made it and what stood before
+// (Driver.template).
+let templates = new Map<string, Database>()
+
+// What a database holds before its schema is made: each object's text, and
+// whether any of its tables has a row. A template stands for a database that
+// held those same objects and nothing in them.
+let holding = (query: (s: Stmt) => Row[]) => {
+  let objects = query(select({
+    cols: [col('type'), col('name'), col('sql')],
+    from: table('sqlite_schema'),
+    order: [col('name')],
+  }))
+  let held = (name: string) =>
+    query(select({ cols: [lit(1)], from: table(name), limit: lit(1) })).length
+  let empty = !objects.some((o) => o.type == 'table' && held(String(o.name)))
+  return { objects: JSON.stringify(objects), empty }
 }
 
 /**
@@ -151,27 +179,48 @@ export let driver = (db: Database): Driver => {
     where: eq(col('name'), val('main')),
   }))
   let file = !!run(main.sql, main.params)[0]?.file
-  return {
-    query: (s) => {
-      if (s.t == 'create index') {
-        let info = render({ t: 'pragma', name: 'table_info', arg: s.on })
-        let cols = new Set(
-          run(info.sql, info.params).map((r) => String(r.name)),
-        )
-        for (
-          let name of [...s.cols, ...(s.where ? [s.where] : [])].flatMap(refs)
-        ) {
-          if (!cols.has(name)) {
-            throw new Error(
-              `index ${s.name} names missing column ${s.on}.${name}`,
-            )
-          }
+  let query = (s: Stmt): Row[] => {
+    if (s.t == 'create index') {
+      let info = render({ t: 'pragma', name: 'table_info', arg: s.on })
+      let cols = new Set(
+        run(info.sql, info.params).map((r) => String(r.name)),
+      )
+      for (
+        let name of [...s.cols, ...(s.where ? [s.where] : [])].flatMap(refs)
+      ) {
+        if (!cols.has(name)) {
+          throw new Error(
+            `index ${s.name} names missing column ${s.on}.${name}`,
+          )
         }
       }
-      let { sql, params } = render(s)
-      return run(sql, params)
-    },
+    }
+    let { sql, params } = render(s)
+    return run(sql, params)
+  }
+  return {
+    query,
     file,
     arms: STOCK,
+    // A database in memory is this process's alone, and copying a schema into
+    // one is a page copy where making it is hundreds of statements. One on
+    // disk is made in place: another process may have it open.
+    ...file ? {} : {
+      template: (key: string, make: () => void) => {
+        let before = holding(query)
+        if (!before.empty || db.inTransaction) return make()
+        let at = key + '\n' + before.objects
+        let kept = templates.get(at)
+        if (kept) {
+          kept.backup(db)
+          run.forget()
+          return
+        }
+        make()
+        let copy = new Database(':memory:')
+        db.backup(copy)
+        templates.set(at, copy)
+      },
+    },
   }
 }
