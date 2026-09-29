@@ -502,7 +502,7 @@ for (let aggregate of [false, true]) {
   Deno.test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door`, async () => {
     let store = await cookbook()
     let error = new Error('query storage failed')
-    using broken = stub(store.door.graph, aggregate ? 'rows' : 'read', () => {
+    using _broken = stub(store.door.graph, aggregate ? 'rows' : 'read', () => {
       throw error
     })
     using logged = stub(console, 'error')

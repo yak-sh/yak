@@ -9,14 +9,8 @@ import { ADMIN } from './lib/bots.ts'
 import { appStore } from './directory.ts'
 import { configured } from './deploy_worker.ts'
 import { compiled } from './esbuild.ts'
-import { purged } from './files.ts'
 import { releaseFiles, staged } from './release.ts'
-import {
-  encode as encodeIndex,
-  type Index,
-  indexOf,
-  META,
-} from './release_index.ts'
+import { type Index, indexOf, META } from './release_index.ts'
 import { appVocab } from './vocab.ts'
 import { verified } from './vale_sfx_seal.ts'
 import { type Args, type Ctx, refuse, type Tool } from './tool.ts'
@@ -361,21 +355,26 @@ let repack = async (ctx: Ctx, args: Args) => {
   let saved = await raw.read(audit)
   if (saved) {
     let proof = JSON.parse(decode(saved)) as {
-      source: string
-      before: { files: Files; index: unknown }
-      after: { files: Files; index: unknown }
+      app: string
+      before: { source: string; files: Files; index: unknown }
+      after: { source: string; files: Files; index: unknown }
     }
-    if (proof.source != version.source) {
-      throw refuse('conflict', `audit ${audit} names a different source`)
+    if (proof.app != app.eid) {
+      throw refuse('conflict', `audit ${audit} names a different app`)
     }
-    let held = version.source ? await indexOf(raw, version.source + '/') : null
+    let oldIndex = proof.before.source
+      ? await indexOf(raw, proof.before.source + '/')
+      : null
+    let newIndex = proof.after.source
+      ? await indexOf(raw, proof.after.source + '/')
+      : null
     let manifest = JSON.stringify(version.files)
-    let index = JSON.stringify(held)
     if (
+      ![proof.before.source, proof.after.source].includes(version.source) ||
       ![JSON.stringify(proof.before.files), JSON.stringify(proof.after.files)]
         .includes(manifest) ||
-      ![JSON.stringify(proof.before.index), JSON.stringify(proof.after.index)]
-        .includes(index)
+      JSON.stringify(oldIndex) != JSON.stringify(proof.before.index) ||
+      JSON.stringify(newIndex) != JSON.stringify(proof.after.index)
     ) {
       throw refuse(
         'conflict',
@@ -384,7 +383,7 @@ let repack = async (ctx: Ctx, args: Args) => {
     }
     if (args.check === true) {
       let done = manifest == JSON.stringify(proof.after.files) &&
-        index == JSON.stringify(proof.after.index)
+        version.source == proof.after.source
       return {
         text: `audited v${version.version}: ${
           done ? 'repackaged' : 'resumable'
@@ -392,19 +391,15 @@ let repack = async (ctx: Ctx, args: Args) => {
         value: { audit, files: proof.after.files },
       }
     }
-    if (version.source) {
-      await raw.put(
-        version.source + META,
-        encodeIndex(proof.after.index as Index),
-      )
-    }
     await ctx.dir.stamp({
       entities: [{
         entity: { eid: version.eid },
-        deploy: { files: JSON.stringify(proof.after.files) },
+        deploy: {
+          source: proof.after.source || null,
+          files: JSON.stringify(proof.after.files),
+        },
       }],
     })
-    await purged(ctx.env, app)
     return { text: `repackaged v${version.version}; audit ${audit}` }
   }
   let pin = pins(raw, `${space.slug}/`)
@@ -446,9 +441,8 @@ let repack = async (ctx: Ctx, args: Args) => {
       deploy: version.eid,
       app: app.eid,
       version: version.version,
-      source: '',
-      before: { files: version.files, index: null, original },
-      after: { files: plan.files, index: null },
+      before: { source: '', files: version.files, index: null, original },
+      after: { source: '', files: plan.files, index: null },
     }
     await raw.put(audit, encode(JSON.stringify(proof)))
     await ctx.dir.stamp({
@@ -540,23 +534,21 @@ let repack = async (ctx: Ctx, args: Args) => {
     deploy: version.eid,
     app: app.eid,
     version: version.version,
-    source: version.source,
     before: {
+      source: version.source,
       files: version.files,
       index: oldIndex ? JSON.parse(decode(oldIndex)) : null,
       original,
     },
-    after: { files, index: JSON.parse(decode(newIndex)) },
+    after: { source: candidate, files, index: JSON.parse(decode(newIndex)) },
   }
   await raw.put(audit, encode(JSON.stringify(proof)))
-  await raw.put(version.source + META, newIndex)
   await ctx.dir.stamp({
     entities: [{
       entity: { eid: version.eid },
-      deploy: { files: JSON.stringify(files) },
+      deploy: { source: candidate, files: JSON.stringify(files) },
     }],
   })
-  await purged(ctx.env, app)
   return {
     text:
       `repackaged v${version.version}; audit ${audit}; ${plan.changed.length} source files changed`,
@@ -565,7 +557,7 @@ let repack = async (ctx: Ctx, args: Args) => {
 }
 
 let restore = async (ctx: Ctx, args: Args) => {
-  let { space, app } = await selected(ctx, say(args.app))
+  let { app } = await selected(ctx, say(args.app))
   let release = (await ctx.dir.deploys(app)).find((v) =>
     v.version == Number(args.version)
   )
@@ -575,50 +567,50 @@ let restore = async (ctx: Ctx, args: Args) => {
   let saved = await raw.read(audit)
   if (!saved) throw refuse('missing', `audit ${audit} is missing`)
   let proof = JSON.parse(decode(saved)) as {
-    source: string
-    before: { files: Files; index: Index | null; original: Files }
-    after: { files: Files; index: Index }
+    app: string
+    before: {
+      source: string
+      files: Files
+      index: Index | null
+      original: Files
+    }
+    after: { source: string; files: Files; index: Index | null }
   }
-  if (proof.source != (release.source ?? '')) {
-    throw refuse('conflict', `audit ${audit} names a different source`)
+  if (proof.app != app.eid) {
+    throw refuse('conflict', `audit ${audit} names a different app`)
   }
-  let held = release.source ? await indexOf(raw, release.source + '/') : null
+  let oldIndex = proof.before.source
+    ? await indexOf(raw, proof.before.source + '/')
+    : null
+  let newIndex = proof.after.source
+    ? await indexOf(raw, proof.after.source + '/')
+    : null
   let files = JSON.stringify(release.files)
-  let index = JSON.stringify(held)
   if (
+    ![proof.before.source, proof.after.source].includes(release.source ?? '') ||
     ![JSON.stringify(proof.before.files), JSON.stringify(proof.after.files)]
       .includes(files) ||
-    ![JSON.stringify(proof.before.index), JSON.stringify(proof.after.index)]
-      .includes(index)
+    JSON.stringify(oldIndex) != JSON.stringify(proof.before.index) ||
+    JSON.stringify(newIndex) != JSON.stringify(proof.after.index)
   ) throw refuse('conflict', `release v${release.version} changed after audit`)
   if (args.check === true) {
     return { text: `ready to restore v${release.version} from ${audit}` }
   }
-  let pin = pins(raw, `${space.slug}/`)
   for (let [path, sha] of Object.entries(proof.before.original)) {
     let bytes = await raw.read(`${AUDIT}sha/${sha}`)
     if (!bytes || await sha256(bytes) != sha) {
       throw refuse('missing', `audited ${path} bytes are missing`)
     }
-    let key = proof.before.index?.[path]?.key
-    if (!key || key == `sha/${sha}`) await pin.put(sha, bytes)
-    else await raw.put(`${space.slug}/${key}`, bytes)
-    if (!key && release.source) {
-      await raw.put(`${release.source}/${path}`, bytes)
-    }
-  }
-  if (release.source) {
-    if (proof.before.index) {
-      await raw.put(release.source + META, encodeIndex(proof.before.index))
-    } else await raw.delete(release.source + META)
   }
   await ctx.dir.stamp({
     entities: [{
       entity: { eid: release.eid },
-      deploy: { files: JSON.stringify(proof.before.files) },
+      deploy: {
+        source: proof.before.source || null,
+        files: JSON.stringify(proof.before.files),
+      },
     }],
   })
-  await purged(ctx.env, app)
   return { text: `restored v${release.version} from ${audit}` }
 }
 

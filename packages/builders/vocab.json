@@ -240,6 +240,7 @@
     },
     "builder_change": {
       "effect": true,
+      "active": ".builder.immediate=true&.limit=1",
       "created": [
         "created",
         "updated"
