@@ -6,8 +6,10 @@ import { homesOf } from './homes.ts'
 import { LEVELS, SIZE } from './levels.ts'
 import { CHUNK, patchOf, propsIn, vale } from './terrain.ts'
 import { seedDesigns } from './designs_fixture.ts'
+import { seedThemes } from './themes_fixture.ts'
 
 seedDesigns()
+seedThemes()
 
 let ground = (id: string, x: number, z: number) => {
   let [gx, gz] = LEVELS[id].cell

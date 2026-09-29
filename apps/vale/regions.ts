@@ -216,6 +216,8 @@ export let placesAt = (x: number, z: number): Placed[] =>
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * // Asked alone, or with every place that may reach a box round it, alike.
  * let x = 37.25, z = 101.75
  * assertEquals(lie(x, z), lie(x, z, placesIn(0, 64, 64, 128)))
@@ -364,6 +366,8 @@ export let boundariesIn = (x0: number, z0: number, x1: number, z1: number) => {
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
  * import { levelOf } from './levels.ts'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * // A level's places lie in its region, its village well inside it.
  * assertEquals(blend(128, 128).a, 'mossvale')
  * assertEquals(blend(-128, 128).a, 'birchmere')

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. Levels and quests are the app's own data; creature and item designs are store rows seeded from files and watched by every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. Levels' geography and quests are authored data; creature, item and region theme designs are store rows seeded from files and watched by every page.",
   "models": "open",
   "$defs": {
     "item_design": {
@@ -75,6 +75,42 @@
         }
       },
       "required": ["kind", "name", "look"]
+    },
+    "theme_design": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "unique": [["land"]],
+      "description": "A land's ground cover and visual theme. Its geography stays in the authored land row.",
+      "properties": {
+        "land": { "type": "string", "minLength": 1, "index": true },
+        "wild": { "type": "string", "minLength": 1 },
+        "look": {
+          "type": "object",
+          "properties": {
+            "ground": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 16777215
+              }
+            },
+            "water": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 0, "maximum": 16777215 },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "sky": { "type": "integer", "minimum": 0, "maximum": 16777215 },
+            "tint": { "type": "number", "minimum": 0, "maximum": 1 },
+            "haze": { "type": "number", "exclusiveMinimum": 0 },
+            "air": { "type": "string" }
+          }
+        },
+        "frontier": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["land", "wild"]
     },
     "beast_design": {
       "component": true,

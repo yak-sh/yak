@@ -19,6 +19,9 @@ import {
   WATER,
 } from './terrain.ts'
 import { roadsOf } from './ways.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 let crossing = () => {
   let road = roadsOf('clovermead').find((r) =>

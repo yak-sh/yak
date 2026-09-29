@@ -2,6 +2,9 @@
 import { assertEquals } from '@std/assert'
 import { LEVELS, SIZE } from './levels.ts'
 import { pan, place, view, WORLD, zoom, ZOOMS } from './mapview.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('the map opens near the hero and zooms out around their position', () => {
   let near = view([100, 120])

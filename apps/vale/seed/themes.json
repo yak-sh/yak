@@ -1,0 +1,935 @@
+[
+  {
+    "entity": {
+      "eid": "fc120972-eb25-80f3-ac51-798a8707c5c6"
+    },
+    "theme_design": {
+      "land": "mossvale",
+      "wild": "meadow"
+    }
+  },
+  {
+    "entity": {
+      "eid": "def322d5-5ef5-8a0a-bf03-f1d2b1f3ded0"
+    },
+    "theme_design": {
+      "land": "birchmere",
+      "wild": "birchwood",
+      "look": {
+        "ground": {
+          "grass": 10276718,
+          "lush": 8371548
+        },
+        "sky": 15267071,
+        "tint": 0.15,
+        "air": "fluff"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "523f9665-21e9-80bb-8346-bd45c0e029c0"
+    },
+    "theme_design": {
+      "land": "clovermead",
+      "wild": "meadow",
+      "look": {
+        "ground": {
+          "grass": 8836200,
+          "lush": 7128154
+        },
+        "sky": 16773320,
+        "tint": 0.12,
+        "air": "pollen"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "ba419339-309e-8642-8cf0-a62c3ae3562f"
+    },
+    "theme_design": {
+      "land": "fernwood",
+      "wild": "fernwood",
+      "look": {
+        "ground": {
+          "grass": 6069830,
+          "lush": 4164156
+        },
+        "sky": 11065504,
+        "tint": 0.14,
+        "haze": 1.3
+      },
+      "frontier": 0
+    }
+  },
+  {
+    "entity": {
+      "eid": "67454fab-35f1-8601-b3c0-b3d40b0a4d39"
+    },
+    "theme_design": {
+      "land": "elderglade",
+      "wild": "elders",
+      "look": {
+        "ground": {
+          "grass": 11061338,
+          "lush": 8826956
+        },
+        "sky": 16767120,
+        "tint": 0.2,
+        "air": "motes"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d20ffb96-7a2b-89f0-a434-5b1b9a83a115"
+    },
+    "theme_design": {
+      "land": "greypine",
+      "wild": "greypines",
+      "look": {
+        "ground": {
+          "grass": 9346688,
+          "lush": 7309930,
+          "dry": 10526858
+        },
+        "water": [
+          4876920,
+          6982292,
+          13161174
+        ],
+        "sky": 12107972,
+        "tint": 0.4,
+        "haze": 2
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d0c38670-0eaf-87b5-968a-e4488dd1ab8d"
+    },
+    "theme_design": {
+      "land": "wolfden",
+      "wild": "hollow",
+      "look": {
+        "ground": {
+          "grass": 5071936,
+          "lush": 3953716,
+          "dry": 6974032,
+          "stone": 7302760
+        },
+        "water": [
+          1977908,
+          3425868,
+          9083040
+        ],
+        "sky": 4870248,
+        "tint": 0.5,
+        "haze": 1.8
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "686312d2-19b2-85d2-99e7-fcaa038c5942"
+    },
+    "theme_design": {
+      "land": "gullwick",
+      "wild": "meadow",
+      "look": {
+        "ground": {
+          "grass": 9224304,
+          "lush": 7778910,
+          "sand": 11117206,
+          "mud": 8020552
+        },
+        "water": [
+          2054778,
+          4163232,
+          14216950
+        ],
+        "sky": 14216440,
+        "tint": 0.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "43c046a6-b5b7-891c-9b78-922c014fd963"
+    },
+    "theme_design": {
+      "land": "driftwood",
+      "wild": "marram",
+      "look": {
+        "ground": {
+          "sand": 15524036,
+          "grass": 11057272,
+          "lush": 9087080,
+          "dry": 13157528,
+          "snow": 13158592
+        },
+        "water": [
+          3824230,
+          6983316,
+          14740200
+        ],
+        "sky": 14212312,
+        "tint": 0.25,
+        "haze": 1.3,
+        "air": "spray"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "777253c1-5182-825d-ad54-5aa129bfacd0"
+    },
+    "theme_design": {
+      "land": "saltreach",
+      "wild": "saltflat",
+      "look": {
+        "ground": {
+          "sand": 15789024,
+          "dry": 14209724,
+          "grass": 12107928,
+          "lush": 10530952,
+          "stone": 13616818,
+          "mud": 10130566,
+          "snow": 14209212
+        },
+        "water": [
+          3832458,
+          8042688,
+          15794175
+        ],
+        "sky": 16774368,
+        "tint": 0.2,
+        "haze": 0.9,
+        "air": "glints"
+      },
+      "frontier": 3
+    }
+  },
+  {
+    "entity": {
+      "eid": "4b5c8677-f120-89a6-849f-85c529ed5aa9"
+    },
+    "theme_design": {
+      "land": "shellstrand",
+      "wild": "thrift",
+      "look": {
+        "ground": {
+          "sand": 16046284,
+          "grass": 9228154,
+          "lush": 7651434,
+          "snow": 14734540
+        },
+        "water": [
+          1743534,
+          5953744,
+          15269880
+        ],
+        "sky": 12578815,
+        "tint": 0.12
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "0ccb76d5-e8b2-87a5-8f1f-89e117897f72"
+    },
+    "theme_design": {
+      "land": "stormhead",
+      "wild": "windmoor",
+      "look": {
+        "ground": {
+          "grass": 7309914,
+          "lush": 5929548,
+          "dry": 9079402,
+          "heath": 6969960,
+          "sand": 9076848,
+          "stone": 6974576,
+          "snow": 8290952
+        },
+        "water": [
+          2244684,
+          4481644,
+          11058372
+        ],
+        "sky": 5266024,
+        "tint": 0.7,
+        "haze": 2.2,
+        "air": "rain"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "b0d9c165-af46-8b93-8ce9-ba37e77e1264"
+    },
+    "theme_design": {
+      "land": "reedmarsh",
+      "wild": "reedbed",
+      "look": {
+        "ground": {
+          "grass": 11579488,
+          "lush": 10002512,
+          "dry": 13152368,
+          "mud": 6969914
+        },
+        "water": [
+          3824202,
+          6982250,
+          14213312
+        ],
+        "sky": 16773328,
+        "tint": 0.15,
+        "air": "down"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "909a7af6-cc4a-87a6-8b1b-53662450deac"
+    },
+    "theme_design": {
+      "land": "mirewood",
+      "wild": "mire",
+      "look": {
+        "ground": {
+          "grass": 4876856,
+          "lush": 3824174,
+          "dry": 5921338,
+          "mud": 3813926
+        },
+        "water": [
+          1318420,
+          2765860,
+          8030826
+        ],
+        "sky": 6978138,
+        "tint": 0.45,
+        "haze": 2,
+        "air": "fireflies"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "0ea1a470-00a0-8cb8-a4f7-d3b1d78581ca"
+    },
+    "theme_design": {
+      "land": "fenhollow",
+      "wild": "fen",
+      "look": {
+        "ground": {
+          "grass": 10525280,
+          "lush": 9079376,
+          "dry": 12101744,
+          "mud": 4864040,
+          "heath": 8018506
+        },
+        "water": [
+          2763294,
+          4868660,
+          11579544
+        ],
+        "sky": 14209216,
+        "tint": 0.3,
+        "haze": 1.6
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "6aec223e-28b1-8bd4-aecd-ff29c4d79280"
+    },
+    "theme_design": {
+      "land": "sunkenkirk",
+      "wild": "marsh",
+      "look": {
+        "ground": {
+          "grass": 6978138,
+          "lush": 5925450,
+          "mud": 4866616,
+          "stone": 9079432
+        },
+        "water": [
+          2240570,
+          3820114,
+          10135728
+        ],
+        "sky": 9081000,
+        "tint": 0.5,
+        "haze": 1.7,
+        "air": "wisps"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "a635c17a-f381-8e60-bf05-eb279be1d688"
+    },
+    "theme_design": {
+      "land": "bogheart",
+      "wild": "bog",
+      "look": {
+        "ground": {
+          "grass": 8030778,
+          "lush": 5929514,
+          "dry": 9075274,
+          "mud": 3812898
+        },
+        "water": [
+          1709070,
+          3023896,
+          6969920
+        ],
+        "sky": 10127978,
+        "tint": 0.35,
+        "haze": 1.5,
+        "air": "midges"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "1297a6ea-909e-84ef-8f78-d4770309648c"
+    },
+    "theme_design": {
+      "land": "sporefen",
+      "wild": "sporemarsh",
+      "look": {
+        "ground": {
+          "spore": 11580490,
+          "grass": 10135626,
+          "lush": 9083450,
+          "mud": 5918768
+        },
+        "water": [
+          3820074,
+          6978106,
+          13688992
+        ],
+        "sky": 14213280,
+        "tint": 0.3,
+        "haze": 1.5,
+        "air": "spores"
+      },
+      "frontier": 2
+    }
+  },
+  {
+    "entity": {
+      "eid": "79d50f21-107f-8885-9183-0e00ec2da734"
+    },
+    "theme_design": {
+      "land": "stonestep",
+      "wild": "moor",
+      "look": {
+        "ground": {
+          "stone": 13156004,
+          "dry": 12103800,
+          "grass": 9222246,
+          "lush": 7644246,
+          "heath": 11049584
+        },
+        "sky": 15791359,
+        "tint": 0.1
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "884ce51a-1841-833b-9968-1badedb5026f"
+    },
+    "theme_design": {
+      "land": "heatherfell",
+      "wild": "moor",
+      "look": {
+        "ground": {
+          "heath": 9325198,
+          "grass": 8034906,
+          "dry": 10132074
+        },
+        "sky": 15261944,
+        "tint": 0.15
+      },
+      "frontier": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "50e57ef0-ab71-8342-be41-2bf42e0034bc"
+    },
+    "theme_design": {
+      "land": "oldwall",
+      "wild": "bracken",
+      "look": {
+        "ground": {
+          "grass": 11051088,
+          "lush": 9080896,
+          "dry": 12098138,
+          "heath": 9067066
+        },
+        "sky": 16769200,
+        "tint": 0.2,
+        "air": "leaves"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "bc962115-0909-8aa7-8499-5150ca6cd336"
+    },
+    "theme_design": {
+      "land": "kingsbarrow",
+      "wild": "barrowmoor",
+      "look": {
+        "ground": {
+          "grass": 6982234,
+          "lush": 5929546,
+          "heath": 7366234,
+          "dry": 9079402
+        },
+        "sky": 11575496,
+        "tint": 0.35,
+        "haze": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "aa2c8069-55b4-8b14-a0d7-4ad9448bd595"
+    },
+    "theme_design": {
+      "land": "giantsteps",
+      "wild": "stonefield",
+      "look": {
+        "ground": {
+          "stone": 4079174,
+          "grass": 6982234,
+          "dry": 8026714,
+          "heath": 5921354,
+          "snow": 6974066
+        },
+        "sky": 12110040,
+        "tint": 0.2,
+        "haze": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "269b1327-3b1c-8f75-83ae-e3b33b4ddf9c"
+    },
+    "theme_design": {
+      "land": "glowcap",
+      "wild": "glowcaps",
+      "look": {
+        "ground": {
+          "snow": 4871288,
+          "spore": 3422314,
+          "path": 8026776,
+          "lush": 3037794,
+          "grass": 4090478,
+          "dry": 5139048,
+          "stone": 5923960
+        },
+        "water": [
+          662074,
+          1718890,
+          6998256
+        ],
+        "sky": 2765920,
+        "tint": 0.65,
+        "haze": 1.4,
+        "air": "glowspores"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "2e5a9483-fb59-875e-a2c7-1965d2fc36f0"
+    },
+    "theme_design": {
+      "land": "gleamdeep",
+      "wild": "gleamwood",
+      "look": {
+        "ground": {
+          "snow": 13152488,
+          "spore": 6968736,
+          "lush": 5921418,
+          "grass": 6978186,
+          "dry": 9075354,
+          "stone": 6969978
+        },
+        "water": [
+          2759242,
+          4864634,
+          13678840
+        ],
+        "sky": 12099808,
+        "tint": 0.35,
+        "air": "sparkle"
+      },
+      "frontier": 6
+    }
+  },
+  {
+    "entity": {
+      "eid": "7d8c0923-67e1-8985-9788-c6d22a680c2e"
+    },
+    "theme_design": {
+      "land": "shardvault",
+      "wild": "shards",
+      "look": {
+        "ground": {
+          "stone": 10135734,
+          "dry": 11056308,
+          "grass": 9085088,
+          "lush": 8033428,
+          "spore": 12110040,
+          "path": 11582660,
+          "snow": 13691124
+        },
+        "water": [
+          2775674,
+          5937850,
+          15794175
+        ],
+        "sky": 13691128,
+        "tint": 0.3,
+        "haze": 1.2,
+        "air": "shimmer"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "313b0258-1f29-8199-8e7c-ab5d38f5e399"
+    },
+    "theme_design": {
+      "land": "dustmere",
+      "wild": "dustpan",
+      "look": {
+        "ground": {
+          "dry": 13943968,
+          "mud": 10127464,
+          "sand": 14207140,
+          "stone": 12102548,
+          "snow": 13615780
+        },
+        "water": [
+          4865580,
+          7233092,
+          11575424
+        ],
+        "sky": 14206112,
+        "tint": 0.45,
+        "haze": 1.9,
+        "air": "dust"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "bd584c26-2210-8251-b462-856f99ec128f"
+    },
+    "theme_design": {
+      "land": "palmwell",
+      "wild": "golddunes",
+      "look": {
+        "ground": {
+          "sand": 15914640,
+          "lush": 3840580,
+          "grass": 6991952,
+          "snow": 15654064
+        },
+        "water": [
+          674394,
+          1743528,
+          13172720
+        ],
+        "sky": 16773320,
+        "tint": 0.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "0265d74a-6854-810b-ade9-95dcb059049c"
+    },
+    "theme_design": {
+      "land": "sunscar",
+      "wild": "greatdunes",
+      "look": {
+        "ground": {
+          "sand": 16047256,
+          "ash": 2372658,
+          "stone": 14207136,
+          "snow": 16313544
+        },
+        "sky": 16774352,
+        "tint": 0.35,
+        "haze": 1.2,
+        "air": "heat"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "e91abe8a-c35b-8eba-b1dd-ac24b6754ff2"
+    },
+    "theme_design": {
+      "land": "redmesa",
+      "wild": "buttes",
+      "look": {
+        "ground": {
+          "sand": 14191194,
+          "clay": 12081720,
+          "dry": 13144154,
+          "grass": 10133584,
+          "lush": 6983744,
+          "stone": 11037258,
+          "snow": 13138000
+        },
+        "water": [
+          2771530,
+          4881002,
+          12114112
+        ],
+        "sky": 15773832,
+        "tint": 0.4,
+        "haze": 1.2
+      },
+      "frontier": 4
+    }
+  },
+  {
+    "entity": {
+      "eid": "397b0469-a6b9-8867-b7b9-bc6c3c1263f6"
+    },
+    "theme_design": {
+      "land": "tombsands",
+      "wild": "tombdunes",
+      "look": {
+        "ground": {
+          "sand": 15257760,
+          "stone": 14205080,
+          "clay": 13150328,
+          "snow": 14731424
+        },
+        "sky": 15247464,
+        "tint": 0.4,
+        "haze": 1.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "e1753484-688a-8249-8f52-6bbd3271529b"
+    },
+    "theme_design": {
+      "land": "frostmoor",
+      "wild": "snowmoor",
+      "look": {
+        "ground": {
+          "snow": 14673646,
+          "heath": 5917272,
+          "stone": 8026750,
+          "path": 11049608
+        },
+        "water": [
+          1714746,
+          3821664,
+          10137792
+        ],
+        "sky": 10135736,
+        "tint": 0.5,
+        "haze": 1.7,
+        "air": "blizzard"
+      },
+      "frontier": 5
+    }
+  },
+  {
+    "entity": {
+      "eid": "227db9d4-ed56-80b1-9c47-35335bc86113"
+    },
+    "theme_design": {
+      "land": "rimeholt",
+      "wild": "rimewood",
+      "look": {
+        "ground": {
+          "snow": 16054524,
+          "path": 12101776
+        },
+        "sky": 14739696,
+        "tint": 0.3
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "d3fe7ce0-3409-8d1b-8cdd-dd84cd381b13"
+    },
+    "theme_design": {
+      "land": "frostpine",
+      "wild": "snowpines",
+      "look": {
+        "ground": {
+          "snow": 15002862,
+          "lush": 2771514,
+          "path": 11575424
+        },
+        "sky": 9083552,
+        "tint": 0.5,
+        "haze": 1.8,
+        "air": "snow"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "a6377eb3-29d1-84ab-a838-9249d50948dd"
+    },
+    "theme_design": {
+      "land": "icefall",
+      "wild": "icefield",
+      "look": {
+        "ground": {
+          "ice": 9094372,
+          "snow": 14741240,
+          "stone": 9083560,
+          "path": 12110032
+        },
+        "water": [
+          666186,
+          2779802,
+          13168895
+        ],
+        "sky": 12114160,
+        "tint": 0.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "9bc0e0e6-060b-8bb9-b30c-f287d3f2b217"
+    },
+    "theme_design": {
+      "land": "whitepeak",
+      "wild": "highsnow",
+      "look": {
+        "ground": {
+          "snow": 16448767,
+          "stone": 6974066,
+          "path": 13156528
+        },
+        "sky": 15791871,
+        "tint": 0.25,
+        "haze": 0.8
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "7a002309-dd16-808a-bc52-526e8ff4afa4"
+    },
+    "theme_design": {
+      "land": "emberfall",
+      "wild": "emberash",
+      "look": {
+        "ground": {
+          "ash": 5917252,
+          "heath": 3812910,
+          "dry": 6969930,
+          "grass": 6974020,
+          "snow": 6969940,
+          "path": 9071184
+        },
+        "water": [
+          2759188,
+          4860442,
+          13135930
+        ],
+        "sky": 14188624,
+        "tint": 0.45,
+        "haze": 1.5,
+        "air": "embers"
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "4a234d10-e4f5-8ac7-8588-520f9b2c0f09"
+    },
+    "theme_design": {
+      "land": "cinderreach",
+      "wild": "cinderflats",
+      "look": {
+        "ground": {
+          "ash": 3025962,
+          "stone": 4472892,
+          "clay": 13152320,
+          "snow": 3814964,
+          "path": 5919306
+        },
+        "sky": 6971998,
+        "tint": 0.55,
+        "haze": 1.9,
+        "air": "ash"
+      },
+      "frontier": 7
+    }
+  },
+  {
+    "entity": {
+      "eid": "24f21836-e4d4-8e19-95a7-e137e86469ec"
+    },
+    "theme_design": {
+      "land": "ashkeep",
+      "wild": "ashfield",
+      "look": {
+        "ground": {
+          "ash": 7368816,
+          "stone": 5921374,
+          "snow": 9079438,
+          "path": 9077368
+        },
+        "sky": 9079442,
+        "tint": 0.5,
+        "haze": 1.4
+      }
+    }
+  },
+  {
+    "entity": {
+      "eid": "4da9b7b8-beca-87b6-91fa-973977f86bac"
+    },
+    "theme_design": {
+      "land": "maw",
+      "wild": "scorch",
+      "look": {
+        "ground": {
+          "ash": 3813938,
+          "stone": 4865598,
+          "ember": 16734746,
+          "snow": 3812910,
+          "path": 6968392
+        },
+        "water": [
+          3803652,
+          6953480,
+          16747066
+        ],
+        "sky": 6953488,
+        "tint": 0.65,
+        "haze": 2.2,
+        "air": "sparks"
+      }
+    }
+  }
+]

@@ -14,6 +14,9 @@ import {
   roofOver,
   vale,
 } from './terrain.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('the ridge cave is walkable from its mouth and back', () => {
   let [x, z] = spotOf('mossvale', 'ridge')!

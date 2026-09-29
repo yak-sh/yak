@@ -4,6 +4,7 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { flat } from './terrain.ts'
 import { eidOf } from './villager-id.ts'
 import { workerOf } from './worker.js'
+import { rows as themeRows } from './themes_fixture.ts'
 
 let HERO = '01234567-89ab-cdef-0123-456789abcdef'
 let hero = {
@@ -37,7 +38,9 @@ Deno.test('inspect worker checks owner and reads live hero state', async () => {
         let url = new URL(path, 'https://store.test/')
         let line = url.searchParams.get('q') ?? ''
         reads.push(line)
-        let rows = url.searchParams.has('live')
+        let rows = line == '.theme_design'
+          ? themeRows
+          : url.searchParams.has('live')
           ? [{
             entity: { eid: HERO },
             position: { level: 'mossvale', x: 10, z: 20 },
@@ -88,7 +91,9 @@ Deno.test('inspect worker resolves land and villager names', async () => {
         let line = new URL(path, 'https://store.test/').searchParams.get('q') ??
           ''
         return Promise.resolve(Response.json(
-          line.startsWith('.eid=') ? [project(elder, line)] : [],
+          line == '.theme_design' ? themeRows : line.startsWith('.eid=')
+            ? [project(elder, line)]
+            : [],
         ))
       },
     },

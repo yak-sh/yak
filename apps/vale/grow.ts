@@ -9,7 +9,9 @@ import { chart } from './chart.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import { buffers, pack, type Packed } from './mesh.ts'
 import { model } from './props.ts'
-import { vale } from './terrain.ts'
+import { useThemes } from './levels.ts'
+import type { Bundle } from './net.ts'
+import { refreshTerrain, vale } from './terrain.ts'
 
 /** What the page asks of a worker: one chunk, grown at a voxel edge, with
  * its small things or without; or a chart of the square `size` metres on a
@@ -29,8 +31,19 @@ export type Answer = {
   template?: Packed
 }
 
-addEventListener('message', (e: MessageEvent<Ask & { n: number }>) => {
+addEventListener('message', (
+  e: MessageEvent<
+    (Ask & { n: number }) | {
+      themes: Bundle[]
+    }
+  >,
+) => {
   let a = e.data
+  if ('themes' in a) {
+    useThemes(a.themes)
+    refreshTerrain()
+    return
+  }
   if ('template' in a) {
     let template = pack(model(...a.template))
     let answer: Answer = { n: a.n, template }

@@ -1,5 +1,6 @@
 // The levels: the lands of one world, each grown from its seed and its places
-// by terrain.ts, so every page grows the same one and none of it is stored.
+// by terrain.ts. Their ground cover and look are store designs seeded from
+// seed/themes.json, so every page and worker grows the same land.
 // Each lies in a cell of its own on a lattice of squares SIZE metres on a side
 // (regions.ts), Mossvale's at the origin, and holds the ground nearer its
 // places than any other level's: a region with a border as ragged as the
@@ -15,7 +16,9 @@
 // Mossvale, and the further from it by road, the wilder. The first 40 levels
 // are rows under levels/; frontier.ts grows the rest from their cells.
 import type { Top } from './features.ts'
+import { comp, str } from './bundle.ts'
 import { frontier, frontierCell, frontierId } from './frontier.ts'
+import type { Bundle } from './net.ts'
 import { COAST } from './levels/coast.ts'
 import { DEEP } from './levels/deep.ts'
 import { FIRE } from './levels/fire.ts'
@@ -83,8 +86,17 @@ export type Look = {
   air?: string
 }
 
-/** A level as its land's file writes it. */
-export type Row = Omit<Level, 'id'>
+/** A level's geography, as its land's file writes it. */
+export type Row = Omit<Level, 'id' | 'wild' | 'look'>
+
+/** The region's cover and look, authored or invented in the store. */
+export type Theme = {
+  land: string
+  wild: string
+  look?: Look
+  /** an authored model for the unbounded frontier, in stable order */
+  frontier?: number
+}
 
 let ROWS: Record<string, Row> = {
   ...VALE,
@@ -105,6 +117,8 @@ let ROWS: Record<string, Row> = {
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { FEATURES } from './features.ts'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * let lvs = Object.values(LEVELS)
  * let roads = (lv: Level) => Object.entries(lv.roads) as [Side, string][]
  * let oneWay = lvs.flatMap((lv) =>
@@ -133,6 +147,28 @@ let ROWS: Record<string, Row> = {
 export let LEVELS: Record<string, Level> = Object.fromEntries(
   Object.entries(ROWS).map(([id, lv]) => [id, { id, ...lv }]),
 )
+
+let themes: Record<string, Theme> = {}
+let frontierThemes: string[] = []
+
+/** Replace the region themes with the store's current designs. */
+export let useThemes = (rows: Bundle[]) => {
+  themes = Object.fromEntries(rows.flatMap((row) => {
+    let design = comp(row, 'theme_design'), land = str(design.land)
+    return land ? [[land, design as Theme]] : []
+  }))
+  LEVELS = Object.fromEntries(
+    Object.entries(ROWS).map(([id, lv]) => [
+      id,
+      { id, ...lv, wild: themes[id]?.wild, look: themes[id]?.look },
+    ]),
+  )
+  frontierThemes = Object.values(themes).filter((t) =>
+    t.frontier != null && LEVELS[t.land]
+  ).sort((a, b) => a.frontier! - b.frontier!).map((t) => t.land)
+  cells = new Map(Object.values(LEVELS).map((lv) => [lv.cell.join(','), lv]))
+  grown.clear()
+}
 
 /** Where a new hero first stands. */
 export let HOME = 'mossvale'
@@ -169,7 +205,7 @@ export let levelAt = (gx: number, gz: number): Level => {
   let got = grown.get(key)
   if (got) return got
   if (grown.size >= 256) grown.delete(grown.keys().next().value!)
-  got = frontier(gx, gz, LEVELS, HOPS)
+  got = frontier(gx, gz, LEVELS, HOPS, frontierThemes)
   grown.set(key, got)
   return got
 }

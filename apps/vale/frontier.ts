@@ -4,16 +4,6 @@ import { isA } from './features.ts'
 import type { Level, Place } from './levels.ts'
 import { fbm, hash, rand } from './rand.ts'
 
-let THEMES = [
-  'fernwood',
-  'heatherfell',
-  'sporefen',
-  'saltreach',
-  'redmesa',
-  'frostmoor',
-  'gleamdeep',
-  'cinderreach',
-]
 let ROOTS = [
   'Alder',
   'Ashen',
@@ -101,12 +91,14 @@ export let frontier = (
   gz: number,
   known: Record<string, Level>,
   hops: Record<string, number>,
+  themes: string[],
 ): Level => {
+  if (!themes.length) throw new Error('Region themes have not loaded')
   let salt = hash(gx, gz, 40841)
-  let theme = THEMES[
+  let theme = themes[
     Math.min(
-      THEMES.length - 1,
-      Math.floor(fbm(gx / 3, gz / 3, 40841, 3) * THEMES.length),
+      themes.length - 1,
+      Math.floor(fbm(gx / 3, gz / 3, 40841, 3) * themes.length),
     )
   ]
   let model = known[theme]

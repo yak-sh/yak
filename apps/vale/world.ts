@@ -88,6 +88,8 @@ export type World = {
   chunks: number[]
   /** props and their worker-chosen placements in the chunks now drawn */
   props: () => ChunkProps[]
+  /** redraw streamed ground after a region design changes */
+  refresh: () => void
   /** let the GPU go of everything the world drew */
   dispose: () => void
 }
@@ -259,6 +261,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let wants = new Map<string, Want>()
   let waiting: (() => void)[] = []
   let gone = false
+  let epoch = 0
   let key = (ci: number, ck: number) => `${ci} ${ck}`
 
   let meshOf = (
@@ -352,13 +355,13 @@ export let world = (v: Vale, mesh: Mesher): World => {
     }
     d.doors.drop()
   }
-  let put = async (c: Chunk, lod: number) => {
+  let put = async (c: Chunk, lod: number, version: number) => {
     let k = key(c.ci, c.ck)
     let prepared = buildings.prepare(c.buildings, lod == 0)
     try {
       await prepared.ready
       if (
-        gone || !wants.has(k) ||
+        gone || version != epoch || !wants.has(k) ||
         (drawn.has(k) && wants.get(k)?.lod != lod)
       ) return
       if (c.patch.voxel == v.voxel) adopt(v, c.patch)
@@ -447,8 +450,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
       if (covered && detailing >= Math.max(1, mesh.capacity - 1)) continue
       asked.add(k)
       if (covered) detailing++
+      let askedAt = epoch
       mesh.chunk(ci, ck, lod).then(async (c) => {
-        if (!gone && wants.has(k)) await put(c, lod)
+        if (!gone && askedAt == epoch && wants.has(k)) {
+          await put(c, lod, askedAt)
+        }
         asked.delete(k)
         stream()
       }).catch((e) => {
@@ -574,6 +580,12 @@ export let world = (v: Vale, mesh: Mesher): World => {
     pending: 0,
     chunks: [0, 0, 0],
     props: () => props ??= [...drawn.values()].map((d) => d.props),
+    refresh: () => {
+      epoch++
+      v.patches.clear()
+      for (let k of [...drawn.keys()]) drop(k)
+      stream()
+    },
     see: (from, feet, tall, dt = 1 / 60, foes = []) => {
       sight(ground, from, feet, tall, foes)
       sight(caveRoof, from, feet, tall, foes)

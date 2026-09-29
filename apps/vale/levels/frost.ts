@@ -23,20 +23,6 @@ export let FROST: Record<string, Row> = {
       south: 'rimeholt',
       west: 'wolfden',
     },
-    wild: 'snowmoor',
-    look: {
-      ground: {
-        snow: 0xdfe6ee,
-        heath: 0x5a4a58,
-        stone: 0x7a7a7e,
-        path: 0xa89a88,
-      },
-      water: [0x1a2a3a, 0x3a5060, 0x9ab0c0],
-      sky: 0x9aa8b8,
-      tint: 0.5,
-      haze: 1.7,
-      air: 'blizzard',
-    },
   },
   rimeholt: {
     name: 'Rimeholt',
@@ -59,12 +45,6 @@ export let FROST: Record<string, Row> = {
       east: 'frostpine',
       south: 'icefall',
     },
-    wild: 'rimewood',
-    look: {
-      ground: { snow: 0xf4f8fc, path: 0xb8a890 },
-      sky: 0xe0e8f0,
-      tint: 0.3,
-    },
   },
   frostpine: {
     name: 'Frostpine',
@@ -83,14 +63,6 @@ export let FROST: Record<string, Row> = {
     },
     roads: {
       west: 'rimeholt',
-    },
-    wild: 'snowpines',
-    look: {
-      ground: { snow: 0xe4ecee, lush: 0x2a4a3a, path: 0xb0a080 },
-      sky: 0x8a9aa0,
-      tint: 0.5,
-      haze: 1.8,
-      air: 'snow',
     },
   },
   icefall: {
@@ -113,18 +85,6 @@ export let FROST: Record<string, Row> = {
       north: 'rimeholt',
       east: 'whitepeak',
     },
-    wild: 'icefield',
-    look: {
-      ground: {
-        ice: 0x8ac4e4,
-        snow: 0xe0eef8,
-        stone: 0x8a9aa8,
-        path: 0xb8c8d0,
-      },
-      water: [0x0a2a4a, 0x2a6a9a, 0xc8f0ff],
-      sky: 0xb8d8f0,
-      tint: 0.4,
-    },
   },
   whitepeak: {
     name: 'Whitepeak',
@@ -143,13 +103,6 @@ export let FROST: Record<string, Row> = {
     },
     roads: {
       west: 'icefall',
-    },
-    wild: 'highsnow',
-    look: {
-      ground: { snow: 0xfafcff, stone: 0x6a6a72, path: 0xc8c0b0 },
-      sky: 0xf0f6ff,
-      tint: 0.25,
-      haze: 0.8,
     },
   },
 }

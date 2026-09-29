@@ -31,7 +31,7 @@ import { menu } from './menu.ts'
 import { BUILD, type Figure, hero, stature } from './figures.ts'
 import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
-import { capacity, meshed, template } from './grown.ts'
+import { capacity, meshed, template, useThemeRows } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
@@ -115,15 +115,23 @@ fit()
 addEventListener('resize', fit)
 
 let net = connect(new URL('api/', document.baseURI))
-// The world, shops, crafting and item pictures all read these indexes. Load
-// both before constructing them; subscriptions keep later edits current.
+// The world, shops, crafting and item pictures read store designs. Start
+// asking about the hero alongside the watches, then grow ground from them.
 let asking = net.me().then(async (me) => ({
   me,
   heroes: me.person ? await net.heroes(me.person) : [],
 }))
+let hadThemes = false
+let redrawThemes = () => {}
+let themeReady = net.designs('theme_design', (rows) => {
+  useThemeRows(rows)
+  if (hadThemes) redrawThemes()
+  hadThemes = true
+})
 await Promise.all([
   net.designs('beast_design', useBeasts),
   net.designs('item_design', useItems),
+  themeReady,
 ])
 let deal = deals(net)
 let folk = village(net, deal)
@@ -216,6 +224,7 @@ let w = world(
     template,
   },
 )
+redrawThemes = () => w.refresh()
 depth(camera, w.fog)
 // Where the hearth is by which the page first looks, and a new hero first
 // stands: home's fire.

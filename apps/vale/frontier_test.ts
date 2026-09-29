@@ -4,6 +4,9 @@ import { foeOf } from './danger.ts'
 import { dens, homesOf } from './homes.ts'
 import { frontierId } from './frontier.ts'
 import { hopsOf, levelAt, levelOf, LEVELS, SIZE } from './levels.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 import { regionOf } from './regions.ts'
 import { roadsOf } from './ways.ts'
 import { seedDesigns } from './designs_fixture.ts'

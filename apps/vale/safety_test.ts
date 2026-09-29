@@ -8,8 +8,10 @@ import { EDGE } from './streets.ts'
 import { flat, hearthOf, streetsOf, vale, villageOf } from './terrain.ts'
 import { lanesIn, nearWay, roadsOf } from './ways.ts'
 import { seedDesigns } from './designs_fixture.ts'
+import { seedThemes } from './themes_fixture.ts'
 
 seedDesigns()
+seedThemes()
 
 Deno.test('the fire and traveled paths shelter a traveler', () => {
   let v = vale(), hearth = hearthOf('mossvale')!

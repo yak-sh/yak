@@ -4,6 +4,9 @@ import { levelAt } from './levels.ts'
 import { spotOf } from './regions.ts'
 import { builtOf, propsNear, rise, vale, wallsNear, WATER } from './terrain.ts'
 import { bridgePartsIn, roadsOf } from './ways.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 let landmark = (kind: string) => {
   for (let gz = -2; gz <= 2; gz++) {

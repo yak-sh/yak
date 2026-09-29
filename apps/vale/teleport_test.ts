@@ -13,6 +13,9 @@ import { game } from './play.ts'
 import { destinationOf, nextTeleport } from './teleport.ts'
 import { flat, vale } from './terrain.ts'
 import { workerOf } from './worker.js'
+import { rows as themeRows, seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('teleport destinations stay in their land and refuse unsafe coordinates', () => {
   let world = vale()
@@ -54,6 +57,9 @@ Deno.test('the teleport worker admits owner and refuses editor', async () => {
   let env = {
     STORE: {
       fetch: (path: string, init?: RequestInit) => {
+        if (path.includes('.theme_design')) {
+          return Promise.resolve(Response.json(themeRows))
+        }
         if (path.startsWith('query?')) {
           return Promise.resolve(Response.json([{
             entity: { eid: 'hero' },
@@ -97,6 +103,9 @@ Deno.test('teleport targets live positions and stored companion spots', async ()
   let env = {
     STORE: {
       fetch: (path: string, init?: RequestInit) => {
+        if (path.includes('.theme_design')) {
+          return Promise.resolve(Response.json(themeRows))
+        }
         if (path.startsWith('query?live=1')) {
           return Promise.resolve(Response.json(
             present
@@ -162,6 +171,9 @@ Deno.test('teleport can meet a villager at their current world position', async 
   let env = {
     STORE: {
       fetch: (path: string, init?: RequestInit) => {
+        if (path.includes('.theme_design')) {
+          return Promise.resolve(Response.json(themeRows))
+        }
         if (path.startsWith('query?live=1')) {
           return Promise.resolve(Response.json([]))
         }

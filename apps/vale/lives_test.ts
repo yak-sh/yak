@@ -7,6 +7,9 @@ import { fits } from './sim.ts'
 import { stationsNear, vale } from './terrain.ts'
 import { STATIONS } from './craft.ts'
 import { walk } from './walk.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('the tailor works beside the loom and can walk there from home', () => {
   let v = vale(), elsie = GIVERS.find((g) => g.id == 'elsie')!

@@ -10,6 +10,9 @@ import { out, pack, type Packed } from './mesh.ts'
 import { chunkOf, flat } from './terrain.ts'
 import { world } from './world.ts'
 import { wanted } from './stream.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 let bare = (ci: number, ck: number): Chunk => ({
   ci,

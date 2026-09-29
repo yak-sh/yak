@@ -3,6 +3,9 @@ import { assert, assertEquals } from '@std/assert'
 import { blend, borderOf } from './regions.ts'
 import { CHUNK, rise, vale, WATER } from './terrain.ts'
 import { roadsOf } from './ways.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 let crossing = (from: string, to: string) => {
   let pair = [from, to].sort().join('/')

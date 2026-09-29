@@ -24,18 +24,6 @@ export let COAST: Record<string, Row> = {
       south: 'saltreach',
       west: 'driftwood',
     },
-    wild: 'meadow',
-    look: {
-      ground: {
-        grass: 0x8cc070,
-        lush: 0x76b25e,
-        sand: 0xa9a296,
-        mud: 0x7a6248,
-      },
-      water: [0x1f5a7a, 0x3f86a0, 0xd8eef6],
-      sky: 0xd8ecf8,
-      tint: 0.1,
-    },
   },
   driftwood: {
     name: 'Driftwood Bay',
@@ -55,21 +43,6 @@ export let COAST: Record<string, Row> = {
     roads: {
       east: 'gullwick',
       south: 'dustmere',
-    },
-    wild: 'marram',
-    look: {
-      ground: {
-        sand: 0xece0c4,
-        grass: 0xa8b878,
-        lush: 0x8aa868,
-        dry: 0xc8c498,
-        snow: 0xc8c8c0,
-      },
-      water: [0x3a5a66, 0x6a8e94, 0xe0eae8],
-      sky: 0xd8dcd8,
-      tint: 0.25,
-      haze: 1.3,
-      air: 'spray',
     },
   },
   saltreach: {
@@ -91,23 +64,6 @@ export let COAST: Record<string, Row> = {
       north: 'gullwick',
       south: 'shellstrand',
     },
-    wild: 'saltflat',
-    look: {
-      ground: {
-        sand: 0xf0ebe0,
-        dry: 0xd8d2bc,
-        grass: 0xb8c098,
-        lush: 0xa0b088,
-        stone: 0xcfc6b2,
-        mud: 0x9a9486,
-        snow: 0xd8d0bc,
-      },
-      water: [0x3a7a8a, 0x7ab8c0, 0xf0ffff],
-      sky: 0xfff4e0,
-      tint: 0.2,
-      haze: 0.9,
-      air: 'glints',
-    },
   },
   shellstrand: {
     name: 'Shellstrand',
@@ -127,18 +83,6 @@ export let COAST: Record<string, Row> = {
       north: 'saltreach',
       east: 'stormhead',
     },
-    wild: 'thrift',
-    look: {
-      ground: {
-        sand: 0xf4d8cc,
-        grass: 0x8ccf7a,
-        lush: 0x74c06a,
-        snow: 0xe0d4cc,
-      },
-      water: [0x1a9aae, 0x5ad8d0, 0xe8fff8],
-      sky: 0xbfefff,
-      tint: 0.12,
-    },
   },
   stormhead: {
     name: 'Stormhead',
@@ -157,23 +101,6 @@ export let COAST: Record<string, Row> = {
     },
     roads: {
       west: 'shellstrand',
-    },
-    wild: 'windmoor',
-    look: {
-      ground: {
-        grass: 0x6f8a5a,
-        lush: 0x5a7a4c,
-        dry: 0x8a8a6a,
-        heath: 0x6a5a68,
-        sand: 0x8a8070,
-        stone: 0x6a6c70,
-        snow: 0x7e8288,
-      },
-      water: [0x22404c, 0x44626c, 0xa8bcc4],
-      sky: 0x505a68,
-      tint: 0.7,
-      haze: 2.2,
-      air: 'rain',
     },
   },
 }

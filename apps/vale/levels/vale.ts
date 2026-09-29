@@ -26,7 +26,6 @@ export let VALE: Record<string, Row> = {
       south: 'stonestep',
       west: 'birchmere',
     },
-    wild: 'meadow',
   },
   birchmere: {
     name: 'Birchmere',
@@ -49,13 +48,6 @@ export let VALE: Record<string, Row> = {
       east: 'mossvale',
       west: 'gullwick',
     },
-    wild: 'birchwood',
-    look: {
-      ground: { grass: 0x9ccf6e, lush: 0x7fbd5c },
-      sky: 0xe8f4ff,
-      tint: 0.15,
-      air: 'fluff',
-    },
   },
   clovermead: {
     name: 'Clovermead',
@@ -75,13 +67,6 @@ export let VALE: Record<string, Row> = {
     roads: {
       east: 'fernwood',
       south: 'birchmere',
-    },
-    wild: 'meadow',
-    look: {
-      ground: { grass: 0x86d468, lush: 0x6cc45a },
-      sky: 0xfff0c8,
-      tint: 0.12,
-      air: 'pollen',
     },
   },
   fernwood: {
@@ -106,13 +91,6 @@ export let VALE: Record<string, Row> = {
       south: 'mossvale',
       west: 'clovermead',
     },
-    wild: 'fernwood',
-    look: {
-      ground: { grass: 0x5c9e46, lush: 0x3f8a3c },
-      sky: 0xa8d8a0,
-      tint: 0.14,
-      haze: 1.3,
-    },
   },
   elderglade: {
     name: 'Elderglade',
@@ -134,13 +112,6 @@ export let VALE: Record<string, Row> = {
       south: 'fernwood',
       west: 'glowcap',
     },
-    wild: 'elders',
-    look: {
-      ground: { grass: 0xa8c85a, lush: 0x86b04c },
-      sky: 0xffd890,
-      tint: 0.2,
-      air: 'motes',
-    },
   },
   greypine: {
     name: 'Greypine',
@@ -161,14 +132,6 @@ export let VALE: Record<string, Row> = {
       east: 'wolfden',
       west: 'fernwood',
     },
-    wild: 'greypines',
-    look: {
-      ground: { grass: 0x8e9e80, lush: 0x6f8a6a, dry: 0xa0a08a },
-      water: [0x4a6a78, 0x6a8a94, 0xc8d2d6],
-      sky: 0xb8c0c4,
-      tint: 0.4,
-      haze: 2,
-    },
   },
   wolfden: {
     name: 'Wolfden',
@@ -188,19 +151,6 @@ export let VALE: Record<string, Row> = {
     roads: {
       east: 'frostmoor',
       west: 'greypine',
-    },
-    wild: 'hollow',
-    look: {
-      ground: {
-        grass: 0x4d6440,
-        lush: 0x3c5434,
-        dry: 0x6a6a50,
-        stone: 0x6f6e68,
-      },
-      water: [0x1e2e34, 0x34464c, 0x8a98a0],
-      sky: 0x4a5068,
-      tint: 0.5,
-      haze: 1.8,
     },
   },
 }

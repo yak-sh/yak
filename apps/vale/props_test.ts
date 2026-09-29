@@ -6,6 +6,9 @@ import { fights, key, pack, profileOf, unkey } from './mesh.ts'
 import { KINDS, model, modelKey } from './props.ts'
 import { walk } from './sim.ts'
 import { groundAt, hearthNear, propsNear, vale } from './terrain.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('no prop fights itself', () => {
   let fighting = Object.keys(KINDS)

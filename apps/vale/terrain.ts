@@ -172,7 +172,7 @@ export let chunkKey = (ci: number, ck: number) =>
 let kept = <T>(most: number, make: (ci: number, ck: number) => T) => {
   let got = new Map<number, T>()
   let last = NaN, was: T
-  return (ci: number, ck: number): T => {
+  let read = (ci: number, ck: number): T => {
     let k = chunkKey(ci, ck)
     if (k === last) return was
     let v = got.get(k)
@@ -183,6 +183,12 @@ let kept = <T>(most: number, make: (ci: number, ck: number) => T) => {
     last = k
     return was = v
   }
+  return Object.assign(read, {
+    clear: () => {
+      got.clear()
+      last = NaN
+    },
+  })
 }
 
 // How strongly a point belongs to each kind of place holding it (the
@@ -353,6 +359,8 @@ let riverFloor = (
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * // A village's ground is flattened round its fire.
  * assertEquals(Math.round(rise(128, 128) * 10) / 10, 6.5)
  * ```
@@ -1202,12 +1210,25 @@ let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
 // The world's ground at each voxel size asked for, made once.
 let vales = new Map<number, Vale>()
 
+/** A changed region design retires ground grown under the previous theme. */
+export let refreshTerrain = () => {
+  planted.clear()
+  for (let v of vales.values()) {
+    v.patches.clear()
+    v.grow = growing(v)
+    v.buildings = housing(v, builtIn)
+    v.bump = kept(200, bumping(v))
+  }
+}
+
 /** The world's ground grown at a voxel edge of `voxel` metres, which must
  * divide CHUNK. Deterministic: every page and worker grows the same.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { regionOf } from './regions.ts'
+ * import { seedThemes } from './themes_fixture.ts'
+ * seedThemes()
  * // A chunk grown alone meets its neighbour at their seam: the column past
  * // its east edge is its neighbour's first, and its last is the column
  * // before the neighbour's.

@@ -26,8 +26,10 @@ import {
   WATER,
 } from './terrain.ts'
 import { seedDesigns } from './designs_fixture.ts'
+import { seedThemes } from './themes_fixture.ts'
 
 seedDesigns()
+seedThemes()
 
 let town = (kind = 'smithy.plaster', turn = 0) =>
   flat(5, [], [{ kind, x: 64, z: 64, seed: 0, turn }])

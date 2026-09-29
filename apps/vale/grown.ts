@@ -9,7 +9,9 @@ import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
 import { pack, type Packed } from './mesh.ts'
 import { model } from './props.ts'
-import { vale } from './terrain.ts'
+import { useThemes } from './levels.ts'
+import type { Bundle } from './net.ts'
+import { refreshTerrain, vale } from './terrain.ts'
 
 // How many workers mesh at once: a core each, less the page's own, up to four.
 export let capacity = Math.max(
@@ -21,6 +23,7 @@ export let capacity = Math.max(
 // are waiting; and each ask still being answered, by its number.
 type Hand = { w: Worker; load: number }
 let pool: Hand[] = []
+let themes: Bundle[] = []
 let asks = new Map<
   number,
   { done: (a: Answer) => void; fail: (e: Error) => void }
@@ -60,8 +63,17 @@ let hands = () =>
       e.preventDefault()
       broke(new Error(`grow.ts: ${e.message || 'the worker did not start'}`))
     }
+    if (themes.length) hand.w.postMessage({ themes })
     return hand
   })
+
+/** Keep the page and each growth worker on the store's region designs. */
+export let useThemeRows = (rows: Bundle[]) => {
+  themes = rows
+  useThemes(rows)
+  refreshTerrain()
+  for (let hand of pool) hand.w.postMessage({ themes: rows })
+}
 
 // One ask of the worker with the fewest waiting.
 let ask = (a: Ask): Promise<Answer> =>

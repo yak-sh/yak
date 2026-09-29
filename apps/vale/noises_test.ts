@@ -2,6 +2,9 @@ import { assert, assertEquals } from '@std/assert'
 import { NEAR } from './ears.ts'
 import { ambience, noises } from './noises.ts'
 import { builtOf, groundAt, hearthOf, vale } from './terrain.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('village fire is near the square but not beyond surrounding buildings', () => {
   // The fire loop uses NEAR's exponential panner: by the outer homes its

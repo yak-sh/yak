@@ -17,8 +17,10 @@ import {
 } from './rules.ts'
 import { skilled } from './skills.ts'
 import { seedDesigns } from './designs_fixture.ts'
+import { seedThemes } from './themes_fixture.ts'
 
 seedDesigns()
+seedThemes()
 
 let wear = (lvl: number, tier: number, full: boolean, known: string[]) => {
   let kinds = full

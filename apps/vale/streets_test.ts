@@ -17,6 +17,9 @@ import {
   vale,
   villagesNear,
 } from './terrain.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 let villages = Object.keys(LEVELS).flatMap((id) => {
   let at = hearthOf(id)

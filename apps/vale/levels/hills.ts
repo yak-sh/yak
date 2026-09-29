@@ -24,18 +24,6 @@ export let HILLS: Record<string, Row> = {
       north: 'mossvale',
       south: 'heatherfell',
     },
-    wild: 'moor',
-    look: {
-      ground: {
-        stone: 0xc8bea4,
-        dry: 0xb8b078,
-        grass: 0x8cb866,
-        lush: 0x74a456,
-        heath: 0xa89a70,
-      },
-      sky: 0xf0f4ff,
-      tint: 0.1,
-    },
   },
   heatherfell: {
     name: 'Heatherfell',
@@ -55,12 +43,6 @@ export let HILLS: Record<string, Row> = {
     roads: {
       north: 'stonestep',
       south: 'oldwall',
-    },
-    wild: 'moor',
-    look: {
-      ground: { heath: 0x8e4a8e, grass: 0x7a9a5a, dry: 0x9a9a6a },
-      sky: 0xe8e0f8,
-      tint: 0.15,
     },
   },
   oldwall: {
@@ -84,18 +66,6 @@ export let HILLS: Record<string, Row> = {
       east: 'sunkenkirk',
       west: 'kingsbarrow',
     },
-    wild: 'bracken',
-    look: {
-      ground: {
-        grass: 0xa8a050,
-        lush: 0x8a9040,
-        dry: 0xb89a5a,
-        heath: 0x8a5a3a,
-      },
-      sky: 0xffe0b0,
-      tint: 0.2,
-      air: 'leaves',
-    },
   },
   kingsbarrow: {
     name: 'Kingsbarrow',
@@ -117,18 +87,6 @@ export let HILLS: Record<string, Row> = {
       east: 'oldwall',
       west: 'giantsteps',
     },
-    wild: 'barrowmoor',
-    look: {
-      ground: {
-        grass: 0x6a8a5a,
-        lush: 0x5a7a4a,
-        heath: 0x70665a,
-        dry: 0x8a8a6a,
-      },
-      sky: 0xb0a0c8,
-      tint: 0.35,
-      haze: 1.3,
-    },
   },
   giantsteps: {
     name: 'Giantsteps',
@@ -149,19 +107,6 @@ export let HILLS: Record<string, Row> = {
     roads: {
       east: 'kingsbarrow',
       west: 'emberfall',
-    },
-    wild: 'stonefield',
-    look: {
-      ground: {
-        stone: 0x3e3e46,
-        grass: 0x6a8a5a,
-        dry: 0x7a7a5a,
-        heath: 0x5a5a4a,
-        snow: 0x6a6a72,
-      },
-      sky: 0xb8c8d8,
-      tint: 0.2,
-      haze: 1.3,
     },
   },
 }

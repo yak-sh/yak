@@ -23,22 +23,6 @@ export let FIRE: Record<string, Row> = {
       east: 'giantsteps',
       west: 'cinderreach',
     },
-    wild: 'emberash',
-    look: {
-      ground: {
-        ash: 0x5a4a44,
-        heath: 0x3a2e2e,
-        dry: 0x6a5a4a,
-        grass: 0x6a6a44,
-        snow: 0x6a5a54,
-        path: 0x8a6a50,
-      },
-      water: [0x2a1a14, 0x4a2a1a, 0xc8703a],
-      sky: 0xd88050,
-      tint: 0.45,
-      haze: 1.5,
-      air: 'embers',
-    },
   },
   cinderreach: {
     name: 'Cinderreach',
@@ -60,20 +44,6 @@ export let FIRE: Record<string, Row> = {
       south: 'ashkeep',
       west: 'maw',
     },
-    wild: 'cinderflats',
-    look: {
-      ground: {
-        ash: 0x2e2c2a,
-        stone: 0x44403c,
-        clay: 0xc8b040,
-        snow: 0x3a3634,
-        path: 0x5a524a,
-      },
-      sky: 0x6a625e,
-      tint: 0.55,
-      haze: 1.9,
-      air: 'ash',
-    },
   },
   ashkeep: {
     name: 'Ashkeep',
@@ -93,18 +63,6 @@ export let FIRE: Record<string, Row> = {
     roads: {
       north: 'cinderreach',
     },
-    wild: 'ashfield',
-    look: {
-      ground: {
-        ash: 0x707070,
-        stone: 0x5a5a5e,
-        snow: 0x8a8a8e,
-        path: 0x8a8278,
-      },
-      sky: 0x8a8a92,
-      tint: 0.5,
-      haze: 1.4,
-    },
   },
   maw: {
     name: 'The Maw',
@@ -122,21 +80,6 @@ export let FIRE: Record<string, Row> = {
     },
     roads: {
       east: 'cinderreach',
-    },
-    wild: 'scorch',
-    look: {
-      ground: {
-        ash: 0x3a3232,
-        stone: 0x4a3e3e,
-        ember: 0xff5a1a,
-        snow: 0x3a2e2e,
-        path: 0x6a5448,
-      },
-      water: [0x3a0a04, 0x6a1a08, 0xff8a3a],
-      sky: 0x6a1a10,
-      tint: 0.65,
-      haze: 2.2,
-      air: 'sparks',
     },
   },
 }

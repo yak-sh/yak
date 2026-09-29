@@ -3,7 +3,7 @@
 import { companionTick } from './companion-tick.ts'
 import { LODES } from './gather.ts'
 import { destinationOf } from './teleport.ts'
-import { vale } from './terrain.ts'
+import { refreshTerrain, vale } from './terrain.ts'
 import { placeOf, placeText } from './place.ts'
 import { resolveTarget } from './target.ts'
 import { GIVERS } from './quests.ts'
@@ -11,6 +11,7 @@ import { decided, where as villagerWhere } from './villagers.ts'
 import { eidOf } from './villager-id.ts'
 import { inspectOf } from './inspect.ts'
 import { objectiveOf } from './companion.ts'
+import { useThemes } from './levels.ts'
 
 let read = async (door, line, live = false) => {
   let search = live
@@ -69,13 +70,14 @@ let choose = async (env, choices) => {
   return choices[i]
 }
 
-let tick = async (req, env, v) => {
+let tick = async (req, env, v, themes) => {
   let call = req.headers.get('x-yak-command-call')
   let directive = req.headers.get('x-yak-command-source')
   let at = Date.parse(req.headers.get('x-yak-command-at') || '')
   if (!call || !directive || !Number.isFinite(at)) {
     return new Response('Scheduled calls only', { status: 403 })
   }
+  await themes(env)
   let [row] = await query(
     env,
     `.eid=${JSON.stringify(directive)}&?directive&?created&?companion`,
@@ -173,7 +175,7 @@ let targetPlace = async (env, v, eid) => {
   return placeOf({ companion: { x, z } }, 'companion')
 }
 
-let inspect = async (req, env, v) => {
+let inspect = async (req, env, v, themes) => {
   if (req.headers.get('x-yak-role') != 'owner') {
     return new Response('Only the app owner can inspect an entity.', {
       status: 403,
@@ -183,6 +185,7 @@ let inspect = async (req, env, v) => {
   if (typeof args?.target != 'string' || !args.target.trim()) {
     return new Response('Pass a land, name, or entity id.', { status: 400 })
   }
+  await themes(env)
   let to
   try {
     to = await resolveTarget(args.target, (line) => read(env.STORE, line))
@@ -256,7 +259,7 @@ let inspect = async (req, env, v) => {
   return new Response(inspectOf({ row, related }))
 }
 
-let teleport = async (req, env, v) => {
+let teleport = async (req, env, v, themes) => {
   if (req.headers.get('x-yak-role') != 'owner') {
     return new Response('Only the app owner can teleport a hero.', {
       status: 403,
@@ -276,6 +279,7 @@ let teleport = async (req, env, v) => {
       { status: 400 },
     )
   }
+  await themes(env)
   let at
   try {
     if (point) {
@@ -328,23 +332,35 @@ let teleport = async (req, env, v) => {
   return Response.json({ request, player, ...at, pending: !!pending })
 }
 
-export let workerOf = (v) => ({
-  fetch(req, env) {
-    let path = new URL(req.url).pathname
-    if (req.method == 'POST' && path.endsWith('/companion/tick')) {
-      return tick(req, env, v)
-    }
-    if (req.method == 'POST' && path.endsWith('/teleport')) {
-      return teleport(req, env, v)
-    }
-    if (req.method == 'POST' && path.endsWith('/where')) {
-      return where(req, env)
-    }
-    if (req.method == 'POST' && path.endsWith('/inspect')) {
-      return inspect(req, env, v)
-    }
-    return new Response('Not found', { status: 404 })
-  },
-})
+export let workerOf = (v) => {
+  let seen
+  let themes = async (env) => {
+    let rows = await read(env.STORE, '.theme_design')
+    let sorted = rows.sort((a, b) => a.entity.eid.localeCompare(b.entity.eid))
+    let next = JSON.stringify(sorted)
+    if (next == seen) return
+    useThemes(sorted)
+    refreshTerrain()
+    seen = next
+  }
+  return {
+    async fetch(req, env) {
+      let path = new URL(req.url).pathname
+      if (req.method == 'POST' && path.endsWith('/companion/tick')) {
+        return tick(req, env, v, themes)
+      }
+      if (req.method == 'POST' && path.endsWith('/teleport')) {
+        return teleport(req, env, v, themes)
+      }
+      if (req.method == 'POST' && path.endsWith('/where')) {
+        return where(req, env)
+      }
+      if (req.method == 'POST' && path.endsWith('/inspect')) {
+        return inspect(req, env, v, themes)
+      }
+      return new Response('Not found', { status: 404 })
+    },
+  }
+}
 
 export default workerOf(vale())

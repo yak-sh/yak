@@ -7,6 +7,9 @@ import { unkey } from './mesh.ts'
 import { KINDS } from './props.ts'
 import { builtOf } from './terrain.ts'
 import { roadsOf } from './ways.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('signpost fingers point along their named roads', () => {
   for (let id of Object.keys(LEVELS)) {

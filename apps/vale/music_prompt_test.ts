@@ -2,6 +2,9 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { LEVELS } from './levels.ts'
 import { musicPrompt } from './music_prompt.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedThemes()
 
 Deno.test('each land gives its songs a distinct direction', () => {
   assertEquals(Object.keys(LEVELS).length, 40)
