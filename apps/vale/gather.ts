@@ -223,7 +223,7 @@ export let LODES: Record<string, Lode> = {
     look: tree('chartree', 0x2a2624, 0xe8622a),
   },
   copper: {
-    name: 'Copper seam',
+    name: 'Copper Vein',
     trade: 'ore',
     tier: 1,
     gives: 'copper',
@@ -232,7 +232,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x8f8e86, 0xa3a198, 0x7f7e77], 0xc8783a),
   },
   iron: {
-    name: 'Iron seam',
+    name: 'Iron Vein',
     trade: 'ore',
     tier: 2,
     gives: 'ore',
@@ -241,7 +241,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x6e6c68, 0x7e7c76, 0x5e5c58], 0xa86a4a),
   },
   silver: {
-    name: 'Silver seam',
+    name: 'Silver Vein',
     trade: 'ore',
     tier: 2,
     gives: 'silver',
@@ -250,7 +250,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x7a7a80, 0x8a8a90, 0x6a6a70], 0xe8ecf2),
   },
   gold: {
-    name: 'Gold seam',
+    name: 'Gold Vein',
     trade: 'ore',
     tier: 3,
     gives: 'gold',
@@ -259,7 +259,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x7a6a58, 0x8a7a66, 0x6a5a4a], 0xf2c14e),
   },
   gleam: {
-    name: 'Gleamstone seam',
+    name: 'Gleamstone Vein',
     trade: 'ore',
     tier: 3,
     gives: 'gleamstone',
@@ -268,7 +268,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x4a4a6a, 0x5a5a7a, 0x3a3a5a], 0x9ad8ff),
   },
   iceore: {
-    name: 'Ice-ore seam',
+    name: 'Ice-ore Vein',
     trade: 'ore',
     tier: 3,
     gives: 'iceore',
@@ -277,7 +277,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x8aa0b0, 0x9ab0c0, 0x7a90a0], 0xc8f0ff),
   },
   sunstone: {
-    name: 'Sunstone seam',
+    name: 'Sunstone Vein',
     trade: 'ore',
     tier: 3,
     gives: 'sunstone',
@@ -286,7 +286,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0xc89a6a, 0xd8aa7a, 0xb88a5a], 0xff9030),
   },
   starsilver: {
-    name: 'Starsilver seam',
+    name: 'Starsilver Vein',
     trade: 'ore',
     tier: 4,
     gives: 'starsilver',
@@ -295,7 +295,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x505868, 0x606878, 0x404858], 0xf0f8ff),
   },
   obsidian: {
-    name: 'Obsidian',
+    name: 'Obsidian Outcrop',
     trade: 'ore',
     tier: 4,
     gives: 'obsidian',
@@ -304,7 +304,7 @@ export let LODES: Record<string, Lode> = {
     look: seam([0x2a2624, 0x3a3432, 0x221e1c], 0x7a5aa8),
   },
   emberstone: {
-    name: 'Emberstone seam',
+    name: 'Emberstone Vein',
     trade: 'ore',
     tier: 5,
     gives: 'emberstone',
