@@ -28,7 +28,12 @@
       "floor": "person",
       "description": "One signed-in hero joining or leaving a party. The newest row written by that hero's owner decides membership; an empty group leaves. A step is a new row so its created.by stamp proves who chose it.",
       "properties": {
-        "player": { "type": "string", "ref": "player", "index": true },
+        "player": {
+          "type": "string",
+          "ref": "player",
+          "death": "cascade",
+          "index": true
+        },
         "group": { "type": "string", "index": true },
         "at": { "type": "number" }
       },
@@ -40,8 +45,13 @@
       "floor": "person",
       "description": "One hero's invitation to another to join their party. The invited hero alone answers it with a party_reply row.",
       "properties": {
-        "from": { "type": "string", "ref": "player" },
-        "to": { "type": "string", "ref": "player", "index": true },
+        "from": { "type": "string", "ref": "player", "death": "cascade" },
+        "to": {
+          "type": "string",
+          "ref": "player",
+          "death": "cascade",
+          "index": true
+        },
         "group": { "type": "string" },
         "at": { "type": "string", "format": "date-time" }
       },
@@ -53,8 +63,17 @@
       "floor": "person",
       "description": "An invited hero accepting or declining an invitation. A reply keeps it out of their inbox after they leave the party.",
       "properties": {
-        "invite": { "type": "string", "ref": "party_invite" },
-        "to": { "type": "string", "ref": "player", "index": true },
+        "invite": {
+          "type": "string",
+          "ref": "party_invite",
+          "death": "cascade"
+        },
+        "to": {
+          "type": "string",
+          "ref": "player",
+          "death": "cascade",
+          "index": true
+        },
         "accept": { "type": "boolean" }
       },
       "required": ["invite", "to", "accept"]
