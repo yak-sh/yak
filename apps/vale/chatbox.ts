@@ -223,10 +223,16 @@ export let chatbox = (
     e.preventDefault()
     let text = clean(input.value)
     input.value = ''
-    let parsed = slash(text)
+    let parsed = slash(text, {
+      person: me?.person ?? null,
+      role: me?.role ?? null,
+    })
     if (parsed) {
       if ('error' in parsed) notice(parsed.error)
-      else void run(parsed.command)
+      else if ('help' in parsed) {
+        let n = notice(parsed.help)
+        n.markdown = true
+      } else void run(parsed.command)
       return
     }
     // E conversations stay open for another line; open chat outside one

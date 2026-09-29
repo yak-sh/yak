@@ -34,6 +34,7 @@ Deno.test('a hero uncovers nearby ground once and keeps it across sessions', () 
     let owner: Me = {
       person: 'owner',
       name: 'Owner',
+      role: null,
       reads: true,
       writes: true,
       signIn: null,

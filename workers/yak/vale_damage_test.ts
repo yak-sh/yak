@@ -60,7 +60,7 @@ Deno.test('the Mossvale owner turns a hero’s damage off and on', async () => {
       })
     )
     assert(refused instanceof Error)
-    assertStringIncludes(refused.message, 'owner is the least that may')
+    assertStringIncludes(refused.message, 'damage requires the app owner')
     let pageRefused = await pageDamage(editor.cookie, true)
     assertEquals(pageRefused.status, 403, await pageRefused.text())
     let posted = await client(k, 'damagelab.yaks.app', 'vale', editor.cookie)

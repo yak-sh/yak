@@ -35,6 +35,7 @@ export type Bundle = NonNullable<ReturnType<Client['ent']>>
 export type Me = {
   person: string | null
   name: string | null
+  role: string | null
   reads: boolean
   writes: boolean
   signIn: string | null
@@ -425,6 +426,7 @@ export let connect = (base: URL) => {
         return {
           person: null,
           name: null,
+          role: null,
           reads: true,
           writes: true,
           signIn: null,
@@ -434,6 +436,7 @@ export let connect = (base: URL) => {
       return {
         person: body.person ?? null,
         name: body.name ?? null,
+        role: body.role ?? null,
         reads: body.reads ?? true,
         writes: body.writes ?? true,
         signIn: body.signIn ?? null,

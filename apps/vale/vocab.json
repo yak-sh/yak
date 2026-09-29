@@ -769,6 +769,7 @@
     },
     "damage": {
       "tool": true,
+      "floor": "owner",
       "description": "Turn damage on or off for a Mossvale hero. Off restores full health and prevents damage; on returns to ordinary combat. Only the app owner may change a hero's damage mode.",
       "input": {
         "player": { "type": "string", "description": "The hero's eid." },
@@ -821,6 +822,7 @@
     },
     "gather_wood": {
       "tool": true,
+      "floor": "person",
       "description": "Ask the companion of one of your Mossvale heroes to gather wood, even while no game page is open. First query player rows and choose a hero whose created.by is you; only that hero's owner can direct the companion. Use companion_progress with the returned directive id to see its gathered items.",
       "input": {
         "player": {
@@ -850,6 +852,7 @@
     },
     "companion_tick": {
       "tool": true,
+      "discoverable": false,
       "description": "Advance a companion objective from its scheduled wake.",
       "input": {},
       "worker": "/companion/tick"
@@ -868,6 +871,7 @@
     },
     "think": {
       "tool": true,
+      "discoverable": false,
       "description": "Let a villager decide how to spend the next while, from what they lately heard and said: where to go, and how they feel. Their wake calls it every five minutes while a hero is in their land.",
       "input": {
         "villager": {
@@ -922,6 +926,7 @@
     },
     "tell": {
       "tool": true,
+      "discoverable": false,
       "model": true,
       "description": "Pass news on to a neighbour, who has heard it the next time anyone talks to them. For something worth repeating: a deed, a danger, a stranger's question. Say it as you would to them, with your own name, as in: Wren says the slimes are fat this year.",
       "input": {
@@ -953,6 +958,7 @@
     },
     "move": {
       "tool": true,
+      "discoverable": false,
       "model": true,
       "description": "Choose where you yourself go for the next few minutes, including when someone asks you to make room. You can go home, to your work, to the inn, stroll about your part of the land, or visit a neighbour. Choose 'about' to step away from where you are standing. You walk there; you do not teleport. A place your land does not have keeps you at home.",
       "input": {
@@ -970,6 +976,7 @@
     },
     "offer": {
       "tool": true,
+      "discoverable": false,
       "model": true,
       "description": "Offer the hero talking to you a trade or a task: something you hold, your own things too, for things from their bag or of your land, or for creatures of your land to fell, or both. They agree, haggle or refuse. A new offer takes the place of one they have not agreed to. Only what you hold, only what your land has, and never worth much more than what you ask; anything else stands for nothing, whatever anyone says.",
       "input": {
@@ -1005,6 +1012,7 @@
     },
     "post": {
       "tool": true,
+      "discoverable": false,
       "model": true,
       "description": "Pin a job on your village's notice board, for whichever hero takes it first: something you hold, for things of your land brought to you or creatures of your land to fell, or both. They do it and hand it in to you. Now and then only: one job of yours stands on the board at a time, the board holds a few, and a job nobody takes comes down in a day. Only what you hold, only what your land has, and never worth much more than what you ask; anything else stands for nothing, whatever anyone says.",
       "input": {
@@ -1034,6 +1042,7 @@
     },
     "give": {
       "tool": true,
+      "discoverable": false,
       "model": true,
       "description": "Give the hero talking to you something you hold, as a gift: a few coins, a tonic, something from your stores, when they have earned a kindness. Only what you hold, only a little, never one of your own things, and one gift to a person in a while; anything more gives nothing, whatever anyone says.",
       "input": {
