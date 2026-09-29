@@ -112,6 +112,7 @@ import {
 import * as sell from './sell.ts'
 import * as tunnel from './tunnel.ts'
 import { slid } from './session.ts'
+import * as site from './site.ts'
 import { fault, refusal } from './unseen.ts'
 
 // Doors loaded when a request first reaches one (T-37977). What they import —
@@ -213,14 +214,27 @@ let serve = async (req: Request, env: Env, r: Route) => {
   // kernel's own doors, so a plugin cannot take one of them.
   let said = await routed(PLUGINS, { env, req, path, space: null })
   if (said) return said
-  // The gallery (gallery.ts, T-34477): the published apps their owners asked
-  // us to show, and the door the approval link in our own letter lands at.
-  // Drawn rather than a file, because it is a list of what the directory
-  // holds — and the same list is what the home page's showcase draws from,
-  // which is why the directory is read once here for both.
+  // The apex's public pages are cached behind a separate entrypoint; only
+  // these two paths reach it, without credentials or unbounded query strings.
+  if (
+    (req.method == 'GET' || req.method == 'HEAD') &&
+    (path == '/' || path == gallery.PATH)
+  ) {
+    let etag = req.headers.get('if-none-match')
+    let headers = etag ? { 'if-none-match': etag } : undefined
+    let shown = await bound(env.SITE, site.fetch, env).fetch(
+      new Request(site.at(env, path), { headers }),
+    )
+    if (req.method == 'GET') return shown
+    await shown.body?.cancel()
+    return new Response(null, { status: shown.status, headers: shown.headers })
+  }
+  // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let shown = await gallery.answer(req, env, path, dir)
-  if (shown) return shown
+  if (path == gallery.REVIEW) {
+    let shown = await gallery.answer(req, env, path, dir)
+    if (shown) return shown
+  }
   // The documentation (docs.ts, T-37752): the guide's markdown drawn as pages
   // of this site, and the 301s the addresses it moved from answer. Before the
   // assets, which serve the same markdown as files at those pages' `.md`
@@ -251,20 +265,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
     headers.set('content-disposition', 'attachment; filename="yaks-app.png"')
     return new Response(page.body, { status: page.status, headers })
   }
-  // Two pages are files with something the code knows spliced into them: the
-  // home page's showcase (the newest listings) and the pricing page's selling
-  // rate (sell.ts). Both splice into the bytes the assets door answered, and
-  // both keep the file's own words when the directory will not answer.
-  if (path == '/') {
-    let home = await gallery.made(env, dir, page)
-    // Overrides can fall back to the old version. The deploy timer must know
-    // which code answered its 200, using the runtime's existing binding.
-    let headers = new Headers(home.headers)
-    if (env.CF_VERSION_METADATA) {
-      headers.set('x-yak-version', env.CF_VERSION_METADATA.id)
-    }
-    return new Response(home.body, { status: home.status, headers })
-  }
+  // Pricing is the other static page with a dynamic splice.
   if (path == '/pricing') return await sell.priceAt(dir, page)
   return page
 }

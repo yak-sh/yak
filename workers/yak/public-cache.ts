@@ -15,7 +15,7 @@ let tag = (env: Deploy, path: string, variant = '') => {
 
 let bare = (value: string) => value.replace(/^W\//, '')
 
-let matches = (asked: string | null, etag: string) =>
+export let matches = (asked: string | null, etag: string) =>
   asked?.split(',').some((part) => {
     let value = part.trim()
     return value == '*' || bare(value) == bare(etag)

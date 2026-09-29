@@ -259,6 +259,8 @@ export type Env = {
   // T-33197). Absent under `wrangler dev` and the workerd probes, where
   // `bound` calls the module in-process and nothing is cached.
   FILES?: Fetcher
+  // The apex's public home and gallery, cached behind the uncached gateway.
+  SITE?: Fetcher
   // yak-esbuild, which compiles an app's TypeScript and npm imports at deploy
   // (esbuild.ts). Absent under `deno test` and the workerd probes.
   ESBUILD?: Fetcher

@@ -52,7 +52,7 @@ import { type Letter, REPLY_TO } from './mail.ts'
 import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
-import { type Host, replyTo, url as siteUrl } from './host.ts'
+import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
 import { caught } from './sentry.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says
@@ -529,18 +529,14 @@ export let owned = async (dir: Directory, space: Space) => {
   return ''
 }
 
-// The two addresses this file answers at the apex, and null for everything
-// else, so index.ts falls through to the assets exactly as it did.
+// The review address this file answers at the apex. The public listing is
+// drawn behind the Site entrypoint (site.ts), outside the review ticket door.
 export let answer = async (
   req: Request,
   env: Env,
   path: string,
   dir: Directory,
 ): Promise<Response | null> => {
-  if (path == PATH) {
-    if (req.method != 'GET') return null
-    return page(await pictures(env, await listed(dir, env)), env)
-  }
   if (path != REVIEW) return null
   let asked = new URL(req.url)
   let form = req.method == 'POST'
@@ -652,13 +648,15 @@ export let showcase = (file: string, all: Shown[], feature = '') => {
 // from the apps' chosen screenshots. The file remains the fallback when the
 // directory does not answer.
 export let made = async (env: Env, dir: Directory, file: Response) => {
-  let html = await file.text()
+  let html = hosted(await file.text(), env)
+  let failed = false
   let { demos: shown, feature } = await examples(dir, env)
     .then(async ({ demos, feature }) => ({
       demos: await pictures(env, demos),
       feature,
     }))
     .catch((e) => {
+      failed = true
       caught(e, { request: 'home showcase' })
       return { demos: [] as Shown[], feature: '' }
     })
@@ -667,6 +665,7 @@ export let made = async (env: Env, dir: Directory, file: Response) => {
   let headers = new Headers(file.headers)
   headers.delete('content-length')
   headers.delete('etag')
+  if (failed) headers.set('cache-control', 'private, no-store')
   return new Response(showcase(html, shown, feature), {
     status: file.status,
     headers,

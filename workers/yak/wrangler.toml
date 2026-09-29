@@ -371,10 +371,9 @@ simple = { limit = 60, period = 60 }
 binding = "BLOBS"
 bucket_name = "yak-blobs"
 
-# Cloudflare's cache, in front of ONE of this Worker's two entrypoints
-# (cache.ts, T-33197). Enabled here so it can be turned on per entrypoint
-# below; on its own this line would cache everything, which is the thing that
-# must not happen.
+# Cloudflare's cache, in front of the Files and Site entrypoints. The default
+# gateway remains uncached: on its own this line would cache every route,
+# including tenant and authenticated responses.
 [cache]
 enabled = true
 
@@ -391,9 +390,9 @@ enabled = true
 #
 # So the default entrypoint is the gateway and never cached: it runs on every
 # request, resolves the space and app, and decides who is asking. `Files` is
-# behind it, addressed by the app's EID (cache.ts `at`), and holds only bytes —
-# nobody's response — which is what makes it safe to share and what makes a
-# private app's files as cacheable as a public one's.
+# behind it, addressed by the app's EID (cache.ts `at`), and holds only bytes.
+# `Site` is behind it too, but receives only canonical public apex pages under
+# a path that includes the apex identity (site.ts `at`).
 #
 # Turning `enabled` on for `default` is the one edit in this file that would
 # leak one tenant's pages to another. cache.ts `sealed` is the second line of
@@ -410,6 +409,12 @@ type = "worker"
   [exports.Files.cache]
   enabled = true
 
+[exports.Site]
+type = "worker"
+
+  [exports.Site.cache]
+  enabled = true
+
 # The gateway's binding to the cached entrypoint — this same Worker, named. The
 # hop is what puts Cloudflare's cache between the gateway and the bucket, so a
 # warm edge answers an app's file without R2 being touched. Absent under
@@ -419,6 +424,11 @@ type = "worker"
 binding = "FILES"
 service = "yak"
 entrypoint = "Files"
+
+[[services]]
+binding = "SITE"
+service = "yak"
+entrypoint = "Site"
 
 # What compiles an app's TypeScript and npm imports at app_deploy
 # (esbuild.ts, @yaks/esbuild): yak-esbuild (esbuild/), a Worker of its own so
@@ -688,10 +698,21 @@ type = "worker"
 [env.staging.exports.Files.cache]
 enabled = true
 
+[env.staging.exports.Site]
+type = "worker"
+
+[env.staging.exports.Site.cache]
+enabled = true
+
 [[env.staging.services]]
 binding = "FILES"
 service = "yak-staging"
 entrypoint = "Files"
+
+[[env.staging.services]]
+binding = "SITE"
+service = "yak-staging"
+entrypoint = "Site"
 
 [[env.staging.services]]
 binding = "ESBUILD"

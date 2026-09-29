@@ -1,6 +1,6 @@
 // The kernel Worker's entry: the router (kernel.ts) as the runtime loads it.
 // What is here is what only the runtime can load — the Durable Object classes
-// each binding names, the Sandbox container, the Files and Outbound
+// each binding names, the Sandbox container, the Files, Site and Outbound
 // entrypoints, and Sentry around all of them — and nothing that decides where
 // a request goes. The Store Durable Object (graph.ts) is its own module: a DO
 // may live in a different Worker from the one that binds it, and so are the
@@ -24,6 +24,7 @@ import type { Env, Inbound } from './env.ts'
 import { handler, type Lent } from './kernel.ts'
 import { egress } from './sandbox.ts'
 import { outbound } from './outbound.ts'
+import * as sitePart from './site.ts'
 
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -60,8 +61,8 @@ export class Sandbox extends Workbench<Env> {
   }
 }
 
-// The kernel's second entrypoint, and the only one with a cache in front of it
-// (cache.ts, wrangler.toml `[exports.Files]`). The default entrypoint below is
+// The kernel's cached file entrypoint (cache.ts, wrangler.toml
+// `[exports.Files]`). The default entrypoint below is
 // the gateway: it runs on every request, because the cache key does not
 // include the hostname and every space is a hostname — caching there would
 // serve one space's bytes to another's visitors. This one is addressed by the
@@ -86,6 +87,18 @@ class Filed extends WorkerEntrypoint {
   }
 }
 export let Files = withSentry(options, Filed)
+
+// Only the gateway reaches this entrypoint, and only with canonical apex
+// paths and no caller credentials. Its cache holds the public listing pages;
+// the review and identity doors remain on the uncached default entrypoint.
+class Sited extends WorkerEntrypoint {
+  declare env: Env
+
+  fetch(req: Request): Promise<Response> {
+    return sitePart.fetch(req, this.env)
+  }
+}
+export let Site = withSentry(options, Sited)
 
 // An app's worker calling out (outbound.ts): the namespace's outbound Worker,
 // yak-out (outbound/), hands each fetch back here with the CALLER dispatch.ts

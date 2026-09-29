@@ -107,6 +107,10 @@ Deno.test('the apex answers the crawler and the model', async () => {
       })
       assertEquals(again.status, 304, path)
       assertEquals(await again.text(), '', path)
+      let head = await k.at('yaks.app', path, { method: 'HEAD' })
+      assertEquals(head.status, 200, path)
+      assertEquals(head.headers.get('etag'), etag, path)
+      assertEquals(await head.text(), '', path)
       assertEquals(again.headers.get('etag'), etag, path)
       assertStringIncludes(
         page.headers.get('cache-control') ?? '',
@@ -178,6 +182,33 @@ Deno.test('the apex answers the crawler and the model', async () => {
     let none = await k.at('jeff.yaks.app', '/.well-known/security.txt')
     await none.text()
     assertEquals(none.status, 404)
+
+    // The public pages include listings, so their rendered bodies carry a
+    // short bound and their own ETags. A review ticket and sign-in stay live.
+    for (let path of ['/', '/gallery']) {
+      let first = await k.at('yaks.app', path)
+      assertEquals(first.status, 200, path)
+      assertEquals(
+        first.headers.get('cache-control'),
+        'public, max-age=30, must-revalidate',
+        path,
+      )
+      let etag = first.headers.get('etag') ?? ''
+      assert(etag.startsWith('W/"'), path)
+      await first.body?.cancel()
+      let again = await k.at('yaks.app', path, {
+        headers: { 'if-none-match': etag },
+      })
+      assertEquals(again.status, 304, path)
+      assertEquals(await again.text(), '', path)
+    }
+    let review = await k.at('yaks.app', '/gallery/review?t=nope')
+    assertEquals(review.status, 410)
+    assertEquals(review.headers.get('cache-control'), 'private, no-store')
+    await review.body?.cancel()
+    let login = await k.at('yaks.app', '/login')
+    assertEquals(login.headers.get('cache-control'), 'private, no-store')
+    await login.body?.cancel()
   } finally {
     await k.stop()
   }
