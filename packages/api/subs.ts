@@ -99,6 +99,8 @@ export type Ask = string | true
 /** The subscription registry: what the socket layer talks to, and what an
  * application can drive directly. */
 export type Subs = {
+  /** Answer one query from storage and the peer values held right now. */
+  snapshot: (query: string) => Bundle[] | Reduced | Promise<Bundle[] | Reduced>
   /** open (or replace) a subscription and send its current set */
   open: (sink: Sink, id: string, query: Ask) => void | Promise<void>
   /** close one subscription */
@@ -343,7 +345,7 @@ export let subscriptions = (graph: Graph, opts: {
   let network = (sub: Sub) => sub.peer ? peerNet : durableNet
   let peerComp = (name: string) => syncOf(graph.vocab, name) == 'peers'
   let pendingWork: Promise<void> | undefined
-  let ordered = (fn: () => void | Promise<void>) => {
+  let ordered = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
     let out = pendingWork ? pendingWork.then(fn) : fn()
     if (isPromise(out)) {
       let done = out.then(() => {}, () => {})
@@ -777,6 +779,51 @@ export let subscriptions = (graph: Graph, opts: {
     })
   }
 
+  let snapshot = (
+    line: string,
+  ): Bundle[] | Reduced | Promise<Bundle[] | Reduced> => {
+    let ast = parse(line)
+    let op = aggregate(ast)
+    let plan = peerPlan(ast, graph.vocab)
+    if (!plan.peers) {
+      if (op) {
+        return then(
+          graph.rows(ast, { durable: true }),
+          (rows) => reduced(op, rows),
+        )
+      }
+      let want = wanted(graph.vocab, line)
+      return then(
+        graph.read(ast, { durable: true }),
+        (rows) =>
+          rows.map((row) =>
+            only(want)(overlay([row], peers.values([row.entity.eid]))[0])
+          ),
+      )
+    }
+    let sub: Sub = {
+      id: '',
+      sink: () => {},
+      raw: false,
+      query: line,
+      members: new Set(),
+      fields: new Map(),
+      routed: false,
+      peer: true,
+      durable: plan.durable,
+      ref: plan.ref,
+    }
+    return then(
+      source(sub),
+      (bundles) =>
+        op
+          ? reduced(op, matchRows(line, graph.vocab)(bundles))
+          : matcher(line, graph.vocab)(bundles).map(
+            only(wanted(graph.vocab, line)),
+          ),
+    )
+  }
+
   let peerChange = (bundles: Bundle[], except?: Sink) => {
     if (!bundles.length) return
     // Old members hear the patch that moved a row out; new members receive
@@ -897,6 +944,7 @@ export let subscriptions = (graph: Graph, opts: {
   })
 
   return {
+    snapshot: (query) => ordered(() => snapshot(query)),
     open: (sink, id, query) => ordered(() => open(sink, id, query)),
     close: (sink, id) =>
       ordered(() => {

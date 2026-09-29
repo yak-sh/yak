@@ -12,6 +12,12 @@ One grammar reads an app's store, and everything that reads one uses it:
 what selects rows, what a row comes back carrying, and the handful of things
 this store will not do.
 
+For a one-time read of values held by connected peers, such as a live game
+position, use `GET ./api/query?live=1&q=<encoded filter>` or the same path
+through `env.STORE.fetch` in an app worker. The response uses the ordinary
+bundle shape; a peer value disappears when its connection closes or its declared
+duration expires. Without `live=1`, a query reads stored data only.
+
 The examples are a kitchen app: a `vocab.json` declaring
 
     { "$defs": {

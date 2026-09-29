@@ -497,6 +497,47 @@ Deno.test('/ws without an upgrade is not a door', async () => {
   assertEquals((await get(store, '/ws', owner)).status, 405)
 })
 
+Deno.test('a Store live query sees only connected peer positions', async () => {
+  let ctx = state()
+  let manifest = JSON.stringify({
+    $defs: {
+      recipe: { component: true, properties: { serves: { type: 'number' } } },
+      position: {
+        component: true,
+        sync: 'peers',
+        durable: 'connection',
+        properties: { x: { type: 'number' }, z: { type: 'number' } },
+      },
+    },
+  })
+  let store = await cookbook(ctx, manifest)
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 8 },
+  }], owner)
+  let ws = wire()
+  ctx.live.push(ws)
+  let path = `/query?live=1&q=${encodeURIComponent(`.eid=${CAKE}&.position`)}`
+  let positions = async () =>
+    await (await get(store, path, owner)).json() as Bundle[]
+  assertEquals(await positions(), [])
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({
+      relay: [{ entity: { eid: CAKE }, position: { x: 4, z: 7 } }],
+    }),
+  )
+  assertEquals((await positions())[0].position, { x: 4, z: 7 })
+  let count = await get(
+    store,
+    `/query?live=1&q=${encodeURIComponent('.position&.count')}`,
+    owner,
+  )
+  assertEquals(await count.json(), { count: 1 })
+  await store.webSocketClose(ws)
+  assertEquals(await positions(), [])
+})
+
 Deno.test('a subscription is answered, and a commit reaches the socket', async () => {
   let ctx = state()
   let store = await cookbook(ctx)

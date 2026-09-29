@@ -24,7 +24,7 @@ import { Pending, said } from './writes.ts'
 /** The meta store, in the graph's own wire. */
 export type Meta = {
   /** a filter line → the entities it selects, whole */
-  query: (line: string) => Promise<Bundle[]>
+  query: (line: string, opts?: { live?: boolean }) => Promise<Bundle[]>
   /** a batch of bundles → the batch as applied, aliases resolved */
   apply: (
     bundles: Bundle[],
@@ -66,8 +66,10 @@ let refusal = (text: string): { error?: string; message: string } | null => {
  * unseen.ts aims it at one app's own store.
  */
 export let metaOf = (store: Door): Meta => ({
-  query: async (line) => {
-    let r = await store(`/query?q=${encodeURIComponent(line)}`)
+  query: async (line, opts) => {
+    let r = await store(
+      `/query?q=${encodeURIComponent(line)}${opts?.live ? '&live=1' : ''}`,
+    )
     if (!r.ok) throw await answered(r)
     return await r.json() as Bundle[]
   },

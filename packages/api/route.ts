@@ -8,6 +8,7 @@
 // other than Deno supplies its own.
 
 import type { Graph } from '@yaks/graph'
+import { Refused } from '@yaks/graph'
 import { type Authenticate } from './actor.ts'
 import { ask, write } from './doors.ts'
 import { denoUpgrade } from './deno.ts'
@@ -92,9 +93,16 @@ export let api = (opts: Options): Handler => {
           : no('/apply takes POST', 405)
       }
       if (path == '/query') {
-        return request.method == 'GET' || request.method == 'POST'
-          ? await ask(graph, request)
-          : no('/query takes GET or POST', 405)
+        if (request.method != 'GET' && request.method != 'POST') {
+          return no('/query takes GET or POST', 405)
+        }
+        let url = new URL(request.url)
+        if (request.method == 'GET' && url.searchParams.get('live') == '1') {
+          let q = url.searchParams.get('q')
+          if (q == null) throw new Refused('/query needs a query: ?q=…')
+          return json(await subs.snapshot(q))
+        }
+        return await ask(graph, request)
       }
       if (path == '/ws') {
         if (

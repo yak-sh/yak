@@ -114,12 +114,18 @@ export let at = (r: { space: Space; app: App }) =>
 // and a person titled with what to call them matches `.doc` like any row.
 // The directory's own store is the exception: there people are the data, and
 // its reads are its own (identity.ts).
-let doorOf = (env: Env, r: Reach, said?: string) => async (line: string) => {
+let doorOf = (
+  env: Env,
+  r: Reach,
+  said?: string,
+  live = false,
+) =>
+async (line: string) => {
   let asked = bare(line)
   let mine = at(r) == META_STORE ? asked : asking(asked, SCREEN)
   let door = appStore(env.STORE, r.space, r.app, env)
   let res = await door(
-    `/query?q=${encodeURIComponent(mine)}`,
+    `/query?q=${encodeURIComponent(mine)}${live ? '&live=1' : ''}`,
     {},
     vouched(r.who),
   )
@@ -276,10 +282,11 @@ let asked = async (
   reach: Reach[],
   line: string,
   said?: string,
+  live = false,
 ): Promise<Heard[]> => {
   let tried = await Promise.all(reach.map(async (r) => {
     try {
-      let out = await doorOf(env, r, said)(line)
+      let out = await doorOf(env, r, said, live)(line)
       return { at: at(r), bundles: (Array.isArray(out) ? out : []) as Bundle[] }
     } catch (e) {
       // A store left out of the merge is a quieter answer, never a silent one.
@@ -421,6 +428,7 @@ let gathered = async (
   eids: string[],
   apart: Set<string> = new Set(),
   said?: string,
+  live = false,
 ) => {
   let held = new Map<string, Held>()
   if (!eids.length) return held
@@ -430,6 +438,7 @@ let gathered = async (
       reach,
       `.eid=${eids.join(',')}`,
       said,
+      live,
     )
   ) {
     for (let row of bundles) {
@@ -481,6 +490,7 @@ export type Ask = {
   apart?: Set<string>
   said?: string
   must?: string[]
+  live?: boolean
 }
 
 export let composed = async (
@@ -489,8 +499,8 @@ export let composed = async (
   eids: string[],
   ask: Ask = {},
 ): Promise<Bundle[]> => {
-  let { want = null, apart = new Set<string>(), said, must } = ask
-  let held = await gathered(env, reach, eids, apart, said)
+  let { want = null, apart = new Set<string>(), said, must, live = false } = ask
+  let held = await gathered(env, reach, eids, apart, said, live)
   let keeps = (name: string) => !want || want.has(name)
   let bundle = (
     one: Held,
@@ -576,8 +586,11 @@ export let read = async (
   env: Env,
   reach: Reach[],
   line: string,
+  live = false,
 ): Promise<unknown> => {
-  if (reach.length == 1) return await doorOf(env, reach[0])(line)
+  if (reach.length == 1) {
+    return await doorOf(env, reach[0], undefined, live)(line)
+  }
   let agg = aggOf(line)
   if (agg && agg != 'count') {
     throw refuse(
@@ -607,7 +620,7 @@ export let read = async (
   let ranks = new Map<string, unknown>()
   let sets = await Promise.all(
     lines.map(async ([who, one]) => {
-      let heard = await asked(env, who, one)
+      let heard = await asked(env, who, one, undefined, live)
       for (let [eid, rank] of ranksIn(heard)) ranks.set(eid, rank)
       return ordered(heard)
     }),
@@ -651,6 +664,7 @@ export let read = async (
       apart,
       said: by ? `${line}&?${by}` : line,
       must: need.map(([name]) => name),
+      live,
     },
   )
   let out = sorted(

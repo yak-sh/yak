@@ -7,6 +7,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { shopGraph } from './testing.ts'
+import { api } from './route.ts'
 import { relay as relaying } from './relay.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
@@ -125,6 +126,37 @@ Deno.test('a relay is never stored: the set is unchanged and nothing commits', (
   assertEquals(b1.browsing, undefined)
   // And the peer heard it exactly once, as a relay and never as a bundle.
   assertEquals(two.take(), [])
+})
+
+Deno.test('a live query reads the current peer value and loses it on disconnect', async () => {
+  let graph = shop()
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph)
+  let writer = ear()
+  let handle = api({ graph, subs })
+  let q = encodeURIComponent('.eid=b1&.browsing')
+  let ask = async () => {
+    let res = await handle(new Request(`http://shop/query?live=1&q=${q}`))
+    assertEquals(res.status, 200)
+    return await res.json()
+  }
+  assertEquals(await ask(), [])
+  subs.relay(writer.to, [{
+    entity: { eid: 'b1' },
+    browsing: { x: 4, y: 7 },
+  }, {
+    entity: { eid: 'visitor' },
+    browsing: { x: 9, y: 2 },
+  }])
+  assertEquals((await ask())[0].browsing, { x: 4, y: 7 })
+  let visitor = await subs.snapshot('.eid=visitor&.browsing')
+  assert(Array.isArray(visitor))
+  assertEquals(visitor[0].browsing, { x: 9, y: 2 })
+  assertEquals(await subs.snapshot('.eid=b1&.browsing&.count'), {
+    count: 1,
+  })
+  subs.drop(writer.to)
+  assertEquals(await ask(), [])
 })
 
 Deno.test('a late subscriber is told what the peers are already saying', () => {

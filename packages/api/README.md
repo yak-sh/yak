@@ -52,6 +52,11 @@ curl -G http://localhost:8000/query \
 | `POST /query`    | JSON string or `{"q":"…"}` | Same as GET                             |
 | `/ws`            | WebSocket upgrade          | Subscription messages                   |
 
+`GET /query?live=1&q=…` answers the same filter against stored bundles and
+values currently held by connected peers. A relayed value disappears when its
+connection closes or its declared duration expires. The ordinary `/query`
+continues to read durable data only.
+
 The `/apply` result contains the patches and what the graph generated, including
 assigned entity numbers, timestamps, and cascading deletions where the graph is
 configured to produce them. It is not a read of every component on each entity.

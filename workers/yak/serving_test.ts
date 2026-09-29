@@ -104,6 +104,58 @@ Deno.test('a page is served with its base and its reporter', async () => {
   assert((await js.text()).includes('export let store ='))
 })
 
+Deno.test('an app worker query can read a connected peer position', async () => {
+  using scenario = platform()
+  let { env, object, states } = scenario
+  let { space, app } = await seeded(env)
+  let name = storeName(space, app)
+  let store = object(name)
+  let headers = {
+    'x-store': name,
+    'x-yak-app': app.eid,
+    'x-yak-access': 'public',
+    'x-yak-person': ADA,
+    'x-yak-role': 'owner',
+  }
+  let vocab = JSON.stringify({
+    $defs: {
+      position: {
+        component: true,
+        sync: 'peers',
+        durable: 'connection',
+        properties: { x: { type: 'number' }, z: { type: 'number' } },
+      },
+    },
+  })
+  let deployed = await store.fetch(
+    new Request('http://store/vocab', {
+      method: 'POST',
+      headers,
+      body: vocab,
+    }),
+  )
+  assertEquals(deployed.status, 200)
+  let ws = {
+    send: () => {},
+    serializeAttachment: () => {},
+    deserializeAttachment: () => null,
+  }
+  states.get(name)!.live.push(ws)
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({
+      relay: [{ entity: { eid: CAKE }, position: { x: 4, z: 7 } }],
+    }),
+  )
+  let q = encodeURIComponent(`.eid=${CAKE}&.position`)
+  let res = await apps.fetch(
+    visit(`/cookbook/api/query?live=1&q=${q}`),
+    env,
+  )
+  assertEquals(res.status, 200)
+  assertEquals((await res.json())[0].position, { x: 4, z: 7 })
+})
+
 Deno.test('an app serves audio and video with byte ranges', async () => {
   using scenario = platform()
   let { env, files } = scenario

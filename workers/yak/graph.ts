@@ -2032,6 +2032,7 @@ export class Store {
     if (path == '/query') {
       let url = new URL(request.url)
       let line = url.searchParams.get('q') ?? ''
+      let live = url.searchParams.get('live') == '1'
       let no = unserved(line)
       if (no) return refuse(new Refused(no))
       // An aggregate is not a listing — `.count` answers one number — and
@@ -2041,7 +2042,7 @@ export class Store {
       // parse is the caller's to fix, answered 400 like any other refusal.
       try {
         let agg = aggOf(line)
-        if (agg) {
+        if (agg && !live) {
           await this.#auth(request)
           return await this.#counted(line, agg)
         }
@@ -2204,6 +2205,7 @@ export class Store {
       return held
     }
     return {
+      snapshot: (query) => subs.snapshot(asking(query, words)),
       open: (sink, id, query) =>
         subs.open(
           by(sink),

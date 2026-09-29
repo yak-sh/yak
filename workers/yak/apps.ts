@@ -1089,8 +1089,11 @@ let api = async (
     // the listing's own screen (listing.ts `asking`), so what a count counts is
     // what a list lists.
     try {
-      let line = lined(new URL(req.url).search.slice(1))
-      return Response.json(await queried(env, space, app, who, line))
+      let url = new URL(req.url)
+      let live = url.searchParams.get('live') == '1'
+      let line = live ? url.searchParams.get('q') : lined(url.search.slice(1))
+      if (line == null) throw new Error('/query needs a query: ?q=…')
+      return Response.json(await queried(env, space, app, who, line, live))
     } catch (e) {
       caught(e, { request: 'GET /api/query', space: space.slug, app: app.slug })
       return json(400, 'refused', e instanceof Error ? e.message : String(e))
