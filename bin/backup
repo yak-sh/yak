@@ -115,8 +115,9 @@ snapshot="$outside/snapshot.db"
 echo "backup: snapshot in $YAK_BACKUP_SNAPSHOT_DIR"
 mkdir -p snap
 
-# Plain output regardless of any ~/.sqliterc (box modes break the checks).
-sq() { sqlite3 -batch -init /dev/null -noheader -list "$@"; }
+# Plain output regardless of any ~/.sqliterc (box modes break the checks). A
+# lock is waited out, not failed on: the server holds one while it starts.
+sq() { sqlite3 -batch -init /dev/null -cmd '.timeout 60000' -noheader -list "$@"; }
 
 # Catch structural corruption on the LIVE db, which the snapshot check below
 # cannot. VACUUM INTO rebuilds the database from its logical rows, so a torn
