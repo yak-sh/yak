@@ -1,7 +1,8 @@
 // A hero's map remembers regions, one identity-keyed row per visit. Tabs
 // agree through the store and keep discoveries while a write is in flight.
 import { writer } from './chat.ts'
-import { type Bundle, comp, type Me } from './net.ts'
+import { comp } from './bundle.ts'
+import type { Bundle, Me } from './net.ts'
 import { regionsFromCells } from './explore-region.ts'
 import { regionOf } from './regions.ts'
 import type { Spot } from './levels.ts'
