@@ -30,7 +30,7 @@
 // importing it pulls in the graph and every plugin's words — a cost `yak login`
 // on a machine with no graph should not pay.
 
-import { type Actor, offered } from '@yaks/graph'
+import { type Actor, mint, offered } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
@@ -247,14 +247,15 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       // entity nothing created would be a dangling reference. Done once per
       // process, by whichever caller gets there first (@yaks/tools `ensure`).
       await host.runner.ensure()
+      let id = mint()
       let landed = await host.runner.call({
-        entity: { eid: '$call' },
+        entity: { eid: id },
         call: { to: toolEid(declared.name), args: args ?? {} },
         ...await signer(host, c.via),
       })
       // `--json` prints the answer as data, the same object an MCP client
       // reads as `structuredContent` (@yaks/tools `structured`).
-      let answer = answerOf(landed)
+      let answer = answerOf(landed, id)
       if (c.json) {
         c.out(JSON.stringify(structured(declared, answer), null, 2))
       } else {
@@ -274,7 +275,7 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       // A refusal is data, not an exception: the text is printed either way
       // and the exit code is what reports which it was — taken from the runner,
       // since a tool that returns fault rows has not itself failed.
-      return faulted(landed) ? 1 : 0
+      return faulted(landed, id) ? 1 : 0
     },
   }))
   let controls: Command[] = direct.map(({ run, ...declared }) => ({

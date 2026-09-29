@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Handler } from '@yaks/api'
-import { argsOf, type Bundle, type Comp, detached } from '@yaks/graph'
+import { argsOf, type Bundle, type Comp, detached, mint } from '@yaks/graph'
 import { answerOf, toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
@@ -723,11 +723,12 @@ test('a plugin attaches reply bundles through the host runner', async () => {
   )
   try {
     await host.runner.ensure(['book_list'])
+    let id = mint()
     let landed = await host.runner.call({
-      entity: { eid: '$call' },
+      entity: { eid: id },
       call: { to: toolEid('book_list'), args: {} },
     })
-    assertEquals(answerOf(landed).map((b) => b.entity.eid), ['owed'])
+    assertEquals(answerOf(landed, id).map((b) => b.entity.eid), ['owed'])
   } finally {
     await host.close()
   }

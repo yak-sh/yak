@@ -6,7 +6,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { graph, identityEid } from '@yaks/graph'
+import { graph, identityEid, mint } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadTools } from '@yaks/graph/tools'
 import { loadVocab } from '@yaks/vocab'
@@ -95,12 +95,13 @@ let through = async (
 ): Promise<Bundle[]> => {
   let r = runner(g, { tools: loadTools(spawnDoc, tools) })
   await r.ensure()
+  let id = mint()
   let records = await r.call({
-    entity: { eid: '$call' },
+    entity: { eid: id },
     call: { to: toolEid(name), args },
   })
-  if (faulted(records)) throw new Error(worded(answerOf(records)))
-  return answerOf(records)
+  if (faulted(records, id)) throw new Error(worded(answerOf(records, id)))
+  return answerOf(records, id)
 }
 
 let body = (bundles: Bundle[]) =>

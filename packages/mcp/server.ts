@@ -1,4 +1,4 @@
-import { type NamedTool, namedTool, offered, toolName } from '@yaks/graph'
+import { mint, type NamedTool, namedTool, offered, toolName } from '@yaks/graph'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { zodToJsonSchema } from 'zod-to-json-schema'
 // The server: a graph, its tools, and the MCP protocol implementation that
@@ -478,15 +478,16 @@ export let server = (opts: Options): McpServer => {
     }
     let call = async (args: Record<string, unknown>) => {
       let out: CallToolResult
+      let id = mint()
       let asked: Bundle = {
-        entity: { eid: '$call' },
+        entity: { eid: id },
         call: { to: toolEid(t.name), args: args ?? {} },
         ...(actor ? { $actor: { ...actor } } : {}),
       }
       try {
         await run.ensure([t.name])
         let landed = await run.call(asked)
-        out = said(t, answerOf(landed), faulted(landed))
+        out = said(t, answerOf(landed, id), faulted(landed, id))
       } catch (err) {
         // The runner answers a tool's own throw as a fault above; a throw that
         // reaches here is the runner's (a call it could not record), reported

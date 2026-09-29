@@ -5,7 +5,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, mint } from '@yaks/graph'
 import { compose, type Plug } from '@yaks/cli/host'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { hashEmbedder, searched, sweep } from './mod.ts'
@@ -49,11 +49,13 @@ let stocked = async (yak: Yak) => {
 
 let call = async (yak: Yak, tool: string, args: Record<string, unknown>) => {
   await yak.runner.ensure([tool])
+  let id = mint()
   return answerOf(
     await yak.runner.call({
-      entity: { eid: '$call' },
+      entity: { eid: id },
       call: { to: toolEid(tool), args },
     }),
+    id,
   )
 }
 

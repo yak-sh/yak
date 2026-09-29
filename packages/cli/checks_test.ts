@@ -12,6 +12,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { answerOf, checks, toolEid, worded } from '@yaks/tools'
+import { mint } from '@yaks/graph'
 import { compose, type Served } from './host.ts'
 
 // The session, project, task and doc words and their runs, and this process
@@ -39,11 +40,12 @@ let host = () =>
 // One check, asked the way a door asks: write the call, run it, read the prose.
 let ask = async (h: Served, name: string): Promise<string> => {
   await h.runner.ensure()
+  let id = mint()
   let landed = await h.runner.call({
-    entity: { eid: `$${name}` },
+    entity: { eid: id },
     call: { to: toolEid(name), args: {} },
   })
-  return worded(answerOf(landed))
+  return worded(answerOf(landed, id))
 }
 
 test('the checks are the tools whose verb is check', async () => {

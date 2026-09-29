@@ -389,23 +389,32 @@ export let structured = (
 ): Record<string, unknown> =>
   (tool.outputSchema ? valueIn(answer) : undefined) ?? { result: answer }
 
+// The runner's own record of one call, told apart from the answer by identity,
+// never by shape: a tool that reads transcripts answers other calls and their
+// results, and those are the answer.
+let owned = (call: Eid) => (b: Bundle): boolean =>
+  b.entity.eid == call || (b.result as Comp | undefined)?.call == call
+
 /**
  * Did this call fail? Read from the runner's own record — `execution{state}`
  * on the call — rather than guessed from the shape of the answer: a tool that
- * queries for broken rows returns entities carrying `error` and `exception`,
- * and reporting faults is not itself a fault.
+ * queries for broken rows (or failed calls) returns entities carrying `error`,
+ * `exception` and `execution`, and reporting faults is not itself a fault.
  */
-export let faulted = (landed: Bundle[]): boolean =>
-  landed.some((b) => (b.execution as Comp | undefined)?.state == 'failed')
+export let faulted = (landed: Bundle[], call: Eid): boolean =>
+  landed.some((b) =>
+    b.entity.eid == call &&
+    (b.execution as Comp | undefined)?.state == 'failed'
+  )
 
 /**
- * What a call answered, for display: the tool's own bundles, with the runner's
- * bookkeeping filtered out. The result entity carries a copy of the answer's
- * text so a transcript can show one line per result; a caller rendering the
- * answer itself would otherwise show it twice.
+ * What a call answered, for display: the tool's own bundles, without the
+ * runner's record of this call — the call itself and its result, which
+ * carries a copy of the answer's text so a transcript can show one line per
+ * result; a caller rendering the answer itself would otherwise show it twice.
  */
-export let answerOf = (landed: Bundle[]): Bundle[] =>
-  landed.filter((b) => !b.result && !b.execution)
+export let answerOf = (landed: Bundle[], call: Eid): Bundle[] =>
+  landed.filter((b) => !owned(call)(b))
 
 /**
  * Build a runner over a graph.
@@ -414,10 +423,12 @@ export let answerOf = (landed: Bundle[]): Bundle[] =>
  * let r = runner(g, { tools })
  * await r.ensure()
  * // the call entity is the record; the answer is the tool's own bundles
- * let answer = await r.call({
- *   entity: { eid: '$c' },
+ * let id = mint()
+ * let landed = await r.call({
+ *   entity: { eid: id },
  *   call: { to: toolEid('text_echo'), args: {} },
  * })
+ * answerOf(landed, id)
  * ```
  *
  * Nothing polls the graph for calls. A server that wants the deferred ones too
@@ -710,7 +721,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         )
       } else {
         answered = await land(made, 'done')
-        if (!tool.readOnly) wrote = answerOf(answered)
+        if (!tool.readOnly) wrote = answerOf(answered, id)
       }
     } catch (error) {
       // This catches both the tool's own throw and a rejection of what it
@@ -724,7 +735,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     try {
       return [
         ...answered,
-        ...await opts.reply(call, answerOf(answered), wrote),
+        ...await opts.reply(call, answerOf(answered, id), wrote),
       ]
     } catch (error) {
       await opts.report?.(error, call, tool.name)

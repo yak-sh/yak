@@ -10,6 +10,7 @@ import {
   type Bundle,
   type Comp,
   graph,
+  mint,
   Refused,
   type Tool,
 } from '@yaks/graph'
@@ -88,7 +89,7 @@ let called = (
   args: Record<string, unknown> = {},
   by?: string,
 ): Bundle => ({
-  entity: { eid: '$call' },
+  entity: { eid: mint() },
   call: { to: toolEid(to), args },
   ...(by ? { $actor: { by } } : {}),
 })
@@ -126,8 +127,8 @@ test('a direct tool reply carries what its caller is owed beside its data', asyn
       }])),
   })
   await r.ensure()
-  let landed = await r.call(called('example_echo', { value: 'hi' }))
-  let answer = answerOf(landed)
+  let asked = called('example_echo', { value: 'hi' })
+  let answer = answerOf(await r.call(asked), asked.entity.eid)
   assertEquals(answer.map((b) => b.entity.eid), ['datum', 'notice'])
   let said = worded(answer)
   assertEquals(said.includes('datum'), true)
@@ -159,12 +160,10 @@ test('a rehearsal keeps its answer in the call graph', async () => {
   }
   let r = runner(g, { tools: [tool], host, report: () => {} })
   await r.ensure()
-  let answer = await r.call(called('example_echo', {
-    value: 'hi',
-    check: true,
-  }))
-  assertEquals(faulted(answer), false)
-  assertEquals(body(answerOf(answer)[0]), 'hi 2')
+  let asked = called('example_echo', { value: 'hi', check: true })
+  let answer = await r.call(asked)
+  assertEquals(faulted(answer, asked.entity.eid), false)
+  assertEquals(body(answerOf(answer, asked.entity.eid)[0]), 'hi 2')
   assertEquals((await g.read('.output&*')).length, 0)
 })
 
@@ -214,9 +213,13 @@ test('a refused tool still carries what its caller is owed', async () => {
       }]),
   })
   await r.ensure()
-  let landed = await r.call(called('example_echo', { value: 'hi' }))
-  assertEquals(faulted(landed), true)
-  assertEquals(worded(answerOf(landed)).includes('new mail'), true)
+  let asked = called('example_echo', { value: 'hi' })
+  let landed = await r.call(asked)
+  assertEquals(faulted(landed, asked.entity.eid), true)
+  assertEquals(
+    worded(answerOf(landed, asked.entity.eid)).includes('new mail'),
+    true,
+  )
 })
 
 test('a runner writes only the tool rows the graph lacks or holds otherwise', async () => {
@@ -490,9 +493,35 @@ test('a tool that ANSWERS a fault has not failed', async () => {
   }])
   await r.ensure()
   await g.apply([{ entity: { eid: 'b1' }, error: { code: 'broke' } }])
-  let landed = await r.call(called('example_echo'))
+  let asked = called('example_echo')
+  let landed = await r.call(asked)
   assertEquals(landed.some((b) => b.error), true)
-  assertEquals(faulted(landed), false)
+  assertEquals(faulted(landed, asked.entity.eid), false)
+})
+
+test("a tool that reads calls answers them, and only its own record is the runner's", async () => {
+  let { r } = world([{
+    ...echo,
+    readOnly: true,
+    inputSchema: { type: 'object', properties: {} },
+    // A transcript's calls and their results, the failed one among them.
+    run: (_, g) => g.read('.call&*'),
+  }, {
+    ...echo,
+    name: 'example_broke',
+    run: () => {
+      throw new Error('broke')
+    },
+  }])
+  await r.ensure()
+  let broke = called('example_broke')
+  await r.call(broke)
+  let asked = called('example_echo')
+  let landed = await r.call(asked)
+  let answer = answerOf(landed, asked.entity.eid)
+  assertEquals(answer.map((b) => b.entity.eid), [broke.entity.eid])
+  assertEquals((answer[0].execution as Comp).state, 'failed')
+  assertEquals(faulted(landed, asked.entity.eid), false)
 })
 
 test('a reading tool answers entities and writes none of them', async () => {

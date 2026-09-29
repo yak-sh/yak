@@ -96,7 +96,7 @@ the current process, and register their `tool` entities with `ensure()` (or
 on the way into each call):
 
 ```ts
-import { argsOf, graph, type Tool } from '@yaks/graph'
+import { argsOf, graph, mint, type Tool } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import {
@@ -129,27 +129,30 @@ const g = graph({ vocab, storage: ram(vocab) })
 const r = runner(g, { tools: [greet] })
 await r.ensure()
 
+const id = mint()
 const records = await r.call({
-  entity: { eid: '$call' },
+  entity: { eid: id },
   call: { to: toolEid('person_greet'), args: { name: 'Ada' } },
 })
 
-if (faulted(records)) throw new Error(worded(answerOf(records)))
-console.log(worded(answerOf(records)))
+if (faulted(records, id)) throw new Error(worded(answerOf(records, id)))
+console.log(worded(answerOf(records, id)))
 ```
 
 `call()` writes the call already claimed, in one change, and runs its tool in
 this process: the caller asking is the one waiting for the answer. A `$` eid is
 given a fresh one first, so the call is in flight here from the moment it is
 written. It returns the tool's output together with runner bookkeeping. Use
-`answerOf()` to remove `result` and `execution` bundles before displaying the
-answer. `worded()` joins `content.body` values, or returns formatted JSON when
-no text is present. `structured(tool, answer)` is the answer as data: the
-bundles under `result`, or the `output.value` of a tool that declares an
-`outputSchema`. `valueIn(answer)` is the `output.value` an answer carries: the
-same answer as data, which a caller reads instead of parsing the words.
-`faulted()` checks the stored execution state rather than treating an answer
-that contains `error` data as an execution failure.
+`answerOf(records, id)` to remove this call's own record (the call and its
+result) before displaying the answer; it goes by the call's eid, never by shape,
+since a tool that reads transcripts answers other calls and results. `worded()`
+joins `content.body` values, or returns formatted JSON when no text is present.
+`structured(tool, answer)` is the answer as data: the bundles under `result`, or
+the `output.value` of a tool that declares an `outputSchema`. `valueIn(answer)`
+is the `output.value` an answer carries: the same answer as data, which a caller
+reads instead of parsing the words. `faulted(records, id)` checks this call's
+stored execution state rather than treating an answer that contains `error` data
+as an execution failure.
 
 Use `run(callId)` for a call already stored in the graph, and `due(callId)` for
 one a rule selected: it runs the call if nobody holds it and otherwise leaves

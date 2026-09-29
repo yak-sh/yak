@@ -7,7 +7,7 @@ import {
   commands as localCommands,
   opened,
 } from '../cli/local.ts'
-import { argsOf, type Bundle, namedTool, offered } from '@yaks/graph'
+import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { connect } from '../mcp/testing.ts'
 import { transcript } from '@yaks/session'
@@ -55,11 +55,13 @@ test('the harness composes as a plugin, and its words reach a command line and M
     let found = commandFor(h.tools, ['session', 'list'])!
     assertEquals(commandFor(h.tools, ['list', 'session'])?.verb, found.verb)
     assertEquals(await argsFor(found.verb, found.args, reads), {})
+    let id = mint()
     let said = worded(answerOf(
       await h.runner.call({
-        entity: { eid: '$call' },
+        entity: { eid: id },
         call: { to: toolEid(namedTool(found.verb).name), args: {} },
       }),
+      id,
     ))
     assertEquals(said.includes('one'), true)
   } finally {
