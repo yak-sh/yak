@@ -250,7 +250,7 @@ Deno.test('edge: stopping its service ends an in-flight request quietly', async 
 
 let pulled = (stop?: AbortController) => {
   let messages = 0
-  let go = (url: string, init: RequestInit): Promise<Response> => {
+  let go = (url: string): Promise<Response> => {
     if (url.includes('/messages?')) {
       messages++
       return Promise.resolve(
@@ -291,7 +291,7 @@ Deno.test('service: a timed-out pull is tried again', async () => {
   let calls = 0
   let go = (url: string, init: RequestInit) => {
     if (url.includes('/messages?') && calls++ == 0) return waiting(url, init)
-    return at.go(url, init)
+    return at.go(url)
   }
   let options = {
     domain,
