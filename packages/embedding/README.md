@@ -274,22 +274,44 @@ results before reusing the same extension for another query.
 
 ## The ranking
 
-`nearest()` computes exact cosine similarity. On a local SQLite connection with
-sqlite-vector installed, an unfiltered single-model query uses its native
-`vector_full_scan`; other queries scan in TypeScript so `.near` still filters
-_before_ selecting the nearest neighbours. Both exclude tombstoned entities
-immediately. No approximate index is included.
+`nearest()` ranks by exact cosine similarity over the stored vectors, among the
+entities a screen admits, and excludes tombstoned entities immediately. Where
+the index below is built, it names the candidates and only those vectors are
+read; everywhere else every vector the screen admits is read. A screen that
+admits at most 5000 entities is always read whole: its vectors cost less to
+score than to find among every code.
 
-To enable the native scan on an existing file, back it up first, then explicitly
-call `installNative(db)` once on a writable `@yaks/sqlite` connection. Loading
-sqlite-vector creates its `_sqliteai_vector` metadata table. Searches never
-install it automatically on a database that lacks that table. The dependency's
-platform binaries are in the root import map; other SQL drivers use the
-TypeScript scan. No vector migration or rebuild is needed. A native exact scan
-still reads the whole corpus; at ~123k 384-dimensional vectors, a measured local
-warm scan takes ~180 ms (2026-09-27, scratch copy). This does not remove CLI
-startup or embedding time. Supply `semantic(db, space, { rank })` with a `Rank`
-implementation to use an application-managed approximate index.
+Supply `semantic(db, space, { rank })` with a `Rank` implementation to use
+another ranking; it receives the same screen.
+
+## The index
+
+On a local SQLite connection, sqlite-vector keeps every vector as 2-bit
+TurboQuant codes, held in memory per connection. A search scans the codes for
+its nearest candidates (at least 128, 32 per neighbour asked for), among what
+the screen admits, and scores those exactly beside every vector written or
+deleted since the build. The answer is the exact ranking wherever the true
+nearest are among the candidates. A screen is applied to each candidate before
+the pool is cut, reading further into the codes until the pool is full.
+
+`build(db)` quantizes the whole table in one transaction under the write lock,
+clears the dirty set and numbers the build. It builds only when the index is
+`behind(state(db))`: never built, built from another model, or 1024 vectors
+changed since. The plugin's service calls it after every sweep pass, so the one
+process holding the sweep is the one that builds; every other connection sees
+the new build number and loads the codes again. While two models' vectors share
+the table during a re-embed, no index is built and every vector is read.
+
+The tables are `embedding_build` (one row: the build number, 0 before the first,
+and the model, dimension and count it was built from) and `embedding_dirty` (one
+row per entity whose vector changed since), kept by insert, update and delete
+triggers on `embedding` in the same statement as the vector change.
+
+To enable the index on an existing file, back it up first, then call
+`installNative(db)` once on a writable `@yaks/sqlite` connection. Loading
+sqlite-vector creates its `_sqliteai_vector` metadata table, so searches never
+install it on a database that lacks that table. The platform binaries are in the
+root import map; other SQL drivers read every vector.
 
 ## Storage
 
@@ -315,28 +337,17 @@ component owner columns, and `tombstone` table. The vector data can be rebuilt
 from the selected text: after deleting its tables, recreate them with `schema()`
 before running another sweep.
 
-## The dirty flag
-
-`embedding_index` holds a single dirty flag. Insert, update and delete triggers
-on `embedding` set it in the same SQL statement as the vector change. A new
-schema starts dirty. An application maintaining an approximate index can use:
-
-- `dirty(db)` to check whether a rebuild is needed;
-- `clean(db)` after completing a rebuild;
-- `mark(db)` to request a rebuild explicitly;
-- `state(db)` for the dirty flag, vector count and newest vector timestamp.
-
-The built-in exact scan does not use this flag, and `sweep()` does not rebuild
-an approximate index or clear it. `vector_check` reports an old dirty index
-using the newest vector timestamp; that finding needs interpretation when only
-exact scans are configured.
+`vector_check` fails when the index has been behind for longer than the `stale`
+threshold, which means no process is running the sweep. It warns where every
+search reads every vector: sqlite-vector not installed, or two models sharing
+the table.
 
 ## Exports
 
 The root exports field selection, `Embedder`, `hashEmbedder`, `remote`, vector
-math/packing helpers, schema and dirty-state helpers, sweep operations,
-`vectorOf`, `nearest`, `meaning`, `semantic` and supporting types such as
-`Rank`. The `Driver` it runs on is `@yaks/sql`'s.
+math/packing helpers, the schema, sweep operations, the index (`installNative`,
+`build`, `state`, `behind`), `vectorOf`, `nearest`, `meaning`, `semantic` and
+supporting types such as `Rank`. The `Driver` it runs on is `@yaks/sql`'s.
 
 | Sub-module export         | Purpose                                                                                                                                                                                      |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

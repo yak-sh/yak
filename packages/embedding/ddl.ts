@@ -1,6 +1,7 @@
 // Where the vectors live: one table, one row per entity that has text; beside
-// it the one-row dirty flag a persisted index reads to know the vectors have
-// changed; and the queue of entities owed a look (./owed.ts).
+// it the record of the quantized index built from them (./native.ts) — which
+// build it is, and the vectors written since; and the queue of entities owed a
+// look (./owed.ts).
 //
 // The layout is deliberately the plainest thing that works — the entity's own
 // integer id as the primary key, so a vector joins to the graph the way every
@@ -13,51 +14,50 @@
 // no history, no journal, and is never sent to a client — and why a graph with
 // no embedder at all is a graph that simply has no vectors, not a broken one.
 //
-// The dirty flag is what protects an approximate index built from these rows
-// against a crash (see mark.ts): any write to the vector table sets it in the
-// same SQLite statement, by trigger, and only a finished rebuild clears it. An
-// exact scan never reads it.
+// The dirty set is what keeps the index exact between builds: a trigger notes
+// every vector written or deleted, in the same statement as the write, and a
+// build clears the set in the same transaction as it quantizes. So whatever the
+// index has not seen is in the set, which a search scores directly, and a
+// crash between a write and a build leaves it there.
 
-import {
-  col,
-  type CreateTrigger,
-  eq,
-  lit,
-  NOW,
-  type Stmt,
-  type Update,
-} from '@yaks/sql'
+import { col, type CreateTrigger, eq, lit, NOW, type Stmt } from '@yaks/sql'
 
 /** The vector table's name. */
 export let TABLE = 'embedding'
 
-/** The flag table's name: one row, `dirty` 1 while an index needs a rebuild. */
-export let MARK = 'embedding_index'
+/** The build's name: one row saying which build of the quantized index is
+ * current (0 before the first), and the model, dimension and count of the
+ * vectors it was built from. */
+export let BUILD = 'embedding_build'
+
+/** The dirty set's name: one row per entity whose vector was written or
+ * deleted since the current build. */
+export let DIRTY = 'embedding_dirty'
 
 /** The queue's name: one row per entity owed a look, and how many writes have
  * queued it since it was last settled. */
 export let OWED = 'embedding_owed'
 
-/** The flag set to `dirty`. */
-export let flag = (dirty: number): Update => ({
-  t: 'update',
-  table: MARK,
-  set: { dirty: lit(dirty) },
-  where: eq(col('id'), lit(1)),
-})
-
-// One trigger per kind of write; an index rebuilt after a write that set no
-// flag would answer from vectors that no longer exist.
+// One trigger per kind of write: an index that missed a write would answer
+// from a vector that no longer exists, or without one that does. An entity
+// already in the set stays as it is, said as an upsert: a trigger's `insert or
+// ignore` takes the conflict policy of the statement that fired it instead.
 let triggers = (['insert', 'update', 'delete'] as const).map((
   event,
 ): CreateTrigger => ({
   t: 'create trigger',
-  name: `${MARK}_a${event[0]}`,
+  name: `${DIRTY}_a${event[0]}`,
   ifNot: true,
   timing: 'after',
   event,
   on: TABLE,
-  body: [flag(1)],
+  body: [{
+    t: 'insert',
+    into: DIRTY,
+    cols: ['entity'],
+    rows: [[col('entity', event == 'delete' ? 'old' : 'new')]],
+    upsert: [{ on: [col('entity')] }],
+  }],
 }))
 
 /**
@@ -92,20 +92,29 @@ export let schema = (): Stmt[] => [
   },
   {
     t: 'create table',
-    name: MARK,
+    name: BUILD,
     ifNot: true,
     cols: [
       { name: 'id', type: 'integer', pk: true, check: eq(col('id'), lit(1)) },
-      { name: 'dirty', type: 'integer', notNull: true },
+      { name: 'n', type: 'integer', notNull: true },
+      { name: 'model', type: 'text' },
+      { name: 'dim', type: 'integer' },
+      { name: 'rows', type: 'integer' },
     ],
   },
-  // A fresh flag starts dirty: an index that has never been built needs one.
+  // No build yet: every search scores every vector until the first.
   {
     t: 'insert',
     or: 'ignore',
-    into: MARK,
-    cols: ['id', 'dirty'],
-    rows: [[lit(1), lit(1)]],
+    into: BUILD,
+    cols: ['id', 'n'],
+    rows: [[lit(1), lit(0)]],
+  },
+  {
+    t: 'create table',
+    name: DIRTY,
+    ifNot: true,
+    cols: [{ name: 'entity', type: 'integer', pk: true }],
   },
   ...triggers,
   {

@@ -42,11 +42,11 @@
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
     "npm:@sentry/cloudflare@10.75.0": "10.75.0_@cloudflare+workers-types@4.20260702.1_wrangler@4.111.0__@cloudflare+workers-types@4.20260702.1",
     "npm:@sentry/core@10.75.0": "10.75.0",
-    "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0": "1.0.0",
-    "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0": "1.0.0",
-    "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0": "1.0.0",
-    "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0": "1.0.0",
-    "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0": "1.0.0",
+    "npm:@sqliteai/sqlite-vector-darwin-arm64@1.1.2": "1.1.2",
+    "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.1.2": "1.1.2",
+    "npm:@sqliteai/sqlite-vector-linux-arm64@1.1.2": "1.1.2",
+    "npm:@sqliteai/sqlite-vector-linux-x86_64@1.1.2": "1.1.2",
+    "npm:@sqliteai/sqlite-vector-win32-x86_64@1.1.2": "1.1.2",
     "npm:@types/three@0.186": "0.186.0",
     "npm:ajv@^8.17.1": "8.20.0",
     "npm:croner@10.0.1": "10.0.1",
@@ -701,28 +701,28 @@
     "@speed-highlight/core@1.2.24": {
       "integrity": "sha512-qeW2e1l78afw8VhRPfPQ1Gjj+KU5XFQ/OFV5ti6eTa9bruO7mJyZtA4vw0ofqmA3tKCkROE9xLk3VZoeRc98nw=="
     },
-    "@sqliteai/sqlite-vector-darwin-arm64@1.0.0": {
-      "integrity": "sha512-Z7tpJrOGexZInUbwWvB1a1/7seZQWzR25TvPk0JWeUQCSHW9auMt6qX/rm37gONIgzNSveqXqbrb9Y+a2cgYDQ==",
+    "@sqliteai/sqlite-vector-darwin-arm64@1.1.2": {
+      "integrity": "sha512-9BkSBlrTPylyVSw8IaqNRwfFzBpWFQMRFqcngLZz1TtMxqIaxddgem3OKA1RMGaE1wQnA4+/4KFBB1Zd8XmrbQ==",
       "os": ["darwin"],
       "cpu": ["arm64"]
     },
-    "@sqliteai/sqlite-vector-darwin-x86_64@1.0.0": {
-      "integrity": "sha512-ugm2x8D0hR9mwj26dYyLbEXnUo6IwgbCfiv2kyaB1NQCevSzhDYFxXdIaiNIOO2rSTYBSyf6096/88NOeFiStA==",
+    "@sqliteai/sqlite-vector-darwin-x86_64@1.1.2": {
+      "integrity": "sha512-K8iWY1dmCLnk8ZuEhSzPJn+t3jVk2PX+lNbKiF1IE63aQEr9sC2IiX5hRzO7nidWUrrJcu1ecFxZUvdWdY8d2Q==",
       "os": ["darwin"],
       "cpu": ["x64", "ia32"]
     },
-    "@sqliteai/sqlite-vector-linux-arm64@1.0.0": {
-      "integrity": "sha512-avROgMf1Vn06Dkz7u+1t9s/0L/jgTmZ0gn9WfNlOMugPbmHybMWMIQ2wZm8+LQobrdl5uF0hcGdhpMrWVaxxlQ==",
+    "@sqliteai/sqlite-vector-linux-arm64@1.1.2": {
+      "integrity": "sha512-waRqD9OevfhuknZn9mVue7+YIFiu2ayozwD2tX1SWETUEOrfg3Kz8RlzQIk4Qst7a69Qjx+jBTbq6hTmaBrH4A==",
       "os": ["linux"],
       "cpu": ["arm64"]
     },
-    "@sqliteai/sqlite-vector-linux-x86_64@1.0.0": {
-      "integrity": "sha512-BnH1+NZ30qFqIST0WXAbX6rJz5PiiT+W8rBukFpIr5Wpc3i6SLWV5ojBihY30S1DTyQ7BUDD+RE61IPR7wcb+A==",
+    "@sqliteai/sqlite-vector-linux-x86_64@1.1.2": {
+      "integrity": "sha512-dIvF3i+L6lsrP37Y6GilHOdkpFzInRIeKXvneF2KAribkZTlhlYZ6NZ1p2ZYOyVDMM5SjDYk9nUVeY5wC/g3zw==",
       "os": ["linux"],
       "cpu": ["x64", "ia32"]
     },
-    "@sqliteai/sqlite-vector-win32-x86_64@1.0.0": {
-      "integrity": "sha512-fus/uA1+Ta/rnmUGzlrJKopR/gN3gfodZwwpTtRA/CYPk1G/M0Gfj+fZwLTwQaIwZxGbe3g2WRRNn0Q9yQmijg==",
+    "@sqliteai/sqlite-vector-win32-x86_64@1.1.2": {
+      "integrity": "sha512-x4u92ICYFrp9HYxPBsgF61+gtJJ11kgfp68lSJwIsHXDYSgsB+h/dI3037XmBbdXHxXLMc7ZNtu3fUP/b9ZQEQ==",
       "os": ["win32"],
       "cpu": ["x64", "ia32"]
     },
@@ -1729,11 +1729,11 @@
       "npm:@preact/signals@^2.9.0",
       "npm:@sentry/cloudflare@10.75.0",
       "npm:@sentry/core@10.75.0",
-      "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0",
-      "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0",
-      "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0",
-      "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0",
-      "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0",
+      "npm:@sqliteai/sqlite-vector-darwin-arm64@1.1.2",
+      "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.1.2",
+      "npm:@sqliteai/sqlite-vector-linux-arm64@1.1.2",
+      "npm:@sqliteai/sqlite-vector-linux-x86_64@1.1.2",
+      "npm:@sqliteai/sqlite-vector-win32-x86_64@1.1.2",
       "npm:ajv@^8.17.1",
       "npm:es-module-lexer@1.7.0",
       "npm:linkedom@~0.18.12",

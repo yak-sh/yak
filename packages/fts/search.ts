@@ -53,9 +53,9 @@ export type Hit = {
 export type SearchOpts = {
   // how many hits at most (default 20)
   limit?: number
-  // a statement selecting the `eid`s a hit must be among — pass what @yaks/sql
-  // compiled for the rest of the query, and only rows the filters already allow
-  // are ranked
+  // a statement selecting the ids of the entities a hit must be among — pass
+  // @yaks/sql's `screen` of the rest of the query, and only rows the filters
+  // already allow are ranked
   screen?: Raw
   // how many words of context a snippet carries (default 10)
   context?: number
@@ -173,7 +173,7 @@ let chosen = (
     ],
     from: table('hit'),
     joins: [join(table('entity'), eq(e('id'), hit('owner')))],
-    where: opts.screen ? and(alive, among(e('eid'), opts.screen)) : alive,
+    where: opts.screen ? and(alive, among(hit('owner'), opts.screen)) : alive,
     group: [hit('owner')],
     order: [col('rank')],
     limit: val(opts.limit ?? 20),

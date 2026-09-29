@@ -38,7 +38,7 @@ test('new words find ranked source excerpts, bounded by the limit', async () => 
 test('a screen narrows meaning search before ranking and limiting', async () => {
   let db = await stocked()
   let screen = render(select({
-    cols: [col('eid')],
+    cols: [col('id')],
     from: table('entity'),
     where: among(col('eid'), [val('book-3'), val('review-4')]),
   }))
@@ -57,7 +57,7 @@ test('an excerpt reads the configured, resolved source', async () => {
       text: (stored: Expr) => fn('upper', stored),
     }))
   let screen = render(select({
-    cols: [col('eid')],
+    cols: [col('id')],
     from: table('entity'),
     where: among(col('eid'), [val('book-1')]),
   }))

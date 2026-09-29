@@ -19,8 +19,8 @@
  * - {@link fields} reads the embedded properties off a
  *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema;
  * - {@link schema} returns the statements for the table the vectors live in,
- *   and for the dirty flag an approximate index reads ({@link dirty},
- *   {@link clean}) to know it needs rebuilding;
+ *   and for the record of the quantized index built from them, which
+ *   {@link build} makes again once enough of them changed;
  * - {@link sweep} embeds what changed and drops what left, off the write path,
  *   reading what moved from a queue the database's own triggers keep
  *   ({@link watch});
@@ -95,7 +95,13 @@ export * from './ddl.ts'
 export * from './sweep.ts'
 export * from './owed.ts'
 export * from './near.ts'
-export { install as installNative } from './native.ts'
+export {
+  behind,
+  type Build,
+  build,
+  install as installNative,
+  type State,
+  state,
+} from './native.ts'
 export * from './search.ts'
-export * from './mark.ts'
 export * from './compile.ts'

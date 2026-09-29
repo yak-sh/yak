@@ -247,11 +247,11 @@
     "@std/media-types": "jsr:@std/media-types@^1.1.0",
     "@std/testing": "jsr:@std/testing@^1.0.0",
     "@db/sqlite": "jsr:@db/sqlite@0.13.0",
-    "@sqlite-vector-linux-x86_64": "npm:@sqliteai/sqlite-vector-linux-x86_64@1.0.0",
-    "@sqlite-vector-linux-aarch64": "npm:@sqliteai/sqlite-vector-linux-arm64@1.0.0",
-    "@sqlite-vector-darwin-x86_64": "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.0.0",
-    "@sqlite-vector-darwin-aarch64": "npm:@sqliteai/sqlite-vector-darwin-arm64@1.0.0",
-    "@sqlite-vector-windows-x86_64": "npm:@sqliteai/sqlite-vector-win32-x86_64@1.0.0"
+    "@sqlite-vector-linux-x86_64": "npm:@sqliteai/sqlite-vector-linux-x86_64@1.1.2",
+    "@sqlite-vector-linux-aarch64": "npm:@sqliteai/sqlite-vector-linux-arm64@1.1.2",
+    "@sqlite-vector-darwin-x86_64": "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.1.2",
+    "@sqlite-vector-darwin-aarch64": "npm:@sqliteai/sqlite-vector-darwin-arm64@1.1.2",
+    "@sqlite-vector-windows-x86_64": "npm:@sqliteai/sqlite-vector-win32-x86_64@1.1.2"
   },
   "scopes": {
     "./workers/yak/node_modules/@cloudflare/workers-oauth-provider/": {

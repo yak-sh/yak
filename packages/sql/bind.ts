@@ -1170,18 +1170,39 @@ let UNREACHED = new Set(['near', 'edges'])
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
 
-// The rest of the query, as a statement selecting the eids it admits — what an
-// extension that ranks is given (./extend.ts `Screen`). This extension's own
-// clauses are left out, because they are what is being resolved; the directives
-// are left out, because a window or an ordering shapes an answer rather than
-// narrowing it. What is left is every filter and every other package's clause,
+/**
+ * The entities a query admits, as a statement selecting their integer ids as
+ * `id`, in no order: a ranking's screen (./extend.ts `Screen`), and what a
+ * search run beside a query is narrowed by. The directives are left out,
+ * because a window or an ordering shapes an answer rather than narrowing it,
+ * and a query with nothing else in it has nothing to narrow by: null.
+ */
+export let screen = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts = {},
+  d: Dialect = sqlite,
+): Raw | null => {
+  let rest = ast.clauses.filter((c) => !directive(c))
+  if (!rest.length) return null
+  let admits = bound({ ...ast, clauses: rest }, vocab, opts, d)
+  return render({
+    ...admits,
+    cols: [raw(`${d.ownerKey('entity')} as id`)],
+    order: [],
+  })
+}
+
+// The rest of the query, as the screen an extension that ranks is given. This
+// extension's own clauses are left out, because they are what is being
+// resolved; what is left is every filter and every other package's clause,
 // compiled through the same extensions.
 //
 // Those extensions are passed on without their `begin` hook: this statement is
 // a query inside a query, and telling an extension that a new one had begun
 // would wipe out what it remembered about the outer one — and have it ask for a
 // screen of a screen.
-let screen = (
+let screenFor = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts,
@@ -1189,11 +1210,12 @@ let screen = (
   e: Extension,
 ): Raw | null => {
   let mine = new Set(Object.keys(e.compile))
-  let rest = ast.clauses.filter((c) => !mine.has(c.kind) && !directive(c))
-  if (!rest.length) return null
   let quiet = (opts.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
-  return render(
-    bound({ ...ast, clauses: rest }, vocab, { ...opts, extend: quiet }, d),
+  return screen(
+    { ...ast, clauses: ast.clauses.filter((c) => !mine.has(c.kind)) },
+    vocab,
+    { ...opts, extend: quiet },
+    d,
   )
 }
 
@@ -1269,7 +1291,7 @@ export let bound = (
   // that what a long-lived extension remembers is always this query's; one that
   // ranks asks for the screen and ranks among the rows the other clauses admit
   // (./extend.ts `Begin`, `Screen`).
-  for (let e of ctx.ext) e.begin?.(() => screen(ast, vocab, opts, d, e))
+  for (let e of ctx.ext) e.begin?.(() => screenFor(ast, vocab, opts, d, e))
   let cs = ast.clauses
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {

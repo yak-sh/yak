@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile, insert } from '@yaks/sql'
+import { insert, screen as screenOf } from '@yaks/sql'
 import { fields } from './fields.ts'
 import { search } from './compile.ts'
 import { find, hits } from './search.ts'
@@ -33,11 +33,12 @@ test('the snippet comes from whichever property matched', () => {
 
 test('a screen narrows the hits to what the filters allow', () => {
   let db = shelf()
-  let screen = compile(parse('dragon .price<15'), shop, {
+  let screen = screenOf(parse('dragon .price<15'), shop, {
     extend: [search(text)],
   })
   assertEquals(
-    find(db, text, 'dragon', { screen }).map((h) => h.entity),
+    find(db, text, 'dragon', { screen: screen ?? undefined })
+      .map((h) => h.entity),
     ['book-1'],
   )
 })

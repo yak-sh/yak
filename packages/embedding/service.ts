@@ -16,6 +16,11 @@
 // what it reads and writes are a batch's rows, and the wait between is the
 // model's.
 //
+// The same process builds the quantized index (./native.ts): after each pass
+// it builds again once enough vectors have changed. A build is a write of its
+// own, a few seconds under the write lock, which is why one process makes it
+// and every other only reads it.
+//
 // The config is read on every pass (./options.ts). A server whose key has not
 // arrived starts up, stores no vectors, reports what it is waiting for once,
 // and keeps looking, so the first pass after the key appears is the one that
@@ -29,6 +34,7 @@ import type { Derived, Driver } from '@yaks/sql'
 import { resolved } from './fields.ts'
 import { type Options, ready } from './options.ts'
 import { sweep } from './sweep.ts'
+import { build } from './native.ts'
 
 /** How long an empty queue waits before the loop looks again, by default. */
 export let AFTER = 3_000
@@ -61,6 +67,8 @@ export let service = async (
         told.add(now.waiting!)
         console.warn('@yaks/embedding —', now.waiting)
       }
+      // The vectors already stored are still searched, through an index.
+      build(host.sql)
       return after
     }
     let text = resolved(now.text, host.derived)
@@ -68,6 +76,7 @@ export let service = async (
     for (let r of swept.refused) {
       console.warn('@yaks/embedding refused', r.entity, '—', r.error)
     }
+    build(host.sql)
     return swept.left ? 0 : after
   }
   for (;;) {

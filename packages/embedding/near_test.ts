@@ -69,7 +69,7 @@ test('a screen decides what "nearest" is nearest among', async () => {
   let db = await stocked()
   let q = vectorOf(db, 'book-1', model)!
   let within = render(select({
-    cols: [col('eid')],
+    cols: [col('id')],
     from: table('entity'),
     where: among(col('eid'), [val('book-3'), val('review-4')]),
   }))

@@ -110,11 +110,16 @@ export type Extension = {
 export type Begin = (screen: Screen) => void
 
 // What the rest of the query selects: a statement over the same database
-// returning the `eid`s that every other clause admits — this extension's own
-// clauses left out, since they are what is being resolved, and the directives
-// that shape an answer (order, limit, projection) left out, since they never
-// narrow it. It is a function because compiling it costs something an extension
-// that does not rank should not have to pay, and it returns null when there is
-// nothing else in the query — there is nothing to narrow by, so every entity in
-// the database is a candidate.
+// returning, as `id`, the integer ids of the entities every other clause
+// admits — the owner ids an extension's own rows are keyed by, in no order.
+// This extension's own clauses are left out, since they are what is being
+// resolved, and so are the directives that shape an answer (order, limit,
+// projection), since they never narrow it. Ids rather than eids because a
+// ranker tests its candidates against it one by one: `exists (select 1 from
+// (screen) s where s.id = candidate)` is a primary-key read of the candidate's
+// own row, where an eid would first be looked up in the eid index. It is a
+// function because compiling it costs something an extension that does not
+// rank should not have to pay, and it returns null when there is nothing else
+// in the query — there is nothing to narrow by, so every entity in the database
+// is a candidate.
 export type Screen = () => Raw | null

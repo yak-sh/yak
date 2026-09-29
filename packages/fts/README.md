@@ -66,7 +66,7 @@ import { graph } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { fields, find, heal, schema, search } from '@yaks/fts'
-import { compile } from '@yaks/sql'
+import { compile, screen } from '@yaks/sql'
 import { parse } from '@yaks/query'
 
 let title = { type: 'string', search: true }
@@ -83,8 +83,8 @@ let text = fields(vocab)
 for (let statement of schema(text)) db.query(statement)
 heal(db, text) // populate indexes if the component tables already had rows
 
-let screen = compile(parse('.book.price<20'), vocab)
-let hits = find(db, text, 'hobbit', { screen, limit: 10 })
+let within = screen(parse('.book.price<20'), vocab) ?? undefined
+let hits = find(db, text, 'hobbit', { screen: within, limit: 10 })
 // Each hit: { entity: 'book-1', rank: -1.9, snippet: 'A \x01hobbit\x02…' }
 
 let statement = compile(parse('hobbit .book.price<20'), vocab, {
@@ -123,8 +123,8 @@ snippet.
 
 FTS5 `bm25` supplies the rank, where lower numbers are better matches. No
 recency or popularity weighting is added. `limit` defaults to 20 and snippet
-`context` defaults to 10 words. An optional `screen` is SQL selecting the
-permitted eids, such as the statement returned by `compile()` above. Ranking
+`context` defaults to 10 words. An optional `screen` is SQL selecting the ids of
+the permitted entities, such as the statement `screen()` returns above. Ranking
 reads only the index; a snippet is cut afterwards, for the rows returned,
 because FTS5 reads a row's whole text back to cut one.
 

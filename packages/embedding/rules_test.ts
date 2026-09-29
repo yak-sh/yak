@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile, scan, tally } from '@yaks/sql'
+import { compile, tally } from '@yaks/sql'
 import { extend, meaning, rules } from './rules.ts'
 import { TABLE } from './ddl.ts'
 import { mem, shop, stocked } from './testing.ts'
@@ -66,12 +66,6 @@ test('a key that has not arrived still names the space it will fill', async () =
     extend: [near],
   })
   assertEquals(db.query(q).map((r) => String(r.eid))[0], 'book-2')
-})
-
-test('the mark starts dirty: an index never built is owed one', () => {
-  let sql = mem()
-  rules({ sql })
-  assert(scan(sql, `${TABLE}_index`)[0].dirty)
 })
 
 test('a phrase search sees an embedder that arrives after composition', async () => {

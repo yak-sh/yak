@@ -20,8 +20,8 @@
 // `limit`, so cutting it before the other clauses filter would answer with the
 // memories among the eight nearest entities of any kind — almost always none.
 // @yaks/sql hands each extension the query's `Screen` (a statement selecting
-// the eids the rest of the query admits) when it begins, and the scan reads
-// only those vectors: filter, then rank, then cut.
+// the ids of the entities the rest of the query admits) when it begins, and
+// only those are candidates: filter, then rank, then cut.
 //
 // It remembers the neighbourhood the `.near` clause resolved, so the ordering
 // can rank by it and the caller can read the scores back afterwards — and

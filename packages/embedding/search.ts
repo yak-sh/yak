@@ -18,7 +18,8 @@ export type Hit = {
 export type MeaningOpts = {
   limit?: number
   floor?: number
-  /** a statement selecting the eids a hit must be among */
+  /** a statement selecting, as `id`, the ids of the entities a hit must be
+   * among (@yaks/sql `screen`) */
   screen?: Raw
 }
 

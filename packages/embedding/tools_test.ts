@@ -1,17 +1,17 @@
-// The check: an index nobody is rebuilding, one that was just written, and a
-// host with no index at all.
+// The check: an index nobody is building, one that was just written, and hosts
+// where every search reads every vector.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { type Driver, val } from '@yaks/sql'
+import { col, type Driver, eq, val } from '@yaks/sql'
 import { mem, shelf, stocked } from './testing.ts'
 import { TABLE } from './ddl.ts'
-import { clean } from './mark.ts'
+import { build, install } from './native.ts'
 import { type Options, runs } from './tools.ts'
 
 // The offline embedder stands in for a host whose config is complete: what
-// these cases are about is the mark, not what is missing.
+// these cases are about is the index, not what is missing.
 let checkup = async (
   sql: Driver,
   options: Options = {},
@@ -29,8 +29,8 @@ let checkup = async (
   }
 }
 
-// Move every vector's timestamp back, the way an index nobody has touched for
-// an hour looks.
+// Move every vector's timestamp back, the way vectors nobody has touched for
+// hours look.
 let aged = (sql: Driver, hours: number) => {
   sql.query({
     t: 'update',
@@ -40,25 +40,47 @@ let aged = (sql: Driver, hours: number) => {
   return sql
 }
 
-test('an index the sweep cleaned is nothing to report', async () => {
-  let sql = aged(await stocked(), 3)
-  clean(sql)
-  assertEquals((await checkup(sql)).level, undefined)
+let installed = async () => {
+  let db = await stocked()
+  install(db)
+  return db
+}
+
+test('an index the sweep built is nothing to report', async () => {
+  let db = await installed()
+  build(db)
+  assertEquals((await checkup(aged(db, 3))).level, undefined)
 })
 
-test('a mark that outlived the sweep is a fail', async () => {
-  let said = await checkup(aged(await stocked(), 3))
+test('an index behind for longer than the sweep takes is a fail', async () => {
+  let said = await checkup(aged(await installed(), 3))
   assertEquals(said.level, 'fail')
-  assert(said.body.includes('owed a rebuild since'), said.body)
-  assert(said.body.includes('nothing '), said.body)
+  assert(said.body.includes('owed a build since'), said.body)
+  assert(said.body.includes('nothing building it'), said.body)
 })
 
-test('a mark set moments ago is the sweep having its turn', async () => {
-  assertEquals((await checkup(await stocked())).level, undefined)
+test('a build owed moments ago is the sweep having its turn', async () => {
+  assertEquals((await checkup(await installed())).level, undefined)
 })
 
-test('an empty index is not a stalled one', async () => {
+test('an empty table is not a stalled index', async () => {
   assertEquals((await checkup(shelf())).level, undefined)
+})
+
+test('where every search reads every vector, it says why', async () => {
+  let bare = await checkup(await stocked())
+  assertEquals(bare.level, 'warn')
+  assert(bare.body.includes('not installed'), bare.body)
+  let db = await installed()
+  db.query({
+    t: 'update',
+    table: TABLE,
+    set: { model: val('next') },
+    where: eq(col('entity'), val(4)),
+  })
+  let two = await checkup(db)
+  assertEquals(two.level, 'warn')
+  assert(two.body.includes('two models'), two.body)
 })
 
 test('a host still waiting for its config says what it is waiting for', async () => {

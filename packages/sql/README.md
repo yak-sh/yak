@@ -61,7 +61,8 @@ queries exclude these entities.
 
 The package has one import path, `@yaks/sql`. It exports:
 
-- `compile`, `bind`, `BindOpts`, `Compiled`, and `Unsupported` for compilation;
+- `compile`, `bind`, `BindOpts`, `Compiled`, and `Unsupported` for compilation,
+  and `screen` for the ids a query admits;
 - the statement nodes (`Select`, `Insert`, `CreateTable`, `Stmt`, `Expr`, …),
   their builders (`select`, `col`, `val`, `eq`, `and`, `among`, `when`, …), and
   `render`;
@@ -233,10 +234,13 @@ calls this hook again for the cursor entity.
 `begin(screen)` runs once at the start of each `bind` call, allowing a reused
 extension to reset state shared by its clause and ordering hooks. Calling
 `screen()` lazily compiles the other filters into a `Raw` statement selecting
-eids, excluding this extension's clauses and ordering, limits, and projections.
-It returns `null` when no other filters exist. Ranking extensions use this
-candidate set before selecting the nearest or highest-ranked results; ranking
-all entities first and filtering afterward would return the wrong subset.
+the admitted entities' integer ids as `id`, in no order, excluding this
+extension's clauses and ordering, limits, and projections. It returns `null`
+when no other filters exist. Ranking extensions use this candidate set before
+selecting the nearest or highest-ranked results; ranking all entities first and
+filtering afterward would return the wrong subset. The exported
+`screen(ast, vocab, opts?)` builds the same statement for a whole query, for a
+search run beside one.
 
 ## Ordering and paging
 
