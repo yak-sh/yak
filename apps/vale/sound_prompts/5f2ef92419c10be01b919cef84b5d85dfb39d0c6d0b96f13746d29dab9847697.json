@@ -1,0 +1,18 @@
+{
+  "sound": "done-ore",
+  "sha256": "5f2ef92419c10be01b919cef84b5d85dfb39d0c6d0b96f13746d29dab9847697",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A worked mineral seam crumbles: brittle rock crack, falling grit and one low stone thud. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654044-dZlh32rbMKWW1ZPV8HRA"
+  },
+  "playback": {
+    "loop": false
+  }
+}

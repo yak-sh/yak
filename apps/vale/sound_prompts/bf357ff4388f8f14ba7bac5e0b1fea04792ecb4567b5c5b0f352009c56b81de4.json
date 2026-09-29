@@ -1,0 +1,18 @@
+{
+  "sound": "stroke-bench",
+  "sha256": "bf357ff4388f8f14ba7bac5e0b1fea04792ecb4567b5c5b0f352009c56b81de4",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One woodworking plane stroke across a board: clean shaving scrape, slight woody tap at the end. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790653990-qQcNmcDiPYZEh9u6uPFt"
+  },
+  "playback": {
+    "loop": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "sound": "stroke-cauldron",
+  "sha256": "b02a6c9342d8fd5a9fe033c484b6b15b7d33a7b0e7f8d7a58a65010567de4a03",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One ladle stir in a bubbling cauldron: wet ceramic clink and small liquid swirl. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654003-XBYECQ8Bd0GOJuSDFK4A"
+  },
+  "playback": {
+    "loop": false
+  }
+}

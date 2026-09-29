@@ -1,0 +1,18 @@
+{
+  "sound": "stroke-loom",
+  "sha256": "b7bb854d0dd6984d6a63662198f8bab32101dea0dea45bf1668e71f3e302b6b9",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One loom stroke: wooden shuttle clicking across taut threads and a soft cloth rustle. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654017-qJgVmm6YgoyBicbz1dfO"
+  },
+  "playback": {
+    "loop": false
+  }
+}

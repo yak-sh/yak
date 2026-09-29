@@ -1,0 +1,18 @@
+{
+  "sound": "done-herb",
+  "sha256": "b60aef22550c95b6e0b1beb4236e2cd491b896859a061ae4dd57fcf1eeeba0b5",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A harvested herb clump comes free: small earthy root pop, leaves rustle, delicate finishing chime. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654061-2vhTj8CvxNUphm56UxTi"
+  },
+  "playback": {
+    "loop": false
+  }
+}

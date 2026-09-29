@@ -1,0 +1,18 @@
+{
+  "sound": "stroke-fish",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A fishing line is worked: small wet plop and a quick tug of taut line at a quiet river. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3"
+  },
+  "attempt": {
+    "ask": "58f8b449-49c9-4ed8-a138-14a06712fd56",
+    "session": "925ad5e5-4439-4990-9525-4ff1d5ef8c88",
+    "state": "interrupted",
+    "error": "Response interrupted: ModelError: OpenRouter speech request failed (502)",
+    "response_id": null,
+    "artifact": null
+  }
+}

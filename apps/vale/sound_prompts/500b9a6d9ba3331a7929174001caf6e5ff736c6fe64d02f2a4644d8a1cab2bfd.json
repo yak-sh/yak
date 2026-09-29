@@ -1,0 +1,18 @@
+{
+  "sound": "done-wood",
+  "sha256": "500b9a6d9ba3331a7929174001caf6e5ff736c6fe64d02f2a4644d8a1cab2bfd",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A felled tree falls: trunk creaks, branches brush down and a heavy soft ground impact. One short event. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790654030-sOYCubwmbLUXM64fWHaN"
+  },
+  "playback": {
+    "loop": false
+  }
+}

@@ -7,3 +7,6 @@ listening set was processed into WAV; hosted builders keep the MP3 they receive.
 outputs for the rest. The village fire uses procedural crackles; its trial
 recording remains here for provenance. Ambient recordings are crossfaded into
 seamless loops when played.
+
+`attempts/` records requests that returned no artifact, including their error
+and the absent response ID; these files are not playable recordings.
