@@ -115,6 +115,26 @@ export let frontier = (
       .filter(([, p]) => !isA(p.kind, 'village'))
       .map(([name, p], i) => [name, place(p, gx, gz, i + 1)]),
   )
+  let landmark = hash(gx, gz, 40843) % 4
+  if (landmark < 2) {
+    let sites: [number, number][] = [
+      [64, 64],
+      [192, 64],
+      [64, 192],
+      [192, 192],
+    ]
+    let nearest = ([x, z]: [number, number]) =>
+      Math.min(
+        ...Object.values(places).map((p) =>
+          Math.hypot(x - p.at[0], z - p.at[1])
+        ),
+      )
+    let at = sites.sort((a, b) => nearest(b) - nearest(a))[0]
+    places[landmark ? 'valley' : 'castle'] = {
+      kind: landmark ? 'valley' : 'castle',
+      at,
+    }
+  }
   let arrive = places[model.arrive] ? model.arrive : Object.keys(places)[0]
   return {
     id: frontierId(gx, gz),

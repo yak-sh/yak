@@ -15,7 +15,7 @@ import {
   SIZE,
   type Spot,
 } from './levels.ts'
-import { lie } from './regions.ts'
+import { boundaryAt, lie } from './regions.ts'
 import { clamp, fbm, lerp } from './rand.ts'
 
 /** Ground at or under this height, in metres, is shore: sand, never dry. */
@@ -321,6 +321,57 @@ export let roadsOf = (
   ...ROADS().filter((r) => r.from == id || r.to == id),
   ...neighbours(id),
 ]
+
+type BridgePart = {
+  kind: 'bridgepost' | 'bridgewall'
+  x: number
+  z: number
+  seed: number
+  turn: number
+}
+let bridges = new WeakMap<Road, BridgePart[]>()
+let bridgeParts = (r: Road): BridgePart[] => {
+  let got = bridges.get(r)
+  if (got) return got
+  let parts = new Map<string, BridgePart>()
+  for (let i = 1; i < r.c.xs.length - 1; i++) {
+    let x = r.c.xs[i], z = r.c.zs[i]
+    if (boundaryAt(x, z).river < 0.55) continue
+    let dx = r.c.xs[i + 1] - r.c.xs[i - 1]
+    let dz = r.c.zs[i + 1] - r.c.zs[i - 1]
+    let length = Math.hypot(dx, dz) || 1
+    for (let side of [-1, 1]) {
+      let px = snap(x - side * dz / length * 2.2)
+      let pz = snap(z + side * dx / length * 2.2)
+      let kind: BridgePart['kind'] = i % 4 == 0 ? 'bridgepost' : 'bridgewall'
+      let key = `${px},${pz}`
+      let old = parts.get(key)
+      if (!old || kind == 'bridgepost') {
+        parts.set(key, {
+          kind,
+          x: px,
+          z: pz,
+          seed: i + (side + 1) / 2,
+          turn: Math.abs(dx) >= Math.abs(dz) ? 0 : 1,
+        })
+      }
+    }
+  }
+  bridges.set(r, got = [...parts.values()])
+  return got
+}
+
+/** A road's stone parapets across a river. Its graded bed is the walkable
+ * deck, with water visible beside it. */
+export let bridgePartsIn = (
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+): BridgePart[] =>
+  roadsIn(x0 - 4, z0 - 4, x1 + 4, z1 + 4, 0)
+    .flatMap(bridgeParts)
+    .filter((p) => p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1)
 
 // Each level's lanes, from its village out to each of its places.
 let paths = new Map<string, Course[]>()

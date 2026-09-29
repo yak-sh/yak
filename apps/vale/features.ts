@@ -10,6 +10,7 @@ import { FIRE } from './features/fire.ts'
 import { FROST } from './features/frost.ts'
 import { HILLS } from './features/hills.ts'
 import { type Feature, Top } from './features/kit.ts'
+import { LANDMARKS } from './features/landmarks.ts'
 import { MARSH } from './features/marsh.ts'
 import { SANDS } from './features/sands.ts'
 import { VALE } from './features/vale.ts'
@@ -22,6 +23,7 @@ export let FEATURES: Record<string, Feature> = {
   ...COAST,
   ...MARSH,
   ...HILLS,
+  ...LANDMARKS,
   ...DEEP,
   ...SANDS,
   ...FROST,

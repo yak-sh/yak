@@ -49,6 +49,7 @@ import { EDGE, type Street, streets } from './streets.ts'
 import {
   along,
   bedAt,
+  bridgePartsIn,
   clearOf,
   EASE,
   laneEntriesOf,
@@ -517,7 +518,10 @@ export let builtIn = (
       }
     }
   }
-  return out
+  return [
+    ...out,
+    ...bridgePartsIn(x0, z0, x1, z1),
+  ]
 }
 
 /** What is built within `r` metres of (x, z). */
@@ -1129,10 +1133,11 @@ let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
           // drawn.
           let tall = kind.row ? bulk(p.kind, p.seed).tall : 3
           let row = kind.row ?? 0
+          let across = !!((p.turn ?? 0) & 1)
           for (let dx = -row; dx <= row + 1e-9; dx += kind.girth) {
             add({
-              x: p.x + dx,
-              z: p.z,
+              x: p.x + (across ? 0 : dx),
+              z: p.z + (across ? dx : 0),
               r: kind.girth,
               top: y + tall,
               prop: p.natural ? p : undefined,

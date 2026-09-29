@@ -15,6 +15,7 @@ import { FIRE } from './props/fire.ts'
 import { FROST } from './props/frost.ts'
 import { HILLS } from './props/hills.ts'
 import { type Kind, type Model, refine } from './props/kit.ts'
+import { LANDMARKS } from './props/landmarks.ts'
 import { MARSH } from './props/marsh.ts'
 import { SANDS } from './props/sands.ts'
 import { VALE } from './props/vale.ts'
@@ -29,6 +30,7 @@ export let KINDS: Record<string, Kind> = {
   ...COAST,
   ...MARSH,
   ...HILLS,
+  ...LANDMARKS,
   ...SANDS,
   ...DEEP,
   ...FROST,
