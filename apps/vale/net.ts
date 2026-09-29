@@ -47,15 +47,10 @@ export type Me = {
  * the chat show anyone's. */
 export type Hero = Look & { eid: string; seen: Seen | null }
 
-// The words the store speaks, as it serves them (./api/vocab.json): this app's
-// own and every word the platform gives it, the byline `created` among them,
-// so the client asks and writes what the store takes. Loaded at the top of the
-// module, so everything that imports it evaluates with them. A failed request
-// waits here for the store to recover; an incomplete vocabulary cannot make
-// the page issue queries it cannot understand.
-export let vocab = loadVocab(
-  await read<VocabDoc>(new URL('api/vocab.json', document.baseURI)),
-)
+// The store's words include this app's vocabulary and the platform's. A
+// failed request waits for the store to recover before the page opens a client.
+export let vocabulary = async (base: URL) =>
+  loadVocab(await read<VocabDoc>(new URL('vocab.json', base)))
 
 /** A hero, off their player row and their newest look row. */
 let heroOf = (b: Bundle, look?: Bundle): Hero => ({
@@ -97,7 +92,7 @@ let tab = {
 export type Net = ReturnType<ReturnType<typeof connect>['world']>
 
 /** Open the store. World queries start after its designs have arrived. */
-export let connect = (base: URL) => {
+export let connect = (base: URL, vocab: ReturnType<typeof loadVocab>) => {
   let c = client(vocab, [], {
     url: base.href.replace(/\/$/, ''),
     vault: false,

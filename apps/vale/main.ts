@@ -56,7 +56,7 @@ import { ITEMS, useItems } from './items.ts'
 import { GRADES, piece, RARITIES, type Rarity, tint } from './rarity.ts'
 import type { Held } from './rules.ts'
 import { HOME, levelOf, LEVELS, type Spot } from './levels.ts'
-import { connect, type Hero, type Me } from './net.ts'
+import { connect, type Hero, type Me, vocabulary } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
 import { FOES } from './soft.ts'
 import { recall, type Seen, sighting } from './seen.ts'
@@ -120,7 +120,8 @@ let fit = () => {
 fit()
 addEventListener('resize', fit)
 
-let opening = connect(new URL('api/', document.baseURI))
+let base = new URL('api/', document.baseURI)
+let opening = connect(base, await vocabulary(base))
 // The world, shops, crafting and item pictures read store designs. Start
 // asking about the hero alongside the watches, then grow ground from them.
 let asking = opening.me().then(async (me) => ({
