@@ -4,21 +4,22 @@
 // staff and tome blaze, ward and mend; a dagger in each hand flurry,
 // shadowstep and crosscut. An ability is a row: the shape of
 // what it takes, how hard it lands, what else it does, and how soon it can
-// be done again. strike.ts finds what an ability takes; play.ts does it, on
-// the hero's own page, the way it does a blow.
+// be done again. The authored rows live in seed/abilities/ and each page
+// watches them in the store. strike.ts finds what an ability takes; play.ts
+// does it, on the hero's own page, the way it does a blow.
 //
 // The shapes: `one` lands on the creature it was aimed at, and waits for one
 // in reach; an `arc` sweeps everything before the hero; a `ring` takes
 // everything about them; a `burst` lands on the creature aimed at and
 // everything about it; `self` takes nothing, and does its work on the hero.
 //
-// What an ability says it does is written from its row as the hero does it
-// (`does`): the numbers a skill changed, the damage and health their own blow
-// and health make, and what a skill added to it, so it never says what it no
-// longer does.
+// Its short description comes from the row; its effects are named from the
+// current numbers (`does`), including what a skill changed.
+import { comp, str } from './bundle.ts'
 import type { Glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
 import type { Worn } from './gear.ts'
+import type { Bundle } from './net.ts'
 
 export type Shape = 'one' | 'arc' | 'ring' | 'burst' | 'self'
 
@@ -34,8 +35,12 @@ export type Ability = {
   element?: SpellElement
   name: string
   icon: Glyph
-  /** what it does, as a sentence of its numbers in words (`does`) */
-  says: (w: Words) => string
+  /** A short description of the move, without stats; `does` adds its effects. */
+  description: string
+  /** Which held item grants it, and its position on that item's bar. */
+  weapon?: string
+  slot?: number
+  offhand?: string
   shape: Shape
   pose: Pose
   /** metres past the weapon's reach for `one` and `arc`; the radius of a
@@ -89,26 +94,6 @@ export let WARD = 8000
  * `blowOf`), and the most health they can have. */
 export type Doer = { blow: number; max: number }
 
-/** An ability's numbers as a doer does it, each in words, or empty where it
- * has none: the damage of each of its blows, how far it reaches, how wide it
- * sweeps and how far it dashes, how long it holds a foe, what a bleed or a
- * burn adds, how long a guard holds, what a ward takes and for how long,
- * what it mends, and how many times it lands. */
-export type Words = Record<
-  | 'dmg'
-  | 'far'
-  | 'arc'
-  | 'dash'
-  | 'held'
-  | 'bleed'
-  | 'guard'
-  | 'ward'
-  | 'lasts'
-  | 'heal'
-  | 'hits',
-  string
->
-
 /** A span in ms, as a person reads it.
  *
  * ```ts
@@ -118,43 +103,27 @@ export type Words = Record<
  */
 export let secs = (ms: number): string => `${+(ms / 1000).toFixed(1)} s`
 
-let words = (a: Ability, { blow, max }: Doer): Words => ({
-  dmg: a.dmg ? `${Math.round(blow * a.dmg)} damage` : '',
-  far: a.far ? `${a.far} m` : '',
-  arc: a.arc ? `${Math.round((a.arc * 360) / Math.PI)}°` : '',
-  dash: a.dash ? `${a.dash} m` : '',
-  held: a.held ? secs(a.held) : '',
-  bleed: a.bleed
-    ? `${Math.round((blow * a.bleed) / BLEEDS) * BLEEDS} more over ${
-      secs(BLEEDS * 1000)
-    }`
-    : '',
-  guard: a.guard ? secs(a.guard) : '',
-  ward: a.ward ? `${Math.round(max * a.ward)} damage` : '',
-  lasts: secs(WARD),
-  heal: a.heal ? `${Math.round(max * a.heal)} health` : '',
-  hits: String(a.hits ?? 1),
-})
-
 /** What `a` does, done by `d`, with its numbers, and what else a skill made
  * it do: pass the ability as their skills make it (skills.ts `formOf`).
  *
  * ```ts
  * import { assertEquals, assertMatch, assertNotMatch } from '@std/assert'
+ * import { seedAbilities } from './abilities_fixture.ts'
  * import { formOf } from './skills.ts'
+ * seedAbilities()
  * let d = { blow: 20, max: 120 }
- * assertEquals(does(ABILITIES.mend, d), 'Read a word of healing: 36 health back.')
+ * assertEquals(does(ABILITIES.mend, d), 'Read a word of healing. Restores 36 Health.')
  * // Kindness mends nearer half, and Mend says so.
- * assertEquals(does(formOf('mend', ['kindness'])!, d), 'Read a word of healing: 54 health back.')
+ * assertEquals(does(formOf('mend', ['kindness'])!, d), 'Read a word of healing. Restores 54 Health.')
  * assertEquals(
  *   does(ABILITIES.rend, d),
- *   'A deep cut for 28 damage. The foe bleeds 32 more over 4 s.',
+ *   'A deep cut. 28 Damage · 32 Bleed Damage over 4 s.',
  * )
  * // Earthbreaker's Crush leaves the foe senseless; the plain one does not.
- * assertEquals(does(ABILITIES.crush, d), 'One enormous overhead blow for 52 damage.')
+ * assertEquals(does(ABILITIES.crush, d), 'An enormous overhead blow. 52 Damage.')
  * assertEquals(
  *   does(formOf('crush', ['earthbreaker'])!, d),
- *   'One enormous overhead blow for 64 damage, and the foe is senseless for 1.5 s.',
+ *   'An enormous overhead blow. 64 Damage · 1.5 s Stun.',
  * )
  * // A Lunge that misses is given back, and Relentless readies one that
  * // kills; Lunge says so.
@@ -167,7 +136,39 @@ let words = (a: Ability, { blow, max }: Doer): Words => ({
 export let does = (a: Ability, d: Doer): string => {
   let when = [a.renew && 'after a killing blow', a.refund && 'if it misses']
     .filter(Boolean)
-  return a.says(words(a, d)) +
+  let effects = [
+    a.hits && a.hits > 1 ? `${a.hits} hits` : '',
+    a.dmg
+      ? `${Math.round(d.blow * a.dmg)} Damage${
+        a.hits && a.hits > 1 ? ' each' : ''
+      }`
+      : '',
+    a.arc ? `${Math.round((a.arc * 360) / Math.PI)}° arc` : '',
+    a.far
+      ? a.shape == 'ring' || a.shape == 'burst'
+        ? `${a.far} m radius`
+        : `Extends reach by ${a.far} m`
+      : '',
+    a.dash ? `${a.dash} m dash` : '',
+    a.held ? `${secs(a.held)} Stun` : '',
+    a.bleed
+      ? `${Math.round((d.blow * a.bleed) / BLEEDS) * BLEEDS} ${
+        a.element == 'fire' ? 'Burn' : 'Bleed'
+      } Damage over ${secs(BLEEDS * 1000)}`
+      : '',
+    a.guard ? `${secs(a.guard)} Guard` : '',
+    a.ward
+      ? `Absorbs ${Math.round(d.max * a.ward)} Damage for ${secs(WARD)}`
+      : '',
+    a.heal ? `Restores ${Math.round(d.max * a.heal)} Health` : '',
+    a.sure
+      ? a.hits && a.hits > 1
+        ? 'Final hit is a great blow'
+        : 'Always a great blow'
+      : '',
+  ].filter(Boolean)
+  let intro = (a.description?.trim() || a.name).replace(/[.!?]+$/, '')
+  return `${intro}.${effects.length ? ` ${effects.join(' · ')}.` : ''}` +
     (when.length ? ` Ready again at once ${when.join(', or ')}.` : '')
 }
 
@@ -181,6 +182,8 @@ export type Went = 'kill' | 'miss'
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedAbilities } from './abilities_fixture.ts'
+ * seedAbilities()
  * let a = ABILITIES.crush
  * let went = (b: Ability) => [again(b, 'kill'), again(b, 'miss')]
  * assertEquals(went(a), [false, false])
@@ -191,239 +194,31 @@ export type Went = 'kill' | 'miss'
 export let again = (a: Ability, went: Went): boolean =>
   went == 'kill' ? !!a.renew : !!a.refund
 
-/** Every ability, by id. */
-export let ABILITIES: Record<string, Ability> = {
-  haymaker: {
-    name: 'Haymaker',
-    icon: 'handFist',
-    says: (w) =>
-      `A big swing for ${w.dmg} that knocks the foe senseless for ${w.held}.`,
-    shape: 'one',
-    pose: 'swing',
-    dmg: 2,
-    held: 1000,
-    cool: 6000,
-  },
-  cleave: {
-    name: 'Cleave',
-    icon: 'axe',
-    says: (w) =>
-      `A sweep ${w.arc} wide, for ${w.dmg} on everything in front of you.`,
-    shape: 'arc',
-    pose: 'swing',
-    far: 0.5,
-    arc: 1.4,
-    dmg: 1.3,
-    cool: 6000,
-  },
-  lunge: {
-    name: 'Lunge',
-    icon: 'zap',
-    says: (w) =>
-      `Dash at a foe up to ${w.dash} off and run it through for ${w.dmg}.`,
-    shape: 'one',
-    pose: 'swing',
-    dash: 4.5,
-    dmg: 2,
-    cool: 9000,
-    refund: true,
-  },
-  whirl: {
-    name: 'Whirl',
-    icon: 'tornado',
-    says: (w) =>
-      `Spin round, striking everything within ${w.far} of you for ${w.dmg}.`,
-    shape: 'ring',
-    pose: 'spin',
-    far: 2.8,
-    dmg: 1.25,
-    cool: 8000,
-  },
-  rend: {
-    name: 'Rend',
-    icon: 'droplet',
-    says: (w) => `A deep cut for ${w.dmg}. The foe bleeds ${w.bleed}.`,
-    shape: 'one',
-    pose: 'swing',
-    dmg: 1.4,
-    bleed: 1.6,
-    cool: 10000,
-    tint: 0xd8483a,
-  },
-  quake: {
-    element: 'earth',
-    name: 'Quake',
-    icon: 'activity',
-    says: (w) =>
-      `Slam the ground: everything within ${w.far} of you takes ${w.dmg}, and is stunned for ${w.held}.`,
-    shape: 'ring',
-    pose: 'swing',
-    far: 3.4,
-    dmg: 1,
-    held: 2000,
-    cool: 11000,
-    tint: 0xb8a07a,
-  },
-  crush: {
-    name: 'Crush',
-    icon: 'hammer',
-    says: (w) =>
-      `One enormous overhead blow for ${w.dmg}${
-        w.held ? `, and the foe is senseless for ${w.held}` : ''
-      }.`,
-    shape: 'one',
-    pose: 'swing',
-    dmg: 2.6,
-    cool: 9000,
-  },
-  flurry: {
-    name: 'Flurry',
-    icon: 'blow',
-    says: (w) =>
-      `${w.hits} quick stabs for ${w.dmg} each, the last a sure great blow.`,
-    shape: 'one',
-    pose: 'swing',
-    dmg: 0.8,
-    hits: 3,
-    sure: true,
-    time: 600,
-    cool: 6000,
-  },
-  crosscut: {
-    name: 'Crosscut',
-    icon: 'scissors',
-    says: (w) =>
-      `Both daggers across the foe at once: ${w.hits} cuts for ${w.dmg} each, and it bleeds ${w.bleed}.`,
-    shape: 'one',
-    pose: 'cross',
-    dmg: 0.9,
-    hits: 2,
-    bleed: 1.2,
-    time: 450,
-    cool: 8000,
-    tint: 0xd8483a,
-  },
-  shadowstep: {
-    element: 'shadow',
-    name: 'Shadowstep',
-    icon: 'mask',
-    says: (w) =>
-      `Step behind a foe up to ${w.dash} off and stab it for ${w.dmg}: a sure great blow.`,
-    shape: 'one',
-    pose: 'swing',
-    dash: 6,
-    behind: true,
-    dmg: 1,
-    sure: true,
-    cool: 10000,
-    tint: 0x6a5a8a,
-  },
-  volley: {
-    name: 'Volley',
-    icon: 'cloudRain',
-    says: (w) =>
-      `Rain arrows on your foe and everything within ${w.far} of it, for ${w.dmg}.`,
-    shape: 'burst',
-    pose: 'swing',
-    far: 3,
-    dmg: 0.9,
-    shots: 6,
-    cool: 8000,
-  },
-  pin: {
-    name: 'Pinning shot',
-    icon: 'locateFixed',
-    says: (w) =>
-      `An arrow for ${w.dmg} that pins the foe where it stands for ${w.held}.`,
-    shape: 'one',
-    pose: 'swing',
-    dmg: 1.2,
-    held: 3000,
-    cool: 10000,
-  },
-  blaze: {
-    element: 'fire',
-    name: 'Blaze',
-    icon: 'flame',
-    says: (w) =>
-      `A bolt that bursts into flame on your foe and everything within ${w.far} of it, for ${w.dmg}.`,
-    shape: 'burst',
-    pose: 'swing',
-    far: 2.5,
-    dmg: 1.4,
-    cool: 7000,
-    tint: 0xff8a3a,
-  },
-  ward: {
-    element: 'light',
-    name: 'Ward',
-    icon: 'shieldCheck',
-    says: (w) =>
-      `A ward of light that takes the next ${w.ward} of bites for you, for up to ${w.lasts}.`,
-    shape: 'self',
-    pose: 'cast',
-    ward: 0.3,
-    cool: 16000,
-    tint: 0x9fd8ff,
-  },
-  block: {
-    name: 'Block',
-    icon: 'shield',
-    says: (w) =>
-      `Raise your shield for ${w.guard}: bites are turned, and leave the biter open to a great blow.`,
-    shape: 'self',
-    pose: 'guard',
-    guard: 1500,
-    time: 400,
-    cool: 6000,
-    tint: 0xffe08a,
-  },
-  mend: {
-    element: 'life',
-    name: 'Mend',
-    icon: 'handHeart',
-    says: (w) => `Read a word of healing: ${w.heal} back.`,
-    shape: 'self',
-    pose: 'cast',
-    heal: 0.3,
-    cool: 18000,
-    tint: 0x8ff07a,
-  },
-  scorch: {
-    element: 'fire',
-    name: 'Scorch',
-    icon: 'flameKindling',
-    says: (w) =>
-      `Sweep the flame ${w.arc} wide before you, for ${w.dmg}. What it catches burns ${w.bleed}.`,
-    shape: 'arc',
-    pose: 'swing',
-    far: 1.2,
-    arc: 1,
-    dmg: 0.6,
-    bleed: 1.2,
-    cool: 9000,
-    tint: 0xff7a2a,
-  },
-}
+// All page consumers read the same current Store design index. A watch
+// replaces it, so new abilities and changes to existing ones take effect.
+export let ABILITIES: Record<string, Ability> = {}
+export let GIVES: Record<string, string[]> = {}
+export let OFF: Record<string, string> = {}
 
-/** What each family of weapon gives in the hand. Bare hands give one. */
-export let GIVES: Record<string, string[]> = {
-  fists: ['haymaker'],
-  sword: ['cleave', 'lunge'],
-  axe: ['whirl', 'rend'],
-  hammer: ['quake', 'crush'],
-  dagger: ['flurry', 'shadowstep'],
-  bow: ['volley', 'pin'],
-  staff: ['blaze', 'ward'],
-}
-
-/** What each thing held in the other hand gives: a shield, a tome, a torch,
- * or a second dagger beside the first (skills.ts `hand`). */
-export let OFF: Record<string, string> = {
-  shield: 'block',
-  tome: 'mend',
-  torch: 'scorch',
-  dagger: 'crosscut',
+/** Install the store's current ability designs and their equipment grants. */
+export let useAbilities = (rows: Bundle[]) => {
+  let next = Object.fromEntries(rows.flatMap((row) => {
+    let design = comp(row, 'ability_design'), kind = str(design.kind)
+    let ability = Object.fromEntries(
+      Object.entries(design).filter(([, value]) => value != null),
+    ) as Ability
+    return kind ? [[kind, ability]] : []
+  })) as Record<string, Ability>
+  ABILITIES = next
+  GIVES = {}
+  OFF = {}
+  for (let [kind, ability] of Object.entries(ABILITIES)) {
+    if (ability.weapon && ability.slot) {
+      let granted = GIVES[ability.weapon] ??= []
+      granted[ability.slot - 1] = kind
+    }
+    if (ability.offhand) OFF[ability.offhand] = kind
+  }
 }
 
 /** The abilities what a hero wears gives them, on the bar's three slots: the
@@ -431,7 +226,9 @@ export let OFF: Record<string, string> = {
  *
  * ```ts
  * import { seedItems } from './items_fixture.ts'
+ * import { seedAbilities } from './abilities_fixture.ts'
  * seedItems()
+ * seedAbilities()
  * import { assertEquals } from '@std/assert'
  * import { ITEMS } from './items.ts'
  * let worn = (...kinds: string[]) =>

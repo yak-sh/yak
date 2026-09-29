@@ -127,6 +127,8 @@ export let aimOf = <M extends Mark>(
  * the act's reach, a blow's or ability `a`'s, or else nothing.
  *
  * ```ts
+ * import { seedAbilities } from './abilities_fixture.ts'
+ * seedAbilities()
  * import { assertEquals } from '@std/assert'
  * import { ABILITIES } from './abilities.ts'
  * import { HANDLES } from './arms.ts'
@@ -184,6 +186,8 @@ export let landOf = <M extends Mark>(
  * aimed at and everything about it; for `self`, nothing.
  *
  * ```ts
+ * import { seedAbilities } from './abilities_fixture.ts'
+ * seedAbilities()
  * import { assertEquals } from '@std/assert'
  * import { ABILITIES } from './abilities.ts'
  * import { HANDLES } from './arms.ts'

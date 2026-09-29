@@ -13,7 +13,7 @@
 // last seen (seen.ts).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { ABILITIES, type Ability } from './abilities.ts'
+import { ABILITIES, type Ability, useAbilities } from './abilities.ts'
 import { bar } from './bar.ts'
 import { board } from './board.ts'
 import { BEASTS, useBeasts } from './beasts.ts'
@@ -139,6 +139,7 @@ let buildingReady = opening.designs('building_design', (rows) => {
   hadBuildings = true
 })
 await Promise.all([
+  opening.designs('ability_design', useAbilities),
   opening.designs('beast_design', useBeasts),
   opening.designs('item_design', useItems),
   themeReady,

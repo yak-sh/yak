@@ -448,6 +448,8 @@ export let canLearn = (skill: string, known: string[], lvl: number) => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
+ * import { seedAbilities } from './abilities_fixture.ts'
+ * seedAbilities()
  * assertEquals(formOf('mend', [])?.heal, 0.3)
  * assertEquals(formOf('mend', ['kindness'])?.heal, 0.45)
  * assertEquals(formOf('mend', ['kindness', 'aegis', 'vigil', 'sanctuary'])?.heal, 0.6)

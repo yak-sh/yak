@@ -1,0 +1,328 @@
+[
+  {
+    "entity": {
+      "eid": "19979de4-1593-8b57-8c72-783f501ea8e3"
+    },
+    "ability_design": {
+      "kind": "haymaker",
+      "name": "Haymaker",
+      "icon": "handFist",
+      "shape": "one",
+      "pose": "swing",
+      "dmg": 2,
+      "held": 1000,
+      "cool": 6000,
+      "description": "A heavy swing",
+      "weapon": "fists",
+      "slot": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "ea5047a3-1432-8e2d-880c-1d8d3426f913"
+    },
+    "ability_design": {
+      "kind": "cleave",
+      "name": "Cleave",
+      "icon": "axe",
+      "shape": "arc",
+      "pose": "swing",
+      "far": 0.5,
+      "arc": 1.4,
+      "dmg": 1.3,
+      "cool": 6000,
+      "description": "A sweep across foes in front of you",
+      "weapon": "sword",
+      "slot": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "cfcdd13c-d4ec-85ef-8710-07c40bff8cef"
+    },
+    "ability_design": {
+      "kind": "lunge",
+      "name": "Lunge",
+      "icon": "zap",
+      "shape": "one",
+      "pose": "swing",
+      "dash": 4.5,
+      "dmg": 2,
+      "cool": 9000,
+      "refund": true,
+      "description": "Dash toward one foe and run it through",
+      "weapon": "sword",
+      "slot": 2
+    }
+  },
+  {
+    "entity": {
+      "eid": "6367ad8a-5199-8d1e-be8e-8b0ab2162ddd"
+    },
+    "ability_design": {
+      "kind": "whirl",
+      "name": "Whirl",
+      "icon": "tornado",
+      "shape": "ring",
+      "pose": "spin",
+      "far": 2.8,
+      "dmg": 1.25,
+      "cool": 8000,
+      "description": "Spin and strike nearby foes",
+      "weapon": "axe",
+      "slot": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "576b2719-9d3c-897d-89ff-3762e1f7d53c"
+    },
+    "ability_design": {
+      "kind": "rend",
+      "name": "Rend",
+      "icon": "droplet",
+      "shape": "one",
+      "pose": "swing",
+      "dmg": 1.4,
+      "bleed": 1.6,
+      "cool": 10000,
+      "tint": 14174266,
+      "description": "A deep cut",
+      "weapon": "axe",
+      "slot": 2
+    }
+  },
+  {
+    "entity": {
+      "eid": "4c831268-ccd1-81f5-869c-6070d1a44efe"
+    },
+    "ability_design": {
+      "kind": "quake",
+      "element": "earth",
+      "name": "Quake",
+      "icon": "activity",
+      "shape": "ring",
+      "pose": "swing",
+      "far": 3.4,
+      "dmg": 1,
+      "held": 2000,
+      "cool": 11000,
+      "tint": 12099706,
+      "description": "Slam the ground",
+      "weapon": "hammer",
+      "slot": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "085bb14e-cf16-8ffe-8a9a-7a7759bd0174"
+    },
+    "ability_design": {
+      "kind": "crush",
+      "name": "Crush",
+      "icon": "hammer",
+      "shape": "one",
+      "pose": "swing",
+      "dmg": 2.6,
+      "cool": 9000,
+      "description": "An enormous overhead blow",
+      "weapon": "hammer",
+      "slot": 2
+    }
+  },
+  {
+    "entity": {
+      "eid": "d5529dbf-622e-8f4e-ad26-d5324b987696"
+    },
+    "ability_design": {
+      "kind": "flurry",
+      "name": "Flurry",
+      "icon": "blow",
+      "shape": "one",
+      "pose": "swing",
+      "dmg": 0.8,
+      "hits": 3,
+      "sure": true,
+      "time": 600,
+      "cool": 6000,
+      "description": "Rapid dagger strikes",
+      "weapon": "dagger",
+      "slot": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "c6c8d0e4-6ad0-8cfe-9191-a28387c01113"
+    },
+    "ability_design": {
+      "kind": "crosscut",
+      "name": "Crosscut",
+      "icon": "scissors",
+      "shape": "one",
+      "pose": "cross",
+      "dmg": 0.9,
+      "hits": 2,
+      "bleed": 1.2,
+      "time": 450,
+      "cool": 8000,
+      "tint": 14174266,
+      "description": "Cross both daggers against one foe",
+      "offhand": "dagger"
+    }
+  },
+  {
+    "entity": {
+      "eid": "799b6b48-ce93-8019-9815-fb25b51b2651"
+    },
+    "ability_design": {
+      "kind": "shadowstep",
+      "element": "shadow",
+      "name": "Shadowstep",
+      "icon": "mask",
+      "shape": "one",
+      "pose": "swing",
+      "dash": 6,
+      "behind": true,
+      "dmg": 1,
+      "sure": true,
+      "cool": 10000,
+      "tint": 6969994,
+      "description": "Step behind one foe and strike",
+      "weapon": "dagger",
+      "slot": 2
+    }
+  },
+  {
+    "entity": {
+      "eid": "95bb1226-be6b-8065-8495-e15e496f99e1"
+    },
+    "ability_design": {
+      "kind": "volley",
+      "name": "Volley",
+      "icon": "cloudRain",
+      "shape": "burst",
+      "pose": "swing",
+      "far": 3,
+      "dmg": 0.9,
+      "shots": 6,
+      "cool": 8000,
+      "description": "Rain arrows around your target",
+      "weapon": "bow",
+      "slot": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "e9aed41b-e629-8721-9c45-cfdd0d75465d"
+    },
+    "ability_design": {
+      "kind": "pin",
+      "name": "Pinning shot",
+      "icon": "locateFixed",
+      "shape": "one",
+      "pose": "swing",
+      "dmg": 1.2,
+      "held": 3000,
+      "cool": 10000,
+      "description": "Pin one foe in place",
+      "weapon": "bow",
+      "slot": 2
+    }
+  },
+  {
+    "entity": {
+      "eid": "b6893c26-26e3-870b-b785-957bec8b03a4"
+    },
+    "ability_design": {
+      "kind": "blaze",
+      "element": "fire",
+      "name": "Blaze",
+      "icon": "flame",
+      "shape": "burst",
+      "pose": "swing",
+      "far": 2.5,
+      "dmg": 1.4,
+      "cool": 7000,
+      "tint": 16747066,
+      "description": "A bolt bursts into flame around your target",
+      "weapon": "staff",
+      "slot": 1
+    }
+  },
+  {
+    "entity": {
+      "eid": "a6daf880-37e9-892f-be24-a38628512b9f"
+    },
+    "ability_design": {
+      "kind": "ward",
+      "element": "light",
+      "name": "Ward",
+      "icon": "shieldCheck",
+      "shape": "self",
+      "pose": "cast",
+      "ward": 0.3,
+      "cool": 16000,
+      "tint": 10475775,
+      "description": "Raise a ward of light",
+      "weapon": "staff",
+      "slot": 2
+    }
+  },
+  {
+    "entity": {
+      "eid": "6bbdee1d-e4eb-88fc-8711-526c5e18b5e9"
+    },
+    "ability_design": {
+      "kind": "block",
+      "name": "Block",
+      "icon": "shield",
+      "shape": "self",
+      "pose": "guard",
+      "guard": 1500,
+      "time": 400,
+      "cool": 6000,
+      "tint": 16769162,
+      "description": "Raise your shield and leave a blocked foe open to a great blow",
+      "offhand": "shield"
+    }
+  },
+  {
+    "entity": {
+      "eid": "22f24b4a-8438-8ce7-bb20-c6b67dfd23f2"
+    },
+    "ability_design": {
+      "kind": "mend",
+      "element": "life",
+      "name": "Mend",
+      "icon": "handHeart",
+      "shape": "self",
+      "pose": "cast",
+      "heal": 0.3,
+      "cool": 18000,
+      "tint": 9433210,
+      "description": "Read a word of healing",
+      "offhand": "tome"
+    }
+  },
+  {
+    "entity": {
+      "eid": "1831c78e-5c1b-8789-8464-0c8c7f1a4680"
+    },
+    "ability_design": {
+      "kind": "scorch",
+      "element": "fire",
+      "name": "Scorch",
+      "icon": "flameKindling",
+      "shape": "arc",
+      "pose": "swing",
+      "far": 1.2,
+      "arc": 1,
+      "dmg": 0.6,
+      "bleed": 1.2,
+      "cool": 9000,
+      "tint": 16742954,
+      "description": "Sweep flame across foes in front of you",
+      "offhand": "torch"
+    }
+  }
+]

@@ -2,9 +2,64 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Mossvale",
   "rtc": "open",
-  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. Levels' geography and quests are authored data; creature, item, building and region theme designs are store rows seeded from files and watched by every page.",
+  "description": "A voxel world to adventure in together. What a player is and has done, where they were last seen and where they have explored, is kept in this app's store (player, look, seen, explored, fire, slain, item, gathered, crafted, used, upgraded, equip, learned, respec, journal), and so is what they said (chat) and the villagers who answer them and what they hand over (villager, deal, agreed, handed); what moves (where each player and creature is, how they move, how they fare in a fight, what they wear) is relayed between the players in a level and kept by nobody. Levels' geography and quests are authored data; creature, item, ability, building and region theme designs are store rows seeded from files and watched by every page.",
   "models": "open",
   "$defs": {
+    "ability_design": {
+      "component": true,
+      "type": "object",
+      "floor": "editor",
+      "unique": [["kind"]],
+      "description": "An ability's combat rules, description and equipment grant.",
+      "properties": {
+        "kind": { "type": "string", "minLength": 1, "index": true },
+        "name": { "type": "string", "minLength": 1 },
+        "icon": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "weapon": { "type": "string", "minLength": 1 },
+        "slot": { "type": "integer", "minimum": 1, "maximum": 2 },
+        "offhand": { "type": "string", "minLength": 1 },
+        "shape": {
+          "type": "string",
+          "enum": ["one", "arc", "ring", "burst", "self"]
+        },
+        "pose": {
+          "type": "string",
+          "enum": ["swing", "spin", "guard", "cast", "cross"]
+        },
+        "element": {
+          "type": "string",
+          "enum": ["fire", "earth", "shadow", "light", "life"]
+        },
+        "far": { "type": "number", "minimum": 0 },
+        "arc": { "type": "number", "minimum": 0 },
+        "dmg": { "type": "number", "minimum": 0 },
+        "hits": { "type": "integer", "minimum": 1 },
+        "shots": { "type": "integer", "minimum": 1 },
+        "sure": { "type": "boolean" },
+        "held": { "type": "number", "minimum": 0 },
+        "bleed": { "type": "number", "minimum": 0 },
+        "dash": { "type": "number", "minimum": 0 },
+        "behind": { "type": "boolean" },
+        "guard": { "type": "number", "minimum": 0 },
+        "ward": { "type": "number", "minimum": 0 },
+        "heal": { "type": "number", "minimum": 0 },
+        "time": { "type": "number", "minimum": 0 },
+        "cool": { "type": "number", "minimum": 0 },
+        "renew": { "type": "boolean" },
+        "refund": { "type": "boolean" },
+        "tint": { "type": "integer", "minimum": 0, "maximum": 16777215 }
+      },
+      "required": [
+        "kind",
+        "name",
+        "icon",
+        "description",
+        "shape",
+        "pose",
+        "cool"
+      ]
+    },
     "building_design": {
       "component": true,
       "type": "object",
