@@ -25,7 +25,9 @@ import { dress } from './sheet.ts'
  * @yaks/context, @yaks/model and its providers), what a reply carries
  * (@yaks/blob), the programs it starts (@yaks/process), the sign-ins it keeps
  * (@yaks/secrets, @yaks/connections), the runs its commits owe (@yaks/effects),
- * the work it is doing, and the harness's own words. In a config's order: a
+ * the work it is doing, and the harness's own words; and which tables each
+ * entity is in (@yaks/archetype), so a read asks those tables alone, as the
+ * box's own graph does. In a config's order: a
  * later package's computed property wins, so @yaks/session's claim is the step
  * in a task's status it contributes. */
 export let PLUGINS: string[] = [
@@ -37,6 +39,7 @@ export let PLUGINS: string[] = [
   '@yaks/edge',
   '@yaks/blob',
   '@yaks/doc',
+  '@yaks/archetype',
   '@yaks/effects',
   '@yaks/task',
   '@yaks/project',

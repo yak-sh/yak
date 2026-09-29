@@ -101,33 +101,35 @@ let locked = async <T>(
 /** Find the checkout containing `cwd`, and update the repository's refs from
  * Git. A ref that Git no longer has keeps its row, marked absent. */
 export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
-  let path = await Deno.realPath(
-    (await git(cwd, ['rev-parse', '--show-toplevel']))!,
-  )
-  let common = await Deno.realPath(
-    (await git(path, [
+  // Git is asked everything at once: each answer is about the checkout that
+  // holds `cwd`, from wherever in it `cwd` is, and a session opening pays for
+  // one round of processes rather than six in a row.
+  let [dirs, head, branch, refs] = await Promise.all([
+    git(cwd, [
       'rev-parse',
       '--path-format=absolute',
+      '--show-toplevel',
       '--git-common-dir',
-    ]))!,
-  )
-  let gitdir = await Deno.realPath(
-    (await git(path, ['rev-parse', '--absolute-git-dir']))!,
+      '--absolute-git-dir',
+    ]),
+    git(cwd, ['rev-parse', '--verify', 'HEAD'], true),
+    git(cwd, ['symbolic-ref', '-q', 'HEAD'], true),
+    git(cwd, [
+      'for-each-ref',
+      '--format=%(refname)%09%(objectname)%09%(symref)',
+    ]),
+  ])
+  let [path, common, gitdir] = await Promise.all(
+    dirs!.split('\n').map((dir) => Deno.realPath(dir)),
   )
   let repository = repositoryEid(common)
   let eid = worktreeEid(repository, path)
-  let head = await git(path, ['rev-parse', '--verify', 'HEAD'], true)
-  let branch = await git(path, ['symbolic-ref', '-q', 'HEAD'], true)
-  let refs = (await git(path, [
-    'for-each-ref',
-    '--format=%(refname)%09%(objectname)%09%(symref)',
-  ]))!
   let changes: Bundle[] = [{
     entity: { eid: repository },
     repository: { common },
   }]
   let found = new Set<string>()
-  for (let line of refs.split('\n').filter(Boolean)) {
+  for (let line of refs!.split('\n').filter(Boolean)) {
     let [name, oid, target] = line.split('\t')
     let id = refEid(repository, name)
     found.add(id)

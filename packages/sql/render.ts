@@ -107,7 +107,27 @@ let compound = (e: Expr): boolean =>
     : e.t == 'not' || e.t == 'null' || e.t == 'in' ||
       (e.t == 'raw' && !SIMPLE.test(e.sql))
 
-let expr = (e: Expr, c: Ctx): string => {
+// The text of each node rendered with nothing to bind, kept while the node
+// lives. A node is a value, never changed once built, so a caller that keeps
+// the tree of a statement it runs over and over (a read's projection of one
+// component, asked thousands of times a session) renders only what changed
+// since: the part holding its bound values. A leaf is cheaper to write than to
+// look up, and short text is not worth keeping.
+let seen = new WeakMap<object, string>()
+let LEAF = new Set(['col', 'val', 'lit', 'star', 'table'])
+let kept =
+  <N extends { t: string }>(write: (n: N, c: Ctx) => string) =>
+  (n: N, c: Ctx): string => {
+    if (c.inline || LEAF.has(n.t)) return write(n, c)
+    let text = seen.get(n)
+    if (text != null) return text
+    let bound = c.params.length
+    text = write(n, c)
+    if (c.params.length == bound && text.length >= 64) seen.set(n, text)
+    return text
+  }
+
+let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
   switch (e.t) {
     case 'raw':
       c.params.push(...e.params)
@@ -171,7 +191,7 @@ let expr = (e: Expr, c: Ctx): string => {
         e.msg == null ? '' : `, ${literal(e.msg)}`
       })`
   }
-}
+})
 
 let operand = (e: Expr, c: Ctx): string =>
   compound(e) ? `(${expr(e, c)})` : expr(e, c)
@@ -180,12 +200,12 @@ let list = (es: Expr[], c: Ctx): string => es.map((e) => expr(e, c)).join(', ')
 
 let names = (ns: string[]): string => ns.map(q).join(', ')
 
-let source = (s: Source, c: Ctx): string => {
+let source: (s: Source, c: Ctx) => string = kept((s: Source, c: Ctx) => {
   if (s.t == 'raw') return expr(s, c)
   let as = s.as ? ` as ${q(s.as)}` : ''
   if (s.t == 'from') return `(${query(s.q, c)})${as}`
   return `${q(s.name)}${s.args ? `(${list(s.args, c)})` : ''}${as}`
-}
+})
 
 let HOW = { join: 'join', left: 'left join', cross: 'cross join' }
 let joins = (js: Join[] | undefined, c: Ctx): string =>
@@ -217,7 +237,7 @@ let tail = (
   (s.limit ? ` limit ${expr(s.limit, c)}` : '') +
   (s.offset ? ` offset ${expr(s.offset, c)}` : '')
 
-let query = (s: Query, c: Ctx): string => {
+let query: (s: Query, c: Ctx) => string = kept((s: Query, c: Ctx) => {
   if (s.t == 'raw') return expr(s, c)
   if (s.t == 'values') {
     return `values ${s.rows.map((r) => `(${list(r, c)})`).join(', ')}`
@@ -236,7 +256,7 @@ let query = (s: Query, c: Ctx): string => {
     (s.group?.length ? ` group by ${list(s.group, c)}` : '') +
     (s.having ? ` having ${expr(s.having, c)}` : '') +
     tail(s, c)
-}
+})
 
 let returning = (es: Expr[] | undefined, c: Ctx): string =>
   es?.length ? ` returning ${list(es, c)}` : ''

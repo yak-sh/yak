@@ -44,6 +44,7 @@ import {
   type Row,
   type Select,
   select,
+  type Source,
   table,
   val,
 } from '@yaks/sql'
@@ -116,12 +117,13 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
 // A reference to a computed component's entity (the journal's `_change.tx`)
 // reads as that entity's eid, written out from the id it holds: such an
 // entity has no row in the entity table to join (@yaks/sql `Backing`).
-let project = (
+type Projection = { sel: Expr[]; joins: Join[] }
+let projection = (
   v: Vocab,
   comp: string,
   derived: Derived,
-  backed: Backings = {},
-): { sel: Expr[]; joins: Join[] } => {
+  backed: Backings,
+): Projection => {
   let own = (prop: string) => col(prop, comp)
   let sel: Expr[] = []
   let joins: Join[] = []
@@ -150,6 +152,42 @@ let project = (
   }
   return { sel, joins }
 }
+
+// What `key` holds in `m`, made on first ask.
+let at = <K, V>(
+  m: { get(k: K): V | undefined; set(k: K, v: V): unknown },
+  key: K,
+  make: () => V,
+): V => {
+  let v = m.get(key)
+  if (v === undefined) m.set(key, v = make())
+  return v
+}
+
+// A read's trees, kept per vocabulary and registries while they live. A store
+// asks the same few reads thousands of times a session, and @yaks/sql renders
+// a tree it has seen once, so only the part holding the ids is written again.
+// The registries are built once per store and never changed.
+let NONE = {}
+let kept = new WeakMap<
+  object,
+  WeakMap<object, WeakMap<object, Map<string, Projection>>>
+>()
+let project = (
+  v: Vocab,
+  comp: string,
+  derived: Derived = NONE,
+  backed: Backings = NONE,
+): Projection =>
+  at(
+    at(
+      at(at(kept, v, () => new WeakMap()), derived, () => new WeakMap()),
+      backed,
+      () => new Map(),
+    ),
+    comp,
+    () => projection(v, comp, derived, backed),
+  )
 
 // One component's read, whatever names its owners: `lead` is what is selected
 // before the component's own columns, `owner` the condition on `o`, the
@@ -255,27 +293,33 @@ export let spine = (vocab: Vocab, which: Expr): Select => {
 // Which tables hold a row for any owner. VALUES has no compound-SELECT arm
 // limit, so a wide sparse vocabulary still takes one presence statement.
 // Globally empty tables short-circuit before the owners are walked.
-let probe = (names: string[], owners: number[]): Select =>
+let worn = new WeakMap<Vocab, Map<string, Source>>()
+let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
   select({
     with: [{ name: 'owners', q: each(owners), materialized: true }],
     cols: [as(col('column1', 'worn'), 'name')],
-    from: from({
-      t: 'values',
-      rows: names.map((c) => [
-        lit(c),
-        and(
-          ...(owners.length > 1
-            ? [exists(select({ cols: [lit(1)], from: table(c) }))]
-            : []),
-          exists(select({
-            cols: [lit(1)],
-            from: table('owners'),
-            joins: [cross(table(c))],
-            where: eq(col('entity', c), col('value', 'owners')),
-          })),
-        ),
-      ]),
-    }, 'worn'),
+    from: at(
+      at(worn, vocab, () => new Map()),
+      `${owners.length > 1} ${names}`,
+      () =>
+        from({
+          t: 'values',
+          rows: names.map((c) => [
+            lit(c),
+            and(
+              ...(owners.length > 1
+                ? [exists(select({ cols: [lit(1)], from: table(c) }))]
+                : []),
+              exists(select({
+                cols: [lit(1)],
+                from: table('owners'),
+                joins: [cross(table(c))],
+                where: eq(col('entity', c), col('value', 'owners')),
+              })),
+            ),
+          ]),
+        }, 'worn'),
+    ),
     where: eq(col('column2', 'worn'), lit(true)),
   })
 
@@ -355,7 +399,7 @@ export let get = (
     let present: string[] = comps && owners.length ? names : []
     if (!comps && owners.length && names.length) {
       present.push(
-        ...driver.query(probe(names, owners))
+        ...driver.query(probe(vocab, names, owners))
           .map((r) => String(r.name)),
       )
     }
@@ -368,12 +412,7 @@ export let get = (
       // The spine pass already resolved every owner's storage id. Do not join
       // it again for each component just to recover the eid we already hold.
       // References still use project()'s joins; only ownership stays numeric.
-      let { sel, joins } = project(
-        vocab,
-        comp,
-        opts.derived ?? {},
-        opts.backed,
-      )
+      let { sel, joins } = project(vocab, comp, opts.derived, opts.backed)
       for (
         let row of driver.query(select({
           cols: [as(col('entity', comp), '@id'), ...sel],
@@ -411,7 +450,7 @@ let backedGet = (
       ? eids.map((e) => idOf(tag, e)).filter((id) => id != null)
       : []
     if (!tag || !ids.length) return []
-    let { sel, joins } = project(vocab, comp, opts.derived ?? {}, opts.backed)
+    let { sel, joins } = project(vocab, comp, opts.derived, opts.backed)
     let asked = !comps || comps.includes(comp)
     return driver.query(select({
       cols: [as(col('entity', comp), '@id'), ...sel],
