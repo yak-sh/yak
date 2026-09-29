@@ -683,7 +683,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // write would have returned it, or the refusal it would have met.
       if (!tool.readOnly && args.check === true) {
         answered = await land(
-          await host.apply(made, { check: true }),
+          await g.apply(made, { check: true }),
           'done',
           false,
         )

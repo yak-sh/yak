@@ -137,6 +137,36 @@ Deno.test('a direct tool reply carries what its caller is owed beside its data',
   assertEquals(replies, 1)
 })
 
+Deno.test('a rehearsal keeps its answer in the call graph', async () => {
+  let { g } = world()
+  let host = {
+    ...g,
+    apply: () => {
+      throw new Error('the answer crossed into the host')
+    },
+  }
+  let tool: Tool = {
+    ...echo,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        value: { type: 'string' },
+        count: { type: 'integer', default: 2 },
+        check: { type: 'boolean' },
+      },
+    },
+  }
+  let r = runner(g, { tools: [tool], host, report: () => {} })
+  await r.ensure()
+  let answer = await r.call(called('example_echo', {
+    value: 'hi',
+    check: true,
+  }))
+  assertEquals(faulted(answer), false)
+  assertEquals(body(answerOf(answer)[0]), 'hi 2')
+  assertEquals((await g.read('.output&*')).length, 0)
+})
+
 Deno.test('a refused tool still carries what its caller is owed', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })
