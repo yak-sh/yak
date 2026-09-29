@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert'
-import { served } from './serve.ts'
+import { ranged, type Served, served, servedVia } from './serve.ts'
 
 Deno.test('a served object is fenced, revalidated, and named safely', async () => {
   let res = served(new Uint8Array([1, 2, 3]), {
@@ -87,6 +87,60 @@ Deno.test('no mime means octet-stream, no name means no disposition', () => {
   let res = served(new Uint8Array())
   assertEquals(res.headers.get('content-type'), 'application/octet-stream')
   assertEquals(res.headers.get('content-disposition'), null)
+})
+
+Deno.test('cached bytes keep range and condition semantics under the response fence', async () => {
+  let body = new Uint8Array([0, 1, 2, 3, 4, 5])
+  let calls: Request[] = []
+  let read = (request: Request) => {
+    calls.push(request)
+    return Promise.resolve(ranged(body, request, {
+      'content-type': 'application/octet-stream',
+      'cache-control': 'public, max-age=31536000',
+      etag: '"bytes"',
+    }))
+  }
+  let meta: Served = {
+    mime: 'video/mp4',
+    name: 'theme.mp4',
+    etag: '"representation"',
+    cache: 'revalidate',
+  }
+  let at = 'https://blob.invalid/movie.mp4'
+  let get = (headers: HeadersInit = {}, method = 'GET') =>
+    servedVia(read, meta, new Request(at, { method, headers }))
+
+  let whole = await get()
+  assertEquals(whole.status, 200)
+  assertEquals(whole.headers.get('content-type'), 'video/mp4')
+  assertEquals(whole.headers.get('cache-control'), 'private, no-cache')
+  assertEquals(whole.headers.get('etag'), '"representation"')
+  assertEquals(new Uint8Array(await whole.arrayBuffer()), body)
+
+  let part = await get({ range: 'bytes=2-4', 'if-range': '"representation"' })
+  assertEquals(part.status, 206)
+  assertEquals(part.headers.get('content-range'), 'bytes 2-4/6')
+  assertEquals(new Uint8Array(await part.arrayBuffer()), body.slice(2, 5))
+  assertEquals(calls.at(-1)?.headers.get('range'), 'bytes=2-4')
+
+  let stale = await get({ range: 'bytes=2-', 'if-range': '"old"' })
+  assertEquals(stale.status, 200)
+  assertEquals(calls.at(-1)?.headers.get('range'), null)
+  assertEquals(new Uint8Array(await stale.arrayBuffer()), body)
+
+  let before = calls.length
+  let fresh = await get({ 'if-none-match': '"representation"' })
+  assertEquals(fresh.status, 304)
+  assertEquals(calls.length, before)
+
+  let beyond = await get({ range: 'bytes=6-' })
+  assertEquals(beyond.status, 416)
+  assertEquals(beyond.headers.get('content-range'), 'bytes */6')
+
+  let head = await get({}, 'HEAD')
+  assertEquals(head.status, 200)
+  assertEquals(head.headers.get('content-length'), '6')
+  assertEquals(await head.text(), '')
 })
 
 Deno.test('immutable and private policies follow the representation', () => {

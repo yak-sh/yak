@@ -145,6 +145,11 @@ Deno.test('a letter lands in the app its address named', async () => {
 
     // An attachment is filed where a page's upload is (apps.ts `filed`) and
     // hung off the letter, so a reader finds it from the letter.
+    await connector(k, them.cookie).tool('app_set', {
+      space: 'jeff24',
+      app: 'recipes',
+      access: 'private',
+    })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
@@ -185,6 +190,29 @@ Deno.test('a letter lands in the app its address named', async () => {
       '.edge.from=' + held.entity.eid,
     ) as unknown as { edge: { to: string } }[]
     assertEquals(links.map((l) => l.edge.to), [file.entity.eid])
+    assertEquals(
+      (await arrives(k, {
+        from: 'ana@books.example',
+        to: 'jeff24.recipes@yaks.app',
+        raw: rfc822(
+          {
+            Subject: 'Unnamed attachment',
+            'Content-Type': 'multipart/mixed; boundary="b2"',
+          },
+          [
+            '--b2',
+            'Content-Type: application/octet-stream',
+            'Content-Disposition: attachment',
+            'Content-Transfer-Encoding: base64',
+            '',
+            btoa('unnamed bytes'),
+            '--b2--',
+            '',
+          ].join('\r\n'),
+        ),
+      })).status,
+      200,
+    )
   } finally {
     await k.stop()
   }

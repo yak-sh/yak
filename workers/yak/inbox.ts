@@ -157,6 +157,7 @@ let carried = async (
   env: Env,
   space: Space,
   app: App,
+  graph: ReturnType<typeof metaOf>,
   mail: Email,
   of: string,
 ) => {
@@ -170,6 +171,7 @@ let carried = async (
       env,
       space,
       app,
+      graph,
       bytes,
       a.mimeType || 'application/octet-stream',
       a.filename ?? '',
@@ -201,9 +203,17 @@ export let arrived = async (m: Inbound, env: Env): Promise<string> => {
     // nobody said.
     ...(signed == null ? {} : { verified: signed }),
   })
-  await metaOf(appStore(env.STORE, space, app, env)).apply([
+  let store = appStore(env.STORE, space, app, env)
+  let graph = metaOf((path, init, sent) =>
+    store(path, init, {
+      'x-yak-person': app.eid,
+      'x-yak-role': 'editor',
+      ...sent,
+    })
+  )
+  await metaOf(store).apply([
     ...letter,
-    ...(await carried(env, space, app, mail, eid)),
+    ...(await carried(env, space, app, graph, mail, eid)),
   ], KERNEL)
   // The month's letters, one higher (meter.ts). After the letter is filed and
   // never before it: the count is what the space received, and a meter that

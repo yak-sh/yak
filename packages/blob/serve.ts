@@ -169,3 +169,41 @@ export let servedOpen = (
   meta: Served = {},
   request: Request = new Request('https://blob.invalid/'),
 ): Promise<Response> => rangedOpen(object, request, headersOf(meta))
+
+/** Fence a byte response fetched through a cache or another object store. */
+export let servedVia = async (
+  read: (request: Request) => Promise<Response>,
+  meta: Served,
+  request: Request,
+): Promise<Response> => {
+  let headers = new Headers(headersOf(meta))
+  headers.set('accept-ranges', 'bytes')
+  if (unchanged(request, headers.get('etag'))) {
+    return new Response(null, { status: 304, headers })
+  }
+  let ifRange = request.headers.get('if-range')
+  let range = request.method == 'GET' &&
+      (!ifRange || (meta.etag && !meta.etag.startsWith('W/') &&
+        ifRange == meta.etag))
+    ? request.headers.get('range')
+    : null
+  let bytes = await read(
+    new Request(request.url, {
+      method: request.method,
+      headers: range ? { range } : {},
+    }),
+  )
+  if (![200, 206, 416].includes(bytes.status)) return bytes
+  let head = new Headers(bytes.headers)
+  for (let [key, value] of headers) head.set(key, value)
+  head.delete('cache-tag')
+  if (request.method == 'HEAD') await bytes.body?.cancel()
+  return new Response(
+    request.method == 'HEAD'
+      ? new ReadableStream({ start: (c) => c.close() })
+      : bytes.status == 416
+      ? null
+      : bytes.body,
+    { status: bytes.status, headers: head },
+  )
+}

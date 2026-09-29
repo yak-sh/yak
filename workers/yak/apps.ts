@@ -64,12 +64,11 @@ import {
   representation,
   represents,
   type Served,
-  served as fenced,
-  servedOpen as fencedOpen,
+  servedVia as fencedVia,
   type Size,
   sizeOf,
 } from '@yaks/blob'
-import { KERNEL, metaOf, minted } from './meta.ts'
+import { KERNEL, type Meta, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
 import { batched, lined, receipt } from './wire.ts'
 import {
@@ -787,6 +786,7 @@ export let filed = async (
   env: Env,
   space: Space,
   app: App,
+  graph: Meta,
   bytes: Uint8Array<ArrayBuffer>,
   mime: string,
   name: string,
@@ -803,10 +803,9 @@ export let filed = async (
   let sha = await sha256(bytes)
   let use = await useOf(sha)
   if (!name || mime == 'application/octet-stream') {
-    let [prior] = await metaOf(appStore(env.STORE, space, app, env))
-      .query(`.eid=${use}`) as {
-        attachment?: { name?: string; mime?: string }
-      }[]
+    let [prior] = await graph.query(`.eid=${use}`) as {
+      attachment?: { name?: string; mime?: string }
+    }[]
     name ||= prior?.attachment?.name ?? ''
     if (mime == 'application/octet-stream') {
       mime = prior?.attachment?.mime ?? mime
@@ -870,9 +869,20 @@ let took = async (
     bytes: bytes.byteLength,
   }])
   if (stopped) return json(413, 'space_full', stopped)
-  let file = await filed(env, space, app, bytes, mimeSent(req), nameSent(req))
+  let graph = metaOf((path, init, sent) =>
+    store(path, init, { ...headers, ...sent })
+  )
+  let file = await filed(
+    env,
+    space,
+    app,
+    graph,
+    bytes,
+    mimeSent(req),
+    nameSent(req),
+  )
   try {
-    await metaOf(store).apply(file.bundles, { ...headers, ...KERNEL })
+    await graph.apply(file.bundles, KERNEL)
   } catch (e) {
     caught(e, { request: 'POST /api/blob', space: space.slug, app: app.slug })
     return json(400, 'refused', e instanceof Error ? e.message : String(e))
@@ -982,27 +992,44 @@ let gave = async (
     !rep || rep.scope != app.eid || rep.address != sha ||
     !represents(eid, rep)
   ) return json(404, 'no_such_file')
-  let partial = req.method == 'HEAD' ||
-    req.headers.has('range') || req.headers.has('if-none-match')
-  let object
-  let bytes
-  try {
-    if (partial) object = await blobs.open(blobKey(space, app, sha))
-    else bytes = await blobs.get(blobKey(space, app, sha))
-    if (partial && !object) return json(404, 'no_such_file')
-  } catch (e) {
-    caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
-    return json(404, 'no_such_file')
-  }
   let response: Served = {
     mime: rep.media_type,
     name: rep.name,
     etag: `"${eid}"`,
     cache: app.access == 'private' ? 'private' : 'revalidate',
   }
-  return object
-    ? fencedOpen(object, response, req)
-    : fenced(bytes!, response, req)
+  try {
+    let bytes = await fencedVia(
+      (seek) =>
+        files.blobBytes(
+          env,
+          app,
+          blobPrefix(space, app),
+          sha,
+          seek.headers.get('range'),
+          seek.method,
+        ),
+      response,
+      req,
+    )
+    if (bytes.status == 404) {
+      await bytes.body?.cancel()
+      caught(new Error(`missing blob ${sha}`), {
+        request: 'GET /api/blob',
+        space: space.slug,
+        app: app.slug,
+      })
+      return json(404, 'no_such_file')
+    }
+    if (![200, 206, 304, 416].includes(bytes.status)) {
+      await bytes.body?.cancel()
+      throw new Error(`blob bytes answered ${bytes.status}`)
+    }
+    return bytes
+  } catch (e) {
+    caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
+    return json(503, 'blob_unavailable')
+  }
 }
 
 // What to call this person, for the store to write beside their rows: the
