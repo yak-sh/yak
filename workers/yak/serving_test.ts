@@ -1413,6 +1413,52 @@ Deno.test('env.APP: a private app is written by its own worker, and by nobody el
   assertEquals((await (await asAda('/api/query?.person')).json()).length, 0)
 })
 
+// Inside an app's worker's own call, Cloudflare refuses the hop to the cache
+// in front of `Files` (apps.ts `reachable`); the worker still gets its bytes.
+Deno.test("an app's worker reads its own page and upload where the cache refuses it", async () => {
+  let env: Env
+  let photo = ''
+  using k = await router((req) =>
+    apps.fetch(
+      new Request(
+        visit(new URL(req.url).pathname == '/photo' ? photo : '/index.html'),
+        { headers: { 'x-yak-grant': req.headers.get('x-yak-grant') ?? '' } },
+      ),
+      env,
+    )
+  )
+  env = k.env
+  k.put('ada/cookbook/index.html', '<!doctype html><body>the page</body>')
+  let body = new Uint8Array([1, 2, 3])
+  let upload = await apps.fetch(
+    visit('/cookbook/api/blob', {
+      method: 'POST',
+      headers: {
+        cookie: await as(ADA),
+        'content-type': 'application/octet-stream',
+      },
+      body,
+    }),
+    env,
+  )
+  photo = (await upload.json()).url
+  env.FILES = {
+    fetch: () =>
+      Promise.reject(
+        new DOMException(
+          'This ServiceStub cannot be serialized.',
+          'DataCloneError',
+        ),
+      ),
+  }
+  let page = await k.at('/card')
+  assertEquals(page.status, 200)
+  assertStringIncludes(await page.text(), 'the page')
+  let got = await k.at('/photo')
+  assertEquals(got.status, 200)
+  assertEquals(new Uint8Array(await got.arrayBuffer()), body)
+})
+
 Deno.test('photo and file uploads enforce space R2 limits from actual bytes', async () => {
   using scenario = platform()
   let { env, files } = scenario

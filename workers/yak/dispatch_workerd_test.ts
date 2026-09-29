@@ -37,7 +37,7 @@ Deno.test('workerd links the shim, the app, and its wasm', async () => {
   await pass.body?.cancel()
 })
 
-Deno.test('workerd serves a file through the cached FILES entrypoint', async () => {
+Deno.test("workerd serves a file to a visitor and to its app's worker", async () => {
   let k = workerd()
   let space = 'filebindprobe'
   let { cookie } = await seed(k, [{ slug: space, apps: ['assets'] }])

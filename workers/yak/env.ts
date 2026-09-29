@@ -259,8 +259,9 @@ export type Env = {
   // The one binding that is not a part waiting to be split out: `Files` is a
   // second entrypoint of this same Worker (index.ts), bound here so that
   // Cloudflare's cache sits between the gateway and the bucket (cache.ts,
-  // T-33197). Absent under `wrangler dev` and the workerd probes, where
-  // `bound` calls the module in-process and nothing is cached.
+  // T-33197). Absent under `deno test`, and taken off a request an app's
+  // worker made (apps.ts `reachable`), where `bound` calls the module
+  // in-process and nothing is cached.
   FILES?: Fetcher
   // The apex's public home and gallery, cached behind the uncached gateway.
   SITE?: Fetcher
