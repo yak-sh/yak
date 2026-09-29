@@ -163,6 +163,31 @@ test('an input is asked, a tool call is run, the transcript settles', async () =
   }])
 })
 
+test('a turn whose using names tools is offered those alone, the runner’s by name too', async () => {
+  let g = world()
+  let shout = {
+    ...echo,
+    name: 'shout',
+    run: (args: Record<string, unknown>) => String(args.text).toUpperCase(),
+  }
+  await g.apply([
+    { entity: { eid: toolEid('shout') }, tool: { name: 'shout' } },
+    { entity: { eid: 'e1' }, using: { tools: ['shout', 'nothing'] } },
+  ])
+  let { model, asked } = scripted([{
+    id: 'r1',
+    model: 'fake-1',
+    items: [{ kind: 'call', id: 'c1', name: 'shout', args: '{"text":"hi"}' }],
+  }, says('r2', 'done')])
+  let deps = { model, tools: [echo], named: () => [shout], mint }
+  assertEquals(await rest(g, ids.s, deps), 'settled')
+  assertEquals(asked.map((a) => a.tools?.map((t) => t.name)), [
+    ['shout'],
+    ['shout'],
+  ])
+  assertEquals(textOf((await transcript(g, ids.s))[3]), 'HI')
+})
+
 test('an anchored ask can include a late result from an earlier call', async () => {
   let g = world()
   await g.apply([{

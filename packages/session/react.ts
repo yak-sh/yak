@@ -124,6 +124,10 @@ export type Deps = {
   tools: Tool[]
   /** Resolve a stable tool registry for one execution step. */
   toolSnapshot?: (phase: 'ask' | 'call', session: Eid) => Promise<Tool[]>
+  /** Tools offered only to a turn whose `using.tools` names them, beside the
+   * runner's own: the ones a host can run that every transcript need not
+   * carry. Asked for only when a turn names some. */
+  named?: () => Tool[]
   /** aborts the model request in flight */
   signal?: AbortSignal
   /** aborts when the process running the transcript is leaving: no step
@@ -162,6 +166,33 @@ let objectIn = (text: string): Record<string, unknown> | undefined => {
   } catch {
     return undefined
   }
+}
+
+/**
+ * The tools a turn is offered: the runner's own, or, where the turn's
+ * `using.tools` names some, exactly those, each found among the runner's own
+ * and then among the ones it runs only by name, which are asked for only
+ * then. A name nothing answers to is left out.
+ *
+ * ```ts
+ * let tool = (name: string) =>
+ *   ({ name, description: name, parameters: {}, run: () => name })
+ * offered([tool('shell')], () => [tool('memory_around')], ['memory_around'])
+ *   .map((t) => t.name)
+ * // ['memory_around']
+ * ```
+ */
+export let offered = (
+  own: Tool[],
+  named: () => Tool[],
+  names: unknown,
+): Tool[] => {
+  if (!Array.isArray(names)) return own
+  let more = named()
+  return names.flatMap((name) => {
+    let t = own.find((t) => t.name == name) ?? more.find((t) => t.name == name)
+    return t ? [t] : []
+  })
 }
 
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
@@ -380,12 +411,16 @@ export let react = async (
     )
     return recovered ?? await current()
   }
-  const tools = deps.toolSnapshot
-    ? await deps.toolSnapshot(
-      openCalls(entries).length ? 'call' : 'ask',
-      session,
-    )
-    : deps.tools
+  const tools = offered(
+    deps.toolSnapshot
+      ? await deps.toolSnapshot(
+        openCalls(entries).length ? 'call' : 'ask',
+        session,
+      )
+      : deps.tools,
+    deps.named ?? (() => []),
+    usingBefore(entries)?.tools,
+  )
   let toolEntities = new Map<Eid, Tool>()
   for (let b of await g.read(`.${TOOL}`)) {
     let t = tools.find((t) => t.name == comp(b, TOOL)?.name)

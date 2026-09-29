@@ -34,7 +34,7 @@ import { dbPath, worktrees } from './paths.ts'
 import { collecting, going, homes, sweep } from './worktrees.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
-import { harnessTools } from './tools.ts'
+import { graphTools, harnessTools } from './tools.ts'
 
 export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools, parametersOf } from './tools.ts'
@@ -156,6 +156,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     (error, session) => report(error, { phase: 'worktree', session }),
     root,
   )
+  let named: Tool[] | undefined
   let lent: AgentOpts<Harness> = {
     ...workspace(h.g, cwd, root),
     ...opts,
@@ -180,6 +181,11 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
         reply: h.reply,
       }),
     remote: mcp.snapshot,
+    // The host's other tools, its plugins' own among them, adapted the first
+    // time a transcript names one: a builder's session offered memory_around
+    // and memory_save carries those and nothing else.
+    named: () =>
+      named ??= graphTools(h.g, { tools: h.hostTools?.(), reply: h.reply }),
     streaming: streamingEnabled(opts, env),
     opening: async (persona) => {
       let home = await homeAt(h.g, cwd)

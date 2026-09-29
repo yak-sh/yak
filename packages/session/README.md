@@ -56,6 +56,9 @@ await appendEntry(g, 'session', 'Build completed', {
 })
 ```
 
+`using.tools` names the tools a turn is offered: exactly those, found among the
+runner's own and then among the ones it runs only for a turn that names them
+(`Deps.named`, `offered()`); without it a turn gets the runner's own.
 `using.instructions` are the system instructions a turn is asked with, and
 `using.window` bounds what it sends: the newest that many lines, reaching back
 to the input that began the turn they cut into, so a long transcript costs a

@@ -2,7 +2,10 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools, parametersOf } from './tools.ts'
 import { core } from '@yaks/mcp'
+import { identityEid } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import { harness } from './testing.ts'
+import { local } from './local.ts'
 
 let schemas = async () => {
   let h = await harness()
@@ -107,5 +110,53 @@ test('the merged wait preserves process output and child status alongside task w
     else Deno.env.set('PROCESS_DIR', was)
     Deno.removeSync(dir, { recursive: true })
     h.close()
+  }
+})
+
+test('a transcript naming a plugin’s tool is offered it alone, and it runs', async () => {
+  let offered: string[][] = []
+  let worktrees = Deno.makeTempDirSync({ prefix: 'yaks-named-' })
+  let a = local({
+    h: await harness(),
+    tools: [],
+    worktrees,
+    model: (req) => {
+      offered.push(req.tools?.map((t) => t.name) ?? [])
+      return Promise.resolve({
+        id: `r${offered.length}`,
+        model: 'fake',
+        items: offered.length == 1
+          ? [{
+            kind: 'call',
+            id: 'c1',
+            name: 'task_new',
+            args: '{"title":"x"}',
+          }]
+          : [{ kind: 'assistant', text: 'filed' }],
+      })
+    },
+  })
+  try {
+    let [s] = await a.h.g.apply([
+      { entity: { eid: '$s' }, session: {} },
+      {
+        entity: { eid: '$e' },
+        entry: { session: '$s' },
+        content: { body: 'file x' },
+        using: {
+          provider: identityEid('provider', ['openai']),
+          model: a.model,
+          tools: ['task_new'],
+        },
+      },
+      // What a serving host writes for each of its tools at start-up.
+      { entity: { eid: toolEid('task_new') }, tool: { name: 'task_new' } },
+    ])
+    await a.idle(s.entity.eid)
+    assertEquals(offered, [['task_new'], ['task_new']])
+    assertEquals((await a.h.g.read('.task&.doc.title=x')).length, 1)
+  } finally {
+    await a.close()
+    Deno.removeSync(worktrees, { recursive: true })
   }
 })

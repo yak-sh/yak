@@ -136,6 +136,9 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   tools?: Tool[]
   /** tools served from elsewhere, offered afresh to every ask */
   remote?: () => Promise<Tool[]>
+  /** tools offered only to a transcript whose `using.tools` names them
+   * (@yaks/session `Deps.named`) */
+  named?: () => Tool[]
   streaming?: boolean
   checkpointMs?: number
   /** The system prompt every ask carries. */
@@ -347,6 +350,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       : undefined,
     answers: answers(h.g, implementations, opts.model),
     tools,
+    named: opts.named,
     toolSnapshot: async (phase, session) => {
       await (seeded ??= h.g.apply(seed({ provider, model: name, tools }), {
         trusted: true,

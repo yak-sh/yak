@@ -7,7 +7,7 @@
 
 import { type Blobs } from '@yaks/blob'
 import type { Effects } from '@yaks/effects'
-import type { Eid, Graph } from '@yaks/graph'
+import type { Eid, Graph, NamedTool } from '@yaks/graph'
 import { migrations, type Store } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { dbOf, type Host } from '@yaks/cli/host'
@@ -37,6 +37,9 @@ export type Harness = {
    * as the host's own runner adds it (@yaks/cli `Host.reply`): the entities
    * near one it just created, among them */
   reply?: Reply
+  /** every tool the host runs, its plugins' own among them (`memory_around`),
+   * read when a transcript names one the harness does not carry for all */
+  hostTools?: () => NamedTool[]
   migrations: ReturnType<typeof migrations>
   close: () => void | Promise<void>
 }
@@ -60,6 +63,7 @@ export let hosted = (
     vault: host.vault,
     artifacts: host.artifacts,
     reply: host.reply,
+    hostTools: () => host.tools,
     migrations: migrations(host.sql),
     close,
   }

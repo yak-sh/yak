@@ -54,15 +54,22 @@ export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
 }
 
 /**
- * The generic graph tier as tools a model may call: `graph_apply`,
- * `graph_query`, `graph_show`, `graph_schema`. The agent reads and writes the
- * same graph its transcript lives in.
+ * Graph tools as tools a model may call: the generic tier (`graph_apply`,
+ * `graph_query`, `graph_show`, `graph_schema`) where `tools` names none, or
+ * the ones it names (a host's plugins' own, `memory_around` among them). The
+ * agent reads and writes the same graph its transcript lives in.
  */
 export let graphTools = (
   g: Graph,
-  opts: { actor?: Entity | null; depth?: Depth; reply?: Reply } = {},
+  opts: {
+    actor?: Entity | null
+    depth?: Depth
+    reply?: Reply
+    tools?: GraphTool[]
+  } = {},
 ): Tool[] => {
-  let tier = core({ vocab: g.vocab, depth: opts.depth ?? 'names' })
+  let tier = opts.tools ??
+    core({ vocab: g.vocab, depth: opts.depth ?? 'names' })
   // A runner: these calls are this agent's own, and `call()` runs them here.
   // Nothing sweeps a queue from inside an agent — a call somebody else wrote
   // is for whoever works the effects to notice, by handling the same rules.

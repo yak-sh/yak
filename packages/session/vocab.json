@@ -418,6 +418,11 @@
         "window": {
           "type": "integer",
           "description": "how many of the transcript's newest entries a turn sends the model, reaching back to the input that began the turn they cut into; the whole transcript where absent"
+        },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the tools a turn is offered, by name: exactly these, from every tool the runner can run; the runner's own set where absent"
         }
       }
     },
