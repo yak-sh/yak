@@ -170,6 +170,32 @@ let examples = (pages: string[]) => [
   ...pages,
 ]
 
+// A page is one shard input, but its examples are not one unit of work: Vale
+// alone has 165. Count its runnable code fences so the doc shards carry similar
+// work without running an extra `deno test --doc --list` pass first.
+let exampleCount = async (path: string): Promise<number> => {
+  let entry = await Deno.stat(path)
+  if (entry.isFile) {
+    let source = await Deno.readTextFile(path)
+    return source.match(
+      /^\s*\*?\s*```(?:ts|tsx|js|jsx|typescript|javascript)\b/gm,
+    )?.length ?? 0
+  }
+  let count = 0
+  for await (let child of Deno.readDir(path)) {
+    let at = `${path}/${child.name}`
+    if (child.isDirectory && !SKIP.includes(child.name)) {
+      count += await exampleCount(at)
+    } else if (
+      child.isFile && /\.(?:tsx?|jsx?|md)$/.test(child.name) &&
+      !test(child.name)
+    ) {
+      count += await exampleCount(at)
+    }
+  }
+  return count
+}
+
 // The directory a file sits in: its package, as a rule, whose files load the
 // same module graph and share what their tests lend a process (a kernel, the
 // harness's backend Worker, a repository).
@@ -224,26 +250,27 @@ let ansi = /\x1b\[[0-9;]*m/g
 
 export let observe = async (
   stream: ReadableStream<Uint8Array>,
-  progress: { name: string; completed: number },
+  progress: { name: string; completed: number; count: number },
 ) => {
   let decoder = new TextDecoder()
   let pending = ''
-  let read = (line: string) => {
+  let read = (line: string, done = false) => {
     line = line.replace(ansi, '')
     let test = line.match(/^(.+?) \.\.\./)
     if (test) progress.name = test[1]
-    if (/ \.\.\. (ok|FAILED)(?: |$)/.test(line)) {
+    if (done && / \.\.\. (ok|FAILED)(?: |$)/.test(line)) {
       progress.completed = Date.now()
+      progress.count++
     }
   }
   for await (let bytes of stream) {
     pending += decoder.decode(bytes, { stream: true })
     let lines = pending.split('\n')
     pending = lines.pop() ?? ''
-    for (let line of lines) read(line)
+    for (let line of lines) read(line, true)
     read(pending)
   }
-  read(pending + decoder.decode())
+  read(pending + decoder.decode(), true)
 }
 
 let group = () => {
@@ -260,8 +287,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let args = Deno.args.slice(1)
   let docs = args.filter((a) => a.startsWith('--doc=')).map((a) => a.slice(6))
   let files = args.filter((a) => !a.startsWith('--doc='))
-  // Keep a run light on a shared box; opt in to extra shards explicitly.
-  let jobs = Number(Deno.env.get('DENO_JOBS') ?? 1)
+  // Four balanced file shards keep the full suite from waiting on one long
+  // runtime. Each shard still loads its files into one runtime.
+  let jobs = Number(Deno.env.get('DENO_JOBS') ?? 4)
+  let docJobs = Number(Deno.env.get('DENO_DOC_JOBS') ?? 3)
   // A file never timed weighs what the middle one does.
   let known = timed()
   let middle = Object.values(known).sort((a, b) => a - b)
@@ -272,6 +301,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     throw new Error('invalid test idle limit')
   }
   let reports = await Deno.makeTempDir({ prefix: 'tasks-junit-' })
+  let counts = await Promise.all(docs.map(exampleCount))
+  let docWeights = new Map(docs.map((page, i) => [page, counts[i]]))
   let runs = [
     ...groups(files, jobs, weight).map((g, i) => [
       ...common,
@@ -280,7 +311,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       '--',
       ...g,
     ]),
-    ...shards(docs, jobs).map(examples),
+    ...shards(docs, docJobs, (page) => docWeights.get(page) ?? 0)
+      .map(examples),
   ]
   let children = runs.map((args) =>
     new Deno.Command(Deno.execPath(), {
@@ -296,7 +328,9 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let progress = children.map(() => ({
     name: 'loading tests',
     completed: Date.now(),
-    reported: 0,
+    count: 0,
+    said: 0,
+    reported: Date.now(),
     done: false,
   }))
   let parent = Deno.ppid
@@ -322,7 +356,13 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     for (let [i, p] of progress.entries()) {
       if (p.done) continue
       let idle = Date.now() - p.completed
-      if (idle >= 30_000 && Date.now() - p.reported >= 30_000) {
+      if (p.count > p.said && Date.now() - p.reported >= 15_000) {
+        console.error(
+          `test shard ${i}: ${p.count} tests completed; now ${p.name}`,
+        )
+        p.said = p.count
+        p.reported = Date.now()
+      } else if (idle >= 30_000 && Date.now() - p.reported >= 30_000) {
         console.error(
           `test shard ${i}: waiting ${Math.floor(idle / 1000)}s on ${p.name}`,
         )

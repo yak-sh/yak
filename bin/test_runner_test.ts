@@ -4,7 +4,7 @@ import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import { groups, observe, pages, RUN, shards, timesIn } from './test.ts'
 
 Deno.test('colored test results count as completed', async () => {
-  let progress = { name: 'loading tests', completed: 0 }
+  let progress = { name: 'loading tests', completed: 0, count: 0 }
   let encoder = new TextEncoder()
   let output = new ReadableStream<Uint8Array>({
     start(stream) {
@@ -16,6 +16,7 @@ Deno.test('colored test results count as completed', async () => {
   await observe(output, progress)
   assertEquals(progress.name, 'one')
   assert(progress.completed > 0)
+  assertEquals(progress.count, 1)
 })
 
 Deno.test('examples come from every root, and never a module by name', async () => {
@@ -355,6 +356,12 @@ async function fixtureExists(pid: number, dir: string): Promise<boolean> {
     return command.includes(fixture) && command.includes(dir)
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) return false
+    // Linux can remove a process after opening cmdline but before reading it.
+    try {
+      await Deno.stat(`/proc/${pid}`)
+    } catch (gone) {
+      if (gone instanceof Deno.errors.NotFound) return false
+    }
     throw error
   }
 }
