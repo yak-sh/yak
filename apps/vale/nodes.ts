@@ -255,8 +255,8 @@ type Drawn = {
 export let nodes = (
   scene: THREE.Scene,
   v: Vale,
-  plates: ReturnType<typeof overlay>,
-  glow: ReturnType<typeof bits>,
+  plates: Pick<ReturnType<typeof overlay>, 'plate'>,
+  glow: Pick<ReturnType<typeof bits>, 'emit'>,
   phone: boolean,
 ) => {
   let mat = soft({ speckle: 0.08, see: true })
@@ -284,6 +284,7 @@ export let nodes = (
     return g
   }
   let drawn = new Map<string, Drawn>()
+  let naturalWas = new Map<string, boolean>()
   let wild = new Map<
     string,
     { mesh: THREE.Mesh; state: string; source: ChunkProps }
@@ -302,8 +303,32 @@ export let nodes = (
     return got
   }
   // Felled trees falling, and things flying to the hero.
-  let falling: { obj: THREE.Object3D; t: number; axis: THREE.Vector3 }[] = []
+  let falling: {
+    obj: THREE.Object3D
+    t: number
+    axis: THREE.Vector3
+    geo?: THREE.BufferGeometry
+  }[] = []
   let flying: { obj: THREE.Mesh; from: THREE.Vector3; t: number }[] = []
+  let topple = (
+    obj: THREE.Object3D,
+    at: THREE.Vector3,
+    hero: Vec3,
+    geo?: THREE.BufferGeometry,
+  ) => {
+    let away = new THREE.Vector3(at.x - hero[0], 0, at.z - hero[2])
+    if (away.lengthSq() < 1e-6) away.set(1, 0, 0)
+    away.normalize()
+    obj.removeFromParent()
+    obj.position.copy(at)
+    scene.add(obj)
+    falling.push({
+      obj,
+      t: 0,
+      axis: new THREE.Vector3(away.z, 0, -away.x),
+      geo,
+    })
+  }
 
   // What an item looks like, as loot does (cast.ts).
   let itemModel = (kind: string) => {
@@ -360,6 +385,7 @@ export let nodes = (
     `<em>${glyphText(mark)} ${verb}${phone ? '' : ' · E'}</em>`
 
   let plate = (n: Seen, job: Job) => {
+    if (n.spent) return
     let doing = job.doing?.node?.eid == n.eid ? job.doing : null
     let t = TRADES[n.lode.trade]
     let name = `<b>${esc(n.name)}</b>${
@@ -367,7 +393,7 @@ export let nodes = (
     }`
     let html = doing
       ? `<span>${name}</span>${bar(doing.k)}`
-      : !n.spent && job.near?.eid == n.eid
+      : job.near?.eid == n.eid
       ? `<span>${name} ${hint(t.icon, GATHER[n.lode.trade].verb)}</span>`
       : `<span>${name}</span>`
     let [x, y, z] = n.at
@@ -411,6 +437,7 @@ export let nodes = (
         stepped.clear()
       }
       let natural = new Map<string, Seen[]>()
+      let naturalSeen = new Set<string>()
       let byChunk = new Map(chunks.map((c) => [`${c.ci} ${c.ck}`, c]))
       for (let d of drawn.values()) d.seen = false
       for (let e of job.events) {
@@ -425,6 +452,23 @@ export let nodes = (
           let group = natural.get(id) ?? []
           group.push(n)
           natural.set(id, group)
+          naturalSeen.add(n.eid)
+          let was = naturalWas.get(n.eid)
+          if (was && n.spent && plan == 'tree') {
+            let packed = pack(model(
+              n.prop.kind,
+              n.prop.seed,
+              n.prop.turn,
+              true,
+              byChunk.get(id)?.voxel ?? v.voxel,
+            ))
+            let geo = geometry(packed)
+            let fall = new THREE.Mesh(geo, mat)
+            fall.castShadow = true
+            fall.receiveShadow = true
+            topple(fall, v3(n.at), hero, geo)
+          }
+          naturalWas.set(n.eid, !n.spent)
           if (
             !n.spent && n.rarity != 'common' && n.near < 30 &&
             Math.random() < dt * 2
@@ -471,22 +515,7 @@ export let nodes = (
           // Felled while in sight: a tree topples away from the hero, and
           // anything else is simply gone.
           if (d.was && d.whole && plan == 'tree') {
-            let away = new THREE.Vector3(
-              n.at[0] - hero[0],
-              0,
-              n.at[2] - hero[2],
-            )
-            if (away.lengthSq() < 1e-6) away.set(1, 0, 0)
-            away.normalize()
-            let fall = d.whole.obj
-            fall.removeFromParent()
-            fall.position.copy(d.group.position)
-            scene.add(fall)
-            falling.push({
-              obj: fall,
-              t: 0,
-              axis: new THREE.Vector3(away.z, 0, -away.x),
-            })
+            topple(d.whole.obj, d.group.position, hero)
           } else drop(d.whole)
           drop(d.spent)
           d.whole = whole ? body(n, true) : null
@@ -634,8 +663,13 @@ export let nodes = (
         if (f.t > TOPPLE) f.obj.position.y -= dt * 2.5
         if (f.t < TOPPLE + SINK) return true
         scene.remove(f.obj)
+        f.geo?.dispose()
         return false
       })
+
+      for (let eid of naturalWas.keys()) {
+        if (!naturalSeen.has(eid)) naturalWas.delete(eid)
+      }
 
       for (let [eid, d] of drawn) {
         if (d.seen) continue
@@ -657,7 +691,11 @@ export let nodes = (
         drop(d.whole)
         scene.remove(d.group)
       }
-      for (let f of [...falling, ...flying]) scene.remove(f.obj)
+      for (let f of falling) {
+        scene.remove(f.obj)
+        f.geo?.dispose()
+      }
+      for (let f of flying) scene.remove(f.obj)
       for (let g of made.values()) g.dispose()
       ringGeo.dispose()
       mat.dispose()

@@ -20,6 +20,13 @@ import type { Natural } from './nature.ts'
 import { flat, type Prop, propsIn } from './terrain.ts'
 import { type Bundle, comp } from './net.ts'
 import { type WorkFrame, working } from './work.ts'
+import { seedBuildings } from './buildings_fixture.ts'
+import { seedDesigns } from './designs_fixture.ts'
+import { seedThemes } from './themes_fixture.ts'
+
+seedDesigns()
+seedThemes()
+seedBuildings()
 
 Deno.test('a natural prop is the same gatherable node on every read', () => {
   let prop = propsIn(2, 2).find((p) => p.natural)!
