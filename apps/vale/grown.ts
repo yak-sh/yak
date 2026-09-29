@@ -29,12 +29,15 @@ type Hand = { w: Worker; load: number }
 let pool: Hand[] = []
 let themes: Bundle[] = []
 let buildingDesigns: Bundle[] | null = null
+// The map's pixels depend on both sets of designs.
+export let chartVersion = 0
 
 /** Give each world Worker the same building plans the page is using. */
 export let useBuildingDesigns = (rows: Bundle[]): {
   affects: Affects
   kinds: Set<string>
 } => {
+  chartVersion++
   buildingDesigns = rows
   let impact = installBuildingDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ buildingDesigns: rows })
@@ -86,6 +89,7 @@ let hands = () =>
 
 /** Keep the page and each growth worker on the store's region designs. */
 export let useThemeRows = (rows: Bundle[]): Affects => {
+  chartVersion++
   themes = rows
   let affects = installThemeDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ themes: rows })

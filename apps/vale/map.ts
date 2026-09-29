@@ -7,7 +7,7 @@
 // by their trade and hollow while spent, where each road leaves the map and
 // the region it leads to, and a ring where each quest tracked goes next
 // (journal.ts). M or the compass opens its panel.
-import { charted } from './grown.ts'
+import { charted, chartVersion } from './grown.ts'
 import { Top } from './features.ts'
 import { glyph } from './glyphs.ts'
 import { paletteOf } from './ground.ts'
@@ -20,7 +20,7 @@ import {
   SIZE,
   type Spot,
 } from './levels.ts'
-import { type Box, pan, place, view, WORLD, zoom } from './mapview.ts'
+import { type Box, pan, place, reopen, view, WORLD, zoom } from './mapview.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
 import { clamp } from './rand.ts'
@@ -103,12 +103,27 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   // The view is a square of world metres. The ground may lag a drag or zoom;
   // its last chart is transformed until the next one has been painted.
   let box = view([0, 0], WORLD[2])
+  let home: Box | null = null
   let drawn = box
   let shown = ''
+  let version = chartVersion
   let openWas = false
   let levelWas = ''
   let hero: Spot = [0, 0]
   let cache = new Map<string, ImageData>()
+  let keep = (id: string, image: ImageData) => {
+    cache.delete(id)
+    cache.set(id, image)
+    if (cache.size <= 8) return
+    let oldest = cache.keys().next().value!
+    if (oldest == home?.join(',')) {
+      let pinned = cache.get(oldest)!
+      cache.delete(oldest)
+      cache.set(oldest, pinned)
+      oldest = cache.keys().next().value!
+    }
+    cache.delete(oldest)
+  }
   let was = ''
   let fogWas: ReadonlyArray<Spot> | null = null
   let local: Spot[] = []
@@ -201,6 +216,11 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     }
   }
   let draw = () => {
+    if (version != chartVersion) {
+      version = chartVersion
+      cache.clear()
+      shown = ''
+    }
     let id = key()
     if (shown == id) return
     shown = id
@@ -208,6 +228,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     canvas.style.transform = ''
     let image = cache.get(id)
     if (image) {
+      keep(id, image)
       ctx.putImageData(image, 0, 0)
       return
     }
@@ -216,10 +237,11 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     // overview is the useful detail: discovered places and the roads to them.
     if (box[2] == WORLD[2]) return
     let m = box[2] / 320
+    let askedAt = version
     charted(...box, m).then((px) => {
+      if (askedAt != chartVersion) return
       let image = new ImageData(px, 320, 320)
-      cache.set(id, image)
-      if (cache.size > 8) cache.delete(cache.keys().next().value!)
+      keep(id, image)
       if (shown != id) return
       ctx.putImageData(image, 0, 0)
       moveGround()
@@ -335,7 +357,8 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       hero = [f.body.x, f.body.z]
       if (!openWas) {
         openWas = true
-        setView(view(hero))
+        home = reopen(hero, home)
+        setView(home)
       }
       if (levelWas != f.level) {
         levelWas = f.level

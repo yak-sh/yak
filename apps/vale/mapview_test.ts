@@ -1,7 +1,7 @@
 // Nearby and world map gestures share one world-coordinate viewport.
 import { assertEquals } from '@std/assert'
 import { LEVELS, SIZE } from './levels.ts'
-import { pan, place, view, WORLD, zoom, ZOOMS } from './mapview.ts'
+import { pan, place, reopen, view, WORLD, zoom, ZOOMS } from './mapview.ts'
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
@@ -32,4 +32,13 @@ Deno.test('panning and anchored zoom keep places aligned', () => {
     moved[1] + point[1] * moved[2],
   ]
   assertEquals(place(zoom(moved, 1, point), world), point)
+})
+
+Deno.test('reopening nearby reuses the chart until the hero leaves its middle', () => {
+  let first = reopen([100, 120], null)
+  assertEquals(place(first, [100, 120]), [0.5, 0.5])
+  assertEquals(reopen([101, 120], first), first)
+  assertEquals(reopen([180, 120], first), first)
+  let moved = reopen([181, 120], first)
+  assertEquals(place(moved, [181, 120]), [0.5, 0.5])
 })
