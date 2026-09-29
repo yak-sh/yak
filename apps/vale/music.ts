@@ -1,12 +1,13 @@
-// Each land plays its two songs in turn, with quiet between them. The two
-// nearest lands fade through the same border blend as the ground.
-import { blend } from './regions.ts'
+// Each land plays its two songs in turn, with quiet between them. Only one
+// land owns the soundtrack; crossing a border fades it out before the next.
+import { type Blend, blend } from './regions.ts'
 import { TRACKS } from './music_tracks.ts'
 import type { Vec3 } from './play.ts'
 
 let LOUD = 0.28
 let QUIET = 8
 let FADE = 0.7
+let HOLD = 0.65
 let muted = false
 try {
   muted = localStorage.getItem('mossvale.music.muted') == '1'
@@ -18,13 +19,13 @@ type Land = {
   next: number
   source: AudioBufferSourceNode | null
   wait: ReturnType<typeof setTimeout> | null
-  retire: ReturnType<typeof setTimeout> | null
   target: number
 }
 
 let ctx: AudioContext | null = null
 let out: AudioNode | null = null
-let lands = new Map<string, Land>()
+let current: Land | null = null
+let change: ReturnType<typeof setTimeout> | null = null
 let ducked = false
 let at: Vec3 | null = null
 
@@ -39,12 +40,12 @@ let song = async (land: Land) => {
       throw new Error(`Music: ${response.status} for ${land.id}`)
     }
     let buffer = await c.decodeAudioData(await response.arrayBuffer())
-    if (lands.get(land.id) != land || land.retire != null) return
+    if (current != land) return
     let source = new AudioBufferSourceNode(c, { buffer })
     land.source = source
     source.connect(land.gain)
     source.onended = () => {
-      if (land.source != source) return
+      if (current != land || land.source != source) return
       source.disconnect()
       land.source = null
       land.next = 1 - index
@@ -53,32 +54,25 @@ let song = async (land: Land) => {
     source.start()
   } catch (error) {
     reportError(error)
-    if (lands.get(land.id) == land && land.retire == null) {
+    if (current == land) {
       land.wait = setTimeout(() => void song(land), QUIET * 1000)
     }
   }
 }
 
 let enter = (id: string) => {
-  let land = lands.get(id)
-  if (land) {
-    if (land.retire != null) clearTimeout(land.retire)
-    land.retire = null
-    return land
-  }
   let gain = ctx!.createGain()
   gain.gain.value = 0
   gain.connect(out!)
-  land = {
+  let land: Land = {
     id,
     gain,
     next: 0,
     source: null,
     wait: null,
-    retire: null,
     target: -1,
   }
-  lands.set(id, land)
+  current = land
   void song(land)
   return land
 }
@@ -89,33 +83,60 @@ let fade = (land: Land, to: number) => {
   let p = land.gain.gain, t = ctx!.currentTime
   p.cancelScheduledValues(t)
   p.setValueAtTime(p.value, t)
-  p.setTargetAtTime(to, t, FADE)
+  p.linearRampToValueAtTime(to, t + FADE)
 }
 
 let leave = (land: Land) => {
-  fade(land, 0)
-  if (land.retire != null) return
-  land.retire = setTimeout(() => {
-    land.source?.stop()
-    land.source = null
-    if (land.wait != null) clearTimeout(land.wait)
-    land.gain.disconnect()
-    lands.delete(land.id)
-  }, 5_000)
+  if (current == land) current = null
+  if (land.wait != null) clearTimeout(land.wait)
+  if (land.source) {
+    land.source.onended = null
+    land.source.stop()
+    land.source.disconnect()
+  }
+  land.gain.disconnect()
 }
+
+// The nearest region has to lead clearly before taking the song. The ground
+// can still blend evenly at a border without changing music every step.
+export let heard = (b: Blend, playing: string | null) =>
+  playing == b.b && b.t < HOLD && TRACKS[b.b]
+    ? b.b
+    : TRACKS[b.a]
+    ? b.a
+    : TRACKS[b.b]
+    ? b.b
+    : null
 
 let update = (pos: Vec3) => {
   at = pos
   if (!ctx) return
   let b = blend(pos[0], pos[2])
-  let heard = new Map<string, number>()
-  if (TRACKS[b.a]) heard.set(b.a, b.t)
-  if (TRACKS[b.b] && 1 - b.t > 0.002) heard.set(b.b, 1 - b.t)
-  for (let [id, share] of heard) {
-    let land = enter(id)
-    fade(land, (muted ? 0 : LOUD) * (ducked ? 0.35 : 1) * share)
+  let id = heard(b, current?.id ?? null)
+  if (id == current?.id) {
+    if (change != null) clearTimeout(change)
+    change = null
+    if (current) fade(current, (muted ? 0 : LOUD) * (ducked ? 0.35 : 1))
+    return
   }
-  for (let [id, land] of lands) if (!heard.has(id)) leave(land)
+  if (current) {
+    if (!current.source) {
+      leave(current)
+      if (change != null) clearTimeout(change)
+      change = null
+    } else if (change == null) {
+      fade(current, 0)
+      change = setTimeout(() => {
+        if (current) leave(current)
+        change = null
+        if (at) update(at)
+      }, FADE * 1000)
+    }
+  }
+  if (!current && id) {
+    let next = enter(id)
+    fade(next, (muted ? 0 : LOUD) * (ducked ? 0.35 : 1))
+  }
 }
 
 export let music = {
