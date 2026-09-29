@@ -363,7 +363,7 @@ export let boundariesIn = (x0: number, z0: number, x1: number, z1: number) => {
  *
  * ```ts
  * import { assert, assertEquals } from '@std/assert'
- * import { LEVELS } from './levels.ts'
+ * import { levelOf } from './levels.ts'
  * // A level's places lie in its region, its village well inside it.
  * assertEquals(blend(128, 128).a, 'mossvale')
  * assertEquals(blend(-128, 128).a, 'birchmere')
