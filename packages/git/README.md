@@ -23,6 +23,8 @@ Entry points:
   commit plugin.
 - `@yaks/git/host`: local checkout discovery, and creating, taking back and
   re-creating worktrees, using the `git` subprocess.
+- `@yaks/git/service`: while a process is up, takes back the idle worktrees that
+  hold nothing, in every repository the graph knows.
 - `@yaks/git/land`: the filesystem-based branch landing operation.
 - `@yaks/git/cites`: how a citation stands against the code it names, derived
   from Git.
@@ -455,11 +457,11 @@ are async, writing an object is async too.
 
 Here a **host** is the process that opened the graph and runs these operations.
 `@yaks/git/host` adds `discover`, `checkoutAt`, `createWorktree`, `holds`,
-`reclaim`, `lost` and `restore`, which run `git` as a subprocess and therefore
-need Deno. They are kept out of the main entry point, which still type-checks
-with only the web platform in scope. Load `checkoutDoc` to get just the four
-components below — `repository`, `worktree`, `ref` and `checkout` — without the
-Git object components.
+`reclaim`, `lost`, `idleFor`, `linked` and `restore`, which run `git` as a
+subprocess and therefore need Deno. They are kept out of the main entry point,
+which still type-checks with only the web platform in scope. Load `checkoutDoc`
+to get just the four components below — `repository`, `worktree`, `ref` and
+`checkout` — without the Git object components.
 
 Git is authoritative here; the graph holds an observation of it that can be
 refreshed at any time without changing anything.
@@ -499,9 +501,9 @@ committed HEAD. Uncommitted files in the source are not copied, committed, reset
 or stashed. Passing a short branch name creates a new branch instead. An
 existing checkout has to be discovered and attached explicitly; creation refuses
 to adopt a directory that is already there. Nothing is merged, pruned or deleted
-automatically when an agent finishes. A managed directory that has gone missing
-is an error, not permission to recreate it and lose whatever was uncommitted in
-it.
+automatically the moment an agent finishes. A managed directory that has gone
+missing is an error, not permission to recreate it and lose whatever was
+uncommitted in it.
 
 Taking a worktree back is a separate, explicit step. `holds(path)` says what a
 worktree still holds: `dirty` for uncommitted files, `unlanded` when its HEAD is
@@ -511,8 +513,16 @@ only when it holds nothing, and never with `--force`, so Git's own refusal
 stands behind that test; it returns what kept it, `failed` included. A worktree
 whose gitdir Git has lost (`lost(path)`) is deleted outright. `restore(g, row)`
 creates a worktree again at the path, branch and commit its row recorded, so run
-`discover` on it before taking it back. Which worktrees to take back, and when,
-is the caller's decision.
+`discover` on it before taking it back. `linked(common)` names a repository's
+linked worktrees, and `idleFor(path)` says how long since Git last wrote one's
+HEAD, index or reflog.
+
+`@yaks/git/service` is the caller for every worktree nobody else takes back.
+Once an hour it runs `collect` on each repository the graph knows that is on
+this machine: every linked worktree Git has left alone for six hours and that
+holds nothing is reclaimed. A `managed` worktree is left to the harness, which
+takes those back when their session ends (@yaks/harness `worktrees.ts`). The
+`idle` and `every` options change the two durations.
 
 Identity and locking assume one filesystem and one shared graph, used by
 cooperating processes on that machine. A checkout moved on disk, or changed by

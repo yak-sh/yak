@@ -344,14 +344,51 @@ export type Held = 'dirty' | 'unlanded' | 'failed'
 let quiet = (cwd: string, args: string[]): Promise<string | undefined> =>
   git(cwd, args, true).catch(() => undefined)
 
+// The gitdir a linked worktree's `.git` file names, or nothing for a primary
+// checkout or a path that is not a checkout at all.
+let gitdirOf = async (path: string): Promise<string | undefined> =>
+  /^gitdir:\s*(.+)$/m.exec(
+    await Deno.readTextFile(path + '/.git').catch(() => ''),
+  )?.[1]?.trim()
+
 /** A worktree Git has already lost: the gitdir its `.git` file names is gone,
  * so nothing can be committed from it and nothing read out of it. */
 export let lost = async (path: string): Promise<boolean> => {
-  let named = /^gitdir:\s*(.+)$/m.exec(
-    await Deno.readTextFile(path + '/.git').catch(() => ''),
-  )?.[1]
-  return !!named &&
-    !await Deno.stat(named.trim()).then(() => true, () => false)
+  let named = await gitdirOf(path)
+  return !!named && !await Deno.stat(named).then(() => true, () => false)
+}
+
+/** How long, in milliseconds, since Git last wrote this linked worktree's own
+ * state: its HEAD, index or reflog, which a commit, checkout, rebase or add
+ * rewrites. Editing a file writes none of them, but it makes the worktree
+ * dirty, and a dirty worktree is kept at any age. Zero for anything that is
+ * not a linked worktree. */
+export let idleFor = async (
+  path: string,
+  now: number = Date.now(),
+): Promise<number> => {
+  let dir = await gitdirOf(path)
+  if (!dir) return 0
+  let times = await Promise.all(
+    ['HEAD', 'index', 'logs/HEAD'].map((f) =>
+      Deno.stat(dir + '/' + f).then((s) => s.mtime?.getTime() ?? 0, () => 0)
+    ),
+  )
+  return Math.max(0, now - Math.max(...times))
+}
+
+/** The linked worktrees of the repository whose common Git directory is
+ * `common`: every checkout `git worktree list` names but the primary one.
+ * Git's records of worktrees whose directory is already gone are pruned
+ * first, so none of those is named. */
+export let linked = async (common: string): Promise<string[]> => {
+  let at = ['--git-dir=' + common, 'worktree']
+  await quiet(common, [...at, 'prune'])
+  let list = await quiet(common, [...at, 'list', '--porcelain']) ?? ''
+  return list.split('\n')
+    .filter((line) => line.startsWith('worktree '))
+    .map((line) => line.slice('worktree '.length))
+    .slice(1)
 }
 
 /** What this worktree still holds, `undefined` when it holds nothing: a clean
