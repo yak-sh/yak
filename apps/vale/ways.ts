@@ -3,7 +3,7 @@
 // meets the village streets, which wind among the placed buildings and props.
 // A road wobbles as a trodden way does; its bed is the lie of the land along it
 // (regions.ts), evened out, cut down where it would climb too steeply, and
-// never under water, so it is a causeway over a lake. A signpost stands
+// never under water; over a river it rises to a stone span. A signpost stands
 // beside each end, naming where it leads. Authored routes stay fixed; beyond
 // them, neighbouring cells join by deterministic roads grown when nearby.
 import { isA } from './features.ts'
@@ -25,8 +25,12 @@ export let SHORE = 5
  * in metres. */
 export let ROAD = 1.5
 export let EASE = 3.5
-// The lowest a road's bed runs, in metres: dry, a causeway over water.
+// The lowest a road's bed runs, in metres; the bridge's bed clears water
+// high enough to show the river beneath its stone deck.
 let DRY = SHORE + 0.3
+let BRIDGE = 6.5
+export let BRIDGE_HALF = 2.75
+export let BRIDGE_BANK = 6
 // How steep a road's bed may run, in metres a metre, and how far either way
 // along it its bed is evened out, in metres.
 let GRADE = 0.45
@@ -151,6 +155,7 @@ export type Road = {
   to: string
   c: Course
   bed: Float64Array
+  river: Float64Array
   signs: [Sign, Sign]
 }
 
@@ -216,7 +221,14 @@ let road = (from: string, to: string): Road => {
   let hi = whole.xs.length - 1 - (village(to) ? VILLAGE_REACH : 0)
   let c = part(whole, lo, hi + 1)
   let n = c.xs.length
-  let raw = c.xs.map((x, i) => Math.max(DRY, lie(x, c.zs[i])))
+  let river = c.xs.map((x, i) => boundaryAt(x, c.zs[i]).river)
+  let raw = c.xs.map((x, i) =>
+    Math.max(
+      DRY,
+      lie(x, c.zs[i]),
+      river[i] > 0.75 ? BRIDGE : DRY,
+    )
+  )
   let bed = raw.map((_, i) => {
     let lo = Math.max(0, i - EVEN), hi = Math.min(n - 1, i + EVEN)
     let sum = 0
@@ -232,6 +244,7 @@ let road = (from: string, to: string): Road => {
     to,
     c,
     bed: bed.map((h) => Math.max(DRY, h)),
+    river,
     signs: [
       post(c, 0, from, to, village(from) ? 4 : POST),
       post(c, 1, to, from, village(to) ? 4 : POST),
@@ -337,6 +350,25 @@ export let roadsOf = (
   ...neighbours(id),
 ]
 
+/** The height of a bridge deck over a road's river crossing, or null beyond
+ * its stone span. Its width includes the parapets beside the walked road. */
+export let bridgeAt = (
+  roads: Road[],
+  x: number,
+  z: number,
+  wide = BRIDGE_HALF,
+): number | null => {
+  for (let r of roads) {
+    if (!near(r.c, x, z, wide)) continue
+    let t = along(r.c, x, z)
+    if (off(r.c, x, z, t) >= wide) continue
+    let f = t * (r.c.xs.length - 1)
+    let i = Math.min(r.c.xs.length - 2, Math.floor(f)), u = f - i
+    if (lerp(r.river[i], r.river[i + 1], u) > 0.75) return bedAt(r, t)
+  }
+  return null
+}
+
 type BridgePart = {
   kind: 'bridgepost' | 'bridgewall'
   x: number
@@ -351,7 +383,7 @@ let bridgeParts = (r: Road): BridgePart[] => {
   let parts = new Map<string, BridgePart>()
   for (let i = 1; i < r.c.xs.length - 1; i++) {
     let x = r.c.xs[i], z = r.c.zs[i]
-    if (boundaryAt(x, z).river < 0.55) continue
+    if (r.river[i] < 0.55) continue
     let dx = r.c.xs[i + 1] - r.c.xs[i - 1]
     let dz = r.c.zs[i + 1] - r.c.zs[i - 1]
     let length = Math.hypot(dx, dz) || 1

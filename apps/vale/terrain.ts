@@ -13,10 +13,9 @@
 // creatures' homes) is decided on the smooth height and a half-metre grid,
 // never on the voxels, so it is the same at every voxel size.
 //
-// A chunk's ground is a stack of height maps, its layers: the surface, then
-// each cave's ceiling and its floor in turn, deeper, each below the one above;
-// rock between a ceiling and the floor over it. The ridge cave grows the
-// first pair; what reads the ground (`floorUnder`, `roofOver`) reads the stack.
+// A chunk's ground is a stack of height maps: the surface, then a ceiling or
+// a bridge underside and the floor beneath it. The ridge cave and river
+// bridges grow the lower pair; movement and the mesher read the same stack.
 //
 // Each place's kind (features.ts) says what the ground is topped with where
 // it holds, and what grows and stands there; the region's wild says so where
@@ -49,6 +48,8 @@ import { EDGE, type Street, streets } from './streets.ts'
 import {
   along,
   bedAt,
+  BRIDGE_BANK,
+  bridgeAt,
   bridgePartsIn,
   clearOf,
   EASE,
@@ -75,6 +76,8 @@ export let VOXEL = 0.25
 export let VOXELS = [0.125, 0.25, 0.5, 1, 2]
 /** The water's surface, in metres. */
 export let WATER = 4.8
+/** The underside of a stone span keeps its thin edge at every terrain detail. */
+export let BRIDGE_UNIT = 0.125
 /** A chunk's side, in metres: the ground is grown and drawn a chunk at a
  * time. */
 export let CHUNK = 16
@@ -117,7 +120,9 @@ export type Wall = { x: number; z: number; r: number; top: number; prop?: Prop }
 /** A chunk's ground as grown at one voxel size. Its layers are `n` columns
  * on a side, the chunk's own and one more all round, from the column
  * north-west of its corner (index i + k × n), in voxels: the surface, then
- * each cave's ceiling and floor in turn (NONE where a cave is not). The rest
+ * a cave's ceiling and its floor or a bridge's riverbed (NONE where neither
+ * lies). `span` holds a bridge underside in BRIDGE_UNITs so coarse voxels do
+ * not fill the space above water. The rest
  * is of the chunk's own columns only (index i + k × (n − 2)): what tops each,
  * its hue (how green, lush or dry: a gentle colour drift), the region it lies
  * in and the one it blends with, as indexes into `regions`, and how much it is
@@ -128,6 +133,8 @@ export type Patch = {
   voxel: number
   n: number
   layers: Int16Array[]
+  /** Bridge underside in BRIDGE_UNITs, zero beyond a span. */
+  span?: Int16Array
   top: Uint8Array
   hue: Float32Array
   region: Uint8Array
@@ -320,7 +327,25 @@ let rising = (
     let t = along(r.c, x, z), d = off(r.c, x, z, t)
     h = lerp(h, bedAt(r, t), 1 - smooth(ROAD, ROAD + EASE, d))
   }
+  let deck = bridgeAt(roads, x, z)
+  if (deck != null) return clamp(deck, 0.5, 30)
+  if (bridgeAt(roads, x, z, BRIDGE_BANK) != null) {
+    h = Math.min(h, WATER - 0.5)
+  }
   return clamp(h, 0.5, 30)
+}
+
+let riverFloor = (
+  near: Placed[],
+  boundary: typeof boundaryAt,
+  x: number,
+  z: number,
+) => {
+  let h = lie(x, z, near)
+  return Math.min(
+    WATER - 0.5,
+    lerp(h, Math.min(h, WATER - 1.1), boundary(x, z).river),
+  )
 }
 
 /** The ground's smooth height at (x, z), in metres, before it is rounded to
@@ -333,7 +358,10 @@ let rising = (
  * ```
  */
 export let rise = (x: number, z: number): number =>
-  rising(placesAt(x, z), roadsIn(x, z, x, z, ROAD + EASE))(x, z)
+  rising(
+    placesAt(x, z),
+    roadsIn(x, z, x, z, Math.max(ROAD + EASE, BRIDGE_BANK)),
+  )(x, z)
 
 /** How steep a height is at (x, z): the most it rises or falls in a metre
  * toward any side. */
@@ -712,6 +740,7 @@ let area = (v: Vale, x0: number, z0: number, x1: number, z1: number, m = 2) => {
     p.at[0] > x0 - EDGE && p.at[0] < x1 + EDGE &&
     p.at[1] > z0 - EDGE && p.at[1] < z1 + EDGE
   ).map((p) => streetsOf(v, p))
+  let boundary = boundariesIn(x0 - m, z0 - m, x1 + m, z1 + m)
   return {
     near,
     roads,
@@ -719,11 +748,8 @@ let area = (v: Vale, x0: number, z0: number, x1: number, z1: number, m = 2) => {
     built,
     villages,
     streets,
-    height: rising(
-      near,
-      roads,
-      boundariesIn(x0 - m, z0 - m, x1 + m, z1 + m),
-    ),
+    boundary,
+    height: rising(near, roads, boundary),
   }
 }
 
@@ -914,10 +940,27 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
   }
   layIn(v, ci, ck, h, top, a)
   let ceiling: Int16Array | null = null, floor: Int16Array | null = null
+  let span: Int16Array | undefined
   for (let k = 0; k < n; k++) {
     for (let i = 0; i < n; i++) {
       let j = i + k * n
-      let cave = caveAt(mid(i0 + i), mid(k0 + k), h[j] * V)
+      let x = mid(i0 + i), z = mid(k0 + k)
+      let deck = bridgeAt(a.roads, x, z)
+      if (deck != null) {
+        if (!ceiling) {
+          ceiling = new Int16Array(n * n).fill(NONE)
+          floor = new Int16Array(n * n).fill(NONE)
+        }
+        span ??= new Int16Array(n * n)
+        h[j] = Math.round(deck / V)
+        span[j] = Math.round((h[j] * V - 0.4) / BRIDGE_UNIT)
+        floor![j] = Math.round(riverFloor(a.near, a.boundary, x, z) / V)
+        if (i > 0 && i <= C && k > 0 && k <= C) {
+          top[i - 1 + (k - 1) * C] = Top.stone
+        }
+        continue
+      }
+      let cave = caveAt(x, z, h[j] * V)
       if (!cave) continue
       if (!ceiling) {
         ceiling = new Int16Array(n * n).fill(NONE)
@@ -938,6 +981,7 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
     voxel: V,
     n,
     layers: ceiling ? [h, ceiling, floor!] : [h],
+    span,
     top,
     hue,
     region,
@@ -1351,13 +1395,29 @@ let layersAt = (v: Vale, x: number, z: number): number[] => {
   if (known && known.patch == c?.p) return known.layers
   let layers: number[]
   if (c) {
-    layers = c.p.layers.map((l) => l[c.j] == NONE ? NONE : l[c.j] * v.voxel)
+    layers = c.p.span?.[c.j]
+      ? [
+        c.p.layers[0][c.j] * v.voxel,
+        c.p.span[c.j] * BRIDGE_UNIT,
+        c.p.layers[2][c.j] * v.voxel,
+      ]
+      : c.p.layers.map((l) => l[c.j] == NONE ? NONE : l[c.j] * v.voxel)
   } else {
     let surface = surfaceAt(v, x, z)
     let mx = (Math.floor(x / v.voxel) + 0.5) * v.voxel
     let mz = (Math.floor(z / v.voxel) + 0.5) * v.voxel
+    let deck = v.world
+      ? bridgeAt(roadsIn(mx, mz, mx, mz, ROAD + EASE), mx, mz)
+      : null
     let cave = caveAt(mx, mz, surface)
-    layers = cave
+    layers = deck != null
+      ? [
+        surface,
+        Math.round((surface - 0.4) / BRIDGE_UNIT) * BRIDGE_UNIT,
+        Math.round(riverFloor(placesAt(mx, mz), boundaryAt, mx, mz) / v.voxel) *
+        v.voxel,
+      ]
+      : cave
       ? [
         cave.mouth ? NONE : surface,
         cave.ceiling == null ? NONE : Math.min(

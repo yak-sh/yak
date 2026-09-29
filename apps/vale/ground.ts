@@ -12,7 +12,7 @@
 import { Top } from './features.ts'
 import { type Level, levelOf, LEVELS } from './levels.ts'
 import { type Out, quad, rgb, type Vec } from './mesh.ts'
-import { NONE, type Patch } from './terrain.ts'
+import { BRIDGE_UNIT, NONE, type Patch } from './terrain.ts'
 
 let TOPS: Record<number, number> = {
   [Top.grass]: 0x8cc85c,
@@ -127,9 +127,13 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
   let pals = p.regions.map((id) => paletteOf(levelOf(id) ?? LEVELS.mossvale))
   // Column (i, k) of the chunk, from -1 to C, as its patch has it.
   let H = (i: number, k: number) => p.layers[0][i + 1 + (k + 1) * N]
-  let R = (i: number, k: number) => p.layers[1]?.[i + 1 + (k + 1) * N] ?? NONE
+  let R = (i: number, k: number) => {
+    let j = i + 1 + (k + 1) * N
+    return p.span?.[j] ? p.span[j] * BRIDGE_UNIT / V : p.layers[1]?.[j] ?? NONE
+  }
   let F = (i: number, k: number) => p.layers[2]?.[i + 1 + (k + 1) * N] ?? NONE
-  let upper = (i: number, k: number) => R(i, k) != NONE ? roof : o
+  let B = (i: number, k: number) => !!p.span?.[i + 1 + (k + 1) * N]
+  let upper = (i: number, k: number) => R(i, k) != NONE && !B(i, k) ? roof : o
   // A colour of a column's region's look, `of` its palette, blended with the
   // next region's by how much the column is its own.
   let tint = (
@@ -173,7 +177,7 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
       let edge = !i || !k || i == C - 1 || k == C - 1
       if (open && !shaded && !edge && p.share[j] == 255) {
         merge[j] = (h * 32 + p.top[j]) * 256 + p.region[j] +
-          (R(i, k) == NONE ? 0 : 0x10000000)
+          (R(i, k) == NONE ? 0 : B(i, k) ? 0x20000000 : 0x10000000)
       } else single.push([i, k])
     }
   }
@@ -323,12 +327,14 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
   ) => {
     let c = colour(i, k)
     let into = upper(i, k)
+    let depth = B(i, k) ? 0.5 : SKIRT
+    let edge = B(i, k) ? H(i, k) : lo
     quad(
       into,
-      [x * V, lo * V - SKIRT, z * V],
+      [x * V, edge * V - depth, z * V],
       axis,
       V,
-      SKIRT - TUCK,
+      depth - TUCK,
       sign,
       [...c, ...c, ...c, ...c],
       [0, 0, 0, 0],
@@ -351,7 +357,7 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
         ]
         if (
           h != NONE && nh < h &&
-          !(R(i, k) != NONE && F(i + si, k + sk) != NONE)
+          !(R(i, k) != NONE && F(i + si, k + sk) != NONE && !B(i, k))
         ) {
           let from = nh == NONE ? F(i + si, k + sk) : nh
           if (R(i, k) != NONE) from = Math.max(from, R(i, k))
@@ -366,8 +372,8 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
       }
     }
   }
-  // A cave's floor, ceiling underside and the rock round its edge use the
-  // same column heights that movement reads. The roof alone can fade away.
+  // The lower floor and underside use the same heights movement reads. Only
+  // a cave roof fades; a bridge deck and its underside stay in solid ground.
   let stone = rgb(0x736d66), underside = rgb(0x625f5c)
   let plane = (
     height: (i: number, k: number) => number,
@@ -411,7 +417,8 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
   }
   if (p.layers[2]) {
     plane(F, o, 1, stone)
-    plane(R, roof, -1, underside)
+    plane((i, k) => B(i, k) ? NONE : R(i, k), roof, -1, underside)
+    plane((i, k) => B(i, k) ? R(i, k) : NONE, o, -1, underside)
   }
   for (let k = 0; k < C; k++) {
     for (let i = 0; i < C; i++) {
@@ -420,6 +427,10 @@ export let groundChunk = (p: Patch, o: Out, roof = o) => {
       for (let [si, sk, axis, sign] of SIDES) {
         let next = F(i + si, k + sk)
         let neighbour = H(i + si, k + sk)
+        if (
+          B(i, k) && next == NONE &&
+          neighbour < r - Math.round(0.5 / V)
+        ) continue
         if (next == NONE && H(i, k) == NONE && neighbour > f) continue
         let lo = next == NONE ? f : next
         let hi = next == NONE ? r != NONE ? r : Math.max(f, neighbour) : f
