@@ -45,6 +45,26 @@ Deno.test('memory tile says feedback, index, confirmation age, and id', () => {
   assertEquals(id.type === Id, true)
 })
 
+// A memory marked on a transcript entry, or a comment, has no title: its
+// index line is the words it marks, wherever the entity keeps them. A task
+// marked as one keeps its own face.
+Deno.test('a mark on an entry indexes by its words', () => {
+  let entry: Ent = {
+    eid: 'entry',
+    num: 0,
+    kind: 'entry',
+    refs: [],
+    kids: [],
+    content: { eid: 'entry', body: '\nuse grams, never cups\nand commit' },
+    memory: { eid: 'entry' },
+  }
+  assertEquals(resolve(entry, 'List.Tile').Render, MemoryTile)
+  let [, title] = children(MemoryTile({ e: entry }))
+  assertEquals(text(title), 'use grams, never cups')
+  let task: Ent = { ...memory, kind: 'task', task: { eid: 'memory' } }
+  assertEquals(resolve(task, 'List.Tile').Render == MemoryTile, false)
+})
+
 // A memory that records nobody's correction shows no tag at all — the
 // retired enum's other three values said only what the row already held.
 Deno.test('memory tile: no feedback tag, no slot', () => {

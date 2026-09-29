@@ -1,9 +1,9 @@
 # @yaks/memory
 
-Stores what a person said, in their own words, as graph entities, and reads them
-back at the start of the next conversation. This package supplies the `memory`
-component, the write and read helpers, and two tools; storage and optional
-semantic ranking come from elsewhere.
+Marks what a person said, in their own words, where the graph already holds it,
+reads it back at the start of the next conversation, and reads around it. This
+package supplies the `memory` component, the write and read helpers, and six
+tools; storage and optional semantic ranking come from elsewhere.
 
 An entity is a record identified by `entity.eid`. A bundle is a JSON object
 containing that identifier and the entity's named components, such as `doc` and
@@ -43,48 +43,60 @@ console.log(await g.read('.memory ?doc'))
 
 ## The component
 
+A memory is a mark on the entity holding the words: a session entry, a comment,
+a doc. The words are that entity's own text, and nothing here edits them:
+
 ```json
 {
-  "entity": { "eid": "m1" },
-  "doc": { "body": "use grams, never cups" },
-  "memory": { "space": "s1", "about": "recipes", "context": "the recipe app" }
+  "entity": { "eid": "e1" },
+  "entry": { "session": "s1", "seq": 12 },
+  "content": { "body": "use grams, never cups" },
+  "memory": { "context": "the recipe app", "at": "…", "by": "a1", "via": "s1" }
 }
 ```
 
-The text is `doc.body`, verbatim. That is where a store's search index lives, so
-a memory is findable through the same API as every other text and renders
-through the same renderer. `memory` holds the rest:
+Words the graph holds nowhere yet (said in a chat, say) get a doc of their own,
+whose `doc.body` is the sentence verbatim; on yaks.app that is most of them.
+`words(bundle)` reads the words from whichever component holds them, a doc's
+body, else a transcript entry's content, so a memory renders and is found the
+same way whatever it marks. `memory` holds the rest:
 
 - `space` — the space the statement belongs to. Deleting the space deletes its
   memories. Space membership and read access require application access
   controls; this schema alone does not enforce them.
 - `scope` — an optional project reference; the memory survives project deletion.
 - `last_confirmed_at` — a stamped timestamp for the latest confirmation.
+- `at`, `by`, `via` — who marked the words, when, and through what. They make
+  `memory` a mark in @yaks/graph's sense: stamped the first time the component
+  is written, and left alone after. Nothing needs approving.
 - `feedback{by}` — a separate component marking a correction and, when known,
   the entity identifying the person who supplied it.
 - `about` — the app it was about, by slug, when it was about one.
 - `context` — the line or two needed to understand the words. Never a
   restatement of them.
 
-The graph's optional `created{at, by}` component records when the record was
-created and the writer's identity. It identifies the speaker only when the
-application writes as that speaker; `feedback.by` can identify a different
-person who supplied a correction.
+Who said the words, and when, is the entity's own `created{at, by}`. A mark says
+what happened to an entity, never what it is: a comment marked as a memory is
+still a comment, and only a doc that is nothing but a memory is shown as one
+(@yaks/vocab `kindOrder`).
 
 ## Writing
 
-`saved()` trims `said` and rejects an empty result. It keeps the statement
-rather than summarizing it. It drops blank context lines, trims each remaining
-line, and keeps at most `LINES` (two). It returns a list containing one bundle;
-the caller passes that list to `g.apply()`.
+`marked()` returns the bundle that marks an entity already holding the words:
+`memory` and, for a correction, `feedback`, nothing about the words. `saved()`
+returns the bundle for words the graph holds nowhere: a doc whose body is `said`
+trimmed, marked the same way; it rejects an empty `said`. Both keep context as
+at most `LINES` (two) trimmed, non-blank lines. The caller passes the list to
+`g.apply()`.
 
 ## Reading
 
 `line()` builds the query string that finds memories, in the filter grammar
 understood by yaks storage adapters. With `said`, it adds search terms as a
-filter; without `near` or explicit ids, it orders by descending `entity.num`.
-This requires numbered entities for creation-order sorting. Search terms do not
-request BM25 ranking. A `.near` query requires a configured embedding index.
+filter; without `near` or explicit ids, the newest words come first (descending
+`created.at`). Every component comes back, since the words may be a doc's body
+or an entry's content. Search terms do not request BM25 ranking. A `.near` query
+requires a configured embedding index.
 
 `Ranker` is the interface for an application-supplied semantic search function:
 
@@ -122,37 +134,63 @@ strict total-output bound. If records are omitted, a notice names
 
 ## The tools
 
-`vocab.json` declares two tools, and `@yaks/memory/tools` exports the `runs()`
+`vocab.json` declares six tools, and `@yaks/memory/tools` exports the `runs()`
 factory that implements them (`yak memory save`, `yak memory recall`, and the
-same two over `/mcp`):
+rest the same way, and each over `/mcp`):
 
 ```sh
 yak memory save 'always commit your changes' --scope P-19 --feedback jeff
+yak memory save --on C-38041 --context 'on the persona gates'
 yak memory recall 'commit'
 yak memory recall --near T-37666
+yak memory around '#c625160bfa' -B 5 -A 2
+yak memory target C-38041
+yak memory thread C-38041
+yak memory session '#c625160bfa'
 ```
 
-`memory save` creates a memory from the words given; passing `id` patches an
-existing one instead, leaving alone whatever the call did not mention. Replacing
-the words requires `was` — the token `memory recall` returns beside them, which
-the graph's own precondition check reads — so a memory another writer changed
-since you read it is rejected as a whole rather than overwritten.
+`memory save` marks the words where the graph holds them: the entity `on` names,
+or, given `said` and a `feedback` naming who said them, the earliest entity that
+person wrote whose text holds those words verbatim. The same words in anybody
+else's text are a quote, so words it cannot place become a new doc. Passing `id`
+patches an existing memory instead, leaving alone whatever the call did not
+mention. Replacing the words requires `was` — the token `memory recall` returns
+beside them, which the graph's own precondition check reads — so a memory
+another writer changed since you read it is rejected as a whole rather than
+overwritten; the words of anything a memory marks (a comment, an entry, a task)
+are what happened there and are never replaced.
 
 `memory recall` returns complete memories, not excerpts. `said` is converted to
 search terms, so use words expected in the stored statement, not a new question
 about it. Those terms are filters, not a guaranteed exact phrase or a relevance
 ranking. `near` names an existing entity for semantic ranking when
 [@yaks/embedding](https://jsr.io/@yaks/embedding) is configured. Without that
-ranking or explicit ids, the query sorts by descending entity number.
+ranking or explicit ids, the newest words come first.
+
+The other four read around a memory, the way `grep -C` reads around a line, for
+a model building beliefs from memories. Each takes any entity and answers
+bundles, each whole:
+
+| Tool             | Answers                                                                                            |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| `memory_around`  | the transcript entries around an entry: `before` ahead, the entry, `after` behind (default 3 each) |
+| `memory_target`  | what it is aimed at: the entity each of its components' `target` names (a comment's, a letter's)   |
+| `memory_thread`  | what its comments are about, past every reply, then every comment below that, oldest first         |
+| `memory_session` | the session it was written in, then what that session worked on (`worked` edges) or claims         |
+
+They know other packages' components (`entry`, `comment`, `worked`, `claim`)
+only by the names their queries speak and the rows those answer.
 
 ## Exports
 
-The root exports `memoryDoc`, `saved`, `clamped`, `line`, `heard`, `ordered`,
-`passage`, the `Saving`, `Asked`, `Memory`, and `Ranker` types, and constants
-`MEMORY`, `FEEDBACK`, `LINES`, `EMPTY`, `LAST`, and `BYTES`. `clamped` performs
-context-line trimming; `EMPTY` is the empty-statement error message.
-`@yaks/memory/vocab` exports `memoryDoc` and its `docs` array for schema
-loaders; `@yaks/memory/tools` supplies the tool implementations described above.
+The root exports `memoryDoc`, `marked`, `saved`, `clamped`, `words`, `terms`,
+`line`, `heard`, `ordered`, `passage`, the `Marking`, `Saving`, `Asked`,
+`Memory`, and `Ranker` types, and constants `MEMORY`, `FEEDBACK`, `LINES`,
+`EMPTY`, `LAST`, and `BYTES`. `clamped` performs context-line trimming; `terms`
+turns words into search terms the query grammar cannot misread; `EMPTY` is the
+empty-statement error message. `@yaks/memory/vocab` exports `memoryDoc` and its
+`docs` array for schema loaders; `@yaks/memory/tools` supplies the tool
+implementations described above.
 
 ## Compatibility
 

@@ -1,5 +1,10 @@
-// Writing one down. Two rules live here, and both are about keeping the
-// person's words the person's words.
+// Writing one down. A memory is a mark on the entity holding what somebody
+// said: {@link marked} puts it on an entity that already holds the words (a
+// session entry, a comment, a doc), and {@link saved} makes a doc to hold words
+// the graph has nowhere yet. Neither edits words that are already there.
+//
+// Two rules live here, and both are about keeping the person's words the
+// person's words.
 //
 // An empty `said` is rejected. A memory with no sentence in it is an agent's
 // note about a conversation, which is the thing this whole package exists to
@@ -11,7 +16,7 @@
 // saved instead of. Two lines is enough to say "we were looking at the recipe
 // app" and not enough to restate what was said.
 
-import type { Bundle, Eid } from '@yaks/graph'
+import { type Bundle, type Eid, Refused } from '@yaks/graph'
 import { MEMORY } from './comp.ts'
 
 /** The most context a memory carries, in lines. */
@@ -35,16 +40,12 @@ export let clamped = (context: string): string =>
   context.split('\n').map((l) => l.trim()).filter(Boolean)
     .slice(0, LINES).join('\n')
 
-/** What a caller hands over to keep one. Everything but the words is
- * optional, because everything but the words is about where they belong: a
- * graph with no spaces in it keeps memories all the same. */
-export type Saving = {
-  /** the id to write it at */
+/** What a caller hands over to mark words the graph already holds. All of it
+ * but the entity is about where the words belong: a graph with no spaces in it
+ * keeps memories all the same. */
+export type Marking = {
+  /** the entity holding the words */
   eid: Eid
-  /** the person's own words, verbatim */
-  said: string
-  /** the index line a recall shows first, where somebody gave one */
-  title?: string
   /** the space they belong to */
   space?: Eid
   /** the project they belong to — absent for a principle everybody carries */
@@ -58,23 +59,33 @@ export type Saving = {
   about?: string
 }
 
+/** What a caller hands over to keep words the graph holds nowhere yet. */
+export type Saving = Marking & {
+  /** the person's own words, verbatim */
+  said: string
+  /** the index line a recall shows first, where somebody gave one */
+  title?: string
+}
+
 /** The component marking a memory as a correction somebody gave. */
 export let FEEDBACK = 'feedback'
 
 /**
- * One memory as the list of changes that writes it: the words in `doc.body`
- * exactly as they were said, everything else in `memory`. The byline is
- * stamped by the graph, so nothing here writes one.
+ * A mark on an entity that already holds the words, as the list of changes
+ * that writes it: `memory` and, for a correction, `feedback`, and nothing
+ * about the words themselves. Who marked it, and when, the graph stamps.
+ *
+ * ```ts
+ * marked({ eid: 'e1', context: 'looking at the recipe app' })
+ * // [{ entity: { eid: 'e1' },
+ * //    memory: { context: 'looking at the recipe app' } }]
+ * ```
  */
-export let saved = (m: Saving): Bundle[] => {
-  let said = m.said.trim()
-  if (!said) throw new Error(EMPTY)
+export let marked = (m: Marking): Bundle[] => {
   let context = clamped(m.context ?? '')
   let about = (m.about ?? '').trim()
-  let title = (m.title ?? '').trim()
   return [{
     entity: { eid: m.eid },
-    doc: { ...(title ? { title } : {}), body: said },
     [MEMORY]: {
       ...(m.space ? { space: m.space } : {}),
       ...(m.scope ? { scope: m.scope } : {}),
@@ -85,4 +96,17 @@ export let saved = (m: Saving): Bundle[] => {
       ? { [FEEDBACK]: m.feedback === true ? {} : { by: m.feedback } }
       : {}),
   }]
+}
+
+/**
+ * Words the graph holds nowhere yet, as the list of changes that keeps them:
+ * a doc whose body is the words exactly as they were said, marked. The byline
+ * is stamped by the graph, so nothing here writes one.
+ */
+export let saved = (m: Saving): Bundle[] => {
+  let said = m.said.trim()
+  if (!said) throw new Refused(EMPTY)
+  let title = (m.title ?? '').trim()
+  let [mark] = marked(m)
+  return [{ ...mark, doc: { ...(title ? { title } : {}), body: said } }]
 }

@@ -1,5 +1,5 @@
-// The three pure seams: what a save writes and what it refuses, the filter
-// line a recall asks with, and the passage an agent is handed.
+// The pure seams: what a save writes and what it refuses, where an entity's
+// words are read from, and the passage an agent is handed.
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   BYTES,
@@ -7,11 +7,12 @@ import {
   EMPTY,
   heard,
   LAST,
-  line,
+  marked,
   type Memory,
   ordered,
   passage,
   saved,
+  words,
 } from './mod.ts'
 
 let said = (over: Partial<Memory> = {}): Memory => ({
@@ -32,6 +33,29 @@ Deno.test('a save keeps the words and says nothing about them', () => {
   assertEquals(b.doc, { body: 'use grams, never cups' })
   // Nothing said is nothing written: no empty context, no empty about.
   assertEquals(b.memory, { space: 's1' })
+})
+
+Deno.test('a mark says where the words belong, and nothing about them', () => {
+  let [b] = marked({ eid: 'e1', scope: 'p1', context: ' ', feedback: true })
+  assertEquals(b, {
+    entity: { eid: 'e1' },
+    memory: { scope: 'p1' },
+    feedback: {},
+  })
+})
+
+Deno.test('the words are wherever the entity keeps them', () => {
+  let e = { entity: { eid: 'e1' } }
+  assertEquals(
+    words({ ...e, doc: { title: 'x', body: 'use grams' } }),
+    'use grams',
+  )
+  assertEquals(words({ ...e, content: { body: 'use grams' } }), 'use grams')
+  assertEquals(
+    words({ ...e, doc: { title: 'x' }, content: { body: 'y' } }),
+    'y',
+  )
+  assertEquals(words({ ...e, doc: { title: 'x' } }), '')
 })
 
 Deno.test('a memory with no sentence in it is refused', () => {
@@ -57,31 +81,6 @@ Deno.test('the context is two lines, and never the summary', () => {
     context: 'we were looking at\nthe recipe app',
     about: 'recipes',
   })
-})
-
-Deno.test('the filter line names what a row must carry', () => {
-  assertEquals(
-    line({ space: 's1', limit: 8 }),
-    '.memory.space=s1&?doc&?created&.order=-entity.num&.limit=8',
-  )
-  // Words select; a query line carries no bm25, so the newest still lead.
-  assertEquals(
-    line({ space: 's1', limit: 3, said: 'measurements' }),
-    'measurements&.memory.space=s1&?doc&?created' +
-      '&.order=-entity.num&.limit=3',
-  )
-  // The line's own punctuation cannot ride in on a person's words.
-  assertEquals(
-    line({ space: 's1', limit: 3, said: '.doc&how do they  like it?' }),
-    'doc how do they like it&.memory.space=s1&?doc&?created' +
-      '&.order=-entity.num&.limit=3',
-  )
-  // A ranker answered with ids: the store is asked for those, and the space
-  // still bounds it, so one space cannot rank another's memories in.
-  assertEquals(
-    line({ space: 's1', limit: 2, eids: ['a', 'b'] }),
-    '.eid=a,b&.memory.space=s1&?doc&?created&.limit=2',
-  )
 })
 
 Deno.test('a bundle reads back whole, and a byline speaks human', () => {

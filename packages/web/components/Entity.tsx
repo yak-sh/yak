@@ -113,7 +113,7 @@ define([
   },
   { view: 'List', match: parse('.canvas'), Render: List },
   { view: 'List', match: parse('.board'), Render: BoardList },
-  { view: 'Tile', match: parse('.doc .memory'), Render: MemoryTile },
+  { view: 'Tile', match: parse('.memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding
   // for the same reason as Canvas above.
   {

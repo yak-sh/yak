@@ -9,9 +9,9 @@
 // `.near=<entity>` in the query string itself (@yaks/embedding), and
 // {@link Asked.near} is where that goes. With neither, the words select:
 // {@link line} builds a query string carrying the words, which every yaks store
-// answers as a full-text search over `doc` — where a memory's sentence lives —
-// and the newest of the selected rows come first, because a query string
-// carries no bm25 score. None of this is configured; a caller that has a ranker
+// answers as a full-text search over the text a memory marks — a doc's body, a
+// transcript entry's content — and the newest of the selected rows come first,
+// because a query string carries no bm25 score. None of this is configured; a caller that has a ranker
 // passes one.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
@@ -56,13 +56,36 @@ let who = (v: unknown): string =>
       str((v as { eid?: unknown }).eid)
     : str(v)
 
+// Where an entity keeps its words, in the order they are looked for: a doc's
+// body (a memory made to hold them, a comment, a task), then a transcript
+// entry's content (@yaks/session). Matched by component, never by kind, so a
+// memory marked on anything that holds words reads the same way.
+let HOMES: [string, string][] = [['doc', 'body'], ['content', 'body']]
+
+/**
+ * The words an entity holds: a doc's body, else a transcript entry's content,
+ * else ''.
+ *
+ * ```ts
+ * words({ entity: { eid: 'e1' }, content: { body: 'use grams' } })
+ * // 'use grams'
+ * ```
+ */
+export let words = (b: { [comp: string]: unknown }): string => {
+  for (let [c, p] of HOMES) {
+    let v = (b[c] as Comp | null | undefined)?.[p]
+    if (typeof v == 'string' && v) return v
+  }
+  return ''
+}
+
 /** One bundle as a memory. */
 export let heard = (b: Bundle): Memory => {
   let m = comp(b, MEMORY)
   let created = comp(b, 'created')
   return {
     eid: b.entity.eid,
-    said: str(comp(b, 'doc').body),
+    said: words(b),
     context: str(m.context),
     about: str(m.about),
     by: who(created.by),
@@ -70,10 +93,17 @@ export let heard = (b: Bundle): Memory => {
   }
 }
 
-// The words, stripped of anything the query string cannot carry: its own
-// punctuation (`&`, `=`, `.`) would be read as grammar, and a full-text index
-// matches words anyway.
-let words = (said: string) =>
+/**
+ * Words as search terms, stripped of anything the query string cannot carry:
+ * its own punctuation (`&`, `=`, `.`) would be read as grammar, and a
+ * full-text index matches words anyway.
+ *
+ * ```ts
+ * terms('.doc&how do they  like it?')
+ * // 'doc how do they like it'
+ * ```
+ */
+export let terms = (said: string): string =>
   said.replace(/[^\p{L}\p{N}\s'-]+/gu, ' ').trim().replace(/\s+/g, ' ')
 
 /** What a recall is looking for: which memories, and what ranks them. */
@@ -86,7 +116,7 @@ export type Asked = {
   scope?: Eid
   /** only the ones recording a correction somebody gave */
   feedback?: boolean
-  /** the words to select by — the store's own index over `doc` */
+  /** the words to select by — the store's own full-text index */
   said?: string
   /** an entity to rank by meaning instead, where the server has embeddings */
   near?: Eid
@@ -97,19 +127,20 @@ export type Asked = {
 /**
  * The query string that finds memories: with words, the memories containing
  * every one of them, which is what somebody searching means; with a `near`,
- * ranked by meaning; otherwise newest first. Words DO not rank: @yaks/fts
- * compiles a word into a condition and keeps its bm25 score for the search
- * tool, so a query string carrying words is a filter and the newest still come
- * first. The components are named so a returned row carries them — a row
- * carries only what its filter names.
+ * ranked by meaning; otherwise the newest words first. Words do not rank:
+ * @yaks/fts compiles a word into a condition and keeps its bm25 score for the
+ * search tool, so a query string carrying words is a filter and the newest
+ * still come first. Every component comes back (`*`), since the words may be a
+ * doc's body or an entry's content and a row carries only what its query
+ * names.
  *
  * ```ts
  * line({ space: 's1', limit: 8 })
- * // '.memory.space=s1&?doc&?created&.order=-entity.num&.limit=8'
+ * // '.memory.space=s1&*&.order=-created.at&.limit=8'
  * ```
  */
 export let line = (asked: Asked): string => {
-  let said = words(asked.said ?? '')
+  let said = terms(asked.said ?? '')
   let ranked = !!(asked.eids?.length || asked.near)
   return [
     ...(said ? [said] : []),
@@ -120,9 +151,8 @@ export let line = (asked: Asked): string => {
     asked.space ? `.${MEMORY}.space=${asked.space}` : `.${MEMORY}`,
     ...(asked.scope ? [`.${MEMORY}.scope=${asked.scope}`] : []),
     ...(asked.feedback ? ['.feedback'] : []),
-    '?doc',
-    '?created',
-    ...(asked.near ? ['.order=similar'] : ranked ? [] : ['.order=-entity.num']),
+    '*',
+    ...(asked.near ? ['.order=similar'] : ranked ? [] : ['.order=-created.at']),
     `.limit=${asked.limit}`,
   ].join('&')
 }
