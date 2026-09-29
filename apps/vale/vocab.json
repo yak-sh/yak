@@ -783,7 +783,7 @@
     "teleport": {
       "tool": true,
       "floor": "owner",
-      "description": "Teleport a Mossvale hero to a land, exact coordinates, or any entity with a live position. Only the app owner may do this. The hero moves now if their game page is open, or when they next play. Pass a land id or name as level, both x and z in world metres, or an entity eid or current name as to. A bare /teleport destination also accepts a land or entity name. Entity destinations require a live position; coordinates must be inside a known land and walkable.",
+      "description": "Teleport a Mossvale hero to a land, exact coordinates, or a positioned entity. Only the app owner may do this. The hero moves now if their game page is open, or when they next play. Pass a land id or name as level, both x and z in world metres, or an entity eid or current name as to. A bare /teleport destination also accepts a land or entity name. Moving entities require a live position; companions have a saved location and villagers' current location is computed from their plans. The hero's last saved position is never used as an entity destination. Coordinates must be inside a known land and walkable.",
       "input": {
         "player": { "type": "string", "description": "The hero's eid." },
         "level": {
@@ -792,7 +792,7 @@
         },
         "to": {
           "type": "string",
-          "description": "An entity eid or current name to teleport to. The entity must have a live position."
+          "description": "An entity eid or current name to teleport to. The entity needs a live position, saved companion spot, or computed villager location."
         },
         "x": {
           "type": "number",

@@ -1,6 +1,11 @@
 // The owner can request a safe move; the hero answers only the latest request,
 // and a saved acknowledgment keeps that move from replaying on another page.
-import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
+import {
+  assertEquals,
+  assertObjectMatch,
+  assertStringIncludes,
+  assertThrows,
+} from '@std/assert'
 import type { Bundle } from './net.ts'
 import type { Net } from './net.ts'
 import type { Intent } from './input.ts'
@@ -84,10 +89,11 @@ Deno.test('the teleport worker admits owner and refuses editor', async () => {
   })
 })
 
-Deno.test('teleport targets any live positioned entity at its exact spot', async () => {
+Deno.test('teleport targets live positions and stored companion spots', async () => {
   let target = '01234567-89ab-cdef-0123-456789abcdef'
   let wrote: Bundle[] = []
   let present = true
+  let stored = false
   let env = {
     STORE: {
       fetch: (path: string, init?: RequestInit) => {
@@ -102,6 +108,14 @@ Deno.test('teleport targets any live positioned entity at its exact spot', async
           ))
         }
         if (path.startsWith('query?')) {
+          if (path.includes(target)) {
+            return Promise.resolve(Response.json([{
+              entity: { eid: target },
+              player: {},
+              seen: { level: 'mossvale', x: 90, z: 90 },
+              ...(stored ? { companion: { x: 51, z: 52 } } : {}),
+            }]))
+          }
           return Promise.resolve(Response.json([{
             entity: { eid: 'hero' },
             player: {},
@@ -130,8 +144,54 @@ Deno.test('teleport targets any live positioned entity at its exact spot', async
   present = false
   let absent = await worker.fetch(ask(target), env)
   assertEquals(absent.status, 404)
-  assertStringIncludes(await absent.text(), 'no live position')
+  assertStringIncludes(await absent.text(), 'no usable position')
   assertEquals(wrote.length, 1)
+  stored = true
+  let resumed = await worker.fetch(ask(target), env)
+  assertEquals(resumed.status, 200)
+  assertEquals(wrote[0].teleport_request, {
+    player: 'hero',
+    level: 'mossvale',
+    x: 51,
+    z: 52,
+  })
+})
+
+Deno.test('teleport can meet a villager at their current world position', async () => {
+  let wrote: Bundle[] = []
+  let env = {
+    STORE: {
+      fetch: (path: string, init?: RequestInit) => {
+        if (path.startsWith('query?live=1')) {
+          return Promise.resolve(Response.json([]))
+        }
+        if (path.startsWith('query?')) {
+          return Promise.resolve(
+            Response.json(
+              path.includes('hero')
+                ? [{ entity: { eid: 'hero' }, player: {} }]
+                : [],
+            ),
+          )
+        }
+        wrote = JSON.parse(String(init?.body)).entities
+        return Promise.resolve(Response.json({ ok: true, bundles: wrote }))
+      },
+    },
+  }
+  let worker = workerOf(vale())
+  let moved = await worker.fetch(
+    new Request('https://yourname.yaks.app/vale/teleport', {
+      method: 'POST',
+      headers: { 'x-yak-role': 'owner' },
+      body: JSON.stringify({ player: 'hero', to: 'wren' }),
+    }),
+    env,
+  )
+  assertEquals(moved.status, 200)
+  assertObjectMatch(wrote[0], {
+    teleport_request: { player: 'hero', level: 'mossvale' },
+  })
 })
 
 Deno.test('an active hero moves once and a returning hero keeps the move', () => {

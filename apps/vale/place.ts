@@ -13,11 +13,17 @@ export type Place = {
 
 export let placeOf = (
   row: Record<string, unknown> | undefined,
-  source: 'position' | 'seen',
+  source: 'position' | 'seen' | 'companion',
 ): Place | null => {
   let value = row?.[source]
   if (!value || typeof value != 'object') return null
   let { level, x, z, at } = value as Record<string, unknown>
+  if (
+    source == 'companion' && typeof x == 'number' &&
+    typeof z == 'number' && Number.isFinite(x) && Number.isFinite(z)
+  ) {
+    level = regionOf(x, z)
+  }
   if (
     typeof level != 'string' || !Object.hasOwn(LEVELS, level) ||
     typeof x != 'number' || !Number.isFinite(x) ||

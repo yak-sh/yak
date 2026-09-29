@@ -6,6 +6,9 @@ import { destinationOf } from './teleport.ts'
 import { vale } from './terrain.ts'
 import { placeOf, placeText } from './place.ts'
 import { resolveTarget } from './target.ts'
+import { GIVERS } from './quests.ts'
+import { decided, where as villagerWhere } from './villagers.ts'
+import { eidOf } from './villager-id.ts'
 
 let read = async (door, line, live = false) => {
   let search = live
@@ -135,6 +138,39 @@ let where = async (req, env) => {
   )
 }
 
+let targetPlace = async (env, v, eid) => {
+  let [moving] = await live(env, `.eid=${JSON.stringify(eid)}&.position`)
+  let placed = placeOf(moving, 'position')
+  if (placed) return placed
+  let [stored] = await read(
+    env.STORE,
+    `.eid=${JSON.stringify(eid)}&?companion`,
+  )
+  placed = placeOf(stored, 'companion')
+  if (placed) return placed
+  let giver = GIVERS.find((g) => eidOf(g.id) == eid)
+  if (!giver) return null
+  let [outputs, choices] = await Promise.all([
+    read(
+      env.STORE,
+      `.entry.session=${
+        JSON.stringify(eid)
+      }&.output&?content&?answer&?created&.order=-created.at&.limit=60`,
+    ),
+    read(
+      env.STORE,
+      `.going.villager=${
+        JSON.stringify(eid)
+      }&?created&.order=-created.at&.limit=60`,
+    ),
+  ])
+  let plans =
+    decided(outputs, choices, (session) => session == eid ? giver.id : null)
+      .plans.get(giver.id) ?? []
+  let [x, , z] = villagerWhere(giver, v, plans, Date.now())
+  return placeOf({ companion: { x, z } }, 'companion')
+}
+
 let teleport = async (req, env, v) => {
   if (req.headers.get('x-yak-role') != 'owner') {
     return new Response('Only the app owner can teleport a hero.', {
@@ -172,13 +208,9 @@ let teleport = async (req, env, v) => {
       if ('level' in to) {
         at = destinationOf(v, to)
       } else {
-        let [row] = await live(
-          env,
-          `.eid=${JSON.stringify(to.eid)}&.position`,
-        )
-        let place = placeOf(row, 'position')
+        let place = await targetPlace(env, v, to.eid)
         if (!place) {
-          return new Response('That entity has no live position.', {
+          return new Response('That entity has no usable position.', {
             status: 404,
           })
         }
