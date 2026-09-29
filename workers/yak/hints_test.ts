@@ -38,6 +38,7 @@ let READS = [
   'memory_recall',
   'sandbox_read',
   'sandbox_wait',
+  'store_writes',
 ]
 
 // It can delete, or change something no second call takes back. A create is
@@ -66,6 +67,7 @@ let DESTROYS = [
   // still destructive: it throws away everything written since the moment
   // asked for, and a host should stop and ask before it does that.
   'store_restore',
+  'store_retry',
   // Rows already there are patched in place, deletes included.
   'store_load',
 ]

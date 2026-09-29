@@ -5,7 +5,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { sha256 } from '@yaks/graph'
 import { doorOf, type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
-import { by, scan, tally } from '@yaks/sql'
+import { by, lit, scan, tally, val } from '@yaks/sql'
 import { db, keep, named, state } from './testing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { keyed, Pending } from './writes.ts'
@@ -133,6 +133,78 @@ Deno.test('a batch sent again after a reset lost its answer is applied once', as
   )
   let rows = await o.query('.doc')
   assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
+})
+
+Deno.test('an interrupted write keeps its body while reads recover and explicit retry applies once', async () => {
+  let o = object()
+  broken(o)
+  await assertRejects(() => o.apply([titled('n1', 'once')]), Pending)
+  // The earlier attempt marker survives the graph transaction's reset.
+  db(o.ctx).query({
+    t: 'update',
+    table: 'yak_writes',
+    set: { state: lit('running') },
+  })
+  mended(o)
+  assertEquals(await o.title('n1'), undefined)
+  assertEquals(o.writes('interrupted'), 1)
+  let inspect = () =>
+    o.fetch(
+      new Request('http://store/writes?seq=1', {
+        headers: KERNEL,
+      }),
+    )
+  let denied = await o.fetch(new Request('http://store/writes?seq=1'))
+  assertEquals(denied.status, 404)
+  let [write] = await (await inspect()).json()
+  assertEquals(write.state, 'interrupted')
+  assertEquals(JSON.parse(write.body), [titled('n1', 'once')])
+  let retried = await o.fetch(
+    new Request('http://store/writes?seq=1', {
+      method: 'POST',
+      headers: KERNEL,
+    }),
+  )
+  assertEquals(retried.status, 200)
+  assertEquals(await o.title('n1'), 'once')
+  assertEquals(o.writes('interrupted'), 0)
+  assertEquals(
+    (await o.fetch(
+      new Request('http://store/writes?seq=1', {
+        method: 'POST',
+        headers: KERNEL,
+      }),
+    )).status,
+    400,
+  )
+  let rows = await o.query('.doc')
+  assertEquals(rows.length, 1)
+  assertEquals(rows[0].entity.eid, 'n1')
+})
+
+Deno.test('a stale bulk write from before attempt tracking is held for inspection', async () => {
+  let o = object()
+  broken(o)
+  let batch = Array.from({ length: 100 }, (_, i) => titled(`n${i}`, 'one'))
+  await assertRejects(() => o.apply(batch), Pending)
+  db(o.ctx).query({
+    t: 'update',
+    table: 'yak_writes',
+    set: { at: val(new Date(Date.now() - 120_000).toISOString()) },
+  })
+  mended(o)
+  assertEquals(await o.title('n0'), undefined)
+  assertEquals(o.writes('interrupted'), 1)
+  let [write] = await (await o.fetch(
+    new Request('http://store/writes', {
+      headers: KERNEL,
+    }),
+  )).json()
+  assertEquals([write.seq, write.state, write.body], [
+    1,
+    'interrupted',
+    undefined,
+  ])
 })
 
 Deno.test('writes kept by code before idempotency keys apply under the code after', async () => {

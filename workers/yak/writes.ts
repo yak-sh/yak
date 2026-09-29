@@ -99,7 +99,95 @@ let WINDOW = 10 * 60_000
 let PENDING = eq(col('state'), lit('pending'))
 let FAILED = eq(col('state'), lit('failed'))
 let APPLIED = eq(col('state'), lit('applied'))
+let RUNNING = eq(col('state'), lit('running'))
+let INTERRUPTED = eq(col('state'), lit('interrupted'))
 let at = (seq: number) => eq(col('seq'), val(seq))
+
+// A reset rolls the graph transaction back, but not this earlier marker. A
+// committed write changes or removes its log row in the graph transaction.
+export let started = (db: Driver, seq: number) =>
+  void db.query({
+    t: 'update',
+    table: LOG,
+    set: { state: lit('running'), tries: op('+', col('tries'), lit(1)) },
+    where: and(at(seq), PENDING),
+  })
+
+// Older code left no running marker. Its one oldest stale pending write is
+// held on a new incarnation too: an unbounded replay can otherwise keep every
+// read behind the same storage reset. Nothing is deleted or applied here.
+export let interrupted = (db: Driver, now = Date.now()) => {
+  db.query({
+    t: 'update',
+    table: LOG,
+    set: {
+      state: lit('interrupted'),
+      why: lit(
+        'the Store reset while applying this write; inspect before retrying',
+      ),
+    },
+    where: RUNNING,
+  })
+  let [old] = db.query(select({
+    cols: [col('seq'), col('body')],
+    from: table(LOG),
+    where: and(
+      PENDING,
+      lt(col('at'), val(new Date(now - 60_000).toISOString())),
+    ),
+    order: [col('seq')],
+    limit: lit(1),
+  }))
+  if (!old) return
+  // A small write kept while schema code was broken still auto-recovers.
+  let count = (() => {
+    try {
+      let body = JSON.parse(String(old.body))
+      return Array.isArray(body) ? body.length : 0
+    } catch {
+      return 0
+    }
+  })()
+  if (count < 100) return
+  db.query({
+    t: 'update',
+    table: LOG,
+    set: {
+      state: lit('interrupted'),
+      why: lit(
+        'a large write predates attempt tracking and may have reset the Store; inspect before retrying',
+      ),
+    },
+    where: and(at(Number(old.seq)), PENDING),
+  })
+}
+
+/** Kept writes, with the body only when one is named for inspection. */
+export let writes = (db: Driver, seq?: number) =>
+  db.query(select({
+    cols: [
+      col('seq'),
+      col('at'),
+      col('state'),
+      col('tries'),
+      col('why'),
+      ...(seq == null ? [] : [col('body'), col(KEY)]),
+    ],
+    from: table(LOG),
+    where: seq == null ? not(APPLIED) : at(seq),
+    order: [col('seq')],
+    limit: lit(seq == null ? 100 : 1),
+  }))
+
+/** Explicitly retry an interrupted write, keeping its body and key. */
+export let retry = (db: Driver, seq: number): boolean =>
+  db.query({
+    t: 'update',
+    table: LOG,
+    set: { state: lit('pending'), why: lit(null) },
+    where: and(at(seq), INTERRUPTED),
+    returning: [col('seq')],
+  }).length > 0
 
 /** One kept write. */
 export type Kept = { seq: number; headers: string; body: string }
@@ -244,10 +332,9 @@ export let aside = (db: Driver, seq: number, why: string) =>
     table: LOG,
     set: {
       state: lit('failed'),
-      tries: op('+', col('tries'), lit(1)),
       why: val(why),
     },
-    where: at(seq),
+    where: and(at(seq), or(PENDING, RUNNING)),
   })
 
 /** Every write set aside, waiting again: a new incarnation may be new code. */
@@ -301,7 +388,7 @@ export let held = (db: Driver, seq: number): boolean =>
   db.query(select({
     cols: [lit(1)],
     from: table(LOG),
-    where: and(at(seq), or(PENDING, FAILED)),
+    where: and(at(seq), or(PENDING, FAILED, RUNNING)),
   })).length > 0
 
 /** A kept write, as the door that sent it hears it (meta.ts): not applied

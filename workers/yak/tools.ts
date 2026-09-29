@@ -94,6 +94,7 @@ import {
 // A whole store put back to a moment (T-34507) — the data half of what
 // app_rollback does for an app's files.
 import { mark, moment, oldest, putBack, recorded } from './recover.ts'
+import { inspect as inspectWrites, retry as retryWrite } from './write-log.ts'
 // Only the ceiling, and only ever called: tools.ts and standing.ts are a
 // cycle through declared.ts, so nothing from there may be read while this
 // module's own body runs.
@@ -3127,6 +3128,66 @@ let OURS: Row[] = [
           `it — to undo this restore, store_restore(app: '${app.slug}', at: ` +
           `'${done.at}'), which is the moment just before it happened.` +
           story,
+        space,
+      }
+    },
+  },
+  {
+    name: 'store_writes',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        seq: { type: 'integer', minimum: 1 },
+      },
+      required: ['app'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, store } = await inApp(ctx, args, true)
+      let seq = args.seq == null ? undefined : Number(args.seq)
+      if (seq != null && (!Number.isSafeInteger(seq) || seq < 1)) {
+        throw refuse('arguments', 'seq must be a positive integer')
+      }
+      let rows = await inspectWrites(store, seq)
+      return {
+        text: rows.length
+          ? rows.map((r) =>
+            `${r.seq}: ${r.state}, ${r.tries} attempts, ${r.at}${
+              r.why ? ` — ${r.why}` : ''
+            }${r.body ? `, ${r.body.length} body characters` : ''}`
+          ).join('\n')
+          : `no kept writes in ${space.slug}/${app.slug}`,
+        value: { writes: rows },
+        space,
+      }
+    },
+  },
+  {
+    name: 'store_retry',
+    destructive: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        seq: { type: 'integer', minimum: 1 },
+      },
+      required: ['app', 'seq'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, store } = await inApp(ctx, args, true)
+      let seq = Number(args.seq)
+      if (!Number.isSafeInteger(seq) || seq < 1) {
+        throw refuse('arguments', 'seq must be a positive integer')
+      }
+      let rows = await retryWrite(store, seq)
+      return {
+        text: rows.length
+          ? `write ${seq} is ${rows[0].state} in ${space.slug}/${app.slug}`
+          : `write ${seq} applied in ${space.slug}/${app.slug}`,
+        value: { writes: rows },
         space,
       }
     },

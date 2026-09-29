@@ -274,6 +274,14 @@ Deno.test(
         await tool('store_restore', { space: mine, app }),
         'can be put back',
       )
+      assertStringIncludes(
+        await tool('store_writes', { space: mine, app }),
+        'no kept writes',
+      )
+      assertStringIncludes(
+        await refused(tool, 'store_retry', { space: mine, app, seq: 999 }),
+        'not interrupted',
+      )
 
       // ---- a second release, and the first one put back -------------------
       await tool('app_files', {

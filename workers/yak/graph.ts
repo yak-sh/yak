@@ -203,6 +203,7 @@ import {
   first,
   fits,
   held,
+  interrupted,
   keep,
   type Kept,
   keyed,
@@ -212,10 +213,13 @@ import {
   parked,
   raise,
   replayed,
+  retry,
   revived,
   said,
   type Sent,
+  started,
   waiting,
+  writes,
 } from './writes.ts'
 
 // A JSON answer's headers, for one the write log kept as text.
@@ -561,6 +565,7 @@ let routes = new Set([
   '/tools',
   '/graph',
   '/restore',
+  '/writes',
   '/alarm',
   '/ws',
   '/apply',
@@ -663,6 +668,7 @@ export class Store {
     // whose graph cannot boot still keeps what it is sent (writes.ts). What
     // the last incarnation set aside waits again, for this one's code.
     raise(this.#sql)
+    interrupted(this.#sql)
     revived(this.#sql)
     this.#reshaping()
     this.#boot()
@@ -1803,7 +1809,11 @@ export class Store {
             if (no) answer = no
             else {
               // Writes kept during an outage land before a read is answered.
-              await this.#settle()
+              // Recovery must be reachable even when a pending write cannot
+              // finish: inspecting it is how a caller learns what to fix.
+              if (new URL(request.url).pathname != '/writes') {
+                await this.#settle()
+              }
               answer = await this.#serve(request)
             }
           }
@@ -1897,6 +1907,7 @@ export class Store {
     if (was?.state == 'applied') return new Response(was.answer, JSONED)
     if (was?.state == 'refused') return refuse(new Refused(was.why))
     if (was?.state == 'failed') return parked(seq, was.why)
+    if (was?.state == 'interrupted') return parked(seq, was.why)
     if (await this.#ready(request)) {
       return this.#park(seq, this.#refused ?? 'this app could not start')
     }
@@ -1928,6 +1939,7 @@ export class Store {
         for (let k = next(sql); k; k = next(sql, k.seq)) {
           let caller = this.#callers.get(k.seq)
           this.#callers.delete(k.seq)
+          started(sql, k.seq)
           let r = await this.#land(k, !!caller)
           let kept = r.status >= 500 && held(sql, k.seq)
           caller?.(kept ? parked(k.seq, await said(r)) : r)
@@ -1970,6 +1982,7 @@ export class Store {
       return r
     } catch (e) {
       defect(e, { request: 'write replay', store: this.#name() })
+      if (held(sql, k.seq)) aside(sql, k.seq, String(e))
       return refuse(e)
     }
   }
@@ -2095,6 +2108,27 @@ export class Store {
         db: `do:${this.#get('name') ?? ''}`,
         bytes: this.#ctx.storage.sql.databaseSize,
       })
+    }
+    if (path == '/writes') {
+      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
+      let seq = Number(new URL(request.url).searchParams.get('seq'))
+      if (request.method == 'GET') {
+        return Response.json(
+          writes(
+            this.#sql,
+            Number.isSafeInteger(seq) && seq > 0 ? seq : undefined,
+          ),
+        )
+      }
+      if (request.method != 'POST' || !Number.isSafeInteger(seq) || seq < 1) {
+        return refuse(new Refused('/writes retry needs a positive seq'))
+      }
+      if (!retry(this.#sql, seq)) {
+        return refuse(new Refused(`write ${seq} is not interrupted`))
+      }
+      this.#stuck = false
+      await this.#drain()
+      return Response.json({ seq, writes: writes(this.#sql, seq) })
     }
     // The app this store held is gone (tools.ts app_delete, erase.ts
     // `emptied`): everything in it, at once. Kernel only, like the trusted
