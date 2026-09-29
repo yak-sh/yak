@@ -4,10 +4,10 @@
  * there (RFC 7591) when the host has none. What comes back is data, an
  * integration as @yaks/connections takes it; the sign-in, the tokens and their
  * refresh are @yaks/oauth's over that data. No UI, storage or session. */
-import {
-  discoverOAuthServerInfo,
-  registerClient,
-} from '@modelcontextprotocol/sdk/client/auth.js'
+
+// The SDK's discovery and registration, imported when a sign-in is looked for
+// rather than when this module is (./mod.ts says why).
+let auth = () => import('@modelcontextprotocol/sdk/client/auth.js')
 
 export type AuthorizationChallenge = {
   resourceMetadataUrl?: string
@@ -57,6 +57,7 @@ export const discover = async (
       redirect: 'manual',
       signal: AbortSignal.timeout(30000),
     })
+  const { discoverOAuthServerInfo, registerClient } = await auth()
   const info = await discoverOAuthServerInfo(safe(url), {
     resourceMetadataUrl: challenge.resourceMetadataUrl
       ? new URL(challenge.resourceMetadataUrl)

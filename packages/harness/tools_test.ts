@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools, parametersOf } from './tools.ts'
-import { core } from '@yaks/mcp'
+import { core } from '@yaks/mcp/tools'
 import { identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { harness, repo } from './testing.ts'

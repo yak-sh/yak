@@ -83,16 +83,20 @@ export {
   annotated,
   answerSchema,
   COMMAND,
-  inputSchemaOf,
   listing,
   type Options,
   roster,
   type Security,
   server,
-  shapeOf,
 } from './server.ts'
 export { rosterLine, rosterVersion } from './roster.ts'
-export { core, type CoreOpts, type Search } from './tools.ts'
+export {
+  core,
+  type CoreOpts,
+  inputSchemaOf,
+  type Search,
+  shapeOf,
+} from './tools.ts'
 export { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
 // The vocabulary described belongs to @yaks/graph — `graph_schema` builds its
 // answer there — and a server that passes `guide` imports its type from the

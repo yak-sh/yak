@@ -1,6 +1,5 @@
 import { mint, type NamedTool, namedTool, offered, toolName } from '@yaks/graph'
 import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { zodToJsonSchema } from 'zod-to-json-schema'
 // The server: a graph, its tools, and the MCP protocol implementation that
 // lists and calls them. Everything transport-specific lives in ./mount.ts and
 // ./stdio.ts; this file only knows how a @yaks/graph `Tool` becomes an MCP
@@ -26,7 +25,6 @@ import {
   type Actor,
   type Bundle,
   type Graph,
-  type Schema,
   status,
   type Tool,
   toolsOf,
@@ -43,7 +41,14 @@ import {
   worded,
 } from '@yaks/tools'
 import type { BundleOpts, Depth } from './schema.ts'
-import { core, type CoreOpts, pointing, type Search } from './tools.ts'
+import {
+  core,
+  type CoreOpts,
+  inputSchemaOf,
+  pointing,
+  type Search,
+  shapeOf,
+} from './tools.ts'
 import type { Guide } from '@yaks/graph'
 
 /**
@@ -256,20 +261,6 @@ let failed = (err: unknown): CallToolResult => ({
   isError: true,
 })
 
-// @yaks/graph leaves a tool's schemas opaque, because the core package depends
-// on no validation library. This is where `Schema` gets a concrete meaning:
-// the MCP SDK takes Zod, so a schema that is not a Zod schema throws at
-// startup rather than producing a tool that lists the wrong arguments.
-let zodOf = (
-  tool: string,
-  where: string,
-  s: Schema | undefined,
-): z.ZodTypeAny | undefined => {
-  if (s == undefined) return undefined
-  if (s instanceof z.ZodType) return s
-  throw new Error(`${tool}: ${where} must be a Zod schema`)
-}
-
 // One more sentence at the end of a reply, as its own content block. It is not
 // appended to the existing text because that text may be JSON — the generic
 // tier returns a typed value — and a sentence glued onto it would leave the
@@ -322,35 +313,6 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
     ? { [COMMAND]: said, [LEGACY_COMMAND]: said }
     : undefined
 }
-
-/**
- * A tool's arguments as one Zod shape — its `input` object, with every schema
- * checked to be a Zod schema. This is what the server hands the MCP SDK, and
- * the starting point for anything that has to express a tool's arguments in
- * another format: a model's tool declaration takes JSON Schema, and
- * `z.object(shapeOf(tool))` is what you convert.
- */
-export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
-  Object.fromEntries(
-    Object.entries(tool.input ?? {}).map((
-      [name, s],
-    ) => [name, zodOf(toolName(tool), `argument '${name}'`, s)!]),
-  )
-
-/**
- * A tool's arguments as JSON Schema, whichever way it declared them: its own
- * `inputSchema`, or its Zod shape converted. This is exactly what
- * `tools/list` sends, so anything else that needs a tool's argument
- * grammar — a CLI mapping a command onto it, say — reads what an MCP client
- * reads.
- */
-export let inputSchemaOf = (
-  tool: Tool,
-): { type: 'object'; [key: string]: unknown } =>
-  (tool.inputSchema ?? zodToJsonSchema(z.object(shapeOf(tool)), {
-    target: 'jsonSchema7',
-    $refStrategy: 'none',
-  })) as { type: 'object'; [key: string]: unknown }
 
 /**
  * Every tool this server lists, in the order it registers them: the generic

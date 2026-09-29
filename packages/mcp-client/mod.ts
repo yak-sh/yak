@@ -1,15 +1,40 @@
-import { extractWWWAuthenticateParams } from '@modelcontextprotocol/sdk/client/auth.js'
 /** MCP tools over Streamable HTTP, with no dependency on a session or a UI. */
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import {
-  type CallToolResult,
-  type Tool as RemoteTool,
-  ToolListChangedNotificationSchema,
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import type { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import type {
+  CallToolResult,
+  Tool as RemoteTool,
 } from '@modelcontextprotocol/sdk/types.js'
 import { argsOf, type Tool, type ToolId } from '@yaks/graph'
 import { errorsText, toolCheck } from '@yaks/vocab/tools'
 import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js'
+
+// The MCP SDK, imported the first time a connection is used rather than when
+// this module is: a host with no server configured never loads it, and it is
+// most of what a harness would otherwise load at start.
+let sdkModules: Promise<Sdk> | undefined
+type Sdk = {
+  Client: typeof Client
+  Transport: typeof StreamableHTTPClientTransport
+  listChanged: typeof import('@modelcontextprotocol/sdk/types.js')[
+    'ToolListChangedNotificationSchema'
+  ]
+  challenge: typeof import('@modelcontextprotocol/sdk/client/auth.js')[
+    'extractWWWAuthenticateParams'
+  ]
+}
+let loaded = (): Promise<Sdk> =>
+  sdkModules ??= Promise.all([
+    import('@modelcontextprotocol/sdk/client/index.js'),
+    import('@modelcontextprotocol/sdk/client/streamableHttp.js'),
+    import('@modelcontextprotocol/sdk/types.js'),
+    import('@modelcontextprotocol/sdk/client/auth.js'),
+  ]).then(([client, http, types, auth]) => ({
+    Client: client.Client,
+    Transport: http.StreamableHTTPClientTransport,
+    listChanged: types.ToolListChangedNotificationSchema,
+    challenge: auth.extractWWWAuthenticateParams,
+  }))
 
 // The SDK's default output validator is 2020-only; remote servers also declare
 // draft-07. Use the same dialect-aware validation as local graph tools.
@@ -139,17 +164,9 @@ export const connect = (server: Server, options: Options = {}): Connection => {
   if (
     !['http:', 'https:'].includes(url.protocol) || url.username || url.password
   ) throw new Error('MCP requires an HTTP(S) URL without embedded credentials')
-  const sdk = new Client({ name: 'yaks-mcp-client', version: '0.1.0' }, {
-    jsonSchemaValidator: schemas,
-    capabilities: {},
-  })
   let ready: Promise<void> | undefined, closed = false, generation = 0
   let closePromise: Promise<void> | undefined
   let listing: Promise<RemoteTool[]> | undefined
-  sdk.setNotificationHandler(ToolListChangedNotificationSchema, () => {
-    generation++
-    listing = undefined
-  })
   let unauthorized = false
   let challenge: { resourceMetadataUrl?: string; scope?: string } = {}
   const fetcher: typeof fetch = async (input, init) => {
@@ -184,7 +201,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     })
     unauthorized = response.status === 401
     if (unauthorized) {
-      const found = extractWWWAuthenticateParams(response)
+      const found = (await loaded()).challenge(response)
       challenge = {
         resourceMetadataUrl: found.resourceMetadataUrl?.href,
         scope: found.scope,
@@ -192,10 +209,24 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     }
     return response
   }
-  const transport = new StreamableHTTPClientTransport(url, { fetch: fetcher })
-  const ensure = () => {
+  // The client and its transport, made the first time the connection is used.
+  let opened: Promise<[Client, StreamableHTTPClientTransport]> | undefined
+  const open = () =>
+    opened ??= loaded().then((m) => {
+      const sdk = new m.Client(
+        { name: 'yaks-mcp-client', version: '0.1.0' },
+        { jsonSchemaValidator: schemas, capabilities: {} },
+      )
+      sdk.setNotificationHandler(m.listChanged, () => {
+        generation++
+        listing = undefined
+      })
+      return [sdk, new m.Transport(url, { fetch: fetcher })]
+    })
+  const ensure = async (): Promise<Client> => {
     if (closed) throw new MCPError('MCP connection is closed', server.name)
-    return ready ??= sdk.connect(transport).catch(async () => {
+    const [sdk, transport] = await open()
+    await (ready ??= sdk.connect(transport).catch(async () => {
       await sdk.close().catch(() => {})
       if (unauthorized) {
         throw new MCPAuthorizationRequired(server.name, challenge)
@@ -204,10 +235,11 @@ export const connect = (server: Server, options: Options = {}): Connection => {
         'MCP connection failed; check server URL and sign-in',
         server.name,
       )
-    })
+    }))
+    return sdk
   }
   const list = async (): Promise<RemoteTool[]> => {
-    await ensure()
+    const sdk = await ensure()
     if (!listing) {
       const observed = generation
       const pending = (async () => {
@@ -251,7 +283,7 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     args: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<CallToolResult> => {
-    await ensure()
+    const sdk = await ensure()
     if (server.allow && !server.allow.includes(name)) {
       throw new MCPError('Tool not allowed', server.name)
     }
@@ -318,6 +350,9 @@ export const connect = (server: Server, options: Options = {}): Connection => {
     close: (): Promise<void> =>
       closePromise ??= (async () => {
         closed = true
+        // Never used, nothing was opened; an opening under way ends first.
+        if (!opened) return
+        const [sdk, transport] = await opened
         // A transport failure must not strand the local event stream.
         try {
           if (transport.sessionId) await transport.terminateSession()

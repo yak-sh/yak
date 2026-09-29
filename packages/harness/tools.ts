@@ -19,18 +19,16 @@ import { type Blobs, valueTools } from '@yaks/blob'
 // is written in the agent's name and not the runner's, and the transcript's own
 // record of the call is the same entity @yaks/tools' runner answered.
 //
-// The conversion is not hand-written. `shapeOf` (@yaks/mcp) is where a tool's
-// Zod shape already comes from, and `zod-to-json-schema` is what the MCP SDK
-// itself converts with — reimplementing Zod's type table here would be a second
-// copy to keep in step for nothing. References are inlined ($refStrategy 'none'):
-// a provider reads a tool's parameters on its own, without a document to
-// resolve `$ref` against.
+// The conversion is not written here. `inputSchemaOf` (@yaks/mcp/tools) is
+// what an MCP `tools/list` sends, with references inlined: a provider reads a
+// tool's parameters on its own, without a document to resolve `$ref` against.
+// That subpath loads no MCP SDK, so a session that serves nothing never pays
+// for a server.
 
 import { sessionCwd, workspace } from './workspace.ts'
 import { worktrees } from './paths.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
-import { shapeOf } from '@yaks/mcp'
-import { core, type Depth } from '@yaks/mcp'
+import { core, type Depth, inputSchemaOf } from '@yaks/mcp/tools'
 import { boxMachine } from './box.ts'
 import { machineTools } from './machine.ts'
 import {
@@ -39,17 +37,12 @@ import {
   type Tool,
   ToolError,
 } from '@yaks/session'
-import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
 
 /** A graph tool's arguments as JSON Schema, the way a model declaration takes
  * them. */
 export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
   if (tool.inputSchema) return tool.inputSchema
-  let json = zodToJsonSchema(z.object(shapeOf(tool)), {
-    $refStrategy: 'none',
-  }) as Record<string, unknown>
-  delete json.$schema
+  let { $schema: _, ...json } = inputSchemaOf(tool)
   return json
 }
 

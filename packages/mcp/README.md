@@ -133,6 +133,7 @@ their own component declarations.
 | `@yaks/mcp`       | `bundleSchema`, `schemaSchema`, `BundleOpts`, `Depth`: Zod schemas for bundles and schema results                                                   |
 | `@yaks/mcp`       | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                                     |
 | `@yaks/mcp`       | `shapeOf`, `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
+| `@yaks/mcp/tools` | `core`, `shapeOf`, `inputSchemaOf`: the generic tier and argument schemas without the MCP SDK, for a host that describes tools and serves none      |
 | `@yaks/mcp/stdio` | `stdio`: connect the server to process stdin and stdout                                                                                             |
 
 `annotated(tool)` produces MCP behavior hints and includes `annotations.title`
