@@ -1,10 +1,10 @@
 // The persona files: which files a graph says its checkouts hold, and a sync
 // that writes them.
 
-import { assert, assertEquals, assertMatch } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { memo, sync } from '@yaks/mirror'
-import { fleet } from './testing.ts'
+import { checkout, fleet } from './testing.ts'
 import { personaFiles, personaMirror } from './files.ts'
 
 let then = (g: Graph, ...batch: Bundle[]): Graph => (g.apply(batch), g)
@@ -39,14 +39,30 @@ Deno.test('a specialist with no name is named for its id', async () => {
   assertMatch([...(await texts(g)).keys()][1], /\/personas\/n-\d+\.md$/)
 })
 
-Deno.test('only a checkout a person keeps, of a project still open, is written', async () => {
-  let agents = then(fleet('/r'), {
-    entity: { eid: 'w1' },
-    worktree: { managed: true },
-  })
-  assertEquals((await personaFiles(agents)).files, [])
+Deno.test('an archived project keeps what it last had', async () => {
   let archived = then(fleet('/r'), { entity: { eid: 'p1' }, archived: {} })
   assertEquals((await personaFiles(archived)).files, [])
+})
+
+Deno.test('a sync keeps the main checkout current, never a linked worktree', async () => {
+  let root = Deno.makeTempDirSync()
+  try {
+    // A worktree cut by hand, which nothing marks, and first by path.
+    let g = then(
+      fleet(`${root}/main`),
+      checkout('w3', `${root}/a`, `${root}/main/.git/worktrees/a`),
+    )
+    let mem = memo(`${root}/memo.json`)
+    let synced = async () => sync((await personaMirror(g, mem)).binding)
+    await synced()
+    then(g, { entity: { eid: 'm1' }, doc: { body: 'first, revised' } })
+    let file = `${root}/main/.tasks/AGENTS.md`
+    assertEquals((await synced()).wrote, [file])
+    assertMatch(Deno.readTextFileSync(file), /first, revised/)
+    assertThrows(() => Deno.statSync(`${root}/a`))
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
 })
 
 Deno.test('a sync writes the files, removes a stale one, then has nothing to do', async () => {

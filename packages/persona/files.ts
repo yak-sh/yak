@@ -19,10 +19,11 @@
 // too, so a renamed or deleted persona's file is removed.
 //
 // Which checkout is borrowed, not declared here: a project's `repo.repository`
-// (@yaks/project) and that repository's `worktree` (@yaks/git) that no tool
-// made. A managed worktree is an agent's; the primary checkout is where a
-// person works. A graph composed without either package has no checkouts, and
-// writes no files. An archived project keeps what it last had.
+// (@yaks/project) and that repository's main worktree (@yaks/git), the one
+// whose own Git directory is the repository's common one. Every linked
+// worktree is an agent's or a session's, whoever cut it; the main one is where
+// a person works. A graph composed without either package has no checkouts,
+// and writes no files. An archived project keeps what it last had.
 
 import { type Binding, memo, present as exists } from '@yaks/mirror'
 import { and, eq, type Input, list, present } from '@yaks/query'
@@ -46,25 +47,34 @@ let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 
 let eidOf = (b: Bundle): Eid => b.entity.eid
 
-// Each project's checkout root. Where a person keeps more than one checkout
-// no tool made, the first by path is the one, so the answer never depends on
-// the order rows come back in.
+// Each project's checkout root: the main worktree of its repository, which
+// Git knows by its own directory being the common one. Whoever cut a linked
+// worktree, by hand or by a tool, it is never the one. A checkout moved
+// leaves its old row behind, so the first by path wins, and the answer never
+// depends on the order rows come back in.
 let checkouts = async (g: Graph): Promise<Map<Eid, string>> => {
   let out = new Map<Eid, string>()
-  if (!g.vocab.comp('repo') || !g.vocab.comp('worktree')) return out
+  let needs = ['repo', 'repository', 'worktree']
+  if (!needs.every((c) => g.vocab.comp(c))) return out
   let projects = (await g.storage.read(
     and(present('project'), present('repo')),
   )).filter((b) => !b.archived && comp(b, 'repo').repository)
   let repos = [...new Set(projects.map((b) => str(comp(b, 'repo').repository)))]
   if (!repos.length) return out
-  let trees = (await g.storage.read(
-    and(eq('worktree.repository', value(repos))),
+  let common = new Map<Eid, string>()
+  for (let r of await g.get(repos)) {
+    let dir = str(comp(r, 'repository').common)
+    if (dir) common.set(eidOf(r), dir)
+  }
+  if (!common.size) return out
+  let mains = (await g.storage.read(
+    and(eq('worktree.gitdir', value([...new Set(common.values())]))),
   ))
     .map((b) => comp(b, 'worktree'))
-    .filter((w) => w.path && !w.managed)
+    .filter((w) => w.path && w.gitdir == common.get(str(w.repository)))
     .sort((a, b) => str(a.path).localeCompare(str(b.path)))
   for (let p of projects) {
-    let tree = trees.find((w) => w.repository == comp(p, 'repo').repository)
+    let tree = mains.find((w) => w.repository == comp(p, 'repo').repository)
     if (tree) out.set(eidOf(p), str(tree.path))
   }
   return out

@@ -39,13 +39,18 @@ let doc: VocabDoc = {
       properties: { verdict: { type: 'string' } },
     },
     // Where the persona files go: @yaks/project's project and its repo,
-    // @yaks/git's worktree, @yaks/kernel's archived, and a name @yaks/alias
-    // keeps as a key.
+    // @yaks/git's repository and worktree, @yaks/kernel's archived, and a
+    // name @yaks/alias keeps as a key.
     project: { component: true, type: 'object', kind: true, prefix: 'P' },
     repo: {
       component: true,
       type: 'object',
       properties: { repository: { type: 'string' } },
+    },
+    repository: {
+      component: true,
+      type: 'object',
+      properties: { common: { type: 'string' } },
     },
     worktree: {
       component: true,
@@ -53,7 +58,7 @@ let doc: VocabDoc = {
       properties: {
         repository: { type: 'string' },
         path: { type: 'string' },
-        managed: { type: 'boolean' },
+        gitdir: { type: 'string' },
       },
     },
     archived: { component: true, type: 'object' },
@@ -104,18 +109,22 @@ export let voiced = (eid: string, title: string, body: string): Bundle =>
 export let memory = (eid: string, title: string, body: string): Bundle =>
   says(eid, title, body, { memory: {} })
 
-/** A project checked out at `root`, and by an agent at `<root>/agent`, whose
- * common persona n1 carries m1, and a specialist n2 named `coder` that carries
- * m1 and m2. */
+/** A checkout of r1 at `path`, whose own Git directory is `gitdir`. */
+export let checkout = (eid: string, path: string, gitdir: string): Bundle => ({
+  entity: { eid },
+  worktree: { repository: 'r1', path, gitdir },
+})
+
+/** A project whose repository r1 has its main worktree at `root` and a linked
+ * one at `<root>/agent`, whose common persona n1 carries m1, and a specialist
+ * n2 named `coder` that carries m1 and m2. */
 export let fleet = (root: string): Graph => {
   let g = world()
   g.apply([
     { entity: { eid: 'p1' }, project: {}, repo: { repository: 'r1' } },
-    { entity: { eid: 'w1' }, worktree: { repository: 'r1', path: root } },
-    {
-      entity: { eid: 'w2' },
-      worktree: { repository: 'r1', path: `${root}/agent`, managed: true },
-    },
+    { entity: { eid: 'r1' }, repository: { common: `${root}/.git` } },
+    checkout('w1', root, `${root}/.git`),
+    checkout('w2', `${root}/agent`, `${root}/.git/worktrees/agent`),
     { ...voiced('n1', 'common', 'for everyone'), persona: { home: 'p1' } },
     { ...voiced('n2', 'Coder', 'for code'), persona: { home: 'p1' } },
     { entity: { eid: 'k1' }, key: { of: 'n2', value: 'coder' }, alias: {} },

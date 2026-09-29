@@ -110,9 +110,11 @@ project's personas are written into its checkout:
   and leaves out what `AGENTS.md` already says, since the two are read together.
 
 Each file is `voice`'s text under a line naming the persona it was generated
-from. The checkout is the project's [@yaks/project](../project) `repo` →
-[@yaks/git](../git) `worktree` that no tool made; an archived project keeps what
-it last had.
+from. The checkout is the main worktree of the project's
+[@yaks/project](../project) `repo` → [@yaks/git](../git) `repository`: the
+`worktree` whose `gitdir` is the repository's `common` directory. A linked
+worktree never gets the files, whoever cut it. An archived project keeps what it
+last had.
 
 The files are a write-only [@yaks/mirror](../mirror) binding: the graph owns
 them. A hand edit is put back; one made while the graph also moved is left and
