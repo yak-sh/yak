@@ -167,7 +167,11 @@ object.
 Applications can build completions from native `examples` and distinct stored
 values. Component names are alphabetical; writable and stamped property lists
 follow their schema declarations. `kindOrder` is alphabetical, constrained
-topologically by `before`; a cycle is an error.
+topologically by `before`; a cycle is an error. A kind that is a mark (it
+declares a stamped `at` with a stamped `by` or `via`, which the graph fills the
+first time it is written) says what happened to an entity, never what the entity
+is, so it follows every kind it does not sort before: a comment marked as a
+memory is still a comment.
 
 **Reverse associations let queries follow references in reverse.** `review.book`
 makes `.reviews` mean the reviews pointing at a book, and a component with

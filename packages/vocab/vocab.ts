@@ -305,7 +305,7 @@ export type Vocab = {
   keywords: Keywords[] // the extension vocabularies this load registered
   comps: string[] // component names a client may write, alphabetical
   all: string[] // every declared component name, alphabetical
-  kinds: string[] // kindOrder: alphabetical, refined by `before`, topo-sorted
+  kinds: string[] // kindOrder: alphabetical, refined by `before` and marks
   comp: (name: string) => CompInfo | undefined
   /** A component's `$defs` entry as its documents declare it, with every
    * `extends` applied — the JSON Schema itself, for a reader that wants the
@@ -630,6 +630,14 @@ export let loadVocab = (
     defs[name].wire !== false && defs[name].computed !== true
   let compNames = names.filter(wire)
 
+  // A mark records something that happened to an entity: the graph fills its
+  // server-owned `at`, and a `by` or `via`, the first time it is written
+  // (@yaks/graph ./stamp.ts).
+  let mark = (name: string) => {
+    let own = props(name)
+    return !!own.at?.stamped && !!(own.by?.stamped || own.via?.stamped)
+  }
+
   let info = (name: string): CompInfo => {
     let d = defs[name]
     let entries = Object.keys(props(name))
@@ -639,6 +647,7 @@ export let loadVocab = (
       wire: wire(name),
       computed: d.computed === true,
       kind: !!d.kind,
+      mark: mark(name),
       ...(from[name] ? { package: from[name] } : {}),
       before: d.before ?? [],
       // A computed property is readable, never writable — like a stamped one,
@@ -725,6 +734,7 @@ export let loadVocab = (
   let kinds = deriveKindOrder(
     names.filter((n) => defs[n].kind),
     (k) => defs[k].before ?? [],
+    mark,
   )
 
   let v: Vocab = {

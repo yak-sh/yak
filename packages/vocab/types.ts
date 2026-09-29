@@ -106,6 +106,10 @@ export type CompInfo = {
    * backing (@yaks/sql `Backing`). Never wire-writable. */
   computed: boolean
   kind: boolean // this comp names a display kind
+  /** it records something that happened to an entity: a server-owned `at`
+   * with a `by` or `via`, filled the first time it is written. A kind that is
+   * a mark follows every kind it does not sort before (kindOrder). */
+  mark: boolean
   package?: string // the package whose document declared it, where one says
   before: string[] // kinds this kind sorts before (feeds kindOrder)
   writable: string[] // property names a client may write

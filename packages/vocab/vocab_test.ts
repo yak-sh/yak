@@ -476,6 +476,28 @@ Deno.test('the fleet order is unchanged: memory and project precede doc', () => 
   assert(at('project') < at('doc'))
 })
 
+Deno.test('a mark names an entity only where no other kind does', () => {
+  let kind = (before: string[] = [], properties = {}) => ({
+    component: true,
+    type: 'object' as const,
+    kind: true,
+    before,
+    properties,
+  })
+  let stamp = { type: 'string' as const, stamped: true }
+  let w = loadVocab({
+    $defs: {
+      comment: kind(),
+      doc: kind(),
+      memory: kind(['doc'], { at: stamp, by: stamp }),
+      task: kind(['doc']),
+    },
+  })
+  assertEquals(w.kindOf({ doc: 1, memory: 1 }), 'memory')
+  assertEquals(w.kindOf({ comment: 1, doc: 1, memory: 1 }), 'comment')
+  assertEquals(w.kindOf({ doc: 1, memory: 1, task: 1 }), 'task')
+})
+
 Deno.test('indexes merge the property flag with the composite lists', () => {
   let w = loadVocab({
     $defs: {

@@ -132,15 +132,12 @@ export let stamps: Rule[] = provenance()
 
 /** Whether a component is a mark: one a client writes empty and the server
  * fills in — `completed`, `archived`, `notified` — recognized by its declared
- * properties, so a new one is picked up with no edit here. `created` and
- * `updated` declare the same properties but fire when the entity is created or
- * written rather than when the component itself is written, so they keep their
- * own rules and are excluded by name. */
-export let marked = (vocab: Vocab, comp: string): boolean => {
-  if (comp == 'created' || comp == 'updated') return false
-  let has = new Set(vocab.comp(comp)?.stamped ?? [])
-  return has.has('at') && (has.has('by') || has.has('via'))
-}
+ * properties (@yaks/vocab `CompInfo.mark`), so a new one is picked up with no
+ * edit here. `created` and `updated` declare the same properties but fire when
+ * the entity is created or written rather than when the component itself is
+ * written, so they keep their own rules and are excluded by name. */
+export let marked = (vocab: Vocab, comp: string): boolean =>
+  comp != 'created' && comp != 'updated' && !!vocab.comp(comp)?.mark
 
 /**
  * One rule per mark: its `{at, by, via}` are filled the first time the mark is
