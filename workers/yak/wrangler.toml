@@ -505,6 +505,7 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # every npm name below is aliased — so the JSR package's npm build is named
 # here, out of this directory's own install (package.json).
 "@std/yaml" = "./node_modules/@std/yaml/mod.js"
+"file-type/core" = "./node_modules/file-type/core.js"
 "croner" = "./node_modules/croner/dist/croner.js"
 "marked" = "./node_modules/marked/lib/marked.esm.js"
 "preact" = "./node_modules/preact/dist/preact.module.js"
