@@ -395,7 +395,10 @@ let predLine = (p: Pred): string | undefined => {
       ? undefined
       : p.fields.length
       ? `.fields=${
-        p.fields.map((f) => `${f.comp}.${f.prop}${f.wake ? '' : '~'}`).join(',')
+        p.fields.map((f) =>
+          [f, ...f.at ?? []].map((h) => `${h.comp}.${h.prop}`).join('.') +
+          (f.wake ? '' : '~')
+        ).join(',')
       }`
       : '.fields=eid'
   }

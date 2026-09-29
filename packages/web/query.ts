@@ -206,8 +206,11 @@ export let pageRanked = <T extends { num?: number; eid?: string }>(
 // a change to it WAKES the subscription. `wake: false` (a `~`-suffixed field) is
 // VOLATILE — its value still rides in the row, but a live layer excludes it from
 // the change-signal it wakes on. Membership always wakes; volatility only mutes
-// this one column's own edits.
-export type Field = { comp: string; prop: string; wake: boolean }
+// this one column's own edits. A column reached through references
+// (`.fields=_change.tx._tx.at`) is the row's own reference column, `comp.prop`,
+// with the hops beyond it in `at`: the row carries the reference, and the far
+// values ride beside it as peers.
+export type Field = { comp: string; prop: string; wake: boolean; at?: Hop[] }
 
 // A reverse hop resolved: the child component + ref column whose value the
 // parent's eid must equal, and how the many children collapse to a yes/no.
@@ -617,6 +620,27 @@ let columnOf = (path: string[], directive: string): Hop => {
   return at
 }
 
+// A projected column: the row's own, or a path through its references to a
+// column of the entity each one names.
+let fieldOf = (path: string[], wake: boolean): Field => {
+  let hops = vocab.aim(path.join('.'))
+  let [first, ...at] = hops
+  let through = (h: Hop, i: number) =>
+    !!h.prop &&
+    (i == hops.length - 1 || vocab.prop(h.comp, h.prop)?.category == 'ref')
+  if (!hops.every(through)) {
+    throw new Error(
+      `.fields names a column, or one through references: ${path.join('.')}`,
+    )
+  }
+  return {
+    comp: first.comp,
+    prop: first.prop,
+    wake,
+    ...at.length ? { at } : {},
+  }
+}
+
 // A directive inside an alternative would be read by nobody: orderOf, fieldsOf
 // and the riders scan the top-level list. Refuse it there rather than let
 // `(.a=1&.order=hot|.b=2)` quietly drop the order.
@@ -689,10 +713,9 @@ let bindClause = (c: Clause): Pred[] => {
         prop: '',
         op: PROJECT,
         value: '',
-        fields: c.fields.filter((f) => f.path.join('.') != 'eid').map((f) => ({
-          ...columnOf(f.path, '.fields'),
-          wake: f.wake,
-        })),
+        fields: c.fields.filter((f) => f.path.join('.') != 'eid').map((f) =>
+          fieldOf(f.path, f.wake)
+        ),
       }]
     case 'limit':
     case 'after': {

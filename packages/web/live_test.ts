@@ -1813,6 +1813,10 @@ test('predsToQuery round-trips membership shapes, refuses the rest', () => {
     ]),
     `.pin.canvas=${E}&.fields=pin.x,pin.z~`,
   )
+  // A column through references spells back whole: the row carries the
+  // reference, the far column rides as a peer.
+  let through = '.comment&.fields=comment.target.doc.title,doc.title~'
+  assertEquals(predsToQuery(parseQuery(through)), through)
   // An empty query has no line.
   assertEquals(predsToQuery([]), undefined)
 })
