@@ -8,7 +8,7 @@
 // for as long as it listens — is @yaks/api's own test. What this asserts of it
 // is that a config naming that package gets the verb, and a handler at all.
 
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { compose, read } from './host.ts'
 
@@ -93,14 +93,12 @@ test(
       // A status the store computes rather than keeps, answered over HTTP.
       assertEquals(found[0].session.status, 'empty')
 
-      let heard = await until(() =>
+      await until(() =>
         frames.some((f) =>
           f.id == 's' &&
           (f.bundles as { entity: { eid: string } }[])
             .some((b) => b.entity.eid == 'boot-session')
-        )
-      )
-      assert(heard, JSON.stringify(frames))
+        ), { label: () => JSON.stringify(frames) })
       socket.close()
     } finally {
       await server.shutdown()
@@ -109,13 +107,3 @@ test(
     }
   },
 )
-
-// Poll for a fact instead of guessing a duration.
-let until = async (said: () => boolean, ms = 2000): Promise<boolean> => {
-  let end = Date.now() + ms
-  while (Date.now() < end) {
-    if (said()) return true
-    await new Promise((go) => setTimeout(go, 10))
-  }
-  return said()
-}
