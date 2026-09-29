@@ -190,7 +190,7 @@ import {
 } from './host.ts'
 import { foreign, planSettings, RESERVED, SLUG } from './route.ts'
 import { globs } from './router.ts'
-import type { Reach } from './reach.ts'
+import { type Reach, vocabAt } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { mode, reads } from '@yaks/member'
@@ -649,7 +649,7 @@ let toGallery = async (ctx: Ctx, space: Space, app: App) => {
 // A store's `/vocab` answers only the words it homes, so a use never looks
 // like a second declaration and the first entry here is always the home.
 //
-// Each answer is the document that store keeps (vocab.ts `meant`), keywords
+// Each answer is the document that store keeps (reach.ts `vocabAt`), keywords
 // and all: a home's manifest is written back whole when a sibling grows it,
 // and read as types alone it would come back with every `search` erased.
 let vocabs = async (ctx: Ctx, space: Space, app?: App) => {
@@ -657,19 +657,13 @@ let vocabs = async (ctx: Ctx, space: Space, app?: App) => {
   // component names for apps that are serving in the space.
   let all = (await ctx.dir.apps(space)).filter((a) => !a.trashed)
   if (app && !all.some((a) => a.eid == app.eid)) all = [...all, app]
-  let read = await Promise.all(all.map((one) => {
-    return appStore(ctx.env.STORE, space, one).consume(
-      '/vocab',
-      async (r) => {
-        if (!r.ok) {
-          await r.body?.cancel()
-          return [one.slug, {} as VocabDoc] as const
-        }
-        return [one.slug, meant(await r.json())] as const
-      },
-    )
-  }))
-  return new Map(read)
+  return new Map(
+    await Promise.all(
+      all.map(async (one) =>
+        [one.slug, await vocabAt(ctx.env, space, one)] as const
+      ),
+    ),
+  )
 }
 
 // Where each word of the space lives, oldest app first — the first app to

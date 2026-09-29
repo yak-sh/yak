@@ -3,7 +3,13 @@
 import { invoke, mayCall, type ToolDef, type Tools } from '@yaks/tools/declared'
 import { CallError, display } from '@yaks/tools'
 import { type Bundle } from '@yaks/graph'
-import { type App, appStore, type Space, storeName } from './directory.ts'
+import {
+  type App,
+  appStore,
+  releaseOf,
+  type Space,
+  storeName,
+} from './directory.ts'
 import { commandWorker, workerBreak } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { recall } from './lib/hops.ts'
@@ -34,6 +40,8 @@ export let toolsOf = async (
   space: Space,
   app: App,
 ): Promise<Tools> => {
+  // Commands arrive with a release, as words do (reach.ts `vocabAt`).
+  if (releaseOf(app) == '0') return {}
   let name = storeName(space, app)
   return JSON.parse(
     await recall(name, '/tools', () => {

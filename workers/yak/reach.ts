@@ -44,6 +44,7 @@ import {
   type App,
   appStore,
   META_STORE,
+  releaseOf,
   type Space,
   storeName,
 } from './directory.ts'
@@ -695,13 +696,17 @@ export let read = async (
 // Read once per request (hops.ts `recall`): the roster asks it for what an app
 // holds (standing.ts), the door for the properties a write may carry (agent.ts
 // `spoken`), and a write for where each word goes (`spoken` below), and all
-// three are the same moment until the store is written to.
+// three are the same moment until the store is written to. An app that has
+// released nothing declares nothing (directory.ts `releaseOf`), and its store
+// is not woken to say so: the door asks this of every app in reach on every
+// call.
 export let vocabAt = async (
   env: Env,
   space: Space,
   app: App,
 ): Promise<VocabDoc> => {
   if (at({ space, app }) == META_STORE) return PLATFORM_WORDS
+  if (releaseOf(app) == '0') return {}
   let name = storeName(space, app)
   let said = await recall(name, '/vocab', () => {
     return appStore(env.STORE, space, app).consume('/vocab', async (res) => {

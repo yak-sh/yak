@@ -835,6 +835,15 @@ let served = (space: Space, app: App, env: HostEnv) => ({
   mail: mailbox(space, app, env),
 })
 
+/**
+ * Which of its declarations an app's store serves: the one a borrowing deploy
+ * last planted there, else the app's own version. A store's words and
+ * commands arrive only with a release, so an app still at `'0'` has declared
+ * nothing, and whoever asks what it declares has its answer without waking
+ * the store.
+ */
+export let releaseOf = (app: App) => app.declaration ?? String(app.version ?? 0)
+
 export let appStore = (
   ns: Namespace,
   space: Space,
@@ -843,7 +852,7 @@ export let appStore = (
 ): Door =>
   storeOf(ns, storeName(space, app), {
     ...served(space, app, env),
-    release: app.declaration ?? String(app.version ?? 0),
+    release: releaseOf(app),
   })
 
 /** Prepare a declaration without selecting it for ordinary Store requests.
@@ -858,7 +867,7 @@ export let draftStore = (
   storeOf(ns, storeName(space, app), {
     ...served(space, app, env),
     release,
-    base: app.declaration ?? String(app.version ?? 0),
+    base: releaseOf(app),
   })
 
 // The other address a (space, app) has, beside {@link url}: what its letters
