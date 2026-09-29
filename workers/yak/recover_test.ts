@@ -11,6 +11,7 @@
 // testing.ts fakes the three calls; what that buys is the bookkeeping, which
 // is the half that can be wrong in a way we could have prevented.
 import { assertEquals, assertRejects, assertStringIncludes } from '@std/assert'
+import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { state } from './testing.ts'
 import { mark, moment, oldest, putBack, recorded, WINDOW } from './recover.ts'
@@ -55,13 +56,14 @@ let door = (answers: Record<string, unknown>) => {
   let asked: string[] = []
   return {
     asked,
-    store: (path: string, init: RequestInit = {}) => {
-      asked.push(`${init.method ?? 'GET'} ${path}`)
+    store: doorOf((req) => {
+      let path = new URL(req.url).pathname + new URL(req.url).search
+      asked.push(`${req.method} ${path}`)
       let key = path.startsWith('/restore?') ? '/restore?at' : path
       return Promise.resolve(
-        Response.json(answers[`${init.method ?? 'GET'} ${key}`] ?? {}),
+        Response.json(answers[`${req.method} ${key}`] ?? {}),
       )
-    },
+    }, 'ada/cookbook'),
   }
 }
 
@@ -98,12 +100,12 @@ Deno.test('a restore writes down the way back before it moves anything', async (
 })
 
 Deno.test('nothing is written down when the store cannot be read', async () => {
-  let store = () =>
+  let store = doorOf(() =>
     Promise.resolve(
       Response.json({ error: 'Refused', message: 'no recovery here' }, {
         status: 400,
       }),
-    )
+    ), 'ada/cookbook')
   let wrote = 0
   await assertRejects(
     () =>
@@ -192,6 +194,6 @@ Deno.test('a store outside the window refuses, and a client never asks at all', 
 
 Deno.test('mark reads the bookmark off a store', async () => {
   let store = new Store(state())
-  let there = await mark((path, init) => at(store, path, init as RequestInit))
+  let there = await mark(doorOf((req) => store.fetch(req), 'ada/cookbook'))
   assertStringIncludes(there.from, 'at-')
 })
