@@ -24,7 +24,7 @@ import {
   val,
 } from '@yaks/sql'
 import { backfill, fit, indexed, standing, tabled } from '@yaks/sqlite'
-import type { Vocab } from '@yaks/vocab'
+import type { Index, Vocab } from '@yaks/vocab'
 
 /** The five type words the short manifest used, and the JSON Schema each
  * meant. Frozen here rather than read off vocab.ts: what a stored slot meant is
@@ -311,6 +311,29 @@ export let recut = (d: Driver) => {
   for (let f of shadowed(d)) drop('table', f)
 }
 
+let sameIndex = (a: Index, b: Index) =>
+  a.unique == b.unique &&
+  a.props.join('\0') == b.props.join('\0') &&
+  (a.present ?? []).join('\0') == (b.present ?? []).join('\0')
+
+/** Retire indexes whose declaring vocabulary changed before raising the next
+ * schema. A release candidate calls this inside a transaction it rolls back;
+ * the serving store calls it when the directory selects that release. */
+export let retire = (d: Driver, before: Vocab, after: Vocab) => {
+  for (let comp of before.all) {
+    let kept = after.indexes(comp)
+    for (let old of before.indexes(comp)) {
+      if (kept.some((now) => sameIndex(old, now))) continue
+      d.query({
+        t: 'drop',
+        kind: 'index',
+        name: `${comp}_${old.props.join('_')}`,
+        ifExists: true,
+      })
+    }
+  }
+}
+
 /**
  * A column its vocabulary stopped naming, dropped (vocab.ts `grew`). SQLite
  * refuses to drop a column an index, a trigger or a view names, so `recut()`
@@ -336,11 +359,7 @@ export let shed = (
     before.indexes(name)
       .filter((old) =>
         ![...old.props, ...(old.present ?? [])].includes(prop) &&
-        after.indexes(name).some((now) =>
-          old.unique == now.unique &&
-          old.props.join('\0') == now.props.join('\0') &&
-          (old.present ?? []).join('\0') == (now.present ?? []).join('\0')
-        )
+        after.indexes(name).some((now) => sameIndex(old, now))
       )
       .map((i) => `${name}_${i.props.join('_')}`),
   )

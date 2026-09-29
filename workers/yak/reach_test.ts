@@ -224,6 +224,93 @@ Deno.test('a refused draft leaves the serving app store usable', async () => {
   )
 })
 
+let widget = (identity: string[]) => ({
+  $defs: {
+    widget: {
+      component: true,
+      identity,
+      properties: {
+        owner: { type: 'string' },
+        match: { type: 'string' },
+        variant: { type: 'string' },
+      },
+    },
+  },
+})
+
+let put = (door: ReturnType<typeof appStore>, path: string, body: unknown) =>
+  door(path, { method: 'POST', body: JSON.stringify(body) }, vouched(owner))
+
+Deno.test('a changed draft identity leaves serving reads and writes alone', async () => {
+  let env = { STORE: namespace() } as unknown as Env
+  let here = space('draft-identity')
+  let page = app('page', here.eid)
+  let serving = appStore(env.STORE, here, page)
+  let draft = draftStore(env.STORE, here, page, '2')
+  let row = (variant: string, match?: string) => ({
+    entity: { eid: identityEid('widget', ['ada', variant]) },
+    widget: { owner: 'ada', ...(match ? { match } : {}), variant },
+  })
+
+  assertEquals(
+    (await put(serving, '/vocab', widget(['owner', 'variant']))).status,
+    200,
+  )
+  assertEquals((await put(serving, '/apply', [row('one')])).status, 200)
+  let staged = await put(draft, '/vocab', widget(['owner', 'match']))
+  assertEquals(staged.status, 200, await staged.text())
+  assertEquals(
+    (await (await serving('/vocab')).json()).$defs.widget.identity,
+    ['owner', 'variant'],
+  )
+  assertEquals(
+    (await (await draft('/vocab')).json()).$defs.widget.identity,
+    ['owner', 'match'],
+  )
+  // The later rows are distinct under the serving identity. A candidate index
+  // over owner + match would reject the second if it touched the schema.
+  assertEquals((await put(serving, '/apply', [row('two', 'same')])).status, 200)
+  assertEquals(
+    (await put(serving, '/apply', [row('three', 'same')])).status,
+    200,
+  )
+  let rows = await (await serving('/query?q=.widget', {}, vouched(owner)))
+    .json()
+  assertEquals(rows.length, 3)
+})
+
+Deno.test('a changed identity replaces its index when the release moves', async () => {
+  let env = { STORE: namespace() } as unknown as Env
+  let here = space('released-identity')
+  let page = app('page', here.eid)
+  let serving = appStore(env.STORE, here, page)
+  let draft = draftStore(env.STORE, here, page, '2')
+  assertEquals(
+    (await put(serving, '/vocab', widget(['owner', 'variant']))).status,
+    200,
+  )
+  assertEquals(
+    (await put(serving, '/apply', [{
+      entity: { eid: identityEid('widget', ['ada', 'one']) },
+      widget: { owner: 'ada', variant: 'one' },
+    }])).status,
+    200,
+  )
+  let staged = await put(draft, '/vocab', widget(['owner', 'match', 'variant']))
+  assertEquals(staged.status, 200, await staged.text())
+  let released = appStore(env.STORE, here, { ...page, version: 2 })
+  assertEquals(
+    (await put(released, '/apply', [{
+      entity: { eid: identityEid('widget', ['ada', 'two', 'one']) },
+      widget: { owner: 'ada', match: 'two', variant: 'one' },
+    }])).status,
+    200,
+  )
+  let rows = await (await released('/query?q=.widget', {}, vouched(owner)))
+    .json()
+  assertEquals(rows.length, 2)
+})
+
 // A space with a reading list and a lending app in it, each declaring one word
 // of its own — the shape M-32311 describes: two apps, two stores, joined by
 // eid.

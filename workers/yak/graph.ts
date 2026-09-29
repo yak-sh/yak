@@ -233,6 +233,7 @@ import {
   recut,
   requestIds,
   respelled,
+  retire,
   shed,
   unholed,
   unworded,
@@ -723,6 +724,20 @@ export class Store {
     }
   }
 
+  #schema(vocab: Vocab, stamp: string, name: string) {
+    let held = this.#get('schema')
+    if (!(this.#get('name') || held) || held == stamp) return
+    // Definitions cannot be altered by replaying them. Raise each changed
+    // index, trigger and view from the vocabulary in the same transaction.
+    if (held) recut(this.#sql)
+    requestIds(this.#sql, vocab)
+    for (let stmt of blobSchema()) this.#sql.query(stmt)
+    let unfit = install(this.#sql, vocab, blobRead(vocab))
+    for (let e of unfit) defect(e, { request: 'schema fit', store: name })
+    if (held) rebuild(this.#sql)
+    if (!unfit.length) this.#put('schema', stamp)
+  }
+
   #build() {
     let ctx = this.#ctx
     this.#people.clear()
@@ -785,28 +800,7 @@ export class Store {
     // turns out to be the directory would leave tables no word of its
     // vocabulary names. `#learn` reboots the moment the name arrives, and every
     // door runs after it.
-    let named = !!this.#get('name') || !!this.#get('schema')
-    let held = this.#get('schema')
-    if (named && held != stamp) {
-      // A definition cannot be altered by replaying it. `create ... if not
-      // exists` says nothing about a trigger or a full-text index that is
-      // already standing, so one raised under an older schema keeps its old
-      // shape while the tables under it move — which is how a search index came
-      // to hold blob addresses after the triggers learned to resolve them
-      // (T-33978). A definition holds no rows of its own, so it is dropped and
-      // raised again at the current shape whenever the stamp moves, and the
-      // index is then rebuilt off the content it mirrors. Nothing to do the
-      // first time: there is no older shape to be wearing.
-      if (held) recut(drive)
-      requestIds(drive, vocab)
-      for (let stmt of blobSchema()) drive.query(stmt)
-      let unfit = install(drive, vocab, blobRead(vocab))
-      for (let e of unfit) defect(e, { request: 'schema fit', store: name })
-      if (held) rebuild(drive)
-      // A table left unfit is not yet at the stamp, so the next wake fits it
-      // again and it heals once its rows are prepared (@yaks/sqlite `fit`).
-      if (!unfit.length) this.#put('schema', stamp)
-    }
+    this.#schema(vocab, stamp, name)
     let app = this.#get('app')
     // The registry an app's own effects register on (T-33816), and the one
     // every plugin of this Worker registers on below. It is fresh on every
@@ -1041,15 +1035,29 @@ export class Store {
     if (this.#heard(req).length) this.#atomic(() => this.#remember(req))
   }
 
+  // Version zero has no serving release: its first seed writes into the new
+  // store before the directory can publish version one.
+  #candidate(req: Request): string | null {
+    let release = req.headers.get('x-yak-release')
+    if (
+      !req.headers.has('x-yak-base-release') ||
+      this.#get('release') == '0' ||
+      !release || !/^[a-z0-9-]+$/.test(release)
+    ) return null
+    return release
+  }
+
   // A deploy prepares declarations in this store before the directory moves
   // the app's declaration pointer. That pointer is the serving decision:
   // every request selects its declarations here, so a failed release keeps
   // answering with the old vocabulary and commands even after preparation.
-  #select(req: Request) {
+  #select(req: Request): boolean {
+    if (this.#candidate(req)) return false
     let release = req.headers.get('x-yak-release')
-    if (release == null || !/^[a-z0-9-]+$/.test(release)) return
+    if (release == null || !/^[a-z0-9-]+$/.test(release)) return false
     let active = this.#get('release')
-    if (active == release) return
+    if (active == release) return false
+    let toolsMoved = false
     this.#atomic(() => {
       if (active == null) {
         this.#put('release', release)
@@ -1057,19 +1065,46 @@ export class Store {
       }
       let words = ['vocab', 'uses', 'tools'] as const
       let was = this.#get('vocab') ?? '{}'
+      let toolsWas = this.#get('tools') ?? '{}'
+      let next = this.#get(`vocab:${release}`) ?? this.#get('vocab') ?? '{}'
+      if (active != '0' && release != '0' && next != was) {
+        let changed = grew(
+          appDoc(was),
+          appDoc(next),
+          (name, prop) => this.#rows(name, prop),
+        )
+        let before = appVocab(was)
+        let after = appVocab(changed.doc)
+        retire(this.#sql, before, after)
+        for (let name of [...changed.dropped, ...changed.retyped]) {
+          let [comp, prop] = name.split('.')
+          if (prop) shed(this.#sql, before, after, comp, prop)
+          else {
+            this.#sql.query({
+              t: 'drop',
+              kind: 'table',
+              name: comp,
+              ifExists: true,
+            })
+          }
+        }
+        next = JSON.stringify(changed.doc)
+      }
       for (let word of words) {
         this.#put(`${word}:${active}`, this.#get(word) ?? '{}')
       }
       for (let word of words) {
         this.#put(
           word,
-          this.#get(`${word}:${release}`) ??
+          word == 'vocab' ? next : this.#get(`${word}:${release}`) ??
             this.#get(word) ?? '{}',
         )
       }
       this.#put('release', release)
       if (this.#get('vocab') != was) this.#build()
+      toolsMoved = this.#get('tools') != toolsWas
     })
+    return toolsMoved && !this.#refused
   }
 
   async #enter(draft: boolean): Promise<() => void> {
@@ -1867,7 +1902,7 @@ export class Store {
     if (this.#refused) return this.#stalled()
     this.#learn(request)
     if (this.#refused) return this.#stalled()
-    this.#select(request)
+    let toolsMoved = this.#select(request)
     if (this.#refused) return this.#stalled()
     this.#live.wake()
     // The clock, started. A wake row is owed at an instant and the runtime's
@@ -1876,6 +1911,7 @@ export class Store {
     // schedules are planted and a lost alarm is set again. Once per
     // incarnation, and the stamp keeps it to one read after the first.
     await (this.#sowing ??= this.#sow())
+    if (toolsMoved) await this.#planting()
     return null
   }
 
@@ -2102,10 +2138,12 @@ export class Store {
     if (path == '/uses') return this.#slot(request, 'uses')
     if (path == '/storage') return this.#storage(request)
     if (path == '/tools') {
-      let was = this.#get('tools') ?? '{}'
+      let candidate = this.#candidate(request)
+      let key: Word = candidate ? `tools:${candidate}` : 'tools'
+      let was = this.#get(key) ?? this.#get('tools') ?? '{}'
       let answer = await this.#slot(request, 'tools')
       if (!answer.ok || request.method != 'POST') return answer
-      let now = this.#get('tools') ?? '{}'
+      let now = this.#get(key) ?? '{}'
       // The views this manifest names, compared: the set of pages its
       // commands draw their answers in, which is what `resources/list` is made
       // of, and the kernel tells everyone who can reach the app when it moved
@@ -2113,7 +2151,7 @@ export class Store {
       // they are not tools, and the tool roster is fixed (T-34541).
       // The rows those commands are called at (`#planting`): a deploy is what
       // moves the manifest, so a deploy is what stands them up.
-      if (now != was) await this.#planting()
+      if (now != was && !candidate) await this.#planting()
       let said = await answer.json() as Record<string, unknown>
       return Response.json({ ...said, views: viewed(now) != viewed(was) })
     }
@@ -2441,9 +2479,13 @@ export class Store {
   // whoever posts it is the one that can check it against the app's words
   // (tools.ts `released`), and a slot that parsed its own content would be a
   // second vocabulary in the object.
-  async #slot(request: Request, word: Word): Promise<Response> {
+  async #slot(request: Request, word: 'uses' | 'tools'): Promise<Response> {
+    let candidate = this.#candidate(request)
+    let key: Word = candidate ? `${word}:${candidate}` : word
     if (request.method == 'GET') {
-      return Response.json(JSON.parse(this.#get(word) ?? '{}'))
+      return Response.json(
+        JSON.parse(this.#get(key) ?? this.#get(word) ?? '{}'),
+      )
     }
     if (request.method != 'POST') {
       return Response.json(
@@ -2465,7 +2507,7 @@ export class Store {
       )
     }
     let now = JSON.stringify(held)
-    if (now != (this.#get(word) ?? '{}')) this.#put(word, now)
+    if (now != (this.#get(key) ?? '{}')) this.#put(key, now)
     return Response.json({ ok: true, [word]: Object.keys(held) })
   }
 
@@ -2594,8 +2636,13 @@ export class Store {
   // flattened to bare type words dropped every one of them before any store
   // could read it.
   #vocabDoor(request: Request): Response | Promise<Response> {
+    let candidate = this.#candidate(request)
     if (request.method == 'GET') {
-      return Response.json(meant(this.#get('vocab') ?? '{}'))
+      return Response.json(meant(
+        candidate
+          ? this.#get(`vocab:${candidate}`) ?? this.#get('vocab') ?? '{}'
+          : this.#get('vocab') ?? '{}',
+      ))
     }
     if (request.method != 'POST') {
       return Response.json(
@@ -2614,11 +2661,8 @@ export class Store {
         )
         let before = appVocab(was)
         let after = appVocab(doc)
-        // The declaration and its DDL must roll back together on boot failure.
-        // A retyped property's column held nothing, and goes for the boot to
-        // raise again at its new type.
-        this.#boot(() => {
-          this.#put('vocab', JSON.stringify(doc))
+        let prepare = () => {
+          retire(this.#sql, before, after)
           for (let name of [...dropped, ...retyped]) {
             let [comp, prop] = name.split('.')
             if (prop) shed(this.#sql, before, after, comp, prop)
@@ -2631,8 +2675,45 @@ export class Store {
               })
             }
           }
-        })
-        if (this.#refused) return this.#stalled()
+        }
+        if (candidate) {
+          // A draft is validated against the serving rows, but its schema
+          // changes roll back. Only the declaration is kept for selection when
+          // the directory moves the release pointer.
+          let rollback = Symbol('candidate schema')
+          try {
+            this.#ctx.storage.transactionSync(() => {
+              prepare()
+              let { vocab, stamp } = shapeOf(
+                this.#get('name') ?? '',
+                JSON.stringify(doc),
+              )
+              this.#schema(vocab, stamp, this.#get('name') ?? '')
+              throw rollback
+            })
+          } catch (e) {
+            if (e !== rollback) {
+              this.#kv.clear()
+              defect(e, {
+                request: 'schema candidate',
+                store: this.#get('name') ?? '',
+              })
+              return Response.json({
+                error: 'Refused',
+                message: e instanceof Error ? e.message : String(e),
+              }, { status: 503 })
+            }
+          }
+          this.#kv.clear()
+          this.#put(`vocab:${candidate}`, JSON.stringify(doc))
+        } else {
+          // The declaration and its DDL roll back together on boot failure.
+          this.#boot(() => {
+            this.#put('vocab', JSON.stringify(doc))
+            prepare()
+          })
+          if (this.#refused) return this.#stalled()
+        }
         return Response.json({
           ok: true,
           // The app's own words, not the whole vocabulary it speaks: a store's
