@@ -64,3 +64,20 @@ Deno.test('inspect describes a villager, objective, item, and land', () => {
   assertStringIncludes(item, 'Rarity: rare')
   assertStringIncludes(inspectOf({ level: 'tombsands' }), 'Land `tombsands`')
 })
+
+Deno.test('inspect reports saved heroes and live-only world targets', () => {
+  let saved = inspectOf({
+    row: row('hero', {
+      player: {},
+      seen: { level: 'mossvale', x: 8, z: 9 },
+    }),
+  })
+  assertStringIncludes(saved, 'Last seen: Mossvale (8, 9)')
+  let creature = inspectOf({
+    row: row('creature', {
+      position: { level: 'tombsands', x: 11, z: 12 },
+    }),
+  })
+  assertStringIncludes(creature, 'World target')
+  assertStringIncludes(creature, 'Position now: Tombsands (11, 12)')
+})
