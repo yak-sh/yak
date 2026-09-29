@@ -173,7 +173,12 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       ...opts.providers,
     },
     tools: opts.tools ??
-      harnessTools(h.g, { ...opts, worktrees: root, artifacts: h.artifacts }),
+      harnessTools(h.g, {
+        ...opts,
+        worktrees: root,
+        artifacts: h.artifacts,
+        reply: h.reply,
+      }),
     remote: mcp.snapshot,
     streaming: streamingEnabled(opts, env),
     opening: async (persona) => {

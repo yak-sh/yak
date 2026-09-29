@@ -15,6 +15,7 @@
 // the list rather than registered a second time under the same names.
 
 import type { Graph, NamedTool } from '@yaks/graph'
+import type { Reply } from '@yaks/tools'
 import { generic } from '@yaks/graph/tools'
 import { graphDoc } from '@yaks/graph/vocab'
 import { SESSION } from '@yaks/session'
@@ -27,13 +28,15 @@ export let PATH = '/mcp'
 
 /** What this facet reads off the host it is composing into: the graph its
  * tools read and write, who that host says is calling, the tools it assembled,
- * and the ranked search its vocabulary may or may not have earned. */
+ * the ranked search its vocabulary may or may not have earned, and what a
+ * direct call is owed beside its answer. */
 export type Hosting = {
   config: { name?: string }
   graph: Graph
   who: Authenticate
   tools: NamedTool[]
   search?: Search
+  reply?: Reply
 }
 
 /** `/mcp`: one JSON-RPC request in, one reply out. */
@@ -45,6 +48,7 @@ export let routes = (host: Hosting): Route[] => {
     authenticate: host.who,
     tools: host.tools.filter((t) => !tier.has(t.name)),
     search: host.search,
+    reply: host.reply,
     name: host.config.name ?? 'yak',
     instructions: [graphDoc, ...host.graph.vocab.docs].map((doc) =>
       doc.instructions?.trim()

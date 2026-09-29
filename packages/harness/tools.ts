@@ -1,5 +1,5 @@
 import { derivedEid, toolName } from '@yaks/graph'
-import { answerOf, runner, toolEid, worded } from '@yaks/tools'
+import { answerOf, type Reply, runner, toolEid, worded } from '@yaks/tools'
 import { artifactTools } from './artifact_tools.ts'
 
 import { type Blobs, valueTools } from '@yaks/blob'
@@ -60,13 +60,19 @@ export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
  */
 export let graphTools = (
   g: Graph,
-  opts: { actor?: Entity | null; depth?: Depth } = {},
+  opts: { actor?: Entity | null; depth?: Depth; reply?: Reply } = {},
 ): Tool[] => {
   let tier = core({ vocab: g.vocab, depth: opts.depth ?? 'names' })
   // A runner: these calls are this agent's own, and `call()` runs them here.
   // Nothing sweeps a queue from inside an agent — a call somebody else wrote
   // is for whoever works the effects to notice, by handling the same rules.
-  let r = runner(g, { tools: tier, host: g })
+  // What the host's own runner adds to a direct call's answer, this one adds
+  // too, so the agent reads what any caller reads.
+  let r = runner(g, {
+    tools: tier,
+    host: g,
+    ...opts.reply ? { reply: opts.reply } : {},
+  })
   return tier.map((t) => ({
     name: toolName(t),
     description: t.description,
@@ -115,6 +121,9 @@ export let harnessTools = (
       artifacts?: Blobs
       /** the root a task child's checkout is cut under */
       worktrees?: string
+      /** what a direct graph tool call is owed beside its answer (the
+       * harness's `reply`) */
+      reply?: Reply
     }
     & ChildLimits = {},
 ): Tool[] => {
@@ -163,7 +172,7 @@ export let harnessTools = (
     ...machine.map((t) => t.name == 'wait' ? wait : t),
     ...session.filter((t) => t.name != 'wait'),
     ...artifactTools(g, opts),
-    ...graphTools(g, { depth: opts.depth }),
+    ...graphTools(g, { depth: opts.depth, reply: opts.reply }),
     ...valueTools(async (entity) =>
       (await g.read('.entity.eid=' + JSON.stringify(entity)))[0]
     ).map((tool) => ({

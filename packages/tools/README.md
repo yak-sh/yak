@@ -172,8 +172,19 @@ Other runner options are `owner`, the process entity written to `execution.by`;
 `process`, the `{pid, command, cwd}` of the program running the calls, put on
 every call a tool is handed and never stored; `report`, called for unexpected
 errors; `otherwise`, the tool that answers a call naming none of the runner's
-tools (left out, such a call is left for the runner that has its tool); and
-`now`, an injectable clock used to measure `result.ms`.
+tools (left out, such a call is left for the runner that has its tool); `reply`,
+what a direct caller is owed beside the answer; and `now`, an injectable clock
+used to measure `result.ms`.
+
+A `Reply` is `(call, answer, wrote) => Promise<Bundle[]>`, asked after every
+call run through `call()` and never for one an effect runs. `wrote` is what the
+call's own write applied: its answer when the tool wrote and the write was kept,
+so an entity it created wears the `created` its write was stamped with, and
+nothing for a read, a rehearsal or a refusal. The bundles it returns follow the
+tool's own in the answer and are not written. A reply that throws is reported
+and the answer goes out without it. [@yaks/session](../session/README.md) owes a
+caller the items addressed to it; [@yaks/embedding](../embedding/README.md) owes
+a new entity's nearest neighbours.
 
 <a id="the-two-rules"></a>
 

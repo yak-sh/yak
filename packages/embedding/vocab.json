@@ -3,6 +3,7 @@
     "https://yak.sh/vocab/core": true
   },
   "title": "embedding",
+  "instructions": "A tool call that creates something is answered with the nearest few existing entities of its kind, each a `hit` whose `near` names the new one. When one of them is the same thing, keep the one that stands: update it, and delete the new one.",
   "$defs": {
     "vector_check": {
       "tool": true,

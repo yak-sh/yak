@@ -1,7 +1,8 @@
 // Where the vectors are kept and read: the `rules` export
 // (`@yaks/embedding/rules`) — the vector table created through the server's own
-// database connection, and the `.near` compiler the read path consults. "The
-// server" here means whichever process opened the graph and loaded this
+// database connection, the `.near` compiler the read path consults, and the
+// reply a tool call that created something is answered with (./neighbours.ts).
+// "The server" here means whichever process opened the graph and loaded this
 // package.
 //
 // `.near=<entity>&.order=similar` is a query, so it has to be answerable
@@ -18,6 +19,7 @@
 // index's check (./tools.ts), which is a tool and not a component.
 
 import type { Plugin } from '@yaks/graph'
+import type { Reply } from '@yaks/tools'
 import type { Derived, Extension } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
@@ -26,6 +28,7 @@ import { schema } from './ddl.ts'
 import { resolved } from './fields.ts'
 import { embedderOf, type Options, ready } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
+import { type Host, neighbours } from './neighbours.ts'
 
 /** The vector table and its dirty flag, in the server's own database. It
  * contributes no rule to `apply()`: nothing a client writes is a vector, and
@@ -79,3 +82,9 @@ async (words, opts) => {
     )
     : []
 }
+
+/** What a direct tool call's answer carries beside the tool's own: for each
+ * entity the call created, its nearest few of the same kind (./neighbours.ts),
+ * so a twin is seen while it is being written. */
+export let reply = (host: Host, options: Options = {}): Reply =>
+  neighbours(host, options)

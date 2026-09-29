@@ -32,6 +32,7 @@ export {
   type Opts,
   READY,
   reconcile,
+  type Reply,
   RULES,
   type Runner,
   runner,

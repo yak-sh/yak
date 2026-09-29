@@ -289,6 +289,27 @@ Deno.test('x-via keeps its session, and a one-shot CLI call gets one', async () 
   assertEquals(made.via, session.entity.eid)
 })
 
+Deno.test('what the host owes a direct call rides after the answer, which is unchanged', async () => {
+  let door = routes({
+    config: {},
+    graph: shopGraph(),
+    who: () => ada,
+    tools: [],
+    reply: (_call, _answer, wrote) =>
+      Promise.resolve(wrote.map((b) => ({
+        entity: { eid: 'b0' },
+        hit: { kind: 'book', snippet: '', source: 'text', near: b.entity.eid },
+      }))),
+  })[0].handle
+  let said = await (await door(call('graph_apply', {
+    change: [{ entity: { eid: 'b1' }, book: { price: 12 } }],
+  }))).json()
+  let [made, near] = said.result.structuredContent.result as Bundle[]
+  assertEquals([made.entity.eid, made.book], ['b1', { price: 12 }])
+  assertEquals(near.entity.eid, 'b0')
+  assert(said.result.content[0].text.includes('near b1: b0 · book'))
+})
+
 Deno.test('initialize carries instructions from the loaded vocabularies', async () => {
   let vocab = loadVocab([
     { ...shop.docs[0], instructions: 'Read the shelf.' },

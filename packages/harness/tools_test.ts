@@ -51,6 +51,26 @@ Deno.test('a graph tool writes and reads the harness graph', async () => {
   h.close()
 })
 
+Deno.test('a graph tool’s answer carries what a direct call is owed beside it', async () => {
+  let h = await harness()
+  let told: string[][] = []
+  let [apply] = graphTools(h.g, {
+    reply: (_call, _answer, wrote) => {
+      told.push(wrote.map((b) => b.entity.eid))
+      return Promise.resolve([{
+        entity: { eid: 'owed' },
+        content: { body: 'near: an older task' },
+      }])
+    },
+  }).filter((t) => t.name == 'graph_apply')
+  let out = await apply.run({
+    change: [{ entity: { eid: 't1' }, doc: { title: 'a task' }, task: {} }],
+  })
+  assert(out.includes('near: an older task'), out)
+  assertEquals(told, [['t1']])
+  h.close()
+})
+
 Deno.test('the merged wait preserves process output and child status alongside task waiting', async () => {
   let h = await harness()
   // A process's output is its run's files (@yaks/process `tail`).

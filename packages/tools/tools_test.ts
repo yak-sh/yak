@@ -167,6 +167,34 @@ Deno.test('a rehearsal keeps its answer in the call graph', async () => {
   assertEquals((await g.read('.output&*')).length, 0)
 })
 
+Deno.test('a reply is told what the call wrote: the write, never a read or a rehearsal', async () => {
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab) })
+  let make: Tool = {
+    ...echo,
+    inputSchema: { type: 'object', properties: { check: {} } },
+    run: () => [{ entity: { eid: '$made' }, person: {} }],
+  }
+  let told: string[][] = []
+  let r = runner(g, {
+    tools: [make, {
+      ...make,
+      verb: 'list',
+      readOnly: true,
+      run: (_, host) => host.read('.person&*'),
+    }],
+    reply: (_call, _answer, wrote) => (
+      told.push(wrote.map((b) => b.created ? 'created' : 'moved')),
+        Promise.resolve([])
+    ),
+  })
+  await r.ensure()
+  await r.call(called('example_echo'))
+  await r.call(called('example_list'))
+  await r.call(called('example_echo', { check: true }))
+  assertEquals(told, [['created'], [], []])
+})
+
 Deno.test('a refused tool still carries what its caller is owed', async () => {
   let vocab = words()
   let g = graph({ vocab, storage: ram(vocab) })

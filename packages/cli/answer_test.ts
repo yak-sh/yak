@@ -230,6 +230,38 @@ Deno.test('a write’s answer is drawn as its entities now stand', async () => {
   assertEquals(await shown([gone], true), await shown([gone], false))
 })
 
+Deno.test('a new entity is drawn whole, and what it was found near a line apiece', async () => {
+  let made = { entity: { eid: t9.entity.eid }, doc: t9.doc, task: {} }
+  let near = {
+    entity: t10.entity,
+    hit: {
+      kind: 'task',
+      title: 'Ship it',
+      snippet: '',
+      source: 'meaning',
+      near: t9.entity.eid,
+      status: 'done',
+    },
+  }
+  let lines: string[] = []
+  let stand: Record<string, unknown> = {
+    [t9.entity.eid]: t9,
+    [t10.entity.eid]: t10,
+  }
+  await show(
+    { tui: false, out: (line) => lines.push(line) },
+    views,
+    vocab,
+    [made, near] as never,
+    {},
+    { lookup: (eids) => eids.map((e) => stand[e]) as never, query: () => [] },
+    true,
+  )
+  let [page, found] = lines.join('\n').split('\n\nnear ')
+  assertEquals(page, said(t9))
+  assertEquals(found, 'T-9: T-10 Ship it · task done (meaning)')
+})
+
 Deno.test('a link in a list reads as the sentence it states', () => {
   assertEquals(
     printed(views, vocab, [

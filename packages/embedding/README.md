@@ -208,9 +208,37 @@ individual operations. Embedding can run asynchronously; source reads, vector
 writes and query ranking use the synchronous database driver. A sweep is not one
 graph transaction.
 
-A newly created entity cannot be compared until its vector exists. Applications
-that need immediate duplicate suggestions can embed the new text themselves and
-call `nearest()`; no duplicate-detection write rule is provided.
+A newly created entity cannot be compared until its vector exists. The plugin's
+reply (below) makes that vector at once for an entity a tool call created; an
+application of its own can embed the new text and call `nearest()`.
+
+## A write answers what it is near
+
+As a plugin, `@yaks/embedding/rules` exports `reply(host, options)`: what a
+direct tool call's answer carries beside the tool's own
+([@yaks/tools](../tools/README.md) `Reply`). For each entity the call's write
+created, up to five, it answers the three existing entities of the same kind
+nearest to it, so whoever wrote a task, a memory or a comment sees at once
+whether the graph already holds it. A read, a rehearsal and a refusal created
+nothing and get nothing.
+
+The new entity's vector is made then, waiting at most a second for the model,
+and stored as the sweep stores it, so the sweep finds it made and calls no
+model. The neighbours are `.near=<entity>&.order=similar` among entities of that
+kind. Where the model has not answered or no embedder is configured, the words
+of the entity's first line (a document's title) are the query instead, ordered
+by `.order=search`: a twin that says the same thing in the same words. A config
+without this plugin answers no neighbours.
+
+Each neighbour is a bundle carrying a query-only `hit`, the shape a search
+answers with: its `kind`, its `title` (or an excerpt of its text as `snippet`),
+its `status` where it has one, `source` (`meaning` or `text`), and `near`, the
+eid of the new entity it was found near. The tool's own bundles come first,
+unchanged. A model reads each neighbour as one line:
+
+```text
+near <new eid>: <eid> Fix the login page crash on submit · task open (meaning)
+```
 
 ## How `.near` compiles
 
@@ -302,12 +330,12 @@ math/packing helpers, schema and dirty-state helpers, sweep operations,
 `vectorOf`, `nearest`, `meaning`, `semantic` and supporting types such as
 `Rank`. The `Driver` it runs on is `@yaks/sql`'s.
 
-| Sub-module export         | Purpose                                                                                                                            |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/embedding/vocab`   | `embeddingDoc` and `docs`, declaring `vector_check`                                                                                |
-| `@yaks/embedding/rules`   | `rules(host)` creates SQL objects; `extend(host, options)` creates the compiler extension; `meaning(host, options)` searches words |
-| `@yaks/embedding/service` | `service(host, options, signal)` sweeps the queue until the signal aborts                                                          |
-| `@yaks/embedding/tools`   | `runs(host, options)` implements `vector_check`; exports the options type                                                          |
+| Sub-module export         | Purpose                                                                                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/embedding/vocab`   | `embeddingDoc` and `docs`, declaring `vector_check`                                                                                                                                          |
+| `@yaks/embedding/rules`   | `rules(host)` creates SQL objects; `extend(host, options)` creates the compiler extension; `meaning(host, options)` searches words; `reply(host, options)` answers a new entity's neighbours |
+| `@yaks/embedding/service` | `service(host, options, signal)` sweeps the queue until the signal aborts                                                                                                                    |
+| `@yaks/embedding/tools`   | `runs(host, options)` implements `vector_check`; exports the options type                                                                                                                    |
 
 ## Compatibility
 

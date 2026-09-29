@@ -66,6 +66,9 @@ type Hit = {
   source: 'text' | 'meaning' | 'both'
   session?: string
   speaker?: 'input' | 'output'
+  /** the entity a call just made that this one was found near */
+  near?: string
+  status?: string
 }
 
 let hitOf = (b: Bundle): Hit | null => {
@@ -91,6 +94,8 @@ let hitOf = (b: Bundle): Hit | null => {
       : h.speaker == 'output'
       ? 'output'
       : undefined,
+    near: 'near' in h && typeof h.near == 'string' ? h.near : undefined,
+    status: 'status' in h && typeof h.status == 'string' ? h.status : undefined,
   }
 }
 
@@ -116,9 +121,11 @@ let hit = <Node>(
   return h(
     'span',
     { class: 'SearchHit' },
+    found.near ? `near ${s.name(found.near)}: ` : '',
     s.id(b),
     title ? ` ${title}` : '',
     ` · ${kind}`,
+    found.status ? ` ${safe(found.status)}` : '',
     found.session && found.speaker
       ? ` ${found.speaker} in session ${short(found.session)}`
       : '',
@@ -192,12 +199,7 @@ let shown = <Node>(
   return ctx
 }
 
-let viewOf = (answer: Bundle[]) =>
-  answer.length && answer.every(hitOf)
-    ? 'Search.Tile'
-    : answer.length == 1
-    ? 'Page'
-    : 'Tile'
+let viewOf = (answer: Bundle[]) => answer.length == 1 ? 'Page' : 'Tile'
 
 // The relation an edge states: the component beside `edge` that the
 // vocabulary declares one (@yaks/edge).
@@ -308,30 +310,39 @@ let around = (
   return { relations, comments: near.comments }
 }
 
-// What an answer draws, in whatever tree `draw` builds: a lone entity as its
-// `Page`, with what `near` holds beside it, or else every entity as its view,
-// a line apiece. The one composition every lowering shares.
+// An answer's entities, and apart from them its search hits: what a search
+// found, or what a call's new entities were found near.
+let parted = (answer: Bundle[]) => ({
+  them: answer.filter((b) => !hitOf(b)),
+  hits: answer.filter(hitOf),
+})
+
+// What an answer draws, in whatever tree `draw` builds, as groups of lines: a
+// lone entity as its `Page`, with what `near` holds beside it, or else every
+// entity as its view, a line apiece; then every hit, a line apiece. The one
+// composition every lowering shares.
 let drawn = <Node>(
   vocab: Vocab,
   answer: Bundle[],
   named: Bundle[],
   near: Near,
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
-): { nodes: (Node | null)[]; gap: string } => {
+): (Node | null)[][] => {
   let ctx = shown(vocab, answer, draw, named)
-  if (viewOf(answer) == 'Search.Tile') {
-    return { nodes: answer.map((b) => draw(b, 'Search.Tile', ctx)), gap: '\n' }
-  }
-  let [lone] = answer
-  if (answer.length != 1) {
-    return { nodes: answer.map((b) => draw(b, viewOf(answer), ctx)), gap: '\n' }
-  }
+  let { them, hits } = parted(answer)
+  let found = hits.map((b) => draw(b, 'Search.Tile', ctx))
+  let [lone] = them
   let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
-  return {
-    nodes: [draw(lone, 'Page', { ...ctx, ...around(vocab, lone, near, held) })],
-    gap: '\n\n',
-  }
+  let drew = them.length == 1
+    ? [draw(lone, 'Page', { ...ctx, ...around(vocab, lone, near, held) })]
+    : them.map((b) => draw(b, viewOf(them), ctx))
+  return [drew, found].filter((g) => g.length)
 }
+
+// Groups of lines as one text: a line apiece within a group, a blank line
+// between groups.
+let joined = (groups: string[][]): string =>
+  groups.map((g) => g.filter(Boolean).join('\n')).filter(Boolean).join('\n\n')
 
 let nothing: Near = { links: [], comments: [] }
 
@@ -345,14 +356,14 @@ export let printed = (
   named: Bundle[] = [],
   near: Near = nothing,
 ): string => {
-  let { nodes, gap } = drawn<Node>(
+  let groups = drawn<Node>(
     vocab,
     answer,
     named,
     near,
     (b, v, c) => tree(views, b, v, vocab, c),
   )
-  return nodes.map((n) => plain(n)).filter(Boolean).join(gap)
+  return joined(groups.map((g) => g.map((n) => plain(n))))
 }
 
 /** The same answer painted for a terminal `columns` wide: the same views,
@@ -372,14 +383,14 @@ export let painted = async (
     import('@yaks/tui/print'),
     dressed(),
   ])
-  let { nodes, gap } = drawn<ComponentChild>(
+  let groups = drawn<ComponentChild>(
     vocab,
     answer,
     named,
     near,
     (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
   )
-  return nodes.map((n) => print(n, columns, dress)).filter(Boolean).join(gap)
+  return joined(groups.map((g) => g.map((n) => print(n, columns, dress))))
 }
 
 /** An answer held in the terminal (@yaks/tui) until Ctrl-C, drawn as a
@@ -406,13 +417,13 @@ export let hold = async (
   let app = answer.length == 1 && 'Render' in
       (resolve(views, lone, viewOf(answer), vocab, { config }) ?? {})
   await run(() => {
-    let { nodes } = drawn<ComponentChild>(
+    let nodes = drawn<ComponentChild>(
       vocab,
       answer,
       named,
       near,
       (b, v, c) => mount(views, b, v, vocab, { ...c, config }),
-    )
+    ).flat()
     return app ? nodes[0] : h(
       Scroll,
       { id: 'answer', grow: '1' },
@@ -465,11 +476,11 @@ export let standing = async (
   answer: Bundle[],
   from: Source,
 ): Promise<Bundle[]> => {
-  let eids = answer.map((b) => b.entity.eid)
+  let eids = parted(answer).them.map((b) => b.entity.eid)
   let now = new Map(
     (eids.length ? await from.lookup(eids) : []).map((b) => [b.entity.eid, b]),
   )
-  return answer.map((b) => now.get(b.entity.eid) ?? b)
+  return answer.map((b) => hitOf(b) ? b : now.get(b.entity.eid) ?? b)
 }
 
 /** An answer shown the way the command asked — held in the terminal under
@@ -486,10 +497,8 @@ export let show = async (
   wrote = false,
 ): Promise<void> => {
   let answer = wrote ? await standing(said, from) : said
-  let [lone] = answer
-  let asked = answer.length == 1 && !hitOf(lone)
-    ? nearQuery(vocab, lone.entity.eid)
-    : null
+  let [lone, ...more] = parted(answer).them
+  let asked = lone && !more.length ? nearQuery(vocab, lone.entity.eid) : null
   let near = asked ? nearOf(lone.entity.eid, await from.query(asked)) : nothing
   let refs = referenced(vocab, [...answer, ...near.links, ...near.comments])
   let named = refs.length ? await from.lookup(refs) : []

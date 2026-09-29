@@ -12,6 +12,7 @@ import { migrations, type Store } from '@yaks/sqlite'
 import type { Vocab } from '@yaks/vocab'
 import { dbOf, type Host } from '@yaks/cli/host'
 import type { Vault } from '@yaks/secrets'
+import type { Reply } from '@yaks/tools'
 
 /** A graph as a harness runs over it: its file, the store under it, the graph
  * over it, the effects registry the runner is handled on, and the process
@@ -32,6 +33,10 @@ export type Harness = {
   /** where its artifacts' bytes are kept (@yaks/blob), shared with the host's
    * blob door */
   artifacts: Blobs
+  /** what a tool call the agent makes directly is owed beside its answer,
+   * as the host's own runner adds it (@yaks/cli `Host.reply`): the entities
+   * near one it just created, among them */
+  reply?: Reply
   migrations: ReturnType<typeof migrations>
   close: () => void | Promise<void>
 }
@@ -54,6 +59,7 @@ export let hosted = (
     gone: host.gone,
     vault: host.vault,
     artifacts: host.artifacts,
+    reply: host.reply,
     migrations: migrations(host.sql),
     close,
   }

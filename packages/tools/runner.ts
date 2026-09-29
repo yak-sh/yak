@@ -181,8 +181,20 @@ export type Opts = {
   process?: Comp
   /** Extra bundles a direct caller is owed beside a tool's answer. A plugin
    * may supply them without the tool or its transport knowing about them. */
-  reply?: (call: Bundle, answer: Bundle[]) => Promise<Bundle[]>
+  reply?: Reply
 }
+
+/** What a direct caller is owed beside a tool's answer: the call, what the
+ * tool answered, and what the call's own write applied, in; the bundles to add
+ * after that answer, out. `wrote` is the answer where the tool wrote and the
+ * write was kept, so an entity it created wears the `created` its write was
+ * stamped with, and it is empty for a read, a rehearsal or a refusal, whose
+ * answer is entities that were there already or were never written. */
+export type Reply = (
+  call: Bundle,
+  answer: Bundle[],
+  wrote: Bundle[],
+) => Promise<Bundle[]>
 
 /** A live runner: the rules a sweep queries, and the functions a caller
  * invokes. */
@@ -270,36 +282,54 @@ let spent = <T>(
 let inset = (b: Bundle) =>
   '  ' + JSON.stringify(b, null, 2).replaceAll('\n', '\n  ')
 
-// A search answer carries a query-only hit, not the entity's whole body. Say
-// that hit as one line for an MCP reader; structuredContent keeps its fields.
-let hitLine = (b: Bundle): string | null => {
-  let hit = b.hit
-  if (
-    !hit || typeof hit != 'object' || !('kind' in hit) ||
-    !('snippet' in hit) || typeof hit.kind != 'string' ||
-    typeof hit.snippet != 'string'
-  ) return null
+// A search answer carries a query-only hit, not the entity's whole body: the
+// kind, title and words that found it, and, for a neighbour of something a
+// call just made, the entity it is `near` and its `status`. Say that hit as one
+// line for an MCP reader; structuredContent keeps its fields.
+let hitOf = (b: Bundle): Comp | null => {
+  let hit = b.hit as Comp | undefined
+  return hit && typeof hit == 'object' && typeof hit.kind == 'string' &&
+      typeof hit.snippet == 'string'
+    ? hit
+    : null
+}
+
+let hitLine = (b: Bundle, hit: Comp): string => {
   // deno-lint-ignore no-control-regex -- the search markers are intentional
   let mark = /\x01([^\x02]*)\x02/g
   // deno-lint-ignore no-control-regex -- a result must not command a terminal
   let ctrl = /[\x00-\x1f\x7f-\x9f]/g
   let clean = (s: string) => s.replace(/\s+/g, ' ').replace(ctrl, '').trim()
-  let title = 'title' in hit && typeof hit.title == 'string'
-    ? clean(hit.title)
-    : ''
-  let source = 'source' in hit && hit.source == 'meaning' ? ' (meaning)' : ''
-  let snippet = clean(hit.snippet.replace(mark, '*$1*'))
-  return `${b.entity.eid}${title ? ` ${title}` : ''} · ${
-    clean(hit.kind)
-  }${source}${snippet ? ` — ${snippet}` : ''}`
+  let said = (k: string) => typeof hit[k] == 'string' ? clean(hit[k]) : ''
+  let title = said('title')
+  let status = said('status')
+  let near = said('near')
+  let source = hit.source == 'meaning' ? ' (meaning)' : ''
+  let snippet = clean(String(hit.snippet).replace(mark, '*$1*'))
+  return `${near ? `near ${near}: ` : ''}${b.entity.eid}${
+    title ? ` ${title}` : ''
+  } · ${clean(String(hit.kind))}${status ? ` ${status}` : ''}${source}${
+    snippet ? ` — ${snippet}` : ''
+  }`
+}
+
+// A bundle said as a line of its own: the words it carries, or its hit. Null
+// for one that is only data.
+let line = (b: Bundle): string | null => {
+  let body = (b.content as Comp | undefined)?.body
+  if (typeof body == 'string') return body
+  let hit = hitOf(b)
+  return hit ? hitLine(b, hit) : null
 }
 
 /**
- * A tool's answer as text: its `content{body}` values, compact `hit` lines for
- * search results, or the bundles as JSON otherwise. It is copied onto the
- * result entity as `content{body}` so a model, a terminal and a transcript all
- * read the answer the same way. It says at most `most` characters and counts
- * the rest, so an answer of any size words in bounded time and space.
+ * A tool's answer as text: each bundle as a line where it is one — its
+ * `content{body}`, or a compact `hit` line for a search result — and as JSON
+ * where it is only data, or the bundles as JSON where none is a line. It is
+ * copied onto the result entity as `content{body}` so a model, a terminal and
+ * a transcript all read the answer the same way. It says at most `most`
+ * characters and counts the rest, so an answer of any size words in bounded
+ * time and space.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -312,36 +342,17 @@ let hitLine = (b: Bundle): string | null => {
  * ```
  */
 export let worded = (answer: Bundle[], most = WORDS): string => {
-  let said = answer
-    .map((b) => (b.content as Comp | undefined)?.body)
-    .filter((body): body is string => typeof body == 'string')
-  let hits = answer.map(hitLine).filter((s): s is string => s != null)
-  let searched = hits.length > 0 && hits.length == answer.length
-  let mixed = said.length > 0 && said.length < answer.length
-  let { text, left } = mixed
-    ? spent(
-      answer,
-      (b) =>
-        typeof (b.content as Comp | undefined)?.body == 'string'
-          ? String((b.content as Comp).body)
-          : hitLine(b) ?? inset(b),
-      '\n',
-      most,
-    )
-    : said.length
-    ? spent(said, (s) => s, '\n', most)
-    : searched
-    ? spent(hits, (s) => s, '\n', most)
+  let lines = answer.some((b) =>
+    typeof (b.content as Comp | undefined)?.body == 'string' || hitOf(b)
+  )
+  let { text, left } = lines
+    ? spent(answer, (b) => line(b) ?? inset(b), '\n', most)
     : spent(answer, inset, ',\n', most)
-  let open = said.length || searched ? '' : '[\n'
+  let open = lines ? '' : '[\n'
   return left
-    ? `${open}${text}\n… ${left} of ${
-      mixed ? answer.length : said.length || answer.length
-    } ` +
+    ? `${open}${text}\n… ${left} of ${answer.length} ` +
       `not said: an answer is worded in ${most} characters`
-    : said.length
-    ? text
-    : searched
+    : lines
     ? text
     : answer.length
     ? `[\n${text}\n]`
@@ -676,6 +687,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       return keeps ? landed : [...made, ...landed]
     }
     let answered: Bundle[]
+    let wrote: Bundle[] = []
     try {
       let args = await resolved(tool, validated(tool, parsed(c.args)), host)
       let actor = who(call)
@@ -698,6 +710,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         )
       } else {
         answered = await land(made, 'done')
+        if (!tool.readOnly) wrote = answerOf(answered)
       }
     } catch (error) {
       // This catches both the tool's own throw and a rejection of what it
@@ -709,7 +722,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     }
     if (!direct || !opts.reply) return answered
     try {
-      return [...answered, ...await opts.reply(call, answerOf(answered))]
+      return [
+        ...answered,
+        ...await opts.reply(call, answerOf(answered), wrote),
+      ]
     } catch (error) {
       await opts.report?.(error, call, tool.name)
       return answered

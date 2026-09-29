@@ -99,6 +99,10 @@ entities. These records use `graph` by default, including for read tools. Pass
 reads and writes still use `graph`. The calls graph needs the `toolsDoc`
 vocabulary and writable storage.
 
+Pass `reply` (@yaks/tools `Reply`) for what a direct call is owed beside its
+answer; the `@yaks/mcp/routes` host route passes its host's, so a caller over
+MCP reads what one at the command line reads.
+
 The HTTP handler shares one runner across requests and constructs an MCP server
 with the authenticated actor for each request. Pass `sessions: graph` when that
 graph owns connection transcripts and declares the session vocabulary. A request

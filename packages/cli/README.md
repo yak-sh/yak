@@ -209,16 +209,16 @@ contributes nothing to that process.
 }
 ```
 
-| Subpath     | Role       | Expected exports                                                                        |
-| ----------- | ---------- | --------------------------------------------------------------------------------------- |
-| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations                             |
-| `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, and at most one `authenticate?` |
-| `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                           |
-| `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                |
-| `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                  |
-| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`            |
-| `./service` | its plugin | `service?: (host, options, signal)` for a duty                                          |
-| `.`         |            | Public types and library functions; not loaded by `compose`                             |
+| Subpath     | Role       | Expected exports                                                                                  |
+| ----------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations                                       |
+| `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, `reply?`, and at most one `authenticate?` |
+| `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                                     |
+| `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                          |
+| `./effects` | `effects`  | `effects?: (host, options) => Handlers`, keyed by declared effect name                            |
+| `./routes`  | `web`      | `routes?: (host, options) => Route[]`, `filter?`, and at most one `handler?`                      |
+| `./service` | its plugin | `service?: (host, options, signal)` for a duty                                                    |
+| `.`         |            | Public types and library functions; not loaded by `compose`                                       |
 
 The web UI separately imports `./vocab` and `./views`, and `yak` imports
 `./views` to show a tool's answer. Those modules must work in a browser and must

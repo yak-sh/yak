@@ -137,6 +137,7 @@ export let mcp = (opts: MountOptions): Handler => {
     tools: listing(opts).map(namedTool),
     host: opts.graph,
     report: opts.report ?? logged,
+    ...opts.reply ? { reply: opts.reply } : {},
   })
   return async (request) => {
     if (request.method != 'POST') {

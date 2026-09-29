@@ -60,7 +60,7 @@ import {
   type Plugin,
   toolName,
 } from '@yaks/graph'
-import { type Runner, runner, toolsDoc } from '@yaks/tools'
+import { type Reply, type Runner, runner, toolsDoc } from '@yaks/tools'
 import { loadTools, type Runs, type Search, tier } from '@yaks/graph/tools'
 import { toolsIn } from '@yaks/vocab/tools'
 import {
@@ -183,6 +183,11 @@ export type Host = {
    * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
    * answers with, and what a transport restating the tier asks for. */
   search?: Search
+  /** what a direct tool call is owed beside its answer, from every plugin
+   * that offers some ({@link RulesFacet.reply}): what {@link runner} adds, and
+   * what a runner of another's tools over this graph adds too (@yaks/harness).
+   * Absent where no plugin offers any. */
+  reply?: Reply
   /** the one tool runner over this graph: what writes a `call` row, runs the
    * function and writes the result back, for a command line and an HTTP
    * request alike. */
@@ -311,10 +316,7 @@ export type VocabFacet = {
 export type RulesFacet = {
   rules?: (host: Host, options: Options) => Plugin[]
   /** Bundles owed to a caller beside the answer to a direct tool call. */
-  reply?: (
-    host: Host,
-    options: Options,
-  ) => (call: Bundle, answer: Bundle[]) => Promise<Bundle[]>
+  reply?: (host: Host, options: Options) => Reply
   extend?: (host: Host, options: Options) => Extension[]
   /** Search a phrase by meaning through this plugin's own index. */
   meaning?: (
@@ -836,6 +838,7 @@ export let compose = async (
     let filters: Filter[] = []
     let made: NamedTool[] | undefined
     let ranked: Search | undefined
+    let replying: Reply | undefined
     let calls: Runner | undefined
     let watching: Effects | undefined
     let doing:
@@ -893,6 +896,9 @@ export let compose = async (
       },
       get search(): Search | undefined {
         return ranked
+      },
+      get reply(): Reply | undefined {
+        return replying
       },
       get fx(): Effects {
         if (!watching) throw new Error('the effects are not built yet')
@@ -1086,6 +1092,10 @@ export let compose = async (
     let replies = ruled.flatMap(([r, options]) =>
       r.reply ? [r.reply(host, options)] : []
     )
+    replying = replies.length
+      ? async (call, answer, wrote) =>
+        (await Promise.all(replies.map((r) => r(call, answer, wrote)))).flat()
+      : undefined
     // The one tool runner over this graph. A caller runs a tool and the runner
     // records the request and the result as it goes; what the two effects
     // @yaks/tools declares add, in a process serving `effects`, is the calls
@@ -1109,12 +1119,7 @@ export let compose = async (
       // the machine that received it.
       process: started()[PROCESS] as Comp,
       report: (err) => console.error('tool failed —', err),
-      ...replies.length
-        ? {
-          reply: async (call: Bundle, answer: Bundle[]) =>
-            (await Promise.all(replies.map((r) => r(call, answer)))).flat(),
-        }
-        : {},
+      ...replying ? { reply: replying } : {},
     })
     if (effecting) {
       let due: Handlers[string] = (e) => run.due(e.entity.eid)

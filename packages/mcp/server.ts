@@ -79,6 +79,11 @@ export type Options = {
   /** where a tool's defect goes, with the call and the tool's name (default:
    * the console). A refusal (`CallError`) is never reported. */
   report?: RunnerOpts['report']
+  /** what a call is owed beside its tool's answer (@yaks/tools `Reply`): the
+   * host's, so a caller over MCP reads what a caller at the command line
+   * reads. Used where a runner is built here; a runner passed in has its
+   * own. */
+  reply?: RunnerOpts['reply']
   /** who is calling — every write this server makes is signed with this actor:
    * `by` the identity it acts for, `via` the run it came through (default:
    * nobody, and writes are stored unattributed) */
@@ -454,7 +459,12 @@ export let server = (opts: Options): McpServer => {
   // because a question was asked). The tools still read and write `graph`.
   let calls = opts.calls ?? graph
   let report = opts.report ?? logged
-  let run = opts.runner ?? runner(calls, { tools, host: graph, report })
+  let run = opts.runner ?? runner(calls, {
+    tools,
+    host: graph,
+    report,
+    ...opts.reply ? { reply: opts.reply } : {},
+  })
   let names = tools.map((t) => t.name)
 
   for (let t of tools) {
