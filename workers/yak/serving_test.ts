@@ -105,6 +105,37 @@ test('a page is served with its base and its reporter', async () => {
   assert((await js.text()).includes('export let store ='))
 })
 
+// A deployed page names its module under its release (asset_url.ts), and the
+// module imports the client the way the guide writes it. The browser resolves
+// that import against the module's own address, so it has to arrive at the
+// client, and at the client's own address, which is where the client reads its
+// door from (public/client.js `import.meta.url`).
+test("a release's module imports the client by the page's own path", async () => {
+  using scenario = platform()
+  let { env, files } = scenario
+  let { app } = await seeded(env)
+  let release = crypto.randomUUID()
+  let source = `ada/.releases/${app.eid}/${release}`
+  files.held.set(
+    `${source}/app.js`,
+    new TextEncoder().encode("import { query } from './api/client.js'"),
+  )
+  await stamp(env, {
+    entities: [{ entity: { eid: app.eid }, app: { source } }],
+  })
+  let module = visit(`/cookbook/api/assets/${release}/app.js`).url
+  assertEquals((await apps.fetch(new Request(module), env)).status, 200)
+  let url = new URL('./api/client.js', module)
+  let res = await apps.fetch(new Request(url), env)
+  for (let hops = 0; res.headers.has('location') && hops < 3; hops++) {
+    url = new URL(res.headers.get('location')!, url)
+    res = await apps.fetch(new Request(url), env)
+  }
+  assertEquals(res.status, 200)
+  assertStringIncludes(await res.text(), 'export let store =')
+  assertEquals(new URL('.', url).pathname, '/cookbook/api/')
+})
+
 test('a new release serves its files beside the old cached release', async () => {
   using scenario = platform()
   let { env, files } = scenario

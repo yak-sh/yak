@@ -2,7 +2,13 @@
 // stay where the page put them.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { assetMaps, assetPath, assetUrl, releaseId } from './asset_url.ts'
+import {
+  apiOut,
+  assetMaps,
+  assetPath,
+  assetUrl,
+  releaseId,
+} from './asset_url.ts'
 
 test('release URLs keep local assets under their mount', () => {
   let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
@@ -70,4 +76,24 @@ test('local import-map values, URL keys, and scopes follow a release', () => {
     ),
     '<script type=importmap>{bad}</script>',
   )
+})
+
+// The browser resolves a module's imports against the module's own address,
+// so the client a release's module imports sits below the release; it climbs
+// back out through whatever mount the browser asked by.
+test("a release asset's API reference climbs out through its mount", () => {
+  let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
+  let out = (mount: string, ref: string) => {
+    let module = `https://ada.yaks.app${mount}api/assets/${id}/lib/main.js`
+    let asked = new URL(ref, module)
+    let asset = assetPath(asked.pathname.slice(`${mount}api`.length))!
+    return new URL(apiOut(asset.path)!, asked).pathname
+  }
+  assertEquals(out('/cookbook/', '../api/client.js'), '/cookbook/api/client.js')
+  assertEquals(out('/', '../api/blob/x/y'), '/api/blob/x/y')
+  assertEquals(
+    out('/cookbook/~ticket/', '../api/client.js'),
+    '/cookbook/~ticket/api/client.js',
+  )
+  assertEquals(apiOut('/lib/main.js'), null)
 })

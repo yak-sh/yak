@@ -15,6 +15,16 @@ export let assetPath = (path: string) => {
   return found ? { release: found[1], path: `/${found[2]}` } : null
 }
 
+/** Where a release asset's reference to the app's API belongs. A release
+ * holds the app's files and never its API, but a module's `./api/client.js`
+ * resolves against the module's own address, below the release. The answer
+ * climbs back out relatively, so it keeps whatever mount the browser asked
+ * through: a prefix, a front page's root, a sandbox's token. */
+export let apiOut = (asset: string) =>
+  asset.startsWith('/api/')
+    ? '../'.repeat(asset.split('/').length) + asset.slice('/api/'.length)
+    : null
+
 /** Point a local static reference at its release without moving navigation. */
 let local = (
   ref: string,

@@ -72,11 +72,13 @@ javascript.
 After `app_deploy`, local scripts, stylesheets, images, audio and video named by
 the page use a URL under `./api/assets/<release>/`. Local import-map targets and
 scopes, and relative URLs inside stylesheets and module scripts, stay in that
-release too. Those URLs keep the same bytes even after another deploy or a
-rollback, so a browser may keep them for a year. The page itself, app data, and
-the ordinary file addresses still revalidate; they show the current release. A
-page with its own `<base>` keeps its chosen URL behavior. App access is checked
-whenever a request reaches the server, including a request for an older release.
+release too, except one that names `./api/`: a module's
+`import … from './api/client.js'` still reaches the app's API. Those URLs keep
+the same bytes even after another deploy or a rollback, so a browser may keep
+them for a year. The page itself, app data, and the ordinary file addresses
+still revalidate; they show the current release. A page with its own `<base>`
+keeps its chosen URL behavior. App access is checked whenever a request reaches
+the server, including a request for an older release.
 
 ## Every write keeps what it replaced
 

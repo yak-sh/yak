@@ -29,7 +29,13 @@ import { apex, spaceHost, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { at as cachedAt, browserImmutable } from './cache.ts'
-import { assetMaps, assetPath, assetUrl, releaseId } from './asset_url.ts'
+import {
+  apiOut,
+  assetMaps,
+  assetPath,
+  assetUrl,
+  releaseId,
+} from './asset_url.ts'
 import * as files from './files.ts'
 import { keyed, PREFIX, prefixOf, VERSION } from './files.ts'
 import { blobPrefix } from './blob-key.ts'
@@ -1292,6 +1298,8 @@ let api = async (
     if (req.method != 'GET' && req.method != 'HEAD') {
       return json(405, 'method_not_allowed')
     }
+    let out = apiOut(versioned.path)
+    if (out) return redirect(out + new URL(req.url).search)
     if (!mayRead) return refused('not_a_reader')
     let source = `${space.slug}/.releases/${app.eid}/${versioned.release}`
     if (source != app.source && !await dir.released(app, source)) {
