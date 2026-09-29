@@ -1239,7 +1239,9 @@ let api = async (
     try {
       let url = new URL(req.url)
       let live = url.searchParams.get('live') == '1'
-      let line = live ? url.searchParams.get('q') : lined(url.search.slice(1))
+      let line = live || url.searchParams.has('q')
+        ? url.searchParams.get('q')
+        : lined(url.search.slice(1))
       if (line == null) throw new Error('/query needs a query: ?q=…')
       return Response.json(await queried(env, space, app, who, line, live))
     } catch (e) {

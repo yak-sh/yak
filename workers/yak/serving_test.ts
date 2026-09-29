@@ -156,6 +156,26 @@ Deno.test('an app worker query can read a connected peer position', async () => 
   assertEquals((await res.json())[0].position, { x: 4, z: 7 })
 })
 
+Deno.test('an app worker can send a stored query as one encoded filter', async () => {
+  using scenario = platform()
+  let { env } = scenario
+  await seeded(env)
+  let title = 'Smith & Wren'
+  await client(env, await as(ADA)).apply([{
+    entity: { eid: CAKE },
+    doc: { title },
+  }])
+  let line = `.doc.title=${JSON.stringify(title)}&.doc`
+  let res = await apps.fetch(
+    visit(`/cookbook/api/query?q=${encodeURIComponent(line)}`),
+    env,
+  )
+  assertEquals(res.status, 200)
+  let rows = await res.json()
+  assertEquals(rows.length, 1)
+  assertEquals(rows[0].doc.title, title)
+})
+
 Deno.test('an app serves audio and video with byte ranges', async () => {
   using scenario = platform()
   let { env, files } = scenario

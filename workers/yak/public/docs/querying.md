@@ -24,7 +24,8 @@ For a one-time read of values held by connected peers, such as a live game
 position, use `GET ./api/query?live=1&q=<encoded filter>` or the same path
 through `env.STORE.fetch` in an app worker. The response uses the ordinary
 bundle shape; a peer value disappears when its connection closes or its declared
-duration expires. Without `live=1`, a query reads stored data only.
+duration expires. For stored data, `GET ./api/query?q=<encoded filter>` accepts
+the same encoded filter; the bare `?<filter>` form also works for page links.
 
 The examples are a kitchen app: a `vocab.json` declaring
 
