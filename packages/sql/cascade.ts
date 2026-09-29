@@ -36,7 +36,8 @@
 
 import type { Vocab } from '@yaks/vocab'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
-import { type Frag, type Raw, raw } from './ast.ts'
+import { each, type Frag, type Raw, raw } from './ast.ts'
+import { render } from './render.ts'
 import { type Dialect, sqlite } from './sqlite.ts'
 
 /** How far a cascade's rungs are counted before the number stops climbing.
@@ -49,9 +50,6 @@ export let DEEP = 32
 // ordinary name.
 let W = '"__doom"'
 let E = '"__e"'
-
-let marks = (n: number): string =>
-  Array.from({ length: n }, () => '?').join(', ')
 
 // The component row's owner has not been deleted. This is the same condition
 // @yaks/sql ANDs into every query, written against an owner column rather than
@@ -71,27 +69,33 @@ export let narrow = (v: Vocab): boolean =>
 // group's terms — the rows whose death column points at something already
 // marked for deletion. `union` both deduplicates and, together with the
 // saturating depth, terminates.
-let closure = (eids: string[], group: Arm[], d: Dialect): Frag => ({
-  sql: `with recursive ${W}("id", "depth") as (\n` +
-    `  select "entity"."id", 0 from "entity"` +
-    ` where "entity"."eid" in (${marks(eids.length)})\n` +
-    group.map(([comp, props]) => {
-      let own = d.ownerKey(comp)
-      let hits = props.map((p) => `"${comp}"."${p}" = ${W}."id"`).join(' or ')
-      return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
-        ` from ${d.table(comp)}, ${W} where (${hits}) and ${alive(own)}\n`
-    }).join('') + `)\n`,
-  params: [...eids],
-})
+let closure = (eids: string[], group: Arm[], d: Dialect): Frag => {
+  let set = render(each(eids))
+  return {
+    sql: `with recursive ${W}("id", "depth") as (\n` +
+      `  select "entity"."id", 0 from "entity"` +
+      ` where "entity"."eid" in (${set.sql})\n` +
+      group.map(([comp, props]) => {
+        let own = d.ownerKey(comp)
+        let hits = props.map((p) => `"${comp}"."${p}" = ${W}."id"`).join(' or ')
+        return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
+          ` from ${d.table(comp)}, ${W} where (${hits}) and ${alive(own)}\n`
+      }).join('') + `)\n`,
+    params: set.params,
+  }
+}
 
 // The same CTE name over a set that is already known: what a soft-reference
 // statement builds on when the cascade was too wide to restate (see
 // {@link narrow}).
-let named = (eids: string[]): Frag => ({
-  sql: `with ${W}("id") as (` +
-    `select "id" from "entity" where "eid" in (${marks(eids.length)}))\n`,
-  params: [...eids],
-})
+let named = (eids: string[]): Frag => {
+  let set = render(each(eids))
+  return {
+    sql: `with ${W}("id") as (` +
+      `select "id" from "entity" where "eid" in (${set.sql}))\n`,
+    params: set.params,
+  }
+}
 
 /**
  * Everything deleted along with these entities, the named ones included: one row

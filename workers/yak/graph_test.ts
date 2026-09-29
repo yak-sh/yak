@@ -194,6 +194,41 @@ let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   return store
 }
 
+Deno.test('a Store checks a large delete as one batch', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (sql, ...params) => {
+    if (params.length > 100) throw new Error('too many SQL variables')
+    return exec(sql, ...params)
+  }
+  let store = await cookbook(ctx)
+  let ids = Array.from({ length: 230 }, (_, i) => `recipe-${i}`)
+  let seed = await post(
+    store,
+    '/apply',
+    ids.map((eid, i) => ({
+      entity: { eid },
+      recipe: { serves: i },
+    })),
+    owner,
+  )
+  assertEquals(seed.status, 200, await seed.text())
+
+  let checked = await post(
+    store,
+    '/apply?check=1',
+    ids.map((eid) => ({
+      entity: { eid },
+      $delete: true,
+    })),
+    owner,
+  )
+  assertEquals(checked.status, 200, await checked.text())
+  let still = await get(store, '/query?q=.recipe%26.count', owner)
+  assertEquals(await still.json(), { count: ids.length })
+})
+
 Deno.test('an app store admits only values matching opted-in nested schemas', async () => {
   let ctx = state()
   using _db = ctx.storage

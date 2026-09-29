@@ -22,7 +22,7 @@ import { ARMS, doomSql, looseSql, narrow } from '@yaks/sql'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { mem } from './testing.ts'
+import { mem, spy } from './testing.ts'
 import { storage, type Store } from './mod.ts'
 
 let doc: VocabDoc = {
@@ -259,6 +259,33 @@ Deno.test('a wide vocabulary asks no statement more than it may carry', () => {
     }
   }
   assert(narrow(words) && !narrow(wide))
+})
+
+Deno.test('a large delete stays atomic within the host bind limit', () => {
+  for (let vocab of [words, wide]) {
+    let driver = spy(mem(), (_, params) => {
+      if (params.length > 100) throw new Error('too many SQL variables')
+    })
+    let s = storage(driver, vocab, { number: true })
+    s.install()
+    let g = graph({ storage: s, vocab })
+    let ids = Array.from({ length: 230 }, (_, i) => `n${i}`)
+    let comp = vocab == words ? 'node' : 'n1'
+    g.apply([
+      ...ids.map((eid) => ({
+        entity: { eid },
+        [comp]: vocab == words ? { name: eid } : {},
+      })),
+      { entity: { eid: 'm' }, mark: { at: ids.at(-1)! } },
+    ])
+    let kill = ids.map((eid) => ({ entity: { eid }, $delete: true }))
+    let checked = g.apply(kill, { check: true }) as Bundle[]
+    assertEquals(dead(checked).length, ids.length)
+    assert((g.get([ids[0]]) as Bundle[])[0][comp])
+    let landed = g.apply(kill) as Bundle[]
+    assertEquals(dead(landed).length, ids.length)
+    assertEquals(landed.find((b) => b.entity.eid == 'm')?.mark, null)
+  }
 })
 
 Deno.test('a grave is not a casualty twice', () => {
