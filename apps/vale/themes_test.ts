@@ -1,5 +1,6 @@
 // A changed region design reaches authored lands and already-grown frontier.
 import { assertEquals, assertNotEquals } from '@std/assert'
+import { seedBuildings } from './buildings_fixture.ts'
 import { levelAt, levelOf, useThemes } from './levels.ts'
 import { patchOf, refreshTerrain, vale } from './terrain.ts'
 import rows from './seed/themes.json' with { type: 'json' }
@@ -27,10 +28,13 @@ Deno.test('region themes replace the cover and look of a land and its frontier',
 
 Deno.test('a changed ground cover repaints an already-grown chunk', () => {
   useThemes(rows)
+  seedBuildings()
   let v = vale(1), before = patchOf(v, 3, 9)
-  let changed = rows.map((row) => row.theme_design.land == 'mossvale'
-    ? { ...row, theme_design: { ...row.theme_design, wild: 'ashfield' } }
-    : row)
+  let changed = rows.map((row) =>
+    row.theme_design.land == 'mossvale'
+      ? { ...row, theme_design: { ...row.theme_design, wild: 'ashfield' } }
+      : row
+  )
   try {
     useThemes(changed)
     refreshTerrain()

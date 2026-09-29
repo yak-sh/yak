@@ -88,8 +88,6 @@ let asked = Number(new URLSearchParams(location.search).get('voxel'))
 let VOX = asked >= 0.125 && asked <= 2 && Number.isInteger(CHUNK / asked)
   ? asked
   : VOXEL
-// The ground the page walks on, as the workers grow it and the page keeps it.
-let v = vale(VOX)
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
@@ -146,6 +144,8 @@ await Promise.all([
   themeReady,
   buildingReady,
 ])
+// Terrain and its first chunk use the store's region and building designs.
+let v = vale(VOX)
 let deal = deals(net)
 let folk = village(net, deal)
 let seen = sighting(net)
