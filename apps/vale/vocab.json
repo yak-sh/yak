@@ -820,6 +820,20 @@
       "required": ["player"],
       "worker": "/where"
     },
+    "inspect": {
+      "tool": true,
+      "readOnly": true,
+      "floor": "owner",
+      "description": "Inspect a Mossvale land, hero, villager, companion objective, item, or positioned world entity. The app owner may use an entity eid or current name, or a land id or name. The answer is a concise summary, not the underlying store row.",
+      "input": {
+        "target": {
+          "type": "string",
+          "description": "A land id or name, or an entity eid or current name. Quote names with spaces in a slash command."
+        }
+      },
+      "required": ["target"],
+      "worker": "/inspect"
+    },
     "gather_wood": {
       "tool": true,
       "floor": "person",

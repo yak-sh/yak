@@ -67,3 +67,29 @@ Deno.test('inspect worker checks owner and reads live hero state', async () => {
   assertStringIncludes(text, 'Companion: wood 1/4')
   assertEquals(text.includes('owner-person'), false)
 })
+
+Deno.test('inspect worker resolves land and villager names', async () => {
+  let worker = workerOf(flat(5))
+  let env = { STORE: { fetch: () => Promise.resolve(Response.json([])) } }
+  let ask = (target: string) =>
+    worker.fetch(
+      new Request('https://yourname.yaks.app/vale/inspect', {
+        method: 'POST',
+        headers: {
+          'x-yak-role': 'owner',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ target }),
+      }),
+      env,
+    )
+  let land = await ask('Tomb Sands')
+  assertEquals(land.status, 200)
+  assertStringIncludes(await land.text(), 'Land `tombsands`')
+  let villager = await ask('Elder Wren')
+  assertEquals(villager.status, 200)
+  let text = await villager.text()
+  assertStringIncludes(text, 'Elder Wren')
+  assertStringIncludes(text, 'Villager `')
+  assertStringIncludes(text, 'Home: Mossvale')
+})

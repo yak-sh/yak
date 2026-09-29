@@ -40,6 +40,9 @@ Deno.test('slash adapts declared app commands and leaves chat alone', () => {
   assertEquals(slash('/teleport x=-1152 z=624'), {
     command: { name: 'teleport', args: { x: -1152, z: 624 } },
   })
+  assertEquals(slash('/inspect "Elder Wren"'), {
+    command: { name: 'inspect', args: { target: 'Elder Wren' } },
+  })
   assertEquals(slash('/companion_progress directive=order'), {
     command: { name: 'companion_progress', args: { directive: 'order' } },
   })
