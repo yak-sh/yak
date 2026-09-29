@@ -71,9 +71,9 @@ nor the tests. It clones, runs `npm ci`, and runs `bin/build-yak deploy`, which
 installs Deno (not on the Ubuntu 24.04 image), makes the deploy pre-flight check
 (`superseded`), deploys `yak-out` and `yak-esbuild`, bundles with esbuild and
 uploads. `bin/build-yak` with no argument still runs the check and the workers
-tests by hand. A push's build that fails is started once more through the `BUILD_HOOK`
-deploy hook (builds.ts), since most failures are the network's; the second
-build's failure stands.
+tests by hand. A push's build that fails is started once more through the
+`BUILD_HOOK` deploy hook (builds.ts), since most failures are the network's; the
+second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes
