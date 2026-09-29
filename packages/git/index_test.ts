@@ -2,8 +2,11 @@
 // Constants: ./testing.ts.
 
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
-import { keyEid } from '@yaks/key'
+import { edges } from '@yaks/edge'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { keyEid, keys } from '@yaks/key'
+import { storage } from '@yaks/sqlite'
+import { mem, spy } from '../sqlite/testing.ts'
 import { COMPAT } from './comp.ts'
 import { entryEid, index } from './index.ts'
 import { DIR, FILE } from './tree.ts'
@@ -12,6 +15,7 @@ import {
   COMMITTER,
   file,
   fixture,
+  git,
   HELLO,
   HELLO_OID,
   HELLO_OID256,
@@ -19,6 +23,7 @@ import {
   ONE_OID,
   ROOT_OID,
   ROOT_OID256,
+  store,
   TWO_OID,
   X,
 } from './testing.ts'
@@ -116,6 +121,29 @@ Deno.test('a repeat manifest reads existing Git names in batches', async () => {
   }, bytes)
   assertEquals(await batched.files(manifest), want)
   assert(reads < Object.keys(manifest).length)
+})
+
+Deno.test('a large manifest reuses stored Git blobs under a 100-bind limit', async () => {
+  let db = spy(mem(), (_, params) => {
+    if (params.length > 100) throw new Error('too many SQL variables')
+  })
+  let s = storage(db, git)
+  s.install()
+  let g = graph({
+    storage: s,
+    vocab: git,
+    plugins: [edges(git), keys(git)],
+  })
+  let bytes = store()
+  let objects = index(g, bytes)
+  let manifest = Object.fromEntries(Array.from({ length: 101 }, (_, i) => [
+    `file-${i}.txt`,
+    file(bytes, String(i)),
+  ]))
+  let want = await objects.files(manifest)
+  let reads = bytes.reads()
+  assertEquals(await objects.files(manifest), want)
+  assertEquals(bytes.reads(), reads)
 })
 
 Deno.test('bytes nothing stored are refused by name', async () => {

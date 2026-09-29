@@ -166,16 +166,26 @@ let stampish = (c: string, s: Frag): Frag => ({
   params: [LO, HI, ...s.params],
 })
 
-// Any of several predicates. Equalities of one expression are one `in`, which
-// reads the expression once where `or` reads it once per value; a derived
-// property's expression is a whole subquery.
+// Any of several predicates. Equalities of one expression are one set lookup,
+// which reads the expression once where `or` reads it once per value. The set
+// rides as one bind, however many values the caller named.
+let among = (c: string, vals: (string | number)[]): Frag => ({
+  sql: `${c} in (select value from json_each(?))`,
+  params: [JSON.stringify(vals)],
+})
+
 let anyOf = (parts: Frag[]): Frag => {
-  let lhs = parts[0].sql.match(/^(.*) = \?$/s)?.[1]
+  let same = parts.every((p) => p.sql == parts[0].sql && p.params.length == 1)
   let params = parts.flatMap((p) => p.params)
+  let vals = params.filter((p): p is string | number =>
+    typeof p == 'string' || typeof p == 'number'
+  )
+  let lhs = same && vals.length == parts.length &&
+    parts[0].sql.match(/^(.*) = \?$/s)?.[1]
   return parts.length == 1
     ? parts[0]
-    : lhs && parts.every((p) => p.sql == parts[0].sql)
-    ? { sql: `(${lhs} in (${params.map(() => '?').join(', ')}))`, params }
+    : lhs
+    ? among(lhs, vals)
     : { sql: nest(parts.map((p) => p.sql), ' or '), params }
 }
 
@@ -281,10 +291,7 @@ let all = (parts: Frag[]): Frag =>
 
 export let sqlite: Dialect = {
   refCol: (comp, prop) => `${q(comp)}.${q(prop)}`,
-  among: (c, vals) => ({
-    sql: `${c} in (select value from json_each(?))`,
-    params: [JSON.stringify(vals)],
-  }),
+  among,
   name: 'sqlite',
   spine: '"entity"',
   membership: '"entity"."eid" as eid',

@@ -240,7 +240,8 @@ stay within the engine's compound-query limit.
 `.eid=` and `.num=` accept sets. `@yaks/id` also parses display ids such as
 `B-7`: the letter is a label, and 7 is the entity number. A set binds as one
 JSON parameter however long it is, since a host caps how many parameters one
-statement binds (a Durable Object's SQLite takes 100).
+statement binds (a Durable Object's SQLite takes 100). Property any-of lists of
+scalar equalities use the same one-parameter set.
 
 ```text
 .eid=a3f1,b7c2  "entity"."eid" in (select value from json_each(?))  ["a3f1","b7c2"]
