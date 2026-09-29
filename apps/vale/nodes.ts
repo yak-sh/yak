@@ -354,7 +354,7 @@ export let nodes = (
   let plate = (n: Seen, job: Job) => {
     let doing = job.doing?.node?.eid == n.eid ? job.doing : null
     let t = TRADES[n.lode.trade]
-    let name = `<b>${esc(n.lode.name)}</b>${
+    let name = `<b>${esc(n.name)}</b>${
       n.rarity == 'common' ? '' : ` <em>${GRADES[n.rarity].name}</em>`
     }`
     let html = doing

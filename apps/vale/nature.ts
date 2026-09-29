@@ -83,3 +83,25 @@ export let NATURE: Record<string, string> = {
   hoodoo: 'sunstone',
   shard: 'gleam',
 }
+
+/** What a mineable prop looks like, independent of what mining yields. */
+export let FORMATION: Record<string, string> = {
+  rock: 'Stone',
+  chalk: 'Outcrop',
+  sandstone: 'Weathered stone',
+  snowrock: 'Snow-covered stone',
+  serac: 'Ice block',
+  cinder: 'Volcanic stone',
+  basalt: 'Stone columns',
+  columns: 'Stone columns',
+  block: 'Stone blocks',
+  cairn: 'Cairn',
+  menhir: 'Standing stone',
+  obsidian: 'Glass spires',
+  crystal: 'Crystal cluster',
+  amethyst: 'Crystal cluster',
+  clearstone: 'Crystal cluster',
+  glassrock: 'Glass spires',
+  hoodoo: 'Stone spire',
+  shard: 'Crystal spire',
+}

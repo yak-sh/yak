@@ -8,6 +8,7 @@ import {
   haulOf,
   LODES,
   nodeLife,
+  nodeName,
   nodeRarity,
   nodesNear,
   respawnOf,
@@ -26,6 +27,13 @@ Deno.test('a natural prop is the same gatherable node on every read', () => {
   assertEquals(find().eid, first.eid)
   assertEquals([first.x, first.z], [prop.x, prop.z])
   assert(LODES[first.lode])
+})
+
+Deno.test('a rock is named for its form even when its haul is the same', () => {
+  assertEquals(nodeName(LODES.copper, { kind: 'rock' }), 'Stone')
+  assertEquals(nodeName(LODES.copper, { kind: 'cairn' }), 'Cairn')
+  assertEquals(nodeName(LODES.copper, { kind: 'menhir' }), 'Standing stone')
+  assertEquals(nodeName(LODES.copper), 'Stone')
 })
 
 Deno.test('a harvested tree stays spent for everyone until its next life', () => {

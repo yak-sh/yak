@@ -420,7 +420,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
           `<i class="Map_Node Map_Node-${n.lode.trade}${
             n.spent ? ' Map_Node-spent' : ''
           } ${tint(n.rarity)}" style="${at(n.at[0], n.at[2])}"${
-            tipped({ name: n.lode.name })
+            tipped({ name: n.name })
           }></i>`
         ).join('') +
         (box[2] == 320 ? exits(f.level) : []).filter((r) => visible(...r.at))

@@ -22,6 +22,7 @@ import {
   LODES,
   naturalEid,
   nodeLife,
+  nodeName,
   nodeRarity,
   nodesNear,
 } from './gather.ts'
@@ -58,6 +59,7 @@ export type Seen = {
   eid: string
   kind: string
   lode: Lode
+  name: string
   at: Vec3
   life: number
   spent: boolean
@@ -427,6 +429,7 @@ export let working = (
             eid: n.eid,
             kind: n.lode,
             lode,
+            name: nodeName(lode, n.prop),
             at: [n.x, y, n.z],
             life: fall.fell,
             spent: fall.down,
@@ -472,7 +475,7 @@ export let working = (
           job = null
           events.push({
             type: 'say',
-            text: `Someone got to the ${n.lode.name.toLowerCase()} first.`,
+            text: `Someone got to the ${n.name.toLowerCase()} first.`,
           })
         }
       }
@@ -488,7 +491,7 @@ export let working = (
         } else if (near.spent) {
           events.push({
             type: 'say',
-            text: `${near.lode.name}: spent.`,
+            text: `${near.name}: spent.`,
           })
         } else {
           job = {

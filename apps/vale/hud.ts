@@ -568,7 +568,7 @@ export let hud = (
             name: TRADES[trade].name,
             key: gatherKey,
             says: n
-              ? `Gather from the ${n.lode.name.toLowerCase()}.`
+              ? `Gather from the ${n.name.toLowerCase()}.`
               : job?.bench
               ? `Work the ${STATIONS[job.bench.craft].name.toLowerCase()}.`
               : undefined,
