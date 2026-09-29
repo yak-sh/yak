@@ -10,7 +10,8 @@
   "license": "Apache-2.0",
   "description": "Stores text property values by their SHA-256 in a database table, directory, or object store, while reads and writes still deal in text.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "file-type/core": "npm:file-type@21.3.4/core"
   },
   "publish": {
     "exclude": [
