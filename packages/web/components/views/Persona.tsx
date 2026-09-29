@@ -1,7 +1,7 @@
 import { type Change, type Ent } from '../../types.ts'
 import { byWarmth, ent, mutate, relations } from '../../live.ts'
 import { link, unlink } from '../../edge.ts'
-import { block } from '../ui.tsx'
+import { block } from '@yaks/ui'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
 import { type Materialized, useQuery, useResultComponent } from '../useQuery.ts'

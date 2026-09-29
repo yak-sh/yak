@@ -146,6 +146,20 @@ Deno.test('question mark shows keybindings until they are dismissed', () => {
   assertEquals(help.value, false)
 })
 
+Deno.test(':ui opens the style guide, j/k read it and q closes it', () => {
+  trail.value = []
+  mode.value = 'normal'
+  quit.value = false
+  for (let k of ':ui\r') key(k)
+  assertEquals(spot(), 0)
+  key('j')
+  key('j')
+  key('k')
+  assertEquals(spot(), 1)
+  key('q')
+  assertEquals({ spot: spot(), quit: quit.value }, { spot: -1, quit: false })
+})
+
 Deno.test('the TUI keybinding card teaches its navigation keys', () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]

@@ -36,6 +36,7 @@ import type { ComponentChild } from 'preact'
 import { names, reversed } from '@yaks/edge/vocab'
 import { type Node, plain, safe, tree } from '@yaks/text'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import type { Sheet } from '@yaks/tui/theme'
 import {
   type Related,
   sheet,
@@ -45,6 +46,14 @@ import {
 import { subpath } from './config.ts'
 import { understood } from './keywords.ts'
 import type { Tty } from './run.ts'
+
+// What an answer wears in a terminal: @yaks/ui's components and these views'
+// own classes, in Everforest. Loaded with the painter, so a printed answer
+// never pays for it.
+let dressed = async (): Promise<Sheet> => {
+  let { everforest, sheet: kit } = await import('@yaks/ui')
+  return { ...kit(everforest), ...sheet(everforest.colors) }
+}
 
 /** How one plugin's `./views` becomes a module: {@link subpath} unless a test
  * hands its modules over inline. */
@@ -358,9 +367,10 @@ export let painted = async (
   columns: number,
   near: Near = nothing,
 ): Promise<string> => {
-  let [{ render: mount }, { print }] = await Promise.all([
+  let [{ render: mount }, { print }, dress] = await Promise.all([
     import('@yaks/preact'),
     import('@yaks/tui/print'),
+    dressed(),
   ])
   let { nodes, gap } = drawn<ComponentChild>(
     vocab,
@@ -369,7 +379,7 @@ export let painted = async (
     near,
     (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
   )
-  return nodes.map((n) => print(n, columns, sheet)).filter(Boolean).join(gap)
+  return nodes.map((n) => print(n, columns, dress)).filter(Boolean).join(gap)
 }
 
 /** An answer held in the terminal (@yaks/tui) until Ctrl-C, drawn as a
@@ -386,10 +396,11 @@ export let hold = async (
   named: Bundle[] = [],
   near: Near = nothing,
 ): Promise<void> => {
-  let [{ h }, { render: mount }, { run, Scroll }] = await Promise.all([
+  let [{ h }, { render: mount }, { run, Scroll }, dress] = await Promise.all([
     import('preact'),
     import('@yaks/preact'),
     import('@yaks/tui'),
+    dressed(),
   ])
   let [lone] = answer
   let app = answer.length == 1 && 'Render' in
@@ -407,7 +418,7 @@ export let hold = async (
       { id: 'answer', grow: '1' },
       nodes.map((n) => h('div', null, n)),
     )
-  }, { sheet })
+  }, { sheet: dress })
 }
 
 // A package a server named that this machine has no copy of: its plugins are

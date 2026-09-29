@@ -16,12 +16,12 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { ComponentRenderer } from '@yaks/preact'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
-import { sheet } from '@yaks/render/views'
 import { run, useShutdown } from '@yaks/tui'
 import { read } from '@yaks/cli/host'
 import { App } from './app.ts'
 import { openDrafts } from './draft_vault.ts'
 import { remote } from './remote.ts'
+import { dress } from './sheet.ts'
 
 type Up = {
   backend: Awaited<ReturnType<typeof remote>>
@@ -107,4 +107,4 @@ export let views: Registry<ComponentRenderer> = define([
 
 /** Open the harness without creating or selecting a session. */
 export let open = (config: string): Promise<void> =>
-  run(() => h(Harness, { config }), { sheet })
+  run(() => h(Harness, { config }), { sheet: dress })

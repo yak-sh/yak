@@ -100,4 +100,12 @@ let App = () => {
   )
 }
 
-if (import.meta.main) await run(App)
+// The demo's own classes, without colour: a theme is @yaks/ui's business.
+let sheet = {
+  Title: { bold: true },
+  Key: { bold: true },
+  Muted: { dim: true },
+  Dim: { dim: true },
+}
+
+if (import.meta.main) await run(App, { sheet })

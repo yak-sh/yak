@@ -12,7 +12,7 @@ import { useMemo, useRef, useState } from 'preact/hooks'
 import { type Cand, type EntId, suggest } from '../suggest.ts'
 import { cache, domains } from '../live.ts'
 import { idOf, kindOf } from '../types.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 import { Overlay } from './overlay.tsx'
 
 let Frame = block('div', 'Complete', { Row: 'div', Text: 'span', Kind: 'span' })

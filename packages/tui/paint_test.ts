@@ -19,6 +19,15 @@ let words = (lines: Line[]) =>
 let seen = (root: TElement, columns = 20, rows = 6) =>
   words(screenful(root, columns, rows).lines)
 
+// A theme's worth of classes, for the tests that read colours.
+let dress = {
+  Title: { bold: true },
+  Dim: { fg: '#7a8478', dim: true },
+  Code: { fg: '#7fbbb3', bg: '#343434' },
+  Quote: { fg: '#d3c6aa', bg: '#343f44', dim: false },
+  Composer_Border: { fg: '#7a8478', dim: true },
+}
+
 Deno.test('blocks stack and inline children run into one line', () => {
   let tree = el(
     'root',
@@ -97,11 +106,22 @@ Deno.test('a scroll offset windows the content and is clamped to it', () => {
   assertEquals(rows('99'), ['c', 'd'])
 })
 
+Deno.test('a block style lays an inline tag out on lines of its own', () => {
+  let item = (text: string) => el('button', { class: 'Item' }, text)
+  let tree = el('root', {}, el('div', {}, item('one'), item('two')))
+  assertEquals(words(screenful(tree, 20, 2).lines), ['onetwo', ''])
+  assertEquals(
+    words(screenful(tree, 20, 2, { Item: { block: true } }).lines),
+    ['one', 'two'],
+  )
+})
+
 Deno.test('a style becomes the escapes, and nothing else does', () => {
   let line = screenful(
     el('root', {}, el('div', { class: 'Title' }, 'hi')),
     10,
     1,
+    dress,
   ).lines[0]
   assertEquals(ansi(line), '\x1b[1mhi\x1b[0m')
 })
@@ -160,14 +180,14 @@ Deno.test('wrap preserves inline styles, explicit blank lines and indent width',
   ])
 })
 
-Deno.test('inline and fenced code use a subtle theme background and blue text', () => {
+Deno.test('inline and fenced code wear the Code style', () => {
   let tree = el(
     'root',
     {},
     el('p', {}, 'before ', el('code', {}, 'a < b'), ' after'),
     el('pre', {}, el('code', {}, '  first\nsecond')),
   )
-  let { lines } = screenful(tree, 40, 4)
+  let { lines } = screenful(tree, 40, 4, dress)
   assertEquals(words(lines).slice(0, 3), [
     'before a < b after',
     '  first',
@@ -194,14 +214,14 @@ Deno.test('themed borders reserve inner width and height without dimming content
     { border: 'Composer_Border' },
     el('div', { id: 'inside', scroll: '0' }, 'abc'),
   )
-  let got = screenful(root, 7, 4)
+  let got = screenful(root, 7, 4, dress)
   assertEquals(words(got.lines), ['╭─────╮', '│abc  │', '│     │', '╰─────╯'])
   assertEquals(got.metrics.inside.width, 5)
   assertEquals(got.metrics.inside.height, 2)
   assertEquals(got.lines[1][0].style.dim, true)
   assertEquals(got.lines[1][1].style.dim, undefined)
   for (let width of [1, 2]) {
-    let narrow = screenful(root, width, 3)
+    let narrow = screenful(root, width, 3, dress)
     assertEquals(narrow.metrics.inside.width, width)
   }
 })
@@ -226,7 +246,7 @@ Deno.test('quotes use a muted surface with normal text and preserve nested inlin
       el('blockquote', { wrap: '1' }, 'nested words wrap here'),
     ),
   )
-  let got = screenful(tree, 22, 10)
+  let got = screenful(tree, 22, 10, dress)
   let spans = got.lines.flat()
   let normal = spans.find((s) => s.text.includes('normal'))!
   assertEquals(normal.style.fg, '#d3c6aa')
@@ -270,7 +290,7 @@ Deno.test('br preserves explicit breaks inside styled inline content and blank r
 
 Deno.test('pre backgrounds fill allocated width including empty lines; inline code does not', () => {
   let code = el('pre', {}, el('code', {}, 'one\n\nthree'))
-  let lines = screenful(el('root', {}, code), 12, 3).lines
+  let lines = screenful(el('root', {}, code), 12, 3, dress).lines
   assertEquals(lines.map((row) => row.map((s) => s.text).join('')), [
     'one         ',
     '            ',
@@ -279,9 +299,12 @@ Deno.test('pre backgrounds fill allocated width including empty lines; inline co
   for (let row of lines) {
     assert(row.every((s) => s.style.bg == '#343434'))
   }
-  let inline =
-    screenful(el('root', {}, el('div', {}, el('code', {}, 'x'), 'y')), 12, 1)
-      .lines[0]
+  let inline = screenful(
+    el('root', {}, el('div', {}, el('code', {}, 'x'), 'y')),
+    12,
+    1,
+    dress,
+  ).lines[0]
   assertEquals(inline.map((s) => s.text).join(''), 'xy')
   assertEquals(inline[0].style.bg, '#343434')
   assertEquals(inline[1].style.bg, undefined)
@@ -297,7 +320,7 @@ Deno.test('pre fill respects nested borders, indentation and narrow widths', () 
       el('blockquote', {}, el('pre', {}, el('code', {}, 'x\n'))),
     ),
   )
-  let lines = screenful(root, 12, 5).lines
+  let lines = screenful(root, 12, 5, dress).lines
   for (let row of lines.slice(1, 3)) {
     assertEquals(row.map((s) => s.text).join('').length, 12)
     let filled = row.filter((s) => s.style.fg == '#7fbbb3')

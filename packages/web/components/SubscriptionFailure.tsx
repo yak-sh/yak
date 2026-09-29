@@ -3,7 +3,7 @@
 // stable subscription identity so success replaces the failure normally.
 import { useState } from 'preact/hooks'
 import { retrySubscription, type SubscriptionRead } from '../live.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 
 let Frame = block('p', 'SubscriptionFailure', { Retry: 'button' })
 let { Retry } = Frame

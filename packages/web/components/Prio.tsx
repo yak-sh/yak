@@ -1,5 +1,5 @@
 import { formatProp, propAt } from '../props.ts'
-import { el } from './ui.tsx'
+import { el } from '@yaks/ui'
 
 let Badge = el('span', 'Prio')
 let type = propAt('filed', 'priority')!

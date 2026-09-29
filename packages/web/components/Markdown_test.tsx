@@ -5,7 +5,7 @@ import { assertEquals } from '@std/assert'
 import { render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { Markdown } from './Markdown.tsx'
-import { el } from './ui.tsx'
+import { el } from '@yaks/ui'
 
 let Face = el('article', 'Prose')
 

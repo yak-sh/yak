@@ -1,6 +1,6 @@
 import { awake, type Ent } from '../../types.ts'
 import { ent, sessionDetail } from '../../live.ts'
-import { block } from '../ui.tsx'
+import { block } from '@yaks/ui'
 import { Entity } from '../Entity.tsx'
 import { useQueryResult } from '../useQuery.ts'
 import { useInboxCount } from '../useInbox.ts'

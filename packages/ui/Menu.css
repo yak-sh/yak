@@ -1,0 +1,36 @@
+/* A menu: a raised box of items, one to a row, with rules between groups.
+   Where it floats is its host's business. */
+.Menu {
+  display: grid;
+  min-width: 10rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+  overflow: hidden;
+}
+.Menu_Item {
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: 0;
+  padding: var(--half-gap) var(--gap);
+  cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+}
+.Menu_Item:hover,
+.Menu_Item-hover {
+  background: var(--soft);
+}
+/* an item that destroys something */
+.Menu_Item-danger {
+  color: var(--red);
+}
+.Menu_Rule {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}

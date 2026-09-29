@@ -1,7 +1,8 @@
 import { addressId, entityPath } from '../url.ts'
 import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
-import { block, copy, setFollow } from './ui.tsx'
+import * as ui from '@yaks/ui'
+import { copy } from '../clipboard.ts'
 import { usePlaceAt } from './overlay.tsx'
 import {
   cache,
@@ -175,14 +176,21 @@ export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   else navigate(href)
 }
 
-// el()'s demoted links (see ui.tsx) know only an href — resolve the
-// entity at click time so they peek like any chip; double click stays
-// the deliberate navigate.
-setFollow((href) => ({
-  onClick: (ev: MouseEvent) =>
-    follow(href, eidOf(decodeURIComponent(href.slice(1))))(ev),
-  onDblClick: follow(href),
-}))
+// A link inside another link keeps its tag and says data-href (@yaks/ui el),
+// and no component owns its clicks. It resolves its entity at click time, so
+// it peeks like any chip, and double click stays the deliberate navigate.
+// Heard in the capture phase, ahead of the link around it, which would
+// otherwise take the click as its own.
+let demoted =
+  (open: (href: string) => (ev: MouseEvent) => void) => (ev: MouseEvent) => {
+    let href = (ev.target as Element | null)?.closest?.('[data-href]')
+      ?.getAttribute('data-href')
+    if (href) open(href)(ev)
+  }
+let openDemoted = demoted((href) =>
+  follow(href, eidOf(decodeURIComponent(href.slice(1))))
+)
+let navigateDemoted = demoted((href) => follow(href))
 
 // Markdown-rendered ids (md.ts data-ref anchors) come from innerHTML, so
 // no component owns their clicks — one delegated listener gives every
@@ -213,12 +221,18 @@ let menuRef = (ev: MouseEvent) => {
 // an object guard is not enough here — `document?.member(…)` passes it and
 // then throws on the missing member. Guard the METHOD, always.
 type Host = {
-  addEventListener?: (t: string, fn: (ev: MouseEvent) => void) => void
+  addEventListener?: (
+    t: string,
+    fn: (ev: MouseEvent) => void,
+    capture?: boolean,
+  ) => void
 }
 
 export let wire = (doc: Host | undefined = globalThis.document) => {
   doc?.addEventListener?.('click', openRef)
   doc?.addEventListener?.('contextmenu', menuRef)
+  doc?.addEventListener?.('click', openDemoted, true)
+  doc?.addEventListener?.('dblclick', navigateDemoted, true)
 }
 
 wire()
@@ -472,8 +486,7 @@ export let cardMenuAt = (e: Ent) => (ev: MouseEvent) => {
   menuAt(e)(ev)
 }
 
-let Frame = block('div', 'Menu', { Item: 'button' })
-let { Item } = Frame
+let { Item, Rule } = ui.Menu
 
 export let Menu = () => {
   let m = menu.value
@@ -485,7 +498,8 @@ export let Menu = () => {
   }
   let acts = m.acts ?? actionsFor(ent(m.eid))
   return (
-    <Frame
+    <ui.Menu
+      class='Overlay'
       elRef={root}
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
@@ -529,11 +543,12 @@ export let Menu = () => {
           </Item>
         </>
       )}
+      {m.eid && acts.length > 0 && <Rule />}
       {acts.map((a, i) => (
         <Item
           key={i}
           type='button'
-          mod={[a.mod, !i && 'first'] as string[]}
+          mod={a.mod}
           onClick={() => {
             a.run()
             close()
@@ -542,6 +557,6 @@ export let Menu = () => {
           {a.label}
         </Item>
       ))}
-    </Frame>
+    </ui.Menu>
   )
 }

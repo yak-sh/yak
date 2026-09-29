@@ -1,6 +1,6 @@
 import { type Ent, idOf, statusOf } from '../../types.ts'
 import { ent, pending } from '../../live.ts'
-import { el } from '../ui.tsx'
+import { el } from '@yaks/ui'
 import { highlight } from '../../highlight.ts'
 import { type Materialized, useResultComponent } from '../useQuery.ts'
 

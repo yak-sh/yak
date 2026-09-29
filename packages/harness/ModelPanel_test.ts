@@ -1,7 +1,6 @@
 import type { Comp } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
-import { mount } from '../tui/testing.ts'
 import { until } from '../process/testing.ts'
 import { App, changes } from './app.ts'
 import { frontend } from './frontend.ts'
@@ -10,7 +9,7 @@ import { local } from './local.ts'
 import { edgeEid } from '@yaks/edge'
 import { identityEid } from '@yaks/graph'
 import type { Request } from '@yaks/model'
-import { harness, repo } from './testing.ts'
+import { harness, mount, repo } from './testing.ts'
 
 Deno.test('m chooses a model for a new draft; existing choice is passive, Esc preserves draft', async () => {
   const hnd = await harness()

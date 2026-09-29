@@ -162,6 +162,7 @@ Deno.test('Markdown table inside a list reflows on resize without losing code pi
       }),
     42,
     20,
+    { Code: { bg: '#343434' } },
   )
   try {
     assert(ui.text().includes('a|b'), ui.text())

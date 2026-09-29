@@ -2,7 +2,7 @@
 // the graph: GET /blob/<address> serves them from the store beside the db.
 import { type Ent } from '../../types.ts'
 import { ent } from '../../live.ts'
-import { block, el } from '../ui.tsx'
+import { block, el } from '@yaks/ui'
 
 let Img = el('img', 'Media')
 let Audio = el('audio', 'Media')

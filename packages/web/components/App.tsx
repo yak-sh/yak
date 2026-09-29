@@ -11,7 +11,7 @@ import {
   serverName,
 } from '../live.ts'
 import { Admin } from './Admin.tsx'
-import { block, Chip, el } from './ui.tsx'
+import { block, Id, Tabs } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { TabFace } from './Card.tsx'
@@ -45,21 +45,21 @@ let Frame = block('main', 'App', {
   Body: 'div',
 })
 let { Bar, Brand, Trail, Main, Body } = Frame
-let Tab = el('button', 'Tab')
+let { Tab } = Tabs
 
 // The URL named nothing the cache can resolve — a typo'd id, a dead
 // entity, a foreign graph's number. The 404 face keeps the whole shell
 // (brand, `/` search, the : statusbar): a dead link offers the doors,
 // never a blank wall.
 let LostFrame = block('section', 'Lost', { Code: 'p', Id: 'code', Hint: 'p' })
-let { Code, Id, Hint } = LostFrame
+let { Code, Hint } = LostFrame
 let Lost = () => {
   let path = new URL(route.value, 'http://x').pathname
   return (
     <LostFrame>
       <Code>404</Code>
       <p>
-        <Id>{decodeURIComponent(path)}</Id>{' '}
+        <LostFrame.Id>{decodeURIComponent(path)}</LostFrame.Id>{' '}
         names nothing here — a mistyped id, or an entity that's gone.
       </p>
       <Hint>
@@ -82,7 +82,7 @@ let Resolving = () => {
     <LostFrame>
       <Code>…</Code>
       <p>
-        resolving <Id>{decodeURIComponent(path)}</Id>
+        resolving <LostFrame.Id>{decodeURIComponent(path)}</LostFrame.Id>
       </p>
     </LostFrame>
   )
@@ -109,14 +109,14 @@ let Crumbs = () => {
   return (
     <Trail>
       {items.map(({ eid, id, tip }) => (
-        <Chip
+        <Id
           key={eid}
           href={entityPath(id)}
           data-tip={tip}
           onClick={follow(entityPath(id))}
         >
           {id}
-        </Chip>
+        </Id>
       ))}
     </Trail>
   )
@@ -245,53 +245,55 @@ export let App = () => {
           <Crumbs />
           <Entity eid={e.eid} view='Card.Title' />
           {filterable.has(view) && <FilterInput eid={e.eid} />}
-          {tabs.map((v) => (
+          <Tabs>
+            {tabs.map((v) => (
+              <Tab
+                type='button'
+                key={v}
+                mod={v == view && 'on'}
+                aria-label={v}
+                data-tip={v}
+                onClick={() => v != view && show(v)}
+              >
+                <TabFace view={v} eid={e.eid} />
+              </Tab>
+            ))}
             <Tab
               type='button'
-              key={v}
-              mod={v == view && 'on'}
-              aria-label={v}
-              data-tip={v}
-              onClick={() => v != view && show(v)}
+              aria-label='Admin'
+              data-tip='Admin'
+              onClick={() => navigate('/admin')}
             >
-              <TabFace view={v} eid={e.eid} />
+              <Icon name='table' />
             </Tab>
-          ))}
-          <Tab
-            type='button'
-            aria-label='Admin'
-            data-tip='Admin'
-            onClick={() => navigate('/admin')}
-          >
-            <Icon name='table' />
-          </Tab>
-          {
-            /* The root card's dropdown: the same menu a card's right-click
-            serves, hung from the bar's far edge. Pointerdown must not
-            bubble — the Frame's close-on-press would eat the toggle. */
-          }
-          <Tab
-            type='button'
-            aria-label='Menu'
-            data-tip='menu'
-            onPointerDown={(ev: Event) => ev.stopPropagation()}
-            onClick={(ev: MouseEvent & { currentTarget: HTMLElement }) => {
-              if (menu.value) {
-                menu.value = null
-                return
-              }
-              let r = ev.currentTarget.getBoundingClientRect()
-              menu.value = {
-                x: r.right,
-                y: r.bottom,
-                href: entityPath(idOf(e)),
-                eid: e.eid,
-                align: 'right',
-              }
-            }}
-          >
-            <Icon name='ellipsis-vertical' />
-          </Tab>
+            {
+              /* The root card's dropdown: the same menu a card's right-click
+              serves, hung from the bar's far edge. Pointerdown must not
+              bubble — the Frame's close-on-press would eat the toggle. */
+            }
+            <Tab
+              type='button'
+              aria-label='Menu'
+              data-tip='menu'
+              onPointerDown={(ev: Event) => ev.stopPropagation()}
+              onClick={(ev: MouseEvent & { currentTarget: HTMLElement }) => {
+                if (menu.value) {
+                  menu.value = null
+                  return
+                }
+                let r = ev.currentTarget.getBoundingClientRect()
+                menu.value = {
+                  x: r.right,
+                  y: r.bottom,
+                  href: entityPath(idOf(e)),
+                  eid: e.eid,
+                  align: 'right',
+                }
+              }}
+            >
+              <Icon name='ellipsis-vertical' />
+            </Tab>
+          </Tabs>
         </Bar>
         <Body>
           <Entity eid={e.eid} view={view} />

@@ -15,7 +15,7 @@ import type { SubscriptionRead } from '../live.ts'
 import { parseQuery } from '../query.ts'
 import { useDraft } from './drafts.ts'
 import { useQueryResult } from './useQuery.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 import { useComplete } from './Complete.tsx'
 
 let Frame = block('div', 'Filter', {})

@@ -5,7 +5,7 @@ import { type ComponentChildren } from 'preact'
 import { type Ent } from '../types.ts'
 import { clickProps } from './nav.tsx'
 import { title } from './title.tsx'
-import { block, el } from './ui.tsx'
+import { block, el } from '@yaks/ui'
 
 export type TileSlots = {
   before?: ComponentChildren

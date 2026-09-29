@@ -12,7 +12,7 @@ import {
 } from '../providers.ts'
 import { type SpawnAsk, spawnFrames, spawnPlan } from '../client.ts'
 import { type Change, idOf } from '../types.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from './overlay.tsx'
 

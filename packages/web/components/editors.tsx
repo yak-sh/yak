@@ -5,7 +5,9 @@ import { useContext, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf } from '../types.ts'
 import { domains, ent, problem, row } from '../live.ts'
-import { ago, block, focus, pretty, Surround } from './ui.tsx'
+import { block, Surround } from '@yaks/ui'
+import { pretty } from '../time.ts'
+import { ago } from './Stamp.tsx'
 import { Dot } from './Dot.tsx'
 import { Edit, InlineEdit } from './Edit.tsx'
 import {
@@ -25,6 +27,13 @@ import * as suggest from './suggest.ts'
 
 // Native Edit overlays: the same registry selects entity and column views.
 // These shared controls own the browser's inline and popout presentation.
+
+// Take the keyboard on mount: <Field elRef={focus} />. The `autofocus`
+// attribute cannot: the document's autofocus-processed flag fires once per
+// page, so only the first editor a page ever opened would take focus. One
+// module-level function, so preact sees a stable ref and calls it on mount,
+// not on every render.
+let focus = (n: HTMLElement | null) => n?.focus()
 
 export type EditorProps = {
   eid: string
@@ -252,7 +261,7 @@ let plain = (v: unknown) => v == null || v === '' ? null : <>{String(v)}</>
 let titled = (v: unknown) => plain(v)
 
 // A timestamp reads as relative words off the minute tick, full stamp on
-// hover — the Stamp idiom (ui.tsx ago/pretty), one value at a time.
+// hover — the Stamp idiom (Stamp.tsx ago, time.ts pretty), one value at a time.
 // Exported for <Val>: a bare Date wears the same face.
 export let TimeVal = (v: unknown) =>
   v ? <span data-tip={pretty(String(v))}>{ago(String(v))}</span> : null

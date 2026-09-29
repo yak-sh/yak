@@ -10,7 +10,7 @@
 // URL param is the noted follow-up when sharing is wanted.
 import { useState } from 'preact/hooks'
 import { type Ent } from '../../types.ts'
-import { block } from '../ui.tsx'
+import { block } from '@yaks/ui'
 import { eidOf } from '../nav.tsx'
 import { Entity } from '../Entity.tsx'
 

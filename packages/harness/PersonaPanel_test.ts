@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Comp } from '@yaks/graph'
-import { mount } from '../tui/testing.ts'
+import { mount } from './testing.ts'
 import { until } from '../process/testing.ts'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'

@@ -4,7 +4,8 @@ import { render } from 'preact'
 import { assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { cache, ent } from '../../live.ts'
-import { ago, pretty } from '../ui.tsx'
+import { ago } from '../Stamp.tsx'
+import { pretty } from '../../time.ts'
 import { applicable, resolve } from '../Entity.tsx'
 import { Wake, WakeTitle } from './Wake.tsx'
 
@@ -56,7 +57,7 @@ Deno.test('wake coordinates pending, delivered, and failed states', () => {
     moment: root.querySelector('.Wake_Moment')?.className,
     state: root.querySelector('.Wake_Status')?.textContent,
     detail: root.querySelector('.Wake_Detail')?.textContent,
-    dot: root.querySelector('.Dot')?.className,
+    dot: root.querySelector('.Dot')?.getAttribute('title'),
   })
   try {
     cache.value = data('recipient')
@@ -71,7 +72,7 @@ Deno.test('wake coordinates pending, delivered, and failed states', () => {
       moment: 'Wake_Moment Wake_Moment-pending',
       state: 'pending',
       detail: undefined,
-      dot: 'Dot Dot-pending',
+      dot: 'pending',
     })
 
     cache.value = data('recipient', {
@@ -92,7 +93,7 @@ Deno.test('wake coordinates pending, delivered, and failed states', () => {
       moment: 'Wake_Moment Wake_Moment-delivered',
       state: 'delivered',
       detail: 'via knock K-9',
-      dot: 'Dot Dot-done',
+      dot: 'done',
     })
 
     cache.value = data('recipient', {
@@ -113,7 +114,7 @@ Deno.test('wake coordinates pending, delivered, and failed states', () => {
       moment: 'Wake_Moment Wake_Moment-failed',
       state: 'failed',
       detail: 'no door',
-      dot: 'Dot Dot-failed',
+      dot: 'failed',
     })
   } finally {
     render(null, root)

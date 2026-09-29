@@ -1,5 +1,6 @@
 import { type Ent } from '../../types.ts'
-import { block, Stamp } from '../ui.tsx'
+import { block } from '@yaks/ui'
+import { Stamp } from '../Stamp.tsx'
 import { TitleEdit } from '../title.tsx'
 import { Prop } from '../editors.tsx'
 import { Entity } from '../Entity.tsx'

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { ent, type Peeked } from '../live.ts'
-import { block, el } from './ui.tsx'
+import { block, Tabs } from '@yaks/ui'
 import { cardMenuAt, peek } from './nav.tsx'
 import { applicable, resolve } from './registry.ts'
 import {
@@ -24,7 +24,7 @@ import { place } from './overlay.tsx'
 
 let Frame = block('div', 'Peek', { Head: 'div', Body: 'div' })
 let { Head, Body } = Frame
-let Tab = el('button', 'Tab')
+let { Tab } = Tabs
 
 export let peekKey = (key: string, typing: boolean) =>
   !typing && (key == 'Escape' || key == 'q')
@@ -144,30 +144,32 @@ let PeekCard = ({ p }: { p: Peeked }) => {
         onDragEnd={flown}
       >
         <Entity eid={p.eid} view='Card.Title' />
-        {tabs.map((v) => (
-          <Tab
-            type='button'
-            mod={v == view && 'on'}
-            draggable
-            // a tab flies its OWN view: stop the head's dragstart from
-            // overwriting the payload with the current one
-            onDragStart={(ev: DragEvent) => {
-              ev.stopPropagation()
-              dragData(ev, p.eid, v)
-            }}
-            onClick={() => {
-              if (v == view) return
-              peek.value = peek.peek().map((x) =>
-                x == p ? { ...p, view: v } : x
-              )
-            }}
-            key={v}
-            aria-label={v}
-            data-tip={v}
-          >
-            <TabFace view={v} eid={p.eid} />
-          </Tab>
-        ))}
+        <Tabs>
+          {tabs.map((v) => (
+            <Tab
+              type='button'
+              mod={v == view && 'on'}
+              draggable
+              // a tab flies its OWN view: stop the head's dragstart from
+              // overwriting the payload with the current one
+              onDragStart={(ev: DragEvent) => {
+                ev.stopPropagation()
+                dragData(ev, p.eid, v)
+              }}
+              onClick={() => {
+                if (v == view) return
+                peek.value = peek.peek().map((x) =>
+                  x == p ? { ...p, view: v } : x
+                )
+              }}
+              key={v}
+              aria-label={v}
+              data-tip={v}
+            >
+              <TabFace view={v} eid={p.eid} />
+            </Tab>
+          ))}
+        </Tabs>
       </Head>
       <Body>
         <Entity eid={p.eid} view={`Card.${view}`} />

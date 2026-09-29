@@ -1,6 +1,6 @@
 import { type Ent } from '../../types.ts'
 import { base } from '../../live.ts'
-import { block, el } from '../ui.tsx'
+import { block, el } from '@yaks/ui'
 
 let Frame = el('iframe', 'Web')
 let Wait = block('div', 'WebWait', {

@@ -1,0 +1,22 @@
+/* An identifier (T-123): mono, small, dim, never wrapped. As a link it
+   underlines only under the pointer. */
+.Id {
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--dim);
+  text-decoration: none;
+}
+.Id:hover,
+.Id-hover {
+  text-decoration: underline;
+  color: var(--muted);
+}
+/* what it names is out of service: present, struck, half there */
+.Id-retired {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+.Id-retired:hover {
+  text-decoration: line-through underline;
+}

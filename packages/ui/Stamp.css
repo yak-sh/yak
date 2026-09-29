@@ -1,0 +1,10 @@
+/* A moment, said the human way (5 minutes ago): mono, small and dim, out of
+   the way. Its parts run in a row. */
+.Stamp {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  display: inline-flex;
+  gap: var(--half-gap);
+  white-space: nowrap;
+}

@@ -46,7 +46,9 @@ Deno.test('raw formats are nested under Debug', async () => {
       root,
     )
     assertEquals(root.querySelector('.Debug_Head')?.textContent, 'summary')
-    let tabs = [...root.querySelectorAll<HTMLButtonElement>('.Debug_Tabs .Tab')]
+    let tabs = [
+      ...root.querySelectorAll<HTMLButtonElement>('.Debug_Tabs .Tabs_Tab'),
+    ]
     assertEquals(tabs.map((tab) => tab.getAttribute('aria-label')), [
       'Components',
       'Markdown',

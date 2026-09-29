@@ -16,6 +16,9 @@ import { type Runner, running } from '@yaks/session'
 import { compose, type Config, type Host } from '@yaks/cli/host'
 import { install } from '@yaks/connections'
 import { type Harness, hosted } from './store.ts'
+import { type ComponentType } from 'preact'
+import { mount as tui } from '../tui/testing.ts'
+import { dress } from './sheet.ts'
 
 /** The packages a harness graph is made of in these tests: what a transcript
  * is (@yaks/session), what it asks for and what answers (@yaks/tools,
@@ -166,3 +169,7 @@ export let repo = (): string => {
   })
   return made = dir
 }
+
+/** A harness view on a fake terminal, dressed as the harness is. */
+export let mount = (App: ComponentType, columns?: number, rows?: number) =>
+  tui(App, columns, rows, dress)

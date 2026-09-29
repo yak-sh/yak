@@ -22,6 +22,11 @@ export let relative = (iso?: string | null, now = Date.now()) => {
   return 'just now'
 }
 
+// A stamp in full, the way this machine's locale writes one: what a tooltip
+// over a relative age says.
+export let pretty = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString() : ''
+
 // A stored UTC stamp SHOWN in the running machine's local zone: ISO-8601
 // with the local offset where the `Z` was, so `wake.at` reads as the wall
 // clock an operator keeps while storage and wire stay Zulu. THE display face

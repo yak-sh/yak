@@ -19,7 +19,7 @@ import {
   type TileProps,
   tileTitle,
 } from '../Tile.tsx'
-import { el } from '../ui.tsx'
+import { el } from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
 import { Meta } from './Show.tsx'
 

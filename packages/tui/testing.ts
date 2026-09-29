@@ -14,13 +14,16 @@ import { type ComponentType, h, render } from 'preact'
 import { install, onPaint } from './dom.ts'
 import { decode } from './input.ts'
 import { ansiBackend, screenful } from './paint.ts'
+import type { Sheet } from './theme.ts'
 import { clear, measured, press, size } from './screen.ts'
 
-/** Mount an app on a fake terminal; `free()` restores the document. */
+/** Mount an app on a fake terminal, its classes dressed by `sheet`; `free()`
+ * restores the document. */
 export let mount = async (
   App: ComponentType,
   columns = 60,
   rows = 12,
+  sheet: Sheet = {},
 ): Promise<{
   out: string[]
   text: () => string
@@ -32,6 +35,7 @@ export let mount = async (
   let out: string[] = []
   let wrote = 0
   let backend = ansiBackend({
+    sheet,
     size: () => ({ columns, rows }),
     write: (s) => void out.push(s),
   })
@@ -51,7 +55,7 @@ export let mount = async (
   return {
     out,
     text: () =>
-      screenful(screen.root, columns, rows).lines
+      screenful(screen.root, columns, rows, sheet).lines
         .map((l) => l.map((s) => s.text).join('').trimEnd())
         .join('\n'),
     send: async (bytes: string) => {
@@ -60,9 +64,10 @@ export let mount = async (
         if (key.name == 'mouse') {
           routeMouse(
             key,
-            screenful(screen.root, columns, rows).lines.slice(0, rows).map(
-              (line) => clip(line, columns),
-            ),
+            screenful(screen.root, columns, rows, sheet).lines.slice(0, rows)
+              .map(
+                (line) => clip(line, columns),
+              ),
           )
         } else press(key)
       }

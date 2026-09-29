@@ -1,0 +1,69 @@
+import { assert, assertEquals } from '@std/assert'
+import { print } from '@yaks/tui/print'
+import { h, type VNode } from 'preact'
+import { Dot } from './Dot.ts'
+import { everforest } from './everforest.ts'
+import { Guide } from './guide.ts'
+import { sheet, stylesheet } from './kit.ts'
+import { Menu } from './Menu.ts'
+
+// deno-lint-ignore no-control-regex -- the painter's colours, to read the words
+let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
+let fg = (hex: string) =>
+  `38;2;${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(';')}`
+
+Deno.test("a theme's colours are what its stylesheet says", async () => {
+  let css = await (await fetch(everforest.css)).text()
+  let dark = css.slice(css.indexOf(':root'), css.indexOf('}'))
+  let said = Object.fromEntries(
+    [...dark.matchAll(/--([\w-]+):\s*([^;]+);/g)].map(([, k, v]) => [k, v]),
+  )
+  let value = (v: string): string =>
+    v.startsWith('var(--') ? value(said[v.slice(6, -1)]) : v
+  for (let [name, hex] of Object.entries(everforest.colors)) {
+    assertEquals(value(said[name]), hex, name)
+  }
+})
+
+Deno.test('a browser gets the theme, then every part', async () => {
+  let css = await stylesheet(everforest)
+  assert(css.indexOf('--bg:') < css.indexOf('.Dot {'))
+  assert(css.includes('.Menu_Item-danger'))
+})
+
+Deno.test('a part paints in a terminal in the theme: shape a glyph, tone a colour', () => {
+  let dress = sheet(everforest)
+  let c = everforest.colors
+  let cases: [string[], string][] = [
+    [[], `\x1b[${fg(c.dim)}m●`],
+    [['half', 'active'], `\x1b[${fg(c.yellow)}m◐`],
+    [['check', 'positive'], `\x1b[${fg(c.green)}m✓`],
+    [['alert', 'negative'], `\x1b[${fg(c.red)};1m!`],
+  ]
+  for (let [mod, want] of cases) {
+    assert(print(h(Dot, { mod }), 20, dress).includes(want), want)
+  }
+  // A menu's items are rows, as in a browser, though each is a button.
+  let { Item, Rule } = Menu
+  let menu: VNode = h(
+    Menu,
+    {},
+    h(Item, {}, 'open'),
+    h(Item, {}, 'copy'),
+    h(Rule, {}),
+    h(Item, { mod: 'danger' }, 'delete'),
+  )
+  assertEquals(plain(print(menu, 20, dress)).split('\n'), [
+    'open',
+    'copy',
+    '────────',
+    'delete',
+  ])
+})
+
+Deno.test('the style guide paints in a terminal', () => {
+  let out = plain(print(h(Guide, null), 100, sheet(everforest)))
+  for (let label of ['Dot-ring', 'Id-retired', 'Stamp', 'Tip', 'table']) {
+    assert(out.includes(label), label)
+  }
+})

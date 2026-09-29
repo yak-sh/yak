@@ -37,7 +37,7 @@ The public entry point is `mod.ts`. It exports:
   `ImageSource`;
 - rendering: `ansiBackend`, `Backend`, `Line`, `Seg`, `Metrics`, `lay`, `clip`,
   `wrap`, `screenful`, `printout`, `ansi`, and `clipboard`;
-- styling: `theme`, `everforest`, `Sheet`, and `Style`;
+- styling: `base`, `Sheet`, and `Style` (also `@yaks/tui/theme`);
 - input and routing: `decode`, `feed`, `Input`, `Key`, `Mouse`, `MouseEvent`,
   `Name`, `Keys`, `useKeys`, `useKeymap`, `press`, `pressTo`, `pressFocused`,
   `hit`, and `routeMouse`;
@@ -109,14 +109,17 @@ components to emit ANSI.
 
 ## Style
 
-`theme.ts` exports the default `theme` sheet and the `everforest` color palette.
+`theme.ts` exports the `Sheet` and `Style` types and `base`, what this package's
+widgets are without colour: the painted cursor is inverse, a table header bold.
 Class names use the repository's `Block_Element-modifier` convention. Pass
-`sheet` to `run` or `ansiBackend`; provided entries replace default entries with
-the same names.
+`sheet` to `run` or `ansiBackend`; its entries replace `base` entries with the
+same names. Colours come from a theme: `@yaks/ui` builds a sheet for its
+components and for these widgets from one (`sheet(everforest)`).
 
 A `Style` may set `fg`, `bg`, `bold`, `dim`, `italic`, `underline`, `strike`,
-`inverse`, `glyph`, `indent`, and `gap`. The painter also uses `href` internally
-for sanitized links.
+`inverse`, `glyph`, `indent`, `gap`, and `block`, which lays an inline tag (a
+`button`, a `span`) out on lines of its own, as CSS's `display: block` does. The
+painter also uses `href` internally for sanitized links.
 
 ## Widgets
 
@@ -346,9 +349,9 @@ emoji can misalign.
 ### Code block backgrounds
 
 Semantic `pre` elements fill available width, including blank rows, with the
-`Code` theme style. The default background is `#343434`; inline `code` styles
-only its text. Borders and indentation reduce available width. Existing wrapping
-or clipping behavior still controls long source lines.
+`Code` style of the sheet; inline `code` styles only its text. Borders and
+indentation reduce available width. Existing wrapping or clipping behavior still
+controls long source lines.
 
 ### Proportional terminal sidebar
 

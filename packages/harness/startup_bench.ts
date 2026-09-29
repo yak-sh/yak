@@ -3,10 +3,9 @@ import { local } from './local.ts'
 import { remote } from './remote.ts'
 import type { Bundle } from '@yaks/graph'
 import { h as node } from 'preact'
-import { mount } from '../tui/testing.ts'
 import { App } from './app.ts'
 import { frontend } from './frontend.ts'
-import { at, harness } from './testing.ts'
+import { at, harness, mount } from './testing.ts'
 
 let directory = await Deno.makeTempDir({ prefix: 'harness-startup-' })
 let count = Number(Deno.args[0] ?? 300)

@@ -1,6 +1,6 @@
 import { type Ent } from '../../types.ts'
 import { highlight } from '../../highlight.ts'
-import { el } from '../ui.tsx'
+import { el } from '@yaks/ui'
 
 let Pre = el('pre', 'Json')
 

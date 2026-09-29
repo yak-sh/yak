@@ -1,9 +1,10 @@
 /**
  * The class sheet: what a class name means to the painter. Names follow the
- * same `Block_Element-modifier` convention the web uses, so one tree can be
- * styled by a stylesheet in a browser and by this table in a terminal. The
- * default palette is Everforest; pass your own sheet to the backend to change
- * or extend it — an entry replaces the default of the same name.
+ * `Block_Element-modifier` convention a stylesheet uses, so one tree can be
+ * styled by CSS in a browser and by a sheet in a terminal. Colours are a
+ * theme's (@yaks/ui); what this package's own widgets are without colour
+ * (a painted cursor is inverse, a header bold) is {@link base}, which every
+ * sheet given to the painter extends.
  *
  * @module
  */
@@ -34,55 +35,26 @@ export type Style = {
   indent?: number
   /** A blank line after this element's lines. */
   gap?: boolean
+  /** Lay this element out as a block, on lines of its own, whatever its tag:
+   * CSS's `display: block` for a `button` or a `span`. */
+  block?: boolean
 }
 
 /** A class sheet: class name to style. */
 export type Sheet = Record<string, Style>
 
-/** Everforest, as the palette the default sheet draws from. */
-export let everforest = {
-  fg: '#d3c6aa',
-  surface: '#343f44',
-  grey: '#7a8478',
-  muted: '#9da9a0',
-  green: '#a7c080',
-  blue: '#7fbbb3',
-  yellow: '#dbbc7f',
-  red: '#e67e80',
-  orange: '#e69875',
-  purple: '#d699b6',
-}
-
-/** The default sheet: a small generic vocabulary, in Everforest. */
-export let theme: Sheet = {
-  Title: { bold: true },
-  Muted: { fg: everforest.muted },
-  Dim: { fg: everforest.grey, dim: true },
-  Key: { fg: everforest.yellow },
-  Accent: { fg: everforest.blue },
-  Code: { fg: everforest.blue, bg: '#343434' },
-  Quote: { fg: everforest.fg, bg: everforest.surface, dim: false },
-  Good: { fg: everforest.green },
-  Task: { fg: everforest.orange },
-  Composer_Border: { fg: everforest.grey, dim: true },
-  Warn: { fg: everforest.yellow },
-  Bad: { fg: everforest.red },
-  Link: { fg: everforest.blue, underline: true },
-  Table_Border: { fg: everforest.grey, dim: true },
-  Table_Header: { bold: true },
-  Rule: { fg: everforest.grey },
-  Sel: { inverse: true },
+/** This package's widgets, without colour: the text entry's painted cursor
+ * and hint, a table's rules and header, a panel and its title, a selected
+ * list row, a scrollbar resting at the bottom. */
+export let base: Sheet = {
   // The text cursor is a painted cell: the terminal's own cursor is hidden, so
   // an inverted character is the only thing saying where typing lands.
   Cursor: { inverse: true },
-  Scrollbar: { fg: everforest.grey },
-  Scrollbar_Snapped: { dim: true },
-  Frame_Side: {},
-  Selection_Active: { bg: '#3a5154', fg: everforest.blue },
-  Session_Selected: { bg: '#343f44' },
-  List_Selected: { bg: '#343f44' },
+  Entry_Hint: { dim: true },
+  Table_Border: { dim: true },
+  Table_Header: { bold: true },
   Panel: { gap: true },
-  Panel_Title: { fg: everforest.grey, bold: true },
-  Entry: { fg: everforest.fg },
-  Entry_Hint: { fg: everforest.grey, dim: true },
+  Panel_Title: { bold: true },
+  List_Selected: { inverse: true },
+  Scrollbar_Snapped: { dim: true },
 }

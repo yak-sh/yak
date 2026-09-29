@@ -2,7 +2,7 @@ import { type Signal, useComputed, useSignal } from '@preact/signals'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { camera, ent, mutate, pinZ, toFront } from '../live.ts'
 import { type Pinned } from '../types.ts'
-import { block, el } from './ui.tsx'
+import * as ui from '@yaks/ui'
 import { applicable } from './registry.ts'
 import {
   dragData,
@@ -42,7 +42,7 @@ export let icons: Record<string, string> = {
   Debug: 'bug',
 }
 
-let Badge = el('span', 'Tab_Badge')
+let { Tab, Badge } = ui.Tabs
 
 // A tab's face: its icon, plus what is waiting behind it. Only the Inbox
 // carries a count today, and it is the difference between a tab you check
@@ -62,11 +62,10 @@ let InboxBadge = ({ eid }: { eid: string }) => {
   return n != null && n > 0 ? <Badge>{n > 99 ? '99+' : n}</Badge> : null
 }
 
-let Pin = el('div', 'Pin')
-let Tab = el('button', 'Tab')
-let Handle = el('div', 'Handle')
+let Pin = ui.el('div', 'Pin')
+let Handle = ui.el('div', 'Handle')
 
-let Frame = block('section', 'Card', {
+let Frame = ui.block('section', 'Card', {
   Tabs: 'header',
   Min: 'button',
   X: 'button',
@@ -221,22 +220,24 @@ export let Card = (
         <Tabs>
           <Entity eid={p.target} view='Card.Title' />
           {filterable.has(p.view) && <FilterInput eid={p.target} />}
-          {applicable(ent(p.target)).map((v) => (
-            <Tab
-              type='button'
-              mod={v == p.view && 'on'}
-              draggable
-              onDragStart={(e: DragEvent) => dragData(e, p.target, v, p.w)}
-              onClick={() =>
-                v != p.view &&
-                mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
-              key={v}
-              aria-label={v}
-              data-tip={v}
-            >
-              <TabFace view={v} eid={p.target} />
-            </Tab>
-          ))}
+          <ui.Tabs>
+            {applicable(ent(p.target)).map((v) => (
+              <Tab
+                type='button'
+                mod={v == p.view && 'on'}
+                draggable
+                onDragStart={(e: DragEvent) => dragData(e, p.target, v, p.w)}
+                onClick={() =>
+                  v != p.view &&
+                  mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
+                key={v}
+                aria-label={v}
+                data-tip={v}
+              >
+                <TabFace view={v} eid={p.target} />
+              </Tab>
+            ))}
+          </ui.Tabs>
           {onMinimize && (
             <Min type='button' aria-label='minimize' onClick={onMinimize}>
               −

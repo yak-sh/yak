@@ -4,7 +4,7 @@ import { assertEquals } from '@std/assert'
 import { applyLocal, cache, ent } from '../../live.ts'
 import { mount } from '../mount.ts'
 import { resolve } from '../Entity.tsx'
-import { Chip } from '../ui.tsx'
+import * as ui from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
 import { Inline, TaskInline } from './Inline.tsx'
 
@@ -38,7 +38,7 @@ Deno.test('Inline renderers say the title without the id', () => {
     assertEquals(resolve(e, 'Inline').Render, task ? TaskInline : Inline)
     let line = Inline({ e, dot: task })
     let tree = nodes(line)
-    assertEquals(tree.some((node) => node.type == Chip), false)
+    assertEquals(tree.some((node) => node.type == ui.Id), false)
     assertEquals(tree.some((node) => node.type == Dot), task)
     assertEquals(tree.some((node) => node.props.children == title), true)
   }

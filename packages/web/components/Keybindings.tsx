@@ -5,7 +5,7 @@ import { signal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { mode } from '../live.ts'
 import { webKeys } from '../keybindings.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 
 export let keybindingsOpen = signal(false)
 

@@ -44,7 +44,7 @@ export let quit = (): void => stop.fn()
 
 /**
  * Run an app until it quits. `backend` swaps the renderer (the ANSI painter by
- * default); `sheet` extends its theme; Ctrl-C quits unless a widget takes it.
+ * default); `sheet` extends the widgets' `base`; Ctrl-C quits unless a widget takes it.
  */
 export let run = async (
   App: ComponentType,

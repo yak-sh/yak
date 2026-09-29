@@ -1,6 +1,6 @@
 import { reversed } from '@yaks/edge/vocab'
 import { type Ent, vocab } from '../../types.ts'
-import { block } from '../ui.tsx'
+import { block } from '@yaks/ui'
 import { Entity } from '../Entity.tsx'
 
 let Sentence = block('span', 'Dependency', { Type: 'span' })

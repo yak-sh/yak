@@ -2,8 +2,8 @@
 // it in a list, a `Page` that shows it whole, the `Facts` its components state,
 // and a `Comment` for an entity aimed at another. Portable @yaks/render
 // renderers — they build with the caller's `h`, so a terminal prints them
-// through @yaks/text or paints them through @yaks/tui (dressed by `sheet`), and
-// a browser mounts them through @yaks/preact.
+// through @yaks/text or paints them through @yaks/tui (dressed by `sheet`, in a
+// theme's colours), and a browser mounts them through @yaks/preact.
 //
 // Inline parts are separated by a space of their own: a browser lays them out
 // with CSS and ignores it, and a terminal has nothing else to go by.
@@ -220,16 +220,18 @@ export let views: Registry = define([
 ])
 
 /** How these views dress in a terminal (@yaks/tui's painter): their own class
- * names, in the Everforest the terminal's theme wears. A page's head, title
- * and body and each section end with a blank line, where a browser has
- * margins. */
-export let sheet = {
-  Page_Head: { fg: '#7a8478', gap: true },
+ * names, in the colours of a theme (@yaks/ui `Colors`), named rather than
+ * imported: @yaks/tui builds on this package. A page's head, title and body
+ * and each section end with a blank line, where a browser has margins. */
+export let sheet = (
+  c: Record<'dim' | 'green' | 'muted', string>,
+): Record<string, { fg?: string; gap?: boolean }> => ({
+  Page_Head: { fg: c.dim, gap: true },
   Page_Title: { gap: true },
   Page_Body: { gap: true },
   Section: { gap: true },
-  Section_Title: { fg: '#a7c080' },
-  Facts_Prop: { fg: '#9da9a0' },
-  Tile_Id: { fg: '#7a8478' },
-  Comment_Head: { fg: '#7a8478' },
-}
+  Section_Title: { fg: c.green },
+  Facts_Prop: { fg: c.muted },
+  Tile_Id: { fg: c.dim },
+  Comment_Head: { fg: c.dim },
+})

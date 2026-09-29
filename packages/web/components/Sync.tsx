@@ -9,7 +9,7 @@
 // reload, never ephemeral or opaque.
 import { useEffect, useState } from 'preact/hooks'
 import { clearRefusal, outboxWrites, refused } from '../live.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 
 let Frame = block('div', 'Sync', {
   Pending: 'button',
@@ -42,7 +42,7 @@ let {
 
 // Compact elapsed time — seconds until a minute, then minutes/hours/days. The
 // indicator wants sub-minute resolution during an incident, where the shared
-// minute tick (ui.tsx) is too coarse to show a write is stuck.
+// minute tick (Stamp.tsx) is too coarse to show a write is stuck.
 let brief = (since: number, now: number) => {
   let s = Math.max(0, Math.round((now - since) / 1000))
   if (s < 60) return `${s}s`

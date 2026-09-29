@@ -160,6 +160,7 @@
     "./packages/yaml",
     "./packages/harness",
     "./packages/tui",
+    "./packages/ui",
     "./packages/context",
     "./packages/mcp-client",
     "./packages/kernel",

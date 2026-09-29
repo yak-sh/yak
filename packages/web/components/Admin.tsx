@@ -10,7 +10,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { ComponentChildren } from 'preact'
 import { comps, type Ent, idOf, kindOf, type PropType, uuid } from '../types.ts'
 import { aggValue, dropAgg, ent, holdAgg, mutate, rows } from '../live.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 import {
   adminRoute,
   censusComps,

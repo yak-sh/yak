@@ -4,7 +4,7 @@ import { scrollbar } from './scrollbar.ts'
 import { VirtualList, VirtualWindow } from './VirtualList.ts'
 import { Scroll } from './Scroll.ts'
 import { mount } from './testing.ts'
-import { theme as sheet } from './theme.ts'
+import { base as sheet } from './theme.ts'
 
 Deno.test('scrollbar has one column, three thumb rows and dims only when snapped', () => {
   for (let bottom of [false, true]) {

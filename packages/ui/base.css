@@ -1,0 +1,157 @@
+/* The document's defaults: what an element looks like before any component
+   says otherwise. Everything here is :where(), zero specificity, so any
+   component rule wins. */
+
+/* Border-box everywhere: a width is the box you see. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:where(body) {
+  margin: 0;
+  font: 14px/1.5 var(--font);
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Anchors wear the theme's blue, visited ones its purple. */
+:where(a) {
+  color: var(--blue);
+}
+:where(a):visited {
+  color: var(--purple);
+}
+
+/* Prose, wherever it lands: documents, comments and messages all speak the
+   same HTML (marked, GFM). */
+:where(p, ul, ol, pre, blockquote) {
+  margin: 0 0 var(--gap);
+}
+:where(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: var(--measure);
+}
+:where(h1, h2, h3, h4, h5, h6) {
+  margin: var(--gap) 0 var(--half-gap);
+  line-height: 1.25;
+}
+:where(h1) {
+  font-size: 1.35rem;
+}
+:where(h2) {
+  font-size: 1.2rem;
+}
+:where(h3) {
+  font-size: 1.05rem;
+}
+:where(h4, h5, h6) {
+  font-size: 1rem;
+}
+:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):first-child,
+:where(h4, h5, h6):first-child {
+  margin-top: 0;
+}
+:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):last-child,
+:where(h4, h5, h6):last-child {
+  margin-bottom: 0;
+}
+:where(code, pre, kbd) {
+  font-family: var(--mono);
+}
+:where(code) {
+  background: var(--soft);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+:where(pre code) {
+  display: block;
+  padding: var(--half-gap);
+  overflow: auto;
+}
+:where(table) {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: inherit;
+}
+:where(th, td) {
+  border: 1px solid var(--border2);
+  padding: 2px 8px;
+  text-align: left;
+}
+:where(th) {
+  background: var(--soft);
+}
+:where(blockquote) {
+  padding-left: var(--half-gap);
+  border-left: 2px solid var(--border2);
+  color: var(--muted);
+}
+
+/* Syntax, as highlight.js names it. */
+:where(.hljs-keyword, .hljs-selector-tag) {
+  color: var(--red);
+}
+:where(.hljs-literal, .hljs-number) {
+  color: var(--purple);
+}
+:where(.hljs-string, .hljs-addition) {
+  color: var(--accent);
+}
+:where(.hljs-title, .hljs-section) {
+  color: var(--blue);
+}
+:where(.hljs-section) {
+  font-weight: 700;
+}
+:where(.hljs-built_in, .hljs-type) {
+  color: var(--yellow);
+}
+:where(.hljs-attr, .hljs-variable) {
+  color: var(--orange);
+}
+:where(.hljs-comment, .hljs-meta) {
+  color: var(--dim);
+}
+:where(.hljs-comment) {
+  font-style: italic;
+}
+:where(.hljs-deletion) {
+  color: var(--red);
+}
+
+/* A textarea is as tall as what is typed in it. */
+:where(textarea) {
+  field-sizing: content;
+}
+
+/* In-place editing: the same node and the same look, plus a caret and a
+   seam around the text. */
+[contenteditable='plaintext-only'] {
+  user-select: text;
+  display: inline-block; /* one rectangle, so the outline hugs the edit */
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  caret-color: var(--accent);
+  cursor: text;
+  white-space: pre-wrap; /* a multiline source keeps its newlines */
+}
+
+/* Always-visible scrollbars: thin, square, two-tone. Setting
+   scrollbar-width or scrollbar-color would make Chrome ignore these and draw
+   its auto-hiding overlay bars instead. */
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: var(--surface);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border: 1px solid var(--bg); /* a seam of floor around the thumb */
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}

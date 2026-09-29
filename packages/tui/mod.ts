@@ -36,7 +36,7 @@ export {
   type Seg,
   wrap,
 } from './paint.ts'
-export { everforest, type Sheet, type Style, theme } from './theme.ts'
+export { base, type Sheet, type Style } from './theme.ts'
 export {
   clear,
   type Keys,

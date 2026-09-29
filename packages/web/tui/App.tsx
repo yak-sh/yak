@@ -52,6 +52,7 @@ import { Md } from './md.tsx'
 import { spawnOf } from '../components/Run.tsx'
 import { useQuery } from '../components/useQuery.ts'
 import { navigationQuery, navigationView } from '../navigation.ts'
+import { Guide } from '@yaks/ui'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -105,16 +106,25 @@ export let views = signal<Record<string, string>>({})
 // growing a terminal-only selection to paint.
 export let spots = signal<Record<string, number>>({})
 
+// The style guide (@yaks/ui Guide): every UI component in every variant, as
+// this terminal paints them, the page the web answers at /ui. `:ui` opens it,
+// j/k read it, Esc, q or h closes it. Its cursor line while open, else null.
+export let guide = signal<number | null>(null)
+
 // -1 at the board: its j/k move a cursor over the QUERY (sel), which is a
 // different thing — a query cursor can be entered, a line can only be read.
 export let spot = () =>
-  trail.value.length ? spots.value[trail.value.at(-1)!] ?? 0 : -1
+  guide.value ??
+    (trail.value.length ? spots.value[trail.value.at(-1)!] ?? 0 : -1)
 
 let jump = (to: number) => {
   let here = trail.value.at(-1)
   to = Math.max(0, to)
-  if (!here || spot() == to) return
-  spots.value = { ...spots.value, [here]: to }
+  // Unmoved is no repaint: the painter calls back here after every paint.
+  if (spot() == to) return
+  if (guide.value != null) guide.value = to
+  else if (here) spots.value = { ...spots.value, [here]: to }
+  else return
   touch() // a scroll moves no nodes; the screen changed anyway
 }
 
@@ -379,7 +389,15 @@ let bye: Command = {
     return {}
   },
 }
-let local: Record<string, Command> = { q: bye, quit: bye }
+let open: Command = {
+  args: [],
+  about: 'the style guide: every UI component in every variant',
+  run: () => {
+    guide.value = 0
+    return {}
+  },
+}
+let local: Record<string, Command> = { q: bye, quit: bye, ui: open }
 
 // :fix in the TUI is the web's spawn (Run.tsx spawnOf); no canvas here, so
 // the session is a lone graph write.
@@ -447,6 +465,12 @@ export let navigationKey = (k: string) => {
 export let key = (k: string) => {
   if (help.value) {
     if (k == '?' || k == '\x1b' || k == 'q') help.value = false
+    return
+  }
+  if (guide.value != null && mode.value == 'normal' && k != ':') {
+    if (k == 'j') jump(guide.value + 1)
+    else if (k == 'k') jump(guide.value - 1)
+    else if (k == '\x1b' || k == 'q' || k == 'h') guide.value = null
     return
   }
   if (navigationKey(k)) return
@@ -606,6 +630,8 @@ export let App = () => {
       <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
       {help.value
         ? <TKeys />
+        : guide.value != null
+        ? <Guide />
         : navigationOpen.value
         ? <TNavigation />
         : here

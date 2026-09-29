@@ -4,14 +4,14 @@ import { useRepoUrl } from '../subscriptions.ts'
 import { useState } from 'preact/hooks'
 import { type Ent, friendly, kilo, type LogRow } from '../../types.ts'
 import { backlinks, ent } from '../../live.ts'
-import { block, el } from '../ui.tsx'
+import * as ui from '@yaks/ui'
 import { Entity } from '../Entity.tsx'
 import { resolve } from '../registry.ts'
 import { Icon } from '../icons.tsx'
 import { Ansi } from '../Ansi.tsx'
 import { Markdown } from '../Markdown.tsx'
 
-let Frame = block('div', 'Entry', {
+let Frame = ui.block('div', 'Entry', {
   Lens: 'div',
   Tabs: 'div',
   Line: 'span',
@@ -33,7 +33,7 @@ let Frame = block('div', 'Entry', {
   Part: 'section',
   PartName: 'div',
 })
-let Prompt = block('details', 'Prompt', {
+let Prompt = ui.block('details', 'Prompt', {
   Gist: 'summary',
   Body: 'div',
 })
@@ -59,7 +59,7 @@ let {
   Part,
   PartName,
 } = Frame
-let Tab = el('button', 'Tab')
+let { Tab } = ui.Tabs
 
 let lines = (text = '') => text.replace(/\n$/, '').split('\n')
 let first = (text = '') => lines(text)[0]
@@ -407,18 +407,20 @@ export let EntryLens = ({ eid }: { eid: string }) => {
   return (
     <Lens>
       <Tabs>
-        {views.map((v) => (
-          <Tab
-            type='button'
-            key={v}
-            mod={v == view && 'on'}
-            aria-label={v == 'Markdown' ? 'MD' : v}
-            data-tip={v == 'Markdown' ? 'MD' : v}
-            onClick={() => setView(v)}
-          >
-            <Icon name={icon(v)} />
-          </Tab>
-        ))}
+        <ui.Tabs>
+          {views.map((v) => (
+            <Tab
+              type='button'
+              key={v}
+              mod={v == view && 'on'}
+              aria-label={v == 'Markdown' ? 'MD' : v}
+              data-tip={v == 'Markdown' ? 'MD' : v}
+              onClick={() => setView(v)}
+            >
+              <Icon name={icon(v)} />
+            </Tab>
+          ))}
+        </ui.Tabs>
       </Tabs>
       {pair.map((item) => (
         <Part key={item.eid}>

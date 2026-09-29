@@ -87,7 +87,7 @@ import { Role } from './views/Role.tsx'
 import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
 import { viaName } from './Comments.tsx'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 import { favoriteChange, favoriteLabel } from '../navigation.ts'
 
 // Convenience re-exports: Entity.tsx is the front door, registry.ts the

@@ -10,7 +10,7 @@ import {
 } from '../live.ts'
 import type { Ent } from '../types.ts'
 import { leaseEid } from '../../effects/lease.ts'
-import { block } from './ui.tsx'
+import { block } from '@yaks/ui'
 import { dragData } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { SessionDot } from './session_status.tsx'

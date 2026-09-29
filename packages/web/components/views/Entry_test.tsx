@@ -260,7 +260,9 @@ Deno.test('expanded entries offer only specifically rendered faces', () =>
     rows()
     let [, answer] = Object.keys(cache.value)
     render(h(EntryLens, { eid: answer }), root)
-    let tabs = [...root.querySelectorAll<HTMLButtonElement>('.Entry_Tabs .Tab')]
+    let tabs = [
+      ...root.querySelectorAll<HTMLButtonElement>('.Entry_Tabs .Tabs_Tab'),
+    ]
     assertEquals(tabs.map((tab) => tab.getAttribute('aria-label')), [
       'Full',
       'JSON',

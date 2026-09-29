@@ -1,6 +1,7 @@
 import { menuAt } from '../nav.tsx'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
-import { block, el, Stamp } from '../ui.tsx'
+import { block, el } from '@yaks/ui'
+import { Stamp } from '../Stamp.tsx'
 import { Id } from './Inline.tsx'
 
 // A memory in a list: index line, confirmation age, id — with `feedback`

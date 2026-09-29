@@ -3,7 +3,7 @@ import { h } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
 import { setClipboard } from '../tui/visual.ts'
 import { Markdown } from '@yaks/markdown'
-import { mount } from '../tui/testing.ts'
+import { mount } from './testing.ts'
 import { frontend } from './frontend.ts'
 import { App } from './app.ts'
 import type { UIAgent } from './panels.ts'
@@ -109,7 +109,7 @@ Deno.test('rendered Markdown tables, quotes, code and boxes keep layout while se
   const { TElement, install } = await import('../tui/dom.ts')
   const { render } = await import('preact')
   const { lay } = await import('../tui/paint.ts')
-  const { theme } = await import('../tui/theme.ts')
+  const { base } = await import('../tui/theme.ts')
   const { copyRendered } = await import('../tui/RenderedCursor.ts')
   const dom = install()
   const root = new TElement('div')
@@ -125,7 +125,7 @@ Deno.test('rendered Markdown tables, quotes, code and boxes keep layout while se
       ),
       root as unknown as Element,
     )
-    const rows = lay(root, {}, 40, null, { sheet: theme, metrics: {} })
+    const rows = lay(root, {}, 40, null, { sheet: base, metrics: {} })
     const text = copyRendered(
       {
         id: 'a',

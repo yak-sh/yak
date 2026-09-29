@@ -1,0 +1,70 @@
+/* Everforest: the custom properties every component reads. Names are the
+   promise and values are not: a theme sets these names and nothing else, and
+   every rule in the kit stays as it is. everforest.ts holds the same colours
+   for a terminal. */
+:root {
+  color-scheme: dark; /* native widgets and scrollbars match the palette */
+  --gap: 0.75rem;
+  --half-gap: calc(var(--gap) / 2);
+  --radius: 6px;
+  --tap: 0px; /* the touch-target floor; grows under a coarse pointer */
+  --measure: 90ch; /* the readable line length running prose caps at */
+
+  /* Prose reads proportional; mono is kept for what it means: ids, stamps,
+     code, command surfaces. */
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --bg: #232a2e; /* the floor */
+  --surface: #2d353b; /* panels and chrome */
+  --card: #343f44; /* a raised body */
+  --border: #3d484d;
+  --border2: #475258;
+
+  --text: #d3c6aa;
+  --muted: #9da9a0;
+  --dim: #7a8478;
+
+  --green: #a7c080;
+  --red: #e67e80;
+  --orange: #e69875;
+  --purple: #d699b6;
+  --blue: #7fbbb3;
+  --yellow: #dbbc7f;
+  --accent: var(--green); /* selection and the primary action */
+  --soft: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+/* A light system gets Everforest light (medium): the same names re-pointed
+   at the mirror palette. Borders step up to bg3/bg4, because light bg2 is
+   bg_dim and a border the colour of the floor is not one. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --bg: #efebd4;
+    --surface: #fdf6e3;
+    --card: #f4f0d9;
+    --border: #e6e2cc;
+    --border2: #e0dcc7;
+
+    --text: #5c6a72;
+    --muted: #829181;
+    --dim: #a6b0a0;
+
+    --green: #8da101;
+    --red: #f85552;
+    --orange: #f57d26;
+    --purple: #df69ba;
+    --blue: #3a94c5;
+    --yellow: #dfa000;
+  }
+}
+
+/* Fat fingers get fat targets: a control that declares the --tap floor grows
+   to it on a touch device, and only there. */
+@media (pointer: coarse) {
+  :root {
+    --tap: 2.5rem;
+  }
+}

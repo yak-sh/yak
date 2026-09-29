@@ -1,6 +1,5 @@
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
-import { mount } from '../tui/testing.ts'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
 import { frontend } from './frontend.ts'
 import { authorizedMCP } from './mcp_auth.ts'
@@ -8,7 +7,7 @@ import { signins } from './signin.ts'
 import type { UIAgent } from './panels.ts'
 import { fixture } from '../mcp-client/testing.ts'
 import { remote } from './remote.ts'
-import { at, harness, worker } from './testing.ts'
+import { at, harness, mount, worker } from './testing.ts'
 
 Deno.test('authorization UI captures pasted callback privately, preserving draft and never sending it', async () => {
   const ui = frontend()

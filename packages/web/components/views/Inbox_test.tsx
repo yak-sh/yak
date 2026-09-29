@@ -52,7 +52,7 @@ Deno.test('a knock names and opens its target', () => {
     )
     assertEquals(root.querySelector('.List > .List_Row') != null, true)
     assertEquals(
-      root.querySelector('.Dot-unread')?.getAttribute('title'),
+      root.querySelector('.Dot')?.getAttribute('title'),
       'unread',
     )
     assertEquals(root.querySelector('.List_Label')?.textContent, 'knock')

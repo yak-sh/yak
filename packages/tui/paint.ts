@@ -33,7 +33,7 @@ import type { TElement, TNode } from './dom.ts'
 import { touch, TText } from './dom.ts'
 import { table } from './table.ts'
 import { graphics } from './graphics.ts'
-import { type Sheet, type Style, theme as base } from './theme.ts'
+import { base, type Sheet, type Style } from './theme.ts'
 
 /** A run of text under one style. */
 export type Seg = {
@@ -132,6 +132,13 @@ let INLINE = new Set([
   'label',
 ])
 
+// Whether a node runs into its line: text does, and an inline tag does unless
+// its sheet says `block`.
+let runs = (n: TNode, sheet: Sheet) =>
+  n instanceof TText ||
+  (INLINE.has((n as TElement).localName) &&
+    !(n as TElement).className.split(/\s+/).some((k) => sheet[k]?.block))
+
 // `spaced` is for a tree drawn by components written for a browser, whose
 // inline siblings are kept apart by CSS gaps rather than by characters: a space
 // goes between two inline siblings unless one side brings its own, except
@@ -183,9 +190,7 @@ let flow = (
   c: Ctx,
 ): Line[] => {
   let wrapper = kids(el).length == 1 &&
-    !el.childNodes.some((n) =>
-      n instanceof TText || INLINE.has((n as TElement).localName)
-    )
+    !el.childNodes.some((n) => runs(n, c.sheet))
   let lines: Line[] = []
   let cur: Seg[] = []
   let flush = () => {
@@ -230,7 +235,7 @@ let flow = (
   let previousParagraph = false
   let spaced = c.spaced && !el.className.split(/\s+/).includes('Md_Code')
   for (let n of el.childNodes) {
-    if (n instanceof TText || INLINE.has((n as TElement).localName)) {
+    if (runs(n, c.sheet)) {
       let segs = inline(n, s, c)
       if (!segs.length) continue
       previousParagraph = false
@@ -595,16 +600,16 @@ export let screenful = (
   root: TElement,
   columns: number,
   rows: number,
-  sheet: Sheet = base,
+  sheet: Sheet = {},
 ): { lines: Line[]; metrics: Metrics } => {
-  let c: Ctx = { sheet, metrics: {} }
+  let c: Ctx = { sheet: { ...base, ...sheet }, metrics: {} }
   return { lines: lay(root, {}, columns, rows, c), metrics: c.metrics }
 }
 
 /** A tree painted once, as tall as it is, for a command that prints and exits:
  * the layout and escapes a held screen gets, folded at word boundaries to the
- * terminal's width, with no screen kept. `sheet` extends the theme, as it does
- * for {@link ansiBackend}. */
+ * terminal's width, with no screen kept. `sheet` extends {@link base}, as it
+ * does for {@link ansiBackend}. */
 export let printout = (
   root: TElement,
   columns: number,

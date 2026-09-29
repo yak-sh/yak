@@ -17,7 +17,30 @@ Deno.test('nav starts against a document missing browser-only methods', () => {
 Deno.test('nav delegates entity-link gestures wherever the host can listen', () => {
   let heard: string[] = []
   wire({ addEventListener: (t) => heard.push(t) })
-  assertEquals(heard, ['click', 'contextmenu'])
+  assertEquals(heard, ['click', 'contextmenu', 'click', 'dblclick'])
+})
+
+Deno.test('a link inside a link takes its own clicks, ahead of the one around it', () => {
+  let early: Record<string, (ev: MouseEvent) => void> = {}
+  wire({ addEventListener: (t, fn, capture) => capture && (early[t] = fn) })
+  let { document } = parseHTML(
+    '<a href="/T-1"><span data-href="/T-2"><b id="in"></b></span><i id="out"></i></a>',
+  )
+  let taken = (id: string, gesture = 'click') => {
+    let stopped = false
+    early[gesture]({
+      target: document.querySelector(`#${id}`),
+      button: 0,
+      preventDefault: () => {},
+      stopPropagation: () => (stopped = true),
+    } as unknown as MouseEvent)
+    return stopped
+  }
+  assertEquals([taken('in'), taken('out'), taken('in', 'dblclick')], [
+    true,
+    false,
+    true,
+  ])
 })
 
 Deno.test('a native entity anchor opens its target menu', () => {

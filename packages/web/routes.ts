@@ -13,12 +13,14 @@
 // `/ws` and every other plugin's route stay theirs.
 //
 // `/web/*` is what that page loads: the app bundled from main.tsx, its
-// stylesheet, icons and manifest, and the vocabulary exactly as the host
-// loaded it, so the browser and the server read one set of components.
+// stylesheet (@yaks/ui's in Everforest, then this package's own), icons and
+// manifest, and the vocabulary exactly as the host loaded it, so the browser
+// and the server read one set of components.
 
 import type { Route } from '@yaks/api'
 import { dead, type Graph } from '@yaks/graph'
 import { prefixOf } from '@yaks/id'
+import { everforest, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { bundle } from './bundle.ts'
 import { type Body, kept } from './kept.ts'
@@ -45,8 +47,12 @@ let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
 let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
 
+let styles = async () =>
+  (await Promise.all([stylesheet(everforest), text('./styles.css')()]))
+    .join('\n')
+
 let files: [string, string, () => Promise<Body>][] = [
-  ['styles.css', 'text/css; charset=utf-8', text('./styles.css')],
+  ['styles.css', 'text/css; charset=utf-8', styles],
   [
     'manifest.webmanifest',
     'application/manifest+json',

@@ -11,7 +11,7 @@ import {
 import { ent, mutate, parents } from '../../live.ts'
 import { useBacklinks } from '../useQuery.ts'
 import { up } from './Dependency.tsx'
-import { block, el } from '../ui.tsx'
+import * as ui from '@yaks/ui'
 import { Prop } from '../editors.tsx'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
@@ -37,7 +37,7 @@ let priority = propAt('filed', 'priority')!
 // dispatch lives in Debug.Tile: tasks get the status row, everything
 // else the generic one; the inspector's own head is its ListTile too.
 
-let Frame = block('div', 'Debug', {
+let Frame = ui.block('div', 'Debug', {
   Lens: 'div',
   Head: 'div',
   Props: 'div',
@@ -83,7 +83,7 @@ let {
   Linked,
   Via,
 } = Frame
-let Tab = el('button', 'Tab')
+let { Tab } = ui.Tabs
 
 // Raw file forms belong to the inspector, not every card's primary tab row.
 // They remain draggable here because the same gesture is how a browser hands
@@ -102,26 +102,28 @@ export let DebugTabs = (
       <Head>
         {head}
         <Tabs>
-          {views.map((v) => (
-            <Tab
-              key={v}
-              type='button'
-              mod={v == view && 'on'}
-              draggable={v != 'Debug'}
-              onDragStart={(ev: DragEvent) => dragData(ev, e.eid, v)}
-              onClick={() => setView(v)}
-              aria-label={v == 'Debug' ? 'Components' : v}
-              data-tip={v == 'Debug' ? 'Components' : v}
-            >
-              <Icon
-                name={v == 'Debug'
-                  ? 'bug'
-                  : v == 'Markdown'
-                  ? 'hash'
-                  : 'braces'}
-              />
-            </Tab>
-          ))}
+          <ui.Tabs>
+            {views.map((v) => (
+              <Tab
+                key={v}
+                type='button'
+                mod={v == view && 'on'}
+                draggable={v != 'Debug'}
+                onDragStart={(ev: DragEvent) => dragData(ev, e.eid, v)}
+                onClick={() => setView(v)}
+                aria-label={v == 'Debug' ? 'Components' : v}
+                data-tip={v == 'Debug' ? 'Components' : v}
+              >
+                <Icon
+                  name={v == 'Debug'
+                    ? 'bug'
+                    : v == 'Markdown'
+                    ? 'hash'
+                    : 'braces'}
+                />
+              </Tab>
+            ))}
+          </ui.Tabs>
         </Tabs>
       </Head>
       {view == 'Markdown'

@@ -9,7 +9,7 @@ import { Composer } from '../Comments.tsx'
 import { follow } from '../nav.tsx'
 import { load, providers } from '../Run.tsx'
 import { useModel } from '../subscriptions.ts'
-import { block } from '../ui.tsx'
+import { block } from '@yaks/ui'
 import { useQueryResult } from '../useQuery.ts'
 
 let Frame = block('div', 'SessionManage', {

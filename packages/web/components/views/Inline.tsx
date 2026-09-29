@@ -1,6 +1,6 @@
 import { type Ent, idOf, settled, statusOf } from '../../types.ts'
 import { crewed, gated } from '../../live.ts'
-import { block, Chip } from '../ui.tsx'
+import * as ui from '@yaks/ui'
 import { linkProps } from '../nav.tsx'
 import { Dot } from '../Dot.tsx'
 import { title } from '../title.tsx'
@@ -14,10 +14,10 @@ import { title } from '../title.tsx'
 let retired = (e: Ent) => (e.project && e.archived ? 'retired' : undefined)
 
 export let Id = ({ e }: { e: Ent }) => (
-  <Chip {...linkProps(e)} mod={retired(e)}>{idOf(e)}</Chip>
+  <ui.Id {...linkProps(e)} mod={retired(e)}>{idOf(e)}</ui.Id>
 )
 
-let Line = block('a', 'Inline', { Title: 'span' })
+let Line = ui.block('a', 'Inline', { Title: 'span' })
 let { Title } = Line
 
 // A settled task's title is struck — the sentence says whether the entity

@@ -4,7 +4,7 @@ import { ent, mode, problem, want } from '../live.ts'
 import { propAt } from '../props.ts'
 import { drop, peek, save } from './drafts.ts'
 import { markdown, markup } from './Markdown.tsx'
-import { el } from './ui.tsx'
+import { el } from '@yaks/ui'
 
 let Span = el('span', 'Edit')
 

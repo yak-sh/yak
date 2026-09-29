@@ -1,96 +1,18 @@
-/* Tasks v2 — hand-written per the product CSS DNA: three-separator names
-   (Block / Block_Element / Block-modifier), custom properties as the variant
-   mechanism, modern CSS, no build step, no Tailwind.
-   Palette + canvas vibe carried over from the harness web UI (Everforest);
-   one deliberate fix over it: scroll padding lives INSIDE the scroller, so
-   the scrollbar touches the card border and padding scrolls with content. */
+/* @yaks/web's own stylesheet: the app shell and its domain components. It
+   loads after @yaks/ui's (routes.ts), which brings the theme's custom
+   properties, the document's defaults and the UI components; everything here
+   reads the theme through var(). Three-separator names (Block /
+   Block_Element / Block-modifier), custom properties as the variant
+   mechanism, modern CSS, no build step. Scroll padding lives inside the
+   scroller, so the scrollbar touches the card border and padding scrolls
+   with content. */
 
-/* THE THEME CONTRACT (T-12778). This :root block is the stable surface a
-   theme targets — re-point a variable from ~/.tasks/theme.css (loaded after
-   this sheet) and the app re-skins with no fork of this file. The Obsidian
-   lesson: names are the promise, values are not, so a theme sets these names
-   and leaves everything below untouched — every selector past this block is
-   internals that may move. Sixty-odd names, one place; that is the whole API. */
+/* The statuses a task's text wears, as the theme's colours. */
 :root {
-  color-scheme: dark; /* native widgets/scrollbars match the palette */
-  --gap: 0.75rem;
-  --half-gap: calc(var(--gap) / 2);
-  --radius: 6px;
-  --tap: 0px; /* touch-target floor — grows under a coarse pointer */
-  --measure: 90ch; /* readable line length — running prose caps here while
-  the view itself fills the floor; tables, code and
-  images break out to the full width */
-
-  /* Prose reads proportional; mono stays where mono MEANS something —
-     ids, chips, verbs, timestamps, code, command surfaces (the keeper
-     list rides with the base rules below). */
-  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  --bg: #232a2e; /* app background */
-  --surface: #2d353b; /* panels / card chrome */
-  --card: #343f44; /* raised card body */
-  --border: #3d484d;
-  --border2: #475258;
-
-  --text: #d3c6aa; /* foreground */
-  --muted: #9da9a0;
-  --dim: #7a8478;
-
-  --green: #a7c080;
-  --red: #e67e80;
-  --orange: #e69875;
-  --purple: #d699b6;
-  --blue: #7fbbb3;
-  --yellow: #dbbc7f;
-  --accent: var(--green); /* selection / primary — the green hue, worn as a role */
-  --soft: color-mix(in srgb, var(--text) 6%, transparent);
-
-  /* status colours — dots and status text consume these */
-  /* the glyph pips (owner call, T-7416): the pip is a disc and the
-     SHAPE tells the story — ring open, half-moon wip (pulsing full
-     when a live session holds the claim), check done. Open wears
-     blue, done green; wip stays amber, cancelled stays muted. */
   --open: var(--blue);
   --wip: var(--yellow);
   --done: var(--accent);
-  --cancelled: var(--dim); /* settled, but not a success — stays muted */
-}
-
-/* A light system asks, Everforest light (medium) answers: the SAME vars
-   re-pointed at the mirror palette — every rule below stays untouched.
-   Each value sits at the dark one's position (bg_dim/bg0/bg1, grey2/
-   grey0, fg, the six accents); borders step up to bg3/bg4 because light
-   bg2 IS bg_dim — a border the same color as the floor isn't one. */
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-
-    --bg: #efebd4;
-    --surface: #fdf6e3;
-    --card: #f4f0d9;
-    --border: #e6e2cc;
-    --border2: #e0dcc7;
-
-    --text: #5c6a72;
-    --muted: #829181;
-    --dim: #a6b0a0;
-
-    --green: #8da101;
-    --red: #f85552;
-    --orange: #f57d26;
-    --purple: #df69ba;
-    --blue: #3a94c5;
-    --yellow: #dfa000;
-  }
-}
-
-/* Fat fingers get fat targets: every control that declares the --tap
-   floor grows to it on touch devices, and only there. */
-@media (pointer: coarse) {
-  :root {
-    --tap: 2.5rem;
-  }
+  --cancelled: var(--dim); /* settled, but not a success: stays muted */
 }
 
 /* Overscroll gestures (swipe-back) die ONLY while a canvas is on screen —
@@ -120,163 +42,21 @@ html {
   background: var(--surface);
 }
 
-/* Anchors default to OUR blue, visited ones OUR purple — the old web
-   courtesy, still handy and mostly neglected. :where keeps specificity
-   at zero so any component rule still wins. */
-:where(a) {
-  color: var(--blue);
-}
-:where(a):visited {
-  color: var(--purple);
-}
-
-/* Markdown bodies (marked, GFM — md.ts). These are prose defaults,
-   wherever prose lands: documents, comments, and session messages all
-   speak the same HTML. Zero specificity lets a component still override
-   a structural choice. */
-:where(p, ul, ol, pre, blockquote) {
-  margin: 0 0 var(--gap);
-}
-:where(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
-  max-width: var(--measure);
-}
-:where(h1, h2, h3, h4, h5, h6) {
-  margin: var(--gap) 0 var(--half-gap);
-  line-height: 1.25;
-}
-:where(h1) {
-  font-size: 1.35rem;
-}
-:where(h2) {
-  font-size: 1.2rem;
-}
-:where(h3) {
-  font-size: 1.05rem;
-}
-:where(h4, h5, h6) {
-  font-size: 1rem;
-}
-:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):first-child,
-:where(h4, h5, h6):first-child {
-  margin-top: 0;
-}
-:where(p, ul, ol, pre, blockquote, table, h1, h2, h3):last-child,
-:where(h4, h5, h6):last-child {
-  margin-bottom: 0;
-}
-:where(code) {
-  background: var(--soft);
-  padding: 0 3px;
-  border-radius: 3px;
-}
-:where(pre code) {
-  display: block;
-  padding: var(--half-gap);
-  overflow: auto;
-}
-:where(table) {
-  border-collapse: collapse;
-  margin: 0.5em 0;
-  font-size: inherit;
-}
-:where(th, td) {
-  border: 1px solid var(--border2);
-  padding: 2px 8px;
-  text-align: left;
-}
-:where(th) {
-  background: var(--soft);
-}
-:where(blockquote) {
-  padding-left: var(--half-gap);
-  border-left: 2px solid var(--border2);
-  color: var(--muted);
-}
-
-/* Highlight.js names syntax; the app supplies the Everforest face. */
-:where(.hljs-keyword, .hljs-selector-tag) {
-  color: var(--red);
-}
-:where(.hljs-literal, .hljs-number) {
-  color: var(--purple);
-}
-:where(.hljs-string, .hljs-addition) {
-  color: var(--accent);
-}
-:where(.hljs-title, .hljs-section) {
-  color: var(--blue);
-}
-:where(.hljs-section) {
-  font-weight: 700;
-}
-:where(.hljs-built_in, .hljs-type) {
-  color: var(--yellow);
-}
-:where(.hljs-attr, .hljs-variable) {
-  color: var(--orange);
-}
-:where(.hljs-comment, .hljs-meta) {
-  color: var(--dim);
-}
-:where(.hljs-comment) {
-  font-style: italic;
-}
-:where(.hljs-deletion) {
-  color: var(--red);
-}
-
-/* The mono keepers: ids, chips, badges, edge verbs, timestamps, code,
-   and every command/inspector/log surface. Prose everywhere else is
-   var(--font) via body. :where keeps this overridable. */
-:where(code, pre, kbd, .Id, .Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Stamp, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
+/* The mono keepers: badges, edge verbs, and every command, inspector and
+   log surface. Prose everywhere else is var(--font) via body. :where keeps
+   this overridable. */
+:where(.Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Comments_When, .Comments_Who, .Comments_Via, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Box input, .Search_Id, .Debug, .Debug_Claim, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
   font-family: var(--mono);
 }
 
 :where(body) {
-  margin: 0;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  font: 14px/1.5 var(--font);
   /* Surface, not --bg: the phone's notch band takes its color from BODY
      (observed on-device; the html background never shows there). The app's
      dark floor lives on .App instead — same pixels everywhere else. */
   background: var(--surface);
-  color: var(--text);
-}
-
-/* Border-box everywhere: a width IS the box you see. (Pin geometry was
-   the long holdout — the owner accepted the one-time card shrink.) */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-/* Every textarea sizes itself to what's typed — no manual rows, no
-   resize grip needed. */
-:where(textarea) {
-  field-sizing: content;
-}
-
-/* Retro always-visible scrollbars — thin, square, 2-tone (the harness
-   look). NO scrollbar-width/scrollbar-color: setting those makes Chrome
-   ignore the ::-webkit-scrollbar styling below and paint its auto-hide
-   overlay bars instead — the opposite of retro. */
-*::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-*::-webkit-scrollbar-track,
-*::-webkit-scrollbar-corner {
-  background: var(--surface);
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--border2);
-  border: 1px solid var(--bg); /* a seam of floor around the thumb */
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
 }
 
 .App {
@@ -477,40 +257,6 @@ html {
   padding: 1px 5px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-}
-
-/* The link context menu: "open here" is the deliberate root change. */
-.Menu {
-  position: fixed;
-  z-index: 200;
-  display: grid;
-  min-width: 10rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
-  overflow: hidden;
-}
-.Menu_Item {
-  font: inherit;
-  text-align: left;
-  color: var(--text);
-  background: none;
-  border: 0;
-  padding: var(--half-gap) var(--gap);
-  cursor: pointer;
-  min-height: var(--tap);
-  display: flex;
-  align-items: center;
-}
-.Menu_Item:hover {
-  background: var(--soft);
-}
-.Menu_Item-first {
-  border-top: 1px solid var(--border); /* navigation above, verbs below */
-}
-.Menu_Item-danger {
-  color: var(--red);
 }
 
 /* A canvas as a list — the mobile door into the graph. */
@@ -869,51 +615,6 @@ html {
   color: var(--red);
 }
 
-/* View tabs read as CONTROLS, the title as TEXT: icon chips, gapless
-   (their padding is the spacing; the title's flex gap separates the two
-   clusters), the active one lit. The view NAME rides the house data-tip
-   tooltip below. */
-.Tab {
-  color: var(--dim);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: calc(var(--radius) - 2px);
-  padding: 3px 4px;
-  cursor: pointer;
-  min-width: var(--tap);
-  min-height: var(--tap);
-  display: grid;
-  place-items: center; /* the glyph stays centered as the floor grows */
-  position: relative; /* the badge hangs off the corner */
-}
-/* What is waiting behind a tab, without opening it. Out of flow, so the
-   glyph stays centered whether or not there is a count. */
-.Tab_Badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  min-width: 1.1em;
-  padding: 0 0.25em;
-  border-radius: 1em;
-  background: var(--accent);
-  color: var(--bg);
-  font-size: 0.65em;
-  line-height: 1.5;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-  pointer-events: none; /* the whole tab stays one click target */
-}
-.Tab + .Tab {
-  margin-left: calc(-1 * var(--gap)); /* cancel the row gap — gapless chips */
-}
-.Tab:hover {
-  color: var(--muted); /* hover speaks through the glyph alone — no fill */
-}
-.Tab-on {
-  color: var(--text);
-  background: var(--soft);
-  border-color: var(--border2);
-}
 .Icon {
   display: block;
 }
@@ -930,22 +631,9 @@ html {
   left: 0;
   z-index: 200;
 }
-/* The house tooltip: one portaled node (overlay.tsx delegates [data-tip]),
-   not a ::before per host that the overflow ancestors used to clip. */
-.Tip {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 200;
-  white-space: nowrap;
-  font: 11px var(--mono);
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: calc(var(--radius) - 2px);
-  padding: 1px 6px;
-  pointer-events: none;
-}
+/* The house tooltip is @yaks/ui's Tip, floated as an Overlay: one portaled
+   node (overlay.tsx delegates [data-tip]), not a ::before per host that the
+   overflow ancestors used to clip. */
 
 /* The comment rail — quiet, left-ruled, under any entity's view. The
    textarea is the rail's last row: borderless until it's spoken to. */
@@ -1528,26 +1216,6 @@ html {
 .Show_Heading + .Show_Meta {
   margin-top: var(--half-gap);
 }
-/* The universal id chip (T-7, P-2, …) — a real link now: never wraps,
-   underlines only on hover, keeps its dim voice. */
-.Id {
-  white-space: nowrap;
-  font-size: 11px;
-  color: var(--dim);
-  text-decoration: none;
-}
-.Id:hover {
-  text-decoration: underline;
-  color: var(--muted);
-}
-/* a retired project's chip: present, struck, half there */
-.Id-retired {
-  text-decoration: line-through;
-  opacity: 0.55;
-}
-.Id-retired:hover {
-  text-decoration: line-through underline;
-}
 .Show_Meta .Id {
   margin-left: auto; /* the id keeps the row's right edge, as in a titlebar */
 }
@@ -1574,7 +1242,7 @@ html {
 }
 .Inline:hover .Inline_Title {
   text-decoration: underline;
-  color: var(--fg);
+  color: var(--text);
 }
 /* a settled task no longer binds: struck, Show_Done's fade */
 .Inline_Title-settled {
@@ -2042,161 +1710,6 @@ html {
 }
 .Show_AcceptanceBody:empty {
   min-height: 1lh;
-}
-/* In-place editing (double-click a title): the same node, the same look —
-   editing adds only a caret and a seam under the text. */
-[contenteditable='plaintext-only'] {
-  user-select: text; /* .Card_Tabs turns selection off; editing needs it back */
-  display: inline-block; /* one rectangle — the outline hugs the whole edit */
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
-  caret-color: var(--accent);
-  cursor: text;
-  white-space: pre-wrap; /* multiline sources keep their newlines */
-}
-
-.Dot {
-  --dot: var(--dim);
-  display: inline-block;
-  position: relative;
-  flex: none;
-  width: 0.72em; /* em on purpose: the pip rides its line's font */
-  height: 0.72em;
-  border-radius: 50%;
-  border: max(1px, 0.09em) solid var(--dot);
-  background: var(--dot);
-}
-/* the glyphs are pseudo-elements drawn in bg ink — they read as cutouts */
-.Dot::before,
-.Dot::after {
-  position: absolute;
-}
-.Dot-open {
-  --dot: var(--open);
-  background: transparent;
-}
-.Dot-unread {
-  --dot: var(--accent);
-}
-.Dot-wip,
-.Dot-idle,
-.Dot-settled,
-.Dot-pending {
-  --dot: var(--wip);
-  background: linear-gradient(90deg, var(--dot) 50%, transparent 0);
-}
-/* a live hand on it — the claim's session is awake (or the run is
-   going): the pip fills and breathes instead of sitting half */
-.Dot-wip.Dot-live,
-.Dot-running {
-  background: var(--dot);
-  animation: DotPulse 2.2s ease-out infinite;
-}
-@keyframes DotPulse {
-  from {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot) 55%, transparent);
-  }
-  to {
-    box-shadow: 0 0 0 0.45em color-mix(in srgb, var(--dot) 0%, transparent);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .Dot {
-    animation: none; /* the full disc still says live; only the breath goes */
-  }
-}
-.Dot-done {
-  --dot: var(--done);
-}
-.Dot-done::after,
-.Dot-completed::after {
-  content: '';
-  left: 50%;
-  top: 50%;
-  width: 0.3em;
-  height: 0.16em;
-  border-left: 0.09em solid var(--bg);
-  border-bottom: 0.09em solid var(--bg);
-  transform: translate(-50%, -65%) rotate(-45deg);
-}
-.Dot-cancelled {
-  --dot: var(--cancelled);
-}
-.Dot-cancelled::before,
-.Dot-cancelled::after,
-.Dot-failed::before,
-.Dot-failed::after,
-.Dot-interrupted::before,
-.Dot-interrupted::after,
-.Dot-stopped::before,
-.Dot-stopped::after {
-  content: '';
-  left: 50%;
-  top: 50%;
-  width: 0.09em;
-  height: 0.38em;
-  border-radius: 0.04em;
-  background: var(--bg);
-}
-.Dot-cancelled::before,
-.Dot-failed::before,
-.Dot-interrupted::before,
-.Dot-stopped::before {
-  transform: translate(-50%, -50%) rotate(45deg);
-}
-.Dot-cancelled::after,
-.Dot-failed::after,
-.Dot-interrupted::after,
-.Dot-stopped::after {
-  transform: translate(-50%, -50%) rotate(-45deg);
-}
-.Dot-gated {
-  --dot: var(--red); /* the blocked facet: stuck on an external reason, not in status (D-17094) */
-}
-.Dot-gated::before {
-  content: '';
-  left: 50%;
-  top: 0.1em;
-  width: 0.09em;
-  height: 0.24em;
-  border-radius: 0.04em;
-  translate: -50%;
-  background: var(--bg);
-}
-.Dot-gated::after {
-  content: '';
-  left: 50%;
-  bottom: 0.08em;
-  width: 0.1em;
-  height: 0.1em;
-  border-radius: 50%;
-  translate: -50%;
-  background: var(--bg);
-}
-
-/* A session's lifecycle wears the same pip: a ring while starting, the
-   live pulse while going, a glyph for how it ended — check, ✕ in a
-   fault colour, a dashed ring for lost. An external session has no
-   lifecycle to wear: while its door is open it borrows `running`
-   (types.ts `standing`), and once it shuts it keeps the full dim
-   default. */
-.Dot-running {
-  --dot: var(--wip);
-}
-.Dot-completed {
-  --dot: var(--done);
-}
-.Dot-failed {
-  --dot: var(--red);
-}
-.Dot-interrupted,
-.Dot-stopped {
-  --dot: var(--orange);
-}
-.Dot-lost {
-  --dot: var(--purple);
-  background: transparent;
-  border-style: dashed;
 }
 
 /* The search palette: `/` in normal mode. A fixed veil (click to
@@ -3986,14 +3499,17 @@ a[data-ref]:hover {
 .Prop_Query > .Prop_Find {
   flex: 1;
 }
-/* inline editors: the value's own metrics, a dashed seam saying 'live' */
-.Prop_Num,
-/* An entity's age line — dim, small, out of the way. */ .Stamp {
-  color: var(--dim);
-  font-size: 11px;
-  display: inline-flex;
-  gap: var(--half-gap);
-  white-space: nowrap;
+/* the number editor: the value's own metrics, a dashed seam saying 'live' */
+.Prop_Num {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+  border-bottom: 1px dashed var(--accent);
+  padding: 0;
+  min-width: 0;
+  width: 10ch;
 }
 
 /* The tray: live sessions and minimized Shelf cards sit in the bar. A live
@@ -4185,7 +3701,7 @@ a[data-ref]:hover {
   max-height: none;
 }
 /* A titlebar like a card's: the title flexes, the view tabs cluster
-   right (the shared .Tab chips assume the --gap row), and the whole
+   right (a gapless @yaks/ui Tabs row), and the whole
    head moves the temporary card. The chips keep drag-to-pin. */
 .Peek_Head {
   display: flex;
@@ -4573,7 +4089,7 @@ a[data-ref]:hover {
   cursor: pointer;
 }
 .Layout_Act:hover {
-  color: var(--fg);
+  color: var(--text);
 }
 .Layout_Fill {
   display: grid;
@@ -4589,7 +4105,7 @@ a[data-ref]:hover {
 .Layout_Row {
   border: none;
   background: none;
-  color: var(--fg);
+  color: var(--text);
   font-size: 12px;
   cursor: pointer;
 }

@@ -3,10 +3,9 @@ import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/preact'
 import { words } from '@yaks/cli/host'
-import { at } from './testing.ts'
+import { at, mount } from './testing.ts'
 import type { Bundle, Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { mount } from '../tui/testing.ts'
 import { transcriptViews } from './transcript.ts'
 
 let { vocab } = await words(at())

@@ -147,7 +147,7 @@ export let tips = () => {
   g.__tips = true
 
   let tip = document.createElement('div')
-  tip.className = 'Tip'
+  tip.className = 'Overlay Tip' // floated like any overlay, dressed as a Tip
   let host: Element | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 

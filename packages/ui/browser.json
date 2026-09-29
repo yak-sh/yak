@@ -1,0 +1,19 @@
+{
+  "_": "The browser gate: @yaks/ui's front door, the components web's page imports, must type-check with only the web platform in scope. `./routes` runs on the host and is not part of it.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "entries": [
+    "."
+  ],
+  "imports": {
+    "@yaks/tui/theme": "../tui/theme.ts",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks"
+  }
+}

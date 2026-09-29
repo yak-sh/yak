@@ -5,7 +5,7 @@ import { type ComponentChildren, type VNode } from 'preact'
 import { assertEquals } from '@std/assert'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
-import { Stamp } from '../ui.tsx'
+import { Stamp } from '../Stamp.tsx'
 import { Id } from './Inline.tsx'
 import { MemoryTile } from './Memory.tsx'
 

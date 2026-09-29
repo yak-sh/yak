@@ -5,7 +5,9 @@ import { slotsOf } from '../verb.ts'
 import { ent, mutate, pending, uuid } from '../live.ts'
 import { useCommentsOn, useCommitsOn } from './useQuery.ts'
 import { subject } from '../client.ts'
-import { ago, block, pretty } from './ui.tsx'
+import { block } from '@yaks/ui'
+import { ago } from './Stamp.tsx'
+import { pretty } from '../time.ts'
 import { useDraft } from './drafts.ts'
 import {
   type Change,

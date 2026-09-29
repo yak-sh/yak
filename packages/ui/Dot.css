@@ -1,0 +1,116 @@
+/* A pip: a disc whose shape says a state and whose tone colours it. Shape
+   and tone are separate variants, so a state is at most one of each. The
+   glyphs are pseudo-elements drawn in floor ink, so they read as cutouts. */
+.Dot {
+  --dot: var(--dim);
+  display: inline-block;
+  position: relative;
+  flex: none;
+  width: 0.72em; /* em: the pip rides its line's font */
+  height: 0.72em;
+  border-radius: 50%;
+  border: max(1px, 0.09em) solid var(--dot);
+  background: var(--dot);
+}
+.Dot::before,
+.Dot::after {
+  position: absolute;
+}
+
+/* The shapes. */
+.Dot-ring {
+  background: transparent;
+}
+.Dot-dashed {
+  background: transparent;
+  border-style: dashed;
+}
+.Dot-half {
+  background: linear-gradient(90deg, var(--dot) 50%, transparent 0);
+}
+/* Something happening right now: the full disc breathes. */
+.Dot-pulse {
+  animation: DotPulse 2.2s ease-out infinite;
+}
+@keyframes DotPulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dot) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 0.45em color-mix(in srgb, var(--dot) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Dot {
+    animation: none; /* the full disc still says it; only the breath goes */
+  }
+}
+.Dot-check::after {
+  content: '';
+  left: 50%;
+  top: 50%;
+  width: 0.3em;
+  height: 0.16em;
+  border-left: 0.09em solid var(--bg);
+  border-bottom: 0.09em solid var(--bg);
+  transform: translate(-50%, -65%) rotate(-45deg);
+}
+.Dot-cross::before,
+.Dot-cross::after {
+  content: '';
+  left: 50%;
+  top: 50%;
+  width: 0.09em;
+  height: 0.38em;
+  border-radius: 0.04em;
+  background: var(--bg);
+}
+.Dot-cross::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.Dot-cross::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+.Dot-alert::before {
+  content: '';
+  left: 50%;
+  top: 0.1em;
+  width: 0.09em;
+  height: 0.24em;
+  border-radius: 0.04em;
+  translate: -50%;
+  background: var(--bg);
+}
+.Dot-alert::after {
+  content: '';
+  left: 50%;
+  bottom: 0.08em;
+  width: 0.1em;
+  height: 0.1em;
+  border-radius: 50%;
+  translate: -50%;
+  background: var(--bg);
+}
+
+/* The tones. */
+.Dot-info {
+  --dot: var(--blue);
+}
+.Dot-active {
+  --dot: var(--yellow);
+}
+.Dot-positive {
+  --dot: var(--green);
+}
+.Dot-negative {
+  --dot: var(--red);
+}
+.Dot-caution {
+  --dot: var(--orange);
+}
+.Dot-accent {
+  --dot: var(--accent);
+}
+.Dot-special {
+  --dot: var(--purple);
+}

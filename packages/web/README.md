@@ -29,13 +29,14 @@ A graph with no canvas yet makes its first when `/` is opened.
 
 The routes facet (`@yaks/web/routes`, routes.ts) answers:
 
-| path                                                  | serves                                    |
-| ----------------------------------------------------- | ----------------------------------------- |
-| `/`, `/admin`, `/admin/*`                             | the page (index.html)                     |
-| `/<letter>-*`, `/<letter>%23*`, `/%23*`               | the page, for each id letter in use       |
-| `/web/app.js`                                         | main.tsx, built by `deno bundle` at start |
-| `/web/styles.css`, `/web/manifest.webmanifest`, icons | the files beside it                       |
-| `/web/vocab.json`                                     | the host's vocabulary documents           |
+| path                                    | serves                                    |
+| --------------------------------------- | ----------------------------------------- |
+| `/`, `/admin`, `/admin/*`               | the page (index.html)                     |
+| `/<letter>-*`, `/<letter>%23*`, `/%23*` | the page, for each id letter in use       |
+| `/web/app.js`                           | main.tsx, built by `deno bundle` at start |
+| `/web/styles.css`                       | @yaks/ui's stylesheet, then styles.css    |
+| `/web/manifest.webmanifest`, icons      | the files beside it                       |
+| `/web/vocab.json`                       | the host's vocabulary documents           |
 
 Any other one-segment path is a name an id may be written as (`/lemon-cake`):
 the page when it names an entity, and the page answered 404 when it names

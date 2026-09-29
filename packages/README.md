@@ -135,6 +135,11 @@ grouped approximately by function, **not** by dependency order.
   swappable backend (a diffing ANSI painter today), and the three widgets a
   console app is made of — a scrolling transcript, a multi-line input box, and a
   frame with a sidebar of pluggable panels.
+- **[@yaks/ui](./ui)** — the UI components: display-only parts with semantic
+  variants (`Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`) built with `el` and
+  `block`, each a Preact component, a CSS file and terminal sheet entries, so it
+  paints in a browser and in @yaks/tui alike. Themes (Everforest first), and the
+  style guide at `/ui`.
 - **[@yaks/ram](./ram)** — Implement graph storage with a synchronous in-memory
   `Map` and @yaks/match queries, suitable for browsers and tests. Shared
   operations are tested against SQLite, but RAM does not support every SQL query

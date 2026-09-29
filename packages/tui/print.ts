@@ -21,7 +21,7 @@ import { install } from './dom.ts'
 import { printout } from './paint.ts'
 import type { Sheet } from './theme.ts'
 
-/** The text a terminal prints for `node`; `sheet` extends the theme. */
+/** The text a terminal prints for `node`; `sheet` extends the widgets' `base`. */
 export let print = (
   node: ComponentChild,
   columns: number,

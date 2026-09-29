@@ -1,11 +1,12 @@
 // Paint the fake DOM to the terminal as a window of lines around the app's
-// cursor. @yaks/tui lays the tree out and speaks ANSI; what is the board's own
-// is its class sheet — the TUI's chrome, and the same BEM names the web
-// styles, wearing the same Everforest in truecolor — the window that follows
-// the cursor, and the statusbar: the tree's last line, pinned to the bottom
-// row.
+// cursor. @yaks/tui lays the tree out and speaks ANSI; the class sheet is
+// @yaks/ui's components in Everforest, then the board's own: the TUI's chrome,
+// and the domain views' parts under the same BEM names the web styles. Then
+// the window that follows the cursor, and the statusbar: the tree's last
+// line, pinned to the bottom row.
 import {
   ansi,
+  base,
   clip,
   clipboard as osc52,
   lay,
@@ -13,97 +14,77 @@ import {
   type Sheet,
   type TElement,
 } from '@yaks/tui'
+import { type Colors, everforest, sheet as dress } from '@yaks/ui'
 
-export let sheet: Sheet = {
+// The board's own classes, in the theme's colours.
+let own = (c: Colors): Sheet => ({
   // TUI-only chrome
   TTitle: { bold: true, gap: true },
   TCol: { gap: true },
-  TCol_Name: { fg: '#7a8478', bold: true },
+  TCol_Name: { fg: c.dim, bold: true },
   TRow: { indent: 2 },
   'TRow-on': { inverse: true },
   TDetail: { gap: true },
-  TStatus_Mode: { fg: '#7a8478', bold: true },
-  'TStatus_Mode-insert': { fg: '#dbbc7f' },
-  'TStatus_Mode-visual': { fg: '#d699b6' },
-  TStatus_Verb: { fg: '#a7c080' },
-  TStatus_Msg: { fg: '#9da9a0' },
-  TStatus_Hint: { fg: '#7a8478' },
+  TStatus_Mode: { fg: c.dim, bold: true },
+  'TStatus_Mode-insert': { fg: c.yellow },
+  'TStatus_Mode-visual': { fg: c.purple },
+  TStatus_Verb: { fg: c.green },
+  TStatus_Msg: { fg: c.muted },
+  TStatus_Hint: { fg: c.dim },
   TKeys_Title: { bold: true, gap: true },
-  TKeys_Key: { fg: '#dbbc7f' },
-  TKeys_Hint: { fg: '#7a8478', dim: true },
+  TKeys_Key: { fg: c.yellow },
+  TKeys_Hint: { fg: c.dim, dim: true },
 
-  // shared views, styled by the same class names the web uses. The web's
-  // glyph pips speak character here: ring open, half-moon wip — a full
-  // disc when a live hand is on it (Dot-live) — ✓ done, ✕ cancelled,
-  // ! blocked.
-  Dot: { glyph: '●', fg: '#7a8478' },
-  'Dot-open': { glyph: '○', fg: '#7fbbb3' },
-  'Dot-wip': { glyph: '◐', fg: '#dbbc7f' },
-  'Dot-live': { glyph: '●' },
-  'Dot-done': { glyph: '✓', fg: '#a7c080' },
-  'Dot-cancelled': { glyph: '✕', fg: '#7a8478' },
-  'Dot-gated': { glyph: '!', fg: '#e67e80', bold: true }, // the blocked facet: stuck on an external reason (D-17094)
-  Id: { fg: '#7a8478' },
-  'Id-retired': { fg: '#7a8478', dim: true, strike: true },
-  MemoryType: { fg: '#a7c080' },
-  Stamp: { fg: '#7a8478', dim: true },
+  // the domain views, under the class names the web styles
+  MemoryType: { fg: c.green },
   Task_Title: { bold: true },
-  Task_Body: { fg: '#9da9a0' },
-  Task_Claim: { fg: '#d699b6' },
-  Debug_Claim: { fg: '#d699b6' },
-  Comments_Who: { fg: '#7fbbb3' },
-  'Comments_Verdict-approved': { fg: '#a7c080' },
-  'Comments_Verdict-rejected': { fg: '#e67e80' },
-  'Comments_Verdict-changes-requested': { fg: '#dbbc7f' },
-  Task_Prio: { fg: '#7a8478' },
-  Debug_Prio: { fg: '#7a8478' },
-  Dependency: { fg: '#9da9a0' },
-  'Dependency_Type-requires': { fg: '#e67e80' },
-  'Dependency_Type-reads': { fg: '#7fbbb3' },
-  'Dependency_Type-contains': { fg: '#dbbc7f' },
+  Task_Body: { fg: c.muted },
+  Task_Claim: { fg: c.purple },
+  Debug_Claim: { fg: c.purple },
+  Comments_Who: { fg: c.blue },
+  'Comments_Verdict-approved': { fg: c.green },
+  'Comments_Verdict-rejected': { fg: c.red },
+  'Comments_Verdict-changes-requested': { fg: c.yellow },
+  Task_Prio: { fg: c.dim },
+  Debug_Prio: { fg: c.dim },
+  Dependency: { fg: c.muted },
+  'Dependency_Type-requires': { fg: c.red },
+  'Dependency_Type-reads': { fg: c.blue },
+  'Dependency_Type-contains': { fg: c.yellow },
   'Inline_Title-settled': { strike: true },
-  Debug_Kind: { fg: '#7a8478' },
-  'Debug_Comp-0': { fg: '#7fbbb3' },
-  'Debug_Comp-1': { fg: '#dbbc7f' },
-  'Debug_Comp-2': { fg: '#d699b6' },
-  'Debug_Comp-3': { fg: '#a7c080' },
-  'Debug_Comp-4': { fg: '#e69875' },
-  'Debug_Comp-5': { fg: '#e67e80' },
-  Debug_Key: { fg: '#7a8478' },
-  'Debug_Val-num': { fg: '#d699b6' },
-  'Debug_Val-id': { fg: '#7a8478' },
-  'Debug_Status-open': { fg: '#7fbbb3' },
-  'Debug_Status-wip': { fg: '#dbbc7f' },
-  'Debug_Status-done': { fg: '#a7c080' },
-  'Debug_Status-cancelled': { fg: '#7a8478' },
+  Debug_Kind: { fg: c.dim },
+  'Debug_Comp-0': { fg: c.blue },
+  'Debug_Comp-1': { fg: c.yellow },
+  'Debug_Comp-2': { fg: c.purple },
+  'Debug_Comp-3': { fg: c.green },
+  'Debug_Comp-4': { fg: c.orange },
+  'Debug_Comp-5': { fg: c.red },
+  Debug_Key: { fg: c.dim },
+  'Debug_Val-num': { fg: c.purple },
+  'Debug_Val-id': { fg: c.dim },
+  'Debug_Status-open': { fg: c.blue },
+  'Debug_Status-wip': { fg: c.yellow },
+  'Debug_Status-done': { fg: c.green },
+  'Debug_Status-cancelled': { fg: c.dim },
   Debug_Kids: { indent: 2 },
-  Debug_More: { fg: '#7a8478' },
+  Debug_More: { fg: c.dim },
 
   // markdown (the TUI Md renderer's spans)
   Md_B: { bold: true },
   Md_I: { italic: true },
   Md_S: { strike: true },
-  Md_Code: { fg: '#e69875' },
-  Md_A: { fg: '#7fbbb3', underline: true },
-  Md_Ref: { fg: '#7fbbb3', bold: true },
-  Md_H: { bold: true, fg: '#a7c080' },
-  Md_Q: { fg: '#9da9a0', italic: true },
-  Md_Fence: { fg: '#7a8478' },
-  'hljs-keyword': { fg: '#e67e80' },
-  'hljs-selector-tag': { fg: '#e67e80' },
-  'hljs-literal': { fg: '#d699b6' },
-  'hljs-number': { fg: '#d699b6' },
-  'hljs-string': { fg: '#a7c080' },
-  'hljs-title': { fg: '#7fbbb3' },
-  'hljs-section': { fg: '#7fbbb3', bold: true },
-  'hljs-built_in': { fg: '#dbbc7f' },
-  'hljs-type': { fg: '#dbbc7f' },
-  'hljs-attr': { fg: '#e69875' },
-  'hljs-variable': { fg: '#e69875' },
-  'hljs-comment': { fg: '#7a8478', italic: true },
-  'hljs-meta': { fg: '#7a8478' },
-  'hljs-addition': { fg: '#a7c080' },
-  'hljs-deletion': { fg: '#e67e80' },
+  Md_Code: { fg: c.orange },
+  Md_A: { fg: c.blue, underline: true },
+  Md_Ref: { fg: c.blue, bold: true },
+  Md_H: { bold: true, fg: c.green },
+  Md_Q: { fg: c.muted, italic: true },
+  Md_Fence: { fg: c.dim },
+})
+
+export let sheet: Sheet = {
+  ...base,
+  ...dress(everforest),
+  ...own(everforest.colors),
 }
 
 // The lines a tree makes, minus the statusbar the app pins to the bottom row.
