@@ -42,7 +42,6 @@ export let remote = async (
     hold?: number
     instructions?: string
     fake?: boolean | 'stuck' | 'held' | {
-      delayMs?: number
       deltas?: number
       held?: boolean
     }

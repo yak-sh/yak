@@ -77,7 +77,6 @@ let serve = (port: MessagePort) => {
         hold?: number
         instructions?: string
         fake?: boolean | 'stuck' | 'held' | {
-          delayMs?: number
           deltas?: number
           held?: boolean
         }
@@ -118,12 +117,6 @@ let serve = (port: MessagePort) => {
                 options.fake == 'held' ||
                 (typeof options.fake == 'object' && options.fake.held)
               ) await released.promise
-              if (typeof options.fake == 'object') {
-                let delay = options.fake.delayMs
-                if (delay) {
-                  await new Promise((resolve) => setTimeout(resolve, delay))
-                }
-              }
               return {
                 id: 'test',
                 model: 'fake',

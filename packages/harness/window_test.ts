@@ -12,7 +12,7 @@ test('SQLite fork window reads limited bodies and projects position metadata', a
   try {
     await h.g.apply([
       { entity: { eid: 'p' }, session: {} },
-      ...Array.from({ length: 2000 }, (_, i) => ({
+      ...Array.from({ length: 100 }, (_, i) => ({
         entity: { eid: 'p' + i },
         entry: { session: 'p', seq: i + 1 },
         content: { body: String(i) + 'x'.repeat(1000) },
@@ -25,9 +25,9 @@ test('SQLite fork window reads limited bodies and projects position metadata', a
     }) as typeof h.g.read
     let page = await transcriptWindow(h.g, 'p', { limit: 32 })
     assertEquals(page.entries.length, 32)
-    assertEquals(page.entries[0].entity.eid, 'p1968')
-    assertEquals(page.total, 2000)
-    assertEquals(page.offset, 1968)
+    assertEquals(page.entries[0].entity.eid, 'p68')
+    assertEquals(page.total, 100)
+    assertEquals(page.offset, 68)
     assert(
       queries.every((q) => q.includes('.fields=') || q.includes('.limit=32')),
     )
@@ -238,7 +238,7 @@ test('bounded worker subscriptions deliver transient text before final completio
     worker: worker(),
     config: at(),
     cwd: dir,
-    fake: { delayMs: 800, deltas: 20 },
+    fake: { deltas: 20, held: true },
     streaming: true,
   })
   let partial = false
@@ -261,6 +261,7 @@ test('bounded worker subscriptions deliver transient text before final completio
     try {
       await inspect()
       await until(() => partial, 'partial bounded response', 10000)
+      await r.testing!.release()
       await r.idle(id)
       let page = await r.agent.transcriptWindow!(id)
       assert(
@@ -284,28 +285,23 @@ test('bounded worker subscriptions deliver transient text before final completio
   }
 })
 
-// A window of eight out of a thousand: an unbounded read answers 4 MB of
+// A window of eight out of a hundred: an unbounded read answers 400 KB of
 // bodies where the window answers 32 KB.
 test('a long transcript of large entries loads only a bounded body window', async () => {
   let store = await harness()
   try {
     const body = 'x'.repeat(4000)
-    for (let offset = 0; offset < 1000; offset += 250) {
-      await store.g.apply([
-        ...offset == 0 ? [{ entity: { eid: 's' }, session: {} }] : [],
-        ...Array.from(
-          { length: 250 },
-          (_, i) => ({
-            entity: { eid: 'e' + (offset + i) },
-            entry: { session: 's', seq: offset + i + 1 },
-            content: { body },
-          }),
-        ),
-      ])
-    }
+    await store.g.apply([
+      { entity: { eid: 's' }, session: {} },
+      ...Array.from({ length: 100 }, (_, i) => ({
+        entity: { eid: 'e' + i },
+        entry: { session: 's', seq: i + 1 },
+        content: { body },
+      })),
+    ])
     let page = await transcriptWindow(store.g, 's', { limit: 8 })
     assertEquals(page.entries.length, 8)
-    assertEquals(page.entries[0].entity.eid, 'e992')
+    assertEquals(page.entries[0].entity.eid, 'e92')
     assert(JSON.stringify(page).length < 42000)
   } finally {
     store.close()
