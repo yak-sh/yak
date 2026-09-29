@@ -166,27 +166,39 @@ let stampish = (c: string, s: Frag): Frag => ({
   params: [LO, HI, ...s.params],
 })
 
-// Any of several predicates. Equalities of one expression are one set lookup,
-// which reads the expression once where `or` reads it once per value. The set
-// rides as one bind, however many values the caller named.
 let among = (c: string, vals: (string | number)[]): Frag => ({
   sql: `${c} in (select value from json_each(?))`,
   params: [JSON.stringify(vals)],
 })
 
+// The expression an equality tests and the one scalar it binds, or null for
+// any other predicate.
+let equality = (p: Frag): { c: string; v: string | number } | null => {
+  let c = p.sql.match(/^(.*) = \?$/s)?.[1]
+  let [v] = p.params
+  return c && p.params.length == 1 &&
+      (typeof v == 'string' || typeof v == 'number')
+    ? { c, v }
+    : null
+}
+
+// Any of several predicates. Equalities of one expression are one set lookup,
+// which reads the expression once where `or` reads it once per value. The set
+// rides as one bind however many values the caller named, beside whatever else
+// the list holds (a value the column cannot hold is a constant false): a host
+// caps the binds one statement takes, and a list is as long as its caller
+// made it.
 let anyOf = (parts: Frag[]): Frag => {
-  let same = parts.every((p) => p.sql == parts[0].sql && p.params.length == 1)
-  let params = parts.flatMap((p) => p.params)
-  let vals = params.filter((p): p is string | number =>
-    typeof p == 'string' || typeof p == 'number'
-  )
-  let lhs = same && vals.length == parts.length &&
-    parts[0].sql.match(/^(.*) = \?$/s)?.[1]
-  return parts.length == 1
-    ? parts[0]
-    : lhs
-    ? among(lhs, vals)
-    : { sql: nest(parts.map((p) => p.sql), ' or '), params }
+  let hits = parts.map(equality)
+  let sets = Map.groupBy(hits.filter((h) => h != null), (h) => h.c)
+  let arms = [
+    ...[...sets].map(([c, hs]) => among(c, hs.map((h) => h.v))),
+    ...parts.filter((_, i) => !hits[i]),
+  ]
+  return parts.length == 1 ? parts[0] : arms.length == 1 ? arms[0] : {
+    sql: nest(arms.map((a) => a.sql), ' or '),
+    params: arms.flatMap((a) => a.params),
+  }
 }
 
 // A numeric comparison only where both sides are numeric: a numeric column

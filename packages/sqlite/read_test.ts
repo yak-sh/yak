@@ -25,6 +25,25 @@ Deno.test('a scalar filter selects the matching entities', () => {
   assertEquals(eids(s.read('.price>=15')), ['p2'])
 })
 
+// A Durable Object's SQLite binds at most 100 parameters per statement, and an
+// any-of list is as long as its caller made it.
+Deno.test('an any-of list past 100 values binds under the Durable Object limit', () => {
+  let s = storage(
+    spy(mem(), (_, params) => {
+      if (params.length > 100) throw new Error('too many SQL variables')
+    }),
+    vocab,
+  )
+  s.install()
+  seed(s, [
+    { entity: { eid: 'p1' }, product: { price: 1 } },
+    { entity: { eid: 'p2' }, product: { price: 2 } },
+    { entity: { eid: 'p3' }, product: { price: 3 } },
+  ])
+  let many = Array.from({ length: 150 }, (_, i) => i + 10).join(',')
+  assertEquals(eids(s.read(`.price=3,x,1,${many}`)), ['p1', 'p3'])
+})
+
 Deno.test('a reference reads back as the target eid', () => {
   let s = store()
   seed(s, [
