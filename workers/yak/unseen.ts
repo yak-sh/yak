@@ -201,7 +201,7 @@ export let fault = async (
 type Broke = {
   at?: string
   message?: string
-  stack?: string
+  stack?: string | null
   request?: string
   version?: number | null
 }
@@ -259,8 +259,8 @@ export let line = ({ app, hit }: Seen) => {
 // which for a route that threw is the useful half anyway.
 let AT = /([^\s()]+?):(\d+)(?::\d+)?(?=[^\d/]|$)/
 
-export let spot = (stack = '') => {
-  for (let l of stack.split('\n')) {
+export let spot = (stack?: string | null) => {
+  for (let l of (stack ?? '').split('\n')) {
     let m = AT.exec(l)
     if (!m) continue
     let at
