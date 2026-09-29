@@ -1,36 +1,73 @@
 #!/usr/bin/env -S deno run -A
-// test-budget — the deno platform's 1ms budget (M-39441).
+// test-budget — what on the deno platform runs slower than its 1ms budget
+// (M-39441): every test, and every file's load, reported over it.
 //
-// The rule: no test on the deno platform may run slower than 1ms (`deno task
-// test --all --tag=deno`). The runner prints each test's duration — sub-ms as
-// `(NNNµs)`, then `(Nms)` once it rounds to a whole millisecond. So an offender is any test
-// line reporting `(Nms)` with N >= 2: a µs line is always < 1ms, and `(1ms)` is
-// the boundary the rule allows. (deno rounds to the nearest ms, so a `(1ms)`
-// line can hide up to ~1.4ms — the slack that lets one freshDb + one apply pass.)
+// It runs `deno task test --all --tag=deno`, streaming the run as usual, and
+// reads the runner's lines as they pass: a file's header says what loading it
+// took (`running 9 tests from ./a_test.ts (loaded in 12ms)`), and each test's
+// line what the test took (`name ... ok (12ms)`). A duration in µs is under
+// the budget, and `(1ms)` is the boundary it allows, so an offender is 2ms or
+// more. The offenders print slowest first, each test beside its file.
 //
-// Advisory by design, not just for now (T-17785, reading A): the remaining
-// offenders are db-backed tests whose 2–9ms is production freshDb + apply()
-// cost, not trimmable setup — sub-1ms for those needs a server perf pass, not a
-// test rewrite. So the guard's job is to flag accidental cost (real I/O, a
-// test that belongs at a seam), not to gate that band. It runs the normal suite, prints the
-// offenders slowest-first, and exits 0 on the budget alone. Set
-// TASKS_FAST_STRICT=1 to make the budget fatal (exit 1 on any offender) — the
-// opt-in a targeted trim or a perf-pass branch runs to hold a line locally. A
-// real test failure always propagates, strict or not: this guards timing, it
-// never hides a red suite.
-//
-// It reuses `deno task test` (no flag duplication that could drift from
-// deno.json), teeing the child's stdout so the run still streams live while the
-// `(Nms)` lines are parsed out of it.
+// Advisory: the exit code is the run's own. TASKS_FAST_STRICT=1 also fails
+// the run on any offender, for a branch holding a line locally.
 
 // deno-lint-ignore no-control-regex -- ESC is the ANSI escape we strip
 let ansi = /\x1b\[[0-9;]*m/g
-// A passing test's duration line: `(12ms)`, `(3s)` or `(2m32s)`; a line in
-// µs is under the budget.
-let done = /^(.+?) \.\.\. ok \((?:(\d+)m)?(?:(\d+)s)?(?:(\d+)ms)?\)$/
-let ms = (m: RegExpMatchArray) =>
-  +(m[2] ?? 0) * 60_000 + +(m[3] ?? 0) * 1000 +
-  +(m[4] ?? 0)
+let header = /^running \d+ tests from (.+) \(loaded in (.+)\)$/
+let done = /^(.+?) \.\.\. ok \((.+)\)$/
+
+/// ms('250µs') -> 0.25
+/// ms('12ms') -> 12
+/// ms('3s') -> 3000
+/// ms('2m32s') -> 152000
+/** A duration as the runner prints one, in milliseconds. */
+export let ms = (took: string) => {
+  let m = took.match(/^(?:(\d+)m(?!s))?(?:(\d+)s)?(?:(\d+)ms)?(?:(\d+)µs)?$/)
+  return m
+    ? +(m[1] ?? 0) * 60_000 + +(m[2] ?? 0) * 1000 + +(m[3] ?? 0) +
+      +(m[4] ?? 0) / 1000
+    : 0
+}
+
+type Offender = { name: string; file: string; ms: number }
+
+/// let r = reader()
+/// r.read('running 2 tests from ./a_test.ts (loaded in 40ms)')
+/// r.read('slow ... ok (3s)')
+/// r.read('quick ... ok (250µs)')
+/// r.tests -> [{ name: 'slow', file: './a_test.ts', ms: 3000 }]
+/// r.loads -> [{ name: './a_test.ts', file: './a_test.ts', ms: 40 }]
+/** Reads a run a line at a time, keeping what it reports over budget. */
+export let reader = () => {
+  let file = ''
+  let tests: Offender[] = []
+  let loads: Offender[] = []
+  let read = (line: string) => {
+    line = line.replace(ansi, '')
+    let h = line.match(header)
+    if (h) {
+      file = h[1]
+      if (ms(h[2]) >= 2) loads.push({ name: file, file, ms: ms(h[2]) })
+      return
+    }
+    let t = line.match(done)
+    if (t && ms(t[2]) >= 2) tests.push({ name: t[1], file, ms: ms(t[2]) })
+  }
+  return { read, tests, loads }
+}
+
+let listed = (title: string, rows: Offender[], named: boolean) => {
+  rows.sort((a, b) => b.ms - a.ms)
+  console.log(`\n─── deno budget: ${rows.length} ${title} over 1ms ───`)
+  for (let o of rows) {
+    console.log(
+      `  ${String(Math.round(o.ms)).padStart(6)}ms  ${
+        named ? `${o.name}  (${o.file})` : o.file
+      }`,
+    )
+  }
+}
 
 if (import.meta.main) {
   let child = new Deno.Command('deno', {
@@ -41,37 +78,21 @@ if (import.meta.main) {
 
   let dec = new TextDecoder()
   let buf = ''
-  let offenders: { name: string; ms: number }[] = []
-
+  let { read, tests, loads } = reader()
   for await (let chunk of child.stdout) {
-    await Deno.stdout.write(chunk) // tee raw bytes so the run streams as usual
-    buf += dec.decode(chunk, { stream: true }).replace(ansi, '')
-    let nl
-    while ((nl = buf.indexOf('\n')) >= 0) {
-      let line = buf.slice(0, nl)
-      buf = buf.slice(nl + 1)
-      let m = line.match(done)
-      if (m && ms(m) >= 2) offenders.push({ name: m[1], ms: ms(m) })
-    }
+    await Deno.stdout.write(chunk)
+    buf += dec.decode(chunk, { stream: true })
+    let lines = buf.split('\n')
+    buf = lines.pop() ?? ''
+    lines.forEach(read)
   }
+  read(buf)
 
   let { code } = await child.status
-  let strict = !!Deno.env.get('TASKS_FAST_STRICT')
-
-  offenders.sort((a, b) => b.ms - a.ms)
-  console.log(
-    `\n─── deno budget: ${offenders.length} test(s) over 1ms ───`,
-  )
-  for (let o of offenders) {
-    console.log(`  ${String(o.ms).padStart(5)}ms  ${o.name}`)
-  }
-  if (offenders.length && !strict) {
-    console.log(
-      '(advisory — db-backed tests carry production freshDb + apply() cost; set TASKS_FAST_STRICT=1 to gate locally)',
-    )
-  }
-
-  // A real test failure fails the run regardless of the budget mode.
+  listed('file loads', loads, false)
+  listed('tests', tests, true)
   if (code !== 0) Deno.exit(code)
-  if (strict && offenders.length) Deno.exit(1)
+  if (Deno.env.get('TASKS_FAST_STRICT') && (tests.length || loads.length)) {
+    Deno.exit(1)
+  }
 }

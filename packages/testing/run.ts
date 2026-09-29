@@ -95,17 +95,24 @@ export let how = (o: Outcome) =>
       : paint(31, 'FAILED')
   } ${paint(90, `(${took(o.ms)})`)}\n`
 
+/// running(9, 'a_test.ts', 12.4) -> 'running 9 tests from ./a_test.ts (loaded in 12ms)'
+/** A file's header: how many of its tests run, and what loading it took. */
+export let running = (count: number, path: string, loaded: number) =>
+  `running ${count} tests from ${at(path)} (loaded in ${took(loaded)})`
+
 /**
- * Runs the tests of one file. A test's name is said as it starts and how it
- * went ends the line, so what watches a run knows which test it waits on.
+ * Runs the tests of one file, `loaded` being what loading it took. A test's
+ * name is said as it starts and how it went ends the line, so what watches a
+ * run knows which test it waits on.
  */
 export let file = async (
   path: string,
   tests: Test[],
   timeout: number,
+  loaded = 0,
 ): Promise<Outcome[]> => {
   if (!tests.length) return []
-  say(paint(90, `running ${tests.length} tests from ${at(path)}\n`))
+  say(paint(90, `${running(tests.length, path, loaded)}\n`))
   let out: Outcome[] = []
   for (let t of tests) {
     say(`${t.name} ... `)

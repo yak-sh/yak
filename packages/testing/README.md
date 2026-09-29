@@ -77,10 +77,11 @@ deno run -A packages/testing/main.ts [--tag=t]... [--platform=p] [--all] \
 ```
 
 A path is a test module, a page, or a directory holding them. Every file loads
-into this one runtime, one at a time, and its tests run as it loads, each saying
-`name ... ok (12ms)`. A module that cannot load fails as a test of its own, and
-a test that has not ended within `--timeout` (50 seconds) fails while the run
-goes on. The exit code is 1 when a test failed.
+into this one runtime, one at a time, and its tests run as it loads: its header
+says what loading it took (`running 9 tests from ./a_test.ts (loaded in 12ms)`),
+and each test how it went (`name ... ok (12ms)`). A module that cannot load
+fails as a test of its own, and a test that has not ended within `--timeout` (50
+seconds) fails while the run goes on. The exit code is 1 when a test failed.
 
 `--tag` keeps the tests carrying every tag named; `--platform` is a tag every
 test in the runtime carries.

@@ -84,9 +84,10 @@ let run = async (path: string, load: () => Promise<unknown>) => {
       throw error
     })
   }
-  loading += performance.now() - begun
+  let loaded = performance.now() - begun
+  loading += loaded
   let tests = collected.slice(at).filter(chosen)
-  outcomes.push(...await file(path, tests, timeout))
+  outcomes.push(...await file(path, tests, timeout, loaded))
 }
 for (let m of modules.filter(fresh)) await run(m, () => import(here(m)))
 for (let p of pages.filter(fresh)) await run(p, () => examples(p))
