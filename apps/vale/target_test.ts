@@ -17,12 +17,14 @@ Deno.test('command target names choose lands, villagers, and current heroes', as
     row('new', 'hero-1', 'Hazel', 2),
     row('other', 'hero-2', 'Bramble', 3),
   ]
-  let query = async (line: string) =>
-    line.startsWith('.look.name~=')
-      ? looks.filter((b) =>
-        String(comp(b, 'look').name).toLowerCase().includes('bramble')
-      )
-      : looks
+  let query = (line: string) =>
+    Promise.resolve(
+      line.startsWith('.look.name~=')
+        ? looks.filter((b) =>
+          String(comp(b, 'look').name).toLowerCase().includes('bramble')
+        )
+        : looks,
+    )
   assertEquals(await resolveTarget('Tomb Sands', query), {
     level: 'tombsands',
   })
@@ -30,7 +32,7 @@ Deno.test('command target names choose lands, villagers, and current heroes', as
     eid: eidOf('wren'),
   })
   assertEquals(await resolveTarget('Bramble', query), { eid: 'hero-2' })
-  assertEquals(await resolveTarget('Nobody', async () => []), null)
+  assertEquals(await resolveTarget('Nobody', () => Promise.resolve([])), null)
 })
 
 Deno.test('command target refuses ambiguous current hero names', async () => {
@@ -39,13 +41,13 @@ Deno.test('command target refuses ambiguous current hero names', async () => {
     row('b', 'hero-2', 'Bramble', 2),
   ]
   await assertRejects(
-    () => resolveTarget('Bramble', async () => looks),
+    () => resolveTarget('Bramble', () => Promise.resolve(looks)),
     Error,
     'use an eid',
   )
   let uuid = '01234567-89ab-cdef-0123-456789abcdef'
   assertEquals(
-    await resolveTarget(uuid, async () => {
+    await resolveTarget(uuid, () => {
       throw Error('id should not query names')
     }),
     { eid: uuid },
