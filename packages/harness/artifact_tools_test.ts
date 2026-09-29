@@ -5,7 +5,12 @@ import type { Bundle } from '@yaks/graph'
 import { artifactStore, fileBlobs } from '@yaks/blob'
 import { harness } from './testing.ts'
 
-const png = Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0)
+const png = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aG7cAAAAASUVORK5CYII=',
+  ),
+  (c) => c.charCodeAt(0),
+)
 
 Deno.test('file import snapshots bytes; attach is user-only; explicit view projects bounded image bytes', async () => {
   let dir = await Deno.makeTempDir()
@@ -148,6 +153,9 @@ Deno.test('vision admission rejects unsupported files and changed artifact revis
       entity: { eid: 'a' },
       artifact: record,
     }, {
+      entity: { eid: 'truncated' },
+      artifact: await store(png.slice(0, 12), 'image/png'),
+    }, {
       entity: { eid: 'svg' },
       artifact: await store(
         new TextEncoder().encode('<svg/>'),
@@ -159,6 +167,9 @@ Deno.test('vision admission rejects unsupported files and changed artifact revis
     )!
     let ctx = { session: 's', call, entries: [call] }
     await assertRejects(async () => await view.run({ artifact: 'svg' }, ctx))
+    await assertRejects(async () =>
+      await view.run({ artifact: 'truncated' }, ctx)
+    )
     await view.run({ artifact: 'a' }, ctx)
     let rows = await h.g.read('.entry&*')
     // Authorized graph mutation cannot silently substitute pixels for an admitted image.

@@ -8,17 +8,18 @@ import {
   artifactStore,
   type Blobs,
   mediaTypeOf,
+  sizeOf,
 } from '@yaks/blob'
 import { sessionCwd } from './workspace.ts'
 
 const MAX = 20 * 1024 * 1024
 const VISION = ['image/png', 'image/jpeg', 'image/webp']
 
-/** Supported vision formats; SVG, GIF and unrecognized bytes are never image
- * inputs. */
+/** Supported vision formats with a stated size; SVG, GIF and malformed headers
+ * are never image inputs. */
 export let imageType = (b: Uint8Array): string | undefined => {
   let type = mediaTypeOf(b)
-  return type && VISION.includes(type) ? type : undefined
+  return type && VISION.includes(type) && sizeOf(b) ? type : undefined
 }
 
 /** A registered artifact's bytes. Graph authorization is applied before

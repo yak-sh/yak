@@ -35,8 +35,12 @@ Deno.test('the harness and blob door share the graph artifact store', async () =
         let artifact = await artifactStore(h.artifacts)(bytes, 'image/png')
         await h.g.apply([{ entity: { eid: artifact.address }, artifact }])
         let get = blobRoutes(host).find((r) => r.method == 'GET')!
-        let response = await get.handle(
+        let redirect = await get.handle(
           new Request(`http://host/blob/${artifact.address}`),
+        )
+        assertEquals(redirect.status, 302)
+        let response = await get.handle(
+          new Request(redirect.headers.get('location')!),
         )
         assertEquals(response.status, 200)
         assertEquals(response.headers.get('content-type'), 'image/png')
