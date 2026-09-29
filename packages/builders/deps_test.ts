@@ -1,8 +1,27 @@
 import { assertEquals, assertRejects } from '@std/assert'
-import { detached, graph, Stale } from '@yaks/graph'
+import { detached, graph, identityEid, Stale } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { workshop } from './testing.ts'
 import { candidates, sync } from './deps.ts'
+
+Deno.test('a client cannot patch builder dependencies', async () => {
+  let vocab = workshop()
+  let g = graph({ storage: ram(vocab), vocab })
+  let eid = identityEid('builder_dep', ['builder', 'component:doc'])
+  await g.apply([{
+    entity: { eid },
+    builder_dep: { builder: 'builder', source: 'component:doc' },
+  }])
+  assertEquals(await g.get([eid]), [])
+  await g.apply(
+    await g.storage.tx((tx) => sync(tx, 'builder', ['component:doc'])),
+    { trusted: true },
+  )
+  assertEquals((await g.get([eid]))[0]?.builder_dep, {
+    builder: 'builder',
+    source: 'component:doc',
+  })
+})
 
 Deno.test('a delayed reconciliation cannot erase a newer input dependency', async () => {
   let vocab = workshop()

@@ -34,18 +34,17 @@
     "builder_dep": {
       "component": true,
       "type": "object",
+      "wire": false,
       "identity": ["builder", "source"],
       "properties": {
         "builder": {
           "type": "string",
           "ref": "builder",
-          "death": "cascade",
-          "stamped": true
+          "death": "cascade"
         },
         "source": {
           "type": "string",
           "index": true,
-          "stamped": true,
           "description": "component:name or entity:eid read by an immediate builder"
         },
         "version": {
