@@ -49,13 +49,13 @@ import {
   exists,
   type Expr,
   fn,
+  ge,
   gt,
   iff,
   isNull,
   join,
   lit,
   not,
-  op,
   or,
   select,
   sub,
@@ -196,7 +196,9 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (kind == 'error' && (newest.error as Comp)?.code == LIMIT) return 'failed'
   if (kind == 'error') {
     // failed once the last RETRIES entries are all errors
-    let tail = all.slice(-RETRIES)
+    let tail = all.filter((b) =>
+      !(b.ask && (b.attempt as Comp | undefined)?.state == 'completed')
+    ).slice(-RETRIES)
     return tail.length == RETRIES && tail.every((b) => kindOf(b) == 'error')
       ? 'failed'
       : 'pending'
@@ -273,13 +275,36 @@ export let sessionStatus = {
     let n = col('entity', 'n')
     let wears = (comp: string, also?: Expr) => has(comp, n, also)
     let mine = (e: string) => eq(col('session', e), owner)
-    let allErrors = eq(
+    let lastDifferent = fn(
+      'coalesce',
+      sub(select({
+        cols: [col('seq', 'e3')],
+        from: table('entry', 'e3'),
+        where: and(
+          mine('e3'),
+          lacks('notice', col('entity', 'e3')),
+          lacks('error', col('entity', 'e3')),
+          not(and(
+            has(ASK, col('entity', 'e3')),
+            has(
+              'attempt',
+              col('entity', 'e3'),
+              eq(col('state', 'k'), lit('completed')),
+            ),
+          )),
+        ),
+        order: [desc(col('seq', 'e3'))],
+        limit: lit(1),
+      })),
+      lit(0),
+    )
+    let allErrors = ge(
       sub(select({
         cols: [count()],
         from: table('entry', 'e2'),
         where: and(
           mine('e2'),
-          gt(col('seq', 'e2'), op('-', col('seq', 'n'), lit(RETRIES))),
+          gt(col('seq', 'e2'), lastDifferent),
           has('error', col('entity', 'e2')),
         ),
       })),

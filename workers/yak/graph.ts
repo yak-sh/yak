@@ -114,7 +114,7 @@ import {
   storage,
   type Wire,
 } from '@yaks/durable-object'
-import { effects } from '@yaks/effects'
+import { type Effects, effects } from '@yaks/effects'
 import { secrets } from '@yaks/secrets'
 import { edges } from '@yaks/edge'
 import { keys } from '@yaks/key'
@@ -376,6 +376,7 @@ type Word =
   | 'schema'
   | 'wakes'
   | 'planted'
+  | 'effect-migrated'
   // The bytes it last told the directory it holds (`#tell`).
   | 'weighed'
   // One person's localStorage in a sandboxed app (installed.ts): their keys
@@ -599,6 +600,10 @@ export class Store {
   // write per storage object, so two wakes arriving together cannot leave the
   // later one holding the alarm.
   #alarm: Alarm | null = null
+  #effects!: Effects
+  #effectsReady = false
+  #effectWork: Promise<void> | null = null
+  #effectAgain = false
   // The schedules this object was born with, planted once (`#sowing`).
   #sowing: Promise<void> | null = null
   // When this incarnation began: a job marked begun before it was begun by
@@ -812,6 +817,9 @@ export class Store {
     // on every write would answer it with another break, forever.
     let fx = effects(vocab, {
       write: (b) => this.#trust(b, null),
+      defer: true,
+      max: 2,
+      nudge: () => this.#workingEffects(),
       report: (error, { handler }) =>
         defect(error, { request: `effect ${handler}`, store: name }),
     })
@@ -936,6 +944,7 @@ export class Store {
         .map((r) => [r.rule.name, due]),
     ))
     effected(PLUGINS, fx, this.#stored(g))
+    this.#effects = fx
     this.#vocab = vocab
     this.#graph = g
     // One per incarnation, like the graph: directory.ts seeds once per Meta.
@@ -1545,7 +1554,9 @@ export class Store {
           this.#stuck = false
           await this.#drain()
         }
+        await (this.#sowing ??= this.#sow())
         await this.#tick(Date.now())
+        this.#workingEffects()
       } finally {
         this.#profile?.flush()
         leave()
@@ -1574,6 +1585,7 @@ export class Store {
       }
     }
     try {
+      await this.#migrateEffects()
       let rows = this.#get('name') == PLATFORM_STORE ? wakesOf(PLUGINS) : []
       let stamp = sha256(rows.map((r) => r.entity.eid).join('\n'))
       if (rows.length && this.#get('wakes') != stamp) {
@@ -1599,9 +1611,82 @@ export class Store {
         await this.#planting()
         await reconcile(this.#runner())
       }
+      this.#effectsReady = true
+      this.#workingEffects()
     } catch (e) {
       await this.#broke('wake seed', e)
+      if (this.#vocab.comp('effect')) throw e
     }
+  }
+
+  // Before this store kept effect rows, a prompt could have left on the wire
+  // with no ask recorded. Those older requests have an unknown outcome. Mark
+  // them interrupted once, before the effect pool's sweep can dispatch them
+  // again. The person can inspect and explicitly ask anew.
+  #migrateEffects = async () => {
+    if (!this.#vocab.comp('effect') || this.#get('effect-migrated')) return
+    let rows = await this.#graph.read(
+      '.session.status=pending,running,queued (.entries.using|.entries.ask)',
+    )
+    for (let row of rows) {
+      let session = row.entity.eid
+      let inflight = await this.#graph.read(
+        `.entry.session=${session}&.attempt.state=inflight&*`,
+      )
+      await this.#trust([
+        ...inflight.map((b) => ({
+          entity: b.entity,
+          attempt: { state: 'interrupted' },
+        })),
+        {
+          entity: { eid: crypto.randomUUID() },
+          entry: { session },
+          error: { code: 'interrupted' },
+          content: {
+            body: 'The previous model request may have completed at the ' +
+              'provider. Inspect it before asking again.',
+          },
+        },
+      ], null)
+    }
+    this.#put('effect-migrated', '1')
+  }
+
+  #workingEffects = () => {
+    if (!this.#vocab.comp('effect')) return
+    if (!this.#effectsReady) {
+      this.#effectAgain = true
+      return
+    }
+    if (this.#effectWork) {
+      this.#effectAgain = true
+      return
+    }
+    this.#effectWork = (async () => {
+      do {
+        this.#effectAgain = false
+        await this.#effects.work(this.#stored(this.#graph).graph)
+      } while (this.#effectAgain)
+      let pending = await this.#graph.read('.effect.state=pending&*')
+      if (pending.length) {
+        let now = Date.now()
+        let next = Math.min(...pending.map((b) => {
+          let e = b.effect as Comp
+          return Date.parse(String(e.next ?? e.lease_expiry ?? '')) ||
+            now + 60_000
+        }))
+        await this.#arming(new Date(Math.max(now + 1000, next)).toISOString())
+      }
+    })().catch(async (error) => {
+      defect(error, { request: 'effect pool', store: this.#name() })
+      await this.#arming(new Date(Date.now() + Store.RETRY).toISOString())
+        .catch((e) =>
+          defect(e, { request: 'effect retry', store: this.#name() })
+        )
+    }).finally(() => {
+      this.#effectWork = null
+      if (this.#effectAgain) this.#workingEffects()
+    })
   }
 
   // ---- the bytes it holds (meter.ts `weighed`) -----------------------------

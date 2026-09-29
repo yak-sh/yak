@@ -230,6 +230,36 @@ Deno.test('an app without the OpenRouter connection cannot ask its model', async
   assertEquals(v.asked.length, 0)
 })
 
+Deno.test('one app-store write completes seven model turns within its dispatch bound', async () => {
+  let releases: (() => void)[] = []
+  let active = 0, peak = 0
+  let v = await vale(() => {
+    active++
+    peak = Math.max(peak, active)
+    return new Promise((resolve) =>
+      releases.push(() => {
+        active--
+        resolve({ response: 'answered' })
+      })
+    )
+  })
+  let sessions = Array.from({ length: 7 }, () => crypto.randomUUID())
+  assertEquals(
+    (await v.send('/apply', sessions.flatMap((s) => asking(s, FLASH)))).status,
+    200,
+  )
+  for (let i = 0; i < sessions.length; i++) {
+    await until(() => releases.length > i, { label: `model call ${i + 1}` })
+    releases[i]()
+  }
+  await until(
+    async () => (await v.read('.entry&.output&*')).length == sessions.length,
+    { label: 'seven model answers' },
+  )
+  assertEquals(peak, 2)
+  assertEquals(releases.length, sessions.length)
+})
+
 // A transcript and the entry that asks it for a turn, as a page writes them.
 let asking = (
   session: string,

@@ -548,7 +548,15 @@ Deno.test('errors retry to the bound, then the transcript is failed', async () =
   let deps = { model, tools: [echo], mint }
   assertEquals(await rest(g, ids.s, deps), 'failed')
   assertEquals(asked.length, 3)
-  assertEquals(await kinds(g, ids.s), ['input', 'error', 'error', 'error'])
+  assertEquals(await kinds(g, ids.s), [
+    'input',
+    'ask',
+    'error',
+    'ask',
+    'error',
+    'ask',
+    'error',
+  ])
 })
 
 Deno.test('a transient model failure retries before a streaming reply is visible', async () => {
@@ -625,7 +633,7 @@ Deno.test('an exhausted nonstream request does not start another transcript ask'
     'failed',
   )
   assertEquals(calls, 3)
-  assertEquals(await kinds(g, ids.s), ['input', 'error'])
+  assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
 })
 
 Deno.test('stopping during model backoff starts no further attempt', async () => {
@@ -832,8 +840,8 @@ Deno.test('provider completion allocates positions after concurrently admitted n
   await pending
   let all = await transcript(g, ids.s)
   assertEquals(all.map((b) => (b.entry as Comp).seq), [1, 2, 3, 4])
-  assertEquals(all[1].entity.eid, 'during')
-  assertEquals((all[2].ask as Comp).through, 'e1')
+  assertEquals(all[2].entity.eid, 'during')
+  assertEquals((all[1].ask as Comp).through, 'e1')
 })
 
 Deno.test('recovery excludes a stale streamed provider reply', async () => {
@@ -906,6 +914,31 @@ Deno.test('recovery excludes a stale streamed provider reply', async () => {
   assertEquals(done.filter((b) => b.output).map(textOf), ['fresh reply'])
   assertEquals(done.filter((b) => b.call).length, 0)
   assertEquals(done.filter((b) => b.exception).length, 0)
+})
+
+Deno.test('recovery leaves an interrupted nonstream request for inspection', async () => {
+  let g = world(), calls = 0
+  let release!: () => void, started!: () => void
+  let gate = new Promise<void>((done) => release = done)
+  let entered = new Promise<void>((done) => started = done)
+  let model: Model = async () => {
+    calls++
+    started()
+    await gate
+    return says('late', 'late reply')
+  }
+  let old = react(g, ids.s, { model, tools: [] })
+  await entered
+  let [ask] = (await transcript(g, ids.s)).filter((b) => b.ask)
+  assertEquals((ask.attempt as Comp).state, 'inflight')
+  await react(g, ids.s, { model, tools: [] })
+  release()
+  await old
+  let entries = await transcript(g, ids.s)
+  assertEquals(calls, 1)
+  assertEquals(statusOf(entries), 'failed')
+  assertEquals(entries.filter((b) => b.output).length, 0)
+  assertEquals((entries.at(-1)?.error as Comp).code, 'interrupted')
 })
 
 Deno.test('unstarted older calls get results without replay or provider dispatch', async () => {
@@ -1059,7 +1092,7 @@ Deno.test('a request refused at its limit is not retried', async () => {
     return Promise.reject(new ModelError('limit', 'This space is at its limit'))
   }
   assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'failed')
-  assertEquals([asked, await kinds(g, ids.s)], [1, ['input', 'error']])
+  assertEquals([asked, await kinds(g, ids.s)], [1, ['input', 'ask', 'error']])
   await appendEntry(g, ids.s, 'and now?')
   assertEquals(statusOf(await transcript(g, ids.s)), 'pending')
 })

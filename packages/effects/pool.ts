@@ -91,6 +91,10 @@ export type PoolOpts = {
    * worker that names nobody claims under a fresh id and holds no presence
    * lease, since a lease's holder is an entity */
   owner: Eid
+  /** Maximum handlers this worker runs together. */
+  max?: number
+  /** Leave committed runs for work() instead of starting them on the writer. */
+  defer?: boolean
   /** how long a claim holds, in milliseconds (default: 60_000) */
   lease?: number
   /** the most attempts a run gets where its declaration says none (default:
@@ -198,6 +202,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let hold = opts.lease ?? 60_000
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
   let wait = opts.backoff ?? backoff
+  let max = opts.max ?? Infinity
   let stamp = (ms: number) => new Date(ms).toISOString()
   let limit = (s?: Slot) => s?.effect?.tries ?? opts.tries ?? TRIES
   let safe = (s?: Slot) => s?.effect?.idempotent != false
@@ -320,6 +325,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
     let rows = await g.read(and(eq(`${EFFECT}.state`, 'pending')))
     for (let b of rows) {
+      if (running.size >= max) break
       let eid = b.entity.eid
       let row = (b[EFFECT] ?? {}) as Comp
       let s = handled(String(row.handler))
@@ -501,7 +507,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         let key = [s.id, e.entity.eid, e.name, e.kind].join('|')
         if (seen.has(key)) continue
         seen.add(key)
-        let ours = member && !!s.run
+        let ours = member && !opts.defer && !!s.run &&
+          running.size + mine.length < max
         let row: Comp = {
           handler: s.id,
           target: e.entity.eid,
@@ -529,7 +536,11 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           return
         }
         await join(g)
-        await Promise.all(await pass(g))
+        for (;;) {
+          let started = await pass(g)
+          if (!started.length) break
+          await Promise.all(started)
+        }
         return
       }
       await join(g)

@@ -320,10 +320,8 @@ let connected = (at: Stored) =>
 /**
  * The store's transcript runner, registered on its registry: `session_run`
  * run here, lent Workers AI through the metered binding and the app's marked
- * commands. A run is not waited for: a turn takes seconds, and the write that
- * asked for it is answered as soon as it lands — the answer arrives through
- * the page's subscription. The object stays up while a call is in flight, as
- * a Durable Object does while it has I/O pending.
+ * commands. The store's effect pool keeps each run while the write that asked
+ * for it answers immediately; the result arrives through the subscription.
  */
 let asking: Effect = (on, at) => {
   if (at.meta || !at.app) return
@@ -339,9 +337,7 @@ let asking: Effect = (on, at) => {
     report: (error, _, phase) => at.broke(`model ${phase}`, error),
   })
   on.handle({
-    session_run: (e, tx, write) =>
-      void Promise.resolve(run.session_run(e, tx, write))
-        .catch((error) => at.broke('model', error)),
+    session_run: (e, tx, write) => run.session_run(e, tx, write),
   })
 }
 

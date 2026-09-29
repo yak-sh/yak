@@ -65,6 +65,7 @@ import { builderDoc } from '@yaks/builders/vocab'
 import { docDoc } from '@yaks/doc'
 import { dreamingDoc } from '@yaks/dreaming/vocab'
 import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
+import { effectDoc } from '@yaks/effects'
 import { gitDoc } from '@yaks/git'
 import { goalDoc } from '@yaks/goal/vocab'
 import { hookDoc } from '@yaks/hook'
@@ -538,6 +539,7 @@ export let coreDocs: VocabDoc[] = storeDocs([
   pick(artifactDoc, ['artifact', 'representation']),
   openrouterDoc,
   hostedBuilderDoc,
+  pick(effectDoc, ['effect', 'lease']),
   rtcDoc,
 ])
 

@@ -38,6 +38,15 @@ let said = (n: number, source: string) =>
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
+  ['three refused asks exhaust the retry bound', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(3, { error: { code: 'exhausted' } }),
+    entry(4, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(5, { error: { code: 'exhausted' } }),
+    entry(6, { ask: { through: 'e1' }, attempt: { state: 'completed' } }),
+    entry(7, { error: { code: 'exhausted' } }),
+  ], 'failed'],
   ['interrupted response is failed until new input', [
     input(1),
     entry(2, { ask: { through: 'e1' }, attempt: { state: 'interrupted' } }),

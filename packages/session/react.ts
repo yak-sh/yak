@@ -364,12 +364,18 @@ export let react = async (
       unfinished,
       { entity: unfinished.entity, attempt: { state: 'interrupted' } },
       [
-        line(
-          {},
-          'System recovery: the previous response was interrupted. ' +
-            'Continue from the transcript. ' +
-            'Inspect the state before repeating any action that may have completed.',
-        ),
+        deps.streaming
+          ? line(
+            {},
+            'System recovery: the previous response was interrupted. ' +
+              'Continue from the transcript. ' +
+              'Inspect the state before repeating any action that may have completed.',
+          )
+          : line(
+            { [ERROR]: { code: 'interrupted' } },
+            'The previous model request was interrupted. It may have ' +
+              'completed at the provider; inspect it before asking again.',
+          ),
       ],
     )
     return recovered ?? await current()
@@ -709,7 +715,7 @@ export let react = async (
         },
       }
       : {},
-    ...deps.streaming ? { attempt: { state: 'inflight' } } : {},
+    attempt: { state: 'inflight' },
   })
   const stream = new Map<
     string,
@@ -726,13 +732,13 @@ export let react = async (
       streamFailure ??= e
     })
   }
+  // Resolve inputs before admitting the request: a local image read failure
+  // must not be mistaken for an ambiguous network dispatch.
+  if (deps.contextItems) {
+    req.items.push(...await deps.contextItems(window, entries))
+  }
+  ;[ask] = await g.apply([ask], { trusted: true })
   if (deps.streaming) {
-    // Resolve inputs before admitting the request: a local image read failure
-    // must not be mistaken for an ambiguous network dispatch.
-    if (deps.contextItems) {
-      req.items.push(...await deps.contextItems(window, entries))
-    }
-    ;[ask] = await g.apply([ask], { trusted: true })
     req.onText = ({ index, id, text }) => {
       if (!accepting) return
       if (++pendingDeltas > 4096) {
@@ -778,9 +784,6 @@ export let react = async (
   }
   let reply: Reply
   try {
-    if (!deps.streaming && deps.contextItems) {
-      req.items.push(...await deps.contextItems(window, entries))
-    }
     reply = await retry(providerModel, req, deps.stopping, deps.pause)
     accepting = false
     await tail
@@ -819,17 +822,34 @@ export let react = async (
       return failed
     }
     if (!operational) deps.report?.(e, session, 'model')
-    return append([
-      e instanceof ModelError
-        ? line({ [ERROR]: { code: e.code } }, e.message)
-        : line({ [EXCEPTION]: {} }, String(e)),
-    ])
+    let refused = e instanceof ModelError &&
+      ![
+        'interrupted',
+        'transport',
+        'media_response',
+        'media_payload',
+        'media_storage',
+        'http_408',
+      ].includes(e.code) && !/^http_5\d\d$/.test(e.code)
+    let code = e instanceof ModelError ? e.code : 'interrupted'
+    let message = e instanceof ModelError ? e.message : String(e)
+    return await finish(
+      ask,
+      {
+        entity: ask.entity,
+        attempt: { state: refused ? 'completed' : 'interrupted' },
+      },
+      [line(
+        { [ERROR]: { code: refused ? code : 'interrupted' } },
+        refused ? message : 'Response interrupted: ' + String(e),
+      )],
+    ) ?? await current()
   }
   const finalAsk: Bundle = {
     ...ask,
     ...providerModel.mark?.(reply) ?? {},
     ...reply.usage ? { usage: reply.usage } : {},
-    ...deps.streaming ? { attempt: { state: 'completed' } } : {},
+    attempt: { state: 'completed' },
   }
   let added: Bundle[] = [finalAsk]
   let textIndex = 0
@@ -907,7 +927,9 @@ export let react = async (
     }))
   }
   try {
-    if (!deps.streaming) return await append(added)
+    if (!deps.streaming) {
+      return await finish(ask, finalAsk, added.slice(1)) ?? await current()
+    }
     if (
       [...stream.values()].some((active) =>
         !added.some((b) => b.entity.eid == active.entry.entity.eid)
@@ -929,7 +951,17 @@ export let react = async (
     }
     return await finish(ask, finalAsk, added.slice(1)) ?? await current()
   } catch (e) {
-    if (!deps.streaming) throw e
+    if (!deps.streaming) {
+      deps.report?.(e, session, 'finalize')
+      return await finish(
+        ask,
+        { entity: ask.entity, attempt: { state: 'interrupted' } },
+        [line(
+          { [EXCEPTION]: {} },
+          'Could not finalize provider reply: ' + String(e),
+        )],
+      ) ?? await current()
+    }
     return await finish(
       ask,
       { entity: ask.entity, attempt: { state: 'interrupted' } },
