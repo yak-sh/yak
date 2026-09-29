@@ -261,12 +261,17 @@ let ROADS = () =>
     )
   )
 
+// The frontier roads last asked for, most recent last.
 let frontierRoads = new Map<string, Road>()
 let frontierRoad = (a: string, b: string): Road => {
   let [from, to] = [a, b].sort()
   let key = `${from}/${to}`
   let got = frontierRoads.get(key)
-  if (got) return got
+  if (got) {
+    frontierRoads.delete(key)
+    frontierRoads.set(key, got)
+    return got
+  }
   if (frontierRoads.size >= 128) {
     frontierRoads.delete(frontierRoads.keys().next().value!)
   }
@@ -284,27 +289,36 @@ let neighbours = (id: string): Road[] => {
 }
 
 // A point's road candidates change only when its search box crosses a level
-// cell. Ground generation asks for many points inside the same cells.
+// cell: the roads that come into the cells a cell round it. Ground generation
+// asks for many points inside the same cells, one after another.
 let nearRoads = new Map<string, Road[]>()
+let last = [NaN, NaN, NaN, NaN], lastRoads: Road[] = []
 let candidates = (x0: number, z0: number, x1: number, z1: number): Road[] => {
-  let key = [
-    Math.floor(x0 / SIZE) - 1,
-    Math.floor(z0 / SIZE) - 1,
-    Math.floor(x1 / SIZE) + 1,
-    Math.floor(z1 / SIZE) + 1,
-  ].join(' ')
+  let gx0 = Math.floor(x0 / SIZE) - 1, gz0 = Math.floor(z0 / SIZE) - 1
+  let gx1 = Math.floor(x1 / SIZE) + 1, gz1 = Math.floor(z1 / SIZE) + 1
+  if (
+    gx0 == last[0] && gz0 == last[1] && gx1 == last[2] && gz1 == last[3]
+  ) return lastRoads
+  let key = `${gx0} ${gz0} ${gx1} ${gz1}`
   let got = nearRoads.get(key)
-  if (got) return got
-  got = [
-    ...ROADS(),
-    ...new Map(
-      levelsIn(x0, z0, x1, z1).flatMap((lv) => neighbours(lv.id))
-        .map((road) => [`${road.from}/${road.to}`, road]),
-    ).values(),
-  ]
-  if (nearRoads.size >= 128) nearRoads.delete(nearRoads.keys().next().value!)
-  nearRoads.set(key, got)
-  return got
+  if (!got) {
+    got = [
+      ...ROADS(),
+      ...new Map(
+        levelsIn(x0, z0, x1, z1).flatMap((lv) => neighbours(lv.id))
+          .map((road) => [`${road.from}/${road.to}`, road]),
+      ).values(),
+    ].filter(({ c: { box } }) =>
+      box[0] < (gx1 + 1) * SIZE && box[2] > gx0 * SIZE &&
+      box[1] < (gz1 + 1) * SIZE && box[3] > gz0 * SIZE
+    )
+    if (nearRoads.size >= 128) {
+      nearRoads.delete(nearRoads.keys().next().value!)
+    }
+    nearRoads.set(key, got)
+  }
+  last = [gx0, gz0, gx1, gz1]
+  return lastRoads = got
 }
 
 /** The height of a road's bed `t` of the way along it, in metres. */

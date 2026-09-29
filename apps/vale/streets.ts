@@ -164,33 +164,42 @@ export let streets = (
     }
   }
   // Routes may lie side by side where they climb at different rates. Ease
-  // their shared edge without moving the square or a door's landing.
+  // their shared edge without moving the square or a door's landing, in the
+  // order the cells were laid. Heights are kept in a grid, NaN off the
+  // streets and a row past its end, as every column of ground asks of them.
+  let order = [...cells.keys()]
+  let ys = new Float64Array(count + SIDE).fill(NaN)
+  let pinned = new Uint8Array(count + SIDE)
+  for (let [j, y] of cells) ys[j] = y
+  for (let j of anchors) pinned[j] = 1
   for (let pass = 0; pass < 400; pass++) {
     let moved = false
-    for (let [j] of cells) {
+    for (let j of order) {
       for (let next of [j + 1, j + SIDE]) {
         if (next == j + 1 && j % SIDE == SIDE - 1) continue
-        let y = cells.get(j)!
-        let other = cells.get(next)
-        if (other == null || Math.abs(other - y) <= 0.48) continue
+        let y = ys[j], other = ys[next]
+        if (Number.isNaN(other) || Math.abs(other - y) <= 0.48) continue
         let excess = Math.abs(other - y) - 0.48
         let sign = Math.sign(other - y)
-        let a = anchors.has(j), b = anchors.has(next)
+        let a = pinned[j] == 1, b = pinned[next] == 1
         if (a && b) continue
-        if (!a) cells.set(j, y + sign * excess * (b ? 1 : 0.5))
-        if (!b) cells.set(next, other - sign * excess * (a ? 1 : 0.5))
+        if (!a) ys[j] = y + sign * excess * (b ? 1 : 0.5)
+        if (!b) ys[next] = other - sign * excess * (a ? 1 : 0.5)
         moved = true
       }
     }
     if (!moved) break
   }
+  for (let j of order) cells.set(j, ys[j])
+  // A street cell's height, or undefined off the streets.
+  let held = (j: number) => ys[j] === ys[j] ? ys[j] : undefined
   let lay = (x: number, z: number, h: number) => {
     let i = Math.round(x - at[0]), k = Math.round(z - at[1])
     let best = Infinity, height = 0, cell = -1
     for (let dk = -2; dk <= 2; dk++) {
       for (let di = -2; di <= 2; di++) {
         if (!inside(i + di, k + dk)) continue
-        let y = cells.get(index(i + di, k + dk))
+        let y = held(index(i + di, k + dk))
         if (y == null) continue
         let dx = x - at[0] - i - di, dz = z - at[1] - k - dk
         let d = Math.hypot(dx, dz)
@@ -200,7 +209,7 @@ export let streets = (
     if (best >= 2.3) return null
     let blend = Math.min(1, Math.max(0, (2.3 - best) / 1.4))
     let step = NEXT.some((d) => {
-      let y = cells.get(cell + d)
+      let y = held(cell + d)
       return y != null && Math.abs(y - height) >= 0.2
     })
     return {
@@ -215,7 +224,7 @@ export let streets = (
     for (let k = Math.max(-EDGE, c); k <= Math.min(EDGE, d); k++) {
       for (let i = Math.max(-EDGE, a); i <= Math.min(EDGE, b); i++) {
         if (
-          cells.has(index(i, k)) &&
+          held(index(i, k)) != null &&
           Math.hypot(x - at[0] - i, z - at[1] - k) < r
         ) return true
       }
