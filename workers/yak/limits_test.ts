@@ -5,7 +5,7 @@
 // holds the sums at their seam; this holds that the doors ask them.
 import { assertStringIncludes } from '@std/assert'
 import { until } from '../../bin/testing.ts'
-import { connector, kernel, meta, plus, signIn } from './probe.ts'
+import { connector, kernel, meta, onPlus, signIn } from './probe.ts'
 
 let eidIn = (said: { value?: Record<string, unknown> }) =>
   String(said.value?.eid)
@@ -33,7 +33,7 @@ Deno.test('free allowances hold per person, not per space', async () => {
     assertStringIncludes(refused, 'Plus plan')
 
     // One on the Plus plan is paid for on its own, and frees a place.
-    await plus(k, made[0])
+    await onPlus(k, made[0])
     made.push(eidIn(await make(5)))
 
     // The letters: two of her free spaces have sent the month's hundred

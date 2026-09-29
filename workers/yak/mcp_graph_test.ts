@@ -13,7 +13,7 @@ import {
   kernel,
   meta,
   num,
-  plus,
+  onPlus,
   seed,
   signIn,
   txt,
@@ -660,7 +660,7 @@ Deno.test('the free tier: a warning once, then the refusals', async () => {
       await agent.tool('app_list', { space: 'brim36' }),
       'one',
     )
-    await plus(k, eids.brim36)
+    await onPlus(k, eids.brim36)
     let reopened = await k.at('brim36.yaks.app', '/one/api/graph')
     assertEquals(reopened.status, 200)
     await reopened.body?.cancel()
@@ -1163,7 +1163,7 @@ Deno.test(
         app: 'original',
         name: 'limits-example',
       })
-      await plus(k, eids['plus-limits37'])
+      await onPlus(k, eids['plus-limits37'])
       const seeded = [
         ...['plus-limits37', 'yourname'].flatMap((slug) =>
           Array.from({ length: 50 }, (_, i) => ({

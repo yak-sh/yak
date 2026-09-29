@@ -18,7 +18,7 @@ import {
   connector,
   kernel,
   meta,
-  plus,
+  onPlus,
   seed,
 } from './probe.ts'
 
@@ -295,7 +295,7 @@ Deno.test('attaching a domain: what it refuses, and what it says', async () => {
       })),
       'Custom domains require Plus',
     )
-    await plus(k, eids.jeff11)
+    await onPlus(k, eids.jeff11)
 
     // A space with none is told where it does answer, not just "none".
     let empty = await agent.tool('domain_status', { space: 'jeff11' })
@@ -381,7 +381,7 @@ Deno.test(
         slug: 'jeff12',
         apps: ['site', 'recipes'],
       }])
-      await plus(k, eids.jeff12)
+      await onPlus(k, eids.jeff12)
       let agent = connector(k, cookie)
       await agent.tool('app_set', { space: 'jeff12', app: 'site', home: true })
 

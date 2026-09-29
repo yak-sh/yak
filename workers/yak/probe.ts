@@ -944,6 +944,30 @@ export let plus = async (k: Pick<Kernel, 'at' | 'made'>, space: string) => {
 }
 
 /**
+ * A space on Plus for a test whose subject is what the plan allows, not how
+ * it is bought: the same signed webhook {@link plus} delivers, carrying an
+ * active subscription Stripe never held. Nothing is asked of the sandbox, so
+ * nothing is left in it. `billing_kernel_test.ts` and `roster_test.ts` buy
+ * the plan at Stripe.
+ */
+export let onPlus = async (k: Pick<Kernel, 'at'>, space: string) => {
+  let id = crypto.randomUUID().replaceAll('-', '')
+  await delivered(
+    k,
+    '/stripe/webhook',
+    WEBHOOK_SECRET,
+    'customer.subscription.updated',
+    {
+      id: `sub_probe${id}`,
+      customer: `cus_probe${id}`,
+      status: 'active',
+      metadata: { space, apex: apex() },
+      current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+    },
+  )
+}
+
+/**
  * A `Stripe-Signature` header over exactly these bytes: HMAC-SHA256 of
  * `<timestamp>.<raw body>`, keyed by the endpoint's signing secret. The scheme
  * is Stripe's own and identical for the platform endpoint and the Connect one —
