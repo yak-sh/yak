@@ -85,6 +85,8 @@ export type Opts = {
   /** which machine's launcher to use (default this one's, `Deno.build.os`);
    * the macOS one runs anywhere perl does, which is how Linux tests it */
   os?: string
+  /** whether a pid is running (default: `kill -0`) */
+  running?: (pid: number) => Promise<boolean>
 }
 
 /** What a caller holds of a tracked process. */
@@ -388,7 +390,8 @@ let kill = async (target: number, sig: string) =>
     stderr: 'null',
   }).output()).success
 
-let alive = (pid: number) => kill(pid, '0')
+// Whether a pid runs, asked the way the caller looks, or with `kill -0`.
+let alive = (o: Opts) => o.running ?? ((pid: number) => kill(pid, '0'))
 
 /**
  * Send a signal to a tracked run: to its process group where we launched it —
@@ -536,14 +539,14 @@ export let tail = (eid: string, n: number, o: Opts = {}): string[] => {
 // files are ours; a caller that adopted a process and keeps its own exit code
 // reads that once, with no delay to wait out.
 let WRITE = 10_000
-let reported = (f: ReturnType<typeof files>, poll: number) => async () => {
+let reported = (f: ReturnType<typeof files>, o: Opts) => async () => {
   let wrapper = groupOf(f.pid)
   for (let i = 0, end = Date.now() + WRITE;; i++) {
     let code = exitIn(f.code)
     if (code != null) return code
-    let over = wrapper ? !(await alive(wrapper)) : i >= 20
+    let over = wrapper ? !(await alive(o)(wrapper)) : i >= 20
     if (over || Date.now() >= end) return exitIn(f.code)
-    await sleep(poll)
+    await sleep(beat(o))
   }
 }
 
@@ -556,7 +559,7 @@ let follow = async (
   o: Opts,
 ) => {
   let poll = o.poll ?? 1000
-  while (pid && await alive(pid)) await sleep(poll)
+  while (pid && await alive(o)(pid)) await sleep(poll)
   let ended = await code()
   await store.apply([{ entity: { eid }, [EXIT]: { code: ended } }])
   return ended
@@ -609,7 +612,7 @@ export let launch = async (
     ...(o.eid ? { [EXIT]: null } : {}),
   }])
   let elapsed = elapsedOf(dir, eid)
-  let done = follow(store, eid, pid, reported(f, beat(o)), o).then((code) => {
+  let done = follow(store, eid, pid, reported(f, o), o).then((code) => {
     // Cache the ending before a caller cleans its file away, so a held Run
     // keeps reporting the whole elapsed time after cleanup.
     elapsed()
@@ -671,7 +674,7 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
       eid,
       pid,
       elapsed: elapsedOf(dir, eid),
-      done: follow(store, eid, pid, reported(f, beat(o)), o),
+      done: follow(store, eid, pid, reported(f, o), o),
     })
   }
   return runs
@@ -699,12 +702,10 @@ export let vanished = async (
   return out
 }
 
-/** Who is asking after the dead, and how a pid is looked for. */
+/** Who is asking after the dead. */
 export type Asking = Opts & {
   /** the process asking, never counted among them */
   me?: string
-  /** whether a pid is running (default: `kill -0`) */
-  running?: (pid: number) => Promise<boolean>
 }
 
 /**
@@ -739,7 +740,7 @@ let dead = async (b: Bundle, o: Asking): Promise<boolean> => {
   if (eid == o.me || !pid || mtimeOf(files(dirOf(o), eid).started) != null) {
     return false
   }
-  return !await (o.running ?? alive)(pid)
+  return !await alive(o)(pid)
 }
 
 /** How supervision behaves, in addition to how a process is watched. */
@@ -848,7 +849,7 @@ export let supervise = (store: Store, o: Care = {}): () => Promise<Run[]> => {
   // the stop, SIGKILL on the first pass after the grace period. Nothing here
   // waits — the timer calls us again.
   let down = async (eid: string, w: Wait, pid: number) => {
-    if (!pid || !(await alive(pid))) return
+    if (!pid || !(await alive(o)(pid))) return
     if (!w.termed) {
       w.termed = Date.now()
       return signal(eid, pid, 'TERM', o)
@@ -907,7 +908,7 @@ export let supervise = (store: Store, o: Care = {}): () => Promise<Run[]> => {
     // gone, so the shutdown lasts exactly as long as this supervisor does.
     for (let [eid, w] of waits) {
       if (seen.has(eid)) continue
-      if (w.pid && await alive(w.pid)) await down(eid, w, w.pid)
+      if (w.pid && await alive(o)(w.pid)) await down(eid, w, w.pid)
       else waits.delete(eid)
     }
     return started

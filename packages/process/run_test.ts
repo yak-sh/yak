@@ -2,7 +2,9 @@
 // prove nothing: the two escapes, the pidfile, the code file and the stream
 // files are the thing under test. They are short-lived and the poll is 5ms, so
 // the whole file runs in well under a second. A launch runs under every
-// launcher this machine has, so Linux runs the macOS one too.
+// launcher this machine has, so Linux runs the macOS one too. How long a
+// reader waits on a wrapper is the one thing a stand-in liveness probe drives,
+// so that test counts polls instead of sleeping through them.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -76,11 +78,11 @@ for (let os of launchers) {
   test(`${os}: a finished run's running time stops at its end`, async () => {
     let run = await launch(store(tracked()), {
       command: 'sleep',
-      args: ['0.05'],
+      args: ['0.01'],
     }, { dir: dir(), poll: 5, os })
     await run.done
     let took = run.elapsed()
-    assert(took >= 50, `${took}ms`)
+    assert(took >= 10, `${took}ms`)
     let now = Date.now()
     await until(() => Date.now() > now + 5, 'the clock to move')
     assertEquals(run.elapsed(), took)
@@ -163,7 +165,7 @@ test('watch picks up an unfinished row and stamps the one already gone', async (
   let g = tracked()
   let dead = await reaped()
   await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: dead } }])
-  let runs = await watch(store(g), { dir: dir(), poll: 5 })
+  let runs = await watch(store(g), { dir: dir(), poll: 1 })
   assertEquals(runs.map((r) => r.eid), ['p1'])
   assertEquals(await runs[0].done, null)
   assertEquals(comp((await g.read(`.${PROCESS}&*`))[0], EXIT)?.code, null)
@@ -213,17 +215,22 @@ test('an exit-code file read before it is written is waited for, never read as 0
 
 // And a wrapper slowed past the poll budget still has its code read: it is
 // waited for for as long as it is alive, not for a fixed number of polls. Like
-// the wrapper, the stand-in writes the code and then exits, so however a load
-// stretches its sleep, the file is final once it is gone.
+// the wrapper, the stand-in writes the code and then ends, so the file is
+// final once it is gone. It lives through thirty polls, past the twenty a
+// run with no wrapper on file is given.
 test('a wrapper slow to write the code is waited for while it lives', async () => {
   let g = tracked()
   let d = dir()
-  let wrapper = new Deno.Command('sh', {
-    args: ['-c', 'sleep 0.3; echo 3 > "$1"', 'sh', `${d}/p1.code`],
-  }).spawn()
-  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: await reaped() } }])
-  Deno.writeTextFileSync(`${d}/p1.pid`, `${wrapper.pid} ${await reaped()}\n`)
-  let [run] = await watch(store(g), { dir: d, poll: 5 })
+  let [wrapper, child] = [7001, 7002]
+  await g.apply([{ entity: { eid: 'p1' }, [PROCESS]: { pid: child } }])
+  Deno.writeTextFileSync(`${d}/p1.pid`, `${wrapper} ${child}\n`)
+  let polls = 0
+  let running = (pid: number) => {
+    if (pid != wrapper || ++polls < 30) return Promise.resolve(pid == wrapper)
+    Deno.writeTextFileSync(`${d}/p1.code`, '3\n')
+    return Promise.resolve(false)
+  }
+  let [run] = await watch(store(g), { dir: d, poll: 0, running })
   assertEquals(await run.done, 3)
-  await wrapper.status
+  assertEquals(polls, 30)
 })
