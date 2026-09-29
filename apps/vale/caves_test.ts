@@ -83,7 +83,6 @@ Deno.test('the cave has matching cold and grown layers and a clear camera', () =
     z,
     shake: 0,
     snap: false,
-    idle: 0,
     lift: 0,
   }
   let camera = new THREE.PerspectiveCamera()

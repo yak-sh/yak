@@ -267,7 +267,6 @@ let cam: Cam = {
   z: 0,
   shake: 0,
   snap: false,
-  idle: 0,
   lift: 0,
 }
 let target = new THREE.Vector3()

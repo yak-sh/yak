@@ -1,7 +1,7 @@
 // The camera: behind and above the hero, turned by dragging and pulled in or
-// out by the wheel. It eases round behind the hero after a drag or stick move,
-// and swings round behind them when asked (`snap`). It keeps its distance unless a
-// hill or a house is in the way, when it comes in at once, and it eases back
+// out by the wheel. It keeps the chosen orbit until asked to swing behind the
+// hero (`snap`). It keeps its distance unless a hill or a house is in the way,
+// when it comes in at once, and it eases back
 // out after. While the hero is in a building it rises to look down into it
 // over the walls, the roof and the floors over them faded (solid.ts
 // `cutaway`), and that building's walls never pull it in. It sees from a
@@ -28,8 +28,6 @@ export type Cam = {
   shake: number
   /** it is swinging round behind the hero */
   snap: boolean
-  /** seconds since the view was last turned by hand */
-  idle: number
   /** the least it looks down, raised while the hero is in a building */
   lift: number
 }
@@ -53,20 +51,17 @@ export let depth = (camera: THREE.PerspectiveCamera, fog: THREE.Fog) => {
   camera.updateProjectionMatrix()
 }
 
-// How fast it swings behind the hero, snapping and following, and how long
-// after an orbit drag following waits.
+// How fast it swings behind the hero when asked.
 let SNAP = 12
-let FOLLOW = 2.5
-let WAIT = 1
 // How far it looks down, at least, into a building the hero is in.
 let INDOORS = 0.85
 
-/** Turn the camera for a frame: as the hands turned and pulled it, and round
- * behind a hero facing `yaw`, at once when snapping and gently once manual
- * control rests. Holding the stick sideways cannot make the view spin.
+/** Turn the camera for a frame: as the hands turned and pulled it, or round
+ * behind a hero facing `yaw` when asked. Holding the stick sideways cannot
+ * make the view spin.
  *
  * ```ts
- * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
+ * import { assertAlmostEquals, assertEquals } from '@std/assert'
  * let hands = (move: [number, number], more = {}) => ({
  *   move, turn: 0, faceMove: false, jump: false, strike: false, ability: 0,
  *   dodge: false, talk: false, gather: false, drink: false, snap: false,
@@ -75,7 +70,7 @@ let INDOORS = 0.85
  * })
  * let cam = () => ({
  *   yaw: 0, pitch: 0.4, dist: 9, reach: 9, x: 0, y: 0, z: 0, shake: 0,
- *   snap: false, idle: 5, lift: 0,
+ *   snap: false, lift: 0,
  * })
  * // A hero facing +x has the camera behind them at -x, which is yaw -π/2.
  * let run = (c: ReturnType<typeof cam>, i: ReturnType<typeof hands>) => {
@@ -83,7 +78,7 @@ let INDOORS = 0.85
  *   return c.yaw
  * }
  * assertAlmostEquals(run(cam(), hands([0, 0], { snap: true })), -Math.PI / 2, 1e-9)
- * assert(run(cam(), hands([1, 0])) < -0.5) // follows a keyboard strafe
+ * assertEquals(run(cam(), hands([1, 0])), 0)
  * assertEquals(run(cam(), hands([1, 0], { faceMove: true })), 0)
  * assertEquals(run(cam(), hands([0, 1], { look: true })), 0)
  * let turned = cam()
@@ -96,9 +91,8 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
   cam.yaw += dx - i.turn * dt
   cam.pitch = clamp(cam.pitch + dy, 0.1, 1.3)
   cam.dist = clamp(cam.dist * (1 + i.zoom * 0.12), 4, 22)
-  cam.idle = dx || dy || i.turn || i.faceMove ? 0 : cam.idle + dt
   if (i.snap) cam.snap = true
-  if ((!cam.idle && !i.snap) || i.look) cam.snap = false
+  else if (dx || dy || i.turn || i.faceMove || i.look) cam.snap = false
   let off = Math.atan2(
     Math.sin(yaw + Math.PI - cam.yaw),
     Math.cos(yaw + Math.PI - cam.yaw),
@@ -109,8 +103,7 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
     cam.snap = false
     return
   }
-  let k = cam.snap ? SNAP : !i.look && cam.idle > WAIT ? FOLLOW : 0
-  cam.yaw += off * (1 - Math.exp(-dt * k))
+  if (cam.snap) cam.yaw += off * (1 - Math.exp(-dt * SNAP))
 }
 
 /** Which way the camera looks, in whole degrees clockwise from north (-z).
@@ -133,11 +126,13 @@ export let bearing = (yaw: number) =>
  * import { assert } from '@std/assert'
  * import * as THREE from 'three'
  * import { flat } from './terrain.ts'
+ * import { seedBuildings } from './buildings_fixture.ts'
+ * seedBuildings()
  * let v = flat(5, [], [{ kind: 'hall.plaster', x: 30, z: 30, seed: 0 }])
  * let home = v.buildings(30, 30, 0)[0]
  * let cam = {
  *   yaw: 0, pitch: 1.1, dist: 9, reach: 9, x: 30, y: 7, z: 30,
- *   shake: 0, snap: false, idle: 0, lift: 0,
+ *   shake: 0, snap: false, lift: 0,
  * }
  * let camera = new THREE.PerspectiveCamera()
  * aim(cam, camera, new THREE.Vector3(30, home.floors[0] + 1.5, 30),
