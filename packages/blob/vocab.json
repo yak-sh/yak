@@ -20,6 +20,31 @@
         }
       }
     },
+    "representation": {
+      "component": true,
+      "wire": false,
+      "type": "object",
+      "description": "Immutable HTTP headers for one use of content-addressed bytes.",
+      "required": ["scope", "address", "media_type"],
+      "properties": {
+        "scope": {
+          "type": "string",
+          "stamped": true
+        },
+        "address": {
+          "type": "string",
+          "stamped": true
+        },
+        "media_type": {
+          "type": "string",
+          "stamped": true
+        },
+        "name": {
+          "type": "string",
+          "stamped": true
+        }
+      }
+    },
     "attachment": {
       "component": true,
       "type": "object",

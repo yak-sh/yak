@@ -88,3 +88,16 @@ Deno.test('no mime means octet-stream, no name means no disposition', () => {
   assertEquals(res.headers.get('content-type'), 'application/octet-stream')
   assertEquals(res.headers.get('content-disposition'), null)
 })
+
+Deno.test('immutable and private policies follow the representation', () => {
+  let bytes = new Uint8Array([1, 2, 3])
+  let immutable = served(bytes, { mime: 'image/png', cache: 'immutable' })
+  assertEquals(
+    immutable.headers.get('cache-control'),
+    'public, max-age=31536000, immutable',
+  )
+  let private_ = served(bytes, { mime: 'image/png', cache: 'private' })
+  assertEquals(private_.headers.get('cache-control'), 'private, no-store')
+  let revalidate = served(bytes, { cache: 'revalidate' })
+  assertEquals(revalidate.headers.get('cache-control'), 'private, no-cache')
+})

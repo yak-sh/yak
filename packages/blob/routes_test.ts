@@ -1,4 +1,4 @@
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Graph, graph } from '@yaks/graph'
 import { type Authenticate, type Route, routed } from '@yaks/api'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -8,7 +8,8 @@ import { addressOf, type Artifact, artifactDoc } from './artifact.ts'
 import { mem } from './testing.ts'
 import type { Bucket } from './object.ts'
 import { type Backend, type Options, PREFIX, routes } from './routes.ts'
-import { blobSchema } from './sqlite.ts'
+import { blobSchema, sqliteBlobs } from './sqlite.ts'
+import { representations } from './representation_rules.ts'
 
 // The spine, which no package's own document declares: a host composes it from
 // its kernel, and a test needs the two properties a bundle is addressed by.
@@ -50,7 +51,10 @@ let host = (): { sql: Driver; graph: Graph } => {
   let sql = mem()
   let db = storage(sql, vocab)
   for (let stmt of [...db.ddl(), ...blobSchema()]) sql.query(stmt)
-  return { sql, graph: graph({ storage: db, vocab, plugins: [] }) }
+  return {
+    sql,
+    graph: graph({ storage: db, vocab, plugins: [representations()] }),
+  }
 }
 
 let door = (
@@ -76,8 +80,26 @@ let put = (sha: string, body: BodyInit, mime?: string) =>
   })
 
 let text = new TextEncoder().encode('a long essay')
-// A PNG's first bytes: not valid UTF-8, which is what a text table cannot keep.
-let png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+// A PNG's header: not valid UTF-8, which is what a text table cannot keep.
+let png = new Uint8Array([
+  0x89,
+  0x50,
+  0x4e,
+  0x47,
+  0x0d,
+  0x0a,
+  0x1a,
+  0x0a,
+  0,
+  0,
+  0,
+  13,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  ...new Array(21).fill(0),
+])
 
 Deno.test('a PUT to an address stores the bytes and mints the artifact', async () => {
   let h = host(), ask = door(h)
@@ -93,24 +115,29 @@ Deno.test('a PUT to an address stores the bytes and mints the artifact', async (
   let [row] = await h.graph.read(`.eid=${sha}`)
   assertEquals((row.artifact as Artifact).size, text.length)
 
-  let got = await ask(new Request(at(sha)))
+  let versioned = new URL(made.headers.get('location')!, at(sha)).href
+  let alias = await ask(new Request(at(sha)))
+  assertEquals(alias.status, 302)
+  assertEquals(alias.headers.get('location'), versioned)
+  assertEquals(alias.headers.get('cache-control'), 'public, no-cache')
+  let got = await ask(new Request(versioned))
   assertEquals(got.status, 200)
   assertEquals(new Uint8Array(await got.arrayBuffer()), text)
-  // The row is what the answer knows these bytes are.
+  // The snapshot, rather than the editable artifact row, names the headers.
   assertEquals(got.headers.get('content-type'), 'text/plain')
   assertEquals(
     got.headers.get('cache-control'),
-    'public, no-cache',
+    'public, max-age=31536000, immutable',
   )
   let part = await ask(
-    new Request(at(sha), {
+    new Request(versioned, {
       headers: { range: 'bytes=2-5' },
     }),
   )
   assertEquals(part.status, 206)
   assertEquals(part.headers.get('content-range'), `bytes 2-5/${text.length}`)
   assertEquals(new Uint8Array(await part.arrayBuffer()), text.slice(2, 6))
-  let head = await ask(new Request(at(sha), { method: 'HEAD' }))
+  let head = await ask(new Request(versioned, { method: 'HEAD' }))
   assertEquals(head.status, 200)
   assertEquals(head.headers.get('content-length'), String(text.length))
 })
@@ -123,6 +150,62 @@ Deno.test('the same upload twice is one object and one row', async () => {
   assertEquals(again.status, 200)
   assertEquals(tally(h.sql, 'blob_text'), 1)
   assertEquals((await h.graph.read('.artifact')).length, 1)
+  assertEquals((await h.graph.read('.representation')).length, 1)
+})
+
+Deno.test('a changed text type gets a new URL without changing the old one', async () => {
+  let h = host(), ask = door(h)
+  let sha = await addressOf(text)
+  let plain = await ask(put(sha, text, 'text/plain'))
+  let markdown = await ask(put(sha, text, 'text/markdown'))
+  let old = new URL(plain.headers.get('location')!, at(sha)).href
+  let next = new URL(markdown.headers.get('location')!, at(sha)).href
+  assert(old != next)
+  assertEquals((await ask(new Request(at(sha)))).headers.get('location'), next)
+  assertEquals(
+    (await ask(new Request(old))).headers.get('content-type'),
+    'text/plain',
+  )
+  assertEquals(
+    (await ask(new Request(next))).headers.get('content-type'),
+    'text/markdown',
+  )
+  let id = old.split('/').pop()!
+  await assertRejects(
+    async () => await h.graph.apply([{ entity: { eid: id }, $delete: true }]),
+    Error,
+    'cannot be deleted',
+  )
+  await assertRejects(
+    async () =>
+      await h.graph.apply([{
+        entity: { eid: id },
+        representation: { media_type: 'application/javascript' },
+      }], { trusted: true }),
+    Error,
+    'cannot change',
+  )
+})
+
+Deno.test('an existing bare address gains a stable type on its first read', async () => {
+  let h = host(), ask = door(h)
+  let sha = await addressOf(text)
+  sqliteBlobs(h.sql).put(sha, text)
+  await h.graph.apply([{
+    entity: { eid: sha },
+    artifact: { address: sha, media_type: 'text/markdown', size: text.length },
+  }])
+  let alias = await ask(new Request(at(sha)))
+  assertEquals(alias.status, 302)
+  let versioned = alias.headers.get('location')!
+  let got = await ask(new Request(versioned))
+  assertEquals(got.headers.get('content-type'), 'text/markdown')
+  assertEquals(new Uint8Array(await got.arrayBuffer()), text)
+  assertEquals((await h.graph.read('.representation')).length, 1)
+  assertEquals(
+    (await ask(new Request(at(sha)))).headers.get('location'),
+    versioned,
+  )
 })
 
 Deno.test('bytes that do not hash to their address are refused, and nothing lands', async () => {
@@ -200,9 +283,12 @@ Deno.test('the store a host names is where the bytes land', async () => {
   let h = host()
   let ask = door(h, { store: { via: 'object', bucket, prefix: 'art/' } })
   let sha = await addressOf(png)
-  assertEquals((await ask(put(sha, png, 'image/png'))).status, 200)
+  let made = await ask(put(sha, png, 'image/png'))
+  assertEquals(made.status, 200)
   assertEquals([...cells.keys()], [`art/${sha}`])
-  let got = await ask(new Request(at(sha)))
+  let got = await ask(
+    new Request(new URL(made.headers.get('location')!, at(sha))),
+  )
   assertEquals(new Uint8Array(await got.arrayBuffer()), png)
   assertEquals(got.headers.get('content-type'), 'image/png')
   // and the database kept nothing but the row

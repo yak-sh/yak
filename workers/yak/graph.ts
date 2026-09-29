@@ -81,7 +81,13 @@ import {
   subscriptions,
   Unauthorized,
 } from '@yaks/api'
-import { blobRead, blobs, blobSchema, sqliteBlobs } from '@yaks/blob'
+import {
+  blobRead,
+  blobs,
+  blobSchema,
+  representations,
+  sqliteBlobs,
+} from '@yaks/blob'
 import {
   as,
   col,
@@ -839,6 +845,7 @@ export class Store {
         keys(vocab),
         aliases(),
         blobs(vocab, bytes),
+        representations(),
         wakes(),
         // A transcript's rules, in an app's store (D-40545): a model named by
         // its name, an entry's place in its transcript allocated as it lands.

@@ -1,0 +1,47 @@
+// A representation is a snapshot: the URL may be cached for a year, so the
+// graph must never change or delete the row that gives that URL its headers.
+
+import { type Comp, type Plugin, Refused, then } from '@yaks/graph'
+import { type Representation, represents } from './representation.ts'
+
+export let representations = (): Plugin => ({
+  name: 'representations',
+  hooks: {
+    precondition: (bundles, tx) => {
+      let touched = bundles.filter((b) =>
+        b.$delete || b.representation !== undefined
+      )
+      if (!touched.length) return bundles
+      return then(
+        tx.get(touched.map((b) => b.entity.eid), ['representation']),
+        (found) => {
+          let at = new Map(found.map((b) => [b.entity.eid, b]))
+          for (let b of touched) {
+            let old = at.get(b.entity.eid)?.representation as
+              | Representation
+              | undefined
+            let patch = b.representation as Comp | null | undefined
+            if (old && (b.$delete || patch === null)) {
+              throw new Refused('a blob representation cannot be deleted')
+            }
+            if (
+              old && patch &&
+              Object.entries(patch).some(([k, v]) =>
+                v !== old[k as keyof Representation]
+              )
+            ) {
+              throw new Refused('a blob representation cannot change')
+            }
+            if (
+              !old && patch &&
+              !represents(b.entity.eid, patch as Representation)
+            ) {
+              throw new Refused('a blob representation must use its derived id')
+            }
+          }
+          return bundles
+        },
+      )
+    },
+  },
+})

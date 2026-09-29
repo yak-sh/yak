@@ -58,12 +58,16 @@ import {
   selling,
 } from './sell.ts'
 import {
+  addressed,
+  contentType,
   mimeOf,
+  representation,
+  represents,
+  type Served,
   served as fenced,
   servedOpen as fencedOpen,
   type Size,
   sizeOf,
-  validator,
 } from '@yaks/blob'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
@@ -95,7 +99,7 @@ import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
 import { borrowed, queried, sources, vocabulary } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, Stale, token } from '@yaks/graph'
 import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
@@ -760,7 +764,7 @@ let nameSent = (req: Request) => {
 }
 
 /**
- * Bytes into the app's bucket, and the two rows that name them there — the
+ * Bytes into the app's bucket, and the rows that name them there — the
  * write half of an upload, without a request anywhere in it, because bytes
  * arrive by other doors too (inbox.ts: a letter's attachments).
  *
@@ -769,7 +773,7 @@ let nameSent = (req: Request) => {
  * has named yet are invisible until the next arrival of the same file names
  * them. The caller applies the bundles, as whoever it decided is writing.
  *
- * Two rows, the way the fleet shapes a file (src/blob.ts): the content,
+ * The content row, the way the fleet shapes a file (src/blob.ts),
  * addressed by its sha and carrying what is true of the bytes — how many they
  * are, and what they measure (@yaks/blob `sizeOf`, off the file's own header) —
  * and the use of it, carrying what it is called and what it is. They stay
@@ -787,18 +791,38 @@ export let filed = async (
   mime: string,
   name: string,
 ): Promise<
-  { sha: string; use: string; size: Size | undefined; bundles: Bundle[] }
+  {
+    sha: string
+    use: string
+    size: Size | undefined
+    mime: string
+    url: string
+    bundles: Bundle[]
+  }
 > => {
   let sha = await sha256(bytes)
+  let use = await useOf(sha)
+  if (!name || mime == 'application/octet-stream') {
+    let [prior] = await metaOf(appStore(env.STORE, space, app, env))
+      .query(`.eid=${use}`) as {
+        attachment?: { name?: string; mime?: string }
+      }[]
+    name ||= prior?.attachment?.name ?? ''
+    if (mime == 'application/octet-stream') {
+      mime = prior?.attachment?.mime ?? mime
+    }
+  }
+  let rep = representation(app.eid, sha, await contentType(bytes, mime), name)
   let blobs = r2Objects(env.BLOBS)
   let key = blobKey(space, app, sha)
   if (!(await blobs.has(key))) await blobs.put(key, bytes)
   let size = sizeOf(bytes)
-  let use = await useOf(sha)
   return {
     sha,
     use,
     size,
+    mime: rep.row.media_type,
+    url: `/${app.slug}/api/blob/${rep.path}`,
     bundles: [
       {
         entity: { eid: sha },
@@ -806,11 +830,19 @@ export let filed = async (
         ...(size ? { image: size } : {}),
       },
       {
+        entity: { eid: rep.eid },
+        representation: rep.row,
+      },
+      {
         entity: { eid: use },
         // A patch, so an arrival that names nothing leaves the name the
         // first one gave these bytes: the same file is the same file,
         // whatever the page had to call it the second time.
-        attachment: { blob: sha, mime, ...(name ? { name } : {}) },
+        attachment: {
+          blob: sha,
+          mime: rep.row.media_type,
+          ...(name ? { name } : {}),
+        },
       },
     ],
   }
@@ -838,26 +870,24 @@ let took = async (
     bytes: bytes.byteLength,
   }])
   if (stopped) return json(413, 'space_full', stopped)
-  let mime = mimeSent(req)
-  let file = await filed(env, space, app, bytes, mime, nameSent(req))
+  let file = await filed(env, space, app, bytes, mimeSent(req), nameSent(req))
   try {
-    await metaOf(store).apply(file.bundles, headers)
+    await metaOf(store).apply(file.bundles, { ...headers, ...KERNEL })
   } catch (e) {
     caught(e, { request: 'POST /api/blob', space: space.slug, app: app.slug })
     return json(400, 'refused', e instanceof Error ? e.message : String(e))
   }
   return Response.json({
     eid: file.sha,
-    url: `/${app.slug}/api/blob/${file.sha}`,
-    mime,
+    url: file.url,
+    mime: file.mime,
     bytes: bytes.byteLength,
     ...file.size,
   })
 }
 
-// The bytes back, at the address the upload answered. The mime and the name
-// come off the attachment row the upload wrote; @yaks/blob's `served` fences
-// the response and revalidates metadata, as the fleet's blob door does.
+// The bare hash is the current attachment; the second path segment names an
+// immutable representation. Only the bare address reads mutable metadata.
 let gave = async (
   req: Request,
   env: Env,
@@ -865,15 +895,98 @@ let gave = async (
   app: App,
   store: Door,
   headers: Record<string, string>,
-  sha: string,
+  path: string,
 ) => {
-  if (!/^[0-9a-f]{64}$/.test(sha)) return json(404, 'no_such_file')
+  let address = addressed(path)
+  if (!address) return json(404, 'no_such_file')
+  let { sha, eid } = address
+  let graph = metaOf((path, init, sent) =>
+    store(path, init, { ...headers, ...sent })
+  )
+  let blobs = r2Objects(env.BLOBS)
+  if (!eid) {
+    let current = async () => {
+      let rows = await graph.query(`.eid=${await useOf(sha)},${sha}&*`)
+      let file = (rows as {
+        attachment?: { mime?: string; name?: string }
+      }[]).find((r) => r.attachment)?.attachment
+      let artifact = (rows as { artifact?: { media_type?: string } }[])
+        .find((r) => r.artifact)?.artifact
+      if (!file && !artifact) return null
+      let mime = file?.mime ?? artifact?.media_type ?? ''
+      let name = file?.name ?? ''
+      let rep = representation(app.eid, sha, mime, name)
+      if ((await graph.query(`.eid=${rep.eid}`)).length) return rep
+      let bytes = await blobs.read(blobKey(space, app, sha))
+      if (!bytes) return null
+      let fixed = await contentType(bytes, mime)
+      rep = representation(app.eid, sha, fixed, name)
+      let changes: Bundle[] = [{
+        entity: { eid: rep.eid },
+        representation: rep.row,
+      }]
+      if (fixed != mime) {
+        if (file) {
+          changes.push({
+            entity: { eid: await useOf(sha) },
+            attachment: { mime: fixed },
+            $was: {
+              attachment: {
+                blob: token(sha),
+                mime: token(file.mime),
+                name: token(file.name),
+              },
+            },
+          })
+        } else if (artifact) {
+          changes.push({
+            entity: { eid: sha },
+            artifact: { media_type: fixed },
+            $was: { artifact: { media_type: token(artifact.media_type) } },
+          })
+        }
+      }
+      await graph.apply(changes, KERNEL)
+      return rep
+    }
+    let rep
+    try {
+      rep = await current()
+    } catch (e) {
+      if (!(e instanceof Stale)) throw e
+      rep = await current()
+    }
+    if (!rep) return json(404, 'no_such_file')
+    let to = new URL(req.url)
+    to.pathname += `/${rep.eid}`
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: to.href,
+        'cache-control': app.access == 'private'
+          ? 'private, no-store'
+          : 'private, no-cache',
+      },
+    })
+  }
+  let [found] = await graph.query(`.eid=${eid}`) as {
+    representation?: {
+      scope: string
+      address: string
+      media_type: string
+      name?: string
+    }
+  }[]
+  let rep = found?.representation
+  if (
+    !rep || rep.scope != app.eid || rep.address != sha ||
+    !represents(eid, rep)
+  ) return json(404, 'no_such_file')
   let partial = req.method == 'HEAD' ||
     req.headers.has('range') || req.headers.has('if-none-match')
   let object
   let bytes
   try {
-    let blobs = r2Objects(env.BLOBS)
     if (partial) object = await blobs.open(blobKey(space, app, sha))
     else bytes = await blobs.get(blobKey(space, app, sha))
     if (partial && !object) return json(404, 'no_such_file')
@@ -881,17 +994,11 @@ let gave = async (
     caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
     return json(404, 'no_such_file')
   }
-  let rows = await metaOf((path, init, sent) =>
-    store(path, init, { ...headers, ...sent })
-  ).query(`.eid=${await useOf(sha)},${sha}&*`)
-  let file = (rows as { attachment?: { mime?: string; name?: string } }[])
-    .find((r) => r.attachment)?.attachment
-  let generated = (rows as { artifact?: { media_type?: string } }[])
-    .find((r) => r.artifact)?.artifact
-  let meta = file ?? { mime: generated?.media_type }
-  let response = {
-    ...meta,
-    etag: await validator(sha, meta),
+  let response: Served = {
+    mime: rep.media_type,
+    name: rep.name,
+    etag: `"${eid}"`,
+    cache: app.access == 'private' ? 'private' : 'revalidate',
   }
   return object
     ? fencedOpen(object, response, req)

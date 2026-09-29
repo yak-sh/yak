@@ -2,16 +2,18 @@ import { assertEquals } from '@std/assert'
 import { contentType } from './content_type.ts'
 
 let bytes = (...parts: (string | number[])[]) =>
-  new Uint8Array(parts.flatMap((part) =>
-    typeof part == 'string'
-      ? [...part].map((c) => c.charCodeAt(0))
-      : part
-  ))
+  new Uint8Array(
+    parts.flatMap((part) =>
+      typeof part == 'string' ? [...part].map((c) => c.charCodeAt(0)) : part
+    ),
+  )
 
 Deno.test('a binary signature overrides a mistaken declared type', async () => {
   let png = bytes(
-    [0x89], 'PNG\r\n\x1a\n',
-    [0, 0, 0, 13], 'IHDR',
+    [0x89],
+    'PNG\r\n\x1a\n',
+    [0, 0, 0, 13],
+    'IHDR',
     new Array(21).fill(0),
   )
   assertEquals(await contentType(png, 'video/mp4'), 'image/png')

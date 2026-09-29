@@ -535,7 +535,7 @@ export let coreDocs: VocabDoc[] = storeDocs([
   hookDoc,
   transcriptDoc,
   askingDoc,
-  pick(artifactDoc, ['artifact']),
+  pick(artifactDoc, ['artifact', 'representation']),
   openrouterDoc,
   hostedBuilderDoc,
   rtcDoc,

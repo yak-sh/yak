@@ -1,6 +1,5 @@
-// The two HTTP endpoints: a stored object at an address anyone can get, and the
-// PUT that puts one there. This is the module a server imports from
-// `@yaks/blob/routes`. One path, `/blob/<sha256>`, both ways.
+// The public byte door. A bare SHA names the current artifact and redirects
+// to an immutable representation; the representation fixes its MIME and name.
 //
 // The address is the name, which is what makes an upload a PUT: the caller
 // states what the bytes are and the server only has to agree. So the same file sent
@@ -16,18 +15,21 @@
 // ones only the server can know, and they are its options: where the bytes live
 // (`store`) and how large one may be (`limit`).
 //
-// The GET is a prefix route because the address is the rest of the path: a
-// content-addressed read takes no query string and no identity. The
-// row the PUT created supplies the one thing the bytes cannot state about
-// themselves — what they are — and the response is fenced either way
-// (./serve.ts).
+// The read is fenced by ./serve.ts.
 
 import { type Authenticate, json, refuse, type Route, signed } from '@yaks/api'
-import type { Graph } from '@yaks/graph'
+import { type Graph, Stale, token } from '@yaks/graph'
 import type { Driver } from '@yaks/sql'
 import { addressOf, type Artifact, keep } from './artifact.ts'
 import { type Backend, backend } from './backend.ts'
-import { served, servedOpen, validator } from './serve.ts'
+import { type Served, served, servedOpen } from './serve.ts'
+import { contentType, mediaType } from './content_type.ts'
+import {
+  addressed,
+  type Representation,
+  representation,
+  represents,
+} from './representation.ts'
 import type { Blobs } from './store.ts'
 
 export { type Backend, backend } from './backend.ts'
@@ -49,10 +51,10 @@ export type Options = {
 
 // An address is 64 lowercase hex characters; anything else never named an
 // object, whichever way the request was pointing.
-let addressed = (request: Request): string | null => {
-  let sha = new URL(request.url).pathname.slice(PREFIX.length)
-  return /^[0-9a-f]{64}$/.test(sha) ? sha : null
-}
+let address = (request: Request) =>
+  addressed(new URL(request.url).pathname.slice(PREFIX.length))
+
+let SCOPE = 'blob'
 
 // A refusal in the JSON shape every other endpoint here uses (@yaks/api).
 let no = (error: string, message: string, code: number): Response =>
@@ -90,13 +92,8 @@ let bounded = async (
 // What the caller declares these bytes are, as a media type and nothing else.
 // The parameters are dropped and the shape is validated because this string is
 // written into a response header every time the object is read back.
-let mediaOf = (request: Request): string => {
-  let said = (request.headers.get('content-type') ?? '').split(';')[0].trim()
-    .toLowerCase()
-  return /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(said)
-    ? said
-    : 'application/octet-stream'
-}
+let mediaOf = (request: Request): string =>
+  mediaType(request.headers.get('content-type') ?? '')
 
 /** The two endpoints: `GET /blob/<sha256>` returns the bytes, and
  * `PUT /blob/<sha256>` stores them. */
@@ -113,29 +110,71 @@ export let routes = (
   }
   let limit = options.limit ?? LIMIT
 
-  // What the row records this object as. The bytes stand on their own and are
-  // served without it, so a store holding an object no row names still serves
-  // it — as the octet-stream it is to anyone but its owner.
-  let mimeOf = async (sha: string) => {
-    let [found] = await host.graph.read(`.eid=${sha}`)
-    return (found?.artifact as Artifact | undefined)?.media_type
-  }
-
   let big = () => no('Refused', `an object is at most ${limit} bytes here`, 413)
 
   let read: Route['handle'] = async (request) => {
-    let sha = addressed(request)
-    if (!sha) return missing()
+    let at = address(request)
+    if (!at) return missing()
+    let { sha, eid } = at
+    if (!eid) {
+      let current = async () => {
+        let [row] = await host.graph.read(`.eid=${sha}`)
+        let artifact = row?.artifact as Artifact | undefined
+        let mime = artifact?.media_type ?? 'application/octet-stream'
+        let rep = representation(SCOPE, sha, mime)
+        let [saved] = await host.graph.read(`.eid=${rep.eid}`)
+        if (saved?.representation) return rep
+        let bytes = await store.get(sha)
+        if (!bytes) return null
+        let fixed = await contentType(bytes, mime)
+        rep = representation(SCOPE, sha, fixed)
+        await host.graph.apply([
+          {
+            entity: { eid: rep.eid },
+            representation: rep.row,
+          },
+          ...artifact && fixed != mime
+            ? [{
+              entity: { eid: sha },
+              artifact: { media_type: fixed },
+              $was: { artifact: { media_type: token(mime) } },
+            }]
+            : [],
+        ], { trusted: true })
+        return rep
+      }
+      let rep
+      try {
+        rep = await current()
+      } catch (e) {
+        if (!(e instanceof Stale)) throw e
+        rep = await current()
+      }
+      if (!rep) return missing()
+      let to = new URL(request.url)
+      to.pathname += `/${rep.eid}`
+      return new Response(null, {
+        status: 302,
+        headers: { location: to.href, 'cache-control': 'public, no-cache' },
+      })
+    }
+    let [found] = await host.graph.read(`.eid=${eid}`)
+    let rep = found?.representation as Representation | undefined
+    if (
+      !rep || rep.scope != SCOPE || rep.address != sha ||
+      !represents(eid, rep)
+    ) return missing()
     let partial = request.method == 'HEAD' ||
       request.headers.has('range') || request.headers.has('if-none-match')
     let object = partial ? await store.open?.(sha) : null
     if (partial && store.open && !object) return missing()
     let bytes = object ? null : await store.get(sha)
     if (!object && !bytes) return missing()
-    let mime = await mimeOf(sha)
-    let meta = {
-      mime,
-      etag: await validator(sha, { mime }),
+    let meta: Served = {
+      mime: rep.media_type,
+      name: rep.name,
+      etag: `"${eid}"`,
+      cache: 'immutable',
     }
     return object
       ? servedOpen(object, meta, request)
@@ -151,21 +190,22 @@ export let routes = (
     path: `${PREFIX}*`,
     handle: async (request) => {
       try {
-        let sha = addressed(request)
-        if (!sha) {
+        let at = address(request)
+        if (!at || at.eid) {
           return no('Refused', 'an address is 64 lowercase hex digits', 400)
         }
         let bytes = await bounded(request, limit)
         if (!bytes) return big()
         let got = await addressOf(bytes)
-        if (got != sha) {
+        if (got != at.sha) {
           return no('Refused', `these bytes address ${got}`, 400)
         }
         let artifact: Artifact = {
-          address: sha,
-          media_type: mediaOf(request),
+          address: at.sha,
+          media_type: await contentType(bytes, mediaOf(request)),
           size: bytes.length,
         }
+        let rep = representation(SCOPE, at.sha, artifact.media_type)
         // Check, store, write — signed as whoever `host.who` reports is
         // calling, so an upload is attributed the way a write through `/apply`
         // beside it is. The first apply runs with `check`, which validates the
@@ -178,11 +218,20 @@ export let routes = (
         let actor = await host.who?.(request) ?? null
         // Fresh rows each time: `apply` reads and writes the bundles it is
         // given, so the check's must not be the write's.
-        let batch = () => signed([{ entity: { eid: sha }, artifact }], actor)
-        await host.graph.apply(batch(), { check: true })
-        await keep(store, sha, bytes)
-        await host.graph.apply(batch())
-        return json(artifact)
+        let batch = () =>
+          signed([{
+            entity: { eid: at.sha },
+            artifact,
+          }, {
+            entity: { eid: rep.eid },
+            representation: rep.row,
+          }], actor)
+        await host.graph.apply(batch(), { check: true, trusted: true })
+        await keep(store, at.sha, bytes)
+        await host.graph.apply(batch(), { trusted: true })
+        let response = json(artifact)
+        response.headers.set('location', `${PREFIX}${rep.path}`)
+        return response
       } catch (err) {
         return refuse(err, request)
       }

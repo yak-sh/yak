@@ -14,6 +14,7 @@
 
 import type { Blobs } from './store.ts'
 import type { VocabDoc } from '@yaks/vocab'
+import { contentType } from './content_type.ts'
 import doc from './vocab.json' with { type: 'json' }
 
 export type Artifact = {
@@ -63,7 +64,11 @@ export let artifactStore =
   (blobs: Blobs): ArtifactStore => async (bytes, mediaType) => {
     let address = await addressOf(bytes)
     await keep(blobs, address, bytes)
-    return { address, media_type: mediaType, size: bytes.byteLength }
+    return {
+      address,
+      media_type: await contentType(bytes, mediaType),
+      size: bytes.byteLength,
+    }
   }
 
 /** The bytes an {@link Artifact} names, read back from where they are kept:

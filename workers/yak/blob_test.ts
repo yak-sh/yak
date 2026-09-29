@@ -68,7 +68,7 @@ Deno.test('a named media upload stays seekable when its metadata changes', async
   let them = await seed(k, [{ slug: 'mediabox', apps: ['player'] }])
   let host = 'mediabox.yaks.app'
   let path = '/player/api/blob'
-  let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
+  let media = bytes(be32(24), 'ftyp', 'isom', be32(0), 'isom', 'mp41')
   let upload = async (mime: string, name: string) => {
     let res = await k.at(host, path, {
       method: 'POST',
@@ -77,49 +77,71 @@ Deno.test('a named media upload stays seekable when its metadata changes', async
         'content-type': mime,
         'x-yak-name': encodeURIComponent(name),
       },
-      body: bytes,
+      body: media,
     })
     assertEquals(res.status, 200)
     return await res.json() as File
   }
   let file = await upload('application/octet-stream', '旅行—draft.MP4')
   assertEquals(file.mime, 'video/mp4')
-  let get = (headers: HeadersInit = {}, method = 'GET') =>
-    k.at(host, file.url, { method, headers })
-  let first = await get()
+  let get = (url: string, headers: HeadersInit = {}, method = 'GET') =>
+    k.at(host, url, { method, headers })
+  let first = await get(file.url)
   assertEquals(first.status, 200)
   assertEquals(first.headers.get('content-type'), 'video/mp4')
   assertMatch(
     first.headers.get('content-disposition') ?? '',
     /filename\*=UTF-8''%E6%97%85/,
   )
-  assertEquals(first.headers.get('cache-control'), 'public, no-cache')
+  assertEquals(first.headers.get('cache-control'), 'private, no-cache')
   let etag = first.headers.get('etag')!
   await first.body?.cancel()
-  let part = await get({ range: 'bytes=2-4', 'if-range': etag })
+  let part = await get(file.url, { range: 'bytes=2-4', 'if-range': etag })
   assertEquals(part.status, 206)
-  assertEquals(part.headers.get('content-range'), 'bytes 2-4/6')
-  assertEquals(new Uint8Array(await part.arrayBuffer()), bytes.slice(2, 5))
-  let head = await get({}, 'HEAD')
+  assertEquals(part.headers.get('content-range'), `bytes 2-4/${media.length}`)
+  assertEquals(new Uint8Array(await part.arrayBuffer()), media.slice(2, 5))
+  let head = await get(file.url, {}, 'HEAD')
   assertEquals(head.status, 200)
-  assertEquals(head.headers.get('content-length'), '6')
+  assertEquals(head.headers.get('content-length'), String(media.length))
   assertEquals(await head.text(), '')
 
-  // The same bytes keep their address, but a corrected type changes the
-  // representation and its validator. A cache must fetch the new headers.
+  // A later upload can rename the attachment, but the old URL keeps its
+  // original download name and validator.
   let again = await upload('audio/mp4', 'theme.m4a')
   assertEquals(again.eid, file.eid)
-  let changed = await get({ 'if-none-match': etag })
+  assert(file.url != again.url)
+  let changed = await get(again.url, { 'if-none-match': etag })
   assertEquals(changed.status, 200)
-  assertEquals(changed.headers.get('content-type'), 'audio/mp4')
+  assertEquals(changed.headers.get('content-type'), 'video/mp4')
+  assertMatch(changed.headers.get('content-disposition') ?? '', /theme\.m4a/)
   let next = changed.headers.get('etag')!
   assert(next != etag)
   await changed.body?.cancel()
-  let oldRange = await get({ range: 'bytes=2-', 'if-range': etag })
-  assertEquals(oldRange.status, 200)
-  assertEquals(new Uint8Array(await oldRange.arrayBuffer()), bytes)
-  let valid = await get({ 'if-none-match': next })
+  let oldRange = await get(file.url, { range: 'bytes=2-', 'if-range': etag })
+  assertEquals(oldRange.status, 206)
+  assertMatch(
+    oldRange.headers.get('content-disposition') ?? '',
+    /filename\*=UTF-8''%E6%97%85/,
+  )
+  assertEquals(new Uint8Array(await oldRange.arrayBuffer()), media.slice(2))
+  let valid = await get(again.url, { 'if-none-match': next })
   assertEquals(valid.status, 304)
+  let alias = await k.at(host, `${path}/${file.eid}`, { redirect: 'manual' })
+  assertEquals(alias.status, 302)
+  assertEquals(new URL(alias.headers.get('location')!).pathname, again.url)
+  let agent = connector(k, them.cookie)
+  await agent.tool('app_set', {
+    space: 'mediabox',
+    app: 'player',
+    access: 'private',
+  })
+  assertEquals((await get(file.url)).status, 401)
+  let owner = await k.at(host, file.url, {
+    headers: { cookie: them.cookie },
+  })
+  assertEquals(owner.status, 200)
+  assertEquals(owner.headers.get('cache-control'), 'private, no-store')
+  await owner.body?.cancel()
 })
 
 type File = {
@@ -153,7 +175,10 @@ Deno.test('the file door: a page uploads bytes and gets an address', async () =>
     assertEquals(file.eid, await hex(png))
     assertEquals(file.mime, 'image/png')
     assertEquals(file.bytes, png.byteLength)
-    assertEquals(file.url, `/photos/api/blob/${file.eid}`)
+    assertMatch(
+      file.url,
+      new RegExp(`^/photos/api/blob/${file.eid}/[0-9a-f]{64}$`),
+    )
     // …and what the picture measures, read off its header in the door: the
     // page that just picked it can hold its space open before it renders.
     assertEquals([file.w, file.h], [1600, 900])
@@ -163,7 +188,7 @@ Deno.test('the file door: a page uploads bytes and gets an address', async () =>
     let got = await fetch(`${mine.origin}${file.url}`)
     assertEquals(got.status, 200)
     assertEquals(got.headers.get('content-type'), 'image/png')
-    assertEquals(got.headers.get('cache-control'), 'public, no-cache')
+    assertEquals(got.headers.get('cache-control'), 'private, no-cache')
     assertEquals(new Uint8Array(await got.arrayBuffer()), png)
 
     // And it is a row: the app's own store knows what the file is called, and

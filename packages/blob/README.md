@@ -208,7 +208,8 @@ rows/indexes, use `@yaks/fts`'s `heal()` or `adopt()` as appropriate.
 
 `artifactStore(store)` returns a function accepting `(bytes, mediaType)` and
 resolving to `{ address, media_type, size }` after storing and verifying the
-bytes:
+bytes. Known binary signatures determine the media type. Text with valid UTF-8
+keeps a valid declared type; unknown bytes use `application/octet-stream`:
 
 ```ts
 import { artifactStore, fileBlobs } from '@yaks/blob'
@@ -234,17 +235,18 @@ return `undefined`. `mediaTypeOf(bytes)` names the same four formats from their
 signatures (`image/png`, `image/jpeg`, `image/gif`, `image/webp`), and
 `undefined` for anything else.
 
-`served(bytes, { mime?, name?, etag? }, request)` creates a byte-range capable
-HTTP response with `x-content-type-options: nosniff` and an optional inline
-filename disposition. Documents keep
+`served(bytes, { mime?, name?, etag?, cache? }, request)` creates a byte-range
+capable HTTP response with `x-content-type-options: nosniff` and an optional
+inline filename disposition. Documents keep
 `content-security-policy: sandbox;
 script-src 'none'`; audio and video keep
 their origin with `script-src 'none'` so a browser's native player can fetch
-them. The response can be cached but revalidates because its mime and name may
-change while the bytes keep their address. `validator(address, meta)` makes the
-ETag for those bytes and metadata. Scripts are blocked; the policy does not mean
-an HTML or SVG document cannot render. `ranged(bytes, request, headers)` serves
-the same byte-range behavior when a caller supplies its own response headers.
+them. A mutable response revalidates. A versioned public response can use
+`cache: 'immutable'` for a one-year cache; an app response can use `revalidate`
+or `private` so access changes take effect. `validator(address, meta)` makes the
+ETag for bytes and metadata. Scripts are blocked; the policy does not mean an
+HTML or SVG document cannot render. `ranged(bytes, request, headers)` serves the
+same byte-range behavior when a caller supplies its own response headers.
 `servedOpen` and `rangedOpen` accept an opened object and stream the selected
 span without loading the whole file; conditional responses and HEAD need no body
 read. `mimeOf(name)` gives deployed files and named uploads one media type
@@ -257,16 +259,19 @@ the provider call ID and revised prompt associated with generation.
 ## The HTTP endpoints
 
 `@yaks/blob/routes` exports `routes(host, options)` for plugin servers such as
-[`yak serve`](../cli/README.md). It mounts `/blob/<sha256>`:
+[`yak serve`](../cli/README.md). It mounts `/blob/<sha256>` and
+`/blob/<sha256>/<representation>`:
 
-- `GET` returns bytes using `served()`. If an artifact entity with that address
-  as its eid exists, its media type is used; otherwise it uses
-  `application/octet-stream`. Invalid addresses and missing objects return 404.
-  The route itself performs no authentication check.
+- A bare `GET` or `HEAD` redirects to the current representation. The alias
+  revalidates. An older bare address gets its descriptor on first read.
+- A versioned `GET` or `HEAD` returns bytes and immutable MIME and filename
+  headers. Public responses cache for one year. Invalid addresses and missing
+  objects return 404. The route itself performs no authentication check.
 - `PUT` requires 64 lowercase hex digits and bytes hashing to that address;
   either mismatch returns 400. It counts streamed body bytes and returns 413
   above the configured limit. It records a normalized media type from
-  `content-type` and returns artifact metadata as JSON.
+  `content-type` when the bytes are text, identifies known binary signatures,
+  and returns artifact metadata as JSON with the versioned URL in `Location`.
 
 An upload first checks its proposed artifact write with
 `graph.apply(...,

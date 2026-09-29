@@ -6,6 +6,7 @@
 import type { Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { blobs } from './plugin.ts'
+import { representations } from './representation_rules.ts'
 import type { Blobs } from './store.ts'
 
 /** The plugin for every body property this vocabulary marks `store: blob`,
@@ -13,4 +14,5 @@ import type { Blobs } from './store.ts'
  * hold the same text. */
 export let rules = (host: { vocab: Vocab; blobs: Blobs }): Plugin[] => [
   blobs(host.vocab, host.blobs),
+  representations(),
 ]

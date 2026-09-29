@@ -15,6 +15,7 @@ export type Served = {
   mime?: string | null
   name?: string | null
   etag?: string | null
+  cache?: 'immutable' | 'revalidate' | 'private'
 }
 
 // A server may ignore malformed or multiple ranges and answer the whole file.
@@ -135,7 +136,13 @@ let disposition = (name: string) => {
 /** The bytes as a fenced HTTP response. */
 let headersOf = (meta: Served): HeadersInit => ({
   'content-type': meta.mime || 'application/octet-stream',
-  'cache-control': 'public, no-cache',
+  'cache-control': meta.cache == 'immutable'
+    ? 'public, max-age=31536000, immutable'
+    : meta.cache == 'revalidate'
+    ? 'private, no-cache'
+    : meta.cache == 'private'
+    ? 'private, no-store'
+    : 'public, no-cache',
   // A sandbox makes Chrome's native media viewer an opaque origin. Its
   // crossorigin fetch of this same URL then fails. Inert media keeps its
   // origin; document formats remain sandboxed.
