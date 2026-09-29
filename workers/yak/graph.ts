@@ -128,6 +128,7 @@ import {
 } from '@yaks/fts'
 import { admitSchema } from '@yaks/graph/schema'
 import {
+  type Actor,
   type ApplyOpts,
   type Bundle,
   type Comp,
@@ -378,6 +379,8 @@ type Word =
   | `vocab:${string}`
   | `uses:${string}`
   | `tools:${string}`
+  | `seed:${string}`
+  | 'seeded'
   | 'app'
   | 'access'
   | 'mail'
@@ -1036,29 +1039,59 @@ export class Store {
     if (this.#heard(req).length) this.#atomic(() => this.#remember(req))
   }
 
-  // Version zero has no serving release: its first seed writes into the new
-  // store before the directory can publish version one.
+  // Draft declarations and seed wait for the directory's release pointer,
+  // including the first release from an empty store.
   #candidate(req: Request): string | null {
     let release = req.headers.get('x-yak-release')
     if (
       !req.headers.has('x-yak-base-release') ||
-      this.#get('release') == '0' ||
       !release || !/^[a-z0-9-]+$/.test(release)
     ) return null
     return release
+  }
+
+  #prepared(next: string): string {
+    let was = this.#get('vocab') ?? '{}'
+    if (next == was) return next
+    let changed = grew(
+      appDoc(was),
+      appDoc(next),
+      (name, prop) => this.#rows(name, prop),
+    )
+    let before = appVocab(was)
+    let after = appVocab(changed.doc)
+    retire(this.#sql, before, after)
+    for (let name of [...changed.dropped, ...changed.retyped]) {
+      let [comp, prop] = name.split('.')
+      if (prop) shed(this.#sql, before, after, comp, prop)
+      else {
+        this.#sql.query({
+          t: 'drop',
+          kind: 'table',
+          name: comp,
+          ifExists: true,
+        })
+      }
+    }
+    return JSON.stringify(changed.doc)
   }
 
   // A deploy prepares declarations in this store before the directory moves
   // the app's declaration pointer. That pointer is the serving decision:
   // every request selects its declarations here, so a failed release keeps
   // answering with the old vocabulary and commands even after preparation.
-  #select(req: Request): boolean {
-    if (this.#candidate(req)) return false
+  #select(req: Request): {
+    toolsMoved: boolean
+    effects: (() => void | Promise<void>)[]
+  } {
+    let unchanged = () => ({ toolsMoved: false, effects: [] })
+    if (this.#candidate(req)) return unchanged()
     let release = req.headers.get('x-yak-release')
-    if (release == null || !/^[a-z0-9-]+$/.test(release)) return false
+    if (release == null || !/^[a-z0-9-]+$/.test(release)) return unchanged()
     let active = this.#get('release')
-    if (active == release) return false
+    if (active == release) return unchanged()
     let toolsMoved = false
+    let effects: (() => void | Promise<void>)[] = []
     this.#atomic(() => {
       if (active == null) {
         this.#put('release', release)
@@ -1068,29 +1101,7 @@ export class Store {
       let was = this.#get('vocab') ?? '{}'
       let toolsWas = this.#get('tools') ?? '{}'
       let next = this.#get(`vocab:${release}`) ?? this.#get('vocab') ?? '{}'
-      if (active != '0' && release != '0' && next != was) {
-        let changed = grew(
-          appDoc(was),
-          appDoc(next),
-          (name, prop) => this.#rows(name, prop),
-        )
-        let before = appVocab(was)
-        let after = appVocab(changed.doc)
-        retire(this.#sql, before, after)
-        for (let name of [...changed.dropped, ...changed.retyped]) {
-          let [comp, prop] = name.split('.')
-          if (prop) shed(this.#sql, before, after, comp, prop)
-          else {
-            this.#sql.query({
-              t: 'drop',
-              kind: 'table',
-              name: comp,
-              ifExists: true,
-            })
-          }
-        }
-        next = JSON.stringify(changed.doc)
-      }
+      if (active != '0' && release != '0') next = this.#prepared(next)
       for (let word of words) {
         this.#put(`${word}:${active}`, this.#get(word) ?? '{}')
       }
@@ -1103,9 +1114,25 @@ export class Store {
       }
       this.#put('release', release)
       if (this.#get('vocab') != was) this.#build()
+      let seed = this.#get(`seed:${release}`)
+      if (
+        seed && !this.#get('seeded') && !req.headers.has('x-yak-base-release')
+      ) {
+        let { bundles, actor } = JSON.parse(seed) as {
+          bundles: Bundle[]
+          actor: Actor | null
+        }
+        let result = this.#graph.apply(signed(bundles, actor), {
+          deferEffects: (run) => effects.push(run),
+        })
+        if (result instanceof Promise) {
+          throw new Error('a staged seed must apply synchronously')
+        }
+        this.#put('seeded', release)
+      }
       toolsMoved = this.#get('tools') != toolsWas
     })
-    return toolsMoved && !this.#refused
+    return this.#refused ? unchanged() : { toolsMoved, effects }
   }
 
   async #enter(draft: boolean): Promise<() => void> {
@@ -1907,7 +1934,7 @@ export class Store {
     if (this.#refused) return this.#stalled()
     this.#learn(request)
     if (this.#refused) return this.#stalled()
-    let toolsMoved = this.#select(request)
+    let selected = this.#select(request)
     if (this.#refused) return this.#stalled()
     this.#live.wake()
     // The clock, started. A wake row is owed at an instant and the runtime's
@@ -1916,7 +1943,8 @@ export class Store {
     // schedules are planted and a lost alarm is set again. Once per
     // incarnation, and the stamp keeps it to one read after the first.
     await (this.#sowing ??= this.#sow())
-    if (toolsMoved) await this.#planting()
+    if (selected.toolsMoved) await this.#planting()
+    for (let run of selected.effects) await run()
     return null
   }
 
@@ -2130,6 +2158,7 @@ export class Store {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (path == '/vocab') return this.#vocabDoor(request)
+    if (path == '/seed') return this.#seedDoor(request)
     // Every word this store speaks, as the documents its vocabulary was loaded
     // from: the platform's and the app's own together, where `/vocab` is the
     // app's alone. A page's @yaks/client loads them, so it routes and admits
@@ -2620,6 +2649,52 @@ export class Store {
         caught(e, { request: 'restore', store: this.#get('name') })
       }
       return refuse(e instanceof Refused ? e : new Refused(String(e)))
+    }
+  }
+
+  // Check a draft seed with its candidate vocabulary and hold it for the
+  // release switch. The trial's schema and rows roll back together.
+  async #seedDoor(request: Request): Promise<Response> {
+    let release = request.headers.get('x-yak-release')
+    if (
+      request.method != 'POST' ||
+      !request.headers.has('x-yak-base-release') ||
+      !release || !/^[a-z0-9-]+$/.test(release)
+    ) return json({ error: 'NotFound', message: 'no route' }, 404)
+    try {
+      let bundles = await request.json() as Bundle[]
+      if (!Array.isArray(bundles)) {
+        throw new Refused('/seed takes a JSON array of bundles')
+      }
+      let actor = await this.#auth(request)
+      let rollback = Symbol('candidate seed')
+      try {
+        this.#ctx.storage.transactionSync(() => {
+          let next = this.#get(`vocab:${release}`)
+          if (!next) throw new Refused('candidate vocabulary is not staged')
+          this.#put('vocab', this.#prepared(next))
+          this.#build()
+          let result = this.#graph.apply(signed(bundles, actor), {
+            check: true,
+          })
+          if (result instanceof Promise) {
+            throw new Error('a staged seed must check synchronously')
+          }
+          throw rollback
+        })
+      } catch (e) {
+        if (e !== rollback) throw e
+      } finally {
+        this.#kv.clear()
+        this.#boot()
+      }
+      if (this.#refused) return this.#stalled()
+      if (new URL(request.url).searchParams.get('check') != '1') {
+        this.#put(`seed:${release}`, JSON.stringify({ bundles, actor }))
+      }
+      return Response.json({ ok: true })
+    } catch (e) {
+      return refuse(e, request)
     }
   }
 

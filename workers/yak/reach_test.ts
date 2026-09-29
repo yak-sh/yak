@@ -174,6 +174,33 @@ Deno.test('the app version selects its store declarations after preparation', as
   assertEquals((await apply(2)).status, 200)
 })
 
+Deno.test('the first release serves the vocabulary it prepared', async () => {
+  let env = { STORE: namespace() } as unknown as Env
+  let here = space('first-release')
+  let page = { ...app('page', here.eid), version: 0 }
+  let old = appStore(env.STORE, here, page)
+  let next = appStore(env.STORE, here, { ...page, version: 1 })
+  let draft = draftStore(env.STORE, here, page, '1')
+  let manifest = {
+    $defs: {
+      fire: { component: true, properties: { village: { type: 'string' } } },
+    },
+  }
+  await old('/vocab')
+  let planted = await draft('/vocab', {
+    method: 'POST',
+    body: JSON.stringify(manifest),
+  }, vouched(owner))
+  assertEquals(planted.status, 200)
+  await planted.body?.cancel()
+  await old('/vocab')
+  let docs = await (await next('/vocab.json')).json()
+  assertEquals(
+    docs.some((doc: { $defs?: object }) => 'fire' in (doc.$defs ?? {})),
+    true,
+  )
+})
+
 Deno.test('a refused draft leaves the serving app store usable', async () => {
   let env = { STORE: namespace() } as unknown as Env
   let here = space('refused-release')
@@ -309,6 +336,93 @@ Deno.test('a changed identity replaces its index when the release moves', async 
   let rows = await (await released('/query?q=.widget', {}, vouched(owner)))
     .json()
   assertEquals(rows.length, 2)
+})
+
+Deno.test('a candidate seed waits for release and lands once', async () => {
+  let env = { STORE: namespace() } as unknown as Env
+  let here = space('candidate-seed')
+  let page = app('page', here.eid)
+  let serving = appStore(env.STORE, here, page)
+  let draft = draftStore(env.STORE, here, page, '2')
+  let vocab = (component: string) => ({
+    $defs: {
+      [component]: {
+        component: true,
+        properties: { title: { type: 'string' } },
+      },
+    },
+  })
+  let eid = crypto.randomUUID()
+  let seed = [{ entity: { eid }, card: { title: 'seeded' } }]
+  assertEquals((await put(serving, '/vocab', vocab('note'))).status, 200)
+  assertEquals((await put(draft, '/vocab', vocab('card'))).status, 200)
+  assertEquals(
+    (await put(draft, '/seed', [
+      { entity: { eid: crypto.randomUUID() }, missing: { title: 'bad' } },
+    ])).status,
+    400,
+  )
+  assertEquals(
+    (await put(serving, '/apply', [
+      {
+        entity: { eid: crypto.randomUUID() },
+        note: { title: 'still serving' },
+      },
+    ])).status,
+    200,
+  )
+  let staged = await put(draft, '/seed', seed)
+  assertEquals(staged.status, 200, await staged.text())
+  assertEquals(
+    (await serving('/query?q=.card', {}, vouched(owner))).status,
+    400,
+  )
+  assertEquals(
+    (await (await serving('/vocab')).json()).$defs.card,
+    undefined,
+  )
+  let released = appStore(env.STORE, here, { ...page, version: 2 })
+  let rows = await (await released('/query?q=.card', {}, vouched(owner))).json()
+  assertEquals(rows.map((row: { card: { title: string } }) => row.card.title), [
+    'seeded',
+  ])
+  assertEquals(
+    (await put(released, '/apply', [
+      { entity: { eid }, card: { title: 'edited' } },
+    ])).status,
+    200,
+  )
+  let next = draftStore(env.STORE, here, { ...page, version: 2 }, '3')
+  assertEquals((await put(next, '/vocab', vocab('card'))).status, 200)
+  assertEquals((await put(next, '/seed', seed)).status, 200)
+  let again = appStore(env.STORE, here, { ...page, version: 3 })
+  let kept = await (await again('/query?q=.card', {}, vouched(owner))).json()
+  assertEquals(kept.map((row: { card: { title: string } }) => row.card.title), [
+    'edited',
+  ])
+})
+
+Deno.test('a first release seeds its candidate words', async () => {
+  let env = { STORE: namespace() } as unknown as Env
+  let here = space('first-seed')
+  let page = { ...app('page', here.eid), version: 0 }
+  let draft = draftStore(env.STORE, here, page, '1')
+  let result = await put(draft, '/vocab', {
+    $defs: {
+      card: { component: true, properties: { title: { type: 'string' } } },
+    },
+  })
+  assertEquals(result.status, 200, await result.text())
+  let seeded = await put(draft, '/seed', [{
+    entity: { eid: crypto.randomUUID() },
+    card: { title: 'hello' },
+  }])
+  assertEquals(seeded.status, 200, await seeded.text())
+  let serving = appStore(env.STORE, here, { ...page, version: 1 })
+  let rows = await (await serving('/query?q=.card', {}, vouched(owner))).json()
+  assertEquals(rows.map((row: { card: { title: string } }) => row.card.title), [
+    'hello',
+  ])
 })
 
 // A space with a reading list and a lending app in it, each declaring one word

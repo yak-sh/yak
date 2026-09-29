@@ -733,13 +733,13 @@ let texts = (
     text: new TextDecoder().decode(await blobs.get(prefix + path)),
   })))
 
-// A seed batch through the app's own write door, as the caller: the refusal's
-// own sentence back where the store said no, null where it took the batch.
-// `check` is @yaks/api's dry run — every phase, then a rollback — which is how
-// the refused bundle is found (seed.ts `blamed`).
+// A data batch through the app's write door, as the caller: the refusal's
+// sentence back where the store said no, null where it took the batch.
+// `check` asks for a dry run, which identifies the refused bundle.
 let applying =
-  (store: Door, head: Record<string, string>): Applying => (batch, check) => {
-    return store.consume(`/apply${check ? '?check=1' : ''}`, async (r) => {
+  (store: Door, head: Record<string, string>, path = '/apply'): Applying =>
+  (batch, check) => {
+    return store.consume(`${path}${check ? '?check=1' : ''}`, async (r) => {
       let body = await r.text()
       if (r.ok) return null
       try {
@@ -873,9 +873,8 @@ let published = async (
         files.manifest,
       ),
   )
-  // What this release will be called, read here because the seed below is
-  // marked with it the moment it lands and the version row is written at the
-  // end.
+  // What this release will be called. Its seed is staged under this version
+  // and applied when the directory moves the declaration pointer.
   let version = (app.version ?? 0) + 1
   // Read the serving release before preparing the next one. This also gives
   // a store first reached during a deploy the declaration to keep on failure.
@@ -1066,27 +1065,15 @@ let published = async (
     vouched(who),
   )
   vocabTook('vocab')
-  // And the data the app comes with (seed.ts, T-34327), after the words it is
-  // written in — an app's own components seed like the platform's — and once
-  // per store: `app.seeded` is the mark, so a redeploy leaves what the person
-  // has changed since exactly as they left it. It writes through the app's
-  // ordinary door as the caller, so the rows carry their byline and nothing
-  // server-owned can ride in on a seed file.
+  // Check the seed against the candidate words. The store applies it when the
+  // directory moves the release pointer; until then the serving rows stay put.
   let sowed: Sown[] = []
   let seedTook = c.since()
   if (!app.seeded) {
     sowed = await sow(
       await texts(blobs, prefix, own(keys).filter(seedy)),
-      applying(draft, await byCaller(ctx, who)),
+      applying(draft, await byCaller(ctx, who), '/seed'),
     )
-    if (sowed.length) {
-      await ctx.dir.apply({
-        entities: [{
-          entity: { eid: app.eid },
-          seeded: { at: new Date().toISOString(), version },
-        }],
-      }, vouched(who))
-    }
   }
   seedTook('seed')
   let toolsTook = c.since()
@@ -1197,6 +1184,7 @@ let published = async (
         standing.source,
         standing.draft,
         fence,
+        sowed.length > 0,
       ),
   )
   if (tooled.views) {

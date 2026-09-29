@@ -297,3 +297,49 @@ Deno.test(
     }
   },
 )
+
+Deno.test('a later release seeds a newly declared component', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    let space = /https:\/\/([a-z0-9-]+)\.yaks\.app/
+      .exec(
+        await agent.tool('app_new', {
+          slug: 'late-seed',
+          title: 'Late seed',
+        }),
+      )![1]
+    let app = { space, app: 'late-seed' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [{ path: 'index.html', content: '<h1>Late seed' }],
+    })
+    await agent.tool('app_deploy', app)
+    await agent.tool('app_files', {
+      ...app,
+      files: [
+        {
+          path: 'vocab.json',
+          content: vocabFile({ recipe: { serves: num } }),
+        },
+        {
+          path: 'seed.json',
+          content: JSON.stringify([{
+            entity: { eid: '$soup' },
+            recipe: { serves: 4 },
+          }]),
+        },
+      ],
+    })
+    await agent.tool('app_deploy', app)
+    let rows = JSON.parse(
+      await agent.tool('graph_query', {
+        q: '.recipe.serves=4',
+      }),
+    ) as { recipe: { serves: number } }[]
+    assertEquals(rows.map((row) => row.recipe.serves), [4])
+  } finally {
+    await k.stop()
+  }
+})

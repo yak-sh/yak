@@ -95,6 +95,8 @@ export type ApplyOpts = {
    * refusal still throws, which is the whole point of asking. The audit hooks
    * see the rollback (see {@link Checked}). */
   check?: boolean
+  /** Hold observers until an enclosing transaction commits. */
+  deferEffects?: (run: () => void | Promise<void>) => void
   /** Observe phase duration without changing the result. */
   trace?: (
     phase: Phase | 'gather' | 'transaction' | 'compose',
@@ -592,11 +594,12 @@ export let graph = (opts: Options): Graph => {
         return fell(e)
       }
       let observe = (b: Bundle[]) => {
-        if (!opts.deferEffects) return effects(b)
+        let defer = o.deferEffects ?? opts.deferEffects
+        if (!defer) return effects(b)
         // Sample the calling program's clock while its transaction-scoped
         // context still exists.
         instant ??= o.now ?? opts.clock?.() ?? now
-        opts.deferEffects(() => then(effects(b), () => {}))
+        defer(() => then(effects(b), () => {}))
         return b
       }
       return isPromise(committed)

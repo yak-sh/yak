@@ -606,6 +606,7 @@ export let record = async (
   sourceWas = app.source,
   draftWas = app.draft,
   fenceWas = app.fence,
+  seeded = false,
 ) => {
   let prior = sourceWas
     ? (await dir.deploys(app)).find((v) =>
@@ -624,6 +625,7 @@ export let record = async (
           fence: null,
           script: app.script,
         },
+        ...seeded ? { seeded: { at: new Date().toISOString(), version } } : {},
         $was: {
           app: {
             version: token(app.version),
