@@ -1,0 +1,18 @@
+{
+  "sound": "cry-slime",
+  "sha256": "89a0398223d7e273dd0687c689d14684d11f9f6333c605ccf70bd2115429f8ec",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A gelatinous slime gives one wet burbling call and low wobbling squeak. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790657286-0IPplmd5ZOqRQPj9M8Kh"
+  },
+  "playback": {
+    "loop": false
+  }
+}

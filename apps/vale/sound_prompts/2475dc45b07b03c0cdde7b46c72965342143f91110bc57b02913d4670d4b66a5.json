@@ -1,0 +1,18 @@
+{
+  "sound": "cry-crawler",
+  "sha256": "2475dc45b07b03c0cdde7b46c72965342143f91110bc57b02913d4670d4b66a5",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A large crawler gives one rasping hiss and chitter, close and unsettling. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790657260-vuMzViOk8XpzwyISPWXC"
+  },
+  "playback": {
+    "loop": false
+  }
+}

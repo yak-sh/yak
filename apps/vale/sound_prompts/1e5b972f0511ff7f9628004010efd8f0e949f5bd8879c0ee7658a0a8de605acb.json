@@ -1,0 +1,18 @@
+{
+  "sound": "step-serpent",
+  "sha256": "1e5b972f0511ff7f9628004010efd8f0e949f5bd8879c0ee7658a0a8de605acb",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One serpent slithering movement: dry scales and earth brushing under the body. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790657203-tKI5yC5VP7MzfTflYl9I"
+  },
+  "playback": {
+    "loop": false
+  }
+}

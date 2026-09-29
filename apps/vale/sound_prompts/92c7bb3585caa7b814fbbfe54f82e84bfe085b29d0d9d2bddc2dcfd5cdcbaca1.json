@@ -1,0 +1,18 @@
+{
+  "sound": "step-flier",
+  "sha256": "92c7bb3585caa7b814fbbfe54f82e84bfe085b29d0d9d2bddc2dcfd5cdcbaca1",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: One flying creature movement: a compact flap of leathery wings through air. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790657219-7AUT6s28YrDD9iAGwocF"
+  },
+  "playback": {
+    "loop": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "sound": "cry-biped",
+  "sha256": "2b47e3d765831e42f708f181175c6213585e130d81c3bf9e5907087e23f2df7d",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A hostile biped creature gives one low guttural battle growl. No human words. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3",
+    "observed_output": "audio/mpeg"
+  },
+  "generation": {
+    "response_id": "gen-tts-1790657231-d4B1fUohoYgS9Z7vtK47"
+  },
+  "playback": {
+    "loop": false
+  }
+}

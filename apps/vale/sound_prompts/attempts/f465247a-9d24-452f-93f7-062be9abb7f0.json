@@ -1,0 +1,18 @@
+{
+  "sound": "cry-quadruped",
+  "model": "bytedance-seed/seed-audio-1-0",
+  "provider": "openrouter",
+  "prompt": "Generate one isolated game sound effect. Follow the description. No speech, words, or music.\n\nSound effect only: A wild four-legged beast gives one throaty growl with a short snarl, canine rather than feline. No speech, words, music, or other sounds.",
+  "settings": {
+    "endpoint": "https://openrouter.ai/api/v1/audio/speech",
+    "response_format": "mp3"
+  },
+  "attempt": {
+    "ask": "f465247a-9d24-452f-93f7-062be9abb7f0",
+    "session": "19bcbd50-6e08-44b8-8676-e7f3a63c4078",
+    "state": "interrupted",
+    "error": "The previous model request was interrupted. It may have completed at the provider; inspect it before asking again.",
+    "response_id": null,
+    "artifact": null
+  }
+}
