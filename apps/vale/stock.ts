@@ -216,7 +216,10 @@ let POTIONS = ['tonic', 'tonic', 'draught', 'draught', 'elixir']
 // The potion a land's villagers keep.
 let potion = (level: string) => POTIONS[tierOf(lvlOf(level)) - 1]
 
-let WARES = new Map<string, Set<string>>()
+let WARES = {
+  beasts: BEASTS,
+  byLevel: new Map<string, Set<string>>(),
+}
 
 /**
  * What a deal in a land may ask for: its creatures to fell, and what a hero
@@ -233,7 +236,10 @@ let WARES = new Map<string, Set<string>>()
  * ```
  */
 export let wares = (level: string): Set<string> => {
-  let had = WARES.get(level)
+  if (WARES.beasts != BEASTS) {
+    WARES = { beasts: BEASTS, byLevel: new Map() }
+  }
+  let had = WARES.byLevel.get(level)
   if (had) return had
   let tiers = new Set(bred(level).map((k) => tierOf(foeOf(k, level).lvl)))
   let gear = Object.keys(ITEMS).filter((k) =>
@@ -246,7 +252,7 @@ export let wares = (level: string): Set<string> => {
     'coin',
     potion(level),
   ])
-  WARES.set(level, all)
+  WARES.byLevel.set(level, all)
   return all
 }
 

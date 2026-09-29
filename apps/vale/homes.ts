@@ -84,9 +84,20 @@ export type Home = {
 }
 
 let listed = new Map<string, Home[]>()
+let from = BEASTS
+
+// Both caches are views of the creature index, so a new store answer gives
+// each land fresh homes, including the levels already visited.
+let refresh = () => {
+  if (from == BEASTS) return
+  listed.clear()
+  near = nearby(homesOf)
+  from = BEASTS
+}
 
 /** Every creature a level grows, and where. */
 export let homesOf = (id: string): Home[] => {
+  refresh()
   let got = listed.get(id)
   if (got) return got
   let lv = levelOf(id)!, v = vale(), [ox, oz] = originOf(id)
@@ -192,15 +203,11 @@ let PAST = 48
 
 let near = nearby(homesOf)
 
-/** Reconsider every land when its creature designs change. */
-export let clearHomes = () => {
-  listed.clear()
-  near = nearby(homesOf)
-}
-
 /** The creatures that live within `r` metres of (x, z), as far as they are
  * found yet: the levels near are looked at one a call, nearest first. */
-export let homesNear = (x: number, z: number, r: number): Home[] =>
-  near(x, z, r + PAST).filter((h) =>
+export let homesNear = (x: number, z: number, r: number): Home[] => {
+  refresh()
+  return near(x, z, r + PAST).filter((h) =>
     Math.hypot(h.home[0] - x, h.home[1] - z) < r
   )
+}

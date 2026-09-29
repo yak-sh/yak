@@ -44,8 +44,13 @@ export let foeAt = (b: Beast, hops: number): Beast => {
 }
 
 let cache = new Map<string, Beast>()
+let from = BEASTS
 
 export let foeOf = (kind: string, level: string): Beast => {
+  if (from != BEASTS) {
+    cache.clear()
+    from = BEASTS
+  }
   let key = `${kind}:${level}`
   let found = cache.get(key)
   if (found) return found

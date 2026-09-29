@@ -33,7 +33,6 @@ import { bits, type Kind, overlay } from './fx.ts'
 import { glyphText } from './glyphs.ts'
 import { capacity, meshed, template } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
-import { clearHomes } from './homes.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
 import { parties } from './party.ts'
@@ -115,10 +114,7 @@ fit()
 addEventListener('resize', fit)
 
 let net = connect(new URL('api/', document.baseURI))
-let designed = net.designs('beast_design', (rows) => {
-  useBeasts(rows)
-  clearHomes()
-})
+let designed = net.designs('beast_design', useBeasts)
 let deal = deals(net)
 let folk = village(net, deal)
 let seen = sighting(net)
