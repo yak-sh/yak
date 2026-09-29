@@ -79,9 +79,10 @@ in a package.json beside index.html, and app_deploy compiles them. Four steps:
    beside index.html as well — square, 512, on its own background, base64 in
    place of content — and the app has an icon when it is kept on a phone's
    home screen.
-3. app_deploy — mark the release. The files are already live; this is the
-   version an error will name. It also registers any components the app
-   declares in a vocab.json beside index.html — {"$defs": {"recipe":
+3. app_deploy — release them. app_files keeps its edits private until this
+   runs; then they serve at once, as the version an error will name. It also
+   registers any components the app declares in a vocab.json beside
+   index.html — {"$defs": {"recipe":
    {"properties": {"serves": {"type": "number"}}}}} gives the app a recipe
    component of its own, filterable like doc, and two commands of its own,
    add_recipe and find_recipe, so any agent finds the app later.
