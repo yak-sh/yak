@@ -43,6 +43,8 @@ follow (web's nav.tsx listens for it).
 | `Tabs`    | `Tab`, `Badge`          | `Tab-on`, `Tab-hover`                                                                                                                   |
 | `Menu`    | `Item`, `Rule`          | `Item-hover`, `Item-danger`                                                                                                             |
 | `Tip`     | a tooltip               |                                                                                                                                         |
+| `Field`   | a text field            | `bare`; `lines` makes it a textarea, `caret` shows the caret in a terminal                                                              |
+| `Choices` | `Item`, `Text`, `Note`  | `Item-on` (the picked one), `Item-hover`                                                                                                |
 
 A variant for a pseudo-class (`hover`) lets the style guide show that state.
 

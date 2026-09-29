@@ -34,7 +34,7 @@ import { Id } from './views/Inline.tsx'
 import { title } from './title.tsx'
 import { pickLine, useHits } from './hits.ts'
 import { spawnHit } from './Canvas.tsx'
-import { useComplete } from './Complete.tsx'
+import { fields } from './fields.tsx'
 import { Sync } from './Sync.tsx'
 
 let Frame = block('footer', 'Status', {
@@ -44,7 +44,6 @@ let Frame = block('footer', 'Status', {
   Mode: 'span',
   Colon: 'span',
   Line: 'span',
-  Cmd: 'textarea',
   Ghost: 'span',
   Was: 'i',
   Verb: 'span',
@@ -64,7 +63,6 @@ let {
   Mode,
   Colon,
   Line,
-  Cmd,
   Ghost,
   Was,
   Verb,
@@ -79,6 +77,9 @@ let {
 } = Frame
 
 type Message = string | { task: string; session: string }
+
+// The command line's field in the page's own graph, and its draft.
+let CMD = 'cmd'
 
 let msg = signal<Message>('')
 let last = signal('') // what ↑ recalls
@@ -276,11 +277,9 @@ let WhoAmI = () => {
 // always returns to normal (and blurs whatever was being typed in).
 export let Status = () => {
   let input = useRef<HTMLTextAreaElement>(null)
-  let complete = useComplete()
-  // The DOM owns active typing. State mirrors it for hints, and begins from
-  // the durable draft so opening the command line never needs a later value
-  // rewrite that would move the caret.
-  let [line, setLine] = useState(() => peek('cmd')?.v ?? '')
+  // The line is the `cmd` field in the page's own graph (fields.tsx), which
+  // begins from the durable draft; the hints and the ghost read it there.
+  let line = fields.row(CMD)?.text ?? peek(CMD)?.v ?? ''
   let [pick, setPick] = useState(0)
 
   useEffect(() => {
@@ -339,19 +338,13 @@ export let Status = () => {
     }
   }, [])
 
-  // Seed only when the command input APPEARS. Rewriting an uncontrolled
-  // textarea after every repaint races its native input event and moves a
-  // mid-line caret to the end; while mounted, the DOM remains the owner.
+  // Take the keyboard when the command input APPEARS (a thumb waits).
   useEffect(() => {
     if (mode.value != 'command') return
-    let i = input.current
-    if (!i) return
-    if (i.value != line) i.value = line
-    if (!thumb()) i.focus()
+    if (!thumb()) input.current?.focus()
   }, [mode.value])
 
-  // The typed line, mirrored for the ghost and the hints (the DOM input
-  // stays the owner); which hint is picked (0 = the best match).
+  // The hints the line offers, and which is picked (0 = the best match).
   // A half-typed : line survives any reload — restore it and reopen the
   // command line; running or Escaping the line is what spends the draft.
   useEffect(() => {
@@ -362,8 +355,8 @@ export let Status = () => {
   let faded = ghost(line, all)
   let put = (v: string) => {
     if (input.current) input.current.value = v
-    v ? save('cmd', v) : drop('cmd')
-    setLine(v)
+    v ? save(CMD, v) : drop(CMD)
+    fields.set(CMD, v)
     setPick(0)
     if (v) input.current?.focus() // a picked verb takes the keyboard
   }
@@ -372,15 +365,16 @@ export let Status = () => {
     mode.value = 'normal'
   }
 
-  let cmdKey = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
-    if (complete.key(e)) return
+  // The field's list took its keys before these.
+  let cmdKey = (e: KeyboardEvent) => {
+    let v = input.current?.value ?? ''
     // shift+Enter is the textarea's own newline — spec() reads line 2 on
     // as the body, so a : line can file a task with prose attached.
-    let multi = e.currentTarget.value.includes('\n')
+    let multi = v.includes('\n')
     if (e.key == 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      last.value = e.currentTarget.value.trim() || last.value
-      exec(e.currentTarget.value)
+      last.value = v.trim() || last.value
+      exec(v)
       close()
     } else if (e.key == 'Escape') {
       close()
@@ -392,7 +386,7 @@ export let Status = () => {
     } else if (e.key == 'ArrowUp' && !multi) {
       e.preventDefault() // the caret would jump home instead
       // empty line: recall. Otherwise walk the list, away from the bar.
-      if (!e.currentTarget.value) put(last.value)
+      if (!v) put(last.value)
       else setPick((p) => Math.min(p + 1, hints.length - 1))
     } else if (e.key == 'ArrowDown' && !multi) {
       e.preventDefault()
@@ -428,21 +422,21 @@ export let Status = () => {
                   </Was>
                   {mirrorTail(line, faded)}
                 </Ghost>
-                <Cmd
+                <fields.Filter
+                  id={CMD}
+                  lines
+                  mod='bare'
+                  class='Status_Cmd'
+                  initial={line}
                   elRef={input}
-                  onKeyDown={cmdKey}
+                  onKey={cmdKey}
                   onInput={(e: InputEvent) => {
-                    let el = e.currentTarget as HTMLTextAreaElement
-                    let v = el.value
-                    v ? save('cmd', v) : drop('cmd')
-                    setLine(v)
+                    let v = (e.currentTarget as HTMLTextAreaElement).value
+                    v ? save(CMD, v) : drop(CMD)
                     setPick(0)
-                    complete.track(el)
                   }}
-                  onBlur={() => complete.close()}
                 />
               </Line>
-              {complete.list}
               {hints.length > 0 && (
                 <Hints>
                   {hints.slice(0, 8).map(([name, c], i) => (

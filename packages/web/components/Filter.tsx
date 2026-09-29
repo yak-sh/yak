@@ -1,31 +1,26 @@
 // The ephemeral filter — typed in the titlebar, felt in the face. It ANDs
 // into the view's own query only while it's typed, never stored:
 // board.query is the saved filter, this is the glance. Same grammar as
-// everywhere (query.ts), same completion dropdown as the palette; a line
-// that doesn't parse yet filters nothing — inert, because a bar
-// mid-keystroke is no place to throw. Escape clears; blurring empty
-// leaves nothing. The input (FilterInput, rendered by the card chrome)
-// and the rows it screens (passOf, read by the face) live in different
-// subtrees, so a module-held signal per TARGET is the wire between them
-// — keyed by the viewed entity, switching tabs (Board ⇄ List) keeps the
-// glance.
-import { useEffect, useRef } from 'preact/hooks'
-import { type Signal, signal } from '@preact/signals'
+// everywhere (query.ts), same completion as every query field; a line that
+// doesn't parse yet filters nothing — inert, because a bar mid-keystroke is
+// no place to throw. Escape clears; blurring empty leaves nothing. The input
+// (FilterInput, rendered by the card chrome) and the rows it screens
+// (passOf, read by the face) live in different subtrees, and the wire
+// between them is the page's own graph: the line is the field
+// `filter:<eid>` there (fields.tsx), keyed by the viewed entity, so
+// switching tabs (Board ⇄ List) keeps the glance.
+import { useRef } from 'preact/hooks'
 import type { SubscriptionRead } from '../live.ts'
 import { parseQuery } from '../query.ts'
 import { useDraft } from './drafts.ts'
 import { useQueryResult } from './useQuery.ts'
 import { block } from '@yaks/ui'
-import { useComplete } from './Complete.tsx'
+import { fields } from './fields.tsx'
 
 let Frame = block('div', 'Filter', {})
 
-let lines = new Map<string, Signal<string>>()
-let lineOf = (eid: string, initial = '') => {
-  let s = lines.get(eid)
-  if (!s) lines.set(eid, s = signal(initial))
-  return s
-}
+/** The field a viewed entity's filter line is typed in. */
+export let filterField = (eid: string) => `filter:${eid}`
 
 // the faces that listen — the titlebar consults this to decide whether
 // the current view earns the input or just the spacer
@@ -33,8 +28,10 @@ export let filterable = new Set(['Board', 'List'])
 
 // the bar's current text, for a face that must know whether it is SCREENING
 // at all: a count the server computed over the saved query is the truth only
-// while nothing narrows it here. Reading the signal subscribes the caller.
-export let filterLine = (eid: string): string => lineOf(eid).value
+// while nothing narrows it here. Before the bar has mounted, a host's
+// `initial` line is the one it will show. Reading it subscribes the caller.
+export let filterLine = (eid: string, initial = ''): string =>
+  fields.row(filterField(eid))?.text ?? initial
 
 // Windowed faces filter BEFORE taking a page. A half-typed expression stays
 // inert, just as it does for the local faces, but a valid one rides the saved
@@ -58,7 +55,7 @@ export let usePassOf = (
   eid: string,
   initial = '',
 ): Pass => {
-  let line = lineOf(eid, initial).value
+  let line = filterLine(eid, initial)
   let valid = true
   try {
     parseQuery(line)
@@ -74,50 +71,37 @@ export let usePassOf = (
   return pass
 }
 
-// the titlebar's half: the input + its completion dropdown. Uncontrolled
-// so the draft can reseed the caret without a controlled re-render
-// clobbering it; the line SIGNAL stays the wire to passOf, mirrored on
-// every keystroke. A draft keyed by the viewed entity survives a hot
-// swap (which mints a fresh lines Map) or reload; absent a draft, a live
-// glance from this session — the signal outlives a card remount, the DOM
-// input doesn't — is reflected back on mount.
+// the titlebar's half: the query field for this entity's line. A draft keyed
+// by the field survives a hot swap or reload; the field's row in the page's
+// graph outlives a card remount on its own.
 export let FilterInput = (
   { eid, initial = '' }: { eid: string; initial?: string },
 ) => {
-  let c = useComplete()
-  let line = lineOf(eid, initial)
+  let id = filterField(eid)
   let box = useRef<HTMLInputElement>(null)
-  let { sync, spend } = useDraft(`filter:${eid}`, box, (v) => line.value = v)
-  useEffect(() => {
-    if (box.current && !box.current.value && line.value) {
-      box.current.value = line.value
-    }
-  }, [])
+  // A restored draft is put in the field; a keystroke's is already there.
+  let { sync, spend } = useDraft(
+    id,
+    box,
+    (v) => v != fields.text(id) && fields.set(id, v),
+  )
   return (
     <Frame>
-      <input
-        ref={box}
-        defaultValue={line.value}
+      <fields.Filter
+        id={id}
+        initial={initial}
+        elRef={box}
         placeholder='filter…'
-        onInput={(e: InputEvent) => {
+        onInput={(e: InputEvent) => sync(e.currentTarget as HTMLInputElement)}
+        onKey={(e: KeyboardEvent) => {
+          if (e.key != 'Escape') return
           let el = e.currentTarget as HTMLInputElement
-          sync(el) // saves the draft and mirrors into the line signal
-          c.track(el)
+          if (el.value) e.stopPropagation() // consumed by the clear
+          fields.set(id, '')
+          spend()
+          el.blur()
         }}
-        onKeyDown={(e: KeyboardEvent) => {
-          if (c.key(e)) return
-          if (e.key == 'Escape') {
-            let el = e.currentTarget as HTMLInputElement
-            if (el.value) e.stopPropagation() // consumed by the clear
-            el.value = ''
-            line.value = ''
-            spend()
-            el.blur()
-          }
-        }}
-        onBlur={() => c.close()}
       />
-      {c.list}
     </Frame>
   )
 }

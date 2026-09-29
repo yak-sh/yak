@@ -32,6 +32,12 @@ let own = (c: Colors): Sheet => ({
   TStatus_Msg: { fg: c.muted },
   TStatus_Hint: { fg: c.dim },
   TKeys_Title: { bold: true, gap: true },
+  TSearch_Title: { bold: true, gap: true },
+  TSearch_Id: { fg: c.dim },
+  TSearch_Kind: { fg: c.dim },
+  TSearch_Hint: { fg: c.dim, dim: true },
+  TFilter: { gap: true },
+  TFilter_Label: { fg: c.dim, bold: true },
   TKeys_Key: { fg: c.yellow },
   TKeys_Hint: { fg: c.dim, dim: true },
 

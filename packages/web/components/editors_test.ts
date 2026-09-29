@@ -4,7 +4,8 @@ import '../testing.ts'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { ColumnEdit, defineWells, Prop } from './editors.tsx'
+import { ColumnEdit, Prop } from './editors.tsx'
+import { defineWells } from './wells.ts'
 import { Prio } from './Prio.tsx'
 import { ago } from './Stamp.tsx'
 import { pretty } from '../time.ts'
@@ -216,7 +217,7 @@ test('native number and query editors retain their existing elements', () => {
   for (
     let [comp, prop, value, selector] of [
       ['filed', 'priority', 2, 'input.Prop_Num'],
-      ['board', 'query', '.task', '.Prop_Query input.Prop_Find'],
+      ['board', 'query', '.task', '.Prop_Query input.Field'],
     ] as const
   ) {
     let { root, free } = mount(h(ColumnEdit, {

@@ -18,7 +18,9 @@ import { scrollbar } from './scrollbar.ts'
  * (`width` fixed, `grow` takes the rest), `col` stacks them (`grow` takes the
  * leftover rows), `height` fixes a box, and `scroll` windows a box's content
  * from that offset. Everything else flows: block elements stack as lines,
- * inline elements run into them, class names look up the sheet.
+ * inline elements run into them, class names look up the sheet. A text field
+ * (`input`, `textarea`) paints its `value`, or its `placeholder` while empty,
+ * with a painted cursor at `data-caret`.
  *
  * The boundary. Every text node and every href loses the C0/DEL/C1 class
  * before anything is painted (`@yaks/text`'s `safe`, with `\n` kept because a
@@ -130,6 +132,8 @@ let INLINE = new Set([
   'time',
   'button',
   'label',
+  'input',
+  'textarea',
 ])
 
 // Whether a node runs into its line: text does, and an inline tag does unless
@@ -161,7 +165,38 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   }
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s, owner: el }]
+  if (el.localName == 'input' || el.localName == 'textarea') {
+    return field(el, s, c)
+  }
   return el.childNodes.flatMap((k) => inline(k, s, c))
+}
+
+// A text field paints what a browser shows in it: its value, its placeholder
+// (dimmed, as the text entry's hint is) while empty, and a painted cursor
+// where `data-caret` puts the caret, since a terminal has no focus to show it
+// by. Any other input (a checkbox) has no text to paint.
+let field = (el: TElement, s: Style, c: Ctx): Seg[] => {
+  let type = el.attr('type')
+  if (type && type != 'text' && type != 'search') return []
+  let seg = (text: string, style: Style): Seg[] =>
+    text ? [{ text, style, owner: el }] : []
+  let value = safe(el.attr('value') ?? '')
+  let hint = value ? [] : seg(
+    safe(el.attr('placeholder') ?? ''),
+    inherit(s, c.sheet.Entry_Hint ?? base.Entry_Hint),
+  )
+  let at = num(el, 'data-caret')
+  if (at == null) return value ? seg(value, s) : hint
+  at = Math.min(Math.max(0, at), value.length)
+  // At the end of the value, or of one of its lines, the cursor is a cell of
+  // its own.
+  let under = value[at] && value[at] != '\n' ? value[at] : ''
+  return [
+    ...seg(value.slice(0, at), s),
+    ...seg(under || ' ', inherit(s, c.sheet.Cursor ?? base.Cursor)),
+    ...seg(value.slice(at + under.length), s),
+    ...hint,
+  ]
 }
 
 // The <pre> path's text, sanitized by the same function — a text node's data is

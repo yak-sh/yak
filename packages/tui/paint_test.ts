@@ -48,6 +48,26 @@ test('a text node keeps its newlines and loses every control byte', () => {
   assertEquals(seen(tree).slice(0, 2), ['ab', 'c  d'])
 })
 
+test('a text field paints its value, its placeholder, and its caret', () => {
+  let line = (attrs: Record<string, unknown>) =>
+    screenful(el('root', {}, el('div', {}, el('input', attrs))), 20, 1)
+      .lines[0].map((s) => [s.text, !!s.style.inverse, !!s.style.dim])
+  assertEquals(line({ value: 'abc' }), [['abc', false, false]])
+  assertEquals(line({ value: '', placeholder: 'find…' }), [
+    ['find…', false, true],
+  ])
+  assertEquals(line({ value: 'abc', 'data-caret': 1 }), [
+    ['a', false, false],
+    ['b', true, false],
+    ['c', false, false],
+  ])
+  assertEquals(line({ value: 'ab', 'data-caret': 2 }), [
+    ['ab', false, false],
+    [' ', true, false],
+  ])
+  assertEquals(line({ type: 'checkbox', value: 'on' }), [])
+})
+
 test('an href is sanitized and rides in an OSC 8', () => {
   let a = el('a', { href: 'https://x/\x07evil' }, 'link')
   let line = screenful(el('root', {}, el('div', {}, a)), 20, 1).lines[0]

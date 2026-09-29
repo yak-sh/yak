@@ -8,7 +8,9 @@
 
 import type { Sheet } from '@yaks/tui/theme'
 import * as base from './base.ts'
+import * as choices from './Choices.ts'
 import * as dot from './Dot.ts'
+import * as field from './Field.ts'
 import * as id from './Id.ts'
 import * as menu from './Menu.ts'
 import * as stamp from './Stamp.ts'
@@ -25,6 +27,8 @@ export let kit: Record<string, Kit> = {
   Tabs: tabs,
   Menu: menu,
   Tip: tip,
+  Field: field,
+  Choices: choices,
 }
 
 /** What @yaks/tui's painter dresses the kit with, in `theme`'s colours. */

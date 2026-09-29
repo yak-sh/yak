@@ -1,0 +1,26 @@
+/* A text field: typed ink on nothing, with a hairline under it while it has
+   the keyboard. How wide it runs and how big its type are its host's. A bare
+   field draws no line: its host's frame is the edge. */
+.Field {
+  font: inherit;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  outline: 0;
+  padding: 2px 0;
+  resize: none;
+  cursor: text;
+  user-select: text; /* a host that turns selection off still lets you type */
+}
+.Field::placeholder {
+  color: var(--dim);
+}
+.Field:focus {
+  border-bottom-color: var(--border);
+}
+.Field-bare,
+.Field-bare:focus {
+  border-bottom: 0;
+  padding: 0;
+}

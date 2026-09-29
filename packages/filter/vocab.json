@@ -1,0 +1,48 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "filter",
+  "$defs": {
+    "filter": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "what is typed"
+        },
+        "caret": {
+          "type": "number",
+          "description": "where the caret stands, as an offset into text"
+        },
+        "from": {
+          "type": "number",
+          "description": "where the word being completed starts"
+        },
+        "to": {
+          "type": "number",
+          "description": "where the word being completed ends"
+        },
+        "cands": {
+          "type": "array",
+          "description": "what can replace that word, each its text as it reads once taken and the kind of thing it is (@yaks/query complete)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "kind": { "type": "string" }
+            }
+          }
+        },
+        "pick": {
+          "type": "number",
+          "description": "which of cands is picked"
+        }
+      },
+      "description": "a query being typed, in a page's own graph: the text and caret, and what can come next there; its list is open while cands has any"
+    }
+  }
+}

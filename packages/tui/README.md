@@ -105,7 +105,10 @@ box to that child.
 
 Semantic `strong`, `em`, `del`, headings, links, code, block quotes, rules, and
 tables receive terminal-specific rendering without requiring application
-components to emit ANSI.
+components to emit ANSI. A text field (`input`, `textarea`) shares a row and
+paints what a browser shows in it: its `value`, or its `placeholder` in the
+`Entry_Hint` style while empty. A terminal has no focus to show the caret by, so
+a field carrying `data-caret` paints the `Cursor` cell at that offset.
 
 ## Style
 

@@ -1,10 +1,10 @@
 import { type ComponentChildren, type JSX } from 'preact'
 import { type Context } from '@yaks/render'
 import { parse } from '@yaks/query'
-import { useContext, useRef, useState } from 'preact/hooks'
+import { useContext, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { formatProp, propAt } from '../props.ts'
 import { type Ent, idOf } from '../types.ts'
-import { domains, ent, problem, row } from '../live.ts'
+import { ent, problem, row } from '../live.ts'
 import { block, Surround } from '@yaks/ui'
 import { pretty } from '../time.ts'
 import { ago } from './Stamp.tsx'
@@ -21,7 +21,8 @@ import {
   writeColumn,
 } from './registry.ts'
 import { Overlay } from './overlay.tsx'
-import { useComplete } from './Complete.tsx'
+import { fields } from './fields.tsx'
+import { wellOf, wells } from './wells.ts'
 import { pickLine, useHits } from './hits.ts'
 import * as suggest from './suggest.ts'
 
@@ -117,41 +118,35 @@ let NumEdit = ({ ...p }: EditorProps) => (
   />
 )
 
-// query: a filter line that knows its own vocabulary — the palette's
-// completion dropdown under a plain input (Complete.tsx, same grammar
-// teacher everywhere). Controlled, because the dropdown rerenders while
-// you type; Enter commits (when the dropdown isn't eating it), Escape
-// reverts, blur commits like NumEdit — but empty is a VALUE here ('' =
-// every task), so only no-change skips the write.
+// query: the query field (fields.tsx), the same completion as every place
+// a query is typed. It opens on the stored query, whatever was typed here
+// before. Enter commits (when the list isn't taking it), Escape reverts,
+// blur commits like NumEdit — but empty is a VALUE here ('' = every task),
+// so only no-change skips the write.
 let QueryEdit = ({ ...p }: EditorProps) => {
-  let [v, setV] = useState(String(p.value ?? ''))
-  let c = useComplete()
+  let id = `query:${p.eid}:${p.comp}.${p.prop}`
+  let was = String(p.value ?? '')
+  useLayoutEffect(() => fields.set(id, was), [id])
   return (
     <Query>
-      <Find
-        elRef={focus}
-        value={v}
-        onInput={(ev: InputEvent) => {
-          let el = ev.currentTarget as HTMLInputElement
-          setV(el.value)
-          c.track(el)
-        }}
-        onKeyDown={(ev: KeyboardEvent) => {
-          if (c.key(ev)) return
+      <fields.Filter
+        id={id}
+        initial={was}
+        focus
+        onKey={(ev: KeyboardEvent) => {
           let el = ev.currentTarget as HTMLInputElement
           if (ev.key == 'Enter') el.blur()
           else if (ev.key == 'Escape') {
-            setV(String(p.value ?? ''))
-            el.value = String(p.value ?? '')
+            fields.set(id, was)
+            el.value = was // the blur below reads it before the repaint
             el.blur()
           }
         }}
         onBlur={(ev: FocusEvent) => {
           let text = (ev.currentTarget as HTMLInputElement).value.trim()
-          text != String(p.value ?? '') ? set(p, text) : p.done()
+          text != was ? set(p, text) : p.done()
         }}
       />
-      {c.list}
     </Query>
   )
 }
@@ -179,12 +174,6 @@ let EnumEdit = ({ ...p }: EditorProps) => {
   )
 }
 
-// A vocabulary declaration names its suggestion source; plugins can replace
-// that source while the column still selects its control through the registry.
-let wells: Record<string, () => string[]> = { domains: () => domains.value }
-export let defineWells = (sources: typeof wells) =>
-  Object.assign(wells, sources)
-
 // {text: well}: free text with the graph's suggestions — the same popout
 // search list the eid editor wears (one look for every picker; datalist
 // was the browser's own UI, styled by nobody). The difference from a
@@ -193,9 +182,7 @@ export let defineWells = (sources: typeof wells) =>
 // The 'none' row clears, as everywhere.
 let WellEdit = ({ ...p }: EditorProps) => {
   let [q, setQ] = useState('')
-  let type = propAt(p.comp, p.prop)?.type
-  let name = typeof type == 'object' && 'text' in type ? type.text : ''
-  let all = wells[name]?.() ?? []
+  let all = wells[wellOf(p.comp, p.prop)]?.() ?? []
   let typed = q.trim()
   let hits = all
     .filter((x) => !typed || x.toLowerCase().includes(typed.toLowerCase()))

@@ -303,7 +303,8 @@ prefix)` for the entities a reference could name,
 `values(comp, prop, prefix)` for the values a property holds, and `ranks` for
 the `.order=` rankings its evaluator answers. A source that answers with a
 promise makes the whole answer a promise; one that answers at once keeps it
-synchronous.
+synchronous. [@yaks/filter](../filter/README.md) is the query field built on it,
+for a browser and a terminal.
 
 ## What this package leaves to a schema-aware compiler
 

@@ -6,7 +6,8 @@
  * @yaks/tui alike.
  *
  * - `el`, `block`: the builders every part is made from (el.ts).
- * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`: the parts.
+ * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`: the
+ *   parts.
  * - `everforest`: the first theme; `stylesheet(theme)` dresses a browser,
  *   `sheet(theme)` a terminal (kit.ts).
  * - `Guide`: every part in every variant, the page `./routes` serves at `/ui`.
@@ -21,6 +22,8 @@ export { Menu } from './Menu.ts'
 export { Stamp } from './Stamp.ts'
 export { Tabs } from './Tabs.ts'
 export { Tip } from './Tip.ts'
+export { Field, type FieldProps } from './Field.ts'
+export { Choices } from './Choices.ts'
 export { everforest } from './everforest.ts'
 export { kit, sheet, stylesheet } from './kit.ts'
 export { Guide } from './guide.ts'

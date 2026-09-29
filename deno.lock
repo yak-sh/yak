@@ -2090,6 +2090,14 @@
           "npm:sucrase@3.35.1"
         ]
       },
+      "packages/filter": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@preact/signals@^2.9.0",
+          "npm:linkedom@~0.18.12",
+          "npm:preact@^10.29.1"
+        ]
+      },
       "packages/fts": {
         "dependencies": [
           "jsr:@std/assert@1"

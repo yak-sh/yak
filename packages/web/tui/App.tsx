@@ -6,11 +6,12 @@
 // painted as lines instead of CSS.
 import { signal } from '@preact/signals'
 import { parse } from '@yaks/query'
+import { edit as editLine, touch } from '@yaks/tui'
 import { useBoardSub, useEntity } from '../components/subscriptions.ts'
 import { useCommentsOn } from '../components/useQuery.ts'
 import { tuiKeys } from '../keybindings.ts'
 import { formatProp, propAt } from '../props.ts'
-import { type Ent, idOf, statusOf, verdictName } from '../types.ts'
+import { type Ent, type Hit, idOf, statusOf, verdictName } from '../types.ts'
 import {
   applyLocal,
   boardTasks,
@@ -47,12 +48,16 @@ import { Id } from '../components/views/Inline.tsx'
 import { eidOf } from '../components/nav.tsx'
 import { clipboard, link } from './paint.ts'
 import { root } from './doc.ts'
-import { touch } from '@yaks/tui'
 import { Md } from './md.tsx'
 import { spawnOf } from '../components/Run.tsx'
 import { useQuery } from '../components/useQuery.ts'
 import { navigationQuery, navigationView } from '../navigation.ts'
 import { Guide } from '@yaks/ui'
+import { bind } from '../components/fields.tsx'
+import { filterField, usePassOf } from '../components/Filter.tsx'
+import { useHits } from '../components/hits.ts'
+import { group } from '../components/Search.tsx'
+import { editing, named } from './keys.ts'
 
 export let sel = signal({ col: 0, row: 0 })
 export let quit = signal(false)
@@ -72,8 +77,32 @@ let boardEid = () =>
       (cache.peek()[a]?.entity?.num ?? 0) - (cache.peek()[b]?.entity?.num ?? 0)
     )[0]
 
+// The query fields (@yaks/filter) as a terminal shows them: the same fields
+// in the page's own graph the browser types into, the list in the flow under
+// each, its caret painted while it has the keyboard.
+let fields = bind()
+
+// A field with the keyboard reads every key first: its list's (Tab, Enter,
+// the arrows, Escape) while it is open, then an edit to its line. What it
+// leaves is the caller's.
+let fieldKey = (id: string, k: string): boolean => {
+  if (named[k] && fields.press(id, named[k])) return true
+  let key = editing(k)
+  let r = fields.row(id)
+  let next = key && editLine({ text: r?.text ?? '', at: r?.caret ?? 0 }, key)
+  if (next) fields.type(id, next.text, next.at)
+  return !!next
+}
+
+// The board's filter: `f` types into the board's filter field, the same line
+// the browser's titlebar types into (Filter.tsx), and the board shows what
+// passes it. Enter keeps the glance, Escape clears it.
+let filtering = signal(false)
+let pass: (eid: string) => boolean = () => true
+
 let rows = (e: Ent, status: string) =>
-  boardTasks(e).filter((k) => k.task && statusOf(k) == status).sort(byPriority)
+  boardTasks(e).filter((k) => k.task && statusOf(k) == status && pass(k.eid))
+    .sort(byPriority)
 
 export let selected = () => {
   let p = boardEid()
@@ -467,6 +496,8 @@ export let key = (k: string) => {
     if (k == '?' || k == '\x1b' || k == 'q') help.value = false
     return
   }
+  if (searching.value) return searchKey(k)
+  if (filtering.value) return filterKey(k)
   if (guide.value != null && mode.value == 'normal' && k != ':') {
     if (k == 'j') jump(guide.value + 1)
     else if (k == 'k') jump(guide.value - 1)
@@ -500,6 +531,12 @@ export let key = (k: string) => {
     msg.value = ''
     buf.value = ''
     mode.value = 'command'
+  } else if (k == '/') {
+    searching.value = true
+    mode.value = 'insert'
+  } else if (k == 'f' && !trail.value.length && boardEid()) {
+    filtering.value = true
+    mode.value = 'insert'
   } else if (k == '?') help.value = true
   else if (k == 'j') vert(1)
   else if (k == 'k') vert(-1)
@@ -513,6 +550,83 @@ export let key = (k: string) => {
   else if (k == 'y') yank()
   else if (k == 'q' || k == '\x03') quit.value = true
   else if (k == '\x1b') msg.value = ''
+}
+
+// The search palette: `/` types into the `search` field, the one the
+// browser's palette types into (Search.tsx), and the server's hits for it list
+// under it. The arrows walk the hits once the field's list is closed; Enter
+// opens the picked one.
+export let searching = signal(false)
+let hitPick = signal(0)
+let SEARCH = 'search'
+let found: Hit[] = []
+
+let closeSearch = () => {
+  searching.value = false
+  hitPick.value = 0
+  fields.set(SEARCH, '')
+  mode.value = 'normal'
+}
+
+let searchKey = (k: string) => {
+  if (fieldKey(SEARCH, k)) return
+  if (k == '\x1b') closeSearch()
+  else if (k == '\r') {
+    let h = found[Math.min(hitPick.value, found.length - 1)]
+    closeSearch()
+    if (h) trail.value = [...trail.value, h.open]
+  } else if (k == '\x1b[B') {
+    hitPick.value = Math.min(hitPick.value + 1, found.length - 1)
+  } else if (k == '\x1b[A') hitPick.value = Math.max(hitPick.value - 1, 0)
+}
+
+let filterKey = (k: string) => {
+  let id = filterField(boardEid() ?? '')
+  if (fieldKey(id, k)) return
+  if (k == '\x1b') fields.set(id, '')
+  if (k == '\x1b' || k == '\r') {
+    filtering.value = false
+    mode.value = 'normal'
+  } else if (k == '\x1b[B') vert(1)
+  else if (k == '\x1b[A') vert(-1)
+}
+
+export let TSearch = () => {
+  let q = fields.text(SEARCH)
+  found = group(useHits(q.trim(), 20), q)
+  let pick = Math.min(hitPick.value, found.length - 1)
+  return (
+    <div class='TSearch'>
+      <div class='TSearch_Title'>Search</div>
+      <fields.Filter
+        id={SEARCH}
+        active
+        placeholder='search the graph… (.status=done filters)'
+      />
+      {found.map((h, i) => (
+        <div class={i == pick ? 'TRow TRow-on' : 'TRow'} key={h.eid}>
+          <span class='TSearch_Id'>{idOf(h)}</span> {h.title || '(untitled)'}
+          {' '}
+          <span class='TSearch_Kind'>{h.kind}</span>
+        </div>
+      ))}
+      <div class='TSearch_Hint'>
+        ↑/↓ choose · Enter open · Tab complete · Esc close
+      </div>
+    </div>
+  )
+}
+
+// The board's filter line, while it is typed in or narrows the board.
+let TFilter = ({ board }: { board: string }) => {
+  let id = filterField(board)
+  if (!filtering.value && !fields.text(id)) return null
+  return (
+    <div class='TFilter'>
+      <span class='TFilter_Label'>filter</span>{' '}
+      <fields.Filter id={id} active={filtering.value} placeholder='filter…' />
+    </div>
+  )
 }
 
 export let TKeys = () => (
@@ -588,8 +702,8 @@ export let TStatus = () => {
               <span class='TStatus_Msg'>{msg.value || problem.value}</span>
             )}
             <span class='TStatus_Hint'>
-              j/k browse · l in · h out · ⇥ view · i edit · y yank · : cmd · q
-              quit · ? keys
+              j/k browse · l in · h out · ⇥ view · i edit · / search · f filter
+              · y yank · : cmd · q quit · ? keys
             </span>
           </>
         )}
@@ -602,6 +716,9 @@ export let TStatus = () => {
 export let App = () => {
   let p = boardEid()
   useBoardSub(p ? ent(p) : undefined)
+  // What the board's filter passes, for the rows the board paints and the
+  // ones j/k walk.
+  pass = usePassOf(p ?? '')
   let s = selected()
   let here = trail.value.at(-1)
   // The entered entity is held for as long as it is on screen — it carries the
@@ -630,6 +747,8 @@ export let App = () => {
       <div class='TTitle'>{['tasks', ...crumbs].join(' · ')}</div>
       {help.value
         ? <TKeys />
+        : searching.value
+        ? <TSearch />
         : guide.value != null
         ? <Guide />
         : navigationOpen.value
@@ -638,6 +757,7 @@ export let App = () => {
         ? <Entity eid={here} view={views.value[here]} />
         : p && (
           <>
+            <TFilter board={p} />
             <Entity eid={p} view='Board' />
             {s && (
               <div class='TDetail'>

@@ -6,7 +6,7 @@ import { navigate } from './nav.tsx'
 import { drop, peek, save } from './drafts.ts'
 import { block } from '@yaks/ui'
 import { Icon } from './icons.tsx'
-import { useComplete } from './Complete.tsx'
+import { fields } from './fields.tsx'
 import { Entity } from './Entity.tsx'
 import { hits as queryHits } from './hits.ts'
 
@@ -15,8 +15,8 @@ import { hits as queryHits } from './hits.ts'
 // what a pick does); Escape closes it. Search runs server-side (FTS5
 // over every doc) — the palette is just an input, a ranked list, and
 // j/k-ish keys. searchOpen lives in the shell (live.ts) so a hot swap
-// can't shut the palette; the query itself is a draft, reseeded on
-// remount.
+// can't shut the palette; the query itself is the `search` field in the
+// page's own graph (fields.tsx), and a draft, reseeded on remount.
 export { searchOpen }
 
 let Frame = block('div', 'Search', {
@@ -64,6 +64,9 @@ let marked = (s: string) =>
     return [<mark key={i}>{hit}</mark>, rest]
   })
 
+// The palette's field in the page's own graph, and its draft.
+let FIELD = 'search'
+
 export let hitSlots = (h: Hit) => ({
   title: marked(h.title_hit || h.title || '(untitled)'),
   body: <Snip>{marked(h.snip)}{h.retired && ' · retired'}</Snip>,
@@ -73,19 +76,15 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
   let [err, setErr] = useState('')
   let [sel, setSel] = useState(0)
-  let [q, setQ] = useState('')
+  let q = fields.text(FIELD)
   let [drag, setDrag] = useState(false)
   let box = useRef<HTMLInputElement>(null)
   let seq = useRef(0)
-  let c = useComplete() // the dot-grammar's dropdown, under the input
 
   useEffect(() => {
     if (!searchOpen.value || !box.current) return
-    let d = peek('search') // a swap remounted us mid-search: pick it back up
-    if (d?.v && !box.current.value) {
-      box.current.value = d.v
-      setQ(d.v)
-    }
+    let d = peek(FIELD) // a swap remounted us mid-search: pick it back up
+    if (d?.v && !q) fields.set(FIELD, d.v)
     box.current.focus()
   }, [searchOpen.value])
 
@@ -116,10 +115,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let close = () => {
     seq.current++
     searchOpen.value = false
-    drop('search')
+    drop(FIELD)
     setHits([])
     setSel(0)
-    setQ('')
+    fields.set(FIELD, '')
     setDrag(false)
   }
   let seek = async (q: string, signal: AbortSignal) => {
@@ -155,8 +154,8 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     close()
     navigate(entityPath(eid))
   }
+  // The field's list took its keys (Escape included) before these.
   let key = (e: KeyboardEvent) => {
-    if (c.key(e)) return // the dropdown eats its keys (Escape included)
     if (e.key == 'Escape') return close()
     if (e.key == 'Enter') {
       // ⌘/Ctrl+Enter is cmd-click on the selected hit: a new tab, the
@@ -190,16 +189,16 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       <Box>
         <Line>
           <Icon name='search' />
-          <input
-            ref={box}
+          <fields.Filter
+            id={FIELD}
+            mod='bare'
+            elRef={box}
             placeholder='search the graph… (* = prefix, .status=done .updated.at=today filter, ⌘⏎ = new tab)'
             onInput={(e: InputEvent) => {
               let el = e.currentTarget as HTMLInputElement
-              el.value ? save('search', el.value) : drop('search')
-              setQ(el.value)
-              c.track(el)
+              el.value ? save(FIELD, el.value) : drop(FIELD)
             }}
-            onKeyDown={key}
+            onKey={key}
           />
           {
             /* The board chip: the line is a live query, and this is its
@@ -234,7 +233,6 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
               <Icon name='kanban' />
             </Board>
           )}
-          {c.list}
         </Line>
         {err && <Snip>{err}</Snip>}
         {

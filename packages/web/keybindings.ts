@@ -23,6 +23,8 @@ export let tuiKeys: Keybinding[] = [
   { keys: ['h', 'Ctrl-D'], about: 'go back' },
   { keys: ['Tab', 'Shift-Tab'], about: 'change view' },
   { keys: ['i'], about: 'edit' },
+  { keys: ['/'], about: 'search the graph' },
+  { keys: ['f'], about: 'filter the board' },
   { keys: ['Esc'], about: 'finish editing or return to normal mode' },
   { keys: ['y'], about: 'yank' },
   { keys: [':'], about: 'open the command line' },

@@ -1,0 +1,21 @@
+{
+  "_": "The browser gate: @yaks/filter's front door, the query field web's page imports, must type-check with only the web platform in scope.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/tui/theme": "../tui/theme.ts",
+    "@yaks/ui": "../ui/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks"
+  }
+}

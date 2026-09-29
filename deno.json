@@ -161,6 +161,7 @@
     "./packages/harness",
     "./packages/tui",
     "./packages/ui",
+    "./packages/filter",
     "./packages/context",
     "./packages/mcp-client",
     "./packages/kernel",
