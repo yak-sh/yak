@@ -26,6 +26,12 @@
           "stamped": true,
           "description": "the component that changed"
         },
+        "touched": {
+          "type": "array",
+          "items": { "type": "string" },
+          "stamped": true,
+          "description": "components moved on the target by the same commit"
+        },
         "kind": {
           "type": "string",
           "enum": [

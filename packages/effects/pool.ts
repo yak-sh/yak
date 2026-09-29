@@ -275,6 +275,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         kind,
         entity: found?.entity ?? { eid: String(row.target) },
         name,
+        touched: row.touched as string[] | undefined,
         ...(kind == 'removed' ? {} : { comp: found?.[name] as Comp }),
       }
       try {
@@ -514,6 +515,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           target: e.entity.eid,
           comp: e.name,
           kind: e.kind,
+          touched: e.touched,
           state: 'pending',
           attempts: ours ? 1 : 0,
           at,

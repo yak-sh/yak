@@ -2,7 +2,7 @@
 // output value into stable built rows. The model adapter has the same output
 // contract as a code tool; it only translates an ordinary session reply.
 
-import { type Bundle, type Comp, Stale, token } from '@yaks/graph'
+import { type Bundle, type Comp, Stale, token, type Tx } from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq } from '@yaks/query'
@@ -10,16 +10,23 @@ import { next, WAKE } from '@yaks/wake'
 import { BUILD, clock, type Options, reconcile } from './build.ts'
 import { answer } from './answer.ts'
 import { adapted } from './model.ts'
+import { candidates } from './deps.ts'
 
 let str = (c: Comp | undefined, prop: string): string =>
   c?.[prop] == null ? '' : String(c[prop])
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 
-let stir =
-  (o: Options, scheduled: boolean, retry = false): Handler =>
-  async (event, tx, write) => {
-    let [builder] = await tx.get([event.entity.eid])
+let settle = async (
+  eid: string,
+  tx: Tx,
+  write: Parameters<Handler>[2],
+  o: Options,
+  scheduled: boolean,
+  retry = false,
+) => {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let [builder] = await tx.get([eid])
     if (!builder?.builder) return
     let { writes } = await reconcile(
       tx,
@@ -29,10 +36,22 @@ let stir =
       scheduled,
       retry,
     )
-    if (writes.length) await write(writes)
+    if (!writes.length) return
+    try {
+      await write(writes)
+      return
+    } catch (err) {
+      if (!(err instanceof Stale) || attempt == 2) throw err
+    }
   }
+}
+
+let stir =
+  (o: Options, scheduled: boolean, retry = false): Handler =>
+  (event, tx, write) => settle(event.entity.eid, tx, write, o, scheduled, retry)
 
 export let opening = (o: Options): Handler => stir(o, true, true)
+export let editing = (o: Options): Handler => stir(o, false)
 
 export let ringing = (o: Options): Handler => async (event, tx, write) => {
   let [fired] = await tx.get([event.entity.eid])
@@ -46,28 +65,39 @@ export let ringing = (o: Options): Handler => async (event, tx, write) => {
   )
 }
 
-/** T-44668 will narrow candidate builders; reconciliation already does so. */
 export let changing = (o: Options): Handler => async (event, tx, write) => {
   let [changed] = await tx.get([event.entity.eid])
   if (
-    changed?.build || changed?.call || changed?.result || changed?.execution ||
+    changed?.build || changed?.call || changed?.result ||
+    changed?.execution ||
     changed?.error ||
     comp(changed, 'output')?.value != null
   ) {
     return
   }
-  let builders = await tx.read(and(eq('builder.immediate', 'true')))
+  // TODO: Drop the broad path after pending effects written before touched
+  // was recorded have drained; those runs lost the changed component names.
+  let builders = event.touched
+    ? await candidates(tx, event.entity.eid, event.touched)
+    : await tx.read(and(eq('builder.immediate', 'true')))
+  if (changed?.tool || event.touched?.includes('tool')) {
+    builders.push(
+      ...await tx.read(and(
+        eq('builder.immediate', 'true'),
+        eq('builder.to', event.entity.eid),
+      )),
+    )
+  }
+  let seen = new Set<string>()
   for (let builder of builders) {
-    if (event.kind == 'created' && builder.entity.eid == event.entity.eid) {
+    if (
+      builder.entity.eid == event.entity.eid ||
+      !comp(builder, 'builder')?.immediate || seen.has(builder.entity.eid)
+    ) {
       continue
     }
-    let { writes } = await reconcile(tx, builder, o, (o.now ?? clock)(), false)
-    if (!writes.length) continue
-    try {
-      await write(writes)
-    } catch (err) {
-      if (!(err instanceof Stale)) throw err
-    }
+    seen.add(builder.entity.eid)
+    await settle(builder.entity.eid, tx, write, o, false)
   }
 }
 
@@ -121,6 +151,7 @@ export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
 
 export let watches = (o: Options): Handlers => ({
   builder_open: opening(o),
+  builder_edit: editing(o),
   builder_ring: ringing(o),
   builder_model_answer: modeling(),
   builder_answer: answering(o.vocab),

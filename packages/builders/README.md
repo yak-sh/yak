@@ -29,6 +29,14 @@ The key hashes the template, effective using, tool revision, and the content
 hash of every entity in the binding tree. The tool's registered `revision`
 changes the key when its implementation changes.
 
+Immediate builders keep `builder_dep{builder,source}` rows. A `component:name`
+source names a component their query reads, including nested collections; an
+`entity:eid` source names a selected input whose content enters the key. The
+effect pool records every component moved on an entity in `effect.touched`, so
+one graph change looks up only the matching dependencies. Definition edits
+refresh the rows, and a compare-and-set version prevents an older reconciliation
+from erasing newer dependencies.
+
 A tool answers a bundle carrying `output{source,value}`. The source is the call
 id; the value has one shape:
 

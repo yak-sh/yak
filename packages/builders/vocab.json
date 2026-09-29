@@ -31,6 +31,30 @@
       },
       "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model"
     },
+    "builder_dep": {
+      "component": true,
+      "type": "object",
+      "identity": ["builder", "source"],
+      "properties": {
+        "builder": {
+          "type": "string",
+          "ref": "builder",
+          "death": "cascade",
+          "stamped": true
+        },
+        "source": {
+          "type": "string",
+          "index": true,
+          "stamped": true,
+          "description": "component:name or entity:eid read by an immediate builder"
+        },
+        "version": {
+          "type": "string",
+          "stamped": true,
+          "description": "compare-and-set token for one dependency replacement"
+        }
+      }
+    },
     "build": {
       "component": true,
       "type": "object",
@@ -181,6 +205,17 @@
       "sweep": ".builder",
       "description": "build a builder whose floor has passed, unless its key is built"
     },
+    "builder_edit": {
+      "effect": true,
+      "changed": [
+        "builder.query",
+        "builder.to",
+        "builder.immediate",
+        "content.body",
+        "using"
+      ],
+      "description": "reconcile a builder after its definition changes"
+    },
     "builder_ring": {
       "effect": true,
       "created": [
@@ -218,7 +253,6 @@
       "without": [
         "effect"
       ],
-      "active": ".builder.immediate=true",
       "description": "check immediate builders when an entity enters, changes or leaves their query"
     }
   }

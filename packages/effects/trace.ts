@@ -41,6 +41,8 @@ export type Event = {
   entity: Entity
   /** the component's name */
   name: string
+  /** Components this commit moved on the same entity, including removals. */
+  touched?: string[]
   /** the properties the change carried (absent on `removed`) */
   comp?: Comp
   /** what each variable bound, for a `matched` event whose pattern named some */
@@ -161,5 +163,11 @@ export let events = (bundles: Bundle[]): Event[] => {
       out.push({ kind: born ? 'created' : 'changed', entity, name, comp })
     }
   }
-  return out
+  let touched = new Map<Eid, Set<string>>()
+  for (let e of out) {
+    let names = touched.get(e.entity.eid) ?? new Set<string>()
+    names.add(e.name)
+    touched.set(e.entity.eid, names)
+  }
+  return out.map((e) => ({ ...e, touched: [...touched.get(e.entity.eid)!] }))
 }

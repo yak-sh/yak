@@ -79,6 +79,17 @@ Deno.test('a process working the pool runs what it writes, once committed', asyn
   ])
 })
 
+Deno.test('a pooled event retains all components moved on its target', async () => {
+  let a = proc(store())
+  let touched: string[][] = []
+  a.fx.handle({ post_note: (e) => void touched.push(e.touched ?? []) })
+  await a.g.apply([post('p1')])
+  assert((await run(a.g, 'post_note')).touched)
+  await a.fx.work(a.g)
+  assert(touched[0].includes('post'))
+  assert(touched[0].includes('created'))
+})
+
 Deno.test('what one process wrote, another runs, and only one of many', async () => {
   let s = store()
   let [w, a, b] = [proc(s), proc(s), proc(s)]

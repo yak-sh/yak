@@ -15,6 +15,7 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import { next } from '@yaks/wake'
 import { key } from './key.ts'
+import { inputs, queried, sync } from './deps.ts'
 
 export let BUILDER = 'builder'
 export let BUILD = 'build'
@@ -80,7 +81,7 @@ let selectedRow = (rows: Map<Eid, Bundle>, builder: Eid, eid: Eid) => {
   let row = rows.get(eid)
   let built = comp(row, BUILT)
   let parent = built && rows.get(str(built, 'build'))
-  return row && !row.tombstone && eid != builder &&
+  return row && !row.tombstone && !row.builder_dep && eid != builder &&
     (!built || str(comp(parent, BUILD), 'variant') == 'main' &&
         str(comp(parent, BUILD), 'builder') != builder)
 }
@@ -182,15 +183,28 @@ export let reconcile = async (
   retry = false,
 ): Promise<{ plans: Plan[]; writes: Bundle[] }> => {
   let definition = comp(builder, BUILDER)
-  if (!definition || scheduled && !due(definition, at)) {
-    return { plans: [], writes: [] }
-  }
+  if (!definition) return { plans: [], writes: [] }
   let to = str(definition, 'to')
-  if (!to) return { plans: [], writes: [] }
+  let immediate = definition.immediate == true
+  let ready = !scheduled || due(definition, at)
+  let chosen = immediate || ready && to
+    ? await selected(tx, builder, o.vocab)
+    : undefined
+  let dep = await sync(
+    tx,
+    builder.entity.eid,
+    immediate
+      ? [
+        ...queried(str(definition, 'query'), o.vocab),
+        ...inputs(chosen?.map((row) => row.binding) ?? []),
+      ]
+      : [],
+  )
+  if (!ready || !to) return { plans: [], writes: dep }
   let [tool] = await tx.get([to])
   if (!tool?.tool) throw new Error(`builder tool ${to} is missing`)
   let variant = o.variant ?? 'main'
-  let chosen = await selected(tx, builder, o.vocab)
+  chosen ??= await selected(tx, builder, o.vocab)
   let prior = await tx.read(
     `.build.builder=${builder.entity.eid}&.build.variant=${
       encodeURIComponent(variant)
@@ -198,7 +212,7 @@ export let reconcile = async (
   )
   let held = new Map(prior.map((b) => [b.entity.eid, b]))
   let plans: Plan[] = []
-  let writes: Bundle[] = []
+  let writes: Bundle[] = [...dep]
   for (let { binding, rows } of chosen) {
     let entities = binding.entities
     let match = JSON.stringify(entities)

@@ -115,6 +115,11 @@ Deno.test('nested collection changes the key but retains the build and output', 
     comp(await one(g, output(build)), 'built')?.key,
     comp(await one(g, build), 'build')?.key,
   )
+  let withNote = comp(await one(g, build), 'build')?.key
+  await g.apply([{ entity: { eid: 'n1' }, $delete: true }])
+  assertEquals((await rows(g, '.build')).length, 1)
+  assertEquals(comp(await one(g, build), 'build')?.stale, false)
+  assertNotEquals(comp(await one(g, build), 'build')?.key, withNote)
 })
 
 Deno.test('vanished bindings preserve history and returning bindings reuse it', async () => {
@@ -187,6 +192,56 @@ Deno.test('tool revision and input content change a key once each', async () => 
   assertNotEquals(second, first)
   await g.apply([{ entity: { eid: toolEid('code') }, tool: { revision: '2' } }])
   assertNotEquals(comp(await one(g, build), 'build')?.key, second)
+})
+
+Deno.test('selected content, definition edits and removed matches reconcile', async () => {
+  let { g } = await shop({}, [], [code()])
+  await g.apply([source('a'), source('b'), builder()])
+  let a = run(ids.builder, ['a'])
+  let first = comp(await one(g, a), 'build')?.key
+  await g.apply([{ entity: { eid: 'a' }, project: { name: 'new content' } }])
+  assertNotEquals(comp(await one(g, a), 'build')?.key, first)
+  await g.apply([{
+    entity: { eid: ids.builder },
+    builder: {
+      query: '.doc.title=Elsewhere',
+    },
+  }])
+  assertEquals(comp(await one(g, a), 'build')?.stale, true)
+  await g.apply([{ entity: { eid: 'b' }, doc: { title: 'Elsewhere' } }])
+  assertEquals(
+    comp(await one(g, run(ids.builder, ['b'])), 'build')?.stale,
+    false,
+  )
+  await g.apply([{ entity: { eid: 'b' }, doc: null }])
+  assertEquals(
+    comp(await one(g, run(ids.builder, ['b'])), 'build')?.stale,
+    true,
+  )
+})
+
+Deno.test('unrelated changes read a bounded number of rows with many builders', async () => {
+  let { g, failed } = await shop({}, [], [code()])
+  let many = Array.from({ length: 32 }, (_, i): Bundle => ({
+    entity: { eid: `builder-${i}` },
+    builder: {
+      query: `.doc.title=Target-${i}`,
+      to: toolEid('code'),
+      immediate: true,
+    },
+  }))
+  await g.apply(many)
+  let read = g.storage.read
+  let count = 0
+  g.storage.read = (query, opts, comps) =>
+    Promise.resolve(read(query, opts, comps)).then((found) => {
+      count += found.length
+      return found
+    })
+  await g.apply([{ entity: { eid: 'unrelated' }, project: { name: 'Other' } }])
+  assertEquals(failed, [])
+  assert(count < 8, `${count} rows read for 32 unrelated builders`)
+  console.log(`32 builders, unrelated graph change: ${count} rows read`)
 })
 
 Deno.test('an authored using value and its admitted form have one key', async () => {

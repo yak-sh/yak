@@ -161,7 +161,8 @@ The plugin reads component presence before applying changes, including
 components on entities about to be deleted by a cascade. After commit it
 interprets the applied patches in order to distinguish creation, change and
 removal. A changed event describes the applied patch, not a comparison of old
-and new values.
+and new values. `event.touched` lists every component the same commit moved on
+that entity, including removed components; a pooled run keeps that list.
 
 ```ts
 let event = {
