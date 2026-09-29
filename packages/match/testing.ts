@@ -284,6 +284,11 @@ export let QUERIES: string[] = [
   '.kind=book&.order=title',
   '.kind=book&.order=released',
   '.kind=book&.order=-released',
+  // ordered by a property of the entity a reference reaches, one hop or two
+  '.kind=review&.order=review.book.book.price',
+  '.kind=review&.order=-review.book.doc.title',
+  '.kind=book&.order=book.author.doc.title',
+  '.kind=review&.order=review.book.book.author.doc.title',
   // windows: newest first when nothing else is asked, and within the asked
   // order when there is one — `.after` naming the entity to continue past,
   // wherever it sits in that order.
@@ -298,6 +303,8 @@ export let QUERIES: string[] = [
   '.kind=book&.order=-price&.limit=2&.after=4',
   '.kind=book&.order=title&.after=4',
   '.kind=book&.order=-released&.limit=2&.after=5',
+  '.kind=review&.order=review.book.book.price&.limit=1&.after=r2',
+  '.kind=book&.order=-book.author.doc.title&.limit=2&.after=3',
   // an anchor with no value for the ordered property pages by its num alone
   '.order=price&.limit=3&.after=2',
   // an anchor outside the selection still names a place in the order

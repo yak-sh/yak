@@ -15,7 +15,7 @@
 // does not.
 
 import { type Tag, tagOf } from '@yaks/sql'
-import type { Vocab } from '@yaks/vocab'
+import type { Hop, Vocab } from '@yaks/vocab'
 
 /** An entity's id: a client-minted string (a uuid, or a content hash). */
 export type Eid = string
@@ -130,6 +130,23 @@ export let comp = (
  */
 export let wears = (b: Bundle, name: string): boolean =>
   name == 'entity' || comp(b, name) != null
+
+/**
+ * The entity a path's leaf is read from: the first hop's reference read off
+ * this bundle, each later hop but the last read off the entity before it, each
+ * step looked up among the rest. An entity missing anywhere along the way, or
+ * a reference holding no id, reaches nothing, as a missing row does.
+ */
+export let follow =
+  (hops: Hop[]) => (b: Bundle, among: Index): Bundle | undefined => {
+    let eid = comp(b, hops[0].comp)?.[hops[0].prop]
+    for (let h of hops.slice(1, -1)) {
+      if (typeof eid != 'string') return undefined
+      let next = among.of(eid)
+      eid = next && comp(next, h.comp)?.[h.prop]
+    }
+    return typeof eid == 'string' ? among.of(eid) : undefined
+  }
 
 /**
  * Is this entity still present? A deleted entity keeps a `tombstone` component

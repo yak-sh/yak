@@ -34,23 +34,31 @@ import {
   type Clause,
   directive,
   type Distinct,
+  type Fields,
   type Limit,
   type Order,
   parse,
   type Query as Ast,
   type Tally,
 } from '@yaks/query'
-import { Unsupported, whole } from '@yaks/sql'
+import { type Tag, Unsupported, whole } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { BY, compile, type Ctx, type Need, type Test } from './clause.ts'
+import {
+  BY,
+  chained,
+  compile,
+  type Ctx,
+  type Need,
+  type Test,
+} from './clause.ts'
 import {
   type Bundle,
   type Computed,
   type Eid,
+  follow,
   type Index,
   index,
   live,
-  type Read,
   reader,
 } from './read.ts'
 
@@ -180,14 +188,44 @@ let compiled = (
   return { cs, test, needs }
 }
 
-// A directive's path resolved to the one property it names.
-let field = (ctx: Ctx, path: string): Read => {
+// A directive's path (order, fields, distinct, tally) resolved to the one
+// property it names: on this entity, or on the one a chain of references from
+// it reaches (`.fields=review.book.doc.title`), found among the rest the way a
+// path predicate finds it.
+type Field = { read: (b: Bundle, among: Index) => unknown; tag: Tag }
+let field = (ctx: Ctx, path: string): Field => {
   let hops = ctx.v.aim(path)
-  if (hops.length != 1) throw new Unsupported('an ordered path', path, BY)
-  if (!hops[0].prop) throw whole(ctx.v, hops[0].comp, BY)
-  let read = reader(ctx.v, hops[0].comp, hops[0].prop, ctx.computed)
+  let leaf = hops[hops.length - 1]
+  if (!leaf.comp) throw new Unsupported('a shared reference', path, BY)
+  if (!leaf.prop) throw whole(ctx.v, leaf.comp, BY)
+  chained(ctx.v, hops)
+  let read = reader(ctx.v, leaf.comp, leaf.prop, ctx.computed)
   if (!read) throw new Unsupported('a computed property here', path, BY)
-  return read
+  if (read.tag == 'jsonb') {
+    let at = `${leaf.comp}.${leaf.prop}`
+    throw new Unsupported(
+      'ordering or projecting by it',
+      `.${at} holds a JSON value — only its presence (.${at}) can be ` +
+        'asked of it yet',
+      BY,
+    )
+  }
+  if (hops.length == 1) return { read: read.read, tag: read.tag }
+  let reach = follow(hops)
+  return {
+    read: (b, among) => {
+      let t = reach(b, among)
+      return t ? read.read(t) : null
+    },
+    tag: read.tag,
+  }
+}
+
+// A projected value as storage's `rows()` answers it: a boolean, which reads
+// as 0/1 to compare, as `true`/`false` (@yaks/sqlite `projected`).
+let said = (f: Field) => (b: Bundle, among: Index): unknown => {
+  let v = f.read(b, among)
+  return f.tag == 'bool' && v != null ? !!v : v
 }
 
 // The sort a query asks for, or null to keep the order given. An explicit
@@ -200,18 +238,20 @@ let sorter = (
   cs: Clause[],
   windowed: boolean,
 ): (
-  from: readonly Bundle[],
+  among: Index,
 ) => ((a: Bundle, b: Bundle) => number) | null => {
   let order = find<Order>(cs, 'order')
   let desc = order?.value.startsWith('-') ?? false
   let read = order && field(ctx, desc ? order.value.slice(1) : order.value).read
-  return (from) => {
-    let place = new Map(from.map((b, i) => [b.entity.eid, i]))
+  return (among) => {
+    let place = new Map(among.list.map((b, i) => [b.entity.eid, i]))
     let newest = (a: Bundle, b: Bundle) =>
       -compare(a.entity.num ?? null, b.entity.num ?? null) ||
       (place.get(b.entity.eid) ?? 0) - (place.get(a.entity.eid) ?? 0)
     return read
-      ? (a, b) => (desc ? -1 : 1) * compare(read(a), read(b)) || newest(a, b)
+      ? (a, b) =>
+        (desc ? -1 : 1) * compare(read(a, among), read(b, among)) ||
+        newest(a, b)
       : windowed
       ? newest
       : null
@@ -282,7 +322,7 @@ let selection = (ctx: Ctx, q: And): Select => {
   let sorted = sorter(ctx, cs, !!(limit || after))
   return (from) => {
     let among = indexed(from)
-    let sort = sorted(among.list)
+    let sort = sorted(among)
     let out: Bundle[] = []
     for (let b of candidates(needs, among)) {
       if (live(b) && test(b, among)) out.push(b)
@@ -312,7 +352,8 @@ let past = (
   return at ? out.filter((b) => sort(at, b) < 0) : out
 }
 
-/** One row of {@link rows}: `{ eid }`, or an aggregate's `{ value, n }`. */
+/** One row of {@link rows}: `{ eid }` with any projected values beside it, or
+ * an aggregate's `{ value, n }`. */
 export type Row = Record<string, unknown>
 
 let AGGS = new Set(['count', 'distinct', 'tally'])
@@ -322,8 +363,10 @@ let SEQUENCE = new Set(['order', 'limit', 'after'])
 
 /**
  * Compile a query into the rows @yaks/sql's `rows()` answers for it, over the
- * bundles in hand: one `{ eid }` per match, or an aggregate's rows. `.count` is
- * one `{ value: '', n }`; `.tally=prop` is a `{ value, n }` per value and
+ * bundles in hand: one `{ eid }` per match, or an aggregate's rows. A
+ * `.fields` projection puts each value it names beside the eid, keyed by its
+ * path as written, through references too. `.count` is one
+ * `{ value: '', n }`; `.tally=prop` is a `{ value, n }` per value and
  * `.distinct=prop` a `{ value }` per value, empty values dropped and sorted by
  * value. As there, only a text, enum or eid property is tallied, since a
  * number or a time read as text would not compare the same, and an aggregate
@@ -334,12 +377,21 @@ let SEQUENCE = new Set(['order', 'limit', 'after'])
  * import { loadVocab } from '@yaks/vocab'
  *
  * let status = { type: 'string' }
+ * let book = { type: 'string', ref: 'entity' }
  * let vocab = loadVocab([{
- *   $defs: { book: { component: true, properties: { status } } },
+ *   $defs: {
+ *     book: { component: true, properties: { status } },
+ *     review: { component: true, properties: { book } },
+ *   },
  * }])
  * let sold = (eid: string) => ({ entity: { eid }, book: { status: 'sold' } })
- * assertEquals(rows('.book&.tally=status', vocab)([sold('b1'), sold('b2')]), [
+ * let r1 = { entity: { eid: 'r1' }, review: { book: 'b2' } }
+ * let shop = [sold('b1'), sold('b2'), r1]
+ * assertEquals(rows('.book&.tally=status', vocab)(shop), [
  *   { value: 'sold', n: 2 },
+ * ])
+ * assertEquals(rows('.review&.fields=review.book.book.status', vocab)(shop), [
+ *   { eid: 'r1', 'review.book.book.status': 'sold' },
  * ])
  * ```
  */
@@ -356,7 +408,18 @@ export let rows = (
       clauses: agg ? cs.filter((c) => c != agg && !SEQUENCE.has(c.kind)) : cs,
     })
     if (!agg) {
-      return (bs: Source) => select(bs).map((b) => ({ eid: b.entity.eid }))
+      let fields = (find<Fields>(cs, 'fields')?.fields ?? []).map((f) => {
+        let at = f.path.join('.')
+        return [at, said(field(ctx, at))] as const
+      })
+      return (bs: Source) => {
+        let among = indexed(bs)
+        return select(among).map((b) => {
+          let row: Row = { eid: b.entity.eid }
+          for (let [at, read] of fields) row[at] = read(b, among)
+          return row
+        })
+      }
     }
     if (agg.kind == 'count') {
       return (bs: Source) => [{ value: '', n: select(bs).length }]
@@ -367,9 +430,10 @@ export let rows = (
       throw new Unsupported('.distinct/.tally', `over a ${tag} property`, BY)
     }
     return (bs: Source) => {
+      let among = indexed(bs)
       let n = new Map<string, number>()
-      for (let b of select(bs)) {
-        let v = read(b)
+      for (let b of select(among)) {
+        let v = read(b, among)
         if (v != null && String(v) != '') {
           n.set(String(v), (n.get(String(v)) ?? 0) + 1)
         }

@@ -121,11 +121,61 @@ Deno.test('an aggregate answers the same rows on both sides', () => {
   assertThrows(() => rows('.tally=price', shop), Error, 'cannot compile')
 })
 
+// A projection carries each value it names beside the eid, one hop or through
+// references, a boolean as true/false and an entity nothing reaches as null.
+Deno.test('a projection answers the same rows on both sides', () => {
+  let s = sql()
+  let answers = [
+    '.review&.fields=review.stars,review.book.doc.title&.order=review.stars',
+    '.kind=book&.fields=book.available,book.author.doc.title&.order=price',
+    '.kind=review&.fields=review.book.book.author.doc.title,review.book.num' +
+    '&.order=review.stars',
+    '.kind=review&.fields=review.book.book.available&.order=-review.stars',
+    // a window projects only its own page
+    '.kind=review&.fields=review.book.doc.title&.order=review.book.book.price' +
+    '&.limit=2&.after=r2',
+    '.kind=book&.fields=book.author.doc.title&.limit=2',
+    '.distinct=review.book.doc.title',
+    '.tally=review.book.book.status',
+  ].map((q) => {
+    let mine = rows(q, shop, { now: NOW })(bundles)
+    assertEquals(mine, s.rows(q), q)
+    return mine
+  })
+  // and the agreement is not vacuous
+  assertEquals(answers[0][0], {
+    eid: 'r2',
+    'review.stars': 3,
+    'review.book.doc.title': 'The Left Hand of Spring',
+  })
+  assertEquals(answers[2].map((r) => r['review.book.book.author.doc.title']), [
+    'Ursula Vale',
+    'Milo Frank',
+    'Ursula Vale',
+  ])
+  assertEquals(answers[3][0]['review.book.book.available'], true)
+  assertEquals(answers[4], [{
+    eid: 'r1',
+    'review.book.doc.title': 'The Left Hand of Spring',
+  }, { eid: 'r3', 'review.book.doc.title': 'Cooking on a Barge' }])
+})
+
 Deno.test('a query neither side can answer is declined by both', () => {
   let s = sql()
-  for (let q of ['.near=b1', '.edges', '.refs', '.reviews~=deep']) {
-    assertThrows(() => s.read(q), Error, 'cannot compile', q)
-    assertThrows(() => matcher(q, shop), Error, 'cannot compile', q)
+  for (
+    let q of [
+      '.near=b1',
+      '.edges',
+      '.refs',
+      '.reviews~=deep',
+      // a path through a hop that is no reference, or to a whole component
+      '.review&.fields=review.stars.doc.title',
+      '.order=book.author.member',
+      '.tally=review.book.book.price',
+    ]
+  ) {
+    assertThrows(() => s.rows(q), Error, 'cannot compile', q)
+    assertThrows(() => rows(q, shop)(bundles), Error, 'cannot compile', q)
   }
 })
 

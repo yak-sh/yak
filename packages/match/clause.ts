@@ -25,6 +25,7 @@ import {
   type Bundle,
   comp,
   type Computed,
+  follow,
   type Index,
   reader,
   wears,
@@ -227,6 +228,20 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Arm => {
 let isRef = (v: Vocab, hop: Hop) =>
   v.prop(hop.comp, hop.prop)?.category == 'ref'
 
+/** Refuses a path that has a hop before its leaf that is not a reference
+ * property, the one thing a path can follow. */
+export let chained = (v: Vocab, hops: Hop[]): void => {
+  for (let h of hops.slice(0, -1)) {
+    if (!isRef(v, h)) {
+      throw new Unsupported(
+        'a path',
+        `.${h.comp}.${h.prop} is not a reference`,
+        BY,
+      )
+    }
+  }
+}
+
 // A dereference path: a chain of one-to-one lookups through reference
 // properties, ending in a leaf property tested against the operator. Every hop
 // but the last must be a reference, and every step is looked up in the bundle
@@ -236,31 +251,15 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Arm => {
   let op = opOf(p)
   if (op == 'want') return arm(YES)
   let root = hops[0]
-  for (let h of hops.slice(0, -1)) {
-    if (!isRef(ctx.v, h)) {
-      throw new Unsupported(
-        'a path',
-        `.${h.comp}.${h.prop} is not a reference`,
-        BY,
-      )
-    }
-  }
-  let follow = (b: Bundle, among: Index): Bundle | undefined => {
-    let eid = comp(b, root.comp)?.[root.prop]
-    for (let h of hops.slice(1, -1)) {
-      if (typeof eid != 'string') return undefined
-      let next = among.of(eid)
-      eid = next && comp(next, h.comp)?.[h.prop]
-    }
-    return typeof eid == 'string' ? among.of(eid) : undefined
-  }
+  chained(ctx.v, hops)
+  let reach = follow(hops)
   let leaf = hops[hops.length - 1]
   // The leaf is a component rather than a property: does the target have it?
   if (!leaf.prop) {
     let present = op == '~' || op == EXISTS
     return arm(
       (b, among) => {
-        let t = follow(b, among)
+        let t = reach(b, among)
         return (!!t && wears(t, leaf.comp)) == present
       },
       present ? wearing(root.comp) : [],
@@ -276,7 +275,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Arm => {
   let rooted = op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
     ((op == '' || op == '~') && flat(p.value) != '')
   return arm(
-    (b, among) => (!rooted || wears(b, root.comp)) && hit(follow(b, among)),
+    (b, among) => (!rooted || wears(b, root.comp)) && hit(reach(b, among)),
     rooted ? wearing(root.comp) : [],
     false,
   )

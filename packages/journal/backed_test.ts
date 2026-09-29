@@ -134,6 +134,21 @@ Deno.test('a history pages newest first', () => {
   assertEquals(rows('._change.target=p1&.count'), [{ value: '', n: 2 }])
 })
 
+Deno.test('a history reads who wrote each change through its transaction', () => {
+  let { rows } = fixture()
+  let by = '_change.tx._tx.by'
+  let via = '_change.tx._tx.via'
+  let q = `._change.target=p1&.order=-_change.tx._tx.seq&.fields=${by},${via}`
+  assertEquals(rows(q).map(({ eid: _, ...r }) => r), [
+    { [by]: 'bob', [via]: 'cli' },
+    { [by]: 'ada', [via]: null },
+  ])
+  assertEquals(rows(`._change&.tally=${by}`), [
+    { value: 'ada', n: 2 },
+    { value: 'bob', n: 2 },
+  ])
+})
+
 Deno.test('an entity counts its changes by the reverse association', () => {
   let { read } = fixture()
   assertEquals(read('.page&._changes_target>=2').map((b) => b.entity.eid), [

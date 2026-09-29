@@ -240,10 +240,14 @@ all entities first and filtering afterward would return the wrong subset.
 
 ## Ordering and paging
 
-`.order=price` sorts ascending; `.order=-price` sorts descending. An extension
-may supply the order expression. Explicit ordering uses entity `num` descending
-as the tie-breaker. Without `.order=`, a `.limit` or `.after` window returns
-newest numbers first; a complete result returns oldest numbers first.
+`.order=price` sorts ascending; `.order=-price` sorts descending. The ordered
+property may sit on the entity a chain of references reaches, as a path
+predicate's does: `.order=review.book.book.price` orders reviews by their book's
+price, and `.fields=_prop.comp._comp.name` projects each property's component
+name beside it. An extension may supply the order expression. Explicit ordering
+uses entity `num` descending as the tie-breaker. Without `.order=`, a `.limit`
+or `.after` window returns newest numbers first; a complete result returns
+oldest numbers first.
 
 `.after=<id>` identifies the entity by number, human id, or eid. With explicit
 ordering, the compiler reads its order value in a correlated subquery and

@@ -5,8 +5,9 @@ bundle is one entity's components as a JSON object. This package stores no data
 itself: callers supply the array to search, and no database is opened.
 `matcher()` selects from an array of bundles, including ordering and paging;
 `filter()` tests a single bundle; `rows()` answers the rows @yaks/sql `rows()`
-returns, aggregates included. All three read a [@yaks/vocab](../vocab/README.md)
-schema to find out which component a property belongs to and what type it holds.
+returns, aggregates and `.fields` projections included. All three read a
+[@yaks/vocab](../vocab/README.md) schema to find out which component a property
+belongs to and what type it holds.
 
 The same query text can be run against a database by
 [@yaks/sql](../sql/README.md), which compiles it into a `SELECT`.
@@ -305,10 +306,13 @@ in it at all matches nothing, never everything.
 ## Ordering and paging
 
 `.order=price` sorts ascending by that property and `.order=-price` descending.
-Values sort absent first, then numbers, then text — the order SQLite's
-`ORDER BY` gives over the same values — and the entity number breaks ties, so
-ties are deterministic. Ascending property order puts missing values first;
-descending order reverses that property order.
+The property may be one a chain of references reaches, as in a path predicate:
+`.order=review.book.book.price` orders reviews by their book's price, and
+`rows()` projects `.fields=review.book.doc.title` the same way. Values sort
+absent first, then numbers, then text — the order SQLite's `ORDER BY` gives over
+the same values — and the entity number breaks ties, so ties are deterministic.
+Ascending property order puts missing values first; descending order reverses
+that property order.
 
 `.limit=n` keeps the first n results, and `.limit=0` keeps none. An aggregate in
 `rows()` ignores `.order`, `.limit` and `.after` and counts every match, as

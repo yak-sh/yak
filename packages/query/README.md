@@ -328,8 +328,9 @@ Schema-dependent interpretation belongs to a compiler such as `@yaks/sql`:
   the presence and absence clauses that kind implies needs the schema's kind
   order.
 - **Directive validation** — whether a walk's path names a relation or a chain
-  of reference properties, which edge types `.edges` may name, and whether a
-  `.distinct` or `.fields` path is a single property.
+  of reference properties, which edge types `.edges` may name, and whether an
+  `.order`, `.distinct`, `.tally` or `.fields` path names one property, on the
+  entity or through a chain of references (`.fields=review.book.doc.title`).
 - **Evaluation** — matching rows, compiling SQL, and interpreting the `.order`
   rankings (`hot`, `search`, `similar`) against stored data.
 

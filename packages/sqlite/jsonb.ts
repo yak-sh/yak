@@ -19,7 +19,7 @@
 // reads a `.fields` projection in a query's raw rows the same way, so a value
 // comes back as one type whichever door asked for it.
 
-import type { Vocab } from '@yaks/vocab'
+import type { Hop, Vocab } from '@yaks/vocab'
 import { type Expr, fn, lit, op, type Param } from '@yaks/sql'
 
 /** Whether `comp.prop` holds a JSON value. */
@@ -60,23 +60,35 @@ export let decoded = <R extends Record<string, unknown>>(
   return row
 }
 
+// The property a projected column's path ends on, kept per vocabulary: every
+// row of an answer names the same few.
+let leaves = new WeakMap<Vocab, Map<string, Hop | null>>()
+let leafOf = (v: Vocab, path: string): Hop | null => {
+  let known = leaves.get(v)
+  if (!known) leaves.set(v, known = new Map())
+  if (!known.has(path)) {
+    let hops: Hop[] = []
+    try {
+      hops = v.aim(path)
+    } catch { /* a column no path names is left as it came */ }
+    known.set(path, hops.at(-1) ?? null)
+  }
+  return known.get(path)!
+}
+
 /** A row of a query's raw answer, each `.fields` projection read as
  * {@link decoded} reads it in a component. A projected column is named by its
- * path, `comp.prop`; the rest of the row (`eid`, an aggregate's `value` and
- * `n`) is left as the statement returned it. */
+ * path (`comp.prop`, or one through references, `review.book.book.price`),
+ * and read as the property it ends on; the rest of the row (`eid`, an
+ * aggregate's `value` and `n`) is left as the statement returned it. */
 export let projected = <R extends Record<string, unknown>>(
   v: Vocab,
   row: R,
 ): R => {
   for (let [k, raw] of Object.entries(row)) {
-    let dot = k.indexOf('.')
-    if (dot > 0) {
-      ;(row as Record<string, unknown>)[k] = value(
-        v,
-        k.slice(0, dot),
-        k.slice(dot + 1),
-        raw,
-      )
+    let leaf = k.includes('.') ? leafOf(v, k) : null
+    if (leaf) {
+      ;(row as Record<string, unknown>)[k] = value(v, leaf.comp, leaf.prop, raw)
     }
   }
   return row

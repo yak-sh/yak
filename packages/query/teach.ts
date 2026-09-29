@@ -104,11 +104,12 @@ search word 'words'). Bare words are text terms (the document contains them;
 a trailing * matches a prefix).
 A DOTTED path walks a reference: '.author.title~=j' tests the target's title;
 a first segment naming a component is the explicit form ('.pin.x=12') and
-never dereferences. A reverse association, named by the schema, walks the other
-way: '.comments.author=jeff' keeps what has ANY such child; '.comments' has
-any, '!comments' none, '.comments>=5' counts, and '!' on the association
-negates ('.comments!.author=jeff' has NONE by jeff; '.comments!.author!=jeff'
-has EVERY comment by jeff, by De Morgan).
+never dereferences, and a directive's path walks the same way
+('.order=author.title'). A reverse association, named by the schema, walks the
+other way: '.comments.author=jeff' keeps what has ANY such child;
+'.comments' has any, '!comments' none, '.comments>=5' counts, and '!' on the
+association negates ('.comments!.author=jeff' has NONE by jeff;
+'.comments!.author!=jeff' has EVERY comment by jeff, by De Morgan).
 Directives ride beside the filters — ${DIRECTIVES.map(row).join('; ')}.
 A WALK has no hop cap by default and returns at most 10,000 nearest nodes;
 only an explicit [<=N] caps it. The bracket is a QUALIFIER on the path, and a

@@ -22,10 +22,11 @@
 // absence, ordering, `.limit`/`.after` windows (which page within a requested
 // `.order`, by a keyset condition on the anchor entity's own place in it), the
 // `.count`/`.distinct`/`.tally` aggregates, `.fields` projections, and the
-// `.refs=` backlink union. A property the schema marks computed
-// (`computed: true`) is read through the derived hook, or, if no expression was
-// registered for it, declines — the binder never invents a value it cannot
-// read.
+// `.refs=` backlink union. A directive's path may cross references as a
+// predicate's does (`.order=review.book.book.price`). A property the schema
+// marks computed (`computed: true`) is read through the derived hook, or, if
+// no expression was registered for it, declines — the binder never invents a
+// value it cannot read.
 //
 // The walk (`.fork.from->S-7`) compiles here when its path is a reference
 // property, or a chain of them (`.fork.from.session->S-1`, one step across the
@@ -268,6 +269,16 @@ export type Read = {
   deps?: string[]
 } | null
 
+// The type a property's value compares as, from the vocabulary and the
+// derived registry alone.
+let tagAt = (v: Vocab, derived: Derived, comp: string, prop: string): Tag =>
+  derived[`${comp}.${prop}`]?.tag ??
+    (comp == 'entity'
+      ? 'text'
+      : prop == 'eid'
+      ? 'eid'
+      : tagOf(v.prop(comp, prop)!))
+
 // The same direct property read serves a filter, a projection and a rule
 // binding. The caller joins `deps` when the override needs other tables.
 export let readAt = (
@@ -293,7 +304,7 @@ export let readAt = (
   if (expr == null) return null
   return {
     expr,
-    tag: comp == 'entity' ? 'text' : prop == 'eid' ? 'eid' : tagOf(def!),
+    tag: tagAt(v, derived, comp, prop),
     textAffinity: def?.affinity == 'text' && def.category != 'ref',
   }
 }
@@ -541,40 +552,55 @@ let lands = (v: Vocab, comp: string, prop: string): string | undefined => {
 let wears = (v: Vocab, at: string | undefined, comp: string): boolean =>
   at ? comp == at : comp == 'entity' || !computed(v, comp)
 
-let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
-  let op = opOf(p)
-  if (op == 'want') return TRUE
-  let root = hops[0]
-  if (!isRef(ctx.v, root.comp, root.prop)) {
-    throw new Unsupported(
-      'a path',
-      `.${root.comp}.${root.prop} is not a reference`,
-    )
-  }
-  // Each hop lands on the spine its reference names (./spine.ts): an entity
-  // there cannot wear a component of the other, so a path that crosses reads
-  // nothing, and is answered as such.
-  let value = flat(p.value)
-  let last = hops[hops.length - 1].prop
-  if (!worn(ctx, root.comp)) return unworn(op, value, last)
-  let at = lands(ctx.v, root.comp, root.prop)
+// Whether every hop of a path lands where its entities can wear the next
+// hop's component. Each hop lands on the spine its reference names
+// (./spine.ts): an entity there cannot wear a component of the other, so a
+// path that crosses reads nothing, and is answered as such.
+let reachable = (ctx: Ctx, hops: Hop[]): boolean => {
+  if (!worn(ctx, hops[0].comp)) return false
+  let at = lands(ctx.v, hops[0].comp, hops[0].prop)
   for (let h of hops.slice(1)) {
-    if (h.comp && !wears(ctx.v, at, h.comp)) return unworn(op, value, last)
+    if (h.comp && !wears(ctx.v, at, h.comp)) return false
     if (h.prop && isRef(ctx.v, h.comp, h.prop)) {
       at = lands(ctx.v, h.comp, h.prop)
     }
   }
-  ctx.tables.add(root.comp)
-  let target = refKey(ctx, root.comp, root.prop)
-  for (let i = 1; i < hops.length - 1; i++) {
-    let h = hops[i]
-    if (!isRef(ctx.v, h.comp, h.prop)) {
+  return true
+}
+
+// Refuses a path that has a hop before its leaf that is not a reference
+// property, the one thing a path can follow.
+let chained = (v: Vocab, hops: Hop[]): void => {
+  for (let h of hops.slice(0, -1)) {
+    if (!isRef(v, h.comp, h.prop)) {
       throw new Unsupported('a path', `.${h.comp}.${h.prop} is not a reference`)
     }
+  }
+}
+
+// The integer id of the entity a path's leaf is read from: `start` is the id
+// its first reference holds, and each hop between that and the leaf is one
+// correlated lookup of the next reference.
+let chain = (ctx: Ctx, hops: Hop[], start: string): string => {
+  let target = start
+  for (let i = 1; i < hops.length - 1; i++) {
+    let h = hops[i]
     target =
       `(select "__p${i}"."${h.prop}" from ${source(ctx, h.comp)} as "__p${i}"` +
       ` where "__p${i}"."entity" = ${target})`
   }
+  return target
+}
+
+let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
+  let op = opOf(p)
+  if (op == 'want') return TRUE
+  let root = hops[0]
+  chained(ctx.v, hops)
+  let value = flat(p.value)
+  if (!reachable(ctx, hops)) return unworn(op, value, hops.at(-1)!.prop)
+  ctx.tables.add(root.comp)
+  let target = chain(ctx, hops, refKey(ctx, root.comp, root.prop))
   let leaf = hops[hops.length - 1]
   // A leaf property that several components share belongs to no one component
   // (@yaks/vocab's route() returns comp '' — the leaf of
@@ -1171,25 +1197,41 @@ let screen = (
   )
 }
 
-// A path resolved for a directive's value (order, fields): its column
-// expression.
+// A directive's path (order, fields, distinct, tally) as one value: a
+// property of the row, or of the entity a chain of references from the row
+// reaches (`.fields=review.book.doc.title`), read the way a path predicate
+// reads it. Read off the selected row, through the joins this bind makes, or,
+// given `owner`, off the row with that integer id: a `.after` anchor, whose
+// place in the order is then read exactly as the rows' own places are.
 let resolveField = (
   ctx: Ctx,
   pathStr: string,
-): { expr: string; comp: string } => {
+  owner?: string,
+): { expr: string; tag: Tag } => {
   let hops = ctx.v.aim(pathStr)
-  if (hops.length != 1) {
-    throw new Unsupported('a projected/ordered path', pathStr)
-  }
-  let h = hops[0]
-  if (!h.prop) throw whole(ctx.v, h.comp)
+  let [root, leaf] = [hops[0], hops[hops.length - 1]]
+  if (!leaf.comp) throw new Unsupported('a shared reference', pathStr)
+  if (!leaf.prop) throw whole(ctx.v, leaf.comp)
+  chained(ctx.v, hops)
+  let tag = tagAt(ctx.v, ctx.derived, leaf.comp, leaf.prop)
+  opaque(tag, 'ordering or projecting by it', `${leaf.comp}.${leaf.prop}`)
   // A component these entities never wear holds nothing to read.
-  if (!worn(ctx, h.comp)) return { expr: 'null', comp: h.comp }
-  ctx.tables.add(h.comp)
-  let read = readProp(ctx, h.comp, h.prop, ctx.d.ownerKey(h.comp))
+  if (!reachable(ctx, hops)) return { expr: 'null', tag }
+  let read: Read
+  if (hops.length == 1 && owner == null) {
+    ctx.tables.add(leaf.comp)
+    read = readProp(ctx, leaf.comp, leaf.prop, ctx.d.ownerKey(leaf.comp))
+  } else {
+    let start = hops.length == 1
+      ? owner!
+      : owner != null
+      ? `(select "__pa"."${root.prop}" from ${source(ctx, root.comp)}` +
+        ` as "__pa" where "__pa"."entity" = ${owner})`
+      : (ctx.tables.add(root.comp), refKey(ctx, root.comp, root.prop))
+    read = leafRead(ctx, leaf, chain(ctx, hops, start))
+  }
   if (!read) throw new Unsupported('a computed property here', pathStr)
-  opaque(read.tag, 'ordering or projecting by it', `${h.comp}.${h.prop}`)
-  return { expr: read.expr, comp: h.comp }
+  return { expr: read.expr, tag: read.tag }
 }
 
 /** A query as the statement that answers it: the one function `compile`
@@ -1261,52 +1303,40 @@ export let bound = (
   // the JavaScript matcher), or a count per value. Empty values are dropped.
   if (distinct || tally) {
     let agg = (distinct ?? tally)!
-    let { expr } = resolveField(ctx, agg.path.join('.'))
+    let { expr, tag } = resolveField(ctx, agg.path.join('.'))
     // decline a numeric, time or derived property: only text, enum and eid
     // properties tally exactly
-    let hop = ctx.v.aim(agg.path.join('.'))[0]
-    let tag = ctx.derived[`${hop.comp}.${hop.prop}`]?.tag ??
-      (hop.prop == 'eid'
-        ? 'eid'
-        : (hop.comp == 'entity'
-          ? 'text'
-          : tagOf(ctx.v.prop(hop.comp, hop.prop)!)))
     if (!['text', 'enum', 'eid'].includes(tag)) {
       throw new Unsupported('.distinct/.tally', `over a ${tag} property`)
     }
-    let value = `cast(${expr} as text) as value`
+    // Grouped and ordered by the expression, never by its `value` alias: a
+    // name in GROUP BY reads a source column first, and a backed spine can
+    // have one of that name (`_change.value`), which grouped every change
+    // apart.
+    let text = `cast(${expr} as text)`
     let nonEmpty = and(
       cond({ sql: `${expr} is not null`, params: [] }),
-      cond({ sql: `cast(${expr} as text) != ''`, params: [] }),
+      cond({ sql: `${text} != ''`, params: [] }),
       where,
     )
     return tally
       ? rel(ctx.d.spine, {
-        cols: [value, 'count(*) as n'],
+        cols: [`${text} as value`, 'count(*) as n'],
         joins: joinsOf(ctx),
         where: nonEmpty,
-        group: 'value',
-        order: ['value'],
+        group: text,
+        order: [text],
       })
       : rel(ctx.d.spine, {
-        cols: [value],
+        cols: [`${text} as value`],
         uniq: true,
         joins: joinsOf(ctx),
         where: nonEmpty,
-        order: ['value'],
+        order: [text],
       })
   }
 
-  // An ordinary query, with projected columns if `.fields` asked for any.
-  let fields = find<Fields>(cs, 'fields')
-  let cols = [ctx.d.membership]
-  if (fields) {
-    for (let f of fields.fields) {
-      let { expr } = resolveField(ctx, f.path.join('.'))
-      cols.push(`${expr} as "${f.path.join('.')}"`)
-    }
-  }
-  // Ordering, then the window within it. `.order=-field` is descending, and an
+  // An ordinary query. Ordering, then the window within it. `.order=-field` is descending, and an
   // explicit order survives a `.limit`/`.after` window: a window states how much
   // of a sequence to return, never which sequence — so a page of
   // `.order=price&.limit=5` is the five cheapest, not the five newest. With no
@@ -1351,14 +1381,49 @@ export let bound = (
   // which is to say by whatever the planner chose.
   let down = sort || limit || after ? ' desc' : ''
   if (numbered) ordered.push(`"entity"."num"${down}`)
-  ordered.push(`${ctx.d.ownerKey('entity')}${down}`)
+  let owner = ctx.d.ownerKey('entity')
+  ordered.push(`${owner}${down}`)
+  let windowed = after
+    ? and(where, cond(keyset(ctx, sort, after, numbered)))
+    : where
+  // The joins the selection itself reads, taken before a projection adds its
+  // own.
+  let paged = joinsOf(ctx)
+  // Then the projected columns, if `.fields` asked for any.
+  let fields = find<Fields>(cs, 'fields')
+  let cols = [ctx.d.membership]
+  for (let f of fields?.fields ?? []) {
+    let { expr } = resolveField(ctx, f.path.join('.'))
+    cols.push(`${expr} as "${f.path.join('.')}"`)
+  }
+  // SQLite computes a result column before its sorter cuts the window, so a
+  // projection is read for every row the filter selects, not just the page.
+  // A window with projections therefore selects its page by id first, and
+  // projects only the rows on it: a 50-row page of an entity's 36,994 changes,
+  // each change's transaction projected, took 200 ms read the other way and
+  // takes 11 this way.
+  if (limit && fields) {
+    let page = render({
+      ...rel(ctx.d.spine, {
+        cols: [owner],
+        joins: paged,
+        where: windowed,
+        order: ordered,
+      }),
+      limit: val(limit.n),
+    })
+    return rel(ctx.d.spine, {
+      cols,
+      joins: joinsOf(ctx),
+      where: cond({ sql: `${owner} in (${page.sql})`, params: page.params }),
+      order: ordered,
+    })
+  }
   return {
     ...rel(ctx.d.spine, {
       cols,
       joins: joinsOf(ctx),
-      where: after
-        ? and(where, cond(keyset(ctx, sort, after, numbered)))
-        : where,
+      where: windowed,
       order: ordered,
     }),
     limit: limit ? val(limit.n) : undefined,
@@ -1382,16 +1447,7 @@ let sortOf = (ctx: Ctx, value: string): Sort => {
   let rank = ranked(ctx, field)
   if (rank) return { row: rank, at: (o) => ranked(ctx, field, o)!, desc }
   let row = resolveField(ctx, field).expr
-  let hop = ctx.v.aim(field)[0]
-  return {
-    row,
-    at: (o) => {
-      let read = leafRead(ctx, hop, o)
-      if (!read) throw new Unsupported('a computed property here', field)
-      return read.expr
-    },
-    desc,
-  }
+  return { row, at: (o) => resolveField(ctx, field, o).expr, desc }
 }
 
 let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
