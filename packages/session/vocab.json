@@ -631,11 +631,18 @@
     },
     "session_run": {
       "effect": true,
-      "created": ["using", "attention", "stop", "completed", "cancelled"],
+      "created": [
+        "using",
+        "attention",
+        "cancel",
+        "stop",
+        "completed",
+        "cancelled"
+      ],
       "changed": ["dispatch.state"],
       "removed": ["contains", "requires"],
       "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.state=active,queued",
-      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency"
+      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency"
     },
     "session_release": {
       "effect": true,
