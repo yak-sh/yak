@@ -35,6 +35,7 @@ import { capacity, meshed, template } from './grown.ts'
 import { type Clock, hud } from './hud.ts'
 import { guide, journal, tasksOf } from './journal.ts'
 import { pack } from './pack.ts'
+import { pace } from './pace.ts'
 import { parties } from './party.ts'
 import { partybox } from './partybox.ts'
 import { character } from './character.ts'
@@ -255,8 +256,12 @@ let feet = new THREE.Vector3()
 // tray's button, whose tap the browser may ask the player about.
 let voice = voices(net, h.mic)
 h.orbs.mic.addEventListener('click', () => void voice.toggle())
-// The menu: the vale's sound, camera, and ground detail. Reloading through
+// The menu: the vale's sound, camera, frame rate and ground detail. Reloading through
 // this tab keeps its hero and most recent spot (seen.ts).
+let frameRate: 30 | 60 = 60
+try {
+  if (localStorage.getItem('mossvale.frames') == '30') frameRate = 30
+} catch { /* this page keeps its setting */ }
 let settings = menu(h.panels.menu, {
   muted: () => sound.muted,
   mute: () => sound.toggle(),
@@ -273,6 +278,17 @@ let settings = menu(h.panels.menu, {
       let url = new URL(location.href)
       url.searchParams.set('voxel', String(size))
       location.assign(url.href)
+    },
+  },
+  frames: {
+    get current() {
+      return frameRate
+    },
+    set: (rate) => {
+      frameRate = rate
+      try {
+        localStorage.setItem('mossvale.frames', String(rate))
+      } catch { /* this page keeps its setting */ }
     },
   },
 })
@@ -860,6 +876,7 @@ let talkToPeer = () => {
 let last: Frame | null = null
 let job: Job | null = null
 let then = performance.now()
+let paint = pace()
 // The page keeps up with the screen before it keeps its looks: while frames
 // run slow it draws fewer pixels, then plainer shadows, then none.
 let EASE = [
@@ -1192,7 +1209,7 @@ let loop = (t: number) => {
   dust.tick(dt)
   glow.tick(dt, camera)
   marks.tick()
-  renderer.render(w.scene, camera)
+  if (paint(t, playing ? frameRate : 30)) renderer.render(w.scene, camera)
 }
 // The level's shaders compile off the page's thread where the browser can
 // (KHR_parallel_shader_compile), so the gate paints meanwhile, and the frame

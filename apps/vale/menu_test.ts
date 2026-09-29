@@ -15,6 +15,10 @@ Deno.test('voxel slider shows a choice before applying it', () => {
   try {
     let chosen: number | null = null
     let level = { level: 0.5, set: (_: number) => {} }
+    let frames: Settings['frames'] = {
+      current: 60,
+      set: (rate) => frames.current = rate,
+    }
     let o: Settings = {
       muted: () => false,
       mute: () => {},
@@ -26,6 +30,7 @@ Deno.test('voxel slider shows a choice before applying it', () => {
       strafes: () => false,
       strafe: () => {},
       voxel: { current: 0.25, apply: (size) => chosen = size },
+      frames,
     }
     let panel: Panel = {
       body: document.body,
@@ -35,7 +40,8 @@ Deno.test('voxel slider shows a choice before applying it', () => {
       toggle: () => {},
       head: () => {},
     }
-    menu(panel, o).show()
+    let settings = menu(panel, o)
+    settings.show()
     let slider = document.querySelector<HTMLInputElement>('[data-voxel]')!
     let button = document.querySelector<HTMLButtonElement>('[data-do=voxel]')!
     let choice = document.querySelector('[data-voxel-choice]')!
@@ -54,6 +60,15 @@ Deno.test('voxel slider shows a choice before applying it', () => {
     slider.value = '1'
     slider.dispatchEvent(new window.Event('input', { bubbles: true }))
     assertEquals(button.disabled, true)
+    document.querySelector<HTMLElement>('[data-do=frames]')!.dispatchEvent(
+      new window.Event('click', { bubbles: true }),
+    )
+    assertEquals(frames.current, 30)
+    settings.show()
+    assertStringIncludes(
+      document.body.textContent ?? '',
+      '30 fps · lower power',
+    )
   } finally {
     Object.assign(globalThis, {
       Element: element,

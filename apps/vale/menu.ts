@@ -25,6 +25,7 @@ export type Settings = {
   strafes: () => boolean
   strafe: () => void
   voxel: { current: number; apply: (size: number) => void }
+  frames: { current: 30 | 60; set: (rate: 30 | 60) => void }
 }
 
 // Each key and what it does, the actions' keys read from input.ts.
@@ -84,12 +85,13 @@ export let menu = (panel: Panel, o: Settings) => {
     if (act == 'music') o.music.toggle()
     if (act == 'swap') o.swap()
     if (act == 'strafe') o.strafe()
+    if (act == 'frames') o.frames.set(o.frames.current == 60 ? 30 : 60)
     if (act == 'voxel' && selected != o.voxel.current) {
       o.voxel.apply(selected)
     }
     if (
       act == 'sound' || act == 'music' || act == 'swap' ||
-      act == 'strafe'
+      act == 'strafe' || act == 'frames'
     ) {
       was = ''
     }
@@ -160,7 +162,7 @@ export let menu = (panel: Panel, o: Settings) => {
       let sound = !o.muted(), swapped = o.swapped()
       let strafes = o.strafes()
       let playing = !o.music.muted
-      let key = `${sound} ${playing} ${swapped} ${strafes}`
+      let key = `${sound} ${playing} ${swapped} ${strafes} ${o.frames.current}`
       if (key == was) return
       was = key
       let html = `<div class=Menu>` +
@@ -180,6 +182,14 @@ export let menu = (panel: Panel, o: Settings) => {
         slider('effects', 'Effects and ambience volume') +
         slider('voice', 'Player voice volume') +
         voxel() +
+        toggle(
+          'frames',
+          o.frames.current == 30,
+          glyph('video'),
+          o.frames.current == 30
+            ? 'Frame rate: 30 fps · lower power'
+            : 'Frame rate: 60 fps · smoother motion',
+        ) +
         toggle(
           'swap',
           swapped,
