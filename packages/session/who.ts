@@ -17,6 +17,12 @@
 // write), and what it writes is attributed `by` the identity that run speaks as
 // and `via` the run itself: a session's work is attributed to the persona,
 // without losing which transcript did it.
+//
+// A session created from the harness's own id takes its eid from that id
+// (`sessionEid`): the id itself where it is a uuid, as Claude Code's and
+// Codex's are, since an eid is a uuid; one derived from it otherwise. So
+// whoever holds the harness's id holds the eid, and the hook and the importer
+// that both create a session for one id land on one entity.
 
 import {
   type Actor,
@@ -25,11 +31,30 @@ import {
   type Comp,
   type Eid,
   type Graph,
+  identityEid,
   then,
   TOMBSTONE,
   type Tx,
 } from '@yaks/graph'
 import { SESSION } from './comp.ts'
+
+// A uuid, whatever its version.
+let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * The eid of the session a harness knows by `id`: the id itself where it is a
+ * uuid, and otherwise one derived from it.
+ *
+ * ```ts
+ * import { sessionEid } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let id = '49805559-ca98-4c0a-873e-45c19ec7316c'
+ * assertEquals(sessionEid(id), id)
+ * ```
+ */
+export let sessionEid = (id: string): Eid =>
+  UUID.test(id) ? id : identityEid(SESSION, [id])
 
 /** A command speaks for its own transcript, never its launcher's. Clearing
  * the other harness IDs also matters when `yak` chooses the first one it sees. */

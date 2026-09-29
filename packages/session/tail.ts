@@ -340,7 +340,8 @@ let settle = async (g: Graph, t: Tail) => {
   if (!t.known) t.own = await owns(g, t)
 }
 
-// The session a file names, created now that it has said something.
+// The session a file names, created now that it has said something, as the
+// entity the harness's id for it names (./who.ts `sessionEid`).
 let created = async (g: Graph, t: Tail): Promise<Eid> => {
   let made = await g.apply([{
     entity: { eid: '$session' },

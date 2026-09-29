@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import type { Graph } from '@yaks/graph'
+import type { Comp, Graph } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
 import { look, type Seen, service, stale, strip } from './service.ts'
 
@@ -113,6 +113,26 @@ test('a recent transcript is followed in full; an old one is read in later, its 
     // The subagent's transcript is not a session of its own.
     assertEquals((await g.read('.session')).length, 4)
   }))
+
+test('a session is the entity its harness id names', () => {
+  let id = '49805559-ca98-4c0a-873e-45c19ec7316c'
+  return projects({ [id]: { text: lines('hello') } }, async (dir) => {
+    let g = locked(store())
+    await look(g, dir, { tails: new Map(), done: new Set() })
+    let [s] = await g.get([id])
+    assertEquals((s.session as Comp).id, id)
+    assertEquals(await told(g, id), ['hello', 'thought 0', 'said 0'])
+    // The hook, writing the session its payload names, writes the same one;
+    // so does a second write for an id that is not a uuid.
+    let hook = (id: string) =>
+      g.apply([{ entity: { eid: '$s' }, session: { id } }])
+    await hook(id)
+    await hook('run')
+    await hook('run')
+    assertEquals((await g.read(`.session.id=${id}`)).length, 1)
+    assertEquals((await g.read('.session.id=run')).length, 1)
+  })
+})
 
 test('a managed run is read from its own output, not its transcript file', () =>
   projects({ run1: { text: lines('asked') } }, async (dir) => {

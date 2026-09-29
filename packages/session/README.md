@@ -307,6 +307,14 @@ entry that records what a turn cost, since the session's cost is their sum.
 
 <a id="one-id-means-one-run"></a>
 
+A session written under an alias with the harness's own id for it
+(`session{id}`) is the entity `sessionEid(id)` names: the id itself where it is
+a uuid, as Claude Code's session ids and Codex's thread ids are, and otherwise
+an eid derived from it. Whoever holds a Claude session id can read that session
+by it, and the hook and the importer that both create it land on one entity. A
+managed run's session is written first under an eid of its own, which
+`@yaks/spawn` hands Claude Code as its `--session-id`.
+
 `sessionFor()` resolves an entity ID, a human-readable session ID, or a harness
 session ID to the same entity. `speaking()` returns the actor a session writes
 as. The `@yaks/session/rules` entry point exports `authenticate()`, which reads
@@ -336,7 +344,8 @@ The main module exports:
   and `answers()`;
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
   `sessionDerived`, and the bounded transcript functions;
-- identity and rendering: `sessionFor()`, `speaking()`, `where()`, and `views`;
+- identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,
+  `where()`, and `views`;
 - harness readers: `claude`, `codex`, `readers`, and `scrub()`;
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 

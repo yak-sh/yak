@@ -19,7 +19,7 @@ import { SESSION, sessionDoc } from './comp.ts'
 import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
 import { naming } from './naming.ts'
-import { runners } from './who.ts'
+import { runners, sessionEid } from './who.ts'
 
 /** The plugin's two injection points: a clock for both stamps, and the eid a
  * conflict row is minted under. */
@@ -68,6 +68,12 @@ export let sessions = (opts: SessionOpts = {}): Plugin => {
     name: '@yaks/session',
     vocab: [sessionDoc],
     hooks: { precondition, audit: auditing(opts) },
+    // A session written under an alias with the harness's own id for it is
+    // the entity that id names (./who.ts `sessionEid`); one with no id is
+    // given a fresh eid.
+    derive: {
+      [SESSION]: (c) => typeof c.id == 'string' && c.id ? sessionEid(c.id) : '',
+    },
     // An id meant to name a session may be the runner's own id for it, the
     // one a harness hands out (`$CLAUDE_CODE_SESSION_ID`). Only when the
     // caller says it means a session: every other id is left alone.
