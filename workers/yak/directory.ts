@@ -351,6 +351,7 @@ type Row = {
     files?: string
     worker?: string
     script?: string
+    source?: string | null
   }
   restored?: {
     app: Id
@@ -778,6 +779,7 @@ export let deployOf = (r: Row) => ({
   })(),
   worker: r.deploy!.worker ?? '',
   script: r.deploy!.script ?? '',
+  source: r.deploy!.source ?? null,
 })
 
 // One restore of an app's store, as recover.ts reads it (T-34507). `from` is
@@ -1123,6 +1125,21 @@ export let directory = (via: Fetcher, now = false) => {
       (await query(`.deploy.app=${app.eid}&?created`, true))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
+    released: async (app: App, source: string) => {
+      let holds = async (at: string) =>
+        !!(await one(
+          `.deploy.app=${app.eid}&.deploy.source=${at}`,
+          true,
+        ))?.deploy
+      if (await holds(source)) return true
+      let row = await one(`.eid=${app.space}`, true)
+      let space = row?.space ? spaceOf(row) : null
+      let path = source.slice(source.indexOf('/') + 1)
+      for (let slug of space?.slugs ?? []) {
+        if (await holds(`${slug}/${path}`)) return true
+      }
+      return false
+    },
     // Every time this app's store was put back to a moment, newest first
     // (recover.ts, T-34507). Never cached, for the reason `deploys` is not: a
     // restore reads its own trail back the moment it writes to it.

@@ -768,6 +768,7 @@ export let platformDoc: VocabDoc = {
         files: text,
         worker: text,
         script: text,
+        source: text,
       },
     },
     // One time this app's store was put back to a moment (recover.ts,

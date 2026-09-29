@@ -75,6 +75,7 @@ export type Version = {
   // Cloudflare having kept anything.
   worker: string
   script?: string
+  source?: string | null
 }
 
 // How many versions a list shows at once, and the floor under a path's history
@@ -605,8 +606,13 @@ export let record = async (
   sourceWas = app.source,
   draftWas = app.draft,
   fenceWas = app.fence,
-) =>
-  await dir.stamp({
+) => {
+  let prior = sourceWas
+    ? (await dir.deploys(app)).find((v) =>
+      v.version == app.version && !v.source
+    )
+    : null
+  return await dir.stamp({
     entities: [
       {
         entity: { eid: app.eid },
@@ -633,6 +639,13 @@ export let record = async (
         app: { declaration: release },
         $was: { app: { declaration: token(app.declaration) } },
       })),
+      ...(prior
+        ? [{
+          entity: { eid: prior.eid },
+          deploy: { source: sourceWas },
+          $was: { deploy: { source: token(prior.source) } },
+        }]
+        : []),
       {
         entity: { eid: mint() },
         deploy: {
@@ -641,10 +654,12 @@ export let record = async (
           files: JSON.stringify(files),
           worker,
           script: app.script ?? '',
+          source: app.source,
         },
       },
     ],
   }, vouched(who))
+}
 
 // ---- what a write replaced (T-34508) ---------------------------------------
 
@@ -836,17 +851,31 @@ export let pruned = async (
   let named = new Set<string>()
   let gone = 0
   for (let { prefix, app } of apps) {
-    let stage = `${prefix.split('/')[0]}/.releases/${app.eid}/`
-    let current = app.source ? await indexOf(blobs, `${app.source}/`) : null
-    let namedFiles = new Set(
-      Object.values(current ?? {}).map((file) =>
-        `${prefix.split('/')[0]}/${file.key}`
-      ),
+    let space = `${prefix.split('/')[0]}/`
+    let stage = `${space}.releases/${app.eid}/`
+    let releases = await versions(dir, app)
+    let sources = new Set(
+      [app.source, ...releases.map((v) => v.source)]
+        .filter((source): source is string => !!source)
+        .map((source) => space + source.slice(source.indexOf('/') + 1)),
     )
+    let namedFiles = new Set<string>()
+    let legacy: string[] = []
+    for (let source of sources) {
+      namedFiles.add(source + META)
+      let index = await indexOf(blobs, `${source}/`)
+      if (!index) {
+        legacy.push(`${source}/`)
+        continue
+      }
+      for (let file of Object.values(index)) {
+        namedFiles.add(file.key.startsWith(SHA) ? file.key : space + file.key)
+        if (file.sha) named.add(file.sha)
+      }
+    }
     for (let [key, landed] of Object.entries(await blobs.uploaded(stage))) {
-      if (app.source && key.startsWith(`${app.source}/`)) continue
-      if (app.source && key == app.source + META) continue
       if (namedFiles.has(key)) continue
+      if (legacy.some((source) => key.startsWith(source))) continue
       if (now - landed < GRACE) continue
       await blobs.delete(key)
     }
@@ -872,7 +901,7 @@ export let pruned = async (
     }
     // And every version the app can be put back to — all of them, since none is
     // ever buried: the oldest rollback it offers has to have its bytes.
-    for (let v of await versions(dir, app)) {
+    for (let v of releases) {
       for (let sha of Object.values(v.files)) named.add(sha)
     }
     for (let sha of await pinsOf(plugins, { dir, blobs, prefix, app, now })) {

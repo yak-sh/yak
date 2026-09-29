@@ -3,12 +3,49 @@
 // app row selects it. Keys are relative to the space so a space rename carries
 // them without rewriting the manifest.
 import type { Objects } from '@yaks/blob'
-import { BUILT, type Files, own, pins, sha256 } from './versions.ts'
+import { addressed, type Files, own, pins, sha256 } from './versions.ts'
 import { encode, type Index, indexOf, META } from './release_index.ts'
 
 let release = (key: string) =>
   /^([^/]+)\/\.releases\/[^/]+\/[^/]+\//.exec(key)?.[0]
 let spaceOf = (prefix: string) => prefix.slice(0, prefix.indexOf('/') + 1)
+let location = (space: string, key: string) =>
+  key.startsWith('sha/') ? key : space + key
+let complete = (index: Index | null): index is Index =>
+  !!index &&
+  Object.values(index).every((file) =>
+    file.sha && file.key == addressed(file.sha)
+  )
+
+// A release made before every file was pinned can be promoted in place. The
+// source path stays the same, and the index changes only after every byte has
+// its content address. A repeated call on a promoted release is one read.
+export let prepare = async (raw: Objects, source: string): Promise<Index> => {
+  let root = `${source}/`
+  let space = spaceOf(root)
+  let prior = await indexOf(raw, root)
+  if (complete(prior)) return prior
+  let paths = prior ?? Object.fromEntries(
+    (await raw.list(root)).map((key) => [
+      key.slice(root.length),
+      { key: key.slice(space.length) },
+    ]),
+  )
+  let pin = pins(raw, space)
+  let index = Object.fromEntries(
+    await Promise.all(
+      Object.entries(paths).map(async ([path, file]) => {
+        let bytes = await raw.read(location(space, file.key))
+        if (!bytes) throw new Error(`release has no bytes for ${path}`)
+        let sha = await sha256(bytes)
+        await pin.put(sha, bytes)
+        return [path, { key: addressed(sha), sha }] as const
+      }),
+    ),
+  )
+  await raw.put(source + META, encode(index))
+  return index
+}
 // Existing releases have their bytes at their own keys. New ones point at
 // immutable keys, and both shapes answer the same Objects interface.
 export let releaseFiles = (blobs: Objects): Objects => {
@@ -24,7 +61,7 @@ export let releaseFiles = (blobs: Objects): Objects => {
     let held = await index(prefix)
     if (!held) return key
     let file = held[key.slice(prefix.length)]
-    return file ? spaceOf(prefix) + file.key : null
+    return file ? location(spaceOf(prefix), file.key) : null
   }
   let read = async (key: string) => {
     let at = await physical(key)
@@ -84,7 +121,6 @@ export let staged = async (
   source: string | null | undefined,
   work: string,
   prefix: string,
-  base: () => Promise<Files>,
   sparse = false,
 ) => {
   let files = releaseFiles(raw)
@@ -93,25 +129,14 @@ export let staged = async (
   let old = source ? `${source}/` : ''
   let index: Index = {}
   if (sparse && old) {
-    let prior = await indexOf(raw, old)
-    if (prior) index = { ...prior }
-    else {
-      let hashes = await base()
-      index = Object.fromEntries((await files.list(old)).map((key) => {
-        let path = key.slice(old.length)
-        return [path, { key: key.slice(space.length), sha: hashes[path] }]
-      }))
-    }
+    index = { ...await prepare(raw, source!) }
   }
   let pin = pins(raw, space)
   let put = async (key: string, bytes: Uint8Array) => {
-    await raw.put(key, bytes)
     let path = key.slice(root.length)
-    let sha = path.startsWith(BUILT)
-      ? undefined
-      : await sha256(new Uint8Array(bytes))
-    if (sha) await pin.put(sha, bytes)
-    index[path] = { key: key.slice(space.length), sha }
+    let sha = await sha256(new Uint8Array(bytes))
+    await pin.put(sha, bytes)
+    index[path] = { key: addressed(sha), sha }
   }
   let changed = await raw.list(`${work}/`)
   let present = new Set(changed.map((key) => key.slice(work.length + 1)))
@@ -131,7 +156,7 @@ export let staged = async (
   let read = (key: string) =>
     key.startsWith(root)
       ? (index[key.slice(root.length)]
-        ? raw.read(space + index[key.slice(root.length)].key)
+        ? raw.read(location(space, index[key.slice(root.length)].key))
         : Promise.resolve(null))
       : files.read(key)
   let view: Objects = {
@@ -139,13 +164,13 @@ export let staged = async (
     load: (key) =>
       key.startsWith(root)
         ? (index[key.slice(root.length)]
-          ? raw.load(space + index[key.slice(root.length)].key)
+          ? raw.load(location(space, index[key.slice(root.length)].key))
           : Promise.resolve(null))
         : files.load(key),
     open: (key) =>
       key.startsWith(root)
         ? (index[key.slice(root.length)]
-          ? raw.open(space + index[key.slice(root.length)].key)
+          ? raw.open(location(space, index[key.slice(root.length)].key))
           : Promise.resolve(null))
         : files.open(key),
     get: async (key) => {

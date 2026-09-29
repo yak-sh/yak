@@ -43,6 +43,35 @@ let an: App = {
   theme: null,
 }
 
+Deno.test('a release is served only after its deploy records it', async () => {
+  let source = 'jeff/.releases/a1/'
+  let dir = directory({
+    fetch: (req: Request) => {
+      let q = new URL(req.url).searchParams.get('q') ?? ''
+      if (q == '.eid=s1') {
+        return Promise.resolve(Response.json([{
+          entity: { eid: 's1' },
+          space: { slug: 'jeff' },
+          former: { slug: 'former' },
+        }]))
+      }
+      let found = q.endsWith(`.deploy.source=${source}live`) ||
+        q.endsWith('.deploy.source=former/.releases/a1/old')
+      return Promise.resolve(Response.json(
+        found
+          ? [{
+            entity: { eid: 'd1' },
+            deploy: { app: 'a1', source, version: 1 },
+          }]
+          : [],
+      ))
+    },
+  })
+  assertEquals(await dir.released(an, `${source}live`), true)
+  assertEquals(await dir.released(an, `${source}old`), true)
+  assertEquals(await dir.released(an, `${source}failed`), false)
+})
+
 // A meta store that answers one app, at whatever version the test has set.
 let stub = () => {
   let at = { version: 1, reads: 0 }

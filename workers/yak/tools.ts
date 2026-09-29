@@ -1272,7 +1272,6 @@ let released = async (
       standing.source,
       work,
       release,
-      async () => (await versions(ctx.dir, standing))[0]?.files ?? {},
       !candidate && work.split('/').pop()?.startsWith('delta-v') == true,
     )
     return await published(

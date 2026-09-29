@@ -9,7 +9,8 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
-import { releaseFiles, staged } from './release.ts'
+import { prepare, releaseFiles, staged } from './release.ts'
+import { encode } from './release_index.ts'
 import type { Tally } from './lib/hops.ts'
 import * as dirPart from './directory.ts'
 import type { App, Directory, Space } from './directory.ts'
@@ -146,8 +147,9 @@ type Entity = {
   deploy?: {
     app?: string
     version?: number
-    files: string
+    files?: string
     worker?: string
+    source?: string
   }
   tombstone?: unknown
 }
@@ -157,15 +159,18 @@ let directory = () => {
   let apply = (m: { entities: Entity[] }) => {
     for (let e of m.entities) {
       let had = rows.find((r) => r.eid == e.entity?.eid)
-      if (e.deploy && had) had.files = JSON.parse(e.deploy.files)
-      else if (e.deploy) {
+      if (e.deploy && had) {
+        if (e.deploy.files) had.files = JSON.parse(e.deploy.files)
+        if (e.deploy.source) had.source = e.deploy.source
+      } else if (e.deploy) {
         rows.push({
           app: e.deploy.app!,
           eid: `d${e.deploy.app}-${e.deploy.version}`,
           version: e.deploy.version!,
           at: '',
-          files: JSON.parse(e.deploy.files),
+          files: JSON.parse(e.deploy.files ?? '{}'),
           worker: e.deploy.worker!,
+          source: e.deploy.source ?? null,
         })
       }
       if (e.tombstone) rows = rows.filter((r) => r.eid != e.entity!.eid)
@@ -325,16 +330,11 @@ Deno.test('pruning keeps source bytes named by the serving release', async () =>
   await blobs.put(`${source}/index.html`, bytes('kept'))
   await blobs.put(`${source}/removed.css`, bytes('removed'))
   await blobs.put(`${draft}/.deleted/removed.css`, bytes(''))
-  let base = {
-    'index.html': await sha256(bytes('kept')),
-    'removed.css': await sha256(bytes('removed')),
-  }
   let release = await staged(
     blobs,
     source,
     draft,
     current,
-    () => Promise.resolve(base),
     true,
   )
   let files = await release.finish()
@@ -343,7 +343,7 @@ Deno.test('pruning keeps source bytes named by the serving release', async () =>
     prefix: PREFIX,
     app: { ...APP, source: current },
   }])
-  assertEquals(await blobs.has(`${source}/index.html`), true)
+  assertEquals(await blobs.has(`${source}/index.html`), false)
   assertEquals(await blobs.has(`${source}/removed.css`), false)
   assertEquals(await blobs.has(`${current}.json`), true)
   assertEquals(
@@ -352,6 +352,99 @@ Deno.test('pruning keeps source bytes named by the serving release', async () =>
     ),
     'kept',
   )
+})
+
+Deno.test('published releases keep versioned bytes after newer deploys', async () => {
+  let { blobs, clock } = memory()
+  let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
+  let old = 'jeff/.releases/a1/old'
+  let current = 'jeff/.releases/a1/current'
+  let failed = 'jeff/.releases/a1/failed'
+  for (
+    let [source, value] of [
+      [old, 'old code'],
+      [current, 'current code'],
+      [failed, 'failed code'],
+    ]
+  ) {
+    await blobs.put(`${source}/esbuild/app.js`, bytes(value))
+    if (source != old) await prepare(blobs, source)
+  }
+  await blobs.put(
+    old + '.json',
+    encode({
+      'esbuild/app.js': { key: '.releases/a1/old/esbuild/app.js' },
+    }),
+  )
+  await dir.apply({
+    entities: [
+      {
+        entity: { eid: 'old-deploy' },
+        deploy: { app: APP.eid, version: 1, files: '{}', source: old },
+      },
+      {
+        entity: { eid: 'current-deploy' },
+        deploy: { app: APP.eid, version: 2, files: '{}', source: current },
+      },
+    ],
+  })
+  assertEquals(
+    await pruned(dir, blobs, [{
+      prefix: PREFIX,
+      app: { ...APP, source: current },
+    }]),
+    1,
+  )
+  assertEquals(await blobs.has(`${old}/esbuild/app.js`), true)
+  assertEquals(
+    new TextDecoder().decode(
+      await releaseFiles(blobs).get(`${old}/esbuild/app.js`),
+    ),
+    'old code',
+  )
+  assertEquals(await blobs.has(old + '.json'), true)
+  assertEquals(await blobs.has(failed + '.json'), false)
+  assertEquals(
+    await blobs.has(addressed(await sha256(bytes('failed code')))),
+    false,
+  )
+  await prepare(blobs, old)
+  await pruned(dir, blobs, [{
+    prefix: PREFIX,
+    app: { ...APP, source: current },
+  }])
+  assertEquals(await blobs.has(`${old}/esbuild/app.js`), false)
+  assertEquals(
+    new TextDecoder().decode(
+      await releaseFiles(blobs).get(`${old}/esbuild/app.js`),
+    ),
+    'old code',
+  )
+})
+
+Deno.test('a deploy records the source of the release it replaces', async () => {
+  let { dir, rows } = directory()
+  let old = 'jeff/.releases/a1/old'
+  let next = 'jeff/.releases/a1/next'
+  await dir.apply({
+    entities: [{
+      entity: { eid: 'old-deploy' },
+      deploy: { app: APP.eid, version: 1, files: '{}', worker: '' },
+    }],
+  })
+  await record(
+    dir,
+    WHO,
+    { ...APP, version: 1, source: next },
+    2,
+    {},
+    '',
+    [],
+    old,
+  )
+  assertEquals(rows().find((v) => v.version == 1)?.source, old)
+  assertEquals(rows().find((v) => v.version == 2)?.source, next)
 })
 
 // The worker's last hop. A dispatch namespace is remote-only, so what a

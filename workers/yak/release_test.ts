@@ -2,7 +2,8 @@
 // app after its draft and the old release's unreferenced files are removed.
 import { assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
-import { releaseFiles, staged } from './release.ts'
+import { prepare, releaseFiles, staged } from './release.ts'
+import { encode, indexOf } from './release_index.ts'
 import { addressed, sha256 } from './versions.ts'
 
 let memory = () => {
@@ -84,7 +85,6 @@ Deno.test('a release serves unchanged, changed, and compiled files', async () =>
     old,
     draft,
     next,
-    () => Promise.resolve(prior),
     true,
   )
   await stage.files.put(`${next}/esbuild/keep.js`, bytes('compiled'))
@@ -94,8 +94,13 @@ Deno.test('a release serves unchanged, changed, and compiled files', async () =>
     'keep.js': prior['keep.js'],
   })
   assertEquals(held.has(`${next}/keep.js`), false)
-  assertEquals(held.has(`${next}/index.html`), true)
+  assertEquals(held.has(`${next}/index.html`), false)
   assertEquals(await files.has(addressed(snapshot['index.html'])), true)
+  let index = await indexOf(files, `${next}/`)
+  let compiled = index!['esbuild/keep.js']
+  assertEquals(compiled.sha, await sha256(bytes('compiled')))
+  assertEquals(compiled.key, addressed(compiled.sha!))
+  assertEquals(await files.has(compiled.key), true)
   await files.delete(`${draft}/index.html`)
   let served = releaseFiles(files)
   assertEquals(text(await served.read(`${next}/index.html`)), 'new page')
@@ -106,4 +111,35 @@ Deno.test('a release serves unchanged, changed, and compiled files', async () =>
     await served.list(`${next}/`),
     [`${next}/esbuild/keep.js`, `${next}/index.html`, `${next}/keep.js`],
   )
+})
+
+Deno.test('a live indexed release keeps its bytes when promoted', async () => {
+  let { files } = memory()
+  let source = 'alice/.releases/app/live'
+  await files.put(`${source}/index.html`, bytes('page'))
+  await files.put(`${source}/esbuild/main.js`, bytes('compiled'))
+  await files.put(
+    source + '.json',
+    encode({
+      'index.html': {
+        key: '.releases/app/live/index.html',
+        sha: await sha256(bytes('page')),
+      },
+      'esbuild/main.js': { key: '.releases/app/live/esbuild/main.js' },
+    }),
+  )
+  let before = await releaseFiles(files).read(`${source}/esbuild/main.js`)
+  let index = await prepare(files, source)
+  assertEquals(index['esbuild/main.js'].sha, await sha256(bytes('compiled')))
+  await files.delete(`${source}/index.html`)
+  await files.delete(`${source}/esbuild/main.js`)
+  assertEquals(
+    text(await releaseFiles(files).read(`${source}/esbuild/main.js`)),
+    text(before),
+  )
+  assertEquals(
+    text(await releaseFiles(files).read(`${source}/index.html`)),
+    'page',
+  )
+  assertEquals(await prepare(files, source), index)
 })
