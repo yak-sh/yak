@@ -40,7 +40,7 @@ let bodies = async (g: { read: (q: string) => unknown }) =>
 test('the request starts the provider, and what it printed is the transcript', async () => {
   let g = tracked()
   let where = dir()
-  watching(g, { dir: where, poll: 20 })
+  watching(g, { dir: where, poll: 5 })
   try {
     await g.g.apply(asking('S1', 'E1', 'do the thing'))
     // The turn's ending is an entry, so the transcript settles by itself. It
@@ -82,6 +82,7 @@ let persona = async (...rows: Bundle[]) => {
     await start(g, 'S1', {
       cwd: where,
       dir: where,
+      poll: 5,
       adapters: {
         fake: {
           ...fake,
@@ -146,7 +147,7 @@ test('a request made beside a server is started by the server, not the command',
     })
     let g = graph({ storage, vocab, plugins: [sessions(), processes(), fx] })
     fx.handle(
-      spawning({ adapters: { fake } })({ graph: g }, { dir: where, poll: 20 }),
+      spawning({ adapters: { fake } })({ graph: g }, { dir: where, poll: 5 }),
     )
     return { g, fx }
   }
@@ -221,7 +222,7 @@ test('a run works in a checkout of its own, taken back when it ends', async () =
   fx.handle(
     spawning({ adapters: { fake } })({ graph: g }, {
       dir: top,
-      poll: 20,
+      poll: 5,
       cwd: repo,
       worktrees: runs,
     }),
@@ -261,7 +262,7 @@ test('a run speaks as its own session, never its launcher’s', () => {
 test('a stop on the session reaches the agent', async () => {
   let g = tracked()
   let where = dir()
-  watching(g, { dir: where, poll: 20, grace: 500 })
+  watching(g, { dir: where, poll: 5, grace: 500 })
   try {
     await g.g.apply(asking('S1', 'E1', 'linger here'))
     await until(
@@ -288,7 +289,7 @@ test('a stop on the session reaches the agent', async () => {
 test('a stop committed with a request prevents its launch', async () => {
   let g = tracked()
   let where = dir()
-  watching(g, { dir: where, poll: 20 })
+  watching(g, { dir: where, poll: 5 })
   try {
     await g.g.apply([
       ...asking('S1', 'E1', 'linger here'),
@@ -323,7 +324,7 @@ test('a restart adopts the run and reads its log on from where it stands', async
       command: argv[0],
       args: argv.slice(1),
       env: Deno.env.toObject(),
-    }, { eid: 'S1', dir: where, poll: 20 })
+    }, { eid: 'S1', dir: where, poll: 5 })
     // The wrapper opens the log after launch returns, so at first it is absent.
     await until(
       async () =>
@@ -337,14 +338,14 @@ test('a restart adopts the run and reads its log on from where it stands', async
     let up = new AbortController()
     let duty = adopting({ adapters: { fake } })(
       { graph: g.g },
-      { dir: where, poll: 20 },
+      { dir: where, poll: 5 },
       up.signal,
     )
     await until(
       async () => (await bodies(g.g)).includes('working: linger here'),
       'the lines written while we were away',
     )
-    await down(g.g, 'S1', { dir: where, poll: 20, grace: 500 })
+    await down(g.g, 'S1', { dir: where, poll: 5, grace: 500 })
     await until(
       async () => comp((await g.g.read('.session&*'))[0], 'exit'),
       'the agent to go',

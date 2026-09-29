@@ -84,7 +84,7 @@ let asked = (g: Graph, args: Record<string, unknown>): [Bundle, Graph] => [
   g,
 ]
 
-let tools = runs({ graph: undefined as unknown as Graph }, { poll: 20 })
+let tools = runs({ graph: undefined as unknown as Graph }, { poll: 5 })
 
 // A call the way a host makes one: through the runner, which resolves every
 // argument the declaration marks a reference before the tool is handed it.
@@ -356,7 +356,7 @@ test('spawn --wait runs the provider and answers what it came to', async () => {
   let { g, fx } = host()
   let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-tools-' })
   fx.handle(
-    spawning({ adapters: { fake }, dir: where, poll: 20 })({ graph: g }),
+    spawning({ adapters: { fake }, dir: where, poll: 5 })({ graph: g }),
   )
   try {
     await g.apply(shelf)
@@ -389,7 +389,7 @@ test('session stop ends a managed run', async () => {
   let { g, fx } = host()
   let where = Deno.makeTempDirSync({ prefix: 'yaks-spawn-stop-' })
   fx.handle(
-    spawning({ adapters: { fake }, dir: where, poll: 20, grace: 500 })(
+    spawning({ adapters: { fake }, dir: where, poll: 5, grace: 500 })(
       { graph: g },
     ),
   )

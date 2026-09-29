@@ -31,10 +31,6 @@ let fixture = async () => {
   await Deno.mkdir(repo)
   await Deno.mkdir(tmp)
   await git(repo, 'init', '-q', '-b', 'main')
-  await Deno.writeTextFile(`${repo}/a`, 'a')
-  await git(repo, 'add', 'a')
-  await git(repo, 'commit', '-q', '-m', 'a')
-  await git(repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
   return {
     dir,
     repo,
@@ -60,6 +56,10 @@ let fixture = async () => {
 test('tidy collects a worktree only when nothing in it can be lost', async () => {
   let f = await fixture()
   try {
+    await Deno.writeTextFile(`${f.repo}/a`, 'a')
+    await git(f.repo, 'add', 'a')
+    await git(f.repo, 'commit', '-q', '-m', 'a')
+    await git(f.repo, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
     let add = async (
       name: string,
       at = `${f.repo}/.claude/worktrees/${name}`,
