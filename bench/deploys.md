@@ -115,7 +115,7 @@ so `bin/build-yak` defaults `DENO_INSTALL` and `DENO_DIR` to directories inside
 `npm config get cache`, while respecting explicit overrides. See
 [Workers build caching](https://developers.cloudflare.com/workers/ci-cd/builds/build-caching/).
 
-The build and deploy commands now do these steps:
+The build script's steps (the dashboard's build command has been empty since 2026-09-08, so Workers Builds runs only the deploy half):
 
 1. Restore Deno's path; install Deno only if its executable is absent. Download
    and extraction were not measured locally because Deno is already installed.

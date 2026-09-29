@@ -46,7 +46,7 @@ The dashboard settings, in full (Workers & Pages → `yak` → Settings → Buil
 | Repository              | `yak-sh/yak` (Cloudflare GitHub App)     |
 | Production branch       | `main`                                   |
 | Root directory          | `workers/yak`                            |
-| Build command           | `../../bin/build-yak`                    |
+| Build command           | (empty)                                  |
 | Deploy command          | `../../bin/build-yak deploy`             |
 | Build watch paths       | `workers/yak/*`, `packages/*`            |
 | Non-production branches | build only; previews off for now (below) |
@@ -66,10 +66,12 @@ A push outside the watch paths deploys nothing: no build check, no version, and
 so nothing for the gate's `deploy time` step to measure — it says so and the
 deploy gate judges the rows already recorded (`bench/deploys.md`).
 
-Everything the build actually does is in `bin/build-yak`, so the dashboard holds
-one line: install Deno (not on the Ubuntu 24.04 image), `deno task check` from
-the repo root, `deno task test --only=deno workers`. A red build deploys
-nothing. A push's build that fails is started once more through the `BUILD_HOOK`
+The build command is empty, so a Workers Build runs neither `deno task check`
+nor the tests. It clones, runs `npm ci`, and runs `bin/build-yak deploy`, which
+installs Deno (not on the Ubuntu 24.04 image), makes the deploy pre-flight check
+(`superseded`), deploys `yak-out` and `yak-esbuild`, bundles with esbuild and
+uploads. `bin/build-yak` with no argument still runs the check and the workers
+tests by hand. A push's build that fails is started once more through the `BUILD_HOOK`
 deploy hook (builds.ts), since most failures are the network's; the second
 build's failure stands.
 
