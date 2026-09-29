@@ -6,6 +6,12 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv'
+import type {
+  JsonSchemaType,
+  JsonSchemaValidator,
+  jsonSchemaValidator,
+} from '@modelcontextprotocol/sdk/validation/types.js'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -84,6 +90,20 @@ export let shop: Vocab = loadVocab([doc, toolsDoc])
 export let shopGraph = (): Graph =>
   graph({ storage: ram(shop, { number: true }), vocab: shop })
 
+// The SDK's own validator, which checks an answer against its tool's output
+// schema as any client of the SDK does, compiling each schema once for every
+// client these tests connect rather than once per listing.
+let ajv = new AjvJsonSchemaValidator()
+let compiled = new Map<string, JsonSchemaValidator<unknown>>()
+let validator: jsonSchemaValidator = {
+  getValidator<T>(schema: JsonSchemaType) {
+    let key = JSON.stringify(schema)
+    let check = compiled.get(key) ?? ajv.getValidator(schema)
+    compiled.set(key, check)
+    return check as JsonSchemaValidator<T>
+  },
+}
+
 /** An MCP client talking to a server over this graph, in one process. */
 export let connect = async (
   opts: Omit<Options, 'graph'> & { graph?: Graph } = {},
@@ -91,7 +111,9 @@ export let connect = async (
   let mcp = server({ ...opts, graph: opts.graph ?? shopGraph() })
   await opts.extend?.(mcp)
   let [here, there] = InMemoryTransport.createLinkedPair()
-  let client = new Client({ name: 'shop-test', version: '0.0.0' })
+  let client = new Client({ name: 'shop-test', version: '0.0.0' }, {
+    jsonSchemaValidator: validator,
+  })
   await Promise.all([client.connect(here), mcp.connect(there)])
   return client
 }
