@@ -2,6 +2,7 @@
 // anything else it throws through untouched.
 import { assertEquals, assertRejects } from '@std/assert'
 import { doorOf, evicted, type Namespace, storeOf } from './door.ts'
+import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
 
 Deno.test('a request sums statement counts from each store response', async () => {
@@ -71,6 +72,16 @@ Deno.test('an evicted POST is sent again with its body intact', async () => {
     assertEquals(await res.text(), 'ok')
     assertEquals(n.seen, ['[1]', '[1]'])
   }
+})
+
+Deno.test('an interrupted recovery command is not silently sent again', async () => {
+  let n = ns([storageTimeout(), Response.json({ writes: [] })])
+  await assertRejects(
+    () => retryWrite(storeOf(n, 'jeff'), 1),
+    Error,
+    'storage operation exceeded timeout',
+  )
+  assertEquals(n.seen.length, 1)
 })
 
 Deno.test('a bodiless GET retries once; a second eviction and other errors throw', async () => {

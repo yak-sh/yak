@@ -93,6 +93,7 @@ export type Door = (
   path: string,
   init?: RequestInit | Request,
   headers?: Record<string, string>,
+  options?: { replayable?: boolean },
 ) => Promise<Response>
 
 // The statement only the kernel may make, and therefore the set every request
@@ -249,11 +250,11 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
     name,
     app,
   )
-  return (path, init = {}, headers = {}) => {
+  return (path, init = {}, headers = {}, options = {}) => {
     let once = { ...headers, [IDEMPOTENCY]: crypto.randomUUID() }
     return retryOnce(
       async () => thrown(await door(path, init, once)),
-      rebuildable(init),
+      rebuildable(init) && options.replayable !== false,
     )
   }
 }

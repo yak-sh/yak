@@ -16,8 +16,13 @@ export type Write = {
   status?: number
 }
 
-let asked = async (store: Door, path: string, method = 'GET') => {
-  let r = await store(path, { method }, KERNEL)
+let asked = async (
+  store: Door,
+  path: string,
+  method = 'GET',
+  replayable = true,
+) => {
+  let r = await store(path, { method }, KERNEL, { replayable })
   let body = await r.json() as Write[] | { writes: Write[]; seq: number } | {
     message?: string
   }
@@ -31,6 +36,6 @@ export let inspect = async (store: Door, seq?: number): Promise<Write[]> =>
   await asked(store, `/writes${seq == null ? '' : `?seq=${seq}`}`) as Write[]
 
 export let retry = async (store: Door, seq: number): Promise<Write[]> =>
-  (await asked(store, `/writes?seq=${seq}`, 'POST') as {
+  (await asked(store, `/writes?seq=${seq}`, 'POST', false) as {
     writes: Write[]
   }).writes
