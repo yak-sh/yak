@@ -48,22 +48,29 @@ let gone = () =>
     ),
   )
 let flagged = () => Object.assign(new Error('reset'), { retryable: true })
+let storageTimeout = () =>
+  new Error(
+    'Durable Object storage operation exceeded timeout which caused object to be reset.',
+  )
 
 Deno.test('evicted: the runtime flag, or its words', () => {
   assertEquals(evicted(gone()), true)
   assertEquals(evicted(flagged()), true)
+  assertEquals(evicted(storageTimeout()), true)
   assertEquals(evicted(new Error('boot failed')), false)
   assertEquals(evicted(null), false)
 })
 
 Deno.test('an evicted POST is sent again with its body intact', async () => {
-  let n = ns([gone(), 'ok'])
-  let res = await storeOf(n, 'jeff')('/apply', {
-    method: 'POST',
-    body: '[1]',
-  })
-  assertEquals(await res.text(), 'ok')
-  assertEquals(n.seen, ['[1]', '[1]'])
+  for (let reset of [gone(), storageTimeout()]) {
+    let n = ns([reset, 'ok'])
+    let res = await storeOf(n, 'jeff')('/apply', {
+      method: 'POST',
+      body: '[1]',
+    })
+    assertEquals(await res.text(), 'ok')
+    assertEquals(n.seen, ['[1]', '[1]'])
+  }
 })
 
 Deno.test('a bodiless GET retries once; a second eviction and other errors throw', async () => {
@@ -95,10 +102,15 @@ Deno.test('Store does not retry a streamed init or a Request with a body', async
 Deno.test('an eviction a store answers is sent again; another 500 is its answer', async () => {
   let said = (message: string) =>
     Response.json({ error: 'Error', message }, { status: 500 })
-  let n = ns([said(gone().message), 'ok'])
-  let res = await storeOf(n, 'jeff')('/apply', { method: 'POST', body: '[1]' })
-  assertEquals(await res.text(), 'ok')
-  assertEquals(n.seen, ['[1]', '[1]'])
+  for (let reset of [gone(), storageTimeout()]) {
+    let n = ns([said(reset.message), 'ok'])
+    let res = await storeOf(n, 'jeff')('/apply', {
+      method: 'POST',
+      body: '[1]',
+    })
+    assertEquals(await res.text(), 'ok')
+    assertEquals(n.seen, ['[1]', '[1]'])
+  }
   let broke = ns([said('boot failed'), 'unexpected retry'])
   let no = await storeOf(broke, 'jeff')('/query')
   assertEquals([no.status, (await no.json()).message], [500, 'boot failed'])

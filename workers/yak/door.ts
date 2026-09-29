@@ -183,11 +183,15 @@ export let doorOf = (
 // The runtime evicts an object out from under a request during a deploy or a
 // storage reset and says so with `retryable` (its own flag on the error) or, on
 // an older runtime, in words. Its guidance for both is: fetch again.
+let RESETS = [
+  'Durable Object instance is no longer active',
+  'Durable Object reset because',
+  'Durable Object storage operation exceeded timeout which caused object to be reset',
+]
 export let evicted = (e: unknown): boolean =>
   e instanceof Error &&
   (('retryable' in e && e.retryable === true) ||
-    /Durable Object instance is no longer active|Durable Object reset because/
-      .test(e.message))
+    RESETS.some((said) => e.message.includes(said)))
 
 /** An answer, with an eviction in it thrown as the runtime throws one. A store
  * the runtime resets mid-request can still answer, and it answers the reset as

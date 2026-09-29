@@ -50,7 +50,9 @@ let resetting = (o: ReturnType<typeof object>): Namespace => {
         if (!reset) return r
         reset = false
         o.wake()
-        throw Object.assign(new Error('reset'), { retryable: true })
+        throw new Error(
+          'Durable Object storage operation exceeded timeout which caused object to be reset.',
+        )
       },
     }),
   }

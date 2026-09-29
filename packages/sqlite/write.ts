@@ -491,8 +491,34 @@ export let patch = (
     }
   }
 
+  // The physical table is the last word on required columns: an older store
+  // can still hold a stricter table while its vocabulary is being fitted.
+  // A patch supplying every required value can use one INSERT…ON CONFLICT;
+  // a partial one must UPDATE first, since SQLite checks NOT NULL before the
+  // conflict handler can preserve the row's omitted values.
+  let required = new Map<string, string[]>()
+  let full = (name: string, comp: Comp): boolean => {
+    let cols = Object.keys(comp).filter((c) =>
+      vocab.prop(name, c)?.computed === false
+    )
+    if (!cols.length) return false
+    let need = required.get(name)
+    if (!need) {
+      need = driver.query({ t: 'pragma', name: 'table_info', arg: name })
+        .filter((r) =>
+          r.name != 'entity' && Number(r.notnull) != 0 &&
+          r.dflt_value == null
+        ).map((r) => String(r.name))
+      required.set(name, need)
+    }
+    return need.every((prop) => comp[prop] != null)
+  }
   for (let b of alive) {
     for (let [name, comp] of comps(b)) {
+      if (comp != null && full(name, comp)) {
+        effect(driver, upsertSql(vocab, b.entity.eid, name, comp))
+        continue
+      }
       let { first, fallback } = patchOne(vocab, b.entity.eid, name, comp)
       let changes = driver.run?.(first)
       if (changes === undefined) {
