@@ -526,17 +526,17 @@ Deno.test('a recurring call is one invocation per firing, never a re-run', async
   }])
   await a.ctx.storage.deleteAlarm()
   await a.store.alarm()
-  // The schedule keeps asking: it is never answered itself, and the firing
-  // wrote a call of its own.
-  assertEquals((await a.rows('.result.call=daily')).length, 0)
-  assertEquals((await a.rows('.call.source=daily')).length, 1)
+  // The schedule keeps asking: the firing wrote a call of its own, and the
+  // schedule is never answered itself.
   await a.holds('.chore', 1)
+  assertEquals((await a.rows('.call.source=daily')).length, 1)
+  assertEquals((await a.rows('.result.call=daily')).length, 0)
   // The next occurrence, a day on, is its own invocation and its own answer.
   let [row] = await a.rows('.eid=daily&?wake')
   await a.ctx.storage.setAlarm(Date.parse((row.wake as { at: string }).at))
   await a.store.tick(Date.parse((row.wake as { at: string }).at))
-  assertEquals((await a.rows('.call.source=daily')).length, 2)
   await a.holds('.result', 2)
+  assertEquals((await a.rows('.call.source=daily')).length, 2)
   assertEquals((await a.rows('.chore')).length, 2)
 })
 
@@ -638,9 +638,11 @@ Deno.test('a world with nobody in it stops ticking, and a player arriving wakes 
     },
   }])
   await a.store.tick(at('09:05'))
+  await a.holds('.tick', 1)
   assertEquals(await owed(), stamp('09:05:30'))
   await player({ player: { active: false } })
   await a.store.tick(sec('09:05:30'))
+  await a.holds('.tick', 2)
   assertEquals(await owed(), stamp('09:10:30'))
   // Half an hour nobody ticked through is one firing, on the cadence's phase.
   await a.store.tick(at('09:40'))

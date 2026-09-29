@@ -24,6 +24,12 @@
 // do with them would be sooner. What another process wrote waits for the next
 // pass, at most {@link CAP} away.
 //
+// A worker shares its thread with whatever hosts it, and a synchronous
+// storage (a Durable Object's SQLite) never hands the thread back on its own:
+// a backlog worked in one go is one turn, and every request to the host waits
+// it out, until a Durable Object's runtime refuses them as overloaded. So a
+// worker gives way between passes, and a pass starts no more than `max` runs.
+//
 // There are two ways a run does not complete, and they are not the same:
 //
 //   It reported. The handler threw, so the row is marked with the error and
@@ -143,7 +149,8 @@ export type Pool = {
    * done. */
   start: (owed: Owed[]) => void
   /** Work the pool: with a live signal, until it aborts; with an aborted
-   * one, a single pass — and none at all where a process that stays up is
+   * one, pass after pass until nothing is left to start, giving way to the
+   * host between them — and none at all where a process that stays up is
    * already working it. */
   work: (g: Graph, signal?: AbortSignal) => Promise<void>
   /** Look again now, rather than at the next pass: what a thread beside this
@@ -542,6 +549,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           let started = await pass(g)
           if (!started.length) break
           await Promise.all(started)
+          await sleep(0)
         }
         return
       }

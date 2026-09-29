@@ -104,6 +104,19 @@ Deno.test('what one process wrote, another runs, and only one of many', async ()
   assertEquals((await run(w.g, 'post_note')).state, 'done')
 })
 
+// Over a synchronous storage a backlog never waits on anything, so without a
+// pause it would hold its host's thread from the first run to the last.
+Deno.test('a worker clearing a backlog lets its host answer between passes', async () => {
+  let a = proc(store(), { max: 1 })
+  a.fx.handle({ post_note: a.note })
+  await a.g.apply([post('p1'), post('p2'), post('p3')])
+  let heard: number[] = []
+  setTimeout(() => heard.push(a.ran.length))
+  await a.fx.work(a.g)
+  assertEquals(a.ran.length, 3)
+  assert(heard[0] < 3, `answered after ${heard[0]} of 3 runs`)
+})
+
 Deno.test('a run that throws comes back due, and rests failed once its tries are spent', async () => {
   let t = 0
   let a = proc(store(), { now: () => t })
