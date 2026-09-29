@@ -20,8 +20,11 @@ let clock = async (pass = false) => {
         return
       }
       await Deno.writeTextFile(options.marker, 'live')
-      await new Promise((done) =>
-        signal.addEventListener('abort', done, { once: true }))
+      // The mark is read as soon as it is written, so the stop can land
+      // before this line: an abort already past is one this has heard.
+      await new Promise((done) => signal.aborted
+        ? done()
+        : signal.addEventListener('abort', done, { once: true }))
     }
     `,
   )
