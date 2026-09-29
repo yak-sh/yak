@@ -1810,11 +1810,20 @@ export class Store {
         } finally {
           try {
             if (base != null) {
+              // A candidate may have refused while fitting its schema. Its
+              // transaction left the serving rows intact, but #build may have
+              // replaced part of this incarnation's graph before it failed.
+              // Restore the serving release and rebuild it before admitting
+              // another request. A serving schema that also fails stays
+              // refused, so fixed code can heal it on the next incarnation.
+              let refused = this.#refused
+              this.#refused = null
               this.#select(
                 new Request('http://store/', {
                   headers: { 'x-yak-release': base },
                 }),
               )
+              if (refused && !this.#refused) this.#boot()
             }
           } finally {
             this.#profile?.flush()

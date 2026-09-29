@@ -174,6 +174,56 @@ Deno.test('the app version selects its store declarations after preparation', as
   assertEquals((await apply(2)).status, 200)
 })
 
+Deno.test('a refused draft leaves the serving app store usable', async () => {
+  let env = { STORE: namespace() } as unknown as Env
+  let here = space('refused-release')
+  let page = app('page', here.eid)
+  let serving = appStore(env.STORE, here, page)
+  let draft = draftStore(env.STORE, here, page, '2')
+  let vocab = (unique: boolean) => ({
+    $defs: {
+      ability_design: {
+        component: true,
+        ...unique ? { unique: [['kind']] } : {},
+        properties: { kind: { type: 'string' } },
+      },
+    },
+  })
+  let put = (door: typeof serving, path: string, body: unknown) =>
+    door(path, { method: 'POST', body: JSON.stringify(body) }, vouched(owner))
+  assertEquals((await put(serving, '/vocab', vocab(false))).status, 200)
+  let original = await (await serving('/vocab')).json()
+  assertEquals(
+    (await put(serving, '/apply', [
+      {
+        entity: { eid: crypto.randomUUID() },
+        ability_design: { kind: 'same' },
+      },
+      {
+        entity: { eid: crypto.randomUUID() },
+        ability_design: { kind: 'same' },
+      },
+    ])).status,
+    200,
+  )
+
+  let failed = await put(draft, '/vocab', vocab(true))
+  assertEquals(failed.status, 503)
+  assert(
+    (await failed.text()).includes('skipped unique index ability_design_kind'),
+  )
+  let current = await serving('/vocab')
+  assertEquals(current.status, 200)
+  assertEquals(await current.json(), original)
+  assertEquals(
+    (await put(serving, '/apply', [{
+      entity: { eid: crypto.randomUUID() },
+      ability_design: { kind: 'same' },
+    }])).status,
+    200,
+  )
+})
+
 // A space with a reading list and a lending app in it, each declaring one word
 // of its own — the shape M-32311 describes: two apps, two stores, joined by
 // eid.
