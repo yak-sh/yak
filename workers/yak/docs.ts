@@ -30,6 +30,7 @@ import type { Env } from './env.ts'
 import { type Page, PAGES } from './guide.ts'
 import { esc } from './html.ts'
 import { type Host, hosted, url } from './host.ts'
+import { publicPage } from './public-cache.ts'
 import { foot, head, html, top } from './shell.ts'
 
 export let PATH = '/docs'
@@ -244,35 +245,39 @@ export let answer = async (
   }
   if (req.method != 'GET' && req.method != 'HEAD') return null
   if (path == PATH) {
-    let text = await source(env, '/docs.md')
+    return await publicPage(req, env, path, async () => {
+      let text = await source(env, '/docs.md')
+      if (!text) return null
+      let md = await marked()
+      let tokens = md.parse(linked(text), { breaks: false })
+      return page(
+        md,
+        env,
+        url(env, PATH),
+        DOCS.title,
+        DOCS.description,
+        tokens,
+        contents(),
+      )
+    })
+  }
+  let slug = path.startsWith(`${PATH}/`) ? path.slice(PATH.length + 1) : ''
+  let row = CONTENTS.find((p) => p.slug == slug)
+  if (!row) return null
+  return await publicPage(req, env, path, async () => {
+    let text = await source(env, `/docs/${slug}.md`)
     if (!text) return null
     let md = await marked()
     let tokens = md.parse(linked(text), { breaks: false })
     return page(
       md,
       env,
-      url(env, PATH),
-      DOCS.title,
-      DOCS.description,
+      url(env, pathOf(slug)),
+      `${titled(tokens) || row.title} · yaks.app`,
+      row.description,
       tokens,
-      contents(),
+      back,
+      slug,
     )
-  }
-  let slug = path.startsWith(`${PATH}/`) ? path.slice(PATH.length + 1) : ''
-  let row = CONTENTS.find((p) => p.slug == slug)
-  if (!row) return null
-  let text = await source(env, `/docs/${slug}.md`)
-  if (!text) return null
-  let md = await marked()
-  let tokens = md.parse(linked(text), { breaks: false })
-  return page(
-    md,
-    env,
-    url(env, pathOf(slug)),
-    `${titled(tokens) || row.title} · yaks.app`,
-    row.description,
-    tokens,
-    back,
-    slug,
-  )
+  })
 }

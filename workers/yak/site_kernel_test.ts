@@ -49,7 +49,8 @@ Deno.test('the apex answers the crawler and the model', async () => {
     // The index, and the whole guide in one fetch — both read the guide's
     // files back through the assets binding, so this proves the addresses are
     // the ones that serve.
-    let index = await (await k.at('yaks.app', '/llms.txt')).text()
+    let indexPage = await k.at('yaks.app', '/llms.txt')
+    let index = await indexPage.text()
     assertStringIncludes(index, `- [The guide](${WHOLE}):`)
     for (let p of PAGES) assertStringIncludes(index, uriOf(p.slug))
 
@@ -70,7 +71,8 @@ Deno.test('the apex answers the crawler and the model', async () => {
       '<h1 id="building-a-yaks-app">Building a yaks app</h1>',
     )
     assertStringIncludes(map2, '<a href="/docs/querying">')
-    let one = await (await k.at('yaks.app', '/docs/querying')).text()
+    let onePage = await k.at('yaks.app', '/docs/querying')
+    let one = await onePage.text()
     assertStringIncludes(
       one,
       '<title>Querying: the filter grammar · yaks.app</title>',
@@ -89,6 +91,51 @@ Deno.test('the apex answers the crawler and the model', async () => {
       tech,
       '<a href="/docs/technical" aria-current="page">Technical details</a>',
     )
+
+    let publicPages: [string, Response][] = [
+      ['/robots.txt', robots],
+      ['/.well-known/security.txt', sec],
+      ['/sitemap.xml', map],
+      ['/llms.txt', indexPage],
+      ['/docs/querying', onePage],
+    ]
+    for (let [path, page] of publicPages) {
+      let etag = page.headers.get('etag') ?? ''
+      assert(etag, `${path} has a deploy validator`)
+      let again = await k.at('yaks.app', path, {
+        headers: { 'if-none-match': etag },
+      })
+      assertEquals(again.status, 304, path)
+      assertEquals(await again.text(), '', path)
+      assertEquals(again.headers.get('etag'), etag, path)
+      assertStringIncludes(
+        page.headers.get('cache-control') ?? '',
+        'public, max-age=',
+        path,
+      )
+    }
+    assertStringIncludes(
+      sec.headers.get('cache-control') ?? '',
+      'max-age=60',
+    )
+    let mdAsked = await k.at('yaks.app', '/docs/querying', {
+      headers: { accept: 'text/markdown' },
+    })
+    assertStringIncludes(
+      mdAsked.headers.get('content-type') ?? '',
+      'text/html',
+    )
+    assertEquals(mdAsked.headers.get('etag'), onePage.headers.get('etag'))
+    await mdAsked.body?.cancel()
+    let htmlAsked = await k.at('yaks.app', '/llms.txt', {
+      headers: { accept: 'text/html' },
+    })
+    assertStringIncludes(
+      htmlAsked.headers.get('content-type') ?? '',
+      'text/plain',
+    )
+    assertEquals(htmlAsked.headers.get('etag'), indexPage.headers.get('etag'))
+    await htmlAsked.body?.cancel()
 
     // And the whole rule, against the server that serves it: `.md` on a
     // page's own address is the file, served by the assets binding, and the

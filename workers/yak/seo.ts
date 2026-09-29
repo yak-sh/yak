@@ -21,6 +21,7 @@ import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'
 import { type Host, hosted, replyTo, spaceHost, url } from './host.ts'
 import { PLATFORM } from './route.ts'
+import { publicPage } from './public-cache.ts'
 
 export let SITE_URL = url({})
 
@@ -294,33 +295,56 @@ export let full = (parts: { url: string; text: string }[]) =>
 // The addresses answered here. Null for anything else, so index.ts falls
 // through to the assets the way it always did.
 export let answer = async (
+  req: Request,
   path: string,
   env: Env,
 ): Promise<Response | null> => {
-  if (path == '/robots.txt') return text(robots(env))
-  if (path == SECURITY) return text(security(new Date(), env))
+  if (req.method != 'GET' && req.method != 'HEAD') return null
+  if (path == '/robots.txt') {
+    return await publicPage(req, env, path, () => text(robots(env)))
+  }
+  if (path == SECURITY) {
+    let today = new Date()
+    return await publicPage(
+      req,
+      env,
+      path,
+      () => text(security(today, env)),
+      60,
+      today.toISOString().slice(0, 10),
+    )
+  }
   if (path == '/sitemap.xml') {
-    return text(sitemap(deployed(env), env), 'application/xml')
+    return await publicPage(
+      req,
+      env,
+      path,
+      () => text(sitemap(deployed(env), env), 'application/xml'),
+    )
   }
   if (path == '/llms.txt') {
-    let pages = await Promise.all(SITE.map(async (path) => ({
-      url: at(path, env),
-      ...said(await fetched(env, at(path, env))),
-    })))
-    return text(llms([
-      ...pages.filter((p) => p.title),
-      // The drawn pages say their own title and line (above): there is no file
-      // to read them out of, and a page missing from this list is a page a
-      // model never learns is there.
-      ...RENDERED.map((p) => ({ ...p, url: at(p.path, env) })),
-    ], env))
+    return await publicPage(req, env, path, async () => {
+      let pages = await Promise.all(SITE.map(async (path) => ({
+        url: at(path, env),
+        ...said(await fetched(env, at(path, env))),
+      })))
+      return text(llms([
+        ...pages.filter((p) => p.title),
+        // The drawn pages say their own title and line (above): there is no file
+        // to read them out of, and a page missing from this list is a page a
+        // model never learns is there.
+        ...RENDERED.map((p) => ({ ...p, url: at(p.path, env) })),
+      ], env))
+    })
   }
   if (path == '/llms-full.txt') {
-    let all = [whole(env), ...PAGES.map((p) => uriOf(p.slug, env))]
-    let parts = await Promise.all(
-      all.map(async (url) => ({ url, text: await fetched(env, url) })),
-    )
-    return text(full(parts.filter((p) => p.text)))
+    return await publicPage(req, env, path, async () => {
+      let all = [whole(env), ...PAGES.map((p) => uriOf(p.slug, env))]
+      let parts = await Promise.all(
+        all.map(async (url) => ({ url, text: await fetched(env, url) })),
+      )
+      return text(full(parts.filter((p) => p.text)))
+    })
   }
   return null
 }

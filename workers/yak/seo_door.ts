@@ -18,7 +18,7 @@ export let seoPlugin: Plugin = {
   routes: [
     async (at) =>
       at.space == null
-        ? await (await import('./seo.ts')).answer(at.path, at.env)
+        ? await (await import('./seo.ts')).answer(at.req, at.path, at.env)
         : null,
   ],
 }
