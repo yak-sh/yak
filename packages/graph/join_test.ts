@@ -35,6 +35,16 @@ Deno.test('a source is patterns, split on the one thing that separates them', ()
   assertEquals(m.vars, ['call'])
 })
 
+Deno.test('collections keep their own patterns and variables recursively', () => {
+  let m = match('$p .product; [$r .review, review.product=$p; [$n .note]]')
+  assertEquals(m.vars, ['p'])
+  assertEquals(m.collections[0].vars, ['r', 'p'])
+  assertEquals(m.collections[0].collections[0].vars, ['n'])
+  assertEquals(m.collections[0].patterns[0].binds, [
+    { path: ['review', 'product'], name: 'p' },
+  ])
+})
+
 Deno.test('the sigils still say what they always said', () => {
   let m = match('.call, +!result, *result, #Now')
   assertEquals(m.patterns[0].gates, ['result'])

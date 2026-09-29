@@ -298,6 +298,13 @@ Deno.test('a pattern over two entities needs a storage that answers bindings', (
   assertEquals(oops.map((j) => j.handler), ['post.matched'])
 })
 
+Deno.test('a collected pattern uses the binding interface', () => {
+  let { fx, oops, apply } = fixture()
+  fx.on('$p .post; [.comment, comment.post=$p]', () => {})
+  apply([post('p1')])
+  assertEquals(oops.map((j) => j.handler), ['post.matched'])
+})
+
 // A registry over the blog with its effects declared and no pool to write
 // them down in.
 let owing = () => {

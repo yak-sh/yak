@@ -63,6 +63,7 @@ export type Plan = {
     binds: { path: string[]; name: string }[]
     makes: boolean
   }[]
+  collections?: unknown[]
 }
 
 /** Where a component is read from: the name of its table, or of a CTE that
@@ -161,6 +162,9 @@ export let rule = (
   opts: BindOpts = {},
   on: On = {},
 ): Select => {
+  if (m.collections?.length) {
+    throw new Error('a collection is evaluated by the storage adapter')
+  }
   let at = on.at ?? ((comp: string) => comp)
   let touched = on.touched
   let extend = [...(opts.extend ?? []), removals(on.gone ?? (() => null))]

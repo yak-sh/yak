@@ -18,6 +18,7 @@
 
 export * from './ast.ts'
 export * from './parse.ts'
+export * from './multi.ts'
 export * from './rule.ts'
 export * from './time.ts'
 export * from './teach.ts'

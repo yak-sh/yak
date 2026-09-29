@@ -18,7 +18,7 @@
 // which is how one phase of `apply()` passes what it learned to a later one
 // without a global anywhere. The effect phase strips it back off.
 
-import type { Ask, Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
+import type { Ask, Binding, Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
 import { comps, dead, doomed, then } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 
@@ -45,6 +45,8 @@ export type Event = {
   comp?: Comp
   /** what each variable bound, for a `matched` event whose pattern named some */
   vars?: Record<string, unknown>
+  /** the whole multi-entity match, including its collected members */
+  binding?: Binding
 }
 
 /** What each entity carried before the batch: component names, by eid. */

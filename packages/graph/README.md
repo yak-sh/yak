@@ -278,7 +278,10 @@ $call .call; .result, result.call=$call
 `match(source)` parses the rule into a `Match` plan containing patterns,
 conditions, and variable bindings. An adapter's optional `Tx.bindings` method
 then evaluates the plan against stored data together with the pending patches.
-For example, SQLite compiles each plan into a SQL statement and uses temporary
+`[$review .review, review.product=$product]` attaches the matching reviews to
+each product's binding; a product with none keeps an empty collection. Each
+member retains its entity ids and variables. Brackets may nest. SQLite compiles
+each flat match or collection level into a SQL statement and uses temporary
 query sources to include the uncommitted patches; `+!comp` tests for an absent
 component through a left join. `reads(plan, vocab)` lists the components that
 must be included in those sources.

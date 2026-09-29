@@ -1,22 +1,22 @@
 // Parsing the match half of a rule out of the query it is written as. A rule
 // is not a second language: it is one or more ordinary @yaks/query patterns
-// separated by `;`, one per entity, and the sigils already in the grammar
-// express the rest — `+comp` ensures a component exists, `+!comp` also
+// separated by `;`, one per entity; brackets collect nested patterns. The
+// sigils express the rest — `+comp` ensures a component exists, `+!comp` also
 // requires it did not already, `*comp` is the write set, `#Name` binds a
 // resource, `$name` binds an entity, and a value written `$name` is that same
 // variable used as a value.
 //
 //   $call .call; .result, result.call=$call
 //
-// Two patterns, joined by the variable they share. Nothing was added to the
-// grammar for that: `parse()` keeps raw tokens and leaves their meaning to a
-// downstream compiler, so a scalar whose raw text begins with `$` is read here
+// Two patterns, joined by the variable they share. `parse()` keeps raw tokens
+// and leaves their meaning to a downstream compiler, so a scalar whose raw
+// text begins with `$` is read here
 // as the variable it plainly is, exactly as a bare `$name` is read as the
 // pattern's entity.
 //
 // What this file produces is a plan, not SQL. A storage adapter lowers the
-// plan to one statement through its own compiler — @yaks/sqlite does it
-// through @yaks/sql's path-to-join lowering, where `+!comp` becomes a
+// flat part of the plan to a statement — @yaks/sqlite does it through
+// @yaks/sql's path-to-join lowering, where `+!comp` becomes a
 // `LEFT JOIN … IS NULL` — and this package remains the one that knows nothing
 // about any backend. Nothing here enumerates candidate rows: a rule's match is
 // a query, and evaluating a query is storage's job.
@@ -34,7 +34,9 @@ import {
   type Clause,
   declared,
   eq,
+  list,
   parse,
+  parseMatch,
   type Pred,
   scalar,
   type Value,
@@ -53,6 +55,8 @@ export type Bind = { path: string[]; name: string }
 export type Binding = {
   entities: (Eid | null)[]
   vars: Record<string, unknown>
+  /** One list per collection in the match, recursively. */
+  collections?: Binding[][]
 }
 
 /** One entity's pattern — everything one `;`-separated section declares. */
@@ -81,6 +85,9 @@ export type Pattern = {
 /** A rule's match, parsed: its patterns and every variable they name. */
 export type Match = {
   patterns: Pattern[]
+  collections: Match[]
+  /** An impossible nested match still leaves its parent's collection empty. */
+  empty?: boolean
   /** every variable, in the order it was first written */
   vars: string[]
 }
@@ -91,17 +98,12 @@ export let variable = (v: Value | null): string | null =>
     ? v.raw.slice(1)
     : null
 
-// The individual patterns in a rule's source. `;` separates entities and
-// nothing else in this grammar uses it, so splitting on it is the whole parse.
-let halves = (source: string): string[] =>
-  source.split(';').map((s) => s.trim()).filter(Boolean)
-
 // One pattern, parsed. `declared()` separates the sigil clauses from the
 // filter — the same reading every rule has always had — and then the variables
 // are removed from the filter, because comparing a property against the literal
 // text `$session` would match nothing.
-let pattern = (text: string): Pattern => {
-  let d = declared(parse(text, { text: false }))
+let pattern = (query: And): Pattern => {
+  let d = declared(query)
   let binds: Bind[] = []
   let clauses = d.filter.clauses.filter((c) => {
     if (c.kind != 'pred') return true
@@ -145,17 +147,35 @@ let pattern = (text: string): Pattern => {
  * ```
  */
 export let match = (source: string): Match => {
-  let patterns = halves(source).map(pattern)
-  if (!patterns.length) throw new Error('a rule needs a pattern')
-  let vars: string[] = []
-  let see = (name: string) => {
-    if (!vars.includes(name)) vars.push(name)
+  let parts = parseMatch(source)
+  if (!parts.length) throw new Error('a rule needs a pattern')
+  let build = (parts: ReturnType<typeof parseMatch>, inside = false): Match => {
+    let patterns = parts.flatMap((p) =>
+      p.kind == 'pattern' ? [pattern(p.query)] : []
+    )
+    let collections = parts.flatMap((p) =>
+      p.kind == 'collection' ? [build(p.parts, true)] : []
+    )
+    if (
+      inside &&
+      patterns.some((p) =>
+        p.makes || p.ensures.length || p.gates.length || p.writes.length ||
+        p.sets.length || p.resources.length
+      )
+    ) {
+      throw new SyntaxError('a collection contains matches, not rule writes')
+    }
+    let vars: string[] = []
+    let see = (name: string) => {
+      if (!vars.includes(name)) vars.push(name)
+    }
+    for (let p of patterns) {
+      if (p.entity) see(p.entity)
+      for (let b of p.binds) see(b.name)
+    }
+    return { patterns, collections, vars }
   }
-  for (let p of patterns) {
-    if (p.entity) see(p.entity)
-    for (let b of p.binds) see(b.name)
-  }
-  return { patterns, vars }
+  return build(parts)
 }
 
 /**
@@ -197,6 +217,9 @@ export let reads = (m: Match, v: Vocab): string[] => {
     walk(p.filter.clauses)
     for (let b of p.binds) path(b.path)
     for (let c of [...p.gates, ...p.ensures, ...p.writes]) out.add(c)
+  }
+  for (let child of m.collections) {
+    for (let comp of reads(child, v)) out.add(comp)
   }
   return [...out]
 }
@@ -260,9 +283,39 @@ export let filled = (
     }
   })
   return {
+    ...plan,
     patterns,
+    collections: plan.collections.map((child) => filled(child, values)),
     vars: plan.vars.filter((name) => !(name in values)),
   }
+}
+
+/** Limit a match to values held by its surrounding bindings, while keeping
+ * those variables in the result so storage can attach each member to its
+ * parent. A shared variable may occur in several patterns; their ordinary
+ * equality join means narrowing one occurrence is enough. */
+export let narrowed = (m: Match, choices: Record<string, unknown[]>): Match => {
+  let patterns = [...m.patterns]
+  for (let [name, values] of Object.entries(choices)) {
+    let one = [...new Set(values.filter((v) => v != null).map(String))]
+    if (!one.length) return { ...m, empty: true }
+    let i = patterns.findIndex((p) =>
+      p.entity == name || p.binds.some((b) => b.name == name)
+    )
+    if (i < 0) continue
+    let p = patterns[i]
+    let path = p.entity == name
+      ? 'entity.eid'
+      : p.binds.find((b) => b.name == name)!.path.join('.')
+    patterns[i] = {
+      ...p,
+      filter: {
+        ...p.filter,
+        clauses: [...p.filter.clauses, eq(path, list(...one))],
+      },
+    }
+  }
+  return { ...m, patterns }
 }
 
 /** The bindings a query carries: every `$name=value` in it, as plain values.
@@ -336,5 +389,18 @@ export let asked = (m: Match, v: Vocab): Match | null => {
       filter: filter === true ? { kind: 'and', clauses: [] } : filter as And,
     })
   }
-  return { ...m, patterns }
+  let collections: Match[] = []
+  for (let child of m.collections) {
+    let found = asked(child, v)
+    if (found) collections.push(found)
+    else {
+      collections.push({
+        patterns: [],
+        collections: [],
+        vars: [],
+        empty: true,
+      })
+    }
+  }
+  return { ...m, patterns, collections }
 }

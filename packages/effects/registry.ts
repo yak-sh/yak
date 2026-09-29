@@ -243,7 +243,7 @@ let gone = (plan: Match): string[] => {
 // is exactly what a removal event already reports, so it is registered as
 // that event. Anything larger is a question only a batch overlay can answer.
 let solo = (plan: Match): string | undefined => {
-  if (plan.patterns.length != 1) return
+  if (plan.patterns.length != 1 || plan.collections.length) return
   let [p] = plan.patterns
   let [c] = p.filter.clauses
   return p.filter.clauses.length == 1 && c.kind == 'gone' && !p.entity &&
@@ -317,6 +317,9 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let planned = (what: string | Match) => {
     let written = typeof what == 'string' ? match(what) : what
     let plan = asked(written, vocab)
+    if (plan?.collections.length && !plan.patterns.length) {
+      throw new Error('a matched effect needs an outer entity')
+    }
     let one = plan && solo(plan)
     return one ? { comp: one, kind: 'removed' as Kind } : {
       comp: about(written),
@@ -394,7 +397,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     // `-comp` clause reads the deletions a storage's overlay carries.
     let batch = s.gone?.length ? bundles : []
     if (
-      one.length > 1 || plan.patterns.some((p) => p.binds.length) ||
+      one.length > 1 || plan.collections.length ||
+      plan.patterns.some((p) => p.binds.length) ||
       s.gone?.length
     ) {
       if (!tx.bindings) {
@@ -415,6 +419,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
               entity: { eid: r.entities.find((e) => !!e)! },
               name: s.comp,
               vars: r.vars,
+              binding: r,
             })),
       )
     }

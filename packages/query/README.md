@@ -277,10 +277,17 @@ Schema-dependent interpretation belongs to a compiler such as `@yaks/sql`:
 
 ## Multi-entity rules
 
-A multi-entity rule uses one query pattern per entity, separated by `;`. Shared
-variables join the patterns. This package parses one pattern and `declared()`
-separates its filter from its instructions; reading a `;`-separated set of them
-into a match plan is [@yaks/graph](../graph/join.ts)'s job.
+A multi-entity match uses one query pattern per entity, separated by `;`. Shared
+variables join the patterns. Brackets collect inner matches into one outer
+binding, including an empty collection:
+
+```text
+$region .region; [$sfx .sfx, sfx.region=$region]
+```
+
+`parseMatch()` reads the recursive syntax into pattern and collection parts.
+`declared()` separates each pattern's filter from its instructions, and
+[@yaks/graph](../graph/join.ts) turns the parts into a match plan.
 
 ## Teaching the format
 

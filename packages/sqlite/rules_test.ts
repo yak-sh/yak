@@ -69,6 +69,68 @@ Deno.test('two patterns share a variable, and that is the join', () => {
   assert(!render(rule(m, shop)).sql.includes(';'))
 })
 
+Deno.test('a collection keeps every correlated member under one outer binding', () => {
+  let { driver } = floor()
+  let found = matched(
+    driver,
+    match('$p .product; [$r .review, review.product=$p, review.stars=$stars]'),
+    shop,
+  )
+  assertEquals(found.map((row) => [row.entities, row.collections]), [
+    [['p1'], [[{
+      entities: ['r1'],
+      vars: { p: 'p1', r: 'r1', stars: 5 },
+    }]]],
+    [['p2'], [[]]],
+  ])
+})
+
+Deno.test('a top-level collection has one outer binding, even when empty', () => {
+  let { driver } = floor()
+  assertEquals(matched(driver, match('[.review.stars>10]'), shop), [{
+    entities: [],
+    vars: {},
+    collections: [[]],
+  }])
+  assertEquals(
+    matched(driver, match('[$p .product]'), shop)[0]
+      .collections?.[0].map((row) => row.entities),
+    [['p1'], ['p2']],
+  )
+})
+
+Deno.test('nested collections correlate to the member above them', () => {
+  let { driver } = floor()
+  let [outer] = matched(
+    driver,
+    match('[$p .product; [$r .review, review.product=$p]]'),
+    shop,
+  )
+  assertEquals(
+    outer.collections?.[0].map((row) => [
+      row.entities,
+      row.collections?.[0].map((member) => member.entities),
+    ]),
+    [[['p1'], [['r1']]], [['p2'], []]],
+  )
+})
+
+Deno.test('a collection reads unchanged members through a batch overlay', () => {
+  let { driver } = floor()
+  let m = match('$p .product; [$r .review, review.product=$p]')
+  let over = overlay(driver, shop, [{
+    entity: { eid: 'p1' },
+    product: { price: 12 },
+  }], reads(m, shop))
+  assertEquals(
+    matched(driver, m, shop, {}, {
+      at: over.at,
+      touched: [over.ids.get('p1')!],
+    }, over.with)[0].collections?.[0].map((row) => row.entities),
+    [['r1']],
+  )
+})
+
 Deno.test('a variable can tie two plain properties together', () => {
   let { driver } = floor()
   // Both products were made by the same maker, said as a join rather than as
