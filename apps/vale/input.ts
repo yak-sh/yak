@@ -89,8 +89,9 @@ let TURNS: Record<string, number> = {
 let KEY_TURN = 6
 
 /** Arrows turn the camera and hero together; A/D turn or strafe according to
- * the setting. The stick and keys both move in the camera's screen plane.
- * Both mouse buttons add forward motion. Diagonals are no faster.
+ * the setting. Movement axes are resolved against the chosen view or hero
+ * heading by the frame. Both mouse buttons add forward motion. Diagonals are
+ * no faster.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

@@ -17,7 +17,7 @@ import { ABILITIES, type Ability, useAbilities } from './abilities.ts'
 import { bar } from './bar.ts'
 import { board } from './board.ts'
 import { BEASTS, useBeasts } from './beasts.ts'
-import { aim, bearing, type Cam, depth, steer } from './cam.ts'
+import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
 import { cast } from './cast.ts'
 import { chatbox } from './chatbox.ts'
 import { companion } from './companion.ts'
@@ -269,6 +269,7 @@ let cam: Cam = {
   z: 0,
   shake: 0,
   snap: false,
+  orbiting: false,
   lift: 0,
 }
 let target = new THREE.Vector3()
@@ -360,6 +361,7 @@ let begin = async (eid: string, stored: Seen | null = null) => {
     // The camera starts behind the hero, wherever they stand.
     cam.x = NaN
     cam.snap = true
+    cam.orbiting = false
     gate.remove()
     glass.hidden = false
     canvas.focus()
@@ -956,8 +958,9 @@ let loop = (t: number) => {
         jump: false,
       })
     }
-    steer(cam, i, last?.body.yaw ?? cam.yaw + Math.PI, dt)
-    let f = g.frame(walking, i, cam.yaw, dt)
+    let yaw = last?.body.yaw ?? cam.yaw + Math.PI
+    steer(cam, i, yaw, dt)
+    let f = g.frame(walking, i, moveLook(cam, i, yaw, dt), dt)
     last = f
     if (f) {
       let mine = net.who(net.hero) ?? look

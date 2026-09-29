@@ -28,6 +28,8 @@ export type Cam = {
   shake: number
   /** it is swinging round behind the hero */
   snap: boolean
+  /** a free look keeps movement relative to the hero until steering or snap */
+  orbiting: boolean
   /** the least it looks down, raised while the hero is in a building */
   lift: number
 }
@@ -70,7 +72,7 @@ let INDOORS = 0.85
  * })
  * let cam = () => ({
  *   yaw: 0, pitch: 0.4, dist: 9, reach: 9, x: 0, y: 0, z: 0, shake: 0,
- *   snap: false, lift: 0,
+ *   snap: false, orbiting: false, lift: 0,
  * })
  * // A hero facing +x has the camera behind them at -x, which is yaw -π/2.
  * let run = (c: ReturnType<typeof cam>, i: ReturnType<typeof hands>) => {
@@ -91,6 +93,8 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
   cam.yaw += dx - i.turn * dt
   cam.pitch = clamp(cam.pitch + dy, 0.1, 1.3)
   cam.dist = clamp(cam.dist * (1 + i.zoom * 0.12), 4, 22)
+  if (i.look && (dx || dy)) cam.orbiting = true
+  else if (dx || dy) cam.orbiting = false
   if (i.snap) cam.snap = true
   else if (dx || dy || i.turn || i.faceMove || i.look) cam.snap = false
   let off = Math.atan2(
@@ -101,10 +105,17 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
   if (cam.snap && Math.abs(off) < 0.02) {
     cam.yaw += off
     cam.snap = false
+    cam.orbiting = false
     return
   }
   if (cam.snap) cam.yaw += off * (1 - Math.exp(-dt * SNAP))
 }
+
+/** Free orbit changes the view, not where the keys say forward is. A turning
+ * key changes both the camera and the hero's heading this frame. The stick
+ * keeps moving in screen space so its direction remains direct on touch. */
+export let moveLook = (cam: Cam, i: Intent, yaw: number, dt: number) =>
+  cam.orbiting && !i.faceMove ? yaw - Math.PI - i.turn * dt : cam.yaw
 
 /** Which way the camera looks, in whole degrees clockwise from north (-z).
  *

@@ -1,10 +1,10 @@
-// The hero's step: keys and the thumbstick move in the camera's screen plane.
-// Keys preserve a forward heading; a moving thumbstick faces its direction.
+// The hero's step: movement resolves in the chosen view or hero plane. Keys
+// preserve a forward heading; a moving thumbstick faces its direction.
 
 import { type Body, walk } from './sim.ts'
 import { type Vale } from './terrain.ts'
 
-/** A screen-plane direction in the world's horizontal plane. */
+/** A direction in the chosen plane, projected onto the world's ground. */
 export let stepPush = (look: number, [x, y]: [number, number]) => ({
   x: Math.cos(look) * x - Math.sin(look) * y,
   z: -Math.sin(look) * x - Math.cos(look) * y,
