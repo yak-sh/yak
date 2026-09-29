@@ -36,6 +36,10 @@ Deno.test('a byte response supports seeking, revalidation, and HEAD', async () =
       { mime: 'video/mp4', etag: '"v1"' },
       new Request(at, { method, headers }),
     )
+  assertEquals(
+    serve('GET').headers.get('content-security-policy'),
+    "script-src 'none'",
+  )
   for (
     let [range, part, span] of [
       ['bytes=2-4', [2, 3, 4], 'bytes 2-4/6'],

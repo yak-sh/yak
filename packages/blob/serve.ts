@@ -117,7 +117,12 @@ export let served = (
   ranged(bytes, request, {
     'content-type': meta.mime || 'application/octet-stream',
     'cache-control': 'public, no-cache',
-    'content-security-policy': "sandbox; script-src 'none'",
+    // A sandbox makes Chrome's native media viewer an opaque origin. Its
+    // crossorigin fetch of this same URL then fails. Inert media keeps its
+    // origin; document formats remain sandboxed.
+    'content-security-policy': /^(audio|video)\//.test(meta.mime ?? '')
+      ? "script-src 'none'"
+      : "sandbox; script-src 'none'",
     'x-content-type-options': 'nosniff',
     ...(meta.etag ? { etag: meta.etag } : {}),
     ...meta.name
