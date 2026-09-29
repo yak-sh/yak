@@ -2,6 +2,8 @@
 // vocabulary says, as one plain value, so two vocabularies loaded from
 // different documents compare with one `assertEquals`.
 
+import { Ajv2020, type ValidateFunction } from 'ajv/dist/2020.js'
+import { metaSchema } from './meta.ts'
 import type { Vocab } from './vocab.ts'
 
 // A value as JSON holds it: an absent key and an `undefined` one are the same.
@@ -30,3 +32,13 @@ export let facts = (v: Vocab) =>
       }
     }),
   })
+
+let compiled: { ajv: Ajv2020; check: ValidateFunction } | undefined
+
+/** The meta-schema as a document author uses it: ajv over `metaSchema`,
+ * compiled once for every test that asks. */
+export let meta = () => {
+  if (compiled) return compiled
+  let ajv = new Ajv2020({ strict: false, allErrors: true })
+  return compiled = { ajv, check: ajv.compile(metaSchema) }
+}

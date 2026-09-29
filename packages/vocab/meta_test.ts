@@ -5,12 +5,10 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { Ajv2020 } from 'ajv/dist/2020.js'
-import { metaSchema } from './mod.ts'
 import type { PropSchema } from './mod.ts'
+import { meta } from './testing.ts'
 
-let ajv = new Ajv2020({ strict: false, allErrors: true })
-let check = ajv.compile(metaSchema)
+let { ajv, check } = meta()
 let ok = (entry: PropSchema) => {
   let valid = check({ $defs: { thing: entry } })
   return valid ? [] : ajv.errorsText(check.errors).split(', ')

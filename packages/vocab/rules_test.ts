@@ -3,8 +3,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { rulesIn } from './rules.ts'
 import { loadVocab } from './vocab.ts'
 import { storable } from './validate.ts'
-import { Ajv2020 } from 'ajv/dist/2020.js'
-import { metaSchema } from './meta.ts'
+import { meta } from './testing.ts'
 
 let doc = {
   $defs: {
@@ -47,7 +46,7 @@ test('a rule with no match is a declaration that says nothing', () => {
 })
 
 test('a rule declaration validates as one', () => {
-  let check = new Ajv2020({ strict: false }).compile(metaSchema)
+  let { check } = meta()
   assertEquals(check(doc), true)
   // The storable profile passes over it: a rule plants no table.
   assertEquals(storable(doc), [])
