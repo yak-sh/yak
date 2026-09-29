@@ -234,8 +234,24 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // Past the fog, nothing is drawn.
   let ground = soft({ speckle: 0.1, see: true })
   let caveRoof = soft({ speckle: 0.1, see: true })
-  let buildings = instances(scene, ground, mesh.template)
-  let hanging = doors(scene, ground)
+  type Render = {
+    buildings: ReturnType<typeof instances>
+    hanging: ReturnType<typeof doors>
+    used: number
+    pending: number
+  }
+  let makeRender = (): Render => ({
+    buildings: instances(scene, ground, mesh.template),
+    hanging: doors(scene, ground),
+    used: 0,
+    pending: 0,
+  })
+  let render = makeRender()
+  let retire = (r: Render) => {
+    if (r == render || r.used || r.pending) return
+    r.buildings.dispose()
+    r.hanging.dispose()
+  }
   type Lamp = {
     lantern: THREE.MeshBasicMaterial
     halo: THREE.SpriteMaterial
@@ -243,6 +259,8 @@ export let world = (v: Vale, mesh: Mesher): World => {
     sprite: THREE.Sprite
   }
   type Drawn = {
+    revision: number
+    render: Render
     lod: number
     solid: THREE.Mesh
     roof: THREE.Mesh | null
@@ -331,8 +349,8 @@ export let world = (v: Vale, mesh: Mesher): World => {
     })
   let lampBox = new THREE.BoxGeometry(1, 1, 1)
   // The doors of the buildings standing in a chunk.
-  let doorsOf = (ci: number, ck: number) =>
-    hanging.hang(v.plant(ci, ck).flatMap((p) => buildingOf(v, p) ?? []))
+  let doorsOf = (r: Render, ci: number, ck: number) =>
+    r.hanging.hang(v.plant(ci, ck).flatMap((p) => buildingOf(v, p) ?? []))
 
   // Let a chunk go, and its lamps and doors unless it `keeps` them for the
   // same chunk drawn at another detail.
@@ -344,20 +362,25 @@ export let world = (v: Vale, mesh: Mesher): World => {
       scene.remove(m)
       m.geometry.dispose()
     }
-    buildings.drop(k)
+    d.render.buildings.drop(k)
     drawn.delete(k)
     props = null
-    if (keeps) return
-    for (let l of d.lamps) {
-      scene.remove(l.box, l.sprite)
-      l.lantern.dispose()
-      l.halo.dispose()
+    if (!keeps) {
+      for (let l of d.lamps) {
+        scene.remove(l.box, l.sprite)
+        l.lantern.dispose()
+        l.halo.dispose()
+      }
+      d.doors.drop()
     }
-    d.doors.drop()
+    d.render.used--
+    retire(d.render)
   }
   let put = async (c: Chunk, lod: number, rev: number) => {
     let k = key(c.ci, c.ck)
-    let prepared = buildings.prepare(c.buildings, lod == 0)
+    let r = render
+    let prepared = r.buildings.prepare(c.buildings, lod == 0)
+    r.pending++
     try {
       await prepared.ready
       if (
@@ -368,29 +391,33 @@ export let world = (v: Vale, mesh: Mesher): World => {
       // What was drawn in the chunk at another detail keeps its lamps and
       // doors.
       let was = drawn.get(k)
-      let lamps = was?.lamps, hung = was?.doors
-      let glows = was?.glows ?? glowsOf(c.ci, c.ck)
-      drop(k, true)
-      prepared.draw(k)
+      let keeps = was?.render == r
+      let lamps = keeps ? was?.lamps : undefined
+      let hung = keeps ? was?.doors : undefined
+      let glows = (keeps ? was?.glows : undefined) ?? glowsOf(c.ci, c.ck)
       let solid = meshOf(c.solid, c.ci, c.ck)
+      let roof = c.roof && meshOf(c.roof, c.ci, c.ck, caveRoof)
+      let small = c.small && meshOf(c.small, c.ci, c.ck)
+      drop(k, keeps)
+      prepared.draw(k)
       solid.castShadow = true
       solid.receiveShadow = true
-      let roof = c.roof && meshOf(c.roof, c.ci, c.ck, caveRoof)
       if (roof) roof.receiveShadow = true
-      let small = c.small && meshOf(c.small, c.ci, c.ck)
       if (small) small.receiveShadow = true
       scene.add(solid)
       if (roof) scene.add(roof)
       if (small) scene.add(small)
       let x = (c.ci + 0.5) * CHUNK, z = (c.ck + 0.5) * CHUNK
       drawn.set(k, {
+        revision: rev,
+        render: r,
         lod,
         solid,
         roof,
         small,
         lamps: lamps ?? lampsOf(glows),
         glows,
-        doors: hung ?? doorsOf(c.ci, c.ck),
+        doors: hung ?? doorsOf(r, c.ci, c.ck),
         props: {
           ci: c.ci,
           ck: c.ck,
@@ -402,13 +429,19 @@ export let world = (v: Vale, mesh: Mesher): World => {
         x,
         z,
       })
+      r.used++
       props = null
     } finally {
       prepared.release()
+      r.pending--
+      retire(r)
     }
   }
   // Every chunk wanted near the focus is drawn, at any detail.
-  let close = () => [...wants].every(([k, c]) => c.d >= FIRST || drawn.has(k))
+  let close = () =>
+    [...wants].every(([k, c]) =>
+      c.d >= FIRST || drawn.get(k)?.revision == revision
+    )
   let settle = () => {
     if (!waiting.length || !close()) return
     for (let done of waiting.splice(0)) done()
@@ -426,11 +459,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
     wants = new Map(list.map((c) => [key(c.ci, c.ck), c]))
     for (let k of drawn.keys()) if (!wants.has(k)) drop(k)
     let missing = list.filter(({ ci, ck }) => !drawn.has(key(ci, ck)))
-    let finer = list.filter(({ ci, ck, lod }) => {
+    let replace = list.filter(({ ci, ck, lod }) => {
       let d = drawn.get(key(ci, ck))
-      return d && d.lod != lod
+      return d && (d.lod != lod || d.revision != revision)
     })
-    w.pending = missing.length + finer.length
+    w.pending = missing.length + replace.length
     let detailing = [...asked.keys()].filter((k) => drawn.has(k)).length
     // Cover the ground round the hero first, and keep one worker available
     // for new ground while nearby detail catches up. An undrawn chunk keeps
@@ -438,9 +471,9 @@ export let world = (v: Vale, mesh: Mesher): World => {
     let near = (c: Want) => c.d < FIRST
     let order = [
       ...missing.filter(near),
-      ...finer.filter(near),
+      ...replace.filter(near),
       ...missing.filter((c) => !near(c)),
-      ...finer.filter((c) => !near(c)),
+      ...replace.filter((c) => !near(c)),
     ]
     for (let { ci, ck, lod: want } of order) {
       let k = key(ci, ck)
@@ -625,21 +658,17 @@ export let world = (v: Vale, mesh: Mesher): World => {
     refresh: () => {
       if (gone) return
       revision++
-      v.patches.clear()
-      asked.clear()
-      for (let k of [...drawn.keys()]) drop(k)
-      buildings.dispose()
-      hanging.dispose()
-      buildings = instances(scene, ground, mesh.template)
-      hanging = doors(scene, ground)
+      let old = render
+      render = makeRender()
+      retire(old)
       stream()
     },
     dispose: () => {
       if (gone) return
       gone = true
       for (let k of drawn.keys()) drop(k)
-      hanging.dispose()
-      buildings.dispose()
+      render.hanging.dispose()
+      render.buildings.dispose()
       let geometries = new Set<THREE.BufferGeometry>()
       let materials = new Set<THREE.Material>()
       scene.traverse((o) => {

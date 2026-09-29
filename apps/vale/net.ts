@@ -19,6 +19,7 @@ export { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, REACH } from './area.ts'
 import { writer } from './chat.ts'
+import { watchDesigns } from './design-watch.ts'
 import { groupOf } from './party-state.ts'
 import type { Tools } from './slash.ts'
 import { SIZE } from './levels.ts'
@@ -251,9 +252,7 @@ export let connect = (base: URL) => {
     use: (rows: Bundle[]) => void,
   ): Promise<void> => {
     let watch = c.watch(`.${name}`)
-    let update = () => watch.ready && use(watch.value)
-    watch.subscribe(update)
-    update()
+    watchDesigns(watch, name, use)
     return ready(watch)
   }
 

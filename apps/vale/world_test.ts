@@ -8,7 +8,7 @@ import { cuboids } from './boxes.ts'
 import type { Chunk } from './chunks.ts'
 import { SIZE } from './levels.ts'
 import { out, pack, type Packed } from './mesh.ts'
-import { chunkOf, flat } from './terrain.ts'
+import { CHUNK, chunkOf, flat } from './terrain.ts'
 import { world } from './world.ts'
 import { wanted } from './stream.ts'
 import { seedThemes } from './themes_fixture.ts'
@@ -98,6 +98,8 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
 
 Deno.test('an edited design redraws a visible building', async () => {
   let mid = SIZE / 2, calls = 0
+  let reveal: (p: Packed) => void = () => {}
+  let held = new Promise<Packed>((done) => reveal = done)
   let w = world(flat(5), {
     capacity: 4,
     chunk: (ci, ck) =>
@@ -109,10 +111,12 @@ Deno.test('an edited design redraws a visible building', async () => {
       }),
     template: () => {
       calls++
-      return Promise.resolve(pack(cuboids(
-        out(),
-        [[[0, 0, 0], [1, 1, 1], calls]],
-      )))
+      return calls == 1
+        ? Promise.resolve(pack(cuboids(
+          out(),
+          [[[0, 0, 0], [1, 1, 1], calls]],
+        )))
+        : held
     },
   })
   await w.near()
@@ -120,12 +124,18 @@ Deno.test('an edited design redraws a visible building', async () => {
     o instanceof THREE.InstancedMesh && o.geometry.userData.bytes != null
   )!
   w.refresh()
+  for (let i = 0; calls < 2 && i < 200; i++) await Promise.resolve()
+  assertEquals(calls, 2)
+  assert(w.scene.children.includes(first))
+  w.refresh()
+  assert(w.scene.children.includes(first))
+  reveal(pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 3]])))
   await w.near()
+  assertEquals(calls, 3)
   let next = w.scene.children.find((o): o is THREE.InstancedMesh =>
     o instanceof THREE.InstancedMesh && o.geometry.userData.bytes != null
   )!
   assert(first.geometry != next.geometry)
-  assert(calls > 1)
   w.dispose()
 })
 
@@ -157,5 +167,52 @@ Deno.test('new ground draws before detail and keeps a worker free while travelli
     await Promise.resolve()
   }
   assert(sent.some((a) => a.ci >= 19 && a.lod == 2))
+  w.dispose()
+})
+
+Deno.test('a design refresh keeps visible ground until replacement chunks arrive', async () => {
+  let next = false
+  let finish = new Map<string, (c: Chunk) => void>()
+  let w = world(flat(5), {
+    capacity: 4,
+    chunk: (ci, ck) =>
+      next
+        ? new Promise((done) => finish.set(`${ci} ${ck}`, done))
+        : Promise.resolve(bare(ci, ck)),
+    template: () => Promise.resolve(pack(out())),
+  })
+  await w.near()
+  let at = (ci: number, ck: number) =>
+    w.scene.children.find((o): o is THREE.Mesh =>
+      o instanceof THREE.Mesh && o.position.x == ci * CHUNK &&
+      o.position.z == ck * CHUNK && o.geometry.userData.bytes != null
+    )
+  let center = at(8, 8)
+  assert(center)
+  next = true
+  w.refresh()
+  assertEquals(at(8, 8), center)
+  let ready = false
+  w.near().then(() => ready = true)
+  await Promise.resolve()
+  assertEquals(ready, false)
+  for (let i = 0; !finish.size && i < 200; i++) await Promise.resolve()
+  assert(finish.size)
+  let [key, stale] = [...finish][0]
+  let [ci, ck] = key.split(' ').map(Number)
+  let before = at(ci, ck)
+  assert(before)
+  w.refresh()
+  assertEquals(at(ci, ck), before)
+  stale(bare(ci, ck))
+  for (let i = 0; finish.get(key) == stale && i < 200; i++) {
+    await Promise.resolve()
+  }
+  let done = finish.get(key)
+  assert(done && done != stale)
+  assertEquals(at(ci, ck), before)
+  done(bare(ci, ck))
+  for (let i = 0; at(ci, ck) == before && i < 50; i++) await Promise.resolve()
+  assert(at(ci, ck) != before)
   w.dispose()
 })
