@@ -807,6 +807,16 @@ export let cloudflare = (log: string) => {
   let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
+    if (url.pathname == '/api/1/envelope/' && req.method == 'POST') {
+      Deno.writeTextFileSync(
+        log,
+        `yak-sentry ${JSON.stringify(await req.text())}\n`,
+        {
+          append: true,
+        },
+      )
+      return new Response(null, { status: 200 })
+    }
     if (url.pathname.startsWith('/apps/')) return await sfu(req, url.pathname)
     let script =
       /^\/accounts\/[^/]+\/workers\/dispatch\/namespaces\/[^/]+\/scripts\/([^/]+)(?:\/(.*))?$/
@@ -862,6 +872,12 @@ export let cloudflare = (log: string) => {
       return ok({ id })
     }
     let want = url.searchParams.get('hostname') ?? ''
+    if (want.startsWith('sentry-probe-')) {
+      return Response.json({
+        success: false,
+        errors: [{ message: `sentry probe ${want}` }],
+      }, { status: 500 })
+    }
     let found = held.get(want)
     return ok(found ? [found] : [])
   })

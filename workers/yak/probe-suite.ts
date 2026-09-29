@@ -143,7 +143,13 @@ let door = (server: Harness) =>
       let mode = req.headers.get('sec-fetch-mode')
       if (mode) headers.set('mf-sec-fetch-mode', mode)
       let res = await server
-        .getWorker(path.startsWith('/__script/') ? 'probe-scripts' : undefined)
+        .getWorker(
+          path.startsWith('/__script/')
+            ? 'probe-scripts'
+            : path.startsWith('/__sentry/')
+            ? 'probe-sentry'
+            : undefined,
+        )
         .fetch(req.url, {
           method: req.method,
           headers,
@@ -172,15 +178,17 @@ export let probeSuite = async () => {
   // says --node-modules-dir=manual (deno.json `test:run`): from Deno's npm
   // cache, the bundler finds none of the polyfills npm put beside it.
   let { createTestHarness } = createRequire(`${dir}/`)('wrangler')
+  let kernel = config(
+    Deno.readTextFileSync(`${dir}/wrangler.toml`),
+    {
+      ...vars(secret, cf.url),
+      SENTRY_DSN: cf.url.replace('://', '://key@') + '/1',
+    },
+  )
   let server: Harness = createTestHarness({
     root: dir,
     workers: [
-      {
-        config: config(
-          Deno.readTextFileSync(`${dir}/wrangler.toml`),
-          vars(secret, cf.url),
-        ),
-      },
+      { config: kernel },
       {
         config: {
           name: 'probe-scripts',
@@ -188,6 +196,24 @@ export let probeSuite = async () => {
           compatibility_date: '2025-05-08',
           worker_loaders: [{ binding: 'LOADER' }],
           services: [{ binding: 'KERNEL', service: 'yak' }],
+        },
+      },
+      {
+        config: {
+          name: 'probe-sentry',
+          main: 'sentry-probe.ts',
+          compatibility_date: '2025-05-08',
+          compatibility_flags: kernel.compatibility_flags,
+          tsconfig: kernel.tsconfig,
+          alias: kernel.alias,
+          durable_objects: {
+            bindings: [{ name: 'PROBE', class_name: 'Probe' }],
+          },
+          migrations: [{ tag: 'v1', new_classes: ['Probe'] }],
+          vars: {
+            SENTRY_DSN: cf.url.replace('://', '://key@') + '/1',
+            SENTRY_ENVIRONMENT: 'test',
+          },
         },
       },
     ],
