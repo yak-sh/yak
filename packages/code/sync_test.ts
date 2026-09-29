@@ -42,19 +42,9 @@ let write = (dir: string, files: Record<string, string | null>) => {
   }
 }
 
-let commit = async (dir: string) => {
-  await git(dir, 'add', '-A')
-  await git(
-    dir,
-    '-c',
-    'user.name=t',
-    '-c',
-    'user.email=t@t',
-    'commit',
-    '-qm',
-    'x',
-  )
-}
+// What a sync reads is the index (`git ls-files -s`), never a commit, so a
+// change is staged and that is all.
+let stage = (dir: string) => git(dir, 'add', '-A')
 
 let names = (bundles: Bundle[]) =>
   bundles.map((b) => String((b.symbol as Comp).name)).sort()
@@ -70,7 +60,7 @@ test(
       'a.ts': '// A.\n/** Adds. */\nexport let add = 1\nexport let gone = 2\n',
       'README.md': '# T\n\nRead me.\n',
     })
-    await commit(dir)
+    await stage(dir)
     let g = fixture()
     let pass = async () => {
       let m = await codeMirror(g, dir)
@@ -92,7 +82,7 @@ test(
       'a.ts': '// A.\nexport let add = 1\n',
       'README.md': null,
     })
-    await commit(dir)
+    await stage(dir)
     assertEquals((await pass()).read, ['README.md', 'a.ts'])
     assertEquals(names(await g.read('.symbol')), ['add'])
     assertEquals((await g.read('.module')).length, 3)
@@ -100,7 +90,7 @@ test(
     // A name that comes back is the same entity, filled in again.
     let [was] = await g.read('.symbol.name=add')
     write(dir, { 'a.ts': 'export let add = 1\nexport let gone = 3\n' })
-    await commit(dir)
+    await stage(dir)
     await pass()
     assertEquals(names(await g.read('.symbol')), ['add', 'gone'])
     assertEquals(
@@ -139,7 +129,7 @@ test(
         },
       }),
     })
-    await commit(dir)
+    await stage(dir)
     let g = fixture()
     let pass = async () => sync((await codeMirror(g, dir)).binding)
     let titles = async (q: string) =>
@@ -159,14 +149,14 @@ test(
     write(dir, {
       'vocab.json': vocab({ note: note({ a: { type: 'string' } }, []) }),
     })
-    await commit(dir)
+    await stage(dir)
     await pass()
     assertEquals(await titles('._prop'), ['note.a', 'note.c'])
     assertEquals((await g.read('._before')).length, 0)
 
     // A vocabulary that is gone takes what it declared with it.
     write(dir, { 'q/vocab.json': null })
-    await commit(dir)
+    await stage(dir)
     await pass()
     assertEquals(await titles('._prop'), ['note.a'])
     assertEquals(await titles('._package'), ['@t/p'])
