@@ -113,18 +113,18 @@ test('b', () => Deno.readTextFile(data))`,
     'README.md': "```ts\nimport { one } from './one.ts'\n```\n",
   })
   let ran = async (...args: string[]) =>
-    Object.keys((await dir.run(...args)).said)
-  equal(await ran(), ['a', 'b', 'README.md:1'])
+    Object.keys((await dir.run(...args)).said).sort()
+  equal(await ran(), ['README.md:1', 'a', 'b'])
   let again = await dir.run()
   equal(again.said, {})
   match(again.text, /3 unchanged since they passed/)
   await dir.write('one.ts', 'export let one = 2')
-  equal(await ran(), ['a', 'README.md:1'])
+  equal(await ran(), ['README.md:1', 'a'])
   // A directory a module names is a place, not what lies in it.
   await dir.write('data.json', '[]')
   await dir.write('other.txt', '')
   equal(await ran(), ['b'])
-  equal(await ran('--all'), ['a', 'b', 'README.md:1'])
+  equal(await ran('--all'), ['README.md:1', 'a', 'b'])
 })
 
 test('tags pick tests, and a test that never ends fails alone', async () => {

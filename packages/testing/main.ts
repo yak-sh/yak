@@ -89,8 +89,11 @@ let run = async (path: string, load: () => Promise<unknown>) => {
   let tests = collected.slice(at).filter(chosen)
   outcomes.push(...await file(path, tests, timeout, loaded))
 }
-for (let m of modules.filter(fresh)) await run(m, () => import(here(m)))
+// Pages first: Deno's dynamic import costs more the larger the graph already
+// loaded, and every example is a module of its own. After the test modules'
+// graphs, the examples took 33 s to load; before them, 8 s.
 for (let p of pages.filter(fresh)) await run(p, () => examples(p))
+for (let m of modules.filter(fresh)) await run(m, () => import(here(m)))
 
 // A file passed when every test it declared ran and passed; a run that
 // picked by tag ran only some.
