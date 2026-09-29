@@ -137,25 +137,33 @@ the app has no OpenRouter connection, the transcript receives an error with
 
 ## Build from stored rows
 
-A `builder` selects rows from this app's store with a query. Its `doc.body` is
-the instruction. Creating it starts a session in the same store; the answer
-becomes `built` rows there, so a page can query or subscribe to them:
+A `builder` selects rows from this app's store with a query. Its `content.body`
+is the `$var` template; `doc.body` documents the builder. `builder.to` names a
+registered tool. The built-in model tool opens a session in the same store, and
+its answer becomes `built` rows:
+
+    import { modelToolEid } from '@yaks/builders/model'
 
     await apply({
       entity: { eid: '$summaries' },
-      doc: { title: 'Summaries', body: 'Summarize each note.' },
-      builder: { query: '.note' },
+      doc: { title: 'Summaries' },
+      content: { body: 'Summarize $body.' },
+      using: { model: '<model-eid>' },
+      builder: {
+        query: '$note .note, doc.body=$body',
+        to: modelToolEid(),
+      },
     })
 
-The model returns named output slots, each with its own components and the ids
-of the selected inputs it used. A slot keeps its id when built again. The
-builder stores the run as `build`, and each output as `built`; its citations to
-inputs are `cites` edges. Read `.built.builder=<builder-id>&*` to find them.
-Changing `builder.floor` to a time in the past checks it again, while an
-unchanged instruction and inputs open no new session. A `wake` on the builder
-can check it later. `builder.immediate: true` also checks when a matching input
-is added, changed or removed. Only app editors may write a builder, since its
-model turns spend the owner's account budget.
+Each outer query match gets a durable `build` and a fresh tool `call` when its
+key changes. The model returns named slots with components and the selected
+input ids each used. A slot keeps its id across rebuilds; its citations are
+`cites` edges. Query `.build.builder=<builder-id>&*`, then
+`.built.build=<build-id>&*` to find the outputs. A vanished match leaves a stale
+build and its outputs as history. Changing `builder.floor` to a time in the past
+checks it again. A `wake` can check it later, and `builder.immediate: true` also
+checks changed inputs. Only app editors may write a builder, since model turns
+spend the owner's account budget.
 
 ## One call, answered at once
 

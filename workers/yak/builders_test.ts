@@ -2,17 +2,19 @@
 // pays for the model turn that writes its output into that same store.
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import { until } from '../../bin/testing.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { BUDGET, monthOf } from './meter.ts'
-import { priceOf, weigh } from './models.ts'
+import { CATALOGUE, priceOf, weigh } from './models.ts'
 import { platform } from './testing.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let SOURCE = 'a0000000-0000-4000-8000-0000000000aa'
 let BUILDER = 'a0000000-0000-4000-8000-0000000000bb'
+let MODEL = CATALOGUE.find((r) => r.offered && r.output > 0)!.name
 
 let app = async (models = 0, access = 'private') => {
   let asked: string[] = []
@@ -105,8 +107,13 @@ let start = (v: Awaited<ReturnType<typeof app>>) =>
     { entity: { eid: SOURCE }, doc: { title: 'Source', body: 'The village.' } },
     {
       entity: { eid: BUILDER },
-      doc: { title: 'Villager', body: 'Make a villager from the source.' },
-      builder: { query: '.doc.title=Source' },
+      doc: { title: 'Villager', body: 'Builder documentation.' },
+      content: { body: 'Make a villager from the source.' },
+      using: { model: MODEL },
+      builder: {
+        query: '.doc.title=Source',
+        to: toolEid('builder_model'),
+      },
     },
   ])
 
@@ -119,12 +126,14 @@ Deno.test('a hosted builder writes named outputs and spends the account budget',
   }, { label: 'builder output' })
   assertEquals((built.doc as Comp).body, 'Keeps the forge.')
   assertEquals((built.villager as Comp).role, 'smith')
-  assertEquals((built.built as Comp).builder, BUILDER)
+  let buildId = String((built.built as Comp).build)
+  let [build] = await v.read(`.eid=${buildId}&.build&*`)
+  assertEquals((build.build as Comp).builder, BUILDER)
   let [cite] = await v.read(`.edge.from=${built.entity.eid}&.cites&*`)
   assertEquals((cite.edge as Comp).to, SOURCE)
   assert(typeof (cite.cites as Comp).hash == 'string')
-  let session = (built.built as Comp).session
-  assertEquals((await v.read(`.eid=${session}&.session&*`)).length, 1)
+  let call = String((built.built as Comp).call)
+  assertEquals((await v.read(`.session.source=${call}&*`)).length, 1)
   assertEquals(v.asked.length, 1)
   let price = priceOf(v.asked[0])
   assert(price)
@@ -143,8 +152,12 @@ Deno.test('a hosted builder cannot spend beyond the account budget', async () =>
     let rows = await v.read('.build&*')
     return rows.length ? rows : null
   }, { label: 'builder run' })
-  let session = (run.build as Comp).session
-  assert(typeof session == 'string')
+  let call = String((run.build as Comp).call)
+  let [opened] = await until(async () => {
+    let rows = await v.read(`.session.source=${call}&*`)
+    return rows.length ? rows : null
+  }, { label: 'builder session' })
+  let session = opened.entity.eid
   await until(async () => {
     let rows = await v.read(`.entry.session=${session}&.error&*`)
     return rows.length ? rows : null
@@ -158,8 +171,9 @@ Deno.test('an open app cannot let a visitor start a builder at its account expen
   let refused = await v.send('/apply', [
     {
       entity: { eid: BUILDER },
-      doc: { body: 'Make a villager.' },
-      builder: {},
+      content: { body: 'Make a villager.' },
+      using: { model: MODEL },
+      builder: { to: toolEid('builder_model') },
     },
   ], null)
   assertEquals(refused.status, 403)

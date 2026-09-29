@@ -1,747 +1,339 @@
-import {
-  assert,
-  assertEquals,
-  assertNotEquals,
-  assertThrows,
-} from '@std/assert'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { assert, assertEquals, assertNotEquals } from '@std/assert'
+import type { Bundle, Comp, Graph, Tool } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
-import { artifactDoc } from '@yaks/blob/vocab'
-import { status } from '@yaks/kernel'
-import { effectsIn } from '@yaks/vocab'
-import { counter, ids, noon, shop, workshop } from './testing.ts'
-import { type Desk, type Open, output, run } from './build.ts'
-import { effects, opening, watches } from './effects.ts'
+import { toolEid } from '@yaks/tools'
+import { ids, shop } from './testing.ts'
+import { current, output, run, selected } from './build.ts'
+import { key } from './key.ts'
+import { render } from './model.ts'
 import { runs } from './tools.ts'
-import { content, key } from './key.ts'
-import { parse } from './answer.ts'
 
-let scribe: Desk = {
-  provider: ids.house,
-  model: ids.mind,
-  effort: 'high',
-  persona: ids.voice,
-  actor: ids.voice,
-}
-let comp = (b: Bundle | undefined, name: string) =>
+let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
-let rows = async (g: Graph, q: string) => (await g.read(`${q}&*`)) as Bundle[]
-let one = async (g: Graph, eid: string) => (await rows(g, `.eid=${eid}`))[0]
-let sessions = async (g: Graph) => (await rows(g, '.session')).length
-let outputs = (g: Graph) => rows(g, '.built')
-let building = (o: Partial<Open> = {}) =>
-  shop({ desk: scribe, rest: '1h', now: noon, eid: counter(), ...o })
-let writeup = (floor?: string, query?: string): Bundle => ({
-  entity: { eid: ids.builder },
-  builder: { ...(floor ? { floor } : {}), ...(query ? { query } : {}) },
-  doc: { title: 'Write up', body: 'Write up what is waiting.' },
-})
-let immediate = (floor?: string, query?: string): Bundle => {
-  let b = writeup(floor, query)
-  return {
-    ...b,
-    builder: {
-      ...(floor ? { floor } : {}),
-      ...(query ? { query } : {}),
-      immediate: true,
-    },
-  }
-}
-let note = (eid: string, body: string): Bundle => ({
+let rows = async (g: Graph, q: string) => await g.read(`${q}&*`)
+let one = async (g: Graph, eid: string) => (await g.get([eid]))[0]
+let source = (eid: string, body = 'first'): Bundle => ({
   entity: { eid },
   doc: { title: 'Source', body },
 })
-let stir = (g: Graph, eid = ids.builder) =>
-  g.apply([{
-    entity: { eid },
-    builder: { floor: '2026-09-19T08:00:00.000Z' },
-  }])
-let demand = async (
+let builder = (query = '.doc.title=Source', to = toolEid('code')): Bundle => ({
+  entity: { eid: ids.builder },
+  builder: { query, to, immediate: true },
+  content: { body: 'Build $s' },
+})
+let answer = (call: Bundle, body = 'Made'): Bundle[] => [{
+  entity: { eid: crypto.randomUUID() },
+  output: {
+    source: call.entity.eid,
+    value: {
+      outputs: [{
+        slot: 'main',
+        inputs: [String(
+          (comp(call, 'call')?.args as {
+            binding: { entities: string[] }
+          }).binding.entities[0],
+        )],
+        components: { doc: { body } },
+      }],
+    },
+  },
+}]
+let code = (revision = '1'): Tool => ({
+  name: 'code',
+  description: 'Build one source',
+  revision,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      binding: { type: 'object' },
+      key: { type: 'string' },
+      template: { type: 'string' },
+      using: { type: 'object' },
+    },
+    required: ['binding', 'key'],
+  },
+  run: (call) => answer(call),
+})
+let calls = (g: Graph, build: string) => rows(g, `.call.source=${build}`)
+let drive = async (
   g: Graph,
-  args: Record<string, unknown>,
-  o: Parameters<typeof runs>[1] = { desk: scribe },
+  r: Awaited<ReturnType<typeof shop>>['runner'],
+  build: string,
 ) => {
-  let [said] = await runs({ vocab: g.vocab }, o).builder_build(
-    { entity: { eid: 'c-1' }, call: { args } },
-    g,
-  )
-  return String(comp(said, 'content')?.body)
-}
-let spec = (
-  slot: string,
-  body: string,
-  inputs: string[] = [],
-  more: Record<string, unknown> = {},
-) => ({ slot, inputs, components: { doc: { body }, ...more } })
-let reply = async (
-  g: Graph,
-  builder: string,
-  outputs: unknown[],
-  variant = 'main',
-) => {
-  let session = String(
-    comp(await one(g, run(builder, variant)), 'build')?.session,
-  )
-  await g.apply([{
-    entity: { eid: crypto.randomUUID() },
-    entry: { session, seq: 2 },
-    content: { body: JSON.stringify({ outputs }) },
-    output: { source: 'new-2' },
-  }])
+  let pending = await calls(g, build)
+  await r.due(pending.at(-1)!.entity.eid)
 }
 
-Deno.test('a due builder opens one session asking for named graph outputs', async () => {
-  let { g } = await building()
-  await g.apply([writeup()])
-  assertEquals(await sessions(g), 1)
-  let line = (await rows(g, '.entry'))[0]
-  assertEquals(comp(line, 'entry'), { session: 'new-1', seq: 1 })
-  assert(String(comp(line, 'content')?.body).includes('"outputs"'))
-  assertEquals(comp(line, 'using'), {
-    provider: ids.house,
-    model: ids.mind,
-    effort: 'high',
-  })
-  assertEquals((await outputs(g)).length, 0)
+Deno.test('outer query bindings make independent builds and tool calls', async () => {
+  let { g, runner } = await shop({}, [], [code()])
+  await g.apply([source('a'), source('b'), builder()])
+  let a = run(ids.builder, ['a'])
+  let b = run(ids.builder, ['b'])
+  assertNotEquals(a, b)
+  assertEquals((await rows(g, '.build')).length, 2)
+  let [asked] = await calls(g, a)
+  assertEquals(comp(asked, 'call')?.to, toolEid('code'))
+  assertEquals(
+    (comp(asked, 'call')?.args as { binding: { entities: string[] } })
+      .binding.entities,
+    ['a'],
+  )
+  await drive(g, runner, a)
+  await drive(g, runner, b)
+  assertEquals(comp(await one(g, output(a)), 'doc')?.body, 'Made')
+  assertEquals(comp(await one(g, output(b)), 'built')?.build, b)
+  let cited = await one(g, edgeEid(output(a), 'cites', 'a'))
+  assert(cited?.cites)
 })
 
-Deno.test('deleting a configured model returns a builder to its desk model', async () => {
-  let { g } = await building()
-  await g.apply([{
-    ...writeup(),
-    builder: { model: ids.other },
-  }])
-  assertEquals(comp(await one(g, run(ids.builder)), 'build')?.model, ids.other)
-  await g.apply([{ entity: { eid: ids.other }, $delete: true }])
-  await demand(g, { builder: ids.builder })
-  assertEquals(comp(await one(g, run(ids.builder)), 'build')?.model, ids.mind)
-})
-
-Deno.test('one answer writes many stable output entities with their own components', async () => {
-  let villager = {
+Deno.test('nested collection changes the key but retains the build and output', async () => {
+  let notes = {
     $defs: {
-      villager: {
+      note: {
         component: true,
         type: 'object',
-        properties: { role: { type: 'string' } },
+        properties: {
+          parent: { type: 'string', ref: 'entity' },
+          text: { type: 'string' },
+        },
       },
     },
   }
-  let { g } = await shop({
-    desk: scribe,
-    now: noon,
-    eid: counter(),
-  }, [villager])
-  await g.apply([writeup()])
-  await reply(g, ids.builder, [
-    spec('Ada', 'Keeps the forge.', [], { villager: { role: 'smith' } }),
-    spec('Ben', 'Runs the inn.', [], { villager: { role: 'innkeeper' } }),
-  ])
-  assertEquals((await outputs(g)).length, 2)
+  let { g, runner } = await shop({}, [notes], [code()])
+  let query = '$s .doc.title=Source; [$n .note.parent=$s]'
+  await g.apply([source('a'), builder(query)])
+  let build = run(ids.builder, ['a'])
+  let before = comp(await one(g, build), 'build')?.key
+  await drive(g, runner, build)
+  await g.apply([{ entity: { eid: 'n1' }, note: { parent: 'a', text: 'one' } }])
+  assertEquals((await rows(g, '.build')).length, 1)
+  assertNotEquals(comp(await one(g, build), 'build')?.key, before)
+  assertEquals((await calls(g, build)).length, 2)
+  await drive(g, runner, build)
+  assertEquals((await rows(g, '.built')).length, 1)
   assertEquals(
-    comp(await one(g, output(ids.builder, 'Ada')), 'villager')?.role,
-    'smith',
+    comp(await one(g, output(build)), 'built')?.key,
+    comp(await one(g, build), 'build')?.key,
   )
+})
+
+Deno.test('vanished bindings preserve history and returning bindings reuse it', async () => {
+  let { g, runner } = await shop({}, [], [code()])
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  let made = output(build)
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Elsewhere' } }])
+  assertEquals(comp(await one(g, build), 'build')?.stale, true)
+  assert(await one(g, made))
   assertEquals(
-    comp(await one(g, output(ids.builder, 'Ben')), 'doc')?.body,
-    'Runs the inn.',
+    current(
+      comp(await one(g, build), 'build')!,
+      comp(await one(g, made), 'built')!,
+    ),
+    false,
   )
-  let ada = output(ids.builder, 'Ada')
-  await g.apply([{
-    entity: { eid: ids.builder },
-    doc: { body: 'Revise the town.' },
-  }])
-  await stir(g)
-  await reply(g, ids.builder, [spec('Ada', 'Now runs the foundry.', [], {
-    villager: { role: 'founder' },
-  })])
-  assertEquals((await outputs(g)).length, 2)
-  assertEquals(comp(await one(g, ada), 'villager')?.role, 'founder')
-  assertEquals(
-    comp(await one(g, output(ids.builder, 'Ben')), 'doc')?.body,
-    'Runs the inn.',
-  )
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Source' } }])
+  assertEquals(comp(await one(g, build), 'build')?.stale, false)
+  assertEquals((await calls(g, build)).length, 1)
+  assertEquals(comp(await one(g, made), 'built')?.build, build)
+  assert(current(
+    comp(await one(g, build), 'build')!,
+    comp(await one(g, made), 'built')!,
+  ))
 })
 
-Deno.test('the same key opens nothing, and a changed input changes the run key', async () => {
-  let { g } = await building()
-  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
-  let before = comp(await one(g, run(ids.builder)), 'build')?.key
-  await stir(g)
-  await g.apply([note('n-1', 'first')])
-  await stir(g)
-  assertEquals(await sessions(g), 1)
-  await g.apply([note('n-1', 'second')])
-  await stir(g)
-  assertEquals(await sessions(g), 2)
-  assertNotEquals(comp(await one(g, run(ids.builder)), 'build')?.key, before)
-})
-
-Deno.test('a failed session can be retried under the same key', async () => {
-  let { g } = await building()
-  await g.apply([writeup()])
-  let before = comp(await one(g, run(ids.builder)), 'build')
-  await g.apply([{
-    entity: { eid: crypto.randomUUID() },
-    entry: { session: before?.session, seq: 2 },
-    error: { code: 'limit' },
-    content: { body: 'The provider refused the request.' },
-  }])
-  assertEquals(await sessions(g), 1)
-  await demand(g, { builder: ids.builder })
-  let after = comp(await one(g, run(ids.builder)), 'build')
-  assertEquals(after?.key, before?.key)
-  assertNotEquals(after?.session, before?.session)
-  assertEquals(await sessions(g), 2)
-  await demand(g, { builder: ids.builder })
-  assertEquals(await sessions(g), 2)
-})
-
-Deno.test('moving a failed builder floor due retries its session', async () => {
-  let { g } = await building()
-  await g.apply([writeup()])
-  let before = comp(await one(g, run(ids.builder)), 'build')
-  await g.apply([{
-    entity: { eid: crypto.randomUUID() },
-    entry: { session: before?.session, seq: 2 },
-    error: { code: 'limit' },
-    content: { body: 'The provider refused the request.' },
-  }])
-  assertEquals(await sessions(g), 1)
-  await stir(g)
-  let after = comp(await one(g, run(ids.builder)), 'build')
-  assertEquals(after?.key, before?.key)
-  assertNotEquals(after?.session, before?.session)
-  assertEquals(await sessions(g), 2)
-})
-
-Deno.test('a startup sweep leaves an interrupted immediate builder for explicit retry', async () => {
-  let { g, vocab } = await shop({ desk: scribe, now: noon, eid: counter() })
-  await g.apply([immediate()])
-  let before = comp(await one(g, run(ids.builder)), 'build')
-  await g.apply([{
-    entity: { eid: crypto.randomUUID() },
-    entry: { session: before?.session, seq: 2 },
-    error: { code: 'interrupted' },
-    content: { body: 'The previous request may have completed.' },
-  }])
-
-  let opened: Bundle[] = []
-  await g.storage.tx((tx) =>
-    opening({ desk: scribe, vocab, now: noon })(
-      { kind: 'matched', name: 'builder', entity: { eid: ids.builder } },
-      tx,
-      (bundles) => {
-        opened.push(...bundles)
-        return bundles
-      },
-    )
-  )
-  assertEquals(opened, [])
-  assertEquals(await sessions(g), 1)
-
-  await demand(g, { builder: ids.builder })
-  assertEquals(await sessions(g), 2)
-})
-
-Deno.test('artifact builders cite one description and rebuild only its output', async () => {
-  let { g, failed } = await shop({
-    desk: scribe,
-    now: noon,
-    eid: counter(),
-  }, [artifactDoc])
-  let sound = (name: string, body: string) => ({
-    entity: { eid: `sound-${name}` },
-    doc: { title: name, body },
-  })
-  let builder = (name: string) => ({
-    entity: { eid: `build-${name}` },
-    doc: { body: 'Make an isolated sound effect.' },
-    builder: {
-      query: `.doc.title=${name}`,
-      model: ids.other,
-      format: 'artifact',
-      immediate: true,
-    },
-  })
-  let attach = async (name: string, address: string) => {
-    let session = String(
-      comp(await one(g, run(`build-${name}`)), 'build')?.session,
-    )
-    await g.apply([{
-      entity: { eid: address },
-      artifact: { address, media_type: 'audio/mpeg', size: 100 },
+Deno.test('a code tool can return an artifact output without owning built rows', async () => {
+  let artifact = 'a-artifact'
+  let media: Tool = {
+    ...code(),
+    run: (call) => [{
+      entity: { eid: artifact },
+      artifact: { address: 'sha256:abc', media_type: 'image/png', size: 3 },
     }, {
       entity: { eid: crypto.randomUUID() },
-      entry: { session, seq: 2 },
-      output: { source: 'ask' },
-      content: { body: `Generated media: ${address}` },
-      attachment: { artifact: address },
-    }])
+      output: {
+        source: call.entity.eid,
+        value: {
+          outputs: [{
+            slot: 'icon',
+            inputs: ['a'],
+            components: {},
+            artifact,
+          }],
+        },
+      },
+    }],
   }
-  await g.apply([
-    sound('water', 'Gentle stream.'),
-    sound('bird', 'Small bird call.'),
-    builder('water'),
-    builder('bird'),
-  ])
-  assertEquals(await sessions(g), 2)
-  let waterRun = await one(g, run('build-water'))
-  assertEquals(comp(waterRun, 'build')?.model, ids.other)
+  let { g, runner } = await shop({}, [], [media])
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  let built = comp(await one(g, output(build, 'icon')), 'built')
+  assertEquals(built?.artifact, artifact)
+  assertEquals(built?.media_type, undefined)
+  assert((await one(g, edgeEid(output(build, 'icon'), 'cites', 'a')))?.cites)
+})
+
+Deno.test('tool revision and input content change a key once each', async () => {
+  let { g } = await shop({}, [], [code()])
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  let first = comp(await one(g, build), 'build')?.key
+  await g.apply([source('a')])
+  assertEquals(comp(await one(g, build), 'build')?.key, first)
+  await g.apply([source('a', 'second')])
+  let second = comp(await one(g, build), 'build')?.key
+  assertNotEquals(second, first)
+  await g.apply([{ entity: { eid: toolEid('code') }, tool: { revision: '2' } }])
+  assertNotEquals(comp(await one(g, build), 'build')?.key, second)
+})
+
+Deno.test('an authored using value and its admitted form have one key', async () => {
+  let { g, vocab } = await shop({}, [], [code()])
+  let authored = { ...builder(), using: { model: ids.model } }
+  await g.apply([source('a'), authored])
+  let stored = await one(g, ids.builder)
+  let [tool] = await g.get([toolEid('code')])
+  let [{ binding, rows }] = await g.storage.tx((tx) =>
+    selected(tx, stored, vocab)
+  )
   assertEquals(
-    comp(waterRun, 'build')?.prompt,
-    'Make an isolated sound effect.\n\nGentle stream.',
+    key(authored, tool, binding, rows, vocab),
+    key(stored, tool, binding, rows, vocab),
   )
-  await attach('water', 'water-1')
-  await attach('bird', 'bird-1')
-  let water = output('build-water')
-  assertEquals(comp(await one(g, water), 'built')?.artifact, 'water-1')
-  assertEquals(
-    comp(await one(g, water), 'doc')?.body,
-    'Make an isolated sound effect.\n\nGentle stream.',
+})
+
+Deno.test('a malformed output cannot write and leaves its build retryable', async () => {
+  let bad: Tool = {
+    ...code(),
+    run: (call) => [{
+      entity: { eid: crypto.randomUUID() },
+      output: {
+        source: call.entity.eid,
+        value: {
+          outputs: [{
+            slot: 'bad',
+            inputs: ['outside'],
+            components: {},
+          }],
+        },
+      },
+    }],
+  }
+  let { g, runner, failed } = await shop({}, [], [bad])
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  assertEquals((await rows(g, '.built')).length, 0)
+  assertEquals(comp(await one(g, build), 'build')?.key, null)
+  assert(failed.length > 0)
+})
+
+Deno.test('shadow builds have distinct ids and cannot feed another builder', async () => {
+  let { g, runner, vocab } = await shop({}, [], [code()])
+  await g.apply([source('a'), builder()])
+  let primary = run(ids.builder, ['a'])
+  await drive(g, runner, primary)
+  let [said] = await runs({ vocab }).builder_build(
+    {
+      entity: { eid: 'ask' },
+      call: {
+        args: {
+          builder: ids.builder,
+          template: 'alternate',
+        },
+      },
+    },
+    g,
   )
-  let citation = edgeEid(water, 'cites', 'sound-water')
-  assertEquals(comp(await one(g, citation), 'edge')?.to, 'sound-water')
-  await g.apply([sound('water', 'Gentle stream with bubbles.')])
-  assertEquals(await sessions(g), 3)
-  assertEquals(
-    comp(await one(g, output('build-bird')), 'built')?.artifact,
-    'bird-1',
-  )
-  await attach('water', 'water-2')
-  assertEquals(comp(await one(g, water), 'built')?.artifact, 'water-2')
-  assertEquals(failed, [])
-})
-
-Deno.test('immediate builders respond to new, changed and removed query matches', async () => {
-  let { g, failed } = await building()
-  let floor = '2026-09-19T13:00:00.000Z'
-  await g.apply([immediate(floor, '.doc.title=Source')])
-  assertEquals(await sessions(g), 0)
-
-  await g.apply([note('n-1', 'first')])
-  assertEquals(await sessions(g), 1)
-  await g.apply([note('n-1', 'first')])
-  await g.apply([{ entity: { eid: 'unrelated' }, doc: { title: 'Other' } }])
-  assertEquals(await sessions(g), 1)
-
-  await g.apply([note('n-1', 'second')])
-  assertEquals(await sessions(g), 2)
-  await g.apply([{ entity: { eid: 'n-1' }, doc: { title: 'Other' } }])
-  assertEquals(await sessions(g), 3)
-  assertEquals(failed, [])
-})
-
-Deno.test('without immediate, an input change waits for the scheduled check', async () => {
-  let { g } = await building()
-  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
-  await g.apply([note('n-1', 'second')])
-  assertEquals(await sessions(g), 1)
-  await stir(g)
-  assertEquals(await sessions(g), 2)
-})
-
-Deno.test('a new query match changes the key, while own outputs do not', async () => {
-  let { g } = await building()
-  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
-  let before = comp(await one(g, run(ids.builder)), 'build')?.key
-  await g.apply([note('n-2', 'second')])
-  await stir(g)
-  assertNotEquals(comp(await one(g, run(ids.builder)), 'build')?.key, before)
-
-  await g.apply([{
-    entity: { eid: ids.builder },
-    builder: { query: '.built' },
-  }])
-  await stir(g)
-  await reply(g, ids.builder, [spec('story', 'Own output.')])
-  let after = comp(await one(g, run(ids.builder)), 'build')?.key
-  await stir(g)
-  assertEquals(comp(await one(g, run(ids.builder)), 'build')?.key, after)
-})
-
-Deno.test('each output cites only its declared selected inputs', async () => {
-  let { g, vocab } = await building()
-  await g.apply([
-    note('n-1', 'first'),
-    note('n-2', 'second'),
-    writeup(undefined, '.doc.title=Source'),
-  ])
-  await reply(g, ids.builder, [
-    spec('one', 'Only the first.', ['n-1']),
-    spec('two', 'Both.', ['n-1', 'n-2']),
-  ])
-  let cites = (await rows(g, '.cites')).map((b) => [
-    comp(b, 'edge')?.from,
-    comp(b, 'edge')?.to,
-  ])
-  assertEquals(cites.length, 3)
-  assert(
-    cites.some(([from, to]) =>
-      from == output(ids.builder, 'one') && to == 'n-1'
-    ),
-  )
-  assert(
-    !cites.some(([from, to]) =>
-      from == output(ids.builder, 'one') && to == 'n-2'
-    ),
-  )
-  let citation = edgeEid(output(ids.builder, 'one'), 'cites', 'n-1')
-  let source = async () =>
-    (await rows(g, '.doc.title=Source'))
-      .find((b) => b.entity.eid == 'n-1')!
-  assertEquals(status(await one(g, citation), await source(), vocab), {
-    state: 'current',
-  })
-  await g.apply([note('n-1', 'changed')])
-  assertEquals(status(await one(g, citation), await source(), vocab), {
-    state: 'moved',
-  })
-  await stir(g)
-  await reply(g, ids.builder, [spec('one', 'Revised.', ['n-1'])])
-  assertEquals(status(await one(g, citation), await source(), vocab), {
-    state: 'current',
-  })
-})
-
-Deno.test('an output drops and can regain a citation after a query match changes', async () => {
-  let { g } = await building()
-  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
-  await reply(g, ids.builder, [spec('report', 'First.', ['n-1'])])
-  let cited = async () =>
-    (await rows(g, '.cites'))
-      .map((b) => comp(b, 'edge')?.to)
-  assertEquals(await cited(), ['n-1'])
-  await g.apply([{
-    entity: { eid: ids.builder },
-    builder: { query: '.doc.title=Other' },
-  }, { entity: { eid: 'n-3' }, doc: { title: 'Other', body: 'third' } }])
-  await stir(g)
-  await reply(g, ids.builder, [spec('report', 'Third.', ['n-3'])])
-  assertEquals(await cited(), ['n-3'])
-  await g.apply([{
-    entity: { eid: ids.builder },
-    builder: { query: '.doc.title=Source' },
-  }])
-  await stir(g)
-  await reply(g, ids.builder, [spec('report', 'First again.', ['n-1'])])
-  assertEquals(await cited(), ['n-1'])
-})
-
-Deno.test('an upstream named output makes a downstream builder eligible', async () => {
-  let { g, vocab } = await building()
-  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
-  await reply(g, ids.builder, [spec('Ada', 'First story.', ['n-1'])])
-  let upstream = output(ids.builder, 'Ada')
-  await g.apply([{
-    entity: { eid: 'z-digest' },
-    builder: { query: `.eid=${upstream}` },
-    doc: { body: 'Digest the story.' },
-  }])
-  await reply(g, 'z-digest', [spec('guide', 'First guide.', [upstream])])
-  let downstream = output('z-digest', 'guide')
-  let citation = edgeEid(downstream, 'cites', upstream)
-  let before = comp(await one(g, run('z-digest')), 'build')?.key
-  await g.apply([note('n-1', 'second')])
-  await stir(g)
-  await reply(g, ids.builder, [spec('Ada', 'Second story.', ['n-1'])])
-  assertEquals(status(await one(g, citation), await one(g, upstream), vocab), {
-    state: 'moved',
-  })
-  await stir(g, 'z-digest')
-  assertNotEquals(comp(await one(g, run('z-digest')), 'build')?.key, before)
-  await reply(g, 'z-digest', [spec('guide', 'Second guide.', [upstream])])
-  assertEquals((await outputs(g)).length, 2)
-  assertEquals(status(await one(g, citation), await one(g, upstream), vocab), {
-    state: 'current',
-  })
-})
-
-Deno.test('a changed cited output immediately starts its downstream builder', async () => {
-  let { g, vocab, fx, failed } = await building()
-  await g.apply([note('n-1', 'first'), writeup(undefined, '.doc.title=Source')])
-  await reply(g, ids.builder, [spec('Ada', 'First story.', ['n-1'])])
-  let upstream = output(ids.builder, 'Ada')
-  await g.apply([{
-    entity: { eid: 'z-digest' },
-    builder: { query: `.eid=${upstream}`, immediate: true },
-    doc: { body: 'Digest the story.' },
-  }])
-  await reply(g, 'z-digest', [spec('guide', 'First guide.', [upstream])])
-  let citation = edgeEid(output('z-digest', 'guide'), 'cites', upstream)
-  let before = comp(await one(g, run('z-digest')), 'build')?.key
-  let starts = 0
-  fx.created('using', () => {
-    starts++
-  })
-
-  await g.apply([note('n-1', 'second')])
-  await stir(g)
-  await reply(g, ids.builder, [spec('Ada', 'Second story.', ['n-1'])])
-
-  assertEquals(status(await one(g, citation), await one(g, upstream), vocab), {
-    state: 'moved',
-  })
-  assertNotEquals(comp(await one(g, run('z-digest')), 'build')?.key, before)
-  assertEquals(starts, 2)
-  assertEquals(failed, [])
-})
-
-Deno.test('shadow runs write sibling outputs and downstream queries ignore them', async () => {
-  let { g } = await building()
-  await g.apply([writeup()])
-  await reply(g, ids.builder, [spec('story', 'Primary.')])
-  let started = await demand(g, { builder: ids.builder, model: ids.other })
-  assert(started.includes('building in'), started)
+  assert(said.content)
   let shadow = (await rows(g, '.build')).find((b) =>
     comp(b, 'build')?.variant != 'main'
   )!
-  let variant = String(comp(shadow, 'build')?.variant)
-  await reply(g, ids.builder, [spec('story', 'Alternate.')], variant)
-  assertEquals((await outputs(g)).length, 2)
-  await g.apply([{
-    entity: { eid: 'z-digest' },
-    builder: { query: '.built' },
-    doc: { body: 'Digest.' },
-  }])
-  await reply(g, 'z-digest', [
-    spec('guide', 'Only primary.', [output(ids.builder, 'story')]),
-  ])
-  let citations = (await rows(g, '.cites'))
-    .filter((b) => comp(b, 'edge')?.from == output('z-digest', 'guide'))
-  assertEquals(citations.map((b) => comp(b, 'edge')?.to), [
-    output(ids.builder, 'story'),
-  ])
-  assertNotEquals(
-    output(ids.builder, 'story'),
-    output(ids.builder, 'story', variant),
-  )
-})
-
-Deno.test('an alternate prompt has its own stable run', async () => {
-  let { g } = await building()
-  await g.apply([writeup()])
-  let first = await demand(g, {
-    builder: ids.builder,
-    prompt: 'Say it briefly.',
-  })
-  assert(first.includes('building in'), first)
-  let again = await demand(g, {
-    builder: ids.builder,
-    prompt: 'Say it briefly.',
-  })
-  assert(again.includes('built under this key already'), again)
-  assertEquals((await rows(g, '.build')).length, 2)
-  assertEquals(await sessions(g), 2)
-})
-
-Deno.test('on demand builds past the floor and refuses an unconfigured desk', async () => {
-  let { g } = await building()
-  await g.apply([writeup('2026-09-19T18:00:00.000Z')])
-  assertEquals(await sessions(g), 0)
-  await demand(g, { builder: ids.builder })
-  assertEquals(await sessions(g), 1)
-  assertEquals(comp(await one(g, run(ids.builder)), 'build')?.variant, 'main')
-  let refused = async (args: Record<string, unknown>, o = {}) => {
-    try {
-      await demand(g, args, o)
-    } catch (err) {
-      return (err as Error).message
-    }
-    return ''
+  await drive(g, runner, shadow.entity.eid)
+  assertNotEquals(output(shadow.entity.eid), output(primary))
+  let downstream: Bundle = {
+    entity: { eid: 'downstream' },
+    builder: {
+      query: '$s .doc.title=Source; [$x .built]',
+      to: toolEid('code'),
+      immediate: true,
+    },
   }
-  assert((await refused({ builder: ids.builder })).includes('no desk'))
-  assert(
-    (await refused({ builder: 'n-1' }, { desk: scribe })).includes(
-      'no builder',
+  await g.apply([downstream])
+  assertEquals((await rows(g, '.build.builder=downstream')).length, 1)
+  let [asked] = await calls(g, run('downstream', ['a']))
+  let binding = (comp(asked, 'call')?.args as {
+    binding: { collections: { entities: string[] }[][] }
+  }).binding
+  assertEquals(binding.collections[0].map((row) => row.entities[0]), [
+    output(primary),
+  ])
+})
+
+Deno.test('a failed model turn leaves its key retryable without another call', async () => {
+  let { g, runner } = await shop()
+  await g.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    using: { model: ids.model },
+  }])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  await g.apply([{
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: session.entity.eid, seq: 2 },
+    content: { body: 'Connection unavailable' },
+    error: { code: 'connection' },
+  }])
+  assertEquals(comp(await one(g, build), 'build')?.key, null)
+  assertEquals((await calls(g, build)).length, 1)
+})
+
+Deno.test('model tool opens a session using content.body, then adapts its reply', async () => {
+  let { g, runner } = await shop()
+  await g.apply([source('a'), {
+    ...builder(
+      '$s .doc.title=Source, doc.body=$description',
+      toolEid('builder_model'),
     ),
-  )
-})
-
-Deno.test('a stale session answer cannot replace a newer run', async () => {
-  let { g } = await building()
-  await g.apply([writeup()])
+    content: { body: 'Build $s: $description' },
+    doc: { body: 'Documentation, not a request.' },
+    using: { model: ids.model, effort: 'low' },
+  }])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  let [entry] = await rows(g, `.entry.session=${session.entity.eid}`)
+  let prompt = String(comp(entry, 'content')?.body)
+  assert(prompt.includes('Build a: first'))
+  assert(!prompt.includes('Documentation'))
+  assertEquals(comp(entry, 'using')?.effort, 'low')
   await g.apply([{
-    entity: { eid: ids.builder },
-    doc: { body: 'Second instruction.' },
+    entity: { eid: crypto.randomUUID() },
+    entry: { session: session.entity.eid, seq: 2 },
+    content: {
+      body: JSON.stringify({
+        outputs: [{
+          slot: 'main',
+          inputs: ['a'],
+          components: { doc: { body: 'From model' } },
+        }],
+      }),
+    },
+    output: { source: 'model-answer' },
   }])
-  await stir(g)
-  await g.apply([{
-    entity: { eid: 'old-answer' },
-    entry: { session: 'new-1', seq: 2 },
-    content: { body: JSON.stringify({ outputs: [spec('old', 'Obsolete.')] }) },
-    output: { source: 'new-2' },
-  }])
-  assertEquals((await outputs(g)).length, 0)
-  await reply(g, ids.builder, [spec('new', 'Current.')])
-  assertEquals((await outputs(g)).length, 1)
+  assertEquals(comp(await one(g, output(build)), 'doc')?.body, 'From model')
 })
 
-Deno.test('a malformed answer reports and leaves the key retryable', async () => {
-  let { g, failed } = await building()
-  await g.apply([writeup()])
-  await g.apply([{
-    entity: { eid: 'bad-answer' },
-    entry: { session: 'new-1', seq: 2 },
-    content: { body: '{not json' },
-    output: { source: 'new-2' },
-  }])
-  assertEquals(failed.length, 1)
-  assert(String((failed[0] as Error).message).includes('JSON object'))
-  assertEquals(comp(await one(g, run(ids.builder)), 'build')?.key, null)
-  await demand(g, { builder: ids.builder })
-  assertEquals(await sessions(g), 2)
-})
-
-Deno.test('an answer cannot cite unselected inputs or write server fields', () => {
-  let vocab = workshop()
-  let body = (outputs: unknown[]) => JSON.stringify({ outputs })
-  assertThrows(() =>
-    parse(body([spec('one', 'A', ['not-selected'])]), [], vocab)
-  )
-  assertThrows(() =>
-    parse(
-      body([
-        spec('one', 'A'),
-        spec('one', 'B'),
-      ]),
-      [],
-      vocab,
-    )
-  )
-  assertThrows(() =>
-    parse(
-      body([spec('one', 'A', [], {
-        created: { at: noon() },
-      })]),
-      [],
-      vocab,
-    )
-  )
-  assertThrows(() =>
-    parse(
-      body([spec('one', 'A', [], {
-        built: { key: 'chosen by model' },
-      })]),
-      [],
-      vocab,
-    )
-  )
-})
-
-Deno.test('a builder still resting or without instruction opens nothing', async () => {
-  let { g } = await building()
-  await g.apply([writeup('2026-09-19T18:00:00.000Z')])
-  assertEquals(await sessions(g), 0)
-  await g.apply([{ entity: { eid: 'z-empty' }, builder: {} }])
-  assertEquals(await sessions(g), 0)
-})
-
-Deno.test('a wordless builder uses the configured instruction', async () => {
-  let { g } = await building({ desk: { ...scribe, ask: 'Harvest the memos.' } })
-  await g.apply([{ entity: { eid: ids.builder }, builder: {} }])
-  assert(
-    String(comp((await rows(g, '.entry'))[0], 'content')?.body)
-      .startsWith('Harvest the memos.'),
-  )
-})
-
-Deno.test('a wake firing on a builder brings it back', async () => {
-  let at = noon()
-  let { g } = await building({ now: () => at })
-  await g.apply([writeup('2026-09-19T13:00:00.000Z')])
-  at = '2026-09-19T14:00:00.000Z'
-  await g.apply([{
-    entity: { eid: ids.builder },
-    wake: { every: '1h', at: '2026-09-19T15:00:00.000Z' },
-    fired: { at },
-  }])
-  assertEquals(await sessions(g), 1)
-})
-
-Deno.test('a wake aimed at a builder checks its changed query key', async () => {
-  let at = noon()
-  let { g } = await building({ now: () => at })
-  await g.apply([writeup('2026-09-19T13:00:00.000Z')])
-  let ring = (when: string) => {
-    at = when
-    return g.apply([{
-      entity: { eid: 'w-hourly' },
-      wake: { target: ids.builder, every: '1h' },
-      fired: { at },
-    }])
-  }
-  await ring('2026-09-19T14:00:00.000Z')
-  await ring('2026-09-19T16:00:00.000Z')
-  assertEquals(await sessions(g), 1)
-  await g.apply([note('n-1', 'new'), {
-    entity: { eid: ids.builder },
-    builder: { query: '.doc.title=Source' },
-  }])
-  await ring('2026-09-19T17:00:00.000Z')
-  assertEquals(await sessions(g), 2)
-})
-
-Deno.test('an unrelated wake starts no builder', async () => {
-  let { g } = await building()
-  await g.apply([{
-    entity: { eid: 'w-chores' },
-    wake: { at: '2026-09-19T13:00:00.000Z', note: 'take the bins out' },
-    fired: { at: noon() },
-  }])
-  assertEquals(await sessions(g), 0)
-})
-
-Deno.test('a desk this box cannot serve reports without breaking the write', async () => {
-  let { g, failed } = await building({ desk: { ...scribe, model: 'o-nobody' } })
-  await g.apply([writeup()])
-  assertEquals(await sessions(g), 0)
-  assertEquals(failed.length, 1)
-  assert(String((failed[0] as Error).message).includes('o-nobody'))
-})
-
-Deno.test('a key is the instruction, model and every selected input', () => {
-  let a = key('Sum up.', 'O-1', [['m-1', 'x'], ['m-2', 'y']])
-  assertEquals(a, key('Sum up.', 'O-1', [['m-2', 'y'], ['m-1', 'x']]))
-  assertNotEquals(a, key('Sum up!', 'O-1', [['m-1', 'x'], ['m-2', 'y']]))
-  assertNotEquals(a, key('Sum up.', 'O-2', [['m-1', 'x'], ['m-2', 'y']]))
-  assertNotEquals(a, key('Sum up.', 'O-1', [['m-1', 'x'], ['m-2', 'z']]))
-  assertNotEquals(a, key('Sum up.', 'O-1', [['m-1', 'x']]))
-})
-
-Deno.test('content is client-written properties, not server stamps', () => {
-  let hash = content(workshop())
-  let said: Bundle = { entity: { eid: 'n-1' }, doc: { title: 'A', body: 'B' } }
-  let stamped: Bundle = {
-    entity: { eid: 'n-1', num: 7 },
-    doc: { body: 'B', title: 'A' },
-    created: { at: noon() },
-    updated: { at: noon() },
-  }
-  assertEquals(hash(said), hash(stamped))
-  assertNotEquals(hash(said), hash({ ...said, doc: { title: 'A', body: 'C' } }))
-  assertNotEquals(hash(said), hash({ ...said, builder: { query: '.doc' } }))
-})
-
-Deno.test('the facet needs a desk and refuses an unreadable rest', async () => {
-  let { vocab } = await building()
-  assertEquals(effects({ vocab }, {}), {})
-  let declared = effectsIn(vocab.docs).map((e) => e.name)
-  assert(
-    Object.keys(effects({ vocab }, { desk: scribe, rest: '1h' }))
-      .every((n) => declared.includes(n)),
-  )
+Deno.test('template substitution reads variables in nested bindings', () => {
   assertEquals(
-    Object.keys(watches({ desk: scribe, rest: '1h', vocab })),
-    Object.keys(effects({ vocab }, { desk: scribe, rest: '1h' })),
+    render('$s: $n and $$', {
+      entities: ['a'],
+      vars: { s: 'a' },
+      collections: [[{ entities: ['n1'], vars: { n: 'note' } }]],
+    }),
+    'a: note and $',
   )
-  let warned: unknown[] = []
-  let warn = console.warn
-  console.warn = (...said: unknown[]) => warned.push(said[0])
-  try {
-    assertEquals(effects({ vocab }, { desk: scribe, rest: 'whenever' }), {})
-  } finally {
-    console.warn = warn
-  }
-  assert(String(warned[0]).includes('is no rest'))
 })

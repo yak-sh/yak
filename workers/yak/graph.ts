@@ -177,6 +177,7 @@ import {
   wakesOf,
 } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
+import { builderModelTool } from './builders.ts'
 import type { Env } from './env.ts'
 import { resumed, seeded } from './wake.ts'
 import type { Binding } from './post.ts'
@@ -1422,35 +1423,38 @@ export class Store {
           { ...g, apply: (change, opts) => this.#asIs(change, opts) },
           {
             host: g,
-            tools: commands(declared, async (path, args, call) => {
-              let ns = this.#bind.STORE, appId = this.#get('app')
-              if (!ns || !appId) throw new Error('app store is unavailable')
-              let held = await directoryOf(ns).appAt(appId)
-              if (!held || held.app.trashed || held.space.trashed) {
-                throw new Error('app is unavailable')
-              }
-              let res = await commandWorker(
-                this.#bind,
-                held.space,
-                held.app,
-                { person: appId, role: 'editor' },
-                path,
-                args,
-                {
-                  call: call.entity.eid,
-                  at: typeof call.created == 'object' &&
-                      call.created != null && 'at' in call.created
-                    ? String(call.created.at ?? '')
-                    : '',
-                  source: typeof call.call == 'object' && call.call != null &&
-                      'source' in call.call
-                    ? String(call.call.source ?? call.entity.eid)
-                    : call.entity.eid,
-                },
-              )
-              await res.body?.cancel()
-              return []
-            }),
+            tools: [
+              ...commands(declared, async (path, args, call) => {
+                let ns = this.#bind.STORE, appId = this.#get('app')
+                if (!ns || !appId) throw new Error('app store is unavailable')
+                let held = await directoryOf(ns).appAt(appId)
+                if (!held || held.app.trashed || held.space.trashed) {
+                  throw new Error('app is unavailable')
+                }
+                let res = await commandWorker(
+                  this.#bind,
+                  held.space,
+                  held.app,
+                  { person: appId, role: 'editor' },
+                  path,
+                  args,
+                  {
+                    call: call.entity.eid,
+                    at: typeof call.created == 'object' &&
+                        call.created != null && 'at' in call.created
+                      ? String(call.created.at ?? '')
+                      : '',
+                    source: typeof call.call == 'object' && call.call != null &&
+                        'source' in call.call
+                      ? String(call.call.source ?? call.entity.eid)
+                      : call.entity.eid,
+                  },
+                )
+                await res.body?.cancel()
+                return []
+              }),
+              builderModelTool,
+            ],
             // A call in a transcript is the transcript runner's, run in the
             // order its model asked (@yaks/session, models.ts).
             takes: (call) => !call.entry,
@@ -1466,6 +1470,7 @@ export class Store {
   // moves. A call points at a tool entity, so that row has to be standing
   // before anybody can write one — and a deploy is the moment to stand it up.
   #planting = async (): Promise<void> => {
+    await this.#runner().ensure(['builder_model'])
     let said = this.#get('tools') ?? '{}'
     if (this.#get('planted') == said) return
     await this.#runner().ensure()

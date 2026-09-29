@@ -181,6 +181,8 @@ export type Tool<R = Bundle[]> = {
   title?: string
   /** what it does and when to use it — the agent reads this */
   description: string
+  /** Implementation revision included in a builder's input key. */
+  revision?: string
   /** one schema per named argument */
   input?: Record<string, Schema>
   /** this tool only reads — a client may call it without asking the user

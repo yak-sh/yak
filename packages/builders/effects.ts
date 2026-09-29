@@ -1,164 +1,139 @@
-// What a server does about builders, exported as `@yaks/builders/effects`: the
-// code behind ./vocab.json's effects — check scheduled and immediate inputs,
-// and write the named outputs a session answers with.
-// Nothing at all when the configuration names no session to open.
-//
-// That session is why this export takes OPTIONS. Opening one means asking a
-// provider, at an effort, with a persona — an account, a model and a persona
-// that exist on this machine — and none of that is a fact about the graph. So
-// the configuration names what to open and this package decides when:
-//
-// ```json
-// { "use": "@yaks/builders",
-//   "with": { "desk": { "provider": "Y-openai",
-//                       "model": "O-gpt-6",
-//                       "effort": "high",
-//                       "persona": "N-scribe",
-//                       "actor": "N-scribe",
-//                       "ask": "Write up what is waiting." },
-//             "rest": "1h" } }
-// ```
-//
-// A configuration that names no `desk` gives them no code, which is what a
-// graph that only stores builders wants rather than a session opening on a
-// machine with no agent on it.
-//
-// `rest` is parsed when the plugin is composed, deliberately: a recurrence
-// this machine cannot parse would otherwise mean a builder that never rests,
-// and boot is a cheaper place to discover that than the bill. It is reported
-// at boot rather than thrown — malformed configuration never stops the server
-// coming up — and the plugin then gives no code.
+// Reconcile builders after scheduled or selected changes, and turn every tool
+// output value into stable built rows. The model adapter has the same output
+// contract as a code tool; it only translates an ordinary session reply.
 
-import { type Comp, Stale, then, token } from '@yaks/graph'
+import { type Bundle, type Comp, Stale, token } from '@yaks/graph'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq } from '@yaks/query'
-import { kindOf, textOf } from '@yaks/session'
 import { next, WAKE } from '@yaks/wake'
-import {
-  BUILD,
-  clock,
-  decide,
-  ENTRY,
-  type Open,
-  type Options,
-} from './build.ts'
-import { answer, media } from './answer.ts'
+import { BUILD, clock, type Options, reconcile } from './build.ts'
+import { answer } from './answer.ts'
+import { adapted } from './model.ts'
 
-let str = (c: unknown, k: string): string => {
-  let v = (c as Comp | undefined)?.[k]
-  return v == null ? '' : String(v)
+let str = (c: Comp | undefined, prop: string): string =>
+  c?.[prop] == null ? '' : String(c[prop])
+let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
+  b?.[name] as Comp | undefined
+
+let stir =
+  (o: Options, scheduled: boolean, retry = false): Handler =>
+  async (event, tx, write) => {
+    let [builder] = await tx.get([event.entity.eid])
+    if (!builder?.builder) return
+    let { writes } = await reconcile(
+      tx,
+      builder,
+      o,
+      (o.now ?? clock)(),
+      scheduled,
+      retry,
+    )
+    if (writes.length) await write(writes)
+  }
+
+export let opening = (o: Options): Handler => stir(o, true, true)
+
+export let ringing = (o: Options): Handler => async (event, tx, write) => {
+  let [fired] = await tx.get([event.entity.eid])
+  await stir(o, true, true)(
+    {
+      ...event,
+      entity: { eid: str(comp(fired, WAKE), 'target') || event.entity.eid },
+    },
+    tx,
+    write,
+  )
 }
 
-// Build `eid` if its schedule says so and its key has changed. Every
-// other case — not a builder, resting, nothing to ask, built already — is a
-// builder with nothing to do right now, which is ordinary and not an error.
-let stir = (o: Open): Handler => (event, tx, write) =>
-  then(
-    decide(o, event.entity.eid, tx, (o.now ?? clock)(), true, 'automatic'),
-    (v) => v?.build ? write(v.build) : undefined,
-  )
-
-/**
- * `builder_open`, run when a builder itself changes: on `created(builder)` and
- * on `changed(builder.floor)`, so a builder created now builds now, and one
- * whose floor was moved back into the present builds then.
- *
- * It is idempotent, which is what lets its sweep replay it over every builder
- * in the graph: a second run finds the current output key, or
- * the floor it moved, and builds nothing. Its own write moves that floor, so
- * the write triggers this handler once more, and that run is the one that
- * finds the output.
- */
-export let opening = (o: Open): Handler => stir(o)
-
-/**
- * `builder_ring`, run on `created(fired)` and `changed(fired.at)`: how a
- * resting builder comes back at all. A
- * recurring @yaks/wake `wake` on the builder — or one aimed at it through
- * `wake.target` — fires, and the builder is checked again.
- */
-export let ringing = (o: Open): Handler => (event, tx, write) =>
-  then(tx.get([event.entity.eid]), (found) =>
-    stir(o)(
-      {
-        ...event,
-        entity: { eid: str(found[0]?.[WAKE], 'target') || event.entity.eid },
-      },
-      tx,
-      write,
-    ))
-
-/** Recheck opted-in builders when any graph input enters, changes or leaves.
- * The query and run key decide whether that change affected a builder. The
- * run's precondition settles concurrent changes to several inputs. */
-export let changing = (o: Open): Handler => async (event, tx, write) => {
+/** T-44668 will narrow candidate builders; reconciliation already does so. */
+export let changing = (o: Options): Handler => async (event, tx, write) => {
+  let [changed] = await tx.get([event.entity.eid])
+  if (
+    changed?.build || changed?.call || changed?.result || changed?.execution ||
+    changed?.error ||
+    comp(changed, 'output')?.value != null
+  ) {
+    return
+  }
   let builders = await tx.read(and(eq('builder.immediate', 'true')))
   for (let builder of builders) {
-    // Creation is already builder_open's check, which respects its floor.
     if (event.kind == 'created' && builder.entity.eid == event.entity.eid) {
       continue
     }
-    let v = await decide(o, builder.entity.eid, tx, (o.now ?? clock)(), false)
-    if (!v?.build) continue
+    let { writes } = await reconcile(tx, builder, o, (o.now ?? clock)(), false)
+    if (!writes.length) continue
     try {
-      await write(v.build)
+      await write(writes)
     } catch (err) {
       if (!(err instanceof Stale)) throw err
     }
   }
 }
 
-/**
- * `builder_answer` turns one session answer into named graph outputs. A late
- * answer from a superseded session has no current run and writes nothing.
- */
+/** A model entry becomes the same output.value a code tool would answer. */
+export let modeling = (): Handler => async (event, tx, write) => {
+  let [said] = await tx.get([event.entity.eid])
+  if (!said) return
+  if (said.error && said.entry) {
+    let [session] = await tx.get([str(comp(said, 'entry'), 'session')])
+    let call = str(comp(session, 'session'), 'source')
+    if (!call) return
+    let [asked] = await tx.get([call])
+    let [build] = await tx.get([str(comp(asked, 'call'), 'source')])
+    if (str(comp(build, BUILD), 'call') != call) return
+    await write([{
+      entity: build.entity,
+      [BUILD]: { key: null },
+      $was: { [BUILD]: { call: token(call) } },
+    }])
+    return
+  }
+  let result = await adapted(tx, said)
+  if (result) await write([result])
+}
+
+/** The output source is a call; that call's source is its stable build. */
 export let answering = (vocab: Vocab): Handler => async (event, tx, write) => {
   let [said] = await tx.get([event.entity.eid])
-  let session = str(said?.[ENTRY], 'session')
-  if (!said || !session || !('output' in said)) return
-  let [run] = await tx.read(and(eq(`${BUILD}.session`, session)))
-  if (!run) return
-  let [builder] = await tx.get([str(run[BUILD], 'builder')])
-  let artifact = str(builder?.builder, 'format') == 'artifact'
-  if (!artifact && kindOf(said) != 'output') return
+  let source = str(comp(said, 'output'), 'source')
+  let value = comp(said, 'output')?.value
+  if (!source || value == null) return
+  let [call] = await tx.get([source])
+  if (!call?.call) return
+  let [build] = await tx.get([str(comp(call, 'call'), 'source')])
+  if (!build?.[BUILD]) return
   try {
-    let content = artifact ? await media(tx, run, said) : textOf(said)
-    return await write(await answer(tx, run, content, vocab))
+    let writes = await answer(tx, call, value, vocab)
+    if (writes.length) await write(writes)
   } catch (err) {
-    // A bad answer cannot be the current build forever: the next check must
-    // be able to retry the same key, while this error still reaches telemetry.
+    if (err instanceof Stale) return
+    // A malformed output remains a recorded call result, but its key may be
+    // tried again on the next explicit or scheduled reconciliation.
     await write([{
-      entity: { eid: run.entity.eid },
-      [BUILD]: { key: null, session: null },
-      $was: { [BUILD]: { session: token(session) } },
+      entity: build.entity,
+      [BUILD]: { key: null },
+      $was: { [BUILD]: { call: token(call.entity.eid) } },
     }])
     throw err
   }
 }
 
-/** The code that builds: a builder changing, a wake firing, an input changing,
- * and a build's session answering. */
-export let watches = (o: Open): Handlers => ({
+export let watches = (o: Options): Handlers => ({
   builder_open: opening(o),
   builder_ring: ringing(o),
+  builder_model_answer: modeling(),
   builder_answer: answering(o.vocab),
   builder_change: changing(o),
 })
 
-/** The code to run, when the configuration named a session to open. */
 export let effects = (
   host: { vocab: Vocab },
-  options: Options = {},
+  options: Omit<Options, 'vocab'> = {},
 ): Handlers => {
-  let { desk, rest } = options
-  if (!desk) return {}
-  if (rest && next(rest, Date.now()) == null) {
-    console.warn(
-      `@yaks/builders: ${JSON.stringify(rest)} is no rest — nothing builds ` +
-        `until the config says how long a builder rests`,
-    )
+  if (options.rest && next(options.rest, Date.now()) == null) {
+    console.warn(`@yaks/builders: invalid rest ${JSON.stringify(options.rest)}`)
     return {}
   }
-  return watches({ desk, rest, vocab: host.vocab })
+  return watches({ ...options, vocab: host.vocab })
 }

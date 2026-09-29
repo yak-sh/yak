@@ -6,7 +6,7 @@
  * text written for a dream to read later rather than for anyone right now.
  *
  * A dream runs as a @yaks/builders builder: it wears `builder` beside `dream`,
- * its `doc` body is the instruction, and @yaks/builders decides when a session
+ * its `content` body is the template, and @yaks/builders decides when a session
  * opens on it and keeps what that session answered as its output. This package
  * runs nothing itself.
  *

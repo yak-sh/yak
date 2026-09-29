@@ -74,6 +74,7 @@ export type Arg = Record<string, unknown>
 // a sentence, while an empty `recipe` is still what makes the row a recipe.
 export type ToolDef = {
   description: string
+  revision?: string
   input: Record<string, Arg>
   required?: string[]
   /** Least caller authority for page and connector commands. */
@@ -112,6 +113,7 @@ export let TOOLS_EXAMPLE = '{"$defs": {"log_run": {"tool": true, ' +
 let KEYS = [
   'tool',
   'description',
+  'revision',
   'input',
   'required',
   'apply',
@@ -299,6 +301,9 @@ export let parseTools = (
     if (entry.model != null && typeof entry.model != 'boolean') {
       wrong.push(`${name}.model is true, to offer it to the app's models`)
     }
+    if (entry.revision != null && typeof entry.revision != 'string') {
+      wrong.push(`${name}.revision is a source version string`)
+    }
     if (
       entry.floor != null && entry.floor != 'person' &&
       entry.floor != 'editor' && entry.floor != 'owner'
@@ -371,6 +376,9 @@ export let parseTools = (
       : undefined
     out[name] = {
       description: String(entry.description ?? ''),
+      ...(typeof entry.revision == 'string'
+        ? { revision: entry.revision }
+        : {}),
       input,
       ...(required.length ? { required } : {}),
       ...(entry.apply != null ? { apply: entry.apply } : {}),
@@ -633,6 +641,7 @@ export let commands = (
   Object.entries(said).map(([name, def]) => ({
     name,
     description: def.description,
+    revision: def.revision,
     inputSchema: schemaOf(def),
     readOnly: def.query != null || def.readOnly === true,
     run: (call: Bundle, graph: Graph) =>

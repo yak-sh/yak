@@ -11,40 +11,43 @@
       "properties": {
         "query": {
           "type": "string",
-          "description": "query selecting the entities this builder reads"
+          "description": "query whose outer bindings each name a build"
         },
-        "model": {
+        "to": {
           "type": "string",
-          "ref": "model",
-          "death": "detach",
-          "description": "model for this builder, overriding the host default"
-        },
-        "format": {
-          "type": "string",
-          "enum": ["json", "artifact"],
-          "description": "JSON graph outputs or one stored media artifact"
+          "ref": "tool",
+          "death": "keep",
+          "description": "registered tool called for each changed binding"
         },
         "floor": {
           "type": "string",
           "format": "date-time",
-          "description": "the earliest a schedule may build it again"
+          "description": "earliest a scheduled reconciliation may run"
         },
         "immediate": {
           "type": "boolean",
-          "description": "build when query inputs change, without waiting for its floor"
+          "description": "reconcile when selected graph inputs change"
         }
       },
-      "description": "runs its instruction (its doc body) on the inputs selected by its query"
+      "description": "a query-to-tool transformation; content.body is its optional $var template and using chooses a model"
     },
     "build": {
       "component": true,
       "type": "object",
-      "identity": ["builder", "variant"],
+      "identity": [
+        "builder",
+        "match",
+        "variant"
+      ],
       "properties": {
         "builder": {
           "type": "string",
           "ref": "builder",
           "death": "keep"
+        },
+        "match": {
+          "type": "string",
+          "description": "JSON outer entity-ID tuple"
         },
         "variant": {
           "type": "string"
@@ -52,99 +55,86 @@
         "key": {
           "type": "string",
           "stamped": true,
-          "description": "the input key last started in this variant"
+          "description": "current desired input key"
         },
-        "model": {
+        "call": {
           "type": "string",
-          "ref": "entity",
+          "ref": "call",
           "death": "keep",
-          "stamped": true
-        },
-        "session": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true
-        },
-        "inputs": {
-          "type": "array",
-          "items": { "type": "string", "ref": "entity" },
           "stamped": true,
-          "description": "selected input ids offered to the session"
+          "description": "latest call for this key"
         },
-        "prompt": {
-          "type": "string",
+        "stale": {
+          "type": "boolean",
           "stamped": true,
-          "description": "the exact request sent to the model"
+          "description": "outer binding no longer matches"
         }
       },
-      "description": "the last session started for one variant of a builder"
+      "description": "one stable instance of a builder for an outer query binding"
     },
     "built": {
       "component": true,
       "type": "object",
       "kind": true,
-      "before": ["doc"],
-      "identity": ["builder", "variant", "slot"],
+      "before": [
+        "doc"
+      ],
+      "identity": [
+        "build",
+        "slot"
+      ],
       "properties": {
-        "builder": {
+        "build": {
           "type": "string",
-          "ref": "builder",
+          "ref": "build",
           "death": "keep",
-          "bare": false,
-          "description": "the builder it came from"
-        },
-        "variant": {
-          "type": "string",
-          "bare": false,
-          "description": "main or a shadow variant"
+          "bare": false
         },
         "slot": {
           "type": "string",
-          "bare": false,
-          "description": "stable name of this output within one build"
+          "bare": false
         },
         "key": {
           "type": "string",
-          "bare": false,
           "stamped": true,
-          "description": "the hash of the instruction, the model and each input's content hash it was built from"
+          "bare": false
         },
-        "model": {
+        "call": {
           "type": "string",
-          "ref": "entity",
+          "ref": "call",
           "death": "keep",
-          "stamped": true,
-          "description": "the model that built it"
-        },
-        "session": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "the session that built it"
+          "stamped": true
         },
         "artifact": {
           "type": "string",
-          "ref": "entity",
+          "ref": "artifact",
           "death": "keep",
-          "stamped": true,
-          "description": "the media artifact this output names, when present"
-        },
-        "media_type": {
-          "type": "string",
-          "stamped": true,
-          "description": "the artifact's media type, when present"
+          "stamped": true
         }
       },
-      "description": "one named output, updated in place across builds of its variant"
+      "description": "one named output; current when its key equals its non-stale build key"
+    },
+    "builder_model": {
+      "tool": true,
+      "noun": "builder",
+      "verb": "model",
+      "title": "Model builder adapter",
+      "description": "Open a model session for one frozen builder binding",
+      "surfaces": [],
+      "input": {
+        "binding": { "type": "object" },
+        "key": { "type": "string" },
+        "template": { "type": "string" },
+        "using": { "type": "object" }
+      },
+      "required": ["binding", "key"]
     },
     "builder_build": {
       "tool": true,
       "noun": "builder",
       "verb": "build",
       "title": "Build now",
-      "description": "Build a builder now, whatever its schedule says. Its query selects inputs; an unchanged key reuses the output, and a changed key updates that output in place. Passing an alternate provider, model or prompt builds a shadow output for comparison. Returns the output and session, or the current output.",
+      "description": "Reconcile a builder now, independent of its floor. Optional alternate provider, model or template creates a shadow variant.",
       "input": {
         "builder": {
           "type": "string",
@@ -161,42 +151,73 @@
           "ref": "model",
           "description": "the model to build with instead of the configured one"
         },
-        "prompt": {
+        "template": {
           "type": "string",
-          "description": "alternate instruction for a shadow build"
+          "description": "alternate content.body template for a shadow variant"
         }
       },
-      "required": ["builder"],
+      "required": [
+        "builder"
+      ],
       "options": {
-        "positional": ["builder"],
-        "short": { "m": "model", "p": "provider" }
+        "positional": [
+          "builder"
+        ],
+        "short": {
+          "m": "model",
+          "p": "provider"
+        }
       },
       "idempotent": true
     },
     "builder_open": {
       "effect": true,
-      "created": ["builder"],
-      "changed": ["builder.floor"],
+      "created": [
+        "builder"
+      ],
+      "changed": [
+        "builder.floor"
+      ],
       "sweep": ".builder",
       "description": "build a builder whose floor has passed, unless its key is built"
     },
     "builder_ring": {
       "effect": true,
-      "created": ["fired"],
-      "changed": ["fired.at"],
+      "created": [
+        "fired"
+      ],
+      "changed": [
+        "fired.at"
+      ],
       "description": "a wake fired on a builder: check whether it is due"
     },
     "builder_answer": {
       "effect": true,
-      "created": ["output", "attachment"],
-      "description": "a build's session answered with graph outputs or a media artifact"
+      "created": [
+        "output"
+      ],
+      "description": "validate a tool answer and write its named outputs"
+    },
+    "builder_model_answer": {
+      "effect": true,
+      "created": ["output", "attachment", "error"],
+      "description": "adapt a model session's reply to a builder tool output"
     },
     "builder_change": {
       "effect": true,
-      "created": ["created", "updated"],
-      "changed": ["updated"],
-      "removed": ["created"],
-      "without": ["effect"],
+      "created": [
+        "created",
+        "updated"
+      ],
+      "changed": [
+        "updated"
+      ],
+      "removed": [
+        "created"
+      ],
+      "without": [
+        "effect"
+      ],
       "active": ".builder.immediate=true",
       "description": "check immediate builders when an entity enters, changes or leaves their query"
     }

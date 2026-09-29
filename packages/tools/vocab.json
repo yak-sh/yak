@@ -163,6 +163,10 @@
         },
         "description": {
           "type": "string"
+        },
+        "revision": {
+          "type": "string",
+          "description": "implementation revision used by builders to detect changed code"
         }
       }
     },

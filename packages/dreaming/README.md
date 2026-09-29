@@ -28,18 +28,21 @@ what happens to them between conversations.
 ## A dream is a builder
 
 A dream runs as a [@yaks/builders](../builders) builder. It wears `builder`
-beside `dream`, its `doc` body is the instruction, and its `builder.query`
-selects inputs:
+beside `dream`; `content.body` is its template, and `builder.query` selects
+inputs:
 
 ```
-{ entity: { eid: '$d' }, dream: { scope: 'P-1' }, builder: {},
-  doc: { body: 'Write up what is waiting.' } }
+import { modelToolEid } from '@yaks/builders/model'
+
+{ entity: { eid: '$d' }, dream: { scope: 'P-1' },
+  builder: { to: modelToolEid() },
+  content: { body: 'Write up what is waiting.' } }
 ```
 
 When it runs, which session opens, and where the session's answer is kept are
 @yaks/builders' decisions and configuration: list that package beside this one
-and configure its `desk` and `rest`. A dream reads as a `dream` (its `Z-` id)
-rather than as a builder or a doc. This package runs nothing itself.
+and configure its schedule. A dream reads as a `dream` (its `Z-` id) rather than
+as a builder or a doc. This package runs nothing itself.
 
 ## Exports
 

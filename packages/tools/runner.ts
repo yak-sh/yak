@@ -126,6 +126,19 @@ export let toolEid = (name: string): Eid => {
   return eid
 }
 
+/** The row a registered tool advertises to stored calls and builders. */
+export let toolRow = (tool: Tool): Bundle => {
+  let named = namedTool(tool)
+  return {
+    entity: { eid: toolEid(named.name) },
+    tool: {
+      name: named.name,
+      description: named.description,
+      revision: named.revision ?? null,
+    },
+  }
+}
+
 /** What a runner is built with. */
 export type Opts = {
   /** what it can run */
@@ -449,14 +462,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let said = new Map(held.map((b) => [b.entity.eid, b.tool as Comp]))
       let stale = some.filter((t) => {
         let row = said.get(toolEid(t.name))
-        return row?.name != t.name || row?.description != t.description
+        return row?.name != t.name || row?.description != t.description ||
+          row?.revision != t.revision
       })
-      return stale.length
-        ? g.apply(stale.map((t) => ({
-          entity: { eid: toolEid(t.name) },
-          tool: { name: t.name, description: t.description },
-        })))
-        : []
+      return stale.length ? g.apply(stale.map(toolRow)) : []
     })
 
   // The answer, read back out of the graph: the result entity the rule named,

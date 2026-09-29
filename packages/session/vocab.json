@@ -306,6 +306,12 @@
           "death": "detach",
           "description": "who it speaks as — the identity that survives a /clear, where `created.via` is the run"
         },
+        "source": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the request that opened this transcript, when it has one"
+        },
         "persona": {
           "type": "string",
           "ref": "persona",

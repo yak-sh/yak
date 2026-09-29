@@ -37,6 +37,7 @@ export {
   runner,
   structured,
   toolEid,
+  toolRow,
   UnfinishedCall,
   WOKEN,
   worded,

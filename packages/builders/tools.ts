@@ -1,13 +1,5 @@
-// The on-demand door, exported as `@yaks/builders/tools`: `builder build`
-// builds a builder now, whatever its floor says.
-//
-// It decides exactly as the schedule does (./build.ts `decide`), less the
-// floor. Alternate model, provider, or prompt settings get a shadow output
-// beside the primary one. An unchanged key is not an error: the output already
-// built is named and nothing runs.
-//
-// It writes the build itself, signed as whoever asked, and answers with the
-// run and session ids. Named outputs arrive when that session answers.
+// The on-demand door reconciles a definition now. Alternate model settings
+// make a shadow variant; the underlying work still goes through a tool call.
 
 import {
   argsOf,
@@ -19,67 +11,66 @@ import {
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools'
-import { OUTPUT } from '@yaks/session'
 import type { Vocab } from '@yaks/vocab'
-import { BUILD, clock, decide, type Options } from './build.ts'
+import { clock, type Options, reconcile } from './build.ts'
+import { type Desk, modelTool } from './model.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
-
-// A tool's text answer, as a row recording which call it came from.
 let said = (call: Bundle, body: string): Bundle => ({
   entity: { eid: crypto.randomUUID() },
   content: { body },
-  [OUTPUT]: { source: call.entity.eid },
+  output: { source: call.entity.eid },
 })
 
-/** The implementation behind `builder_build`, built from the same
- * configuration as the effects. */
-export let runs = (host: { vocab: Vocab }, options: Options = {}): Runs => ({
+export let runs = (
+  host: { vocab: Vocab },
+  options: Omit<Options, 'vocab'> & { desk?: Desk } = {},
+): Runs => ({
+  builder_model: modelTool(options.desk).run,
   builder_build: async (call, graph): Promise<Bundle[]> => {
-    if (!options.desk) {
-      throw new CallError(
-        'unconfigured',
-        'no desk is configured, so nothing builds on this graph',
-      )
-    }
     let args = argsOf(call)
     let builder = str(args.builder)
-    let provider = str(args.provider)
-    let model = str(args.model)
-    let prompt = str(args.prompt)
-    let desk = {
-      ...options.desk,
-      ...(provider ? { provider } : {}),
-      ...(model ? { model } : {}),
+    let [definition] = await graph.get([builder])
+    if (!definition?.builder) {
+      throw new CallError('refused', `${builder} is no builder`)
     }
-    let alternate = (provider && provider != options.desk.provider) ||
-      (model && model != options.desk.model) || prompt
-    let shadow = alternate
-      ? `shadow:${sha256(JSON.stringify([desk.provider, desk.model, prompt]))}`
-      : undefined
-    let o = {
-      desk,
-      rest: options.rest,
-      vocab: host.vocab,
-      shadow,
-      prompt,
-      ...(model ? { model } : {}),
-      ...(provider ? { provider } : {}),
+    let using = {
+      ...(definition.using as Comp | undefined),
+      ...args.provider ? { provider: args.provider } : {},
+      ...args.model ? { model: args.model } : {},
     }
-    let v = await graph.storage.tx((tx) =>
-      decide(o, builder, tx, clock(), false, 'explicit')
-    )
-    if (!v) {
-      throw new CallError(
-        'refused',
-        `${str(args.builder)} is no builder with an instruction`,
+    let template = args.template == null
+      ? (definition.content as Comp | undefined)?.body
+      : args.template
+    let alternate = args.provider != null || args.model != null ||
+      args.template != null
+    let variant = alternate
+      ? `shadow:${sha256(JSON.stringify([using, template]))}`
+      : 'main'
+    let result = await graph.storage.tx((tx) =>
+      reconcile(
+        tx,
+        definition,
+        {
+          ...options,
+          vocab: host.vocab,
+          variant,
+          using,
+          template: str(template),
+        },
+        clock(),
+        false,
+        true,
       )
+    )
+    if (result.writes.length) {
+      await graph.apply(signed(result.writes, who(call)), { trusted: true })
     }
-    if (!v.build) {
-      return [said(call, `${v.plan.run} is built under this key already`)]
-    }
-    await graph.apply(signed(v.build, who(call)), { trusted: true })
-    let made = v.build.find((b) => b[BUILD])?.[BUILD] as Comp
-    return [said(call, `${v.plan.run} building in ${str(made.session)}`)]
+    return [said(
+      call,
+      result.plans.length
+        ? result.plans.map((p) => p.build).join('\n')
+        : `${builder} has no matching bindings`,
+    )]
   },
 })

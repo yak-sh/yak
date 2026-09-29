@@ -1,56 +1,48 @@
-// The key an output is built under, and the content hash each input
-// contributes to it.
-//
-// A key is the SHA-256 of three things: the instruction, the model, and each
-// input's content hash. Nothing else that could vary between two builds goes
-// in, so an unchanged key means the output already built still answers, and a
-// changed one calls for rebuilding that output.
-//
-// An input's content is what someone wrote on it: every property a client
-// may write, on every component it wears. Server-owned bookkeeping is left out —
-// `created` and `updated` stamps, counters like `recall` — because it moves
-// without anything being said differently, and a key that moved with it would
-// rebuild for nothing. A component with no properties at all is a tag whose
-// presence is the fact, so it counts. The vocabulary says which is which, so
-// this file names no component.
+// A build key describes the definition, tool revision and whole binding tree.
+// Nested collections change the key without changing the build's identity.
 
-import { type Eid, sha256 } from '@yaks/graph'
+import { type Binding, type Bundle, type Eid, sha256 } from '@yaks/graph'
 import { content } from '@yaks/kernel'
+import type { Vocab } from '@yaks/vocab'
 
-/**
- * The content hash of an entity: SHA-256 over its client-written properties, in a
- * fixed order.
- *
- * ```ts
- * import { content } from '@yaks/builders'
- *
- * // let hash = content(vocab)(await g.get(eid))
- * ```
- */
 export { content }
 
-/** An input as a key reads it: its id, and the hash of its content. */
-export type Input = [eid: Eid, hash: string]
+// Graph admission fills absent component properties with null. Those stored
+// blanks have the same meaning as omission in an authored definition.
+let details = (using: unknown): [string, unknown][] =>
+  using != null && typeof using == 'object' && !Array.isArray(using)
+    ? Object.entries(using).filter(([, value]) => value != null)
+      .toSorted(([a], [b]) => a.localeCompare(b))
+    : []
 
-/**
- * The key: SHA-256 over the instruction, the model, and each input's id and
- * content hash, taken in id order so the order links were written in does not
- * matter.
- *
- * ```ts
- * import { key } from '@yaks/builders'
- *
- * key('Summarize.', 'O-1', [['m-2', 'b…'], ['m-1', 'a…']])
- * // the same as key('Summarize.', 'O-1', [['m-1', 'a…'], ['m-2', 'b…']])
- * ```
- */
+let tree = (
+  binding: Binding,
+  rows: Map<Eid, Bundle>,
+  vocab: Vocab,
+): unknown => [
+  binding.entities.map((eid) =>
+    eid == null ? null : [eid, content(vocab)(rows.get(eid)!)]
+  ),
+  Object.entries(binding.vars).toSorted(([a], [b]) => a.localeCompare(b)),
+  (binding.collections ?? []).map((members) =>
+    members.map((one) => tree(one, rows, vocab))
+      .toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  ),
+]
+
 export let key = (
-  instruction: string,
-  model: string,
-  inputs: Input[],
+  builder: Bundle,
+  tool: Bundle,
+  binding: Binding,
+  rows: Map<Eid, Bundle>,
+  vocab: Vocab,
+  template?: string,
+  using?: Record<string, unknown>,
 ): string =>
   sha256(JSON.stringify([
-    instruction,
-    model,
-    inputs.toSorted(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
+    template ?? (builder.content as { body?: string } | undefined)?.body ?? '',
+    details(using ?? builder.using ?? {}),
+    (builder.builder as { to?: string } | undefined)?.to,
+    (tool.tool as { revision?: string }).revision ?? '',
+    tree(binding, rows, vocab),
   ]))

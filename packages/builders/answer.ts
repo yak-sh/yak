@@ -1,46 +1,46 @@
-// One session answer describes named graph outputs. Parse and validate that
-// data before the effect boundary writes it as one graph change. Output ids
-// come from builder, variant and slot; the model never chooses an eid.
+// Every tool returns the same named-output value. Validate it once, then write
+// stable built rows and their citations in one guarded graph change.
 
-import { type Bundle, type Comp, type Eid, token, type Tx } from '@yaks/graph'
+import {
+  type Binding,
+  type Bundle,
+  type Comp,
+  type Eid,
+  token,
+  type Tx,
+} from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq, present } from '@yaks/query'
 import { EDGE, link, unlink } from '@yaks/edge'
 import { verify } from '@yaks/kernel'
-import { BUILD, BUILT, output } from './build.ts'
+import { BUILD, BUILT, ids, output } from './build.ts'
 
 export type Spec = {
   slot: string
   inputs: Eid[]
   components: Record<string, Comp | null>
-  media?: { artifact: Eid; media_type: string }
+  artifact?: Eid
 }
 
 let object = (v: unknown): v is Record<string, unknown> =>
   v != null && typeof v == 'object' && !Array.isArray(v)
-let str = (v: unknown): string => v == null ? '' : String(v)
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
+let str = (v: unknown): string => v == null ? '' : String(v)
 
-/** The graph-shaped answer contract, checked before any output is written. */
+/** The one output contract for a model adapter and any registered code tool. */
 export let parse = (
-  body: string,
+  value: unknown,
   selected: Eid[],
   vocab: Vocab,
 ): Spec[] => {
-  let data: unknown
-  try {
-    data = JSON.parse(body)
-  } catch {
-    throw new Error('builder answer must be a JSON object with outputs')
-  }
-  if (!object(data) || !Array.isArray(data.outputs)) {
-    throw new Error('builder answer must have an outputs array')
+  if (!object(value) || !Array.isArray(value.outputs)) {
+    throw new Error('builder tool answer needs an outputs array')
   }
   let allowed = new Set(selected)
   let slots = new Set<string>()
   let out: Spec[] = []
-  for (let item of data.outputs) {
+  for (let item of value.outputs) {
     if (
       !object(item) || typeof item.slot != 'string' || !item.slot ||
       slots.has(item.slot) || !Array.isArray(item.inputs) ||
@@ -52,9 +52,7 @@ export let parse = (
     let inputs: Eid[] = []
     for (let eid of item.inputs) {
       if (typeof eid != 'string' || !allowed.has(eid)) {
-        throw new Error(
-          `${item.slot} cites an input its builder did not select`,
-        )
+        throw new Error(`${item.slot} cites an input its build did not select`)
       }
       if (!inputs.includes(eid)) inputs.push(eid)
     }
@@ -64,9 +62,7 @@ export let parse = (
       if (
         !info?.wire || [BUILD, BUILT, 'builder', EDGE].includes(name) ||
         (value != null && !object(value))
-      ) {
-        throw new Error(`${item.slot} has no writable ${name} component`)
-      }
+      ) throw new Error(`${item.slot} has no writable ${name} component`)
       if (value != null) {
         for (let prop of Object.keys(value)) {
           if (!info.writable.includes(prop)) {
@@ -76,51 +72,70 @@ export let parse = (
       }
       components[name] = value as Comp | null
     }
-    out.push({ slot: item.slot, inputs, components })
+    if (item.artifact != null && typeof item.artifact != 'string') {
+      throw new Error(`${item.slot} has no artifact id`)
+    }
+    out.push({
+      slot: item.slot,
+      inputs,
+      components,
+      ...(item.artifact ? { artifact: item.artifact } : {}),
+    })
   }
   return out
 }
 
-/** All output patches for one answer, with the run's session as a guard. */
+/** A completed call's output value, with its build as a concurrency guard. */
 export let answer = async (
   tx: Tx,
-  run: Bundle,
-  body: string | Spec[],
+  call: Bundle,
+  value: unknown,
   vocab: Vocab,
 ): Promise<Bundle[]> => {
+  let source = str(comp(call, 'call')?.source)
+  let [run] = await tx.get([source])
   let b = comp(run, BUILD)
-  let builder = str(b?.builder)
-  let variant = str(b?.variant)
-  let session = str(b?.session)
-  let selected = Array.isArray(b?.inputs) ? b.inputs.map(str) : []
-  let specs = typeof body == 'string' ? parse(body, selected, vocab) : body
-  let ids = specs.map((s) => output(builder, s.slot, variant))
-  let prior = await tx.get(ids)
-  let have = new Map(prior.map((b) => [b.entity.eid, b]))
-  let targets = await tx.get([...new Set(specs.flatMap((s) => s.inputs))])
-  let found = new Map(targets.map((b) => [b.entity.eid, b]))
+  if (!b || b.stale || b.call != call.entity.eid) return []
+  let args = comp(call, 'call')?.args as { binding?: Binding; key?: string }
+  if (!args?.binding || args.key != b.key) return []
+  let specs = parse(value, ids(args.binding), vocab)
+  let eids = specs.map((s) => output(source, s.slot))
+  let prior = await tx.get(eids)
+  let have = new Map(prior.map((row) => [row.entity.eid, row]))
+  let targets = await tx.get([
+    ...new Set(
+      specs.flatMap((s) => [...s.inputs, ...s.artifact ? [s.artifact] : []]),
+    ),
+  ])
+  let found = new Map(targets.map((row) => [row.entity.eid, row]))
   let writes: Bundle[] = [{
-    entity: { eid: run.entity.eid },
-    [BUILD]: { session },
-    $was: { [BUILD]: { session: token(session) } },
+    entity: run.entity,
+    [BUILD]: { call: call.entity.eid },
+    $was: {
+      [BUILD]: {
+        call: token(call.entity.eid),
+        key: token(b.key),
+        stale: token(false),
+      },
+    },
   }]
   for (let spec of specs) {
-    let eid = output(builder, spec.slot, variant)
-    let before = have.get(eid)
+    let eid = output(source, spec.slot)
+    let before = comp(have.get(eid), BUILT)
+    if (spec.artifact && !comp(found.get(spec.artifact), 'artifact')) {
+      throw new Error(`${spec.slot} names a missing artifact`)
+    }
     writes.push({
       entity: { eid },
       ...spec.components,
       [BUILT]: {
-        builder,
-        variant,
+        build: source,
         slot: spec.slot,
-        key: b?.key,
-        ...(b?.model ? { model: b.model } : {}),
-        session,
-        artifact: spec.media?.artifact ?? null,
-        media_type: spec.media?.media_type ?? null,
+        key: b.key,
+        call: call.entity.eid,
+        artifact: spec.artifact ?? null,
       },
-      $was: { [BUILT]: { session: token(comp(before, BUILT)?.session) } },
+      $was: { [BUILT]: { call: token(before?.call) } },
     })
     let citations = await tx.read(
       and(eq(`${EDGE}.from`, eid), present('cites')),
@@ -139,32 +154,4 @@ export let answer = async (
     }
   }
   return writes
-}
-
-/** An artifact reply becomes one output citing the one row it came from. */
-export let media = async (
-  tx: Tx,
-  run: Bundle,
-  said: Bundle,
-): Promise<Spec[]> => {
-  let b = comp(run, BUILD)
-  let inputs = b?.inputs
-  let eid = str(comp(said, 'attachment')?.artifact)
-  if (!Array.isArray(inputs) || inputs.length != 1 || !eid) {
-    throw new Error('artifact builder needs one input and one attachment')
-  }
-  let [source, artifact] = await tx.get([str(inputs[0]), eid])
-  let type = str(comp(artifact, 'artifact')?.media_type)
-  if (!source || !type) throw new Error('builder artifact or input is missing')
-  return [{
-    slot: 'main',
-    inputs: [source.entity.eid],
-    components: {
-      doc: {
-        title: str(comp(source, 'doc')?.title),
-        body: str(b?.prompt),
-      },
-    },
-    media: { artifact: eid, media_type: type },
-  }]
 }

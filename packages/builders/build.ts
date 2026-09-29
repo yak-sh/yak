@@ -1,254 +1,257 @@
-// A builder selects graph inputs with a query. A run records the key and
-// session for one variant; that session writes named outputs in answer.ts.
-// The key is the instruction, model and selected content, so the same key
-// opens nothing and a changed one starts a fresh session.
+// A builder is a query-to-tool definition. Each outer binding has one stable
+// build; its changing content asks the tool through a fresh recorded call.
 
 import {
+  type Binding,
   type Bundle,
   type Comp,
   type Eid,
   identityEid,
-  then,
+  match,
+  reads,
   token,
-  TOMBSTONE,
   type Tx,
 } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { BODY, DOC } from '@yaks/doc'
-import { link } from '@yaks/edge'
-import { content } from '@yaks/kernel'
-import { kindOf, ordered, statusOf } from '@yaks/session'
 import { next } from '@yaks/wake'
-import { type Input, key } from './key.ts'
+import { key } from './key.ts'
 
 export let BUILDER = 'builder'
 export let BUILD = 'build'
 export let BUILT = 'built'
 
-// A build writes session and entry components owned by @yaks/session. The
-// persona is linked through @yaks/kernel's references relation.
-export let SESSION = 'session'
-export let ENTRY = 'entry'
-export let CONTENT = 'content'
-export let USING = 'using'
-export let REFERENCES = 'references'
-
-export type Desk = {
-  provider?: string
-  model?: string
-  effort?: string
-  persona?: string
-  actor?: string
-  ask?: string
-}
-
 export type Options = {
-  desk?: Desk
-  /** @yaks/wake recurrence; omitted means the key alone guards builds. */
-  rest?: string
-}
-
-export type Open = Options & {
-  desk: Desk
   vocab: Vocab
+  rest?: string
   now?: () => string
-  eid?: () => string
-  /** alternate model/provider/prompt runs beside the primary variant */
-  shadow?: string
-  prompt?: string
-  model?: string
-  provider?: string
+  eid?: () => Eid
+  variant?: string
+  template?: string
+  using?: Comp
 }
 
 export type Plan = {
   builder: Eid
-  instruction: string
-  model: string
-  provider?: string
-  format: 'json' | 'artifact'
-  inputs: Bundle[]
-  key: string
+  build: Eid
+  match: string
   variant: string
-  run: Eid
+  binding: Binding
+  key: string
+  to: Eid
+  template: string
+  using: Comp
 }
 
-export type Verdict = { plan: Plan; build?: Bundle[] }
-
 export let clock = (): string => new Date().toISOString()
-let uuid = () => crypto.randomUUID() as string
-
+let mint = (): Eid => crypto.randomUUID()
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
-let str = (c: Comp | undefined, k: string): string =>
-  c?.[k] == null ? '' : String(c[k])
+let str = (c: Comp | undefined, prop: string): string =>
+  c?.[prop] == null ? '' : String(c[prop])
 
-/** A schedule may build when its floor has passed or is absent. */
 export let due = (builder: Comp | undefined, at: string): boolean => {
   let floor = Date.parse(str(builder, 'floor'))
   return Number.isNaN(floor) || floor <= Date.parse(at)
 }
 
-/** Stable ids for one variant's run and each of its named outputs. */
-export let run = (builder: Eid, variant = 'main'): Eid =>
-  identityEid(BUILD, [builder, variant])
-export let output = (
+/** An outer entity tuple names one build, regardless of nested collections. */
+export let run = (
   builder: Eid,
-  slot = 'main',
+  entities: (Eid | null)[],
   variant = 'main',
-): Eid => identityEid(BUILT, [builder, variant, slot])
+): Eid => identityEid(BUILD, [builder, JSON.stringify(entities), variant])
 
-/** Query-selected inputs, excluding this builder, its outputs, and shadows. */
-export let inputs = (
-  tx: Tx,
-  it: Bundle,
-): Bundle[] | Promise<Bundle[]> => {
-  let query = str(comp(it, BUILDER), 'query')
-  if (!query) return []
-  return then(
-    tx.read(query),
-    (found) =>
-      found.filter((b) =>
-        b.entity.eid != it.entity.eid && b[TOMBSTONE] == null &&
-        str(comp(b, BUILT), 'builder') != it.entity.eid &&
-        (!comp(b, BUILT) || str(comp(b, BUILT), 'variant') == 'main')
-      ).toSorted((a, b) =>
-        a.entity.eid < b.entity.eid ? -1 : a.entity.eid > b.entity.eid ? 1 : 0
-      ),
-  )
+/** One output slot belongs to its build, including its variant. */
+export let output = (build: Eid, slot = 'main'): Eid =>
+  identityEid(BUILT, [build, slot])
+
+export let current = (build: Comp, built: Comp): boolean =>
+  !build.stale && build.key != null && built.key == build.key
+
+export let ids = (binding: Binding): Eid[] => [
+  ...binding.entities.filter((eid): eid is Eid => eid != null),
+  ...(binding.collections ?? []).flatMap((rows) => rows.flatMap(ids)),
+]
+
+// A shadow or this builder's own output is history, never a selected input.
+// Nested collection members are removed individually; the outer binding
+// remains a build even when its collection becomes empty.
+let selectedRow = (rows: Map<Eid, Bundle>, builder: Eid, eid: Eid) => {
+  let row = rows.get(eid)
+  let built = comp(row, BUILT)
+  let parent = built && rows.get(str(built, 'build'))
+  return row && !row.tombstone && eid != builder &&
+    (!built || str(comp(parent, BUILD), 'variant') == 'main' &&
+        str(comp(parent, BUILD), 'builder') != builder)
 }
-
-/** The run this builder would start now. */
-export let plan = (
-  o: Open,
-  it: Bundle,
-  tx: Tx,
-): Plan | undefined | Promise<Plan | undefined> => {
-  let instruction = o.prompt || str(comp(it, DOC), BODY) || o.desk.ask || ''
-  if (!instruction) return undefined
-  let builder = it.entity.eid
-  let model = o.model ?? (str(comp(it, BUILDER), 'model') || o.desk.model || '')
-  let provider = o.provider ??
-    (model == o.desk.model ? o.desk.provider : undefined)
-  let format: Plan['format'] = str(comp(it, BUILDER), 'format') == 'artifact'
-    ? 'artifact'
-    : 'json'
-  let variant = o.shadow ?? 'main'
-  return then(inputs(tx, it), (read) => {
-    if (format == 'artifact' && !read.length) return undefined
-    if (format == 'artifact' && read.length > 1) {
-      throw new Error('an artifact builder selects more than one input')
-    }
-    return ({
-      builder,
-      instruction,
-      model,
-      provider,
-      format,
-      inputs: read,
-      key: key(
-        format == 'artifact' ? `artifact\0${instruction}` : instruction,
-        model,
-        read.map((b): Input => [b.entity.eid, content(o.vocab)(b)]),
+let prune = (
+  binding: Binding,
+  rows: Map<Eid, Bundle>,
+  builder: Eid,
+): Binding | undefined =>
+  binding.entities.every((eid) =>
+      eid == null || selectedRow(rows, builder, eid)
+    )
+    ? {
+      ...binding,
+      collections: binding.collections?.map((members) =>
+        members.flatMap((member) => {
+          let kept = prune(member, rows, builder)
+          return kept ? [kept] : []
+        })
       ),
-      variant,
-      run: run(builder, variant),
-    })
+    }
+    : undefined
+
+/** Read the complete binding tree and the content of every entity it names. */
+export let selected = async (
+  tx: Tx,
+  builder: Bundle,
+  vocab: Vocab,
+): Promise<{ binding: Binding; rows: Map<Eid, Bundle> }[]> => {
+  let query = str(comp(builder, BUILDER), 'query')
+  if (!query) return [{ binding: { entities: [], vars: {} }, rows: new Map() }]
+  if (!tx.bindings) throw new Error('builder storage cannot evaluate bindings')
+  let plan = match(query)
+  let [found] = await tx.bindings([plan], [], reads(plan, vocab))
+  let all = [...new Set(found.flatMap(ids))]
+  let rows = new Map((await tx.get(all)).map((b) => [b.entity.eid, b]))
+  let builds = [
+    ...new Set(
+      [...rows.values()].map((b) => str(comp(b, BUILT), 'build')).filter(
+        Boolean,
+      ),
+    ),
+  ]
+  for (let b of await tx.get(builds)) rows.set(b.entity.eid, b)
+  return found.flatMap((binding) => {
+    let kept = prune(binding, rows, builder.entity.eid)
+    return kept ? [{ binding: kept, rows }] : []
   })
 }
 
-// The instruction asks for one graph-shaped answer with stable output slots.
-let words = (p: Plan): string =>
-  p.format == 'artifact'
-    ? [p.instruction, ...p.inputs.map((b) => str(comp(b, DOC), BODY))]
-      .filter(Boolean).join('\n\n')
-    : `${p.instruction}\n\nInputs:\n${
-      p.inputs.map((b) => `- ${b.entity.eid}`).join('\n') || '(none)'
-    }\n\nReturn only JSON in this shape: ` +
-      '{"outputs":[{"slot":"stable-name","inputs":["input-id"],' +
-      '"components":{"doc":{"title":"Example"}}}]}. ' +
-      'Each slot names the same thing across runs. Each output lists only the ' +
-      'selected input ids it used. Put its own graph components under components.'
-
-/** Open one session and record its key and selected inputs atomically. */
-export let build = (
+/** A tool call freezes one binding tree and the key it was selected under. */
+export let start = (
   p: Plan,
-  o: Open,
-  at: string = clock(),
-  prior: Comp | undefined = undefined,
+  prior: Comp | undefined,
+  eid: () => Eid = mint,
 ): Bundle[] => {
-  let d = o.desk
-  let eid = o.eid ?? uuid
-  let session = eid()
-  let using: Comp = {
-    ...(p.provider ? { provider: p.provider } : {}),
-    ...(p.model ? { model: p.model } : {}),
-    ...(d.effort ? { effort: d.effort } : {}),
-  }
-  let floor = o.rest ? next(o.rest, Date.parse(at)) : null
+  let call = eid()
   return [
-    { entity: { eid: session }, [SESSION]: d.actor ? { actor: d.actor } : {} },
     {
-      entity: { eid: eid() },
-      [ENTRY]: { session, seq: 1 },
-      [CONTENT]: { body: words(p) },
-      ...(Object.keys(using).length ? { [USING]: using } : {}),
-    },
-    ...(d.persona ? [link(session, REFERENCES, d.persona)] : []),
-    {
-      entity: { eid: p.run },
+      entity: { eid: p.build },
       [BUILD]: {
         builder: p.builder,
+        match: p.match,
         variant: p.variant,
         key: p.key,
-        ...(p.model ? { model: p.model } : {}),
-        session,
-        inputs: p.inputs.map((b) => b.entity.eid),
-        prompt: words(p),
+        call,
+        stale: false,
       },
       $was: {
         [BUILD]: {
           key: token(prior?.key),
-          session: token(prior?.session),
+          call: token(prior?.call),
+          stale: token(prior?.stale),
         },
       },
     },
-    ...(floor ? [{ entity: { eid: p.builder }, [BUILDER]: { floor } }] : []),
+    {
+      entity: { eid: call },
+      call: {
+        to: p.to,
+        source: p.build,
+        args: {
+          binding: p.binding,
+          key: p.key,
+          template: p.template,
+          using: p.using,
+        },
+      },
+    },
   ]
 }
 
-/** Start a changed key, or retry a failed key when its caller may do so. */
-export let decide = (
-  o: Open,
-  eid: Eid,
+/** Bring every desired build current and mark vanished bindings stale. */
+export let reconcile = async (
   tx: Tx,
-  at: string,
+  builder: Bundle,
+  o: Options,
+  at: string = (o.now ?? clock)(),
   scheduled = true,
-  retry: 'automatic' | 'explicit' | null = null,
-): Verdict | undefined | Promise<Verdict | undefined> =>
-  then(tx.get([eid]), ([it]) => {
-    let b = comp(it, BUILDER)
-    if (!it || !b || (scheduled && !due(b, at))) return undefined
-    return then(
-      plan(o, it, tx),
-      (p) =>
-        !p ? undefined : then(tx.get([p.run]), ([have]) => {
-          if (have?.[TOMBSTONE]) return { plan: p }
-          let prior = comp(have, BUILD)
-          let session = str(prior, 'session')
-          let same = str(prior, 'key') == p.key
-          if (!same) return { plan: p, build: build(p, o, at, prior) }
-          if (!session || !retry) return { plan: p }
-          return then(tx.read(`.entry.session=${session}&*`), (entries) => {
-            let newest = ordered(entries).filter((b) => !b.notice).at(-1)
-            // An interrupted request may have reached a paid provider. Only
-            // builder_build may decide to ask for it again.
-            let interrupted = newest && kindOf(newest) == 'error' &&
-              (newest.error as Comp)?.code == 'interrupted'
-            return statusOf(entries) == 'failed' &&
-                (retry == 'explicit' || !interrupted)
-              ? { plan: p, build: build(p, o, at, prior) }
-              : { plan: p }
-          })
-        }),
-    )
-  })
+  retry = false,
+): Promise<{ plans: Plan[]; writes: Bundle[] }> => {
+  let definition = comp(builder, BUILDER)
+  if (!definition || scheduled && !due(definition, at)) {
+    return { plans: [], writes: [] }
+  }
+  let to = str(definition, 'to')
+  if (!to) return { plans: [], writes: [] }
+  let [tool] = await tx.get([to])
+  if (!tool?.tool) throw new Error(`builder tool ${to} is missing`)
+  let variant = o.variant ?? 'main'
+  let chosen = await selected(tx, builder, o.vocab)
+  let prior = await tx.read(
+    `.build.builder=${builder.entity.eid}&.build.variant=${
+      encodeURIComponent(variant)
+    }&*`,
+  )
+  let held = new Map(prior.map((b) => [b.entity.eid, b]))
+  let plans: Plan[] = []
+  let writes: Bundle[] = []
+  for (let { binding, rows } of chosen) {
+    let entities = binding.entities
+    let match = JSON.stringify(entities)
+    let build = run(builder.entity.eid, entities, variant)
+    let p: Plan = {
+      builder: builder.entity.eid,
+      build,
+      match,
+      variant,
+      binding,
+      key: key(builder, tool, binding, rows, o.vocab, o.template, {
+        ...comp(builder, 'using'),
+        ...o.using,
+      }),
+      to,
+      template: o.template ?? str(comp(builder, 'content'), 'body'),
+      using: { ...comp(builder, 'using'), ...o.using },
+    }
+    plans.push(p)
+    let before = comp(held.get(build), BUILD)
+    held.delete(build)
+    let same = str(before, 'key') == p.key
+    if (same && before?.stale) {
+      writes.push({
+        entity: { eid: build },
+        [BUILD]: { stale: false },
+        $was: { [BUILD]: { stale: token(true) } },
+      })
+    }
+    let failed = false
+    if (retry && same && before?.call) {
+      let [call] = await tx.get([String(before.call)])
+      failed = comp(call, 'execution')?.state == 'failed'
+    }
+    if (!same || failed) writes.push(...start(p, before, o.eid))
+  }
+  for (let old of held.values()) {
+    let b = comp(old, BUILD)
+    if (b?.stale) continue
+    writes.push({
+      entity: old.entity,
+      [BUILD]: { stale: true },
+      $was: { [BUILD]: { stale: token(b?.stale) } },
+    })
+  }
+  let floor = o.rest && writes.some((b) => b.call)
+    ? next(o.rest, Date.parse(at))
+    : null
+  if (floor) {
+    writes.push({
+      entity: builder.entity,
+      [BUILDER]: { floor },
+    })
+  }
+  return { plans, writes }
+}
