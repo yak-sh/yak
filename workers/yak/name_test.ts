@@ -46,14 +46,19 @@ let code = (text: string) =>
 // words. Not a test — nobody is handed one.
 let READ = /\.(html|md|css|js|txt|json|yml|svg|webmanifest)$/
 let source = /(?<!_test)\.ts$/
+// And not what npm and wrangler drop beside the Worker (.gitignore names
+// both): nobody here wrote those, and node_modules alone is fourteen thousand
+// files, there whenever a kernel has booted first.
+let dropped = (name: string) => name == 'node_modules' || name.startsWith('.')
 
 let walk = function* (dir: URL, at = ''): Generator<[string, string]> {
   for (
     let e of [...Deno.readDirSync(dir)].sort((a, b) => a.name < b.name ? -1 : 1)
   ) {
     let path = at ? `${at}/${e.name}` : e.name
-    if (e.isDirectory) yield* walk(new URL(`${e.name}/`, dir), path)
-    else if (READ.test(e.name)) {
+    if (e.isDirectory) {
+      if (!dropped(e.name)) yield* walk(new URL(`${e.name}/`, dir), path)
+    } else if (READ.test(e.name)) {
       yield [path, Deno.readTextFileSync(new URL(e.name, dir))]
     } else if (source.test(e.name)) {
       yield [path, code(Deno.readTextFileSync(new URL(e.name, dir)))]
