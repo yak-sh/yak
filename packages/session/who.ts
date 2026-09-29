@@ -22,7 +22,9 @@
 // (`sessionEid`): the id itself where it is a uuid, as Claude Code's and
 // Codex's are, since an eid is a uuid; one derived from it otherwise. So
 // whoever holds the harness's id holds the eid, and the hook and the importer
-// that both create a session for one id land on one entity.
+// that both create a session for one id land on one entity. A subagent's id
+// (Claude Code's `agent-<id>`) names it within its parent, so its eid derives
+// from the two.
 
 import {
   type Actor,
@@ -43,7 +45,8 @@ let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
  * The eid of the session a harness knows by `id`: the id itself where it is a
- * uuid, and otherwise one derived from it.
+ * uuid, and otherwise one derived from it. A subagent's, whose id names it
+ * within its `parent`, derives from both.
  *
  * ```ts
  * import { sessionEid } from '@yaks/session'
@@ -53,8 +56,12 @@ let UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
  * assertEquals(sessionEid(id), id)
  * ```
  */
-export let sessionEid = (id: string): Eid =>
-  UUID.test(id) ? id : identityEid(SESSION, [id])
+export let sessionEid = (id: string, parent?: string): Eid =>
+  parent
+    ? identityEid(SESSION, [parent, id])
+    : UUID.test(id)
+    ? id
+    : identityEid(SESSION, [id])
 
 /** A command speaks for its own transcript, never its launcher's. Clearing
  * the other harness IDs also matters when `yak` chooses the first one it sees. */

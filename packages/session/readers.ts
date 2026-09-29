@@ -208,24 +208,8 @@ let blocks = (e: Event): Event[] => {
   return typeof c == 'string' ? [{ type: 'text', text: c }] : list(c)
 }
 
-/**
- * Claude Code: the transcript it keeps of an interactive session
- * (`~/.claude/projects/<project>/<session>.jsonl`), and the stream
- * `claude -p --output-format stream-json` prints. The two share their message
- * lines; the file adds the queue and the harness's own notes, and the stream
- * adds the line that opens a run and the one that ends it.
- *
- * ```ts
- * import { claude } from '@yaks/session'
- * import { assertEquals } from '@std/assert'
- *
- * let typed = { type: 'user', origin: { kind: 'human' }, message: { content: 'hi' } }
- * assertEquals(claude(typed).entries, [{ content: { body: 'hi' } }])
- * ```
- */
-export let claude: Reader = (e) => {
-  // A side conversation (a subagent's, in older files) is not this session's.
-  if (e.isSidechain) return nothing
+// One line of Claude Code's, whichever conversation it belongs to.
+let line: Reader = (e) => {
   let at = str(e.timestamp) || undefined
   let a = obj(e.attachment)
   let entries: Comps[] = e.type == 'user' && e.isCompactSummary
@@ -259,6 +243,40 @@ export let claude: Reader = (e) => {
     : undefined
   return { entries, ...(about ? { about } : {}), ...(at ? { at } : {}) }
 }
+
+/**
+ * Claude Code: the transcript it keeps of an interactive session
+ * (`~/.claude/projects/<project>/<session>.jsonl`), and the stream
+ * `claude -p --output-format stream-json` prints. The two share their message
+ * lines; the file adds the queue and the harness's own notes, and the stream
+ * adds the line that opens a run and the one that ends it. A side
+ * conversation, which older files keep inline, is a subagent's, not this
+ * session's.
+ *
+ * ```ts
+ * import { claude } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let typed = { type: 'user', origin: { kind: 'human' }, message: { content: 'hi' } }
+ * assertEquals(claude(typed).entries, [{ content: { body: 'hi' } }])
+ * ```
+ */
+export let claude: Reader = (e) => e.isSidechain ? nothing : line(e)
+
+/**
+ * A Claude Code subagent's own transcript
+ * (`<project>/<session>/subagents/agent-<id>.jsonl`), every line of which is
+ * a side conversation of the session that started it.
+ *
+ * ```ts
+ * import { subagent } from '@yaks/session'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let said = { type: 'assistant', isSidechain: true, message: { content: 'done' } }
+ * assertEquals(subagent(said).entries, [{ content: { body: 'done' }, output: {} }])
+ * ```
+ */
+export let subagent: Reader = line
 
 // What a codex tool item called and what it answered. An MCP call is named the
 // way Claude Code names one; every other item is named by its type.

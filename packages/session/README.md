@@ -285,10 +285,19 @@ too, so the two never collide. Each entry is dated when the harness wrote it.
 `@yaks/session/service` duty follows Claude Code's transcript files,
 `<project>/<session>.jsonl` under its projects directory: one written to in the
 last `full` milliseconds is read as it grows, at full depth, and an older one is
-read in lazily, one per pass, its prose alone. It skips a managed run, whose
-transcript asks a provider for it (`using{provider}`), and subagents'
-transcripts. A Claude Code compaction summary becomes a checkpoint in the
-transcript; a native continuation starts there.
+read in lazily, one per pass, its prose alone. A look reads the transcripts it
+already follows least behind first, then the ones it has yet to open most
+recently written first, each for a slice (`SLICE`, 100 ms) until its budget
+(`BUDGET`, a second) is spent, so a backlog is read over many looks and a live
+session's next lines lead every one. It skips a managed run, whose transcript
+asks a provider for it (`using{provider}`). A subagent's transcript,
+`<session>/subagents/agent-<id>.jsonl`, is read the same way (`subagent`, the
+reader whose lines are all side conversations) into a session of its own:
+`session{id}` the agent id, its eid `sessionEid(id, parent)`, and
+`spawned{parent, call}` naming the session that started it and, from the
+`agent-<id>.meta.json` beside it, the call that did. A Claude Code compaction
+summary becomes a checkpoint in the transcript; a native continuation starts
+there.
 
 Once an hour the duty finds the imported sessions whose newest entry is older
 than `full` (`stale()`), from any importer, and strips each to its prose
@@ -346,7 +355,7 @@ The main module exports:
   `sessionDerived`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,
   `where()`, and `views`;
-- harness readers: `claude`, `codex`, `readers`, and `scrub()`;
+- harness readers: `claude`, `subagent`, `codex`, `readers`, and `scrub()`;
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
 Additional entry points are `@yaks/session/vocab`, `/rules` (with

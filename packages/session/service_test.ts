@@ -3,6 +3,8 @@ import { assertEquals } from '@std/assert'
 import type { Comp, Graph } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
 import { look, type Seen, service, stale, strip } from './service.ts'
+import { callOf } from './tail.ts'
+import { sessionEid } from './who.ts'
 
 let lines = (...texts: string[]) =>
   texts.flatMap((text, i) => [
@@ -42,21 +44,23 @@ let dated = (text: string, ago: number) =>
     })
   ).join('\n') + '\n'
 
-// A Claude projects directory holding one transcript per session id, each
-// last written `ago` milliseconds before now.
+// A subagent's transcript: every line a side conversation.
+let side = (text: string) =>
+  text.trim().split('\n').map((l) =>
+    JSON.stringify({ ...JSON.parse(l), isSidechain: true })
+  ).join('\n') + '\n'
+
+// A Claude projects directory holding one transcript per name, a session's id
+// or `<session>/subagents/agent-<id>`, each last written `ago` milliseconds
+// before now.
 let projects = async (
   files: Record<string, { text: string; ago?: number }>,
   body: (dir: string) => Promise<void>,
 ) => {
   let dir = Deno.makeTempDirSync()
-  Deno.mkdirSync(`${dir}/-home-me-code`)
-  Deno.mkdirSync(`${dir}/-home-me-code/one/subagents`, { recursive: true })
-  Deno.writeTextFileSync(
-    `${dir}/-home-me-code/one/subagents/a.jsonl`,
-    lines('no'),
-  )
-  for (let [id, f] of Object.entries(files)) {
-    let path = `${dir}/-home-me-code/${id}.jsonl`
+  for (let [name, f] of Object.entries(files)) {
+    let path = `${dir}/-home-me-code/${name}.jsonl`
+    Deno.mkdirSync(path.slice(0, path.lastIndexOf('/')), { recursive: true })
     Deno.writeTextFileSync(path, f.text)
     let at = new Date(Date.now() - (f.ago ?? 0))
     Deno.utimeSync(path, at, at)
@@ -110,8 +114,31 @@ test('a recent transcript is followed in full; an old one is read in later, its 
       'thought 0',
       'said 0',
     ])
-    // The subagent's transcript is not a session of its own.
-    assertEquals((await g.read('.session')).length, 4)
+  }))
+
+test('a look reads the newest transcript first, and a long one a slice at a time', () =>
+  projects({
+    long: { text: lines('a', 'b', 'c'), ago: 1000 },
+    live: { text: lines('hi') },
+    old: { text: lines('x', 'y'), ago: 30 * DAY },
+  }, async (dir) => {
+    let g = locked(store())
+    let seen: Seen = { tails: new Map(), done: new Set() }
+    // A slice of nothing reads a line; a budget of nothing, one transcript.
+    let once = (budget?: number) => look(g, dir, seen, { slice: 0, budget })
+    await once(0)
+    await once(0)
+    assertEquals(await told(g, 'live'), ['hi', 'thought 0', 'said 0'])
+    assertEquals(await told(g, 'long'), undefined)
+    assertEquals(await told(g, 'old'), undefined)
+    // With time to spare, a line of each, and of the old one too.
+    await once()
+    await once()
+    assertEquals(await told(g, 'long'), ['a', 'thought 0', 'said 0'])
+    assertEquals(await told(g, 'old'), ['x', 'said 0'])
+    for (let i = 0; i < 4; i++) await once()
+    assertEquals((await told(g, 'long'))!.length, 9)
+    assertEquals(await told(g, 'old'), ['x', 'said 0', 'y', 'said 1'])
   }))
 
 test('a session is the entity its harness id names', () => {
@@ -131,6 +158,37 @@ test('a session is the entity its harness id names', () => {
     await hook('run')
     assertEquals((await g.read(`.session.id=${id}`)).length, 1)
     assertEquals((await g.read('.session.id=run')).length, 1)
+  })
+})
+
+test("a subagent's transcript is a session of its own, started by its parent's call", () => {
+  let parent = '49805559-ca98-4c0a-873e-45c19ec7316c'
+  let agent = `${parent}/subagents/agent-a1`
+  let started = {
+    type: 'assistant',
+    message: {
+      content: [{ type: 'tool_use', id: 'toolu_a', name: 'Agent', input: {} }],
+    },
+  }
+  let done = { type: 'assistant', message: { content: 'done' } }
+  return projects({
+    [parent]: { text: JSON.stringify(started) + '\n' },
+    [agent]: { text: side(tool) },
+  }, async (dir) => {
+    let at = `${dir}/-home-me-code/${agent}`
+    Deno.writeTextFileSync(`${at}.meta.json`, '{"toolUseId":"toolu_a"}')
+    let g = locked(store())
+    let seen: Seen = { tails: new Map(), done: new Set() }
+    await look(g, dir, seen)
+    let [s] = await g.get([sessionEid('a1', parent)])
+    assertEquals(s.spawned, { parent, call: callOf(parent, 'toolu_a') })
+    assertEquals(await told(g, 'a1'), ['(call)', 'a.txt'])
+    // What it does next arrives as it is written.
+    Deno.writeTextFileSync(`${at}.jsonl`, side(JSON.stringify(done)), {
+      append: true,
+    })
+    await look(g, dir, seen)
+    assertEquals(await told(g, 'a1'), ['(call)', 'a.txt', 'done'])
   })
 })
 
@@ -158,6 +216,7 @@ let ended = JSON.stringify({
 test('a session quiet past its full depth is stripped to its prose and its cost', () =>
   projects({
     past: { text: dated(lines('long ago') + tool + ended, 30 * DAY) },
+    'past/subagents/agent-p': { text: dated(side(tool), 30 * DAY) },
     today: { text: lines('hello') + tool },
   }, async (dir) => {
     let g = locked(store())
@@ -169,6 +228,7 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
     let [past] = await g.read('.session.id=past')
     let [spent] = await g.read(`.entry.session=${past.entity.eid}&.cost&*`)
     assertEquals(spent.cost, { dollars: 0.25, reported: true })
+    assertEquals(await told(g, 'p'), [])
     assertEquals(await told(g, 'today'), [
       'hello',
       'thought 0',

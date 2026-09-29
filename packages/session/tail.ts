@@ -88,7 +88,15 @@ export type Pull = {
    * for the next pull, and the session's `consumed` says where the read
    * stood */
   signal?: AbortSignal
+  /** stop between lines past this moment (`performance.now()`), the way an
+   * abort stops it, once a line is read: a long log is read over several
+   * pulls */
+  until?: number
 }
+
+/** Whether a tail is behind its file: a pull stopped before its end, and
+ * holds lines it has not read into the graph yet. */
+export let behind = (t: Tail): boolean => t.rest.includes('\n')
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -376,7 +384,7 @@ export let pull = async (
   let breath = performance.now()
   let all = lines(t, o.final)
   for (let [i, text] of all.entries()) {
-    if (o.signal?.aborted) {
+    if (o.signal?.aborted || i && performance.now() > (o.until ?? Infinity)) {
       t.rest = [...all.slice(i), t.rest].join('\n')
       break
     }
