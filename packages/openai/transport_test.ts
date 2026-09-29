@@ -334,6 +334,7 @@ test('responses scrubs failed-stream evidence and credential errors', async () =
       get: () => Promise.reject(new Error('secret-old')),
       hint: 'sign in again: somewhere',
     },
+    pause: () => Promise.resolve(),
     fetch: () => {
       throw Error('credential failure reached HTTP')
     },

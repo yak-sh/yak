@@ -215,6 +215,7 @@ test('a refusal, a failed stream and no credential are errors', async () => {
       responses({
         credential: () => Promise.reject(new Error('nobody home')),
         fetch: dead.fetcher,
+        pause: () => Promise.resolve(),
       })(req),
     ModelError,
     'nobody home',
