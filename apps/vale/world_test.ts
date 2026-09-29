@@ -29,6 +29,7 @@ Deno.test('visible buildings share one mesh and release it when they leave', asy
         ci,
         ck,
         solid: empty,
+        roof: null,
         small: null,
         buildings: ci == chunkOf(mid) && ck == chunkOf(mid) ? placed : [],
         stood: ci == chunkOf(mid) && ck == chunkOf(mid)

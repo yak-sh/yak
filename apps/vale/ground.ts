@@ -12,7 +12,7 @@
 import { Top } from './features.ts'
 import { type Level, LEVELS } from './levels.ts'
 import { type Out, quad, rgb, type Vec } from './mesh.ts'
-import type { Patch } from './terrain.ts'
+import { NONE, type Patch } from './terrain.ts'
 
 let TOPS: Record<number, number> = {
   [Top.grass]: 0x8cc85c,
@@ -122,11 +122,14 @@ let drift = ([r, g, b]: Vec, hue: number): Vec => {
 
 /** Write a patch's chunk of ground into `o`, about the chunk's north-west
  * corner. */
-export let groundChunk = (p: Patch, o: Out) => {
+export let groundChunk = (p: Patch, o: Out, roof = o) => {
   let V = p.voxel, N = p.n, C = N - 2
   let pals = p.regions.map((id) => paletteOf(LEVELS[id] ?? LEVELS.mossvale))
   // Column (i, k) of the chunk, from -1 to C, as its patch has it.
   let H = (i: number, k: number) => p.layers[0][i + 1 + (k + 1) * N]
+  let R = (i: number, k: number) => p.layers[1]?.[i + 1 + (k + 1) * N] ?? NONE
+  let F = (i: number, k: number) => p.layers[2]?.[i + 1 + (k + 1) * N] ?? NONE
+  let upper = (i: number, k: number) => R(i, k) != NONE ? roof : o
   // A colour of a column's region's look, `of` its palette, blended with the
   // next region's by how much the column is its own.
   let tint = (
@@ -161,6 +164,7 @@ export let groundChunk = (p: Patch, o: Out) => {
   for (let k = 0; k < C; k++) {
     for (let i = 0; i < C; i++) {
       let h = H(i, k), j = i + k * C
+      if (h == NONE) continue
       let open = H(i - 1, k) >= h && H(i + 1, k) >= h && H(i, k - 1) >= h &&
         H(i, k + 1) >= h
       let shaded = H(i - 1, k) > h || H(i + 1, k) > h || H(i, k - 1) > h ||
@@ -168,7 +172,8 @@ export let groundChunk = (p: Patch, o: Out) => {
         H(i - 1, k + 1) > h || H(i + 1, k + 1) > h
       let edge = !i || !k || i == C - 1 || k == C - 1
       if (open && !shaded && !edge && p.share[j] == 255) {
-        merge[j] = (h * 32 + p.top[j]) * 256 + p.region[j]
+        merge[j] = (h * 32 + p.top[j]) * 256 + p.region[j] +
+          (R(i, k) == NONE ? 0 : 0x10000000)
       } else single.push([i, k])
     }
   }
@@ -202,7 +207,7 @@ export let groundChunk = (p: Patch, o: Out) => {
         ...colour(di, dk + d - 1),
       ]
       quad(
-        o,
+        upper(di, dk),
         [di * V, h * V, dk * V],
         1,
         w * V,
@@ -232,7 +237,7 @@ export let groundChunk = (p: Patch, o: Out) => {
       H(i, k + 1) < h ? 1 : 0,
     ]
     quad(
-      o,
+      upper(i, k),
       [i * V, h * V, k * V],
       1,
       V,
@@ -291,7 +296,7 @@ export let groundChunk = (p: Patch, o: Out) => {
       ]
       // Axis x faces run along z then y; axis z faces along x then y.
       quad(
-        o,
+        upper(i, k),
         [x * V, lo * V, z * V],
         axis,
         V,
@@ -317,8 +322,9 @@ export let groundChunk = (p: Patch, o: Out) => {
     lo: number,
   ) => {
     let c = colour(i, k)
+    let into = upper(i, k)
     quad(
-      o,
+      into,
       [x * V, lo * V - SKIRT, z * V],
       axis,
       V,
@@ -330,7 +336,7 @@ export let groundChunk = (p: Patch, o: Out) => {
       OPEN,
       V,
     )
-    o.nrm.splice(-16, 16, ...UP, ...UP, ...UP, ...UP)
+    into.nrm.splice(-16, 16, ...UP, ...UP, ...UP, ...UP)
   }
   for (let k = 0; k < C; k++) {
     for (let i = 0; i < C; i++) {
@@ -343,10 +349,96 @@ export let groundChunk = (p: Patch, o: Out) => {
           axis,
           sign,
         ]
-        if (nh < h) side(i, k, face, nh, h)
-        if (i + si < 0 || i + si >= C || k + sk < 0 || k + sk >= C) {
-          skirt(i, k, face, Math.min(h, nh))
+        if (
+          h != NONE && nh < h &&
+          !(R(i, k) != NONE && F(i + si, k + sk) != NONE)
+        ) {
+          let from = nh == NONE ? F(i + si, k + sk) : nh
+          if (R(i, k) != NONE) from = Math.max(from, R(i, k))
+          side(i, k, face, from, h)
         }
+        if (
+          h != NONE &&
+          (i + si < 0 || i + si >= C || k + sk < 0 || k + sk >= C)
+        ) {
+          skirt(i, k, face, Math.min(h, nh == NONE ? h : nh))
+        }
+      }
+    }
+  }
+  // A cave's floor, ceiling underside and the rock round its edge use the
+  // same column heights that movement reads. The roof alone can fade away.
+  let stone = rgb(0x736d66), underside = rgb(0x625f5c)
+  let plane = (
+    height: (i: number, k: number) => number,
+    into: Out,
+    sign: number,
+    color: Vec,
+  ) => {
+    let done = new Uint8Array(C * C)
+    for (let k = 0; k < C; k++) {
+      for (let i = 0; i < C; i++) {
+        let h = height(i, k), j = i + k * C
+        if (h == NONE || done[j]) continue
+        let w = 1
+        while (i + w < C && height(i + w, k) == h && !done[j + w]) w++
+        let d = 1
+        grow: while (k + d < C) {
+          for (let x = 0; x < w; x++) {
+            let q = i + x + (k + d) * C
+            if (height(i + x, k + d) != h || done[q]) break grow
+          }
+          d++
+        }
+        for (let z = 0; z < d; z++) {
+          for (let x = 0; x < w; x++) done[i + x + (k + z) * C] = 1
+        }
+        quad(
+          into,
+          [i * V, h * V, k * V],
+          1,
+          w * V,
+          d * V,
+          sign,
+          [...color, ...color, ...color, ...color],
+          [0, 0, 0, 0],
+          round,
+          OPEN,
+          V,
+        )
+      }
+    }
+  }
+  if (p.layers[2]) {
+    plane(F, o, 1, stone)
+    plane(R, roof, -1, underside)
+  }
+  for (let k = 0; k < C; k++) {
+    for (let i = 0; i < C; i++) {
+      let f = F(i, k), r = R(i, k)
+      if (f == NONE) continue
+      for (let [si, sk, axis, sign] of SIDES) {
+        let next = F(i + si, k + sk)
+        let neighbour = H(i + si, k + sk)
+        if (next == NONE && H(i, k) == NONE && neighbour > f) continue
+        let lo = next == NONE ? f : next
+        let hi = next == NONE ? r != NONE ? r : Math.max(f, neighbour) : f
+        if (hi <= lo) continue
+        let x = axis == 0 && sign > 0 ? i + 1 : i
+        let z = axis == 2 && sign > 0 ? k + 1 : k
+        quad(
+          o,
+          [x * V, lo * V, z * V],
+          axis,
+          V,
+          (hi - lo) * V,
+          sign,
+          [...stone, ...stone, ...stone, ...stone],
+          [0, 0, 0, 0],
+          round,
+          OPEN,
+          V,
+        )
       }
     }
   }

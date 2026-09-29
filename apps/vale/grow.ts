@@ -44,6 +44,7 @@ addEventListener('message', (e: MessageEvent<Ask & { n: number }>) => {
   let drawn = chunk(vale(a.voxel), a.ci, a.ck, a.small)
   let handed = [
     ...buffers(drawn.solid),
+    ...(drawn.roof ? buffers(drawn.roof) : []),
     ...(drawn.small ? buffers(drawn.small) : []),
     ...(drawn.nature ? buffers(drawn.nature) : []),
   ]

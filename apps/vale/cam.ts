@@ -12,7 +12,7 @@ import * as THREE from 'three'
 import type { Intent } from './input.ts'
 import { clamp } from './rand.ts'
 import { type Building, walled } from './solid.ts'
-import { floorUnder, type Vale } from './terrain.ts'
+import { floorUnder, roofOver, type Vale } from './terrain.ts'
 
 export type Cam = {
   /** which way it looks from, round the hero: 0 looks from +z */
@@ -166,6 +166,7 @@ export let aim = (
     let p = target.clone().addScaledVector(dir, d)
     if (
       p.y < floorUnder(v, p.x, p.y, p.z) + 0.3 ||
+      p.y > roofOver(v, p.x, target.y, p.z) - 0.3 ||
       walled(v, p.x, p.y, p.z, home)
     ) {
       clear = Math.max(CLOSEST, d - 0.6)

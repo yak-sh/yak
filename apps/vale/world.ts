@@ -37,6 +37,7 @@ import {
   CHUNK,
   groundAt,
   hearthNear,
+  roofOver,
   standAt,
   type Vale,
   WATER,
@@ -232,6 +233,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // finest detail and only near the player; and what glows in it at dusk.
   // Past the fog, nothing is drawn.
   let ground = soft({ speckle: 0.1, see: true })
+  let caveRoof = soft({ speckle: 0.1, see: true })
   let buildings = instances(scene, ground, mesh.template)
   let hanging = doors(scene, ground)
   type Lamp = {
@@ -243,6 +245,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   type Drawn = {
     lod: number
     solid: THREE.Mesh
+    roof: THREE.Mesh | null
     small: THREE.Mesh | null
     lamps: Lamp[]
     glows: Glow[]
@@ -260,14 +263,19 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let gone = false
   let key = (ci: number, ck: number) => `${ci} ${ck}`
 
-  let meshOf = (p: Chunk['solid'], ci: number, ck: number) => {
+  let meshOf = (
+    p: Chunk['solid'],
+    ci: number,
+    ck: number,
+    material = ground,
+  ) => {
     let g = geometry(p)
     g.userData.bytes = bytes(p)
     for (let a of Object.values(g.attributes)) {
       if (a instanceof THREE.BufferAttribute) release(a)
     }
     if (g.index) release(g.index)
-    let m = new THREE.Mesh(g, ground)
+    let m = new THREE.Mesh(g, material)
     m.position.set(ci * CHUNK, 0, ck * CHUNK)
     m.matrixAutoUpdate = false
     m.updateMatrix()
@@ -330,7 +338,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let drop = (k: string, keeps = false) => {
     let d = drawn.get(k)
     if (!d) return
-    for (let m of [d.solid, d.small]) {
+    for (let m of [d.solid, d.roof, d.small]) {
       if (!m) continue
       scene.remove(m)
       m.geometry.dispose()
@@ -363,14 +371,18 @@ export let world = (v: Vale, mesh: Mesher): World => {
       let solid = meshOf(c.solid, c.ci, c.ck)
       solid.castShadow = true
       solid.receiveShadow = true
+      let roof = c.roof && meshOf(c.roof, c.ci, c.ck, caveRoof)
+      if (roof) roof.receiveShadow = true
       let small = c.small && meshOf(c.small, c.ci, c.ck)
       if (small) small.receiveShadow = true
       scene.add(solid)
+      if (roof) scene.add(roof)
       if (small) scene.add(small)
       let x = (c.ci + 0.5) * CHUNK, z = (c.ck + 0.5) * CHUNK
       drawn.set(k, {
         lod,
         solid,
+        roof,
         small,
         lamps: lamps ?? lampsOf(glows),
         glows,
@@ -546,6 +558,16 @@ export let world = (v: Vale, mesh: Mesher): World => {
     props: () => props ??= [...drawn.values()].map((d) => d.props),
     see: (from, feet, tall, dt = 1 / 60, foes = []) => {
       sight(ground, from, feet, tall, foes)
+      sight(caveRoof, from, feet, tall, foes)
+      let ceiling = roofOver(v, feet.x, feet.y + 0.5, feet.z)
+      cut(
+        caveRoof,
+        ceiling == Infinity ? [] : [{
+          lo: [feet.x - 8, ceiling - 0.5, feet.z - 8],
+          hi: [feet.x + 8, ceiling + 32, feet.z + 8],
+          fade: 1,
+        }],
+      )
       let want = cutaway(v, [feet.x, feet.y, feet.z], [from.x, from.y, from.z])
       for (let c of want) {
         let f = fades.get(c.b)
@@ -594,6 +616,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
       })
       geometries.add(lampBox)
       materials.add(ground)
+      materials.add(caveRoof)
       for (let g of geometries) g.dispose()
       for (let m of materials) m.dispose()
       halo.dispose()
@@ -628,6 +651,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
       let dark = smooth(0.24, 0.18, d) + smooth(0.76, 0.82, d)
       hemi.groundColor.copy(GRASS).lerp(DARK, dark)
       night(ground, dark)
+      night(caveRoof, dark)
       // Lamps unlit by day are left undrawn.
       for (let c of drawn.values()) {
         for (let l of c.lamps) {

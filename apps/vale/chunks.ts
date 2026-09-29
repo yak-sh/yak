@@ -27,6 +27,7 @@ export type Chunk = {
   ci: number
   ck: number
   solid: Packed
+  roof: Packed | null
   small: Packed | null
   buildings: { kind: string; seed: number; turn: number; at: Vec }[]
   natural?: Natural[]
@@ -55,7 +56,8 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
   let ox = ci * CHUNK, oz = ck * CHUNK
   let patch = v.grow(ci, ck)
   adopt(v, patch)
-  let solid = groundChunk(patch, out())
+  let roof = out()
+  let solid = groundChunk(patch, out(), roof)
   let bits = out()
   let buildings: Chunk['buildings'] = []
   let props = v.plant(ci, ck)
@@ -112,6 +114,7 @@ export let chunk = (v: Vale, ci: number, ck: number, small: boolean): Chunk => {
     ci,
     ck,
     solid: pack(solid),
+    roof: roof.idx.length ? pack(roof) : null,
     small: bits.idx.length ? pack(bits) : null,
     buildings,
     natural,

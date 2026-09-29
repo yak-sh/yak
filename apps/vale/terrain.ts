@@ -15,8 +15,8 @@
 //
 // A chunk's ground is a stack of height maps, its layers: the surface, then
 // each cave's ceiling and its floor in turn, deeper, each below the one above;
-// rock between a ceiling and the floor over it. Only the surface grows yet,
-// but what reads the ground (`floorUnder`, `roofOver`) reads the stack.
+// rock between a ceiling and the floor over it. The ridge cave grows the
+// first pair; what reads the ground (`floorUnder`, `roofOver`) reads the stack.
 //
 // Each place's kind (features.ts) says what the ground is topped with where
 // it holds, and what grows and stands there; the region's wild says so where
@@ -25,6 +25,7 @@
 // building among it is raised on the ground at its middle, as rounded to
 // voxels, and lays the ground round it as it needs (`lay`).
 import { dressed } from './buildings.ts'
+import { caveAt } from './caves.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
 import { NATURE } from './nature.ts'
 import { LEVELS, SIZE, type Spot } from './levels.ts'
@@ -765,7 +766,7 @@ let planted = kept(400, (ci: number, ck: number): Prop[] => {
       }
     }
   }
-  return props
+  return props.filter((p) => !caveAt(p.x, p.z, a.height(p.x, p.z)))
 })
 
 /** What stands in chunk (ci, ck) of the world: what is built there, and its
@@ -788,6 +789,7 @@ export let decor = (p: Patch): Prop[] => {
     for (let di = 0; di < cells; di++) {
       let gi = p.ci * cells + di, gk = p.ck * cells + dk
       let x = (gi + 0.5) * GRID, z = (gk + 0.5) * GRID
+      if (caveAt(x, z, a.height(x, z))) continue
       let roll = rand(gi, gk, 9)
       if (roll >= LUSH) continue
       let t = p.top[Math.floor((x - x0) / V) + Math.floor((z - z0) / V) * C]
@@ -884,12 +886,31 @@ let growing = (v: Vale) => (ci: number, ck: number): Patch => {
     }
   }
   layIn(v, ci, ck, h, top, a)
+  let ceiling: Int16Array | null = null, floor: Int16Array | null = null
+  for (let k = 0; k < n; k++) {
+    for (let i = 0; i < n; i++) {
+      let j = i + k * n
+      let cave = caveAt(mid(i0 + i), mid(k0 + k), h[j] * V)
+      if (!cave) continue
+      if (!ceiling) {
+        ceiling = new Int16Array(n * n).fill(NONE)
+        floor = new Int16Array(n * n).fill(NONE)
+      }
+      ceiling[j] = cave.ceiling == null ? NONE : Math.round(cave.ceiling / V)
+      if (ceiling[j] != NONE) ceiling[j] = Math.min(ceiling[j], h[j] - 1)
+      floor![j] = Math.round(cave.floor / V)
+      if (cave.mouth) h[j] = NONE
+      if (i > 0 && i <= C && k > 0 && k <= C) {
+        top[i - 1 + (k - 1) * C] = Top.stone
+      }
+    }
+  }
   return {
     ci,
     ck,
     voxel: V,
     n,
-    layers: [h],
+    layers: ceiling ? [h, ceiling, floor!] : [h],
     top,
     hue,
     region,
@@ -1253,11 +1274,10 @@ let column = (v: Vale, x: number, z: number) => {
   return { p, j: i + k * p.n }
 }
 
-/** The ground's surface in metres under (x, z): the top of its first
- * layer. */
-export let groundAt = (v: Vale, x: number, z: number): number => {
+// The upper terrain before an open cave mouth removes its top.
+let surfaceAt = (v: Vale, x: number, z: number): number => {
   let c = column(v, x, z), V = v.voxel
-  if (c) return c.p.layers[0][c.j] * V
+  if (c && c.p.layers[0][c.j] != NONE) return c.p.layers[0][c.j] * V
   let mx = (Math.floor(x / V) + 0.5) * V, mz = (Math.floor(z / V) + 0.5) * V
   let h = Math.round(v.rise(mx, mz) / V) * V
   let street = false
@@ -1274,12 +1294,39 @@ export let groundAt = (v: Vale, x: number, z: number): number => {
   return Math.round(h / V) * V
 }
 
+/** The exposed ground under (x, z), including an open cave mouth. */
+export let groundAt = (v: Vale, x: number, z: number): number => {
+  let c = column(v, x, z)
+  if (c) {
+    return (c.p.layers[0][c.j] == NONE
+      ? c.p.layers[2][c.j]
+      : c.p.layers[0][c.j]) * v.voxel
+  }
+  let surface = surfaceAt(v, x, z)
+  let mx = (Math.floor(x / v.voxel) + 0.5) * v.voxel
+  let mz = (Math.floor(z / v.voxel) + 0.5) * v.voxel
+  let cave = caveAt(mx, mz, surface)
+  return cave?.mouth ? Math.round(cave.floor / v.voxel) * v.voxel : surface
+}
+
 // The layers at a column, deepest last, in metres; NONE where a cave is not.
 let layersAt = (v: Vale, x: number, z: number): number[] => {
   let c = column(v, x, z)
-  return c
-    ? c.p.layers.map((l) => l[c.j] == NONE ? NONE : l[c.j] * v.voxel)
-    : [groundAt(v, x, z)]
+  if (c) return c.p.layers.map((l) => l[c.j] == NONE ? NONE : l[c.j] * v.voxel)
+  let surface = surfaceAt(v, x, z)
+  let mx = (Math.floor(x / v.voxel) + 0.5) * v.voxel
+  let mz = (Math.floor(z / v.voxel) + 0.5) * v.voxel
+  let cave = caveAt(mx, mz, surface)
+  return cave
+    ? [
+      cave.mouth ? NONE : surface,
+      cave.ceiling == null ? NONE : Math.min(
+        Math.round(cave.ceiling / v.voxel),
+        Math.round(surface / v.voxel) - 1,
+      ) * v.voxel,
+      Math.round(cave.floor / v.voxel) * v.voxel,
+    ]
+    : [surface]
 }
 
 // The open space a point at height y is in: the floor it stands over and
@@ -1287,6 +1334,7 @@ let layersAt = (v: Vale, x: number, z: number): number[] => {
 // over it.
 let spaceOf = (v: Vale, x: number, y: number, z: number): [number, number] => {
   let ls = layersAt(v, x, z)
+  if (ls[0] == NONE) return [ls[2], Infinity]
   let roof = Infinity
   for (let i = 0; i < ls.length; i += 2) {
     let floor = ls[i]
