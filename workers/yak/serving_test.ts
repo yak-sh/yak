@@ -440,6 +440,34 @@ Deno.test("an app's own colours, set through app_set, win over the platform's", 
   )
 })
 
+Deno.test('a refresh after the page changes is sent the page, and one before is not', async () => {
+  using scenario = platform()
+  let { env, files } = scenario
+  let { dir } = await seeded(env)
+  files.held.set(
+    'ada/cookbook/index.html',
+    new TextEncoder().encode('<!doctype html><head></head><body>hi'),
+  )
+  let refresh = (etag = '') =>
+    apps.fetch(visit('/cookbook/', { headers: { 'if-none-match': etag } }), env)
+  let first = await refresh()
+  let etag = first.headers.get('etag') ?? ''
+  await first.body?.cancel()
+  assertEquals((await refresh(etag)).status, 304)
+  // Only the colour moves: the bytes and the release stay put.
+  await call({ env, dir, person: ADA } as unknown as Ctx, 'app_set', {
+    space: 'ada',
+    app: 'cookbook',
+    theme_color: '#1b3a2f',
+  })
+  let after = await refresh(etag)
+  assertEquals(after.status, 200)
+  assertStringIncludes(
+    await after.text(),
+    '<meta name="theme-color" content="#1b3a2f">',
+  )
+})
+
 Deno.test('a page view is one data point, and it names no visitor', async () => {
   let seen = dataset()
   using scenario = platform({ VIEWS: seen })

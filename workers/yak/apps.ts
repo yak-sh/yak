@@ -482,31 +482,23 @@ let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
 // person reading them, which is the whole of the rule: a private app's bytes
 // belong to its members and to no proxy.
 //
-// A file's validator is its content. HTML also names the release whose asset
-// URLs are woven into it, even when the authored HTML bytes stayed the same.
+// A file's validator is its content, and a page's is the document as sent
+// (`woven`).
 let keeping = (app: App) =>
   `${app.access == null || app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
 
-// The tag for these bytes at this mount. Weak, and the mount is part of it,
-// because an HTML page is served with a `<base href>` woven in: the same
-// bytes at `/` and at `/recipes/` are two different documents.
-//
-// The bytes' version arrives from files.ts (`VERSION`). An HTML response also
-// names its mount and release: the same HTML bytes can point at a new CSS or
-// script release, and must not answer a conditional request with 304 then.
-let etagOf = async (
-  version: string,
-  at: string,
-  html: boolean,
-  source = '',
-) =>
-  html
-    ? `W/"${version}${
-      (await sha256(new TextEncoder().encode(`${at}\0${source}\0assets-v1`)))
-        .slice(0, 8)
-    }"`
-    : `"${version}"`
+// The tag for a file's bytes, whose version arrives from files.ts (`VERSION`).
+let etagOf = (version: string) => `"${version}"`
+
+// The tag for a page: a hash of the document as sent, never of the bytes it
+// was woven from. A page is its bytes plus what the platform weaves in at this
+// mount (its base, its release's asset addresses, the app's colours, the
+// platform's own tags), and any of those can move while the bytes stay put.
+// Hashing what is sent is what keeps a refresh from being told it already
+// holds a page it does not.
+let pageTag = async (page: string) =>
+  `W/"${(await sha256(new TextEncoder().encode(page))).slice(0, 32)}"`
 
 let unchanged = (req: Request, etag: string) =>
   (req.headers.get('if-none-match') ?? '').split(',')
@@ -545,11 +537,10 @@ let media = async (
   req: Request,
   got: Response,
   cache: string,
-  at: string,
   whole: () => Promise<Response>,
 ) => {
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
-  let etag = await etagOf(got.headers.get(VERSION) ?? '', at, false)
+  let etag = etagOf(got.headers.get(VERSION) ?? '')
   let headers = { 'content-type': type, 'cache-control': cache, etag }
   if (unchanged(req, etag)) {
     await got.body?.cancel()
@@ -561,7 +552,7 @@ let media = async (
     got = await whole()
     if (got.status != 200) return null
     type = got.headers.get('content-type') ?? type
-    etag = await etagOf(got.headers.get(VERSION) ?? '', at, false)
+    etag = etagOf(got.headers.get(VERSION) ?? '')
     headers = { 'content-type': type, 'cache-control': cache, etag }
   }
   let length = got.headers.get('content-length')
@@ -650,67 +641,60 @@ let asset = async (
     return await unwritten(req, env, app, path, bare) ?? nothingHere(env)
   }
   let type = got.headers.get('content-type') ?? 'application/octet-stream'
-  let html = type.startsWith('text/html')
-  // A sandboxed page is woven its person's saved keys (installed.ts
-  // `stored`), which the bytes' tag knows nothing of, and carries a token for
-  // them: it is sent whole every time, and no cache on the way may keep it.
-  if (sandbox && html) {
-    let original = await got.text()
-    let own = pinned(at, mapped(original, at, bare, app.source), app)
-    return reported(
-      at,
-      released(
-        new Response(based(at, intoHead(own, await sandbox())), {
-          headers: {
-            'content-type': type,
-            'cache-control': 'private, no-store',
-          },
-        }),
-        original,
-        at,
-        bare,
-        app.source,
-      ),
-    )
-  }
-  if (!html) {
+  if (!type.startsWith('text/html')) {
     return await media(
       req,
       got,
       keeping(app),
-      at,
       () => bytes(env, app, prefix, path),
     ) ?? nothingHere(env)
   }
-  let etag = await etagOf(
-    got.headers.get(VERSION) ?? '',
+  // A sandboxed page is woven its person's saved keys (installed.ts
+  // `stored`) and carries a token for them: it is sent whole every time, and
+  // no cache on the way may keep it.
+  let page = await woven(
+    await got.text(),
     at,
-    true,
-    app.source ?? '',
+    bare,
+    app,
+    sandbox ? await sandbox() : '',
   )
-  let headers = { 'content-type': type, 'cache-control': keeping(app), etag }
-  // The browser already has these bytes, so it is told so and sent none.
-  if (unchanged(req, etag)) {
-    await got.body?.cancel()
+  if (sandbox) {
+    return new Response(page, {
+      headers: { 'content-type': type, 'cache-control': 'private, no-store' },
+    })
+  }
+  let headers = {
+    'content-type': type,
+    'cache-control': keeping(app),
+    etag: await pageTag(page),
+  }
+  // The browser already has this page, so it is told so and sent none.
+  if (unchanged(req, headers.etag)) {
     return new Response(null, { status: 304, headers })
   }
-  if (req.method == 'HEAD') {
-    await got.body?.cancel()
-    return new Response(null, { headers })
-  }
-  // A page, so it gets the app's address before its own first relative URL,
-  // and the reporter after it. The weaving is done here rather than behind the
-  // cache because the same file is a different document at each mount, and one
-  // cached copy of the bytes serving every mount beats one copy per mount.
-  let original = await got.text()
-  let page = based(
+  return new Response(req.method == 'HEAD' ? null : page, { headers })
+}
+
+// A page as the browser gets it: the app's address before its own first
+// relative URL, the tags a home screen needs, its release's asset addresses,
+// any tags the caller adds, and the reporter. The weaving is done here rather
+// than behind the cache because the same file is a different document at each
+// mount, and one cached copy of the bytes serving every mount beats one copy
+// per mount.
+let woven = async (
+  original: string,
+  at: string,
+  bare: string,
+  app: App,
+  tags: string,
+) => {
+  let own = pinned(at, mapped(original, at, bare, app.source), app)
+  let page = based(at, tags ? intoHead(own, tags) : own)
+  return await reported(
     at,
-    pinned(at, mapped(original, at, bare, app.source), app),
-  )
-  return reported(
-    at,
-    released(new Response(page, { headers }), original, at, bare, app.source),
-  )
+    released(new Response(page), original, at, bare, app.source),
+  ).text()
 }
 
 let versionedAsset = async (
@@ -742,7 +726,6 @@ let versionedAsset = async (
     req,
     got,
     browserImmutable,
-    '',
     () => bytes(env, app, source, path, null, 'GET', source),
   ) ?? json(404, 'no_such_file')
 }
