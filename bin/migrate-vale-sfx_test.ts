@@ -103,3 +103,38 @@ Deno.test('sound migration keeps completed audio and retries missing output', ()
   )
   assertEquals(change.filter((r) => r.$delete).length, 5)
 })
+
+Deno.test('a dormant sound builder moves without inventing a model call', () => {
+  let definition = row('shared', {
+    builder: { query: '$sfx .sfx', to: 'tool' },
+    content: { body: 'Generate sound\n\n$description' },
+    using: { model: 'seed' },
+  })
+  let before = {
+    builders: [row('old-water', {
+      builder: { query: '.sfx.name=water', model: 'seed' },
+      doc: { body: 'Generate sound' },
+    })],
+    builds: [],
+    outputs: [],
+    sounds: [row('water', {
+      doc: { body: 'Water sound' },
+      sfx: { name: 'water' },
+    })],
+    artifacts: [],
+    citations: [],
+  }
+  let plans = [{
+    build: 'new-water',
+    match: '["water"]',
+    variant: 'main',
+    binding: { entities: ['water'], vars: { description: 'Water sound' } },
+    key: 'key-water',
+    to: 'tool',
+    template: 'Generate sound\n\n$description',
+    using: { model: 'seed' },
+  }]
+  let change = migrate(before, definition, plans)
+  assertEquals(change.filter((r) => r.call).length, 0)
+  assertEquals(change.filter((r) => r.$delete).length, 1)
+})

@@ -117,19 +117,29 @@ let scan = async (ctx: Ctx, args: Args) => {
   let builders = await read(store, '.builder&*')
   let builds = await read(store, '.build&*')
   let outputs = await read(store, '.built&*')
+  let sounds = await read(store, '.sfx&*')
+  let recovery = await json(
+    await store(
+      '/restore',
+      {},
+      { 'x-yak-kernel': '1' },
+    ),
+  )
   return {
     text:
-      `${space.slug}/${app.slug}: ${builders.length} builders, ${builds.length} builds, ${outputs.length} outputs`,
+      `${space.slug}/${app.slug}: ${builders.length} builders, ${builds.length} builds, ${outputs.length} outputs, ${sounds.length} sounds`,
     value: {
       builders: builders.length,
       builds: builds.length,
       outputs: outputs.length,
+      sounds: sounds.length,
+      recovery,
     },
   }
 }
 
 let migrateStore = async (ctx: Ctx, args: Args) => {
-  let { space, app } = await selected(ctx, VALE)
+  let { space, app } = await selected(ctx, say(args.app) || VALE)
   let raw = r2Objects(ctx.env.BLOBS)
   let audit = `${AUDIT}stores/${app.eid}.json`
   let hashes = object(args.files)
@@ -155,6 +165,12 @@ let migrateStore = async (ctx: Ctx, args: Args) => {
   let citations = allCites.filter((r) =>
     made.has(say((r.edge as { from?: string } | undefined)?.from))
   )
+  if (
+    !builders.length && !builds.length && !outputs.length &&
+    !sounds.length
+  ) {
+    return { text: `${space.slug}/${app.slug} has no sound builder rows` }
+  }
   let saved = await raw.read(audit)
   if (
     saved && builders.length == 1 &&

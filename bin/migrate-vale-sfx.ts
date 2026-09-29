@@ -58,7 +58,18 @@ export let migrate = (
   let byInput = new Map(
     plans.map((p) => [one(p.binding.entities, 'binding'), p]),
   )
-  if (byInput.size != plans.length || plans.length != sound.size) {
+  let queries = new Set(
+    before.builders.map((row) => String(get(row, 'builder').query)),
+  )
+  let expected = new Set(
+    before.sounds.map((row) => `.sfx.name=${get(row, 'sfx').name}`),
+  )
+  if (
+    byInput.size != plans.length || plans.length != sound.size ||
+    expected.size != sound.size || queries.size != before.builders.length ||
+    queries.size != expected.size ||
+    [...expected].some((query) => !queries.has(query))
+  ) {
     throw new Error('one sound must have one planned build')
   }
   let writes: Bundle[] = [definition]
@@ -146,7 +157,6 @@ export let migrate = (
     })
   }
   if (
-    before.builds.length != before.builders.length ||
     before.outputs.length != before.citations.length ||
     writes.filter((row) => row.built).length != before.outputs.length
   ) {
