@@ -3,7 +3,7 @@
 // query the door answers — nobody wires an extension up by hand. The package depends on
 // nothing up here; the test does, because what it is checking is the wiring.
 
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { compose } from '@yaks/cli/host'
@@ -98,7 +98,8 @@ test('a config composes the vectors, and asking the door ranks by them', async (
 // the config names the space even where it cannot reach the model yet.
 test('a config with no key composes, and nothing about the boot is different', async () => {
   let warn = console.warn
-  console.warn = () => {}
+  let said: unknown[][] = []
+  console.warn = (...line: unknown[]) => void said.push(line)
   let yak = await compose({
     db: ':memory:',
     numbers: false,
@@ -129,7 +130,8 @@ test('a config with no key composes, and nothing about the boot is different', a
       ),
     )
     assertEquals(res.status, 200, await res.text())
-    await new Promise((go) => setTimeout(go, 30))
+    // The service has looked once it says what it is waiting for.
+    await until(() => said.some((line) => line[0] == '@yaks/embedding —'))
     assertEquals(
       tally(yak.sql, 'embedding'),
       0,
@@ -156,14 +158,14 @@ test('a host that closes takes its service with it', async () => {
         '@yaks/doc',
         {
           use: '@yaks/embedding',
-          with: { embedder: { via: 'hash' }, after: 30 },
+          with: { embedder: { via: 'hash' }, after: 5 },
         },
       ],
     }, ['graph', '@yaks/embedding'])
     void yak.duties()
     await yak.graph.apply(shelf)
     await yak.close()
-    await new Promise((go) => setTimeout(go, 80))
+    await new Promise((go) => setTimeout(go, 20))
     assertEquals(late, [], 'the sweep fired after the store was closed')
   } finally {
     console.warn = warn

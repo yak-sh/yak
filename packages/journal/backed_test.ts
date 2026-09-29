@@ -24,7 +24,7 @@ let vocab = loadVocab([...wiki.docs, edgeDoc, metaDoc, journalDoc], [
 // backings. Three writes: ada makes p1, bob (through cli) retitles it and
 // makes p2, ada deletes p2. A fourth describes `page` and `entity` as the
 // `_comp` entities a change points at.
-let fixture = () => {
+let build = () => {
   let db = mem()
   let store = storage(db, vocab, { backed: backed(vocab) })
   store.install()
@@ -68,6 +68,11 @@ let fixture = () => {
   }
   return { g, read, rows, apply, said }
 }
+
+// The wiki as every reading test sees it, built once: they only read. A test
+// that writes builds its own.
+let built: ReturnType<typeof build> | undefined
+let fixture = () => built ??= build()
 let ada = { by: 'ada' }
 let bob = { by: 'bob', via: 'cli' }
 
@@ -165,7 +170,7 @@ test('the journal is no part of any other answer', () => {
 })
 
 test('nothing writes the journal’s components', () => {
-  let { apply, g } = fixture()
+  let { apply, g } = build()
   let change = { tx: null, target: 'p1', value: {} }
   assertEquals(apply([{ entity: { eid: 'x' }, _change: change }]), [])
   assertThrows(

@@ -100,10 +100,7 @@ test('a process that stays holds the duty until it goes', async () => {
     { holder: 'p1', signal: stop.signal },
     (signal) => until(signal),
   )
-  for (let i = 0; i < 200 && !holder; i++) {
-    holder = (await held(graph, 'clock'))?.holder ?? null
-    if (!holder) await new Promise((go) => setTimeout(go, 5))
-  }
+  await soon(async () => holder = (await held(graph, 'clock'))?.holder ?? null)
   assertEquals(holder, 'p1')
   stop.abort()
   await running
@@ -112,23 +109,28 @@ test('a process that stays holds the duty until it goes', async () => {
 
 test('a second process waits, and takes over when the first lapses', async () => {
   let graph = g()
-  // A holder that was killed: it never renews and never lets go.
-  await take(graph, 'clock', { holder: 'gone', hold: 30 })
+  // A holder that was killed: it never renews and never lets go. The clock is
+  // the test's, so the lapse is a move of it and not a wait.
+  let clock = 0
+  let asked = 0
+  let now = () => (asked++, clock)
+  await take(graph, 'clock', { holder: 'gone', hold: 30, now })
   let stop = new AbortController()
   let took = false
   let running = holding(
     graph,
     'clock',
-    { holder: 'p2', hold: 500, poll: 5, signal: stop.signal },
+    { holder: 'p2', hold: 500, poll: 1, now, signal: stop.signal },
     (signal) => {
       took = true
       return until(signal)
     },
   )
-  for (let i = 0; i < 200 && !took; i++) {
-    await new Promise((go) => setTimeout(go, 5))
-  }
-  assert(took, 'nobody took over a lease that lapsed')
+  let before = asked
+  await soon(() => asked > before + 1, { label: 'p2 to ask again' })
+  assert(!took, 'p2 took a lease that still stood')
+  clock = 31
+  await soon(() => took, { label: 'p2 to take over' })
   assertEquals((await held(graph, 'clock'))?.holder, 'p2')
   stop.abort()
   await running
@@ -162,7 +164,7 @@ test('a lease lost mid-work stops the work, and the loser waits to take it back'
   let running = holding(
     graph,
     'clock',
-    { holder: 'p1', hold: 60, poll: 5, signal: stop.signal },
+    { holder: 'p1', hold: 15, poll: 1, signal: stop.signal },
     (signal) => {
       runs.push(signal)
       return until(signal)
@@ -202,7 +204,7 @@ test('a take the store fails is asked again, and the duty is not given up', asyn
     'clock',
     {
       holder: 'p1',
-      poll: 5,
+      poll: 1,
       signal: stop.signal,
       report: (e) => void told.push(e),
     },
@@ -253,7 +255,7 @@ test('holding answers what the work answered', async () => {
 test('a pass on its way out is renewed while it runs', async () => {
   let graph = g()
   let upto = async () => String((await held(graph, 'sweep'))?.until)
-  await holding(graph, 'sweep', { holder: 'p1', hold: 60 }, async () => {
+  await holding(graph, 'sweep', { holder: 'p1', hold: 15 }, async () => {
     let first = await upto()
     await soon(async () => await upto() != first, { label: 'a renewal' })
   })

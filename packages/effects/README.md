@@ -316,8 +316,8 @@ let g = graph({ storage: ram(vocab), vocab })
 await g.apply([{ entity: { eid: 'me' }, process: {} }])
 let refreshIndex = async () => {}
 
-// Held until the signal says stop: here, a tenth of a second.
-let signal = AbortSignal.timeout(100)
+// Held until the signal says stop: here, a hundredth of a second.
+let signal = AbortSignal.timeout(10)
 await holding(
   g,
   'refresh-index',
