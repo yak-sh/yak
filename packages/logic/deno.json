@@ -1,0 +1,12 @@
+{
+  "name": "@yaks/logic",
+  "version": "0.2.10",
+  "exports": "./mod.ts",
+  "license": "Apache-2.0",
+  "description": "A relational runtime in the miniKanren manner: unification over lists and objects, constraints deferred until their variables are bound, relations with facts, and effects kept as data and performed by a separate pass.",
+  "publish": {
+    "exclude": [
+      "browser.json"
+    ]
+  }
+}

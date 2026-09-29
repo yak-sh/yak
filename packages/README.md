@@ -480,6 +480,11 @@ grouped approximately by function, **not** by dependency order.
   the ones before it: `compose`, a `pipe` that stops on nil, `when` dispatch
   tables, copy-tweak-return (`beget`, `update`, `defaults`), `tally`, `fold`,
   and `cmp` and `bsearch` for order. No dependencies.
+- **[@yaks/logic](./logic)** — a relational runtime in the miniKanren manner:
+  unification over lists and objects (`splat` for a run of items), relations
+  that answer from whichever arguments are bound, constraints deferred until
+  their variables are, facts said and asked, and effects kept as data and
+  performed by `race`. Depends only on @yaks/fp.
 
 ## Domain plugins
 

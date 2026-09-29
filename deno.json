@@ -187,7 +187,8 @@
     "./packages/esbuild",
     "./packages/rtc",
     "./packages/testing",
-    "./packages/fp"
+    "./packages/fp",
+    "./packages/logic"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

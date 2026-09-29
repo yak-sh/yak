@@ -1,0 +1,14 @@
+{
+  "_": "The browser gate: @yaks/logic is pure functions over plain values, and its two effects use fetch and setTimeout, so the whole package must type-check with only the web platform in scope.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/fp": "../fp/mod.ts",
+    "@yaks/logic": "./mod.ts"
+  }
+}

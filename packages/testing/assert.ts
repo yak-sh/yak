@@ -33,16 +33,20 @@ let object = (v: unknown): v is Record<string, unknown> =>
 // `actual`, cut to the shape of `pattern`: a key the pattern leaves out is
 // left out, a RegExp that tests true and a class the value is an instance of
 // become the pattern itself, so what remains compares by equality and a
-// failure shows only the difference that matters.
+// failure shows only the difference that matters. Only arrays and plain
+// objects are cut: an instance in a pattern (a date, a class's) is a value,
+// and so is a function with no prototype (an arrow), which is never a class.
 let cut = (actual: unknown, pattern: unknown): unknown =>
   pattern instanceof RegExp && !(actual instanceof RegExp)
     ? pattern.test(String(actual)) ? pattern : actual
-    : typeof pattern == 'function'
+    : typeof pattern == 'function' && pattern.prototype
     ? actual instanceof pattern ? pattern : actual
     : !object(pattern) || !object(actual) || !Object.keys(pattern).length
     ? actual
     : Array.isArray(pattern)
     ? Array.isArray(actual) ? pattern.map((p, i) => cut(actual[i], p)) : actual
+    : ![Object.prototype, null].includes(Object.getPrototypeOf(pattern))
+    ? actual
     : Object.fromEntries(
       Object.entries(pattern).map(([k, p]) => [k, cut(actual[k], p)]),
     )
@@ -51,10 +55,13 @@ let cut = (actual: unknown, pattern: unknown): unknown =>
  * A partial match: every key `pattern` names holds in `actual`, and every
  * item of a pattern array in the item at its index. A RegExp tests a value's
  * text and a class tests an instance; an empty array or object asks for an
- * empty one, and the rest is equality.
+ * empty one, and the rest is equality: an instance's, and an arrow's.
  *
  * ```ts
  * match({ id: 7, name: 'Ada', tags: ['a', 'b'] }, { name: /^A/, tags: ['a'] })
+ * let twice = (n: number) => n * 2
+ * match({ at: new Date(0), of: twice }, { at: Date, of: twice })
+ * match({ at: new Date(0) }, { at: new Date(0) })
  * ```
  */
 export let match = <T>(actual: T, pattern: unknown, message?: string): T => {
