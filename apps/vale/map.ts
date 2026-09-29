@@ -20,7 +20,16 @@ import {
   SIZE,
   type Spot,
 } from './levels.ts'
-import { type Box, pan, place, reopen, view, WORLD, zoom } from './mapview.ts'
+import {
+  type Box,
+  pan,
+  pinch,
+  place,
+  reopen,
+  view,
+  WORLD,
+  zoom,
+} from './mapview.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
 import { clamp } from './rand.ts'
@@ -103,8 +112,11 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   // The view is a square of world metres. The ground may lag a drag or zoom;
   // its last chart is transformed until the next one has been painted.
   let box = view([0, 0], WORLD[2])
+  let aim = box
+  let frameWas = performance.now()
   let home: Box | null = null
   let drawn = box
+  let fogDrawn = box
   let shown = ''
   let version = chartVersion
   let openWas = false
@@ -128,26 +140,44 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
   let fogWas = ''
   let fogCtx = fog.getContext('2d')!
   let choicesWas = ''
-  let pending: ReturnType<typeof setTimeout> | undefined
   canvas.width = canvas.height = 320
   fog.width = fog.height = FOG_SIZE
   let ctx = canvas.getContext('2d')!
   let key = () => box.join(',')
-  let moveGround = () => {
+  let moveImage = (image: HTMLCanvasElement, drawn: Box) => {
     let x = (drawn[0] - box[0]) / box[2] * 100
     let z = (drawn[1] - box[1]) / box[2] * 100
-    canvas.style.transform = `translate(${x}%, ${z}%) scale(${
+    image.style.transform = `translate(${x}%, ${z}%) scale(${
       drawn[2] / box[2]
     })`
   }
-  let setView = (next: Box) => {
-    if (next.join() == box.join()) return
+  let moveImages = () => {
+    moveImage(canvas, drawn)
+    moveImage(fog, fogDrawn)
+  }
+  let setView = (next: Box, smooth = false) => {
+    if (next.join() == box.join()) next = box
+    aim = next
+    if (smooth || next == box) return
     box = next
     was = ''
-    fogWas = ''
-    fogCtx.fillStyle = 'rgba(34, 35, 31, 0.9)'
-    fogCtx.fillRect(0, 0, FOG_SIZE, FOG_SIZE)
-    moveGround()
+    moveImages()
+  }
+  let advance = () => {
+    let now = performance.now()
+    let dt = Math.min(now - frameWas, 64)
+    frameWas = now
+    if (box == aim) return
+    let t = 1 - Math.exp(-dt / 90)
+    let next: Box = [
+      box[0] + (aim[0] - box[0]) * t,
+      box[1] + (aim[1] - box[1]) * t,
+      box[2] + (aim[2] - box[2]) * t,
+    ]
+    if (next.every((n, i) => Math.abs(n - aim[i]) < 0.05)) next = aim
+    box = next
+    was = ''
+    moveImages()
   }
   let overview = () => {
     ctx.fillStyle = '#30382d'
@@ -241,7 +271,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
       keep(id, image)
       if (shown != id) return
       ctx.putImageData(image, 0, 0)
-      moveGround()
+      moveImages()
     }).catch(reportError)
   }
   // Where a point sits on the map, as a percentage across and down.
@@ -251,13 +281,16 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
     let id = `${key()}/${[...visited].sort().join(',')}`
     if (id == fogWas) return
     fogWas = id
-    fogged(box, visited).then((px) => {
+    let asked = box
+    fogged(asked, visited).then((px) => {
       if (id == fogWas) {
+        fogDrawn = asked
         fogCtx.putImageData(
           new ImageData(px, FOG_SIZE, FOG_SIZE),
           0,
           0,
         )
+        moveImages()
       }
     }).catch(reportError)
   }
@@ -272,50 +305,84 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         ? view(hero)
         : action == 'world'
         ? view(hero, WORLD[2])
-        : zoom(box, action == 'in' ? -1 : 1),
+        : zoom(aim, action == 'in' ? 1 / 1.5 : 1.5),
+      true,
     )
-    draw()
   })
   stage.addEventListener('wheel', (e) => {
     e.preventDefault()
     let rect = stage.getBoundingClientRect()
-    setView(zoom(box, e.deltaY < 0 ? -1 : 1, [
-      (e.clientX - rect.left) / rect.width,
-      (e.clientY - rect.top) / rect.height,
-    ]))
-    clearTimeout(pending)
-    pending = setTimeout(() => {
-      pending = undefined
-      if (panel.open) draw()
-    }, 120)
+    let pixels = e.deltaY *
+      (e.deltaMode == 1 ? 40 : e.deltaMode == 2 ? rect.height : 1)
+    setView(
+      zoom(aim, Math.exp(clamp(pixels, -240, 240) * 0.0015), [
+        (e.clientX - rect.left) / rect.width,
+        (e.clientY - rect.top) / rect.height,
+      ]),
+      true,
+    )
   }, { passive: false })
   let drag: { x: number; z: number; box: Box } | null = null
+  let points = new Map<number, Spot>()
+  let gesture: { from: Spot; span: number; box: Box } | null = null
+  let pair = () => {
+    let [a, b] = [...points.values()]
+    let rect = stage.getBoundingClientRect()
+    let from: Spot = [
+      ((a[0] + b[0]) / 2 - rect.left) / rect.width,
+      ((a[1] + b[1]) / 2 - rect.top) / rect.height,
+    ]
+    return { from, span: Math.hypot(a[0] - b[0], a[1] - b[1]) }
+  }
   stage.addEventListener('pointerdown', (e) => {
-    drag = { x: e.clientX, z: e.clientY, box }
+    aim = box
+    points.set(e.pointerId, [e.clientX, e.clientY])
+    if (points.size == 1) drag = { x: e.clientX, z: e.clientY, box }
+    if (points.size == 2) {
+      drag = null
+      gesture = { ...pair(), box }
+    }
     stage.setPointerCapture(e.pointerId)
   })
   stage.addEventListener('pointermove', (e) => {
+    if (!points.has(e.pointerId)) return
+    points.set(e.pointerId, [e.clientX, e.clientY])
+    if (gesture && points.size == 2) {
+      let now = pair()
+      if (now.span && gesture.span) {
+        setView(pinch(
+          gesture.box,
+          gesture.from,
+          now.from,
+          gesture.span / now.span,
+        ))
+      }
+      return
+    }
     if (!drag) return
     let side = stage.getBoundingClientRect().width
     setView(
       pan(drag.box, (e.clientX - drag.x) / side, (e.clientY - drag.z) / side),
     )
   })
-  stage.addEventListener('pointerup', () => {
-    drag = null
-    draw()
-  })
-  stage.addEventListener('pointercancel', () => {
-    drag = null
-    draw()
-  })
+  let end = (e: PointerEvent) => {
+    points.delete(e.pointerId)
+    gesture = points.size == 2 ? { ...pair(), box } : null
+    let [left] = points.values()
+    drag = points.size == 1 ? { x: left[0], z: left[1], box } : null
+    if (!left) draw()
+  }
+  stage.addEventListener('pointerup', end)
+  stage.addEventListener('pointercancel', end)
   stage.addEventListener('dblclick', (e) => {
     let rect = stage.getBoundingClientRect()
-    setView(zoom(box, -1, [
-      (e.clientX - rect.left) / rect.width,
-      (e.clientY - rect.top) / rect.height,
-    ]))
-    draw()
+    setView(
+      zoom(aim, 1 / 1.5, [
+        (e.clientX - rect.left) / rect.width,
+        (e.clientY - rect.top) / rect.height,
+      ]),
+      true,
+    )
   })
 
   return {
@@ -332,6 +399,7 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         openWas = false
         return
       }
+      advance()
       hero = [f.body.x, f.body.z]
       if (!openWas) {
         openWas = true
@@ -342,11 +410,11 @@ export let map = (panel: Panel, travel: (to: string) => void) => {
         levelWas = f.level
         panel.head(esc(levelOf(f.level)?.name ?? f.level))
       }
-      if (!drag && pending == undefined) draw()
-      scale.textContent = box[2] == WORLD[2]
-        ? `${box[2]} m across`
-        : `${box[2]} m across`
-      if (!drag && pending == undefined) uncover(regions)
+      if (!drag && !gesture && box == aim) {
+        draw()
+        uncover(regions)
+      }
+      scale.textContent = `${Math.round(box[2])} m across`
       let inside = (x: number, z: number) =>
         x >= box[0] && x <= box[0] + box[2] &&
         z >= box[1] && z <= box[1] + box[2]

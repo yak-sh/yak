@@ -1,17 +1,26 @@
 // Nearby and world map gestures share one world-coordinate viewport.
-import { assertEquals } from '@std/assert'
+import { assertAlmostEquals, assertEquals } from '@std/assert'
 import { LEVELS, SIZE } from './levels.ts'
-import { pan, place, reopen, view, WORLD, zoom, ZOOMS } from './mapview.ts'
+import {
+  NEAR,
+  pan,
+  pinch,
+  place,
+  reopen,
+  view,
+  WORLD,
+  zoom,
+} from './mapview.ts'
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
 
 Deno.test('the map opens near the hero and zooms out around their position', () => {
   let near = view([100, 120])
-  assertEquals(near[2], ZOOMS[0])
+  assertEquals(near[2], NEAR)
   assertEquals(place(near, [100, 120]), [0.5, 0.5])
   let whole = near
-  for (let i = 1; i < ZOOMS.length; i++) whole = zoom(whole, 1)
+  for (let i = 0; i < 40; i++) whole = zoom(whole, 1.2)
   assertEquals(whole[2], WORLD[2])
   assertEquals(place(whole, [100, 120]), [0.5, 0.5])
   for (let lv of Object.values(LEVELS)) {
@@ -31,7 +40,28 @@ Deno.test('panning and anchored zoom keep places aligned', () => {
     moved[0] + point[0] * moved[2],
     moved[1] + point[1] * moved[2],
   ]
-  assertEquals(place(zoom(moved, 1, point), world), point)
+  let changed = zoom(moved, 1.13, point)
+  assertAlmostEquals(changed[2], moved[2] * 1.13)
+  let [u, v] = place(changed, world)
+  assertAlmostEquals(u, point[0])
+  assertAlmostEquals(v, point[1])
+  assertEquals(zoom(changed, 100)[2], WORLD[2])
+  assertEquals(zoom(changed, 0.001)[2], NEAR)
+})
+
+Deno.test('pinch keeps ground beneath the moving midpoint', () => {
+  let box = zoom(view([100, 120]), 2)
+  let from: [number, number] = [0.3, 0.4]
+  let to: [number, number] = [0.5, 0.6]
+  let ground: [number, number] = [
+    box[0] + from[0] * box[2],
+    box[1] + from[1] * box[2],
+  ]
+  let next = pinch(box, from, to, 0.75)
+  assertEquals(next[2], 480)
+  let [u, v] = place(next, ground)
+  assertAlmostEquals(u, to[0])
+  assertAlmostEquals(v, to[1])
 })
 
 Deno.test('reopening nearby reuses the chart until the hero leaves its middle', () => {

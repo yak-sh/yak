@@ -18,12 +18,12 @@ export let WORLD: Box = [
   (north + south - side) / 2,
   side,
 ]
-export let ZOOMS = [...[320, 640, 1280, 2560].filter((n) => n < side), side]
+export let NEAR = 320
 
 /** A square centred near `at` in the unbounded world. */
-export let view = (at: Spot, size = ZOOMS[0]): Box => [
-  Math.round(at[0] - size / 2),
-  Math.round(at[1] - size / 2),
+export let view = (at: Spot, size = NEAR): Box => [
+  at[0] - size / 2,
+  at[1] - size / 2,
   size,
 ]
 
@@ -41,15 +41,24 @@ export let reopen = (at: Spot, was: Box | null): Box => {
 export let pan = (box: Box, dx: number, dz: number): Box =>
   view([box[0] + box[2] * (0.5 - dx), box[1] + box[2] * (0.5 - dz)], box[2])
 
-/** Zoom around a point on the chart, given as a fraction from its top left. */
-export let zoom = (box: Box, step: number, [u, v]: Spot = [0.5, 0.5]): Box => {
-  let i = ZOOMS.indexOf(box[2])
-  let size = ZOOMS[clamp(i + step, 0, ZOOMS.length - 1)]
-  return view([
-    box[0] + u * box[2] + (0.5 - u) * size,
-    box[1] + v * box[2] + (0.5 - v) * size,
-  ], size)
+/** Keep the same ground point between two fingers as they move and spread. */
+export let pinch = (
+  box: Box,
+  from: Spot,
+  to: Spot,
+  factor: number,
+): Box => {
+  let size = clamp(box[2] * factor, NEAR, WORLD[2])
+  return [
+    box[0] + from[0] * box[2] - to[0] * size,
+    box[1] + from[1] * box[2] - to[1] * size,
+    size,
+  ]
 }
+
+/** Zoom around a point on the chart, given as a fraction from its top left. */
+export let zoom = (box: Box, factor: number, at: Spot = [0.5, 0.5]): Box =>
+  pinch(box, at, at, factor)
 
 /** A world point on the chart, from zero to one across and down. */
 export let place = (
