@@ -6,7 +6,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle } from './net.ts'
 import { comp } from './bundle.ts'
-import { eidOf } from './villagers.ts'
+import { eidOf } from './villager-id.ts'
 import { resolveTarget } from './target.ts'
 import words from './vocab.json' with { type: 'json' }
 
