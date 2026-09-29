@@ -8,10 +8,9 @@
 import { chart } from './chart.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import { buffers, pack, type Packed } from './mesh.ts'
-import { useThemes } from './levels.ts'
 import type { Bundle } from './net.ts'
 import { model } from './props.ts'
-import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
+import { installBuildingDesigns, installThemeDesigns, vale } from './terrain.ts'
 
 /** What the page asks of a worker: one chunk, grown at a voxel edge, with
  * its small things or without; or a chart of the square `size` metres on a
@@ -40,8 +39,7 @@ addEventListener('message', (e: MessageEvent<Init | (Ask & { n: number })>) => {
     return
   }
   if ('themes' in a) {
-    useThemes(a.themes)
-    refreshTerrain()
+    installThemeDesigns(a.themes)
     return
   }
   if ('template' in a) {

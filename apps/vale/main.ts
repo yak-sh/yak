@@ -69,6 +69,7 @@ import { station } from './station.ts'
 import { voices } from './voicebox.ts'
 import { COARSER } from './stream.ts'
 import {
+  type Affects,
   CHUNK,
   groundAt,
   hearthNear,
@@ -128,15 +129,15 @@ let asking = opening.me().then(async (me) => ({
 }))
 let hadThemes = false
 let hadBuildings = false
-let redraw = () => {}
+let redraw: (affects: Affects, kinds?: Set<string>) => void = () => {}
 let themeReady = opening.designs('theme_design', (rows) => {
-  useThemeRows(rows)
-  if (hadThemes) redraw()
+  let affects = useThemeRows(rows)
+  if (hadThemes) redraw(affects)
   hadThemes = true
 })
 let buildingReady = opening.designs('building_design', (rows) => {
-  useBuildingDesigns(rows)
-  if (hadBuildings) redraw()
+  let { affects, kinds } = useBuildingDesigns(rows)
+  if (hadBuildings) redraw(affects, kinds)
   hadBuildings = true
 })
 await Promise.all([
@@ -240,7 +241,7 @@ let w = world(
     template,
   },
 )
-redraw = () => w.refresh()
+redraw = (affects, kinds) => w.refresh(affects, kinds)
 depth(camera, w.fog)
 // Where the hearth is by which the page first looks, and a new hero first
 // stands: home's fire.

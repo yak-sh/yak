@@ -24,11 +24,20 @@
 // building among it is raised on the ground at its middle, as rounded to
 // voxels, and lays the ground round it as it needs (`lay`).
 import { dressed, PLANS } from './buildings.ts'
+import { comp } from './bundle.ts'
+import { changed } from './designs.ts'
 import { caveAt } from './caves.ts'
 import { type Feature, FEATURES, isA, Top } from './features.ts'
 import { NATURE } from './nature.ts'
 import type { Bundle } from './net.ts'
-import { levelAt, levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
+import {
+  levelAt,
+  levelOf,
+  LEVELS,
+  SIZE,
+  type Spot,
+  useThemes,
+} from './levels.ts'
 import { bulk, halfOf, KINDS, raisedOf, useBuildingKinds } from './props.ts'
 import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
 import {
@@ -37,12 +46,14 @@ import {
   borderOf,
   boundariesIn,
   boundaryAt,
+  levelsNear,
   lie,
   pick,
   type Placed,
   placesAt,
   placesIn,
   placesOf,
+  refreshRegions,
 } from './regions.ts'
 import { type Building, near, placed, type Station, within } from './solid.ts'
 import { EDGE, type Street, streets } from './streets.ts'
@@ -144,6 +155,17 @@ export type Patch = {
   regions: string[]
 }
 
+/** The regions whose cover can be picked in a chunk. A second region at
+ * share 255 is known for the border but contributes nothing here. */
+export let usedRegions = (p: Patch): string[] => {
+  let ids = new Set<string>()
+  for (let j = 0; j < p.region.length; j++) {
+    ids.add(p.regions[p.region[j]])
+    if (p.share[j] < 255) ids.add(p.regions[p.other[j]])
+  }
+  return [...ids]
+}
+
 /** The world's ground as a page or a worker grows it, at one voxel size: how
  * high the smooth ground is anywhere, how a chunk's ground grows, what stands
  * in it and what a walker bumps into there; and the chunks' ground grown so
@@ -188,6 +210,16 @@ let kept = <T>(most: number, make: (ci: number, ck: number) => T) => {
     clear: () => {
       got.clear()
       last = NaN
+    },
+    drop: (take: (ci: number, ck: number) => boolean) => {
+      for (let key of got.keys()) {
+        let ci = Math.floor(key / 0x2000000) - 0x1000000
+        let ck = key - (ci + 0x1000000) * 0x2000000 - 0x1000000
+        if (take(ci, ck)) {
+          got.delete(key)
+          if (key == last) last = NaN
+        }
+      }
     },
   })
 }
@@ -446,11 +478,12 @@ let raised = new Map<string, Prop[]>()
 let paths = new WeakMap<Vale, Map<string, Street>>()
 let plans = PLANS
 let builtReach = -1
-let refreshBuildings = () => {
-  if (plans == PLANS) return
+let refreshBuildings = (force = false) => {
+  if (!force && plans == PLANS) return
   raised.clear()
   paths = new WeakMap()
   raising = new WeakMap()
+  details = new WeakMap()
   builtReach = -1
   plans = PLANS
 }
@@ -1227,22 +1260,98 @@ let bumping = (v: Vale) => (ci: number, ck: number): Wall[] => {
 // The world's ground at each voxel size asked for, made once.
 let vales = new Map<number, Vale>()
 
+/** A design's old and new reach over chunks; the optional region list is a
+ * chunk's grown cover, which makes the common theme check exact. */
+export type Affects = (ci: number, ck: number, regions?: string[]) => boolean
+let themeRows: Bundle[] | null = null
+let buildingRows: Bundle[] | null = null
+let any: Affects = () => true
+
+let themeAffects = (lands: Set<string>, frontier: boolean): Affects => {
+  let named = (id: string) =>
+    lands.has(id) || lands.has(levelOf(id)?.source ?? '') ||
+    (frontier && id.startsWith('frontier_'))
+  return (ci, ck, regions) => {
+    if (regions?.some(named)) return true
+    if (regions && !frontier) return false
+    let x = ci * CHUNK, z = ck * CHUNK
+    // Include the column halo shared with neighbours. An uncached prop list
+    // has no patch's region index, so read the same global border function.
+    for (let dz = -1; dz <= CHUNK + 1; dz += 2) {
+      for (let dx = -1; dx <= CHUNK + 1; dx += 2) {
+        let b = blend(x + dx, z + dz)
+        if (named(b.a) || (b.t < 1 && named(b.b))) return true
+      }
+    }
+    return false
+  }
+}
+
+let buildingAffects =
+  (kinds: Set<string>, half: number): Affects => (ci, ck) => {
+    let x = (ci + 0.5) * CHUNK, z = (ck + 0.5) * CHUNK
+    return levelsNear(x, z, SIZE * 2 + half).some((id) =>
+      placesOf(id).some((p) => {
+        let builds = p.f.builds ?? []
+        if (!builds.some((b) => kinds.has(b.kind))) return false
+        // A changed footprint may move later builds at the same place. The
+        // village's streets and retaining walls also read its buildings.
+        let reach = Math.max(
+          ...builds.map((b) =>
+            Math.max(Math.abs(b.x), Math.abs(b.z)) + half + 12
+          ),
+          isA(p.kind, 'village') ? 55 : 0,
+        )
+        return Math.abs(x - p.at[0]) < reach + CHUNK &&
+          Math.abs(z - p.at[1]) < reach + CHUNK
+      })
+    )
+  }
+
 /** Retire ground and collision derived from the previous designs. */
-export let refreshTerrain = () => {
-  refreshBuildings()
-  planted.clear()
+export let refreshTerrain = (affects: Affects = any, frontier = false) => {
+  refreshBuildings(frontier)
+  planted.drop(affects)
   for (let v of vales.values()) {
-    v.patches.clear()
-    v.grow = growing(v)
+    for (let [key, p] of v.patches) {
+      if (affects(p.ci, p.ck, usedRegions(p))) v.patches.delete(key)
+    }
     v.buildings = housing(v, builtIn)
     v.bump = kept(200, bumping(v))
   }
 }
 
+/** Install a watched theme change and name the chunks it can change. */
+export let installThemeDesigns = (rows: Bundle[]): Affects => {
+  let lands = changed(themeRows ?? [], rows, 'theme_design', 'land')
+  if (themeRows && !lands.size) return () => false
+  let frontier = useThemes(rows)
+  if (frontier) refreshRegions()
+  let affects = themeRows ? themeAffects(lands, frontier) : any
+  themeRows = rows
+  if (lands.size || frontier) refreshTerrain(affects, frontier)
+  return affects
+}
+
 /** Install the store's building plans throughout this world's derived data. */
-export let installBuildingDesigns = (rows: Bundle[]) => {
-  useBuildingKinds(rows)
-  refreshTerrain()
+export let installBuildingDesigns = (rows: Bundle[]): {
+  affects: Affects
+  kinds: Set<string>
+} => {
+  let kinds = changed(buildingRows ?? [], rows, 'building_design', 'kind')
+  if (buildingRows && !kinds.size) return { affects: () => false, kinds }
+  let sizes = [...buildingRows ?? [], ...rows].flatMap((row) => {
+    let d = comp(row, 'building_design')
+    if (!kinds.has(String(d.kind))) return []
+    let size = d.size
+    return Array.isArray(size) ? Math.max(...size.map(Number)) : 0
+  })
+  let half = Math.max(0, ...sizes) / 2
+  useBuildingKinds(rows, kinds)
+  let affects = buildingRows ? buildingAffects(kinds, half) : any
+  buildingRows = rows
+  if (kinds.size) refreshTerrain(affects)
+  return { affects, kinds }
 }
 
 /** The world's ground grown at a voxel edge of `voxel` metres, which must

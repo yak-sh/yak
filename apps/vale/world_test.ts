@@ -216,3 +216,64 @@ Deno.test('a design refresh keeps visible ground until replacement chunks arrive
   assert(at(ci, ck) != before)
   w.dispose()
 })
+
+Deno.test('a scoped design edit replaces its chunk and keeps its neighbour', async () => {
+  let calls: string[] = []
+  let w = world(flat(5), {
+    capacity: 4,
+    chunk: (ci, ck) => {
+      calls.push(`${ci} ${ck}`)
+      return Promise.resolve(bare(ci, ck))
+    },
+    template: () => Promise.resolve(pack(out())),
+  })
+  w.fog.far = 35
+  w.focus.set(128, 5, 128)
+  await w.near()
+  for (let i = 0; w.pending && i < 500; i++) await Promise.resolve()
+  assertEquals(w.pending, 0)
+  let at = (ci: number, ck: number) =>
+    w.scene.children.find((o): o is THREE.Mesh =>
+      o instanceof THREE.Mesh && o.position.x == ci * CHUNK &&
+      o.position.z == ck * CHUNK && o.geometry.userData.bytes != null
+    )
+  let first = at(8, 8), other = at(7, 8)
+  assert(first && other)
+  calls.length = 0
+  w.refresh((ci, ck) => ci == 8 && ck == 8)
+  await w.near()
+  assert(at(8, 8) != first)
+  assertEquals(at(7, 8), other)
+  assertEquals(calls, ['8 8'])
+  w.dispose()
+})
+
+Deno.test('a building edit remeshes its model without remeshing another kind', async () => {
+  let calls: string[] = []
+  let w = world(flat(5), {
+    capacity: 4,
+    chunk: (ci, ck) =>
+      Promise.resolve({
+        ...bare(ci, ck),
+        buildings: ci == 8 && ck == 8
+          ? [{ kind: 'cottage.plaster', seed: 0, turn: 0, at: [136, 5, 136] }]
+          : ci == 7 && ck == 8
+          ? [{ kind: 'smithy.plaster', seed: 0, turn: 0, at: [120, 5, 136] }]
+          : [],
+      }),
+    template: (kind) => {
+      calls.push(kind)
+      return Promise.resolve(pack(out()))
+    },
+  })
+  w.fog.far = 35
+  w.focus.set(128, 5, 128)
+  await w.near()
+  for (let i = 0; w.pending && i < 500; i++) await Promise.resolve()
+  assertEquals(w.pending, 0)
+  calls.length = 0
+  w.refresh((ci, ck) => ci == 8 && ck == 8, new Set(['cottage']))
+  await w.near()
+  assertEquals(calls, ['cottage.plaster'])
+  w.dispose()
+})

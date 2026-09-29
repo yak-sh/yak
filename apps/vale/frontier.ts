@@ -133,6 +133,7 @@ export let frontier = (
     name: ROOTS[salt % ROOTS.length] +
       ENDS[hash(gx, gz, 40842) % ENDS.length],
     seed: salt,
+    source: theme,
     cell: [gx, gz],
     arrive,
     places,

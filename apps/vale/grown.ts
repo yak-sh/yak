@@ -10,8 +10,12 @@ import type { Answer, Ask } from './grow.ts'
 import { pack, type Packed } from './mesh.ts'
 import type { Bundle } from './net.ts'
 import { model } from './props.ts'
-import { useThemes } from './levels.ts'
-import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
+import {
+  type Affects,
+  installBuildingDesigns,
+  installThemeDesigns,
+  vale,
+} from './terrain.ts'
 
 // How many workers mesh at once: a core each, less the page's own, up to four.
 export let capacity = Math.max(
@@ -27,10 +31,14 @@ let themes: Bundle[] = []
 let buildingDesigns: Bundle[] | null = null
 
 /** Give each world Worker the same building plans the page is using. */
-export let useBuildingDesigns = (rows: Bundle[]) => {
+export let useBuildingDesigns = (rows: Bundle[]): {
+  affects: Affects
+  kinds: Set<string>
+} => {
   buildingDesigns = rows
-  installBuildingDesigns(rows)
+  let impact = installBuildingDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ buildingDesigns: rows })
+  return impact
 }
 let asks = new Map<
   number,
@@ -77,11 +85,11 @@ let hands = () =>
   })
 
 /** Keep the page and each growth worker on the store's region designs. */
-export let useThemeRows = (rows: Bundle[]) => {
+export let useThemeRows = (rows: Bundle[]): Affects => {
   themes = rows
-  useThemes(rows)
-  refreshTerrain()
+  let affects = installThemeDesigns(rows)
   for (let hand of pool) hand.w.postMessage({ themes: rows })
+  return affects
 }
 
 // One ask of the worker with the fewest waiting.

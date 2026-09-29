@@ -53,6 +53,8 @@ export let ACROSS: Record<Side, Side> = {
 export type Level = {
   id: string
   name: string
+  /** the authored theme whose places and cover grew a frontier land */
+  source?: string
   /** what the noise is salted with; 0 grows Mossvale as it always was */
   seed: number
   /** its cell on the lattice, `[east, south]` in cells from Mossvale's */
@@ -153,6 +155,7 @@ let frontierThemes: string[] = []
 
 /** Replace the region themes with the store's current designs. */
 export let useThemes = (rows: Bundle[]) => {
+  let previous = frontierThemes.join(',')
   themes = Object.fromEntries(rows.flatMap((row) => {
     let design = comp(row, 'theme_design'), land = str(design.land)
     return land ? [[land, design as Theme]] : []
@@ -168,6 +171,7 @@ export let useThemes = (rows: Bundle[]) => {
   ).sort((a, b) => a.frontier! - b.frontier!).map((t) => t.land)
   cells = new Map(Object.values(LEVELS).map((lv) => [lv.cell.join(','), lv]))
   grown.clear()
+  return previous != frontierThemes.join(',')
 }
 
 /** Where a new hero first stands. */

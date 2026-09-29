@@ -41,12 +41,15 @@ let natural: Record<string, Kind> = {
 export let KINDS: Record<string, Kind> = natural
 
 /** Install the current building shapes beside the natural props. */
-export let useBuildingKinds = (rows: Bundle[]) => {
-  useBuildings(rows)
+export let useBuildingKinds = (rows: Bundle[], changed?: Set<string>) => {
+  useBuildings(rows, changed)
   KINDS = { ...natural, ...BUILDINGS }
-  made.clear()
-  meshed.clear()
-  profiled.clear()
+  for (let cache of [made, meshed, profiled]) {
+    if (!changed) cache.clear()
+    else {for (let key of cache.keys()) {
+        if (changed.has(key.split('.')[0])) cache.delete(key)
+      }}
+  }
 }
 
 /** Half the ground a placed kind takes, after a quarter turn. */

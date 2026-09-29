@@ -39,7 +39,12 @@ export let instances = (
 ) => {
   let batches = new Map<string, Batch>()
   let chunks = new Map<string, string[]>()
+  let versions = new Map<string, number>()
   let gone = false
+  let key = (p: Place, near: boolean) =>
+    `${modelKey(p.kind, p.seed, p.turn, near)}@${
+      versions.get(p.kind.split('.')[0]) ?? 0
+    }`
   let forget = (b: Batch) => {
     if (b.pending || b.places.size || batches.get(b.id) != b) return
     if (b.mesh) scene.remove(b.mesh), b.mesh.dispose()
@@ -47,7 +52,7 @@ export let instances = (
     batches.delete(b.id)
   }
   let batch = (p: Place, near: boolean) => {
-    let id = modelKey(p.kind, p.seed, p.turn, near)
+    let id = key(p, near)
     let b = batches.get(id)
     if (!b) {
       b = {
@@ -110,7 +115,7 @@ export let instances = (
     let at = new Map<string, Vec[]>()
     let used = new Map<string, Batch>()
     for (let p of placed) {
-      let id = modelKey(p.kind, p.seed, p.turn, near)
+      let id = key(p, near)
       let places = at.get(id)
       if (!places) {
         at.set(id, places = [])
@@ -146,5 +151,8 @@ export let instances = (
     batches.clear()
     chunks.clear()
   }
-  return { prepare, drop, dispose }
+  let invalidate = (kinds: Set<string>) => {
+    for (let kind of kinds) versions.set(kind, (versions.get(kind) ?? 0) + 1)
+  }
+  return { prepare, drop, invalidate, dispose }
 }

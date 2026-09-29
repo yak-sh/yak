@@ -306,6 +306,12 @@ export let borderOf = ({ a, b, t }: Blend): Border => {
 // search for nearby sites. The grid is global, not a chunk's, so seams agree.
 export type Boundary = { ridge: number; river: number }
 let boundaryGrid = new Map<string, Boundary>()
+/** Frontier models change the sites and the border heights derived from them. */
+export let refreshRegions = () => {
+  grown.clear()
+  reaching.clear()
+  boundaryGrid.clear()
+}
 let sampleBoundary = (x: number, z: number): Boundary => {
   let key = `${x} ${z}`
   let got = boundaryGrid.get(key)

@@ -33,12 +33,14 @@ import { day } from './day.ts'
 import { COARSER, type Want, wanted } from './stream.ts'
 import {
   adopt,
+  type Affects,
   buildingOf,
   CHUNK,
   groundAt,
   hearthNear,
   roofOver,
   standAt,
+  usedRegions,
   type Vale,
   WATER,
 } from './terrain.ts'
@@ -83,7 +85,7 @@ export type World = {
   /** once every chunk within FIRST of the focus is drawn, at any detail */
   near: () => Promise<void>
   /** redraw visible chunks after a design changes */
-  refresh: () => void
+  refresh: (affects?: Affects, kinds?: Set<string>) => void
   /** how many chunks within sight are not yet drawn as finely as wanted */
   pending: number
   /** how many chunks are drawn at each detail */
@@ -269,6 +271,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     glows: Glow[]
     doors: Hung
     props: ChunkProps
+    regions: string[]
     /** its middle */
     x: number
     z: number
@@ -277,6 +280,9 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let props: ChunkProps[] | null = null
   let asked = new Map<string, number>()
   let revision = 0
+  let base = 0
+  let generations = new Map<string, number>()
+  let current = (k: string) => generations.get(k) ?? base
   let wants = new Map<string, Want>()
   let waiting: (() => void)[] = []
   let gone = false
@@ -384,14 +390,14 @@ export let world = (v: Vale, mesh: Mesher): World => {
     try {
       await prepared.ready
       if (
-        gone || rev != revision || !wants.has(k) ||
+        gone || rev != current(k) || !wants.has(k) ||
         (drawn.has(k) && wants.get(k)?.lod != lod)
       ) return
       if (c.patch.voxel == v.voxel) adopt(v, c.patch)
       // What was drawn in the chunk at another detail keeps its lamps and
       // doors.
       let was = drawn.get(k)
-      let keeps = was?.render == r
+      let keeps = was?.render == r && was?.revision == rev
       let lamps = keeps ? was?.lamps : undefined
       let hung = keeps ? was?.doors : undefined
       let glows = (keeps ? was?.glows : undefined) ?? glowsOf(c.ci, c.ck)
@@ -426,6 +432,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
           nature: c.nature ?? null,
           stood: c.stood ?? [],
         },
+        regions: usedRegions(c.patch),
         x,
         z,
       })
@@ -440,7 +447,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // Every chunk wanted near the focus is drawn, at any detail.
   let close = () =>
     [...wants].every(([k, c]) =>
-      c.d >= FIRST || drawn.get(k)?.revision == revision
+      c.d >= FIRST || drawn.get(k)?.revision == current(k)
     )
   let settle = () => {
     if (!waiting.length || !close()) return
@@ -461,7 +468,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     let missing = list.filter(({ ci, ck }) => !drawn.has(key(ci, ck)))
     let replace = list.filter(({ ci, ck, lod }) => {
       let d = drawn.get(key(ci, ck))
-      return d && (d.lod != lod || d.revision != revision)
+      return d && (d.lod != lod || d.revision != current(key(ci, ck)))
     })
     w.pending = missing.length + replace.length
     let detailing = [...asked.keys()].filter((k) => drawn.has(k)).length
@@ -481,11 +488,11 @@ export let world = (v: Vale, mesh: Mesher): World => {
       let lod = covered ? want : COARSER.length - 1
       if (asked.has(k) || asked.size >= mesh.capacity) continue
       if (covered && detailing >= Math.max(1, mesh.capacity - 1)) continue
-      let rev = revision
+      let rev = current(k)
       asked.set(k, rev)
       if (covered) detailing++
       mesh.chunk(ci, ck, lod).then(async (c) => {
-        if (!gone && rev == revision && wants.has(k)) await put(c, lod, rev)
+        if (!gone && rev == current(k) && wants.has(k)) await put(c, lod, rev)
         if (asked.get(k) == rev) asked.delete(k)
         stream()
       }).catch((e) => {
@@ -655,12 +662,24 @@ export let world = (v: Vale, mesh: Mesher): World => {
         waiting.push(done)
         stream()
       }),
-    refresh: () => {
+    refresh: (affects, kinds) => {
       if (gone) return
       revision++
-      let old = render
-      render = makeRender()
-      retire(old)
+      if (affects) {
+        render.buildings.invalidate(kinds ?? new Set())
+        for (let k of new Set([...drawn.keys(), ...asked.keys()])) {
+          let [ci, ck] = k.split(' ').map(Number)
+          if (affects(ci, ck, drawn.get(k)?.regions)) {
+            generations.set(k, revision)
+          }
+        }
+      } else {
+        base = revision
+        generations.clear()
+        let old = render
+        render = makeRender()
+        retire(old)
+      }
       stream()
     },
     dispose: () => {

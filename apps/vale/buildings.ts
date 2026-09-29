@@ -75,13 +75,16 @@ let raised = (plan: Plan, dress: string, seed: number): Raised => {
 export let BUILDINGS: Record<string, Kind> = {}
 
 /** Replace the building index when the store's design query changes. */
-export let useBuildings = (rows: Bundle[]) => {
+export let useBuildings = (rows: Bundle[], changed?: Set<string>) => {
   PLANS = Object.fromEntries(rows.flatMap((row) => {
     let design = comp(row, 'building_design')
     let kind = str(design.kind)
     return kind ? [[kind, planOf(design as BuildingDesign)]] : []
   }))
-  made.clear()
+  if (!changed) made.clear()
+  else {for (let key of made.keys()) {
+      if (changed.has(key.split('.')[0])) made.delete(key)
+    }}
   BUILDINGS = Object.fromEntries(
     Object.entries(PLANS).flatMap(([name, plan]) =>
       Object.keys(DRESSES).map((dress): [string, Kind] => {
