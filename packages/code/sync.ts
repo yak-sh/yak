@@ -69,17 +69,13 @@ let run = async (cmd: string, args: string[], cwd: string) => {
 export let checkout = async (
   cwd: string,
 ): Promise<{ root: string; common: string }> => {
-  let root = await Deno.realPath(
-    (await run('git', ['rev-parse', '--show-toplevel'], cwd)).trim(),
-  )
-  let common = await Deno.realPath(
-    (await run(
-      'git',
-      ['rev-parse', '--path-format=absolute', '--git-common-dir'],
-      root,
-    )).trim(),
-  )
-  return { root, common }
+  let [top, git] = (await run('git', [
+    'rev-parse',
+    '--path-format=absolute',
+    '--show-toplevel',
+    '--git-common-dir',
+  ], cwd)).trim().split('\n')
+  return { root: await Deno.realPath(top), common: await Deno.realPath(git) }
 }
 
 /** Which tracked files are code: TS/JS modules, markdown, package manifests
