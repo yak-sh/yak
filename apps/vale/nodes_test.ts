@@ -38,8 +38,18 @@ Deno.test('gathered trees topple, lose their plates, and return on respawn', () 
     rarity: 'common',
     prop,
   }
+  let placed: Seen = {
+    ...n,
+    eid: 'placed-copper',
+    kind: 'copper',
+    lode: LODES.copper,
+    name: 'Stone',
+    at: [8, 5, 7],
+    near: 4,
+    prop: undefined,
+  }
   let job: Job = {
-    nodes: [n],
+    nodes: [n, placed],
     near: n,
     bench: null,
     board: null,
@@ -64,6 +74,13 @@ Deno.test('gathered trees topple, lose their plates, and return on respawn', () 
 
   tick()
   assertEquals(labels.map((l) => l.key), [`node:${n.eid}`])
+  assert(labels[0].html.includes('· E'))
+  job.near = placed
+  tick()
+  assertEquals(labels.map((l) => l.key), [`node:${placed.eid}`])
+  job.near = null
+  tick()
+  assertEquals(labels, [])
   job.doing = {
     trade: 'wood',
     at,
@@ -74,9 +91,11 @@ Deno.test('gathered trees topple, lose their plates, and return on respawn', () 
     swing: 0,
   }
   tick()
+  assertEquals(labels.map((l) => l.key), [`node:${n.eid}`])
   assert(labels[0].html.includes('Plate_Bar-work'))
 
   job.doing = null
+  job.near = n
   n.spent = true
   tick(0.15)
   assertEquals(labels, [])

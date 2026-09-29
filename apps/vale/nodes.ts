@@ -6,8 +6,8 @@
 // rings spreading on the water and a fish leaping now and then, and still
 // water once fished. A node shakes at each stroke of its work, a felled tree
 // topples away from whoever felled it, and whatever grows back swells up out
-// of the ground. Over the nodes near the hero a plate says what each is and
-// what it asks, and over the one being worked, how far the work has come; so
+// of the ground. Over the node the hero can gather, a plate says what it is
+// and what it asks, and over the one being worked, how far the work has come; so
 // does one over a village's station while the hero stands at it. What a node
 // gives, or a station makes, flies from it to the hero.
 // @ts-types="npm:@types/three@^0.186.0"
@@ -46,8 +46,6 @@ import type { Job, Seen } from './work.ts'
 export let SHAPES = 4
 // How far off each plan is drawn, in metres: trees stand out over the rest.
 let FAR = { tree: 90, seam: 50, herb: 40, shoal: 40 }
-// How near the hero a node's plate shows, in metres.
-let LABEL = 8
 // How high over a node its plate rides, in metres.
 let HIGH = { tree: 2.4, seam: 1.2, herb: 0.9, shoal: 0.6 }
 // How long a felled tree takes to fall and to sink, and anything to grow back,
@@ -387,15 +385,14 @@ export let nodes = (
   let plate = (n: Seen, job: Job) => {
     if (n.spent) return
     let doing = job.doing?.node?.eid == n.eid ? job.doing : null
+    if (!doing && job.near?.eid != n.eid) return
     let t = TRADES[n.lode.trade]
     let name = `<b>${esc(n.name)}</b>${
       n.rarity == 'common' ? '' : ` <em>${GRADES[n.rarity].name}</em>`
     }`
     let html = doing
       ? `<span>${name}</span>${bar(doing.k)}`
-      : job.near?.eid == n.eid
-      ? `<span>${name} ${hint(t.icon, GATHER[n.lode.trade].verb)}</span>`
-      : `<span>${name}</span>`
+      : `<span>${name} ${hint(t.icon, GATHER[n.lode.trade].verb)}</span>`
     let [x, y, z] = n.at
     plates.plate(
       `node:${n.eid}`,
@@ -486,7 +483,7 @@ export let nodes = (
               },
             )
           }
-          if (n.near < LABEL || job.doing?.node?.eid == n.eid) plate(n, job)
+          plate(n, job)
           continue
         }
         let d = drawn.get(n.eid)
@@ -589,7 +586,7 @@ export let nodes = (
             { speed: 0.2, up: 0.4, life: 0.5, size: 0.05, fall: 0 },
           )
         }
-        if (n.near < LABEL || job.doing?.node?.eid == n.eid) plate(n, job)
+        plate(n, job)
       }
       // The worker gives each chunk its whole mesh. Only a harvest or
       // respawn rebuilds that one chunk on the page's thread.
