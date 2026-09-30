@@ -120,7 +120,7 @@
       "noun": "topic",
       "verb": "new",
       "title": "Make a topic",
-      "description": "Make a topic for beliefs to be about, where no existing topic, project, package, component or design fits. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its brief, a line or two saying what belongs under it, never a point anybody made. One name is one topic: a name that is taken is refused with the topic that has it, to use instead. Returns the applied change as bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
+      "description": "Make a topic for beliefs to be about, where no existing topic, project, package, component or design fits. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its brief, a line or two saying what belongs under it, never a point anybody made. One name is one topic: a name that is taken is refused with the topic that has it, to use instead, and so is a name whose words hold another topic's or are held by them (\"economic market design\" beside \"market design\"). Returns the applied change as bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
       "input": {
         "name": {
           "type": "string",

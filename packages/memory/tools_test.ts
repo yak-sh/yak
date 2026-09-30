@@ -137,6 +137,25 @@ test('a topic is its name, and a name said twice is one topic', async () => {
   )
 })
 
+test("a name holding another topic's words, or held by them, is refused", async () => {
+  let g = fresh()
+  await write(
+    g,
+    await ask('topic_new', { name: 'market design', body: 'the market' }, g),
+  )
+  for (let name of ['economic market design', 'markets', 'design']) {
+    await assertRejects(
+      () => ask('topic_new', { name, body: 'the same' }, g),
+      Refused,
+      topicEid('market design'),
+    )
+  }
+  assertEquals(
+    eids(await ask('topic_new', { name: 'ui design', body: 'screens' }, g)),
+    [topicEid('ui design')],
+  )
+})
+
 test('find answers the topics holding the words, else every one by name', async () => {
   let g = fresh()
   for (

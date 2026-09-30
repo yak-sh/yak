@@ -6,12 +6,15 @@
 // its letters, so left alone it calls the same subject "testing" in one build,
 // "tests" in the next and "test suite" in a third, and the beliefs about it
 // scatter across three topics that each hold a third of what was said (M-12915
-// on why). Two things stand against that. A topic's name is its identity
+// on why). Three things stand against that. A topic's name is its identity
 // (`topic.name` derives its id), folded to lowercase with single spaces, so a
-// name said twice is one topic whoever says it, even two builds at once; and a
+// name said twice is one topic whoever says it, even two builds at once; a
 // builder is shown the topics that exist, nearest its words by meaning, before
-// it makes one, so it reuses a subject already named. `topic_new` refuses a
-// name that is taken and says which topic has it.
+// it makes one, so it reuses a subject already named; and `topic_new` refuses
+// a name that is taken, or whose words hold another topic's or are held by
+// them ("economic market design" beside "market design"), and says which
+// topic to use. The last is checked when the topic is written, so two builds
+// that looked at once and found nothing still meet.
 
 import {
   argsOf,
@@ -44,10 +47,34 @@ export let named = (title: string): string =>
 export let topicEid = (title: string): string =>
   identityEid(TOPIC, [named(title)])
 
+let words = (said: string): string[] =>
+  terms(said).toLowerCase().split(' ').filter(Boolean)
+
 // Each word as the start of a word: a topic is found by what it is about, and
 // "query" should find "querying" and "query grammar" alike.
-let starts = (said: string): string =>
-  terms(said).split(' ').filter(Boolean).map((w) => `${w}*`).join(' ')
+let starts = (said: string): string => words(said).map((w) => `${w}*`).join(' ')
+
+/**
+ * Whether two names name one subject by their words: every word of one starts
+ * a word of the other, or is started by one.
+ *
+ * ```ts
+ * overlaps('economic market design', 'market design') // true
+ * overlaps('tests', 'testing and ci') // false
+ * overlaps('test', 'testing and ci') // true
+ * overlaps('ui design', 'cover design') // false
+ * ```
+ */
+export let overlaps = (a: string, b: string): boolean => {
+  let holds = (xs: string[], ys: string[]) =>
+    ys.every((y) => xs.some((x) => x.startsWith(y) || y.startsWith(x)))
+  return holds(words(a), words(b)) || holds(words(b), words(a))
+}
+
+let brief = (t: Bundle): string => {
+  let doc = (t.doc ?? {}) as { title?: string; body?: string }
+  return `${t.entity.eid} (${str(doc.title)}: ${str(doc.body)})`
+}
 
 /**
  * The query string that finds topics: those holding a word starting with each
@@ -82,10 +109,20 @@ export let topics = (): Runs => ({
     }
     let [held] = await graph.get([topicEid(title)])
     if (held && !held.tombstone) {
-      let doc = (held.doc ?? {}) as { title?: string; body?: string }
       throw new Refused(
-        `the topic ${named(title)} is ${held.entity.eid} already ` +
-          `(${str(doc.title)}: ${str(doc.body)}); use it`,
+        `the topic ${named(title)} is ${brief(held)} already; use it`,
+      )
+    }
+    // Every topic, by name: they are few and broad, and a word longer than
+    // theirs ("markets" for "market design") no prefix search finds.
+    let same = (await graph.read(`.${TOPIC}&*&.limit=100000`)).filter((t) =>
+      overlaps(title, str((t[TOPIC] as { name?: unknown })?.name))
+    )
+    if (same.length) {
+      throw new Refused(
+        `${named(title)} names the subject of ${
+          same.map(brief).join(', ')
+        }; use it, or a name that holds none of its words`,
       )
     }
     // Its id, not an alias: the name decides it, and the caller is answered

@@ -221,14 +221,16 @@ only by the names their queries speak and the rows those answer.
 starting with each word of `said` (`query` finds `querying`), ranked by meaning
 to `near` where the server has embeddings, or with neither, in order of name.
 `topic new` makes a topic from a name and a brief, and refuses a name that is
-taken, saying which topic has it. A builder making beliefs finds before it
-makes, so a subject already named is reused.
+taken, or whose words hold another topic's or are held by them (`overlaps`:
+"economic market design" beside "market design"), saying which topic to use. A
+builder making beliefs finds before it makes, so a subject already named is
+reused, and the refusal catches two builds that found nothing at once.
 
 ## Exports
 
 The root exports `memoryDoc`, `marked`, `saved`, `clamped`, `words`, `terms`,
-`line`, `heard`, `ordered`, `passage`, `named`, `topicEid`, `found`, the
-`Marking`, `Saving`, `Asked`, `Memory`, and `Ranker` types, and constants
+`line`, `heard`, `ordered`, `passage`, `named`, `topicEid`, `found`, `overlaps`,
+the `Marking`, `Saving`, `Asked`, `Memory`, and `Ranker` types, and constants
 `MEMORY`, `FEEDBACK`, `LINES`, `EMPTY`, `LAST`, `BYTES`, `TOPIC` and `FIND`.
 `named` folds a title to a topic's name, `topicEid` gives the id a title names,
 and `found` builds the query `topic find` reads. `clamped` performs context-line
