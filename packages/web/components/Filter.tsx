@@ -8,11 +8,9 @@
 // (passOf, read by the face) live in different subtrees, and the wire
 // between them is the page's own graph: the line is the field
 // `filter:<eid>` there (fields.tsx), keyed by the viewed entity, so
-// switching tabs (Board ⇄ List) keeps the glance.
-import { useRef } from 'preact/hooks'
+// switching tabs (Board ⇄ List) keeps the glance, and so does a reload.
 import type { SubscriptionRead } from '../live.ts'
 import { parseQuery } from '../query.ts'
-import { useDraft } from './drafts.ts'
 import { useQueryResult } from './useQuery.ts'
 import { block } from '@yaks/ui'
 import { fields } from './fields.tsx'
@@ -71,34 +69,23 @@ export let usePassOf = (
   return pass
 }
 
-// the titlebar's half: the query field for this entity's line. A draft keyed
-// by the field survives a hot swap or reload; the field's row in the page's
-// graph outlives a card remount on its own.
+// the titlebar's half: the query field for this entity's line. Its row in the
+// page's graph outlives a card remount and a reload of the tab.
 export let FilterInput = (
   { eid, initial = '' }: { eid: string; initial?: string },
 ) => {
   let id = filterField(eid)
-  let box = useRef<HTMLInputElement>(null)
-  // A restored draft is put in the field; a keystroke's is already there.
-  let { sync, spend } = useDraft(
-    id,
-    box,
-    (v) => v != fields.text(id) && fields.set(id, v),
-  )
   return (
     <Frame>
       <fields.Filter
         id={id}
         initial={initial}
-        elRef={box}
         placeholder='filter…'
-        onInput={(e: InputEvent) => sync(e.currentTarget as HTMLInputElement)}
         onKey={(e: KeyboardEvent) => {
           if (e.key != 'Escape') return
           let el = e.currentTarget as HTMLInputElement
           if (el.value) e.stopPropagation() // consumed by the clear
           fields.set(id, '')
-          spend()
           el.blur()
         }}
       />

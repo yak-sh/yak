@@ -83,7 +83,10 @@ let host = (answers: Answers = {}, edits = true) => {
     : (l: string) => answers[l]
   let asked: string[] = []
   let applied: Bundle[][] = []
-  let front = client(loadVocab([...docs, ...uxDocs]), [], { vault: false })
+  let front = client(loadVocab([...docs, ...uxDocs]), [], {
+    vault: false,
+    tab: false,
+  })
   let double: Host = {
     vocab,
     front,

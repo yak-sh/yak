@@ -9,20 +9,23 @@ patches to that entity.
 ## State
 
 Each field is one entity in a front-end graph (a local @yaks/client over RAM),
-named by its host (`search`, `filter:<board>`), wearing the `filter` component
-this package declares (`vocab.json`, `sync: none`):
+named by its host (`search`, `filter:<board>`), wearing the two components this
+package declares (`vocab.json`, `sync: none`). Its `filter` is what is typed,
+`durable: tab`, so a reload of the tab brings the text back; its `completion` is
+what can come next there, gone with the page, so the list does not:
 
-| property | what it is                                                  |
-| -------- | ----------------------------------------------------------- |
-| `text`   | what is typed                                               |
-| `caret`  | where the caret stands                                      |
-| `from`   | where the word being completed starts                       |
-| `to`     | where it ends                                               |
-| `cands`  | what can replace it (@yaks/query `complete`), at most eight |
-| `pick`   | which of those is picked, -1 for none                       |
+| component    | property | what it is                                                  |
+| ------------ | -------- | ----------------------------------------------------------- |
+| `filter`     | `text`   | what is typed                                               |
+| `filter`     | `caret`  | where the caret stands                                      |
+| `completion` | `from`   | where the word being completed starts                       |
+| `completion` | `to`     | where it ends                                               |
+| `completion` | `cands`  | what can replace it (@yaks/query `complete`), at most eight |
+| `completion` | `pick`   | which of those is picked, -1 for none                       |
 
-The list is open while `cands` has any. Anything on the page reads what is typed
-in a field by reading its row: a board narrows its rows by its filter field, a
+`rowOf` reads the two as one row, and `put` writes a row back as both. The list
+is open while `cands` has any. Anything on the page reads what is typed in a
+field by reading its row: a board narrows its rows by its filter field, a
 palette searches for its search field's text.
 
 ## Use
@@ -33,7 +36,7 @@ import { filters } from '@yaks/filter'
 import { docs } from '@yaks/filter/vocab'
 import { loadVocab } from '@yaks/vocab'
 
-let front = client(loadVocab(docs), [], { vault: false })
+let front = client(loadVocab(docs))
 let { Filter, text } = filters(front, { vocab, source, Float })
 
 // <Filter id='search' placeholder='search…' onKey={key} />
@@ -71,6 +74,6 @@ paints its caret (@yaks/tui paints a `data-caret`).
 
 | file         | owns                                                    |
 | ------------ | ------------------------------------------------------- |
-| `vocab.json` | the `filter` component                                  |
+| `vocab.json` | the `filter` and `completion` components                |
 | `state.ts`   | what each action makes of a row, and the key table      |
 | `filters.ts` | `filters()`: the actions bound to a graph, and `Filter` |

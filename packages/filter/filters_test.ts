@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { client } from '@yaks/client'
+import { client, stash, type Vault } from '@yaks/client'
 import { type Cand, type Source } from '@yaks/query'
 import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
@@ -21,8 +21,12 @@ let vocab = loadVocab({
     },
   },
 })
-let field = (opts: Partial<Opts> = {}) =>
-  filters(client(loadVocab(docs), [], { vault: false }), { vocab, ...opts })
+// A field in a page of its own; given a tab, the page is one load of it.
+let field = (opts: Partial<Opts> = {}, tab: Vault | false = false) =>
+  filters(client(loadVocab(docs), [], { vault: false, tab }), {
+    vocab,
+    ...opts,
+  })
 let words = (cands: Cand[] = []) => cands.map((c) => c.text)
 // The painter's styles, to read the words under them.
 // deno-lint-ignore no-control-regex
@@ -45,6 +49,15 @@ test('typing offers what can come next, and the keys walk and take it', () => {
   f.press('q', 'Enter')
   assertEquals(f.row('q')?.caret, '.task .status=done'.length)
   assertEquals(f.text('q'), '.task .status=done')
+})
+
+test('a reload of the tab brings back what was typed, and not its list', () => {
+  let tab = stash()
+  field({}, tab).type('q', '.task .st')
+  let next = field({}, tab)
+  assertEquals(next.text('q'), '.task .st')
+  assertEquals(next.row('q')?.cands, [])
+  assertEquals(field({}, stash()).row('q'), undefined, 'a new tab is empty')
 })
 
 test('Enter takes a word to where it reads whole, then keeps it', () => {

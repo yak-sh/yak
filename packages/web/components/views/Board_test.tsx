@@ -21,7 +21,7 @@ await import('../Entity.tsx')
 let { Board, columnLine, QuickAdd } = await import('./Board.tsx')
 let { mount } = await import('../mount.ts')
 let { tick, until } = await import('../../testing.ts')
-let { drop } = await import('../drafts.ts')
+let { drafted } = await import('../fields.tsx')
 
 test('board columns request a projected, priority-ordered screenful', () => {
   let q = columnLine('.task', 'open', 8)
@@ -60,8 +60,39 @@ test('quick-add previews empty facets and ordinary properties', async () => {
     )
   } finally {
     mounted.free()
-    drop(key)
   }
+})
+
+test('a quick-add box types on from its draft, and filing spends it', async () => {
+  let key = `test:quick-add:${crypto.randomUUID()}`
+  let filed: string[] = []
+  let box = () => {
+    let mounted = mount(
+      <QuickAdd dkey={key} file={(t) => !!filed.push(t)} close={() => {}} />,
+    )
+    let input = mounted.root.querySelector<HTMLTextAreaElement>('.Board_New')!
+    let { Event } = input.ownerDocument.defaultView!
+    let fire = (type: string, props = {}) =>
+      input.dispatchEvent(Object.assign(new Event(type), props))
+    return {
+      input,
+      free: mounted.free,
+      type: (v: string) => {
+        input.value = v
+        fire('input')
+      },
+      enter: () => fire('keydown', { key: 'Enter' }),
+    }
+  }
+  let first = box()
+  first.type('Ship it')
+  first.free()
+  let next = box()
+  await until(() => next.input.value == 'Ship it')
+  next.enter()
+  next.free()
+  assertEquals(filed, ['Ship it'])
+  assertEquals(drafted(key), '')
 })
 
 // Twenty-four open tasks, none prioritized: the column's order is their age.

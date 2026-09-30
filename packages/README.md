@@ -480,7 +480,8 @@ grouped approximately by function, **not** by dependency order.
   assembles the graph, its connection to the server and its plugins; a query
   becomes a value that updates as commits change its results; and components
   declared `sync: none` with `durable: forever` are kept in IndexedDB between
-  page loads when local persistence is enabled.
+  page loads when local persistence is enabled, and `durable: tab` ones in the
+  tab's `sessionStorage`, across its reloads.
 
 - **[@yaks/testing](./testing)** — declare tests (`test`, `suite`), check them
   (`equal`, `ok`, `match`, `throws`) and wait on facts (`tick`, `until`); its

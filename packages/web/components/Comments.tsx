@@ -8,7 +8,7 @@ import { subject } from '../client.ts'
 import { block } from '@yaks/ui'
 import { ago } from './Stamp.tsx'
 import { pretty } from '../time.ts'
-import { useDraft } from './drafts.ts'
+import { useDraft } from './fields.tsx'
 import {
   type Change,
   type Ent,
@@ -159,9 +159,8 @@ export let Composer = (
   // owner, exactly as the palette does it) and which hint is picked.
   let [line, setLine] = useState('')
   let [pick, setPick] = useState(0)
-  // A draft outlives blur on purpose — abandon the box, come back, the
-  // words are still there. Only posting spends it. If this box was the
-  // one being typed in when a hot swap hit, it takes the caret back.
+  // A draft outlives blur on purpose — abandon the box, come back (or
+  // reload the tab), the words are still there. Only posting spends it.
   let { sync, spend } = useDraft(dkey, box, setLine)
 
   // The vocabulary teaches where the typing happens: a comment opening

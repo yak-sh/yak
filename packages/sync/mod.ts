@@ -95,6 +95,7 @@ export {
   durableOf,
   guessed,
   inverse,
+  type Local,
   local,
   outbound,
   outward,

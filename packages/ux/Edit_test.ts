@@ -85,7 +85,11 @@ let page = (more: Partial<Host> = {}) => {
   // Effects run on the next turn, as a browser's next frame would.
   let raf = options.requestAnimationFrame
   options.requestAnimationFrame = (f) => setTimeout(f)
-  let front = client(loadVocab(docs), [], { vault: false, wireVault: false })
+  let front = client(loadVocab(docs), [], {
+    vault: false,
+    wireVault: false,
+    tab: false,
+  })
   let emitted: Bundle[] = []
   let asked: string[] = []
   let host: Host = {

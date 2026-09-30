@@ -7,7 +7,7 @@ import { spec, taskChanges } from '../../client.ts'
 import { block } from '@yaks/ui'
 import { Float } from '@yaks/ui'
 import { label, pickLine, useHits } from '@yaks/ux'
-import { peek, useDraft } from '../drafts.ts'
+import { drafted, useDraft } from '../fields.tsx'
 import { rows } from '../hits.ts'
 import { ux } from '../registry.ts'
 
@@ -45,12 +45,12 @@ let said = (v: V) => v.out ? v.type : up(v.type)
 // nothing below it moves.
 export let Relate = ({ e }: { e: Ent }) => {
   // On mount, a verb whose line was left half-typed reopens itself — a
-  // new task or edge the last mount never filed resurfaces, caret and all
-  // (../drafts.ts). Keyed by (host, verb) so the sentence resumes
-  // exact.
+  // new task or edge the last mount (or the tab before its reload) never
+  // filed resurfaces (../fields.tsx `useDraft`). Keyed by (host, verb) so
+  // the sentence resumes exact.
   let dk = (v: V) => `relate:${e.eid}:${said(v)}`
   let [verb, setVerb] = useState<V | null>(() =>
-    verbs.find((v) => peek(dk(v))) ?? null
+    verbs.find((v) => drafted(dk(v))) ?? null
   )
   let [q, setQ] = useState('')
   let [pick, setPick] = useState(0)

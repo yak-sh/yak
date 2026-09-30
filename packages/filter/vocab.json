@@ -8,7 +8,7 @@
       "component": true,
       "type": "object",
       "sync": "none",
-      "durable": "connection",
+      "durable": "tab",
       "properties": {
         "text": {
           "type": "string",
@@ -17,7 +17,16 @@
         "caret": {
           "type": "number",
           "description": "where the caret stands, as an offset into text"
-        },
+        }
+      },
+      "description": "a query being typed, in a page's own graph: the text and the caret, kept across a reload of the tab; what can come next there is its completion"
+    },
+    "completion": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "properties": {
         "from": {
           "type": "number",
           "description": "where the word being completed starts"
@@ -42,7 +51,7 @@
           "description": "which of cands is picked, -1 for none: what is typed already reads whole"
         }
       },
-      "description": "a query being typed, in a page's own graph: the text and caret, and what can come next there; its list is open while cands has any"
+      "description": "what can come next where a query is being typed (its filter): the word at the caret and what can replace it, open while cands has any; gone with the page, so a reload brings back the text and not the list"
     }
   }
 }

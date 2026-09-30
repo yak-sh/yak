@@ -1,6 +1,7 @@
 /**
  * The query field, bound to its host. Each field is an entity in the host's
- * front-end graph wearing a `filter` component, named by the host (`search`,
+ * front-end graph wearing a `filter` component, what is typed, and a
+ * `completion`, what can come next, named by the host (`search`,
  * `filter:<board>`), so any part of a page reads what is typed in any field
  * by reading the graph. `filters(front, opts)` gives the actions on those
  * rows (each one a patch) and `Filter`, the component that types into them,
@@ -42,7 +43,9 @@ import {
   dismissed,
   moved,
   placed,
+  put,
   type Row,
+  rowOf,
   taken,
   typed,
 } from './state.ts'
@@ -136,23 +139,21 @@ export let filters = (front: Front, opts: Opts): Filters => {
   let { Float = Inline } = opts
   // One watch for every field; each field's row is its own computed, so a
   // keystroke repaints the field it landed in and whoever reads that one.
-  let seen = front.watch('.filter')
+  let seen = front.watch('.filter&?completion')
   let rows = signal(seen.value)
   seen.subscribe((all) => rows.value = all)
   let held = new Map<string, ReadonlySignal<Row | undefined>>()
   let live = (id: string) => {
     let r = held.get(id)
     if (!r) {
-      r = computed(() =>
-        rows.value.find((b) => b.entity.eid == id)?.filter as Row | undefined
-      )
+      r = computed(() => rowOf(rows.value.find((b) => b.entity.eid == id)))
       held.set(id, r)
     }
     return r
   }
-  let now = (id: string) => front.ent(id)?.filter as Row | undefined
+  let now = (id: string) => rowOf(front.ent(id))
   let write = (id: string, patch: Partial<Row>) =>
-    void front.mutate([{ entity: { eid: id }, filter: patch }])
+    void front.mutate([put(id, patch)])
 
   let type = (id: string, text: string, caret = text.length) => {
     let found = complete(opts.vocab, text, caret, opts.source ?? {})

@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural, uuid } from '../types.ts'
 import { ent, mutate, searchOpen } from '../live.ts'
 import { navigate } from './nav.tsx'
-import { drop, peek, save } from './drafts.ts'
 import { block } from '@yaks/ui'
 import { Icon } from './icons.tsx'
 import { fields } from './fields.tsx'
@@ -16,7 +15,7 @@ import { hits as queryHits } from './hits.ts'
 // over every doc) — the palette is just an input, a ranked list, and
 // j/k-ish keys. searchOpen lives in the shell (live.ts) so a hot swap
 // can't shut the palette; the query itself is the `search` field in the
-// page's own graph (fields.tsx), and a draft, reseeded on remount.
+// page's own graph (fields.tsx), which a remount or a reload finds again.
 export { searchOpen }
 
 let Frame = block('div', 'Search', {
@@ -64,7 +63,7 @@ let marked = (s: string) =>
     return [<mark key={i}>{hit}</mark>, rest]
   })
 
-// The palette's field in the page's own graph, and its draft.
+// The palette's field in the page's own graph.
 let FIELD = 'search'
 
 export let hitSlots = (h: Hit) => ({
@@ -82,10 +81,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let seq = useRef(0)
 
   useEffect(() => {
-    if (!searchOpen.value || !box.current) return
-    let d = peek(FIELD) // a swap remounted us mid-search: pick it back up
-    if (d?.v && !q) fields.set(FIELD, d.v)
-    box.current.focus()
+    if (searchOpen.value) box.current?.focus()
   }, [searchOpen.value])
 
   // FTS shares the server's one event loop with keypress delivery. Search
@@ -115,7 +111,6 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let close = () => {
     seq.current++
     searchOpen.value = false
-    drop(FIELD)
     setHits([])
     setSel(0)
     fields.set(FIELD, '')
@@ -194,10 +189,6 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             mod='bare'
             elRef={box}
             placeholder='search the graph… (* = prefix, .status=done .updated.at=today filter, ⌘⏎ = new tab)'
-            onInput={(e: InputEvent) => {
-              let el = e.currentTarget as HTMLInputElement
-              el.value ? save(FIELD, el.value) : drop(FIELD)
-            }}
             onKey={key}
           />
           {

@@ -118,8 +118,8 @@ export type CompInfo = {
   stamped: string[] // property names only the server writes
   /** who is told about a write to it — see {@link Sync} */
   sync: Sync
-  /** how long one of its values lives: `forever`, `connection`, or a duration
-   * (lifetime.ts `ms` reads the span out of one) */
+  /** how long one of its values lives: `forever`, `tab`, `connection`, or a
+   * duration (lifetime.ts `ms` reads the span out of one) */
   durable: string
   /** how often a writer's value is taken — relayed, or stored — in
    * milliseconds; `null` takes every write as it is made (lifetime.ts

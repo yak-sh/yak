@@ -25,7 +25,6 @@ import {
 } from '../commands.ts'
 import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
-import { drop, peek, save } from './drafts.ts'
 import { pickLine, useHits } from '@yaks/ux'
 import { spawnOf } from './Run.tsx'
 import { Tray } from './Tray.tsx'
@@ -278,9 +277,9 @@ let WhoAmI = () => {
 // always returns to normal (and blurs whatever was being typed in).
 export let Status = () => {
   let input = useRef<HTMLTextAreaElement>(null)
-  // The line is the `cmd` field in the page's own graph (fields.tsx), which
-  // begins from the durable draft; the hints and the ghost read it there.
-  let line = fields.row(CMD)?.text ?? peek(CMD)?.v ?? ''
+  // The line is the `cmd` field in the page's own graph (fields.tsx), which a
+  // reload of the tab brings back; the hints and the ghost read it there.
+  let line = fields.row(CMD)?.text ?? ''
   let [pick, setPick] = useState(0)
 
   useEffect(() => {
@@ -360,8 +359,8 @@ export let Status = () => {
   }, [mode.value])
 
   // The hints the line offers, and which is picked (0 = the best match).
-  // A half-typed : line survives any reload — restore it and reopen the
-  // command line; running or Escaping the line is what spends the draft.
+  // A half-typed : line survives a reload of the tab: reopen the command line
+  // on it. Running or Escaping the line is what empties it.
   useEffect(() => {
     if (line) mode.value = 'command'
   }, [])
@@ -370,7 +369,6 @@ export let Status = () => {
   let faded = ghost(line, all)
   let put = (v: string) => {
     if (input.current) input.current.value = v
-    v ? save(CMD, v) : drop(CMD)
     fields.set(CMD, v)
     setPick(0)
     if (v) input.current?.focus() // a picked verb takes the keyboard
@@ -445,11 +443,7 @@ export let Status = () => {
                   initial={line}
                   elRef={input}
                   onKey={cmdKey}
-                  onInput={(e: InputEvent) => {
-                    let v = (e.currentTarget as HTMLTextAreaElement).value
-                    v ? save(CMD, v) : drop(CMD)
-                    setPick(0)
-                  }}
+                  onInput={() => setPick(0)}
                 />
               </Line>
               {hints.length > 0 && (

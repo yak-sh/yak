@@ -1,18 +1,20 @@
 /**
- * A query being typed, and what each action makes of it. The `filter`
- * component (vocab.json) holds the text and the caret, the word being
- * completed (`from` to `to`), what can replace it, and which of those is
- * picked; the list is open while it has candidates. Where the word already
- * reads whole, nothing is picked: Enter keeps it as typed, and Tab takes the
- * first to read on. Each function here is pure: a row in, the patch it
- * becomes out.
+ * A query being typed, and what each action makes of it. A field is two
+ * components (vocab.json): its `filter` holds the text and the caret, kept
+ * across a reload of the tab, and its `completion` the word being completed
+ * (`from` to `to`), what can replace it, and which of those is picked, gone
+ * with the page; the list is open while it has candidates. Where the word
+ * already reads whole, nothing is picked: Enter keeps it as typed, and Tab
+ * takes the first to read on. Each function here is pure: a row in, the patch
+ * it becomes out.
  *
  * @module
  */
 
+import type { Bundle } from '@yaks/graph'
 import type { Cand, Completion } from '@yaks/query'
 
-/** What the `filter` component holds. */
+/** A field, as its `filter` and its `completion` hold it together. */
 export type Row = {
   text: string
   caret: number
@@ -59,6 +61,46 @@ export let placed = (text: string, caret = text.length): Row => ({
   cands: [],
   pick: 0,
 })
+
+/** A field's row, read off its entity: nothing offered where it wears no
+ * `completion`, and no row where it wears no `filter`.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { placed, rowOf } from '@yaks/filter'
+ *
+ * let e = { entity: { eid: 'q' }, filter: { text: '.s', caret: 2 } }
+ * assertEquals(rowOf(e), placed('.s'))
+ * ```
+ */
+export let rowOf = (e: Bundle | undefined): Row | undefined => {
+  let t = e?.filter as { text: string; caret: number } | undefined
+  return t && { ...placed(t.text, t.caret), ...e?.completion as object }
+}
+
+/** A patch to a field's row, as the bundle that writes it: what is typed to
+ * its `filter`, what is offered to its `completion`.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { put } from '@yaks/filter'
+ *
+ * assertEquals(put('q', { text: '.s', caret: 2, pick: 0 }), {
+ *   entity: { eid: 'q' },
+ *   filter: { text: '.s', caret: 2 },
+ *   completion: { pick: 0 },
+ * })
+ * ```
+ */
+export let put = (id: string, patch: Partial<Row>): Bundle => {
+  let { text, caret, ...offered } = patch
+  let typed = text == null ? {} : { text, ...caret == null ? {} : { caret } }
+  return {
+    entity: { eid: id },
+    ...text == null ? {} : { filter: typed },
+    ...Object.keys(offered).length ? { completion: offered } : {},
+  }
+}
 
 /** The pick `d` rows on, held to the list. */
 export let moved = (r: Row, d: number): Partial<Row> => ({

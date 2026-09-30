@@ -68,12 +68,13 @@ h(Edit.Control, { e, comp: 'task', prop: 'status', anchor, onChange })
 | `Edit`    | `at(owner, eid, comp, prop)`      | `open` while it is changed, `text` typed over it, `query` in its picker |
 | `Refused` | the entity whose value it changes | an event: `said`, why what was typed could not be read                  |
 
-Both are `sync: none`: nothing leaves the page. `Edit` is `durable: connection`,
-gone with the page and kept across every remount before that; closing it removes
-it. Leaving a value typed over emits it, and being taken off the page is not
-leaving it: the draft waits in the graph for the remount. `Refused` is
-`durable: "0s"`, which is how a vocabulary marks an event: a graph applies it
-and carries it back in the applied change, and never stores it (@yaks/vocab).
+Both are `sync: none`: nothing leaves the page. `Edit` is `durable: tab`, kept
+across every remount and every reload of the tab, and gone with the tab; closing
+it removes it. Leaving a value typed over emits it, and being taken off the page
+is not leaving it: the draft waits in the graph for the remount or the reload.
+`Refused` is `durable: "0s"`, which is how a vocabulary marks an event: a graph
+applies it and carries it back in the applied change, and never stores it
+(@yaks/vocab).
 
 ## The host
 

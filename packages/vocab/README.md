@@ -82,7 +82,7 @@ component table needs on top:
 | `embed`      | comp  | `false` = an entity wearing it is never embedded (still found by words) |
 | `wire`       | comp  | `false` = a component clients read but cannot write                     |
 | `sync`       | comp  | who is told about a write: `none` \| `server` (default) \| `peers`      |
-| `durable`    | comp  | how long a value lives: `forever` (default) \| `connection` \| `5s`     |
+| `durable`    | comp  | how long it lives: `forever` (default) \| `tab` \| `connection` \| `5s` |
 | `pace`       | comp  | how often a writer's value is taken: relayed, or stored (`1s`)          |
 
 A component whose name starts with `_` gives none of its properties a bare name,
@@ -361,19 +361,23 @@ without a foreign-key constraint.
 `syncOf(vocab, comp)`, `durableOf(vocab, comp)` and `paceOf(vocab, comp)` read
 state-lifetime metadata, including defaults for unknown components. `sync`
 selects server synchronization, peer relay, or local-only data; `durable`
-selects permanent storage, connection-lifetime memory, or a duration. `pace` is
-how often a writer's value is taken. Beside `sync: peers`, the writer's own
-graph takes every write at once, and [@yaks/sync](../sync/README.md) sends the
-latest value per entity at most once a pace, the last one always, and a clear at
-once. On a stored component, a store takes one write of it from each writer at
-most once a pace and refuses the rest, which
-[@yaks/member](../member/README.md)'s guard holds; everyone signed out counts as
-one writer. A `sync: none` component has nobody to take its value, so it has no
-pace. `paceOf` answers in milliseconds, `null` when every write is taken.
-`ms('5s')` returns `5000`; `ms('forever')` and `ms('connection')` return `null`.
-`lives()` validates lifetime strings; `said()`, `kept()` and `paced()` normalize
-the three declarations. Storage, sync and access packages implement these
-policies; this package does not retain, expire or pace data.
+selects permanent storage, the tab's lifetime, connection-lifetime memory, or a
+duration. `tab` is kept across a reload of the tab that wrote it and gone with
+that tab, so a new tab starts without it; a terminal has no tab, and there it is
+the process, gone when it exits. Only a `sync: none` component can be `tab`,
+since no server can tell a tab's reload from its close. `pace` is how often a
+writer's value is taken. Beside `sync: peers`, the writer's own graph takes
+every write at once, and [@yaks/sync](../sync/README.md) sends the latest value
+per entity at most once a pace, the last one always, and a clear at once. On a
+stored component, a store takes one write of it from each writer at most once a
+pace and refuses the rest, which [@yaks/member](../member/README.md)'s guard
+holds; everyone signed out counts as one writer. A `sync: none` component has
+nobody to take its value, so it has no pace. `paceOf` answers in milliseconds,
+`null` when every write is taken. `ms('5s')` returns `5000`; `ms('forever')`,
+`ms('tab')` and `ms('connection')` return `null`. `lives()` validates lifetime
+strings; `said()`, `kept()` and `paced()` normalize the three declarations.
+Storage, sync and access packages implement these policies; this package does
+not retain, expire or pace data.
 
 See `vocab_test.ts` and `validate_test.ts` for vocabulary loading and validation
 examples.

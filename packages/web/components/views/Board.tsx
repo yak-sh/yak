@@ -15,7 +15,7 @@ import {
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
-import { peek, useDraft } from '../drafts.ts'
+import { drafted, useDraft } from '../fields.tsx'
 import { useBoardTally } from '../subscriptions.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import { block } from '@yaks/ui'
@@ -85,10 +85,10 @@ export let columnLine = (q: string, status: string, limit: number): string => {
 // Ship it' announces what Enter will file. Enter files and clears for
 // the next title (filing a list is one uninterrupted keyboard); Escape
 // closes. Uncontrolled on purpose: the DOM owns the text, state only
-// mirrors it for the chips. dkey persists the line per (board, column) —
-// a hot swap or reload that unmounts this box (adding resets) is caught
-// by Board reopening the column from the draft, so a half-typed task is
-// never lost. Blur closes the box but KEEPS the draft (Board resurfaces
+// mirrors it for the chips. dkey keeps the line per (board, column) — a
+// remount or a reload of the tab that unmounts this box (adding resets) is
+// caught by Board reopening the column from the draft, so a half-typed task
+// is never lost. Blur closes the box but KEEPS the draft (Board resurfaces
 // it); only filing or Escape spends it.
 export let QuickAdd = (
   { dkey, file, close }: {
@@ -148,7 +148,7 @@ export let QuickAdd = (
 }
 
 // The quick-add draft key for one column — stable across remounts, so a
-// swap or reload reseeds the exact box that was being typed in.
+// remount or reload reseeds the exact box that was being typed in.
 let addKey = (eid: string, status: string) => `new:${eid}:${status}`
 
 export let Board = ({ e }: { e: Ent }) => {
@@ -198,10 +198,10 @@ export let Board = ({ e }: { e: Ent }) => {
   // Which column's quick-create box is open ('' = none). One at a time:
   // the box is a keyboard, and there's one keyboard. On mount, a column
   // with a live draft reopens itself — a half-typed task the last mount
-  // (hot swap, reload, closed card) never got to file resurfaces where it
-  // was left, caret and all.
+  // (a reload of the tab, a closed card) never got to file resurfaces where
+  // it was left.
   let [adding, setAdding] = useState(() =>
-    statuses.find((s) => peek(addKey(e.eid, s))) ?? ''
+    statuses.find((s) => drafted(addKey(e.eid, s))) ?? ''
   )
   // A board that says .order=hot ranks its columns by warmth, not
   // priority — the Front page: attention IS the ordering. Drag-drop

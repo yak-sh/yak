@@ -14,11 +14,16 @@
 // durable: connection` — everybody watching sees it, nobody stores it, and it
 // goes away with the tab that wrote it. A saved draft is `sync: none, durable:
 // forever` — no one else is told about it, and this browser keeps it across a
-// reload. A task is the default, `sync: server, durable: forever`. A pace
-// needs somebody to take the value: a relay folds a mover's sixty writes a
-// second into one a pace, where a store cannot fold one row into another and
-// refuses the second instead, so a chat line is paced per person. Nothing is
-// taken from a `sync: none` value, so it has no pace.
+// reload. A half-typed line is `sync: none, durable: tab` — kept across a
+// reload of the tab it was typed in, and gone with that tab, so a new tab
+// starts empty. A terminal has no tab: there the tab is the process, and the
+// line goes when it exits. Only a component that stays on this node lives as
+// long as its tab, since no server can tell a reload from a closed tab. A task
+// is the default, `sync: server, durable: forever`. A pace needs somebody to
+// take the value: a relay folds a mover's sixty writes a second into one a
+// pace, where a store cannot fold one row into another and refuses the second
+// instead, so a chat line is paced per person. Nothing is taken from a `sync:
+// none` value, so it has no pace.
 //
 // The keywords are core, not @yaks/sync's: the write allowlist, the
 // subscription registry and the store all decide from `sync` and `durable`,
@@ -50,21 +55,26 @@ let UNIT: Record<string, number> = {
   d: 86_400_000,
 }
 
+/** The spans a `durable` value can name instead of a duration: kept for good,
+ * kept across a reload of the tab (the process, in a terminal), and kept while
+ * the connection lives. */
+let SPANS = ['forever', 'tab', 'connection']
+
 /**
  * A `durable` value in milliseconds — `null` when it names no duration.
- * `forever` and `connection` are spans a clock cannot count, so they return
- * `null` too: a caller uses {@link ms} to decide whether to set a timer, and
- * compares the string itself for the rest.
+ * `forever`, `tab` and `connection` are spans a clock cannot count, so they
+ * return `null` too: a caller uses {@link ms} to decide whether to set a timer,
+ * and compares the string itself for the rest.
  */
 export let ms = (durable: string): number | null => {
   let m = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/.exec(durable)
   return m ? Number(m[1]) * UNIT[m[2]] : null
 }
 
-/** Whether a `durable` value is one this package understands: either of the
- * two named spans, or a duration. */
+/** Whether a `durable` value is one this package understands: a named span,
+ * or a duration. */
 export let lives = (durable: string): boolean =>
-  durable == 'forever' || durable == 'connection' || ms(durable) != null
+  SPANS.includes(durable) || ms(durable) != null
 
 /** A `pace` value in milliseconds — `null` when a component declares none, or
  * none a clock can count, and every write is taken as it is made. */

@@ -4,7 +4,8 @@
  * its `Edit` state, the element becomes plaintext-editable in place, the same
  * face, font and box, so nothing on the page moves. Enter (a body: leaving it)
  * emits what was typed, Escape puts the value back, and what is typed is kept
- * in the page's graph as it is typed, so a remount types on from it.
+ * in the page's graph as it is typed, so a remount or a reload of the tab
+ * types on from it.
  *
  * @module
  */

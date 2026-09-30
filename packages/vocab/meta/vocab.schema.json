@@ -278,7 +278,7 @@
         },
         "durable": {
           "type": "string",
-          "pattern": "^(forever|connection|[0-9]+(\\.[0-9]+)?(ms|s|m|h|d))$"
+          "pattern": "^(forever|tab|connection|[0-9]+(\\.[0-9]+)?(ms|s|m|h|d))$"
         },
         "pace": {
           "type": "string",

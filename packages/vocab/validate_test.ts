@@ -240,8 +240,15 @@ test('a relay owns nothing, so it cannot keep a value forever', () => {
     'presence syncs "everyone" — a component syncs to none, server, peers',
   ])
   assertEquals(one({ type: 'object', sync: 'peers', durable: 'a while' }), [
-    'presence is durable "a while" — say "forever", "connection", or a duration such as "5s" or "2m"',
+    'presence is durable "a while" — say "forever", "tab", "connection", or a duration such as "5s" or "2m"',
   ])
+})
+
+test('only what stays on the page lives as long as its tab', () => {
+  let one = (comp: PropSchema) => storable(doc({ line: comp }))
+  assertEquals(one({ type: 'object', sync: 'none', durable: 'tab' }), [])
+  assertEquals(one({ type: 'object', durable: 'tab' }).length, 1)
+  assertEquals(one({ type: 'object', sync: 'peers', durable: 'tab' }).length, 1)
 })
 
 test('a pace is how often a value is taken, so what nobody takes has none', () => {

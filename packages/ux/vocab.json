@@ -9,8 +9,8 @@
       "component": true,
       "type": "object",
       "sync": "none",
-      "durable": "connection",
-      "description": "a value being changed where it stands (@yaks/ux Edit), on an entity of its own whose eid is derived from its owner and the value: open while it is, what is typed over it, and what its picker searches for",
+      "durable": "tab",
+      "description": "a value being changed where it stands (@yaks/ux Edit), on an entity of its own whose eid is derived from its owner and the value: open while it is, what is typed over it, and what its picker searches for; kept across a reload of the tab",
       "properties": {
         "open": {
           "type": "boolean",
@@ -18,7 +18,7 @@
         },
         "text": {
           "type": "string",
-          "description": "what is typed over the value so far; a remount types on from it"
+          "description": "what is typed over the value so far; a remount or a reload types on from it"
         },
         "query": {
           "type": "string",

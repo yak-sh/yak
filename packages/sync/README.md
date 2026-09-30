@@ -138,6 +138,7 @@ are sent and how they should be retained:
 | `durable`             | Intended lifetime                                                        |
 | --------------------- | ------------------------------------------------------------------------ |
 | `"forever"` (default) | Persistent storage on the server, or local persistence for `sync: none`. |
+| `"tab"`               | Local persistence for `sync: none`, kept across a reload of the tab.     |
 | `"connection"`        | Memory associated with the writing connection.                           |
 | `"5s"`, `"2m"`        | Connection-associated memory with an expiry timer renewed on each write. |
 
@@ -165,10 +166,11 @@ taking the folded patch with it. Values one message carried are paced together,
 so their next values also share a message.
 
 `syncOf(vocab, name)` and `durableOf(vocab, name)` read these keywords.
-`local(vocab, name)` returns `'vault'` for local-only persistent state,
-`'memory'` for other local-only state, and `null` for state sent to the server.
-Here `'vault'` is an API value meaning caller-provided local persistence; the
-helper does not implement it or enforce expiry timers.
+`local(vocab, name)` returns `'vault'` for local-only persistent state, `'tab'`
+for local-only state kept as long as the tab, `'memory'` for other local-only
+state, and `null` for state sent to the server. Here `'vault'` and `'tab'` are
+API values meaning caller-provided local persistence; the helper does not
+implement either or enforce expiry timers.
 
 One `apply()` can contain both a recipe and its local draft. Both commit in the
 same local transaction, but only the recipe is posted. Outgoing data contains

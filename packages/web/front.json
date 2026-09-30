@@ -1,0 +1,22 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "web",
+  "description": "What the web page keeps in its own graph (components/fields.tsx `front`): never synced, and never a component of the graph it shows.",
+  "$defs": {
+    "draft": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "tab",
+      "description": "text typed in one of the page's plain boxes (a comment, a new task, an edge's search) and not yet sent, on an entity of its own whose eid is derived from the box: kept across a reload of the tab, and gone once it is sent",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "what is typed"
+        }
+      }
+    }
+  }
+}
