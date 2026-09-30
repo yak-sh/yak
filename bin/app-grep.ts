@@ -1,17 +1,21 @@
 #!/usr/bin/env -S deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg
-// bin/app-grep — ripgrep over the current files of every yaks app.
+// bin/app-grep — ripgrep over every yaks app's files, live and kept.
 //
-//   deno task app-grep [rg flags] PATTERN [space/app/...]
+//   deno task app-grep [rg flags] PATTERN [space/app/... | sha]
 //
-// Each match prints as `space/app/path:line: text`. A path after the pattern
-// narrows the search to one space or app, as it would for rg.
+// Each match prints as `space/app/path:line: text`, or `sha/<sha>:line: text`
+// for bytes a kept version names. A path after the pattern narrows the search
+// to one space or app, or to the kept bytes, as it would for rg.
 //
 // An app's files are objects in the R2 bucket yak-blobs, keyed
-// `<space>/<app>/<path>` (workers/yak/files.ts `prefixOf`, `keyed`). The bucket
-// holds two more things, and neither is code: what people uploaded, at
-// `<space>/<app>/blobs/<sha>` (apps.ts `blobKey`), and the platform's own
-// content-addressed bytes, one segment under `sha/` and `git/` (versions.ts,
-// gitobj.ts). Only the files are copied.
+// `<space>/<app>/<path>` (workers/yak/files.ts `prefixOf`, `keyed`). Every
+// version an app deployed, and every draft edit it replaced, is a manifest
+// naming its files' bytes by SHA-256, pinned once for the whole bucket at
+// `sha/<sha>` (versions.ts `addressed`), so those are copied too: a rollback
+// serves them again. Which version names a sha is the directory's to say
+// (`deploy.files`). The bucket holds two more things, and neither is code:
+// what people uploaded, at `<space>/<app>/blobs/<sha>` (apps.ts `blobKey`), and
+// the objects under `git/` (gitobj.ts), which name the same bytes again.
 //
 // It reads production and never writes to it: the token is 1Password's
 // "cloudflare user read-only", and the only calls are a listing and a get. The
@@ -43,6 +47,9 @@ export let isFile = (key: string) => {
     !parts.some((p) => p == '' || p == '.' || p == '..') &&
     !UPLOAD.test(parts.slice(2).join('/'))
 }
+
+// Bytes a kept version names.
+export let isKept = (key: string) => /^sha\/[0-9a-f]{64}$/.test(key)
 
 // The keys a run gets: new since the last run, or moved.
 export let stale = (objs: Obj[], had: Etags) =>
@@ -88,7 +95,7 @@ let listed = async (auth: string) => {
     objs.push(...page.result.map(({ key, etag }: Obj) => ({ key, etag })))
     cursor = page.result_info?.is_truncated ? page.result_info.cursor : ''
   } while (cursor)
-  return objs.filter((o) => isFile(o.key))
+  return objs.filter((o) => isFile(o.key) || isKept(o.key))
 }
 
 let copied = async (auth: string, o: Obj) => {

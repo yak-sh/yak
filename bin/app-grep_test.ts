@@ -3,7 +3,7 @@
 // tool's own business.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { gone, isFile, shown, stale } from './app-grep.ts'
+import { gone, isFile, isKept, shown, stale } from './app-grep.ts'
 
 let sha = 'a'.repeat(64)
 
@@ -19,6 +19,16 @@ test('isFile: an app file, never an upload or the platform bytes', () => {
     ['yourname//index.html', false],
   ]
   for (let [key, want] of cases) assertEquals(isFile(key), want, key)
+})
+
+test('isKept: the bytes a kept version names, and nothing else', () => {
+  let cases: [string, boolean][] = [
+    [`sha/${sha}`, true],
+    [`git/${sha}`, false],
+    [`sha/${sha}/x`, false],
+    ['sha/recipes/index.html', false],
+  ]
+  for (let [key, want] of cases) assertEquals(isKept(key), want, key)
 })
 
 test('stale and gone: a run gets what moved and removes what left', () => {
