@@ -32,7 +32,7 @@ export let Panes: Part & Record<'Pane' | 'Top' | 'Body', Part> = block(
 /** Columns in a row, each framed, quiet but for the accent where the
  * keyboard is. */
 export let sheet = (c: Colors): Sheet => ({
-  Panes: { row: true },
+  Panes: { row: true, grow: true },
   Panes_Pane: { col: true, border: 'Panes_Edge' },
   'Panes_Pane-nav': { width: 30 },
   'Panes_Pane-main': { grow: true },

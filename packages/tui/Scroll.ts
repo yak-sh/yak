@@ -59,7 +59,8 @@ export let Scroll = (
     id: string
     scrollbar?: boolean
     keyboard?: boolean
-    /** Reveal a logical row when keyboard selection changes. */
+    /** Reveal a logical row when keyboard selection changes; left out, the
+     * first row of the element inside marked `reveal`. */
     reveal?: number
     follow?: boolean
     children?: ComponentChildren
@@ -68,6 +69,7 @@ export let Scroll = (
 ): JSX.Element => {
   let v = useMetric(id)
   let max = Math.max(0, v.total - v.height)
+  let shown = reveal ?? v.reveal
   let [top, setTop] = useState(0)
   let [stick, setStick] = useState(follow)
   // A held page key arrives as several keys in one read, before any re-render:
@@ -91,22 +93,22 @@ export let Scroll = (
     setStick(follow)
   }, [id, follow])
   useLayoutEffect(() => {
-    if (reveal == null || v.height < 1) return
+    if (shown == null || v.height < 1) return
     let next = Math.max(
       0,
       Math.min(
         max,
-        reveal < live.current
-          ? reveal
-          : reveal >= live.current + v.height
-          ? reveal - v.height + 1
+        shown < live.current
+          ? shown
+          : shown >= live.current + v.height
+          ? shown - v.height + 1
           : live.current,
       ),
     )
     live.current = next
     setTop(next)
     setStick(false)
-  }, [reveal, v.height, max])
+  }, [shown, v.height, max])
   // Content grew while pinned to the bottom: follow it there. Setting the same
   // offset renders nothing, so this settles after one paint.
   useLayoutEffect(() => {

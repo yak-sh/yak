@@ -86,7 +86,7 @@ export let useKeys = (fn: Keys, id?: string): void => {
 /** What the painter measured for an element id on the last paint. */
 export let useMetric = (
   id: string,
-): { total: number; height: number; width: number } =>
+): { total: number; height: number; width: number; reveal?: number } =>
   metrics.value[id] ?? { total: 0, height: 0, width: 0 }
 
 /** Publish a paint's measurements; unchanged measurements re-render nothing. */
@@ -95,7 +95,7 @@ export let measured = (next: Metrics): void => {
   let same = Object.keys(next).length == Object.keys(now).length &&
     Object.entries(next).every(([k, v]) =>
       now[k]?.total == v.total && now[k]?.height == v.height &&
-      now[k]?.width == v.width
+      now[k]?.width == v.width && now[k]?.reveal == v.reveal
     )
   if (!same) metrics.value = next
 }

@@ -56,10 +56,12 @@ export type Seg = {
 }
 /** One screen line, as styled runs. */
 export type Line = Seg[]
-/** What a scroll region measured on the last paint, per element id. */
+/** What a scroll region measured on the last paint, per element id: its
+ * content lines, the rows it shows, its width, and the first line of the
+ * element inside it marked `reveal`, where one is. */
 export type Metrics = Record<
   string,
-  { total: number; height: number; width: number }
+  { total: number; height: number; width: number; reveal?: number }
 >
 
 /** The five calls `run()` makes of whatever draws the screen. */
@@ -382,6 +384,29 @@ let row = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
     ))
 }
 
+// The first element under `el` marked `reveal`, and everything under it.
+let mark = (el: TElement): TElement[] | undefined => {
+  if (el.attr('reveal') != null) {
+    let all: TElement[] = []
+    let add = (n: TElement) => (all.push(n), kids(n).forEach(add))
+    add(el)
+    return all
+  }
+  for (let k of kids(el)) {
+    let found = mark(k)
+    if (found) return found
+  }
+}
+
+// The first of a box's lines that an element marked `reveal` inside it paints,
+// or -1.
+let marked = (box: TElement, lines: Line[]) => {
+  let own = new Set(kids(box).flatMap((k) => mark(k) ?? []))
+  return own.size
+    ? lines.findIndex((l) => l.some((seg) => own.has(seg.owner!)))
+    : -1
+}
+
 // Window a box's content from its scroll offset, recording what it measured.
 let windowed = (
   el: TElement,
@@ -392,7 +417,15 @@ let windowed = (
 ) => {
   let height = h ?? lines.length
   let id = el.attr('id')
-  if (id) c.metrics[id] = { total: lines.length, height, width }
+  if (id) {
+    let reveal = marked(el, lines)
+    c.metrics[id] = {
+      total: lines.length,
+      height,
+      width,
+      ...reveal < 0 ? {} : { reveal },
+    }
+  }
   let top = Math.min(
     Math.max(0, num(el, 'scroll') ?? 0),
     Math.max(0, lines.length - height),

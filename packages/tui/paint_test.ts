@@ -129,6 +129,23 @@ test('a col gives its leftover rows to the growing child', () => {
   assertEquals(metrics.body, { total: 5, height: 3, width: 20 })
 })
 
+test('a scroll region reports the line an element marked reveal paints', () => {
+  let tree = (at?: string) =>
+    el(
+      'root',
+      { col: '1' },
+      el(
+        'div',
+        { grow: '1', id: 'body', scroll: '0' },
+        ...['a', 'b', 'c', 'd', 'e'].map((t) =>
+          el('div', t == at ? { reveal: '' } : {}, el('span', {}, t))
+        ),
+      ),
+    )
+  assertEquals(screenful(tree('d'), 20, 2).metrics.body.reveal, 3)
+  assertEquals(screenful(tree(), 20, 2).metrics.body.reveal, undefined)
+})
+
 test('a scroll offset windows the content and is clamped to it', () => {
   let rows = (top: string) =>
     seen(
