@@ -147,6 +147,7 @@ test('packages: every vocabulary goes through a graph as bundles and back', asyn
   let rows = [
     ...await g.read('._package'),
     ...await g.read('._comp ?doc'),
+    ...await g.read('._extends ?doc'),
     ...await g.read('._prop ?doc'),
     ...await g.read('._before ?edge'),
   ]

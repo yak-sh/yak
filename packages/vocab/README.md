@@ -582,12 +582,13 @@ A vocabulary can be held in a graph, where it is read, searched and linked like
 anything else. The **meta vocabulary** (this package's `vocab.json`, `metaDoc`)
 declares the components it is held in:
 
-| component  | one per                                                                    | its `doc`                    |
-| ---------- | -------------------------------------------------------------------------- | ---------------------------- |
-| `_package` | package a document is (`VocabDoc.package`)                                 | its name; its description    |
-| `_comp`    | component a document declares, in `package`                                | its name; its description    |
-| `_prop`    | property, in `comp` at `ord`, from `package`                               | `comp.prop`; its description |
-| `_before`  | kind a kind sorts before, an @yaks/edge relation with `edge.ord` its place | none                         |
+| component  | one per                                                                       | its `doc`                       |
+| ---------- | ----------------------------------------------------------------------------- | ------------------------------- |
+| `_package` | package a document is (`VocabDoc.package`)                                    | its name; its description       |
+| `_comp`    | component a document declares, in `package`                                   | its name; its description       |
+| `_extends` | component a document extends, from `package`, with the `status` rungs it adds | `comp+package`; its description |
+| `_prop`    | property, in `comp` at `ord`, from `package`                                  | `comp.prop`; its description    |
+| `_before`  | kind a kind sorts before, an @yaks/edge relation with `edge.ord` its place    | none                            |
 
 A keyword with a column of its own is written there; every other keyword an
 entry says, another package's (`prefix`, `store`) or JSON Schema's own
@@ -602,11 +603,12 @@ bare name in a query.
 `toBundles(doc, id)` reads one document into bundles, and `fromBundles(rows)`
 turns rows back into documents, one per package, that `loadVocab` loads as the
 vocabulary they came from. `id` is the graph's own derivation of a declared
-identity: a `_package` and a `_comp` are identified by their names and a `_prop`
-by its component and its name, so each document is read on its own and an
-extension's properties land on the component another document declares,
-whichever is read first. A `before` naming a kind no document declares does not
-come back from `fromBundles`; it constrains nothing in `kindOrder` either.
+identity: a `_package` and a `_comp` are identified by their names, an
+`_extends` by its component and its package, and a `_prop` by its component and
+its name, so each document is read on its own and an extension's properties land
+on the component another document declares, whichever is read first. A `before`
+naming a kind no document declares does not come back from `fromBundles`; it
+constrains nothing in `kindOrder` either.
 
 ```ts ignore
 import { identities } from '@yaks/graph'

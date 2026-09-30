@@ -42,9 +42,10 @@ export let declared = async (
     return b._before && e ? [`${e.from}|${e.to}`] : []
   }))
   let pkgs = said.map(({ pkg }) => id('_package', { name: pkg })).join(',')
-  let [packages, comps, props] = await Promise.all([
+  let [packages, comps, extensions, props] = await Promise.all([
     g.read(`._package .eid=${pkgs}`),
     g.read(`._comp.package=${pkgs}`),
+    g.read(`._extends.package=${pkgs}`),
     g.read(`._prop.package=${pkgs}`),
   ])
   let from = comps.map((b) => b.entity.eid)
@@ -59,6 +60,7 @@ export let declared = async (
     ...fresh,
     ...packages.flatMap(gone('_package')),
     ...comps.flatMap(gone('_comp')),
+    ...extensions.flatMap(gone('_extends')),
     ...props.flatMap(gone('_prop')),
     ...edges.flatMap((b) => {
       let e = b.edge as Comp

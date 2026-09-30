@@ -1,8 +1,8 @@
 // A vocabulary described as entities, in the meta vocabulary (./vocab.json): a
 // `_package` for the package a document is, a `_comp` per component it
-// declares, a `_prop` per property it declares or extends, and a `_before`
-// edge per kind a kind sorts before, each wearing `doc` for its name and its
-// description. A vocabulary is then read, searched and linked like anything
+// declares, an `_extends` per component it extends (the status rungs it adds),
+// a `_prop` per property it declares or extends, and a `_before` edge per kind
+// a kind sorts before, each wearing `doc` for its name and its description. A vocabulary is then read, searched and linked like anything
 // else in a graph, and what `graph_schema` answers is a query:
 //
 //   ._comp ?doc                    every component, by name
@@ -43,7 +43,7 @@ export type Bundle = {
  * entities in every graph that reads it.
  */
 export type Ids = (
-  comp: '_package' | '_comp' | '_prop',
+  comp: '_package' | '_comp' | '_extends' | '_prop',
   values: Record<string, unknown>,
 ) => string
 
@@ -84,8 +84,9 @@ let row = (s: PropSchema, cols: string[], skip: string[]) => {
 /**
  * One document's components as bundles: a `_package` where the document names
  * its `package` (its `description` the package's), a `_comp` for each component
- * it declares, a `_prop` for each property it declares or adds (`extends`), a
- * `_before` edge for each kind its `before` names. A component it only names
+ * it declares, an `_extends` for each one it extends, a `_prop` for each
+ * property it declares or adds, a `_before` edge for each kind its `before`
+ * names. A component it only names
  * (`before`, `extends`) is referred to by the id its name derives, whichever
  * document declares it. A tool, a rule or any other entry that is not a
  * component is left out.
@@ -113,6 +114,7 @@ export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
     }]
     : []
   let comps: Bundle[] = []
+  let extensions: Bundle[] = []
   let props: Bundle[] = []
   let edges: Bundle[] = []
   for (let [name, s] of Object.entries(doc.$defs ?? {})) {
@@ -132,6 +134,15 @@ export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
           _before: {},
         })
       })
+    } else {
+      extensions.push({
+        entity: { eid: id('_extends', { comp: c, package: pkg }) },
+        _extends: { comp: c, package: pkg, status: s.status ?? null },
+        doc: {
+          title: `${name}+${doc.package ?? ''}`,
+          body: s.description ?? null,
+        },
+      })
     }
     Object.entries(s.properties ?? {}).forEach(([prop, p], ord) =>
       props.push({
@@ -148,7 +159,7 @@ export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
       })
     )
   }
-  return [...packages, ...comps, ...props, ...edges]
+  return [...packages, ...comps, ...extensions, ...props, ...edges]
 }
 
 // A component's columns as read back, without the nulls a store fills an
@@ -167,10 +178,10 @@ let described = (b: Bundle) => {
 
 /**
  * Bundles back into documents: one per package, each declaring that package's
- * components, and an `extends` entry wherever a package added properties to a
- * component another one declares. `loadVocab` of what it returns is the
+ * components, and an `extends` entry wherever a package added properties or
+ * status rungs to a component another one declares. `loadVocab` of what it returns is the
  * vocabulary the bundles were projected from. It reads the rows a graph holds
- * (`._package`, `._comp`, `._prop`, `._before`), with whatever else those
+ * (`._package`, `._comp`, `._extends`, `._prop`, `._before`), with whatever else those
  * entities wear. An edge to an entity no `_comp` names is a kind these bundles
  * never declared, and is left out.
  */
@@ -198,6 +209,23 @@ export let fromBundles = (bundles: Bundle[]): VocabDoc[] => {
       properties: {},
     }
   }
+  // Each extension, its rungs in the order its entry gave them; the
+  // properties it adds are `_prop` rows like any other.
+  let extending = (comp: unknown, at: unknown) => {
+    let home = named.get(String(comp))
+    if (!home) return undefined
+    return defs(packageOf(at))[home.name] ??= {
+      component: true,
+      extends: true,
+      properties: {},
+    }
+  }
+  for (let b of bundles.filter((b) => b._extends)) {
+    let { comp, package: at, status } = kept(b, '_extends')
+    let entry = extending(comp, at)
+    if (!entry) continue
+    Object.assign(entry, described(b), status ? { status } : {})
+  }
   let ord = (b: Bundle, name: string, key: string) =>
     Number((b[name] as Record<string, unknown>)[key] ?? 0)
   let props = bundles.filter((b) => b._prop)
@@ -207,13 +235,8 @@ export let fromBundles = (bundles: Bundle[]): VocabDoc[] => {
       b,
       '_prop',
     )
-    let home = named.get(String(comp))
-    if (!home) continue
-    let entry = defs(packageOf(at))[home.name] ??= {
-      component: true,
-      extends: true,
-      properties: {},
-    }
+    let entry = extending(comp, at)
+    if (!entry) continue
     entry.properties![String(name)] = {
       ...keywords as object,
       ...cols,

@@ -233,6 +233,33 @@
       "edge": true,
       "wire": false,
       "description": "the edge from a kind to a kind it sorts before; edge.ord keeps the order its entry lists them in"
+    },
+    "_extends": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "wire": false,
+      "before": ["doc"],
+      "identity": ["comp", "package"],
+      "description": "a package's extension of a component another package declares. The properties it adds are _prop rows; its doc.title is comp+package, its doc.body its description",
+      "properties": {
+        "comp": {
+          "type": "string",
+          "ref": "_comp",
+          "death": "cascade",
+          "description": "the component it extends"
+        },
+        "package": {
+          "type": "string",
+          "ref": "_package",
+          "death": "cascade",
+          "description": "the package whose vocabulary extends it"
+        },
+        "status": {
+          "type": "object",
+          "description": "the rungs it adds to the component's status ladder, in order: each component to the status it gives"
+        }
+      }
     }
   }
 }

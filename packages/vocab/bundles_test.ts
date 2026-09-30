@@ -105,6 +105,28 @@ test('a vocabulary loads back from its bundles as it was', () => {
   )
 })
 
+test('the rungs another package adds to a status ladder survive', () => {
+  let chores: VocabDoc = {
+    package: '@t/chores',
+    $defs: {
+      chore: { component: true, status: { finished: 'done', default: 'open' } },
+      finished: { component: true },
+    },
+  }
+  let helpers: VocabDoc = {
+    package: '@t/helpers',
+    $defs: {
+      chore: { component: true, extends: true, status: { held: 'wip' } },
+      held: { component: true },
+    },
+  }
+  let back = load(fromBundles(bundlesOf([chores, helpers], plain)))
+  assertEquals(back.comp('chore')?.ladder?.rungs.map((r) => r.status), [
+    'done',
+    'wip',
+  ])
+})
+
 test('a union type, the declared order and every keyword survive', () => {
   let back = load(fromBundles(bundlesOf([kitchen, tagger, docDoc], plain)))
   assertEquals(back.prop('recipe', 'serves')?.types, ['number', 'string'])
@@ -160,6 +182,7 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   assertEquals((await titles('._comp')).sort(), [
     '_before',
     '_comp',
+    '_extends',
     '_package',
     '_prop',
     'doc',
@@ -207,6 +230,7 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   let rows = [
     ...await g.read('._package'),
     ...await g.read('._comp ?doc'),
+    ...await g.read('._extends ?doc'),
     ...await g.read('._prop ?doc'),
     ...await g.read('._before ?edge'),
   ]
