@@ -424,6 +424,14 @@ export let mend = (driver: Driver, number = false): number => {
   return moved
 }
 
+/** A unit's ledger of archetype moves ({@link ledger}). */
+export type Ledger = {
+  moved: (eid: string, table: string, held: boolean) => void
+  born: (eid: string) => void
+  pointed: (eid: string) => void
+  owed: () => string[]
+}
+
 /**
  * One unit's account of what its writes did to each entity's archetype, kept
  * by the store that opened the unit (./mod.ts `storage`). `moved` hears a row
@@ -434,7 +442,7 @@ export let mend = (driver: Driver, number = false): number => {
  * nothing, and neither does anything @yaks/graph wrote, since its tracker
  * points every entity it moved after the rows are written.
  */
-export let ledger = () => {
+export let ledger = (): Ledger => {
   // Per entity, per table: whether it held a row before the unit's first
   // write to it, and whether it holds one now.
   let rows = new Map<string, Map<string, [boolean, boolean]>>()

@@ -201,7 +201,7 @@ for (let fault of ['occupied', 'invalid']) {
       // Past every door, as only a raw writer could: a unit through the store
       // classifies what it writes, and refuses the occupied address itself.
       d.query(insert('entity', { eid: String(rows.at(-1)!.eid) }))
-      d.query(insert('doc', { entity: spine(d).at(-1)!.id }))
+      d.query(insert('doc', { entity: Number(spine(d).at(-1)!.id) }))
     } else {
       legacy(d, Number(rows.at(-1)!.id), 'not-a-legacy-descriptor')
     }
