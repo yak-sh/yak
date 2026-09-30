@@ -146,7 +146,9 @@ For a new identity, it adopts the supplied number only when numbering is
 enabled; without `number`, that new identity initially contains only its eid. A
 client that needs server numbers on the first incoming patch can use
 `ram(vocab, { number: true, adopt: true })`. Locally created entities then
-receive provisional numbers that later server responses can correct.
+receive provisional numbers that later server responses can correct. Such a
+store also keeps the computed values it is sent, as the graph it mirrors derived
+them.
 
 ### Rollback
 

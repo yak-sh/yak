@@ -47,7 +47,8 @@ export type RamOpts = {
    * changes a server returned is being told the identity, not choosing it. An
    * entity it has not been told a number for has none: a number it guessed
    * could be another entity's. Off by default: a store that mirrors nothing
-   * owns its own numbering. */
+   * owns its own numbering. Such a store also keeps the computed values it is
+   * sent, as the graph it mirrors derived them. */
   adopt?: boolean
   /** Give new entities a human-readable number. Opt-IN, with the same option
    * name @yaks/sqlite uses: left out, an entity has its eid and nothing else.
@@ -326,11 +327,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     vocab.prop(comp, prop)?.category == 'ref'
 
   // The properties of a patch this vocabulary stores. A component whose patch
-  // names none is still a component: its presence is the fact.
+  // names none is still a component: its presence is the fact. A store that
+  // mirrors another graph keeps the computed values that graph sent, since it
+  // holds no rule to derive them.
   let stored = (comp: string, patch: Comp): Comp => {
     let out: Comp = {}
     for (let p in patch) {
-      if (vocab.prop(comp, p)?.computed === false) out[p] = patch[p]
+      let prop = vocab.prop(comp, p)
+      if (prop && (!prop.computed || base.adopt)) out[p] = patch[p]
     }
     return out
   }

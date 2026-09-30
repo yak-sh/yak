@@ -128,7 +128,8 @@ it with the selected entities apart from the ones reached, and what each covers.
 committing; it returns the proposed patches, runs audit hooks, and skips
 effects. `apply(change, { replica: true })` lands rows another graph already
 admitted in a partial copy of it, leaving out the components this vocabulary
-does not declare instead of refusing them. `g.rows(query)` returns
+does not declare instead of refusing them, and keeping the computed values it
+was sent, which it has no rule to derive. `g.rows(query)` returns
 adapter-specific rows for aggregates and other raw query results. `g.get(eids)`
 returns those entities whole, tombstones included, by eid rather than by query;
 `g.get(eids, comps)` returns each carrying only the components `comps` names,

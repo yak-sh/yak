@@ -71,12 +71,13 @@ export let formed = (change: unknown): Bundle[] => {
 // A caller may write the client-writable properties, and the server-owned ones
 // when it is trusted. A computed property (`computed: true`) is neither — it
 // is derived, so there is nothing to write — and is dropped like a stamped
-// one.
+// one, except in a replica, which keeps the value the graph it copies derived.
 let admitComp = (
   v: Vocab,
   name: string,
   patch: Comp,
   trusted: boolean,
+  replica: boolean,
 ): Comp | undefined => {
   let alien: string[] = []
   let kept: Comp = {}
@@ -91,7 +92,7 @@ let admitComp = (
     // A computed property is never a write, so a patch of nothing else names
     // the component alone: a server's `task: { status: 'open' }` is a task.
     if (!p.computed) asked = true
-    if (p.stamped ? !trusted : p.computed) continue
+    if (p.stamped ? !trusted : p.computed && !replica) continue
     kept[k] = patch[k]
     any = true
   }
@@ -130,13 +131,15 @@ export let known = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
  * removed from the change — it asked for nothing this caller may write.
  * `trusted` admits server-owned properties; it is the calling program's
  * decision, never a client's. `teach` ends the refusal of an undeclared
- * component (@yaks/vocab `unknownComps`).
+ * component (@yaks/vocab `unknownComps`). A `replica` (trusted) keeps the
+ * computed values its source sent.
  */
 export let admit = (
   bundles: Bundle[],
   vocab: Vocab,
   trusted = false,
   teach?: string,
+  replica = false,
 ): Bundle[] => {
   let alien = new Set<string>()
   for (let b of bundles) {
@@ -161,7 +164,7 @@ export let admit = (
         kept++
         continue
       }
-      let admitted = admitComp(vocab, name, patch, trusted)
+      let admitted = admitComp(vocab, name, patch, trusted, replica && trusted)
       if (!admitted) continue
       out[name] = admitted
       kept++

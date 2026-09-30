@@ -85,7 +85,9 @@ export type ApplyOpts = {
   /** the change copies rows another graph already admitted into this graph's
    * copy of them — a replica landing what its server sent. A copy holds only
    * the words it was loaded with, so a component this vocabulary does not
-   * declare is left out; every other write is refused for naming one. */
+   * declare is left out; every other write is refused for naming one. It
+   * holds the values its server computed as the server sent them, since it
+   * has no rule to derive them itself. */
   replica?: boolean
   /** the timestamp every stamp in this change uses, ISO-8601 (default: now) */
   now?: string
@@ -638,6 +640,7 @@ export let graph = (opts: Options): Graph => {
               vocab,
               o.trusted,
               opts.teach,
+              o.replica,
             ),
         ),
         // Derive the id, then check it still matches: an id derived from a

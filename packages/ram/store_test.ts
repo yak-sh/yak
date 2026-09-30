@@ -8,7 +8,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle, Storage } from '@yaks/graph'
+import { type Bundle, graph, type Storage } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { matcher } from '@yaks/match'
 import { shop } from '../sqlite/testing.ts'
@@ -313,19 +313,21 @@ test('a real delete after payload eviction still makes death permanent', () => {
 
 // A property the vocabulary declares but never stores is answered by the rule
 // the store is handed, and refused by name without one.
-test('a computed property is read through the rule the store is given', () => {
-  let vocab = loadVocab({
-    $defs: {
-      lamp: {
-        type: 'object',
-        component: true,
-        properties: {
-          watts: { type: 'number' },
-          glow: { type: 'string', computed: true },
-        },
+let lampVocab = loadVocab({
+  $defs: {
+    lamp: {
+      type: 'object',
+      component: true,
+      properties: {
+        watts: { type: 'number' },
+        glow: { type: 'string', computed: true },
       },
     },
-  })
+  },
+})
+
+test('a computed property is read through the rule the store is given', () => {
+  let vocab = lampVocab
   let lamps = [
     { entity: { eid: 'l1' }, lamp: { watts: 60 } },
     { entity: { eid: 'l2' }, lamp: { watts: 5 } },
@@ -340,4 +342,22 @@ test('a computed property is read through the rule the store is given', () => {
   let dark = ram(vocab)
   put(dark, ...lamps)
   assertThrows(() => dark.read('.lamp.glow=bright'), Error, 'lamp.glow')
+})
+
+// A replica has no rule for what its server derives, so it keeps the value as
+// the server sent it; a graph of its own writes derives it, never takes it.
+test('a replica keeps the computed values its server sent', () => {
+  let sent = [{ entity: { eid: 'l1' }, lamp: { watts: 60, glow: 'bright' } }]
+  let mirror = graph({
+    storage: ram(lampVocab, { adopt: true }),
+    vocab: lampVocab,
+  })
+  mirror.apply(sent, { trusted: true, replica: true })
+  assertEquals(comp((mirror.get(['l1']) as Bundle[])[0], 'lamp'), {
+    watts: 60,
+    glow: 'bright',
+  })
+  let own = graph({ storage: ram(lampVocab), vocab: lampVocab })
+  own.apply(sent)
+  assertEquals(comp((own.get(['l1']) as Bundle[])[0], 'lamp'), { watts: 60 })
 })
