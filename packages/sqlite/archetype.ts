@@ -376,16 +376,24 @@ export function drift(driver: Driver, sample = 12): Drift {
   )
   for (let lo = 0; lo < top; lo += WINDOW) {
     let hi = lo + WINDOW
-    let rows = run(
-      owned(and(gt(col('id', 'e'), val(lo)), le(col('id', 'e'), val(hi)))),
-    )
-    if (!rows.length) continue
-    let owners = presence(
-      run,
-      tables,
-      new Map(rows.map((r) => [Number(r.id), [] as string[]])),
-      (c) => ({ where: and(gt(c, val(lo)), le(c, val(hi))) }),
-    )
+    // A window's pointers and rows are read in one snapshot, so a writer
+    // committing between the two is never counted as drift.
+    let [rows, owners] = unit(driver, () => {
+      let rows = run(
+        owned(and(gt(col('id', 'e'), val(lo)), le(col('id', 'e'), val(hi)))),
+      )
+      return [
+        rows,
+        rows.length
+          ? presence(
+            run,
+            tables,
+            new Map(rows.map((r) => [Number(r.id), [] as string[]])),
+            (c) => ({ where: and(gt(c, val(lo)), le(c, val(hi))) }),
+          )
+          : new Map<number, string[]>(),
+      ] as const
+    }, 'read')
     for (let r of rows) {
       let names = owners.get(Number(r.id))!
       let key = names.join('|')
