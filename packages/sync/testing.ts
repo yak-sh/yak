@@ -62,16 +62,7 @@ let doc: VocabDoc = {
       sync: 'none',
       properties: { text: { type: 'string' } },
     },
-    // What this cook has half-typed in the comment box: back after a reload
-    // of the tab, gone in a new one.
-    jotting: {
-      component: true,
-      type: 'object',
-      sync: 'none',
-      durable: 'tab',
-      properties: { text: { type: 'string' } },
-    },
-    // The text in the search box: gone when the page goes.
+    // The text in the search box: gone when the tab closes.
     sieve: {
       component: true,
       type: 'object',

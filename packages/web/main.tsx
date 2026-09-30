@@ -3,6 +3,7 @@ import { agreementProbe, boot, clientId, config } from './live.ts'
 import { restore } from './components/nav.tsx'
 import { App } from './components/App.tsx'
 import { ux } from './components/registry.ts'
+import { lone } from './components/drafts.ts'
 import { Ux } from '@yaks/ux'
 
 // Name this tab to the socket before it opens, so its writes journal a
@@ -10,6 +11,9 @@ import { Ux } from '@yaks/ux'
 config.client = clientId()
 config.agreement = agreementProbe(location.search)
 await boot()
+// Until this browser is bound to someone, it types as the graph's lone
+// person (components/drafts.ts).
+void lone()
 
 // A cold launch at `/` — the manifest's start_url, so every app launch —
 // resumes the card and view this device left off on, with the canvas

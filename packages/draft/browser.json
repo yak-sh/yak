@@ -1,0 +1,17 @@
+{
+  "_": "The browser gate: @yaks/draft must type-check with only the web platform in scope, since a page's interfaces keep their drafts through it.",
+  "compilerOptions": {
+    "lib": ["dom", "esnext"],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/archetype": "../archetype/mod.ts",
+    "@yaks/fp": "../fp/mod.ts",
+    "@yaks/graph": "../graph/mod.ts",
+    "@yaks/match": "../match/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/sql": "../sql/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts",
+    "@preact/signals": "npm:@preact/signals@^2.9.0"
+  }
+}

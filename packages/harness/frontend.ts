@@ -10,7 +10,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
   // No URL or socket: the local vault is never replicated to the backend.
   let pending = Promise.resolve()
   let failure: unknown
-  const enqueue = (write: () => void | Promise<void>) => {
+  const enqueue = (write: () => Promise<void>) => {
     pending = pending.then(write).catch((error) => {
       failure = error
       mutate([{

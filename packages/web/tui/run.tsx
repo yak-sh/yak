@@ -7,6 +7,7 @@ import { onPaint, touch } from '@yaks/tui'
 import { render } from 'preact'
 import { effect } from '@preact/signals'
 import { boot, config } from '../live.ts'
+import { lone } from '../components/drafts.ts'
 import { extend } from '../components/registry.ts'
 import { onMarkdown } from '../components/Markdown.tsx'
 import { Md } from './md.tsx'
@@ -74,6 +75,8 @@ onMarkdown((text, repo, inline) => (
 ))
 extend(overrides)
 await boot()
+// A terminal names no client: it types as the graph's lone person.
+void lone()
 
 Deno.stdin.setRaw(true)
 // Alt screen, cursor hidden, and push the kitty keyboard protocol (disambiguate

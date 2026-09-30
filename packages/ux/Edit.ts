@@ -20,7 +20,7 @@ import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { define, type Registry, resolve } from '@yaks/render'
 import type { ComponentRenderer } from '@yaks/preact'
 import { parse } from '@yaks/query'
-import { useContext, useLayoutEffect, useRef } from 'preact/hooks'
+import { useContext, useRef } from 'preact/hooks'
 import { Prop as Frame, Surround } from '@yaks/ui'
 import { type Bundle, type Host, useHost } from './host.ts'
 import { emit, type OnChange } from './emit.ts'
@@ -79,9 +79,10 @@ let popout = (E: Control): Control => (p) => {
   )
 }
 
-// A choice made: emitted, and the control closed.
+// A choice made: emitted, its draft spent, and the control closed.
 let choose = (host: Host, p: ControlProps, v: unknown) => {
   emit(host, p.onChange, p.e, p.comp, p.prop, v)
+  p.edit.spend()
   p.edit.end()
 }
 
@@ -102,34 +103,35 @@ let TextEdit = (p: ControlProps) =>
   })
 
 // A query: the host's query field (@yaks/filter), the same completion as
-// every place a query is typed. It opens on the stored query, whatever was
-// typed there before. Enter or leaving emits it, Escape puts it back; empty
-// is a value here ('' = every task), so only no change emits nothing.
+// every place a query is typed. The field is the value's draft (its
+// `place`), so it opens on what was typed there before, anywhere, and on the
+// stored query when nothing was. Enter or leaving emits it, Escape puts it
+// back; empty is a value here ('' = every task), so only no change emits
+// nothing.
 let QueryEdit = (p: ControlProps) => {
   let host = useHost()
   let fields = host.fields!
-  let id = `query:${p.e.entity.eid}:${p.comp}.${p.prop}`
   let was = String(valueOf(p.e, p.comp, p.prop) ?? '')
-  useLayoutEffect(() => fields.set(id, was), [id])
   return h(
     Query,
     null,
     h(fields.Filter, {
-      id,
+      id: p.edit.place,
       initial: was,
-      focus: true,
+      focus: !!p.edit.row?.open,
       onKey: (ev: KeyboardEvent) => {
         let el = ev.currentTarget as HTMLInputElement
         if (ev.key == 'Enter') el.blur()
         else if (ev.key == 'Escape') {
-          fields.set(id, was)
           el.value = was // the blur below reads it before the repaint
           el.blur()
         }
       },
       onBlur: (ev: FocusEvent) => {
         let text = (ev.currentTarget as HTMLInputElement).value.trim()
-        text != was ? choose(host, p, text) : p.edit.end()
+        if (text != was) return choose(host, p, text)
+        p.edit.spend()
+        p.edit.end()
       },
     }),
   )
@@ -344,9 +346,12 @@ export type ControlOwnProps = {
  * caller turns into marks, with the same picker as every other enum. */
 let Control = (p: ControlOwnProps): ComponentChildren => {
   let host = useHost()
-  let edit = useEdit(p.e.entity.eid, p.comp, p.prop, p.at)
+  let edit = useEdit(p.e.entity.eid, p.comp, p.prop, {
+    at: p.at,
+    value: valueOf(p.e, p.comp, p.prop),
+  })
   let entry = entryOf(host, p.e, p.comp, p.prop)
-  if (!edit.row?.open || !entry) return null
+  if (!edit.open || !entry) return null
   return h(
     entry.Render,
     { ...p, edit } as unknown as ControlProps & { e: Bundle },
@@ -387,10 +392,10 @@ let EditValue = (
 ): JSX.Element => {
   let host = useHost()
   let { vocab, name: called } = host
-  let edit = useEdit(e.entity.eid, comp, prop, at)
+  let value = valueOf(e, comp, prop)
+  let edit = useEdit(e.entity.eid, comp, prop, { at, value })
   // What the popout control anchors on: the value or its handle.
   let anchor = useRef<HTMLElement>(null)
-  let value = valueOf(e, comp, prop)
   let bool = vocab.prop(comp, prop)?.scalar == 'bool'
   let faceValue = formatProp(vocab, comp, prop, value, called)
   let entry = entryOf(host, e, comp, prop)
@@ -406,7 +411,7 @@ let EditValue = (
     ? undefined
     : bool
     ? () => emit(host, onChange, e, comp, prop, value ? 0 : 1)
-    : () => edit.row?.open ? edit.end() : edit.begin()
+    : () => edit.open ? edit.end() : edit.begin()
   // A click that lands on a link inside the face belongs to that link, and
   // inside a linked surround the press demotes the way nested links do: an
   // edit press never rides the anchor around it.
@@ -440,7 +445,7 @@ let EditValue = (
       }, face ? '▾' : `+ ${name ?? prop}`)
       : null,
   )
-  let control = edit.row?.open && editor
+  let control = edit.open && editor
     ? h(
       editor.Render,
       {

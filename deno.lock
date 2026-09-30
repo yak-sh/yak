@@ -1823,6 +1823,12 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/draft": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@preact/signals@^2.9.0"
+        ]
+      },
       "packages/dreaming": {
         "dependencies": [
           "jsr:@std/assert@1"

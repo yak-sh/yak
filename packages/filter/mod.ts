@@ -1,23 +1,23 @@
 /**
  * @yaks/filter: the query field, a domain component giving completion wherever
  * a query is typed, in a browser and in a terminal. Its state is the `filter`
- * and `completion` components (vocab.json), one entity per field in the host's
- * front-end graph; its actions (type, set, move, accept, dismiss, press) are
- * patches to them; it
+ * component (vocab.json), one entity per field in the host's front-end graph,
+ * and what is typed in it is the person's draft (the host's `drafts`); its
+ * actions (type, set, move, accept, dismiss, press) are patches to them; it
  * is built of @yaks/ui's `Field` and `Choices`, and completes through
  * @yaks/query's `complete`.
  *
- * - `filters(front, {vocab, source, Float})`: the field bound to its host
- *   (filters.ts).
+ * - `filters(front, {vocab, drafts, source, Float})`: the field bound to its
+ *   host (filters.ts).
  * - `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`: what each action
- *   makes of a row, pure (state.ts); `rowOf` and `put` read a row off its
- *   entity and write one back.
+ *   makes of a row, pure (state.ts).
  *
  * @module
  */
 
 export {
   type Anchor,
+  type Drafts,
   type FilterProps,
   type Filters,
   filters,
@@ -32,9 +32,7 @@ export {
   dismissed,
   moved,
   placed,
-  put,
   type Row,
-  rowOf,
   taken,
   typed,
 } from './state.ts'

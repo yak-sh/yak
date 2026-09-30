@@ -9,16 +9,12 @@
       "component": true,
       "type": "object",
       "sync": "none",
-      "durable": "tab",
-      "description": "a value being changed where it stands (@yaks/ux Edit), on an entity of its own whose eid is derived from its owner and the value: open while it is, what is typed over it, and what its picker searches for; kept across a reload of the tab",
+      "durable": "connection",
+      "description": "a value being changed where it stands (@yaks/ux Edit), on an entity of its own whose eid is derived from its owner and the value: open while it is, and what its picker searches for; what is typed over it is the person's draft, kept where the host says (its drafts)",
       "properties": {
         "open": {
           "type": "boolean",
           "description": "being changed: typed over in place, or its picker floating beside it"
-        },
-        "text": {
-          "type": "string",
-          "description": "what is typed over the value so far; a remount or a reload types on from it"
         },
         "query": {
           "type": "string",

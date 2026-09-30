@@ -14,10 +14,11 @@
 // delete is what the cascade acts on.
 //
 // An event is a component that lives no time (`durable: "0s"`): the rules
-// have read it, and it is never written. Beside other components it rides in
-// the change; a bundle of nothing but events leaves the change here, so no
-// entity is stamped or journaled for it, and is carried back to whoever hears
-// the applied change (`State.heard`).
+// have read it, and it is never written. It leaves the change here, so
+// nothing stamps or journals it (a journal that recorded one would have undo
+// restore what was never stored), and rejoins it after the journal, on its
+// entity, for whoever hears the applied change (`State.heard`). A bundle of
+// nothing but events leaves whole.
 
 import { after } from '@yaks/fp'
 import type { Bundle } from './bundle.ts'
@@ -47,6 +48,26 @@ let written = (b: Bundle, events: Set<string>): Bundle => {
   return out
 }
 
+// A bundle's events alone, said of its entity.
+let said = (b: Bundle, events: Set<string>): Bundle => ({
+  entity: b.entity,
+  ...Object.fromEntries(comps(b).filter(([c]) => events.has(c))),
+})
+
+/** The change with what was heard and never written back in it, each on its
+ * entity's bundle, or beside the others where the change wrote nothing of
+ * that entity. */
+export let rejoin = (bundles: Bundle[], heard: Bundle[]): Bundle[] => {
+  let out = [...bundles]
+  let at = new Map(out.map((b, i) => [b.entity.eid, i]))
+  for (let h of heard) {
+    let i = at.get(h.entity.eid)
+    if (i == null) at.set(h.entity.eid, out.push(h) - 1)
+    else out[i] = { ...out[i], ...h, entity: out[i].entity }
+  }
+  return out
+}
+
 /**
  * The mutate phase: write the change's live bundles, swallow the ones that
  * raced a delete, revive a deleted entity any other write gives a component,
@@ -70,30 +91,30 @@ export let mutate = (
     let gone = new Set<string>()
     let live: Bundle[] = []
     let back: string[] = []
-    let kept = bundles.filter((b) => {
+    let kept = bundles.flatMap((b): Bundle[] => {
       let eid = b.entity.eid
-      if (gone.has(eid)) return false
+      if (gone.has(eid)) return []
       if (buried.has(eid)) {
         // Deleting it again is nothing, a write that raced its delete is
         // swallowed, and one that gives no component has nothing to bring
         // back. Any other write revives it.
-        if (dead(b) || raced(b) || !gives(b)) return false
+        if (dead(b) || raced(b) || !gives(b)) return []
         buried.delete(eid)
         back.push(eid)
       }
       if (dead(b)) {
         gone.add(eid)
         if (!st.killed.includes(eid)) st.killed.push(eid)
-        return true
+        return [b]
       }
       let w = written(b, events)
-      if (w != b && !comps(w).length) {
-        st.heard.push(b)
-        return false
+      if (w != b) {
+        st.heard.push(said(b, events))
+        if (!comps(w).length) return []
       }
       live.push(w)
       if (comps(w).length) st.touched.add(eid)
-      return true
+      return [w]
     })
     if (!live.length) return kept
     return after(

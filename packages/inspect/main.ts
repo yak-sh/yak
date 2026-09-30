@@ -20,6 +20,8 @@
 import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { client } from '@yaks/client'
+import { desk, docs as draftDocs, drafts } from '@yaks/draft'
+import { mint } from '@yaks/graph'
 import { filters } from '@yaks/filter'
 import { docs as fieldDocs } from '@yaks/filter/vocab'
 import { Float, Panes } from '@yaks/ui'
@@ -47,13 +49,18 @@ let box = client(vocab, [], {
   // that goes wrong on the way is the console's.
   report: (t) => t.refused || console.warn('@yaks/inspect', t.error, t.sent),
 })
-let front = client(loadVocab([...fieldDocs, ...uxDocs, ...own]), [], {
-  vault: false,
-  wireVault: false,
-})
+let front = client(
+  loadVocab([...fieldDocs, ...uxDocs, ...draftDocs, ...own]),
+  [drafts()],
+  { vault: false, wireVault: false },
+)
+// What is typed here waits in the page's own graph: the inspector keeps no
+// draft past the page.
+let typer = mint()
+let typed = desk(front, { by: () => typer })
 
 // The field's candidates show under it, above the index.
-let fields = filters(front, { vocab })
+let fields = filters(front, { vocab, drafts: typed })
 
 let where = signal(at(location.href) ?? {})
 let go = (href: string) => {
@@ -72,7 +79,7 @@ let find = async (line: string, limit: number, signal?: AbortSignal) => {
   if (!r.ok) throw new Error(await r.text())
   return await r.json()
 }
-let ux = editing(host, { find, fields, Float })
+let ux = editing(host, { find, fields, drafts: typed, Float })
 let door = inspector(views, host)
 let Frame = frame(door, {
   Bar: ({ id }) =>

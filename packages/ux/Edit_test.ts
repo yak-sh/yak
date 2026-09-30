@@ -4,9 +4,11 @@ import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type ComponentChild, h, options, render } from 'preact'
 import { client } from '@yaks/client'
+import { desk, draftDoc, drafts } from '@yaks/draft'
+import { mint } from '@yaks/graph'
 import { Float } from '@yaks/ui'
 import { loadVocab } from '@yaks/vocab'
-import { at, type Bundle, Edit, type Host, Ux } from './mod.ts'
+import { at, type Bundle, Edit, type Host, place, Ux } from './mod.ts'
 import { docs } from './vocab.ts'
 
 let vocab = loadVocab([{
@@ -85,16 +87,19 @@ let page = (more: Partial<Host> = {}) => {
   // Effects run on the next turn, as a browser's next frame would.
   let raf = options.requestAnimationFrame
   options.requestAnimationFrame = (f) => setTimeout(f)
-  let front = client(loadVocab(docs), [], {
-    vault: false,
-    wireVault: false,
-    tab: false,
-  })
+  let front = client(loadVocab(docs), [], { vault: false, wireVault: false })
+  // The person's drafts, in a graph of their own.
+  let by = mint()
+  let typed = desk(
+    client(loadVocab([draftDoc]), [drafts()], { vault: false }),
+    { by: () => by },
+  )
   let emitted: Bundle[] = []
   let asked: string[] = []
   let host: Host = {
     vocab,
     front,
+    drafts: typed,
     write: (b) => void emitted.push(b),
     name: (eid) => eid == P ? 'Draw the map' : eid,
     id: (b) => `T-${b.entity.num}`,
@@ -117,6 +122,7 @@ let page = (more: Partial<Host> = {}) => {
   return {
     root,
     front,
+    drafts: typed,
     emitted,
     asked,
     fire,
@@ -138,6 +144,7 @@ let page = (more: Partial<Host> = {}) => {
     [Symbol.dispose]: () => {
       render(null, root)
       front.close()
+      typed.close()
       options.requestAnimationFrame = raf
       for (let [k, d] of prior) {
         if (d) Object.defineProperty(globalThis, k, d)
@@ -244,18 +251,16 @@ test('input that cannot be read is emitted as a Refused event, and no value', as
   )
 })
 
-test('what is typed lives in the page graph, and a remount types on from it', async () => {
+test('what is typed is the draft, and a remount types on from it', async () => {
   using p = page()
   let title = h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' })
+  let draft = place(T, 'doc', 'title')
   p.draw(title)
   await p.fire(p.$('.Edit'), 'dblclick')
   let edit = p.$('.Edit')
   edit.textContent = 'Fix the ma'
   await p.fire(edit, 'input')
-  assertEquals(p.front.ent(at('', T, 'doc', 'title'))?.Edit, {
-    open: true,
-    text: 'Fix the ma',
-  })
+  assertEquals(p.drafts.text(draft), 'Fix the ma')
   p.drop() // unmounted mid-typing: nothing emitted, the draft kept
   await tick()
   assertEquals(p.emitted, [])
@@ -268,7 +273,27 @@ test('what is typed lives in the page graph, and a remount types on from it', as
     entity: { eid: T },
     doc: { title: 'Fix the map now' },
   }])
+  assertEquals(p.drafts.text(draft), '', 'sending it spent it')
   assertEquals(p.front.ent(at('', T, 'doc', 'title'))?.Edit, undefined)
+})
+
+test('a draft shows open wherever its value is drawn, and Escape puts it back', async () => {
+  using p = page()
+  let title = (view: string) =>
+    h(Ux, { at: view }, h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }))
+  p.draw(h('div', null, title('bar'), title('body')))
+  let edits = () => [...p.root.querySelectorAll<HTMLElement>('.Edit')]
+  await p.fire(edits()[1], 'dblclick')
+  edits()[1].textContent = 'Fix the moon'
+  await p.fire(edits()[1], 'input')
+  assertEquals(
+    edits().map((e) => [e.isContentEditable, e.textContent]),
+    [[true, 'Fix the moon'], [true, 'Fix the moon']],
+  )
+  await p.fire(edits()[1], 'keydown', 'Escape')
+  await tick()
+  assertEquals(edits().map((e) => e.isContentEditable), [false, false])
+  assertEquals([p.emitted, p.drafts.text(place(T, 'doc', 'title'))], [[], ''])
 })
 
 test('the same value drawn in each view of each card keeps a state of its own', async () => {
@@ -405,12 +430,11 @@ test("a query is typed in the host's query field, or as text", async () => {
   using q = page({
     fields: {
       Filter: ({ id }) => h('input', { class: 'Field', 'data-id': id }),
-      set: () => {},
     },
   })
   q.draw(value('line'))
   await press(q)
-  assertEquals(q.$('.Prop_Query .Field').dataset.id, `query:${T}:task.line`)
+  assertEquals(q.$('.Prop_Query .Field').dataset.id, place(T, 'task', 'line'))
 })
 
 test('a JSON value is typed over as its JSON text', async () => {

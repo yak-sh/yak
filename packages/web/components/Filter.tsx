@@ -8,7 +8,8 @@
 // (passOf, read by the face) live in different subtrees, and the wire
 // between them is the page's own graph: the line is the field
 // `filter:<eid>` there (fields.tsx), keyed by the viewed entity, so
-// switching tabs (Board ⇄ List) keeps the glance, and so does a reload.
+// switching tabs (Board ⇄ List) keeps the glance, and what is typed is the
+// person's draft, so a reload, another tab and the terminal keep it too.
 import type { SubscriptionRead } from '../live.ts'
 import { parseQuery } from '../query.ts'
 import { useQueryResult } from './useQuery.ts'
@@ -69,8 +70,9 @@ export let usePassOf = (
   return pass
 }
 
-// the titlebar's half: the query field for this entity's line. Its row in the
-// page's graph outlives a card remount and a reload of the tab.
+// the titlebar's half: the query field for this entity's line. What is typed
+// there is the person's draft (./drafts.ts), so a remount, a reload, another
+// tab and the terminal's board all narrow by it until Escape clears it.
 export let FilterInput = (
   { eid, initial = '' }: { eid: string; initial?: string },
 ) => {

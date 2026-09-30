@@ -17,7 +17,8 @@ component prescribes behavior and keeps nothing in memory of its own:
   again, and whoever owns it reads and opens it there (`useEdit`).
 - Where a value lives is its caller's choice: the bundle it emits goes to the
   caller's `onChange`, or else to the host's `write`, and it never knows which
-  graph that is.
+  graph that is. What the person types before it is sent is their draft, kept
+  where the host's `drafts` keep it.
 
 ## Edit
 
@@ -54,8 +55,8 @@ h(Edit.Control, { e, comp: 'task', prop: 'status', anchor, onChange })
 | `Edit`                             | the value; editable, a press opens its control. `show` paints a custom face, `handle` gives a link a handle |
 | `Edit.Text`                        | the value typed over in place, opened by a double-click or by its owner (`multi`, `inline`, `readOnly`)     |
 | `Edit.Control`                     | the control alone, anchored where its caller says, drawn while its state is open                            |
-| `useEdit`, `Editing`               | an `Edit`'s state, read live, and `begin`, `end`, `type`, `search`                                          |
-| `at`, `put`, `changed`, `refused`  | the bundles, pure                                                                                           |
+| `useEdit`, `Editing`               | an `Edit`'s state and its value's draft, read live, and `begin`, `end`, `type`, `spend`, `search`           |
+| `at`, `place`, `put`, `changed`    | the names and bundles, pure; `refused`, `source`, `valueOf` too                                             |
 | `Ux`, `useHost`, `Host`            | what a page hands down                                                                                      |
 | `views`, `editorViews`             | the controls as registrations; `TimeVal`, `UrlVal` are faces                                                |
 | `pickLine`, `useHits`, `label`     | a picker's candidates, asked of the graph                                                                   |
@@ -63,18 +64,22 @@ h(Edit.Control, { e, comp: 'task', prop: 'status', anchor, onChange })
 
 ## State and events
 
-| component | on                                | what it holds                                                           |
-| --------- | --------------------------------- | ----------------------------------------------------------------------- |
-| `Edit`    | `at(owner, eid, comp, prop)`      | `open` while it is changed, `text` typed over it, `query` in its picker |
-| `Refused` | the entity whose value it changes | an event: `said`, why what was typed could not be read                  |
+| component | on                                | what it holds                                          |
+| --------- | --------------------------------- | ------------------------------------------------------ |
+| `Edit`    | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker |
+| `Refused` | the entity whose value it changes | an event: `said`, why what was typed could not be read |
 
-Both are `sync: none`: nothing leaves the page. `Edit` is `durable: tab`, kept
-across every remount and every reload of the tab, and gone with the tab; closing
-it removes it. Leaving a value typed over emits it, and being taken off the page
-is not leaving it: the draft waits in the graph for the remount or the reload.
-`Refused` is `durable: "0s"`, which is how a vocabulary marks an event: a graph
-applies it and carries it back in the applied change, and never stores it
-(@yaks/vocab).
+Both are `sync: none`: nothing leaves the page. `Edit` is `durable: connection`,
+gone with the page and kept across every remount before that; closing it removes
+it. What is typed over a value is not its state but the person's draft, in the
+value's own place (`place(eid, comp, prop)`), kept by the host's `drafts`: every
+view of the value, and every interface the host syncs drafts to, types on from
+it, and a value whose draft says something else shows it, open, wherever it is
+drawn. Leaving a value typed over emits it and spends the draft, Escape puts the
+value back and spends it, and being taken off the page is neither: the draft
+waits for the remount. `Refused` is `durable: "0s"`, which is how a vocabulary
+marks an event: a graph applies it and carries it back in the applied change,
+and never stores it (@yaks/vocab).
 
 ## The host
 
@@ -87,6 +92,9 @@ cards, keeps a state of its own. The host supplies:
 - `vocab`: what a property is, and whether a client may write it.
 - `front`: the page's own graph, where each state lives (a @yaks/client over
   this package's `./vocab`).
+- `drafts`: where what is typed waits until it is sent or put back, by place
+  (`text`, `type`, `spend`); @yaks/draft's `desk` keeps a person's drafts in the
+  graph, synced to every interface they use.
 - `write(b)`: where an emitted bundle goes when its caller names nowhere else.
 - `name`, `id`, `kind`, `when`: what an entity is called, its human id and kind,
   and a moment in words.
@@ -104,7 +112,7 @@ without it a popout paints in the flow, as a terminal wants.
 | ------------ | ------------------------------------------------------------- |
 | `vocab.json` | the `Edit` and `Refused` components                           |
 | `state.ts`   | the bundles: an `Edit`'s eid, its patches, what it emits      |
-| `live.ts`    | `useEdit`: an `Edit`'s state, read live from the page's graph |
+| `live.ts`    | `useEdit`: an `Edit`'s state and its value's draft, read live |
 | `emit.ts`    | typed or picked input, read as its type, sent as a bundle     |
 | `host.ts`    | `Host`, `Ux`                                                  |
 | `Edit.ts`    | `Edit`, its controls and faces, `views`                       |

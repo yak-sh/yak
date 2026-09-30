@@ -10,7 +10,6 @@
 //   sync: "none"    it stays on this node
 //
 //   durable: "forever"     (the default) storage — the server's, or the vault
-//   durable: "tab"         this tab's storage, kept across its reloads
 //   durable: "connection"  memory, for as long as this connection lives
 //   durable: "5s"          the same, plus a timer
 //
@@ -43,22 +42,19 @@ export let outbound = (vocab: Vocab, comp: string): boolean =>
 export let stored = (vocab: Vocab, comp: string): boolean =>
   syncOf(vocab, comp) == 'server'
 
-/** Where a component no server sends back is kept on this node. */
-export type Local = 'vault' | 'tab' | 'memory'
-
 /**
  * Where a component's state has to be kept on this node, for the components no
  * server will ever send back: the vault when it is durable forever (it
- * survives everything), the tab's own storage when it is durable tab (it
- * survives a reload of the tab, and goes with it), process memory otherwise
- * (it goes with the page, or with its timer). A component that is sent to the
- * server is none of these, because the server is what sends it back.
+ * survives a reload), process memory otherwise (it goes with the tab, or with
+ * its timer). A component that is sent to the server is neither, because the
+ * server is what sends it back.
  */
-export let local = (vocab: Vocab, comp: string): Local | null => {
-  if (outbound(vocab, comp)) return null
-  let span = durableOf(vocab, comp)
-  return span == 'forever' ? 'vault' : span == 'tab' ? 'tab' : 'memory'
-}
+export let local = (vocab: Vocab, comp: string): 'vault' | 'memory' | null =>
+  outbound(vocab, comp)
+    ? null
+    : durableOf(vocab, comp) == 'forever'
+    ? 'vault'
+    : 'memory'
 
 // The properties of one patch a client is allowed to write. A stamped property
 // is the server's to write (it writes its own `created`), and a computed one

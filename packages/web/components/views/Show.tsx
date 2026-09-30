@@ -128,7 +128,7 @@ export let Pip = ({ e }: { e: Ent }) => {
         gated={gated(e)}
         live={crewed(e)}
         class='Show_Pip'
-        onClick={() => edit.row?.open ? edit.end() : edit.begin()}
+        onClick={() => edit.open ? edit.end() : edit.begin()}
       />
       <Edit.Control
         e={{ entity: { eid: e.eid }, task: { status } }}
@@ -292,12 +292,12 @@ export let Mail = ({ e }: { e: Ent }) => {
 // double-click somewhere to land.
 export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
   let repo = useRepoUrl(e)
-  let edit = useEdit(e.eid, 'doc', 'body')
+  let edit = useEdit(e.eid, 'doc', 'body', { value: e.doc?.body })
   if (!e.doc) return null
   // A body this client was never shipped is not an empty one: paint the
   // wait and offer no editor until it lands (pending() is the ask).
   if (pending(e)) return <BodyEl mod={mod}>…</BodyEl>
-  return edit.row?.open
+  return edit.open
     ? (
       <BodyEl mod={mod}>
         <Edit.Text e={bundle(e)} comp='doc' prop='body' multi />
@@ -319,14 +319,14 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
 // editing seam as doc.body keeps the criteria legible and editable.
 export let Acceptance = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
-  let edit = useEdit(e.eid, 'accept', 'body')
+  let edit = useEdit(e.eid, 'accept', 'body', { value: e.accept?.body })
   if (!e.accept) return null
   return (
     <AcceptanceEl>
       <AcceptanceTitle>Acceptance</AcceptanceTitle>
       {pending(e, 'accept', 'body')
         ? <AcceptanceBody>…</AcceptanceBody>
-        : edit.row?.open
+        : edit.open
         ? (
           <AcceptanceBody>
             <Edit.Text e={bundle(e)} comp='accept' prop='body' multi />

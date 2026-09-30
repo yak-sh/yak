@@ -29,7 +29,6 @@ import {
   repoUrl,
   resolveEid,
   rows as graph,
-  send,
   statuses,
 } from '../live.ts'
 import { parseQuery, resolveRefs } from '../query.ts'
@@ -61,7 +60,8 @@ import { navigationQuery, navigationView } from '../navigation.ts'
 import { Guide } from '@yaks/ui'
 import { bind } from '../components/fields.tsx'
 import { filterField, usePassOf } from '../components/Filter.tsx'
-import { type Host, useHits } from '@yaks/ux'
+import { type Host, place, useHits } from '@yaks/ux'
+import { drafts } from '../components/drafts.ts'
 import { hits } from '../components/hits.ts'
 import { group } from '../components/Search.tsx'
 import { editing, named } from './keys.ts'
@@ -253,6 +253,12 @@ let show = (e: NonNullable<typeof edit.value>, caret: boolean) =>
     comp: { [e.prop]: caret ? e.text + '█' : e.text },
   }])
 
+// What is typed is the person's draft of the value (@yaks/ux `place`), the
+// same one a browser's Edit types into: starting types on from it, wherever
+// it was typed, each key keeps it, and ending sends it and spends it in one
+// change.
+let draftOf = (e: { eid: string; prop: string }) => place(e.eid, 'doc', e.prop)
+
 let startEdit = () => {
   let here = trail.value.at(-1)
   let eid = here ?? selected()
@@ -266,7 +272,8 @@ let startEdit = () => {
     return
   }
   let was = ent(eid).doc![prop] ?? ''
-  edit.value = { eid, prop, text: was, was }
+  let text = drafts.text(draftOf({ eid, prop })) || was
+  edit.value = { eid, prop, text, was }
   mode.value = 'insert'
   show(edit.value, true)
 }
@@ -280,6 +287,7 @@ let typeEdit = (k: string) => {
   else if (k >= ' ') e = { ...e, text: e.text + k }
   else return
   edit.value = e
+  drafts.type(draftOf(e), e.text)
   show(e, true)
 }
 
@@ -290,9 +298,12 @@ let endEdit = () => {
     return
   }
   show(e, false) // strip the caret from the local cache
-  if (e.text != e.was) {
-    send({ eid: e.eid, name: 'doc', comp: { [e.prop]: e.text } })
-  }
+  drafts.spend(
+    draftOf(e),
+    e.text != e.was
+      ? [{ entity: { eid: e.eid }, doc: { [e.prop]: e.text } }]
+      : [],
+  )
   edit.value = null
   mode.value = 'normal'
 }

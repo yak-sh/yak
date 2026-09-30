@@ -27,7 +27,7 @@ let hosted = async (asks: Asks) => {
     },
   ])
   let box = boxClient(srv, { signal })
-  let front = client(loadVocab(docs), [], { vault: false, tab: false })
+  let front = client(loadVocab(docs), [], { vault: false })
   let host = live({ box, front, edits: true })
   let got: Record<string, Answer> = {}
   let View = () => {

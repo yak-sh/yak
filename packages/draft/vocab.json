@@ -1,0 +1,48 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "draft",
+  "description": "What a person has typed and not yet sent, kept by the store and seen by every interface they use.",
+  "$defs": {
+    "draft": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "what a person has typed in one place and not yet sent, on an entity whose eid is derived from the person and the place (draftEid), so every interface they use finds the same one; sending it or discarding it empties its text",
+      "properties": {
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the person typing it"
+        },
+        "place": {
+          "type": "string",
+          "description": "where it is typed, as its interface names it: `<eid>.comment`, `edit:<eid>:doc.title`, `search`"
+        },
+        "text": {
+          "type": "string",
+          "description": "what is typed; empty once it is sent or discarded"
+        },
+        "rev": {
+          "type": "integer",
+          "stamped": true,
+          "description": "how many writes of its text the store has taken, so an interface tells the newer text from the older"
+        }
+      }
+    },
+    "typed": {
+      "component": true,
+      "type": "object",
+      "durable": "0s",
+      "description": "an event beside a draft's text: the text it was typed over, so the store keeps what another interface wrote meanwhile",
+      "properties": {
+        "over": {
+          "type": "string",
+          "description": "the text the writer last heard from the store"
+        }
+      }
+    }
+  }
+}

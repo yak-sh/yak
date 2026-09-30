@@ -17,7 +17,6 @@ import { box, type Fake, pair, type Server } from '../sync/testing.ts'
 import { type Client, client, type ClientOpts } from './client.ts'
 import { idb } from './idb.ts'
 import type { Vault } from './vault.ts'
-import type { Area } from './web-storage.ts'
 
 export {
   box,
@@ -48,8 +47,7 @@ export type Box = Client & {
 
 /** A client over the recipe box. Given a server, its `fetch` and its socket
  * are pointed at that server in this same process; without one, it is a graph
- * in this page alone. Nothing is stored unless the caller passes a vault, for
- * good or for the tab. */
+ * in this page alone. Nothing is stored unless the caller passes a vault. */
 export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
   let trouble: Trouble[] = []
   let timers: (() => void)[] = []
@@ -76,7 +74,6 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
 
   let c = client(box, [], {
     vault: false,
-    tab: false,
     ...opts,
     url: srv ? 'http://box.test' : undefined,
     fetch: srv ? (request) => srv.handler(request) : undefined,
@@ -109,21 +106,6 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
  * a Map. Two vaults over one of these stand for two page loads of the same
  * browser. */
 export let fakeDb = (): IDBFactory => new IDBFactory()
-
-/** A stand-in Web Storage area over a Map: two vaults over one of these stand
- * for two page loads of the same tab, and a new one for a new tab. */
-export let area = (): Area => {
-  let items = new Map<string, string>()
-  return {
-    get length() {
-      return items.size
-    },
-    key: (i) => [...items.keys()][i] ?? null,
-    getItem: (k) => items.get(k) ?? null,
-    setItem: (k, v) => void items.set(k, v),
-    removeItem: (k) => void items.delete(k),
-  }
-}
 
 /** The package's own IndexedDB vault, pointed at a stand-in. */
 export let fakeIdb = (indexedDB: IDBFactory): Vault =>

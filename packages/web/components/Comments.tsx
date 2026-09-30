@@ -2,13 +2,14 @@ import { useModel, useRepoUrl } from './subscriptions.ts'
 import { useRef, useState } from 'preact/hooks'
 import { commands, orderIn, suggest } from '../commands.ts'
 import { slotsOf } from '../verb.ts'
-import { ent, mutate, pending, uuid } from '../live.ts'
+import { ent, pending, uuid } from '../live.ts'
+import { bundlesOf } from '../wire.ts'
 import { useCommentsOn, useCommitsOn } from './useQuery.ts'
 import { subject } from '../client.ts'
 import { block } from '@yaks/ui'
 import { ago } from './Stamp.tsx'
 import { pretty } from '../time.ts'
-import { useDraft } from './fields.tsx'
+import { useDraft } from './drafts.ts'
 import {
   type Change,
   type Ent,
@@ -159,8 +160,9 @@ export let Composer = (
   // owner, exactly as the palette does it) and which hint is picked.
   let [line, setLine] = useState('')
   let [pick, setPick] = useState(0)
-  // A draft outlives blur on purpose — abandon the box, come back (or
-  // reload the tab), the words are still there. Only posting spends it.
+  // The words are the person's draft: they outlive blur, a reload, and the
+  // tab, and show in every interface that draws this box. Only posting
+  // spends them, in the same change as the comment they became.
   let { sync, spend } = useDraft(dkey, box, setLine)
 
   // The vocabulary teaches where the typing happens: a comment opening
@@ -187,11 +189,10 @@ export let Composer = (
   let post = () => {
     let body = box.current!.value.trim()
     if (!body) return
-    mutate(...composerChanges(eid, body, entry, uuid(), using))
+    spend(bundlesOf(composerChanges(eid, body, entry, uuid(), using)))
     box.current!.value = ''
     setLine('')
     setPick(0)
-    spend()
   }
 
   let key = (e: KeyboardEvent) => {

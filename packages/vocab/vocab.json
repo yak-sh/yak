@@ -67,7 +67,7 @@
         },
         "durable": {
           "type": "string",
-          "description": "how long one of its values lives: forever, tab, connection, or a duration"
+          "description": "how long one of its values lives: forever, connection, or a duration"
         },
         "pace": {
           "type": "string",

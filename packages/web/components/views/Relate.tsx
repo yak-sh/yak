@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Ent, uuid } from '../../types.ts'
-import { mutate } from '../../live.ts'
 import { link } from '../../edge.ts'
 import { up } from './Dependency.tsx'
 import { spec, taskChanges } from '../../client.ts'
 import { block } from '@yaks/ui'
 import { Float } from '@yaks/ui'
 import { label, pickLine, useHits } from '@yaks/ux'
-import { drafted, useDraft } from '../fields.tsx'
+import { drafts, useDraft } from '../drafts.ts'
+import { bundlesOf } from '../../wire.ts'
 import { rows } from '../hits.ts'
 import { ux } from '../registry.ts'
 
@@ -44,22 +44,21 @@ let said = (v: V) => v.out ? v.type : up(v.type)
 // apply, inheriting the host's project and domain. The list overlays —
 // nothing below it moves.
 export let Relate = ({ e }: { e: Ent }) => {
-  // On mount, a verb whose line was left half-typed reopens itself — a
-  // new task or edge the last mount (or the tab before its reload) never
-  // filed resurfaces (../fields.tsx `useDraft`). Keyed by (host, verb) so
-  // the sentence resumes exact.
+  // A verb whose line is half-typed stays open — a new task or edge not yet
+  // filed, typed here before a reload, in another tab or in the terminal
+  // (../drafts.ts). Keyed by (host, verb) so the sentence resumes exact. A
+  // verb picked here takes the keyboard; one its draft opened waits.
   let dk = (v: V) => `relate:${e.eid}:${said(v)}`
-  let [verb, setVerb] = useState<V | null>(() =>
-    verbs.find((v) => drafted(dk(v))) ?? null
-  )
+  let [picked, setVerb] = useState<V | null>(null)
+  let verb = picked ?? verbs.find((v) => drafts.text(dk(v))) ?? null
   let [q, setQ] = useState('')
   let [pick, setPick] = useState(0)
   // The Find input doubles as the picker's anchor; focus it when a verb
   // opens it (it only mounts then), the way Search takes the palette.
   let find = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    if (verb) find.current?.focus()
-  }, [verb])
+    if (picked) find.current?.focus()
+  }, [picked])
   let { sync, spend } = useDraft(verb ? dk(verb) : '', find, setQ)
   let close = () => {
     setVerb(null)
@@ -83,15 +82,14 @@ export let Relate = ({ e }: { e: Ent }) => {
   let edge = (v: V, other: string) =>
     v.out ? link(e.eid, v.type, other) : link(other, v.type, e.eid)
   let tie = (other: string) => {
-    if (verb) mutate(...edge(verb, other))
-    spend()
+    if (verb) spend(bundlesOf(edge(verb, other)))
     close()
   }
   let create = () => {
     if (!verb || !fresh) return
     let { title, body, grouped } = spec(q)
     let id = uuid()
-    mutate(
+    spend(bundlesOf([
       ...taskChanges(id, {
         ...grouped,
         doc: { title, body, ...grouped.doc },
@@ -102,8 +100,7 @@ export let Relate = ({ e }: { e: Ent }) => {
         },
       }, true),
       ...edge(verb, id),
-    )
-    spend()
+    ]))
     close()
   }
   let key = (ev: KeyboardEvent) => {

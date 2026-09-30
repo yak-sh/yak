@@ -3,9 +3,10 @@
  * text (or its inline markdown); opened, by a double-click or by whoever holds
  * its `Edit` state, the element becomes plaintext-editable in place, the same
  * face, font and box, so nothing on the page moves. Enter (a body: leaving it)
- * emits what was typed, Escape puts the value back, and what is typed is kept
- * in the page's graph as it is typed, so a remount or a reload of the tab
- * types on from it.
+ * emits what was typed, Escape puts the value back, and what is typed is the
+ * person's draft (the host's `drafts`) as it is typed: a remount, a reload,
+ * another view or another interface types on from it, and a value with a
+ * draft shows it, open, wherever it is drawn, until it is sent or put back.
  *
  * @module
  */
@@ -17,11 +18,7 @@ import { type Bundle, useHost } from './host.ts'
 import { emit, type OnChange } from './emit.ts'
 import { useEdit } from './live.ts'
 import { isBody } from './read.ts'
-import { valueOf } from './state.ts'
-
-// The source a value is typed over as: a JSON value as its JSON text.
-let source = (v: unknown) =>
-  v == null ? '' : typeof v == 'object' ? JSON.stringify(v) : String(v)
+import { source, valueOf } from './state.ts'
 
 /** What an `Edit.Text` is drawn with. */
 export type TextProps = {
@@ -47,49 +44,63 @@ export let Text = (
 ): JSX.Element => {
   let host = useHost()
   let { vocab, markup } = host
-  let edit = useEdit(e.entity.eid, comp, prop, at)
   let held = valueOf(e, comp, prop)
+  let edit = useEdit(e.entity.eid, comp, prop, { at, value: held })
   // A body a bundle does not carry is one the page has not loaded, not an
   // empty one: typing over it would write a fragment over the stored text.
   let unloaded = held === undefined && isBody(vocab, comp, prop)
   let still = readOnly || unloaded
   let value = source(held)
-  let open = !!edit.row?.open && !still
+  let open = edit.open && !still
   let ref = useRef<HTMLElement>(null)
   let md = inline && markup
 
-  // Opened, the element takes the keyboard, holding what was typed so far,
-  // and says it is being typed in (the state's `text`).
+  // Opened, the element holds what was typed so far, and, opened here, takes
+  // the keyboard. One its draft opened waits for a press to take it.
   useLayoutEffect(() => {
     let t = ref.current
     if (!open || !t) return
     let row = t.closest<HTMLElement>('[draggable="true"]')
     if (row) row.draggable = false
-    let text = edit.row?.text ?? value
+    let text = edit.text || value
     t.contentEditable = 'plaintext-only'
     if (md || text != value) t.textContent = text
-    t.focus()
-    globalThis.getSelection?.()?.setPosition(t, t.childNodes.length)
-    if (edit.row?.text == null) edit.type(text)
+    if (edit.row?.open) {
+      t.focus()
+      globalThis.getSelection?.()?.setPosition(t, t.childNodes.length)
+    }
     return () => {
       if (row) row.draggable = true
     }
   }, [open])
 
-  // Read-only while open (a permission change): it closes, emitting nothing.
+  // The draft typed on elsewhere (another view, another interface) shows
+  // here as it lands; what is typed here is already what it says.
+  useLayoutEffect(() => {
+    let t = ref.current
+    if (!open || !t || !edit.text || edit.text == t.textContent) return
+    t.textContent = edit.text
+    if (globalThis.document?.activeElement == t) {
+      globalThis.getSelection?.()?.setPosition(t, t.childNodes.length)
+    }
+  }, [edit.text])
+
+  // Read-only while open (a permission change): it closes, emitting nothing,
+  // and its draft stays for when it is not.
   useLayoutEffect(() => {
     if (still && edit.row?.open) edit.end()
   }, [still])
 
-  // Leaving it emits. Being taken off the page (a remount) is not leaving
-  // it: a browser blurs the focused element as it removes it, so finishing
-  // waits a microtask and asks whether it is still there, and the draft stays
-  // in the graph for the remount.
+  // Leaving it emits, and the draft is spent. Being taken off the page (a
+  // remount) is not leaving it: a browser blurs the focused element as it
+  // removes it, so finishing waits a microtask and asks whether it is still
+  // there, and the draft stays for the remount.
   let finish = (t: HTMLElement) =>
     queueMicrotask(() => {
       if (!t.isConnected || !t.isContentEditable || !edit.now()?.open) return
       let text = (t.textContent ?? '').trim()
       if (text && text != value) emit(host, onChange, e, comp, prop, text)
+      edit.spend()
       edit.end()
     })
 
@@ -111,6 +122,8 @@ export let Text = (
     key: open ? 'open' : 'rest',
     elRef: ref,
     onDblClick: () => still || open || edit.begin(),
+    // Pressed into, a draft opened elsewhere is being typed in here.
+    onFocus: () => open && !edit.now()?.open && edit.begin(),
     onKeyDown: key,
     onInput: (ev: InputEvent) =>
       edit.type((ev.currentTarget as HTMLElement).textContent ?? ''),

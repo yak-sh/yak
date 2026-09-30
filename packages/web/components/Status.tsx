@@ -277,9 +277,9 @@ let WhoAmI = () => {
 // always returns to normal (and blurs whatever was being typed in).
 export let Status = () => {
   let input = useRef<HTMLTextAreaElement>(null)
-  // The line is the `cmd` field in the page's own graph (fields.tsx), which a
-  // reload of the tab brings back; the hints and the ghost read it there.
-  let line = fields.row(CMD)?.text ?? ''
+  // The line is the `cmd` field (fields.tsx), whose text is the person's
+  // draft; the hints and the ghost read it there.
+  let line = fields.text(CMD)
   let [pick, setPick] = useState(0)
 
   useEffect(() => {
@@ -358,12 +358,18 @@ export let Status = () => {
     if (!thumb()) input.current?.focus()
   }, [mode.value])
 
-  // The hints the line offers, and which is picked (0 = the best match).
-  // A half-typed : line survives a reload of the tab: reopen the command line
-  // on it. Running or Escaping the line is what empties it.
+  // A half-typed : line is a draft: wherever it was typed (before a reload,
+  // in another tab, in the terminal), the first time this page hears of it
+  // the command line reopens on it. Running or Escaping the line is what
+  // spends it.
+  let reopened = useRef(false)
   useEffect(() => {
-    if (line) mode.value = 'command'
-  }, [])
+    if (!line || reopened.current) return
+    reopened.current = true
+    if (mode.value == 'normal') mode.value = 'command'
+  }, [line])
+
+  // The hints the line offers, and which is picked (0 = the best match).
   let hints = mode.value == 'command' ? suggest(line, all) : []
   let [, pre, verb, rest] = line.match(/^(\s*)(\S+)(.*)$/s) ?? []
   let faded = ghost(line, all)

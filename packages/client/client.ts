@@ -2,10 +2,9 @@
 //
 // A graph in a page is four things that always go together — a map to hold the
 // entities, a connection to a server, somewhere durable for what the server
-// will never send back (the browser's for good, the tab's for a reload), and a
-// way for a render to find out that a query's result changed. Connecting them
-// is the same twenty lines in every application, so this function does it
-// instead.
+// will never send back, and a way for a render to find out that a query's
+// result changed. Connecting them is the same twenty lines in every
+// application, so this function does it instead.
 //
 // Everything it builds stays reachable on the object it returns: the graph is
 // the graph, and `apply()`, `read()`, plugins and hooks are all still there.
@@ -40,8 +39,7 @@ import {
   type Timer,
 } from '@yaks/sync'
 import { idb, wireIdb } from './idb.ts'
-import { keep, keeps, type Tier, type Vault } from './vault.ts'
-import { webStorage } from './web-storage.ts'
+import { keep, type Vault } from './vault.ts'
 import { type Retained, retention } from './retention.ts'
 import type { WireVault } from './wire-vault.ts'
 import {
@@ -79,11 +77,6 @@ export type ClientOpts = {
    * `false` for none. Default: IndexedDB where the browser has it, nothing
    * where it does not. */
   vault?: Vault | false
-  /** where this tab's own components (`durable: tab`) are kept across a
-   * reload: a {@link Vault}, or `false` for none, and then they last as long
-   * as the page. Default: the runtime's `sessionStorage` ({@link webStorage}),
-   * which Deno keeps for the process. */
-  tab?: Vault | false
   /** how many inactive server-synchronized entities to keep (default:
    * 20,000) */
   retention?: number
@@ -171,18 +164,6 @@ export type ClientWatchOpts = WatchOpts & {
 // Building it is lazy — no database is opened until something is written — so
 // this costs nothing in a page that stores nothing.
 let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
-
-// The tab's own storage, when the runtime lets a page have it: a browser that
-// refuses storage (a sandboxed frame, storage switched off) throws on the
-// first touch, and then the tab's components last as long as the page.
-let tabbed = (): Vault | null => {
-  try {
-    let area = globalThis.sessionStorage
-    return area ? webStorage(area) : null
-  } catch {
-    return null
-  }
-}
 
 // A name may already belong to a row the page has never seen. The store must
 // resolve it before the page can put the write in its own graph. Browser-owned
@@ -281,6 +262,9 @@ export let client = (
 
   let seen = watches(g, { signal: opts.signal })
 
+  let vault = opts.vault === undefined ? ordinary() : opts.vault || null
+  let kept = vault ? keep(g, vault) : null
+
   cache = retention(g, store, seen, {
     retainUnownedProps: opts.retainUnownedProps,
     limit: opts.retention,
@@ -295,16 +279,6 @@ export let client = (
       : undefined,
   })
   let restored = opts.epoch ? cache.epoch(opts.epoch) : Promise.resolve()
-
-  // This browser's own components, each tier kept where it lives. A vault is
-  // opened only for a vocabulary that declares something for it; the tab's
-  // answers at once, so its components are in the graph from here on.
-  let open = (tier: Tier, vault: Vault | null) =>
-    vault && keeps(vocab, tier) ? keep(g, vault, tier).ready : undefined
-  let kept = [
-    open('vault', opts.vault === undefined ? ordinary() : opts.vault || null),
-    open('tab', opts.tab === undefined ? tabbed() : opts.tab || null),
-  ]
 
   type Shared = {
     watch: Watch
@@ -490,7 +464,7 @@ export let client = (
       wire?.refresh()
       return ready
     },
-    ready: Promise.all([...kept, restored]).then(() => undefined),
+    ready: Promise.all([kept?.ready, restored]).then(() => undefined),
     watch,
     // The graph's own read, so every door answers a query alike. Over this
     // RAM store it answers at once; only a plugin that looks a name up

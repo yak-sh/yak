@@ -45,6 +45,13 @@ let doc: VocabDoc = {
         page: { type: 'string', ref: 'page', death: 'cascade' },
       },
     },
+    // An event: who read a page as it was written, heard and never kept.
+    read: {
+      component: true,
+      type: 'object',
+      durable: '0s',
+      properties: { by: { type: 'string' } },
+    },
     created: {
       component: true,
       type: 'object',

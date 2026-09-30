@@ -15,7 +15,7 @@
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
 import { composite, jsonb, TYPES, typesOf } from './vocab.ts'
-import { lives, paced, said, SYNC, type Sync } from './lifetime.ts'
+import { lives, paced, SYNC, type Sync } from './lifetime.ts'
 import { constraintErrors } from './constraints.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
@@ -140,12 +140,10 @@ let signed = (comp: string, s: PropSchema): string[] => {
 
 // What a component declares about its own state, checked together. Each
 // keyword is legal on its own — the meta-schema already rejects an unknown
-// value — but three combinations are contradictions: a relay does not own
-// durable data, so a component cannot ask the server both to forward a value
-// without storing it and to keep it forever; a tab is one page's, and no server
-// can tell its reload from its close, so only a component that stays on the
-// page lives as long as its tab; and a pace is how often a value is taken from
-// a writer, so a component nobody is told about has nothing to pace.
+// value — but two combinations are contradictions: a relay does not own durable
+// data, so a component cannot ask the server both to forward a value without
+// storing it and to keep it forever; and a pace is how often a value is taken
+// from a writer, so a component nobody is told about has nothing to pace.
 let lived = (comp: string, s: PropSchema): string[] => {
   let errs: string[] = []
   if (s.sync != null && !SYNC.includes(s.sync as Sync)) {
@@ -155,13 +153,7 @@ let lived = (comp: string, s: PropSchema): string[] => {
   }
   if (s.durable != null && !lives(s.durable)) {
     errs.push(
-      `${comp} is durable "${s.durable}" — say "forever", "tab", "connection", or a duration such as "5s" or "2m"`,
-    )
-  }
-  let sync = said(s.sync)
-  if (s.durable == 'tab' && sync != 'none') {
-    errs.push(
-      `${comp} syncs to ${sync} and is durable tab — a tab is one page's, and no server can tell its reload from its close; sync it to none, or say "connection" or "forever"`,
+      `${comp} is durable "${s.durable}" — say "forever", "connection", or a duration such as "5s" or "2m"`,
     )
   }
   if (s.sync == 'peers' && s.durable == 'forever') {

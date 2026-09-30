@@ -2,7 +2,8 @@
 // applicability, overlay precedence and action union belong to @yaks/render;
 // the Preact host owns mounting. This page is also the host its UX
 // components (@yaks/ux) are handed at the root: what a bundle they emit
-// writes, and where their own state lives (the page's graph, ./fields.tsx).
+// writes, where their own state lives (the page's graph, ./fields.tsx), and
+// where what the person types waits (their drafts, ./drafts.ts).
 import {
   actions,
   applicable as offered,
@@ -30,6 +31,7 @@ import { mdInline } from '../md.ts'
 import { Dot } from './Dot.tsx'
 import { ago } from './Stamp.tsx'
 import { fields, front } from './fields.tsx'
+import { drafts } from './drafts.ts'
 import { rows } from './hits.ts'
 import { wells } from './wells.ts'
 
@@ -149,6 +151,7 @@ let write = ({ entity, ...rest }: Bundle) => {
 export let ux: Host = {
   vocab,
   front,
+  drafts,
   write,
   name: named,
   id: (b) =>

@@ -60,7 +60,7 @@ import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import { type Ask, complete, gather, holding, reached } from './gather.ts'
 import { guard } from './guard.ts'
-import { mutate } from './mutate.ts'
+import { mutate, rejoin } from './mutate.ts'
 import { ordered } from './ordered.ts'
 import { cascade } from './cascade.ts'
 import {
@@ -576,7 +576,7 @@ export let graph = (opts: Options): Graph => {
                 phase('journal', tx),
                 // What was heard and never written joins the change again.
                 (b: Bundle[]) =>
-                  st.heard.length ? [...b, ...st.heard] : b,
+                  st.heard.length ? rejoin(b, st.heard) : b,
                 phase('commit', tx),
                 flush,
               ],

@@ -27,15 +27,14 @@ All exports come from `@yaks/client`:
 | `client`                         | Assemble the graph, storage, watches, and optional synchronization.       |
 | `watches`                        | Add reactive queries to an existing graph.                                |
 | `idb`, `stash`                   | IndexedDB and in-memory implementations of `Vault` for local components.  |
-| `webStorage`                     | A `Vault` over Web Storage: `sessionStorage` keeps the tab's components.  |
-| `keep`, `keeps`, `localComps`    | Connect a `Vault` to a graph, or ask which components a tier stores.      |
+| `keep`, `localComps`             | Connect a `Vault` to a graph, or select the components it stores.         |
 | `wireIdb`, `wireStash`           | IndexedDB and in-memory implementations of `WireVault` for server data.   |
 | `retention`                      | Add cache retention to an existing graph, RAM store, and watch registry.  |
 | `RETENTION_ROWS`, `ANSWER_BYTES` | Default cache budgets: 20,000 rows and 1,000,000 bytes of query metadata. |
 
 The module also exports `Client`, `ClientOpts`, `ClientWatchOpts`, `Watch`,
 `Watches`, `WatchOpts`, `WatchesOpts`, `Hold`, `Make`, `Vault`, `Saved`, `Kept`,
-`Tier`, `Area`, `IdbOpts`, `Retained`, `WireVault`, and `SavedAnswer` types.
+`IdbOpts`, `Retained`, `WireVault`, and `SavedAnswer` types.
 
 ## Use
 
@@ -245,7 +244,6 @@ A component's `sync` and `durable` vocabulary keywords determine its storage:
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `sync: server` (default)                            | Sent to the server; eligible for the local server-data cache.                                      |
 | `sync: none`, `durable: forever` (default lifetime) | Persisted through the local `Vault`; never sent.                                                   |
-| `sync: none`, `durable: tab`                        | Kept in the tab's `Vault` across a reload, gone with the tab; never sent.                          |
 | `sync: none`, another lifetime                      | Held in memory, without local persistence.                                                         |
 | `sync: peers`                                       | Relayed over the WebSocket, once per `pace` if it declares one; requires a non-permanent lifetime. |
 
@@ -288,16 +286,7 @@ await persistent.ready
 `vault: false` disables local persistence. `stash()` provides the same interface
 in memory for tests or an application-selected fallback; it does not survive a
 process restart. Custom `Vault` implementations provide `load`, `save`, `drop`,
-and `clear`, each answering at once or with a promise. The vault only persists
-records; queries run against the RAM store.
-
-The `durable: tab` components are kept apart, in `webStorage(sessionStorage)` by
-default: one item per entity, named `yaks:<eid>`. The browser keeps that across
-a reload of the tab and forgets it with the tab, so a new tab starts without
-them; Deno keeps it for the process, so in a terminal the tab is the process. It
-answers at once, so they are in the graph when `client()` returns, before
-anything paints. Pass `tab: webStorage(sessionStorage, 'recipes')` to name your
-own, or `tab: false` to hold them in memory for the page alone.
+and `clear`. The vault only persists records; queries run against the RAM store.
 
 ## Options
 
@@ -310,7 +299,6 @@ own, or `tab: false` to hold them in memory for the page alone.
 | `wait`, `most`       | 250, 30,000 ms             | Initial and maximum reconnect delay.                                                     |
 | `report`             | console warning            | Receive synchronization and server-cache failures.                                       |
 | `vault`              | `idb()` when available     | Persistence for local components, or `false`.                                            |
-| `tab`                | `sessionStorage` if any    | The tab's persistence for `durable: tab` components, or `false`.                         |
 | `wireVault`          | `wireIdb()` when available | Persistence for server data, or `false`.                                                 |
 | `epoch`              | none                       | Validated server epoch for restoring server data.                                        |
 | `retention`          | 20,000                     | Maximum inactive server rows retained.                                                   |

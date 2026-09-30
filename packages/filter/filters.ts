@@ -1,11 +1,12 @@
 /**
  * The query field, bound to its host. Each field is an entity in the host's
- * front-end graph wearing a `filter` component, what is typed, and a
- * `completion`, what can come next, named by the host (`search`,
- * `filter:<board>`), so any part of a page reads what is typed in any field
- * by reading the graph. `filters(front, opts)` gives the actions on those
- * rows (each one a patch) and `Filter`, the component that types into them,
- * built of @yaks/ui's `Field` and `Choices`.
+ * front-end graph wearing a `filter` component, named by the host (`search`,
+ * `filter:<board>`), so any part of a page reads a field by reading the
+ * graph. What is typed in it is the person's draft in the place the field is
+ * named for (the host's `drafts`), so a reload, another tab or another
+ * interface finds it until it is sent or cleared. `filters(front, opts)`
+ * gives the actions on those rows (each one a patch) and `Filter`, the
+ * component that types into them, built of @yaks/ui's `Field` and `Choices`.
  *
  * The host supplies what the field cannot know: the vocabulary its queries
  * speak, the `source` that answers what only a graph knows (@yaks/query
@@ -43,9 +44,7 @@ import {
   dismissed,
   moved,
   placed,
-  put,
   type Row,
-  rowOf,
   taken,
   typed,
 } from './state.ts'
@@ -69,11 +68,21 @@ export type Float = FunctionComponent<
   { anchor: Anchor; children?: ComponentChildren }
 >
 
+/** A person's drafts, by the place they type in: what is typed there ('' for
+ * nothing, read reactively), and kept as it is typed. @yaks/draft's `desk`
+ * is one. */
+export type Drafts = {
+  text: (place: string) => string
+  type: (place: string, text: string) => void
+}
+
 /** What a host supplies. `vocab` and `source` are read each time a field
  * completes, so a vocabulary the host learns later is the one used. */
 export type Opts = {
   /** the vocabulary the queries speak */
   vocab: Vocab
+  /** where what is typed in each field is kept, by the field's name */
+  drafts: Drafts
   /** what only a graph can answer: entity ids, common values, rankings */
   source?: Source
   /** where the list floats (default: in the flow, under the field) */
@@ -90,7 +99,7 @@ export type FilterProps = {
   /** @yaks/ui `Field` variants */
   mod?: string
   class?: string
-  /** the text a field starts with when its row does not exist yet */
+  /** the text a field starts with when nothing is typed in it yet */
   initial?: string
   /** paint the caret, for a terminal, where no element has the focus */
   active?: boolean
@@ -139,21 +148,32 @@ export let filters = (front: Front, opts: Opts): Filters => {
   let { Float = Inline } = opts
   // One watch for every field; each field's row is its own computed, so a
   // keystroke repaints the field it landed in and whoever reads that one.
-  let seen = front.watch('.filter&?completion')
+  let seen = front.watch('.filter')
   let rows = signal(seen.value)
   seen.subscribe((all) => rows.value = all)
   let held = new Map<string, ReadonlySignal<Row | undefined>>()
+  // A field's row: what is typed (its draft) over its `filter`, and none
+  // while it has neither.
+  let rowOf = (id: string, f?: Bundle) => {
+    let text = opts.drafts.text(id)
+    let at = f?.filter as Omit<Row, 'text'> | undefined
+    return at || text ? { ...placed(text), ...at, text } : undefined
+  }
   let live = (id: string) => {
     let r = held.get(id)
     if (!r) {
-      r = computed(() => rowOf(rows.value.find((b) => b.entity.eid == id)))
+      r = computed(() => rowOf(id, rows.value.find((b) => b.entity.eid == id)))
       held.set(id, r)
     }
     return r
   }
-  let now = (id: string) => rowOf(front.ent(id))
-  let write = (id: string, patch: Partial<Row>) =>
-    void front.mutate([put(id, patch)])
+  let now = (id: string) => rowOf(id, front.ent(id))
+  let write = (id: string, { text, ...at }: Partial<Row>) => {
+    if (text != null) opts.drafts.type(id, text)
+    if (Object.keys(at).length) {
+      front.mutate([{ entity: { eid: id }, filter: at }])
+    }
+  }
 
   let type = (id: string, text: string, caret = text.length) => {
     let found = complete(opts.vocab, text, caret, opts.source ?? {})

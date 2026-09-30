@@ -14,8 +14,8 @@
  *   (./host.ts).
  * - `useEdit`, `Editing`: an `Edit`'s state, read and changed by whoever
  *   owns it (./live.ts).
- * - `at`, `put`, `changed`, `refused`, `valueOf`: the bundles, pure
- *   (./state.ts).
+ * - `at`, `place`, `put`, `changed`, `refused`, `valueOf`: the bundles and
+ *   names, pure (./state.ts).
  * - `editorViews`, `views`: the editors as registrations (the `/views`
  *   facet); `TimeVal`, `UrlVal`: faces.
  * - `pickLine`, `useHits`, `label`: a picker's candidates, asked of the
@@ -27,6 +27,7 @@
 
 export {
   type Bundle,
+  type Drafts,
   type Float,
   type Front,
   type Host,
@@ -47,7 +48,16 @@ export {
 } from './Edit.ts'
 export { Text, type TextProps } from './Text.ts'
 export { type Editing, useEdit } from './live.ts'
-export { at, changed, put, refused, type Row, valueOf } from './state.ts'
+export {
+  at,
+  changed,
+  place,
+  put,
+  refused,
+  type Row,
+  source,
+  valueOf,
+} from './state.ts'
 export { emit, type OnChange, reading } from './emit.ts'
 export { canEdit, formatProp, isBody, wellOf } from './read.ts'
 export { type Find, pickLine, useHits } from './hits.ts'

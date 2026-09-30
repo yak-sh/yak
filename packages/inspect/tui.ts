@@ -19,6 +19,8 @@ import { signal } from '@preact/signals'
 import { h } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { client } from '@yaks/client'
+import { desk, docs as draftDocs, drafts } from '@yaks/draft'
+import { mint } from '@yaks/graph'
 import { filters } from '@yaks/filter'
 import { docs as fieldDocs } from '@yaks/filter/vocab'
 import { parse as human } from '@yaks/id'
@@ -125,11 +127,15 @@ export let open = async (url: string, href: string): Promise<void> => {
     // (./live.ts), and a lost socket reconnects on its own.
     report: () => {},
   })
-  let front = client(loadVocab([...fieldDocs, ...own]), [], {
-    vault: false,
-    wireVault: false,
+  let front = client(loadVocab([...fieldDocs, ...draftDocs, ...own]), [
+    drafts(),
+  ], { vault: false, wireVault: false })
+  // What is typed in the bar waits in the page's own graph, gone with it.
+  let typer = mint()
+  let fields = filters(front, {
+    vocab,
+    drafts: desk(front, { by: () => typer }),
   })
-  let fields = filters(front, { vocab })
   let typing = signal(false)
   let host = live({ box, front, edits: false })
   let door = inspector(views, host)

@@ -31,6 +31,16 @@ test('undo of a patch restores the property it moved', () => {
   assertEquals(f.page('p1')?.title, 'Kickoff')
 })
 
+test('an event beside a write is not history, so undo restores the write', () => {
+  let f = fixture()
+  let read = (title: string, by: string) =>
+    f.apply([{ entity: { eid: 'p1' }, page: { title }, read: { by } }])
+  read('Kickoff', 'bo')
+  read('Retro', 'ada')
+  f.back(2)
+  assertEquals(f.page('p1')?.title, 'Kickoff')
+})
+
 test('an undo is itself in history, with its own actor', () => {
   let f = fixture()
   f.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])

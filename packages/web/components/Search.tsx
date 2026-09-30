@@ -14,8 +14,8 @@ import { hits as queryHits } from './hits.ts'
 // what a pick does); Escape closes it. Search runs server-side (FTS5
 // over every doc) — the palette is just an input, a ranked list, and
 // j/k-ish keys. searchOpen lives in the shell (live.ts) so a hot swap
-// can't shut the palette; the query itself is the `search` field in the
-// page's own graph (fields.tsx), which a remount or a reload finds again.
+// can't shut the palette; the query itself is the `search` field
+// (fields.tsx), whose text is the person's draft until the palette closes.
 export { searchOpen }
 
 let Frame = block('div', 'Search', {
@@ -63,7 +63,8 @@ let marked = (s: string) =>
     return [<mark key={i}>{hit}</mark>, rest]
   })
 
-// The palette's field in the page's own graph.
+// The palette's field: its line is the person's draft, so it opens on what
+// was being searched for, here or in another interface, until it closes.
 let FIELD = 'search'
 
 export let hitSlots = (h: Hit) => ({

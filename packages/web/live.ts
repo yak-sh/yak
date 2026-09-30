@@ -1447,8 +1447,19 @@ let armRedeliver = () => {
   ;(globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
     .Deno?.unrefTimer?.(redeliver as unknown as number)
 }
-let deliver = (changes: Change[]) => {
+// Writes whose caller waits for the answer (apply), by delivery id. Only this
+// life's: a write replayed from a prior one has no caller left to tell.
+type Waiter = { ok: (applied: Bundle[]) => void; no: (why: Error) => void }
+let waiting = new Map<string, Waiter>()
+let settle = (id: string, applied?: Bundle[], why?: string) => {
+  let w = waiting.get(id)
+  waiting.delete(id)
+  if (applied) w?.ok(applied)
+  else w?.no(new Error(why))
+}
+let deliver = (changes: Change[], wait?: Waiter) => {
   let id = uuid()
+  if (wait) waiting.set(id, wait)
   let o = { changes, at: Date.now() }
   outbox.set(id, o)
   ensureClient()
@@ -1503,6 +1514,18 @@ export let replayOutbox = async () => {
     redeliverNow(true)
   }
 }
+
+/** Land bundles in the cache at once and send them through the outbox, like
+ * `mutate`; the promise is the host's answer, the change as it applied it,
+ * or its refusal. A refusal is also kept where the person sees it (refuse),
+ * as every refused write is. */
+export let apply = (bundles: Bundle[]): Promise<Bundle[]> =>
+  new Promise((ok, no) => {
+    problem.value = ''
+    let changes = normalizeChanges(changesOf(bundles), { resolve: findEid })
+    applyLocal(changes)
+    deliver(changes, { ok, no })
+  })
 
 // Land a local edit: cache first (instant render), then the acked wire.
 export let mutate = (...changes: Change[]) => {
@@ -1615,14 +1638,17 @@ let post = async (changes: Change[], id: string) => {
   }
   if (res.status >= 500) return
   if (!res.ok) {
-    refuse(id, await res.text(), outbox.get(id)?.changes ?? changes)
+    let why = await res.text()
+    refuse(id, why, outbox.get(id)?.changes ?? changes)
     acked(id)
+    settle(id, undefined, why)
     await heal(changes).catch(() => {})
     return
   }
   let applied = await res.json() as Bundle[]
   acked(id)
   applyLocal(changesOf(applied))
+  settle(id, applied)
   tell(changes)
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
-import { type Ent, statusOf } from '../../types.ts'
+import { type Change, type Ent, statusOf } from '../../types.ts'
 import {
   boardTally,
   byPriority,
@@ -15,7 +15,8 @@ import {
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
-import { drafted, useDraft } from '../fields.tsx'
+import { drafts, useDraft } from '../drafts.ts'
+import { bundlesOf } from '../../wire.ts'
 import { useBoardTally } from '../subscriptions.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import { block } from '@yaks/ui'
@@ -85,22 +86,24 @@ export let columnLine = (q: string, status: string, limit: number): string => {
 // Ship it' announces what Enter will file. Enter files and clears for
 // the next title (filing a list is one uninterrupted keyboard); Escape
 // closes. Uncontrolled on purpose: the DOM owns the text, state only
-// mirrors it for the chips. dkey keeps the line per (board, column) — a
-// remount or a reload of the tab that unmounts this box (adding resets) is
-// caught by Board reopening the column from the draft, so a half-typed task
-// is never lost. Blur closes the box but KEEPS the draft (Board resurfaces
-// it); only filing or Escape spends it.
+// mirrors it for the chips. The line is the person's draft per (board,
+// column) (../drafts.ts): Board keeps a column with one open, here and in
+// every interface that draws the board, so a half-typed task is never lost
+// or hidden. Blur keeps it; filing spends it, in the same change as the task
+// it became, and Escape discards it. Opened by a press, the box takes the
+// keyboard; opened by its draft, it waits for one.
 export let QuickAdd = (
-  { dkey, file, close }: {
+  { dkey, file, close, focus = true }: {
     dkey: string
-    file: (text: string) => boolean
+    file: (text: string) => Change[] | undefined
     close: () => void
+    focus?: boolean
   },
 ) => {
   let [text, setText] = useState('')
   let box = useRef<HTMLTextAreaElement>(null)
   let { sync, spend } = useDraft(dkey, box, setText)
-  useEffect(() => void box.current?.focus(), [])
+  useEffect(() => void (focus && box.current?.focus()), [])
   let { body, grouped } = spec(text)
   let p = grouped.filed?.priority
   let chips = Object.entries(grouped).flatMap(([comp, props]) =>
@@ -131,10 +134,11 @@ export let QuickAdd = (
           let t = ev.currentTarget as HTMLTextAreaElement
           if (ev.key == 'Enter' && !ev.shiftKey) {
             ev.preventDefault()
-            if (file(t.value)) {
+            let filed = file(t.value)
+            if (filed) {
+              spend(bundlesOf(filed))
               t.value = ''
               setText('')
-              spend()
             }
           } else if (ev.key == 'Escape') {
             spend()
@@ -147,8 +151,8 @@ export let QuickAdd = (
   )
 }
 
-// The quick-add draft key for one column — stable across remounts, so a
-// remount or reload reseeds the exact box that was being typed in.
+// The quick-add draft key for one column: the same in every interface, so
+// each reopens the exact box that was being typed in.
 let addKey = (eid: string, status: string) => `new:${eid}:${status}`
 
 export let Board = ({ e }: { e: Ent }) => {
@@ -195,14 +199,13 @@ export let Board = ({ e }: { e: Ent }) => {
   // held rows are the only set anyone is claiming.
   useBoardTally(e)
   let counts = query != saved ? undefined : boardTally(e)
-  // Which column's quick-create box is open ('' = none). One at a time:
-  // the box is a keyboard, and there's one keyboard. On mount, a column
-  // with a live draft reopens itself — a half-typed task the last mount
-  // (a reload of the tab, a closed card) never got to file resurfaces where
-  // it was left.
-  let [adding, setAdding] = useState(() =>
-    statuses.find((s) => drafted(addKey(e.eid, s))) ?? ''
-  )
+  // Which column's quick-create box was opened by a press ('' = none): one
+  // at a time, since the box is a keyboard and there's one keyboard. A
+  // column whose draft holds a half-typed task stays open too, wherever it
+  // was typed (a reload, another tab, the terminal), until it is filed or
+  // discarded.
+  let [adding, setAdding] = useState('')
+  let drafted = (s: string) => !!drafts.text(addKey(e.eid, s))
   // A board that says .order=hot ranks its columns by warmth, not
   // priority — the Front page: attention IS the ordering. Drag-drop
   // still writes priorities (adopt semantics unchanged); the ranking is
@@ -332,7 +335,7 @@ export let Board = ({ e }: { e: Ent }) => {
   // top-landing priority. Lands at the top where the typist is looking.
   let create = (status: string, list: Ent[], text: string) => {
     let { title, body, grouped } = spec(text)
-    if (!title) return false
+    if (!title) return
     for (
       let [comp, values] of Object.entries(
         adopt(parseQuery(String(e.board?.query ?? ''))),
@@ -340,7 +343,7 @@ export let Board = ({ e }: { e: Ent }) => {
     ) {
       grouped[comp] = { ...values, ...grouped[comp] }
     }
-    mutate(...taskChanges(uuid(), {
+    return taskChanges(uuid(), {
       ...grouped,
       doc: { title, body, ...grouped.doc },
       task: { ...grouped.task, status },
@@ -348,8 +351,7 @@ export let Board = ({ e }: { e: Ent }) => {
         priority: (list[0]?.filed?.priority ?? 1) - 1,
         ...grouped.filed,
       },
-    }, true))
-    return true
+    }, true)
   }
 
   return (
@@ -384,17 +386,18 @@ export let Board = ({ e }: { e: Ent }) => {
               <Dot status={s} />
               {s}
               <Count>{counts?.[s] ?? win?.total ?? list.length}</Count>
-              {!folded.has(s) && adding != s && (
+              {!folded.has(s) && adding != s && !drafted(s) && (
                 <Add onClick={() => setAdding(s)} title={`new ${s} task`}>
                   +
                 </Add>
               )}
             </ColName>
-            {!folded.has(s) && adding == s && (
+            {!folded.has(s) && (adding == s || drafted(s)) && (
               <QuickAdd
                 dkey={addKey(e.eid, s)}
                 file={(text) => create(s, list, text)}
                 close={() => setAdding('')}
+                focus={adding == s}
               />
             )}
             {!folded.has(s) && (

@@ -47,22 +47,19 @@
  * disconnect. Both `value` and `ready` are reactive; listeners are called when
  * readiness changes, even if the result is empty.
  *
- * ## Where state lives, one apply()
+ * ## Three places state lives, one apply()
  * A component's `sync` and `durable` keywords in the vocabulary decide where
  * its state is kept: `sync: server` is the server's and is synchronized with
  * it; `sync: none` with `durable: forever` belongs to this browser and is
- * stored in IndexedDB ({@link idb}); `sync: none` with `durable: tab` belongs
- * to this tab and is kept in its `sessionStorage` ({@link webStorage}), across
- * a reload and gone with the tab; any other `sync: none` component is held in
- * memory and disappears with the page. All are written through the same
- * `apply()`. What the tab kept is back in the graph when {@link client}
- * returns, and what IndexedDB held by the time {@link Client.ready}
- * resolves.
+ * stored in IndexedDB ({@link idb}); any other `sync: none` component is held
+ * in memory and disappears with the tab. All three are written through the
+ * same `apply()`, and what IndexedDB held is back in the graph by the time
+ * {@link Client.ready} resolves.
  *
  * ## Nothing is imported from a runtime
- * `fetch`, `WebSocket`, `indexedDB` and `sessionStorage` are all read from
- * options that default to the global, so the whole package runs — and is
- * tested — in one process with no browser at all.
+ * `fetch`, `WebSocket` and `indexedDB` are all read from options that default
+ * to the global, so the whole package runs — and is tested — in one process
+ * with no browser at all.
  *
  * @module
  */
@@ -84,16 +81,13 @@ export {
 } from './watch.ts'
 export {
   keep,
-  keeps,
   type Kept,
   localComps,
   type Saved,
   stash,
-  type Tier,
   type Vault,
 } from './vault.ts'
 export { idb, type IdbOpts, wireIdb } from './idb.ts'
-export { type Area, webStorage } from './web-storage.ts'
 
 export { type Retained, retention, RETENTION_ROWS } from './retention.ts'
 export { wireStash, type WireVault } from './wire-vault.ts'

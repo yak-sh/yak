@@ -90,10 +90,11 @@ export let write = (
  * of the entity it was about until a write lands, and so is input its `Edit`
  * could not read (a `Refused` event). The page's graph is the inspector's
  * own; `find` is the server search a picker's candidates come from, `fields`
- * the page's query fields and `Float` where a picker floats. */
+ * the page's query fields, `drafts` where what is typed waits, and `Float`
+ * where a picker floats. */
 export let editing = (
   host: Host,
-  more: Pick<Ux, 'find' | 'fields' | 'Float'>,
+  more: Pick<Ux, 'find' | 'fields' | 'drafts' | 'Float'>,
 ): Ux => {
   let set = (change: Bundle[]) => void host.front.mutate(change)
   let { vocab, front, name, id, kind, when } = host

@@ -235,6 +235,13 @@ grouped approximately by function, **not** by dependency order.
   rendering are implemented once. Its `body` uses `@yaks/blob`'s `store` keyword
   without depending on the package that implements it — content-addressed when
   blob is loaded, plain text otherwise.
+- **[@yaks/draft](./draft)** — what a person has typed and not yet sent:
+  `draft{by, place, text}` on an entity derived from the person and the place,
+  kept by the store and seen by every interface they use until it is sent or
+  discarded. A write says what it was typed over and the store merges, so two
+  interfaces typing at once lose nothing; `desk()` is an interface's side, typed
+  into at once and kept across a reload.
+
 - **[@yaks/tools](./tools)** — Run functions that accept and return bundles,
   recording the tool declaration, `call`, claimed `execution`, and `result`.
   Direct callers invoke the runner; configured effects execute queued or
@@ -482,8 +489,7 @@ grouped approximately by function, **not** by dependency order.
   assembles the graph, its connection to the server and its plugins; a query
   becomes a value that updates as commits change its results; and components
   declared `sync: none` with `durable: forever` are kept in IndexedDB between
-  page loads when local persistence is enabled, and `durable: tab` ones in the
-  tab's `sessionStorage`, across its reloads.
+  page loads when local persistence is enabled.
 
 - **[@yaks/testing](./testing)** — declare tests (`test`, `suite`), check them
   (`equal`, `ok`, `match`, `throws`) and wait on facts (`tick`, `until`); its

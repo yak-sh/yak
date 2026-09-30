@@ -9,24 +9,25 @@ patches to that entity.
 ## State
 
 Each field is one entity in a front-end graph (a local @yaks/client over RAM),
-named by its host (`search`, `filter:<board>`), wearing the two components this
-package declares (`vocab.json`, `sync: none`). Its `filter` is what is typed,
-`durable: tab`, so a reload of the tab brings the text back; its `completion` is
-what can come next there, gone with the page, so the list does not:
+named by its host (`search`, `filter:<board>`), wearing the `filter` component
+this package declares (`vocab.json`, `sync: none`, gone with the page):
 
-| component    | property | what it is                                                  |
-| ------------ | -------- | ----------------------------------------------------------- |
-| `filter`     | `text`   | what is typed                                               |
-| `filter`     | `caret`  | where the caret stands                                      |
-| `completion` | `from`   | where the word being completed starts                       |
-| `completion` | `to`     | where it ends                                               |
-| `completion` | `cands`  | what can replace it (@yaks/query `complete`), at most eight |
-| `completion` | `pick`   | which of those is picked, -1 for none                       |
+| property | what it is                                                  |
+| -------- | ----------------------------------------------------------- |
+| `caret`  | where the caret stands                                      |
+| `from`   | where the word being completed starts                       |
+| `to`     | where it ends                                               |
+| `cands`  | what can replace it (@yaks/query `complete`), at most eight |
+| `pick`   | which of those is picked, -1 for none                       |
 
-`rowOf` reads the two as one row, and `put` writes a row back as both. The list
-is open while `cands` has any. Anything on the page reads what is typed in a
-field by reading its row: a board narrows its rows by its filter field, a
-palette searches for its search field's text.
+What is typed in a field is the person's draft in the place the field is named
+for, kept by the host's `drafts` (@yaks/draft's `desk` keeps them in the graph,
+synced to every interface the person uses): a reload, another tab or a terminal
+shows the same text, and not its list, until the host clears it. A field's row
+(`row(id)`) is that text over its `filter`. The list is open while `cands` has
+any. Anything on the page reads what is typed in a field by reading its row: a
+board narrows its rows by its filter field, a palette searches for its search
+field's text.
 
 ## Use
 
@@ -36,28 +37,29 @@ import { filters } from '@yaks/filter'
 import { docs } from '@yaks/filter/vocab'
 import { loadVocab } from '@yaks/vocab'
 
-let front = client(loadVocab(docs))
-let { Filter, text } = filters(front, { vocab, source, Float })
+let front = client(loadVocab(docs), [], { vault: false })
+let { Filter, text } = filters(front, { vocab, drafts, source, Float })
 
 // <Filter id='search' placeholder='search…' onKey={key} />
 text('search') // what is typed there, read reactively
 ```
 
 The host supplies what the field cannot know: `vocab`, the vocabulary its
-queries speak; `source`, what only a graph can answer, the entity ids a
-reference could name and the values a property holds (@yaks/query `Source`,
-answering at once or with a promise); and `Float`, where the list floats beside
-its field. Without `Float` the list paints in the flow, under the field.
+queries speak; `drafts`, where what is typed is kept; `source`, what only a
+graph can answer, the entity ids a reference could name and the values a
+property holds (@yaks/query `Source`, answering at once or with a promise); and
+`Float`, where the list floats beside its field. Without `Float` the list paints
+in the flow, under the field.
 
 ## Actions
 
 `type(id, text, caret)` is what the person typed, and completes at the caret.
-`set(id, text)` is text the host put there, offering nothing. `move(id, d)`,
-`accept(id, i?)` and `dismiss(id)` walk, take and close the list; taking a word
-completes on from it, so `.status` rolls on to `.status=` and then its values.
-`press(id, key)` is a key, named as a browser names it, and says whether the
-list took it. Each is a patch to the field's row; `state.ts` is what each makes
-of a row, pure.
+`set(id, text)` is text the host put there, offering nothing; `set(id, '')`
+clears the field, which ends its draft. `move(id, d)`, `accept(id, i?)` and
+`dismiss(id)` walk, take and close the list; taking a word completes on from it,
+so `.status` rolls on to `.status=` and then its values. `press(id, key)` is a
+key, named as a browser names it, and says whether the list took it. Each is a
+patch to the field's row; `state.ts` is what each makes of a row, pure.
 
 ## Keys
 
@@ -74,6 +76,6 @@ paints its caret (@yaks/tui paints a `data-caret`).
 
 | file         | owns                                                    |
 | ------------ | ------------------------------------------------------- |
-| `vocab.json` | the `filter` and `completion` components                |
+| `vocab.json` | the `filter` component                                  |
 | `state.ts`   | what each action makes of a row, and the key table      |
 | `filters.ts` | `filters()`: the actions bound to a graph, and `Filter` |

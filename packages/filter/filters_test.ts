@@ -1,6 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { client, stash, type Vault } from '@yaks/client'
+import { client } from '@yaks/client'
+import { desk, draftDoc, type Drafts, drafts } from '@yaks/draft'
+import { mint } from '@yaks/graph'
 import { type Cand, type Source } from '@yaks/query'
 import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
@@ -21,10 +23,18 @@ let vocab = loadVocab({
     },
   },
 })
-// A field in a page of its own; given a tab, the page is one load of it.
-let field = (opts: Partial<Opts> = {}, tab: Vault | false = false) =>
-  filters(client(loadVocab(docs), [], { vault: false, tab }), {
+// A person's drafts, kept in a graph of their own: every page given the same
+// ones is another interface they type in.
+let kept = (): Drafts => {
+  let store = client(loadVocab([draftDoc]), [drafts()], { vault: false })
+  let by = mint()
+  return desk(store, { by: () => by })
+}
+// A field in a page of its own.
+let field = (opts: Partial<Opts> = {}, typed = kept()) =>
+  filters(client(loadVocab(docs), [], { vault: false }), {
     vocab,
+    drafts: typed,
     ...opts,
   })
 let words = (cands: Cand[] = []) => cands.map((c) => c.text)
@@ -51,13 +61,12 @@ test('typing offers what can come next, and the keys walk and take it', () => {
   assertEquals(f.text('q'), '.task .status=done')
 })
 
-test('a reload of the tab brings back what was typed, and not its list', () => {
-  let tab = stash()
-  field({}, tab).type('q', '.task .st')
-  let next = field({}, tab)
+test('what is typed is the draft: another page shows it, and not its list', () => {
+  let typed = kept()
+  field({}, typed).type('q', '.task .st')
+  let next = field({}, typed)
   assertEquals(next.text('q'), '.task .st')
   assertEquals(next.row('q')?.cands, [])
-  assertEquals(field({}, stash()).row('q'), undefined, 'a new tab is empty')
 })
 
 test('Enter takes a word to where it reads whole, then keeps it', () => {

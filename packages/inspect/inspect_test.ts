@@ -1,6 +1,8 @@
 import { test, tick, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
+import { desk, draftDoc, drafts } from '@yaks/draft'
+import { mint } from '@yaks/graph'
 import { EDGE_URI, edgeKeywords } from '@yaks/edge'
 import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
@@ -83,10 +85,7 @@ let host = (answers: Answers = {}, edits = true) => {
     : (l: string) => answers[l]
   let asked: string[] = []
   let applied: Bundle[][] = []
-  let front = client(loadVocab([...docs, ...uxDocs]), [], {
-    vault: false,
-    tab: false,
-  })
+  let front = client(loadVocab([...docs, ...uxDocs]), [], { vault: false })
   let double: Host = {
     vocab,
     front,
@@ -121,7 +120,16 @@ let host = (answers: Answers = {}, edits = true) => {
     when: (at) => at,
   }
   let door = inspector(views, double)
-  let ux = editing(double, { find: () => Promise.resolve([T2]), Float })
+  let typer = mint()
+  let drafted = desk(
+    client(loadVocab([draftDoc]), [drafts()], { vault: false }),
+    { by: () => typer },
+  )
+  let ux = editing(double, {
+    find: () => Promise.resolve([T2]),
+    drafts: drafted,
+    Float,
+  })
   return {
     asked,
     applied,

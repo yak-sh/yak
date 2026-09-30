@@ -152,6 +152,7 @@
     "./packages/mail",
     "./packages/member",
     "./packages/doc",
+    "./packages/draft",
     "./packages/key",
     "./packages/git",
     "./packages/code",

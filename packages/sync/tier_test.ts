@@ -20,7 +20,6 @@ test('a component says who hears it and how long it lives', () => {
     'forever',
   ])
   assertEquals(local(box, 'draft'), 'vault') // sync: none, durable: forever
-  assertEquals(local(box, 'jotting'), 'tab') // sync: none, durable: tab
   assertEquals(local(box, 'sieve'), 'memory') // sync: none, until disconnect
   assertEquals(local(box, 'pointing'), null) // it leaves; not this node's
 })

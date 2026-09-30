@@ -3,9 +3,10 @@
  * root of the tree it draws (`Ux`), so one page may hold several: web's page
  * and the inspector's views on one of its cards each hand down their own. The
  * host says what the values mean (the vocabulary, what an entity is called),
- * where each component keeps its own state (the page's graph), where a bundle
- * it emits goes when its caller names nowhere else, and the platform's
- * primitives (where a popout floats). The rest is optional: a host without it
+ * where each component keeps its own state (the page's graph), where what the
+ * person types waits until it is sent (their drafts), where a bundle it emits
+ * goes when its caller names nowhere else, and the platform's primitives
+ * (where a popout floats). The rest is optional: a host without it
  * gets the plain behavior (no suggestions, a query typed as text, no inline
  * markdown, a popout in the flow).
  *
@@ -39,6 +40,17 @@ export type Front = {
   ent: (eid: string) => Bundle | undefined
 }
 
+/** A person's drafts, by the place they type in: what is typed there and not
+ * yet sent ('' for nothing, read reactively), kept as it is typed, and
+ * emptied once it is sent or discarded. Where they are kept is the host's
+ * choice; @yaks/draft's `desk` keeps them in the graph, synced to every
+ * interface the person uses. */
+export type Drafts = {
+  text: (place: string) => string
+  type: (place: string, text: string) => void
+  spend: (place: string) => void
+}
+
 /** Where a popout floats: beside `anchor`, on `side` first. @yaks/ui `Float`
  * is a browser's. */
 export type Float = FunctionComponent<{
@@ -54,6 +66,8 @@ export type Host = {
   vocab: Vocab
   /** the page's own graph, where each component keeps its own state */
   front: Front
+  /** where what is typed over a value waits until it is sent or put back */
+  drafts: Drafts
   /** where a bundle a component emits goes when its caller names nowhere
    * else: a value to the graph it came from, an event (./vocab.json) to
    * whoever says it */
@@ -75,7 +89,7 @@ export type Host = {
   values?: (well: string) => string[]
   /** the query fields (@yaks/filter) a saved query is typed in; without
    * them a query is typed as text */
-  fields?: Pick<Filters, 'Filter' | 'set'>
+  fields?: Pick<Filters, 'Filter'>
   /** inline markdown as HTML: a value shown `inline` at rest */
   markup?: (text: string) => string
   /** what a choice wears beside its word: a status's dot */

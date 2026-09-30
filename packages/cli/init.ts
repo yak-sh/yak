@@ -21,6 +21,7 @@ export let STARTER = [
   '@yaks/alias',
   '@yaks/edge',
   '@yaks/doc',
+  '@yaks/draft',
   '@yaks/effects',
   '@yaks/journal',
   '@yaks/tools',
