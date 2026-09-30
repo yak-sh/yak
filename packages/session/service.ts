@@ -244,7 +244,10 @@ export let look = async (
     owed.push({ f, at, ...t ? { lag: st.size - t.at + t.rest.length } : {} })
   }
   // The tails already open, least behind first, then the rest, most recently
-  // written first: a live session's next lines lead every look.
+  // written first: a live session's next lines lead every look. Of the rest,
+  // sessions come before subagents, as `transcripts()` lists them: a subagent
+  // writes after the call that started it, so its transcript is the newer one,
+  // and opened first it would find no call to link to.
   owed.sort((a, b) =>
     a.lag != null && b.lag != null
       ? a.lag - b.lag
@@ -252,7 +255,7 @@ export let look = async (
       ? -1
       : b.lag != null
       ? 1
-      : b.at - a.at
+      : Number(!!a.f.parent) - Number(!!b.f.parent) || b.at - a.at
   )
   for (let [i, { f }] of owed.entries()) {
     if (o.signal?.aborted || i && spent()) return

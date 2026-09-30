@@ -171,8 +171,9 @@ test("a subagent's transcript is a session of its own, started by its parent's c
     },
   }
   let done = { type: 'assistant', message: { content: 'done' } }
+  // The parent wrote the call before the subagent it started wrote anything.
   return projects({
-    [parent]: { text: JSON.stringify(started) + '\n' },
+    [parent]: { text: JSON.stringify(started) + '\n', ago: 1000 },
     [agent]: { text: side(tool) },
   }, async (dir) => {
     let at = `${dir}/-home-me-code/${agent}`
