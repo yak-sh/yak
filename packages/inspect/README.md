@@ -172,9 +172,10 @@ one thing.
 
 ## Limits
 
-- The census is one tally over every entity (`.tally=entity.archetype`), under a
-  second on a graph of 2.5 million; it is asked once for as long as the page is
-  open, and every count on every page is read off it.
+- The census is one tally over every entity (`.tally=entity.archetype`): a
+  second or two on a graph of 2.5 million, most of it checking each entity is
+  not deleted. It is asked once for as long as the page is open, every count on
+  every page is read off it, and the page draws before it is in.
 - A tally cannot be bounded, so a property's values are ranked at once only for
   an enum or a component carried by up to 5,000 entities; beyond that, a press
   ranks them.
