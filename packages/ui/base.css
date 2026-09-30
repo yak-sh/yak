@@ -16,12 +16,10 @@
   color: var(--text);
 }
 
-/* Anchors wear the theme's blue, visited ones its purple. */
+/* Anchors wear the theme's link colour, visited or not: one look for a
+   link, whatever part it is in. */
 :where(a) {
-  color: var(--blue);
-}
-:where(a):visited {
-  color: var(--purple);
+  color: var(--link);
 }
 
 /* Prose, wherever it lands: documents, comments and messages all speak the

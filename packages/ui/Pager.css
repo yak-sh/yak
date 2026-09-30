@@ -1,5 +1,5 @@
 /* Which rows show, then a step each way: small, mono, out of the way of the
-   rows above it. */
+   rows above it, each step a link to another page, in the link colour. */
 .Pager {
   display: flex;
   align-items: baseline;
@@ -14,7 +14,7 @@
 }
 .Pager_Step {
   font: inherit;
-  color: var(--accent);
+  color: var(--link);
   background: none;
   border: 0;
   padding: 0;

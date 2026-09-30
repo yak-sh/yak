@@ -237,6 +237,16 @@ test('a grid lines its rows up in shared columns, each cell cut or set to its si
   assert(lines.every((l) => l.every((s) => s.style.bg == '#111111')))
 })
 
+test('a bare anchor wears the sheet’s Link; one with a class wears its class', () => {
+  let fg = (a: TElement) =>
+    screenful(el('root', {}, el('div', {}, a)), 20, 1, {
+      Link: { fg: '#0000ff' },
+      Tile: { fg: '#00ff00' },
+    }).lines[0][0].style.fg
+  assertEquals(fg(el('a', { href: '/x' }, 'x')), '#0000ff')
+  assertEquals(fg(el('a', { href: '/x', class: 'Tile' }, 'x')), '#00ff00')
+})
+
 test('a block style lays an inline tag out on lines of its own', () => {
   let item = (text: string) => el('button', { class: 'Item' }, text)
   let tree = el('root', {}, el('div', {}, item('one'), item('two')))

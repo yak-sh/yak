@@ -35,6 +35,8 @@ export type Colors = {
   yellow: string
   /** selection and the primary action */
   accent: string
+  /** a link, whatever part it is in */
+  link: string
 }
 
 /** A theme: its custom properties, and their colours. */

@@ -32,6 +32,7 @@
   --blue: #7fbbb3;
   --yellow: #dbbc7f;
   --accent: var(--green); /* selection and the primary action */
+  --link: var(--blue); /* a link, whatever part it is in */
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
 }
 

@@ -94,8 +94,11 @@ let safe = (text: string) =>
   text.replaceAll('\t', '  ').split('\n').map(strip).join('\n')
 
 // Semantic HTML emitted by shared Preact renderers. ANSI stays in this backend.
+// A bare anchor wears the sheet's `Link`; one with a class is a part that
+// says its own look there.
 let semantic = (el: TElement, sheet: Sheet): Style => {
   let tag = el.localName
+  if (tag == 'a' && !el.className) return { ...sheet.Link }
   if (tag == 'strong' || tag == 'b' || /^h[1-6]$/.test(tag) || tag == 'th') {
     return { bold: true }
   }

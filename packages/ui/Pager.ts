@@ -19,10 +19,10 @@ export let Pager: Part & Record<'Span' | 'Step', Part> = block(
   { Span: 'span', Step: 'button' },
 )
 
-/** The span dim, each step in the accent. */
+/** The span dim, each step in the link colour. */
 export let sheet = (c: Colors): Sheet => ({
   Pager: { fg: c.dim, spaced: true },
-  Pager_Step: { fg: c.accent },
+  Pager_Step: { fg: c.link },
 })
 
 let { Span, Step } = Pager

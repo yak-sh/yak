@@ -80,10 +80,12 @@ of the screen, and a `Table` is a `grid` whose cells cut with an `ellipsis`.
 ## Themes
 
 A theme is a stylesheet of CSS custom properties (`--bg`, `--dim`, …) and the
-same colours as values. Every component's CSS reads the properties through
-`var()`, and every component's terminal entries are a function of the colours.
-Everforest is the first theme: `everforest.css`, with a light face for a light
-system, and `everforest.ts`.
+same colours as values. Some name a role rather than a hue: `--accent` is
+selection and the primary action, and `--link` is every link, whatever part it
+is in (an anchor, a `Pager.Step`), in a browser and in a terminal alike. Every
+component's CSS reads the properties through `var()`, and every component's
+terminal entries are a function of the colours. Everforest is the first theme:
+`everforest.css`, with a light face for a light system, and `everforest.ts`.
 
 ```ts ignore
 import { everforest, sheet, stylesheet } from '@yaks/ui'

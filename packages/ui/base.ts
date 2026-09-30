@@ -2,9 +2,10 @@
  * The document's defaults, in a terminal: base.css's twin. @yaks/tui's
  * painter already knows what a heading, `strong` or `em` means, and what its
  * own widgets are without colour; this gives code, quotes and highlight.js's
- * syntax their colours, and the painter's widgets (tables, scrollbars,
- * panels, the text entry, a selected row) the theme's, the way base.css gives
- * a browser's scrollbars theirs.
+ * syntax their colours, a bare anchor the link colour base.css gives one
+ * (@yaks/tui paints it with `Link`), and the painter's widgets (tables,
+ * scrollbars, panels, the text entry, a selected row) the theme's, the way
+ * base.css gives a browser's scrollbars theirs.
  *
  * @module
  */
@@ -17,6 +18,7 @@ import type { Colors, Specimen } from './theme.ts'
 export let sheet = (c: Colors): Sheet => ({
   Code: { fg: c.blue, bg: c.card },
   Quote: { fg: c.text, bg: c.card },
+  Link: { fg: c.link, underline: true },
   'hljs-keyword': { fg: c.red },
   'hljs-selector-tag': { fg: c.red },
   'hljs-literal': { fg: c.purple },

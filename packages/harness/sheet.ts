@@ -15,7 +15,6 @@ let own = (c: Colors): Sheet => ({
   Task: { fg: c.orange },
   Warn: { fg: c.yellow },
   Bad: { fg: c.red },
-  Link: { fg: c.blue, underline: true },
   Rule: { fg: c.dim },
   Composer_Border: { fg: c.dim, dim: true },
   Selection_Active: { bg: c.card, fg: c.blue },
