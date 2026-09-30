@@ -781,8 +781,7 @@ export type Generation = {
 export type Output = {
   eid: string
   source: string
-  key?: string | null
-  phase?: string | null
+  id?: string | null
 }
 export type Call = { eid: string; key: string }
 // Provider-neutral named tool use (D-16704): an imported tool call with no

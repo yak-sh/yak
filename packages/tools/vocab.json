@@ -72,10 +72,6 @@
           "type": "string",
           "description": "the provider's id for this piece of output, as `call.id` is its id for the call — what a later revision of the same item is matched on"
         },
-        "phase": {
-          "type": "string",
-          "description": "which part of the answer it is — a model that narrates before it answers marks the narration apart from the answer"
-        },
         "value": {
           "type": "object",
           "description": "the same output as data, for a reader that parses rather than reads: a tool that declares an outputSchema answers its structured content here, beside the text a person reads"

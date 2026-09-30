@@ -71,9 +71,9 @@ these components:
 - `result{call, ms}` refers to the completed call and records its duration. The
   result entity also gets `content{body}` containing a text rendering of the
   answer.
-- `content{body}` stores text. `output{source, id?, phase?, value?}` identifies
-  what produced output, can preserve provider-specific output metadata, and
-  carries the output as data where its producer declared a shape for it.
+- `content{body}` stores text. `output{source, id?, value?}` identifies what
+  produced output, can preserve provider-specific output metadata, and carries
+  the output as data where its producer declared a shape for it.
 - `error{code}` records an expected failure. `exception` records an unexpected
   failure and can carry diagnostic fields supplied by the graph's stamping
   rules.
