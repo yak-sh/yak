@@ -1019,6 +1019,36 @@ test('a woken object rewrites nothing it already holds', async () => {
   assertEquals(moved, [])
 })
 
+// A wake whose planting throws (`#sow`), here the runtime's alarm failing,
+// still serves, and plants again once its backoff has passed: each try that
+// throws is one note in the break log, and a store that planted is done.
+test('a store whose planting threw serves, and plants again after a wait', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let alarm = ctx.storage.getAlarm
+  let down = true
+  ctx.storage.getAlarm = () =>
+    down ? Promise.reject(new Error('the alarm is down')) : alarm()
+  let now = Date.now()
+  using _clock = stub(Date, 'now', () => now)
+  let store = await cookbook(ctx)
+  let notes = async () => {
+    let answer = await get(store, '/query?q=.exception', owner)
+    assertEquals(answer.status, 200)
+    return (await answer.json()).length
+  }
+  assertEquals(await notes(), 1)
+  assertEquals(await notes(), 1, 'tried again before its wait')
+  now += 60 * 60_000
+  assertEquals(await notes(), 2)
+  down = false
+  now += 60 * 60_000
+  assertEquals(await notes(), 2)
+  down = true
+  now += 60 * 60_000
+  assertEquals(await notes(), 2, 'planted again after it had planted')
+})
+
 test('a stranger is refused on a private app', async () => {
   let mine: Vouch = { ...owner, access: 'private' }
   let store = await cookbook(state(), SCHEMA, mine)

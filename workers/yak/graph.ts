@@ -623,8 +623,11 @@ export class Store {
   #effectsReady = false
   #effectWork: Promise<void> | null = null
   #effectAgain = false
-  // The schedules this object was born with, planted once (`#sowing`).
+  // The schedules this object was born with, planted once (`#sown`), and
+  // how long the ground lies fallow after a planting that threw: until when,
+  // and how many throws the wait has doubled for.
   #sowing: Promise<void> | null = null
+  #fallow = { until: 0, throws: 0 }
   // When this incarnation began: a job marked begun before it was begun by
   // one that is gone (wake.ts `resumed`).
   #born = Date.now()
@@ -1562,10 +1565,12 @@ export class Store {
 
   // The next instant this object owes, off its own rows: what a tick arms
   // after it has fired, and what a request re-arms when the runtime lost the
-  // alarm. `soonest` reads the earliest wake still ahead.
+  // alarm. `soonest` reads the earliest wake still ahead; a planting that
+  // threw is owed when its fallow ends (`#sown`).
   #owed = async (now: number, floor = Infinity): Promise<void> => {
     let next = await soonest(this.#graph, now)
-    let at = Math.min(next ?? Infinity, floor)
+    let replant = this.#sowing ? Infinity : this.#fallow.until || Infinity
+    let at = Math.min(next ?? Infinity, floor, replant)
     if (Number.isFinite(at)) await this.#arming(new Date(at).toISOString())
   }
 
@@ -1643,7 +1648,7 @@ export class Store {
           this.#stuck = false
           await this.#drain()
         }
-        await (this.#sowing ??= this.#sow())
+        await this.#sown()
         await this.#tick(Date.now())
         this.#workingEffects()
       } finally {
@@ -1653,6 +1658,34 @@ export class Store {
     }
     return this.#profile ? this.#profile.run('alarm', run) : run()
   }
+
+  // Planted once per incarnation, by the first request or alarm to find the
+  // ground ready. A planting that throws is noted and let go, and the object
+  // serves without it: its effects wait in their rows, and the ground lies
+  // fallow for a second, then two, doubling to an hour, before a request or
+  // the alarm set for that instant plants again. A store whose trouble has
+  // passed heals without a deploy, and one that still cannot plant is not
+  // asked to on every request.
+  #sown = (): Promise<void> => {
+    if (!this.#sowing && Date.now() < this.#fallow.until) {
+      return Promise.resolve()
+    }
+    return this.#sowing ??= this.#sow().catch(this.#unsown)
+  }
+
+  #unsown = async (e: unknown) => {
+    let wait = Math.min(1000 * 2 ** this.#fallow.throws++, Store.FALLOW)
+    this.#fallow.until = Date.now() + wait
+    this.#sowing = null
+    await this.#broke('wake seed', e)
+    await this.#arming(new Date(this.#fallow.until).toISOString())
+      .catch((why) =>
+        defect(why, { request: 'wake seed alarm', store: this.#name() })
+      )
+  }
+
+  // The longest the ground lies fallow after a planting that threw (`#sown`).
+  static FALLOW = 60 * 60_000
 
   // What this object was born owing: the rows its plugins declare — the
   // directory's sweeps — planted if they are missing, and the alarm set again
@@ -1673,39 +1706,34 @@ export class Store {
         await this.#broke('install', e)
       }
     }
-    try {
-      await this.#migrateEffects()
-      let rows = this.#get('name') == PLATFORM_STORE ? wakesOf(PLUGINS) : []
-      let stamp = sha256(rows.map((r) => r.entity.eid).join('\n'))
-      if (rows.length && this.#get('wakes') != stamp) {
-        await seeded(this.#graph, rows, Date.now())
-        this.#put('wakes', stamp)
-      }
-      // And any of them the last incarnation died in the middle of.
-      if (rows.length) {
-        await resumed(
-          this.#clock,
-          this.#born,
-          (job, e) => this.#broke(`wake ${job}`, e),
-        )
-      }
-      if (this.#alarm && !(await this.#alarm.getAlarm())) {
-        await this.#owed(Date.now())
-      }
-      // The app's own commands, standing: the `tool` rows a call names, and
-      // one pass over the calls nobody is waiting on — one another process
-      // wrote, one a crash left claimed, one whose wake fired while this
-      // object was away. Only a store that has commands asks.
-      if ((this.#get('tools') ?? '{}') != '{}') {
-        await this.#planting()
-        await reconcile(this.#runner())
-      }
-      this.#effectsReady = true
-      this.#workingEffects()
-    } catch (e) {
-      await this.#broke('wake seed', e)
-      if (this.#vocab.comp('effect')) throw e
+    await this.#migrateEffects()
+    let rows = this.#get('name') == PLATFORM_STORE ? wakesOf(PLUGINS) : []
+    let stamp = sha256(rows.map((r) => r.entity.eid).join('\n'))
+    if (rows.length && this.#get('wakes') != stamp) {
+      await seeded(this.#graph, rows, Date.now())
+      this.#put('wakes', stamp)
     }
+    // And any of them the last incarnation died in the middle of.
+    if (rows.length) {
+      await resumed(
+        this.#clock,
+        this.#born,
+        (job, e) => this.#broke(`wake ${job}`, e),
+      )
+    }
+    if (this.#alarm && !(await this.#alarm.getAlarm())) {
+      await this.#owed(Date.now())
+    }
+    // The app's own commands, standing: the `tool` rows a call names, and
+    // one pass over the calls nobody is waiting on — one another process
+    // wrote, one a crash left claimed, one whose wake fired while this
+    // object was away. Only a store that has commands asks.
+    if ((this.#get('tools') ?? '{}') != '{}') {
+      await this.#planting()
+      await reconcile(this.#runner())
+    }
+    this.#effectsReady = true
+    this.#workingEffects()
   }
 
   // Before this store kept effect rows, a prompt could have left on the wire
@@ -1951,7 +1979,7 @@ export class Store {
     // never been asked anything is not running, so a request is the moment its
     // schedules are planted and a lost alarm is set again. Once per
     // incarnation, and the stamp keeps it to one read after the first.
-    await (this.#sowing ??= this.#sow())
+    await this.#sown()
     if (selected.toolsMoved) await this.#planting()
     for (let run of selected.effects) await run()
     return null
