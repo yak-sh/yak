@@ -282,17 +282,18 @@ Every command, server, or TUI that opens a graph, and every thread of one that
 does, creates its own process entity:
 
 ```text
-process{pid, command, cwd} ...and exit{code} when it closes
+process{pid, command, cwd, roles} ...and exit{code} when it closes
 ```
 
 Writes without an explicit actor are attributed to that process. Authenticated
 requests are attributed to the authenticated identity. On shutdown, `close()`
 records the exit and releases the process's leases in one transaction.
 
-Creating the process entity also provides the startup event: a plugin can
-declare an effect `created: ["process"]`, and whichever process works the pool
-runs it; there is no separate `./boot` facet. Start-up work that must run in the
-process that started holds a lease instead.
+Start-up work is an effect declared `start: true` (@yaks/effects): a process
+that starts working the pool owes itself a run of it, and a command passing
+through, which serves no `effects` role, owes none; there is no separate
+`./boot` facet. Start-up work that must run in the process that started holds a
+lease instead.
 
 ## What `compose` does
 

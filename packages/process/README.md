@@ -98,8 +98,9 @@ The process that opens a graph is the **host**. `started()` returns the bundle
 that records the host's process entity, `ended()` records its exit, and
 `selfEid()` returns the stable in-memory entity ID for that host run. The host
 can sign writes with this entity, so `created.by` identifies the specific
-program run that wrote a row. A `created(process)` event for the host also gives
-effects a normal post-commit event on which to perform startup recovery.
+program run that wrote a row. A host's row also says which roles it serves
+(`process.roles`, from @yaks/cli `compose`): `graph`, `web`, `effects`, or a
+plugin's service by its name.
 
 A Worker thread that opens a graph is a host of its own, with its own row in the
 pid it runs in. The pid lives on after the thread, so its `exit` is what

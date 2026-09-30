@@ -345,6 +345,9 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     for (let [comp, props] of changed) at({ comp, kind: 'changed', props })
     for (let comp of effect.removed ?? []) at({ comp, kind: 'removed' })
     if (effect.match) at(planned(effect.match))
+    // Start-up work: owed by a worker joining the pool (./pool.ts), and by
+    // no commit, so its slot watches nothing.
+    if (effect.start) at({ comp: '', kind: 'started' })
     if (effect.sweep && !effect.created) {
       throw new Error(
         `effect ${effect.name} declares a sweep and no created trigger — ` +

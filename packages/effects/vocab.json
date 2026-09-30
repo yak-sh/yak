@@ -38,10 +38,11 @@
             "created",
             "changed",
             "removed",
-            "matched"
+            "matched",
+            "started"
           ],
           "stamped": true,
-          "description": "what happened to it, or `matched` where a query matched it"
+          "description": "what happened to it, `matched` where a query matched it, or `started` where the target is a process that started working the effects"
         },
         "state": {
           "type": "string",

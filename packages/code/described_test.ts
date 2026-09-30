@@ -47,7 +47,7 @@ let q: VocabDoc = {
 }
 
 // One store, each graph over it served with its own vocabulary, as a server
-// restarted over new code is; `serve` also describes it, as a process starting
+// restarted over new code is; `serve` also describes it, as a worker starting
 // does (./effects.ts).
 let store = () => {
   let storage = ram(loadVocab(base, [edgeKeywords]))
@@ -85,7 +85,7 @@ test('a graph describes what it is served with, and stops describing what it is 
   ])
   assertEquals(await titles('._prop.package._package.name=@t/q'), ['note.c'])
   assertEquals(await befores(), 1)
-  // Described already, so a process starting writes nothing.
+  // Described already, so a worker starting writes nothing.
   assertEquals(await described(g, g.vocab.docs), [])
 
   // A property and a `before` no longer served are cleared, and so is a

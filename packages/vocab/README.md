@@ -569,12 +569,13 @@ vocabulary knows what a write owes, whatever code it imported.
 
 `created` and `removed` list components; `changed` lists components or
 `comp.prop` for one property; `match` is a pattern in the rule grammar, run
-wherever the batch made it hold. `tries` bounds the attempts,
-`idempotent: false` says an interrupted run must not run again. `active` is a
-query that must match somewhere before a run is owed. `sweep` is a query whose
-matches are owed a `created` run again whenever a worker starts.
-`effectsIn(docs)` reads them, refuses a name declared twice, and `loadVocab`
-skips them.
+wherever the batch made it hold. `start: true` is start-up work: a run is owed
+each time a process starts working the effects, its target that process, and
+never by a commit. `tries` bounds the attempts, `idempotent: false` says an
+interrupted run must not run again. `active` is a query that must match
+somewhere before a run is owed. `sweep` is a query whose matches are owed a
+`created` run again whenever a worker starts. `effectsIn(docs)` reads them,
+refuses a name declared twice, and `loadVocab` skips them.
 
 ## A vocabulary as entities
 

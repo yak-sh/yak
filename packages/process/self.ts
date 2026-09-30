@@ -17,9 +17,11 @@
 // wrote this", and a child process's row, written by its parent, identifies its
 // parent without needing a property for it.
 //
-// A process starting is also an event: an effect declared on
-// `created: ["process"]` is what a process coming up owes, so start-up work is
-// an ordinary effect instead of a separate start-up hook nothing else can see.
+// A run that opened a graph says which roles it serves (@yaks/cli `compose`):
+// the graph, `web`, `effects`, a plugin's service by its name. Start-up work
+// is owed by the one that starts working the effects, not by every run
+// (@yaks/effects `start`), since a command passing through changes nothing it
+// would do.
 //
 // The id is minted once, in memory, and it is a uuid rather than something
 // derived from the process: two runs of one command are two different runs, and
@@ -57,6 +59,8 @@ export type SelfOpts = {
   command?: string
   /** where it runs (default this one's) */
   cwd?: string
+  /** the roles it serves where it opened a graph (@yaks/cli `compose`) */
+  roles?: string[]
 }
 
 let line = (): string => {
@@ -111,6 +115,7 @@ export let started = (o: SelfOpts = {}): Bundle => {
       pid: o.pid ?? Deno.pid,
       command: o.command ?? line(),
       ...cwd ? { cwd } : {},
+      ...o.roles ? { roles: o.roles } : {},
     },
     [RUNTIME]: runtime(),
   }

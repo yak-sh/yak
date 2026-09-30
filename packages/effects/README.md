@@ -79,7 +79,10 @@ A declaration names its triggers: `created`, `changed` (a component, or
 `comp.prop` for one property), `removed`, and `match`, a pattern (below). It can
 also say how many attempts a run gets (`tries`), that a run interrupted mid-way
 must not run again (`idempotent: false`), and a `sweep`, a query whose matches
-are owed a `created` run again whenever a worker starts. `handle` throws for a
+are owed a `created` run again whenever a worker starts. `start: true` is
+start-up work: a worker joining the pool owes itself a run of each one it has
+the code for (kind `started`, its target the worker's owner), and no commit owes
+one, so a process that only passes through never does. `handle` throws for a
 name the vocabulary does not declare, so a typo never goes quietly unrun.
 Without the `effect` component there is no pool, and a handled effect runs in
 the process that committed, like an observer.

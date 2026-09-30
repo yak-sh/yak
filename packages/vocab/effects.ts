@@ -37,6 +37,9 @@ export type EffectDecl = {
   /** the components whose removal owes a run, by their own deletion or with
    * their entity */
   removed?: string[]
+  /** a run is owed each time a process starts working the effects, its
+   * target that process: start-up work, never owed by a commit */
+  start?: boolean
   /** commit triggers owe runs only while this query matches an entity */
   active?: string
   /** a query over what committed: a run is owed wherever a batch made it hold
@@ -80,11 +83,15 @@ export let effectsIn = (input: VocabDoc | VocabDoc[]): EffectDecl[] => {
         let said = entry[key]
         if (typeof said == 'string') decl[key] = said
       }
+      if (entry.start === true) decl.start = true
       if (typeof entry.tries == 'number') decl.tries = entry.tries
       if (typeof entry.idempotent == 'boolean') {
         decl.idempotent = entry.idempotent
       }
-      if (!decl.created && !decl.changed && !decl.removed && !decl.match) {
+      if (
+        !decl.created && !decl.changed && !decl.removed && !decl.match &&
+        !decl.start
+      ) {
         throw new Error(`effect '${name}' is owed by nothing`)
       }
       out.push(decl)

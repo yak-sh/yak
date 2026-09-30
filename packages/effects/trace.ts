@@ -25,7 +25,7 @@ import type { Vocab } from '@yaks/vocab'
 
 /** What triggered a handler: one of the three things that can happen to a
  * component, or a pattern that is now true over what the batch committed. */
-export type Kind = 'created' | 'changed' | 'removed' | 'matched'
+export type Kind = 'created' | 'changed' | 'removed' | 'matched' | 'started'
 
 /**
  * One committed component change, as an effect sees it.

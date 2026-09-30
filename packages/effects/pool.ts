@@ -277,7 +277,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let go = async () => {
       let tx = detached(g.storage)
       let kind = String(row.kind) as Kind
-      let name = String(row.comp)
+      let name = String(row.comp ?? '')
       let [found] = await tx.get([String(row.target)])
       let event: Event = {
         kind,
@@ -487,14 +487,45 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
   }
 
+  // Start-up work: a run of each `start` effect this process has the code
+  // for, its target this process. Owed here, when a process starts working
+  // the effects, and never by a commit, so a command passing through, which
+  // never joins, owes none.
+  let begin = async (g: Graph) => {
+    let at = stamp(clock())
+    let rows: Bundle[] = ctx.slots()
+      .filter((s) => s.kind == 'started' && s.run)
+      .map((s) => ({
+        entity: { eid: mint() },
+        [EFFECT]: {
+          handler: s.id,
+          target: me,
+          kind: 'started',
+          state: 'pending',
+          attempts: 0,
+          at,
+          generation: 0,
+        },
+      }))
+    try {
+      if (rows.length) await g.apply(rows, { trusted: true })
+    } catch (err) {
+      ctx.report(err, {
+        handler: POOL,
+        event: { kind: 'started', entity: { eid: me }, name: EFFECT },
+      })
+    }
+  }
+
   // Joining the pool, once: this process claims what it writes from now on,
-  // and what the declared sweeps select is owed a run — how a worker coming
-  // up finds what nobody wrote down.
+  // it owes its start-up work, and what the declared sweeps select is owed a
+  // run — how a worker coming up finds what nobody wrote down.
   let joined = false
   let join = async (g: Graph) => {
     member = true
     if (joined) return
     joined = true
+    await begin(g)
     await sweep(g)
   }
 

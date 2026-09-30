@@ -594,16 +594,12 @@ only what a lifecycle hook needs: the session's own id, and the work it holds a
 lock on. It can create or update that session; file-based instruction loading is
 a separate harness operation.
 
-There used to be a `./boot` export, the single pass a plugin made at start-up.
-It was removed (T-37703), and what it did is now an ordinary effect. A `yak`
-process using the full graph composition writes its own `process` row when it
-opens the graph (`@yaks/process` `started`), so a plugin's start-up work is a
-`created(process)` handler that checks the row is this process
-(`@yaks/session/effects` releases the locks a dead holder left behind;
-`@yaks/spawn/effects` picks up the agents a restart left running). Each takes a
-`lease` (`@yaks/effects`) so that two processes starting at the same time do not
-both do the work. Startup handlers use that ordinary graph event rather than a
-separate `./boot` callback.
+There is no `./boot` export. A plugin's start-up work is an effect declared
+`start: true` (@yaks/effects): each process that starts working the effects owes
+itself one run of it (`@yaks/connections` installs the integrations it builds,
+`@yaks/code` describes the served vocabulary), and a command passing through
+owes none. A `yak` process writes its own `process` row when it opens the graph
+(`@yaks/process` `started`), with the roles it serves.
 
 `./service` is work a plugin keeps doing for as long as the program is running:
 a clock, a poll, a periodic sweep (`@yaks/wake/service` fires the wakes that

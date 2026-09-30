@@ -102,8 +102,8 @@
     },
     "vocab_describe": {
       "effect": true,
-      "created": ["process"],
-      "description": "describe the vocabulary this graph is served with as @yaks/vocab's _package, _comp, _extends, _prop and _before entities whenever a process starts, clearing what it no longer declares; a graph already describing it is checked by the hash its _vocab holds and written nothing"
+      "start": true,
+      "description": "describe the vocabulary this graph is served with as @yaks/vocab's _package, _comp, _extends, _prop and _before entities whenever a process starts working the effects, clearing what it no longer declares; a graph already describing it is checked by the hash its _vocab holds and written nothing"
     }
   }
 }

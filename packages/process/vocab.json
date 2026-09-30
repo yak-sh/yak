@@ -44,6 +44,11 @@
         "cwd": {
           "type": "string",
           "description": "the working directory it was launched in; absent for the same reason as command"
+        },
+        "roles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the roles it serves, where it opened a graph: graph, web, effects, or a plugin's service by its name; absent for a program that opened none"
         }
       }
     },

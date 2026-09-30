@@ -629,7 +629,7 @@ test('a rule sees the graph it is part of, and an effect fires on a commit', asy
   }
 })
 
-test('a start-up pass is an effect on this process being born', async () => {
+test('start-up work is owed by a process that starts working the effects, and by nothing else', async () => {
   let booted: string[] = []
   let mod: Plugged = {
     ...shop,
@@ -637,26 +637,28 @@ test('a start-up pass is an effect on this process being born', async () => {
       docs: [
         doc,
         processDoc,
-        { $defs: { boot: { effect: true, created: ['process'] } } },
+        effectDoc,
+        { $defs: { boot: { effect: true, start: true } } },
       ],
     },
     effects: {
-      effects: (host) => ({
-        // A `process` born here is either this run writing itself in or a
-        // child it launched, and only the first is a start-up.
-        boot: (e) => {
-          if (e.entity.eid == host.me) booted.push(host.me)
-        },
-      }),
+      effects: () => ({ boot: (e) => void booted.push(e.entity.eid) }),
     },
   }
-  let host = await compose({ db: ':memory:', plugins: ['m'] }, only({ m: mod }))
+  let host = await composing(
+    { db: ':memory:', plugins: ['m'] },
+    ['graph', 'effects'],
+    only({ m: mod }),
+  )
   try {
-    // It has already run: composing the host is the start, and the pass ran
-    // inside the batch that wrote the row.
-    assertEquals(booted, [me])
-    // A child's row wakes the same effect and is left alone.
+    let [row] = await host.graph.get([me])
+    assertEquals((row.process as Comp).roles, ['graph', 'effects'])
+    // Writing itself in owes nothing, and nor does a child's row.
     await host.graph.apply([{ entity: { eid: 'kid' }, process: { pid: 1 } }])
+    assertEquals(await host.graph.read('.effect'), [])
+    // Starting to work the effects owes it once, about this process.
+    await host.fx.work(host.graph)
+    await host.fx.work(host.graph)
     assertEquals(booted, [me])
   } finally {
     host.close()

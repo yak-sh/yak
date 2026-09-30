@@ -1145,7 +1145,7 @@ export let compose = async (
       // read the command line (local.ts). A host answering HTTP reports its
       // own, which is the accurate answer — a call arriving over HTTP acts on
       // the machine that received it.
-      process: started()[PROCESS] as Comp,
+      process: started({ roles: [...roles] })[PROCESS] as Comp,
       report: (err) => console.error('tool failed —', err),
       ...replying ? { reply: replying } : {},
     })
@@ -1223,14 +1223,15 @@ export let compose = async (
         ),
       ]).then(() => {})
     }
-    // This process, written in. Last in this function, because the creation of
-    // this row owes what a process starting owes (@yaks/connections installs
-    // what it builds), and the declarations above have to be in place when it
-    // commits. First among the writes, because everything after is attributed
-    // to it and `created.by` is a reference: a process attributing writes to an
-    // entity nothing created would store a dangling id on its very first
-    // write.
-    if (self && opts.process !== false) await g.apply([started()])
+    // This process, written in, with the roles it serves. First among the
+    // writes, because everything after is attributed to it and `created.by`
+    // is a reference: a process attributing writes to an entity nothing
+    // created would store a dangling id on its very first write. What a
+    // process starting owes is owed when it starts working the effects
+    // (@yaks/effects `start`), not here.
+    if (self && opts.process !== false) {
+      await g.apply([started({ roles: [...roles] })])
+    }
     return {
       ...host,
       graph: g,
