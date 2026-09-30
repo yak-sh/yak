@@ -245,8 +245,8 @@ let field = (el: TElement, s: Style, c: Ctx): Seg[] => {
   ]
 }
 
-// The <pre> path's text, sanitized by the same function — a text node's data is
-// never painted raw, whichever branch reaches it.
+// A node's text, sanitized by the same function — a text node's data is never
+// painted raw, whichever branch reaches it.
 let text = (n: TNode): string =>
   n instanceof TText
     ? safe(n.data)
@@ -326,10 +326,28 @@ let flow = (
     return lines
   }
   if (el.localName == 'pre') {
-    // A preformatted block paints its allocated width, including blank rows.
-    // Keep long lines intact so the enclosing layout retains its wrap policy.
-    for (let l of text(el).split('\n')) {
-      lines.push([{ text: l.padEnd(Math.max(0, w), ' '), style: s }])
+    // A preformatted block keeps its newlines and the styles of what it holds
+    // (a highlighter's spans), and paints its allocated width, including
+    // blank rows. Keep long lines intact so the enclosing layout retains its
+    // wrap policy.
+    let rows: Seg[][] = [[]]
+    for (let seg of el.childNodes.flatMap((k) => inline(k, s, c))) {
+      seg.text.split('\n').forEach((t, i) => {
+        if (i) rows.push([])
+        if (t) rows.at(-1)!.push({ ...seg, text: t })
+      })
+    }
+    for (let row of rows) {
+      let used = row.reduce((n, seg) => n + seg.text.length, 0)
+      let pad = ' '.repeat(Math.max(0, w - used))
+      let last = row.at(-1)
+      lines.push(
+        last && alike(last.style, s)
+          ? [...row.slice(0, -1), { ...last, text: last.text + pad }]
+          : pad || !row.length
+          ? [...row, { text: pad, style: s }]
+          : row,
+      )
     }
     return lines
   }
@@ -798,6 +816,10 @@ let rgb = (hex: string) =>
   [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)].map((h) =>
     parseInt(h, 16)
   )
+
+// Whether two styles paint alike, so a run in one can carry on in the other.
+let alike = (a: Style, b: Style) =>
+  ansi([{ text: '', style: a }]) == ansi([{ text: '', style: b }])
 
 /** The bytes a line becomes — every escape the terminal sees is emitted here. */
 export let ansi = (line: Line): string =>

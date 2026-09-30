@@ -368,6 +368,17 @@ test('inline and fenced code wear the Code style', () => {
   assert(output.includes('\x1b[38;2;127;187;179;48;2;52;52;52m  first'))
   assert(output.includes('\x1b[38;2;127;187;179;48;2;52;52;52msecond'))
   assert(!output.includes('\x1b[7m'))
+  // A highlighter's spans keep their colours inside the block.
+  let lit = el(
+    'pre',
+    {},
+    el('code', {}, el('span', { class: 'Title' }, 'let'), ' n\nsay()'),
+  )
+  let [first] = screenful(el('root', {}, lit), 12, 2, dress).lines
+  assertEquals(first.map((s) => [s.text, !!s.style.bold]).slice(0, 2), [
+    ['let', true],
+    [' n       ', false],
+  ])
   let custom = screenful(tree, 40, 4, {
     Code: { fg: '#112233', bg: '#223344' },
   })
