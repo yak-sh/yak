@@ -1266,7 +1266,9 @@ export class Store {
   // to answer "and everyone else?". It is written straight through storage,
   // not through apply(): the platform's word about who may write is not an
   // application write and does not pass the application's guard, which would
-  // refuse it (only an owner may write an `access`).
+  // refuse it (only an owner may write an `access`). The storage unit keeps
+  // the app's archetype pointer in step with the row (@yaks/sqlite `ledger`),
+  // since @yaks/member reads the mode only from the tables that pointer names.
   #mode(m: Mode) {
     let app = this.#get('app')
     if (!app) return

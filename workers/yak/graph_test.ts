@@ -1076,6 +1076,21 @@ test('a stranger is refused on a private app', async () => {
   assertEquals(cake.recipe.serves, 8)
 })
 
+test('a stranger is refused on an app made private after it was written', async () => {
+  // Public at first: the owner's write names the app, so its own entity is
+  // born and classified before the directory says a mode (T-59268).
+  let store = await cookbook(state(), SCHEMA, owner)
+  let write = (v: Vouch, serves: number) =>
+    post(store, '/apply', [{ entity: { eid: CAKE }, recipe: { serves } }], v)
+  assertEquals((await write(owner, 8)).status, 200)
+  let mine: Vouch = { ...owner, access: 'private' }
+  assertEquals((await get(store, '/query?q=.recipe', mine)).status, 200)
+  // The mode reaches this store's own rows, so nobody is refused by the store
+  // itself, as well as by the kernel in front of it.
+  assertEquals((await get(store, '/query?q=.recipe', { app: APP })).status, 401)
+  assertEquals((await write({ app: APP }, 1)).status, 401)
+})
+
 test('an open app is written by nobody', async () => {
   let open: Vouch = { app: APP, access: 'open' }
   let store = await cookbook(state(), SCHEMA, open)
