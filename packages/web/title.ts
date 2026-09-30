@@ -1,6 +1,7 @@
 // Titles derived from component facets, shared by every display door.
 import { idOf } from './types.ts'
-import { local, relative } from './time.ts'
+import { relative } from '@yaks/ui'
+import { local } from './time.ts'
 
 type Face = {
   wake?: { at?: unknown }

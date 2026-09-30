@@ -1,6 +1,5 @@
 // The routes facet, exported as `@yaks/web/routes`: the addresses a person
-// opens in a browser. `/` is the root canvas, `/inspect` the inspector's map,
-// and each entity is at its own id — `/T-9`, or `/%23abc123` for one the
+// opens in a browser. `/` is the root canvas, and each entity is at its own id — `/T-9`, or `/%23abc123` for one the
 // store has not numbered. Every one of them answers the same page, and the app
 // reads the address and draws the rest (main.tsx).
 //
@@ -12,18 +11,18 @@
 // @yaks/api lets the route naming a path most closely answer it, so `/query`,
 // `/ws` and every other plugin's route stay theirs.
 //
-// `/web/*` is what that page loads: the app bundled from main.tsx, its
-// stylesheet (@yaks/ui's in Everforest, then this package's own), icons and
-// manifest, and the vocabulary exactly as the host loaded it, so the browser
-// and the server read one set of components.
+// `/web/*` is what that page loads: the app bundled from main.tsx (@yaks/cli
+// `bundle`), its stylesheet (@yaks/ui's in Everforest, then those of the
+// packages whose views it draws, then this package's own), icons and
+// manifest. The vocabulary is @yaks/api's `/vocab`.
 
 import type { Route } from '@yaks/api'
 import { dead, type Graph } from '@yaks/graph'
 import { prefixOf } from '@yaks/id'
 import { everforest, stylesheet } from '@yaks/ui'
+import { styles as inspecting } from '@yaks/inspect/styles'
 import type { Vocab } from '@yaks/vocab'
-import { bundle } from './bundle.ts'
-import { type Body, kept } from './kept.ts'
+import { type Body, bundle, kept } from '@yaks/cli/page'
 import { addressId } from './url.ts'
 
 /** What this facet reads off the host it is composing into: the vocabulary
@@ -47,9 +46,14 @@ let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
 let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
 
+let read = (url: URL) => fetch(url).then((r) => r.text())
+
 let styles = async () =>
-  (await Promise.all([stylesheet(everforest), text('./styles.css')()]))
-    .join('\n')
+  (await Promise.all([
+    stylesheet(everforest),
+    ...inspecting.map(read),
+    text('./styles.css')(),
+  ])).join('\n')
 
 let files: [string, string, () => Promise<Body>][] = [
   ['styles.css', 'text/css; charset=utf-8', styles],
@@ -88,10 +92,10 @@ let names = async (graph: Graph, path: string): Promise<boolean> => {
   }
 }
 
-/** The page at every entity's address, `/web/*`, and the vocabulary. */
+/** The page at every entity's address, and `/web/*`. */
 export let routes = (host: Hosting): Route[] => {
   let page = kept('/', 'text/html; charset=utf-8', text('./index.html'))
-  let vocab = JSON.stringify(host.vocab.docs)
+  let app = new URL('./main.tsx', import.meta.url)
   let named = async (request: Request) => {
     if (await names(host.graph, new URL(request.url).pathname)) {
       return page(request)
@@ -102,7 +106,6 @@ export let routes = (host: Hosting): Route[] => {
   return [
     { method: 'GET', path: '/*', handle: named },
     { method: 'GET', path: '/', handle: page },
-    { method: 'GET', path: '/inspect', handle: page },
     { method: 'GET', path: '/%23*', handle: page },
     ...letters(host.vocab).flatMap((l): Route[] => [
       { method: 'GET', path: `/${l}-*`, handle: page },
@@ -112,24 +115,17 @@ export let routes = (host: Hosting): Route[] => {
       method: 'GET',
       path: '/web/app.js',
       // Started with the host, so the first page load finds it built.
-      handle: kept('/web/app.js', 'text/javascript; charset=utf-8', bundle, {
-        early: true,
-        closing: host.stopping,
-      }),
+      handle: kept(
+        '/web/app.js',
+        'text/javascript; charset=utf-8',
+        (signal) => bundle(app, signal),
+        { early: true, closing: host.stopping },
+      ),
     },
     ...files.map(([name, type, make]): Route => ({
       method: 'GET',
       path: `/web/${name}`,
       handle: kept(`/web/${name}`, type, make),
     })),
-    {
-      method: 'GET',
-      path: '/web/vocab.json',
-      handle: kept(
-        '/web/vocab.json',
-        'application/json',
-        () => Promise.resolve(vocab),
-      ),
-    },
   ]
 }

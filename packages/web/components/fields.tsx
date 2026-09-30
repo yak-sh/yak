@@ -14,7 +14,7 @@
 import { client } from '@yaks/client'
 import { filters, type Float } from '@yaks/filter'
 import { docs as filterDocs } from '@yaks/filter/vocab'
-import { docs as inspectDocs } from '@yaks/inspect/vocab'
+import { docs as inspectDocs } from '@yaks/inspect/front'
 import type { Cand, Source } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { cache, type Comps } from '../live.ts'

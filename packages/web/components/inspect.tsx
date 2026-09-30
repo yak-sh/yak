@@ -1,22 +1,21 @@
-// The inspector (@yaks/inspect) bound to this page: the host its views are
-// drawn through, in a browser and in the terminal alike. What the views ask
-// is answered by the live store's subscriptions (a query held while the view
-// asking is mounted, an aggregate held or asked once), what they write goes
-// out as this store's changes, and their own state lives in `front`, the
-// page's own graph the query fields keep theirs in.
-//
-// `Inspect` is an entity's page, a card view like any other;
-// `InspectMap` is `/inspect`, the map.
+// The inspector's views (@yaks/inspect) bound to this page: `Inspect`, an
+// entity's page as a card view like any other, in a browser and in the
+// terminal alike. What the views ask is answered by the live store's
+// subscriptions (a query held while the view asking is mounted, an aggregate
+// held or asked once), what they write goes out as this store's changes, and
+// their own state lives in `front`, the page's own graph the query fields keep
+// theirs in. The map, and every page past this one, is the inspector's own
+// page (`/inspect`), which a link here opens.
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import {
   type Answer,
   type Ask,
   type Asks,
+  at,
   type Bundle,
   type Host,
   inspector,
-  MAP,
-  opened,
+  mapPath,
   views,
 } from '@yaks/inspect'
 import { define } from '@yaks/render'
@@ -44,7 +43,6 @@ import { entityPath } from '../url.ts'
 import { editOptions, vocab } from './registry.ts'
 import { ago } from './Stamp.tsx'
 import { navigate } from './nav.tsx'
-import type { FilterProps, Filters } from '@yaks/filter'
 import { fields, front } from './fields.tsx'
 import { Md } from './views/Md.tsx'
 
@@ -55,10 +53,6 @@ let browser = typeof Deno == 'undefined'
 /** The inspector's page for an entity, by eid. */
 export let inspectPath = (eid: string) =>
   `${entityPath(idOf(ent(eid)))}?v=Inspect`
-
-/** The map, with a query in its bar. */
-export let mapPath = (query: string) =>
-  query ? `/inspect?q=${encodeURIComponent(query)}` : '/inspect'
 
 // An entity as the store holds it: its components, its eid on its spine.
 let held = (eid: string): Bundle | undefined => {
@@ -205,92 +199,60 @@ let own = define([{
 }])
 let registry = { ...views, renderers: [...own.renderers, ...views.renderers] }
 
-// A plain click on a link inside the inspector opens it in place.
+// A plain click on a link inside the inspector opens it in place: this page's
+// own addresses here, the inspector's in its own page.
 let inPlace = (ev: MouseEvent) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   let a = (ev.target as Element | null)?.closest?.('a[href]')
   let href = a?.getAttribute('href') ?? ''
-  if (!href.startsWith('/')) return
+  if (!href.startsWith('/') || at(href)) return
   ev.preventDefault()
   navigate(href)
 }
 
-/**
- * The inspector over the query fields `bound`: a browser's float their list
- * over the page, a terminal's paint it in the flow. `bar` is what the map's
- * field is given besides its id (a terminal passes `active` while it types).
- */
-export let inspectorOf = (
-  bound: Filters,
-  bar: () => Partial<FilterProps> = () => ({}),
-) => {
-  let host: Host = {
-    vocab,
-    front,
-    useAnswers,
-    edits: browser,
-    // A reference is written as typed, and the write resolves it.
-    editing: {
-      ...editOptions,
-      parse: (input, prop, b) =>
-        prop.category == 'ref' ? input : editOptions.parse?.(input, prop, b),
-    },
-    apply: async (bundles) => mutate(...changes(await resolved(bundles))),
-    get: held,
-    link: inspectPath,
-    find: mapPath,
-    id: (b) => idOf(ent(b.entity.eid)),
-    kind: (b) => ent(b.entity.eid).kind,
-    name,
-    when: (at) => ago(at),
-    Bar: ({ id, run }) => (
-      <bound.Filter
-        id={id}
-        placeholder='a query: ._comp, .task&.tally=filed.priority…'
-        onKey={(e: KeyboardEvent) => {
-          if (e.key != 'Enter') return
-          e.preventDefault()
-          let line = bound.text(id)
-          run(line)
-          navigate(mapPath(line.trim()))
-        }}
-        {...bar()}
-      />
-    ),
-  }
-  let { Door, io } = inspector(registry, host)
-
-  /** An entity's inspector page. */
-  let Inspect = ({ e }: { e: Ent }) => {
-    let b = held(e.eid)
-    return b
-      ? (
-        <div class='InspectHost' onClick={inPlace}>
-          <Door e={b} view='Inspect.Full' />
-        </div>
-      )
-      : null
-  }
-
-  /** The map, `/inspect`, with the address's query run in its bar. */
-  let InspectMap = ({ query }: { query?: string }) => {
-    useLayoutEffect(() => {
-      front.mutate(opened(front.ent, query))
-      if (query != null) bound.set(MAP, query)
-    }, [query])
-    // Read through the page's graph, so the map repaints as it changes.
-    let map = io.state(MAP)
-    return map
-      ? (
-        <div class='InspectHost' onClick={inPlace}>
-          <Door e={map} view='Inspect.Full' />
-        </div>
-      )
-      : null
-  }
-
-  return { Door, io, Inspect, InspectMap }
+// The host the card view draws the inspector's views through. The map's bar
+// is drawn on the inspector's own page, so a line sent here opens it there.
+let host: Host = {
+  vocab,
+  front,
+  useAnswers,
+  edits: browser,
+  // A reference is written as typed, and the write resolves it.
+  editing: {
+    ...editOptions,
+    parse: (input, prop, b) =>
+      prop.category == 'ref' ? input : editOptions.parse?.(input, prop, b),
+  },
+  apply: async (bundles) => mutate(...changes(await resolved(bundles))),
+  get: held,
+  link: inspectPath,
+  find: mapPath,
+  id: (b) => idOf(ent(b.entity.eid)),
+  kind: (b) => ent(b.entity.eid).kind,
+  name,
+  when: (at) => ago(at),
+  Bar: ({ id }) => (
+    <fields.Filter
+      id={id}
+      placeholder='a query: ._comp, .task&.tally=filed.priority…'
+      onKey={(e: KeyboardEvent) => {
+        if (e.key != 'Enter') return
+        e.preventDefault()
+        globalThis.location?.assign(mapPath(fields.text(id).trim()))
+      }}
+    />
+  ),
 }
+let { Door } = inspector(registry, host)
 
-/** The inspector as a browser draws it. */
-export let { Inspect, InspectMap } = inspectorOf(fields)
+/** An entity's inspector page, as a card view. */
+export let Inspect = ({ e }: { e: Ent }) => {
+  let b = held(e.eid)
+  return b
+    ? (
+      <div class='InspectHost' onClick={inPlace}>
+        <Door e={b} view='Inspect.Full' />
+      </div>
+    )
+    : null
+}

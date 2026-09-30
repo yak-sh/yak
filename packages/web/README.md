@@ -31,12 +31,11 @@ The routes facet (`@yaks/web/routes`, routes.ts) answers:
 
 | path                                    | serves                                    |
 | --------------------------------------- | ----------------------------------------- |
-| `/`, `/inspect`                         | the page (index.html)                     |
+| `/`                                     | the page (index.html)                     |
 | `/<letter>-*`, `/<letter>%23*`, `/%23*` | the page, for each id letter in use       |
 | `/web/app.js`                           | main.tsx, built by `deno bundle` at start |
-| `/web/styles.css`                       | @yaks/ui's stylesheet, then styles.css    |
+| `/web/styles.css`                       | @yaks/ui's, @yaks/inspect's, styles.css   |
 | `/web/manifest.webmanifest`, icons      | the files beside it                       |
-| `/web/vocab.json`                       | the host's vocabulary documents           |
 
 Any other one-segment path is a name an id may be written as (`/lemon-cake`):
 the page when it names an entity, and the page answered 404 when it names
@@ -46,7 +45,7 @@ handlers.
 
 ## How it works
 
-- **Vocabulary.** The page learns the host's documents from `/web/vocab.json`
+- **Vocabulary.** The page learns the host's documents from @yaks/api's `/vocab`
   before any module reads them (types.ts ends with the fetch), so the browser
   and the server speak one set of components. Tests learn the same plugin
   documents by importing testing.ts first; the TUI's main.tsx fetches them from

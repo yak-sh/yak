@@ -6,7 +6,7 @@
  * The views know no store. Each is selected through @yaks/render, declares
  * the queries it needs as data, and draws what the host answers; an edit goes
  * out as bundles. The inspector's own state (a folded section, a lens, the
- * trail, the map's listings) lives in the page's own graph (./vocab.json).
+ * trail, the map's listings) lives in the page's own graph (./front.json).
  *
  * - `views`: every view, as a registry: the `/views` facet (./views.ts).
  * - `inspector(registry, host)`: the `Door` a host draws them through, and
@@ -15,6 +15,11 @@
  *   its bar, and its entity (./Map.ts).
  * - `feedback`: the change that leaves feedback on a part (./Feedback.ts).
  * - `Host`, `View`, `Answer`, `Ask`: the contract (./host.ts).
+ * - `at`, `mapPath`, `pagePath`: the inspector's addresses (./where.ts).
+ *
+ * `./routes` serves its own page at `/inspect` (./main.ts, over ./live.ts),
+ * `./cli` holds it in a terminal as `yak inspect` (./tui.ts), `./styles` is
+ * its stylesheet and `./front` its page's own components.
  *
  * @module
  */
@@ -34,3 +39,4 @@ export type {
 } from './host.ts'
 export { LISTINGS, MAP, opened, QUERY, ran } from './Map.ts'
 export { all, views } from './views.ts'
+export { type At, at, mapPath, pagePath } from './where.ts'

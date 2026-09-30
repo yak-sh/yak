@@ -1,7 +1,7 @@
 /**
  * `Inspect.List`: a listing, its saved query and its rows. A listing is an
  * entity of the inspector's own (`listing{title, query, of, open, limit}`,
- * ./vocab.json), so whether it is folded and how far it reaches is state in
+ * ./front.json), so whether it is folded and how far it reaches is state in
  * the page's own graph, and a press on its fold is a patch to it.
  *
  * What a listing's rows are (`of`) says what it asks beside its query and how

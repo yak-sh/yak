@@ -5,7 +5,8 @@
 import type { ComponentChildren } from 'preact'
 import { signal } from '@preact/signals'
 import * as ui from '@yaks/ui'
-import { pretty, relative } from '../time.ts'
+import { relative } from '@yaks/ui'
+import { pretty } from '../time.ts'
 
 let tick = signal(Date.now())
 if (globalThis.document) setInterval(() => (tick.value = Date.now()), 60_000)

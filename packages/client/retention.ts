@@ -9,7 +9,7 @@
 //
 // The same bookkeeping is written to IndexedDB under the server's epoch, so
 // that a reopened page can show something before the server answers.
-import type { Bundle, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
 import { comps, dead, then, transient } from '@yaks/graph'
 import type { Store } from '@yaks/ram'
 import {
@@ -19,6 +19,7 @@ import {
   delivered,
   ECHO,
   echoed,
+  type Frame,
   hear,
   land,
   outbound,
@@ -35,6 +36,17 @@ import { ANSWER_BYTES, answerCache, type SavedAnswer } from './answers.ts'
 /** How many rows no subscription still covers are kept, in memory and on
  * disk, by default. */
 export const RETENTION_ROWS = 20_000
+
+// What an aggregate's frame answers: `.count`, `.tally` or `.distinct`, the
+// same shape `/query` answers with (@yaks/graph `Reduced`).
+let reducedOf = (f: Frame): Reduced | undefined =>
+  f.count != null
+    ? { count: f.count }
+    : f.tally
+    ? { tally: f.tally }
+    : f.distinct
+    ? { distinct: f.distinct }
+    : undefined
 
 /** The client's working set: what is kept, what is loaded, and what can be
  * shown from the previous page load under the same server epoch. */
@@ -56,6 +68,10 @@ export type Retained = Replica & {
    * answer `graph.read` gives. Nothing is matched locally and no unrelated
    * pending write is added to it. */
   answer: (id: string) => Bundle[]
+  /** an aggregate subscription's last answer (`.count`, `.tally`,
+   * `.distinct`), in place of members; undefined until the server has given
+   * one, and for a subscription that names members */
+  reduced: (id: string) => Reduced | undefined
   /** called when entity data changed, including when a row was evicted from
    * memory. Read the current row from the client: an entity missing here was
    * evicted, which is not proof it was deleted from the graph. */
@@ -109,6 +125,7 @@ export let retention = (
     prime: boolean
     key?: string
     confirmed: boolean
+    reduced?: Reduced
   }
   let subscriptions = new Map<
     string,
@@ -444,6 +461,7 @@ export let retention = (
           .filter((b) => !dead(b)),
       )
     },
+    reduced: (id) => subscriptions.get(id)?.reduced,
     onRows: (fn) => {
       rowListeners.add(fn)
       return () => {
@@ -531,6 +549,9 @@ export let retention = (
       let owns = (eid: Eid) => sub.members.has(eid) || sub.peers.has(eid)
       let before = new Set([...affected].filter(owns))
       let changed = !!frame.reset || !sub.confirmed
+      // An aggregate answers whole every time, in place of members.
+      let reduced = reducedOf(frame)
+      if (reduced) sub.reduced = reduced
       if (frame.reset) {
         sub.members.clear()
         sub.peers.clear()

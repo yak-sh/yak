@@ -64,11 +64,11 @@ export type Options = {
 let nobody: Authenticate = () => null
 
 /** The paths {@link api} answers itself. */
-export let DOORS: string[] = ['/apply', '/query', '/ws']
+export let DOORS: string[] = ['/apply', '/query', '/ws', '/vocab']
 
 /**
- * Build the request handler for a graph: `POST /apply`, `GET|POST /query`, and
- * `/ws` for live subscriptions. Everything else is a 404, and every thrown
+ * Build the request handler for a graph: `POST /apply`, `GET|POST /query`,
+ * `/ws` for live subscriptions, and `GET /vocab`, the vocabulary. Everything else is a 404, and every thrown
  * error becomes the refusal body it describes (see the README's Refusals).
  *
  * ```ts ignore
@@ -103,6 +103,15 @@ export let api = (opts: Options): Handler => {
           return json(await subs.snapshot(q))
         }
         return await ask(graph, request)
+      }
+      // What a client must load to read and write this graph as it does:
+      // the documents and the keyword sets they are written with, for
+      // @yaks/vocab `loadVocab(docs, keywords)`.
+      if (path == '/vocab') {
+        let { docs, keywords } = graph.vocab
+        return request.method == 'GET'
+          ? json({ docs, keywords })
+          : no('/vocab takes GET', 405)
       }
       if (path == '/ws') {
         if (

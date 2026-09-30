@@ -191,10 +191,9 @@ test('a device that refuses storage still opens the canvas', () => {
   }
 })
 
-test('chrome and dead ends are not places you were', () => {
+test('a dead end is not a place you were', () => {
   using _ = fresh()
   navigate('/T-7')
-  navigate('/inspect')
   navigate('/T-404')
 
   launch('/')

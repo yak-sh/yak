@@ -424,7 +424,7 @@ by `/yaks`:
 The tool cache avoids an MCP round trip for ordinary calls. A server response
 that reports a changed roster invalidates or updates the cache.
 
-The package exports six entry points:
+The package exports seven entry points:
 
 - `@yaks/cli` exports command parsing, schema conversion, display and completion
   helpers, MCP transport, token and roster storage, config reading, remote tool
@@ -443,7 +443,13 @@ The package exports six entry points:
   installer's own release, under a config that lets Deno resolve that release
   the day it publishes.
 - `@yaks/cli/release` exports that config (`released`), for anything else that
-  resolves a release from JSR, as @yaks/web's bundler does.
+  resolves a release from JSR, as `@yaks/cli/page`'s bundler does.
+- `@yaks/cli/page` is what a plugin's `./routes` serve a page with: `kept`
+  answers an address with a body made once and kept for the process, bounded,
+  healed on its next request after a failure, and ended as its host closes;
+  `bundle(entry, signal)` makes a page's script and everything it imports into
+  one browser module with `deno bundle`. @yaks/web's app and @yaks/inspect's
+  page are each served this way.
 
 Application commands use `yak command <name> --app <app> key=value`, or the
 short form `yak <app> <name> key=value`. Values are parsed as JSON when

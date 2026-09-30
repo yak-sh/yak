@@ -149,6 +149,15 @@ test('POST /query reads the same line', async () => {
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
 })
 
+test('/vocab is what a client loads to read the graph as it does', async () => {
+  let graph = shopGraph()
+  let handler = api({ graph })
+  let got = await body(await handler(req('/vocab')))
+  let { docs, keywords } = graph.vocab
+  assertEquals(got, JSON.parse(JSON.stringify({ docs, keywords })))
+  assertEquals((await handler(post('/vocab', {}))).status, 405)
+})
+
 test('the door signs the batch, never the client', async () => {
   let handler = shop()
   await handler(post('/apply', [

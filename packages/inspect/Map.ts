@@ -1,7 +1,7 @@
 /**
  * `/inspect`, the map: a query bar and, under it, the listings, each a saved
  * query in the page's own graph. The map is an entity there too (`map`,
- * ./vocab.json), naming its listings in order, and what is typed in its bar
+ * ./front.json), naming its listings in order, and what is typed in its bar
  * is the same entity's `filter` (@yaks/filter), so a host's bar and its key
  * loop write the one row the map reads.
  *

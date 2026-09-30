@@ -24,7 +24,7 @@
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { dead, then } from '@yaks/graph'
 import { asking, clean, ECHO, echoed, SENT } from './mark.ts'
-import { exchange, type Fetch, type Report } from './outbound.ts'
+import { exchange, type Fetch, type Refusal, type Report } from './outbound.ts'
 import { relayed } from './tier.ts'
 import { pacer } from './pace.ts'
 import { type Mine, saying } from './saying.ts'
@@ -101,9 +101,12 @@ export type Sync = {
   /** whether this subscription has successfully applied an answer on the
    * current connection. Cached rows alone never make it ready. */
   ready: (id: string) => boolean
-  /** be called when readiness changes (including on an empty first answer);
-   * not called immediately. The returned function removes the listener. */
+  /** be called when readiness changes (including on an empty first answer),
+   * and when the server refuses a subscription; not called immediately. The
+   * returned function removes the listener. */
   onReady: (fn: (id: string, ready: boolean) => void) => () => void
+  /** why the server refused this subscription, until it answers it again */
+  refusal: (id: string) => Refusal | undefined
   /** Send an input batch whose identity the server must resolve before this
    * graph can hold it. The caller has separated browser-owned components. */
   submit: (sent: Bundle[]) => Promise<Bundle[]>
@@ -142,6 +145,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   // A fresh object on every invalidation guards asynchronous apply completion
   // against a disconnect, re-point or unsubscribe while it was in flight.
   let states = new Map<string, { ready: boolean }>()
+  let refusals = new Map<string, Refusal>()
   let listeners = new Set<(id: string, ready: boolean) => void>()
   let notify = (id: string, ready: boolean) => {
     for (let fn of listeners) fn(id, ready)
@@ -255,7 +259,11 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     again: said.again,
     land: (frame: Frame) => {
       if (frame.refused) {
+        // Kept for the watch to say why, and heard even by one never ready.
+        refusals.set(frame.id, frame.refused)
+        let was = states.get(frame.id)?.ready
         pending(frame.id)
+        if (!was) notify(frame.id, false)
         return report({
           sent: [],
           refused: frame.refused,
@@ -264,6 +272,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       }
       // Another connection's word on a value takes it over (./saying.ts).
       said.heard(frame.relay ?? [])
+      refusals.delete(frame.id)
       let state = states.get(frame.id)
       let safe = frame
       // With a working-set policy, ownership lives there, not in a duplicate
@@ -335,6 +344,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     unsubscribe: (id) => {
       let ready = states.get(id)?.ready
       states.delete(id)
+      refusals.delete(id)
       asks.delete(id)
       members.delete(id)
       w.unsubscribe(id)
@@ -347,6 +357,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       listeners.add(fn)
       return () => listeners.delete(fn)
     },
+    refusal: (id) => refusals.get(id),
     submit,
     idle: () => sending,
     close: () => {
@@ -355,6 +366,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       asks.clear()
       members.clear()
       states.clear()
+      refusals.clear()
       listeners.clear()
     },
   }

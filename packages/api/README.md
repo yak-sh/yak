@@ -51,6 +51,7 @@ curl -G http://localhost:8000/query \
 | `GET /query?q=…` | URL-encoded query          | Selected bundles, or an aggregate value |
 | `POST /query`    | JSON string or `{"q":"…"}` | Same as GET                             |
 | `/ws`            | WebSocket upgrade          | Subscription messages                   |
+| `GET /vocab`     |                            | `{docs, keywords}`: the vocabulary      |
 
 `GET /query?live=1&q=…` answers the same filter against stored bundles and
 values currently held by connected peers. A relayed value disappears when its

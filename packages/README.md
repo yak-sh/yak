@@ -147,18 +147,20 @@ grouped approximately by function, **not** by dependency order.
   `Button`, `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
   `Crumbs`, `Edit`) built with `el` and `block`, each a Preact component, a CSS
   file and terminal sheet entries, so it paints in a browser and in @yaks/tui
-  alike. Themes (Everforest first), and the style guide at `/ui`.
+  alike. Themes (Everforest first), `relative` for a moment in words, and the
+  style guide at `/ui`.
 - **[@yaks/filter](./filter)** — the query field: completion wherever a query is
   typed, in a browser and in a terminal. A domain component built of @yaks/ui's
   `Field` and `Choices`, its state the `filter` component in the page's own
   graph, its actions patches to it, completing through @yaks/query `complete`
   from a vocabulary and a data source the host supplies.
 - **[@yaks/inspect](./inspect)** — the inspector: a graph's data model, its
-  values and how they flow, as pages and listings of @yaks/ui parts in a browser
-  (`/inspect`) and a terminal (`:inspect`). Its views are selected through
-  @yaks/render, ask for the queries they need as data, write edits out as
-  bundles, keep their own state in the page's own graph, and take feedback on
-  any part as an open task aimed at it.
+  values and how they flow, as pages and listings of @yaks/ui parts on a page of
+  its own (`/inspect`, served beside @yaks/api over a @yaks/client box) and in
+  the terminal (`yak inspect`). Its views are selected through @yaks/render, ask
+  for the queries they need as data, write edits out as bundles, keep their own
+  state in the page's own graph, and take feedback on any part as an open task
+  aimed at it.
 - **[@yaks/ram](./ram)** — Implement graph storage with a synchronous in-memory
   `Map` and @yaks/match queries, suitable for browsers and tests. Shared
   operations are tested against SQLite, but RAM does not support every SQL query
@@ -423,6 +425,8 @@ grouped approximately by function, **not** by dependency order.
   serialize. `yak serve` runs @yaks/api's tool over the same composition rather
   than being mandatory for local commands. The host keeps the graph's secrets in
   private files beside its database and hands that vault to every plugin.
+  `./page` is what a plugin's routes serve a page with: a body made once and
+  kept, and a page's script bundled for the browser.
 
 - **[@yaks/admin](./admin)** — The owner's verbs on yaks.app as `yak admin`
   tools: accounts and their sign-in, standing links, the fee, a space's

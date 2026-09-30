@@ -65,7 +65,6 @@ test('every id letter the vocabulary uses has a route, in both cases', () => {
       '/T',
       '/%23abc123',
       '/D-3',
-      '/inspect',
     ]
   ) {
     assertEquals(reached(path)?.method, 'GET', path)
@@ -109,15 +108,4 @@ test('every address answers the one page, which loads the bundled app', async ()
   let page = await reached('/T-9')!.handle(new Request('http://x/T-9'))
   assertEquals(page.headers.get('content-type'), 'text/html; charset=utf-8')
   assertEquals((await page.text()).includes('src="/web/app.js"'), true)
-})
-
-test('the vocabulary is served with a tag the browser revalidates', async () => {
-  let get = (headers: HeadersInit = {}) =>
-    reached('/web/vocab.json')!.handle(
-      new Request('http://x/web/vocab.json', { headers }),
-    )
-  let first = await get()
-  assertEquals(JSON.parse(await first.text()).length, vocab.docs.length)
-  let tag = first.headers.get('etag')!
-  assertEquals((await get({ 'if-none-match': tag })).status, 304)
 })

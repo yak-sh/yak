@@ -10,7 +10,7 @@ import {
   row,
   serverName,
 } from '../live.ts'
-import { InspectMap } from './inspect.tsx'
+import { mapPath } from '@yaks/inspect'
 import { block, Id, Tabs } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
@@ -129,8 +129,8 @@ let Crumbs = () => {
 // and the bar's title text sleeps until that h1 scrolls away). The vim
 // statusbar keeps the floor.
 export let App = () => {
-  // `/` raises the search palette over ANY root — canvas, doc, board,
-  // the inspector's map. The shell owns the hotkey and the one <Search> mount so a
+  // `/` raises the search palette over ANY root — canvas, doc, board.
+  // The shell owns the hotkey and the one <Search> mount so a
   // fullscreened card can search; a pick opens the hit as the root in its
   // default view.
   useEffect(() => {
@@ -149,10 +149,7 @@ export let App = () => {
   // Hold a route sub for the fullscreen root while it's this one — under a
   // partial cache an entity reached by direct URL is in no
   // defining set, so this is what loads it; a no-op under a whole-graph cache.
-  // Computed before the /inspect early return so the hook order stays stable.
-  let at = new URL(route.value, 'http://x')
-  let mapped = at.pathname == '/inspect'
-  let rootEid = mapped ? undefined : screenTarget()?.eid
+  let rootEid = screenTarget()?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
   // `/` on a graph that has answered it holds no canvas makes the first, so a
   // new graph opens on a canvas rather than a 404 (live.ts `makeHome`).
@@ -160,34 +157,6 @@ export let App = () => {
   useEffect(() => bare ? makeHome() : undefined, [bare])
   let goto = (t: string) => navigate(entityPath(idOf(ent(t))))
 
-  // The inspector's map rides beside the canvas: /inspect swaps the body
-  // wholesale; the bar keeps only the brand (the sidebar is the navigation
-  // there), and `?q=` is the query in its bar.
-  if (mapped) {
-    return (
-      <Frame
-        onPointerDown={() => {
-          if (menu.value) menu.value = null
-        }}
-      >
-        <Navigation />
-        <Main>
-          <Bar>
-            <NavigationToggle />
-            <Brand href='/'>Tasks</Brand>
-          </Bar>
-          <Body mod='inspect'>
-            <InspectMap query={at.searchParams.get('q') ?? undefined} />
-          </Body>
-          <Status />
-        </Main>
-        <Menu />
-        <Peek />
-        <Search open={goto} />
-        <Keybindings />
-      </Frame>
-    )
-  }
   let t = screenTarget()
   if (!t) {
     return (
@@ -263,7 +232,7 @@ export let App = () => {
               type='button'
               aria-label='Inspect'
               data-tip='Inspect'
-              onClick={() => navigate('/inspect')}
+              onClick={() => location.assign(mapPath())}
             >
               <Icon name='table' />
             </Tab>

@@ -116,6 +116,36 @@ test('replacement preserves server ranking; content deltas do not reorder', () =
   c.close()
 })
 
+test('an aggregate watch carries its answer, and every later one', () => {
+  let { c, frame } = fixture()
+  let w = c.watch('.doc&.tally=doc.title', server)
+  assertEquals(w.reduced, undefined)
+  let heard = 0
+  w.subscribe(() => heard++)
+  frame({ id: 's1', tally: { a: 2, b: 1 } })
+  assertEquals(w.reduced, { tally: { a: 2, b: 1 } })
+  assertEquals([w.value, w.ready], [[], true])
+  frame({ id: 's1', tally: { a: 3 } })
+  assertEquals(w.reduced, { tally: { a: 3 } })
+  assert(heard >= 2)
+  let n = c.watch('.doc&.count', server)
+  frame({ id: 's2', count: 0 })
+  assertEquals(n.reduced, { count: 0 })
+  c.close()
+})
+
+test('a refused watch says why, until the server answers it', () => {
+  let { c, frame } = fixture()
+  let w = c.watch('.nope', server)
+  let heard = 0
+  w.subscribe(() => heard++)
+  frame({ id: 's1', refused: { error: 'Refused', message: 'no nope' } })
+  assertEquals([w.refused, w.ready, heard], ['no nope', false, 1])
+  frame({ id: 's1', bundles: [row('a')], reset: true })
+  assertEquals([w.refused, w.ready], [undefined, true])
+  c.close()
+})
+
 test('server watches dedupe and dispose independently from locally evaluated watches', () => {
   let { c, frame, sockets } = fixture()
   let a = c.watch('.doc', server)

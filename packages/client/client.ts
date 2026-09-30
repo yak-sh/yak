@@ -310,8 +310,24 @@ export let client = (
             ? cache.answer(id)
             : local!.value.filter((b) => cache.includes(id, b.entity.eid))
         let value = (opts.signal ?? (<T>(value: T) => ({ value })))(read())
+        let reduced = (opts.signal ?? (<T>(value: T) => ({ value })))(
+          cache.reduced(id),
+        )
+        let refused = (opts.signal ?? (<T>(value: T) => ({ value })))(
+          wire!.refusal(id)?.message,
+        )
         let listeners = new Set<(bundles: Bundle[]) => void>()
         let publish = (force = false) => {
+          let answered = cache.reduced(id)
+          if (answered !== reduced.value) {
+            reduced.value = answered
+            force = true
+          }
+          let why = wire!.refusal(id)?.message
+          if (why !== refused.value) {
+            refused.value = why
+            force = true
+          }
           let next = read()
           if (
             next.length !== value.value.length ||
@@ -361,6 +377,12 @@ export let client = (
           get ready() {
             return ready.value && (local?.ready ?? true)
           },
+          get reduced() {
+            return reduced.value
+          },
+          get refused() {
+            return refused.value
+          },
           subscribe: (fn) => {
             listeners.add(fn)
             return () => listeners.delete(fn)
@@ -394,6 +416,12 @@ export let client = (
       },
       get ready() {
         return own.watch.ready
+      },
+      get reduced() {
+        return own.watch.reduced
+      },
+      get refused() {
+        return own.watch.refused
       },
       subscribe: (fn) => {
         if (!active) return () => {}

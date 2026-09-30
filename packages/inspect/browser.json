@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/inspect's front door, the views web's page and the terminal draw, must type-check with only the web platform in scope.",
+  "_": "The browser gate: @yaks/inspect's front door, the views a page and a terminal draw, and the page's own components must type-check with only the web platform in scope. The page itself (main.ts) is checked by the root program.",
   "compilerOptions": {
     "lib": [
       "dom",
@@ -8,6 +8,10 @@
     ],
     "strict": true
   },
+  "entries": [
+    ".",
+    "./front"
+  ],
   "imports": {
     "@yaks/archetype": "../archetype/mod.ts",
     "@yaks/graph": "../graph/mod.ts",

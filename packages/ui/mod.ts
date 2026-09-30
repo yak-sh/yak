@@ -10,6 +10,7 @@
  *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Crumbs`,
  *   `Edit`:
  *   the parts.
+ * - `relative`: a moment in words, what a `Stamp` says.
  * - `everforest`: the first theme; `stylesheet(theme)` dresses a browser,
  *   `sheet(theme)` a terminal (kit.ts).
  * - `Guide`: every part in every variant, the page `./routes` serves at `/ui`.
@@ -21,7 +22,7 @@ export { block, el, type Part, type Props, Surround } from './el.ts'
 export { Dot, shapes, tones } from './Dot.ts'
 export { Id } from './Id.ts'
 export { Menu } from './Menu.ts'
-export { Stamp } from './Stamp.ts'
+export { relative, Stamp } from './Stamp.ts'
 export { Tabs } from './Tabs.ts'
 export { Tip } from './Tip.ts'
 export { Field, type FieldProps } from './Field.ts'

@@ -236,41 +236,6 @@ html {
   flex: 0 0 1px;
 }
 
-/* The inspector (@yaks/inspect, components/inspect.tsx): a page is its
-   trail, its tile and lenses, then its sections; the map is its bar over
-   its listings. The parts are @yaks/ui's; this is only how they stack. */
-.Inspect {
-  display: grid;
-  gap: var(--half-gap);
-  min-width: 0;
-  max-width: 64rem;
-}
-.Inspect_Sections {
-  display: grid;
-  min-width: 0;
-  margin-top: var(--half-gap);
-}
-.Inspect-map > .Field {
-  font-family: var(--mono);
-  font-size: 13px;
-  margin-bottom: var(--half-gap);
-}
-.Inspect_Actions,
-.Inspect_Say {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--half-gap);
-  margin-top: var(--half-gap);
-}
-.Inspect_Actions > .Edit {
-  width: auto;
-}
-.Inspect_Say > .Field {
-  flex: 1 1 20em;
-  min-height: 3lh;
-}
-
 /* The 404 face (App.tsx Lost): the URL named nothing the cache can
    resolve. Prose, so it caps at the reading measure like the doc body;
    the shell around it stays whole. */

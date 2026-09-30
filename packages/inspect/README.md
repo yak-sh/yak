@@ -8,6 +8,10 @@ The views know no store. Each is a @yaks/render registration that declares the
 queries it needs as data (`asks`), draws what the host answers, and sends an
 edit out as bundles. The inspector's own state lives in the page's own graph.
 
+It has a page of its own at `/inspect` and a terminal of its own, `yak inspect`:
+nothing of another package's app around it. A host that lists `@yaks/api` and
+this package serves it.
+
 ## A tour
 
 - **`/inspect`** is the map: a query bar (@yaks/filter) over listings, each a
@@ -18,8 +22,8 @@ edit out as bundles. The inspector's own state lives in the page's own graph.
   populous first. **Packages** and **Relations** (the edge relations, each with
   its reverse reading) follow. `/inspect?q=<line>` opens the map with that line
   run.
-- **A page**, `/<id>?v=Inspect` (the Inspect tab of any card), shows one entity:
-  the trail that led there, its tile, and lenses: `parts`, `markdown` for a
+- **A page**, `/inspect/<id>` (any id the graph resolves), shows one entity: the
+  trail that led there, its tile, and lenses: `parts`, `markdown` for a
   document, `json`. Its parts are sections by kind:
   - a component (`_comp`): About, Properties, References (its own and those
     naming it), Archetypes, Carried by, Feedback, Writes, Fields
@@ -32,9 +36,13 @@ edit out as bundles. The inspector's own state lives in the page's own graph.
     client write it; add or remove a component; delete), Links (edges each way,
     and every entity whose reference names it; add or remove an edge), History
     (the journal's changes to it, by transaction), Feedback
-- **The terminal**: `:inspect [line]` opens the map, `f` types in its bar,
-  `j`/`k` and `l` follow any link on a line. Controls paint as values there;
-  editing is the browser's.
+- **The terminal**: `yak inspect` opens the map, `yak inspect T-9` an entity's
+  page and `yak inspect '<line>'` the map with the line run. Tab and ⇧Tab (or j
+  and k) walk the links, Enter or a click follows one, h goes back, `/` types a
+  query, q quits. It reads through the config's `yak serve`. Controls paint as
+  values there; editing is the page's.
+- **Elsewhere**: a page that registers these views (a card's Inspect tab) draws
+  an entity's page in place, and links to `/inspect` for the rest.
 
 ## The host
 
@@ -43,12 +51,32 @@ hook answering a view's asks while it is mounted, where links go, how an entity
 is named and when a moment was, and `apply`, which writes a change and rejects
 with the reason when the graph refuses it (the section that wrote says it under
 its title). `inspector(registry, host)` gives the `Door` every view is drawn
-through. @yaks/web's host is packages/web/components/inspect.tsx.
+through.
+
+The inspector's own page and terminal share one host, `live()` (./live.ts), and
+it is small: the vocabulary the server serves (@yaks/api `/vocab`), a
+@yaks/client box connected to that server, and the page's own graph. An ask is a
+server-evaluated watch held while its view is mounted, an aggregate is the
+watch's `reduced` and a refusal its `refused`; a write goes to the server as it
+stands (@yaks/sync `submit`), so the graph resolves the ids and aliases a person
+typed. `here()` draws what an address names (./where.ts). Around it the page
+(./main.ts) adds a floating list for the query field and follows links in place;
+the terminal (./tui.ts) adds its keys.
+
+| export     | what it is                                                    |
+| ---------- | ------------------------------------------------------------- |
+| `.`        | the views, `inspector()`, the addresses, the contract         |
+| `./views`  | the views as a registry, for a host that draws them           |
+| `./routes` | `/inspect`, `/inspect/<id>` and what their page loads         |
+| `./cli`    | `yak inspect`                                                 |
+| `./styles` | the CSS a page that draws the views serves after @yaks/ui's   |
+| `./front`  | the components of the page's own graph, never a graph's vocab |
 
 ## State
 
 The page's own graph holds the inspector's state, in components this package
-declares (`vocab.json`, `sync: none`, `durable: connection`):
+declares for that graph alone (`front.json`, exported as `./front`, never a
+`./vocab` a host composes; `sync: none`, `durable: connection`):
 
 | component | on               | what it holds                                   |
 | --------- | ---------------- | ----------------------------------------------- |
@@ -77,9 +105,8 @@ feedback is filed as a task.
   component's Writes section is folded until opened.
 - A `.fields` projection cannot carry a JSON value, so `_comp` rows are asked
   whole.
-- @yaks/web watches whole rows and drops `.fields` from every line, so a
-  projection through a reference never reaches a page. A history asks the
-  transactions and components by reverse hop (`._tx&._changes_tx._change.…`)
-  instead.
+- A history asks the transactions and components by reverse hop
+  (`._tx&._changes_tx._change.…`), which every host answers, rather than a
+  projection through a reference.
 - A live answer adds a new row at its end, so a view that shows an order sorts
   by the column it asked the order on.

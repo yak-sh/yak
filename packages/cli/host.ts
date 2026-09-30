@@ -6,7 +6,8 @@
  * functions behind its tools (`/tools`), what runs after a commit
  * (`/effects`), the work it keeps doing while a process is up (`/service`), the
  * HTTP it adds (`/routes`), its terminal controls (`/cli`), and how its
- * entities are drawn (`/views`, `/tui`).
+ * entities are drawn (`/views`, `/tui`) and styled (`/styles`, the CSS files a
+ * page that draws those views serves).
  * It never says where any of that runs. A process serves roles, and imports
  * only the facets of the roles it serves:
  *

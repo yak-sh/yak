@@ -1,26 +1,7 @@
-// The fleet's time DISPLAY and RECURRENCE: a stamp shown relative or local, and
-// the next firing of a schedule. The phrase grammar (today, 1 hour ago, 9am)
+// The fleet's time DISPLAY and RECURRENCE: a stamp shown local, and the next
+// firing of a schedule (a relative one is @yaks/ui `relative`). The phrase grammar (today, 1 hour ago, 9am)
 // lives in @yaks/query as timeSpan/timeInstant; nothing here parses one.
 import { unitMs } from '@yaks/query'
-
-let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 31_536_000],
-  ['month', 2_592_000],
-  ['week', 604_800],
-  ['day', 86_400],
-  ['hour', 3_600],
-  ['minute', 60],
-]
-let rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-
-export let relative = (iso?: string | null, now = Date.now()) => {
-  if (!iso) return ''
-  let s = (now - Date.parse(iso)) / 1000
-  for (let [unit, size] of SIZES) {
-    if (Math.abs(s) >= size) return rtf.format(Math.round(-s / size), unit)
-  }
-  return 'just now'
-}
 
 // A stamp in full, the way this machine's locale writes one: what a tooltip
 // over a relative age says.

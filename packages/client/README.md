@@ -125,6 +125,19 @@ stop() // Remove this listener.
 dinners.close() // Release this watch handle.
 ```
 
+An aggregate query (`.count`, `.tally=prop`, `.distinct=prop`) answers a value
+instead of rows. A server watch carries it as `reduced`, in the shape `/query`
+answers with (`{count}`, `{tally}` or `{distinct}`), undefined until the server
+has answered; its `value` stays empty:
+
+```ts ignore
+let open = remote.watch('.task&.tally=task.status', { evaluate: 'server' })
+open.reduced // { tally: { done: 12, open: 3 } }, once answered
+```
+
+A server watch the server refused says why in `refused` (the refusal's message),
+and is not ready, until the server answers it again.
+
 Subscriptions report later result or readiness changes; read `value` for the
 initial result. Local evaluation runs after committed graph changes, including
 server updates. Queries about one entity's own values test only changed
@@ -385,8 +398,9 @@ available through `ent()` without becoming query members.
 after their covering subscription ends, within the row budget. They are not
 reported as loaded. A new covering result, deletion, or epoch change still
 reconciles them. Restored coverage is restricted to fields present in memory.
-`Watch.value` remains a bundle array; it does not expose aggregate or window
-metadata. Application integration is described in [@yaks/web](../web/README.md).
+`Watch.value` remains a bundle array; it does not expose window metadata.
+Application integration is described in [@yaks/web](../web/README.md) and
+[@yaks/inspect](../inspect/README.md).
 
 `cache.onRows(eids => ...)` observes entity changes, including commits,
 eviction, epoch changes, and disk restoration. Read the current row with

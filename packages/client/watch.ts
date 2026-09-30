@@ -31,7 +31,7 @@
 // move without the entities the query selects moving, so a projection that
 // reaches runs again rather than being routed.
 
-import type { Bundle, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
 import { only, over, projection, then, transient, wanted } from '@yaks/graph'
 import { type Net, net } from '@yaks/match'
 import { parse } from '@yaks/query'
@@ -57,6 +57,13 @@ export type Watch = {
    * even when cached rows are already on screen. False again on
    * disconnect. */
   readonly ready: boolean
+  /** an aggregate query's answer (`.count`, `.tally`, `.distinct`), in place
+   * of rows: the server's, so only a watch it answers carries one, and only
+   * once it has. Undefined for a query that names members. */
+  readonly reduced?: Reduced
+  /** why the server refused this query (a server watch's), until it answers
+   * it again; a refused watch is not ready */
+  readonly refused?: string
   /** be called with every later result; call the function it returns to stop
    * listening. It is also called when `ready` changes, even if the result is
    * empty. It is NOT called with the current result — read `value` for that,

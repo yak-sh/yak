@@ -7,6 +7,7 @@
     "./config": "./config.ts",
     "./host": "./host.ts",
     "./install": "./install.ts",
+    "./page": "./page.ts",
     "./release": "./release.ts"
   },
   "license": "Apache-2.0",

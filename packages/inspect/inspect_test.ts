@@ -16,7 +16,7 @@ import {
   opened,
   views,
 } from './mod.ts'
-import { docs } from './vocab.ts'
+import { docs } from './front.ts'
 
 // A graph of tasks, their owners and the edges between them.
 let vocab = loadVocab([{

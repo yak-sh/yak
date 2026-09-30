@@ -4,10 +4,13 @@
   "exports": {
     ".": "./mod.ts",
     "./views": "./views.ts",
-    "./vocab": "./vocab.ts"
+    "./front": "./front.ts",
+    "./styles": "./styles.ts",
+    "./routes": "./routes.ts",
+    "./cli": "./cli.ts"
   },
   "license": "Apache-2.0",
-  "description": "The inspector: a graph's data model, its values and how they flow, as pages and listings built of @yaks/ui for a browser and a terminal, with feedback left in place; its own state in the page's own graph.",
+  "description": "The inspector: a graph's data model, its values and how they flow, as pages and listings built of @yaks/ui, on a page of its own at /inspect and in a terminal as yak inspect, with feedback left in place; its own state in the page's own graph.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "preact": "npm:preact@^10.29.1",

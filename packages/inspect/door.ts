@@ -16,7 +16,7 @@ import { type FunctionComponent, h } from 'preact'
 import { signal } from '@preact/signals'
 import { type Context, resolve, type Selection } from '@yaks/render'
 import type { Bundle, Host, Io, View } from './host.ts'
-import { docs } from './vocab.ts'
+import { docs } from './front.ts'
 
 /** What `Door` takes: the bundle, the view it is drawn as, and the context
  * the view is drawn with. */
