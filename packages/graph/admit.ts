@@ -81,6 +81,10 @@ let admitComp = (
 ): Comp | undefined => {
   let alien: string[] = []
   let kept: Comp = {}
+  // What a replica's source derived: kept as it was sent, never checked, since
+  // a derivation may answer wider than the words a client writes (a claimed
+  // task's status is `wip`).
+  let derived: Comp = {}
   let asked = false
   let any = false
   for (let k of Object.keys(patch)) {
@@ -91,8 +95,12 @@ let admitComp = (
     }
     // A computed property is never a write, so a patch of nothing else names
     // the component alone: a server's `task: { status: 'open' }` is a task.
-    if (!p.computed) asked = true
-    if (p.stamped ? !trusted : p.computed && !replica) continue
+    if (p.computed) {
+      if (replica) derived[k] = patch[k]
+      continue
+    }
+    asked = true
+    if (p.stamped && !trusted) continue
     kept[k] = patch[k]
     any = true
   }
@@ -104,7 +112,7 @@ let admitComp = (
   let cut = cast(v, name, kept)
   let errs = v.check(name, cut, { stamped: trusted })
   if (errs.length) throw new Refused(errs.join('; '))
-  return cut
+  return { ...cut, ...derived }
 }
 
 /**

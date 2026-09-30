@@ -348,10 +348,20 @@ test('a computed property is read through the rule the store is given', () => {
 // the server sent it; a graph of its own writes derives it, never takes it.
 test('a replica keeps the computed values its server sent', () => {
   let sent = [{ entity: { eid: 'l1' }, lamp: { watts: 60, glow: 'bright' } }]
-  let mirror = graph({
-    storage: ram(lampVocab, { adopt: true }),
-    vocab: lampVocab,
+  // A derivation may answer wider than what a client may write.
+  let wide = loadVocab({
+    $defs: {
+      lamp: {
+        type: 'object',
+        component: true,
+        properties: {
+          watts: { type: 'number' },
+          glow: { type: 'string', enum: ['dim'], computed: true },
+        },
+      },
+    },
   })
+  let mirror = graph({ storage: ram(wide, { adopt: true }), vocab: wide })
   mirror.apply(sent, { trusted: true, replica: true })
   assertEquals(comp((mirror.get(['l1']) as Bundle[])[0], 'lamp'), {
     watts: 60,
