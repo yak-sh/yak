@@ -171,7 +171,7 @@ export let neighbours = (host: Host, options: Options = {}): Reply => {
       fresh.has(b.entity.eid) && host.vocab.kindOf(b) != 'entity'
     )
     if (!born.length) return []
-    let now = ready(host.vocab, options)
+    let now = await ready(host.vocab, options, host.graph)
     let prose = resolved(now.text, host.derived)
     // The first few that have text: a plan's links come back beside its tasks.
     let made = sources(

@@ -77,31 +77,66 @@ need not contain any search word. It returns at most 20 hits by default;
 
 ## As a plugin
 
-The plugin configuration selects a model, endpoint, credentials and text fields:
+The plugin configuration names a provider and a model, the way a session names
+what serves it, and the text fields:
 
 ```json
 {
   "plugins": [
     "@yaks/doc",
+    "@yaks/model",
     {
       "use": "@yaks/embedding",
       "with": {
         "embedder": {
-          "via": "ollama",
-          "model": "qwen3-embedding",
-          "base": "https://ollama.example",
-          "key": { "secret": "OLLAMA_API_KEY" },
-          "dim": 384
+          "provider": "ollama",
+          "model": "granite-embedding-30m-english"
         },
         "text": ["doc.title"],
         "neighbours": 8,
-        "floor": 0.78,
         "after": 3000
       }
     }
   ]
 }
 ```
+
+A provider reached over HTTP is a row in the graph ([@yaks/model](../model)):
+`provider{name, base, api}` says where it answers and which API it speaks
+(`ollama`, or `openai` for an OpenAI-compatible server), and a `serves` edge
+from it to the `model` row says what it calls that model (`serves.name`). So
+choosing another model, or another server, is a write, never a release:
+
+```json
+[
+  {
+    "entity": { "eid": "$ollama" },
+    "provider": {
+      "name": "ollama",
+      "base": "https://ollama.example",
+      "api": "ollama"
+    }
+  },
+  {
+    "entity": { "eid": "$granite" },
+    "model": { "name": "granite-embedding-30m-english" }
+  },
+  {
+    "entity": { "eid": "$serves" },
+    "edge": { "from": "$ollama", "to": "$granite" },
+    "serves": { "name": "granite-embedding:30m" }
+  }
+]
+```
+
+The vector space is the model's own name (`granite-embedding-30m-english`), and
+its width where `dim` cuts it (`qwen3-embedding-0.6b#256`), whoever serves it:
+the same model moved to another provider keeps its vectors. A provider that
+wants a token is given one beside it, `"key": { "secret": "NAME" }`. Workers AI
+outside a Worker is such a row as well: `api: "openai"`, its base
+`https://api.cloudflare.com/client/v4/accounts/<account>/ai`, and a token for
+`key`. Two providers run in this process and need no row: `hash`, the offline
+embedder below, and `model2vec`.
 
 `@yaks/embedding/rules` creates the vector tables through the host's SQL driver.
 Its `extend()` export registers the `.near` compiler; its `meaning()` factory
@@ -116,7 +151,7 @@ Options:
 
 | Option       | Meaning                                                                               |
 | ------------ | ------------------------------------------------------------------------------------- |
-| `embedder`   | `{ via: 'hash', dim? }`, `{ via: 'model2vec', model, dim? }`, or a remote embedder    |
+| `embedder`   | `{ provider, model?, dim?, key?, chars? }`: `hash`, `model2vec`, or a provider row    |
 | `text`       | Selected `component.property` names; defaults to the properties marked `search: true` |
 | `neighbours` | Maximum `.near` results, default 8                                                    |
 | `floor`      | Minimum similarity for `.near`, default 0                                             |
@@ -126,10 +161,10 @@ Options:
 
 The `batch` option bounds one sweep; it does not mean a graph transaction.
 
-Missing embedder configuration or a missing configured key does not prevent
-startup. `vector_check` reports the missing configuration, and the service keeps
-looking until it arrives. An unknown provider is reported as unavailable;
-invalid `text` names are also reported.
+Missing embedder configuration, a missing configured key, or a provider or model
+row not written yet does not prevent startup. `vector_check` reports what is
+missing, and the service keeps looking until it arrives, reading the rows again
+on every pass. Invalid `text` names are also reported.
 
 The CLI resolves `{ "secret": "NAME" }` through [@yaks/secrets](../secrets) each
 time options are read, so a key written through the graph after the host started
@@ -174,19 +209,22 @@ Queries compare only vectors under the selected model name. Changing that name
 makes existing text stale and causes the next sweep to recompute it.
 
 `hashEmbedder(dim?)` defaults to 64 dimensions. It hashes words into counts and
-normalizes the resulting vector. `remote({ via, model, base, key?, dim? })`
+normalizes the resulting vector. `remote({ api, model, base, key?, dim? })`
 posts to Ollama's `/api/embed` or an OpenAI-compatible `/v1/embeddings`
-endpoint; the calls made in one turn of the event loop ride in one request, up
-to `count` (64) inputs and `load` (128,000) characters each. Credentials are
-arguments; `remote()` itself reads no environment variables. Optional `dim`
-truncates and renormalizes vectors; use it with a model that supports that
-operation. Two widths of one model are two spaces, so a `dim` is part of the
-stored model name (`qwen3-embedding:0.6b#384`). `chars` (default 30,000) bounds
-the text sent for one vector: a server refuses input past its model's context
-rather than truncating it. A status saying the input was refused (400, 413, 422)
+endpoint, asking for `model` by the name the server knows it by; `space` names
+the vectors otherwise. The calls made in one turn of the event loop ride in one
+request, up to `count` (64) inputs and `load` (128,000) characters each.
+Credentials are arguments; `remote()` itself reads no environment variables.
+Optional `dim` truncates and renormalizes vectors; use it with a model that
+supports that operation. Two widths of one model are two spaces, so a `dim` is
+part of the stored model name (`qwen3-embedding-0.6b#256`). `chars` (default
+30,000) bounds the text sent for one vector. A server may refuse a text past its
+model's context rather than truncate it, as Ollama does for some texts on a
+512-token model, so a text refused alone is asked again as its opening half,
+down to 256 characters. A status saying the input was refused (400, 413, 422)
 rejects with `Refused`; any other failure rejects with the error.
 
-`{ via: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`
+`{ provider: 'model2vec', model: 'minishlab/potion-retrieval-32M@6fc8051', dim: 256 }`
 runs a Model2Vec static model in this process ([@yaks/model2vec](../model2vec)):
 about a millisecond for a 500-token text on one core, fast enough to embed every
 prompt. The model is fetched from the Hugging Face hub on the first embed and

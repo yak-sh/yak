@@ -23,14 +23,16 @@
 // own, a few seconds under the write lock, which is why one process makes it
 // and every other only reads it.
 //
-// The config is read on every pass (./options.ts). A server whose key has not
-// arrived starts up, stores no vectors, reports what it is waiting for once,
-// and keeps looking, so the first pass after the key appears is the one that
-// embeds and nothing has to be restarted. A pass that fails is reported where
+// The config, and the provider and model rows it names, are read on every
+// pass (./options.ts). A server whose key or provider has not arrived starts
+// up, stores no vectors, reports what it is waiting for once, and keeps
+// looking, so the first pass after it appears is the one that embeds and
+// nothing has to be restarted. A pass that fails is reported where
 // it happens, and its work stays queued for the next look: a machine that
 // cannot reach its model has stale vectors, not a broken graph.
 
 import { sleep } from '@yaks/effects'
+import type { Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import type { Derived, Driver } from '@yaks/sql'
 import { resolved } from './fields.ts'
@@ -41,12 +43,13 @@ import { build } from './native.ts'
 /** How long an empty queue waits before the loop looks again, by default. */
 export let AFTER = 3_000
 
-/** What the service reads: the vocabulary, the database, and the host's
- * derived columns, through which a body @yaks/blob stores by address is read
- * as its text. */
+/** What the service reads: the vocabulary, the database, the graph the
+ * provider and model rows are read from, and the host's derived columns,
+ * through which a body @yaks/blob stores by address is read as its text. */
 export type Host = {
   vocab: Vocab
   sql: Driver
+  graph: Pick<Graph, 'get'>
   derived?: Derived
 }
 
@@ -63,7 +66,7 @@ export let service = async (
   let told = new Set<string>()
   for (;;) {
     try {
-      let now = ready(host.vocab, options)
+      let now = await ready(host.vocab, options, host.graph)
       if (now.embedder) {
         let text = resolved(now.text, host.derived)
         let done = await drain(host.sql, text, now.embedder, {

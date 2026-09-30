@@ -94,14 +94,16 @@ grouped approximately by function, **not** by dependency order.
 
 - **[@yaks/embedding](./embedding)** — Store vectors and compile
   `.near=<entity>` and `.order=similar`. An injected embedding function
-  determines what similarity means. Triggers queue the entities whose text a
-  write touched, from any process, and the plugin's service settles the queue a
-  batch at a time.
+  determines what similarity means; as a plugin, a config names a provider and a
+  model, and a provider reached over HTTP (Ollama, an OpenAI-compatible server)
+  is a `provider` row serving the `model` row. Triggers queue the entities whose
+  text a write touched, from any process, and the plugin's service settles the
+  queue a batch at a time.
 
 - **[@yaks/model2vec](./model2vec)** — Embed text in-process with a Model2Vec
   static model read from the Hugging Face hub: a millisecond a text, no native
   code, the same vector on a server, in a Worker and in a browser. The embedder
-  `@yaks/embedding` names `via: "model2vec"`.
+  `@yaks/embedding` names `provider: "model2vec"`.
 
 - **[@yaks/match](./match)** — Evaluate supported query AST clauses against
   bundles in memory. Tests compare shared behavior with SQL, but search,

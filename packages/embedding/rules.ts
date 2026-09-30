@@ -18,7 +18,7 @@
 // here rather than by the store. The one thing `./vocab` does declare is the
 // index's check (./tools.ts), which is a tool and not a component.
 
-import type { Plugin } from '@yaks/graph'
+import type { Graph, Plugin } from '@yaks/graph'
 import type { Reply } from '@yaks/tools'
 import type { Derived, Extension } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
@@ -26,7 +26,7 @@ import { semantic } from './compile.ts'
 import type { Driver } from '@yaks/sql'
 import { schema } from './ddl.ts'
 import { resolved } from './fields.ts'
-import { embedderOf, type Options, ready } from './options.ts'
+import { type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
 
@@ -54,7 +54,7 @@ export let extend = (
   host: { sql: Driver },
   options: Options = {},
 ): Extension[] => {
-  let { model } = embedderOf(options)
+  let model = spaceOf(options.embedder)
   return model
     ? [semantic(host.sql, { model }, {
       limit: options.neighbours,
@@ -63,15 +63,20 @@ export let extend = (
     : []
 }
 
-/** A phrase search over this graph's vectors. Resolve options on every call:
- * the service may have started embedding after a key arrived, without a new
- * host or a new search function. */
+/** A phrase search over this graph's vectors. Resolve options and the rows
+ * they name on every call: the service may have started embedding after a key
+ * or a provider arrived, without a new host or a new search function. */
 export let meaning = (
-  host: { sql: Driver; vocab: Vocab; derived?: Derived },
+  host: {
+    sql: Driver
+    vocab: Vocab
+    graph: Pick<Graph, 'get'>
+    derived?: Derived
+  },
   options: Options = {},
 ): (words: string, opts?: MeaningOpts) => Promise<Hit[]> =>
 async (words, opts) => {
-  let now = ready(host.vocab, options)
+  let now = await ready(host.vocab, options, host.graph)
   return now.embedder
     ? await search(
       host.sql,

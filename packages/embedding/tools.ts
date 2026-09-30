@@ -27,6 +27,7 @@
 // reported every time the tool is called rather than once into a log nobody
 // kept.
 
+import type { Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { checked, type Finding } from '@yaks/tools'
 import { as, col, type Driver, fn, select, table } from '@yaks/sql'
@@ -48,17 +49,17 @@ let newest = (db: Driver): string | null =>
 /** The implementation behind the tool ./vocab.json declares, over this
  * server's own database connection — which is why this export is a factory. */
 export let runs = (
-  host: { sql: Driver },
+  host: { sql: Driver; graph: Pick<Graph, 'get'> },
   options: Options = {},
 ): Runs => ({
-  vector_check: (call) => {
+  vector_check: async (call) => {
     let about = 'the vector index is being built by the sweep that owns it'
     let minutes = options.stale ?? STALE
     let warn = (text: string) =>
       checked(call.entity.eid, about, [{ level: 'warn', text }])
     // What this server is waiting for, if anything: a sweep that cannot embed
     // is not behind on a build, it has not started at all.
-    let { waiting } = embedderOf(options)
+    let { waiting } = await embedderOf(options, host.graph)
     if (waiting) {
       return warn(
         `nothing is being embedded — ${waiting}. The sweep starts on its ` +

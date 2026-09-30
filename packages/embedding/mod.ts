@@ -75,9 +75,10 @@
  * synchronously; searching new words embeds them asynchronously.
  *
  * As a plugin, `./rules` creates the vector table, registers the `.near`
- * compiler and answers phrase searches; `./service` settles the queue. The
- * model, endpoint and key are named beside the plugin in the config. It
- * declares no component — no client ever writes a vector.
+ * compiler and answers phrase searches; `./service` settles the queue. A
+ * provider and a model are named beside the plugin in the config, and a
+ * provider reached over HTTP is a `provider` row serving the `model` row
+ * (@yaks/model). It declares no component — no client ever writes a vector.
  *
  * It assumes the storage layout @yaks/sql's SQLite dialect reads and
  * {@link https://jsr.io/@yaks/sqlite | @yaks/sqlite} creates: an `entity`

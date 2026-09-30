@@ -158,7 +158,7 @@ test('a text the model refuses is dropped; the batch it rode in is not', async (
   // a server that refuses a whole request for one input in it
   let asked = 0
   let picky = remote({
-    via: 'ollama',
+    api: 'ollama',
     model: embedder.model,
     base: 'http://box',
     fetch: (_, init) => {

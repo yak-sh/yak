@@ -32,9 +32,12 @@ Three things, and no transport:
   `gpt-6-astra`. A model is the model itself, whoever serves it. A provider's
   offering of a model is an edge, provider `serves` model, carrying
   `serves.name`: what that provider calls the model, sent as the model of every
-  request it serves. The `tool` component belongs to [@yaks/tools](../tools),
-  not this vocabulary. `Tool` here is the provider-neutral TypeScript type for a
-  callable tool description.
+  request it serves. A provider reached over HTTP says where in `base` (its root
+  URL) and which API it speaks in `api` (`ollama`, or `openai` for an
+  OpenAI-compatible one): that is how [@yaks/embedding](../embedding) reaches an
+  embedding model, a provider and a model named in its config. The `tool`
+  component belongs to [@yaks/tools](../tools), not this vocabulary. `Tool` here
+  is the provider-neutral TypeScript type for a callable tool description.
 
 What a request cost is two more components. `price{input, output, cached}` on a
 model's row is what it costs, in dollars per million tokens;

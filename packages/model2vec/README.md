@@ -57,7 +57,7 @@ own `dimensionality` loads one. The narrower table is what is kept in memory.
   "use": "@yaks/embedding",
   "with": {
     "embedder": {
-      "via": "model2vec",
+      "provider": "model2vec",
       "model": "minishlab/potion-retrieval-32M@6fc8051",
       "dim": 256
     }

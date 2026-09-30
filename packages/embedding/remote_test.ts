@@ -24,7 +24,7 @@ let answered = (body: unknown, ok = true, status = 200) => {
 test('ollama: /api/embed, and the vector out of `embeddings`', async () => {
   let { go, seen } = answered({ embeddings: [[3, 4]] })
   let e = remote({
-    via: 'ollama',
+    api: 'ollama',
     model: 'qwen3',
     base: 'https://box/',
     fetch: go,
@@ -38,7 +38,7 @@ test('ollama: /api/embed, and the vector out of `embeddings`', async () => {
 
 test('a text longer than the model reads is sent as its opening', async () => {
   let { go, seen } = answered({ embeddings: [[1]] })
-  let e = remote({ via: 'ollama', model: 'm', base: 'b', chars: 3, fetch: go })
+  let e = remote({ api: 'ollama', model: 'm', base: 'b', chars: 3, fetch: go })
   await e.embed('abcdef')
   assertEquals(JSON.parse(seen[0].init!.body!).input, ['abc'])
 })
@@ -46,7 +46,7 @@ test('a text longer than the model reads is sent as its opening', async () => {
 test('openai: /v1/embeddings, the vector out of `data`, and the key as a bearer', async () => {
   let { go, seen } = answered({ data: [{ embedding: [1, 0] }] })
   let e = remote({
-    via: 'openai',
+    api: 'openai',
     model: 'text-embedding-3-small',
     base: 'https://api.example',
     key: 'sk-x',
@@ -60,7 +60,7 @@ test('openai: /v1/embeddings, the vector out of `data`, and the key as a bearer'
 test('a dim keeps the leading coordinates, renormalized', async () => {
   let { go } = answered({ embeddings: [[3, 4, 99]] })
   let e = remote({
-    via: 'ollama',
+    api: 'ollama',
     model: 'm',
     base: 'https://box',
     dim: 2,
@@ -77,7 +77,7 @@ test('a model narrower than the dim asked for is a refusal, not a pad', () => {
 test('a status and a shapeless answer both throw, with the body in the words', async () => {
   let bad = answered({ error: 'no such model' }, false, 404)
   let e = remote({
-    via: 'ollama',
+    api: 'ollama',
     model: 'gone',
     base: 'https://box',
     fetch: bad.go,
@@ -85,7 +85,7 @@ test('a status and a shapeless answer both throw, with the body in the words', a
   await assertRejects(async () => await e.embed('x'), Error, '404')
   let empty = answered({ embeddings: [] })
   let f = remote({
-    via: 'ollama',
+    api: 'ollama',
     model: 'm',
     base: 'https://box',
     fetch: empty.go,
@@ -96,7 +96,7 @@ test('a status and a shapeless answer both throw, with the body in the words', a
 test('calls made together ride together, split by count and in order', async () => {
   let seen: string[][] = []
   let e = remote({
-    via: 'openai',
+    api: 'openai',
     model: 'm',
     base: 'b',
     count: 2,
@@ -120,7 +120,7 @@ test('calls made together ride together, split by count and in order', async () 
 test('a refused input is Refused; an unreachable server is not', async () => {
   let at = (status: number) =>
     remote({
-      via: 'ollama',
+      api: 'ollama',
       model: 'm',
       base: 'b',
       fetch: answered({}, false, status).go,
@@ -128,4 +128,26 @@ test('a refused input is Refused; an unreachable server is not', async () => {
   await assertRejects(() => Promise.resolve(at(413).embed('x')), Refused)
   let down = await Promise.resolve(at(503).embed('x')).catch((e) => e)
   assert(!(down instanceof Refused))
+})
+
+test('a text refused past the model context is asked again as its opening half', async () => {
+  let sent: number[] = []
+  let e = remote({
+    api: 'ollama',
+    model: 'm',
+    base: 'b',
+    fetch: (_, init) => {
+      let [text]: string[] = JSON.parse(init!.body!).input
+      sent.push(text.length)
+      let fits = text.length <= 300
+      let body = fits ? { embeddings: [[1]] } : { error: 'exceeds the context' }
+      return Promise.resolve({
+        ok: fits,
+        status: fits ? 200 : 400,
+        text: () => Promise.resolve(JSON.stringify(body)),
+      })
+    },
+  })
+  assertEquals([...await e.embed('x'.repeat(1000))], [1])
+  assertEquals(sent, [1000, 500, 250])
 })

@@ -13,9 +13,11 @@ import { fields } from './fields.ts'
 
 let PLUGINS: Plug[] = [
   '@yaks/kernel',
+  '@yaks/edge',
   '@yaks/doc',
   '@yaks/task',
   '@yaks/memory',
+  '@yaks/model',
 ]
 
 // A graph with this plugin, its embedder as given.
@@ -68,7 +70,7 @@ let hits = (answer: Bundle[]): Comp[] =>
 let made = (answer: Bundle[]) => answer.find((b) => b.created)!.entity.eid
 
 test('a new task answers its nearest tasks, and not itself or a memory', async () => {
-  let yak = await open({ via: 'hash' })
+  let yak = await open({ provider: 'hash' })
   try {
     await stocked(yak)
     let answer = await call(yak, 'task_new', {
@@ -122,7 +124,7 @@ test('a new task answers its nearest tasks, and not itself or a memory', async (
 })
 
 test('a comment answers comments near it, shown by their words', async () => {
-  let yak = await open({ via: 'hash' })
+  let yak = await open({ provider: 'hash' })
   try {
     await stocked(yak)
     // The first comment's vector is made as it is answered, not by a sweep.
@@ -145,12 +147,20 @@ test('a comment answers comments near it, shown by their words', async () => {
 })
 
 test('a model out of reach leaves a twin found by its words', async () => {
-  let yak = await open({
-    via: 'ollama',
-    model: 'm',
-    base: 'http://127.0.0.1:9',
-  })
+  let yak = await open({ provider: 'box', model: 'm' })
   try {
+    await yak.graph.apply([
+      {
+        entity: { eid: '$box' },
+        provider: { name: 'box', api: 'ollama', base: 'http://127.0.0.1:9' },
+      },
+      { entity: { eid: '$m' }, model: { name: 'm' } },
+      {
+        entity: { eid: '$serves' },
+        edge: { from: '$box', to: '$m' },
+        serves: { name: 'm' },
+      },
+    ])
     await stocked(yak)
     let answer = await call(yak, 'task_new', {
       title: 'Fix the login page crash',

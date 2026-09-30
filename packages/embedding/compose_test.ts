@@ -53,7 +53,7 @@ let host = () =>
       {
         use: '@yaks/embedding',
         with: {
-          embedder: { via: 'hash' },
+          embedder: { provider: 'hash' },
           text: ['doc.title', 'doc.body'],
           after: 0,
         },
@@ -109,12 +109,7 @@ test('a config with no key composes, and nothing about the boot is different', a
       {
         use: '@yaks/embedding',
         with: {
-          embedder: {
-            via: 'ollama',
-            model: 'qwen3',
-            base: 'https://box',
-            key: undefined,
-          },
+          embedder: { provider: 'gpu', model: 'qwen3', key: undefined },
           text: ['doc.title', 'doc.body'],
           after: 5,
         },
@@ -158,7 +153,7 @@ test('a host that closes takes its service with it', async () => {
         '@yaks/doc',
         {
           use: '@yaks/embedding',
-          with: { embedder: { via: 'hash' }, after: 5 },
+          with: { embedder: { provider: 'hash' }, after: 5 },
         },
       ],
     }, ['graph', '@yaks/embedding'])

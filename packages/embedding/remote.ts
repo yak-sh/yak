@@ -6,15 +6,21 @@
 // (where the token arrives from the process), in a Worker (where it arrives on
 // `env`), and in a test (where it is made up and the `fetch` is a stub).
 //
-// Two kinds of server, one declaration. Ollama answers `/api/embed` with
-// `{embeddings: [[…]]}`, and an OpenAI-compatible one answers `/v1/embeddings`
-// with `{data: [{embedding: […]}]}`; `via` names which, and nothing else here
-// differs. A failure — an error status, an unexpected body, a timeout — is
-// thrown, because the sweep is what decides what an unreachable embedder means
-// (it stops, and the corpus stays stale), and a vector invented here to avoid
-// the error would be worse than no vector at all. A status saying the input
-// itself was refused throws {@link Refused}, which the sweep treats as one
-// text it cannot embed rather than a model it cannot reach.
+// Two APIs, one declaration. Ollama answers `/api/embed` with
+// `{embeddings: [[…]]}`, and an OpenAI-compatible server answers
+// `/v1/embeddings` with `{data: [{embedding: […]}]}`; `api` names which, and
+// nothing else here differs. Which server speaks which is the provider row's
+// to say (./options.ts), not this file's.
+//
+// A failure — an error status, an unexpected body, a timeout — is thrown,
+// because the sweep is what decides what an unreachable embedder means (it
+// stops, and the corpus stays stale), and a vector invented here to avoid the
+// error would be worse than no vector at all. A status saying the input itself
+// was refused throws {@link Refused}, which the sweep treats as one text it
+// cannot embed rather than a model it cannot reach. A server may refuse a text
+// past its model's context rather than truncate it, as Ollama does for some
+// texts on a 512-token model, so a text refused alone is asked again as its
+// opening half, down to {@link SHORTEST} characters.
 //
 // Calls made together are sent together. Both servers take an array of inputs,
 // and a batch of 64 costs a local model about a seventh of the time per vector
@@ -37,12 +43,20 @@ export type Fetch = (
   },
 ) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>
 
-/** A hosted or local embedding endpoint, as a config names one. */
+/** The APIs spoken here: Ollama's own, and OpenAI-compatible. */
+export type Api = 'ollama' | 'openai'
+
+/** A hosted or local embedding endpoint: a provider, and the model asked of
+ * it. */
 export type Remote = {
-  /** which endpoint shape: Ollama's native one, or OpenAI-compatible */
-  via: 'ollama' | 'openai'
-  /** the model to ask for — it names the space every stored vector lives in */
+  /** which API the server speaks: Ollama's own, or OpenAI-compatible */
+  api: Api
+  /** what the server calls the model, sent with every request */
   model: string
+  /** the space the vectors live in (default {@link space} of the model): the
+   * model's own name, whoever serves it, where the provider calls it
+   * something else */
+  space?: string
   /** the server's root, without a path (`https://ollama.example`) */
   base: string
   /** a bearer token; a server on your own network may need none */
@@ -74,16 +88,20 @@ export let COUNT = 64
  * is split before a server spends the whole timeout on it. */
 export let LOAD = 128_000
 
+/** The shortest text asked again after a refusal: one refused at this
+ * length is refused for more than its length. */
+export let SHORTEST = 256
+
 // The statuses that mean the input was refused, not the request: malformed,
 // too large, or unprocessable.
 let REFUSED = [400, 413, 422]
 
-let vectorsOf = (via: Remote['via'], body: unknown): number[][] | undefined => {
+let vectorsOf = (api: Api, body: unknown): number[][] | undefined => {
   let said = body as {
     embeddings?: number[][]
     data?: { embedding?: number[]; index?: number }[]
   }
-  return via == 'ollama' ? said.embeddings : said.data
+  return api == 'ollama' ? said.embeddings : said.data
     ?.toSorted((a, b) => (a.index ?? 0) - (b.index ?? 0))
     .map((d) => d.embedding ?? [])
 }
@@ -233,7 +251,7 @@ export let remote = (said: Remote): Embedder => {
       'content-type': 'application/json',
     }
     if (said.key) headers.authorization = `Bearer ${said.key}`
-    let res = await go(`${root}${PATH[said.via]}`, {
+    let res = await go(`${root}${PATH[said.api]}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ model: said.model, input }),
@@ -243,17 +261,30 @@ export let remote = (said: Remote): Embedder => {
     if (!res.ok) {
       let Fault = REFUSED.includes(res.status) ? Refused : Error
       throw new Fault(
-        `@yaks/embedding: ${said.via} answered ${res.status} — ${
+        `@yaks/embedding: ${said.api} answered ${res.status} — ${
           raw.slice(0, 200)
         }`,
       )
     }
     return answered(
-      said.via,
+      said.api,
       input,
-      vectorsOf(said.via, JSON.parse(raw)),
+      vectorsOf(said.api, JSON.parse(raw)),
       said.dim,
     )
   }
-  return batched(space(said), ask, said)
+  // One text, alone and refused, is asked again as its opening half.
+  let fit = async (input: string[]): Promise<Float32Array[]> => {
+    try {
+      return await ask(input)
+    } catch (error) {
+      let [text] = input
+      if (
+        !(error instanceof Refused) || input.length > 1 ||
+        text.length <= SHORTEST
+      ) throw error
+      return fit([text.slice(0, text.length >> 1)])
+    }
+  }
+  return batched(said.space ?? space(said), fit, said)
 }

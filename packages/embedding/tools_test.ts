@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { col, type Driver, eq, val } from '@yaks/sql'
-import { mem, shelf, stocked } from './testing.ts'
+import { mem, none, shelf, stocked } from './testing.ts'
 import { TABLE } from './ddl.ts'
 import { build, install } from './native.ts'
 import { type Options, runs } from './tools.ts'
@@ -16,8 +16,8 @@ let checkup = async (
   sql: Driver,
   options: Options = {},
 ) => {
-  let [said] = await runs({ sql }, {
-    embedder: { via: 'hash' },
+  let [said] = await runs({ sql, graph: none }, {
+    embedder: { provider: 'hash' },
     ...options,
   }).vector_check(
     { entity: { eid: 'c1' }, call: { args: {} } },
@@ -88,12 +88,7 @@ test('a host still waiting for its config says what it is waiting for', async ()
   assertEquals(said.level, 'warn')
   assert(said.body.includes('no `embedder` is named'), said.body)
   let key = await checkup(shelf(), {
-    embedder: {
-      via: 'ollama',
-      model: 'qwen3',
-      base: 'https://box',
-      key: undefined,
-    },
+    embedder: { provider: 'gpu', model: 'qwen3', key: undefined },
   })
   assertEquals(key.level, 'warn')
   assert(key.body.includes('waiting for a key'), key.body)

@@ -7,9 +7,9 @@ import { parse } from '@yaks/query'
 import { compile, tally } from '@yaks/sql'
 import { extend, meaning, rules } from './rules.ts'
 import { TABLE } from './ddl.ts'
-import { mem, shop, stocked } from './testing.ts'
+import { mem, none, shop, stocked } from './testing.ts'
 
-let hash = { embedder: { via: 'hash' } } as const
+let hash = { embedder: { provider: 'hash' } }
 
 test('rules raises the vectors and adds no rule to apply()', () => {
   let sql = mem()
@@ -55,12 +55,7 @@ test('a key that has not arrived still names the space it will fill', async () =
   // name, and the config says that whether or not the environment has a token.
   let db = await stocked()
   let [near] = extend({ sql: db }, {
-    embedder: {
-      via: 'ollama',
-      model: 'hash-64',
-      base: 'https://box',
-      key: undefined,
-    },
+    embedder: { provider: 'gpu', model: 'hash-64', key: undefined },
   })
   let q = compile(parse('.near=book-1&.order=similar'), shop, {
     extend: [near],
@@ -70,9 +65,9 @@ test('a key that has not arrived still names the space it will fill', async () =
 
 test('a phrase search sees an embedder that arrives after composition', async () => {
   let db = await stocked()
-  let options: { embedder?: { via: 'hash' } } = {}
-  let find = meaning({ sql: db, vocab: shop }, options)
+  let options: { embedder?: { provider: string } } = {}
+  let find = meaning({ sql: db, vocab: shop, graph: none }, options)
   assertEquals(await find('dragon'), [])
-  options.embedder = { via: 'hash' }
+  options.embedder = { provider: 'hash' }
   assert((await find('dragon')).length > 0)
 })

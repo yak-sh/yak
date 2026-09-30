@@ -30,6 +30,15 @@
         "credential": {
           "type": "string"
         },
+        "base": {
+          "type": "string",
+          "format": "uri",
+          "description": "where a provider reached over HTTP answers: its root URL, without a path"
+        },
+        "api": {
+          "type": "string",
+          "description": "the HTTP API it speaks, which names the code that reaches it: `ollama`, or `openai` for an OpenAI-compatible one"
+        },
         "fallback": {
           "type": "boolean"
         },

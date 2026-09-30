@@ -7,10 +7,15 @@
 
 import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { type Comp, type Graph, graph, identityEid } from '@yaks/graph'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
+import { modelDoc } from '@yaks/model'
+import { ram } from '@yaks/ram'
 import { type Driver, insert } from '@yaks/sql'
 import { BOOKSHOP, entity } from '../sqlite/testing.ts'
 import { fields, schema, sweep } from './mod.ts'
 import { hashEmbedder } from './embedder.ts'
+import type { Rows } from './options.ts'
 
 /** A Driver over a fresh in-memory database. */
 export let mem = (): Driver => open(':memory:')
@@ -83,4 +88,27 @@ export let stocked = async (): Promise<Driver> => {
   let db = shelf()
   await sweep(db, fields(shop), embedder)
   return db
+}
+
+/** A graph with no provider or model rows: all an in-process embedder needs. */
+export let none: Rows = { get: () => [] }
+
+/** A graph holding one provider serving one model, under the name it calls
+ * the model by (the model's own, unless `as` says otherwise): what a config's
+ * `{provider, model}` is read from. */
+export let serving = async (
+  provider: Comp,
+  model: string,
+  as = model,
+): Promise<Graph> => {
+  let vocab = loadVocab([modelDoc, edgeDoc], [edgeKeywords])
+  let g = graph({ storage: ram(vocab), vocab })
+  let p = identityEid('provider', [String(provider.name)])
+  let m = identityEid('model', [model])
+  await g.apply([
+    { entity: { eid: p }, provider },
+    { entity: { eid: m }, model: { name: model } },
+    { ...link(p, 'serves', m), serves: { name: as } },
+  ])
+  return g
 }
