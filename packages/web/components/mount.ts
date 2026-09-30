@@ -2,12 +2,15 @@
 // assert on. A renderer is a component — several hold hooks — so it must be
 // MOUNTED, never called as a bare function, which bypasses Preact's hook
 // dispatcher (registry.ts). Callers build the vnode the production way,
-// `h(resolve(e, view).Render, props)`, and read the resulting DOM. Sets up a
+// `h(resolve(e, view).Render, props)`, and read the resulting DOM, under the
+// page's UX host (registry.ts `ux`) as main.tsx mounts the app. Sets up a
 // throwaway linkedom document, mounts into a <main>, and returns that root
 // plus a free() that unmounts and restores the document global. Pair every
 // mount() with free() — a try/finally, or the end of the test.
-import { type ComponentChild, render } from 'preact'
+import { type ComponentChild, h, render } from 'preact'
 import { parseHTML } from 'linkedom'
+import { Ux } from '@yaks/ux'
+import { ux } from './registry.ts'
 
 export let mount = (node: ComponentChild) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -17,7 +20,7 @@ export let mount = (node: ComponentChild) => {
     configurable: true,
   })
   let root = document.querySelector('main')!
-  render(node, root)
+  render(h(Ux, { host: ux }, node), root)
   return {
     root,
     free() {

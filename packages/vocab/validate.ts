@@ -19,6 +19,9 @@ import { lives, paced, SYNC, type Sync } from './lifetime.ts'
 import { constraintErrors } from './constraints.ts'
 
 let NAME = /^[a-z][a-z0-9_]{0,39}$/
+// A UX component's own state, or an event it emits (@yaks/ux): CamelCase,
+// and only in a page's own graph.
+let UX = /^[A-Z][A-Za-z0-9]{0,39}$/
 
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
@@ -200,7 +203,11 @@ export let storable = (doc: VocabDoc): string[] => {
       }
       continue
     }
-    if (!NAME.test(comp)) {
+    if (UX.test(comp) && schema.sync != 'none') {
+      errs.push(
+        `${comp} is CamelCase, a UX component's, which stays in the page — say "sync": "none", or name it in lower case`,
+      )
+    } else if (!NAME.test(comp) && !UX.test(comp)) {
       errs.push(`${JSON.stringify(comp)} is not a component name (a-z, 0-9, _)`)
     }
     if (schema.type != null && schema.type != 'object') {

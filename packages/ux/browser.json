@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/editors' front door and its views, drawn by web's page and the inspector's, must type-check with only the web platform in scope.",
+  "_": "The browser gate: @yaks/ux's components, drawn by web's page and the inspector's, must type-check with only the web platform in scope.",
   "compilerOptions": {
     "lib": [
       "dom",

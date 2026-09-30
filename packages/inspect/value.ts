@@ -1,7 +1,7 @@
 /**
  * A stored value on a page: shown as it was stored, coloured by its shape (a
  * reference as the name of what it names, linked, beside its id). Where a
- * client may write it, it is a @yaks/editors `Prop` wearing that face: pressed,
+ * client may write it, it is a @yaks/ux `Edit` wearing that face: pressed,
  * it is typed over where it stands, in the shape's own type so nothing moves,
  * or its choices float beside it; a reference's picker opens from a handle
  * beside its link. A value the vocabulary keeps from clients,
@@ -12,7 +12,7 @@
  */
 
 import { h, type JSX } from 'preact'
-import { Prop } from '@yaks/editors'
+import { Edit } from '@yaks/ux'
 import { Value } from '@yaks/ui'
 import type { Prop as Declared } from '@yaks/vocab'
 import type { Bundle, Io } from './host.ts'
@@ -46,8 +46,8 @@ export let Cell = ({ io, e, name, prop }: CellProps): JSX.Element => {
   if (!writable(io, name, prop)) return shown(io, v, p)
   let ref = p?.category == 'ref'
   // A reference's face is a link, so its picker opens from a handle beside it.
-  let value = h(Prop, {
-    eid: e.entity.eid,
+  let value = h(Edit, {
+    e,
     comp: name,
     prop,
     editable: true,

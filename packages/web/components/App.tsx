@@ -31,7 +31,7 @@ import { Run, run } from './Run.tsx'
 import { Search, searchOpen } from './Search.tsx'
 import { Status } from './Status.tsx'
 import { Entity } from './Entity.tsx'
-import { tips } from '@yaks/editors'
+import { tips } from '@yaks/ui'
 import { Keybindings } from './Keybindings.tsx'
 import { Navigation, NavigationToggle } from './Navigation.tsx'
 

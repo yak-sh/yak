@@ -13,6 +13,7 @@ import type { Plugin } from './plugin.ts'
 import { Stale, token } from './guard.ts'
 import { Refused } from './admit.ts'
 import { books, comp, isDead, memory, slow } from './testing.ts'
+import { loadVocab } from '@yaks/vocab'
 
 let g = (plugins: Plugin[] = []) =>
   graph({ storage: memory(), vocab: books, plugins })
@@ -201,6 +202,32 @@ test('the answer is one bundle per entity, and no pipeline key', () => {
     { entity: { eid: 'b1' }, doc: { title: 'too late' }, $delete: true },
   ]))
   assertEquals(died, [{ entity: { eid: 'b1' }, tombstone: {} }])
+})
+
+test('an event is applied and carried, and never stored', () => {
+  let vocab = loadVocab([...books.docs, {
+    $defs: {
+      Browsed: {
+        component: true,
+        type: 'object',
+        sync: 'none',
+        durable: '0s',
+        properties: { by: { type: 'string' } },
+      },
+    },
+  }])
+  let one = graph({ storage: memory(), vocab })
+  let out = sync(one.apply([
+    { entity: { eid: 'b1' }, book: { pages: 7 }, Browsed: { by: 'ann' } },
+    { entity: { eid: 'b2' }, Browsed: { by: 'bo' } },
+  ]))
+  assertEquals(at(out, 'b1', 'Browsed'), { by: 'ann' })
+  assertEquals(at(out, 'b2', 'Browsed'), { by: 'bo' })
+  assertEquals(sync(one.get(['b1', 'b2'])).map((b) => Object.keys(b)), [[
+    'entity',
+    'book',
+    'created',
+  ]])
 })
 
 test('a patch touches only the properties it names; null clears one', () => {

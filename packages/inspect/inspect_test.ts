@@ -6,7 +6,9 @@ import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
 import { type ComponentChild, h, render } from 'preact'
-import { bind } from '@yaks/editors'
+import { Float } from '@yaks/ui'
+import { Ux } from '@yaks/ux'
+import { docs as uxDocs } from '@yaks/ux/vocab'
 import {
   type Answer,
   type Asks,
@@ -69,8 +71,8 @@ let TASK: Bundle = {
 }
 
 // A host that answers each line from `answers` and keeps what was asked,
-// written and picked, over a page graph of the inspector's own; the editors
-// are bound to it while it lives.
+// written and picked, over a page graph of the inspector's own; `draw` hands
+// @yaks/ux a host over it.
 type Answers =
   | Record<string, Partial<Answer>>
   | ((line: string) => Partial<Answer> | undefined)
@@ -81,7 +83,7 @@ let host = (answers: Answers = {}, edits = true) => {
     : (l: string) => answers[l]
   let asked: string[] = []
   let applied: Bundle[][] = []
-  let front = client(loadVocab(docs), [], { vault: false })
+  let front = client(loadVocab([...docs, ...uxDocs]), [], { vault: false })
   let double: Host = {
     vocab,
     front,
@@ -116,14 +118,15 @@ let host = (answers: Answers = {}, edits = true) => {
     when: (at) => at,
   }
   let door = inspector(views, double)
-  let was = bind(editing(double, { find: () => Promise.resolve([T2]) }))
+  let ux = editing(double, { find: () => Promise.resolve([T2]), Float })
   return {
     asked,
     applied,
     front,
     ...door,
     door,
-    [Symbol.dispose]: () => void bind(was),
+    draw: (node: ComponentChild) => h(Ux, { host: ux }, node),
+    [Symbol.dispose]: () => {},
   }
 }
 
@@ -187,7 +190,7 @@ let type = async (p: ReturnType<typeof mount>, was: string, to: string) => {
 
 test('an entity page shows each component and writes a value typed over in place', async () => {
   using t = host()
-  using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
+  using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
   assert(value(p, 'Fix the map'))
   assert(p.text('[data-section="task"]').includes('Work to be done.'))
   // What the server owns is shown, never offered.
@@ -230,7 +233,7 @@ test('a note under a heading is a comment on the entity that is an open task', a
       }],
     },
   })
-  using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
+  using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
   assert(p.text('[data-section="task"]').includes('owner should be required'))
   assert(!p.text('[data-section="doc"]').includes('owner should be required'))
   await p.fire(
@@ -259,7 +262,7 @@ test('an edge is added by its relation and far end, and its × removes it', asyn
     requires: {},
   }
   using t = host({ '.refs=t1&.limit=200': { rows: [edge] } })
-  using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
+  using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
   assertEquals(p.text('[data-section="Edges"] a[href="/t2"]'), 'N-t2')
   await p.fire(p.$('[aria-label="remove this requires edge"]'), 'click')
   assertEquals(t.applied.at(-1), [{ entity: { eid: 'e1' }, $delete: true }])
@@ -292,7 +295,7 @@ test("a component's entities run by a pressed heading, a page at a time", async 
       ? { count: 120 }
       : undefined
   )
-  using p = mount(h(t.Door, { e: TASK, view: 'Inspect.Page' }))
+  using p = mount(t.draw(h(t.Door, { e: TASK, view: 'Inspect.Page' })))
   let heading = () =>
     p.root.querySelectorAll('[data-section="Entities"] [role=columnheader]')[1]
   let last = () => t.asked.filter((l) => l.endsWith('&.limit=50')).at(-1)
@@ -321,7 +324,7 @@ test('a query shows its rows by the components they share; a row pressed opens b
     Bar: () => h('input', { name: 'filter' }),
     Scroll: ({ children }) => h('div', {}, children),
   })
-  using p = mount(h(Page, { where: { query: '.task' } }))
+  using p = mount(t.draw(h(Page, { where: { query: '.task' } })))
   let pane = (name: string) => `[data-pane="${name}"]`
   assertEquals(
     [...p.root.querySelectorAll(`${pane('page')} [role=columnheader]`)].map((
@@ -347,7 +350,7 @@ test('a query that counts shows the count', () => {
     Bar: () => null,
     Scroll: ({ children }) => h('div', {}, children),
   })
-  using p = mount(h(Page, { where: { query: '.task&.count' } }))
+  using p = mount(t.draw(h(Page, { where: { query: '.task&.count' } })))
   assert(p.text('[data-pane="page"]').includes('12,403'))
 })
 

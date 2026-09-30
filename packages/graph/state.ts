@@ -6,7 +6,7 @@
 // deleted one gets neither), so they are collected here rather than smuggled
 // through the bundles.
 
-import type { Eid, Entity } from './bundle.ts'
+import type { Bundle, Eid, Entity } from './bundle.ts'
 
 /** The bookkeeping one `apply()` run accumulates across its phases. */
 export type State = {
@@ -17,6 +17,9 @@ export type State = {
   born: Entity[]
   /** entities this change wrote to (a created entity counts as written to) */
   touched: Set<Eid>
+  /** bundles of nothing but events: carried back to whoever hears the
+   * change, never written, stamped or journaled */
+  heard: Bundle[]
 }
 
 /** A fresh run's bookkeeping. */
@@ -24,4 +27,5 @@ export let state = (): State => ({
   killed: [],
   born: [],
   touched: new Set(),
+  heard: [],
 })

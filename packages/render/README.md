@@ -162,9 +162,9 @@ and `Bundle`.
 
 Editors use the same registry as entity views, selected by the property they
 edit rather than by the entity: a registration matching `.prop.type=enum` draws
-every enum. [@yaks/editors](../editors/README.md) registers a browser's and a
-terminal's editors this way; an application can register a more specific query,
-such as `.prop.type=ref, .prop.ref=project`, to select its own.
+every enum. [@yaks/ux](../ux/README.md) registers its `Edit` controls this way;
+an application can register a more specific query, such as
+`.prop.type=ref, .prop.ref=project`, to select its own.
 
 ### Property selection
 

@@ -63,7 +63,7 @@ export let paged = (
 }
 
 /** Whether a press landed on something of its own inside the row: a link, a
- * control, a value that can be changed (@yaks/editors). */
+ * control, a value that can be changed (@yaks/ux). */
 let own = (target: unknown): boolean => {
   for (
     let n = target as {

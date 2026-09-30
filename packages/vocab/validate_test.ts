@@ -79,6 +79,14 @@ test('storable refuses what a table cannot lower', () => {
   )
 })
 
+test("a CamelCase component is a UX component's, and stays in the page", () => {
+  let named = (sync?: string) =>
+    storable(doc({ Edit: { type: 'object', sync, properties: {} } }))
+  assertEquals(named('none'), [])
+  assert(named()[0].startsWith('Edit is CamelCase'))
+  assert(named('peers')[0].startsWith('Edit is CamelCase'))
+})
+
 test('storable refuses an index over a property that is not there', () => {
   let errs = storable(doc({
     recipe: {

@@ -623,7 +623,7 @@ html {
   display: block;
 }
 /* The house tooltip is @yaks/ui's Tip, floated as an Overlay: one portaled
-   node (@yaks/editors `tips` delegates [data-tip]), not a ::before per host
+   node (@yaks/ui `tips` delegates [data-tip]), not a ::before per host
    that the overflow ancestors used to clip. */
 
 /* The comment rail — quiet, left-ruled, under any entity's view. The
@@ -1553,7 +1553,7 @@ html {
   width: min(260px, 100%);
 }
 .Relate_Pop {
-  /* portaled into an .Overlay (@yaks/editors) — box only, no positioning */
+  /* portaled into an .Overlay (@yaks/ui Float) — box only, no positioning */
   min-width: 240px;
   max-width: 320px;
   display: grid;

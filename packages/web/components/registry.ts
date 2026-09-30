@@ -1,8 +1,8 @@
 // The app's one registry and its Ent-to-bundle boundary. Selection, tab
 // applicability, overlay precedence and action union belong to @yaks/render;
-// the Preact host owns mounting. The property editors (@yaks/editors) join
-// the curated list, and this page is their host: they read its store, write
-// through its changes, and are drawn through this registry.
+// the Preact host owns mounting. This page is also the host its UX
+// components (@yaks/ux) are handed at the root: what a bundle they emit
+// writes, and where their own state lives (the page's graph, ./fields.tsx).
 import {
   actions,
   applicable as offered,
@@ -17,33 +17,24 @@ import {
   resolve as select,
 } from '@yaks/render'
 import { type ComponentRenderer, type Events, render } from '@yaks/preact'
-import { bind, editorViews } from '@yaks/editors'
-import { h, type JSX } from 'preact'
+import type { Host } from '@yaks/ux'
+import { Float } from '@yaks/ui'
+import { h } from 'preact'
 import { short } from '@yaks/id'
 import { parseProp, propAt } from '../props.ts'
-import {
-  cache,
-  ent,
-  findEid,
-  mode,
-  mutate,
-  problem,
-  row,
-  want,
-} from '../live.ts'
+import { cache, ent, findEid, mode, mutate, problem, row } from '../live.ts'
 import { and, present } from '@yaks/query'
 import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
 import { mdInline } from '../md.ts'
 import { Dot } from './Dot.tsx'
 import { ago } from './Stamp.tsx'
-import { fields } from './fields.tsx'
+import { fields, front } from './fields.tsx'
 import { rows } from './hits.ts'
 import { wells } from './wells.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
   file?: { ext: string; mime: string; text: (e: Ent) => string }
-  show?: (value: string | null) => JSX.Element | null
 }
 export type Entry = Renderer | PortableRenderer
 export type Render = Renderer['Render']
@@ -59,8 +50,7 @@ let editOptions: EditOptions = {
     return p ? parseProp(p, input, { resolve: findEid }) : input
   },
 }
-let columns = (): Entry[] => editorViews<Ent>()
-export let registry = registryOf<Entry, Action, Ent>(columns(), {
+export let registry = registryOf<Entry, Action, Ent>([], {
   vocab,
   archetypes: archetypeTables,
 })
@@ -97,7 +87,7 @@ export let bundle = (e: Ent): Bundle => {
 export let has = (...names: string[]) => and(...names.map(present))
 
 export let define = (rs: Renderer[], views: string[]) => {
-  registry.renderers = [...rs, ...columns()]
+  registry.renderers = rs
   registry.views = views
 }
 export let defineActions = (cs: Contributor[]) => {
@@ -123,12 +113,6 @@ export let resolve = (e: Ent, view?: string): Renderer => {
   return component
 }
 
-/** Column renderers share the entity registry and its qualified view walk. */
-let columnView = (e: Ent, comp: string, col: string, view = 'Edit') =>
-  vocab.prop(comp, col)
-    ? select(registry, bundle(e), view, vocab, { comp, prop: col })
-    : undefined
-
 /** Apply a host patch through the fleet's optimistic write path. */
 let applyPatch = (eid: string, patch: Patch) =>
   mutate(...Object.entries(patch).map(([name, comp]) => ({ eid, name, comp })))
@@ -153,15 +137,19 @@ let named = (eid: string) => {
   return e.doc?.title || idOf(e)
 }
 
-// The editors' host is this page.
-bind({
+// What a UX component emits: a value, written through the optimistic path;
+// input it could not read, said where every refusal is.
+let write = ({ entity, ...rest }: Bundle) => {
+  let no = rest.Refused as { said?: string } | undefined
+  if (no) return void (problem.value = no.said ?? '')
+  applyPatch(entity.eid, rest as Patch)
+}
+
+/** The host this page hands its UX components (@yaks/ux) at the root. */
+export let ux: Host = {
   vocab,
-  get: (eid) => row(eid).value ? bundle(ent(eid)) : undefined,
-  apply: (change) =>
-    change.forEach(({ entity, ...patch }) =>
-      applyPatch(entity.eid, patch as Patch)
-    ),
-  problem: (message) => void (problem.value = message),
+  front,
+  write,
   name: named,
   id: (b) =>
     idOf({ eid: b.entity.eid, kind: kindOf(b), num: Number(b.entity.num) }),
@@ -169,15 +157,20 @@ bind({
   when: (at) => ago(at),
   find: rows,
   editing: editOptions,
-  renderView: (eid, view, ctx) => renderView(ent(eid), view, ctx),
-  columnView: (eid, comp, prop, view) => columnView(ent(eid), comp, prop, view),
   values: (well) => wells[well]?.() ?? [],
   get fields() {
     return fields
   },
   markup: mdInline,
-  want,
-  mode: (m) => void (mode.value = m),
   wears: (comp, prop, v) =>
     comp == 'task' && prop == 'status' ? h(Dot, { status: v }) : null,
+  Float,
+}
+
+// Typing over a value in place is insert mode: the page reads it off the
+// `Edit` states in its graph, whatever put it there.
+front.watch('.Edit').subscribe((rows) => {
+  let typing = rows.some((b) => (b.Edit as { text?: string })?.text != null)
+  if (typing && mode.peek() == 'normal') mode.value = 'insert'
+  else if (!typing && mode.peek() == 'insert') mode.value = 'normal'
 })

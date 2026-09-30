@@ -25,7 +25,8 @@ import {
 } from '../commands.ts'
 import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
-import { drop, peek, pickLine, save, useHits } from '@yaks/editors'
+import { drop, peek, save } from './drafts.ts'
+import { pickLine, useHits } from '@yaks/ux'
 import { spawnOf } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { shelve } from './shelf.ts'
@@ -247,7 +248,7 @@ let exec = async (line: string) => {
 let WhoAmI = () => {
   let me = ent(clientId())
   // Ask only when this browser is bound to no one yet — and ask the SERVER
-  // (@yaks/editors useHits) for the people, so a partial cache can't hide candidates or
+  // (@yaks/ux useHits) for the people, so a partial cache can't hide candidates or
   // under-count them into a false "no choice". The empty line while already
   // bound skips the round trip; the hook still runs (its rule) every render.
   let asking = !!me.client && !me.client.actor

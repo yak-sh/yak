@@ -10,6 +10,7 @@ import { boot, config } from '../live.ts'
 import { extend } from '../components/registry.ts'
 import { onMarkdown } from '../components/Markdown.tsx'
 import { Md } from './md.tsx'
+import { Ux } from '@yaks/ux'
 import {
   App,
   fit,
@@ -19,6 +20,7 @@ import {
   sel,
   spot,
   spots,
+  terminal,
   trail,
   views,
 } from './App.tsx'
@@ -90,7 +92,12 @@ effect(() => {
 // and the clamp rides it.
 onPaint(() => fit(paint(root, spot())))
 Deno.addSignalListener('SIGWINCH', touch)
-render(<App />, root as unknown as Parameters<typeof render>[1])
+render(
+  <Ux host={terminal}>
+    <App />
+  </Ux>,
+  root as unknown as Parameters<typeof render>[1],
+)
 
 // The key loop: raw bytes → keys() → key(). A multi-byte escape sequence
 // (an arrow, a function key, or a kitty CSI-u report like ⇧⏎) arrives as one

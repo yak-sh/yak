@@ -18,7 +18,8 @@ import {
   useRoute,
 } from '../../live.ts'
 import { parse } from '@yaks/query'
-import { extend, resolve } from '../registry.ts'
+import { extend, resolve, ux } from '../registry.ts'
+import { Ux } from '@yaks/ux'
 import { mount } from '../mount.ts'
 import { Entity } from '../Entity.tsx'
 import { Pip } from './Show.tsx'
@@ -657,7 +658,7 @@ test('Runs and Tasks ask only their typed memberships, not every reverse ref', (
   }
 })
 
-test('the status pip picks a status through the editors and writes marks', async () => {
+test('the status pip picks a status through its Edit and writes marks', async () => {
   let { document } = parseHTML('<html><body><main></main></body></html>')
   let globals = {
     document,
@@ -689,7 +690,7 @@ test('the status pip picks a status through the editors and writes marks', async
   }
   let root = document.querySelector('main')!
   try {
-    render(h(Pip, { e: ent(eid) }), root)
+    render(h(Ux, { host: ux }, h(Pip, { e: ent(eid) })), root)
     root.querySelector<HTMLElement>('.Show_Pip')!.click()
     await tick()
     let tabs = [...document.querySelectorAll<HTMLElement>('.Prop_Tab')]

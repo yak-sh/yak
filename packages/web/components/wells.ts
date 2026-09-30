@@ -1,6 +1,6 @@
 // Where a text property's suggestions come from. A vocabulary declaration
 // names a well (`{text: 'domains'}`), and the well answers the values seen so
-// far. The editor that sets such a property (@yaks/editors) and the query field
+// far. The editor that sets such a property (@yaks/ux) and the query field
 // that completes one (fields.tsx) read the same wells; a plugin may replace
 // one while the column still selects its control through the registry.
 import { domains } from '../live.ts'

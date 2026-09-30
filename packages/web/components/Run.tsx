@@ -14,7 +14,7 @@ import { type SpawnAsk, spawnFrames, spawnPlan } from '../client.ts'
 import { type Change, idOf } from '../types.ts'
 import { block } from '@yaks/ui'
 import { menu, navigate, screenTarget } from './nav.tsx'
-import { usePlaceAt } from '@yaks/editors'
+import { usePlaceAt } from '@yaks/ui'
 
 // The Run door: a task's "run session…" verb opens this over the point
 // the menu stood on — model, effort; the provider is never asked, it is

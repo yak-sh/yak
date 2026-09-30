@@ -12,8 +12,8 @@
  * editor. The renderer still receives the original bundle and that context, so
  * it knows both the value and where a patch belongs. Property queries and
  * entity queries describe different subjects; register them under separate
- * view names. See prop.ts for the four queryable schema fields; @yaks/editors
- * registers its editors this way.
+ * view names. See prop.ts for the four queryable schema fields; @yaks/ux
+ * registers its `Edit` controls this way.
  *
  * A missing view returns undefined unless a matching JSON view is registered.
  * An unnamed request considers the configured views (all by default).

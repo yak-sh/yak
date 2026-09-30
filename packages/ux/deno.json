@@ -1,0 +1,25 @@
+{
+  "name": "@yaks/ux",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./views": "./views.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "UX components: behavior between UI components and domain components, each controlled by a bundle and emitting a bundle of the same shape, its own state a CamelCase component in the page's graph. The first is Edit, a property's value changed where it stands.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
+    "linkedom": "npm:linkedom@^0.18.12"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "**/*_test.tsx",
+      "./browser.json"
+    ]
+  }
+}

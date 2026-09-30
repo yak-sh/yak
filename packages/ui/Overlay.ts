@@ -2,7 +2,7 @@
  * What floats above everything, on a point of the page: a popout editor, a
  * tooltip. It is only a position, fixed to the viewport at the rect of what it
  * springs from, so nothing clipping or scaling can cut it off; what is in it
- * keeps its own box (a `Prop_Pop`, a `Tip`). @yaks/editors `Overlay` floats
+ * keeps its own box (a `Prop_Pop`, a `Tip`). `Float` (./float.ts) floats
  * one.
  *
  * @module

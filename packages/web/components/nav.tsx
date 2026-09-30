@@ -3,7 +3,7 @@ import { signal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import * as ui from '@yaks/ui'
 import { copy } from '../clipboard.ts'
-import { usePlaceAt } from '@yaks/editors'
+import { usePlaceAt } from '@yaks/ui'
 import {
   cache,
   clientId,

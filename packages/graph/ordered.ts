@@ -40,10 +40,11 @@ export let ordered = (
             each(checks, live, (bs, check) => check(bs, held)),
             (bs) => {
               let step = state()
-              return after(mutate(bs, held, step), (written) =>
+              return after(mutate(bs, held, step, vocab), (written) =>
                 after(cascade(written, tx, vocab, step), (expanded) => {
                   st.born.push(...step.born)
                   st.killed.push(...step.killed)
+                  st.heard.push(...step.heard)
                   for (let eid of step.touched) {
                     st.touched.add(eid)
                   }

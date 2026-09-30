@@ -12,12 +12,40 @@
 // components that write gives it. Within one change, a patch after the
 // change's own delete of an entity is dropped: the change said both, and the
 // delete is what the cascade acts on.
+//
+// An event is a component that lives no time (`durable: "0s"`): the rules
+// have read it, and it is never written. Beside other components it rides in
+// the change; a bundle of nothing but events leaves the change here, so no
+// entity is stamped or journaled for it, and is carried back to whoever hears
+// the applied change (`State.heard`).
 
 import { after } from '@yaks/fp'
 import type { Bundle } from './bundle.ts'
 import { comps, dead, gives, raced } from './bundle.ts'
 import type { Tx } from './storage.ts'
 import type { State } from './state.ts'
+import { durableOf, ms, type Vocab } from '@yaks/vocab'
+
+// The components a vocabulary declares as events, found once.
+let known = new WeakMap<Vocab, Set<string>>()
+let eventsOf = (vocab: Vocab): Set<string> => {
+  let found = known.get(vocab)
+  if (!found) {
+    found = new Set(
+      vocab.all.filter((c) => ms(durableOf(vocab, c)) === 0),
+    )
+    known.set(vocab, found)
+  }
+  return found
+}
+
+// A bundle as it is written: without its events.
+let written = (b: Bundle, events: Set<string>): Bundle => {
+  if (!events.size || !comps(b).some(([c]) => events.has(c))) return b
+  let out = { ...b }
+  for (let c of events) delete out[c]
+  return out
+}
 
 /**
  * The mutate phase: write the change's live bundles, swallow the ones that
@@ -29,7 +57,9 @@ export let mutate = (
   bundles: Bundle[],
   tx: Tx,
   st: State,
+  vocab: Vocab,
 ): Bundle[] | Promise<Bundle[]> => {
+  let events = eventsOf(vocab)
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
   return after(tx.get(eids), (found) => {
     // Deleted before this change began: a write may bring one back.
@@ -56,8 +86,13 @@ export let mutate = (
         if (!st.killed.includes(eid)) st.killed.push(eid)
         return true
       }
-      live.push(b)
-      if (comps(b).length) st.touched.add(eid)
+      let w = written(b, events)
+      if (w != b && !comps(w).length) {
+        st.heard.push(b)
+        return false
+      }
+      live.push(w)
+      if (comps(w).length) st.touched.add(eid)
       return true
     })
     if (!live.length) return kept

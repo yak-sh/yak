@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { Host as Editing } from '@yaks/editors'
+import type { Host as Ux } from '@yaks/ux'
 import type { Bundle, Host, Io } from './host.ts'
 import { comp } from './read.ts'
 
@@ -85,23 +85,31 @@ export let write = (
         })),
     )
 
-/** The editors' host (@yaks/editors) over the inspector's: a value changed
- * where it stands goes out through `host.apply`, and, like any write here, a
- * refusal is said in the head of the entity it was about until a write
- * lands. `find` is the server search a picker's candidates come from, and
- * `fields` the page's query fields. */
+/** The UX components' host (@yaks/ux) over the inspector's: a value changed
+ * where it stands is written like any write here, a refusal said in the head
+ * of the entity it was about until a write lands, and so is input its `Edit`
+ * could not read (a `Refused` event). The page's graph is the inspector's
+ * own; `find` is the server search a picker's candidates come from, `fields`
+ * the page's query fields and `Float` where a picker floats. */
 export let editing = (
   host: Host,
-  more: Pick<Editing, 'find' | 'fields'>,
-): Editing => {
+  more: Pick<Ux, 'find' | 'fields' | 'Float'>,
+): Ux => {
   let set = (change: Bundle[]) => void host.front.mutate(change)
+  let { vocab, front, name, id, kind, when } = host
   return {
-    ...host,
+    vocab,
+    front,
+    name,
+    id,
+    kind,
+    when,
     ...more,
-    apply: async (change) => {
-      await host.apply(change)
-      set(put({ said: null, at: null }))
+    write: (b) => {
+      let no = b.Refused as { said?: string } | undefined
+      return no
+        ? set(put({ said: no.said ?? null, at: b.entity.eid }))
+        : write({ apply: host.apply, set }, b.entity.eid, [b])
     },
-    problem: (said, at) => set(put({ said, at })),
   }
 }

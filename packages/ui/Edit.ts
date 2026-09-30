@@ -1,6 +1,6 @@
 /**
  * A value where it can be changed. `Edit` is the value itself, a span typed
- * over where it stands (@yaks/editors `InlineEdit` makes it
+ * over where it stands (@yaks/ux `Edit.Text` makes it
  * `contenteditable`, so it stays the same element in the same place). The
  * same class on an `input` or a `select` makes a control that reads as the
  * value it holds; `Edit-fit` is one as wide as what it holds, for a control

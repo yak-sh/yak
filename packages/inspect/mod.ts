@@ -9,8 +9,8 @@
  * the queries it needs as data, and draws what the host answers; an edit goes
  * out as bundles. The inspector's own state (what is beside the page, what is
  * armed, how each table runs) lives in the page's own graph (./front.json).
- * A value is changed where it stands through @yaks/editors, which the page
- * binds to its host (`editing`).
+ * A value is changed where it stands through @yaks/ux's `Edit`, whose host
+ * the page hands down over its own (`editing`).
  *
  * - `views`: every view, as a registry: the `/views` facet (./views.ts).
  * - `inspector(registry, host)`: the `Door` a host draws them through, and

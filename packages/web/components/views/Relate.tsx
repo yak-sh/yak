@@ -5,14 +5,11 @@ import { link } from '../../edge.ts'
 import { up } from './Dependency.tsx'
 import { spec, taskChanges } from '../../client.ts'
 import { block } from '@yaks/ui'
-import {
-  label,
-  Overlay,
-  peek,
-  pickLine,
-  useDraft,
-  useHits,
-} from '@yaks/editors'
+import { Float } from '@yaks/ui'
+import { label, pickLine, useHits } from '@yaks/ux'
+import { peek, useDraft } from '../drafts.ts'
+import { rows } from '../hits.ts'
+import { ux } from '../registry.ts'
 
 let Frame = block('span', 'Relate', {
   Verb: 'button',
@@ -49,7 +46,7 @@ let said = (v: V) => v.out ? v.type : up(v.type)
 export let Relate = ({ e }: { e: Ent }) => {
   // On mount, a verb whose line was left half-typed reopens itself — a
   // new task or edge the last mount never filed resurfaces, caret and all
-  // (@yaks/editors drafts). Keyed by (host, verb) so the sentence resumes
+  // (../drafts.ts). Keyed by (host, verb) so the sentence resumes
   // exact.
   let dk = (v: V) => `relate:${e.eid}:${said(v)}`
   let [verb, setVerb] = useState<V | null>(() =>
@@ -74,11 +71,11 @@ export let Relate = ({ e }: { e: Ent }) => {
     ...e.refs.map((r) => r.child),
     ...e.kids.map((k) => k.eid),
   ])
-  // Candidates come from the server (@yaks/editors useHits): FTS over every doc plus
+  // Candidates come from the server (@yaks/ux useHits): FTS over every doc plus
   // id-addressing, so a typed id, title word, or dot-filter names an entity
   // even when the cache holds only part of the graph. An unopened verb (no
   // line) searches nothing; already-linked targets and the host drop out.
-  let hits = useHits(verb ? pickLine(q) : '')
+  let hits = useHits(verb ? pickLine(q) : '', 8, rows)
     .filter((h) => !taken.has(h.entity.eid))
     .slice(0, 6)
   let fresh = q.trim() ? spec(q).title : ''
@@ -159,7 +156,7 @@ export let Relate = ({ e }: { e: Ent }) => {
           onBlur={close}
         />
         {(hits.length || fresh) && (
-          <Overlay anchor={find} side='below'>
+          <Float anchor={find} side='below'>
             <Pop>
               {hits.map((t, i) => (
                 <Row
@@ -169,7 +166,7 @@ export let Relate = ({ e }: { e: Ent }) => {
                   onMouseDown={(ev: MouseEvent) =>
                     grab(ev, () => tie(t.entity.eid))}
                 >
-                  {label(t)}
+                  {label(ux, t)}
                 </Row>
               ))}
               {fresh && (
@@ -182,7 +179,7 @@ export let Relate = ({ e }: { e: Ent }) => {
                 </New>
               )}
             </Pop>
-          </Overlay>
+          </Float>
         )}
       </Anchor>
     </Frame>

@@ -27,7 +27,8 @@ import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { title, TitleEdit } from '../title.tsx'
-import { ColumnEdit, Edit, Prop } from '@yaks/editors'
+import { Edit, useEdit } from '@yaks/ux'
+import { bundle } from '../registry.ts'
 import { Relate } from './Relate.tsx'
 import { up } from './Dependency.tsx'
 import { Id } from './Inline.tsx'
@@ -109,48 +110,48 @@ let {
 // The status pip IS the status control: a click anchors the vocabulary's
 // enum editor on the dot — every status one press away, and a slip is a
 // closed menu, not a written status (the old cycle wrote on every click).
-// The registry supplies the picker exactly as Prop would — its popout
+// The registry supplies the picker exactly as an Edit would — its popout
 // wrapper owns the anchor dance; only the face differs — a bare Dot
 // (kept out of the editor's hands), so the heading and titlebar flex
-// rows keep their dot untouched by Prop's value chrome.
+// rows keep their dot untouched by Edit's value chrome.
 export let Pip = ({ e }: { e: Ent }) => {
-  let [open, setOpen] = useState(false)
   let anchor = useRef<HTMLElement>(null)
+  let edit = useEdit(e.eid, 'task', 'status')
+  let status = statusOf(e)
   // The vocabulary declares task.status as derived; its shared enum picker
   // translates a choice into completed/cancelled marks.
   return (
     <>
       <Dot
         elRef={anchor}
-        status={statusOf(e)}
+        status={status}
         gated={gated(e)}
         live={crewed(e)}
         class='Show_Pip'
-        onClick={() => setOpen((was) => !was)}
+        onClick={() => edit.row?.open ? edit.end() : edit.begin()}
       />
-      {open && (
-        <ColumnEdit
-          eid={e.eid}
-          comp='task'
-          prop='status'
-          value={statusOf(e)}
-          onChange={(value) => mutate(...statusChanges(e.eid, String(value)))}
-          done={() => setOpen(false)}
-          anchor={anchor}
-          side='below'
-        />
-      )}
+      <Edit.Control
+        e={{ entity: { eid: e.eid }, task: { status } }}
+        comp='task'
+        prop='status'
+        onChange={(b) =>
+          mutate(
+            ...statusChanges(e.eid, String((b.task as Ent['task'])?.status)),
+          )}
+        anchor={anchor}
+        side='below'
+      />
     </>
   )
 }
 
-// The task fields, all through the registry door (@yaks/editors Prop):
+// The task fields, all through the registry door (@yaks/ux Edit):
 // the faces stay the board grammar's chips — Prio badge, domain chip,
 // project link — while the registry supplies each type's editor from the
 // vocabulary (number box, domain well, project search).
 let Rank = ({ e }: { e: Ent }) => (
-  <Prop
-    eid={e.eid}
+  <Edit
+    e={bundle(e)}
     comp='filed'
     prop='priority'
     editable
@@ -160,8 +161,8 @@ let Rank = ({ e }: { e: Ent }) => (
 )
 
 let Facet = ({ e }: { e: Ent }) => (
-  <Prop
-    eid={e.eid}
+  <Edit
+    e={bundle(e)}
     comp='filed'
     prop='domain'
     editable
@@ -177,8 +178,8 @@ let By = (
 ) =>
   e[comp]?.by
     ? (
-      <Prop
-        eid={e.eid}
+      <Edit
+        e={bundle(e)}
         comp={comp}
         prop='by'
         show={(face, v) => {
@@ -194,8 +195,8 @@ let By = (
 // standing in for its operator) — same grammar as Home. Claim (⚑, who's
 // on it NOW) renders separately.
 let Plate = ({ e }: { e: Ent }) => (
-  <Prop
-    eid={e.eid}
+  <Edit
+    e={bundle(e)}
     comp='filed'
     prop='assignee'
     editable
@@ -210,8 +211,8 @@ let Plate = ({ e }: { e: Ent }) => (
 )
 
 let Home = ({ e }: { e: Ent }) => (
-  <Prop
-    eid={e.eid}
+  <Edit
+    e={bundle(e)}
     comp='filed'
     prop='project'
     editable
@@ -285,35 +286,28 @@ export let Mail = ({ e }: { e: Ent }) => {
 
 // The body is markdown: rendered as HTML (md.ts, which is where the
 // text stops being able to speak HTML — a body can come from anyone who
-// mails the fleet), double-click swaps in the raw source through the
-// same <Edit>, and the blur that commits swaps the rendered view back.
-// An empty body keeps a line of height to give the double-click
-// somewhere to land.
+// mails the fleet), double-click opens its Edit, which swaps in the raw
+// source, and the Edit closing on the blur that commits swaps the
+// rendered view back. An empty body keeps a line of height to give the
+// double-click somewhere to land.
 export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
   let repo = useRepoUrl(e)
-  let [src, setSrc] = useState(false)
+  let edit = useEdit(e.eid, 'doc', 'body')
   if (!e.doc) return null
   // A body this client was never shipped is not an empty one: paint the
   // wait and offer no editor until it lands (pending() is the ask).
   if (pending(e)) return <BodyEl mod={mod}>…</BodyEl>
-  return src
+  return edit.row?.open
     ? (
       <BodyEl mod={mod}>
-        <Edit
-          eid={e.eid}
-          comp='doc'
-          prop='body'
-          multi
-          open
-          onClose={() => setSrc(false)}
-        />
+        <Edit.Text e={bundle(e)} comp='doc' prop='body' multi />
       </BodyEl>
     )
     : (
       <Markdown
         as={BodyEl}
         mod={mod}
-        onDblClick={() => setSrc(true)}
+        onDblClick={edit.begin}
         text={e.doc?.body ?? ''}
         repo={repo}
       />
@@ -325,28 +319,23 @@ export let Body = ({ e, mod }: { e: Ent; mod?: string }) => {
 // editing seam as doc.body keeps the criteria legible and editable.
 export let Acceptance = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
-  let [src, setSrc] = useState(false)
+  let edit = useEdit(e.eid, 'accept', 'body')
   if (!e.accept) return null
   return (
     <AcceptanceEl>
       <AcceptanceTitle>Acceptance</AcceptanceTitle>
-      {src
+      {pending(e, 'accept', 'body')
+        ? <AcceptanceBody>…</AcceptanceBody>
+        : edit.row?.open
         ? (
           <AcceptanceBody>
-            <Edit
-              eid={e.eid}
-              comp='accept'
-              prop='body'
-              multi
-              open
-              onClose={() => setSrc(false)}
-            />
+            <Edit.Text e={bundle(e)} comp='accept' prop='body' multi />
           </AcceptanceBody>
         )
         : (
           <Markdown
             as={AcceptanceBody}
-            onDblClick={() => setSrc(true)}
+            onDblClick={edit.begin}
             text={e.accept.body ?? ''}
             repo={repo}
           />
@@ -631,8 +620,8 @@ export let Meta = (
       {e.blocked && (
         <Blocked data-tip='blocked on an external reason'>
           <Icon name='circle-alert' />{' '}
-          <Prop
-            eid={e.eid}
+          <Edit
+            e={bundle(e)}
             comp='blocked'
             prop='on'
             editable

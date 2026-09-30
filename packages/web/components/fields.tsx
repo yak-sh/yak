@@ -2,8 +2,8 @@
 // (a card's filter bar, the search palette, the command line, a board's query,
 // the inspector's bar) is a field in `front`, the page's own graph: a local
 // @yaks/client over RAM that no server hears of, where the inspector
-// (@yaks/inspect) keeps its state too. Anything on the page reads what is
-// typed in one by reading its row.
+// (@yaks/inspect) and every UX component (@yaks/ux) keep their state too.
+// Anything on the page reads what is typed in one by reading its row.
 //
 // What a field cannot know is supplied here, once: the vocabulary the host
 // taught this page (read when a field completes, since it is learned after
@@ -15,19 +15,21 @@ import { client } from '@yaks/client'
 import { filters, type Float } from '@yaks/filter'
 import { docs as filterDocs } from '@yaks/filter/vocab'
 import { docs as inspectDocs } from '@yaks/inspect/front'
+import { docs as uxDocs } from '@yaks/ux/vocab'
 import type { Cand, Source } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { cache, type Comps } from '../live.ts'
 import { RANKS } from '../query.ts'
 import { idOf, kindOf, vocab } from '../types.ts'
-import { Overlay } from '@yaks/editors'
+import { Float as Floating } from '@yaks/ui'
 import { wellOf, wells } from './wells.ts'
 
 /** The page's own graph. */
-export let front = client(loadVocab([...filterDocs, ...inspectDocs]), [], {
-  vault: false,
-  wireVault: false,
-})
+export let front = client(
+  loadVocab([...filterDocs, ...uxDocs, ...inspectDocs]),
+  [],
+  { vault: false, wireVault: false },
+)
 
 let starts = (s: string, pre: string) =>
   s.toLowerCase().startsWith(pre.toLowerCase())
@@ -75,7 +77,7 @@ export let bind = (Float?: Float) =>
 
 // A browser floats the list under its field.
 let Below: Float = ({ anchor, children }) => (
-  <Overlay anchor={anchor} side='below'>{children}</Overlay>
+  <Floating anchor={anchor} side='below'>{children}</Floating>
 )
 
 /** The fields as a browser shows them. */

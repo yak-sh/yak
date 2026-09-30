@@ -1,5 +1,5 @@
 /**
- * A property's value that knows how to be changed (@yaks/editors `Prop`): its
+ * A property's value that knows how to be changed (@yaks/ux `Edit`): its
  * face in a `Val`, `live` when a press opens its editor, `nil` when there is
  * nothing to show; a quiet `Hand` beside a face that is a link, so the link
  * keeps its click. The editors it opens: a `Pop` of `Tab`s for a closed set,

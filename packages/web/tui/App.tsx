@@ -41,7 +41,12 @@ import {
   type SpawnIntent,
   spawnTask,
 } from '../commands.ts'
-import { applicable, type Renderer, resolve } from '../components/registry.ts'
+import {
+  applicable,
+  type Renderer,
+  resolve,
+  ux,
+} from '../components/registry.ts'
 import { Entity } from '../components/Entity.tsx'
 import { byline, viaName } from '../components/Comments.tsx'
 import { Dot } from '../components/Dot.tsx'
@@ -56,7 +61,7 @@ import { navigationQuery, navigationView } from '../navigation.ts'
 import { Guide } from '@yaks/ui'
 import { bind } from '../components/fields.tsx'
 import { filterField, usePassOf } from '../components/Filter.tsx'
-import { useHits } from '@yaks/editors'
+import { type Host, useHits } from '@yaks/ux'
 import { hits } from '../components/hits.ts'
 import { group } from '../components/Search.tsx'
 import { editing, named } from './keys.ts'
@@ -83,6 +88,10 @@ let boardEid = () =>
 // in the page's own graph the browser types into, the list in the flow under
 // each, its caret painted while it has the keyboard.
 let fields = bind()
+
+/** The UX host a terminal hands down: the page's, its popouts and query
+ * fields in the flow. */
+export let terminal: Host = { ...ux, fields, Float: undefined }
 
 // A field with the keyboard reads every key first: its list's (Tab, Enter,
 // the arrows, Escape) while it is open, then an edit to its line. What it

@@ -12,7 +12,7 @@
 import { useRef } from 'preact/hooks'
 import type { SubscriptionRead } from '../live.ts'
 import { parseQuery } from '../query.ts'
-import { useDraft } from '@yaks/editors'
+import { useDraft } from './drafts.ts'
 import { useQueryResult } from './useQuery.ts'
 import { block } from '@yaks/ui'
 import { fields } from './fields.tsx'

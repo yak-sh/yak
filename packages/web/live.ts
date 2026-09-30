@@ -1252,13 +1252,15 @@ export let want = (eid: string, comp = 'doc', prop = 'body') => {
   queue.set(eid, fields.add(field))
 }
 
-// Whether a view is still waiting on this entity's body — and ASKING is what
-// fetches it, so no placeholder outlives one round trip. Fused for the same
-// reason step() folds its bookkeeping into the verb: a caller that could
-// paint the placeholder without asking would paint it forever.
-export let pending = (e: Ent) => {
-  if (!e.doc || e.doc.body !== undefined) return false
-  want(e.eid)
+// Whether a view is still waiting on this entity's body (or another held-back
+// property) — and ASKING is what fetches it, so no placeholder outlives one
+// round trip. Fused for the same reason step() folds its bookkeeping into the
+// verb: a caller that could paint the placeholder without asking would paint
+// it forever.
+export let pending = (e: Ent, comp = 'doc', prop = 'body') => {
+  let held = e[comp] as Record<string, unknown> | undefined
+  if (!held || held[prop] !== undefined) return false
+  want(e.eid, comp, prop)
   return true
 }
 

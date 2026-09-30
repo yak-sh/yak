@@ -8,7 +8,7 @@ import { subject } from '../client.ts'
 import { block } from '@yaks/ui'
 import { ago } from './Stamp.tsx'
 import { pretty } from '../time.ts'
-import { useDraft } from '@yaks/editors'
+import { useDraft } from './drafts.ts'
 import {
   type Change,
   type Ent,

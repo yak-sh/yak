@@ -90,6 +90,16 @@ whatever `bare` says: `.name` never means `_prop.name`. An authored name starts
 with a letter, so `_` names only the components that describe a vocabulary
 itself ([below](#a-vocabulary-as-entities)).
 
+A component named in CamelCase (`Edit`, `Refused`) belongs to a UX component
+([@yaks/ux](../ux/README.md)): its own state, named after it, or an event it
+emits. It lives in a page's own graph, so it is `sync: none`; `storable()`
+refuses a CamelCase name that syncs, since a store's tables fold case.
+
+An event is a component that is `durable: "0s"`: it lives no time. A graph
+applies it like any other component, so a rule can read it and the applied
+change carries it, but nothing stores it, and a relay hands it on and forgets it
+at once.
+
 A computed property's `reads` can name `comp.ref` when that reference points
 back to the entity carrying the computed value. Subscriptions then refresh that
 entity when the referenced component changes.

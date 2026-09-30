@@ -3,8 +3,11 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { type ComponentChild, h, options, render } from 'preact'
+import { client } from '@yaks/client'
+import { Float } from '@yaks/ui'
 import { loadVocab } from '@yaks/vocab'
-import { bind, type Bundle, Edit, type Host, Prop } from './mod.ts'
+import { at, type Bundle, Edit, type Host, Ux } from './mod.ts'
+import { docs } from './vocab.ts'
 
 let vocab = loadVocab([{
   $defs: {
@@ -35,26 +38,27 @@ let vocab = loadVocab([{
 
 let T = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 let P = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-let rows = (): Record<string, Bundle> => ({
-  [T]: {
-    entity: { eid: T, num: 1 },
-    doc: { title: 'Fix the map', body: 'Stored body' },
-    task: {
-      status: 'open',
-      owner: P,
-      due: '2026-09-29T19:12:21.000Z',
-      prio: 3,
-      site: 'https://yak.sh/',
-      urgent: true,
-      data: { a: 1 },
-      seen: 'yesterday',
-    },
+let task = (): Bundle => ({
+  entity: { eid: T, num: 1 },
+  doc: { title: 'Fix the map', body: 'Stored body' },
+  task: {
+    status: 'open',
+    owner: P,
+    due: '2026-09-29T19:12:21.000Z',
+    prio: 3,
+    site: 'https://yak.sh/',
+    urgent: true,
+    data: { a: 1 },
+    seen: 'yesterday',
   },
-  [P]: { entity: { eid: P, num: 2 }, doc: { title: 'Draw the map' } },
 })
+let person: Bundle = {
+  entity: { eid: P, num: 2 },
+  doc: { title: 'Draw the map' },
+}
 
-// A page: a document, a host over `rows` that keeps what it was sent and
-// what it said, and a way to press and type.
+// A page: a document, a page graph, and a host whose `write` keeps what was
+// emitted; a way to press and type.
 let page = (more: Partial<Host> = {}) => {
   let { document, window } = parseHTML(
     '<html><body><main></main></body></html>',
@@ -66,6 +70,8 @@ let page = (more: Partial<Host> = {}) => {
       observe() {}
       disconnect() {}
     },
+    addEventListener: () => {},
+    removeEventListener: () => {},
     innerWidth: 1000,
     innerHeight: 800,
     Text: window.Text,
@@ -79,28 +85,22 @@ let page = (more: Partial<Host> = {}) => {
   // Effects run on the next turn, as a browser's next frame would.
   let raf = options.requestAnimationFrame
   options.requestAnimationFrame = (f) => setTimeout(f)
-  let held = rows()
-  let applied: Bundle[][] = []
-  let said: string[] = []
+  let front = client(loadVocab(docs), [], { vault: false, wireVault: false })
+  let emitted: Bundle[] = []
   let asked: string[] = []
-  let was = bind({
+  let host: Host = {
     vocab,
-    get: (eid) => held[eid],
-    apply: (change) => {
-      applied.push(change)
-      if (JSON.stringify(change).includes('T-404')) {
-        return Promise.reject(new Error("no entity 'T-404'"))
-      }
-    },
-    problem: (message) => void said.push(message),
-    name: (eid) => String((held[eid]?.doc as { title?: string })?.title),
+    front,
+    write: (b) => void emitted.push(b),
+    name: (eid) => eid == P ? 'Draw the map' : eid,
     id: (b) => `T-${b.entity.num}`,
     kind: () => 'task',
     when: (at) => `when ${at}`,
-    find: (line) => (asked.push(line), Promise.resolve([held[P]])),
+    find: (line) => (asked.push(line), Promise.resolve([person])),
     values: (well) => well == 'domains' ? ['web', 'infra'] : [],
+    Float,
     ...more,
-  })
+  }
   let root = document.querySelector('main')!
   let fire = async (el: Element, type: string, key?: string) => {
     let ev = new window.Event(type, { bubbles: true, cancelable: true })
@@ -112,13 +112,12 @@ let page = (more: Partial<Host> = {}) => {
     document.querySelector<T>(s)!
   return {
     root,
-    held,
-    applied,
-    said,
+    front,
+    emitted,
     asked,
     fire,
     $,
-    draw: (node: ComponentChild) => render(node, root),
+    draw: (node: ComponentChild) => render(h(Ux, { host }, node), root),
     // Type over a value in place: its text, then the key that ends it.
     type: async (el: HTMLElement, text: string, end = 'Enter') => {
       el.textContent = text
@@ -127,7 +126,7 @@ let page = (more: Partial<Host> = {}) => {
     },
     [Symbol.dispose]: () => {
       render(null, root)
-      bind(was)
+      front.close()
       options.requestAnimationFrame = raf
       for (let [k, d] of prior) {
         if (d) Object.defineProperty(globalThis, k, d)
@@ -137,13 +136,19 @@ let page = (more: Partial<Host> = {}) => {
   }
 }
 
-let prop = (p: string, editable = true, comp = 'task') =>
-  h(Prop, { eid: T, comp, prop: p, editable })
+let value = (p: string, editable = true, comp = 'task', e = task()) =>
+  h(Edit, { e, comp, prop: p, editable })
+
+// Press a value open and settle.
+let press = async (p: ReturnType<typeof page>) => {
+  await p.fire(p.$('.Prop_Val'), 'click')
+  await tick()
+}
 
 test("a value's face follows its type", () => {
   using p = page()
   let face = (name: string, comp = 'task') => {
-    p.draw(prop(name, false, comp))
+    p.draw(value(name, false, comp))
     return p.$('.Prop_Val')
   }
   assertEquals(face('title', 'doc').textContent, 'Fix the map')
@@ -159,115 +164,187 @@ test("a value's face follows its type", () => {
   assertEquals(p.root.querySelector('.Prop-live'), null)
 })
 
-test('a value is typed over where it stands, and written', async () => {
+test('a value typed over where it stands emits the bundle it was handed, changed', async () => {
   using p = page()
-  p.draw(prop('title', true, 'doc'))
-  let val = p.$('.Prop_Val')
-  await p.fire(val, 'click')
-  await tick()
+  p.draw(value('title', true, 'doc'))
+  await press(p)
   let edit = p.$('.Prop .Edit')
   assert(edit.isContentEditable)
   assertEquals(edit.textContent, 'Fix the map')
   await p.type(edit, 'Fix the whole map')
-  assertEquals(p.applied, [[{
+  assertEquals(p.emitted, [{
     entity: { eid: T },
     doc: { title: 'Fix the whole map' },
-  }]])
-  assertEquals(p.said, [])
+  }])
+  assertEquals(p.root.querySelector('.Edit'), null) // closed again
 })
 
-test('Escape puts a value back and writes nothing', async () => {
+test("a caller's onChange takes what it emits, and nothing reaches the host", async () => {
   using p = page()
-  p.draw(h(Edit, { eid: T, comp: 'doc', prop: 'title' }))
+  let mine: Bundle[] = []
+  p.draw(
+    h(Edit, {
+      e: task(),
+      comp: 'task',
+      prop: 'urgent',
+      editable: true,
+      onChange: (b) => void mine.push(b),
+    }),
+  )
+  await press(p)
+  assertEquals(mine, [{ entity: { eid: T }, task: { urgent: false } }])
+  assertEquals(p.emitted, [])
+})
+
+test('Escape puts a value back and emits nothing', async () => {
+  using p = page()
+  p.draw(h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }))
+  await p.fire(p.$('.Edit'), 'dblclick')
   let edit = p.$('.Edit')
-  await p.fire(edit, 'dblclick')
   assert(edit.isContentEditable)
   await p.type(edit, 'something else', 'Escape')
-  assertEquals(edit.textContent, 'Fix the map')
-  assertEquals(p.applied, [])
+  assertEquals(p.$('.Edit').textContent, 'Fix the map')
+  assertEquals(p.emitted, [])
 })
 
 test('inline markdown shows at rest and its source is typed over', async () => {
   using p = page({ markup: (t) => t.replace(/`(.*)`/, '<code>$1</code>') })
-  p.held[T].doc = { title: 'a `map`' }
-  p.draw(h(Edit, { eid: T, comp: 'doc', prop: 'title', inline: true }))
+  let e = { ...task(), doc: { title: 'a `map`' } }
+  p.draw(h(Edit.Text, { e, comp: 'doc', prop: 'title', inline: true }))
+  assertEquals(p.$('.Edit').innerHTML, 'a <code>map</code>')
+  await p.fire(p.$('.Edit'), 'dblclick')
   let edit = p.$('.Edit')
-  assertEquals(edit.innerHTML, 'a <code>map</code>')
-  await p.fire(edit, 'dblclick')
   assertEquals(edit.textContent, 'a `map`')
   // A second double-click while typing leaves the typing alone.
   edit.textContent = 'a `big` map'
   await p.fire(edit, 'dblclick')
-  assertEquals(edit.textContent, 'a `big` map')
+  assertEquals(p.$('.Edit').textContent, 'a `big` map')
 })
 
-test('a refused write is said, and the stored value shows again', async () => {
+test('input that cannot be read is emitted as a Refused event, and no value', async () => {
   using p = page()
-  p.draw(h(Edit, { eid: T, comp: 'doc', prop: 'title' }))
-  let edit = p.$('.Edit')
-  await p.fire(edit, 'dblclick')
-  await p.type(edit, 'T-404')
-  await tick()
-  assertEquals(p.said, ["no entity 'T-404'"])
-  assertEquals(edit.textContent, 'Fix the map')
-  // Input that cannot be read is said without being sent.
-  p.draw(prop('prio'))
-  await p.fire(p.$('.Prop_Val'), 'click')
-  await tick()
+  p.draw(value('prio'))
+  await press(p)
   await p.type(p.$('.Prop .Edit'), 'soon')
-  assertEquals(p.applied.length, 1)
-  assertEquals(p.said.length, 2)
+  assertEquals(p.emitted.length, 1)
+  assertEquals(Object.keys(p.emitted[0]), ['entity', 'Refused'])
+  assert(
+    String((p.emitted[0].Refused as { said: string }).said).includes('prio'),
+  )
 })
 
-test('a body held back is not offered until it lands, and asking lands it', async () => {
-  let wanted: string[] = []
-  using p = page({ want: (...at) => void wanted.push(at.join('.')) })
-  delete (p.held[T].doc as Record<string, unknown>).body
-  p.draw(h(Edit, { eid: T, comp: 'doc', prop: 'body', multi: true }))
-  await tick()
-  let edit = p.$('.Edit')
-  await p.fire(edit, 'dblclick')
-  assertEquals(edit.isContentEditable, false)
-  assertEquals(wanted, [`${T}.doc.body`])
-})
-
-test('a value made read-only while typed over reverts and writes nothing', async () => {
+test('what is typed lives in the page graph, and a remount types on from it', async () => {
   using p = page()
-  let at = { eid: T, comp: 'doc', prop: 'body', multi: true }
-  p.draw(h(Edit, at))
+  let title = h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' })
+  p.draw(title)
+  await p.fire(p.$('.Edit'), 'dblclick')
   let edit = p.$('.Edit')
-  await p.fire(edit, 'dblclick')
-  edit.textContent = 'unsaved words'
-  p.draw(h(Edit, { ...at, readOnly: true }))
-  await p.fire(edit, 'blur')
-  assertEquals(edit.textContent, 'Stored body')
-  assertEquals(p.applied, [])
+  edit.textContent = 'Fix the ma'
+  await p.fire(edit, 'input')
+  assertEquals(p.front.ent(at('', T, 'doc', 'title'))?.Edit, {
+    open: true,
+    text: 'Fix the ma',
+  })
+  render(null, p.root) // unmounted mid-typing, nothing emitted
+  p.draw(title)
+  await tick()
+  assert(p.$('.Edit').isContentEditable)
+  assertEquals(p.$('.Edit').textContent, 'Fix the ma')
+  await p.type(p.$('.Edit'), 'Fix the map now')
+  assertEquals(p.emitted, [{
+    entity: { eid: T },
+    doc: { title: 'Fix the map now' },
+  }])
+  assertEquals(p.front.ent(at('', T, 'doc', 'title'))?.Edit, undefined)
+})
+
+test('the same value under two owners keeps two states', async () => {
+  using p = page()
+  let title = (owner: string) =>
+    h(
+      Ux,
+      { at: owner },
+      h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }),
+    )
+  p.draw(h('div', null, title('a'), title('b')))
+  let [a, b] = [...p.root.querySelectorAll<HTMLElement>('.Edit')]
+  await p.fire(a, 'dblclick')
+  let [a2, b2] = [...p.root.querySelectorAll<HTMLElement>('.Edit')]
+  assert(a2.isContentEditable)
+  assert(!b2.isContentEditable)
+  assert(b == b2)
+})
+
+test('a body the bundle does not carry is not offered', async () => {
+  using p = page()
+  let e = { ...task(), doc: { title: 'Fix the map' } }
+  p.draw(h(Edit.Text, { e, comp: 'doc', prop: 'body', multi: true }))
+  await p.fire(p.$('.Edit'), 'dblclick')
+  assertEquals(p.$('.Edit').isContentEditable, false)
+})
+
+test('a value made read-only while typed over closes and emits nothing', async () => {
+  using p = page()
+  let at = { e: task(), comp: 'doc', prop: 'body', multi: true }
+  p.draw(h(Edit.Text, at))
+  await p.fire(p.$('.Edit'), 'dblclick')
+  p.$('.Edit').textContent = 'unsaved words'
+  p.draw(h(Edit.Text, { ...at, readOnly: true }))
+  await tick()
+  assertEquals(p.$('.Edit').textContent, 'Stored body')
+  assertEquals(p.$('.Edit').isContentEditable, false)
+  assertEquals(p.emitted, [])
 })
 
 test("a closed set's choices float beside the value, the held one marked", async () => {
   using p = page({ wears: (_c, _p, v) => h('i', { class: 'Dot' }, v[0]) })
-  p.draw(prop('status'))
-  await p.fire(p.$('.Prop_Val'), 'click')
+  p.draw(value('status'))
+  await press(p)
   assertEquals(p.$('.Prop_Val').textContent, 'open') // the face stays
   let tabs = [...p.root.ownerDocument.querySelectorAll('.Overlay .Prop_Tab')]
   assertEquals(tabs.map((t) => t.textContent), ['oopen', 'ddone'])
   assert(tabs[0].className.includes('Prop_Tab-on'))
   await p.fire(tabs[1], 'click')
-  assertEquals(p.applied, [[{ entity: { eid: T }, task: { status: 'done' } }]])
+  assertEquals(p.emitted, [{ entity: { eid: T }, task: { status: 'done' } }])
+  assertEquals(p.root.ownerDocument.querySelector('.Overlay'), null)
+})
+
+test('the control alone opens where its owner says, and closes on a choice', async () => {
+  using p = page()
+  let anchor = { current: null }
+  let mine: Bundle[] = []
+  p.draw(
+    h(Edit.Control, {
+      e: task(),
+      comp: 'task',
+      prop: 'status',
+      anchor,
+      onChange: (b) => void mine.push(b),
+    }),
+  )
+  assertEquals(p.root.ownerDocument.querySelector('.Overlay'), null)
+  p.front.mutate([{
+    entity: { eid: at('', T, 'task', 'status') },
+    Edit: { open: true },
+  }])
+  await tick()
+  let tabs = [...p.root.ownerDocument.querySelectorAll('.Overlay .Prop_Tab')]
+  await p.fire(tabs[1], 'click')
+  assertEquals(mine, [{ entity: { eid: T }, task: { status: 'done' } }])
   assertEquals(p.root.ownerDocument.querySelector('.Overlay'), null)
 })
 
 test('a flag is its own toggle', async () => {
   using p = page()
-  p.draw(prop('urgent'))
-  await p.fire(p.$('.Prop_Val'), 'click')
-  assertEquals(p.applied, [[{ entity: { eid: T }, task: { urgent: false } }]])
+  p.draw(value('urgent'))
+  await press(p)
+  assertEquals(p.emitted, [{ entity: { eid: T }, task: { urgent: false } }])
 })
 
 test("a reference is picked from the graph's answer, or cleared", async () => {
   using p = page()
-  p.draw(prop('owner'))
-  await p.fire(p.$('.Prop_Val'), 'click')
+  p.draw(value('owner'))
+  await press(p)
   let find = p.$<HTMLInputElement>('.Overlay .Prop_Find')
   find.value = 'draw'
   await p.fire(find, 'input')
@@ -276,17 +353,15 @@ test("a reference is picked from the graph's answer, or cleared", async () => {
   assert(p.asked[0].includes('draw'))
   assertEquals(row.textContent, 'T-2 — Draw the map')
   await p.fire(row, 'click')
-  await p.fire(p.$('.Prop_Val'), 'click')
+  await press(p)
   await p.fire(p.$('.Overlay .Prop_Row-none'), 'click')
-  assertEquals(p.applied.map((c) => c[0].task), [{ owner: P }, {
-    owner: null,
-  }])
+  assertEquals(p.emitted.map((b) => b.task), [{ owner: P }, { owner: null }])
 })
 
 test('a well offers the values seen so far, and what is typed', async () => {
   using p = page()
-  p.draw(prop('domain'))
-  await p.fire(p.$('.Prop_Val'), 'click')
+  p.draw(value('domain'))
+  await press(p)
   let rows = () =>
     [...p.root.ownerDocument.querySelectorAll('.Overlay .Prop_Row')]
       .map((r) => r.textContent)
@@ -295,27 +370,25 @@ test('a well offers the values seen so far, and what is typed', async () => {
   find.value = 'ops'
   await p.fire(find, 'input')
   assertEquals(rows(), ['none', '“ops”'])
-  await p.fire(find, 'keydown', 'Enter')
-  assertEquals(p.applied, [[{ entity: { eid: T }, task: { domain: 'ops' } }]])
+  await p.fire(p.$('.Overlay .Prop_Find'), 'keydown', 'Enter')
+  assertEquals(p.emitted, [{ entity: { eid: T }, task: { domain: 'ops' } }])
 })
 
 test("a number is typed over in place, in the host's language", async () => {
   using p = page({ editing: { parse: (v) => Number(String(v).slice(1)) } })
-  p.draw(prop('prio'))
-  await p.fire(p.$('.Prop_Val'), 'click')
-  await tick()
+  p.draw(value('prio'))
+  await press(p)
   let edit = p.$('.Prop .Edit')
   assert(edit.isContentEditable)
   assertEquals(edit.textContent, '3')
   await p.type(edit, 'P2')
-  assertEquals(p.applied, [[{ entity: { eid: T }, task: { prio: 2 } }]])
+  assertEquals(p.emitted, [{ entity: { eid: T }, task: { prio: 2 } }])
 })
 
 test("a query is typed in the host's query field, or as text", async () => {
   using p = page()
-  p.draw(prop('line'))
-  await p.fire(p.$('.Prop_Val'), 'click')
-  await tick()
+  p.draw(value('line'))
+  await press(p)
   assert(p.$('.Prop .Edit').isContentEditable)
   using q = page({
     fields: {
@@ -323,33 +396,25 @@ test("a query is typed in the host's query field, or as text", async () => {
       set: () => {},
     },
   })
-  q.draw(prop('line'))
-  await q.fire(q.$('.Prop_Val'), 'click')
+  q.draw(value('line'))
+  await press(q)
   assertEquals(q.$('.Prop_Query .Field').dataset.id, `query:${T}:task.line`)
 })
 
 test('a JSON value is typed over as its JSON text', async () => {
   using p = page()
-  p.draw(prop('data'))
-  await p.fire(p.$('.Prop_Val'), 'click')
+  p.draw(value('data'))
+  await press(p)
   let edit = p.$('.Prop .Edit')
   assertEquals(edit.textContent, '{"a":1}')
   await p.type(edit, '{"a":2}')
-  assertEquals(p.applied, [[{ entity: { eid: T }, task: { data: { a: 2 } } }]])
+  assertEquals(p.emitted, [{ entity: { eid: T }, task: { data: { a: 2 } } }])
 })
 
 test('a value the vocabulary keeps from clients is never offered', async () => {
   using p = page()
-  p.draw(prop('seen'))
+  p.draw(value('seen'))
   assertEquals(p.root.querySelector('.Prop-live'), null)
-  await p.fire(p.$('.Prop_Val'), 'click')
+  await press(p)
   assertEquals(p.root.querySelector('.Edit, .Overlay'), null)
-})
-
-test("a page's own registry draws the editors it selects", () => {
-  using p = page({
-    renderView: (_eid, view, ctx) => h('em', null, `${view} ${ctx.prop}`),
-  })
-  p.draw(h(Edit, { eid: T, comp: 'doc', prop: 'title' }))
-  assertEquals(p.root.innerHTML, '<em>Inline.Edit title</em>')
 })

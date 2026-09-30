@@ -49,7 +49,7 @@ export let preflight = (
             }
             return after(check([b], tx), (checked) => {
               let st = state()
-              return after(mutate(checked, tx, st), (written) =>
+              return after(mutate(checked, tx, st, vocab), (written) =>
                 after(
                   cascade(written, tx, vocab, st),
                   () => [...out, ...checked],

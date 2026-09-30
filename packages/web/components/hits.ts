@@ -1,8 +1,8 @@
 // The browser's server search: the rows a query line answers over the whole
 // graph, not what happens to be loaded. `rows` is what a picker lists (the
-// editors' host `find`, @yaks/editors); `hits` is the palette's ranked form
-// of the same answer. A picker's line and its debounced hook are
-// @yaks/editors' `pickLine` and `useHits`.
+// UX host's `find`, @yaks/ux); `hits` is the palette's ranked form of the
+// same answer. A picker's line and its debounced hook are @yaks/ux's
+// `pickLine` and `useHits`.
 import { base } from '../live.ts'
 import { hitOf, rowOf } from '../client.ts'
 import type { Hit } from '../types.ts'

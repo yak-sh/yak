@@ -69,6 +69,18 @@ follow (web's nav.tsx listens for it).
 
 A variant for a pseudo-class (`hover`) lets the style guide show that state.
 
+## What floats
+
+A UX component (@yaks/ux) is handed the platform's primitives rather than
+building them, and this package holds the browser's (float.ts). `Float` is the
+popover: its children render into an `Overlay` fixed on document.body at the
+live rect of an anchor, so no clipping or scaled container cuts them off, and
+they read the same context as the tree they spring from. `place`, `placeAt` and
+`usePlaceAt` put a fixed element on a rect or a point, clamped to the viewport;
+`tips` floats a `Tip` for every `[data-tip]`. A terminal has nowhere to float,
+so a terminal's host hands down no `Float` and what would float stays in the
+flow.
+
 A `Table` is a grid, not an html table: its `cols` say what each column holds
 (`h(Table, { cols: [null, 'prose', 'num'] }, …)`, the variant its cells wear or
 nothing for text), each row is a subgrid of it so the cells line up, and a cell
@@ -157,6 +169,7 @@ picks it. It reads nothing from a graph.
 | `routes.ts`     | `/ui`                                                                |
 | `cli.ts`        | `yak ui`                                                             |
 | `tui.ts`        | the style guide in a terminal                                        |
+| `float.ts`      | what floats in a browser: `Float`, `place`, `tips`                   |
 
 A new component is its module and its CSS file, and one line in its group in
 `kit.ts`.

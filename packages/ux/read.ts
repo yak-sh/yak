@@ -1,33 +1,13 @@
 /**
- * What the editors read off the vocabulary and a bundle: pure functions.
- * Whether a property may be written, whether it is a body the page holds
- * back, the well its suggestions come from, a value as its face says it.
+ * What an `Edit` reads off the vocabulary: pure functions. Whether a property
+ * may be written, whether it is a body, the well its suggestions come from, a
+ * value as its face says it.
  *
  * @module
  */
 
 import { short } from '@yaks/id'
 import type { Vocab } from '@yaks/vocab'
-import type { Bundle } from './host.ts'
-
-/** The eid of what a view was handed: a bundle, or a host's own shape of an
- * entity that keeps its eid at the top. */
-export let eidOf = (e: unknown): string => {
-  let b = e as { entity?: { eid?: string }; eid?: string }
-  return String(b.entity?.eid ?? b.eid ?? '')
-}
-
-/** A property's value, as the bundle holds it. */
-export let columnValue = (
-  b: Bundle | undefined,
-  comp: string,
-  prop: string,
-): unknown => {
-  let row = b?.[comp]
-  return row && typeof row == 'object'
-    ? (row as Record<string, unknown>)[prop]
-    : undefined
-}
 
 /** Whether a client may write this property: its component is on the wire and
  * the property is neither stamped nor computed. */

@@ -3,9 +3,10 @@
  * `/inspect`. Its host is the smallest that works: the vocabulary the server
  * serves (@yaks/api `/vocab`), a @yaks/client box connected to that server,
  * the page's own graph for the inspector's state and the index's field
- * (@yaks/filter), and the views, in the three panes (./Frame.ts). A value is
- * changed through @yaks/editors, bound to the same host, its pickers asking
- * @yaks/api's `/query` for their candidates. Nothing else is on the page.
+ * (@yaks/filter) and each value's `Edit` (@yaks/ux), and the views, in the
+ * three panes (./Frame.ts). A value is changed through @yaks/ux, handed the
+ * same host at the root, its pickers asking @yaks/api's `/query` for their
+ * candidates. Nothing else is on the page.
  *
  * The address is the page shown: a link inside the inspector is followed in
  * place, and back and forward walk what was followed. The keys step through
@@ -19,10 +20,11 @@
 import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { client } from '@yaks/client'
-import { bind } from '@yaks/editors'
 import { filters } from '@yaks/filter'
 import { docs as fieldDocs } from '@yaks/filter/vocab'
-import { Panes } from '@yaks/ui'
+import { Float, Panes } from '@yaks/ui'
+import { Ux } from '@yaks/ux'
+import { docs as uxDocs } from '@yaks/ux/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { inspector } from './door.ts'
 import { frame } from './Frame.ts'
@@ -45,7 +47,7 @@ let box = client(vocab, [], {
   // that goes wrong on the way is the console's.
   report: (t) => t.refused || console.warn('@yaks/inspect', t.error, t.sent),
 })
-let front = client(loadVocab([...fieldDocs, ...own]), [], {
+let front = client(loadVocab([...fieldDocs, ...uxDocs, ...own]), [], {
   vault: false,
   wireVault: false,
 })
@@ -70,7 +72,7 @@ let find = async (line: string, limit: number, signal?: AbortSignal) => {
   if (!r.ok) throw new Error(await r.text())
   return await r.json()
 }
-bind(editing(host, { find, fields }))
+let ux = editing(host, { find, fields, Float })
 let door = inspector(views, host)
 let Frame = frame(door, {
   Bar: ({ id }) =>
@@ -136,4 +138,4 @@ document.addEventListener('keydown', (ev) => {
 
 let Page = () => h(Frame, { where: where.value })
 
-render(h(Page, null), document.body)
+render(h(Ux, { host: ux }, h(Page, null)), document.body)

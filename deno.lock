@@ -1839,13 +1839,6 @@
           "jsr:@std/assert@1"
         ]
       },
-      "packages/editors": {
-        "dependencies": [
-          "jsr:@std/assert@1",
-          "npm:linkedom@~0.18.12",
-          "npm:preact@^10.29.1"
-        ]
-      },
       "packages/effects": {
         "dependencies": [
           "jsr:@std/assert@1"
@@ -2165,6 +2158,14 @@
           "jsr:@std/assert@1",
           "npm:@preact/signals@^2.9.0",
           "npm:preact-render-to-string@6.7.0",
+          "npm:preact@^10.29.1"
+        ]
+      },
+      "packages/ux": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:@preact/signals@^2.9.0",
+          "npm:linkedom@~0.18.12",
           "npm:preact@^10.29.1"
         ]
       },

@@ -5,7 +5,6 @@
 // server search; the hook here debounces it and aborts a stale request, so a
 // late answer never repaints a newer query.
 import { useEffect, useState } from 'preact/hooks'
-import { type Bundle, host } from './host.ts'
 
 /** A server search: the entities a line answers, at most `limit`. */
 export type Find<T> = (
@@ -43,27 +42,20 @@ export let pickLine = (q: string, comp = ''): string => {
   return [q, filter, '*'].filter(Boolean).join(' ')
 }
 
-/** A live picker's hits: refetched as the line settles (150ms), the last
- * request aborted so a slow answer can't overwrite a newer one. An empty line
- * clears the list without a round trip. The search is the host's `find`
- * unless another is named (a palette's ranked hits). */
-export function useHits(line: string, limit?: number): Bundle[]
-export function useHits<T>(line: string, limit: number, find: Find<T>): T[]
-export function useHits(
-  line: string,
-  limit = 8,
-  find?: Find<unknown>,
-): unknown[] {
-  let [found, setFound] = useState<unknown[]>([])
+/** A live picker's hits, asked of `find`: refetched as the line settles
+ * (150ms), the last request aborted so a slow answer can't overwrite a newer
+ * one. An empty line clears the list without a round trip. The answer is an
+ * answer to a query, not a component's own state, so it is held here. */
+export let useHits = <T>(line: string, limit: number, find: Find<T>): T[] => {
+  let [found, setFound] = useState<T[]>([])
   useEffect(() => {
     if (!line) {
       setFound([])
       return
     }
-    let search = find ?? host().find
     let abort = new AbortController()
     let timer = setTimeout(
-      () => search(line, limit, abort.signal).then(setFound).catch(() => {}),
+      () => find(line, limit, abort.signal).then(setFound).catch(() => {}),
       150,
     )
     return () => {

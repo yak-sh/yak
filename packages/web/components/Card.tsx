@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { camera, ent, mutate, pinZ, toFront } from '../live.ts'
 import { type Pinned } from '../types.ts'
 import * as ui from '@yaks/ui'
+import { Ux } from '@yaks/ux'
 import { applicable } from './registry.ts'
 import {
   dragData,
@@ -216,51 +217,57 @@ export let Card = (
       // and selectable text keep the browser's own menu.
       onContextMenu={cardMenuAt(ent(p.target))}
     >
-      <Frame elRef={frame}>
-        <Tabs>
-          <Entity eid={p.target} view='Card.Title' />
-          {filterable.has(p.view) && <FilterInput eid={p.target} />}
-          <ui.Tabs>
-            {applicable(ent(p.target)).map((v) => (
-              <Tab
-                type='button'
-                mod={v == p.view && 'on'}
-                draggable
-                onDragStart={(e: DragEvent) => dragData(e, p.target, v, p.w)}
-                onClick={() =>
-                  v != p.view &&
-                  mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
-                key={v}
-                aria-label={v}
-                data-tip={v}
-              >
-                <TabFace view={v} eid={p.target} />
-              </Tab>
-            ))}
-          </ui.Tabs>
-          {onMinimize && (
-            <Min type='button' aria-label='minimize' onClick={onMinimize}>
-              −
-            </Min>
-          )}
-          <X
-            type='button'
-            onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
-          >
-            ×
-          </X>
-        </Tabs>
-        <Scroll>
-          {
-            /* The frame's ask wears the Card qualifier: a view with a card
+      {
+        /* What is changed on this card is this card's: the same value on
+          another card, or twice on one page, keeps a state of its own. */
+      }
+      <Ux at={p.eid}>
+        <Frame elRef={frame}>
+          <Tabs>
+            <Entity eid={p.target} view='Card.Title' />
+            {filterable.has(p.view) && <FilterInput eid={p.target} />}
+            <ui.Tabs>
+              {applicable(ent(p.target)).map((v) => (
+                <Tab
+                  type='button'
+                  mod={v == p.view && 'on'}
+                  draggable
+                  onDragStart={(e: DragEvent) => dragData(e, p.target, v, p.w)}
+                  onClick={() =>
+                    v != p.view &&
+                    mutate({ eid: p.eid, name: 'card', comp: { view: v } })}
+                  key={v}
+                  aria-label={v}
+                  data-tip={v}
+                >
+                  <TabFace view={v} eid={p.target} />
+                </Tab>
+              ))}
+            </ui.Tabs>
+            {onMinimize && (
+              <Min type='button' aria-label='minimize' onClick={onMinimize}>
+                −
+              </Min>
+            )}
+            <X
+              type='button'
+              onClick={() => mutate({ eid: p.eid, name: 'entity', comp: null })}
+            >
+              ×
+            </X>
+          </Tabs>
+          <Scroll>
+            {
+              /* The frame's ask wears the Card qualifier: a view with a card
               face (Card.Full) serves it, anything else walks to the plain
               role — the titlebar above already shows the head. */
-          }
-          {!collection || near
-            ? <Entity eid={p.target} view={`Card.${p.view}`} />
-            : <div class={p.view} />}
-        </Scroll>
-      </Frame>
+            }
+            {!collection || near
+              ? <Entity eid={p.target} view={`Card.${p.view}`} />
+              : <div class={p.view} />}
+          </Scroll>
+        </Frame>
+      </Ux>
       {!docked && resizeDirs.map((d) => (
         <Handle
           key={d}

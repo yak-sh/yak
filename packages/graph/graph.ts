@@ -562,7 +562,7 @@ export let graph = (opts: Options): Graph => {
                   )
                   return checks.length
                     ? ordered(b, tx, vocab, snap, st, checks)
-                    : mutate(b, held, st)
+                    : mutate(b, held, st, vocab)
                 }),
                 phase('cascade', tx, (b) =>
                   after(b.length ? complete(tx, snap) : undefined, () =>
@@ -574,6 +574,9 @@ export let graph = (opts: Options): Graph => {
                   births(b, st), holds),
                 flush,
                 phase('journal', tx),
+                // What was heard and never written joins the change again.
+                (b: Bundle[]) =>
+                  st.heard.length ? [...b, ...st.heard] : b,
                 phase('commit', tx),
                 flush,
               ],

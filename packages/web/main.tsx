@@ -2,6 +2,8 @@ import { render } from 'preact'
 import { agreementProbe, boot, clientId, config } from './live.ts'
 import { restore } from './components/nav.tsx'
 import { App } from './components/App.tsx'
+import { ux } from './components/registry.ts'
+import { Ux } from '@yaks/ux'
 
 // Name this tab to the socket before it opens, so its writes journal a
 // resolved actor (T-6669). Fill the cache, open the socket, render.
@@ -20,4 +22,9 @@ restore()
 // looks, but nothing reads it back to move the tab. Rendering answers to the
 // URL and to gestures, never to graph state, so there is no follow to arm here.
 
-render(<App />, document.body)
+render(
+  <Ux host={ux}>
+    <App />
+  </Ux>,
+  document.body,
+)

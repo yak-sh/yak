@@ -11,6 +11,10 @@
  *   `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Panes`, `Head`, `Notes`,
  *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
+ * - `Float`, `place`, `placeAt`, `usePlaceAt`, `tips`: what floats above a
+ *   browser's page, clear of every clipping container (float.ts), the
+ *   browser's form of the popover primitive a UX component (@yaks/ux) is
+ *   handed.
  * - `relative`: a moment in words, what a `Stamp` says.
  * - `themes`: every theme by name, `everforest` the first and `rosepine`;
  *   `stylesheet(theme)` dresses a browser, `sheet(theme)` a terminal (kit.ts).
@@ -39,6 +43,14 @@ export { Head } from './Head.ts'
 export { Index } from './Index.ts'
 export { Notes } from './Notes.ts'
 export { Overlay } from './Overlay.ts'
+export {
+  Float,
+  type FloatProps,
+  place,
+  placeAt,
+  tips,
+  usePlaceAt,
+} from './float.ts'
 export { Pager } from './Pager.ts'
 export { Panes } from './Panes.ts'
 export { Prop } from './Prop.ts'

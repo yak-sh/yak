@@ -2,7 +2,8 @@ import { type Ent } from '../../types.ts'
 import { block } from '@yaks/ui'
 import { Stamp } from '../Stamp.tsx'
 import { TitleEdit } from '../title.tsx'
-import { Prop } from '@yaks/editors'
+import { Edit } from '@yaks/ux'
+import { bundle } from '../registry.ts'
 import { Entity } from '../Entity.tsx'
 import { Id } from './Inline.tsx'
 
@@ -30,8 +31,8 @@ let Config = (
 ) => (
   <Field>
     <Label>{name}</Label>
-    <Prop
-      eid={e.eid}
+    <Edit
+      e={bundle(e)}
       comp={comp}
       prop={prop}
       name={name}
