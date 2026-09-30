@@ -175,6 +175,19 @@ test('vanished bindings preserve history and returning bindings reuse it', async
   ))
 })
 
+test('an answer that lands after its binding vanished is kept for its return', async () => {
+  let { g, runner } = await shop({}, [], [code()])
+  await g.apply([source('a'), builder()])
+  let build = run(ids.builder, ['a'])
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Elsewhere' } }])
+  await drive(g, runner, build)
+  let made = comp(await one(g, output(build)), 'built')!
+  assertEquals(current(comp(await one(g, build), 'build')!, made), false)
+  await g.apply([{ entity: { eid: 'a' }, doc: { title: 'Source' } }])
+  assert(current(comp(await one(g, build), 'build')!, made))
+  assertEquals((await calls(g, build)).length, 1)
+})
+
 test('a code tool can return an artifact output without owning built rows', async () => {
   let artifact = 'a-artifact'
   let media: Tool = {

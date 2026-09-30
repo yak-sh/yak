@@ -105,7 +105,9 @@ export let spent = (call: Bundle, value: unknown): Bundle[] => {
     : [{ entity: call.entity, cost: { dollars: n, reported: true } }]
 }
 
-/** A completed call's output value, with its build as a concurrency guard. */
+/** A completed call's output value, with its build as a concurrency guard. An
+ * answer whose binding vanished while it was asked is kept, not current, so a
+ * binding that returns under the same key has it without asking again. */
 export let answer = async (
   tx: Tx,
   call: Bundle,
@@ -115,7 +117,7 @@ export let answer = async (
   let source = str(comp(call, 'call')?.source)
   let [run] = await tx.get([source])
   let b = comp(run, BUILD)
-  if (!b || b.stale || b.call != call.entity.eid) return []
+  if (!b || b.call != call.entity.eid) return []
   let args = comp(call, 'call')?.args as { binding?: Binding; key?: string }
   if (!args?.binding || args.key != b.key) return []
   let specs = parse(value, ids(args.binding), vocab)
@@ -135,7 +137,7 @@ export let answer = async (
       [BUILD]: {
         call: token(call.entity.eid),
         key: token(b.key),
-        stale: token(false),
+        stale: token(b.stale ?? null),
       },
     },
   }]
