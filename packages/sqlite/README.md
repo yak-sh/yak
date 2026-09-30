@@ -131,6 +131,7 @@ aggregates.
 | `install()`          | Creates/updates schema, indexes, metadata, and archetype classification |
 | `read(query, opts?)` | Matching bundles                                                        |
 | `rows(query, opts?)` | Raw result rows                                                         |
+| `screen(query)`      | A statement selecting the ids a query admits, compiled as reads are     |
 | `get(eids)`          | Those entities as stored, read without taking the write lock            |
 | `tx(body)`           | Runs the callback in a transaction and returns its result               |
 

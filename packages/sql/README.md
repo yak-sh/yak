@@ -101,8 +101,8 @@ behind the SQLite dialect ([sqlite.ts](./sqlite.ts)), which is internal.
 ## Matching on the archetype column
 
 An archetype describes an entity's set of components. With `opts.archetypes`, a
-presence test can compile to `entity.archetype in (…)` instead of a component
-join. `archetypeSet(cache, ids)` constructs this resolver from an
+presence test can compile to `entity.archetype in (…)` instead of a read of the
+component's table. `archetypeSet(cache, ids)` constructs this resolver from an
 `@yaks/archetype` cache and a map from descriptor eids to database integer ids.
 
 This optimization handles AND/OR/NOT, presence through a reference or reverse
@@ -111,10 +111,11 @@ kinds preceding it in the vocabulary's ordering. Value comparisons still read
 the relevant columns.
 
 The resolver must describe a current, complete catalog for the query. Returning
-`undefined` requests the ordinary join; returning `[]` means nothing matches.
-Without a resolver or a dialect's `archetype` expression, compilation uses
-joins. `@yaks/sqlite` loads the catalog lazily when its vocabulary includes
-archetypes.
+`undefined` declines; returning `[]` means nothing matches. Without a resolver
+or a dialect's `archetype` expression, presence tests the component's own owners
+(`id in (select entity from memo)`) and absence the rest, which SQLite drives
+from the component's rows with or without table statistics. `@yaks/sqlite` loads
+the catalog lazily when its vocabulary includes archetypes.
 
 ## Computed properties
 

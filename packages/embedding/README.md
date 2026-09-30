@@ -73,7 +73,9 @@ Call `sweep()` after text changes or schedule it through the plugin below.
 comes from the configured text that made the vector, including resolved text for
 a property stored by address. An excerpt has no match markers: a semantic hit
 need not contain any search word. It returns at most 20 hits by default;
-`limit`, `floor` and an optional candidate `screen` can narrow them.
+`limit`, `floor` and an optional candidate `screen` can narrow them. The screen
+is asked for once the words are embedded (@yaks/sql `Screen`), so a store's
+`screen(query)` names the archetypes the search then reads.
 
 ## As a plugin
 
