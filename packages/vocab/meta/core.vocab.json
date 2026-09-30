@@ -77,6 +77,14 @@
       "type": "boolean",
       "default": false
     },
+    "status": {
+      "description": "On a component: its computed status, as an ordered map from a component to the status an entity wearing it reads as, plus `default` for an entity wearing none. The first rung the entity wears wins. It gives the component a computed, read-only `status` property whose closed set is every status the map can give; an entity without the component reads null. A rung is usually a mark (a component with a stamped `at` and `by` or `via`), but any component can be one. An `extends` entry's `status` appends rungs to the declaring document's, in load order, and names no default.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "reads": {
       "description": "On a computed property: the components on other entities its value is read from, so a change to an entity wearing one of them can move it. [] = the entity's own components alone. A computed property that declares none may read anything, and every change can move it.",
       "type": "array",

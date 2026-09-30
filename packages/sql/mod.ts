@@ -18,7 +18,9 @@
 // caller through the derived hook (./derived.ts). A registered expression is
 // what lets a computed property (a status rolled up from other rows, say) be
 // filtered in SQL, through an index, instead of scanning every row in
-// JavaScript.
+// JavaScript. A status the vocabulary declares as a ladder (@yaks/vocab's
+// `status` keyword) needs no expression from the caller: it is read from the
+// declaration (./derived.ts `ladders`).
 //
 // A clause this package declines may still be compiled by another package: an
 // `Extension` (./extend.ts) claims a clause kind and lowers it to a condition,

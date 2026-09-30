@@ -19,6 +19,7 @@ import type {
   Hop,
   Identity,
   Index,
+  Ladder,
   Prop,
   PropSchema,
   Scalar,
@@ -27,6 +28,7 @@ import type {
 import type { Keywords } from './keywords.ts'
 import { kept, paced, said, type Sync } from './lifetime.ts'
 import { kindOrder as deriveKindOrder } from './order.ts'
+import { appended, ladderOf, statusProp } from './status.ts'
 
 /** A name this vocabulary does not know. One error for every caller, raised
  * here because the vocabulary is what decides: `route()` raises it when
@@ -65,8 +67,16 @@ export class Ambiguous extends Error {
 // The keywords an extension entry may carry. Everything else about a component
 // — its kind, its prefix, its indexes, whether it reaches the wire — belongs to
 // the document that declares it, so an extension that states one of those is a
-// mistake rather than an override.
-let ADDABLE = ['component', 'extends', 'type', 'description', 'properties']
+// mistake rather than an override. `status` adds rungs to the ladder the
+// declaring document gives it (./status.ts).
+let ADDABLE = [
+  'component',
+  'extends',
+  'type',
+  'description',
+  'properties',
+  'status',
+]
 
 // A component another document declares, with one plugin's properties added.
 // The spine is what this exists for: `entity` is declared once, and a plugin
@@ -99,8 +109,16 @@ let extended = (
     properties[prop] = schema
   }
   let need = [...base.required ?? [], ...more.required ?? []]
-  return { ...base, properties, ...need.length ? { required: need } : {} }
+  let out = { ...base, properties, ...need.length ? { required: need } : {} }
+  return more.status ? appended(name, out, more.status) : out
 }
+
+// An extension that only adds rungs to a status, where no document here
+// declares the component: a graph composed without the package that declares
+// it has none of its entities to read a status of, as with `search`.
+let rungsOnly = (more: PropSchema): boolean =>
+  !!more.status && !Object.keys(more.properties ?? {}).length &&
+  !more.required?.length
 
 // A component's `search` list: the text its entities are found by, read off
 // another component — `entry` names `content.body`, so a transcript entry is
@@ -594,7 +612,20 @@ export let loadVocab = (
     }
   }
   for (let [name, schema] of adding) {
+    if (!defs[name] && rungsOnly(schema)) continue
     defs[name] = extended(name, defs[name], schema)
+  }
+  // A component's `status` ladder gives it a computed `status` property, which
+  // every reader below then sees as declared (./status.ts).
+  let ladders: Record<string, Ladder> = {}
+  for (let [name, schema] of Object.entries(defs)) {
+    let l = ladderOf(name, schema, defs)
+    if (!l) continue
+    ladders[name] = l
+    defs[name] = {
+      ...schema,
+      properties: { ...schema.properties, status: statusProp(l) },
+    }
   }
   let lists: Record<string, string[]> = {}
   for (let [name, schema] of Object.entries(defs)) {
@@ -662,6 +693,7 @@ export let loadVocab = (
       durable: kept(d.durable),
       pace: paced(d.pace),
       search: lists[name],
+      ...(ladders[name] ? { ladder: ladders[name] } : {}),
       keywords: carried(d, compWords),
     }
   }

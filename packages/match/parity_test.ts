@@ -457,6 +457,85 @@ test('a computed property nobody registered still declines', () => {
   assertThrows(() => matcher('.task&.order=status', todo), Unsupported)
 })
 
+// ---- a status ladder, declared once in the vocabulary
+// ---------------------------
+//
+// A component's `status` keyword (@yaks/vocab) is the rule itself: neither
+// side is handed an expression, and each builds its reading from the
+// declaration. Another document's rung (`held`, appended after the declaring
+// document's) reaches both at once.
+
+let laddered: Vocab = loadVocab([
+  spine,
+  {
+    $defs: {
+      job: {
+        component: true,
+        type: 'object',
+        status: { failed: 'failed', finished: 'done', default: 'pending' },
+        properties: { rank: { type: 'number' } },
+      },
+      failed: { component: true, type: 'object' },
+      finished: { component: true, type: 'object' },
+      held: { component: true, type: 'object' },
+    },
+  },
+  {
+    $defs: {
+      job: { component: true, extends: true, status: { held: 'running' } },
+    },
+  },
+])
+let JOBS: Bundle[] = [
+  { entity: { eid: 'j1', num: 1 }, job: { rank: 1 } },
+  { entity: { eid: 'j2', num: 2 }, job: { rank: 2 }, finished: {} },
+  { entity: { eid: 'j3', num: 3 }, job: { rank: 3 }, failed: {} },
+  // both: the first rung wins
+  { entity: { eid: 'j4', num: 4 }, job: { rank: 4 }, failed: {}, finished: {} },
+  { entity: { eid: 'j5', num: 5 }, job: { rank: 5 }, held: {} },
+  { entity: { eid: 'j6', num: 6 }, job: { rank: 6 }, held: {}, finished: {} },
+  // a rung without the component: no status at all
+  { entity: { eid: 'x1', num: 7 }, finished: {} },
+]
+let LADDER = [
+  '.job.status=pending',
+  '.job.status=done',
+  '.job.status=failed',
+  '.job.status=running',
+  '.status=pending,running',
+  '.job.status=failed,done&.rank>=3',
+  '.job.status!=done',
+  '.job.status~=ail',
+  '!job.status',
+  '.job.status',
+  '.job .order=status',
+  '.job .order=-status&.limit=3',
+  '.job .order=status&.after=4',
+]
+
+test('a status ladder reads the same from both sides, from the vocabulary alone', () => {
+  let s = loaded(laddered, JOBS)
+  for (let q of LADDER) {
+    let mine = eids(matcher(q, laddered, { now: NOW })(JOBS))
+    let theirs = eids(fromSql(s, q))
+    if (asks(q)) assertEquals(mine, theirs, q)
+    else assertEquals(mine.sort(), theirs.sort(), q)
+  }
+  // and the agreement is not vacuous
+  let sel = (q: string) => eids(matcher(q, laddered)(JOBS)).sort()
+  assertEquals(sel('.job.status=failed'), ['j3', 'j4'])
+  assertEquals(sel('.job.status=done'), ['j2', 'j6'])
+  assertEquals(sel('.job.status=running'), ['j5'])
+  assertEquals(sel('.job.status=pending'), ['j1'])
+  // a gather carries the status it read, the way a page is handed it
+  assertEquals(
+    s.get(['j4', 'j5', 'x1']).map((b) =>
+      (b.job as { status?: string })?.status
+    ),
+    ['failed', 'running', undefined],
+  )
+})
+
 // An order names a property. A whole component in its place is refused by
 // both compilers alike, and the refusal names what the caller could order by.
 test('an order naming a whole component declines, naming its properties', () => {

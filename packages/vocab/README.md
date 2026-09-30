@@ -68,6 +68,7 @@ component table needs on top:
 | `death`      | prop  | `cascade` \| `detach` \| `release` \| `keep` when the target is deleted |
 | `computed`   | both  | `true` = derived, never stored: a query-only rank, a journal record     |
 | `reads`      | prop  | on a computed prop: components on other entities it reads; `[]` = none  |
+| `status`     | comp  | `{"completed": "done", "default": "open"}`: a computed `status`         |
 | `stamped`    | prop  | `true` = the server owns it: clients read it, never write it            |
 | `search`     | both  | prop: `true` = full-text indexed. comp: `["content.body"]`, found by it |
 | `aliases`    | prop  | input forms that resolve to an enum member                              |
@@ -109,6 +110,39 @@ nothing writes it: its entities are rows another package keeps, read through the
 backing that package supplies (@yaks/sql `Backing`), as @yaks/journal's `_tx`
 and `_change` are. It is never wire-writable, and `refProps()` leaves out its
 references, which no reverse read over stored rows can find.
+
+**`status` computes a component's status from what its entity wears.** The
+keyword is an ordered map from a component to the status it gives, plus
+`default`. The first component in the map the entity wears gives its status, an
+entity wearing none reads as `default`, and one without the component reads
+null. The component gains a computed, read-only `status` property whose closed
+set is every status the map can give, and `comp(name).ladder` reports the map as
+rungs. [@yaks/sql](../sql/README.md) reads it as SQL and
+[@yaks/match](../match/README.md) off a bundle, both from this one declaration,
+so no package writes the rule out. The rungs are usually marks (a component with
+a stamped `at` and a `by` or `via`), but any component can be one. The following
+is a `$defs` fragment:
+
+```json
+{
+  "task": {
+    "component": true,
+    "type": "object",
+    "status": {
+      "cancelled": "cancelled",
+      "completed": "done",
+      "default": "open"
+    }
+  }
+}
+```
+
+A task wearing `completed` reads `.task.status=done`; one wearing both marks
+reads `cancelled`. Another package adds a rung with an `extends` entry, as
+@yaks/session reads a held claim as `wip`:
+`"task": {"component": true, "extends": true, "status": {"claim": "wip"}}`. Its
+rungs come after the declaring document's, in load order, and it names no
+default. A rung whose component the load does not declare is left out.
 
 Storage adapters interpret the loaded metadata: `type: integer` stores with
 integer affinity where a plain `number` uses SQLite REAL affinity, `enum`

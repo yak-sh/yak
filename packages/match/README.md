@@ -352,6 +352,13 @@ type still comes from the vocabulary, and ordering uses the registered function
 too. A registration also serves as a plain read override for a stored property.
 A computed property nobody registered is refused.
 
+A status ladder needs no registration. A component whose vocabulary declares
+`status` ([@yaks/vocab](../vocab/README.md)) has its computed `status` read from
+that declaration, as @yaks/sql reads it, and `statusOf(vocab, comp, bundle)`
+reads it off one entity in hand: the first rung the entity wears, else the
+status the bundle carries (what a store read with its whole ladder), else the
+default.
+
 ## Refused queries
 
 Unsupported query features throw

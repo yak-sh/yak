@@ -40,10 +40,13 @@
  * compiles the same query into a test on one bundle, for a caller re-checking
  * the single entity that changed.
  *
- * A property a vocabulary declares but never stores (`computed: true`) is read
- * through `opts.computed` — `comp.prop` → the value for one bundle — the way
- * @yaks/sql reads it through its `derived` hook, so an application states the
- * rule once and both evaluators return the same rows.
+ * A component's `status` ladder (@yaks/vocab's `status` keyword) is read from
+ * the vocabulary itself, as @yaks/sql reads it, and {@link statusOf} reads it
+ * off one entity in hand. Any other property a vocabulary declares but never
+ * stores (`computed: true`) is read through `opts.computed` — `comp.prop` → the
+ * value for one bundle — the way @yaks/sql reads it through its `derived` hook,
+ * so an application states the rule once and both evaluators return the same
+ * rows.
  *
  * ## Refusals
  * A question this package cannot answer exactly throws
@@ -74,6 +77,7 @@ export {
   index,
   keyOf,
   live,
+  statusOf,
 } from './read.ts'
 // The value and text rules on their own: the pieces matcher() and filter() are
 // built from, exported for a caller testing one value or one search term by

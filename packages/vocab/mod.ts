@@ -31,6 +31,8 @@
 //   effects.ts   effectsIn(docs) → the effects a vocabulary declares: a
 //                `$defs` entry marked `effect: true` names what a commit owes,
 //                and a plugin's code runs it by that name
+//   status.ts    the `status` keyword: a component's computed status, read
+//                off the components its entity wears
 //   bundles.ts   toBundles(doc) / fromBundles(bundles): a vocabulary as
 //                entities in the meta vocabulary, and back
 

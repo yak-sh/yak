@@ -146,6 +146,11 @@ let derived: Derived = {
 extra component joins. `text(stored)` optionally reads an old/new stored value
 without looking up its owner, for example in full-text index triggers.
 
+A status ladder needs no entry. A component whose vocabulary declares `status`
+([@yaks/vocab](../vocab/README.md)) has its computed `status` read as a `case`
+over an `exists` per rung, built from that declaration for every store
+(`ladders(vocab)`); an entry of your own for the same property wins.
+
 A qualified derived property returns NULL when its entity lacks that component
 unless `worn: false` is set. Use that option for expressions intended to work
 without the component, such as an update time that falls back to creation time.

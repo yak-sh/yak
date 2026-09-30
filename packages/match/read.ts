@@ -176,6 +176,44 @@ export type Read = {
 }
 
 /**
+ * The status a component's ladder gives this entity (@yaks/vocab's `status`
+ * keyword): the first rung it wears, else the status the bundle carries, else
+ * the ladder's default. An entity without the component has none, and reads
+ * `null`, the nothing a database reads for it.
+ *
+ * The carried status is what a store read with its whole ladder, so it holds
+ * where the rungs are missing: a read answers the components it names, and
+ * `.task` alone brings the status without the `completed` behind it. A rung
+ * the bundle does carry wins over it, because a rung written here is newer
+ * evidence than the status read before it. A vocabulary that declares no
+ * ladder for the component reads only what is carried.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ *
+ * let v = loadVocab({ $defs: {
+ *   job: { component: true, type: 'object',
+ *     status: { failed: 'failed', default: 'pending' } },
+ *   failed: { component: true, type: 'object' },
+ * } })
+ * let job = { entity: { eid: 'j1' }, job: {} }
+ * assertEquals(statusOf(v, 'job', job), 'pending')
+ * assertEquals(statusOf(v, 'job', { ...job, failed: {} }), 'failed')
+ * assertEquals(statusOf(v, 'job', { ...job, job: { status: 'failed' } }), 'failed')
+ * assertEquals(statusOf(v, 'job', { entity: { eid: 'x' } }), null)
+ * ```
+ */
+export let statusOf = (v: Vocab, name: string, b: Bundle): string | null => {
+  let own = comp(b, name)
+  if (!own) return null
+  let l = v.comp(name)?.ladder
+  let carried = typeof own.status == 'string' ? own.status : undefined
+  return l?.rungs.find((r) => wears(b, r.comp))?.status ?? carried ??
+    l?.default ?? null
+}
+
+/**
  * The computed-property registry, keyed `comp.prop`: the function that reads a
  * property the vocabulary declares but never stores (`computed: true`). It is
  * the in-memory equivalent of {@link https://jsr.io/@yaks/sql/doc/~/Derived |
@@ -224,6 +262,16 @@ export let reader = (
       read: (b) => held(own(b)),
       tag: tagOf(def),
       bound: false,
+      stored: false,
+    }
+  }
+  // A ladder's status is read from the vocabulary's own declaration, and like
+  // a stored value it is null for an entity without the component.
+  if (prop == 'status' && v.comp(name)?.ladder) {
+    return {
+      read: (b) => statusOf(v, name, b),
+      tag: tagOf(def),
+      bound: true,
       stored: false,
     }
   }

@@ -23,6 +23,7 @@ import {
   cross,
   DEEP,
   type Derived,
+  derivedOf,
   doomSql,
   type Driver,
   each,
@@ -173,21 +174,25 @@ let kept = new WeakMap<
   object,
   WeakMap<object, WeakMap<object, Map<string, Projection>>>
 >()
+// A status a vocabulary's ladder computes is read like any registered one
+// (@yaks/sql `derivedOf`).
 let project = (
   v: Vocab,
   comp: string,
   derived: Derived = NONE,
   backed: Backings = NONE,
-): Projection =>
-  at(
+): Projection => {
+  let all = derivedOf(v, derived)
+  return at(
     at(
-      at(at(kept, v, () => new WeakMap()), derived, () => new WeakMap()),
+      at(at(kept, v, () => new WeakMap()), all, () => new WeakMap()),
       backed,
       () => new Map(),
     ),
     comp,
-    () => projection(v, comp, derived, backed),
+    () => projection(v, comp, all, backed),
   )
+}
 
 // One component's read, whatever names its owners: `lead` is what is selected
 // before the component's own columns, `owner` the condition on `o`, the

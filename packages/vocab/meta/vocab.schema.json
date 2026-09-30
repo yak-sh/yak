@@ -269,6 +269,13 @@
         "computed": {
           "type": "boolean"
         },
+        "status": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "sync": {
           "enum": [
             "none",

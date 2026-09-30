@@ -84,6 +84,7 @@ import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
 import {
   type Backings,
   type Derived,
+  derivedOf,
   type DerivedProp,
   eidAt,
   idOf,
@@ -1278,7 +1279,7 @@ export let bound = (
   let ctx: Ctx = {
     v: vocab,
     d: backedDialect(d, vocab, backed, spine),
-    derived: opts.derived ?? {},
+    derived: derivedOf(vocab, opts.derived),
     backed,
     ext: spine ? [] : opts.extend ?? [],
     now: opts.now ?? Date.now(),

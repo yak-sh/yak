@@ -50,6 +50,7 @@ import {
 } from './ast.ts'
 import { q } from './render.ts'
 import { type BindOpts, bound, readAt } from './bind.ts'
+import { derivedOf } from './derived.ts'
 import type { Extension } from './extend.ts'
 import { type Dialect, refEqAt, sqlite } from './sqlite.ts'
 
@@ -247,7 +248,7 @@ export let rule = (
       let read = readAt(
         vocab,
         d,
-        opts.derived ?? {},
+        derivedOf(vocab, opts.derived),
         hop.comp,
         hop.prop,
         d.ownerKey(hop.comp),

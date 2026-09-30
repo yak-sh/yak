@@ -129,8 +129,20 @@ export type CompInfo = {
    * names of another component's properties — the component's `search` list,
    * [] for most (@yaks/fts indexes it, @yaks/embedding embeds it) */
   search: string[]
+  /** its computed status, where its `status` keyword declares one — see
+   * {@link Ladder} */
+  ladder?: Ladder
   keywords: Record<string, unknown> // registered extension keywords, verbatim
 }
+
+/** One rung of a status ladder: an entity wearing `comp` reads as `status`. */
+export type Rung = { comp: string; status: string }
+
+/** A component's computed `status`, from its `status` keyword: the first rung
+ * whose component the entity wears gives the status, and an entity wearing
+ * none reads as `default`. An entity without the component itself has no
+ * status at all. The rungs are usually marks, but any component can be one. */
+export type Ladder = { rungs: Rung[]; default: string }
 
 // The properties an entity's own id is derived from, in the order the
 // derivation reads them. Empty for the ordinary component, whose entities take
@@ -224,6 +236,10 @@ export type PropSchema = {
   // true = derived, never stored: a property no column holds, or a component
   // no table holds (its rows are another package's, read through a backing)
   computed?: boolean
+  // On a component: its computed status, as an ordered map from a component
+  // to the status an entity wearing it reads as, plus `default` for one
+  // wearing none (./status.ts).
+  status?: Record<string, string>
   // On a computed property: the components on other entities it reads.
   reads?: string[]
   stamped?: boolean

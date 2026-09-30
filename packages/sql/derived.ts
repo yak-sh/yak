@@ -27,8 +27,21 @@
 //   compile(ast, vocab, { derived: { 'order.total': total } })
 
 import type { Vocab } from '@yaks/vocab'
-import { type Expr, fn, lit, notNull, op, type Select, when } from './ast.ts'
-import type { Tag } from './sqlite.ts'
+import {
+  col,
+  eq,
+  exists,
+  type Expr,
+  fn,
+  lit,
+  notNull,
+  op,
+  type Select,
+  select,
+  table,
+  when,
+} from './ast.ts'
+import { type Tag, tagOf } from './sqlite.ts'
 
 // One derived property. `expr(owner)` builds the read expression, given the
 // expression naming this entity's integer id (the row being selected, or the
@@ -61,6 +74,93 @@ export type DerivedProp = {
 // passes its own in.
 export type Derived = Record<string, DerivedProp>
 
+// ---- status ladders ----
+//
+// A component whose vocabulary declares a `status` ladder (@yaks/vocab
+// ./status.ts) has a computed `status` no caller registers: it is read here,
+// from the declaration, for every store. The value is a `case` over an
+// `exists` per rung, in ladder order, falling through to the default; the
+// binder's guard (./bind.ts `guarded`) makes it NULL for an entity without the
+// component, as every read through a left join is.
+
+// Does the entity `owner` names wear `comp`?
+let wears = (comp: string, owner: Expr): Expr =>
+  exists(select({
+    cols: [lit(1)],
+    from: table(comp, '__s'),
+    where: eq(col('entity', '__s'), owner),
+  }))
+
+let laddered = new WeakMap<Vocab, Derived>()
+
+/**
+ * The status each ladder in this vocabulary gives, as SQL: one entry per
+ * component declaring `status`, keyed `comp.status`.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { col, render } from '@yaks/sql'
+ *
+ * let v = loadVocab({ $defs: {
+ *   job: { component: true, type: 'object',
+ *     status: { failed: 'failed', default: 'pending' } },
+ *   failed: { component: true, type: 'object' },
+ * } })
+ * let read = ladders(v)['job.status']
+ * assertEquals(read.values, ['failed', 'pending'])
+ * assertEquals(
+ *   render(read.expr(col('entity', 'job'))).sql,
+ *   'case when exists (select 1 from "failed" as "__s" where ' +
+ *     `"__s"."entity" = "job"."entity") then 'failed' else 'pending' end`,
+ * )
+ * ```
+ */
+export let ladders = (v: Vocab): Derived => {
+  let got = laddered.get(v)
+  if (got) return got
+  got = {}
+  for (let comp of v.all) {
+    let l = v.comp(comp)?.ladder
+    let p = v.prop(comp, 'status')
+    if (!l || !p) continue
+    got[`${comp}.status`] = {
+      tag: tagOf(p),
+      values: p.values,
+      expr: (owner) =>
+        when(
+          l.rungs.map((
+            r,
+          ): [Expr, Expr] => [wears(r.comp, owner), lit(r.status)]),
+          lit(l.default),
+        ),
+    }
+  }
+  laddered.set(v, got)
+  return got
+}
+
+let merged = new WeakMap<Vocab, WeakMap<Derived, Derived>>()
+let made = new WeakSet<Derived>()
+
+/**
+ * The registry a store reads through: every ladder the vocabulary declares
+ * ({@link ladders}), then the caller's own expressions, which win where both
+ * name a property. The same object for the same two, so a cache keyed on the
+ * registry keeps hitting.
+ */
+export let derivedOf = (v: Vocab, derived: Derived = {}): Derived => {
+  if (made.has(derived)) return derived
+  let byVocab = merged.get(v)
+  if (!byVocab) merged.set(v, byVocab = new WeakMap())
+  let got = byVocab.get(derived)
+  if (!got) {
+    byVocab.set(derived, got = { ...ladders(v), ...derived })
+    made.add(got)
+  }
+  return got
+}
+
 /**
  * Whether a value a store reads for `comp.prop` means its entity wears `comp`:
  * a stored property's does, a derived one's does unless its expression answers
@@ -91,7 +191,7 @@ export type Derived = Record<string, DerivedProp>
 export let worn =
   (vocab: Vocab, derived: Derived = {}) =>
   (comp: string, prop: string): boolean => {
-    let d = derived[`${comp}.${prop}`]
+    let d = derivedOf(vocab, derived)[`${comp}.${prop}`]
     let p = vocab.prop(comp, prop)
     return d ? d.worn !== false : !!p && !p.computed
   }
