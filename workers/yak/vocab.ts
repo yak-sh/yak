@@ -80,6 +80,7 @@ import { mailDoc } from '@yaks/mail'
 import { floored, memberDoc, memberKeywords } from '@yaks/member'
 import { modelDoc } from '@yaks/model/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
+import { platformDoc as platformWords } from '@yaks/platform/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { rtcDoc } from '@yaks/rtc/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
@@ -573,6 +574,14 @@ export let coreDocs: VocabDoc[] = storeDocs([
 // (directory.ts), and there is no app to be a member of.
 
 /**
+ * What @yaks/platform declares and the directory keeps: a `hostname` pointed
+ * at a space or an app (T-34596), and the `plan` a space pays for, a mirror of
+ * one Stripe subscription (billing.ts). The rest of the directory's words are
+ * still {@link platformDoc}'s own.
+ */
+let hostingDoc: VocabDoc = pick(platformWords, ['hostname', 'plan'])
+
+/**
  * The platform's own components — what the directory IS, as one JSON Schema
  * document. Every word here is the fleet contract's own (src/types.ts) read
  * back in the format @yaks/vocab loads: the same properties, the same closed
@@ -751,24 +760,6 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { address: text },
     },
-    // A hostname somebody owns, and the one place it serves: a space, whose
-    // front page it opens at `/` with every app of it at `/<app>/`, or a single
-    // app, which it opens at `/` outright (T-34596). One property for both,
-    // because it is one fact — what this name is aimed at — and the two forms
-    // differ only in which entity it names; a second property would let a row
-    // say both and mean neither.
-    hostname: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        name: unique(text),
-        serves: ref('cascade'),
-        stage: { type: 'string', enum: ['pending', 'active', 'error'] },
-        at: time,
-      },
-    },
     deploy: {
       component: true,
       type: 'object',
@@ -929,19 +920,6 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { bps: owned(num) },
     },
-    plan: {
-      component: true,
-      type: 'object',
-      properties: {
-        tier: owned({ type: 'string', enum: ['free', 'plus'] }),
-        customer: owned(text),
-        subscription: owned(text),
-        status: owned(text),
-        until: owned(time),
-        ending: owned(time),
-        at: owned(time),
-      },
-    },
     // What the hourly sweep read off Cloudflare (usage.ts), beside what the
     // space spent (`spend`). Written through the kernel's door — and not
     // stamped, because the fleet contract does not stamp it (src/types.ts
@@ -1055,6 +1033,7 @@ export let platformDocs: VocabDoc[] = storeDocs([
   sweepDoc,
   tunnelDoc,
   ...vocabOf(PLUGINS),
+  hostingDoc,
   platformDoc,
 ])
 

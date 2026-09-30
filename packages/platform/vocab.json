@@ -85,19 +85,20 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "unique": [
-        [
-          "name"
-        ]
+      "before": [
+        "doc"
       ],
       "properties": {
         "name": {
-          "type": "string"
-        },
-        "app": {
           "type": "string",
-          "ref": "app",
-          "death": "cascade"
+          "unique": true,
+          "description": "the domain, as a person typed it; one hostname points at one place"
+        },
+        "serves": {
+          "type": "string",
+          "ref": "entity",
+          "death": "cascade",
+          "description": "what the name opens: a space, whose front page it opens at `/` with every app at `/<app>/`, or a single app, which it opens at `/`"
         },
         "stage": {
           "type": "string",
@@ -110,10 +111,11 @@
         },
         "at": {
           "type": "string",
-          "format": "date-time"
+          "format": "date-time",
+          "description": "when the stage was last written"
         }
       },
-      "description": "a domain pointed at an app, and how far its setup got"
+      "description": "a domain somebody owns, and the one place it serves"
     },
     "installed": {
       "component": true,
@@ -181,7 +183,6 @@
     "plan": {
       "component": true,
       "type": "object",
-      "kind": true,
       "properties": {
         "tier": {
           "type": "string",
@@ -190,37 +191,43 @@
             "plus"
           ],
           "stamped": true,
-          "description": "free or plus"
+          "description": "free or plus: the tier every ceiling the space meets is read from"
         },
         "customer": {
           "type": "string",
-          "stamped": true
+          "stamped": true,
+          "description": "the Stripe customer the space pays as"
         },
         "subscription": {
           "type": "string",
-          "stamped": true
+          "stamped": true,
+          "description": "the Stripe subscription behind the tier"
         },
         "status": {
           "type": "string",
-          "stamped": true
+          "stamped": true,
+          "description": "that subscription's status as Stripe last said it (`active`, `past_due`, `canceled`, …), mirrored by the webhook and never moved by anything here: Stripe's state machine, not ours"
         },
         "until": {
           "type": "string",
           "format": "date-time",
-          "stamped": true
+          "stamped": true,
+          "description": "when the paid-for period runs out"
         },
         "ending": {
           "type": "string",
           "format": "date-time",
-          "stamped": true
+          "stamped": true,
+          "description": "when a subscription that will not renew stops paying"
         },
         "at": {
           "type": "string",
           "format": "date-time",
-          "stamped": true
+          "stamped": true,
+          "description": "when the Stripe event the row was derived from was created"
         }
       },
-      "description": "what a space pays for, and the subscription behind it"
+      "description": "what a space pays for: a function of one Stripe subscription, derived whole from it on every webhook. The platform writes it and no client can."
     },
     "published": {
       "component": true,
