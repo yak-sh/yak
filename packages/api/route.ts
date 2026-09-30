@@ -1,5 +1,5 @@
-// The route table. Three paths, one `try`, and the two callbacks the
-// application supplies.
+// The route table. Four paths, and the two callbacks the application
+// supplies; every answer is watched for breaking by ./request.ts `served`.
 //
 // Attribution is decided here. `authenticate` runs on every request — a read,
 // a write and a WebSocket upgrade alike — and what it returns is what signs
@@ -12,7 +12,8 @@ import { Refused } from '@yaks/graph'
 import { type Authenticate } from './actor.ts'
 import { ask, write } from './doors.ts'
 import { denoUpgrade } from './deno.ts'
-import { json, refuse } from './refuse.ts'
+import { json } from './refuse.ts'
+import { type Report, served } from './request.ts'
 import { attach, type Upgrade } from './socket.ts'
 import { type Subs, subscriptions } from './subs.ts'
 
@@ -59,6 +60,9 @@ export type Options = {
   socketNow?: () => number
   /** the subscription registry (default: a fresh one over `graph`) */
   subs?: Subs
+  /** where a request that broke goes, as its `request` bundle (default: the
+   * console) */
+  report?: Report
 }
 
 let nobody: Authenticate = () => null
@@ -68,8 +72,10 @@ export let DOORS: string[] = ['/apply', '/query', '/ws', '/vocab']
 
 /**
  * Build the request handler for a graph: `POST /apply`, `GET|POST /query`,
- * `/ws` for live subscriptions, and `GET /vocab`, the vocabulary. Everything else is a 404, and every thrown
- * error becomes the refusal body it describes (see the README's Refusals).
+ * `/ws` for live subscriptions, and `GET /vocab`, the vocabulary. Everything
+ * else is a 404, every thrown error becomes the refusal body it describes (see
+ * the README's Refusals), and an answer at 500 or over goes to `report` as a
+ * `request` bundle (./request.ts `served`).
  *
  * ```ts ignore
  * Deno.serve(api({ graph, authenticate }))
@@ -83,49 +89,52 @@ export let api = (opts: Options): Handler => {
   let no = (message: string, code: number) =>
     json({ error: code == 404 ? 'NotFound' : 'NotAllowed', message }, code)
 
-  return async (request) => {
+  let door: Handler = async (request) => {
     let path = new URL(request.url).pathname
-    try {
-      let who = await authenticate(request)
-      if (path == '/apply') {
-        return request.method == 'POST'
-          ? await write(graph, request, who)
-          : no('/apply takes POST', 405)
-      }
-      if (path == '/query') {
-        if (request.method != 'GET' && request.method != 'POST') {
-          return no('/query takes GET or POST', 405)
-        }
-        let url = new URL(request.url)
-        if (request.method == 'GET' && url.searchParams.get('live') == '1') {
-          let q = url.searchParams.get('q')
-          if (q == null) throw new Refused('/query needs a query: ?q=…')
-          return json(await subs.snapshot(q))
-        }
-        return await ask(graph, request)
-      }
-      // What a client must load to read and write this graph as it does:
-      // the documents and the keyword sets they are written with, for
-      // @yaks/vocab `loadVocab(docs, keywords)`.
-      if (path == '/vocab') {
-        let { docs, keywords } = graph.vocab
-        return request.method == 'GET'
-          ? json({ docs, keywords })
-          : no('/vocab takes GET', 405)
-      }
-      if (path == '/ws') {
-        if (
-          (request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket'
-        ) {
-          return no('/ws is a WebSocket endpoint', 405)
-        }
-        let { socket, response } = upgrade(request)
-        attach(subs, socket, opts.socketTimer, opts.socketNow)
-        return response
-      }
-      return no(`no route for ${path}`, 404)
-    } catch (err) {
-      return refuse(err, request)
+    let who = await authenticate(request)
+    if (path == '/apply') {
+      return request.method == 'POST'
+        ? await write(graph, request, who)
+        : no('/apply takes POST', 405)
     }
+    if (path == '/query') {
+      if (request.method != 'GET' && request.method != 'POST') {
+        return no('/query takes GET or POST', 405)
+      }
+      let url = new URL(request.url)
+      if (request.method == 'GET' && url.searchParams.get('live') == '1') {
+        let q = url.searchParams.get('q')
+        if (q == null) throw new Refused('/query needs a query: ?q=…')
+        return json(await subs.snapshot(q))
+      }
+      return await ask(graph, request)
+    }
+    // What a client must load to read and write this graph as it does:
+    // the documents and the keyword sets they are written with, for
+    // @yaks/vocab `loadVocab(docs, keywords)`.
+    if (path == '/vocab') {
+      let { docs, keywords } = graph.vocab
+      return request.method == 'GET'
+        ? json({ docs, keywords })
+        : no('/vocab takes GET', 405)
+    }
+    if (path == '/ws') {
+      if (
+        (request.headers.get('upgrade') ?? '').toLowerCase() != 'websocket'
+      ) {
+        return no('/ws is a WebSocket endpoint', 405)
+      }
+      let { socket, response } = upgrade(request)
+      attach(subs, socket, opts.socketTimer, opts.socketNow)
+      return response
+    }
+    return no(`no route for ${path}`, 404)
   }
+  return served(door, {
+    report: opts.report,
+    route: (request) => {
+      let path = new URL(request.url).pathname
+      return DOORS.includes(path) ? path : undefined
+    },
+  })
 }

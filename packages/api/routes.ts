@@ -22,7 +22,7 @@ import {
   type Route,
   routed,
 } from './route.ts'
-import { refuse } from './refuse.ts'
+import { type Report, served } from './request.ts'
 import { subscriptions } from './subs.ts'
 
 /** What this facet reads off the host it is composing into: the graph its
@@ -37,6 +37,9 @@ export type Hosting = {
   routes: Route[]
   filters?: Filter[]
   feed?: (each: (applied: Bundle[]) => void | Promise<void>) => () => void
+  /** where a request that broke goes, as its `request` bundle (default: the
+   * console) */
+  report?: Report
 }
 
 // How closely a route names a path: an exact path over any prefix, and a
@@ -47,7 +50,9 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
 /**
  * The host's one request handler: each plugin's route, and this package's
  * three endpoints, behind every plugin's filter. A filter that throws answers
- * the request with that refusal, and nothing past it runs.
+ * the request with that refusal, and nothing past it runs. An answer at 500 or
+ * over, from a route, a filter or a door, goes to `host.report` as a `request`
+ * bundle named by its route (./request.ts `served`).
  *
  * The route that names the path most closely wins, whichever plugin listed it:
  * an exact path over a prefix, a longer prefix over a shorter, and plugin order
@@ -64,25 +69,21 @@ export let handler = (host: Hosting): Handler => {
   // pool's thread — which that phase never runs for.
   let subs = subscriptions(graph)
   host.feed?.((applied) => subs.commit(applied))
-  let door = api({ graph, authenticate: host.who, subs })
-  let answer: Handler = (request) => {
+  let report = host.report
+  let door = api({ graph, authenticate: host.who, subs, report })
+  let claimed = (request: Request): Route | undefined => {
     let path = new URL(request.url).pathname
     let route = routes.filter((r) => routed(r, request.method, path))
       .reduce<Route | undefined>(
         (best, r) => best && reach(best) >= reach(r) ? best : r,
         undefined,
       )
-    return route && (exact(route) || !DOORS.includes(path))
-      ? route.handle(request)
-      : door(request)
+    return route && (exact(route) || !DOORS.includes(path)) ? route : undefined
   }
   let filters = host.filters ?? []
-  return filters.length == 0 ? answer : async (request) => {
-    try {
-      for (let f of filters) await f(request)
-    } catch (err) {
-      return refuse(err, request)
-    }
-    return answer(request)
-  }
+  return served(async (request) => {
+    for (let f of filters) await f(request)
+    let route = claimed(request)
+    return route ? route.handle(request) : door(request)
+  }, { report, route: (request) => claimed(request)?.path })
 }

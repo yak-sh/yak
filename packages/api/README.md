@@ -8,9 +8,9 @@ A **bundle** is one entity's components as a JSON object, with its identity in
 `entity.eid`. A **batch** is a list of changes applied in one transaction. The
 JSON `/apply` endpoint accepts a batch of bundles; queries return bundles.
 
-This package creates no database or component tables. Persistent data belongs to
-the graph's storage adapter. Subscription membership and peer values are kept in
-memory by the handler's subscription registry.
+This package creates no database. Persistent data, its one component `request`
+included, belongs to the graph's storage adapter. Subscription membership and
+peer values are kept in memory by the handler's subscription registry.
 
 ## Install
 
@@ -97,6 +97,7 @@ All exports are available from `@yaks/api`:
 | `attach`, `receive`, `sink`, `Socket`, `Upgrade`, `denoUpgrade` | Connect the subscription protocol to sockets                                          |
 | `denoListen`, `Listen`, `Listener`, `Addr`                      | Bind a port on Deno, which is what the `serve` tool listens with                      |
 | `json`, `refusal`, `refuse`, `Refusal`, `Unauthorized`          | Construct JSON responses and translate errors                                         |
+| `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`   | Watch a handler's answers, and write a broken request as its `request` bundle         |
 | `timed`                                                         | A client `fetch` that says one line per response, with the `Server-Timing` it carried |
 
 `Route` and `routed` help an application compose additional routes; `api()`
@@ -298,6 +299,32 @@ HTTP errors use these statuses. Subscription errors are socket messages, and
 streaming import errors use the final NDJSON line described above. The
 error-name mapping is @yaks/graph's `STATUS`, the same table the tool runner
 reads to tell a refusal from a defect.
+
+### A request that broke
+
+An answer at 500 or over, thrown or returned, carries an `x-request-id` header,
+and the request is handed to `report` (an `api()` option, and `Hosting.report`
+for the plugin's handler) as a bundle under that id:
+
+```json
+{
+  "entity": { "eid": "5b0f…" },
+  "request": {
+    "method": "POST",
+    "url": "http://localhost:8000/apply",
+    "route": "/apply",
+    "status": 500,
+    "ms": 3,
+    "agent": "curl 8.5.0"
+  }
+}
+```
+
+`report` also receives the error when one was thrown. Without one, the failure
+is said on the console with its id. `request` is this package's component
+(./vocab.json); where the bundle is kept is the reporter's choice. `served` puts
+the same watch around any handler, and an answer that already carries an
+`x-request-id` is not reported a second time.
 
 ## The plugin: the handler, and the `serve` tool
 

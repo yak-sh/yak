@@ -29,7 +29,7 @@ let ask = (line: string) => req(`/query?q=${encodeURIComponent(line)}`)
 
 for (let async of [false, true]) {
   for (let method of ['GET', 'POST']) {
-    test(`${method} /query logs ${async ? 'async' : 'sync'} failures with door context`, async () => {
+    test(`${method} /query logs, with its request id, ${async ? 'async' : 'sync'} failures with door context`, async () => {
       let graph = shopGraph()
       let error = new Error('too many terms in compound SELECT')
       graph.read = () => {
@@ -48,8 +48,9 @@ for (let async of [false, true]) {
         error: 'Error',
         message: error.message,
       })
+      let id = response.headers.get('x-request-id')
       assertEquals(logged.calls.map((c) => c.args), [
-        [`${method} /query failed —`, error],
+        [`${method} /query (request ${id}) failed —`, error],
       ])
     })
   }

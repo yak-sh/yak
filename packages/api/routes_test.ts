@@ -1,6 +1,7 @@
 /// <reference lib="deno.ns" />
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
+import type { Bundle } from '@yaks/graph'
 import type { Filter } from './route.ts'
 import { handler } from './routes.ts'
 import { req, shopGraph } from './testing.ts'
@@ -72,4 +73,47 @@ test('an HTTP route answers while the graph reader is busy', async () => {
   assertEquals(called, true)
   slow.resolve([])
   assertEquals(await (await waiting).json(), [])
+})
+
+test('a request that broke is answered with its id and reported once', async () => {
+  let graph = shopGraph()
+  let told: [Bundle, unknown][] = []
+  let h = handler({
+    graph,
+    reader: { ...graph, read: () => Promise.reject(new Error('disk gone')) },
+    who: () => null,
+    routes: [
+      { method: 'GET', path: '/hello', handle: () => new Response('hi') },
+      {
+        method: 'GET',
+        path: '/boom/*',
+        handle: () => Promise.reject(new Error('boom')),
+      },
+    ],
+    report: (b, err) => void told.push([b, err]),
+  })
+  assertEquals((await h(req('/hello'))).headers.get('x-request-id'), null)
+  assertEquals(told, [])
+  for (
+    let [path, route, message] of [
+      ['/boom/x?secret=1', '/boom/*', 'boom'],
+      ['/query?q=.book', '/query', 'disk gone'],
+    ]
+  ) {
+    told = []
+    let res = await h(req(path, { headers: { 'user-agent': 'curl/8.5.0' } }))
+    assertEquals(res.status, 500)
+    assertEquals(told.length, 1)
+    let [[b, err]] = told
+    assertEquals(b.entity.eid, res.headers.get('x-request-id'))
+    assertEquals((err as Error).message, message)
+    let { ms: _, ...rest } = b.request as Record<string, unknown>
+    assertEquals(rest, {
+      method: 'GET',
+      url: `http://shop.test${path.split('?')[0]}`,
+      route,
+      status: 500,
+      agent: 'curl 8.5.0',
+    })
+  }
 })

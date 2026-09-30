@@ -90,6 +90,14 @@ export {
   type Socket,
   type Upgrade,
 } from './socket.ts'
+export {
+  agent,
+  type Answered,
+  type Report,
+  requested,
+  served,
+  type Watch,
+} from './request.ts'
 export { timed } from './timing.ts'
 export {
   type Addr,

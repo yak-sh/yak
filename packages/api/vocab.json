@@ -4,6 +4,44 @@
   },
   "title": "api",
   "$defs": {
+    "request": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "description": "An HTTP request as the server that answered it records it. The entity's id is the one the caller was answered with, in the x-request-id header, so a person holding a failed answer can name its record. Only a request that broke is written: one answered with a status of 500 or over.",
+      "properties": {
+        "method": {
+          "type": "string",
+          "stamped": true,
+          "description": "the HTTP method: GET, POST, PUT, …"
+        },
+        "url": {
+          "type": "string",
+          "stamped": true,
+          "description": "the address asked for, without its query string"
+        },
+        "route": {
+          "type": "string",
+          "stamped": true,
+          "description": "the route that answered it, as the server names its routes (`/apply`, `/blob/*`); absent when no route claimed the address"
+        },
+        "status": {
+          "type": "integer",
+          "stamped": true,
+          "description": "the HTTP status it was answered with"
+        },
+        "ms": {
+          "type": "number",
+          "stamped": true,
+          "description": "milliseconds from its arrival until the answer's head was ready"
+        },
+        "agent": {
+          "type": "string",
+          "stamped": true,
+          "description": "what sent it, from its User-Agent header: a browser, its major version and the operating system (`Chrome 141 on macOS`), or any other program's name and version (`curl 8.5.0`)"
+        }
+      }
+    },
     "serve": {
       "tool": true,
       "surfaces": ["cli"],
