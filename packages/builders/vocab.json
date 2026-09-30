@@ -251,8 +251,9 @@
     },
     "builder_model_answer": {
       "effect": true,
-      "created": ["output", "attachment", "error"],
-      "description": "adapt a model session's reply to a builder tool output"
+      "created": ["attempt", "error"],
+      "changed": ["attempt.state"],
+      "description": "adapt a model session's reply to a builder tool output once its ask completes"
     },
     "builder_change": {
       "effect": true,

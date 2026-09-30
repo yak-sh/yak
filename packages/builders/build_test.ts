@@ -58,6 +58,30 @@ let code = (revision = '1'): Tool => ({
   run: (call) => answer(call),
 })
 let calls = (g: Graph, build: string) => rows(g, `.call.source=${build}`)
+// A model's ask in a transcript, and a reply to it.
+let asked = (
+  session: string,
+  seq: number,
+  eid: string,
+  state: string,
+): Bundle => ({
+  entity: { eid },
+  entry: { session, seq },
+  ask: { to: ids.model },
+  attempt: { state },
+})
+let replied = (
+  session: string,
+  seq: number,
+  ask: string,
+  body: string,
+  eid: string = crypto.randomUUID(),
+): Bundle => ({
+  entity: { eid },
+  entry: { session, seq },
+  content: { body },
+  output: { source: ask },
+})
 let drive = async (
   g: Graph,
   r: Awaited<ReturnType<typeof shop>>['runner'],
@@ -357,7 +381,7 @@ test('a model turn failed for good leaves its key retryable without another call
 })
 
 test('model tool opens a session using content.body, then adapts its reply', async () => {
-  let { g, runner } = await shop()
+  let { g, runner, failed } = await shop()
   await g.apply([source('a'), {
     ...builder(
       '$s .doc.title=Source, doc.body=$description',
@@ -375,20 +399,30 @@ test('model tool opens a session using content.body, then adapts its reply', asy
   assert(prompt.includes('Build a: first'))
   assert(!prompt.includes('Documentation'))
   assertEquals(comp(entry, 'using')?.effort, 'low')
-  await g.apply([{
-    entity: { eid: crypto.randomUUID() },
-    entry: { session: session.entity.eid, seq: 2 },
-    content: {
-      body: JSON.stringify({
-        outputs: [{
-          slot: 'main',
-          inputs: ['a'],
-          components: { doc: { body: 'From model' } },
-        }],
-      }),
-    },
-    output: { source: 'model-answer' },
-  }])
+  let answer = JSON.stringify({
+    outputs: [{
+      slot: 'main',
+      inputs: ['a'],
+      components: { doc: { body: 'From model' } },
+    }],
+  })
+  // A streamed reply is written as it arrives: half of it is no answer yet.
+  await g.apply([
+    asked(session.entity.eid, 2, 'model-answer', 'inflight'),
+    replied(
+      session.entity.eid,
+      3,
+      'model-answer',
+      answer.slice(0, 20),
+      'reply',
+    ),
+  ])
+  assertEquals(await one(g, output(build)), undefined)
+  await g.apply([
+    asked(session.entity.eid, 2, 'model-answer', 'completed'),
+    replied(session.entity.eid, 3, 'model-answer', answer, 'reply'),
+  ])
+  assertEquals(failed, [])
   assertEquals(comp(await one(g, output(build)), 'doc')?.body, 'From model')
 })
 
@@ -401,19 +435,21 @@ test('prose a model writes beside a tool call is not its answer', async () => {
   let build = run(ids.builder, ['a'])
   await drive(g, runner, build)
   let [session] = await rows(g, '.session')
-  let said = (seq: number, ask: string, body: string): Bundle => ({
-    entity: { eid: crypto.randomUUID() },
-    entry: { session: session.entity.eid, seq },
-    content: { body },
-    output: { source: ask },
-  })
-  await g.apply([said(2, 'ask-1', 'Let me read around it first.'), {
-    entity: { eid: 'look' },
-    entry: { session: session.entity.eid, seq: 3 },
-    call: { to: toolEid('code'), source: 'ask-1' },
-  }])
+  let s = session.entity.eid
+  await g.apply([
+    asked(s, 2, 'ask-1', 'completed'),
+    replied(s, 3, 'ask-1', 'Let me read around it first.'),
+    {
+      entity: { eid: 'look' },
+      entry: { session: s, seq: 4 },
+      call: { to: toolEid('code'), source: 'ask-1' },
+    },
+  ])
   let answer = { slot: 'main', inputs: ['a'], components: { doc: {} } }
-  await g.apply([said(4, 'ask-2', JSON.stringify({ outputs: [answer] }))])
+  await g.apply([
+    asked(s, 5, 'ask-2', 'completed'),
+    replied(s, 6, 'ask-2', JSON.stringify({ outputs: [answer] })),
+  ])
   assertEquals(failed, [])
   assert(await one(g, output(build)))
 })

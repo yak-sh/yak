@@ -77,13 +77,15 @@ distinct values inside a bracket; the variable a bracket binds its members to,
 variables it binds, so a member's values stay together), opens an ordinary
 @yaks/session transcript with `using`, and adapts that transcript's reply to the
 same output value. The reply is the output of an ask that called no tools: prose
-beside a tool call is the model at work. A session that fails for good leaves
-its build's key clear, to be asked again on the next reconciliation; a tool's
-refusal answered to the model, and a request the runner retries, do not.
-`using.tools` names the tools the session is offered (@yaks/session), so a
-builder's model reads and writes the graph through exactly the tools its builder
-names. `builder.to` points at `modelToolEid()` for this adapter. The tool runner
-records the call and result; builders does not execute models or code itself.
+beside a tool call is the model at work. It is read once its ask's `attempt`
+completes, since a streamed reply is written as it arrives. A session that fails
+for good leaves its build's key clear, to be asked again on the next
+reconciliation; a tool's refusal answered to the model, and a request the runner
+retries, do not. `using.tools` names the tools the session is offered
+(@yaks/session), so a builder's model reads and writes the graph through exactly
+the tools its builder names. `builder.to` points at `modelToolEid()` for this
+adapter. The tool runner records the call and result; builders does not execute
+models or code itself.
 
 `builder build <builder>` reconciles now, independent of `floor`. An alternate
 model, provider or template creates a shadow variant. A repeated key creates no

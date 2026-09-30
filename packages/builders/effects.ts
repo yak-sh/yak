@@ -101,10 +101,21 @@ export let changing = (o: Options): Handler => async (event, tx, write) => {
   }
 }
 
-/** A model entry becomes the same output.value a code tool would answer. */
+/** A model's reply becomes the same output.value a code tool would answer,
+ * once the ask it answers has completed: a streamed reply is written as it
+ * arrives, and only the completed ask says its text is whole. */
 export let modeling = (): Handler => async (event, tx, write) => {
   let [said] = await tx.get([event.entity.eid])
   if (!said) return
+  if (said.ask) {
+    if (str(comp(said, 'attempt'), 'state') != 'completed') return
+    let replies = await tx.read(`.output.source=${said.entity.eid}&*`)
+    for (let reply of replies) {
+      let result = await adapted(tx, reply)
+      if (result) await write([result])
+    }
+    return
+  }
   if (said.error && said.entry) {
     let [session] = await tx.get([str(comp(said, 'entry'), 'session')])
     let call = str(comp(session, 'session'), 'source')
@@ -119,10 +130,7 @@ export let modeling = (): Handler => async (event, tx, write) => {
       [BUILD]: { key: null },
       $was: { [BUILD]: { call: token(call) } },
     }])
-    return
   }
-  let result = await adapted(tx, said)
-  if (result) await write([result])
 }
 
 /** The output source is a call; that call's source is its stable build. */
