@@ -74,7 +74,7 @@ import {
 import { epoch, epochAt, installed, meta, SCHEMA } from './meta.ts'
 import { doom, get, read, rows, tagOf } from './read.ts'
 import { unit } from './unit.ts'
-import { backfill } from './archetype.ts'
+import { backfill, entomb } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
@@ -302,6 +302,12 @@ export let storage = (
   let identity = (eids: string[], comps?: string[]) =>
     get(driver, vocab, eids, opts(), comps)
   let report = base.report ?? logged
+  // Whether this store keeps archetypes, and whether their descriptors are
+  // numbered like any other entity.
+  let classified = !!vocab.comp('archetype')
+  let numbered = typeof base.number == 'object'
+    ? !base.number.except.includes('archetype')
+    : !!base.number
   let tx: Tx = {
     read: (query, o) => read(driver, vocab, query, { ...opts(), ...o }),
     get: identity,
@@ -309,7 +315,10 @@ export let storage = (
     bindings: (matches, batch, covers) =>
       bindings(driver, vocab, matches, batch, covers, base),
     patch: (bundles) => patch(driver, vocab, bundles, base.number, base.adopt),
-    remove: (entities) => remove(driver, vocab, entities),
+    remove: (entities) => {
+      remove(driver, vocab, entities)
+      if (classified) entomb(driver, entities.map((e) => e.eid), numbered)
+    },
     revive: (eids) => revive(driver, eids),
   }
   return {
@@ -390,14 +399,7 @@ export let storage = (
         // The store's lineage identity, minted on the first install (meta.ts
         // `epoch`).
         epoch(driver)
-        if (vocab.comp('archetype')) {
-          backfill(
-            driver,
-            typeof base.number == 'object'
-              ? !base.number.except.includes('archetype')
-              : base.number,
-          )
-        }
+        if (classified) backfill(driver, numbered)
         // A table left unfit is not yet the shape this vocabulary says, so
         // the mark waits: the next open fits it again, and it heals once its
         // rows are prepared.

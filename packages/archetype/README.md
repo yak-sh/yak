@@ -88,11 +88,14 @@ storage migration rather than a graph apply; graph-time descriptor creations are
 journaled when the journal plugin is composed in.
 
 Use `g.apply()` for ongoing writes. Low-level storage `patch` bypasses this
-plugin. A later install classifies newly created entities lacking an archetype,
-but does not detect arbitrary direct changes to already-classified entities. An
-application that must write a component row outside the graph calls
-`@yaks/sqlite`'s `reclassify(driver, eids)` in that same transaction; there is
-no trigger or queue to maintain. Arbitrary SQL and component-table drops require
+plugin. A low-level `remove` does not: `@yaks/sqlite` points each entity it
+removes at the tombstone set (`entomb`), since a removal leaves it nothing else,
+so the dead leave their archetype by every door. A later install classifies
+newly created entities lacking an archetype, but does not detect arbitrary
+direct changes to already-classified entities. An application that must write a
+component row outside the graph calls `@yaks/sqlite`'s
+`reclassify(driver, eids)` in that same transaction; there is no trigger or
+queue to maintain. Arbitrary SQL and component-table drops require
 reopening/installing before graph writes resume.
 
 ## Compatibility

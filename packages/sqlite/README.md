@@ -108,7 +108,9 @@ which writes bring an entity back is @yaks/graph's to decide. Reference
 properties declare deletion behavior: `cascade` deletes their owner, `release`
 removes their component, `detach` clears the reference, and `keep` retains it as
 history. `tx.remove()` removes exactly the entities passed to it; the graph
-determines the full cascade.
+determines the full cascade. Where the store keeps archetypes, it also points
+each one at the tombstone set (`entomb`), so a presence lookup passes the dead
+by however they were removed.
 
 ### Read
 

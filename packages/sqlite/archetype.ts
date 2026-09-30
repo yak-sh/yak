@@ -1,4 +1,4 @@
-import { type Bundle, sha256 } from '@yaks/graph'
+import { type Bundle, sha256, TOMBSTONE } from '@yaks/graph'
 import { Archetypes, tablesOf } from '@yaks/archetype'
 import {
   among,
@@ -390,6 +390,27 @@ export function drift(driver: Driver, sample = 12): Drift {
     }
   }
   return out
+}
+
+/**
+ * Point these entities, just removed, at the tombstone set, minting its
+ * descriptor the first time a store needs one. A removal clears every
+ * component table the file holds (./write.ts `remove`), so what each one holds
+ * afterwards is its tombstone and nothing else, known without reading a table.
+ * Storage's own removal calls this, so the dead leave their archetype
+ * whichever door removed them, and a presence lookup passes them by.
+ */
+export function entomb(driver: Driver, eids: string[], number = false): void {
+  if (!eids.length) return
+  let run: Run = (s) => driver.query(s)
+  unit(driver, () => {
+    let cache = new Archetypes()
+    let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
+    let tables = () => facets(driver)
+    let { mint } = minter(run, driver, cache, tables, new Map(), number, counts)
+    let dead = mint(cache.intern([TOMBSTONE]).eid)
+    run(point(dead, among(col('eid'), each([...new Set(eids)]))))
+  })
 }
 
 /**

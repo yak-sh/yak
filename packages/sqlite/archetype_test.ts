@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
-import { type Bundle, graph, type Plugin } from '@yaks/graph'
+import { type Bundle, graph, type Plugin, token } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ddl, journal, log } from '@yaks/journal'
 import {
@@ -140,6 +140,23 @@ test('archetype: reference-only births, release/cascade and tombstones', () => {
   assertEquals(get('child').entity.archetype, eidOf(['tombstone']))
   assertEquals(get('ref').entity.archetype, eidOf([]))
   assertEquals(get('ref').link, undefined)
+})
+
+test('archetype: a removal past the graph leaves its archetype, and its tombstone still swallows a racing write', () => {
+  let { g, store, driver, get } = setup()
+  g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' }, task: {} }])
+  store.tx((tx) => tx.remove([{ eid: 'a' }]))
+  assertEquals(get('a').entity.archetype, eidOf(['tombstone']))
+  assertEquals(drift(driver).drifted, 0)
+  g.apply([{
+    entity: { eid: 'a' },
+    doc: { title: 'B' },
+    $was: { doc: { title: token('A') } },
+  }])
+  assert(get('a').tombstone)
+  assertEquals(get('a').entity.archetype, eidOf(['tombstone']))
+  g.apply([{ entity: { eid: 'a' }, doc: { title: 'C' } }])
+  assertEquals(get('a').entity.archetype, eidOf(['doc']))
 })
 
 test('archetype: dry run and late rollback cannot poison cached sets', () => {
