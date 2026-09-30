@@ -62,7 +62,7 @@ export type LiveOpts = {
 /** The host over `box`. */
 export let live = ({ box, front, edits }: LiveOpts): Host => {
   let vocab = box.vocab
-  let id = human(vocab)
+  let format = human(vocab)
 
   // Each entity a render read, woken when its row changes.
   let turns = new Map<string, Signal<number>>()
@@ -170,15 +170,15 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
       : b
   }
 
+  // The id a person reads, its prefix its kind's: what a row shows and what
+  // a link to it says are one spelling.
+  let id = (b: Bundle): string => format(kinded(b))
+
   // What an entity is called: its title, or the id a person reads.
   let name = (eid: string): string => {
     let b = get(eid)
     let title = (b?.doc as { title?: unknown } | undefined)?.title
-    return typeof title == 'string' && title
-      ? title
-      : b
-      ? id(kinded(b))
-      : short(eid)
+    return typeof title == 'string' && title ? title : b ? id(b) : short(eid)
   }
 
   return {
@@ -197,7 +197,7 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
     },
     find: queryPath,
     pick: (eid) => void front.mutate(picked(eid)),
-    id: (b) => id(kinded(b)),
+    id,
     kind: (b) => vocab.kindOf(kinded(b)) || 'entity',
     name,
     when: (at) => relative(at),
