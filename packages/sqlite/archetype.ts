@@ -395,6 +395,22 @@ export function drift(driver: Driver, sample = 12): Drift {
 }
 
 /**
+ * Every owner the audit finds out of step ({@link drift}) classified again
+ * from the rows it holds, a few thousand to a unit, so a large file never
+ * holds the write lock for the whole pass: the repair for pointers a writer
+ * past every door left behind. Returns how many moved.
+ */
+export let mend = (driver: Driver, number = false): number => {
+  let { sample } = drift(driver, Infinity)
+  let moved = 0
+  for (let i = 0; i < sample.length; i += 5000) {
+    moved += reclassify(driver, sample.slice(i, i + 5000), number)
+      .filter((b) => b.archetype == null).length
+  }
+  return moved
+}
+
+/**
  * One unit's account of what its writes did to each entity's archetype, kept
  * by the store that opened the unit (./mod.ts `storage`). `moved` hears a row
  * come or go (./write.ts `patch`), `born` a spine minted, `pointed` a pointer

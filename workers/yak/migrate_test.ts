@@ -210,6 +210,28 @@ test('a Store keeps exception request ids across the rename', async () => {
   }
 })
 
+test('a Store answers, after its next schema wake, a row a raw write gave it', async () => {
+  let ctx = state()
+  let before = newer(ctx, PLATFORM_STORE)
+  assertEquals(
+    (await before.apply([
+      { entity: { eid: ONE }, exception: { request_id: 'report-1' } },
+      { entity: { eid: TWO }, doc: { title: 'two' } },
+    ])).status,
+    200,
+  )
+  let d = db(ctx)
+  let two = Number(scan(d, 'entity', by({ eid: TWO }), ['id'])[0].id)
+  // Past every door, as a script or an older Store's own write could.
+  run(ctx, insert('exception', { entity: two, request_id: 'report-2' }))
+  let reported = async () =>
+    (await newer(ctx, PLATFORM_STORE).query('.exception'))
+      .map((b) => b.entity.eid).sort()
+  assertEquals(await reported(), [ONE])
+  keep(ctx, 'schema', 'older schema')
+  assertEquals(await reported(), [ONE, TWO])
+})
+
 test('a Store heals vector tables made while their key was named entity', async () => {
   let ctx = state()
   let before = newer(ctx, PLATFORM_STORE)

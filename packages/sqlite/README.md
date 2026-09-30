@@ -318,7 +318,8 @@ its transaction after changing component rows. It returns changed pointers and
 new descriptors as bundles that the application can broadcast; descriptor
 entities and unknown ids are ignored. `drift(driver)` is the audit
 (`archetype_check`): it reads every owner's presence and counts the pointers
-that disagree, writing nothing. Stores without archetypes and unclassified
+that disagree, writing nothing; `mend(driver)` classifies every one it finds
+again, a few thousand to a unit. Stores without archetypes and unclassified
 low-level writes fall back to inspecting component presence. An incomplete
 catalog declines the query optimization instead of hiding entities. The fixture
 benchmarks compare the classified and fallback read paths.

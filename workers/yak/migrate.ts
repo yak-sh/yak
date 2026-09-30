@@ -24,7 +24,15 @@ import {
   tally,
   val,
 } from '@yaks/sql'
-import { backfill, fit, indexed, retired, standing, tabled } from '@yaks/sqlite'
+import {
+  backfill,
+  fit,
+  indexed,
+  mend,
+  retired,
+  standing,
+  tabled,
+} from '@yaks/sqlite'
 import type { Index, Vocab } from '@yaks/vocab'
 
 /** The five type words the short manifest used, and the JSON Schema each
@@ -425,7 +433,14 @@ export let install = (
   for (let stmt of ftsSchema(fields(vocab), derived)) d.query(stmt)
   rekey(d)
   for (let stmt of vectorSchema()) d.query(stmt)
-  if (vocab.comp('archetype')) backfill(d, false)
+  if (vocab.comp('archetype')) {
+    backfill(d, false)
+    // A pass: pointers a write past the graph left out of step (the access
+    // mode `#mode` writes, before @yaks/sqlite's units kept them) are
+    // classified again, so `get` reads the rows they hold. It can be deleted
+    // once every store has opened with it (T-59268).
+    mend(d, false)
+  }
   return unfit
 }
 
