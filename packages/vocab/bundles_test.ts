@@ -185,6 +185,7 @@ test('the queries that describe a vocabulary answer from its entities', async ()
     '_extends',
     '_package',
     '_prop',
+    '_vocab',
     'doc',
     'note',
     'recipe',

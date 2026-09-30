@@ -589,6 +589,7 @@ declares the components it is held in:
 | `_extends` | component a document extends, from `package`, with the `status` rungs it adds | `comp+package`; its description |
 | `_prop`    | property, in `comp` at `ord`, from `package`                                  | `comp.prop`; its description    |
 | `_before`  | kind a kind sorts before, an @yaks/edge relation with `edge.ord` its place    | none                            |
+| `_vocab`   | graph: `hash`, the SHA-256 of the rows as they were last described            | none                            |
 
 A keyword with a column of its own is written there; every other keyword an
 entry says, another package's (`prefix`, `store`) or JSON Schema's own

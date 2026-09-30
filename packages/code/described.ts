@@ -9,15 +9,18 @@
 // A package's description is its manifest's, as this codebase was last read
 // (`package`, ./sync.ts), or else what its vocabulary says.
 //
-// What is written is the difference. A row already saying what the
-// vocabulary says is left alone, so a graph that describes it is read once
-// and written nothing. A row the vocabulary stopped declaring is cleared the
-// way a gone export is (./sync.ts): the entity stays, empty, with any note
-// left on it, and is filled in again if the component comes back. A `_before`
-// edge it stopped saying is unlinked.
+// The graph's one `_vocab` holds the hash of every row as last described, so
+// a graph whose hash matches is known to describe it, and is read no further:
+// a process starting over an unchanged vocabulary costs that entity and the
+// packages' descriptions. Otherwise what is written is the difference, and
+// the new hash with it. A row already saying what the vocabulary says is left
+// alone. A row the vocabulary stopped declaring is cleared the way a gone
+// export is (./sync.ts): the entity stays, empty, with any note left on it,
+// and is filled in again if the component comes back. A `_before` edge it
+// stopped saying is unlinked.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { identities } from '@yaks/graph'
+import { derivedEid, identities } from '@yaks/graph'
 import { link, unlink } from '@yaks/edge'
 import { type Ids, toBundles, type VocabDoc } from '@yaks/vocab'
 
@@ -25,7 +28,7 @@ let str = (v: unknown) => v == null ? '' : String(v)
 
 // The rows a vocabulary is described in, in the order a change writes them,
 // so each reference lands on an entity written before it.
-let ROWS = ['_package', '_comp', '_extends', '_prop', '_before']
+let ROWS = ['_package', '_comp', '_extends', '_prop', '_before', '_vocab']
 let rank = (b: Bundle) => ROWS.findIndex((r) => b[r] !== undefined)
 
 // A value as a string that is the same whatever order its keys are in, and
@@ -80,28 +83,27 @@ let merged = (a: Bundle, b: Bundle): Bundle =>
     ]),
   ) as Bundle
 
-/** What to write so `g` describes `docs`, the vocabulary it is served with:
- * every row that is missing or says something else, and every row it holds
- * that `docs` no longer declares, cleared. Nothing, where `g` cannot hold a
- * vocabulary (@yaks/vocab not composed). */
-export let described = async (
-  g: Graph,
-  docs: VocabDoc[],
-): Promise<Bundle[]> => {
-  if (!g.vocab.comp('_comp')) return []
+// The one entity that says what the rows were last described from.
+let VOCAB = derivedEid('_vocab')
+
+// The hex SHA-256 of a string.
+let sha = async (s: string) =>
+  [
+    ...new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)),
+    ),
+  ].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+// Every row `docs` describe, by eid: each package's description is its
+// manifest's where the codebase was read, and two documents of one package
+// describe it as one.
+let rows = async (g: Graph, docs: VocabDoc[]): Promise<Map<string, Bundle>> => {
   let derive = identities(g.vocab)
   let id: Ids = (comp, values) =>
     derive[comp](values as Comp, { entity: { eid: '' }, [comp]: values })
-  let [held, manifests] = await Promise.all([
-    Promise.all([
-      g.read('._package ?doc'),
-      g.read('._comp ?doc'),
-      g.read('._extends ?doc'),
-      g.read('._prop ?doc'),
-      g.read('._before ?edge'),
-    ]).then((all) => all.flat()),
-    g.vocab.comp('package') ? g.read('.package ?doc') : [],
-  ])
+  let manifests = g.vocab.comp('package')
+    ? await g.read('.package&.fields=package.name,doc.body')
+    : []
   let about = new Map(manifests.map((b) => [
     str((b.package as Comp).name),
     str((b.doc as Comp | undefined)?.body),
@@ -116,6 +118,33 @@ export let described = async (
       fresh.set(row.entity.eid, was ? merged(was, row) : row)
     }
   }
+  return fresh
+}
+
+/** What to write so `g` describes `docs`, the vocabulary it is served with:
+ * every row that is missing or says something else, every row it holds that
+ * `docs` no longer declares, cleared, and the hash of the rows as described
+ * (`_vocab`). A graph whose hash already matches is not read further and is
+ * written nothing; nor is one that cannot hold a vocabulary (@yaks/vocab not
+ * composed). */
+export let described = async (
+  g: Graph,
+  docs: VocabDoc[],
+): Promise<Bundle[]> => {
+  if (!g.vocab.comp('_vocab')) return []
+  let [fresh, [was]] = await Promise.all([
+    rows(g, docs),
+    g.get([VOCAB], ['_vocab']),
+  ])
+  let hash = await sha(canon([...fresh.values()]))
+  if ((was?._vocab as Comp | undefined)?.hash == hash) return []
+  let held = (await Promise.all([
+    g.read('._package ?doc'),
+    g.read('._comp ?doc'),
+    g.read('._extends ?doc'),
+    g.read('._prop ?doc'),
+    g.read('._before ?edge'),
+  ])).flat()
   let at = new Map(held.map((b) => [b.entity.eid, b]))
   let cleared = (b: Bundle): Bundle => {
     let e = b.edge as Comp | undefined
@@ -128,5 +157,6 @@ export let described = async (
   return [
     ...[...fresh.values()].filter((b) => moves(b, at.get(b.entity.eid))),
     ...held.filter((b) => !fresh.has(b.entity.eid)).map(cleared),
+    { entity: { eid: VOCAB }, _vocab: { hash } },
   ].toSorted((a, b) => rank(a) - rank(b))
 }

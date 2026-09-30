@@ -7,8 +7,8 @@
 //
 // A process starting is when the served vocabulary can change: a landed
 // change reaches it when the server restarts, and a config lists or drops a
-// plugin the same way. A graph that already describes it is read once and
-// written nothing.
+// plugin the same way. A graph that already describes it is checked by the
+// hash its `_vocab` holds, and written nothing.
 
 import type { Handlers } from '@yaks/effects'
 import type { Graph } from '@yaks/graph'

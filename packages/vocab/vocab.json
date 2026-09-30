@@ -4,7 +4,7 @@
     "https://yak.sh/vocab/edge": true
   },
   "title": "vocab",
-  "description": "A vocabulary described as entities: a `_package` per document, a `_comp` per component it declares, a `_prop` per property, a `_before` edge per kind a kind sorts before. Each wears `doc` for its name and its description. The names start with `_`, which no authored name can.",
+  "description": "A vocabulary described as entities: a `_package` per document, a `_comp` per component it declares, a `_prop` per property, a `_before` edge per kind a kind sorts before, and one `_vocab` saying what they were described from. Each row wears `doc` for its name and its description. The names start with `_`, which no authored name can.",
   "$defs": {
     "_package": {
       "component": true,
@@ -258,6 +258,18 @@
         "status": {
           "type": "object",
           "description": "the rungs it adds to the component's status ladder, in order: each component to the status it gives"
+        }
+      }
+    },
+    "_vocab": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "the vocabulary the other rows describe, as a whole: one entity per graph, whose hash says what they were last brought into line with, so a graph already describing it is known to without reading them",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "description": "the SHA-256 of every row as the vocabulary described them"
         }
       }
     }
