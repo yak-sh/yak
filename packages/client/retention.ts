@@ -10,7 +10,8 @@
 // The same bookkeeping is written to IndexedDB under the server's epoch, so
 // that a reopened page can show something before the server answers.
 import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
-import { comps, dead, then, transient } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { comps, dead, transient } from '@yaks/graph'
 import type { Store } from '@yaks/ram'
 import {
   type Ask,
@@ -602,18 +603,18 @@ export let retention = (
             preserve: (eid, name, prop) => covered(eid, name, prop, role),
           },
         )
-      return then(
+      return after(
         sub.query === true
           ? land(graph, {
             ...frame,
             bundles: bundles.filter((b) => !pins.has(b.entity.eid)),
             gone: [],
           }, mine)
-          : then(
+          : after(
             receive(bundles, sub.members),
             (out) =>
-              then(receive(peers, sub.peers), (rode) =>
-                then(
+              after(receive(peers, sub.peers), (rode) =>
+                after(
                   // Relayed values belong to members this set holds; one for
                   // an entity it does not hold would be a row nothing owns.
                   hear(graph, {
@@ -731,7 +732,7 @@ export let retention = (
       // A reopened watch owns the rows restored for it before the first
       // frame arrives. Rows that finish loading later must join that same
       // subscription, not create a second one.
-      await then(snapshot(graph, bundles), () => {
+      await after(snapshot(graph, bundles), () => {
         for (let [id, sub] of subscriptions) {
           if (sub.confirmed) continue
           let cached = sub.key ? answers.get(sub.key) : undefined

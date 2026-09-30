@@ -19,7 +19,7 @@
 
 import type { Bundle, Hook, Plugin } from '@yaks/graph'
 import { type Clock, wakeOf } from './due.ts'
-import { after } from './every.ts'
+import { recur } from './every.ts'
 import { WAKE, wakeDoc } from './comp.ts'
 import { conditions } from './while.ts'
 
@@ -40,7 +40,7 @@ export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
     let w = wakeOf(b)
     if (!w?.every || w.at !== undefined) return b
     let now = (opts.now ?? Date.now)()
-    let at = after(w.every, now, now, opts.tz)
+    let at = recur(w.every, now, now, opts.tz)
     return at == null
       ? b
       : { ...b, [WAKE]: { ...w, at: new Date(at).toISOString() } }

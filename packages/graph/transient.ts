@@ -1,9 +1,9 @@
+import { after } from '@yaks/fp'
 import { token } from './guard.ts'
 /** Ordered, non-durable text projections over existing graph entities.
  * Membership and aggregates remain queries over durable data. */
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import type { Graph } from './graph.ts'
-import { then } from './pipe.ts'
 
 export type TransientFrame = {
   id: string
@@ -63,7 +63,7 @@ function create(g: Graph): Transients {
     })
   const read = g.read.bind(g)
   g.read = (q, opts) =>
-    opts?.durable ? read(q, opts) : then(read(q, opts), project)
+    opts?.durable ? read(q, opts) : after(read(q, opts), project)
   const receive = (f: TransientFrame) => {
     if (!Number.isSafeInteger(f.seq) || f.seq < 0) {
       throw new Error('Invalid transient sequence')

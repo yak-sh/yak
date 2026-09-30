@@ -19,7 +19,7 @@
 // first process that has the token sends them when it starts.
 
 import type { Handler, Handlers } from '@yaks/effects'
-import { then } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import type { Options, Transport } from './options.ts'
 import type { Sender } from './send.ts'
 import { letterOf, owed, sending } from './send.ts'
@@ -48,7 +48,7 @@ export let post = (said: Transport): { sender?: Sender; waiting?: string } => {
 export let waiting = (reason: string): Handler => {
   let said = false
   return (event, tx) =>
-    then(letterOf(tx, event.entity), (letter) => {
+    after(letterOf(tx, event.entity), (letter) => {
       if (said || !owed(letter)) return
       said = true
       console.warn('@yaks/mail —', reason)

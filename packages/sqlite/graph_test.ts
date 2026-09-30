@@ -5,7 +5,8 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { type Bundle, graph, isPromise, Stale, token } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
+import { type Bundle, graph, Stale, token } from '@yaks/graph'
 import { storage } from './mod.ts'
 import { mem, shop, shopGraph, spy } from './testing.ts'
 

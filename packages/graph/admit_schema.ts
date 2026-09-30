@@ -5,10 +5,10 @@
 import { numberOf, type NumericConstraint } from '@yaks/vocab/constraints'
 import { errorsText, toolCheck } from '@yaks/vocab/tools'
 import type { Vocab } from '@yaks/vocab'
+import { after } from '@yaks/fp'
 import { Refused } from './admit.ts'
 import { type Bundle, type Comp, comps, dead } from './bundle.ts'
 import { merged } from './gather.ts'
-import { then } from './pipe.ts'
 import type { Plugin, WriteHook } from './plugin.ts'
 
 type Check = ReturnType<typeof toolCheck>
@@ -64,7 +64,7 @@ export let admitSchema = (vocab: Vocab): Plugin => {
       }
     }
     if (!touched.size) return bundles
-    return then(tx.get([...touched.keys()], [...names]), (prior) => {
+    return after(tx.get([...touched.keys()], [...names]), (prior) => {
       let rows = new Map<string, Bundle>(prior.map((b) => [b.entity.eid, b]))
       let gone = new Set<string>()
       for (let b of bundles) {

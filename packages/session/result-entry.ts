@@ -1,5 +1,6 @@
 /** Session association is a rule, not a responsibility of the tool executor. */
-import { type Bundle, type Comp, type Hook, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { type Bundle, type Comp, type Hook } from '@yaks/graph'
 
 /** Add transcript membership only when absent. Sequencing is a separate rule.
  * Execution diagnostics use output.source to identify the same call.
@@ -11,11 +12,11 @@ export const resultEntries: Hook = (bundles, tx) => {
   }
   const candidates = bundles.filter((b) => !('entry' in b) && source(b) != null)
   if (!candidates.length) return bundles
-  return then(tx.get(candidates.map((b) => b.entity.eid)), (existing) => {
+  return after(tx.get(candidates.map((b) => b.entity.eid)), (existing) => {
     const lacking = candidates.filter((b) =>
       !existing.some((v) => v.entity.eid == b.entity.eid && v.entry)
     )
-    return then(tx.get(lacking.map((b) => String(source(b)))), (sources) => {
+    return after(tx.get(lacking.map((b) => String(source(b)))), (sources) => {
       return bundles.map((b) => {
         if (!lacking.includes(b)) return b
         const id = String(source(b))

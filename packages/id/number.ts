@@ -11,7 +11,7 @@
 //
 // A storage adapter may answer synchronously or not, and registering this
 // plugin must not turn every write into a promise — so the promise branch that
-// @yaks/graph's `then` usually hides is written out below. Its types are
+// @yaks/fp's `after` usually hides is written out below. Its types are
 // restated in ./graph.ts rather than imported, for the reason given there.
 
 import type { Bundle, Entity, Plugin } from './graph.ts'

@@ -13,8 +13,8 @@ import { weighing } from './cost.ts'
 // rollback. One of them cannot do both jobs: a refusal that could also write
 // would write into the transaction it just condemned.
 
+import { after } from '@yaks/fp'
 import type { Hook, Plugin } from '@yaks/graph'
-import { then } from '@yaks/graph'
 import { SESSION, sessionDoc } from './comp.ts'
 import { auditing, type AuditOpts } from './audit.ts'
 import { leasing } from './lease.ts'
@@ -53,12 +53,12 @@ export type SessionOpts = AuditOpts
 export let sessions = (opts: SessionOpts = {}): Plugin => {
   let lease = leasing(opts)
   let precondition: Hook = (bundles, tx, err) =>
-    then(
+    after(
       lease(bundles, tx, err),
       (b) =>
-        then(naming(b, tx, err), (named) =>
-          then(resultEntries(named, tx, err), (joined) =>
-            then(
+        after(naming(b, tx, err), (named) =>
+          after(resultEntries(named, tx, err), (joined) =>
+            after(
               sequencing(joined, tx, err),
               (placed) =>
                 weighing(placed, tx, err),

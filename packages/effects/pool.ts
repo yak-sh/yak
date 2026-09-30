@@ -54,7 +54,8 @@
 // that one, and says nothing about the rest.
 
 import type { Bundle, Comp, Eid, Graph, Tx } from '@yaks/graph'
-import { derivedEid, detached, Stale, then, token } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { derivedEid, detached, Stale, token } from '@yaks/graph'
 import { and, eq } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
@@ -533,7 +534,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         rows.push({ entity: { eid }, [EFFECT]: row })
         if (ours) mine.push({ eid, row })
       }
-      return then(tx.patch(rows), () => mine)
+      return after(tx.patch(rows), () => mine)
     },
     start: (owed) => {
       for (let { eid, row } of owed) start(graph!, eid, row)

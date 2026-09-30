@@ -58,12 +58,12 @@ import {
   type Value,
 } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { after, each } from '@yaks/fp'
 import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
 import { reserved } from './bundle.ts'
 import { merged } from './gather.ts'
 import { type Phase, PHASES } from './plugin.ts'
 import type { Query, Tx } from './storage.ts'
-import { each, then } from './pipe.ts'
 
 /**
  * The context one phase's rules run in: the frozen state they are evaluated
@@ -436,7 +436,7 @@ export let fire = (
     })
   }
   if (!hits.length) return bundles
-  return then(
+  return after(
     each(hits, [] as Bundle[], (out, [r, ready, i]) => {
       let patch: Patch = {}
       // The match guarantees a `+!` component is absent; a `+` component may
@@ -451,7 +451,7 @@ export let fire = (
       let got: Record<string, unknown> = {}
       for (let name of ready.resources) got[name] = hold(name)
       let bound = { ...views[i], ...patch, ...got } as Bound
-      return then(r.run?.(bound), (made) => {
+      return after(r.run?.(bound), (made) => {
         Object.assign(patch, made)
         patch = resolved(patch)
         let names = wrote(patch)
@@ -483,7 +483,7 @@ export let fire = (
       // written here. Before `mutate`, it is still to come and will write it.
       let late = PHASES.indexOf(tick.phase) >= PHASES.indexOf('mutate')
       return late
-        ? then(tick.tx.patch(made), () => [...bundles, ...made])
+        ? after(tick.tx.patch(made), () => [...bundles, ...made])
         : [...bundles, ...made]
     },
   )

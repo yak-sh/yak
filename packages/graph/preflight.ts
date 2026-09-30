@@ -4,12 +4,12 @@
 // it, and then always rolls that transaction back. Unlike `$was`, these checks
 // deliberately see earlier writes in the same change. No stamps and no effects
 // run during the rehearsal.
+import { after, each, isPromise } from '@yaks/fp'
 import type { Bundle } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { Hook } from './plugin.ts'
 import type { Storage } from './storage.ts'
 import type { Vocab } from '@yaks/vocab'
-import { each, isPromise, then } from './pipe.ts'
 import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
 import { state } from './state.ts'
@@ -41,16 +41,16 @@ export let preflight = (
   }
   try {
     let run = storage.tx((tx) =>
-      then(
+      after(
         each(bundles, [] as Bundle[], (out, b) =>
-          then(tx.get([b.entity.eid]), (found) => {
+          after(tx.get([b.entity.eid]), (found) => {
             if (found.some(dead)) {
               return [...out, b]
             }
-            return then(check([b], tx), (checked) => {
+            return after(check([b], tx), (checked) => {
               let st = state()
-              return then(mutate(checked, tx, st), (written) =>
-                then(
+              return after(mutate(checked, tx, st), (written) =>
+                after(
                   cascade(written, tx, vocab, st),
                   () => [...out, ...checked],
                 ))

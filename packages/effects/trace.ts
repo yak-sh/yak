@@ -19,7 +19,8 @@
 // without a global anywhere. The effect phase strips it back off.
 
 import type { Ask, Binding, Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
-import { comps, dead, doomed, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { comps, dead, doomed } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 
 /** What triggered a handler: one of the three things that can happen to a
@@ -74,10 +75,10 @@ export let before = (
 ) =>
 (bundles: Bundle[], tx: Tx): Bundle[] | Promise<Bundle[]> => {
   let killed = killing(bundles)
-  return then(
+  return after(
     killed.length ? doomed(tx, vocab, killed) : [],
     (gone) =>
-      then(
+      after(
         tx.get([...new Set([...bundles.map((b) => b.entity.eid), ...gone])]),
         (found) => {
           let map: Before = {}

@@ -22,15 +22,8 @@ import type {
   Ready,
   StampPolicy,
 } from '@yaks/graph'
-import {
-  admit,
-  comps,
-  dead,
-  graph,
-  isPromise,
-  own,
-  substitute,
-} from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
+import { admit, comps, dead, graph, own, substitute } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { syncOf } from '@yaks/vocab'
 import { nameOf } from '@yaks/alias'

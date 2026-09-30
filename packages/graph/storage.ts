@@ -5,7 +5,7 @@
 //
 // Two rules keep this interface small. First, every method is async or sync:
 // an embedded database returns immediately, a remote one returns a promise,
-// and `apply()` handles either (see ./pipe.ts). Second, identity belongs to
+// and `apply()` handles either (see @yaks/fp `after`). Second, identity belongs to
 // storage: `patch` creates whatever identity row an eid needs and returns the
 // entities it created, including the `num` if the adapter assigns one.
 

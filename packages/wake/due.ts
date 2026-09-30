@@ -24,9 +24,9 @@
 // same graph at the same instant agree.
 
 import type { Bundle, Comp, Entity, Storage } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import { FIRED, WAKE, type Wake } from './comp.ts'
-import { after } from './every.ts'
+import { recur } from './every.ts'
 
 /** How a schedule is read: the time zone a cron line is interpreted in. */
 export type Clock = {
@@ -73,7 +73,7 @@ export let due = (
  *
  * A duration is counted from the wake's own `at`, so a cadence keeps its phase;
  * a cron line is evaluated against the calendar. See
- * {@link https://jsr.io/@yaks/wake/doc/~/after | after}.
+ * {@link https://jsr.io/@yaks/wake/doc/~/recur | recur}.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -92,13 +92,13 @@ export let next = (
 ): string | null => {
   let tz = typeof clock == 'string' ? clock : clock.tz
   if (typeof wake == 'string') {
-    let at = after(wake, now, now, tz)
+    let at = recur(wake, now, now, tz)
     return at == null ? null : iso(at)
   }
   if (!wake.every || !wake.at) return null
   let from = Date.parse(wake.at)
   if (Number.isNaN(from)) return null
-  let at = after(wake.every, from, now, tz)
+  let at = recur(wake.every, from, now, tz)
   return at == null ? null : iso(at)
 }
 
@@ -139,7 +139,7 @@ export let soonest = (
   storage: Pick<Storage, 'read'>,
   now: number = Date.now(),
 ): number | null | Promise<number | null> =>
-  then(
+  after(
     storage.read(`.${WAKE}.at>${iso(now)}&.order=${WAKE}.at&.limit=1`, { now }),
     ([b]) => {
       let at = wakeOf(b ?? { entity: {} as Entity })?.at

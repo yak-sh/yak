@@ -27,12 +27,12 @@
 // deleted is a question about the graph as this change leaves it.
 
 import type { Death, Vocab } from '@yaks/vocab'
+import { after } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { tombstoned } from './bundle.ts'
 import type { Doom, Gone, Loose, Tx } from './storage.ts'
 import type { State } from './state.ts'
 import { about, gather, holding } from './gather.ts'
-import { then } from './pipe.ts'
 
 // The components holding a reference declared with one of these death
 // behaviors — exactly what an `about` read has to look through, and nothing
@@ -73,7 +73,7 @@ let walk = (
   if (!props.length) return list
   let rung = (front: Eid[], depth: number): Gone[] | Promise<Gone[]> => {
     if (!front.length) return list
-    return then(about(tx, vocab, front, look), (found) => {
+    return after(about(tx, vocab, front, look), (found) => {
       let next: Eid[] = []
       for (let b of born(found)) {
         let eid = b.entity.eid
@@ -114,7 +114,7 @@ export let doomed = (
   // both.
   look: string[] = bearing(vocab, ['cascade']),
 ): Eid[] | Promise<Eid[]> =>
-  then(walk(tx, vocab, killed, look), (gone) => gone.map((g) => g.eid))
+  after(walk(tx, vocab, killed, look), (gone) => gone.map((g) => g.eid))
 
 // The detach/release references into a set of deleted entities, read out of
 // the bundles that point at them. Only surviving entities need their
@@ -150,20 +150,20 @@ let reckon = (
   let soft = bearing(vocab, SOFT)
   let look = [...new Set([...bearing(vocab, ['cascade']), ...soft])]
   let walked = (): Doom | Promise<Doom> =>
-    then(gather(tx, vocab, [{ about: killed, comps: look }]), (snap) => {
+    after(gather(tx, vocab, [{ about: killed, comps: look }]), (snap) => {
       let held = holding(tx, vocab, snap)
-      return then(walk(held, vocab, killed, look), (gone) => {
+      return after(walk(held, vocab, killed, look), (gone) => {
         let dead = gone.map((g) => g.eid)
         // The detach/release references into everything deleted, including
         // the entities the walk turned up — one read, and no read at all when
         // this change's own deletes were all of it.
-        return then(about(held, vocab, dead, soft), (owners) => ({
+        return after(about(held, vocab, dead, soft), (owners) => ({
           gone,
           loose: letting(vocab, born(owners), dead),
         }))
       })
     })
-  return tx.doom ? then(tx.doom(killed), (told) => told ?? walked()) : walked()
+  return tx.doom ? after(tx.doom(killed), (told) => told ?? walked()) : walked()
 }
 
 // Clearing a reference: `detach` sets the property to null, `release` removes
@@ -186,7 +186,7 @@ let loosen = (
       })
     }
   }
-  return out.length ? then(tx.patch(out), () => out) : out
+  return out.length ? after(tx.patch(out), () => out) : out
 }
 
 /**
@@ -202,16 +202,16 @@ export let cascade = (
   st: State,
 ): Bundle[] | Promise<Bundle[]> => {
   if (!st.killed.length) return bundles
-  return then(reckon(tx, vocab, st.killed), ({ gone, loose }) => {
+  return after(reckon(tx, vocab, st.killed), ({ gone, loose }) => {
     // The entities the change named come first, whatever order the answer
     // arrived in: they are deleted because the caller said so, and an entity
     // storage has never heard of is still one of them.
     let dead = [...new Set([...st.killed, ...gone.map((g) => g.eid)])]
-    return then(
+    return after(
       loosen(tx, vocab, loose, 'release'),
       (released) =>
-        then(loosen(tx, vocab, loose, 'detach'), (detached) =>
-          then(
+        after(loosen(tx, vocab, loose, 'detach'), (detached) =>
+          after(
             tx.remove(dead.map((eid) => ({ eid }))),
             () => [
               ...bundles,

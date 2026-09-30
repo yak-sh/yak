@@ -97,22 +97,9 @@ let load = async (page: string, tag: string, code: string, lang?: string) => {
   }
 }
 
-// The names a module exports. Read through a module of its own: a namespace
-// exporting `then` (@yaks/graph's does) is a thenable, so awaiting its import
-// would call that `then` instead of handing the namespace back.
-let exported = async (page: string): Promise<string[]> => {
-  let base = page.slice(page.lastIndexOf('/') + 1)
-  let path = beside(page, 'names')
-  await Deno.writeTextFile(
-    path,
-    `import * as $module from './${base}'\nexport let names = Object.keys($module)\n`,
-  )
-  try {
-    return (await import(url(path))).names
-  } finally {
-    await Deno.remove(path).catch(() => {})
-  }
-}
+/** The names a module exports. */
+let exported = async (page: string): Promise<string[]> =>
+  Object.keys(await import(url(page)))
 
 /** Loads a page's examples, each declaring its test. */
 export let examples = async (page: string) => {

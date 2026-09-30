@@ -17,20 +17,19 @@
 // `rouse` once its writes commit, the way it calls `tick` when its own clock
 // goes off.
 
+import { after, over } from '@yaks/fp'
 import {
   type Bundle,
   type Hook,
-  over,
   type Query,
   Stale,
-  then,
   token,
   type Tx,
 } from '@yaks/graph'
 import { and, limit, parse } from '@yaks/query'
 import { WAKE, type Wake } from './comp.ts'
 import { wakeOf } from './due.ts'
-import { after } from './every.ts'
+import { recur } from './every.ts'
 import type { Driver } from './tick.ts'
 
 let iso = (t: number): string => new Date(t).toISOString()
@@ -113,7 +112,7 @@ export let rouse = async (
     let w = wakeOf(wake) ?? {}
     try {
       let every = await cadence(graph, w, now, holds)
-      let at = every == null ? null : after(every, now, now)
+      let at = every == null ? null : recur(every, now, now)
       if (at == null || (w.at && Date.parse(w.at) <= at)) continue
       ready.push({ wake, at })
     } catch (error) {
@@ -155,7 +154,7 @@ let entry = (tx: Tx, e: unknown, i: number): unknown => {
       `wake.while[${i}] is {match, every}: a query and a cadence`,
     )
   }
-  if (after(every, 0, 0) == null) {
+  if (recur(every, 0, 0) == null) {
     throw new TypeError(`wake.while[${i}].every: no cadence in "${every}"`)
   }
   return tx.read(probe(match))
@@ -168,7 +167,7 @@ let entry = (tx: Tx, e: unknown, i: number): unknown => {
  * firing after.
  */
 export let conditions: Hook = (bundles, tx) =>
-  then(
+  after(
     over(
       bundles.flatMap((b) =>
         (wakeOf(b)?.while ?? []).map((e, i) => [e, i] as const)

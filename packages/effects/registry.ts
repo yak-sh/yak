@@ -51,7 +51,8 @@ import type {
   Plugin,
   Tx,
 } from '@yaks/graph'
-import { asked, each, isPromise, match, over, reads, then } from '@yaks/graph'
+import { after, each, isPromise, over } from '@yaks/fp'
+import { asked, match, reads } from '@yaks/graph'
 import { type Clause, eq, list } from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import {
@@ -408,7 +409,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
             'one-entity pattern over committed rows is all it can be asked',
         )
       }
-      return then(
+      return after(
         tx.bindings([plan], batch, reads(plan, vocab)),
         ([rows]) =>
           rows
@@ -427,7 +428,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     // lookup, not a scan with the batch picked out afterwards.
     let { filter } = one[0]
     let about = eq('eid', list(...touched))
-    return then(
+    return after(
       tx.read({ ...filter, clauses: [...filter.clauses, about] }),
       (rows) =>
         rows.map((b) => ({
@@ -468,14 +469,14 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       let query = s.effect?.active
       if (!query) return true
       if (!active.has(query)) {
-        active.set(query, then(tx.read(query), (rows) => rows.length > 0))
+        active.set(query, after(tx.read(query), (rows) => rows.length > 0))
       }
       return active.get(query)!
     }
-    return then(
+    return after(
       each(asking, found, (out, s) => {
         try {
-          return then(
+          return after(
             hits(s, bundles, tx),
             (evs) => [
               ...out,
@@ -498,7 +499,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           hits,
           kept,
           (out, pair) =>
-            then(enabled(pair[0]), (yes) => yes ? [...out, pair] : out),
+            after(enabled(pair[0]), (yes) => yes ? [...out, pair] : out),
         )
       },
     )
@@ -535,10 +536,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   // Inside the transaction: the runs this batch owes, written down.
   let owe: Hook = (bundles, tx) => {
     if (generation(bundles) > depth) return bundles
-    return then(
+    return after(
       matched(bundles, tx, (s) => !!s.effect),
       (found) =>
-        !found.length ? bundles : then(
+        !found.length ? bundles : after(
           pooled!.owe(tx, found, generation(bundles)),
           (mine) => {
             if (mine.length) owed.set(bundles[0], mine)
@@ -551,7 +552,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // After the commit: the runs this process claimed as it wrote them are
   // started, and every observer runs.
-  let after: Hook = (bundles, tx) => {
+  let effect: Hook = (bundles, tx) => {
     let mine = bundles[0] && owed.get(bundles[0])
     let clean = () => unmark(strip(bundles))
     if (mine) {
@@ -562,8 +563,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let gen = generation(bundles)
     if (gen > depth || !slots.some(here)) return clean()
     let write = writer(gen)
-    return then(
-      then(
+    return after(
+      after(
         matched(bundles, tx, here),
         (found) => over(found, ([s, e]) => fire(s, e, tx, write)),
       ),
@@ -582,7 +583,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       precondition: (bundles, tx) =>
         slots.length ? before(vocab)(bundles, tx) : bundles,
       ...(pooled ? { commit: owe } : {}),
-      effect: after,
+      effect,
     },
     // Nothing is read while nothing is registered, so nothing is asked for.
     wants: (bundles) => [

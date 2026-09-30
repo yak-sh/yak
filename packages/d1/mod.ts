@@ -20,8 +20,8 @@
  * ```
  *
  * Because `Storage` may be either asynchronous or synchronous, and @yaks/graph
- * handles either (its `then` awaits a promise and passes a plain value straight
- * through), the same `apply()` is synchronous over @yaks/sqlite and
+ * handles either (@yaks/fp's `after` awaits a promise and passes a plain value
+ * straight through), the same `apply()` is synchronous over @yaks/sqlite and
  * asynchronous here. No caller in between has to know which.
  *
  * ## The transaction, in plain terms

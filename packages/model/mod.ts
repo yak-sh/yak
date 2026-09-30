@@ -43,6 +43,7 @@
  * @module
  */
 
+import { after } from '@yaks/fp'
 import {
   dead,
   type Eid,
@@ -50,7 +51,6 @@ import {
   minted,
   type Plugin,
   Refused,
-  then,
   type Tx,
 } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
@@ -82,7 +82,7 @@ export let addressed = (
     id && !id.startsWith('$') && !minted(id)
   )
   let at = (id: string) => [PROVIDER, MODEL].map((c) => identityEid(c, [id]))
-  return then(tx.get(ask.flatMap(at)), (rows) => {
+  return after(tx.get(ask.flatMap(at)), (rows) => {
     let live = new Set(rows.filter((b) => !dead(b)).map((b) => b.entity.eid))
     let found = new Map<string, Eid>()
     for (let id of ask) {

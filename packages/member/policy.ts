@@ -34,7 +34,8 @@
 // promise.
 
 import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
-import { detached, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { detached } from '@yaks/graph'
 import { and, eq, or } from '@yaks/query'
 import { ACCESS, GRANT, MEMBER } from './comp.ts'
 import { edits, type Level, level, type Mode, mode, reads } from './words.ts'
@@ -72,7 +73,7 @@ let of = (b: Bundle | undefined, name: string): Comp | undefined =>
  * nothing else, since this runs on every request and a whole read of an
  * entity can ask every table the vocabulary has. */
 export let modeOn = (tx: Tx, app: Eid): Mode | Promise<Mode> =>
-  then(tx.get([app], [ACCESS]), ([b]) => mode(of(b, ACCESS)?.mode))
+  after(tx.get([app], [ACCESS]), ([b]) => mode(of(b, ACCESS)?.mode))
 
 /**
  * Everything filed about this principal: their membership rows, their grants.
@@ -105,11 +106,11 @@ export let levelOn = (
   where: Where = {},
 ): Level | null | Promise<Level | null> => {
   if (!who) return null
-  return then(tx.get([who], [GRANT]), ([self]) => {
+  return after(tx.get([who], [GRANT]), ([self]) => {
     // A share link's bearer is the grant they opened.
     let own = of(self, GRANT)
     if (own && own.app == app) return level(own.access)
-    return then(filed(tx, who), (found) => {
+    return after(filed(tx, who), (found) => {
       // The space's owner, before any grant. Never stored per app — a space
       // owner owns everything in it, and storing that would be a row to forget
       // to write.
@@ -132,12 +133,12 @@ export let readsOn = (
   app: Eid,
   where: Where = {},
 ): boolean | Promise<boolean> =>
-  then(
+  after(
     modeOn(tx, app),
     // Check the anonymous case first: a mode that admits nobody in particular
     // admits everybody, and the permission lookup never runs.
     (m) =>
-      reads(m, null) || then(levelOn(tx, who, app, where), (l) => reads(m, l)),
+      reads(m, null) || after(levelOn(tx, who, app, where), (l) => reads(m, l)),
   ) as boolean | Promise<boolean>
 
 /** May they write it? The mode is `open`, or they hold owner or editor. */
@@ -147,10 +148,10 @@ export let writesOn = (
   app: Eid,
   where: Where = {},
 ): boolean | Promise<boolean> =>
-  then(
+  after(
     modeOn(tx, app),
     (m) =>
-      edits(m, null) || then(levelOn(tx, who, app, where), (l) => edits(m, l)),
+      edits(m, null) || after(levelOn(tx, who, app, where), (l) => edits(m, l)),
   ) as boolean | Promise<boolean>
 
 /**

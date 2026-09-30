@@ -29,10 +29,10 @@
 
 import { type And, type Fields, meaning, parse } from '@yaks/query'
 import type { Hop, Vocab } from '@yaks/vocab'
+import { after } from '@yaks/fp'
 import { type Bundle, type Comp, type Eid, reserved } from './bundle.ts'
 import { composed } from './compose.ts'
 import type { Graph } from './graph.ts'
-import { then } from './pipe.ts'
 import type { Query, ReadOpts, Row } from './storage.ts'
 
 /** Which properties of each component a delivered bundle answers for, whether
@@ -206,7 +206,7 @@ export let project = (
   graph: Graph,
   p: Projection,
   opts?: ReadOpts,
-): Projected | Promise<Projected> => then(graph.rows(p.query, opts), p.fold)
+): Projected | Promise<Projected> => after(graph.rows(p.query, opts), p.fold)
 
 /** A projection's answer as one list of bundles, one per entity: the ones
  * selected, then each one reached that is not among them. What a door with no

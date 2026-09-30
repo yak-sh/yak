@@ -24,7 +24,7 @@
 // whole entity, which is what the effect reads anyway.
 
 import type { Bundle, Comp, Entity, Tx } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import type { Handler } from '@yaks/effects'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { at } from './addr.ts'
@@ -84,7 +84,7 @@ export let letterOf = (
   tx: Tx,
   entity: Entity,
 ): Bundle | undefined | Promise<Bundle | undefined> =>
-  then(tx.get([entity.eid]), (found) => found[0])
+  after(tx.get([entity.eid]), (found) => found[0])
 
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
@@ -105,12 +105,12 @@ export let addressOf = (
   tx: Tx,
   eid: string,
 ): string | Promise<string> =>
-  then(tx.get([eid]), (found) => str(comp(found[0], EMAIL), 'address'))
+  after(tx.get([eid]), (found) => str(comp(found[0], EMAIL), 'address'))
 
 // The Message-ID a reply threads on: the answered letter's own, whether it
 // arrived with it or our transport gave it one when it left.
 let threadOf = (tx: Tx, eid: string): string | Promise<string> =>
-  then(tx.get([eid]), (found) => str(comp(found[0], MAIL), 'message_id'))
+  after(tx.get([eid]), (found) => str(comp(found[0], MAIL), 'message_id'))
 
 /**
  * The letter as a message: the subject and both body renderings, with the
@@ -180,7 +180,7 @@ export let message = (
  */
 export let sending =
   ({ sender, now = clock, local }: Post): Handler => (event, tx, write) =>
-    then(letterOf(tx, event.entity), (letter) => {
+    after(letterOf(tx, event.entity), (letter) => {
       // Not a letter, not a request to send one, or one already handed over.
       if (!owed(letter)) return
       let mail = comp(letter, MAIL)!
@@ -190,7 +190,7 @@ export let sending =
       let fail = (reason: string) => settle({ reason }, BOUNCED)
       let recipient = deliver.to == null ? '' : String(deliver.to)
       if (!recipient) return fail('deliver.to names nobody')
-      return then(addressOf(tx, recipient), (to) => {
+      return after(addressOf(tx, recipient), (to) => {
         if (!to) return fail(`no address on file for ${recipient}`)
         if (!str(mail, 'from')) return fail('the letter has no from address')
         // Local delivery: the address is at a domain this graph owns, so the
@@ -207,10 +207,10 @@ export let sending =
         let answered = mail.reply_to == null ? '' : String(mail.reply_to)
         let tried = () =>
           write([{ entity: event.entity, [DELIVER]: { tried: now() } }])
-        return then(
+        return after(
           answered ? threadOf(tx, answered) : '',
           (replyTo) =>
-            then(
+            after(
               tried(),
               () => sender.send(message(letter!, to, replyTo || undefined)),
             ).then(

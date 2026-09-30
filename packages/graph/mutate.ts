@@ -13,11 +13,11 @@
 // change's own delete of an entity is dropped: the change said both, and the
 // delete is what the cascade acts on.
 
+import { after } from '@yaks/fp'
 import type { Bundle } from './bundle.ts'
 import { comps, dead, gives, raced } from './bundle.ts'
 import type { Tx } from './storage.ts'
 import type { State } from './state.ts'
-import { then } from './pipe.ts'
 
 /**
  * The mutate phase: write the change's live bundles, swallow the ones that
@@ -31,7 +31,7 @@ export let mutate = (
   st: State,
 ): Bundle[] | Promise<Bundle[]> => {
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
-  return then(tx.get(eids), (found) => {
+  return after(tx.get(eids), (found) => {
     // Deleted before this change began: a write may bring one back.
     let buried = new Set(
       found.filter((b) => dead(b)).map((b) => b.entity.eid),
@@ -61,10 +61,10 @@ export let mutate = (
       return true
     })
     if (!live.length) return kept
-    return then(
+    return after(
       back.length ? tx.revive(back) : undefined,
       () =>
-        then(tx.patch(live), (born) => {
+        after(tx.patch(live), (born) => {
           st.born.push(...born)
           for (let e of born) st.touched.add(e.eid)
           return kept

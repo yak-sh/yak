@@ -10,7 +10,8 @@
 // while sending its own initial result.
 
 import { fault, refusal } from './refuse.ts'
-import { type Bundle, coalescer, isPromise } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
+import { type Bundle, coalescer } from '@yaks/graph'
 import { admission } from './admission.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
 

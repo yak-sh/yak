@@ -19,7 +19,8 @@
 // start-up finds nothing to do.
 
 import type { Bundle, Comp, Eid, Storage, Tx } from '@yaks/graph'
-import { detached, then, TOMBSTONE } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { detached, TOMBSTONE } from '@yaks/graph'
 import { CLAIM, SESSION } from './comp.ts'
 
 /**
@@ -28,11 +29,11 @@ import { CLAIM, SESSION } from './comp.ts'
  * you want the release journaled and its effects fired.
  */
 export let staleLeases = (tx: Tx): Bundle[] | Promise<Bundle[]> =>
-  then(tx.read(`.${CLAIM}.session`), (locked) => {
+  after(tx.read(`.${CLAIM}.session`), (locked) => {
     if (!locked.length) return []
     let holder = (b: Bundle) => String((b[CLAIM] as Comp).session)
     let runs = [...new Set(locked.map(holder))]
-    return then(tx.get(runs), (found) => {
+    return after(tx.get(runs), (found) => {
       let live = new Set<Eid>(
         found.filter((b) => b[TOMBSTONE] == null && b[SESSION] != null)
           .map((b) => b.entity.eid),
@@ -58,8 +59,8 @@ export let staleLeases = (tx: Tx): Bundle[] | Promise<Bundle[]> =>
  */
 export let reapLeases = (storage: Storage): Bundle[] | Promise<Bundle[]> => {
   let tx = detached(storage)
-  return then(
+  return after(
     staleLeases(tx),
-    (freed) => freed.length ? then(tx.patch(freed), () => freed) : freed,
+    (freed) => freed.length ? after(tx.patch(freed), () => freed) : freed,
   )
 }

@@ -16,7 +16,7 @@
 // in a rule's match).
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
-import { over, then } from '@yaks/graph'
+import { after, over } from '@yaks/fp'
 import { MODEL, PROVIDER } from '@yaks/model'
 import { ENTRY, FORK, USING } from './native.ts'
 
@@ -61,7 +61,7 @@ const names: Hook = (bundles, tx) => {
     bundles.some((b) => b.entity.eid == eid && comp in b)
   let asked = all.filter(([, , eid, comp]) => !inBatch(eid, comp))
   if (!asked.length) return bundles
-  return then(tx.get(asked.map(([, , eid]) => eid)), (found) => {
+  return after(tx.get(asked.map(([, , eid]) => eid)), (found) => {
     for (let [comp, prop, eid, must] of asked) {
       let hit = found.find((b) => b.entity.eid == eid)
       if (!hit || !(must in hit)) throw new Unnamed(comp, prop, eid)
@@ -72,15 +72,15 @@ const names: Hook = (bundles, tx) => {
 
 /** Fork boundaries cannot include mutable, unfinished provider output. */
 export const naming: Hook = (bundles, tx, err) =>
-  then(
+  after(
     over(bundles.filter((b) => ref(b, FORK, 'from')), (b) => {
       const from = ref(b, FORK, 'from')!
-      return then(tx.get([from]), (rows) => {
+      return after(tx.get([from]), (rows) => {
         const anchor = bundles.find((v) => v.entity.eid == from && v.entry) ??
           rows[0]
         const entry = anchor?.entry as Comp | undefined
         if (!entry) return
-        return then(
+        return after(
           tx.read('.entry.session=' + String(entry.session)),
           (entries) => {
             if (

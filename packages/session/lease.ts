@@ -20,7 +20,7 @@
 // verdict has to be about the batch rather than about each bundle in turn.
 
 import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import { CLAIM } from './comp.ts'
 import { Bounced } from './bounce.ts'
 
@@ -56,7 +56,7 @@ export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx) => {
   if (!taken.length) return bundles
   let now = opts.now ?? (() => new Date().toISOString())
   let want = [...new Set(taken.map(([on]) => on))]
-  return then(tx.get(want), (found) => {
+  return after(tx.get(want), (found) => {
     let at = new Map(found.map((b) => [b.entity.eid, b]))
     // The holder of each contested entity, as the batch found it — then as the
     // batch itself leaves it, so two bundles taking one lock for two sessions

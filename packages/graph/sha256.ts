@@ -2,7 +2,7 @@
 // synchronous. The platform's own digest (`crypto.subtle.digest`) returns a
 // promise, and hashing through it would make every guarded write async —
 // including one over an embedded database that is otherwise synchronous end to
-// end (see ./pipe.ts). A precondition hashes a handful of small strings per
+// end (see @yaks/fp `after`). A precondition hashes a handful of small strings per
 // change, so the cost of hashing them here is nothing next to making the whole
 // pipeline asynchronous.
 //

@@ -17,7 +17,8 @@
 // first landing.
 
 import type { Bundle, Comp, Eid, Tx } from '@yaks/graph'
-import { dead, each, then } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
+import { dead } from '@yaks/graph'
 import { absent, and, eq, ge, or, present } from '@yaks/query'
 import { paceOf, syncOf, type Vocab } from '@yaks/vocab'
 
@@ -123,7 +124,7 @@ export let pacing = (
   let paced = Object.keys(paces).filter((c) => bundles.some((b) => b[c]))
   if (!paced.length) return bundles
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
-  return then(tx.get(eids), (rows) => {
+  return after(tx.get(eids), (rows) => {
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
     return each(paced, bundles, (out, comp) => {
       let pace = paces[comp]
@@ -133,7 +134,7 @@ export let pacing = (
       if (writing.length > 1) throw new Paced(who, comp, pace, pace)
       if (!writing.length) return out
       let since = new Date(now - pace + 1).toISOString()
-      return then(tx.read(wrote(comp, who, since)), (recent) => {
+      return after(tx.read(wrote(comp, who, since)), (recent) => {
         if (!recent.length) return out
         let at = Math.max(...recent.map((r) => last(r, who)))
         throw new Paced(who, comp, pace, at ? at + pace - now : pace)

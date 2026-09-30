@@ -1,10 +1,10 @@
+import { after } from '@yaks/fp'
 import {
   type Bundle,
   comps,
   dead,
   type Plugin,
   Refused,
-  then,
   type Tracker,
   type Tx,
 } from '@yaks/graph'
@@ -64,7 +64,7 @@ function tracking(
   let ensure = (eids: string[]) => {
     let missing = [...new Set(eids)].filter((e) => !held.has(e))
     let unknown = missing.filter((e) => found(e) === undefined)
-    return then(unknown.length ? tx.get(unknown) : [], (rows) => {
+    return after(unknown.length ? tx.get(unknown) : [], (rows) => {
       let read = new Map(rows.map((b) => [b.entity.eid, b]))
       let before = missing.map((e) => found(e) ?? read.get(e))
       let ids = [
@@ -73,7 +73,7 @@ function tracking(
           return id && !cache.get(id) ? [id] : []
         })),
       ]
-      return then(ids.length ? tx.get(ids) : [], (defs) => {
+      return after(ids.length ? tx.get(ids) : [], (defs) => {
         for (let b of defs) {
           let a = cache.intern(
             tablesOf((b.archetype as { tables: unknown }).tables),
@@ -105,7 +105,7 @@ function tracking(
   let wrapped: Tx = {
     ...tx,
     patch: (bundles) =>
-      then(ensure(bundles.map((b) => b.entity.eid)), () => {
+      after(ensure(bundles.map((b) => b.entity.eid)), () => {
         for (let b of bundles) {
           let h = held.get(b.entity.eid)!
           if (h.dead) continue
@@ -125,7 +125,7 @@ function tracking(
           }
           if (h.set.eid != h.assigned) dirty.add(b.entity.eid)
         }
-        return then(tx.patch(bundles), (born) => {
+        return after(tx.patch(bundles), (born) => {
           for (let e of born) {
             // References can mint bare entities that no input bundle named.
             if (!held.has(e.eid)) held.set(e.eid, { set: empty, dead: false })
@@ -135,7 +135,7 @@ function tracking(
         })
       }),
     remove: (entities) =>
-      then(ensure(entities.map((e) => e.eid)), () => {
+      after(ensure(entities.map((e) => e.eid)), () => {
         for (let e of entities) {
           let h = held.get(e.eid)!
           if (h.set.tables.includes('archetype')) {
@@ -152,7 +152,7 @@ function tracking(
     // A revived entity starts from the empty set: the patch after it moves it
     // to the tables it is given, as it would a new one.
     revive: (eids) =>
-      then(ensure(eids), () => {
+      after(ensure(eids), () => {
         for (let eid of eids) {
           let h = held.get(eid)!
           if (!h.dead) continue
@@ -191,7 +191,7 @@ function tracking(
       // descriptors.
       let meta = cache.intern(['archetype'])
       needed.set(meta.eid, meta)
-      return then(tx.get([...needed.keys()]), (rows) => {
+      return after(tx.get([...needed.keys()]), (rows) => {
         let existing = new Set(
           rows.filter((b) => b.archetype != null).map((b) => b.entity.eid),
         )
@@ -213,7 +213,7 @@ function tracking(
         assignments = assignments.filter((b) => !defining.has(b.entity.eid))
         // The underlying transaction bypasses this tracker for its own
         // metadata. It is still inside the same rollback/journal boundary.
-        return then(tx.patch([...made, ...assignments]), (born) => {
+        return after(tx.patch([...made, ...assignments]), (born) => {
           let numbered = new Map(born.map((e) => [e.eid, e]))
           for (let b of made) {
             held.set(b.entity.eid, {

@@ -22,7 +22,8 @@
 // yet (see `warm`) is fetched for the next asker rather than waited for.
 
 import type { Bundle, Eid } from '@yaks/graph'
-import { identityEid, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { identityEid } from '@yaks/graph'
 import { deadline, type OpRead, opRead } from './op.ts'
 import { sentinel } from './sentinel.ts'
 import type { Local, Vault } from './vault.ts'
@@ -93,7 +94,7 @@ export let reveal = (
   name: string,
   s: Sources = {},
 ): string | undefined | Promise<string | undefined> =>
-  then(
+  after(
     vault.read(secretEid(name)),
     (kept) =>
       kept?.value ??
@@ -137,7 +138,7 @@ export let warm = (
 ): Promise<unknown> =>
   Promise.all(
     names.map((name) =>
-      then(
+      after(
         vault.read(secretEid(name)),
         (kept) =>
           kept?.op && kept.value == null

@@ -38,7 +38,8 @@
 
 import { PROVISIONAL, type Write } from '@yaks/effects'
 import type { Bundle, Eid, Hook, Plugin, Tx } from '@yaks/graph'
-import { dead, each, isPromise, then } from '@yaks/graph'
+import { after, each, isPromise } from '@yaks/fp'
+import { dead } from '@yaks/graph'
 import { isOpRef } from './op.ts'
 import { secretEid } from './reveal.ts'
 import { handle, isHandle } from './sentinel.ts'
@@ -132,7 +133,7 @@ export let secrets = (vault: Vault, write: Write): Plugin => {
   // The handle for a secret being written: the one the vault keeps for it, the
   // one this process gave it moments ago, or a new one.
   let handleOf = (eid?: Eid): string | Promise<string> =>
-    !eid ? handle() : then(vault.read(eid), (kept) => {
+    !eid ? handle() : after(vault.read(eid), (kept) => {
       let h = kept?.handle ?? minted.get(eid)?.handle ?? handle()
       if (!kept) minted.set(eid, { handle: h, until: Date.now() + HOLD_MS })
       return h
@@ -191,7 +192,7 @@ export let secrets = (vault: Vault, write: Write): Plugin => {
         return each(
           bundles,
           [] as Bundle[],
-          (out, b) => then(hide(b), (one) => [...out, one]),
+          (out, b) => after(hide(b), (one) => [...out, one]),
         )
       },
     },
@@ -257,7 +258,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
     let kept = isOpRef(held.value) ? { op: held.value } : { value: held.value }
     let name = comp.name
     let put = () =>
-      then(vault.read(eid), (was) => {
+      after(vault.read(eid), (was) => {
         let named = typeof name == 'string' ? name : was?.name
         return vault.seal(eid, {
           ...named ? { name: named } : {},
@@ -269,7 +270,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
     // Sealed: the mark comes off, and with it any failure an earlier try, or
     // an earlier write, left on this secret.
     let sealed = () =>
-      then(tx.get([eid]), ([b]) =>
+      after(tx.get([eid]), ([b]) =>
         mark({
           entity: { eid },
           [PROVISIONAL]: null,
@@ -280,7 +281,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
     let attempt = (n: number): unknown =>
       settle(put, sealed, (err) =>
         retryable(err) && n < TRIES
-          ? then(
+          ? after(
             mark({
               entity: { eid },
               error: { code: 'transient' },
@@ -288,7 +289,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
             }),
             () => pause(n).then(() => attempt(n + 1)),
           )
-          : then(
+          : after(
             mark({
               entity: { eid },
               [PROVISIONAL]: null,
@@ -306,7 +307,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
     return vault.drop(eid)
   }
   return (bundles, tx) =>
-    then(
+    after(
       each(bundles, null as unknown, (_, b) => {
         let eid = b.entity.eid
         if (dead(b) || b[SECRET] === null) return drop(eid)

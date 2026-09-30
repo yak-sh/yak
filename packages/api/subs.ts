@@ -34,13 +34,11 @@
 // what remembers who is in.
 
 import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { after, isPromise, over } from '@yaks/fp'
 import {
   admit,
   coalesced,
   composed,
-  isPromise,
-  over,
-  then,
   transient,
   type TransientFrame,
 } from '@yaks/graph'
@@ -368,7 +366,7 @@ export let subscriptions = (graph: Graph, opts: {
     }
     let missing = targets.filter((peer) => !answers.has(peer))
     let fresh = missing.length
-      ? then(
+      ? after(
         graph.read(
           `.${ref.comp}.${ref.prop}=${missing.join(',')}`,
           { durable: true },
@@ -376,7 +374,7 @@ export let subscriptions = (graph: Graph, opts: {
         (refs) => refs.length ? graph.get(refs.map((b) => b.entity.eid)) : [],
       )
       : []
-    return then(fresh, (rows) => {
+    return after(fresh, (rows) => {
       for (let peer of missing) {
         let key = linkKey(ref.comp, ref.prop, peer)
         let matching = rows.filter((b) =>
@@ -458,7 +456,7 @@ export let subscriptions = (graph: Graph, opts: {
   let ask = (sub: Sub, q: string): Answer =>
     sub.plan?.reaches.length
       ? project(graph, sub.plan, { durable: true })
-      : then(graph.read(q, { durable: true }), answered)
+      : after(graph.read(q, { durable: true }), answered)
 
   // The bundles a frame carries, and what each covers where a projection
   // narrowed them, so a replica clears only a property the projection named.
@@ -533,10 +531,10 @@ export let subscriptions = (graph: Graph, opts: {
       }
       let loaded = rows?.get(line)
       if (!loaded) {
-        loaded = sub.peer ? then(read(sub), answered) : ask(sub, line)
+        loaded = sub.peer ? after(read(sub), answered) : ask(sub, line)
         rows?.set(line, loaded)
       }
-      return then(loaded, (answer) => {
+      return after(loaded, (answer) => {
         let bundles = answer.found
         for (let b of bundles) sub.members.add(b.entity.eid)
         // A query over a computed component is never routed: the entities it
@@ -576,9 +574,9 @@ export let subscriptions = (graph: Graph, opts: {
   ) => {
     let value = answers?.get(sub.query)
     if (!value) {
-      value = then(
+      value = after(
         sub.peer
-          ? then(
+          ? after(
             source(sub),
             (bundles) => matchRows(sub.query, graph.vocab)(bundles),
           )
@@ -587,7 +585,7 @@ export let subscriptions = (graph: Graph, opts: {
       )
       answers?.set(sub.query, value)
     }
-    return then(value, (value) => {
+    return after(value, (value) => {
       let answer = JSON.stringify(value)
       if (!first && answer == sub.answer) {
         return
@@ -639,9 +637,9 @@ export let subscriptions = (graph: Graph, opts: {
     if (sub.plan?.reaches.length) scope = undefined
     let query = scope ? sub.query + '&.eid=' + [...scope].join(',') : sub.query
     let loaded = sub.peer
-      ? then(read(sub, scope, prepared), answered)
+      ? after(read(sub, scope, prepared), answered)
       : load(sub, query)
-    return then(loaded, (answer) => {
+    return after(loaded, (answer) => {
       let set = answer.found
       let ids = new Set(set.map((b) => b.entity.eid))
       let gone = [...(scope ?? sub.members)].filter((e) =>
@@ -716,7 +714,7 @@ export let subscriptions = (graph: Graph, opts: {
     let names = touched.some((eid) => peerRows.has(eid))
       ? undefined
       : components(queries)
-    return then(graph.get(touched, names), (now) => {
+    return after(graph.get(touched, names), (now) => {
       let changed = new Map(now.map((b) => [b.entity.eid, b]))
       for (let eid of touched) {
         if (peerRows.has(eid)) peerRows.set(eid, changed.get(eid) ?? null)
@@ -731,13 +729,13 @@ export let subscriptions = (graph: Graph, opts: {
           peerNet,
         ),
       ])
-      return then(
+      return after(
         over(queries, (s) =>
           attempt(s, () => {
             if (!relevant.has(s)) return
             if (invalidated.has(s)) {
-              let loaded = s.peer ? then(read(s), answered) : load(s, s.query)
-              return then(loaded, (answer) => {
+              let loaded = s.peer ? after(read(s), answered) : load(s, s.query)
+              return after(loaded, (answer) => {
                 let set = answer.found
                 let ids = new Set(set.map((b) => b.entity.eid))
                 let gone = [...s.members].filter((id) => !ids.has(id))
@@ -880,7 +878,7 @@ export let subscriptions = (graph: Graph, opts: {
     let missing = ids.filter((eid) => !peerRows.has(eid))
     let collect = () => ids.flatMap((eid) => peerRows.get(eid) ?? [])
     if (!missing.length) return collect()
-    return then(graph.get(missing), (rows) => {
+    return after(graph.get(missing), (rows) => {
       let found = new Map(rows.map((b) => [b.entity.eid, b]))
       for (let eid of missing) peerRows.set(eid, found.get(eid) ?? null)
       return collect()
@@ -896,7 +894,7 @@ export let subscriptions = (graph: Graph, opts: {
         ? graph.read(sub.durable, { durable: true })
         : [])
     if (scope) {
-      return then(candidates, (rows) => {
+      return after(candidates, (rows) => {
         let ids = new Set(scope)
         if (sub.ref) {
           for (let row of overlay(rows, peers.values(scope))) {
@@ -906,7 +904,7 @@ export let subscriptions = (graph: Graph, opts: {
           }
         }
         let values = peers.values(ids)
-        return then(
+        return after(
           durableRows(values.map((b) => b.entity.eid)),
           (held) => overlay([...rows, ...held], values),
         )
@@ -915,13 +913,13 @@ export let subscriptions = (graph: Graph, opts: {
     let values = peers.values()
     let ids = [...new Set(values.map((b) => b.entity.eid))]
     let refs = sub.ref && !scope && ids.length ? linked(sub.ref, ids) : []
-    return then(
+    return after(
       candidates,
       (rows) =>
-        then(
+        after(
           refs,
           (linked) =>
-            then(durableRows(ids), (held) =>
+            after(durableRows(ids), (held) =>
               overlay([...rows, ...linked, ...held], values)),
         ),
     )
@@ -932,7 +930,7 @@ export let subscriptions = (graph: Graph, opts: {
     prepared?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
     if (!sub.peer) return graph.read(sub.query, { durable: true })
-    return then(prepared ?? source(sub, scope), (bundles) => {
+    return after(prepared ?? source(sub, scope), (bundles) => {
       let chosen = matcher(sub.query, graph.vocab)(bundles)
       return chosen.filter((b) => !scope || scope.has(b.entity.eid))
         .map((b) => sub.cut(stored(b)))
@@ -949,14 +947,14 @@ export let subscriptions = (graph: Graph, opts: {
     let cut = p?.cut ?? only(wanted(graph.vocab, line))
     if (!plan.peers) {
       if (op) {
-        return then(
+        return after(
           graph.rows(ast, { durable: true }),
           (rows) => reduced(op, rows),
         )
       }
       // A projection answers what is stored, the entities it reaches too.
       if (p) return graph.read(ast, { durable: true })
-      return then(
+      return after(
         graph.read(ast, { durable: true }),
         (rows) =>
           rows.map((row) =>
@@ -983,7 +981,7 @@ export let subscriptions = (graph: Graph, opts: {
       cut,
       riders: new Set(),
     }
-    return then(
+    return after(
       source(sub),
       (bundles) =>
         op
@@ -1018,7 +1016,7 @@ export let subscriptions = (graph: Graph, opts: {
     // avoids rebuilding the combined answer for every watch.
     let batchLinks = new Map<string, Bundle[] | Promise<Bundle[]>>()
     let batchSources = new Map<string, Bundle[] | Promise<Bundle[]>>()
-    return then(durableRows(touched), (rows) => {
+    return after(durableRows(touched), (rows) => {
       let routing = route(
         overlay(rows, values),
         touched,
@@ -1026,7 +1024,7 @@ export let subscriptions = (graph: Graph, opts: {
         true,
       )
       release()
-      return then(
+      return after(
         over(
           all().filter((s) => s.peer),
           (s) =>
@@ -1050,7 +1048,7 @@ export let subscriptions = (graph: Graph, opts: {
                   found = ids.length ? linked(s.ref, ids) : []
                   batchLinks.set(key, found)
                 }
-                return then(
+                return after(
                   found,
                   (refs) => {
                     let scope = new Set([
@@ -1126,7 +1124,7 @@ export let subscriptions = (graph: Graph, opts: {
       ordered(() => {
         let rows = new Map<string, Answer>()
         let answers = new Map<string, Reduced | Promise<Reduced>>()
-        return then(
+        return after(
           over(
             openings,
             ({ sink, id, query }) => open(sink, id, query, rows, answers),

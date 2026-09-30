@@ -6,12 +6,12 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { stub } from '@std/testing/mock'
+import { isPromise } from '@yaks/fp'
 import { Checked, graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
 import { Stale, token } from './guard.ts'
 import { Refused } from './admit.ts'
-import { isPromise } from './pipe.ts'
 import { books, comp, isDead, memory, slow } from './testing.ts'
 
 let g = (plugins: Plugin[] = []) =>

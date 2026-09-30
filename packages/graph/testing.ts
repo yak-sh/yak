@@ -10,10 +10,10 @@
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Clause, Query as Ast } from '@yaks/query'
+import { isPromise } from '@yaks/fp'
 import type { Bundle, Comp, Eid, Entity } from './bundle.ts'
 import { comps, TOMBSTONE, tombstoned } from './bundle.ts'
 import type { Query, Row, Storage, Tx } from './storage.ts'
-import { isPromise } from './pipe.ts'
 import { only } from './projection.ts'
 
 // A bookstore: books by publishers, reviews about books, bookmarks that only

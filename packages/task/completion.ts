@@ -7,13 +7,14 @@
 // the task. If there was no such component, `by` is the one on the incoming
 // component, or the `$actor.by` the `apply()` call carries, or null.
 
-import { type Comp, type Hook, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { type Comp, type Hook } from '@yaks/graph'
 
 export let completing: Hook = (bundles, tx) => {
   let writes = bundles.filter((b) => b.completed != null)
   if (!writes.length) return bundles
   let actor = bundles.find((b) => b.$actor)?.$actor?.by
-  return then(tx.get(writes.map((b) => b.entity.eid)), (rows) => {
+  return after(tx.get(writes.map((b) => b.entity.eid)), (rows) => {
     let previous = new Map(rows.map((b) => [b.entity.eid, b.completed as Comp]))
     for (let b of writes) {
       let old = previous.get(b.entity.eid)

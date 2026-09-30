@@ -22,7 +22,7 @@
 // capture and knows nothing about processes.
 
 import type { Bundle, Comp, Entity, Tx } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import type { Handler } from '@yaks/effects'
 import { address, type Blobs, encode } from '@yaks/blob'
 import { DOC, TITLE } from '@yaks/doc'
@@ -53,7 +53,7 @@ let clock = () => new Date().toISOString()
 // storage rather than from the change that triggered it, so it sees the address
 // however the transaction that wrote it was shaped.
 let whole = (tx: Tx, entity: Entity) =>
-  then(tx.get([entity.eid]), (found) => found[0])
+  after(tx.get([entity.eid]), (found) => found[0])
 
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
@@ -103,7 +103,7 @@ export let froze = async (
  */
 export let freezing =
   ({ archive, ...keep }: Capture): Handler => (event, tx, write) =>
-    then(whole(tx, event.entity), async (page) => {
+    after(whole(tx, event.entity), async (page) => {
       let web = comp(page, WEB)
       if (!page || !web || web.bytes) return
       let url = String(web.url ?? '')

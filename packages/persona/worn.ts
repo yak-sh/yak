@@ -29,14 +29,8 @@
 // above them, and {@link beside} leaves out what another file already says.
 
 import { and, eq, type Input, list, present } from '@yaks/query'
-import {
-  type Bundle,
-  detached,
-  each,
-  type Eid,
-  type Storage,
-  then,
-} from '@yaks/graph'
+import { after, each } from '@yaks/fp'
+import { type Bundle, detached, type Eid, type Storage } from '@yaks/graph'
 import { EDGE, relations } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import type { Vocab } from '@yaks/vocab'
@@ -75,7 +69,7 @@ let far = (b: Bundle): Eid => {
 // authored: an edge's own `ord` where its author set one, then the entity it
 // points at, so two unordered siblings never swap places between reads.
 let links = (storage: Storage, from: Eid[], tag: string | undefined) =>
-  !tag || !from.length ? [] : then(
+  !tag || !from.length ? [] : after(
     storage.read(and(eq(`${EDGE}.from`, value(from)), present(tag))),
     (found) =>
       found
@@ -112,19 +106,19 @@ export let wear = (
   let tags = relations(vocab)
   let tx = detached(storage)
   return (eid) =>
-    then(tx.get([eid]), (found) => {
+    after(tx.get([eid]), (found) => {
       let persona = found[0]
       if (!persona?.[PERSONA]) return undefined
       let carries = new Map<Eid, Bundle>()
       let names = new Map<Eid, Bundle>()
       let seen = new Set<Eid>([eid])
       let level = [eid]
-      return then(
+      return after(
         each(Array.from({ length: DEPTH }, (_, i) => i), null, () => {
           if (!level.length) return null
-          return then(links(storage, level, tags[CARRIES]), (held) =>
-            then(links(storage, level, tags[READS]), (said) =>
-              then(
+          return after(links(storage, level, tags[CARRIES]), (held) =>
+            after(links(storage, level, tags[READS]), (said) =>
+              after(
                 tx.get([...new Set([...held, ...said])]),
                 (docs) => {
                   let by = new Map(docs.map((b) => [b.entity.eid, b]))

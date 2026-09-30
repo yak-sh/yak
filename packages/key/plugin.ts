@@ -8,7 +8,7 @@
 // documents, then pass the same vocabulary to the plugin.
 
 import type { Hook, Plugin } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { KEY, names } from './kinds.ts'
 import { derive } from './eid.ts'
@@ -21,7 +21,7 @@ import { keyDoc } from './comp.ts'
 let minting = (vocab: Vocab): Hook => {
   let whole = stated(vocab)
   let once = settled(vocab)
-  return (bundles, tx) => then(whole(bundles, tx), (b) => once(b, tx))
+  return (bundles, tx) => after(whole(bundles, tx), (b) => once(b, tx))
 }
 
 /**

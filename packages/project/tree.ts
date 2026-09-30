@@ -15,7 +15,8 @@
 // project filed under itself, or under a project already under it.
 
 import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
-import { each, Refused, then } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
+import { Refused } from '@yaks/graph'
 import { FILED, PROJECT } from './comp.ts'
 
 /** What reading up a lineage needs: entities by eid, synchronously or not. */
@@ -34,7 +35,7 @@ let up = (
 ): Bundle[] | Promise<Bundle[]> => {
   if (!eid || seen.has(eid)) return out
   seen.add(eid)
-  return then(g.get([eid]), ([b]) => {
+  return after(g.get([eid]), ([b]) => {
     if (b?.[PROJECT]) out.push(b)
     return up(g, parentOf(b), seen, out)
   })
@@ -78,20 +79,20 @@ let moves = (bundles: Bundle[]): Map<Eid, Eid | undefined> => {
 export let nesting: Hook = (bundles, tx) => {
   let moved = moves(bundles)
   let parent = (eid: Eid) =>
-    moved.has(eid) ? moved.get(eid) : then(tx.get([eid]), ([b]) => parentOf(b))
+    moved.has(eid) ? moved.get(eid) : after(tx.get([eid]), ([b]) => parentOf(b))
   let reaches = (
     at: Eid | undefined,
     eid: Eid,
     seen: Set<Eid>,
   ): boolean | Promise<boolean> =>
     !at || seen.has(at) ? false : at == eid ||
-      (seen.add(at), then(parent(at), (p) => reaches(p, eid, seen)))
-  return then(
+      (seen.add(at), after(parent(at), (p) => reaches(p, eid, seen)))
+  return after(
     each(
       [...moved],
       null,
       (_, [eid, under]) =>
-        then(reaches(under, eid, new Set()), (loop) => {
+        after(reaches(under, eid, new Set()), (loop) => {
           if (!loop) return null
           throw new Refused(
             `${eid} cannot be filed under ${under}: ${under} is already under ` +

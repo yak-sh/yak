@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { isPromise } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
 import { keyEid } from './eid.ts'
 import { keyed, unkeyed } from './say.ts'
 import { held } from './resolve.ts'

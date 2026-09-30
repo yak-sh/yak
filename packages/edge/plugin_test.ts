@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { isPromise } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
 import { edgeEid } from './eid.ts'
 import { link, unlink } from './say.ts'
 import { blogGraph } from './testing.ts'

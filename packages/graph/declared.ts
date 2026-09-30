@@ -41,7 +41,7 @@ import {
   writes,
 } from './join.ts'
 import type { Tx } from './storage.ts'
-import { then } from './pipe.ts'
+import { after } from '@yaks/fp'
 import type { Value } from '@yaks/query'
 import { type Prop, syncOf, type Vocab } from '@yaks/vocab'
 
@@ -222,7 +222,7 @@ export let settle = (
   let covers = cover(rules, vocab)
   let fired = new Set<string>()
   let round = (batch: Bundle[]): Bundle[] | Promise<Bundle[]> =>
-    then(
+    after(
       ask(plans, batch, covers),
       (found) => {
         let made: Bundle[] = []
@@ -271,7 +271,7 @@ export let invoked = (
   if (!tx.bindings) return []
   let plan = filled(template, args)
   let rule: Ready = { rule: { name, match: '' }, plan }
-  return then(
+  return after(
     tx.bindings([plan], [], reads(plan, vocab)),
     ([rows]) =>
       (rows ?? []).flatMap((row) => emitted(rule, row, vocab, resource)),

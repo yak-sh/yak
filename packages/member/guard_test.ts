@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle, Storage } from '@yaks/graph'
-import { isPromise } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
 import { Denied } from './deny.ts'
 import { Paced } from './pace.ts'
 import type { Floors } from './words.ts'

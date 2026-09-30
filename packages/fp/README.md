@@ -34,6 +34,11 @@ let sorted = [3, 1, 2].sort(cmp) // [1, 2, 3]
   next), `negate`, and `pipe`, left to right, which stops at the first nil and
   goes async only when a value on the way is a promise. `guard(pred)` answers
   nothing where `pred` fails, so a `pipe` stops there.
+- **Now or later**: `after(v, f)` applies `f` to a value that may be a promise,
+  and answers one only when `v` was one; `each(items, seed, step)` folds,
+  awaiting only the steps that answer a promise; `over(items, fn)` runs `fn`
+  over each for what it does; `isPromise` is the test they share. A pipeline
+  built only from synchronous parts stays synchronous end to end.
 - **Dispatch**: `when(test, desc)` computes a tag with `test` and runs `desc`
   where the tag holds, or the tag's entry of a table, `_` the default.
 - **Objects**, each answering a copy: `beget(x, fn)` (copy, tweak, return),

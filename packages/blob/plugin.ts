@@ -26,7 +26,7 @@
 // the ordinary way one phase passes a decision to a later one.
 
 import type { Bundle, Comp, Plugin } from '@yaks/graph'
-import { each, then } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { bodies, type Body } from './props.ts'
 import { address, type Blobs, encode } from './store.ts'
@@ -63,10 +63,10 @@ let swap = (
   if (!mine.length) return b
   let stash: Record<string, string> = {}
   let out: Bundle = { ...b }
-  return then(
+  return after(
     each(mine, null, (_, [{ comp, prop }, value]) => {
       stash[`${comp}.${prop}`] = value
-      return then(intern(value), (ref) => {
+      return after(intern(value), (ref) => {
         out[comp] = { ...patch(out, comp)!, [prop]: ref }
         return null
       })
@@ -154,13 +154,13 @@ export let blobs = (
           let held = refs.get(value)
           if (held !== undefined) return held
           let sha = address(value)
-          return then(
+          return after(
             store.has(sha),
             (exists) =>
-              then(
+              after(
                 exists ? undefined : store.put(sha, encode(value)),
                 () =>
-                  then(reference(sha), (ref) => {
+                  after(reference(sha), (ref) => {
                     refs.set(value, ref)
                     return ref
                   }),
@@ -170,7 +170,7 @@ export let blobs = (
         return each(
           bundles,
           [] as Bundle[],
-          (out, b) => then(swap(b, props, intern), (one) => [...out, one]),
+          (out, b) => after(swap(b, props, intern), (one) => [...out, one]),
         )
       },
       commit: (bundles) => bundles.map(restore),

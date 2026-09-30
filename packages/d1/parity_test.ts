@@ -12,7 +12,7 @@
 
 import { test } from '@yaks/testing'
 import { assert } from '@std/assert'
-import { isPromise } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
 import { answers, parity, rig } from '../sqlite/parity.ts'
 import { store as reference } from '../sqlite/testing.ts'
 import { store } from './testing.ts'

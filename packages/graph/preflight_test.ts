@@ -1,9 +1,9 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { after } from '@yaks/fp'
 import { graph } from './graph.ts'
 import { detached } from './storage.ts'
 import { preflight } from './preflight.ts'
-import { then } from './pipe.ts'
 import { books, comp, memory, slow } from './testing.ts'
 import type { Bundle } from './bundle.ts'
 
@@ -15,7 +15,7 @@ for (let async of [false, true]) {
       storage,
       books,
       (bs, tx) =>
-        then(tx.get(['b']), (found) => {
+        after(tx.get(['b']), (found) => {
           seen.push(comp(found[0], 'book').pages)
           return bs
         }),

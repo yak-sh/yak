@@ -105,18 +105,18 @@ let cron = (every: string, tz: string): Cron | null => {
  * duration from `from`.
  *
  * The two moments are different clocks on purpose. A cron line ignores `from`
- * — nine in the morning is nine in the morning. A DURATION counts from
+ * — nine in the morning is nine in the morning. A duration counts from
  * `from`, the last instant the wake was due, so a cadence keeps its phase and
  * a long outage catches up in one step instead of firing once per missed tick.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { after } from './every.ts'
+ * import { recur } from './every.ts'
  *
  * let t = Date.parse('2026-01-01T09:17:00Z')
  * // two hours on from 09:17, skipping the ticks a six-hour outage missed
- * assertEquals(after('2h', t, t + 6 * 3600_000), Date.parse('2026-01-01T17:17:00Z'))
- * assertEquals(after('@hourly', t, t), Date.parse('2026-01-01T10:00:00Z'))
+ * assertEquals(recur('2h', t, t + 6 * 3600_000), Date.parse('2026-01-01T17:17:00Z'))
+ * assertEquals(recur('@hourly', t, t), Date.parse('2026-01-01T10:00:00Z'))
  * ```
  *
  * Cron follows the named time zone's calendar. At a spring DST gap, a local
@@ -126,11 +126,11 @@ let cron = (every: string, tz: string): Cron | null => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { after } from './every.ts'
+ * import { recur } from './every.ts'
  *
  * let t = Date.parse('2026-03-08T05:00:00Z')
  * assertEquals(
- *   after('30 2 * * * America/New_York', t, t),
+ *   recur('30 2 * * * America/New_York', t, t),
  *   Date.parse('2026-03-08T07:30:00Z'), // 03:30, because 02:30 is missing
  * )
  * ```
@@ -143,7 +143,7 @@ let cron = (every: string, tz: string): Cron | null => {
  * @returns the instant, in epoch milliseconds, or `null` if `every` cannot be
  * parsed
  */
-export let after = (
+export let recur = (
   every: string,
   from: number,
   now: number,

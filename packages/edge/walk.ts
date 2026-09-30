@@ -20,7 +20,8 @@
 // return a promise. No caller in between has to know which.
 
 import { and, eq, type Input, list, present } from '@yaks/query'
-import { each, type Eid, type Storage, then } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
+import { type Eid, type Storage } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { EDGE, relations } from './relations.ts'
 
@@ -73,7 +74,7 @@ export let walk = (storage: Storage, vocab: Vocab): Walk => {
     let [here, there] = dir == 'out' ? ['from', 'to'] : ['to', 'from']
     if (!eids.length) return []
     let query = and(eq(`${EDGE}.${here}`, value(eids)), present(tag))
-    return then(
+    return after(
       storage.read(query),
       (bundles) =>
         bundles.flatMap((b) => {
@@ -86,12 +87,12 @@ export let walk = (storage: Storage, vocab: Vocab): Walk => {
   let reach = (eid: Eid, relation: string, depth: number, dir: Dir = 'out') => {
     let seen = new Set<Eid>()
     let level = [eid]
-    return then(
+    return after(
       each(
         Array.from({ length: Math.max(0, depth) }, (_, i) => i),
         null,
         () =>
-          then(hop(level, relation, dir), (far) => {
+          after(hop(level, relation, dir), (far) => {
             // A cycle comes back to somewhere already walked; the seen set is
             // what stops it, and the depth limit is what stops everything
             // else. The starting entity is not included for being the start —

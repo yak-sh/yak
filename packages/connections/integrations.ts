@@ -14,14 +14,8 @@
 // where no integration holds the name yet — so no verb a space can reach
 // writes over a built integration, or changes where its tokens are sent.
 
-import { cmp } from '@yaks/fp'
-import {
-  type Bundle,
-  type Eid,
-  identityEid,
-  type Query,
-  then,
-} from '@yaks/graph'
+import { after, cmp } from '@yaks/fp'
+import { type Bundle, type Eid, identityEid, type Query } from '@yaks/graph'
 import type { Scheme } from '@yaks/hook'
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
@@ -135,7 +129,7 @@ export let install = (
   read: Read,
   seeds: Integration[] = SEEDS,
 ): Bundle[] | Promise<Bundle[]> =>
-  then(
+  after(
     read(`.eid=${
       seeds.map((i) => integrationEid(i.name)).join(',')
     }&.${INTEGRATION}`),

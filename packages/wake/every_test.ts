@@ -1,10 +1,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { after, span } from './every.ts'
+import { recur, span } from './every.ts'
 
 let T = Date.parse('2026-01-01T09:17:00Z')
 let iso = (t: number | null) => t == null ? null : new Date(t).toISOString()
-let at = (every: string, from = T, now = T) => iso(after(every, from, now))
+let at = (every: string, from = T, now = T) => iso(recur(every, from, now))
 
 test('a duration is read in every form', () => {
   for (
@@ -78,14 +78,14 @@ test('the calendar skips invalid dates and is strictly after its input', () => {
 
 test('a cron line is read in the zone it is given', () => {
   assertEquals(
-    iso(after('0 9 * * *', T, T, 'America/New_York')),
+    iso(recur('0 9 * * *', T, T, 'America/New_York')),
     '2026-01-01T14:00:00.000Z',
   )
   assertEquals(at('0 9 * * * America/New_York'), '2026-01-01T14:00:00.000Z')
   assertEquals(at('@daily Asia/Kathmandu'), '2026-01-01T18:15:00.000Z')
   assertEquals(at('@daily UTC'), '2026-01-02T00:00:00.000Z')
   assertEquals(
-    iso(after('0 9 * * * America/New_York', T, T, 'Asia/Tokyo')),
+    iso(recur('0 9 * * * America/New_York', T, T, 'Asia/Tokyo')),
     '2026-01-01T14:00:00.000Z',
   )
 })
@@ -130,9 +130,9 @@ test('an unreadable recurrence is null, never a throw', () => {
   ) {
     assertEquals(at(every), null, every)
   }
-  assertEquals(after('@daily', T, T, 'America/Nowhere'), null)
+  assertEquals(recur('@daily', T, T, 'America/Nowhere'), null)
   for (let t of [NaN, Infinity, -Infinity, 9e15]) {
-    assertEquals(after('@daily', t, t), null)
-    assertEquals(after('2h', t, t), null)
+    assertEquals(recur('@daily', t, t), null)
+    assertEquals(recur('2h', t, t), null)
   }
 })

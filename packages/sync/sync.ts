@@ -24,7 +24,8 @@
 // committed.
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
-import { dead, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { dead } from '@yaks/graph'
 import { asked, asking, clean, ECHO, echoed, ruling, SENT } from './mark.ts'
 import { exchange, type Fetch, type Refusal, type Report } from './outbound.ts'
 import { relayed } from './tier.ts'
@@ -216,7 +217,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       precondition: (bundles, tx) => {
         if (bundles.some(echoed)) return bundles
         let eids = [...new Set(bundles.map((b) => b.entity.eid))]
-        return then(tx.get(eids), (held) => {
+        return after(tx.get(eids), (held) => {
           let was = new Map(held.map((b) => [b.entity.eid, b]))
           let asked = bundles.map((b) =>
             asking(b, was.get(b.entity.eid) ?? null)
@@ -237,7 +238,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         let added = bundles.filter((b) => !asked(b))
         if (!added.length || bundles.some(echoed)) return bundles
         let eids = [...new Set(added.map((b) => b.entity.eid))]
-        return then(tx.get(eids), (held) => {
+        return after(tx.get(eids), (held) => {
           let was = new Map(held.map((b) => [b.entity.eid, b]))
           return bundles.map((b) =>
             asked(b) ? b : ruling(b, was.get(b.entity.eid) ?? null)
@@ -313,7 +314,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           ),
         }
       }
-      let out = then(
+      let out = after(
         opts.replica
           ? opts.replica.land(frame, said.mine)
           : land(graph, safe, said.mine),

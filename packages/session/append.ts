@@ -1,19 +1,14 @@
 /** Transactional transcript ordering. Omit seq to append; explicit positions are
  * reserved for import and must be positive, unique integers. */
-import {
-  type Bundle,
-  type Comp,
-  type Graph,
-  type Hook,
-  then,
-} from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { type Bundle, type Comp, type Graph, type Hook } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { UnknownSession } from './unknown.ts'
 
 let entry = (b: Bundle | undefined) => b?.entry as Comp | undefined
 
 export let sequencing: Hook = (bundles, tx) =>
-  then(
+  after(
     tx.get(bundles.filter((b) => b.entry).map((b) => b.entity.eid)),
     (existing) => {
       let groups = new Map<string, Bundle[]>()
@@ -65,15 +60,15 @@ export let sequencing: Hook = (bundles, tx) =>
       let pending: void | Promise<void> = undefined
       for (let session of ordered) {
         let batch = groups.get(session)!
-        pending = then(pending, () =>
-          then(
+        pending = after(pending, () =>
+          after(
             tx.read(
               parse(
                 '.entry.session=' + session + '&.order=-entry.seq&.limit=1',
               ),
             ),
             (latest) =>
-              then(
+              after(
                 batch.some((b) => entry(b)?.seq != null)
                   ? tx.read(
                     parse(
@@ -96,7 +91,7 @@ export let sequencing: Hook = (bundles, tx) =>
                     ...latest,
                     ...collisions,
                   ]
-                  return then(tx.get([session]), (found) => {
+                  return after(tx.get([session]), (found) => {
                     if (
                       !found[0]?.session &&
                       !bundles.some((b) => b.entity.eid == session && b.session)
@@ -108,7 +103,7 @@ export let sequencing: Hook = (bundles, tx) =>
                     let anchorInBatch = bundles.find((b) =>
                       b.entity.eid == from
                     )
-                    return then(
+                    return after(
                       from && !anchorInBatch ? tx.get([String(from)]) : [],
                       (anchors) => {
                         let floor = Number(
@@ -164,7 +159,7 @@ export let sequencing: Hook = (bundles, tx) =>
               ),
           ))
       }
-      return then(pending, () => bundles)
+      return after(pending, () => bundles)
     },
   )
 

@@ -26,6 +26,7 @@
 // (Claude Code's `agent-<id>`) names it within its parent, so its eid derives
 // from the two.
 
+import { after } from '@yaks/fp'
 import {
   type Actor,
   addressed,
@@ -34,7 +35,6 @@ import {
   type Eid,
   type Graph,
   identityEid,
-  then,
   TOMBSTONE,
   type Tx,
 } from '@yaks/graph'
@@ -90,8 +90,8 @@ export let runners = (
 ): Map<string, Eid> | Promise<Map<string, Eid>> =>
   ids.reduce<Map<string, Eid> | Promise<Map<string, Eid>>>(
     (at, id) =>
-      then(at, (found) =>
-        then(
+      after(at, (found) =>
+        after(
           tx.read(`.${SESSION}.id=${JSON.stringify(id)}`),
           ([b]) => b ? new Map([...found, [id, b.entity.eid]]) : found,
         )),

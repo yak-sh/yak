@@ -19,10 +19,10 @@
 // around it.
 
 import type { Vocab } from '@yaks/vocab'
+import { after } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { Tx } from './storage.ts'
-import { then } from './pipe.ts'
 import { sha256 } from './sha256.ts'
 import { Refused } from './admit.ts'
 
@@ -69,7 +69,7 @@ export let guard = (
 ): Bundle[] | Promise<Bundle[]> => {
   let guarded = bundles.filter((b) => b.$was)
   if (!guarded.length) return bundles
-  return then(tx.get(guarded.map((b) => b.entity.eid)), (found) => {
+  return after(tx.get(guarded.map((b) => b.entity.eid)), (found) => {
     let at = new Map(found.map((b) => [b.entity.eid, b]))
     for (let b of guarded) {
       let stored = at.get(b.entity.eid)

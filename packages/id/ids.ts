@@ -23,7 +23,7 @@
 //
 // Every write asks about the ids it names, and most name none of these, so
 // that answer comes back without a promise and a synchronous store's writes
-// stay synchronous — the branch @yaks/graph's `then` hides, written out as in
+// stay synchronous — the branch @yaks/fp's `after` hides, written out as in
 // ./number.ts.
 
 import type { Bundle, Eid, Plugin, Tx } from './graph.ts'

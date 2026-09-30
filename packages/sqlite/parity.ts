@@ -18,7 +18,8 @@
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage } from '@yaks/graph'
-import { each, graph, only, then, token } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
+import { graph, only, token } from '@yaks/graph'
 import { shop } from './testing.ts'
 
 /** A bookmark is content-addressed: its eid is derived from what it marks, so
@@ -209,7 +210,7 @@ let PICKS = [['doc', 'review'], []]
 
 let picked = (g: Graph, whole: Bundle[]) =>
   each(PICKS, null, (_, [eids, names]) =>
-    then(g.get(eids, names), (got) => {
+    after(g.get(eids, names), (got) => {
       let want = whole.filter((b) => eids.includes(b.entity.eid))
       assertEquals(got, want.map(only(new Set(names))), `get ${eids} ${names}`)
       return null
@@ -263,14 +264,14 @@ let say = (
 }
 
 let state = (g: Graph) =>
-  then(
+  after(
     each(READS, [] as Bundle[][], (acc, q) =>
-      then(g.read(q), (bs) => [...acc, byNum(bs)])),
+      after(g.read(q), (bs) => [...acc, byNum(bs)])),
     (reads) =>
-      then(
+      after(
         g.get(NAMED),
         (named) =>
-          then(picked(g, named), () => ({
+          after(picked(g, named), () => ({
             reads,
             named: byNum(named as Bundle[]),
           })),
@@ -288,13 +289,13 @@ let state = (g: Graph) =>
  * synchronous adapter proves it stayed synchronous through the whole script.
  */
 export let parity = (a: Graph, b: Graph): void | Promise<void> =>
-  then(
+  after(
     each(script, null, (_, step) =>
-      then(say(a, step.batch, step.now ?? AT), (sa) =>
-        then(say(b, step.batch, step.now ?? AT), (sb) => {
+      after(say(a, step.batch, step.now ?? AT), (sa) =>
+        after(say(b, step.batch, step.now ?? AT), (sb) => {
           assertEquals(sa, sb, `returned: ${step.name}`)
-          return then(state(a), (ra) =>
-            then(state(b), (rb) => {
+          return after(state(a), (ra) =>
+            after(state(b), (rb) => {
               assertEquals(ra, rb, `read back: ${step.name}`)
               return null
             }))
@@ -349,18 +350,18 @@ let iso = (ms: number) => new Date(ms).toISOString()
  * over a synchronous adapter, a promise over an asynchronous one.
  */
 export let answers = (g: Graph): void | Promise<void> =>
-  then(
+  after(
     each(STOCK, null, (_, [eid, made, product]) =>
-      then(
+      after(
         g.apply([{ entity: { eid }, product }], {
           now: iso(AROUND + made),
         }),
         () => null,
       )),
     () =>
-      then(
+      after(
         each(ANSWERS, null, (_, [q, want]) =>
-          then(g.read(q, { now: AROUND }), (bs) => {
+          after(g.read(q, { now: AROUND }), (bs) => {
             assertEquals(bs.map((b) => b.entity.eid).sort(), want, q)
             return null
           })),

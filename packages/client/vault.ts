@@ -25,7 +25,8 @@
 // the store's job and not the vault's.
 
 import type { Bundle, Comp, Eid, Graph, Plugin } from '@yaks/graph'
-import { comps, dead, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { comps, dead } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { ECHO, local, replicate } from '@yaks/sync'
 
@@ -140,7 +141,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
 
   let write = (bundles: Bundle[]) => {
     let touched = [...new Set(bundles.map((b) => b.entity.eid))]
-    return then(graph.get(touched), async (now) => {
+    return after(graph.get(touched), async (now) => {
       let save: Saved[] = []
       let gone: Eid[] = []
       let seen = new Set(now.map((b) => b.entity.eid))
@@ -177,7 +178,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
           }
         }
         return concerns(bundles, vocab)
-          ? then(write(bundles), () => bundles)
+          ? after(write(bundles), () => bundles)
           : bundles
       },
     },
@@ -199,7 +200,7 @@ export let keep = (graph: Graph, vault: Vault): Kept => {
     }))
     loading.clear()
     if (!bundles.length) return
-    return then(replicate(graph, bundles), () => undefined)
+    return after(replicate(graph, bundles), () => undefined)
   })
 
   return { plugin, ready }

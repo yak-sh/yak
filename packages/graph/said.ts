@@ -19,9 +19,9 @@
 
 import { type Clause, parse, type Query as Ast, type Value } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { after } from '@yaks/fp'
 import type { Eid } from './bundle.ts'
 import type { Query } from './storage.ts'
-import { then } from './pipe.ts'
 
 /** What one id maps to. Collecting the ids and rewriting them are the same
  * traversal with two different functions of this type. */
@@ -106,7 +106,7 @@ export let addressing = (vocab: Vocab) =>
   let said: string[] = []
   mapped(vocab, ast, (id) => (said.push(id), id))
   if (!said.length) return query
-  return then(
+  return after(
     address([...new Set(said)]),
     (at) =>
       at.size ? mapped(vocab, ast, (id) => at.get(id) ?? id) as Ast : query,

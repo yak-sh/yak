@@ -36,14 +36,14 @@
 // below is where it is called, so an `about` costs one round trip on any
 // adapter that offers it. Everything the hooks ask afterwards is answered from
 // memory, synchronously, so the phases between them stay a plain loop
-// (./pipe.ts).
+// (@yaks/fp `after`).
 
 import { and, eq, list, or, type Query as Ast } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
+import { after } from '@yaks/fp'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps, dead } from './bundle.ts'
 import type { Tx } from './storage.ts'
-import { then } from './pipe.ts'
 
 /**
  * One read a phase needs taken before it runs. Both directions are optional
@@ -225,13 +225,13 @@ export let gather = (
   let rows = !named.length
     ? []
     : tx.get(named, narrow ? [...selected] : undefined)
-  return then(rows, (found) => {
+  return after(rows, (found) => {
     for (let e of named) snap.got.set(e, null)
     for (let b of found) snap.got.set(b.entity.eid, b)
     if (narrow) snap.only = new Map(found.map((b) => [b.entity.eid, selected]))
     let q = pointing(back)
     if (!q) return snap
-    return then(seek(tx, q), (rows) => {
+    return after(seek(tx, q), (rows) => {
       file(snap, back, rows)
       return snap
     })
@@ -243,7 +243,7 @@ export let gather = (
  * compiled SQL is cached across applies, never row values. */
 export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
   if (!snap.only?.size) return
-  return then(tx.get([...snap.only.keys()]), (rows) => {
+  return after(tx.get([...snap.only.keys()]), (rows) => {
     let found = new Map(rows.map((b) => [b.entity.eid, b]))
     for (let [eid, selected] of snap.only!) {
       let b = found.get(eid)
@@ -286,10 +286,10 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
   // walks the references instead (./cascade.ts `doomed`).
   doom: undefined,
   patch: (bundles) =>
-    then(
+    after(
       bundles.length ? complete(tx, snap) : undefined,
       () =>
-        then(tx.patch(bundles), (born) => {
+        after(tx.patch(bundles), (born) => {
           for (let b of bundles) {
             let eid = b.entity.eid
             let held = merged(snap.got.get(eid) ?? null, b)
@@ -308,12 +308,12 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
           return born
         }),
     ),
-  remove: (entities) => then(complete(tx, snap), () => tx.remove(entities)),
+  remove: (entities) => after(complete(tx, snap), () => tx.remove(entities)),
   // A revived entity holds nothing until the patch after it: the snapshot
   // drops its tombstone, so that patch merges onto an identity, not a grave.
   revive: (eids) =>
-    then(complete(tx, snap), () =>
-      then(tx.revive(eids), () => {
+    after(complete(tx, snap), () =>
+      after(tx.revive(eids), () => {
         for (let eid of eids) {
           let held = snap.got.get(eid)
           if (held && dead(held)) snap.got.set(eid, { entity: held.entity })
@@ -329,10 +329,10 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
       (!snap.only?.has(e) || !!names?.every((n) => snap.only!.get(e)!.has(n)))
     if (eids.every(read)) return mine()
     if (eids.some((e) => snap.only?.has(e))) {
-      return then(complete(tx, snap), () => holding(tx, vocab, snap).get(eids))
+      return after(complete(tx, snap), () => holding(tx, vocab, snap).get(eids))
     }
     let miss = eids.filter((e) => !snap.got.has(e))
-    return then(tx.get(miss), (found) => {
+    return after(tx.get(miss), (found) => {
       for (let e of miss) snap.got.set(e, null)
       for (let b of found) snap.got.set(b.entity.eid, b)
       return mine()
@@ -345,7 +345,7 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
     let miss = asked.filter(([c, p, e]) => !snap.near.has(key(c, p, e)))
     let q = pointing(miss)
     if (!q) return mine()
-    return then(seek(tx, q), (rows) => {
+    return after(seek(tx, q), (rows) => {
       file(snap, miss, rows)
       return mine()
     })

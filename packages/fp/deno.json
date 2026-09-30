@@ -3,7 +3,7 @@
   "version": "0.2.10",
   "exports": "./mod.ts",
   "license": "Apache-2.0",
-  "description": "A vocabulary of small curried functions: compose, a pipe that stops on nil, dispatch tables, copy-tweak-return, tally, cmp and bsearch, with no dependencies.",
+  "description": "A vocabulary of small curried functions: compose, a pipe that stops on nil, steps that stay synchronous until a promise forces them, dispatch tables, copy-tweak-return, tally, cmp and bsearch, with no dependencies.",
   "publish": {
     "exclude": [
       "browser.json"

@@ -55,7 +55,7 @@ export let isNil = (x: unknown): x is null | undefined => x == null
 /** The opposite of a value's truth. */
 export let not = (x: unknown): boolean => !x
 
-let after = (f: Fn, g: Fn): Fn => (...xs) => f(g(...xs))
+let of = (f: Fn, g: Fn): Fn => (...xs) => f(g(...xs))
 
 /// compose(String, inc, inc)(5) -> '7'
 /// compose(compose(String), add)(7)(2) -> '9'
@@ -64,18 +64,84 @@ let after = (f: Fn, g: Fn): Fn => (...xs) => f(g(...xs))
  * only `f`, it waits for the function to go under it.
  */
 export let compose = (f: Fn, ...fs: Fn[]): Fn =>
-  fs.length ? fs.reduce(after, f) : (g: Fn) => after(f, g)
+  fs.length ? fs.reduce(of, f) : (g: Fn) => of(f, g)
 
 /// negate(isNil)(null) -> false
 /** A predicate's opposite. */
 export let negate: (f: Fn) => Fn = compose(not)
 
-let thenable = (x: unknown): x is PromiseLike<unknown> =>
-  typeof x == 'object' && x != null && 'then' in x &&
-  typeof x.then == 'function'
+// Staying synchronous when nothing forces a promise. An interface may answer
+// now or later: a storage adapter over an embedded database returns
+// immediately, one over a network returns a promise, and the same pipeline
+// has to serve both. So instead of making everything `async` (which would turn
+// every embedded write into a promise, and every caller into an `await`), each
+// step goes through `after`: a promise is awaited, a plain value passes
+// straight through.
+//
+// The rule that falls out: a pipeline built only from synchronous parts stays
+// synchronous end to end, and the first asynchronous part turns the rest of
+// that one run into a promise chain. Nothing in between needs to know which.
 
-let step = (x: unknown, f: Fn): unknown =>
-  x == null ? x : thenable(x) ? x.then((v) => step(v, f)) : f(x)
+/// isPromise(Promise.resolve(1)) -> true
+/// isPromise({ then: id }) -> true
+/// isPromise(1) -> false
+/// isPromise(null) -> false
+/** Whether a value is thenable: the test `after` and `each` branch on. */
+export let isPromise = <T>(v: T | Promise<T>): v is Promise<T> =>
+  !!v && typeof (v as Promise<T>).then == 'function'
+
+/// after(1, inc) -> 2
+/// after(Promise.resolve(1), inc) ~> 2
+/**
+ * `f` applied to a value that may still be in flight: a promise is awaited, a
+ * plain value is passed straight in, and the answer is a promise only when
+ * the value was one.
+ */
+export let after = <A, B>(
+  v: A | Promise<A>,
+  f: (a: A) => B,
+): B | Promise<Awaited<B>> =>
+  isPromise(v)
+    ? v.then(f) as Promise<Awaited<B>>
+    : f(v) as B | Promise<Awaited<B>>
+
+/// each(['a', 'b', 'c'], '', (s, c) => s + c) -> 'abc'
+/// each(['a', 'b', 'c'], '', (s, c) =>
+///   c == 'b' ? Promise.resolve(s + c) : s + c) ~> 'abc'
+/**
+ * `items` folded one at a time from `seed`, a step awaited only when it
+ * answers a promise. While every step is synchronous this is a plain loop;
+ * the first promise moves the items left into a promise chain, so a long
+ * synchronous run never grows the stack.
+ */
+export let each = <T, A>(
+  items: T[],
+  seed: A,
+  step: (acc: A, item: T) => A | Promise<A>,
+): A | Promise<A> => {
+  let acc: A | Promise<A> = seed
+  for (let i = 0; i < items.length; i++) {
+    if (isPromise(acc)) {
+      let rest = items.slice(i)
+      return acc.then((a) => each(rest, a, step))
+    }
+    acc = step(acc, items[i])
+  }
+  return acc
+}
+
+/// let seen: string[] = []
+/// over(['a', 'b'], (s) => seen.push(s)) -> null
+/// seen -> ['a', 'b']
+/// over([1], (n) => Promise.resolve(n)) ~> null
+/** `fn` run over each item in order, for what it does: `each` with no sum. */
+export let over = <T>(
+  items: T[],
+  fn: (item: T) => unknown,
+): null | Promise<null> =>
+  each(items, null, (_, item) => after(fn(item), always(null)))
+
+let step = (x: unknown, f: Fn): unknown => after(x, (v) => v == null ? v : f(v))
 
 /// pipe(inc, inc)(2) -> 4
 /// pipe(inc, inc)(null) -> null

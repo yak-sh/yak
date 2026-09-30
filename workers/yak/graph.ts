@@ -127,6 +127,7 @@ import {
   search,
 } from '@yaks/fts'
 import { admitSchema } from '@yaks/graph/schema'
+import { after } from '@yaks/fp'
 import {
   type Actor,
   type ApplyOpts,
@@ -138,7 +139,6 @@ import {
   type Plugin,
   Refused,
   sha256,
-  then,
 } from '@yaks/graph'
 import { DELIVER, MAIL, mailbox } from '@yaks/mail'
 import { models } from '@yaks/model'
@@ -1307,7 +1307,7 @@ export class Store {
           })
         }
         if (!out.length) return bundles
-        return then(tx.patch(out), () => bundles)
+        return after(tx.patch(out), () => bundles)
       },
       // The transaction is gone, taking the rows above with it — because the
       // batch was refused, or because it was only ever a rehearsal
@@ -2367,7 +2367,7 @@ export class Store {
     if (!eids.length) return { refs, names: {} }
     let missing = eids.filter((eid) => !this.#people.has(eid))
     let read = missing.length ? this.#graph.get(missing, ['person', 'doc']) : []
-    return then(read, (found) => {
+    return after(read, (found) => {
       for (let eid of missing) this.#people.set(eid, null)
       for (let b of found) {
         let title = (b.doc as { title?: string } | undefined)?.title
@@ -2383,7 +2383,7 @@ export class Store {
   }
 
   #speak = (rows: Bundle[]): Bundle[] | Promise<Bundle[]> =>
-    then(this.#names(rows), (said) => named(rows as Row[], said) as Bundle[])
+    after(this.#names(rows), (said) => named(rows as Row[], said) as Bundle[])
 
   // The read door's half of the graph's `teach`: `unknown prop: .recipe` is true and
   // useless on its own, so the store that holds the vocabulary adds where a
@@ -2483,7 +2483,7 @@ export class Store {
             let bundles = f.bundles.map(this.#kind)
             let peers = f.peers?.map(this.#kind)
             let rode = peers ? { peers } : {}
-            then(this.#names([...bundles, ...peers ?? []]), (said) => {
+            after(this.#names([...bundles, ...peers ?? []]), (said) => {
               let spoken: Frame & Partial<Names> =
                 Object.keys(said.names).length
                   ? { ...f, bundles, ...rode, ...said }

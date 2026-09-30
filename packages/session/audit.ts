@@ -19,7 +19,8 @@
 // never committed would mint a phantom identity to point at.
 
 import type { Bundle, Eid, Hook } from '@yaks/graph'
-import { then, TOMBSTONE } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { TOMBSTONE } from '@yaks/graph'
 import { CONFLICT } from './comp.ts'
 import { Bounced } from './bounce.ts'
 
@@ -44,7 +45,7 @@ export let auditing = (opts: AuditOpts = {}): Hook => (bundles, tx, err) => {
   if (!(err instanceof Bounced)) return bundles
   let now = opts.now ?? (() => new Date().toISOString())
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
-  return then(tx.get([err.loser, err.holder]), (found) => {
+  return after(tx.get([err.loser, err.holder]), (found) => {
     let live = new Set(
       found.filter((b) => b[TOMBSTONE] == null).map((b) => b.entity.eid),
     )
@@ -57,6 +58,6 @@ export let auditing = (opts: AuditOpts = {}): Hook => (bundles, tx, err) => {
         at: now(),
       },
     }
-    return then(tx.patch([record]), () => bundles)
+    return after(tx.patch([record]), () => bundles)
   })
 }

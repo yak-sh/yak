@@ -1,7 +1,8 @@
 // A representation is a snapshot: the URL may be cached for a year, so the
 // graph must never change or delete the row that gives that URL its headers.
 
-import { type Comp, type Plugin, Refused, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { type Comp, type Plugin, Refused } from '@yaks/graph'
 import { type Representation, represents } from './representation.ts'
 
 export let representations = (): Plugin => ({
@@ -12,7 +13,7 @@ export let representations = (): Plugin => ({
         b.$delete || b.representation !== undefined
       )
       if (!touched.length) return bundles
-      return then(
+      return after(
         tx.get(touched.map((b) => b.entity.eid), ['representation']),
         (found) => {
           let at = new Map(found.map((b) => [b.entity.eid, b]))

@@ -47,6 +47,7 @@
 // there.
 
 import { rulesIn, type Vocab } from '@yaks/vocab'
+import { after, each, isPromise } from '@yaks/fp'
 import { type Actor, type Bundle, comps, type Eid } from './bundle.ts'
 import type { Row, Storage, Tx } from './storage.ts'
 import { detached, type Query, type ReadOpts } from './storage.ts'
@@ -73,7 +74,6 @@ import {
 import { fire, registry, type Resource, type Rule, stands } from './rules.ts'
 import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
-import { each, isPromise, then } from './pipe.ts'
 import { addressing } from './said.ts'
 import { meaning } from '@yaks/query'
 import { flat, named, only, projection } from './projection.ts'
@@ -413,7 +413,7 @@ export let graph = (opts: Options): Graph => {
       // own for isolation, but they share the phase's resources and the same
       // starting state.
       let run = () =>
-        then(
+        after(
           outside.get([...new Set(applied.map((b) => b.entity.eid))]),
           (rows) => {
             let held = new Map(rows.map((b) => [b.entity.eid, b]))
@@ -429,7 +429,7 @@ export let graph = (opts: Options): Graph => {
             )
             return each(rules, applied, (b, [plugin, rule]) =>
               observed(plugin, b, () =>
-                then(
+                after(
                   fire([rule], {
                     vocab,
                     tx: outside,
@@ -444,8 +444,8 @@ export let graph = (opts: Options): Graph => {
           },
         )
       let made = rules.length ? observed('graph', applied, run) : applied
-      return then(made, (b) =>
-        then(
+      return after(made, (b) =>
+        after(
           each(hooks('effect'), b, (out, [plugin, hook]) =>
             observed(plugin, out, () =>
               hook(out, outside))),
@@ -495,7 +495,7 @@ export let graph = (opts: Options): Graph => {
         // writes anything, and a patch made through the gathered transaction
         // is folded back into the snapshot, so those phases still see each
         // other's writes.
-        then(gathering(tx, bundles), (snap) => {
+        after(gathering(tx, bundles), (snap) => {
           let trackers: Tracker[] = []
           for (let p of plugins) {
             if (!p.track) continue
@@ -510,7 +510,7 @@ export let graph = (opts: Options): Graph => {
           // (./rules.ts).
           let holds = (eid: Eid) => snap.got.get(eid) ?? undefined
           let checks: WriteHook[] | undefined
-          return then(
+          return after(
             each(
               [
                 phase('precondition', held, (b) => guard(b, held, vocab)),
@@ -565,7 +565,7 @@ export let graph = (opts: Options): Graph => {
                     : mutate(b, held, st)
                 }),
                 phase('cascade', tx, (b) =>
-                  then(b.length ? complete(tx, snap) : undefined, () =>
+                  after(b.length ? complete(tx, snap) : undefined, () =>
                     checks?.length ? b : cascade(b, tx, vocab, st))),
                 // The stamps are rules, and they ask what the graph already
                 // holds for an entity: a newly created entity is one with no
@@ -594,7 +594,7 @@ export let graph = (opts: Options): Graph => {
       // effects, which observe committed data only.
       let fell = (e: unknown) =>
         e instanceof Checked
-          ? then(auditing(bundles, e), () => e.bundles)
+          ? after(auditing(bundles, e), () => e.bundles)
           : audited(bundles, e)
       let committed: Bundle[] | Promise<Bundle[]>
       try {
@@ -608,7 +608,7 @@ export let graph = (opts: Options): Graph => {
         // Sample the calling program's clock while its transaction-scoped
         // context still exists.
         instant ??= o.now ?? opts.clock?.() ?? now
-        defer(() => then(effects(b), () => {}))
+        defer(() => after(effects(b), () => {}))
         return b
       }
       return isPromise(committed)
@@ -629,7 +629,7 @@ export let graph = (opts: Options): Graph => {
           'normalize',
           outside,
           (b) =>
-            then(
+            after(
               address(reached(b, vocab).filter((id) => !isAlias(id))),
               (at) => substitute(b, vocab, at),
             ),
@@ -691,11 +691,11 @@ export let graph = (opts: Options): Graph => {
     if (!asks.length || !ids.length) return new Map<string, Eid>()
     let outside = detached(storage)
     let asked = each(asks, new Map<string, Eid | null>(), (at, ask) =>
-      then(
+      after(
         ask(outside, ids.filter((id) => at.get(id) == null), kind),
         (more) => new Map([...at, ...more]),
       ))
-    return then(asked, (at) => {
+    return after(asked, (at) => {
       let found = new Map<string, Eid>()
       let nothing: string[] = []
       for (let [id, eid] of at) {
@@ -726,25 +726,25 @@ export let graph = (opts: Options): Graph => {
     // at every door. A `.fields` projection is read as its rows, and answers
     // the entities its paths reach beside the ones it selects.
     read: (query, readOpts) =>
-      then(
+      after(
         aim(mean(query), address),
         (q) => {
           let p = projection(vocab, q)
           if (p) {
-            return then(
+            return after(
               storage.rows(p.query, readOpts),
               (rows) => flat(p.fold(rows)),
             )
           }
           let want = named(vocab, q)
-          return then(
+          return after(
             storage.read(q, readOpts, want ? [...want] : undefined),
             (rows) => rows.map(only(want)),
           )
         },
       ),
     rows: (query, readOpts) =>
-      then(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
+      after(aim(mean(query), address), (q) => storage.rows(q, readOpts)),
     get: (eids, comps) => storage.get(eids, comps),
     apply,
   }

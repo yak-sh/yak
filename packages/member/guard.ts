@@ -40,7 +40,8 @@
 // should get.
 
 import type { Ask, Bundle, Comp, Eid, Hook, Tx } from '@yaks/graph'
-import { comps, dead, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { comps, dead } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { GOVERNED, GRANT, MEMBER } from './comp.ts'
 import { levelOn, modeOn, type Viewer, type Where } from './policy.ts'
@@ -116,7 +117,7 @@ let idle = (b: Bundle, row: Bundle) =>
 
 // A principal the mode admits and no level does: new rows, and its own.
 let adding = (tx: Tx, who: Viewer, app: Eid, bundles: Bundle[]) =>
-  then(tx.get([...new Set(bundles.map((b) => b.entity.eid))]), (rows) => {
+  after(tx.get([...new Set(bundles.map((b) => b.entity.eid))]), (rows) => {
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
     for (let b of bundles) {
       let row = held.get(b.entity.eid)
@@ -156,16 +157,16 @@ export let guarding = (where: Guard): Hook => {
   return (bundles, tx) => {
     if (!bundles.length) return bundles
     let who = actorOf(bundles)
-    return then(
+    return after(
       modeOn(tx, where.app),
       (m) =>
-        then(levelOn(tx, who, where.app, where), (level) => {
+        after(levelOn(tx, who, where.app, where), (level) => {
           if (!edits(m, level)) throw new Denied(who, where.app, 'editor')
           let comp = short(floors, who, level, bundles)
           if (comp) {
             throw new Denied(who, where.app, floors[comp], 'write', comp)
           }
-          return then(
+          return after(
             writes(level) ? bundles : adding(tx, who, where.app, bundles),
             (b) => pacing(paces, tx, who, b),
           )

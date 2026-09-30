@@ -20,7 +20,8 @@
 // up at all, so ordinary eid references cost nothing.
 
 import type { Eid, Tx } from '@yaks/graph'
-import { minted, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { minted } from '@yaks/graph'
 import { ofOf } from '@yaks/key'
 import { aliasEid } from './comp.ts'
 
@@ -44,7 +45,7 @@ export let addressed = (
 ): Map<string, Eid> | Promise<Map<string, Eid>> => {
   let ask = [...new Set(ids.filter(wordish))]
   if (!ask.length) return new Map()
-  return then(tx.get([...ask, ...ask.map(aliasEid)]), (rows) => {
+  return after(tx.get([...ask, ...ask.map(aliasEid)]), (rows) => {
     let by = new Map(rows.map((b) => [b.entity.eid, b]))
     let at = new Map<string, Eid>()
     for (let id of ask) {

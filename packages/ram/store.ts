@@ -38,14 +38,8 @@ import type {
   ReadOpts,
   Row,
 } from '@yaks/graph'
-import {
-  comps,
-  dead,
-  isPromise,
-  only,
-  TOMBSTONE,
-  tombstoned,
-} from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
+import { comps, dead, only, TOMBSTONE, tombstoned } from '@yaks/graph'
 import {
   type Computed,
   type Index,

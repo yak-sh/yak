@@ -32,7 +32,8 @@
 // reaches runs again rather than being routed.
 
 import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
-import { only, over, projection, then, transient, wanted } from '@yaks/graph'
+import { after, over } from '@yaks/fp'
+import { only, projection, transient, wanted } from '@yaks/graph'
 import { type Net, net } from '@yaks/match'
 import { parse } from '@yaks/query'
 
@@ -188,7 +189,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   // Refresh: the result is a property of the whole set, so run the query
   // again.
   let refresh = (w: Live, touched: Eid[]) =>
-    then(graph.read(w.query, { now: w.now, durable: true }), (set) => {
+    after(graph.read(w.query, { now: w.now, durable: true }), (set) => {
       let ids = new Set(set.map((b) => b.entity.eid))
       let left = [...w.members.keys()].some((eid) => !ids.has(eid))
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
@@ -209,16 +210,16 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
   let commit = (applied: Bundle[]) => {
     if (!held.size) return
     let touched = [...new Set(applied.map((b) => b.entity.eid))]
-    return then(graph.get(touched), (now) => {
+    return after(graph.get(touched), (now) => {
       route(now, touched)
       let again = [...held].filter((w) => !w.routed)
-      return then(over(again, (w) => refresh(w, touched)), () => undefined)
+      return after(over(again, (w) => refresh(w, touched)), () => undefined)
     })
   }
 
   graph.use({
     name: '@yaks/client',
-    hooks: { effect: (bundles) => then(commit(bundles), () => bundles) },
+    hooks: { effect: (bundles) => after(commit(bundles), () => bundles) },
   })
 
   let watch = (query: string, opts: WatchOpts = {}): Watch => {
@@ -241,7 +242,7 @@ export let watches = (graph: Graph, base: WatchesOpts = {}): Watches => {
     // The first result, read before the watch is registered: a query the
     // graph cannot answer throws here, out of `watch()`, rather than on every
     // later commit for the life of the page.
-    then(graph.read(query, { now, durable: true }), (set) => {
+    after(graph.read(query, { now, durable: true }), (set) => {
       if (!active || closed) return
       w.members = new Map(set.map((b) => [b.entity.eid, b]))
       w.routed = !p?.reaches.length &&

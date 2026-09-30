@@ -5,11 +5,11 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
+import { isPromise } from '@yaks/fp'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Phase, Plugin } from './plugin.ts'
 import { type Rule, stands } from './rules.ts'
-import { isPromise } from './pipe.ts'
 import { books, comp, memory } from './testing.ts'
 
 let g = (plugins: Plugin[] = []) =>

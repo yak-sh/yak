@@ -8,7 +8,8 @@
 // steps, the way @yaks/edge's is: load the documents, then pass the same
 // vocabulary to the plugin.
 
-import { type Plugin, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { type Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import type { Mark } from '@yaks/task'
 import { projectDoc } from './comp.ts'
@@ -31,7 +32,7 @@ export let projects = (vocab: Vocab, marks?: Mark[]): Plugin => {
     name: '@yaks/project',
     vocab: [projectDoc],
     hooks: {
-      precondition: (b, tx) => then(boards(b, tx), (b) => nesting(b, tx)),
+      precondition: (b, tx) => after(boards(b, tx), (b) => nesting(b, tx)),
     },
   }
 }

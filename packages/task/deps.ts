@@ -23,7 +23,8 @@
 // which.
 
 import type { Bundle, Eid, Storage, Tx } from '@yaks/graph'
-import { detached, each, then } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
+import { detached } from '@yaks/graph'
 import { and, eq, present } from '@yaks/query'
 import { EDGE } from '@yaks/edge'
 import { type Mark, MARKS, settled } from './words.ts'
@@ -61,9 +62,9 @@ export type DepOpts = {
 // synchronous.
 let kidsOf = (tx: Tx, eid: Eid, rels: string[]): Eid[] | Promise<Eid[]> => {
   let seen = new Set<Eid>()
-  return then(
+  return after(
     each(rels, null, (_, rel) =>
-      then(
+      after(
         tx.read(and(eq(`${EDGE}.from`, eid), present(rel))),
         (bundles) => {
           for (let b of bundles) {
@@ -97,10 +98,10 @@ export let openDeps = (
 ): number | Promise<number> => {
   let marks = opts.marks ?? MARKS
   let tx = detached(storage)
-  return then(
+  return after(
     kidsOf(tx, eid, opts.relations ?? [REQUIRES, CONTAINS]),
     (kids) =>
-      kids.length == 0 ? 0 : then(tx.get(kids), (bundles) => {
+      kids.length == 0 ? 0 : after(tx.get(kids), (bundles) => {
         // Counted by what has settled, so a child the storage does not hold —
         // and which therefore cannot be shown to have finished — stays counted.
         let done = bundles.filter((b) => {
@@ -127,9 +128,9 @@ export let done = (
   opts: DepOpts = {},
 ): boolean | Promise<boolean> => {
   let marks = opts.marks ?? MARKS
-  return then(storage.get([eid]), (bundles) => {
+  return after(storage.get([eid]), (bundles) => {
     let status = bundles[0] ? statusOf(bundles[0], marks) : null
     if (status == null || !settled(status, marks)) return false
-    return then(openDeps(storage, eid, opts), (count) => count == 0)
+    return after(openDeps(storage, eid, opts), (count) => count == 0)
   }) as boolean | Promise<boolean>
 }

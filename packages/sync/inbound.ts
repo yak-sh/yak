@@ -18,7 +18,8 @@
 // finds them beside the entity they belong to.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { comps, dead, then, transient } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { comps, dead, transient } from '@yaks/graph'
 import { replicate } from './mark.ts'
 import type { Mine } from './saying.ts'
 import type { Frame } from './socket.ts'
@@ -46,7 +47,7 @@ export let strip = (
   graph: Graph,
   eids: Eid[],
 ): Bundle[] | Promise<Bundle[]> =>
-  then(graph.get(eids), (held) => {
+  after(graph.get(eids), (held) => {
     let out = held.flatMap((b) => bare(graph, b))
     return out.length ? replicate(graph, out) : []
   })
@@ -70,14 +71,14 @@ export let land = (
   let bundles = frame.bundles ?? []
   let gone = frame.gone ?? []
   live.forget([...gone, ...frame.transientReset ?? []])
-  return then(
+  return after(
     bundles.length ? replicate(graph, bundles) : [],
     (applied) => {
       for (const update of frame.transient ?? []) live.receive(update)
-      return then(
+      return after(
         gone.length ? strip(graph, gone) : [],
         (out) =>
-          then(
+          after(
             hear(graph, frame, mine),
             (heard) => [...applied, ...out, ...heard],
           ),
@@ -119,7 +120,7 @@ export let hear = (
   }
   let landed = () => said.length ? replicate(graph, said) : []
   if (!frame.reset || !frame.bundles?.length) return landed()
-  return then(graph.get(frame.bundles.map((b) => b.entity.eid)), (held) => {
+  return after(graph.get(frame.bundles.map((b) => b.entity.eid)), (held) => {
     for (let b of held) {
       let eid = b.entity.eid
       let out: Bundle = { entity: { eid } }
@@ -148,7 +149,7 @@ export let snapshot = (
     preserve?: (eid: Eid, name: string, prop?: string) => boolean
   } = {},
 ): Bundle[] | Promise<Bundle[]> =>
-  then(
+  after(
     graph.get(bundles.map((b) => b.entity.eid)),
     (held) => {
       let previous = new Map(held.map((b) => [b.entity.eid, b]))

@@ -9,7 +9,8 @@
 // it, and a graph over both. The clock is fixed, so a test can assert on the
 // timestamp a transaction was stamped with.
 
-import { type Graph, graph, isPromise, type Options } from '@yaks/graph'
+import { isPromise } from '@yaks/fp'
+import { type Graph, graph, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'

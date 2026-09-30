@@ -28,13 +28,13 @@
 // contend with — one process, one graph — so every take succeeds and nothing
 // is written.
 
+import { after } from '@yaks/fp'
 import {
   type Bundle,
   derivedEid,
   type Eid,
   type Graph,
   Stale,
-  then,
   token,
 } from '@yaks/graph'
 
@@ -176,7 +176,7 @@ export let released = (
   g: Graph,
   holder: Eid,
 ): Bundle[] | Promise<Bundle[]> =>
-  !contested(g) ? [] : then(
+  !contested(g) ? [] : after(
     g.read(`.${LEASE}.holder=${holder}`),
     (rows: Bundle[]): Bundle[] =>
       rows.map((b) => ({

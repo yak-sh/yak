@@ -1,9 +1,9 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { after } from '@yaks/fp'
 import { graph } from './graph.ts'
 import { token } from './guard.ts'
 import { type Storage } from './storage.ts'
-import { then } from './pipe.ts'
 import { books, comp, memory, slow } from './testing.ts'
 import type { Bundle } from './bundle.ts'
 
@@ -76,7 +76,7 @@ for (let async of [false, true]) {
       beforeWrite: (all) => {
         assertEquals(all.length, 4)
         return (bs, tx) =>
-          then(tx.get(['b']), (found) => {
+          after(tx.get(['b']), (found) => {
             seen.push(comp(found[0], 'book').pages)
             return bs
           })
@@ -113,7 +113,7 @@ for (let async of [false, true]) {
     g.use({
       name: 'prefix',
       beforeWrite: () => (bs, tx) =>
-        then(tx.get(['b', 'm']), (found) => {
+        after(tx.get(['b', 'm']), (found) => {
           if (calls++ == 1) {
             assertEquals(comp(found[0], 'book').publisher, null)
             assertEquals(found[1].bookmark, undefined)

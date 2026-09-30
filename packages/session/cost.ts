@@ -10,7 +10,7 @@
 // record no cost has none, not zero.
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
-import { then } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import { COST, PRICE, type Price, USAGE, type Usage, weigh } from '@yaks/model'
 import type { DerivedProp } from '@yaks/sql'
 import { col, eq, fn, join, select, sub, table } from '@yaks/sql'
@@ -34,13 +34,13 @@ export let weighing: Hook = (bundles, tx) => {
   let owed = bundles.filter((b) => b[USAGE] && !(COST in b))
   if (!owed.length) return bundles
   let eids = owed.map((b) => b.entity.eid)
-  return then(tx.get(eids, [ASK, USING, USAGE, COST]), (held) => {
+  return after(tx.get(eids, [ASK, USING, USAGE, COST]), (held) => {
     let stored = new Map(held.map((b) => [b.entity.eid, b]))
     let was = (b: Bundle) => stored.get(b.entity.eid)
     let fresh = owed.filter((b) => !was(b)?.[COST])
     let model = (b: Bundle) => served(b) ?? served(was(b))
     let models = [...new Set(fresh.map(model).filter((m) => m != null))]
-    return then(models.length ? tx.get(models, [PRICE]) : [], (rows) => {
+    return after(models.length ? tx.get(models, [PRICE]) : [], (rows) => {
       let price = new Map(
         rows.filter((r) => r[PRICE]).map((r) => [r.entity.eid, r[PRICE]]),
       )

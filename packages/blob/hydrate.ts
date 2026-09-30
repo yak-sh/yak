@@ -9,7 +9,7 @@
 // push, after `apply()` returns.
 
 import type { Bundle, Comp } from '@yaks/graph'
-import { each, then } from '@yaks/graph'
+import { after, each } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { bodies } from './props.ts'
 import { type Blobs, decode } from './store.ts'
@@ -55,13 +55,13 @@ export let hydrate = (
   if (!props.length) return bundles
   return each(bundles, [] as Bundle[], (out, b) => {
     let one: Bundle = { ...b }
-    return then(
+    return after(
       each(props, null, (_, { comp, prop }) => {
         let held = one[comp]
         if (!held || typeof held != 'object') return null
         let sha = (held as Comp)[prop]
         if (typeof sha != 'string' || !sha) return null
-        return then(store.get(sha), (bytes) => {
+        return after(store.get(sha), (bytes) => {
           if (bytes) one[comp] = { ...held as Comp, [prop]: decode(bytes) }
           return null
         })

@@ -26,7 +26,8 @@
 // and the `of` that ends up stored is the one that committed last.
 
 import type { Eid, Hook, Tx } from '@yaks/graph'
-import { Refused, substitute, then } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { Refused, substitute } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { ofOf, valueOf } from './comp.ts'
 import { keyEid, tagOf } from './eid.ts'
@@ -44,7 +45,7 @@ export let held = (
 ): Map<string, Eid> | Promise<Map<string, Eid>> => {
   let ask = [...new Set(values)].filter(Boolean)
   if (!ask.length) return new Map()
-  return then(tx.get(ask.map((v) => keyEid(kind, v))), (rows) => {
+  return after(tx.get(ask.map((v) => keyEid(kind, v))), (rows) => {
     let by = new Map(rows.map((b) => [b.entity.eid, b]))
     let out = new Map<string, Eid>()
     for (let v of ask) {
@@ -71,13 +72,13 @@ export let retired = (vocab: Vocab): Hook => {
   return (bundles, tx) => {
     let gone = bundles.filter((b) => b[KEY] === null).map((b) => b.entity.eid)
     if (!gone.length) return bundles
-    return then(tx.get(gone), (rows) => {
+    return after(tx.get(gone), (rows) => {
       let out = rows.flatMap((r) => {
         let tag = tagOf(r, tags)
         return tag ? [{ entity: r.entity, [tag]: null }] : []
       })
       return out.length
-        ? then(tx.patch(out), () => [...bundles, ...out])
+        ? after(tx.patch(out), () => [...bundles, ...out])
         : bundles
     })
   }
@@ -116,7 +117,7 @@ export let settled = (vocab: Vocab): Hook => {
     let ours = new Set(
       bundles.flatMap((b) => b.$alias == null ? [] : [b.entity.eid]),
     )
-    return then(tx.get(claims.map(([b]) => b.entity.eid)), (rows) => {
+    return after(tx.get(claims.map(([b]) => b.entity.eid)), (rows) => {
       let was = new Map(rows.map((b) => [b.entity.eid, b]))
       let at = new Map<Eid, Eid>()
       for (let [b, tag, value] of claims) {

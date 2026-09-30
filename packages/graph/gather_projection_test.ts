@@ -1,12 +1,12 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { after } from '@yaks/fp'
 import {
   type Bundle,
   gather,
   graph,
   holding,
   type Storage,
-  then,
   token,
   type Tx,
 } from './mod.ts'
@@ -54,7 +54,7 @@ for (let async of [false, true]) {
     g.use({
       name: 'settle',
       beforeWrite: () => (bs, tx) =>
-        then(tx.get(['b'], ['book']), (held) => {
+        after(tx.get(['b'], ['book']), (held) => {
           assertEquals(comp(held[0], 'book').pages, 4)
           assertEquals(held[0].doc, undefined)
           return bs.filter((b) => comp(b, 'book').pages != 4)
@@ -122,7 +122,7 @@ for (let async of [false, true]) {
     g.use({
       name: 'ordered',
       beforeWrite: () => (bs, tx) =>
-        then(tx.get(['b'], ['book']), (held) => {
+        after(tx.get(['b'], ['book']), (held) => {
           checks.push(Number(comp(held[0], 'book').pages))
           if (comp(bs[0], 'book').pages == 9) throw Error('late refusal')
           return bs
@@ -195,7 +195,7 @@ for (let async of [false, true]) {
         {
           ...tx,
           get: (es) =>
-            then(tx.get(es), (bs) =>
+            after(tx.get(es), (bs) =>
               bs.map((b) => ({
                 ...b,
                 book: { pages: 9 },

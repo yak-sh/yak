@@ -4,12 +4,12 @@
 // written before them. It reuses the same mutate and cascade functions, once
 // per operation, inside the enclosing transaction — so a refusal at the end
 // rolls back everything that came before it.
+import { after, each } from '@yaks/fp'
 import type { Bundle } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { WriteHook } from './plugin.ts'
 import type { Tx } from './storage.ts'
 import type { Vocab } from '@yaks/vocab'
-import { each, then } from './pipe.ts'
 import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
 import { holding, type Snap } from './gather.ts'
@@ -30,18 +30,18 @@ export let ordered = (
       : bundles.map((b) => [b]),
     [] as Bundle[],
     (out, batch) =>
-      then(
+      after(
         held.get(batch.map((b) => b.entity.eid), []),
         (found) => {
           let gone = new Set(found.filter(dead).map((b) => b.entity.eid))
           let live = batch.filter((b) => !gone.has(b.entity.eid))
           if (!live.length) return out
-          return then(
+          return after(
             each(checks, live, (bs, check) => check(bs, held)),
             (bs) => {
               let step = state()
-              return then(mutate(bs, held, step), (written) =>
-                then(cascade(written, tx, vocab, step), (expanded) => {
+              return after(mutate(bs, held, step), (written) =>
+                after(cascade(written, tx, vocab, step), (expanded) => {
                   st.born.push(...step.born)
                   st.killed.push(...step.killed)
                   for (let eid of step.touched) {
