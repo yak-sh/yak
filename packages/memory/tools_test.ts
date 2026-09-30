@@ -184,6 +184,7 @@ test('on marks the entity named, only for words it holds', async () => {
   let g = fresh()
   await write(g, [
     { entity: { eid: 't1' }, task: {}, doc: { title: 'a task' } },
+    { entity: { eid: 'b1' }, task: {} },
     {
       entity: { eid: 'k1' },
       comment: { target: 't1' },
@@ -202,10 +203,13 @@ test('on marks the entity named, only for words it holds', async () => {
     'does not hold those words',
   )
   await assertRejects(
-    () => ask('memory_save', { on: 't1' }, g),
+    () => ask('memory_save', { on: 'b1' }, g),
     Refused,
-    't1 holds no words',
+    'b1 holds no words',
   )
+  // A task filed as one line holds that line.
+  await save({ on: 't1', said: 'a task' }, g, agent)
+  assertEquals((await marks(g)).sort(), ['k1', 't1'])
   // The words of a mark are what happened there, and a save never replaces
   // them.
   let was = witnessed(await read(g, 'k1')).$was!.doc.body

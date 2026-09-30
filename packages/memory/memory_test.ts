@@ -56,7 +56,8 @@ test('the words are wherever the entity keeps them', () => {
     words({ ...e, doc: { title: 'x' }, content: { body: 'y' } }),
     'y',
   )
-  assertEquals(words({ ...e, doc: { title: 'x' } }), '')
+  assertEquals(words({ ...e, doc: { title: 'x' } }), 'x')
+  assertEquals(words({ ...e, doc: {} }), '')
 })
 
 test('a memory with no sentence in it is refused', () => {

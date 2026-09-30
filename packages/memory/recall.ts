@@ -58,13 +58,18 @@ let who = (v: unknown): string =>
 
 // Where an entity keeps its words, in the order they are looked for: a doc's
 // body (a memory made to hold them, a comment, a task), then a transcript
-// entry's content (@yaks/session). Matched by component, never by kind, so a
-// memory marked on anything that holds words reads the same way.
-let HOMES: [string, string][] = [['doc', 'body'], ['content', 'body']]
+// entry's content (@yaks/session), then a doc's title, all a task filed as one
+// line says. Matched by component, never by kind, so a memory marked on
+// anything that holds words reads the same way.
+let HOMES: [string, string][] = [
+  ['doc', 'body'],
+  ['content', 'body'],
+  ['doc', 'title'],
+]
 
 /**
  * The words an entity holds: a doc's body, else a transcript entry's content,
- * else ''.
+ * else a doc's title, else ''.
  *
  * ```ts
  * words({ entity: { eid: 'e1' }, content: { body: 'use grams' } })

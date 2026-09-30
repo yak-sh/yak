@@ -58,8 +58,9 @@ a doc. The words are that entity's own text, and nothing here edits them:
 Words the graph holds nowhere yet (said in a chat, say) get a doc of their own,
 whose `doc.body` is the sentence verbatim; on yaks.app that is most of them.
 `words(bundle)` reads the words from whichever component holds them, a doc's
-body, else a transcript entry's content, so a memory renders and is found the
-same way whatever it marks. `memory` holds the rest:
+body, else a transcript entry's content, else a doc's title (a task filed as one
+line), so a memory renders and is found the same way whatever it marks. `memory`
+holds the rest:
 
 - `space` — the space the statement belongs to. Deleting the space deletes its
   memories. Space membership and read access require application access
