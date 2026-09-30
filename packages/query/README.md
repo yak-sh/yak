@@ -271,7 +271,9 @@ query as typed, and returns the very string when nothing changed.
 `complete(vocab, text, caret?, source?)` is the one completion engine for every
 place a query is typed. It reads the word under the caret and returns its span
 (`from`, `to`) and the candidates to replace it with, each the whole word as it
-reads once taken and labeled with where it comes from:
+reads once taken and labeled with where it comes from. A word that already reads
+whole is never offered back; `whole` says so, and what reads on from it comes
+before what rewrites it:
 
 ```ts
 import { loadVocab } from '@yaks/vocab'
@@ -285,8 +287,10 @@ let v = loadVocab({
     },
   },
 })
-complete(v, '.sta').cands // [..., { text: '.status', kind: 'task' }]
+complete(v, '.ta').cands // [{ text: '.task', kind: 'comp' }, …]
+complete(v, '.task').cands // '.task.' its properties, …, then '!task' absent
 complete(v, '.status').cands // the operators: '.status=' equals, '.status!=' not, …
+complete(v, '.status').whole // true
 complete(v, '.status=o').cands // [{ text: '.status=open', kind: 'status' }]
 ```
 

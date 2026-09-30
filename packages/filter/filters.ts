@@ -13,7 +13,9 @@
  *
  * The keys are the same everywhere: while the list is open, Tab or Enter
  * accepts the pick, the arrows move it and Escape closes the list; any other
- * key, and those with a modifier, are the host's (`onKey`). A browser types
+ * key, and those with a modifier, are the host's (`onKey`). Where what is
+ * typed already reads whole nothing is picked: Tab takes the first, and Enter
+ * is the host's, closing the list, so `.effect` runs as typed. A browser types
  * through the element's own editing and `press` is called for it; a terminal
  * calls `type` and `press` from its key loop, and passes `active` so the field
  * paints its caret.
@@ -186,11 +188,6 @@ export let filters = (front: Front, opts: Opts): Filters => {
     down: (id) => move(id, 1),
     dismiss,
   }
-  let press = (id: string, key: string) => {
-    let a = act(now(id), key)
-    if (a) acts[a](id)
-    return !!a
-  }
 
   // Accepting in a browser edits the element the way typing does, caret and
   // all, so the host's own input listener hears it too and the list rolls on
@@ -209,6 +206,17 @@ export let filters = (front: Front, opts: Opts): Filters => {
     let E = el.ownerDocument.defaultView?.Event ?? Event
     el.dispatchEvent(new E('input', { bubbles: true }))
   }
+
+  // A key, taken through the element where there is one. An Enter the list
+  // leaves to the host sends what is typed as it stands, so the list closes.
+  let key = (id: string, name: string, el?: Anchor['current']) => {
+    let a = act(now(id), name)
+    if (a == 'accept' && el) take(id, el)
+    else if (a) acts[a](id)
+    else if (name == 'Enter') dismiss(id)
+    return !!a
+  }
+  let press = (id: string, name: string) => key(id, name)
 
   let List = ({ id, r, anchor }: { id: string; r: Row; anchor: Anchor }) =>
     h(
@@ -265,12 +273,10 @@ export let filters = (front: Front, opts: Opts): Filters => {
           p.onInput?.(e)
         },
         onKeyDown: (e: KeyboardEvent) => {
-          let a = !modified(e) && act(now(p.id), e.key)
-          if (!a) return p.onKey?.(e)
+          let el = e.currentTarget as HTMLInputElement
+          if (modified(e) || !key(p.id, e.key, el)) return p.onKey?.(e)
           e.preventDefault()
           e.stopPropagation()
-          if (a == 'accept') take(p.id, e.currentTarget as HTMLInputElement)
-          else acts[a](p.id)
         },
         onBlur: (e: FocusEvent) => {
           dismiss(p.id)

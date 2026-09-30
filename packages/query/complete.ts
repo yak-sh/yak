@@ -8,7 +8,9 @@
 // Each candidate is the whole word as it reads once taken, labeled with where
 // it comes from — its component, `· stamped` for a property only the server
 // writes, `· ref` for a reference, the operator's meaning, the enum's
-// property.
+// property. A word that already reads whole (`.effect`, `.status=open`) is
+// never offered back; the answer says it is `whole`, so a field keeps it as
+// typed, and what extends it comes before what rewrites it (`!effect`).
 //
 // A bare property is offered the way the query will be read: by the
 // vocabulary alone (@yaks/vocab's `route`), and where several components
@@ -33,8 +35,14 @@ import { about, qualify } from './meant.ts'
 export type Cand = { text: string; kind: string }
 
 /** The candidates for the word from `from` to the caret (`to`); taking one
- * replaces that span with its text. */
-export type Completion = { from: number; to: number; cands: Cand[] }
+ * replaces that span with its text. `whole` says the word already reads
+ * whole as typed, so a query may end there. */
+export type Completion = {
+  from: number
+  to: number
+  cands: Cand[]
+  whole: boolean
+}
 
 type Found = Cand[] | Promise<Cand[]>
 
@@ -59,9 +67,9 @@ let then = <A, B>(x: A | Promise<A>, f: (a: A) => B): B | Promise<B> =>
 let starts = (s: string, pre: string) =>
   s.toLowerCase().startsWith(pre.toLowerCase())
 
-// Candidates that extend what was typed, never the word itself.
+// Candidates that read on from what was typed, the word itself among them.
 let fits = (words: Cand[], pre: string): Cand[] =>
-  words.filter((c) => starts(c.text, pre) && c.text != pre)
+  words.filter((c) => starts(c.text, pre))
 
 let cands = (words: string[], kind: string): Cand[] =>
   words.map((text) => ({ text, kind }))
@@ -180,8 +188,9 @@ let inner = (a: string, b: string): number =>
   Number(a.startsWith('_')) - Number(b.startsWith('_')) || cmp(a, b)
 
 // The names that can follow `lead` (a prefix character and the settled
-// segments), by family: components (`dot` leads on to their properties),
-// properties, and the reverse associations a clause may start with.
+// segments), by family: components (`dot` leads on to their properties, for
+// where a component alone is no word), properties, and the reverse
+// associations a clause may start with.
 type Names = { comps: Cand[]; props: Cand[]; reverse: Cand[] }
 let names = (
   at: At,
@@ -226,20 +235,25 @@ let ops = (word: string): Cand[] => [
   { text: word + '=..', kind: 'range' },
 ]
 
-// A component alone is its own presence test; what it completes to is the
-// other questions about it, each a prefix form.
+// A component alone is its own presence test; the other questions about it
+// are prefix forms, which rewrite the word rather than read on from it.
 let presence = (name: string): Cand[] => [
   { text: '!' + name, kind: 'absent' },
   { text: '?' + name, kind: 'wanted' },
 ]
 
-// The whole word, when it already names something, and what may follow it.
+// What may follow a word that already names something: a component's
+// properties, a property's operators.
 let exact = (at: At, segs: string[], name: string, word: string): Cand[] => {
   let n = next(at, segs)
   if (!n || !name) return []
   if ('comp' in n) return at.v.props(n.comp).includes(name) ? ops(word) : []
-  if (owner(at.v, name, n.far) != null) return ops(word)
-  return !segs.length && at.v.comp(name) ? presence(name) : []
+  return [
+    ...at.v.comp(name) && at.v.props(name).length
+      ? [{ text: word + '.', kind: 'comp' }]
+      : [],
+    ...owner(at.v, name, n.far) != null ? ops(word) : [],
+  ]
 }
 
 // The directives written as a dotted name: `.order=`, `.count`, `.limit=`.
@@ -253,7 +267,7 @@ let path = (at: At, word: string, sigil: string, dotted: string): Cand[] => {
   let segs = dotted.split('.')
   let pre = segs.pop()!
   let lead = sigil + segs.map((s) => s + '.').join('')
-  let n = names(at, lead, segs, pre, sigil == '.' || segs.length > 0)
+  let n = names(at, lead, segs, pre, false)
   if (sigil == '?') return fits(n.comps, word)
   let found = fits([...n.comps, ...n.props, ...n.reverse], word)
   if (sigil == '!') return found
@@ -261,6 +275,7 @@ let path = (at: At, word: string, sigil: string, dotted: string): Cand[] => {
     ...exact(at, segs, pre, word),
     ...found,
     ...segs.length ? [] : fits(directives(pre), word),
+    ...!segs.length && at.v.comp(pre) ? presence(pre) : [],
   ]
 }
 
@@ -369,8 +384,7 @@ let value = (
   return then(
     slot(at, leaf, pre),
     (found) =>
-      found.filter((c) => c.text && c.text != pre)
-        .map((c) => ({ ...c, text: lead + c.text })),
+      found.filter((c) => c.text).map((c) => ({ ...c, text: lead + c.text })),
   )
 }
 
@@ -379,6 +393,17 @@ let DOTTED = `${SEG}(?:\\.${SEG})*`
 let VALUE = new RegExp(`^\\.?(${DOTTED})(!=|~=|<=|>=|<|>|=)(.*)$`, 's')
 let HALF = new RegExp(`^\\.${DOTTED}([!~])$`)
 let PATH = new RegExp(`^([.!?])((?:${SEG}\\.)*[A-Za-z_-]*)$`)
+
+// What the engine found for `word`, as answered: the word itself is not
+// offered but makes the answer whole, and a word two families name is
+// offered once.
+let answer = (word: string, found: Cand[]) => {
+  let seen = new Set([word])
+  return {
+    cands: found.filter((c) => !seen.has(c.text) && seen.add(c.text)),
+    whole: found.some((c) => c.text == word),
+  }
+}
 
 let offer = (at: At, word: string): Found => {
   let m = word.match(VALUE)
@@ -408,7 +433,8 @@ let offer = (at: At, word: string): Found => {
  *   },
  * })
  * complete(v, '.status=o')
- * // { from: 0, to: 9, cands: [{ text: '.status=open', kind: 'status' }] }
+ * // { from: 0, to: 9, cands: [{ text: '.status=open', kind: 'status' }],
+ * //   whole: false }
  * ```
  */
 export function complete(
@@ -431,6 +457,7 @@ export function complete(
 ): Completion | Promise<Completion> {
   let from = start(text, caret)
   let within = context(v, `${text.slice(0, from)} ${text.slice(caret)}`)
-  let found = offer({ v, within, source }, text.slice(from, caret))
-  return then(found, (cands) => ({ from, to: caret, cands }))
+  let word = text.slice(from, caret)
+  let found = offer({ v, within, source }, word)
+  return then(found, (cands) => ({ from, to: caret, ...answer(word, cands) }))
 }

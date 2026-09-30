@@ -39,7 +39,7 @@
         },
         "pick": {
           "type": "number",
-          "description": "which of cands is picked"
+          "description": "which of cands is picked, -1 for none: what is typed already reads whole"
         }
       },
       "description": "a query being typed, in a page's own graph: the text and caret, and what can come next there; its list is open while cands has any"

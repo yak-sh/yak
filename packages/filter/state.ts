@@ -2,8 +2,10 @@
  * A query being typed, and what each action makes of it. The `filter`
  * component (vocab.json) holds the text and the caret, the word being
  * completed (`from` to `to`), what can replace it, and which of those is
- * picked; the list is open while it has candidates. Each function here is
- * pure: a row in, the patch it becomes out.
+ * picked; the list is open while it has candidates. Where the word already
+ * reads whole, nothing is picked: Enter keeps it as typed, and Tab takes the
+ * first to read on. Each function here is pure: a row in, the patch it
+ * becomes out.
  *
  * @module
  */
@@ -20,7 +22,7 @@ export type Row = {
   to: number
   /** what can replace it */
   cands: Cand[]
-  /** which of `cands` is picked */
+  /** which of `cands` is picked, -1 for none */
   pick: number
 }
 
@@ -28,13 +30,14 @@ export type Row = {
 export let CAP = 8
 
 /** The field as the person left it: the text, the caret, and what can come
- * next there.
+ * next there, the first picked unless what is typed already reads whole.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { typed } from '@yaks/filter'
  *
- * let found = { from: 0, to: 2, cands: [{ text: '.status', kind: 'task' }] }
+ * let cands = [{ text: '.status', kind: 'task' }]
+ * let found = { from: 0, to: 2, cands, whole: false }
  * assertEquals(typed('.s', 2, found).cands, found.cands)
  * ```
  */
@@ -44,7 +47,7 @@ export let typed = (text: string, caret: number, found: Completion): Row => ({
   from: found.from,
   to: found.to,
   cands: found.cands.slice(0, CAP),
-  pick: 0,
+  pick: found.whole ? -1 : 0,
 })
 
 /** The field as its host put it: the text, and nothing offered. */
@@ -62,14 +65,15 @@ export let moved = (r: Row, d: number): Partial<Row> => ({
   pick: Math.min(Math.max(r.pick + d, 0), r.cands.length - 1),
 })
 
-/** The text with candidate `i` in place of the word being completed, and the
- * caret after it.
+/** The text with candidate `i` (the pick, or else the first) in place of the
+ * word being completed, and the caret after it.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { taken, typed } from '@yaks/filter'
  *
- * let found = { from: 6, to: 8, cands: [{ text: '.status=', kind: 'is' }] }
+ * let cands = [{ text: '.status=', kind: 'is' }]
+ * let found = { from: 6, to: 8, cands, whole: false }
  * assertEquals(taken(typed('.task .s x', 8, found)), {
  *   text: '.task .status= x',
  *   caret: 14,
@@ -78,7 +82,7 @@ export let moved = (r: Row, d: number): Partial<Row> => ({
  */
 export let taken = (
   r: Row,
-  i = r.pick,
+  i = Math.max(r.pick, 0),
 ): { text: string; caret: number } => {
   let word = r.cands[i]?.text ?? r.text.slice(r.from, r.to)
   return {
@@ -103,7 +107,8 @@ let KEYS: Record<string, Act> = {
 }
 
 /** The act a key is on this row: one of the list's while it is open, and none
- * otherwise, so the key is its host's.
+ * otherwise, so the key is its host's. Enter takes only a pick, so with
+ * nothing picked it is the host's too.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -113,4 +118,4 @@ let KEYS: Record<string, Act> = {
  * ```
  */
 export let act = (r: Row | undefined, key: string): Act | undefined =>
-  r?.cands.length ? KEYS[key] : undefined
+  !r?.cands.length || key == 'Enter' && r.pick < 0 ? undefined : KEYS[key]

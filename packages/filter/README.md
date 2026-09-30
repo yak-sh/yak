@@ -19,7 +19,7 @@ this package declares (`vocab.json`, `sync: none`):
 | `from`   | where the word being completed starts                       |
 | `to`     | where it ends                                               |
 | `cands`  | what can replace it (@yaks/query `complete`), at most eight |
-| `pick`   | which of those is picked                                    |
+| `pick`   | which of those is picked, -1 for none                       |
 
 The list is open while `cands` has any. Anything on the page reads what is typed
 in a field by reading its row: a board narrows its rows by its filter field, a
@@ -59,11 +59,13 @@ of a row, pure.
 ## Keys
 
 While the list is open, Tab or Enter takes the pick, ↑ and ↓ move it, and Escape
-closes the list. Every other key, and any key with a modifier, is the host's:
-`Filter` hands it to `onKey`. In a browser the element does the editing and
-`Filter` wires it; a terminal calls `type` and `press` from its own key loop and
-passes `active`, so the field paints its caret (@yaks/tui paints a
-`data-caret`).
+closes the list. Where what is typed already reads whole (@yaks/query's
+`whole`), nothing is picked: Tab takes the first, and Enter is the host's and
+closes the list, so `.effect` then Enter runs `.effect` as typed. Every other
+key, and any key with a modifier, is the host's: `Filter` hands it to `onKey`.
+In a browser the element does the editing and `Filter` wires it; a terminal
+calls `type` and `press` from its own key loop and passes `active`, so the field
+paints its caret (@yaks/tui paints a `data-caret`).
 
 ## Files
 

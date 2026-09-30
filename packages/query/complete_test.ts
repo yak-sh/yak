@@ -35,6 +35,8 @@ let v = loadVocab([{
       },
     },
     person: { component: true, kind: true, properties: {} },
+    effect: { component: true, properties: { handler: str } },
+    using: { component: true, properties: { effort: str } },
     proposed: { component: true, properties: {} },
     comment: {
       component: true,
@@ -75,7 +77,8 @@ let people: Source<Cand[]> = {
 }
 
 let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
-  ['a component leads on to its properties', '.', '.task.', 'comp'],
+  ['a component is its own clause', '.', '.task', 'comp'],
+  ['a whole one leads on to its properties', '.task', '.task.', 'comp'],
   ['a component with none is its own word', '.pro', '.proposed', 'comp'],
   ['a bare property names its component', '.', '.priority', 'task'],
   ['a stamped property says so', '.', '.num', 'entity · stamped'],
@@ -85,7 +88,7 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
   ['the line decides it', '.task .sta', '.status', 'task'],
   ['a line naming both leaves it', '.task .session .sta', '.status', undefined],
   ['the prefix filters', '.pri', '.proposed', undefined],
-  ['a _ component is a component', '._', '._prop.', 'comp'],
+  ['a _ component is a component', '._', '._prop', 'comp'],
   ['its properties never stand bare', '.', '.name', undefined],
   ['but read through it', '._prop.', '._prop.name', '_prop'],
   ["a component's columns", '.pin.', '.pin.x', 'pin'],
@@ -118,6 +121,12 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
   [
     'past a reference, a component',
     '.comment.target.',
+    '.comment.target.pin',
+    'comp',
+  ],
+  [
+    'and on to its properties',
+    '.comment.target.pin',
     '.comment.target.pin.',
     'comp',
   ],
@@ -212,5 +221,22 @@ test('complete: nothing to offer is an empty list', () => {
 
 test("complete: a _ component follows the application's own", () => {
   let texts = complete(v, '.').cands.map((c) => c.text)
-  assertEquals(texts.indexOf('._prop.') > texts.indexOf('.task.'), true)
+  assertEquals(texts.indexOf('._prop') > texts.indexOf('.task'), true)
+})
+
+let first = (text: string) => complete(v, text).cands[0]?.text
+
+test('complete: a component comes first, as the word it reads', () => {
+  assertEquals(first('.eff'), '.effect')
+})
+
+test('complete: a whole word says so, and reads on before it is rewritten', () => {
+  let whole = (text: string) => complete(v, text).whole
+  for (let w of ['.effect', '.priority', '!effect', '.task.status=open']) {
+    assertEquals(whole(w), true, w)
+  }
+  for (let w of ['.eff', '.effect.', '.status', '.priority!']) {
+    assertEquals(whole(w), false, w)
+  }
+  assertEquals(first('.effect'), '.effect.')
 })

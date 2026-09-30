@@ -38,13 +38,26 @@ test('typing offers what can come next, and the keys walk and take it', () => {
   // Taking a property rolls on to what may follow it.
   assertEquals(f.text('q'), '.task .status')
   assertEquals(words(f.row('q')?.cands).slice(0, 2), ['.status=', '.status!='])
-  f.press('q', 'Enter')
+  f.press('q', 'Tab')
   assertEquals(words(f.row('q')?.cands), ['.status=open', '.status=done'])
   f.press('q', 'ArrowDown')
   f.press('q', 'ArrowDown') // held to the list
   f.press('q', 'Enter')
   assertEquals(f.row('q')?.caret, '.task .status=done'.length)
   assertEquals(f.text('q'), '.task .status=done')
+})
+
+test('Enter takes a word to where it reads whole, then keeps it', () => {
+  let f = field()
+  f.type('q', '.tas')
+  assertEquals(f.press('q', 'Enter'), true)
+  assertEquals(f.text('q'), '.task')
+  assertEquals(f.press('q', 'Enter'), false, 'the host sends it as typed')
+  assertEquals(f.text('q'), '.task')
+  assertEquals(f.row('q')?.cands, [])
+  f.type('q', '.task')
+  f.press('q', 'Tab')
+  assertEquals(f.text('q'), '.task.', 'Tab reads on')
 })
 
 test('a closed list leaves every key to its host', () => {
