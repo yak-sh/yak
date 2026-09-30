@@ -146,11 +146,11 @@
       "noun": "topic",
       "verb": "find",
       "title": "Find topics",
-      "description": "Find existing topics: those whose name or brief contains every word in said, ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it before making a topic, with near set to what a belief is built from, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
+      "description": "Find existing topics: those whose name or brief holds a word starting with each word in said (\"query\" finds \"querying\"; ask one word at a time), ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it before making a topic, with near set to what a belief is built from, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
       "input": {
         "said": {
           "type": "string",
-          "description": "words the topic's name or brief must contain"
+          "description": "a word or two the topic's name or brief holds words starting with"
         },
         "near": {
           "type": "string",

@@ -149,7 +149,7 @@ test('find answers the topics holding the words, else every one by name', async 
   }
   let names = (bs: Bundle[]) => bs.map((b) => part(b, 'topic').name)
   assertEquals(names(await ask('topic_find', {}, g)), ['naming', 'testing'])
-  assertEquals(names(await ask('topic_find', { said: 'checks' }, g)), [
+  assertEquals(names(await ask('topic_find', { said: 'check' }, g)), [
     'testing',
   ])
 })

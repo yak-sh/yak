@@ -44,20 +44,25 @@ export let named = (title: string): string =>
 export let topicEid = (title: string): string =>
   identityEid(TOPIC, [named(title)])
 
+// Each word as the start of a word: a topic is found by what it is about, and
+// "query" should find "querying" and "query grammar" alike.
+let starts = (said: string): string =>
+  terms(said).split(' ').filter(Boolean).map((w) => `${w}*`).join(' ')
+
 /**
- * The query string that finds topics: those containing every word, ranked by
- * meaning to `near`, or else in order of name.
+ * The query string that finds topics: those holding a word starting with each
+ * word given, ranked by meaning to `near`, or else in order of name.
  *
  * ```ts
  * found({ said: 'ui?', limit: 5 })
- * // 'ui&.topic&*&.order=topic.name&.limit=5'
+ * // 'ui*&.topic&*&.order=topic.name&.limit=5'
  * ```
  */
 export let found = (
   o: { said?: string; near?: string; limit: number },
 ): string =>
   [
-    ...(terms(o.said ?? '') ? [terms(o.said ?? '')] : []),
+    ...(starts(o.said ?? '') ? [starts(o.said ?? '')] : []),
     ...(o.near ? [`.near=${o.near}`] : []),
     `.${TOPIC}`,
     '*',

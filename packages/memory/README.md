@@ -217,11 +217,12 @@ bundles, each whole:
 They know other packages' components (`entry`, `comment`, `worked`, `claim`)
 only by the names their queries speak and the rows those answer.
 
-`topic find` answers topics whole: those whose name or brief holds every word of
-`said`, ranked by meaning to `near` where the server has embeddings, or with
-neither, in order of name. `topic new` makes a topic from a name and a brief,
-and refuses a name that is taken, saying which topic has it. A builder making
-beliefs finds before it makes, so a subject already named is reused.
+`topic find` answers topics whole: those whose name or brief holds a word
+starting with each word of `said` (`query` finds `querying`), ranked by meaning
+to `near` where the server has embeddings, or with neither, in order of name.
+`topic new` makes a topic from a name and a brief, and refuses a name that is
+taken, saying which topic has it. A builder making beliefs finds before it
+makes, so a subject already named is reused.
 
 ## Exports
 
