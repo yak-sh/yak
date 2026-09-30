@@ -80,6 +80,10 @@ export let runs = (
     }
     let last = newest(host.sql)
     if (!last) return checked(call.entity.eid, about, [])
+    // Where no index serves, a database only this process has open holds its
+    // vectors in memory (./held.ts): no search reads them.
+    let held = !host.sql.file && (!said.installed || !said.model)
+    if (held) return checked(call.entity.eid, about, [])
     if (!said.installed) {
       return warn(
         'sqlite-vector is not installed on this database, so every search ' +

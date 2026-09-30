@@ -113,7 +113,9 @@ export let current = (db: Driver): Build => {
 let tally = (db: Driver, name: string): number =>
   Number(db.query(select({ cols: [as(count(), 'n')], from: table(name) }))[0].n)
 
-let installed = (db: Driver): boolean =>
+/** Whether sqlite-vector was installed on this database: then the dirty set
+ * is its index's, cleared only by {@link build}. */
+export let installed = (db: Driver): boolean =>
   !!db.query(select({
     cols: [col('name')],
     from: table('sqlite_master'),
@@ -240,9 +242,9 @@ export let build = (db: Driver): boolean => {
   return true
 }
 
-// Whether a candidate is one the screen admits: a primary-key read of its row,
-// never the whole screen made first.
-let admitted = (within: Raw, owner: Expr) =>
+/** Whether a candidate is one the screen admits: a primary-key read of its
+ * row, never the whole screen made first. */
+export let admitted = (within: Raw, owner: Expr): Expr =>
   exists(select({
     cols: [lit(1)],
     from: from(within, 's'),

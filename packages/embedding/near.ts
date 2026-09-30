@@ -1,10 +1,13 @@
 // The search itself: a vector in, the nearest entities out.
 //
-// The ranking is exact cosine over the stored vectors. Where sqlite-vector is
-// installed and its index built (./native.ts), the index names the few hundred
-// candidates worth scoring, plus every vector written since its build, and only
-// those are read; everywhere else every vector is read. An approximate ranker
-// can replace this through Rank without changing the query extension.
+// The ranking is exact cosine over the stored vectors, and what it reads is
+// the cheapest of three. Where sqlite-vector is installed and its index built
+// (./native.ts), the index names the few hundred candidates worth scoring,
+// plus every vector written since its build, and only those are read. Where
+// this process is the only one with the database open (a Durable Object's),
+// the vectors are held in its memory (./held.ts) and none is read. Everywhere
+// else every vector is read. An approximate ranker can replace this through
+// Rank without changing the query extension.
 //
 // A {@link Screen} is the other half of "nearest": nearest among what. The
 // eight nearest entities of any kind are the wrong eight for `.near=X&.memory`
@@ -35,6 +38,7 @@ import {
   val,
 } from '@yaks/sql'
 import { TABLE } from './ddl.ts'
+import { hold, ranked } from './held.ts'
 import { candidates } from './native.ts'
 import { cosine, unpack } from './vector.ts'
 
@@ -178,6 +182,15 @@ export let nearest = (
     within: opts.within,
   }) ?? undefined
   if (pool && !pool.length) return []
+  let held = pool ? null : hold(db, opts.model)
+  if (held) {
+    return ranked(db, held, query, {
+      limit,
+      floor,
+      without: without == null ? undefined : Number(without),
+      within: opts.within,
+    })
+  }
   let heap: Hit[] = []
   for (let row of vectors(db, opts.model, opts.within, pool)) {
     if (row.owner == without) continue

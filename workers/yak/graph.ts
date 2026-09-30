@@ -1947,13 +1947,15 @@ export class Store {
   // ---- the vectors (@yaks/embedding, T-59101) -------------------------------
   //
   // A vector beside each text the vocabulary marks searched, made by the model
-  // embedding.ts names and kept in this object's own SQLite, which is what
-  // `.near` ranks. Triggers queue a text in the write's own statement; this
-  // drains the queue once a write has committed and from the alarm, a batch
-  // at a time, waiting on the model between batches, so requests interleave
-  // and none waits on it. It drains for a slice and comes back on the alarm
-  // for the rest: the first wake after this shipped, every store owes a
-  // vector for each text it holds, and it catches up behind its own traffic.
+  // embedding.ts names and kept in this object's own SQLite, and held in its
+  // memory once a search asks, which is what `.near` ranks; each drain pass
+  // folds what it wrote into that copy. Triggers queue a text in the write's
+  // own statement; this drains the queue once a write has committed and from
+  // the alarm, a batch at a time, waiting on the model between batches, so
+  // requests interleave and none waits on it. It drains for a slice and comes
+  // back on the alarm for the rest: the first wake after this shipped, every
+  // store owes a vector for each text it holds, and it catches up behind its
+  // own traffic.
   // A drain that fails goes to Sentry and comes back a minute later; `.near`
   // ranks whatever is stored meanwhile.
   static EMBED = 10_000

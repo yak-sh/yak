@@ -97,6 +97,7 @@ export * from './ddl.ts'
 export * from './sweep.ts'
 export * from './owed.ts'
 export * from './near.ts'
+export { absorb, HELD } from './held.ts'
 export {
   behind,
   type Build,

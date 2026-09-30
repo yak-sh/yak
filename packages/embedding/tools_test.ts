@@ -67,8 +67,11 @@ test('an empty table is not a stalled index', async () => {
   assertEquals((await checkup(shelf())).level, undefined)
 })
 
+// The same database as a file other processes may have open.
+let shared = (db: Driver): Driver => ({ ...db, file: true })
+
 test('where every search reads every vector, it says why', async () => {
-  let bare = await checkup(await stocked())
+  let bare = await checkup(shared(await stocked()))
   assertEquals(bare.level, 'warn')
   assert(bare.body.includes('not installed'), bare.body)
   let db = await installed()
@@ -78,9 +81,13 @@ test('where every search reads every vector, it says why', async () => {
     set: { model: val('next') },
     where: eq(col('entity'), val(4)),
   })
-  let two = await checkup(db)
+  let two = await checkup(shared(db))
   assertEquals(two.level, 'warn')
   assert(two.body.includes('two models'), two.body)
+})
+
+test('a database this process alone has open draws no warning', async () => {
+  assertEquals((await checkup(await stocked())).level, undefined)
 })
 
 test('a host still waiting for its config says what it is waiting for', async () => {

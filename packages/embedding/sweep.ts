@@ -35,6 +35,7 @@ import { TABLE } from './ddl.ts'
 import { due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
 import { build } from './native.ts'
+import { absorb } from './held.ts'
 
 /** How many queued entities one sweep takes by default. */
 export let BATCH = 64
@@ -256,11 +257,12 @@ export type Drained = { fresh: number; refused: Swept['refused'] }
 
 /**
  * Sweep pass after pass until nothing is owed, and stop, building the index
- * after each pass where there is one (./native.ts `build`). A host with
- * nothing standing between requests (a Durable Object sleeps) runs this when a
- * write asks; the service (./service.ts) runs it, then waits. An aborted
- * `signal` stops it after the pass it is in. An embedder that cannot be
- * reached throws, and what it took stays owed.
+ * after each pass where there is one (./native.ts `build`), or folding what
+ * the pass wrote into the vectors this process holds (./held.ts `absorb`). A
+ * host with nothing standing between requests (a Durable Object sleeps) runs
+ * this when a write asks; the service (./service.ts) runs it, then waits. An
+ * aborted `signal` stops it after the pass it is in. An embedder that cannot
+ * be reached throws, and what it took stays owed.
  */
 export let drain = async (
   db: Driver,
@@ -274,6 +276,7 @@ export let drain = async (
     done.fresh += swept.fresh
     done.refused.push(...swept.refused)
     build(db)
+    absorb(db)
     if (!swept.left || opts.signal?.aborted) return done
   }
 }

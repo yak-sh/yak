@@ -257,10 +257,11 @@ other embedder failure stops the pass, the caller receives the error, and the
 work stays queued.
 
 `drain(db, fields, embedder, { batch?, signal? })` sweeps pass after pass until
-nothing is owed, building the index after each, and returns
-`{ fresh, refused }`: the service's loop is a drain and a wait, and a host with
-nothing standing between requests (a Durable Object sleeps) drains once a write
-commits. An aborted `signal` stops it after the pass it is in.
+nothing is owed, building the index or folding the pass into the vectors held in
+memory after each (below), and returns `{ fresh, refused }`: the service's loop
+is a drain and a wait, and a host with nothing standing between requests (a
+Durable Object sleeps) drains once a write commits. An aborted `signal` stops it
+after the pass it is in.
 
 `sources()`, `put()`, `watch()`, `owe()`, `due()` and `paid()` expose the
 individual operations. Embedding can run asynchronously; source reads, vector
@@ -328,10 +329,10 @@ results before reusing the same extension for another query.
 `nearest()` ranks by exact cosine similarity over the stored vectors, among the
 entities a screen admits, and excludes tombstoned entities immediately. Where
 the index below is built, it names the candidates and only those vectors are
-read; everywhere else every vector the screen admits is read. A screen that
-admits at most 5000 entities is always read whole: its vectors cost less to
-score than to find among every code. A Durable Object cannot load sqlite-vector,
-so there every search reads every vector the screen admits.
+read. A screen that admits at most 5000 entities is always read whole: its
+vectors cost less to score than to find among every code. Where the database is
+this process's alone, the vectors are held in memory (below) and none is read.
+Everywhere else every vector the screen admits is read.
 
 Supply `semantic(db, space, { rank })` with a `Rank` implementation to use
 another ranking; it receives the same screen.
@@ -365,6 +366,29 @@ sqlite-vector creates its `_sqliteai_vector` metadata table, so searches never
 install it on a database that lacks that table. The platform binaries are in the
 root import map; other SQL drivers read every vector.
 
+## Held in memory
+
+A database only this process has open (a Durable Object's, or one in memory: the
+driver sets no `file`) keeps its vectors in the process's memory, one copy per
+driver, loaded the first time a search asks for them. A search scores every held
+vector in memory, then tests the best against the graph a few at a time: an
+entity that is buried, or one the rest of the query does not admit, is passed
+over for the next. Where the rate so far says a screen admits too few to find by
+walking the ranking, the screen is read whole instead.
+
+The copy stays exact the way the index does. Whatever wrote a vector, the dirty
+set names it, and a search scores what the set names from its rows beside the
+copy. After each sweep pass, `absorb(db)` folds the set into that process's
+copy, clears it and numbers a new build; a copy that sees a build it did not
+make loads again. The answer is the one reading every vector gives, to the last
+bit.
+
+A vector costs its width in float32 and about 44 bytes beside it: 1,068 bytes at
+256 dimensions, so 24,000 vectors hold 26 MB. Every copy in the process shares
+`HELD` (48 MB of a Worker isolate's 128 MB, which every object in it shares):
+the least recently searched copy is dropped to make room, and a database whose
+vectors alone would pass it is not held, and every search reads its vectors.
+
 ## Storage
 
 The vector table is:
@@ -390,17 +414,17 @@ from the selected text: after deleting its tables, recreate them with `schema()`
 before running another sweep.
 
 `vector_check` fails when the index has been behind for longer than the `stale`
-threshold, which means no process is running the sweep. It warns where every
-search reads every vector: sqlite-vector not installed, or two models sharing
-the table.
+threshold, which means no process is running the sweep. On a file other
+processes may have open, it warns where every search reads every vector:
+sqlite-vector not installed, or two models sharing the table.
 
 ## Exports
 
 The root exports field selection, `Embedder`, `hashEmbedder`, `remote`,
 `workersAi`, `batched`, vector math/packing helpers, the schema, sweep
-operations, the index (`installNative`, `build`, `state`, `behind`), `vectorOf`,
-`nearest`, `meaning`, `semantic` and supporting types such as `Rank`. The
-`Driver` it runs on is `@yaks/sql`'s.
+operations, the index (`installNative`, `build`, `state`, `behind`), the vectors
+held in memory (`absorb`, `HELD`), `vectorOf`, `nearest`, `meaning`, `semantic`
+and supporting types such as `Rank`. The `Driver` it runs on is `@yaks/sql`'s.
 
 | Sub-module export         | Purpose                                                                                                                                                                                      |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

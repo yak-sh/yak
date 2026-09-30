@@ -1,10 +1,12 @@
 // Which model a store's vectors are made by (@yaks/embedding, T-59101). Every
 // store on the platform keeps a vector beside each text its vocabulary marks
-// `search: true`, in its own SQLite, and answers `.near=<entity>` with an
-// exact scan over them: a Durable Object cannot load sqlite-vector, and a
-// space's stores are small enough that reading every vector is fast (the
-// measurements are on T-59101). The directory is a store like any other, so
-// the memories a space keeps are ranked the same way (memory.ts).
+// `search: true`, in its own SQLite, and answers `.near=<entity>` exactly
+// from a copy of them held in the object's memory, loaded the first time a
+// search asks, so a search reads no vector rows (@yaks/embedding held.ts;
+// the measurements are on T-59374). A Durable Object cannot load
+// sqlite-vector, and a space's stores are small enough to hold. The directory
+// is a store like any other, so the memories a space keeps are ranked the
+// same way (memory.ts).
 //
 // Workers AI makes the vectors, through the `AI` binding every store is given:
 // Qwen3-Embedding, kept at 256 of its 1024 dimensions, which it was trained to
