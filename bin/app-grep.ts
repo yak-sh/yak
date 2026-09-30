@@ -74,10 +74,21 @@ let token = async () => {
   return new TextDecoder().decode(out.stdout).trim()
 }
 
+// The API answers 429 past its pace (1,200 calls in five minutes), which a
+// cold mirror of every app outruns: a throttled get waits as long as it is
+// told, or a doubling pause, and asks again.
 let get = async (auth: string, path: string) => {
-  let res = await fetch(`${API}${path}`, {
-    headers: { authorization: `Bearer ${auth}` },
-  })
+  let res: Response
+  for (let tries = 0;; tries++) {
+    res = await fetch(`${API}${path}`, {
+      headers: { authorization: `Bearer ${auth}` },
+    })
+    if (res.status != 429 || tries == 10) break
+    await res.body?.cancel()
+    let told = Number(res.headers.get('retry-after'))
+    let wait = told > 0 ? told * 1000 : Math.min(60_000, 1000 * 2 ** tries)
+    await new Promise((go) => setTimeout(go, wait))
+  }
   if (!res.ok) {
     throw new Error(
       `GET ${path}: ${res.status} ${(await res.text()).slice(0, 300)}`,
