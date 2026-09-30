@@ -7,7 +7,7 @@ export let textOf = (title: unknown, body: unknown) =>
   `${String(title ?? '')}\n${String(body ?? '')}`.trim().slice(0, 2000)
 
 // How close counts as a twin. A floor belongs to the embedder's space, so it
-// moves when the configured model does. In potion-retrieval-32M#256, over the
-// tasks known to be duplicates, 0.66 lets the twin through for about three
-// tasks in four, and something that is not a twin through for about as many.
-export let FLOOR = 0.66
+// moves when the configured model does. In granite-embedding-30m-english, over
+// the tasks known to be duplicates, 0.86 lets the twin through for about three
+// tasks in four, and the nearest task that is not a twin for about two in five.
+export let FLOOR = 0.86
