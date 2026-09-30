@@ -277,16 +277,18 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // left every runtime that loaded its tests meanwhile without that module
   // for the rest of its life, and each kernel in it answered its first
   // sign-in with a 500.
-  if ([...local, ...wd].some((f) => f.startsWith('workers/'))) {
-    await (await import('../workers/yak/wrangler.ts')).ready()
-  }
-  // The Stripe sandbox every kernel sells in, found once for the run and
-  // handed to every process by its environment (probe.ts `vars`).
-  let { plusPrice, sandboxKey } = await import('../workers/yak/probe.ts')
-  let stripe = await sandboxKey()
-  if (stripe) {
-    Deno.env.set('STRIPE_KEY', stripe)
-    Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
+  let worker = [...local, ...wd].some((f) => f.startsWith('workers/'))
+  if (worker) await (await import('../workers/yak/wrangler.ts')).ready()
+  // The Stripe sandbox every kernel sells in, found once for a run that has
+  // the Worker's tests and handed to every process by its environment
+  // (probe.ts `vars`).
+  if (worker) {
+    let { plusPrice, sandboxKey } = await import('../workers/yak/probe.ts')
+    let stripe = await sandboxKey()
+    if (stripe) {
+      Deno.env.set('STRIPE_KEY', stripe)
+      Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
+    }
   }
   let env: Record<string, string> = { DENO_DIR: denoDir(), ...GIT }
   // The kernel starts while the deno pass runs, and is ready by its end.
