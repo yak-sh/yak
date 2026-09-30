@@ -500,7 +500,7 @@ test('a declared rule cannot write a value outside an app constraint', async () 
 })
 
 for (let aggregate of [false, true]) {
-  test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door`, async () => {
+  test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door and the request id`, async () => {
     let store = await cookbook()
     let error = new Error('query storage failed')
     using _broken = stub(store.door.graph, aggregate ? 'rows' : 'read', () => {
@@ -517,8 +517,9 @@ for (let aggregate of [false, true]) {
       error: 'Error',
       message: error.message,
     })
+    let id = response.headers.get('x-request-id')
     assertEquals(logged.calls.map((c) => c.args), [[
-      'GET /query failed —',
+      `GET /query (request ${id}) failed —`,
       error,
     ]])
   })

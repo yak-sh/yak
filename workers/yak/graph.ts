@@ -75,6 +75,7 @@ import {
   json,
   poured,
   refuse,
+  served,
   signed,
   type Sink,
   type Subs,
@@ -2470,30 +2471,30 @@ export class Store {
     ) {
       return this.#commit(request)
     }
-    if (path == '/query') {
-      let url = new URL(request.url)
-      let line = url.searchParams.get('q') ?? ''
-      let live = url.searchParams.get('live') == '1'
-      let no = unserved(line)
-      if (no) return refuse(new Refused(no))
-      // An aggregate is not a listing — `.count` answers one number — and
-      // @yaks/api's read door answers bundles, which is the wrong half of the
-      // compiled statement. So it is answered here, off the raw rows, in the
-      // shape every door on this platform says it in. A line that does not
-      // parse is the caller's to fix, answered 400 like any other refusal.
-      try {
-        let agg = aggOf(line)
-        if (agg && !live) {
-          await this.#auth(request)
-          return await this.#counted(line, agg)
-        }
-      } catch (e) {
-        return refuse(e, request)
-      }
-      return await this.#kinded(await this.#route(request), line)
-    }
+    if (path == '/query') return await this.#asked(request)
     return await this.#route(request)
   }
+
+  // `/query`, watched as @yaks/api watches its own doors (`served`): a
+  // failure is answered with the `x-request-id` its console line names, and a
+  // refusal is the caller's, answered at its status. An aggregate is not a
+  // listing — `.count` answers one number — and @yaks/api's read door answers
+  // bundles, which is the wrong half of the compiled statement. So it is
+  // answered here, off the raw rows, in the shape every door on this platform
+  // says it in. A line that does not parse is answered 400.
+  #asked = served(async (request) => {
+    let url = new URL(request.url)
+    let line = url.searchParams.get('q') ?? ''
+    let live = url.searchParams.get('live') == '1'
+    let no = unserved(line)
+    if (no) throw new Refused(no)
+    let agg = aggOf(line)
+    if (agg && !live) {
+      await this.#auth(request)
+      return await this.#counted(line, agg)
+    }
+    return await this.#kinded(await this.#route(request), line)
+  }, { route: () => '/query' })
 
   // The word a row is named by. `kind` is not a property and no client can
   // derive it: it is the most specific component this vocabulary says the
@@ -2550,8 +2551,9 @@ export class Store {
         !said.message!.includes(url(this.#bind, '/docs.md'))
       ? Response.json({ ...said, message: said.message + teach(this.#bind) }, {
         status: answer.status,
+        headers: answer.headers,
       })
-      : Response.json(said, { status: answer.status })
+      : Response.json(said, { status: answer.status, headers: answer.headers })
   }
 
   // One aggregate, as every door on this platform says it: a count is a
