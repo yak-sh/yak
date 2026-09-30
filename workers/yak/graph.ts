@@ -203,7 +203,7 @@ import {
   type Rule,
   RULES,
   runs,
-  size,
+  SIZE,
   type Stamp,
   type Standing,
   step,
@@ -1813,7 +1813,7 @@ export class Store {
         let s: Stamp
         try {
           s = this.#ctx.storage.transactionSync(() => {
-            let s = step(this.#mover(held), rule, was, size(name), now)
+            let s = step(this.#mover(held), rule, was, SIZE, now)
             this.#put(rule.mark, JSON.stringify(s))
             return s
           })
@@ -2441,7 +2441,7 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       let store = this.#get('name') ?? ''
       if (new URL(request.url).searchParams.get('rehearse') == '1') {
-        let rules = rehearse(this.#mover([]), this.#rules, size(store))
+        let rules = rehearse(this.#mover([]), this.#rules, SIZE)
         this.#kv.clear()
         return Response.json({ store, rules })
       }

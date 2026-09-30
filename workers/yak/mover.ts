@@ -8,7 +8,7 @@
 //   - a Store moves from its alarm, once it has booted and serves (graph.ts
 //     `#moving`). Nothing in boot waits on it, and a wake owed rows arms the
 //     alarm rather than moving them itself.
-//   - each batch is one transaction of a few hundred rows, and the object
+//   - each batch is one transaction of a few dozen rows, and the object
 //     yields between batches, so requests interleave. An alarm moves a few
 //     batches and comes back for the rest.
 //   - every bound is counted in rows, never in time: inside a Worker the clock
@@ -104,9 +104,11 @@ export type Moving = {
   tx: <T>(body: () => T) => T
 }
 
-/** Rows a batch takes: a few hundred in an app's store, fewer in the
- * directory, which every space's routing reads. */
-export let size = (store: string) => store == PLATFORM_STORE ? 50 : 200
+/** Rows a batch takes. A store's one thread is held for the whole batch, and
+ * one whose writes run many rules holds it longest: rehearsed, a batch of 200
+ * held the Mossvale store for about a second, and 50 held the directory for
+ * about a tenth of one. */
+export let SIZE = 50
 
 /** The batches an alarm moves before it comes back for the rest, how long it
  * waits to come back, and the batches a rehearsal holds the store for. */

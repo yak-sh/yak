@@ -78,7 +78,7 @@ test('a live rule moves every row from the alarm, and says it is done', async ()
 test('a rehearsal says what a rule would move, and moves nothing', async () => {
   let s = await store(250, rule({ live: undefined }))
   let [r] = await s.rehearse()
-  assertEquals([r.rows, r.moved, r.batches, r.failed], [250, 250, 2, undefined])
+  assertEquals([r.rows, r.moved, r.failed], [250, 250, undefined])
   await s.alarm()
   assertEquals(await count(s, '.was'), 250)
   let [said] = await s.moves()

@@ -271,16 +271,16 @@ unchanged. `yak admin deploys` still treats a version carrying that pass as a
 potential boundary, because another Store may have completed it.
 
 Rows move with the store mover (mover.ts, D-45640), never inside boot. A Store
-moves from its alarm once it serves, one transaction of a few hundred rows at a
-time, yielding between them; a batch that fails unwinds and is reported, and the
-store keeps serving the shape it holds until its next incarnation tries again. A
-rule is data, the rows still in the old shape and the patch that moves one, and
-lands rehearsal-only: `yak admin move --rehearse --admin` moves every rule's
-rows in every store inside a transaction the store rolls back, and says what
-each found, how long it took, its slowest batch and any failure. A clean rule
-goes `live: 'apps'`, then `'all'`, the directory last, and its mark joins
-`BOUNDARIES` in that release. `yak admin move --admin` wakes the dormant stores
-a few a minute and says where each rule stands in each.
+moves from its alarm once it serves, one transaction of fifty rows at a time,
+yielding between them; a batch that fails unwinds and is reported, and the store
+keeps serving the shape it holds until its next incarnation tries again. A rule
+is data, the rows still in the old shape and the patch that moves one, and lands
+rehearsal-only: `yak admin move --rehearse --admin` moves every rule's rows in
+every store inside a transaction the store rolls back, up to twenty batches, and
+says what each found and moved, any failure, and how long each store took to
+answer. A clean rule goes `live: 'apps'`, then `'all'`, the directory last, and
+its mark joins `BOUNDARIES` in that release. `yak admin move --admin` wakes the
+dormant stores a few a minute and says where each rule stands in each.
 
 ## App bindings
 
