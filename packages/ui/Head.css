@@ -43,6 +43,9 @@ a.Head_Title:hover,
   color: var(--muted);
   max-width: var(--measure);
 }
+.Head_Sub-refused {
+  color: var(--negative);
+}
 .Head_Facts {
   display: flex;
   flex-wrap: wrap;

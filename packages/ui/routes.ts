@@ -18,7 +18,7 @@ import { Tabs } from './Tabs.ts'
 
 // The colour schemes the page can be seen in: the system's, or one forced.
 let schemes = ['system', 'light', 'dark']
-let first = Object.keys(themes)[0]
+let first: string = Object.keys(themes)[0]
 
 let at = (theme: string, scheme: string) =>
   `?${new URLSearchParams({ theme, scheme })}`

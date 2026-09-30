@@ -10,7 +10,7 @@
       "type": "object",
       "sync": "none",
       "durable": "connection",
-      "description": "the inspector's page, on the entity `inspect`: what shows beside the page, which pane has the keys, and what is being typed over; what the index's field holds is the same entity's `filter` (@yaks/filter)",
+      "description": "the inspector's page, on the entity `inspect`: what shows beside the page, which pane has the keys, a note open, a delete armed and a refused write; what the index's field holds is the same entity's `filter` (@yaks/filter)",
       "properties": {
         "detail": {
           "type": "string",
@@ -20,10 +20,6 @@
           "type": "string",
           "enum": ["index", "page", "detail"],
           "description": "the pane that has the keys, in a terminal"
-        },
-        "edit": {
-          "type": "string",
-          "description": "the value being typed over, `<eid> <component> <property> <place>`: one value can show on the page and beside it"
         },
         "note": {
           "type": "string",
@@ -39,7 +35,7 @@
         },
         "at": {
           "type": "string",
-          "description": "where the refused write came from: an edit's or a note's key, or the eid of the entity it was about"
+          "description": "where the refused write came from: a note's key, or the eid of the entity it was about"
         }
       }
     },

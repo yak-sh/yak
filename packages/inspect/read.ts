@@ -1,13 +1,13 @@
 /**
  * What the inspector reads off a bundle or an answer: pure functions, the
  * vocabulary of every view. How a value is shaped, which hue a name wears, the
- * components an entity carries, the tables an archetype names, and how many
- * entities carry each component.
+ * components an entity carries, the tables an archetype names, how many
+ * entities carry each component, and what a client may write.
  *
  * @module
  */
 
-import type { Bundle } from './host.ts'
+import type { Bundle, Io } from './host.ts'
 
 /** One component, as a bundle carries it. */
 export type Comp = Record<string, unknown>
@@ -81,6 +81,21 @@ export let face = (v: unknown): string =>
     : typeof v == 'object'
     ? JSON.stringify(v)
     : String(v)
+
+/** Whether a client may write this component, or this property of it,
+ * here: never where the host's controls take no input (a terminal), nor a
+ * component that is not on the wire or is computed, nor a property that is
+ * stamped or computed. */
+export let writable = (
+  io: Pick<Io, 'vocab' | 'edits'>,
+  name: string,
+  prop?: string,
+): boolean => {
+  let c = io.vocab.comp(name)
+  if (!io.edits || !c?.wire || c.computed) return false
+  let p = prop == null ? undefined : io.vocab.prop(name, prop)
+  return prop == null || (!!p && !p.stamped && !p.computed)
+}
 
 /** Whether a value names an entity by its eid. */
 export let named = (v: unknown): v is string =>

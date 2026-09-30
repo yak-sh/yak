@@ -25,14 +25,14 @@ import {
 } from '../commands.ts'
 import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
-import { drop, peek, save } from './drafts.ts'
+import { drop, peek, pickLine, save, useHits } from '@yaks/editors'
 import { spawnOf } from './Run.tsx'
 import { Tray } from './Tray.tsx'
 import { shelve } from './shelf.ts'
 import { block } from '@yaks/ui'
 import { Id } from './views/Inline.tsx'
 import { title } from './title.tsx'
-import { pickLine, useHits } from './hits.ts'
+import { hits } from './hits.ts'
 import { spawnHit } from './Canvas.tsx'
 import { fields } from './fields.tsx'
 import { Sync } from './Sync.tsx'
@@ -247,11 +247,11 @@ let exec = async (line: string) => {
 let WhoAmI = () => {
   let me = ent(clientId())
   // Ask only when this browser is bound to no one yet — and ask the SERVER
-  // (hits.ts) for the people, so a partial cache can't hide candidates or
+  // (@yaks/editors useHits) for the people, so a partial cache can't hide candidates or
   // under-count them into a false "no choice". The empty line while already
   // bound skips the round trip; the hook still runs (its rule) every render.
   let asking = !!me.client && !me.client.actor
-  let people = useHits(asking ? pickLine('', 'person') : '', 50)
+  let people = useHits(asking ? pickLine('', 'person') : '', 50, hits)
   if (!asking || people.length < 2) return null
   return (
     <You>

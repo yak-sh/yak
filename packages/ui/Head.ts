@@ -1,9 +1,10 @@
 /**
  * The top of a page: its `Title` line (the words, then the thing's `Id` and
  * `Kind`, and anything else the line offers, a button say), a `Sub` saying
- * what it is, and `Facts`, the short things known about it, kept apart by a
- * dot. A `Title` given an `href` is a link to the page, for a head drawn
- * somewhere else (el.ts).
+ * what it is (`Sub-refused`: why the last change to it was turned down), and
+ * `Facts`, the short things known about it, kept apart by a dot. A `Title`
+ * given an `href` is a link to the page, for a head drawn somewhere else
+ * (el.ts).
  *
  * @module
  */
@@ -49,6 +50,7 @@ export let sheet = (c: Colors): Sheet => ({
   Head_Id: { fg: c.dim, bold: false },
   Head_Kind: { fg: c.dim, bold: false },
   Head_Sub: { fg: c.muted },
+  'Head_Sub-refused': { fg: c.negative },
   Head_Facts: { fg: c.dim, spaced: true },
   Head_Sep: { fg: c.border2 },
 })
@@ -81,4 +83,13 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   ['Head, Title', h(Head, {}, h(Title, {}, 'inspect'))],
+  [
+    'Head, Sub-refused',
+    h(
+      Head,
+      {},
+      h(Title, {}, 'Fix the map'),
+      h(Sub, { mod: 'refused' }, "no entity 'T-404'"),
+    ),
+  ],
 ]

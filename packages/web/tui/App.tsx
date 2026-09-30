@@ -56,7 +56,8 @@ import { navigationQuery, navigationView } from '../navigation.ts'
 import { Guide } from '@yaks/ui'
 import { bind } from '../components/fields.tsx'
 import { filterField, usePassOf } from '../components/Filter.tsx'
-import { useHits } from '../components/hits.ts'
+import { useHits } from '@yaks/editors'
+import { hits } from '../components/hits.ts'
 import { group } from '../components/Search.tsx'
 import { editing, named } from './keys.ts'
 
@@ -609,7 +610,7 @@ let filterKey = (k: string) => {
 
 export let TSearch = () => {
   let q = fields.text(SEARCH)
-  found = group(useHits(q.trim(), 20), q)
+  found = group(useHits(q.trim(), 20, hits), q)
   let pick = Math.min(hitPick.value, found.length - 1)
   return (
     <div class='TSearch'>

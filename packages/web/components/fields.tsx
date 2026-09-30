@@ -20,7 +20,7 @@ import { loadVocab } from '@yaks/vocab'
 import { cache, type Comps } from '../live.ts'
 import { RANKS } from '../query.ts'
 import { idOf, kindOf, vocab } from '../types.ts'
-import { Overlay } from './overlay.tsx'
+import { Overlay } from '@yaks/editors'
 import { wellOf, wells } from './wells.ts'
 
 /** The page's own graph. */

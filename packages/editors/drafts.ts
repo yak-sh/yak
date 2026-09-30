@@ -17,7 +17,7 @@ import { useEffect } from 'preact/hooks'
 
 type Draft = { v: string; caret?: number }
 
-// Deno (the TUI, tests) has no sessionStorage; a Map stands in.
+// Deno (a terminal, tests) has no sessionStorage; a Map stands in.
 let mem = new Map<string, string>()
 let store: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> =
   globalThis.sessionStorage ?? {
@@ -29,7 +29,7 @@ let store: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> =
 // Drafts never expire: they're the user's words, and losing work is
 // always worse than resurfacing it. Only commit or revert spends one.
 
-export let save = (key: string, v: string, caret?: number) => {
+export let save = (key: string, v: string, caret?: number): void => {
   store.setItem(`draft:${key}`, JSON.stringify({ v, caret }))
   store.setItem('draft:focus', key)
 }
@@ -44,12 +44,13 @@ export let peek = (key: string): Draft | null => {
   }
 }
 
-export let drop = (key: string) => {
+export let drop = (key: string): void => {
   store.removeItem(`draft:${key}`)
   if (store.getItem('draft:focus') == key) store.removeItem('draft:focus')
 }
 
-export let focused = (key: string) => store.getItem('draft:focus') == key
+export let focused = (key: string): boolean =>
+  store.getItem('draft:focus') == key
 
 // Wire a text field to its draft: give useDraft a stable key and the
 // field's ref, and every keystroke is saved, the next mount reseeds the
@@ -69,7 +70,7 @@ export let useDraft = (
   key: string,
   ref: { current: Field | null },
   seed?: (v: string) => void,
-) => {
+): { sync: (el: Field) => void; spend: () => void } => {
   useEffect(() => {
     let el = ref.current
     if (!key || !el) return

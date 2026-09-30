@@ -35,33 +35,35 @@ HTML allows: inside a link, the same href is not a second link, and another
 keeps its tag and says `role="link"` and `data-href`, for the application to
 follow (web's nav.tsx listens for it).
 
-| component  | parts                                    | variants                                                                                                                                |
-| ---------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `Dot`      | the pip                                  | shapes `ring` `dashed` `half` `pulse` `check` `cross` `alert`; tones `info` `active` `positive` `negative` `caution` `accent` `special` |
-| `Id`       | an identifier                            | `hover`, `retired`                                                                                                                      |
-| `Stamp`    | a moment, said in words                  |                                                                                                                                         |
-| `Tabs`     | `Tab`, `Badge`                           | `Tab-on`, `Tab-hover`                                                                                                                   |
-| `Menu`     | `Item`, `Rule`                           | `Item-hover`, `Item-danger`                                                                                                             |
-| `Tip`      | a tooltip                                |                                                                                                                                         |
-| `Field`    | a text field                             | `bare`; `lines` makes it a textarea, `caret` shows the caret in a terminal                                                              |
-| `Choices`  | `Item`, `Text`, `Note`                   | `Item-on` (the picked one), `Item-hover`                                                                                                |
-| `Button`   | a press                                  | `add`, `danger`, `quiet`                                                                                                                |
-| `Chip`     | a name, as a token                       | hues `0` to `5`, `ghost`                                                                                                                |
-| `Value`    | a stored value                           | shapes `text` `num` `bool` `id` `time` `json` `nil`; `editable`, `editing`, `refused`                                                   |
-| `Pairs`    | `Key`, `Value`                           |                                                                                                                                         |
-| `Tile`     | `Id`, `Kind`, `Title`, `Note`, `Count`   |                                                                                                                                         |
-| `Rows`     | `Item`, `More`                           | `nested`                                                                                                                                |
-| `Section`  | `Title`, `Count`, `Note`, `Sub`          | `Note-refused`                                                                                                                          |
-| `Timeline` | `Item`, `When`, `Who`, `What`            |                                                                                                                                         |
-| `Crumbs`   | `Item`                                   | `Item-here`                                                                                                                             |
-| `Edit`     | a value where it can be changed          | the class @yaks/render's editors put on each control; `Edit` itself is the read-only value; `fit`                                       |
-| `Table`    | `Head`, `Body`, `Row`, `Heading`, `Cell` | `Row-picks`, `Row-on`, `Row-hover`; `Heading-sorts`, `Heading-asc`, `Heading-desc`, `Heading-num`; `Cell-num`, `Cell-key`, `Cell-prose` |
-| `Pager`    | `Span`, `Step`                           | a `Step` is `disabled` with nowhere to go                                                                                               |
-| `Panes`    | `Pane`, `Top`, `Body`                    | `Pane-nav`, `Pane-main`, `Pane-aside`, `Pane-on`                                                                                        |
-| `Head`     | `Title`, `Id`, `Kind`, `Sub`, `Facts`    |                                                                                                                                         |
-| `Notes`    | `Item`, `Text`, `Who`, `When`            | `Item-done`                                                                                                                             |
-| `Say`      | one line to send something on            |                                                                                                                                         |
-| `Index`    | `Group`, `Head`, `Item`                  | `Head-on`, `Item-on`, `Item-hover`                                                                                                      |
+| component  | parts                                                                  | variants                                                                                                                                |
+| ---------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `Dot`      | the pip                                                                | shapes `ring` `dashed` `half` `pulse` `check` `cross` `alert`; tones `info` `active` `positive` `negative` `caution` `accent` `special` |
+| `Id`       | an identifier                                                          | `hover`, `retired`                                                                                                                      |
+| `Stamp`    | a moment, said in words                                                |                                                                                                                                         |
+| `Tabs`     | `Tab`, `Badge`                                                         | `Tab-on`, `Tab-hover`                                                                                                                   |
+| `Menu`     | `Item`, `Rule`                                                         | `Item-hover`, `Item-danger`                                                                                                             |
+| `Tip`      | a tooltip                                                              |                                                                                                                                         |
+| `Field`    | a text field                                                           | `bare`; `lines` makes it a textarea, `caret` shows the caret in a terminal                                                              |
+| `Choices`  | `Item`, `Text`, `Note`                                                 | `Item-on` (the picked one), `Item-hover`                                                                                                |
+| `Button`   | a press                                                                | `add`, `danger`, `quiet`                                                                                                                |
+| `Chip`     | a name, as a token                                                     | hues `0` to `5`, `ghost`                                                                                                                |
+| `Value`    | a stored value                                                         | shapes `text` `num` `bool` `id` `time` `json` `nil`                                                                                     |
+| `Pairs`    | `Key`, `Value`                                                         |                                                                                                                                         |
+| `Tile`     | `Id`, `Kind`, `Title`, `Note`, `Count`                                 |                                                                                                                                         |
+| `Rows`     | `Item`, `More`                                                         | `nested`                                                                                                                                |
+| `Section`  | `Title`, `Count`, `Note`, `Sub`                                        | `Note-refused`                                                                                                                          |
+| `Timeline` | `Item`, `When`, `Who`, `What`                                          |                                                                                                                                         |
+| `Crumbs`   | `Item`                                                                 | `Item-here`                                                                                                                             |
+| `Edit`     | a value typed over where it stands, or a control that reads as a value | `fit`                                                                                                                                   |
+| `Prop`     | `Val`, `Hand`, `Pop`, `Tab`, `Row`, `Find`, `Query`                    | `live`; `Val-nil`, `Hand-empty`, `Pop-list`, `Tab-on`, `Row-none`                                                                       |
+| `Overlay`  | a position floating above the page                                     |                                                                                                                                         |
+| `Table`    | `Head`, `Body`, `Row`, `Heading`, `Cell`                               | `Row-picks`, `Row-on`, `Row-hover`; `Heading-sorts`, `Heading-asc`, `Heading-desc`, `Heading-num`; `Cell-num`, `Cell-key`, `Cell-prose` |
+| `Pager`    | `Span`, `Step`                                                         | a `Step` is `disabled` with nowhere to go                                                                                               |
+| `Panes`    | `Pane`, `Top`, `Body`                                                  | `Pane-nav`, `Pane-main`, `Pane-aside`, `Pane-on`                                                                                        |
+| `Head`     | `Title`, `Id`, `Kind`, `Sub`, `Facts`                                  | `Sub-refused`                                                                                                                           |
+| `Notes`    | `Item`, `Text`, `Who`, `When`                                          | `Item-done`                                                                                                                             |
+| `Say`      | one line to send something on                                          |                                                                                                                                         |
+| `Index`    | `Group`, `Head`, `Item`                                                | `Head-on`, `Item-on`, `Item-hover`                                                                                                      |
 
 A variant for a pseudo-class (`hover`) lets the style guide show that state.
 

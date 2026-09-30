@@ -1,7 +1,6 @@
 import { test } from '@yaks/testing'
-import '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { place } from './overlay.tsx'
+import { place } from './overlay.ts'
 
 // Overlay placement is viewport geometry. The tiny element double keeps that
 // seam fast and leaves component lifecycle to the browser probe.

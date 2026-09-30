@@ -2,17 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
-import {
-  type Action,
-  type Child,
-  define,
-  edit,
-  editors,
-  extend,
-  type H,
-  properties,
-  resolve,
-} from './mod.ts'
+import { define, edit, extend, type H, resolve } from './mod.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -121,80 +111,39 @@ test('applications can parse and validate without changing the write path', () =
   )
 })
 
-type Node = {
-  tag: string
-  props: Record<string, unknown> | null
-  children: Child<Node>[]
-}
-let h: H<Node> = (tag, props, ...children) => ({ tag, props, children })
+type Node = { tag: string; props: Record<string, unknown> | null }
+let h: H<Node> = (tag, props) => ({ tag, props })
 
-test('seven Edit families select by declaration with no stored value', () => {
-  let family = editors(vocab)
+// An editor per declared type, each drawing a tag named for it.
+let family = ['string', 'number', 'enum', 'ref', 'time', 'boolean', 'json']
+  .map((type) => ({
+    view: 'Edit',
+    match: parse(`.prop.type=${type}${type == 'number' ? ',priority' : ''}`),
+    render: <N>(_b: unknown, h: H<N>) => h(type, null),
+  }))
+
+test('a property selects its editor by declaration, with no stored value', () => {
   let registry = define(family)
   let empty = { entity: { eid: 'empty' } }
   let cases = [
-    ['title', 'input', 'text'],
-    ['count', 'input', 'number'],
-    ['state', 'select', undefined],
-    ['owner', 'input', 'text'],
-    ['at', 'input', 'text'],
-    ['enabled', 'input', 'checkbox'],
-    ['data', 'textarea', undefined],
+    ['title', 'string'],
+    ['count', 'number'],
+    ['priority', 'number'],
+    ['state', 'enum'],
+    ['owner', 'ref'],
+    ['at', 'time'],
+    ['enabled', 'boolean'],
+    ['data', 'json'],
   ]
-  assertEquals(family.length, 7)
-  for (let [i, [prop, tag, type]] of cases.entries()) {
+  for (let [prop, tag] of cases) {
     let ctx = { comp: 'doc', prop }
     let renderer = resolve(registry, empty, 'Form.Edit', vocab, ctx)!
-    assertStrictEquals(renderer, family[i])
-    let node = renderer.render(empty, h, ctx)
-    assertEquals(node.tag, tag)
-    assertEquals(node.props?.type, type)
-    assertEquals(node.props?.['aria-label'], `doc.${prop}`)
-    assertEquals(node.props?.value ?? node.props?.checked, i == 5 ? false : '')
-  }
-  assertStrictEquals(
-    resolve(registry, empty, 'Edit', vocab, { comp: 'doc', prop: 'priority' }),
-    family[1],
-  )
-})
-
-test('enum controls use the vocabulary and offer inert patch actions', () => {
-  let registry = define(editors(vocab))
-  let ctx = { comp: 'doc', prop: 'state' }
-  let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
-    .render(bundle, h, ctx)
-  let choices = node.children.flat() as Node[]
-  assertEquals(choices.map((n) => n.props?.value), ['', 'open', 'done'])
-  assertEquals((node.props?.onChange as Action).run(bundle, 'done'), {
-    doc: { state: 'done' },
-  })
-  assertEquals(bundle.doc, { title: 'Before', count: 2 })
-})
-
-test('empty and case-distinct enum members keep their declared values', () => {
-  let vocab = loadVocab({
-    $defs: {
-      doc: {
-        component: true,
-        properties: { state: { type: 'string', enum: ['', '_', 'A', 'a'] } },
-      },
-    },
-  })
-  let registry = define(editors(vocab))
-  let ctx = { comp: 'doc', prop: 'state' }
-  let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
-    .render(bundle, h, ctx)
-  let choices = node.children.flat() as Node[]
-  assertEquals(choices.map((n) => n.props?.value), ['__', '', '_', 'A', 'a'])
-  assertEquals(node.props?.value, '__')
-  let action = node.props?.onChange as Action
-  for (let [input, value] of [['__', null], ['', ''], ['a', 'a'], ['A', 'A']]) {
-    assertEquals(action.run(bundle, input), { doc: { state: value } })
+    assertEquals(renderer.render(empty, h, ctx).tag, tag)
   }
 })
 
 test('property overlays use ordinary specificity and suffix resolution', () => {
-  let registry = define(editors(vocab))
+  let registry = define(family)
   let custom = {
     view: 'Edit',
     match: parse('.prop.type=string, .prop.comp=doc, .prop.prop=title'),
@@ -211,33 +160,6 @@ test('property overlays use ordinary specificity and suffix resolution', () => {
   assertEquals(
     resolve(registry, bundle, 'Edit', vocab, { comp: 'doc', prop: 'count' })!
       .render(bundle, h, { comp: 'doc', prop: 'count' }).tag,
-    'input',
+    'number',
   )
-})
-
-test('Props lays out every declared property and delegates its editor', () => {
-  let registry = define([...editors(vocab), properties(vocab)])
-  let props = resolve(registry, bundle, 'Props', vocab, { comp: 'doc' })!
-  let calls: unknown[] = []
-  let node = props.render(bundle, h, {
-    comp: 'doc',
-    render: (view, ctx) => {
-      calls.push([view, ctx])
-      return h('span', null, ctx?.prop)
-    },
-  })
-  assertEquals(node.tag, 'dl')
-  assertEquals(
-    calls,
-    vocab.props('doc').map((prop) => ['Edit', { comp: 'doc', prop }]),
-  )
-  assertThrows(() => props.render(bundle, h, { comp: 'missing' }))
-  assertThrows(() => props.render(bundle, h, { comp: 'doc' }), Error, 'host')
-  for (let prop of ['updated', 'rank']) {
-    let ctx = { comp: 'doc', prop }
-    let node = resolve(registry, bundle, 'Edit', vocab, ctx)!
-      .render(bundle, h, ctx)
-    assertEquals(node.tag, 'span')
-    assertEquals(node.props?.onChange, undefined)
-  }
 })

@@ -20,9 +20,11 @@ import * as id from './Id.ts'
 import * as index from './Index.ts'
 import * as menu from './Menu.ts'
 import * as notes from './Notes.ts'
+import * as overlay from './Overlay.ts'
 import * as pager from './Pager.ts'
 import * as pairs from './Pairs.ts'
 import * as panes from './Panes.ts'
+import * as prop from './Prop.ts'
 import * as rows from './Rows.ts'
 import * as say from './Say.ts'
 import * as section from './Section.ts'
@@ -58,6 +60,8 @@ export let kit: Record<string, Kit> = {
   Timeline: timeline,
   Crumbs: crumbs,
   Edit: edit,
+  Prop: prop,
+  Overlay: overlay,
   Table: table,
   Pager: pager,
   Panes: panes,

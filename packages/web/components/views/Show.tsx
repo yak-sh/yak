@@ -25,10 +25,9 @@ import { Stamp } from '../Stamp.tsx'
 import { Comments, viaName } from '../Comments.tsx'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
-import { Edit } from '../Edit.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { title, TitleEdit } from '../title.tsx'
-import { ColumnEdit, Prop } from '../editors.tsx'
+import { ColumnEdit, Edit, Prop } from '@yaks/editors'
 import { Relate } from './Relate.tsx'
 import { up } from './Dependency.tsx'
 import { Id } from './Inline.tsx'
@@ -145,7 +144,7 @@ export let Pip = ({ e }: { e: Ent }) => {
   )
 }
 
-// The task fields, all through the registry door (editors.tsx Prop):
+// The task fields, all through the registry door (@yaks/editors Prop):
 // the faces stay the board grammar's chips — Prio badge, domain chip,
 // project link — while the registry supplies each type's editor from the
 // vocabulary (number box, domain well, project search).

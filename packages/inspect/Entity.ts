@@ -7,7 +7,7 @@
  * is the same entity without its history, its name a link to its page.
  *
  * Everything the vocabulary lets a client write is written in place: each
- * value typed over (./cell.ts), a component removed by its ×, one the entity
+ * value changed where it stands (./value.ts), a component removed by its ×, one the entity
  * lacks added from the head, and the entity deleted by two presses.
  *
  * @module
@@ -16,7 +16,7 @@
 import { h, type JSX } from 'preact'
 import { Button, Head, Rows, Value } from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'
-import { Cell, writable } from './cell.ts'
+import { Cell } from './value.ts'
 import { Edges } from './Edges.ts'
 import { Grid } from './grid.ts'
 import { chip } from './links.ts'
@@ -30,7 +30,7 @@ import {
   useNamed,
   useNotes,
 } from './notes.ts'
-import { comp, comps, named } from './read.ts'
+import { comp, comps, named, writable } from './read.ts'
 import { key, me, put, refusal, write } from './state.ts'
 
 // The components a client may add that the entity lacks.
@@ -109,7 +109,7 @@ export let EntityHead = ({ e, io, notes, linked }: Top): JSX.Element => {
         h(Head.Kind, {}, io.kind(e)),
         h(NoteButton, { io, eid, heading: '', subject }),
       ),
-      said ? h(Head.Sub, {}, h(Value, { mod: 'refused' }, said)) : null,
+      said ? h(Head.Sub, { mod: 'refused' }, said) : null,
       h(
         Head.Facts,
         {},

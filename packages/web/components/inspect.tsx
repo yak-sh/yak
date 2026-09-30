@@ -40,7 +40,7 @@ import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { type Change, type Ent, idOf, uuid } from '../types.ts'
 import { edgeEid } from '../edge.ts'
 import { entityPath } from '../url.ts'
-import { editOptions, vocab } from './registry.ts'
+import { vocab } from './registry.ts'
 import { ago } from './Stamp.tsx'
 import { navigate } from './nav.tsx'
 import { front } from './fields.tsx'
@@ -206,12 +206,6 @@ let host: Host = {
   front,
   useAnswers,
   edits: browser,
-  // A reference is written as typed, and the write resolves it.
-  editing: {
-    ...editOptions,
-    parse: (input, prop, b) =>
-      prop.category == 'ref' ? input : editOptions.parse?.(input, prop, b),
-  },
   apply: async (bundles) => mutate(...changes(await resolved(bundles))),
   get: held,
   link: inspectPath,

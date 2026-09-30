@@ -2,7 +2,7 @@ import { type Ent } from '../../types.ts'
 import { block } from '@yaks/ui'
 import { Stamp } from '../Stamp.tsx'
 import { TitleEdit } from '../title.tsx'
-import { Prop } from '../editors.tsx'
+import { Prop } from '@yaks/editors'
 import { Entity } from '../Entity.tsx'
 import { Id } from './Inline.tsx'
 

@@ -63,7 +63,7 @@ export let paged = (
 }
 
 /** Whether a press landed on something of its own inside the row: a link, a
- * control, a value that can be typed over. */
+ * control, a value that can be changed (@yaks/editors). */
 let own = (target: unknown): boolean => {
   for (
     let n = target as {
@@ -77,7 +77,7 @@ let own = (target: unknown): boolean => {
     if (['a', 'button', 'input', 'select', 'textarea'].includes(n.localName!)) {
       return true
     }
-    if (/\bValue-editable\b/.test(n.className ?? '')) return true
+    if (/\b(Prop-live|Edit)\b/.test(n.className ?? '')) return true
   }
   return false
 }

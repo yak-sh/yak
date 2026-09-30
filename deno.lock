@@ -1839,6 +1839,13 @@
           "jsr:@std/assert@1"
         ]
       },
+      "packages/editors": {
+        "dependencies": [
+          "jsr:@std/assert@1",
+          "npm:linkedom@~0.18.12",
+          "npm:preact@^10.29.1"
+        ]
+      },
       "packages/effects": {
         "dependencies": [
           "jsr:@std/assert@1"

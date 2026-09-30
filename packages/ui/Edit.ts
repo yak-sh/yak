@@ -1,12 +1,10 @@
 /**
- * A property's value where it can be changed: the controls @yaks/render's
- * `editors` build (an `input`, a `select`, a `textarea`, each of class
- * `Edit`), and the plain `span.Edit` they show where a value cannot be
- * written. The controls are built by the renderer through whatever
- * hyperscript its host gives it, so this part is the class they share and its
- * look; `Edit` is that span, for a caller drawing a value the same way.
- * `Edit-fit` is a control as wide as what it holds, for one sitting in a line
- * beside other things rather than on a row of its own.
+ * A value where it can be changed. `Edit` is the value itself, a span typed
+ * over where it stands (@yaks/editors `InlineEdit` makes it
+ * `contenteditable`, so it stays the same element in the same place). The
+ * same class on an `input` or a `select` makes a control that reads as the
+ * value it holds; `Edit-fit` is one as wide as what it holds, for a control
+ * sitting in a line beside other things rather than on a row of its own.
  *
  * @module
  */
@@ -16,7 +14,7 @@ import { h } from 'preact'
 import { el, type Part } from './el.ts'
 import type { Colors, Specimen } from './theme.ts'
 
-/** A value shown where an editor would be. */
+/** A value, typed over where it stands. */
 export let Edit: Part = el('span', 'Edit')
 
 /** A value is ink; a terminal paints a control's value as its text. */
@@ -24,28 +22,25 @@ export let sheet = (c: Colors): Sheet => ({
   Edit: { fg: c.text },
 })
 
-// The controls as a renderer builds them, each wearing the class.
 let Input = el('input', 'Edit')
 let Select = el('select', 'Edit')
-let Area = el('textarea', 'Edit')
 
-/** Each control, and the read-only value. */
+/** The value at rest and typed over, and each control. */
 export let specimens = (): Specimen[] => [
-  ['Edit, text', h(Input, { type: 'text', value: 'Inbox' })],
-  ['Edit, number', h(Input, { type: 'number', value: 2 })],
+  ['Edit', h(Edit, {}, 'Inspect the data model')],
   [
-    'Edit, enum',
+    'Edit, typed over',
+    h(Edit, { contentEditable: 'plaintext-only' }, 'Inspect the data'),
+  ],
+  ['Edit, text', h(Input, { type: 'text', value: 'Inbox' })],
+  [
+    'Edit, a choice',
     h(
       Select,
       { value: 'open' },
       ['—', 'open', 'done'].map((v) => h('option', { value: v }, v)),
     ),
   ],
-  [
-    'Edit, bool',
-    h(Input, { type: 'checkbox', checked: true }),
-  ],
-  ['Edit, json', h(Area, { value: '{"x": 1}' })],
   [
     'Edit-fit',
     h(
@@ -54,5 +49,4 @@ export let specimens = (): Specimen[] => [
       h('option', { value: '' }, '+ component'),
     ),
   ],
-  ['Edit, read-only', h(Edit, {}, '2026-09-29T19:12:21Z')],
 ]

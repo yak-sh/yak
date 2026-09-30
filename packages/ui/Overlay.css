@@ -1,0 +1,8 @@
+/* Fixed to the viewport at the rect of what it springs from, placed by
+   script, above every card, so a picker clears what it springs from. */
+.Overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 200;
+}

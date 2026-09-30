@@ -622,22 +622,9 @@ html {
 .Icon {
   display: block;
 }
-/* Overlays escape their container by portaling to <body> (overlay.tsx):
-   position:fixed against the VIEWPORT, placed on the trigger's live rect.
-   This dodges two walls at once — CSS anchor() won't resolve inside the
-   canvas plane's transform, and a plain fixed child would take that
-   transform as its containing block. The host is just the positioner; each
-   popover keeps its own box (.Prop_Pop, .Relate_Pop). Above the Search
-   palette's tier so a picker clears the cards it springs from. */
-.Overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 200;
-}
 /* The house tooltip is @yaks/ui's Tip, floated as an Overlay: one portaled
-   node (overlay.tsx delegates [data-tip]), not a ::before per host that the
-   overflow ancestors used to clip. */
+   node (@yaks/editors `tips` delegates [data-tip]), not a ::before per host
+   that the overflow ancestors used to clip. */
 
 /* The comment rail — quiet, left-ruled, under any entity's view. The
    textarea is the rail's last row: borderless until it's spoken to. */
@@ -1310,27 +1297,6 @@ html {
   text-decoration: underline;
   color: var(--text);
 }
-/* A link-faced prop keeps navigation on its face and editing on a quiet
-   handle beside it. */
-.Prop_Hand {
-  white-space: nowrap;
-  font-size: 11px;
-  font-family: inherit;
-  color: var(--dim);
-  cursor: pointer;
-  background: none;
-  border: 0;
-  padding: 0;
-}
-.Prop_Hand:hover {
-  color: var(--text);
-}
-.Prop_Hand-empty {
-  opacity: 0.6;
-}
-.Prop_Hand-empty:hover {
-  opacity: 1;
-}
 /* The picker's handle beside the project link — the link owns the click,
    so the caret owns the picker. */
 .Show_Caret {
@@ -1587,7 +1553,7 @@ html {
   width: min(260px, 100%);
 }
 .Relate_Pop {
-  /* portaled into an .Overlay (overlay.tsx) — box only, no positioning */
+  /* portaled into an .Overlay (@yaks/editors) — box only, no positioning */
   min-width: 240px;
   max-width: 320px;
   display: grid;
@@ -3075,122 +3041,6 @@ a[data-ref]:hover {
   font-size: 11px;
   max-width: 20rem;
   overflow-wrap: anywhere;
-}
-
-/* A component's property list, shared by every Props view. The existing Prop
-   faces and controls sit in its value column with their usual gestures. */
-.Props {
-  margin: 0;
-}
-.Props_Row {
-  display: grid;
-  grid-template-columns: minmax(7em, 1fr) minmax(0, 3fr);
-  gap: var(--gap);
-  align-items: baseline;
-  padding-block: var(--half-gap);
-  border-bottom: 1px solid var(--border);
-}
-.Props_Row > dt {
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-.Props_Row > dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-/* <Prop> — a value that knows how to edit itself (editors.tsx). The
-   value never moves: inline editors take its place at its metrics,
-   popout controls anchor above it. */
-.Prop {
-  position: relative;
-  display: inline-flex;
-  min-width: 0;
-}
-.Prop-live > .Prop_Val {
-  cursor: pointer;
-  border-bottom: 1px dashed transparent;
-}
-.Prop-live > .Prop_Val:hover {
-  border-bottom-color: var(--dim);
-}
-.Prop_Val-nil {
-  color: var(--dim);
-}
-.Prop_Pop {
-  /* portaled into an .Overlay (overlay.tsx) — box only, no positioning */
-  display: flex;
-  gap: 2px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2px;
-  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
-  white-space: nowrap;
-}
-.Prop_Pop-list {
-  flex-direction: column;
-  min-width: 12rem;
-}
-.Prop_Tab {
-  display: inline-flex; /* a status tab seats its dot beside the word */
-  align-items: center;
-  gap: calc(var(--half-gap) / 2);
-  font: inherit;
-  background: none;
-  border: 0;
-  color: var(--muted);
-  padding: 2px var(--half-gap);
-  border-radius: var(--radius);
-  cursor: pointer;
-  min-height: var(--tap);
-}
-.Prop_Tab:hover,
-.Prop_Tab-on {
-  background: var(--soft);
-  color: var(--text);
-}
-.Prop_Row {
-  padding: 2px var(--half-gap);
-  cursor: pointer;
-  border-radius: var(--radius);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.Prop_Row:hover {
-  background: var(--soft);
-}
-.Prop_Row-none {
-  color: var(--dim);
-}
-.Prop_Find {
-  font: inherit;
-  color: var(--text);
-  background: var(--surface);
-  border: 0;
-  border-bottom: 1px solid var(--border);
-  outline: none;
-  padding: 2px var(--half-gap);
-}
-.Prop_Query {
-  display: inline-flex;
-  min-width: min(24rem, 60vw); /* a query is a line, not a word */
-}
-.Prop_Query > .Field {
-  flex: 1;
-}
-/* the number editor: the value's own metrics, a dashed seam saying 'live' */
-.Prop_Num {
-  font: inherit;
-  color: var(--text);
-  background: none;
-  border: 0;
-  outline: none;
-  border-bottom: 1px dashed var(--accent);
-  padding: 0;
-  min-width: 0;
-  width: 10ch;
 }
 
 /* The tray: live sessions and minimized Shelf cards sit in the bar. A live

@@ -8,7 +8,8 @@
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
  *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Crumbs`,
- *   `Edit`, `Table`, `Pager`, `Panes`, `Head`, `Notes`, `Say`, `Index`: the
+ *   `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Panes`, `Head`, `Notes`,
+ *   `Say`, `Index`: the
  *   parts.
  * - `relative`: a moment in words, what a `Stamp` says.
  * - `themes`: every theme by name, `everforest` the first and `rosepine`;
@@ -35,8 +36,10 @@ export { Edit } from './Edit.ts'
 export { Head } from './Head.ts'
 export { Index } from './Index.ts'
 export { Notes } from './Notes.ts'
+export { Overlay } from './Overlay.ts'
 export { Pager } from './Pager.ts'
 export { Panes } from './Panes.ts'
+export { Prop } from './Prop.ts'
 export { Say } from './Say.ts'
 export { type Col, Table, type TableProps } from './Table.ts'
 export { Pairs } from './Pairs.ts'

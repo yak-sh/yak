@@ -22,7 +22,6 @@ All exports come from `@yaks/render`:
 | `resolve`, `applicable` | Select a renderer or list matching view names.        |
 | `actions`               | List actions offered for a bundle.                    |
 | `edit`                  | Create a validated, single-property editing action.   |
-| `editors`, `properties` | Create portable `Edit` and `Props` renderers.         |
 
 The module also exports the contracts `Registration`, `Renderer`, `Registry`,
 `Selection`, `Options`, `H`, `Child`, `Context`, `RenderContext`, `Action`,
@@ -161,53 +160,11 @@ and `Bundle`.
 
 ## Editors
 
-Editors use the same registry as entity views. `editors(vocab, options?)`
-returns seven `Edit` registrations: text (`string`, `url`, `query`), number
-(`number`, `priority`), enum, entity reference (`ref`), timestamp (`time`),
-boolean, and JSON. `properties(vocab)` returns a `Props` renderer that lays out
-all declared properties of one component.
-
-The text backend renders editors read-only. Continuing the example:
-
-```ts ignore
-import { editors, properties } from '@yaks/render'
-
-let editable = define([...editors(vocab), properties(vocab)])
-console.log(render(editable, bundle, 'Props', vocab, { comp: 'doc' }))
-```
-
-For interactive controls, call `@yaks/preact`'s `render` with an `onPatch`
-callback that applies the returned patch, and optionally `onError` to display
-validation failures:
-
-```ts ignore
-import { render as renderPreact } from '@yaks/preact'
-
-let node = renderPreact(editable, bundle, 'Edit', vocab, {
-  comp: 'doc',
-  prop: 'title',
-  onPatch: (patch, entity) => console.log(entity.entity.eid, patch),
-  onError: (error) => console.error(error),
-})
-```
-
-This example logs edits; an application replaces `onPatch` with its write
-operation. Controls carry an `Action` in their `onChange` property. The Preact
-backend converts it to an event handler, calls `run(bundle, input)`, and sends
-the patch to `onPatch`. Validation failures reach `onError` and the control's
-native validation feedback. Native controls may also call `edit()` directly.
-
-Enum choices come from `vocab.prop(comp, prop).values`. References accept entity
-ids; applications can register a more specific query such as
-`.prop.type=ref, .prop.ref=project` to select their own picker. JSON properties
-are declared `{ type: 'string', format: 'json' }` and contain JSON text.
-
-`Props` requires `{ comp }` and a backend that supplies nested rendering. It
-selects each property's `Edit` through the same registry, including added
-registrations. It includes absent and read-only properties. Read-only output
-shows false and zero, and uses `—` for unset values. The text backend always
-requests read-only output; callers can also pass `readOnly: true` to the Preact
-backend.
+Editors use the same registry as entity views, selected by the property they
+edit rather than by the entity: a registration matching `.prop.type=enum` draws
+every enum. [@yaks/editors](../editors/README.md) registers a browser's and a
+terminal's editors this way; an application can register a more specific query,
+such as `.prop.type=ref, .prop.ref=project`, to select its own.
 
 ### Property selection
 
@@ -253,4 +210,4 @@ Deno, Node, browsers, and workers. Depends on `@yaks/query`, `@yaks/match`, and
 ## Verification
 
 From the repository root, `deno task test packages/render` covers matching, view
-selection, actions, property types, parsing, and editors.
+selection, actions, property selection, and parsing.

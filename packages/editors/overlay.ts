@@ -1,12 +1,9 @@
-import { type ComponentChildren, Fragment, h, render } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
-
-// Overlays that must escape their container. Every card lives in the
-// scaled/scrolled canvas plane, and every popover today is a
-// position:absolute child clipped by an overflow ancestor — so tooltips
-// and pickers get cut off. Two escapes are BOTH shut: CSS anchor() won't
-// resolve inside a transformed ancestor (the plane), and position:fixed
-// takes the transformed plane as its containing block, not the viewport.
+// Overlays that must escape their container. A card on web's canvas lives
+// in a scaled and scrolled plane, and a position:absolute popover is
+// clipped by any overflow ancestor, so tooltips and pickers get cut off.
+// Two escapes are BOTH shut: CSS anchor() won't resolve inside a
+// transformed ancestor (the plane), and position:fixed takes the
+// transformed plane as its containing block, not the viewport.
 //
 // The one door out: getBoundingClientRect() already returns POST-transform
 // VIEWPORT coordinates, so a node portaled into document.body and fixed at
@@ -14,6 +11,10 @@ import { useLayoutEffect, useRef } from 'preact/hooks'
 // at 1:1 whatever the zoom, which is the feature (a picker at zoom 0.4
 // stays readable). We portal by hand with preact's own render() into a
 // body-mounted host: no preact/compat, no react shim, ~one screen of code.
+// The host wears @yaks/ui's Overlay, the fixed position.
+
+import { type ComponentChildren, Fragment, h, render } from 'preact'
+import { useLayoutEffect, useRef } from 'preact/hooks'
 
 let MARGIN = 6 // keep this many px off every viewport edge
 let GAP = 4 // between the trigger and the overlay
@@ -25,7 +26,7 @@ export let place = (
   el: HTMLElement,
   rect: DOMRect,
   side: 'above' | 'below',
-) => {
+): void => {
   let w = el.offsetWidth
   let h = el.offsetHeight
   let left = rect.left + rect.width / 2 - w / 2
@@ -48,7 +49,7 @@ export let placeAt = (
   x: number,
   y: number,
   align?: 'right',
-) => {
+): void => {
   let w = el.offsetWidth
   let h = el.offsetHeight
   let left = align == 'right' ? x - w : x
@@ -66,7 +67,7 @@ export let placeAt = (
 export let usePlaceAt = (
   ref: { current: HTMLElement | null },
   at: { x: number; y: number; align?: 'right' } | null,
-) =>
+): void =>
   useLayoutEffect(() => {
     let el = ref.current
     if (!el || !at) return
@@ -87,10 +88,10 @@ export let Overlay = (
   { anchor, side, children }: {
     anchor: { current: HTMLElement | null }
     side: 'above' | 'below'
-    children: ComponentChildren
+    children?: ComponentChildren
   },
-) => {
-  // No real browser (the TUI's fake document has no <body>) → a no-op: the
+): null => {
+  // No real browser (a terminal's document has no <body>) → a no-op: the
   // hooks still run (rules of hooks), but there's nothing to portal into.
   let host = useRef<HTMLDivElement>()
   if (!host.current && globalThis.document?.body) {
@@ -140,7 +141,7 @@ export let Overlay = (
 // document: linger ~0.3s over a [data-tip], show it centered above, clamped;
 // hide instantly on the pointer leaving or any press. The data-tip ATTRIBUTE
 // contract is untouched — callers keep their attributes. Idempotent across
-// hot-swaps via a globalThis latch (App.tsx's import graph re-runs on swap).
+// hot-swaps via a globalThis latch (a page's import graph re-runs on swap).
 export let tips = () => {
   let g = globalThis as { document?: Document; __tips?: boolean }
   if (!g.document?.body || g.__tips) return // real browser only, once

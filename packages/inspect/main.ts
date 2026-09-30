@@ -3,8 +3,9 @@
  * `/inspect`. Its host is the smallest that works: the vocabulary the server
  * serves (@yaks/api `/vocab`), a @yaks/client box connected to that server,
  * the page's own graph for the inspector's state and the index's field
- * (@yaks/filter), and the views, in the three panes (./Frame.ts). Nothing
- * else is on the page.
+ * (@yaks/filter), and the views, in the three panes (./Frame.ts). A value is
+ * changed through @yaks/editors, bound to the same host, its pickers asking
+ * @yaks/api's `/query` for their candidates. Nothing else is on the page.
  *
  * The address is the page shown: a link inside the inspector is followed in
  * place, and back and forward walk what was followed. The keys step through
@@ -18,6 +19,7 @@
 import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { client } from '@yaks/client'
+import { bind } from '@yaks/editors'
 import { filters } from '@yaks/filter'
 import { docs as fieldDocs } from '@yaks/filter/vocab'
 import { Panes } from '@yaks/ui'
@@ -26,6 +28,7 @@ import { inspector } from './door.ts'
 import { frame } from './Frame.ts'
 import { docs as own } from './front.ts'
 import { live } from './live.ts'
+import { editing } from './state.ts'
 import { at, queryPath } from './where.ts'
 import { views } from './views.ts'
 
@@ -59,6 +62,15 @@ let go = (href: string) => {
 addEventListener('popstate', () => where.value = at(location.href) ?? {})
 
 let host = live({ box, front, edits: true })
+
+// The entities a line answers, asked of the server: a picker's candidates.
+let find = async (line: string, limit: number, signal?: AbortSignal) => {
+  let q = encodeURIComponent(`${line}&.limit=${limit}`)
+  let r = await fetch(`/query?q=${q}`, { signal })
+  if (!r.ok) throw new Error(await r.text())
+  return await r.json()
+}
+bind(editing(host, { find, fields }))
 let door = inspector(views, host)
 let Frame = frame(door, {
   Bar: ({ id }) =>

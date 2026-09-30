@@ -4,11 +4,15 @@ import { mutate } from '../../live.ts'
 import { link } from '../../edge.ts'
 import { up } from './Dependency.tsx'
 import { spec, taskChanges } from '../../client.ts'
-import { peek, useDraft } from '../drafts.ts'
 import { block } from '@yaks/ui'
-import { Overlay } from '../overlay.tsx'
-import { pickLine, useHits } from '../hits.ts'
-import * as suggest from '../suggest.ts'
+import {
+  label,
+  Overlay,
+  peek,
+  pickLine,
+  useDraft,
+  useHits,
+} from '@yaks/editors'
 
 let Frame = block('span', 'Relate', {
   Verb: 'button',
@@ -45,7 +49,8 @@ let said = (v: V) => v.out ? v.type : up(v.type)
 export let Relate = ({ e }: { e: Ent }) => {
   // On mount, a verb whose line was left half-typed reopens itself — a
   // new task or edge the last mount never filed resurfaces, caret and all
-  // (drafts.ts). Keyed by (host, verb) so the sentence resumes exact.
+  // (@yaks/editors drafts). Keyed by (host, verb) so the sentence resumes
+  // exact.
   let dk = (v: V) => `relate:${e.eid}:${said(v)}`
   let [verb, setVerb] = useState<V | null>(() =>
     verbs.find((v) => peek(dk(v))) ?? null
@@ -69,12 +74,12 @@ export let Relate = ({ e }: { e: Ent }) => {
     ...e.refs.map((r) => r.child),
     ...e.kids.map((k) => k.eid),
   ])
-  // Candidates come from the server (hits.ts): FTS over every doc plus
+  // Candidates come from the server (@yaks/editors useHits): FTS over every doc plus
   // id-addressing, so a typed id, title word, or dot-filter names an entity
   // even when the cache holds only part of the graph. An unopened verb (no
   // line) searches nothing; already-linked targets and the host drop out.
   let hits = useHits(verb ? pickLine(q) : '')
-    .filter((h) => !taken.has(h.eid))
+    .filter((h) => !taken.has(h.entity.eid))
     .slice(0, 6)
   let fresh = q.trim() ? spec(q).title : ''
 
@@ -111,7 +116,7 @@ export let Relate = ({ e }: { e: Ent }) => {
     }
     if (ev.key == 'Enter') {
       ev.preventDefault()
-      return hits[pick] ? tie(hits[pick].eid) : create()
+      return hits[pick] ? tie(hits[pick].entity.eid) : create()
     }
     let d = ev.key == 'ArrowDown' ? 1 : ev.key == 'ArrowUp' ? -1 : 0
     if (!d) return
@@ -158,12 +163,13 @@ export let Relate = ({ e }: { e: Ent }) => {
             <Pop>
               {hits.map((t, i) => (
                 <Row
-                  key={t.eid}
+                  key={t.entity.eid}
                   mod={i == pick && 'sel'}
                   onMouseEnter={() => setPick(i)}
-                  onMouseDown={(ev: MouseEvent) => grab(ev, () => tie(t.eid))}
+                  onMouseDown={(ev: MouseEvent) =>
+                    grab(ev, () => tie(t.entity.eid))}
                 >
-                  {suggest.label(t)}
+                  {label(t)}
                 </Row>
               ))}
               {fresh && (

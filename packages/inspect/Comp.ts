@@ -17,7 +17,7 @@ import { h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
 import { Head, Value } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'
-import { Cell } from './cell.ts'
+import { Cell } from './value.ts'
 import { type Column, Grid, paged, SIZE } from './grid.ts'
 import { chip, chips } from './links.ts'
 import {

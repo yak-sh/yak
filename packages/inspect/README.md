@@ -39,8 +39,11 @@ this package serves it.
 - **The detail**, on the right: a row pressed in any table opens its entity
   there without leaving the page, so rows can be stepped through one by one (j
   and k, or the arrows). A link inside it moves the page.
-- **Editing**: a value pressed is typed over where it stands, and nothing else
-  on the page moves; Enter or leaving it writes it, Escape puts it back. A
+- **Editing**, through [@yaks/editors](../editors/README.md), the same editors
+  web's page uses: a value pressed is typed over where it stands, and nothing
+  else on the page moves; Enter or leaving it writes it, Escape puts it back. A
+  closed set's choices, and a reference's search of the graph, float beside the
+  value; a flag is its own toggle. A refusal is said under the entity's head. A
   component is added from an entity's head and removed by its ×; an edge is
   added under its table; an entity is deleted by two presses.
 - **Notes**: every heading has a `note` press that opens a one-line field. A
@@ -71,7 +74,8 @@ server-evaluated watch held while its view is mounted, sent as it is written
 `refused`; one asked `once` is kept for as long as the page is open. A write
 goes to the server as it stands (@yaks/sync `submit`), so the graph resolves the
 ids and aliases a person typed. Around it the page (./main.ts) follows links in
-place, and the terminal (./tui.ts) adds its keys.
+place and binds the editors to the same host (`editing`, ./state.ts), their
+pickers asking @yaks/api's `/query`; the terminal (./tui.ts) adds its keys.
 
 | export     | what it is                                                    |
 | ---------- | ------------------------------------------------------------- |
@@ -87,10 +91,10 @@ The page's own graph holds the inspector's state, in components this package
 declares for that graph alone (`front.json`, exported as `./front`, never a
 `./vocab` a host composes; `sync: none`, `durable: connection`):
 
-| component   | on               | what it holds                                                                                        |
-| ----------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `inspector` | `inspect`        | the detail, the pane with the keys, what is typed over, a note open, a delete armed, a refused write |
-| `table`     | each table's key | how its rows run, the page it shows, whether its values are ranked                                   |
+| component   | on               | what it holds                                                                    |
+| ----------- | ---------------- | -------------------------------------------------------------------------------- |
+| `inspector` | `inspect`        | the detail, the pane with the keys, a note open, a delete armed, a refused write |
+| `table`     | each table's key | how its rows run, the page it shows, whether its values are ranked               |
 
 The index's field is the same `inspect` entity's `filter` (@yaks/filter).
 

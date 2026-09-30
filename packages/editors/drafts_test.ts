@@ -1,5 +1,4 @@
 import { test } from '@yaks/testing'
-import '../testing.ts'
 import { assert, assertEquals } from '@std/assert'
 import { drop, focused, peek, save } from './drafts.ts'
 

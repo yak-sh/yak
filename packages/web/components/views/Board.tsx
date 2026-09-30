@@ -15,7 +15,7 @@ import {
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
 import { adopt, fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
-import { peek, useDraft } from '../drafts.ts'
+import { peek, useDraft } from '@yaks/editors'
 import { useBoardTally } from '../subscriptions.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import { block } from '@yaks/ui'

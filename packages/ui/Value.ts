@@ -4,11 +4,6 @@
  * structure, `nil` nothing at all (`null`, `""`), and `text` a string that
  * keeps its newlines. What the value means is the caller's.
  *
- * A value that can be changed where it stands is `editable`, `editing` while
- * it is typed over (the caller makes it `contenteditable`, so it stays the
- * same element in the same place), and `refused` when the change it was
- * given was turned down.
- *
  * @module
  */
 
@@ -32,7 +27,6 @@ export let sheet = (c: Colors): Sheet => ({
   'Value-time': { fg: c.time },
   'Value-json': { fg: c.muted },
   'Value-nil': { fg: c.dim, italic: true },
-  'Value-refused': { fg: c.negative, underline: true },
 })
 
 let samples: Record<string, string> = {
@@ -45,25 +39,6 @@ let samples: Record<string, string> = {
   nil: 'null',
 }
 
-/** Each shape, and a value as it is changed in place. */
-export let specimens = (): Specimen[] => [
-  ...shapes.map((s): Specimen => [
-    `Value-${s}`,
-    h(Value, { mod: s }, samples[s]),
-  ]),
-  ['Value-editable', h(Value, { mod: 'editable' }, 'Inspect the data model')],
-  [
-    'Value-editing',
-    h(Value, {
-      mod: ['editable', 'editing'],
-      contentEditable: 'plaintext-only',
-    }, 'Inspect the data'),
-  ],
-  [
-    'Value-refused',
-    h(Value, {
-      mod: ['editable', 'refused'],
-      title: 'task.status needs one of open, done',
-    }, 'finished'),
-  ],
-]
+/** Each shape. */
+export let specimens = (): Specimen[] =>
+  shapes.map((s): Specimen => [`Value-${s}`, h(Value, { mod: s }, samples[s])])

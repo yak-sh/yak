@@ -1,6 +1,6 @@
 /**
  * A tooltip: the words a pointer resting on something reveals. Showing it is
- * the caller's; web's overlay.tsx, which listens for `[data-tip]`, floats
+ * the caller's; @yaks/editors `tips`, which listens for `[data-tip]`, floats
  * one of these.
  *
  * @module

@@ -13,10 +13,10 @@ import {
 } from './drag.ts'
 import { Entity } from './Entity.tsx'
 import { TabFace } from './Card.tsx'
-import { place } from './overlay.tsx'
+import { place } from '@yaks/editors'
 
 // The Peek: what a clicked link opens on desktop — a temporary card in a
-// popover just above the pointer, clamped to the viewport (overlay.tsx
+// popover just above the pointer, clamped to the viewport (@yaks/editors
 // place). Reading AND clicking are free; the head moves the temporary card
 // around the viewport and the corner sizes it. View tabs remain native drag
 // sources: dropping one on the canvas pins that view. Esc, q, or a click
@@ -192,7 +192,7 @@ export let Peek = () => {
   useLayoutEffect(() => {
     if (!stack.length) return
     let away = (ev: PointerEvent) => {
-      // Popout editors portal into a body-mounted .Overlay (overlay.tsx),
+      // Popout editors portal into a body-mounted .Overlay (@yaks/editors),
       // so containment can't see them — pressing one is USING the stack,
       // and dismissing here would unmount the control before its click.
       if (

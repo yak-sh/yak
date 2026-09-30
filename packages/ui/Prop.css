@@ -1,0 +1,104 @@
+/* A value that knows how to be changed. The value never moves: an inline
+   editor takes its place at its metrics, and a popout anchors beside it. */
+.Prop {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+/* The face's seam is a border, so the value typed over in its place wears
+   the same one and the line keeps its height. */
+.Prop-live > :is(.Prop_Val, .Edit) {
+  border-bottom: 1px dashed transparent;
+}
+.Prop-live > .Prop_Val {
+  cursor: pointer;
+}
+.Prop-live > .Prop_Val:hover {
+  border-bottom-color: var(--dim);
+}
+.Prop_Val-nil {
+  color: var(--dim);
+}
+/* A link-faced value keeps navigation on its face and editing on a quiet
+   handle beside it. */
+.Prop_Hand {
+  white-space: nowrap;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--dim);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.Prop_Hand:hover {
+  color: var(--text);
+}
+.Prop_Hand-empty {
+  opacity: 0.6;
+}
+.Prop_Hand-empty:hover {
+  opacity: 1;
+}
+.Prop_Pop {
+  /* floated in an Overlay: a box only, no positioning */
+  display: flex;
+  gap: 2px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2px;
+  box-shadow: 0 8px 30px color-mix(in srgb, #000 45%, transparent);
+  white-space: nowrap;
+}
+.Prop_Pop-list {
+  flex-direction: column;
+  min-width: 12rem;
+}
+.Prop_Tab {
+  display: inline-flex; /* a tab seats a dot beside its word */
+  align-items: center;
+  gap: calc(var(--half-gap) / 2);
+  font: inherit;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  padding: 2px var(--half-gap);
+  border-radius: var(--radius);
+  cursor: pointer;
+  min-height: var(--tap);
+}
+.Prop_Tab:hover,
+.Prop_Tab-on {
+  background: var(--soft);
+  color: var(--text);
+}
+.Prop_Row {
+  padding: 2px var(--half-gap);
+  cursor: pointer;
+  border-radius: var(--radius);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Prop_Row:hover {
+  background: var(--soft);
+}
+.Prop_Row-none {
+  color: var(--dim);
+}
+.Prop_Find {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+  padding: 2px var(--half-gap);
+}
+.Prop_Query {
+  display: inline-flex;
+  min-width: min(24rem, 60vw); /* a query is a line, not a word */
+}
+.Prop_Query > .Field {
+  flex: 1;
+}

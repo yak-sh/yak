@@ -2,14 +2,15 @@
  * The inspector's own state, as it lives in the page's own graph
  * (./front.json): read through `io.state`, changed by the patches built here
  * and written through `io.set`. One entity, `inspect`, holds the page's
- * (`inspector`: the detail, the pane with the keys, what is typed over, where
- * a write was refused); each table holds its own (`table`: its order and
- * page).
+ * (`inspector`: the detail, the pane with the keys, a note open, a delete
+ * armed, where a write was refused); each table holds its own (`table`: its
+ * order and page).
  *
  * @module
  */
 
-import type { Bundle, Io } from './host.ts'
+import type { Host as Editing } from '@yaks/editors'
+import type { Bundle, Host, Io } from './host.ts'
 import { comp } from './read.ts'
 
 /** The entity the page's state is on. */
@@ -19,7 +20,6 @@ export let INSPECT = 'inspect'
 export type Inspector = {
   detail?: string | null
   pane?: 'index' | 'page' | 'detail' | null
-  edit?: string | null
   note?: string | null
   armed?: string | null
   said?: string | null
@@ -84,3 +84,24 @@ export let write = (
           at,
         })),
     )
+
+/** The editors' host (@yaks/editors) over the inspector's: a value changed
+ * where it stands goes out through `host.apply`, and, like any write here, a
+ * refusal is said in the head of the entity it was about until a write
+ * lands. `find` is the server search a picker's candidates come from, and
+ * `fields` the page's query fields. */
+export let editing = (
+  host: Host,
+  more: Pick<Editing, 'find' | 'fields'>,
+): Editing => {
+  let set = (change: Bundle[]) => void host.front.mutate(change)
+  return {
+    ...host,
+    ...more,
+    apply: async (change) => {
+      await host.apply(change)
+      set(put({ said: null, at: null }))
+    },
+    problem: (said, at) => set(put({ said, at })),
+  }
+}

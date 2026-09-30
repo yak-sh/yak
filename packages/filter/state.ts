@@ -82,7 +82,7 @@ export let moved = (r: Row, d: number): Partial<Row> => ({
  */
 export let taken = (
   r: Row,
-  i = Math.max(r.pick, 0),
+  i: number = Math.max(r.pick, 0),
 ): { text: string; caret: number } => {
   let word = r.cands[i]?.text ?? r.text.slice(r.from, r.to)
   return {

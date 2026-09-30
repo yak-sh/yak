@@ -1,6 +1,8 @@
 // The app's one registry and its Ent-to-bundle boundary. Selection, tab
 // applicability, overlay precedence and action union belong to @yaks/render;
-// the Preact host owns mounting. Native column controls join the curated list.
+// the Preact host owns mounting. The property editors (@yaks/editors) join
+// the curated list, and this page is their host: they read its store, write
+// through its changes, and are drawn through this registry.
 import {
   actions,
   applicable as offered,
@@ -8,23 +10,36 @@ import {
   type Context,
   type Contributor as Contribution,
   define as registryOf,
-  edit,
   type EditOptions,
-  editors,
   extend as overlay,
   type Patch,
-  properties,
   type Renderer as PortableRenderer,
   resolve as select,
 } from '@yaks/render'
 import { type ComponentRenderer, type Events, render } from '@yaks/preact'
-import type { JSX } from 'preact'
+import { bind, editorViews } from '@yaks/editors'
+import { h, type JSX } from 'preact'
+import { short } from '@yaks/id'
 import { parseProp, propAt } from '../props.ts'
-import { cache, ent, findEid, mutate, problem } from '../live.ts'
-import { editorViews } from './editors.tsx'
+import {
+  cache,
+  ent,
+  findEid,
+  mode,
+  mutate,
+  problem,
+  row,
+  want,
+} from '../live.ts'
 import { and, present } from '@yaks/query'
-import { type Ent, statusOf, vocab } from '../types.ts'
+import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
+import { mdInline } from '../md.ts'
+import { Dot } from './Dot.tsx'
+import { ago } from './Stamp.tsx'
+import { fields } from './fields.tsx'
+import { rows } from './hits.ts'
+import { wells } from './wells.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
   file?: { ext: string; mime: string; text: (e: Ent) => string }
@@ -36,19 +51,15 @@ export type Action = { label: string; run: () => void; mod?: string }
 export type Contributor = Contribution<Action, Ent>
 
 export { vocab }
-// The fleet adds its input language (P2, relative times and human ids); the
-// package still owns column patches and vocabulary validation.
-export let editOptions: EditOptions = {
+// The fleet adds its input language (P2, relative times and human ids);
+// @yaks/render still owns column patches and vocabulary validation.
+let editOptions: EditOptions = {
   parse: (input, column) => {
     let p = propAt(column.comp, column.prop)
     return p ? parseProp(p, input, { resolve: findEid }) : input
   },
 }
-let columns = (): Entry[] => [
-  ...editorViews(),
-  ...editors(vocab, editOptions),
-  properties(vocab),
-]
+let columns = (): Entry[] => editorViews<Ent>()
 export let registry = registryOf<Entry, Action, Ent>(columns(), {
   vocab,
   archetypes: archetypeTables,
@@ -113,39 +124,14 @@ export let resolve = (e: Ent, view?: string): Renderer => {
 }
 
 /** Column renderers share the entity registry and its qualified view walk. */
-export let columnView = (e: Ent, comp: string, col: string, view = 'Edit') =>
+let columnView = (e: Ent, comp: string, col: string, view = 'Edit') =>
   vocab.prop(comp, col)
     ? select(registry, bundle(e), view, vocab, { comp, prop: col })
     : undefined
 
-/** A validated column patch; the browser decides when to apply it. */
-export let editColumn = (
-  e: Ent,
-  ctx: { comp: string; prop: string },
-  value: unknown,
-) => edit(vocab, ctx, editOptions).run(bundle(e), value)
-
 /** Apply a host patch through the fleet's optimistic write path. */
-export let applyPatch = (eid: string, patch: Patch) =>
+let applyPatch = (eid: string, patch: Patch) =>
   mutate(...Object.entries(patch).map(([name, comp]) => ({ eid, name, comp })))
-
-export let writeColumn = (
-  eid: string,
-  comp: string,
-  col: string,
-  value: unknown,
-) => applyPatch(eid, editColumn(ent(eid), { comp, prop: col }, value))
-
-/** The app reads derived values through its bundle projection too. */
-export let columnValue = (e: Ent, comp: string, col: string): unknown => {
-  let row = bundle(e)[comp]
-  return row && typeof row == 'object' ? row[col] : undefined
-}
-
-export let canEdit = (comp: string, col: string): boolean => {
-  let info = vocab.comp(comp)
-  return !!info?.wire && info.writable.includes(col)
-}
 
 /** All app views share the same host callbacks, including portable controls. */
 export let renderView = (e: Ent, view?: string, ctx: Context & Events = {}) => {
@@ -158,3 +144,40 @@ export let renderView = (e: Ent, view?: string, ctx: Context & Events = {}) => {
   }
   return render(registry, bundle(e), view, vocab, context, { e, ...context })
 }
+
+// What an entity is called: its title, or the id a person reads; one this
+// page has never held, its short handle.
+let named = (eid: string) => {
+  if (!row(eid).value) return short(eid)
+  let e = ent(eid)
+  return e.doc?.title || idOf(e)
+}
+
+// The editors' host is this page.
+bind({
+  vocab,
+  get: (eid) => row(eid).value ? bundle(ent(eid)) : undefined,
+  apply: (change) =>
+    change.forEach(({ entity, ...patch }) =>
+      applyPatch(entity.eid, patch as Patch)
+    ),
+  problem: (message) => void (problem.value = message),
+  name: named,
+  id: (b) =>
+    idOf({ eid: b.entity.eid, kind: kindOf(b), num: Number(b.entity.num) }),
+  kind: (b) => kindOf(b),
+  when: (at) => ago(at),
+  find: rows,
+  editing: editOptions,
+  renderView: (eid, view, ctx) => renderView(ent(eid), view, ctx),
+  columnView: (eid, comp, prop, view) => columnView(ent(eid), comp, prop, view),
+  values: (well) => wells[well]?.() ?? [],
+  get fields() {
+    return fields
+  },
+  markup: mdInline,
+  want,
+  mode: (m) => void (mode.value = m),
+  wears: (comp, prop, v) =>
+    comp == 'task' && prop == 'status' ? h(Dot, { status: v }) : null,
+})

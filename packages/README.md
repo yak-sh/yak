@@ -154,6 +154,11 @@ grouped approximately by function, **not** by dependency order.
   `Field` and `Choices`, its state the `filter` component in the page's own
   graph, its actions patches to it, completing through @yaks/query `complete`
   from a vocabulary and a data source the host supplies.
+- **[@yaks/editors](./editors)** — a property's value, changed where it stands:
+  typed over in place so nothing moves, or picked from a popout, each editor
+  selected by the property's type through @yaks/render and drawn with @yaks/ui.
+  A domain component with no store: it reads and writes through the host a page
+  binds, web's and the inspector's alike.
 - **[@yaks/inspect](./inspect)** — the inspector: a graph's data model, its
   values and how they flow, as pages and listings of @yaks/ui parts on a page of
   its own (`/inspect`, served beside @yaks/api over a @yaks/client box) and in

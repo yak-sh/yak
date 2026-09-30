@@ -4,9 +4,11 @@
 // never on a bare call's vnode tree.
 import { test } from '@yaks/testing'
 import { tick } from '../../testing.ts'
-import { h } from 'preact'
-import { assertEquals, assertExists } from '@std/assert'
+import { h, render } from 'preact'
+import { parseHTML } from 'linkedom'
+import { assert, assertEquals, assertExists } from '@std/assert'
 import {
+  acked,
   cache,
   config,
   deps,
@@ -19,6 +21,8 @@ import { parse } from '@yaks/query'
 import { extend, resolve } from '../registry.ts'
 import { mount } from '../mount.ts'
 import { Entity } from '../Entity.tsx'
+import { Pip } from './Show.tsx'
+import type { Change } from '../../types.ts'
 
 test('task acceptance is a distinct Markdown section', () => {
   cache.value = {
@@ -650,5 +654,59 @@ test('Runs and Tasks ask only their typed memberships, not every reverse ref', (
     free()
     cache.value = {}
     useRoute(restore)
+  }
+})
+
+test('the status pip picks a status through the editors and writes marks', async () => {
+  let { document } = parseHTML('<html><body><main></main></body></html>')
+  let globals = {
+    document,
+    innerWidth: 1000,
+    innerHeight: 800,
+    ResizeObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+  }
+  let prior = Object.keys(globals).map((k) =>
+    [k, Object.getOwnPropertyDescriptor(globalThis, k)] as const
+  )
+  for (let [k, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, k, { value, configurable: true })
+  }
+  let sent: Change[] = []
+  let restore = useRoute((frame) => {
+    let write = frame as { apply?: Change[]; id: string }
+    if (write.apply) sent.push(...write.apply), acked(write.id)
+  })
+  let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  cache.value = {
+    [eid]: {
+      entity: { eid, num: 1 },
+      doc: { eid, title: 'A task', body: '' },
+      task: { eid },
+    },
+  }
+  let root = document.querySelector('main')!
+  try {
+    render(h(Pip, { e: ent(eid) }), root)
+    root.querySelector<HTMLElement>('.Show_Pip')!.click()
+    await tick()
+    let tabs = [...document.querySelectorAll<HTMLElement>('.Prop_Tab')]
+    assertEquals(
+      tabs.length,
+      document.querySelectorAll('.Prop_Tab .Dot').length,
+    )
+    tabs.find((t) => t.textContent == 'done')!.click()
+    assert(sent.some((c) => c.name == 'completed'))
+    assert(!sent.some((c) => c.name == 'task' && c.comp && 'status' in c.comp))
+  } finally {
+    render(null, root)
+    useRoute(restore)
+    cache.value = {}
+    for (let [k, d] of prior) {
+      if (d) Object.defineProperty(globalThis, k, d)
+      else delete (globalThis as Record<string, unknown>)[k]
+    }
   }
 })

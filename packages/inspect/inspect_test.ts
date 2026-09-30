@@ -1,4 +1,4 @@
-import { test, tick } from '@yaks/testing'
+import { test, tick, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
 import { EDGE_URI, edgeKeywords } from '@yaks/edge'
@@ -6,10 +6,12 @@ import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
 import { type ComponentChild, h, render } from 'preact'
+import { bind } from '@yaks/editors'
 import {
   type Answer,
   type Asks,
   type Bundle,
+  editing,
   frame,
   type Host,
   inspector,
@@ -67,7 +69,8 @@ let TASK: Bundle = {
 }
 
 // A host that answers each line from `answers` and keeps what was asked,
-// written and picked, over a page graph of the inspector's own.
+// written and picked, over a page graph of the inspector's own; the editors
+// are bound to it while it lives.
 type Answers =
   | Record<string, Partial<Answer>>
   | ((line: string) => Partial<Answer> | undefined)
@@ -99,7 +102,7 @@ let host = (answers: Answers = {}, edits = true) => {
         return Promise.reject(new Error("no entity 'T-404'"))
       }
     },
-    get: () => undefined,
+    get: (eid) => ({ t1: T1, t2: T2 } as Record<string, Bundle>)[eid],
     link: (eid) => `/${eid}`,
     find: (q) => `/inspect?q=${q}`,
     pick: (eid) =>
@@ -113,18 +116,39 @@ let host = (answers: Answers = {}, edits = true) => {
     when: (at) => at,
   }
   let door = inspector(views, double)
-  return { asked, applied, front, ...door, door }
+  let was = bind(editing(double, { find: () => Promise.resolve([T2]) }))
+  return {
+    asked,
+    applied,
+    front,
+    ...door,
+    door,
+    [Symbol.dispose]: () => void bind(was),
+  }
 }
 
-// A page mounted in a document: its root, and a way to fire an event.
+// A page mounted in a document: its root, and a way to fire an event. It has
+// a body and a viewport, for what floats above it.
 let mount = (node: ComponentChild) => {
-  let { document, window } = parseHTML('<main></main>')
+  let { document, window } = parseHTML(
+    '<html><body><main></main></body></html>',
+  )
   let root = document.querySelector('main')!
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
+  let globals: Record<string, unknown> = {
+    document,
+    innerWidth: 1000,
+    innerHeight: 800,
+    ResizeObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+  }
+  let prior = Object.keys(globals).map((k) =>
+    [k, Object.getOwnPropertyDescriptor(globalThis, k)] as const
+  )
+  for (let [k, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, k, { value, configurable: true })
+  }
   render(node, root)
   let fire = async (el: Element, type: string, key?: string) => {
     let ev = new window.Event(type, { bubbles: true, cancelable: true })
@@ -137,47 +161,63 @@ let mount = (node: ComponentChild) => {
   let text = (s: string) => root.querySelector(s)?.textContent ?? ''
   let free = () => {
     render(null, root)
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
+    for (let [k, d] of prior) {
+      if (d) Object.defineProperty(globalThis, k, d)
+      else delete (globalThis as Record<string, unknown>)[k]
+    }
   }
   return { root, fire, $, text, [Symbol.dispose]: free }
 }
 
+// The value on the page that reads `text`.
+let value = (p: ReturnType<typeof mount>, text: string) =>
+  [...p.root.querySelectorAll<HTMLElement>('.Prop_Val')]
+    .find((v) => v.textContent?.includes(text))
+
 // A value typed over where it stands: pressed, typed, then Enter.
-let type = async (p: ReturnType<typeof mount>, label: string, to: string) => {
-  await p.fire(p.$(`[aria-label="${label}"]`), 'click')
-  let v = p.$(`[aria-label="${label}"]`)
-  assert(v.className.includes('Value-editing'))
-  v.textContent = to
-  await p.fire(v, 'keydown', 'Enter')
+let type = async (p: ReturnType<typeof mount>, was: string, to: string) => {
+  await p.fire(value(p, was)!, 'click')
+  let edit = await until(() =>
+    p.root.querySelector<HTMLElement>('.Prop .Edit[contenteditable]')
+  )
+  assertEquals(edit.textContent, was)
+  edit.textContent = to
+  await p.fire(edit, 'keydown', 'Enter')
 }
 
 test('an entity page shows each component and writes a value typed over in place', async () => {
-  let t = host()
+  using t = host()
   using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
-  assertEquals(p.text('[aria-label="doc.title"]'), 'Fix the map')
+  assert(value(p, 'Fix the map'))
   assert(p.text('[data-section="task"]').includes('Work to be done.'))
   // What the server owns is shown, never offered.
   assert(p.text('[data-section="task"]').includes('yesterday'))
-  assertEquals(p.root.querySelector('[aria-label="task.seen"]'), null)
+  assertEquals(value(p, 'yesterday'), undefined)
   // A reference reads as what it names, linked.
   assertEquals(p.text(`a[href="/${P1}"]`), `N-${P1}`)
-  await type(p, 'doc.title', 'Fix the whole map')
+  await type(p, 'Fix the map', 'Fix the whole map')
   assertEquals(t.applied.at(-1), [{
     entity: { eid: 't1' },
     doc: { title: 'Fix the whole map' },
   }])
-  assert(!p.$('[aria-label="doc.title"]').className.includes('Value-editing'))
-  // A value the graph refuses stays marked, saying why.
-  await type(p, 'task.owner', 'T-404')
+  // A closed set's choices float beside the value.
+  await p.fire(value(p, 'open')!, 'click')
+  let done = [...p.root.ownerDocument!.querySelectorAll<HTMLElement>(
+    '.Overlay .Prop_Tab',
+  )].find((b) => b.textContent == 'done')!
+  await p.fire(done, 'click')
+  assertEquals(t.applied.at(-1), [{
+    entity: { eid: 't1' },
+    task: { status: 'done' },
+  }])
+  // A write the graph refuses is said under the entity's head.
+  await type(p, 'Fix the map', 'T-404')
   await tick()
-  let owner = p.$('[aria-label="task.owner"]')
-  assert(owner.className.includes('Value-refused'))
-  assertEquals(owner.getAttribute('title'), "no entity 'T-404'")
+  assertEquals(p.text('.Head_Sub-refused'), "no entity 'T-404'")
 })
 
 test('a note under a heading is a comment on the entity that is an open task', async () => {
-  let t = host({
+  using t = host({
     '.comment&.comment.target=t1&.limit=100&*': {
       rows: [{
         entity: { eid: 'c1' },
@@ -218,7 +258,7 @@ test('an edge is added by its relation and far end, and its × removes it', asyn
     edge: { from: 't1', to: 't2' },
     requires: {},
   }
-  let t = host({ '.refs=t1&.limit=200': { rows: [edge] } })
+  using t = host({ '.refs=t1&.limit=200': { rows: [edge] } })
   using p = mount(h(t.Door, { e: T1, view: 'Inspect.Page' }))
   assertEquals(p.text('[data-section="Edges"] a[href="/t2"]'), 'N-t2')
   await p.fire(p.$('[aria-label="remove this requires edge"]'), 'click')
@@ -245,7 +285,7 @@ test("a component's entities run by a pressed heading, a page at a time", async 
     entity: { eid: `t${i}` },
     task: { status: 'open' },
   }))
-  let t = host((line) =>
+  using t = host((line) =>
     line.endsWith('&.limit=50')
       ? { rows: page }
       : line == '.task&.count'
@@ -272,7 +312,7 @@ test("a component's entities run by a pressed heading, a page at a time", async 
 })
 
 test('a query shows its rows by the components they share; a row pressed opens beside it', async () => {
-  let t = host({
+  using t = host({
     '.task&.limit=50&*': { rows: [T1, T2] },
     '.task&.count': { count: 2 },
     'entity.eid=t2&*': { rows: [T2] },
@@ -302,7 +342,7 @@ test('a query shows its rows by the components they share; a row pressed opens b
 })
 
 test('a query that counts shows the count', () => {
-  let t = host({ '.task&.count': { count: 12403 } })
+  using t = host({ '.task&.count': { count: 12403 } })
   let Page = frame(t.door, {
     Bar: () => null,
     Scroll: ({ children }) => h('div', {}, children),
@@ -312,7 +352,7 @@ test('a query that counts shows the count', () => {
 })
 
 test('a terminal paints a page as values, with nothing to type in', () => {
-  let t = host({}, false)
+  using t = host({}, false)
   let painted = print(h(t.Door, { e: T1, view: 'Inspect.Page' }), 100)
   for (let word of ['Fix the map', 'status', 'open', 'Edges', 'History']) {
     assert(painted.includes(word), word)

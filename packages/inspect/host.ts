@@ -19,7 +19,7 @@
  */
 
 import type { ComponentChildren, FunctionComponent } from 'preact'
-import type { Bundle, Context, EditOptions, Registration } from '@yaks/render'
+import type { Bundle, Context, Registration } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
 
 export type { Bundle }
@@ -93,8 +93,6 @@ export type Host = {
   /** whether its controls take input: a browser's do; a terminal paints
    * them, and a value there is read, not typed over */
   edits: boolean
-  /** how an edit's typed input is read (@yaks/render `edit`) */
-  editing?: EditOptions
 }
 
 /** A view's doors to the world outside it. */
