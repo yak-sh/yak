@@ -1,6 +1,7 @@
 /* A row of tabs: chips that read as controls, gapless (a tab's padding is
    the spacing), the one showing lit. A badge says what waits behind a tab
-   without opening it. */
+   without opening it: raised beside the face, a gap from it, never over
+   it, so the tab is as wide as both. */
 .Tabs {
   display: flex;
   align-items: center;
@@ -16,9 +17,10 @@
   cursor: pointer;
   min-width: var(--tap);
   min-height: var(--tap);
-  display: grid;
-  place-items: center; /* the face stays centred as the floor grows */
-  position: relative; /* the badge hangs off the corner */
+  display: flex;
+  align-items: center; /* the face stays centred as the floor grows */
+  justify-content: center;
+  gap: 3px;
 }
 .Tabs_Tab:hover,
 .Tabs_Tab-hover {
@@ -29,11 +31,11 @@
   background: var(--soft);
   border-color: var(--border2);
 }
-/* Out of flow, so the face stays centred whether or not there is a count. */
+/* Raised like a superscript; the shift is paint only, so the line keeps
+   its height. */
 .Tabs_Badge {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: relative;
+  top: -0.5em;
   min-width: 1.1em;
   padding: 0 0.25em;
   border-radius: 1em;
@@ -43,5 +45,4 @@
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   text-align: center;
-  pointer-events: none; /* the whole tab stays one target */
 }

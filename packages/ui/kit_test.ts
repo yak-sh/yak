@@ -7,6 +7,7 @@ import { everforest } from './everforest.ts'
 import { Guide } from './guide.ts'
 import { sheet, stylesheet, themes } from './kit.ts'
 import { Menu } from './Menu.ts'
+import { Tabs } from './Tabs.ts'
 
 // deno-lint-ignore no-control-regex -- the painter's colours, to read the words
 let plain = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
@@ -65,6 +66,12 @@ test('a part paints in a terminal in the theme: shape a glyph, tone a colour', (
     '────────',
     'delete',
   ])
+})
+
+test("a tab's badge stands beside its face, never over it", () => {
+  let { Tab, Badge } = Tabs
+  let tab = h(Tabs, {}, h(Tab, {}, 'Mail', h(Badge, {}, '12')))
+  assertEquals(plain(print(tab, 20, sheet(everforest))), 'Mail 12')
 })
 
 test('the style guide paints in a terminal', () => {

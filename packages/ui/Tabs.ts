@@ -21,11 +21,12 @@ export let Tabs: Part & Record<'Tab' | 'Badge', Part> = block('div', 'Tabs', {
 /** What it is, in a line. */
 export let description = 'A row of tabs, one of them on.'
 
-/** A tab is its face, a space between two where a browser pads them; the lit
- * one is raised. */
+/** A tab is its face, a space between two where a browser pads them, and
+ * one between its face and its badge where a browser's gap is; the lit one
+ * is raised. */
 export let sheet = (c: Colors): Sheet => ({
   Tabs: { spaced: true },
-  Tabs_Tab: { fg: c.dim },
+  Tabs_Tab: { fg: c.dim, spaced: true },
   'Tabs_Tab-hover': { fg: c.muted },
   'Tabs_Tab-on': { fg: c.text, bg: c.card },
   Tabs_Badge: { fg: c.bg, bg: c.accent },
@@ -42,7 +43,7 @@ export let specimens = (): Specimen[] => [
       {},
       h(Tab, { type: 'button', mod: 'on' }, 'Board'),
       h(Tab, { type: 'button', mod: 'hover' }, 'List'),
-      h(Tab, { type: 'button' }, 'Inbox ', h(Badge, {}, '3')),
+      h(Tab, { type: 'button' }, 'Inbox', h(Badge, {}, '3')),
     ),
   ],
 ]
