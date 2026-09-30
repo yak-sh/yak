@@ -215,17 +215,24 @@ let busy = new Set([
   'rate_limit_exceeded',
 ])
 
+// A spent allowance also answers 429, but it is the provider's no: the Codex
+// backend's plan window and the API's billing quota stay spent for hours, so
+// asking again in seconds meets the same limit.
+let spent = new Set(['usage_limit_reached', 'insufficient_quota'])
+
 // Final provider failures and malformed events are not network failures.
 // A stall is a network failure: a connection that was established and then went
 // silent told us nothing about this request, so the next attempt starts as
 // cleanly as it would after a dropped connection
 // (T-37332 — two stalls ended a session that had retries left).
 let transient = (error: ResponseError) =>
-  error.kind == 'transport' || error.kind == 'disconnected' ||
-  error.kind == 'stalled' ||
-  error.kind == 'no_stream' || error.status == 429 ||
-  (error.status != null && error.status >= 500 && error.status < 600) ||
-  (error.code != null && busy.has(error.code))
+  !(error.code != null && spent.has(error.code)) && (
+    error.kind == 'transport' || error.kind == 'disconnected' ||
+    error.kind == 'stalled' ||
+    error.kind == 'no_stream' || error.status == 429 ||
+    (error.status != null && error.status >= 500 && error.status < 600) ||
+    (error.code != null && busy.has(error.code))
+  )
 
 let retryAfter = (error: ResponseError) => {
   let value = error.limits?.['retry-after']

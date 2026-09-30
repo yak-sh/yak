@@ -716,26 +716,110 @@ test('stopping during model backoff starts no further attempt', async () => {
   assertEquals(calls, 1)
 })
 
-test('a permanent model refusal is not retried', async () => {
-  let g = world(), calls = 0
+// A failing model, counting its calls and the backoff it was made to wait.
+let failing = (error: () => ModelError) => {
+  let seen = { calls: 0, pauses: [] as number[] }
   let model: Model = () => {
-    calls++
-    return Promise.reject(new ModelError('http_400', 'invalid request'))
+    seen.calls++
+    return Promise.reject(error())
   }
-  assertEquals(
+  let pause = (ms: number) => {
+    seen.pauses.push(ms)
+  }
+  return { model, pause, seen }
+}
+
+// The ask and the error line a failed turn leaves: its attempt state, and the
+// error's code and prose.
+let outcome = async (g: Graph) => {
+  let [ask, error] = (await transcript(g, ids.s)).slice(-2)
+  return [
+    (ask.attempt as Comp | undefined)?.state,
+    (error.error as Comp).code,
+    textOf(error),
+  ]
+}
+
+test('a provider’s refusal is final and keeps its own code, streamed or not', async () => {
+  for (
+    let [code, said] of [
+      ['http_400', 'invalid request'],
+      ['usage_limit_reached', 'The usage limit has been reached'],
+    ]
+  ) {
+    for (let streaming of [false, true]) {
+      let g = world()
+      let { model, pause, seen } = failing(() => new ModelError(code, said))
+      let deps = { model, pause, tools: [], streaming, mint }
+      assertEquals(await rest(g, ids.s, deps), 'failed')
+      assertEquals(seen.calls, 1)
+      assertEquals(await kinds(g, ids.s), ['input', 'ask', 'error'])
+      assertEquals(await outcome(g), ['completed', code, said])
+    }
+  }
+})
+
+test('an overloaded provider is retried with backoff, then left interrupted', async () => {
+  for (let audio of [false, true]) {
+    let g = world()
+    if (audio) {
+      await g.apply([{
+        entity: { eid: ids.m },
+        model: { modalities: ['audio'] },
+      }])
+    }
+    let { model, pause, seen } = failing(() =>
+      new ModelError('server_is_overloaded', 'overloaded', { after: 0 })
+    )
+    assertEquals(
+      await rest(g, ids.s, { model, pause, tools: [], mint }),
+      'failed',
+    )
+    // Audio is never resent: the provider may have made paid media.
+    assertEquals(
+      seen,
+      audio ? { calls: 1, pauses: [] } : { calls: 3, pauses: [1000, 4000] },
+    )
+    assertEquals((await outcome(g)).slice(0, 2), ['interrupted', 'interrupted'])
+  }
+})
+
+test('a summary the provider keeps failing ends the transcript, never loops', async () => {
+  for (
+    let error of [
+      () => new ModelError('http_429', 'Rate limit exceeded', { after: 0 }),
+      () => new ModelError('usage_limit_reached', 'The usage limit is reached'),
+    ]
+  ) {
+    let g = world()
     await rest(g, ids.s, {
-      model,
+      model: scripted([says('r1', 'hi')]).model,
       tools: [],
-      streaming: true,
+    })
+    await appendEntry(g, ids.s, 'Remember the blue bridge. '.repeat(4))
+    // A summarizer that would answer on its tenth call, if it got one.
+    let { model, pause, seen } = failing(error)
+    let summarizer: Model = (req) =>
+      seen.calls == 9 ? Promise.resolve(says('sum', 'Blue.')) : model(req)
+    let deps = {
+      model: scripted([says('r2', 'ok')], false).model,
+      pause,
+      tools: [],
       mint,
-    }),
-    'failed',
-  )
-  assertEquals(calls, 1)
-  assertEquals(
-    ((await transcript(g, ids.s)).at(-1)!.content as Comp).body,
-    'Response interrupted: ModelError: invalid request',
-  )
+      contextTokens: 20,
+      compactModel: { model: summarizer, name: 'fake-1' },
+    }
+    assertEquals(await rest(g, ids.s, deps), 'failed')
+    let transient = error().retry
+    // Three runner steps, each asking three times when the failure is
+    // transient and once when it is the provider's no.
+    assertEquals(seen.calls, transient ? 9 : 3)
+    assertEquals(
+      (await kinds(g, ids.s)).slice(-4),
+      ['input', 'error', 'error', 'error'],
+    )
+    assertEquals((await outcome(g))[1], error().code)
+  }
 })
 
 test('two tool calls in one reply are both answered before the next ask', async () => {

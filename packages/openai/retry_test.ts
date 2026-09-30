@@ -177,6 +177,41 @@ test('an overloaded backend recovers with no error, or exhausts into exactly one
   }
 })
 
+test('a spent usage allowance is the provider’s no: one ask, its own code', async () => {
+  for (
+    let error of [
+      {
+        type: 'usage_limit_reached',
+        message: 'The usage limit has been reached',
+      },
+      {
+        code: 'insufficient_quota',
+        message: 'You exceeded your current quota',
+      },
+    ]
+  ) {
+    let calls = 0
+    let model = responses({
+      credential: credentials.get,
+      pause: () => Promise.reject(new Error('must not retry')),
+      fetch: () => {
+        calls++
+        return Promise.resolve(
+          new Response(JSON.stringify({ error }), { status: 429 }),
+        )
+      },
+    })
+    let refused = await assertRejects(
+      () => model({ model: 'm', items: [], tools: [] }),
+      ModelError,
+    )
+    assertEquals(
+      [calls, refused.code, refused.retry],
+      [1, error.type ?? error.code, undefined],
+    )
+  }
+})
+
 test('HTTP auth and validation, malformed SSE, provider failures and hook defects fail fast', async () => {
   for (
     let response of [

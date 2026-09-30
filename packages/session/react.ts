@@ -307,6 +307,15 @@ let askingOf = (entries: Bundle[]): Bundle | undefined => {
     : undefined
 }
 
+// A model failure is the provider's no, final under its own code with the ask
+// completed, unless the provider marked it `retry` (overloaded, rate limited:
+// come back later) or its outcome there is unknown (the connection or the reply
+// was lost, maybe after the work was done). Those leave the ask interrupted.
+let lost =
+  /^(transport|media_response|media_payload|media_storage|http_408|http_5\d\d)$/
+let refusal = (e: unknown): e is ModelError =>
+  e instanceof ModelError && !e.retry && !lost.test(e.code)
+
 let two = (n: number) => String(Math.round(n * 100) / 100)
 
 /** An answer as the line a later turn reads: `plan: forge, 0.82`. */
@@ -826,27 +835,32 @@ export let react = async (
   } catch (e) {
     accepting = false
     await tail
-    const operational = e instanceof ModelError ||
-      (e instanceof Error && e.name == 'AbortError')
-    if (deps.streaming) {
-      let failed = await finish(
-        ask,
-        { entity: ask.entity, attempt: { state: 'interrupted' } },
-        [
-          line(
-            operational
-              ? { [ERROR]: { code: 'interrupted' } }
-              : { [EXCEPTION]: {} },
-            operational ? 'Response interrupted: ' + String(e) : String(e),
+    let refused = refusal(e) ? e : undefined
+    let defect = !(e instanceof ModelError) &&
+      !(e instanceof Error && e.name == 'AbortError')
+    if (defect) deps.report?.(e, session, 'model')
+    let failed = await finish(
+      ask,
+      {
+        entity: ask.entity,
+        attempt: { state: refused ? 'completed' : 'interrupted' },
+      },
+      [
+        refused
+          ? line({ [ERROR]: { code: refused.code } }, refused.message)
+          : defect && deps.streaming
+          ? line({ [EXCEPTION]: {} }, String(e))
+          : line(
+            { [ERROR]: { code: 'interrupted' } },
+            'Response interrupted: ' + String(e),
           ),
-        ],
-      )
-      if (!failed) {
-        for (const active of stream.values()) active.writer.discard()
-        return current()
-      }
-      if (!operational) deps.report?.(e, session, 'model')
-      for (const active of stream.values()) {
+      ],
+    )
+    // Text streamed before the failure stays, unless recovery took the
+    // attempt from this worker.
+    for (const active of stream.values()) {
+      if (!failed) active.writer.discard()
+      else {
         try {
           await active.writer.commit()
         } catch (failure) {
@@ -854,31 +868,8 @@ export let react = async (
           deps.report?.(failure, session, 'stream-checkpoint')
         }
       }
-      return failed
     }
-    if (!operational) deps.report?.(e, session, 'model')
-    let refused = e instanceof ModelError &&
-      ![
-        'interrupted',
-        'transport',
-        'media_response',
-        'media_payload',
-        'media_storage',
-        'http_408',
-      ].includes(e.code) && !/^http_5\d\d$/.test(e.code)
-    let code = e instanceof ModelError ? e.code : 'interrupted'
-    let message = e instanceof ModelError ? e.message : String(e)
-    return await finish(
-      ask,
-      {
-        entity: ask.entity,
-        attempt: { state: refused ? 'completed' : 'interrupted' },
-      },
-      [line(
-        { [ERROR]: { code: refused ? code : 'interrupted' } },
-        refused ? message : 'Response interrupted: ' + String(e),
-      )],
-    ) ?? await current()
+    return failed ?? await current()
   }
   const finalAsk: Bundle = {
     ...ask,
