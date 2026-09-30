@@ -644,6 +644,16 @@ let revealing = (value: unknown, vault: Local): unknown => {
 export let writer = (vocab: Vocab): Actor | null =>
   vocab.comp(PROCESS) ? { by: selfEid(), via: selfEid() } : null
 
+/** The person who works at this machine, as the entity the config's `person`
+ * names (./config.ts), or nobody where it names none: a machine never guesses
+ * who is at its keyboard. What they type at it is written by them. */
+export let person = async (
+  host: Pick<Host, 'config' | 'graph'>,
+): Promise<Eid | undefined> => {
+  let said = host.config.person
+  return said ? (await host.graph.address([said])).get(said) ?? said : undefined
+}
+
 // At most one plugin may name the caller; two would mean the answer depends on
 // import order, which is not an answer. Whoever it is, this PROCESS is the
 // fallback: a request no plugin claimed is this machine's own writing, not

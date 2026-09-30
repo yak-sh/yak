@@ -17,11 +17,11 @@ import type { ListPage } from './agent.ts'
  * what escapes all of them. */
 import { portLink } from '@yaks/sync'
 import { subscriptions } from '@yaks/api'
-import { compose, type Config, type Served } from '@yaks/cli/host'
+import { compose, type Config, person, type Served } from '@yaks/cli/host'
 import { type Local, local } from './local.ts'
 import { hosted } from './store.ts'
 import { diagnostics, uncaught } from './diagnostics.ts'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Eid } from '@yaks/graph'
 uncaught(diagnostics(), self)
 
 /** One backend, on `port`: the graph its `init` names, and every command
@@ -30,6 +30,8 @@ let serve = (port: MessagePort) => {
   let closing = false
   let host: Served | undefined
   let a: Local | undefined
+  // Who types at this keyboard: what the frontend submits is theirs.
+  let typist: Eid | undefined
   let subs: ReturnType<typeof subscriptions> | undefined
   let active = new Set<Promise<unknown>>()
   let fake = false
@@ -131,6 +133,7 @@ let serve = (port: MessagePort) => {
           }
           : {}),
       })
+      typist = await person(served)
       subs = subscriptions(a.h.g, {
         invalidate: (query, applied) =>
           query.startsWith('.session') &&
@@ -194,14 +197,14 @@ let serve = (port: MessagePort) => {
       case 'selectModel':
         return a.selectModel(String(args[0]), String(args[1]))
       case 'start':
-        return a.start(
-          String(args[0]),
-          args[1] as
+        return a.start(String(args[0]), {
+          ...args[1] as
             | { effort?: string; model?: string; persona?: string }
             | undefined,
-        )
+          by: typist,
+        })
       case 'send':
-        return a.send(String(args[0]), String(args[1]))
+        return a.send(String(args[0]), String(args[1]), typist)
       case 'taskEntry':
         return a.taskEntry(String(args[0]), String(args[1]))
       case 'archive':

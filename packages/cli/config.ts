@@ -57,9 +57,10 @@ export type Config = {
   /** the person who works at this machine, as any id the graph resolves (an
    * eid, a human id, a name). What they type here is signed with them: a
    * prompt their harness's transcript marks as typed (@yaks/session
-   * `service`), and a command line run at a terminal that names no session
-   * (./local.ts `signer`). Left out, nothing is signed as a person: a machine
-   * never guesses who is at its keyboard. */
+   * `service`), a line typed into the harness's terminal (@yaks/harness), and
+   * a command line run at a terminal that names no session (./local.ts
+   * `signer`). Left out, nothing is signed as a person: a machine never
+   * guesses who is at its keyboard (./host.ts `person`). */
   person?: string
   /** how long this process's lease on a duty, or its claim on an effect
    * run, stands before another process may take it over, in milliseconds

@@ -236,10 +236,10 @@ let page = (query: string, options: ListPage = {}) =>
   (options.after == null ? '' : `&.after=${options.after}`) + '&*'
 
 // What attributes a write made here: the transcript it is about, and who
-// wrote it where the caller said. The harness runs for whoever is at the
-// keyboard and holds no entity for them, so otherwise the instrument is
-// recorded and the actor is left unset rather than guessed; a model turn
-// attributes itself (@yaks/session react.ts).
+// wrote it where the caller said. The terminal says who is at its keyboard,
+// the config's `person` (./backend_worker.ts); where nobody says, the
+// instrument is recorded and the actor is left unset rather than guessed; a
+// model turn attributes itself (@yaks/session react.ts).
 export let through = (session: Eid, by?: Eid) => ({
   ...by ? { by } : {},
   via: session,

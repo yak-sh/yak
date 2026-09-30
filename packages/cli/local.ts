@@ -43,6 +43,7 @@ import {
   dbOf,
   type Declared,
   facet,
+  person,
   type Role,
   type Served,
   words,
@@ -200,11 +201,8 @@ export let signer = async (
   let actor = await host.who(
     new Request('http://localhost/', { headers: via ? { [VIA]: via } : {} }),
   )
-  let said = !via && typed ? host.config.person : undefined
-  if (said) {
-    let by = (await host.graph.address([said])).get(said) ?? said
-    return { $actor: { ...actor, by } }
-  }
+  let by = !via && typed ? await person(host) : undefined
+  if (by) return { $actor: { ...actor, by } }
   return actor ? { $actor: { ...actor } } : {}
 }
 

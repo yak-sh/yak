@@ -43,6 +43,29 @@ test('worker owns an isolated database; selected entries replicate and commands 
   }
 })
 
+test("what is typed into the worker is written by the config's person", async () => {
+  let dir = await Deno.makeTempDir()
+  let person = crypto.randomUUID()
+  let r = await remote({
+    worker: worker(),
+    config: { ...at(':memory:'), person },
+    cwd: dir,
+    fake: true,
+  })
+  try {
+    let id = await r.agent.start('typed first')
+    await r.agent.send(id, 'typed next')
+    let entries = await r.agent.transcript(id)
+    let by = (said: string) =>
+      (entries.find((b) => (b.content as { body?: string })?.body == said)
+        ?.created as { by?: string } | undefined)?.by
+    assertEquals([by('typed first'), by('typed next')], [person, person])
+  } finally {
+    await r.close()
+    await Deno.remove(dir, { recursive: true })
+  }
+})
+
 test('worker rejects bad paths without creating a fallback database', async () => {
   const { assertRejects } = await import('@std/assert')
   let dir = await Deno.makeTempDir()
