@@ -71,7 +71,7 @@ export let current = (build: Comp, built: Comp): boolean =>
 
 export let ids = (binding: Binding): Eid[] => [
   ...binding.entities.filter((eid): eid is Eid => eid != null),
-  ...(binding.collections ?? []).flatMap((rows) => rows.flatMap(ids)),
+  ...(binding.collections ?? []).flatMap((group) => group.members.flatMap(ids)),
 ]
 
 // A shadow or this builder's own output is history, never a selected input.
@@ -95,12 +95,13 @@ let prune = (
     )
     ? {
       ...binding,
-      collections: binding.collections?.map((members) =>
-        members.flatMap((member) => {
+      collections: binding.collections?.map((group) => ({
+        ...group,
+        members: group.members.flatMap((member) => {
           let kept = prune(member, rows, builder)
           return kept ? [kept] : []
-        })
-      ),
+        }),
+      })),
     }
     : undefined
 

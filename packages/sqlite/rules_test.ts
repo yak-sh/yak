@@ -78,11 +78,19 @@ test('a collection keeps every correlated member under one outer binding', () =>
     shop,
   )
   assertEquals(found.map((row) => [row.entities, row.collections]), [
-    [['p1'], [[{
-      entities: ['r1'],
-      vars: { p: 'p1', r: 'r1', stars: 5 },
-    }]]],
-    [['p2'], [[]]],
+    [['p1'], [{
+      vars: ['r', 'p', 'stars'],
+      entityVars: ['r'],
+      members: [{
+        entities: ['r1'],
+        vars: { p: 'p1', r: 'r1', stars: 5 },
+      }],
+    }]],
+    [['p2'], [{
+      vars: ['r', 'p', 'stars'],
+      entityVars: ['r'],
+      members: [],
+    }]],
   ])
 })
 
@@ -91,11 +99,11 @@ test('a top-level collection has one outer binding, even when empty', () => {
   assertEquals(matched(driver, match('[.review.stars>10]'), shop), [{
     entities: [],
     vars: {},
-    collections: [[]],
+    collections: [{ vars: [], entityVars: [], members: [] }],
   }])
   assertEquals(
     matched(driver, match('[$p .product]'), shop)[0]
-      .collections?.[0].map((row) => row.entities),
+      .collections?.[0].members.map((row) => row.entities),
     [['p1'], ['p2']],
   )
 })
@@ -108,9 +116,9 @@ test('nested collections correlate to the member above them', () => {
     shop,
   )
   assertEquals(
-    outer.collections?.[0].map((row) => [
+    outer.collections?.[0].members.map((row) => [
       row.entities,
-      row.collections?.[0].map((member) => member.entities),
+      row.collections?.[0].members.map((member) => member.entities),
     ]),
     [[['p1'], [['r1']]], [['p2'], []]],
   )
@@ -127,7 +135,7 @@ test('a collection reads unchanged members through a batch overlay', () => {
     matched(driver, m, shop, {}, {
       at: over.at,
       touched: [over.ids.get('p1')!],
-    }, over.with)[0].collections?.[0].map((row) => row.entities),
+    }, over.with)[0].collections?.[0].members.map((row) => row.entities),
     [['r1']],
   )
 })

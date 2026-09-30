@@ -70,7 +70,7 @@ test('a hosted blob-backed binding projects text at every collection level', () 
   let found = s.tx((tx) => tx.bindings([flat, nested], [], reads(flat, vocab)))
   assertEquals(s.read('.doc')[0].doc, { body: 'hosted prose' })
   assertEquals(found[0][0].vars, { d: 'd', description: 'hosted prose' })
-  assertEquals(found[1][0].collections?.[0][0].vars, {
+  assertEquals(found[1][0].collections?.[0].members[0].vars, {
     d: 'd',
     description: 'hosted prose',
   })

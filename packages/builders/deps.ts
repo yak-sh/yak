@@ -46,7 +46,7 @@ export let queried = (query: string, vocab: Vocab): string[] => {
 
 let ids = (binding: Binding): string[] => [
   ...binding.entities.filter((eid): eid is string => eid != null),
-  ...(binding.collections ?? []).flatMap((rows) => rows.flatMap(ids)),
+  ...(binding.collections ?? []).flatMap((group) => group.members.flatMap(ids)),
 ]
 
 export let inputs = (bindings: Binding[]): string[] =>

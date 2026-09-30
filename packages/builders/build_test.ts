@@ -1,5 +1,10 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertNotEquals } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertThrows,
+} from '@std/assert'
 import type { Bundle, Comp, Graph, Tool } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { toolEid } from '@yaks/tools'
@@ -363,9 +368,9 @@ test('shadow builds have distinct ids and cannot feed another builder', async ()
   assertEquals((await rows(g, '.build.builder=downstream')).length, 1)
   let [asked] = await calls(g, run('downstream', ['a']))
   let binding = (comp(asked, 'call')?.args as {
-    binding: { collections: { entities: string[] }[][] }
+    binding: { collections: { members: { entities: string[] }[] }[] }
   }).binding
-  assertEquals(binding.collections[0].map((row) => row.entities[0]), [
+  assertEquals(binding.collections[0].members.map((row) => row.entities[0]), [
     output(primary),
   ])
 })
@@ -517,7 +522,11 @@ test('template substitution reads variables in nested bindings', () => {
     render('$s: $n and $$', {
       entities: ['a'],
       vars: { s: 'a' },
-      collections: [[{ entities: ['n1'], vars: { n: 'note' } }]],
+      collections: [{
+        vars: ['n'],
+        entityVars: ['n'],
+        members: [{ entities: ['n1'], vars: { n: 'note' } }],
+      }],
     }),
     'a: note and $',
   )
@@ -532,9 +541,34 @@ test('a bracket member variable says each member whole', () => {
     JSON.parse(render('$n', {
       entities: ['a'],
       vars: { s: 'a' },
-      collections: [[note('n1', 'same'), note('n2', 'same')]],
+      collections: [{
+        vars: ['n', 'body'],
+        entityVars: ['n'],
+        members: [note('n1', 'same'), note('n2', 'same')],
+      }],
     })),
     [{ n: 'n1', body: 'same' }, { n: 'n2', body: 'same' }],
+  )
+})
+
+test('an empty bracket member variable renders as an empty list', () => {
+  assertEquals(
+    render('$p', {
+      entities: ['a'],
+      vars: { s: 'a' },
+      collections: [{ vars: ['p'], entityVars: ['p'], members: [] }],
+    }),
+    '[]',
+  )
+  assertThrows(
+    () =>
+      render('$missing', {
+        entities: ['a'],
+        vars: { s: 'a' },
+        collections: [{ vars: ['p'], entityVars: ['p'], members: [] }],
+      }),
+    Error,
+    'builder template has no $missing binding',
   )
 })
 

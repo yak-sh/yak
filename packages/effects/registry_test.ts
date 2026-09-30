@@ -307,7 +307,7 @@ test('a pattern over two entities fires once both hold', () => {
 test('a collected pattern carries its members', () => {
   let { fx, seen, apply } = fixture()
   fx.on('$p .post; [$c .comment, comment.post=$p]', (e) => {
-    let members = e.binding?.collections?.[0] ?? []
+    let members = e.binding?.collections?.[0].members ?? []
     seen.push(members.map((m) => m.vars.c).join())
   })
   apply([post('p1'), { entity: { eid: 'c1' }, comment: { post: 'p1' } }])

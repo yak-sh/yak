@@ -24,8 +24,8 @@ let tree = (
     eid == null ? null : [eid, content(vocab)(rows.get(eid)!)]
   ),
   Object.entries(binding.vars).toSorted(([a], [b]) => a.localeCompare(b)),
-  (binding.collections ?? []).map((members) =>
-    members.map((one) => tree(one, rows, vocab))
+  (binding.collections ?? []).map((group) =>
+    group.members.map((one) => tree(one, rows, vocab))
       .toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
   ),
 ]

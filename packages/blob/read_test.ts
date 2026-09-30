@@ -75,9 +75,13 @@ test('doc predicates, paths, projections and bundles resolve the same blob', () 
   assertEquals(found[1], [{
     entities: ['n'],
     vars: { n: 'n', d: 'd' },
-    collections: [[{
-      entities: ['d'],
-      vars: { n: 'n', d: 'd', description: 'resolved prose' },
-    }]],
+    collections: [{
+      vars: ['d', 'description'],
+      entityVars: ['d'],
+      members: [{
+        entities: ['d'],
+        vars: { n: 'n', d: 'd', description: 'resolved prose' },
+      }],
+    }],
   }])
 })

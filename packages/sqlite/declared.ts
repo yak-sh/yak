@@ -233,11 +233,19 @@ export let rules = (store: () => Storage): void => {
     assertEquals(
       found.map((row) => [row.entities, row.collections]).sort(),
       [
-        [['p1'], [[{
-          entities: ['r1'],
-          vars: { p: 'p1', r: 'r1', stars: 5 },
-        }]]],
-        [['p2'], [[]]],
+        [['p1'], [{
+          vars: ['r', 'p', 'stars'],
+          entityVars: ['r'],
+          members: [{
+            entities: ['r1'],
+            vars: { p: 'p1', r: 'r1', stars: 5 },
+          }],
+        }]],
+        [['p2'], [{
+          vars: ['r', 'p', 'stars'],
+          entityVars: ['r'],
+          members: [],
+        }]],
       ],
     )
   })

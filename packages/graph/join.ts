@@ -57,8 +57,16 @@ export type Bind = { path: string[]; name: string }
 export type Binding = {
   entities: (Eid | null)[]
   vars: Record<string, unknown>
-  /** One list per collection in the match, recursively. */
-  collections?: Binding[][]
+  /** One self-described collection per bracket in the match, recursively. */
+  collections?: Collection[]
+}
+
+export type Collection = {
+  /** Every variable declared by the bracket, including shared parent vars. */
+  vars: string[]
+  /** The variables that bind its patterns' entities. */
+  entityVars: string[]
+  members: Binding[]
 }
 
 /** One entity's pattern — everything one `;`-separated section declares. */
@@ -307,7 +315,13 @@ export let collected = (
           vars: { ...parent.vars, ...member.vars },
         }))
         let collections = parent.collections ?? (parent.collections = [])
-        collections.push(found)
+        collections.push({
+          vars: child.vars,
+          entityVars: child.patterns.flatMap((pattern) =>
+            pattern.entity ? [pattern.entity] : []
+          ),
+          members: found,
+        })
         attached.push(...found)
       }
       attach(attached, child.collections)

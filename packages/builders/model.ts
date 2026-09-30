@@ -37,8 +37,13 @@ let values = (binding: Binding): Map<string, unknown[]> => {
       }
       out.set(name, list)
     }
-    for (let members of row.collections ?? []) {
-      for (let child of members) walk(child)
+    for (let group of row.collections ?? []) {
+      if (!group.members.length) {
+        for (let name of group.vars) {
+          if (!(name in row.vars) && !out.has(name)) out.set(name, [])
+        }
+      }
+      for (let child of group.members) walk(child)
     }
   }
   walk(binding)
@@ -52,8 +57,13 @@ let values = (binding: Binding): Map<string, unknown[]> => {
 let members = (binding: Binding): Map<string, Record<string, unknown>[]> => {
   let out = new Map<string, Record<string, unknown>[]>()
   let walk = (row: Binding) => {
-    for (let list of row.collections ?? []) {
-      for (let member of list) {
+    for (let group of row.collections ?? []) {
+      if (!group.members.length) {
+        for (let name of group.entityVars) {
+          if (!(name in row.vars) && !out.has(name)) out.set(name, [])
+        }
+      }
+      for (let member of group.members) {
         let own = Object.fromEntries(
           Object.entries(member.vars).filter(([name]) => !(name in row.vars)),
         )
