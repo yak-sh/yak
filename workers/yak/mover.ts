@@ -49,9 +49,21 @@ export type Rule = {
   live?: 'apps' | 'all'
 }
 
+// The rows the tracker migration moves (D-45640), each written as it stands:
+// a rehearsal of what a batch of them costs every store, which moves nothing.
+// Rehearsal only, and it leaves once the sweep has run (T-59062).
+let unmoved = (row: Bundle) => [{ entity: row.entity }]
+
 /** Every rule a release carries. A rule leaves in the release after the sweep
  * reports every store done with it, with the old words it moved out of. */
-export let RULES: Rule[] = []
+export let RULES: Rule[] = [
+  { mark: 'yak/store/noop-errors/0', find: '.error|.exception', move: unmoved },
+  {
+    mark: 'yak/store/noop-states/0',
+    find: '.execution|.attempt',
+    move: unmoved,
+  },
+]
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so
