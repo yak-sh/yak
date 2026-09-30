@@ -2,24 +2,25 @@
  * The inspector's own state, as it lives in the page's own graph
  * (./front.json): read through `io.state`, changed by the patches built here
  * and written through `io.set`. One entity, `inspect`, holds the page's
- * (`inspector`: the detail, the pane with the keys, a note open, a delete
- * armed, where a write was refused); each table holds its own (`table`: its
- * order and page).
+ * (`inspector`: the pane with the keys, a note open, a delete armed, where a
+ * write was refused); each table holds its own (`table`: its order and
+ * page); and the stack of panes the page shows is a @yaks/ux `Stack` of its
+ * own (`STACK`), each pane an address's (./where.ts).
  *
  * @module
  */
 
-import type { Host as Ux } from '@yaks/ux'
+import { type Host as Ux, stackAt, stacked } from '@yaks/ux'
 import type { Bundle, Host, Io } from './host.ts'
 import { comp } from './read.ts'
+import { HOME, stackOf } from './where.ts'
 
 /** The entity the page's state is on. */
 export let INSPECT = 'inspect'
 
 /** The page's state. */
 export type Inspector = {
-  detail?: string | null
-  pane?: 'index' | 'page' | 'detail' | null
+  pane?: 'index' | 'page' | null
   note?: string | null
   armed?: string | null
   said?: string | null
@@ -38,8 +39,8 @@ export let me = (io: Pick<Io, 'state'>): Inspector =>
  *
  * ```ts
  * import { put } from './state.ts'
- * put({ detail: 'e1' })
- * // [{ entity: { eid: 'inspect' }, inspector: { detail: 'e1' } }]
+ * put({ pane: 'index' })
+ * // [{ entity: { eid: 'inspect' }, inspector: { pane: 'index' } }]
  * ```
  */
 export let put = (patch: Inspector): Bundle[] => [{
@@ -47,8 +48,29 @@ export let put = (patch: Inspector): Bundle[] => [{
   inspector: patch,
 }]
 
-/** The entity beside the page is `eid`. */
-export let picked = (eid: string): Bundle[] => put({ detail: eid })
+/** The eid of the page's stack of panes (@yaks/ux `Stack`). */
+export let STACK: string = stackAt(INSPECT)
+
+/** The stack as the page's graph holds it: the first page, before any. */
+export let stack = (io: Pick<Io, 'state'>): Bundle =>
+  io.state(STACK) ?? { entity: { eid: STACK }, Stack: { panes: [HOME] } }
+
+/**
+ * The stack after `href` is followed: each pane it names stacked on `b`, an
+ * address outside the inspector none.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { panesOf } from '@yaks/ux'
+ * import { follow } from './state.ts'
+ *
+ * let b = { entity: { eid: 's' }, Stack: { panes: ['q='] } }
+ * assertEquals(panesOf(follow(b, '/inspect/T-9')), ['q=', 'T-9'])
+ * assertEquals(panesOf(follow(b, '/T-9')), ['q='])
+ * ```
+ */
+export let follow = (b: Bundle, href: string): Bundle =>
+  (stackOf(href) ?? []).reduce((s, pane) => stacked(s, pane), b)
 
 /** The key of a value, a heading or a table: its parts, spaced. */
 export let key = (...parts: string[]): string => parts.join(' ')

@@ -147,7 +147,7 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/ui](./ui)** — the UI components: display-only parts with semantic
   variants (`Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`,
   `Button`, `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
-  `Crumbs`, `Edit`) built with `el` and `block`, each a Preact component, a CSS
+  `Stack`, `Edit`) built with `el` and `block`, each a Preact component, a CSS
   file and terminal sheet entries, so it paints in a browser and in @yaks/tui
   alike. Themes (Everforest first), `relative` for a moment in words, and the
   style guide at `/ui`.
@@ -162,7 +162,8 @@ grouped approximately by function, **not** by dependency order.
   `Edit` is a property's value changed where it stands: typed over in place so
   nothing moves, or picked from a popout, each control selected by the
   property's type through @yaks/render and drawn with @yaks/ui, under the host a
-  page hands down (web's and the inspector's alike).
+  page hands down (web's and the inspector's alike). `Stack` is panes stacked as
+  a person goes, those under the top one narrowed to strips that return to them.
 - **[@yaks/inspect](./inspect)** — the inspector: a graph's data model, its
   values and how they flow, as pages and listings of @yaks/ui parts on a page of
   its own (`/inspect`, served beside @yaks/api over a @yaks/client box) and in

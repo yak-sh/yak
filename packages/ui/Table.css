@@ -85,7 +85,9 @@
 .Table_Row-hover {
   background: var(--soft);
 }
-.Table_Row-on {
+.Table_Row-picks:focus-visible,
+.Table_Row-focus {
+  outline: none;
   background: var(--card);
   box-shadow: inset 2px 0 var(--accent);
 }

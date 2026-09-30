@@ -2,17 +2,19 @@
  * The inspector's page in a browser, bundled by ./routes.ts and loaded at
  * `/inspect`. Its host is the smallest that works: the vocabulary the server
  * serves (@yaks/api `/vocab`), a @yaks/client box connected to that server,
- * the page's own graph for the inspector's state and the index's field
- * (@yaks/filter) and each value's `Edit` (@yaks/ux), and the views, in the
- * three panes (./Frame.ts). A value is changed through @yaks/ux, handed the
- * same host at the root, its pickers asking @yaks/api's `/query` for their
- * candidates. Nothing else is on the page.
+ * the page's own graph for the inspector's state, the index's field
+ * (@yaks/filter), each value's `Edit` and the stack of pages (@yaks/ux), and
+ * the views, in the index and the stack beside it (./Frame.ts). A value is
+ * changed through @yaks/ux, handed the same host at the root, its pickers
+ * asking @yaks/api's `/query` for their candidates. Nothing else is on the
+ * page.
  *
- * The address is the page shown: a link inside the inspector is followed in
- * place, and back and forward walk what was followed. The keys step through
- * a table's rows: ↓ or j picks the next row of the table a row was last
- * picked in (the first table, before any), ↑ or k the one before, and Enter
- * opens the picked row's own page.
+ * The address is the stack (./where.ts): a link inside the inspector, or a
+ * row pressed, stacks its page in place, and the address follows the stack
+ * as the page's graph holds it, a step of history each, so back, forward
+ * and a shared link restore it. The keys step through a table's rows: ↓ or j
+ * rests on the next row of the table the keys are in (the top page's first
+ * table, before any), ↑ or k the one before, and Enter opens the row.
  *
  * @module
  */
@@ -25,15 +27,15 @@ import { mint } from '@yaks/graph'
 import { filters } from '@yaks/filter'
 import { docs as fieldDocs } from '@yaks/filter/vocab'
 import { Float, Panes } from '@yaks/ui'
-import { Ux } from '@yaks/ux'
+import { panesOf, Ux } from '@yaks/ux'
 import { docs as uxDocs } from '@yaks/ux/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { inspector } from './door.ts'
 import { frame } from './Frame.ts'
 import { docs as own } from './front.ts'
 import { live } from './live.ts'
-import { editing } from './state.ts'
-import { at, queryPath } from './where.ts'
+import { editing, STACK } from './state.ts'
+import { HOME, queryPath, stackOf, stackPath } from './where.ts'
 import { views } from './views.ts'
 
 let { docs, keywords } = await (await fetch('/vocab')).json()
@@ -62,15 +64,21 @@ let typed = desk(front, { by: () => typer })
 // The field's candidates show under it, above the index.
 let fields = filters(front, { vocab, drafts: typed })
 
-let where = signal(at(location.href) ?? {})
-let go = (href: string) => {
-  if (href == location.pathname + location.search) return
-  history.pushState(null, '', href)
-  where.value = at(href) ?? {}
-}
-addEventListener('popstate', () => where.value = at(location.href) ?? {})
-
 let host = live({ box, front, edits: true })
+
+// The stack is the page's graph's; the address says it, a step of history
+// for each change, and a step back or forward puts the one it says back.
+let said = () => stackOf(location.href) ?? [HOME]
+let restore = () =>
+  void front.mutate([{ entity: { eid: STACK }, Stack: { panes: said() } }])
+restore()
+addEventListener('popstate', restore)
+front.watch('.Stack').subscribe((rows) => {
+  let panes = panesOf(rows.find((b) => b.entity.eid == STACK))
+  if (panes.length && panes.join('\n') != said().join('\n')) {
+    history.pushState(null, '', stackPath(panes))
+  }
+})
 
 // The entities a line answers, asked of the server: a picker's candidates.
 let find = async (line: string, limit: number, signal?: AbortSignal) => {
@@ -90,20 +98,20 @@ let Frame = frame(door, {
       onKey: (e: KeyboardEvent) => {
         if (e.key != 'Enter') return
         e.preventDefault()
-        go(queryPath(fields.text(id).trim()))
+        host.go(queryPath(fields.text(id).trim()))
       },
     }),
   Scroll: ({ children }) => h(Panes.Body, {}, children),
 })
 
-// A plain click on a link to another inspector address follows it in place.
+// A plain click on a link to another inspector address stacks it in place.
 document.addEventListener('click', (ev) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   let a = (ev.target as Element | null)?.closest?.('a[href]')
   let href = a?.getAttribute('href') ?? ''
-  if (!href.startsWith('/') || !at(href)) return
+  if (!href.startsWith('/') || !stackOf(href)) return
   ev.preventDefault()
-  go(href)
+  host.go(href)
 })
 
 // Where the keys are the page's: not while something takes what is typed.
@@ -111,13 +119,16 @@ let typing = (el: EventTarget | null) =>
   el instanceof HTMLElement &&
   (el.isContentEditable || /^(input|textarea|select)$/i.test(el.localName))
 
-// The rows the keys step through: the picked row's table's, or the page's
-// first table's.
+// The rows the keys step through: the table of the row they rest on, or the
+// top page's first table.
 let near = (): { rows: HTMLElement[]; on: number } => {
-  let page = document.querySelector('[data-pane=page]')
-  let on = page?.querySelector<HTMLElement>('.Table_Row-on[data-pick]')
+  let top = document.querySelector('.Stack_Pane')
+  let at = document.activeElement
+  let on = at instanceof HTMLElement && top?.contains(at) && at.dataset.pick
+    ? at
+    : undefined
   let table = on?.closest('.Table') ??
-    page?.querySelector('.Table:has(.Table_Row[data-pick])')
+    top?.querySelector('.Table:has(.Table_Row[data-pick])')
   let rows = [
     ...table?.querySelectorAll<HTMLElement>('.Table_Row[data-pick]') ?? [],
   ]
@@ -136,14 +147,11 @@ document.addEventListener('keydown', (ev) => {
     let next = rows[Math.max(0, Math.min(rows.length - 1, on + d))]
     if (!next) return
     ev.preventDefault()
-    host.pick(next.dataset.pick!)
-    next.scrollIntoView({ block: 'nearest' })
+    next.focus()
   } else if (ev.key == 'Enter' && on >= 0) {
     ev.preventDefault()
-    go(host.link(rows[on].dataset.pick!))
+    host.go(host.link(rows[on].dataset.pick!))
   }
 })
 
-let Page = () => h(Frame, { where: where.value })
-
-render(h(Ux, { host: ux }, h(Page, null)), document.body)
+render(h(Ux, { host: ux }, h(Frame, null)), document.body)

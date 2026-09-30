@@ -1,7 +1,7 @@
-/* The window in columns: a narrow nav on the surface, the page on the floor,
-   an aside on the surface beside it, a hairline between each two. Each pane
-   keeps its top where it is and scrolls its body. A phone-width window
-   stacks them, and the page scrolls as one. */
+/* The window in columns: a narrow nav on the surface, the page on the floor
+   beside it (or whatever column follows, a Stack of pages), a hairline
+   between each two. Each pane keeps its top where it is and scrolls its
+   body. A phone-width window stacks them, and the page scrolls as one. */
 .Panes {
   display: flex;
   height: 100dvh;
@@ -13,7 +13,7 @@
   min-width: 0;
   min-height: 0;
 }
-.Panes_Pane + .Panes_Pane {
+.Panes > * + * {
   border-left: 1px solid var(--border);
 }
 .Panes_Pane-nav {
@@ -22,10 +22,6 @@
 }
 .Panes_Pane-main {
   flex: 1 1 0;
-}
-.Panes_Pane-aside {
-  flex: 0 0 min(30rem, 36%);
-  background: var(--surface);
 }
 .Panes_Top {
   padding: var(--half-gap) var(--gap);
@@ -42,7 +38,7 @@
     display: block;
     height: auto;
   }
-  .Panes_Pane + .Panes_Pane {
+  .Panes > * + * {
     border-left: 0;
     border-top: 1px solid var(--border);
   }

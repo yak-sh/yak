@@ -67,7 +67,7 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
         {},
         "The graph's data model: every package and component (the index), " +
           'the sets of components entities are made of, and the relations ' +
-          'between them. Press a row to see it beside the page.',
+          'between them. Press a row to open it over this page.',
       ),
       h(
         Head.Facts,

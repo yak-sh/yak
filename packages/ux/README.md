@@ -61,25 +61,55 @@ h(Edit.Control, { e, comp: 'task', prop: 'status', anchor, onChange })
 | `views`, `editorViews`             | the controls as registrations; `TimeVal`, `UrlVal` are faces                                                |
 | `pickLine`, `useHits`, `label`     | a picker's candidates, asked of the graph                                                                   |
 | `canEdit`, `formatProp`, `reading` | what a value is, pure                                                                                       |
+| `Stack`, `StackProps`              | panes stacked as a person goes, a strip for each under the top one                                          |
+| `stackAt`, `panesOf`, `stacked`    | a stack's eid and bundles, pure; `cut`, `LIMIT` too                                                         |
+
+## Stack
+
+Panes stacked as a person goes. Each one gone to is stacked on top; each one
+under it narrows to a strip at its left that says what it is, and a press on a
+strip returns to that pane, closing those above it. It holds six panes (`LIMIT`,
+the top one and five strips: five spines cost what a narrow nav does, and leave
+the top pane most of a laptop's window and of a 120-column terminal); past that
+the oldest leave, and a browser's history still has them. Its look is @yaks/ui's
+`Stack`: in a browser a strip is a spine its words run down, and in a terminal a
+framed column three wide.
+
+It is controlled by the entity carrying `Stack{panes}`, the panes bottom first,
+each the key its owner draws it by, and a strip pressed emits that bundle cut
+back to it (`cut`). Going somewhere is the owner's to notice (a link followed, a
+row pressed), and `stacked` is the bundle it writes. What a pane shows on top
+and what its strip says are the owner's, and so is where the bundle goes: the
+inspector writes it to the page's graph and says it in the address, so back,
+forward and a shared link restore the stack.
+
+```ts ignore
+import { Stack, stackAt, stacked } from '@yaks/ux'
+
+let e = front.ent(stackAt('inspect'))
+h(Stack, { e, onChange: (b) => front.mutate([b]), Pane, Strip })
+front.mutate([stacked(e, 'T-9')]) // a link followed
+```
 
 ## State and events
 
 | component | on                                | what it holds                                          |
 | --------- | --------------------------------- | ------------------------------------------------------ |
 | `Edit`    | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker |
+| `Stack`   | `stackAt(owner)`                  | `panes`, bottom first                                  |
 | `Refused` | the entity whose value it changes | an event: `said`, why what was typed could not be read |
 
-Both are `sync: none`: nothing leaves the page. `Edit` is `durable: connection`,
-gone with the page and kept across every remount before that; closing it removes
-it. What is typed over a value is not its state but the person's draft, in the
-value's own place (`place(eid, comp, prop)`), kept by the host's `drafts`: every
-view of the value, and every interface the host syncs drafts to, types on from
-it, and a value whose draft says something else shows it, open, wherever it is
-drawn. Leaving a value typed over emits it and spends the draft, Escape puts the
-value back and spends it, and being taken off the page is neither: the draft
-waits for the remount. `Refused` is `durable: "0s"`, which is how a vocabulary
-marks an event: a graph applies it and carries it back in the applied change,
-and never stores it (@yaks/vocab).
+Each is `sync: none`: nothing leaves the page. `Edit` and `Stack` are
+`durable: connection`, gone with the page and kept across every remount before
+that; closing an `Edit` removes it. What is typed over a value is not its state
+but the person's draft, in the value's own place (`place(eid, comp, prop)`),
+kept by the host's `drafts`: every view of the value, and every interface the
+host syncs drafts to, types on from it, and a value whose draft says something
+else shows it, open, wherever it is drawn. Leaving a value typed over emits it
+and spends the draft, Escape puts the value back and spends it, and being taken
+off the page is neither: the draft waits for the remount. `Refused` is
+`durable: "0s"`, which is how a vocabulary marks an event: a graph applies it
+and carries it back in the applied change, and never stores it (@yaks/vocab).
 
 ## The host
 
@@ -110,12 +140,13 @@ without it a popout paints in the flow, as a terminal wants.
 
 | file         | owns                                                          |
 | ------------ | ------------------------------------------------------------- |
-| `vocab.json` | the `Edit` and `Refused` components                           |
+| `vocab.json` | the `Edit`, `Stack` and `Refused` components                  |
 | `state.ts`   | the bundles: an `Edit`'s eid, its patches, what it emits      |
 | `live.ts`    | `useEdit`: an `Edit`'s state and its value's draft, read live |
 | `emit.ts`    | typed or picked input, read as its type, sent as a bundle     |
 | `host.ts`    | `Host`, `Ux`                                                  |
 | `Edit.ts`    | `Edit`, its controls and faces, `views`                       |
 | `Text.ts`    | `Edit.Text`                                                   |
+| `Stack.ts`   | `Stack`, its eid and bundles                                  |
 | `hits.ts`    | a picker's line and its debounced search                      |
 | `read.ts`    | what a property is, off the vocabulary                        |

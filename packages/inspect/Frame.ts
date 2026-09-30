@@ -1,28 +1,36 @@
 /**
- * The inspector's own page, in three panes (@yaks/ui `Panes`): on the left
- * the index (./Index.ts) under the field that narrows it; in the middle the
- * page for what the address names (a component, a property, a package, any
- * entity, a query, or the first page); and beside it the entity last picked
- * from a row (`inspector.detail`, ./state.ts), with a link to its own page.
+ * The inspector's own page (@yaks/ui `Panes`): on the left the index
+ * (./Index.ts) under the field that narrows it, always there; beside it the
+ * pages gone to, stacked (@yaks/ux `Stack`), each a component's, a
+ * property's, a package's, any entity's, a query's or the first page. The
+ * top one is drawn; each under it is a strip saying what it is, and a press
+ * on one returns to it. The stack is the page's own graph's (./state.ts
+ * `STACK`): a link or a row followed stacks on it (`go` on the host), and a
+ * browser says it in the address (./main.ts).
  *
  * What scrolls, and how the field takes what is typed, are the host's
  * (`Chrome`): a browser's panes scroll under the pointer, a terminal's under
- * its keys, and a terminal too narrow for three leaves the detail out. What
- * is typed in the field is read through the host's fields (@yaks/filter
- * `text`), where the person's draft is kept.
+ * its keys. What is typed in the field is read through the host's fields
+ * (@yaks/filter `text`), where the person's draft is kept.
  *
  * @module
  */
 
-import { type ComponentChildren, type FunctionComponent, h } from 'preact'
+import {
+  type ComponentChildren,
+  Fragment,
+  type FunctionComponent,
+  h,
+} from 'preact'
 import type { Filters } from '@yaks/filter'
-import { Panes, Rows } from '@yaks/ui'
+import { Panes, Rows, Stack as Look } from '@yaks/ui'
+import { panesOf, Stack } from '@yaks/ux'
 import type { Inspector } from './door.ts'
 import { HomePage } from './Home.ts'
 import { Index } from './Index.ts'
 import { QueryPage } from './Query.ts'
-import { INSPECT, me } from './state.ts'
-import { type At, entityLine } from './where.ts'
+import { INSPECT, me, stack } from './state.ts'
+import { at, entityLine, HOME } from './where.ts'
 
 /** What a browser or a terminal gives the page around the views. */
 export type Chrome = {
@@ -35,73 +43,92 @@ export type Chrome = {
   Scroll: FunctionComponent<
     { id: string; on: boolean; children?: ComponentChildren }
   >
-  /** whether there is room for the detail beside the page (default: yes) */
-  aside?: () => boolean
 }
 
 /** The page every inspector address draws, over an inspector's door. */
 export let frame = (
   { Door, io }: Inspector,
-  { Bar, fields, Scroll, aside = () => true }: Chrome,
-): FunctionComponent<{ where: At }> => {
-  // An entity, by any id the graph resolves, drawn as `view`.
-  let Shown = ({ id, view }: { id: string; view: string }) => {
+  { Bar, fields, Scroll }: Chrome,
+): FunctionComponent => {
+  // An entity, by any id the graph resolves, and the answer that brings it.
+  let useShown = (id: string) => {
     let { it } = io.ask({ it: entityLine(id) })
-    let [e] = it.rows
-    return e ? h(Door, { e, view }) : h(
+    return { e: it.rows[0], it }
+  }
+  let Shown = ({ id }: { id: string }) => {
+    let { e, it } = useShown(id)
+    return e ? h(Door, { e, view: 'Inspect.Page' }) : h(
       Rows.More,
       {},
       it.error ?? (it.ready ? `${id} names nothing.` : '…'),
     )
   }
-  return ({ where }) => {
-    let s = me(io)
-    let pane = s.pane ?? 'page'
-    let id = 'id' in where ? where.id : undefined
-    let query = 'query' in where ? where.query : undefined
+  let keys = () => me(io).pane ?? 'page'
+
+  // The page a pane shows, on top of the stack.
+  let Page = ({ pane }: { pane: string }) => {
+    let where = at(pane)
+    return h(
+      Scroll,
+      { id: `inspect page ${pane}`, on: keys() == 'page' },
+      'id' in where
+        ? h(Shown, { id: where.id })
+        : where.query
+        ? h(QueryPage, { io, text: where.query })
+        : h(HomePage, { io }),
+    )
+  }
+
+  // What a pane under the top one is: an entity's name and kind, a query's
+  // line, or the first page.
+  let Named = ({ id }: { id: string }) => {
+    let { e } = useShown(id)
+    return h(
+      Fragment,
+      null,
+      h(Look.Name, {}, e ? io.name(e.entity.eid) : id),
+      e ? h(Look.Kind, {}, io.kind(e)) : null,
+    )
+  }
+  let Strip = ({ pane }: { pane: string }) => {
+    let where = at(pane)
+    return 'id' in where ? h(Named, { id: where.id }) : where.query
+      ? h(
+        Fragment,
+        null,
+        h(Look.Name, {}, where.query),
+        h(Look.Kind, {}, 'query'),
+      )
+      : h(Look.Name, {}, 'inspect')
+  }
+
+  return () => {
+    let e = stack(io)
+    let top = at(panesOf(e).at(-1) ?? HOME)
     return h(
       Panes,
       {},
       h(
         Panes.Pane,
-        { mod: ['nav', pane == 'index' && 'on'], 'data-pane': 'index' },
+        { mod: ['nav', keys() == 'index' && 'on'], 'data-pane': 'index' },
         h(Panes.Top, {}, h(Bar, { id: INSPECT })),
         h(
           Scroll,
-          { id: 'inspect index', on: pane == 'index' },
-          h(Index, { io, here: id, text: fields.text(INSPECT) }),
+          { id: 'inspect index', on: keys() == 'index' },
+          h(Index, {
+            io,
+            here: 'id' in top ? top.id : undefined,
+            text: fields.text(INSPECT),
+          }),
         ),
       ),
-      h(
-        Panes.Pane,
-        { mod: ['main', pane == 'page' && 'on'], 'data-pane': 'page' },
-        h(
-          Scroll,
-          { id: `inspect page ${id ?? query ?? ''}`, on: pane == 'page' },
-          id
-            ? h(Shown, { key: id, id, view: 'Inspect.Page' })
-            : query
-            ? h(QueryPage, { key: query, io, text: query })
-            : h(HomePage, { io }),
-        ),
-      ),
-      aside()
-        ? h(
-          Panes.Pane,
-          { mod: ['aside', pane == 'detail' && 'on'], 'data-pane': 'detail' },
-          h(
-            Scroll,
-            { id: `inspect detail ${s.detail ?? ''}`, on: pane == 'detail' },
-            s.detail
-              ? h(Shown, {
-                key: s.detail,
-                id: s.detail,
-                view: 'Inspect.Detail',
-              })
-              : h(Rows.More, {}, 'Press a row to see it here.'),
-          ),
-        )
-        : null,
+      h(Stack, {
+        e,
+        on: keys() == 'page',
+        onChange: (b) => io.set([b]),
+        Pane: Page,
+        Strip,
+      }),
     )
   }
 }

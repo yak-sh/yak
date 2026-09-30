@@ -7,8 +7,6 @@
  *   property's (./Prop.ts) and a package's (./Package.ts) are their own;
  *   anything else is its head, a table per component, its edges and its
  *   history (./Entity.ts).
- * - `Inspect.Detail`: an entity beside a page, picked from a row: its head,
- *   linked to its page, its components and its edges.
  *
  * The first page and a query's page draw no entity, so they are the frame's
  * (./Frame.ts), not views.

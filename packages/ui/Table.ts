@@ -6,10 +6,11 @@
  * subgrid of it, so the cells line up. `cols` says what each column holds,
  * which is how wide it runs: a variant its cells wear, or nothing for text.
  *
- * A row a press picks wears `Row-picks`, the picked one `Row-on`, the one
- * under the pointer `Row-hover`. A heading a press sorts by wears
- * `Heading-sorts`, and `Heading-asc` or `Heading-desc` once the rows run by
- * it, which its arrow says; `Heading-num` heads a column of numbers. A cell
+ * A row a press picks wears `Row-picks`, and is raised while the keyboard
+ * is on it (`Row-focus` shows that); `Row-hover` is the one under the
+ * pointer. A heading a press sorts by wears `Heading-sorts`, and
+ * `Heading-asc` or `Heading-desc` once the rows run by it, which its arrow
+ * says; `Heading-num` heads a column of numbers. A cell
  * is `Cell-num` for a number, set right and never cut; `Cell-key` for the
  * name of what its row holds, in a table of pairs; and `Cell-prose` for text
  * that wraps rather than cutting short. What a press on a row or a heading
@@ -86,7 +87,7 @@ export let description =
 
 /** A grid of rows in a terminal too: every cell one line, cut with an
  * ellipsis, a number set right and prose wrapped; headings dim until they
- * sort; the picked row raised. */
+ * sort; the row the keyboard is on raised. */
 export let sheet = (c: Colors): Sheet => ({
   Table: { grid: true },
   Table_Row: { row: true },
@@ -94,7 +95,7 @@ export let sheet = (c: Colors): Sheet => ({
   'Table_Heading-asc': { fg: c.accent },
   'Table_Heading-desc': { fg: c.accent },
   'Table_Heading-num': { align: 'right' },
-  'Table_Row-on': { bg: c.card, fg: c.text },
+  'Table_Row-focus': { bg: c.card, fg: c.text },
   'Table_Row-hover': { bg: c.surface },
   Table_Cell: { spaced: true, ellipsis: true },
   'Table_Cell-num': { fg: c.number, align: 'right' },
@@ -125,11 +126,11 @@ let pair = (key: string, value: string, shape?: string) =>
 // A specimen's own room, narrower than what its table holds.
 let narrow: Props = { style: 'max-width: 22rem' }
 
-/** A table sorted by one column, with a row picked and one under the
- * pointer; a column too narrow for what it holds; and a table of pairs. */
+/** A table sorted by one column, with the keyboard on a row and one under
+ * the pointer; a column too narrow for what it holds; and a table of pairs. */
 export let specimens = (): Specimen[] => [
   [
-    'Table, Heading-sorts, Heading-desc, Heading-num, Row-picks, Row-on, ' +
+    'Table, Heading-sorts, Heading-desc, Heading-num, Row-picks, Row-focus, ' +
     'Row-hover, Cell-prose, Cell-num',
     h(
       Table,
@@ -149,7 +150,7 @@ export let specimens = (): Specimen[] => [
       h(
         Body,
         {},
-        prop('status', 'string · enum', 'where the task stands', 'on'),
+        prop('status', 'string · enum', 'where the task stands', 'focus'),
         prop('owner', 'ref → session', 'who holds it', 'hover'),
         prop(
           'seen',

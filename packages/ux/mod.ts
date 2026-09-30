@@ -10,6 +10,9 @@
  *
  * - `Edit`, `Edit.Text`, `Edit.Control`: a property's value changed where it
  *   stands, typed over in place, or its control alone (./Edit.ts, ./Text.ts).
+ * - `Stack`: panes stacked as a person goes, those under the top one strips
+ *   that return to them; `stackAt`, `panesOf`, `stacked`, `cut`, `LIMIT`,
+ *   its eid and bundles, pure (./Stack.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
  *   (./host.ts).
  * - `useEdit`, `Editing`: an `Edit`'s state, read and changed by whoever
@@ -47,6 +50,15 @@ export {
   views,
 } from './Edit.ts'
 export { Text, type TextProps } from './Text.ts'
+export {
+  cut,
+  LIMIT,
+  panesOf,
+  Stack,
+  stackAt,
+  stacked,
+  type StackProps,
+} from './Stack.ts'
 export { type Editing, useEdit } from './live.ts'
 export {
   at,

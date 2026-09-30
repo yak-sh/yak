@@ -13,7 +13,6 @@ import * as button from './Button.ts'
 import * as catalog from './Catalog.ts'
 import * as chip from './Chip.ts'
 import * as choices from './Choices.ts'
-import * as crumbs from './Crumbs.ts'
 import * as dot from './Dot.ts'
 import * as edit from './Edit.ts'
 import * as field from './Field.ts'
@@ -31,6 +30,7 @@ import * as prop from './Prop.ts'
 import * as rows from './Rows.ts'
 import * as say from './Say.ts'
 import * as section from './Section.ts'
+import * as stack from './Stack.ts'
 import * as stamp from './Stamp.ts'
 import * as table from './Table.ts'
 import * as tabs from './Tabs.ts'
@@ -58,7 +58,7 @@ export let groups: Record<string, Record<string, Kit>> = {
     Menu: menu,
     Prop: prop,
   },
-  Navigation: { Tabs: tabs, Crumbs: crumbs, Index: index, Pager: pager },
+  Navigation: { Tabs: tabs, Stack: stack, Index: index, Pager: pager },
   Lists: {
     Tile: tile,
     Rows: rows,

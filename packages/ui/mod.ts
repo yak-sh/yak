@@ -7,7 +7,7 @@
  *
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
- *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Crumbs`,
+ *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Stack`,
  *   `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Panes`, `Head`, `Notes`,
  *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
@@ -36,7 +36,6 @@ export { Choices } from './Choices.ts'
 export { Button } from './Button.ts'
 export { Catalog } from './Catalog.ts'
 export { Chip, hues } from './Chip.ts'
-export { Crumbs } from './Crumbs.ts'
 export { Edit } from './Edit.ts'
 export { Gallery } from './Gallery.ts'
 export { Head } from './Head.ts'
@@ -59,6 +58,7 @@ export { type Col, Table, type TableProps } from './Table.ts'
 export { Pairs } from './Pairs.ts'
 export { Rows } from './Rows.ts'
 export { Section } from './Section.ts'
+export { Stack } from './Stack.ts'
 export { Tile } from './Tile.ts'
 export { Timeline } from './Timeline.ts'
 export { Value } from './Value.ts'

@@ -1,7 +1,7 @@
 /**
  * The routes facet, exported as `@yaks/inspect/routes`: the inspector's own
- * page. `/inspect` is the map and `/inspect/<id>` an entity's page; both
- * answer the one document, which loads the page's script (./main.ts, bundled
+ * page. `/inspect` is the first page and `/inspect/<pane>/…` a stack of
+ * pages (./where.ts); each answers the one document, which loads the page's script (./main.ts, bundled
  * by @yaks/cli `bundle`) and its stylesheet: @yaks/ui's kit in Everforest,
  * since every part the page draws is @yaks/ui's. What the page reads and
  * writes is @yaks/api's doors, so a host serves it with @yaks/api and this
@@ -29,7 +29,7 @@ export let PAGE = '<!doctype html><html><head><meta charset="utf-8">' +
 
 let css = () => stylesheet(everforest)
 
-/** `/inspect`, `/inspect/<id>`, and what their page loads. */
+/** `/inspect`, `/inspect/<pane>/…`, and what their page loads. */
 export let routes = (host: Hosting = {}): Route[] => {
   let page = kept(
     '/inspect',

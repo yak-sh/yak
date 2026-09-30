@@ -4,19 +4,19 @@
 // subscriptions (a query held while the view asking is mounted, an aggregate
 // held or asked once), what they write goes out as this store's changes, and
 // their own state lives in `front`, the page's own graph the query fields keep
-// theirs in. A card has no pane beside it, so a row pressed opens its
-// entity's own Inspect card; a query, and the index of every component, are
-// the inspector's own page (`/inspect`), which a link here opens.
+// theirs in. A card stacks nothing, so a row pressed opens its entity's own
+// Inspect card; a query, and the index of every component, are the
+// inspector's own page (`/inspect`), which a link here opens.
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import {
   type Answer,
   type Ask,
   type Asks,
-  at,
   type Bundle,
   type Host,
   inspector,
   queryPath,
+  stackOf,
   views,
 } from '@yaks/inspect'
 import { parse } from '@yaks/query'
@@ -195,7 +195,7 @@ let inPlace = (ev: MouseEvent) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   let a = (ev.target as Element | null)?.closest?.('a[href]')
   let href = a?.getAttribute('href') ?? ''
-  if (!href.startsWith('/') || at(href)) return
+  if (!href.startsWith('/') || stackOf(href)) return
   ev.preventDefault()
   navigate(href)
 }
@@ -210,7 +210,7 @@ let host: Host = {
   get: held,
   link: inspectPath,
   find: queryPath,
-  pick: (eid) => navigate(inspectPath(eid)),
+  go: navigate,
   id: (b) => idOf(ent(b.entity.eid)),
   kind: (b) => ent(b.entity.eid).kind,
   name,

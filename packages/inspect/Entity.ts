@@ -2,9 +2,8 @@
  * An entity, as the inspector shows it: its head (its name, id and kind, and
  * what every entity is before any component: its eid and its archetype),
  * then a small table of its values for each component it carries, that
- * component's description under the component's name. The page adds its
- * edges and its history (./Edges.ts, ./History.ts); the detail beside a page
- * is the same entity without its history, its name a link to its page.
+ * component's description under the component's name, then its edges and
+ * its history (./Edges.ts, ./History.ts).
  *
  * Everything the vocabulary lets a client write is written in place: each
  * value changed where it stands (./value.ts), a component removed by its ×, one the entity
@@ -86,11 +85,11 @@ let Delete = ({ e, io }: { e: Bundle; io: Io }) => {
 }
 
 /** What an entity's head is drawn with. */
-type Top = { e: Bundle; io: Io; notes: Map<string, Bundle[]>; linked?: boolean }
+type Top = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 
 /** An entity's head: its name, id and kind, its eid and archetype, and, where
  * it may be changed, a component to add and its delete. */
-export let EntityHead = ({ e, io, notes, linked }: Top): JSX.Element => {
+export let EntityHead = ({ e, io, notes }: Top): JSX.Element => {
   let eid = e.entity.eid
   let s = comp(e, 'entity')
   let subject = about(io, e)
@@ -104,7 +103,7 @@ export let EntityHead = ({ e, io, notes, linked }: Top): JSX.Element => {
       h(
         Head.Title,
         {},
-        linked ? h('a', { href: io.link(eid) }, io.name(eid)) : io.name(eid),
+        io.name(eid),
         io.name(eid) != io.id(e) ? h(Head.Id, {}, io.id(e)) : null,
         h(Head.Kind, {}, io.kind(e)),
         h(NoteButton, { io, eid, heading: '', subject }),
@@ -202,21 +201,7 @@ export let EntityPage = ({ e, io }: Props): JSX.Element => {
   )
 }
 
-/** An entity beside the page: its head, linked to its page, its components
- * and its edges. */
-export let Detail = ({ e, io }: Props): JSX.Element => {
-  let notes = under(useNotes(io, e.entity.eid), about(io, e), headings(e))
-  return h(
-    'div',
-    { 'data-inspect': e.entity.eid },
-    h(EntityHead, { e, io, notes, linked: true }),
-    comps(e).map(([name]) => h(CompTable, { key: name, e, io, name, notes })),
-    h(Edges, { e, io, notes }),
-  )
-}
-
-/** Any entity's page, and any entity beside a page. */
+/** Any entity's page. */
 export let entityViews: View[] = [
   { view: 'Inspect.Page', match: true, Render: EntityPage },
-  { view: 'Inspect.Detail', match: true, Render: Detail },
 ]

@@ -1,9 +1,10 @@
 /**
  * A table of things, the way every inspector page draws one: @yaks/ui's
- * `Table`, a column per heading and a row per thing. A press on a row picks
- * the entity it stands for, shown beside the page (`io.pick`), unless the
- * press was on a link or a value inside it; a press on a heading whose column
- * can sort runs the rows by it, then back the other way, then as they came.
+ * `Table`, a column per heading and a row per thing. A press on a row opens
+ * the entity it stands for (`io.go` to its `link`), unless the press was on
+ * a link or a value inside it; the keyboard can rest on a row, for Enter to
+ * open it (./main.ts). A press on a heading whose column can sort runs the
+ * rows by it, then back the other way, then as they came.
  * A long table shows a page of rows at a time, with a `Pager` under it. How
  * the rows run and which page shows are the table's state in the page's own
  * graph (./state.ts `grid`), so a page shown again shows as it was left.
@@ -21,7 +22,7 @@ import { Pager, Table } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { count } from './read.ts'
 import { none } from './rows.ts'
-import { grid, me, turned } from './state.ts'
+import { grid, turned } from './state.ts'
 
 /** How many rows a page of a table holds. */
 export let SIZE = 50
@@ -95,8 +96,8 @@ export type GridProps = {
   /** every row is in hand: the table pages them itself */
   local?: boolean
   size?: number
-  /** the entity a press on a row picks (its own, unless this says another);
-   * undefined picks nothing */
+  /** the entity a press on a row opens (its own, unless this says
+   * another); undefined opens nothing */
   pick?: ((b: Bundle) => string | undefined) | false
 }
 
@@ -161,7 +162,7 @@ let way = (order: string | null | undefined, c: Column) =>
     ? 'desc'
     : undefined
 
-/** A table of things, paged, its rows picked and its columns sorted. */
+/** A table of things, paged, its rows opened and its columns sorted. */
 export let Grid = (p: GridProps): JSX.Element => {
   let { io, id, columns, rows, local } = p
   let size = p.size ?? SIZE
@@ -169,7 +170,6 @@ export let Grid = (p: GridProps): JSX.Element => {
   let after = g.after ?? []
   let page = after.length
   let shown = local ? rows.slice(page * size, (page + 1) * size) : rows
-  let on = me(io).detail
   let pick = p.pick === false
     ? () => undefined
     : p.pick ?? ((b: Bundle) => b.entity.eid)
@@ -216,10 +216,12 @@ export let Grid = (p: GridProps): JSX.Element => {
             Table.Row,
             {
               key: b.entity.eid,
-              mod: [at && 'picks', at && at == on && 'on'],
+              mod: at && 'picks',
               'data-pick': at,
+              tabIndex: at ? -1 : undefined,
               onClick: at
-                ? (ev: { target: unknown }) => own(ev.target) || io.pick(at)
+                ? (ev: { target: unknown }) =>
+                  own(ev.target) || io.go(io.link(at))
                 : undefined,
             },
             columns.map((c) =>

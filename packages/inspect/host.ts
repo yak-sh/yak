@@ -78,10 +78,10 @@ export type Host = {
   link: (eid: string) => string
   /** where the inspector's page for a query is */
   find: (query: string) => string
-  /** a row was pressed: show its entity beside the page (the inspector's
-   * own page puts it in its detail pane; a host with no pane beside the
-   * page may open it instead) */
-  pick: (eid: string) => void
+  /** follow an address in place: a link's, or a pressed row's (its
+   * entity's `link`). The inspector's own page stacks it on the panes it
+   * shows; a card goes there. */
+  go: (href: string) => void
   /** the id a person reads: `T-9` */
   id: (b: Bundle) => string
   /** the kind it displays as: `task` */

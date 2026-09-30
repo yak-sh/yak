@@ -18,10 +18,14 @@ import {
   type Asks,
   type Bundle,
   editing,
+  follow,
   frame,
   type Host,
   INSPECT,
   inspector,
+  pagePath,
+  queryPath,
+  STACK,
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
@@ -76,9 +80,9 @@ let TASK: Bundle = {
   doc: { title: 'task', body: 'Work to be done.' },
 }
 
-// A host that answers each line from `answers` and keeps what was asked,
-// written and picked, over a page graph of the inspector's own; `draw` hands
-// @yaks/ux a host over it.
+// A host that answers each line from `answers` and keeps what was asked and
+// written, over a page graph of the inspector's own, where what is followed
+// is stacked; `draw` hands @yaks/ux a host over it.
 type Answers =
   | Record<string, Partial<Answer>>
   | ((line: string) => Partial<Answer> | undefined)
@@ -111,13 +115,12 @@ let host = (answers: Answers = {}, edits = true) => {
       }
     },
     get: (eid) => ({ t1: T1, t2: T2 } as Record<string, Bundle>)[eid],
-    link: (eid) => `/${eid}`,
-    find: (q) => `/inspect?q=${q}`,
-    pick: (eid) =>
-      void front.mutate([{
-        entity: { eid: 'inspect' },
-        inspector: { detail: eid },
-      }]),
+    link: pagePath,
+    find: queryPath,
+    go: (href) =>
+      void front.mutate([
+        follow(front.ent(STACK) ?? { entity: { eid: STACK } }, href),
+      ]),
     id: (b) => b.entity.eid.toUpperCase(),
     kind: (b) => b.task ? 'task' : 'entity',
     name: (eid) => `N-${eid}`,
@@ -216,7 +219,7 @@ test('an entity page shows each component and writes a value typed over in place
   assert(p.text('[data-section="task"]').includes('yesterday'))
   assertEquals(value(p, 'yesterday'), undefined)
   // A reference reads as what it names, linked.
-  assertEquals(p.text(`a[href="/${P1}"]`), `N-${P1}`)
+  assertEquals(p.text(`a[href="${pagePath(P1)}"]`), `N-${P1}`)
   await type(p, 'Fix the map', 'Fix the whole map')
   assertEquals(t.applied.at(-1), [{
     entity: { eid: 't1' },
@@ -282,7 +285,10 @@ test('an edge is added by its relation and far end, and its × removes it', asyn
   }
   using t = host({ '.refs=t1&.limit=200': { rows: [edge] } })
   using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
-  assertEquals(p.text('[data-section="Edges"] a[href="/t2"]'), 'N-t2')
+  assertEquals(
+    p.text(`[data-section="Edges"] a[href="${pagePath('t2')}"]`),
+    'N-t2',
+  )
   await p.fire(p.$('[aria-label="remove this requires edge"]'), 'click')
   assertEquals(t.applied.at(-1), [{ entity: { eid: 'e1' }, $delete: true }])
   // linkedom selects no first option, as a browser does
@@ -333,7 +339,7 @@ test("a component's entities run by a pressed heading, a page at a time", async 
   assertEquals(last(), '.task&.after=t49&.limit=50')
 })
 
-test('a query shows its rows by the components they share; a row pressed opens beside it', async () => {
+test("a row pressed stacks its entity's page on the query's, and the query's strip returns to it", async () => {
   using t = host({
     '.task&.limit=50&*': { rows: [T1, T2] },
     '.task&.count': { count: 2 },
@@ -344,24 +350,24 @@ test('a query shows its rows by the components they share; a row pressed opens b
     Bar: () => h('input', { name: 'filter' }),
     Scroll: ({ children }) => h('div', {}, children),
   })
-  using p = mount(t.draw(h(Page, { where: { query: '.task' } })))
-  let pane = (name: string) => `[data-pane="${name}"]`
+  t.io.go(queryPath('.task'))
+  using p = mount(t.draw(h(Page, null)))
+  let top = '.Stack_Pane'
   assertEquals(
-    [...p.root.querySelectorAll(`${pane('page')} [role=columnheader]`)].map((
-      th,
-    ) => th.textContent),
+    [...p.root.querySelectorAll(`${top} [role=columnheader]`)].map((th) =>
+      th.textContent
+    ),
     ['id', 'title', 'task'],
   )
-  assert(p.text(pane('detail')).includes('Press a row'))
   // linkedom calls a bubbled listener as its target's, so the row is pressed
   // itself
-  await p.fire(p.$(`${pane('page')} [role=row][data-pick="t2"]`), 'click')
-  assert(p.text(`${pane('detail')} h1`).includes('N-t2'))
-  assert(
-    p.$(`${pane('page')} [role=row][data-pick="t2"]`).className.includes(
-      'Table_Row-on',
-    ),
-  )
+  await p.fire(p.$(`${top} [role=row][data-pick="t2"]`), 'click')
+  assert(p.text(`${top} h1`).includes('N-t2'))
+  let strips = () => [...p.root.querySelectorAll('.Stack_Strip')]
+  assertEquals(strips().map((s) => s.textContent), ['.taskquery'])
+  await p.fire(strips()[0], 'click')
+  assertEquals(strips(), [])
+  assert(p.$(`${top} [role=row][data-pick="t2"]`))
 })
 
 test('a query that counts shows the count', () => {
@@ -371,8 +377,9 @@ test('a query that counts shows the count', () => {
     Bar: () => null,
     Scroll: ({ children }) => h('div', {}, children),
   })
-  using p = mount(t.draw(h(Page, { where: { query: '.task&.count' } })))
-  assert(p.text('[data-pane="page"]').includes('12,403'))
+  t.io.go(queryPath('.task&.count'))
+  using p = mount(t.draw(h(Page, null)))
+  assert(p.text('.Stack_Pane').includes('12,403'))
 })
 
 test("what is typed in the index's field narrows the index as it is typed", async () => {
@@ -395,7 +402,7 @@ test("what is typed in the index's field narrows the index as it is typed", asyn
     Bar: () => null,
     Scroll: ({ children }) => h('div', {}, children),
   })
-  using p = mount(t.draw(h(Page, { where: {} })))
+  using p = mount(t.draw(h(Page, null)))
   let listed = () =>
     [...p.root.querySelectorAll('[data-pane="index"] .Index_Item')]
       .map((a) => a.textContent)

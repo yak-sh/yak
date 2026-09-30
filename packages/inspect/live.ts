@@ -10,8 +10,9 @@
  * is kept as it first came, its watch closed, and answered from what was
  * kept for as long as the page is open. A write goes to the server as it
  * stands, so the graph resolves what a person typed (an id, a `$` alias, an
- * edge's eid), and comes back as it was applied. A row pressed is shown
- * beside the page (./state.ts `picked`).
+ * edge's eid), and comes back as it was applied. An address followed (a
+ * link, a row pressed) is stacked on the page's panes, in the page's own
+ * graph (./state.ts `follow`).
  *
  * @module
  */
@@ -25,7 +26,7 @@ import { parse } from '@yaks/query'
 import { relative } from '@yaks/ui'
 import type { Answer, Ask, Asks, Bundle, Front, Host } from './host.ts'
 import { comp, tables } from './read.ts'
-import { picked } from './state.ts'
+import { follow, stack } from './state.ts'
 import { pagePath, queryPath } from './where.ts'
 
 // One ask held: its answer as it stands, and letting it go.
@@ -196,7 +197,10 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
       return pagePath(b?.entity.num ? id(b) : eid)
     },
     find: queryPath,
-    pick: (eid) => void front.mutate(picked(eid)),
+    go: (href) =>
+      void front.mutate([
+        follow(stack({ state: (eid) => front.ent(eid) }), href),
+      ]),
     id,
     kind: (b) => vocab.kindOf(kinded(b)) || 'entity',
     name,
