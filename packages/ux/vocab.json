@@ -3,7 +3,6 @@
     "https://yak.sh/vocab/core": true
   },
   "title": "ux",
-  "description": "What UX components keep and say, in a page's own graph: never synced.",
   "$defs": {
     "Edit": {
       "component": true,

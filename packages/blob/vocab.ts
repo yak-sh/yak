@@ -13,8 +13,13 @@ import type { Derived } from '@yaks/sql'
 import { artifactDoc } from './artifact.ts'
 import { blobKeywords } from './keywords.ts'
 import { blobRead } from './sqlite.ts'
+import manifest from './deno.json' with { type: 'json' }
 
 export { artifactDoc, blobKeywords, blobRead }
+
+/** What this package is: its manifest's description, the one place it is
+ * written, which a host stamps on each document here. */
+export let description: string = manifest.description
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [artifactDoc]

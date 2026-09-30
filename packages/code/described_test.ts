@@ -33,6 +33,7 @@ let note = (properties: Record<string, PropSchema>, before = ['doc']) => ({
 })
 let p = (props: Record<string, PropSchema>, before?: string[]): VocabDoc => ({
   package: '@t/p',
+  description: 'Notes.',
   $defs: { note: note(props, before) },
 })
 let q: VocabDoc = {
@@ -61,14 +62,7 @@ let store = () => {
 
 test('a graph describes what it is served with, and stops describing what it is not', async () => {
   let serve = store()
-  let g = await serve([])
-  // What the codebase says of the package: its manifest's description.
-  await g.apply([{
-    entity: { eid: '$m' },
-    package: { name: '@t/p' },
-    doc: { title: '@t/p', body: 'Notes.' },
-  }])
-  g = await serve([p({ a: { type: 'string' }, b: { type: 'number' } }), q])
+  let g = await serve([p({ a: { type: 'string' }, b: { type: 'number' } }), q])
   let titles = async (q: string) =>
     (await g.read(`${q} ?doc`)).map((b) => (b.doc as Comp).title).sort()
   let note = identityEid('_comp', ['note'])

@@ -5,8 +5,13 @@
 import type { VocabDoc } from '@yaks/vocab'
 import { effectDoc } from './pool.ts'
 import { provisionalDoc } from './provisional.ts'
+import manifest from './deno.json' with { type: 'json' }
 
 export { effectDoc, provisionalDoc }
+
+/** What this package is: its manifest's description, the one place it is
+ * written, which a host stamps on each document here. */
+export let description: string = manifest.description
 
 /** Every document this plugin declares — the pool's `effect` rows, which an
  * application loads when effects are to be written down and worked by any

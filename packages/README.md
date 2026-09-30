@@ -535,7 +535,7 @@ or the `yak` command, takes `./vocab`, `./views` and `./tui`.
 
 | subpath     | what it exports                                                                 | may import          |
 | ----------- | ------------------------------------------------------------------------------- | ------------------- |
-| `./vocab`   | `docs`, `keywords?`, `derived?`                                                 | nothing server-side |
+| `./vocab`   | `docs`, `description`, `keywords?`, `derived?`                                  | nothing server-side |
 | `./rules`   | `rules: (host, options) => Plugin[]`, `extend?` (@yaks/sql), `authenticate?`    | anything            |
 | `./tools`   | `runs: (host, options) => Runs` — the code behind its `tool: true` declarations | ajv, SQL, anything  |
 | `./effects` | `effects: (host, options) => Handlers` — the code behind its `effect: true`     | anything            |

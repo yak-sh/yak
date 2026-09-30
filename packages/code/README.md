@@ -31,12 +31,12 @@ working the effects. It is the composed vocabulary, not the files: a package the
 checkout holds and the config does not list is not described. The graph's
 `_vocab` holds the hash of the rows as last described, so a graph already
 describing it is checked by that hash and written nothing; otherwise only the
-difference is written. The `_package` carries its name and its manifest's
-description (from `package`, as the codebase was last read), and each row points
-at the `_package` that declares it, so `._prop.package._package.name=@yaks/id`
-lists every property @yaks/id declares, on its own components and on the ones it
-extends. A row the served vocabulary stops declaring is cleared like a gone
-export.
+difference is written. The `_package` carries its name and the description its
+deno.json gives it (@yaks/cli `compose` writes it on each document), and each
+row points at the `_package` that declares it, so
+`._prop.package._package.name=@yaks/id` lists every property @yaks/id declares,
+on its own components and on the ones it extends. A row the served vocabulary
+stops declaring is cleared like a gone export.
 
 Each one's text is in `doc`: a package's description, a module's opening comment
 (the `/** */` block or the run of `//` lines it starts with), the whole of a

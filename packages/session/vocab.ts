@@ -13,8 +13,13 @@ import type { Vocab, VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
+import manifest from './deno.json' with { type: 'json' }
 
 export { sessionDoc }
+
+/** What this package is: its manifest's description, the one place it is
+ * written, which a host stamps on each document here. */
+export let description: string = manifest.description
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [sessionDoc]

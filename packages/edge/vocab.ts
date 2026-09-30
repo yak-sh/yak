@@ -5,9 +5,14 @@
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { edgeDoc } from './comp.ts'
 import { edgeKeywords } from './keywords.ts'
+import manifest from './deno.json' with { type: 'json' }
 
 export { edgeDoc, edgeKeywords }
 export { names, relations, reversed } from './relations.ts'
+
+/** What this package is: its manifest's description, the one place it is
+ * written, which a host stamps on each document here. */
+export let description: string = manifest.description
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [edgeDoc]

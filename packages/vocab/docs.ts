@@ -7,6 +7,11 @@
 
 import type { VocabDoc } from './types.ts'
 import { metaDoc } from './meta.ts'
+import manifest from './deno.json' with { type: 'json' }
+
+/** What this package is: its manifest's description, the one place it is
+ * written, which a host stamps on each document here. */
+export let description: string = manifest.description
 
 /** Every document this package declares: the meta vocabulary. */
 export let docs: VocabDoc[] = [metaDoc]

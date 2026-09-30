@@ -190,6 +190,9 @@ export type VocabDoc = {
    * loads the document (@yaks/cli `compose`), so a reader can say where each
    * component comes from */
   package?: string
+  /** what that package is: the host writes its deno.json's description here
+   * beside `package`, since a package says it once, in its manifest */
+  description?: string
   $defs?: Record<string, PropSchema>
   [k: string]: unknown
 }

@@ -211,7 +211,7 @@ contributes nothing to that process.
 
 | Subpath     | Role       | Expected exports                                                                                  |
 | ----------- | ---------- | ------------------------------------------------------------------------------------------------- |
-| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations                                       |
+| `./vocab`   | `graph`    | `docs?`, `keywords?`, `derived?` and `backed?` declarations, and `description?` from deno.json    |
 | `./rules`   | `graph`    | `rules?: (host, options) => Plugin[]`, query `extend?`, `reply?`, and at most one `authenticate?` |
 | `./tools`   | `graph`    | `runs?: (host, options) => Runs`, keyed by declared tool name                                     |
 | `./cli`     | `yak`      | `commands?: CliCommand[]`, direct terminal controls with a composed host                          |

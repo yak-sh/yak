@@ -62,6 +62,7 @@ import {
   toolName,
 } from '@yaks/graph'
 import { type Reply, type Runner, runner, toolsDoc } from '@yaks/tools'
+import { description as toolsAbout } from '@yaks/tools/vocab'
 import { loadTools, type Runs, type Search, tier } from '@yaks/graph/tools'
 import { toolsIn } from '@yaks/vocab/tools'
 import {
@@ -288,6 +289,9 @@ let common = (role: Role): role is keyof typeof ROLES =>
  * run in a browser tab: a page importing this must never reach SQL, a database
  * driver or a server runtime. */
 export type VocabFacet = {
+  /** what the plugin is: its package's own description, from its deno.json,
+   * written on each of its documents beside its name */
+  description?: string
   /** the components and tools this plugin declares */
   docs?: VocabDoc[]
   /** the JSON Schema keywords those documents use (@yaks/vocab `loadVocab`) */
@@ -576,7 +580,12 @@ let said = (docs: VocabDoc[]): VocabDoc[] => {
     Object.entries(toolsDoc.$defs ?? {}).filter(([name]) => !taken.has(name)),
   )
   return Object.keys($defs).length
-    ? [{ title: 'invocation', package: '@yaks/tools', $defs }, ...docs]
+    ? [{
+      title: 'invocation',
+      package: '@yaks/tools',
+      description: toolsAbout,
+      $defs,
+    }, ...docs]
     : docs
 }
 
@@ -736,7 +745,11 @@ let spoken = (vocabs: Taken<'vocab'>): Words => {
   // nobody supplied are added.
   let docs = said(
     vocabs.flatMap(([v, , plugin]) =>
-      (v.docs ?? []).map((d) => ({ ...d, package: plugin }))
+      (v.docs ?? []).map((d) => ({
+        ...d,
+        package: plugin,
+        description: v.description,
+      }))
     ),
   )
   let vocab = loadVocab(

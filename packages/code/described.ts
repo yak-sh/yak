@@ -4,20 +4,18 @@
 // linked like anything else, and a page about a component resolves.
 //
 // The served vocabulary is the one source: every document the host composed,
-// each written with the package that brought it (@yaks/cli `compose`), so a
-// package the checkout holds and the config does not list is not described.
-// A package's description is its manifest's, as this codebase was last read
-// (`package`, ./sync.ts), or else what its vocabulary says.
+// each written with the package that brought it and that package's
+// description, from its deno.json (@yaks/cli `compose`), so a package the
+// checkout holds and the config does not list is not described.
 //
 // The graph's one `_vocab` holds the hash of every row as last described, so
 // a graph whose hash matches is known to describe it, and is read no further:
-// a process starting over an unchanged vocabulary costs that entity and the
-// packages' descriptions. Otherwise what is written is the difference, and
-// the new hash with it. A row already saying what the vocabulary says is left
-// alone. A row the vocabulary stopped declaring is cleared the way a gone
-// export is (./sync.ts): the entity stays, empty, with any note left on it,
-// and is filled in again if the component comes back. A `_before` edge it
-// stopped saying is unlinked.
+// a process starting over an unchanged vocabulary costs that entity. Otherwise
+// what is written is the difference, and the new hash with it. A row already
+// saying what the vocabulary says is left alone. A row the vocabulary stopped
+// declaring is cleared the way a gone export is (./sync.ts): the entity stays,
+// empty, with any note left on it, and is filled in again if the component
+// comes back. A `_before` edge it stopped saying is unlinked.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identities } from '@yaks/graph'
@@ -94,24 +92,15 @@ let sha = async (s: string) =>
     ),
   ].map((b) => b.toString(16).padStart(2, '0')).join('')
 
-// Every row `docs` describe, by eid: each package's description is its
-// manifest's where the codebase was read, and two documents of one package
-// describe it as one.
-let rows = async (g: Graph, docs: VocabDoc[]): Promise<Map<string, Bundle>> => {
+// Every row `docs` describe, by eid: two documents of one package describe it
+// as one.
+let rows = (g: Graph, docs: VocabDoc[]): Map<string, Bundle> => {
   let derive = identities(g.vocab)
   let id: Ids = (comp, values) =>
     derive[comp](values as Comp, { entity: { eid: '' }, [comp]: values })
-  let manifests = g.vocab.comp('package')
-    ? await g.read('.package&.fields=package.name,doc.body')
-    : []
-  let about = new Map(manifests.map((b) => [
-    str((b.package as Comp).name),
-    str((b.doc as Comp | undefined)?.body),
-  ]))
   let fresh = new Map<string, Bundle>()
   for (let doc of docs) {
-    let description = about.get(str(doc.package)) || doc.description
-    for (let b of toBundles({ ...doc, description }, id) as Bundle[]) {
+    for (let b of toBundles(doc, id) as Bundle[]) {
       let e = b.edge as Comp | undefined
       let row = e ? link(str(e.from), '_before', str(e.to), Number(e.ord)) : b
       let was = fresh.get(row.entity.eid)
@@ -132,10 +121,8 @@ export let described = async (
   docs: VocabDoc[],
 ): Promise<Bundle[]> => {
   if (!g.vocab.comp('_vocab')) return []
-  let [fresh, [was]] = await Promise.all([
-    rows(g, docs),
-    g.get([VOCAB], ['_vocab']),
-  ])
+  let fresh = rows(g, docs)
+  let [was] = await g.get([VOCAB], ['_vocab'])
   let hash = await sha(canon([...fresh.values()]))
   if ((was?._vocab as Comp | undefined)?.hash == hash) return []
   let held = (await Promise.all([

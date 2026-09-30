@@ -5,8 +5,13 @@
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { keyDoc } from './comp.ts'
 import { keyKeywords } from './keywords.ts'
+import manifest from './deno.json' with { type: 'json' }
 
 export { keyDoc, keyKeywords }
+
+/** What this package is: its manifest's description, the one place it is
+ * written, which a host stamps on each document here. */
+export let description: string = manifest.description
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [keyDoc]

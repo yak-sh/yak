@@ -9,9 +9,14 @@
 // invariant can be asked about the same way every other package's is.
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
+import manifest from './deno.json' with { type: 'json' }
 
 /** The tool declaration this plugin contributes. */
 export let embeddingDoc: VocabDoc = doc
+
+/** What this package is: its manifest's description, the one place it is
+ * written, which a host stamps on each document here. */
+export let description: string = manifest.description
 
 /** Every document this plugin declares. */
 export let docs: VocabDoc[] = [embeddingDoc]
