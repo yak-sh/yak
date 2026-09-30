@@ -268,6 +268,21 @@ test("a batch nobody signed is the graph's own, and a signed one is not", () => 
   assertEquals(at(hers, 'b2', 'created').by, 'ada')
 })
 
+test("each entity is its own bundle's writer's, and the rest the change's", () => {
+  let out = sync(
+    g().apply([
+      { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'ada' } },
+      { entity: { eid: 'b2' }, sold: {}, $actor: { by: 'till' } },
+      { entity: { eid: 'b3' }, doc: { title: 'Emma' } },
+    ]),
+  )
+  assertEquals(
+    ['b1', 'b2', 'b3'].map((eid) => at(out, eid, 'created').by),
+    ['ada', 'till', 'ada'],
+  )
+  assertEquals(at(out, 'b2', 'sold').by, 'till')
+})
+
 test('a mark is signed where it lands, and the first telling stands', () => {
   let one = g()
   let out = sync(one.apply([{

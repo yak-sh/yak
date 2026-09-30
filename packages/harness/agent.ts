@@ -247,18 +247,20 @@ export let through = (session: Eid, by?: Eid) => ({
 
 /** A new transcript, as one write: the session and its instruction files,
  * followed by a message that asks for a turn when one was given. An empty
- * session holds its model choice until that first message arrives. */
+ * session holds its model choice until that first message arrives. The
+ * session and the message are whoever began it; the instruction files are the
+ * harness's own, put in front of the model, and never that person's words. */
 export let begin = async (
   g: Graph,
   prompt: string | undefined,
   o: Opening & { using: Comp; by?: Eid },
 ): Promise<Eid> => {
   let session = crypto.randomUUID() as Eid
-  let context = (o.files ?? []).map((f, i) =>
-    promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision)
-  )
+  let context = (o.files ?? []).map((f, i) => ({
+    ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
+    $actor: through(session),
+  }))
   await g.apply([
-    ...context,
     {
       entity: { eid: session },
       session: {
@@ -269,12 +271,14 @@ export let begin = async (
       ...prompt ? {} : { using: o.using },
       $actor: through(session, o.by),
     },
+    ...context,
     ...prompt
       ? [{
         entity: { eid: crypto.randomUUID() as Eid },
         [ENTRY]: { session, seq: context.length + 1 },
         [CONTENT]: { body: prompt },
         using: o.using,
+        $actor: through(session, o.by),
       }]
       : [],
   ])

@@ -24,8 +24,8 @@
 // and its rows out. No platform API, no driver object, and no transaction of
 // its own — the caller owns the transaction.
 
-import type { Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
-import { actorOf, comps, dead } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
+import { comps, dead, writers } from '@yaks/graph'
 import {
   and,
   as,
@@ -835,7 +835,10 @@ export { dec, enc }
  * read nothing in order to write, so nothing is gathered beforehand and nothing
  * is passed forward to a later phase. The transaction is recorded as applied —
  * one row per component the bundles patched or removed, in the order they
- * arrived.
+ * arrived — under its writer. A change carrying more than one writer's work is
+ * recorded as one transaction per writer, each holding what its entities'
+ * bundles wrote (@yaks/graph `writers`), so an entity's history names who
+ * wrote it, as its stamps do.
  */
 export let journal = (
   n: Log,
@@ -847,24 +850,32 @@ export let journal = (
     name: opts.name ?? '@yaks/journal',
     hooks: {
       journal: (bundles: Bundle[], _tx: Tx) => {
-        let applied: Patch[] = []
+        let writer = writers(bundles)
+        let by = new Map<string, { actor: Actor; applied: Patch[] }>()
+        let put = (actor: Actor, patch: Patch) => {
+          let key = `${actor.by ?? ''} ${actor.via ?? ''}`
+          if (!by.has(key)) by.set(key, { actor, applied: [] })
+          by.get(key)!.applied.push(patch)
+        }
         for (let b of bundles) {
           let target = b.entity.eid
+          let actor = writer(target)
           if (dead(b)) {
-            applied.push({ target, comp: 'entity', value: null })
+            put(actor, { target, comp: 'entity', value: null })
             continue
           }
           for (let [comp, value] of comps(b)) {
             if (skip.has(comp)) continue
-            applied.push({ target, comp, value: value ?? null })
+            put(actor, { target, comp, value: value ?? null })
           }
         }
-        if (!applied.length) return bundles
-        let actor = actorOf(bundles)
-        n.write(
-          { at: clock(), by: actor.by ?? null, via: actor.via ?? null },
-          applied,
-        )
+        let at = clock()
+        for (let { actor, applied } of by.values()) {
+          n.write(
+            { at, by: actor.by ?? null, via: actor.via ?? null },
+            applied,
+          )
+        }
         return bundles
       },
     },

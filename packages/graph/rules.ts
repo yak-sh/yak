@@ -165,6 +165,9 @@ export let registry = (
  * core's own rules read them; a resource the calling program adds is reached by
  * name, like a component. The capital letter is what tells the two apart:
  * `({ trashed, Actor, Now })`.
+ *
+ * The bundle keeps the `$actor` the entity's own bundles named, where one did:
+ * the writer of this entity when the change carries more than one's work.
  */
 export type Bound = Bundle & {
   /** `#Vocab` — the component vocabulary this graph uses */
@@ -403,7 +406,11 @@ export let fire = (
   let written = new Map<Eid, Set<string>>()
   for (let b of bundles) {
     let eid = b.entity.eid
-    seen.set(eid, merged(seen.get(eid) ?? tick.of?.(eid) ?? null, b))
+    let view = merged(seen.get(eid) ?? tick.of?.(eid) ?? null, b)
+    // The writer the entity's own bundles named, where one did: a change can
+    // carry more than one writer's work (./stamp.ts `writers`).
+    if (b.$actor) view.$actor ??= b.$actor
+    seen.set(eid, view)
     let names = written.get(eid) ?? new Set<string>()
     for (let name of Object.keys(b)) names.add(name)
     written.set(eid, names)

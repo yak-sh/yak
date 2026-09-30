@@ -89,7 +89,9 @@ The graph passes the resolved `$actor` to the journal: `by` identifies whom the
 write acts for, and `via` identifies the session, connector or other entity
 through which it was made. Both are stored as references into `entity`, then
 read back as public eids. Create those entities before attributing writes to
-them. Unspecified actors are recorded as null.
+them. Unspecified actors are recorded as null. A change whose bundles name more
+than one writer is recorded as one transaction per writer, each holding what its
+entities' bundles wrote (@yaks/graph `writers`).
 
 Authentication and actor selection belong to the API, CLI or tool caller; the
 journal records what the graph passes to it. `created` and `updated` components

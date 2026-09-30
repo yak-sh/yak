@@ -19,7 +19,8 @@
  *
  * - `journal_tx` — one row per committed transaction: its id is both the total
  *   order and the cursor, with the timestamp and the actor from the
- *   transaction's `$actor`;
+ *   transaction's `$actor` (one row per writer, where its bundles name more
+ *   than one);
  * - `journal_change` — one ordered row per component that transaction patched
  *   or removed;
  * - `journal_field` — one ordered after-image per property that row wrote.

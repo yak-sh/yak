@@ -15,12 +15,19 @@
 // the only thing that can know who is writing, and it is that code's job to
 // trust or replace what a client claimed. `apply()` stamps whatever reaches it.
 //
+// It travels on each bundle, because one change can carry more than one
+// writer's work and still have to land whole: a session a person begins holds
+// the person's words beside the instructions the harness put in front of the
+// model. Each entity is stamped with the writer its own bundle names, and an
+// entity whose bundles name none — a caller's unsigned patch, or one a phase
+// added — with the change's writer, the first one it names (`writers`).
+//
 // The properties come from the vocabulary, not from this file: a graph whose
 // `created` declares only `at` gets only `at`, and a graph with no `created`
 // component at all is not stamped. Nothing here assumes a particular shape.
 
 import type { Vocab } from '@yaks/vocab'
-import type { Actor, Bundle, Comp } from './bundle.ts'
+import type { Actor, Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
 import type { State } from './state.ts'
 import type { Bound, Patch, Rule } from './rules.ts'
@@ -48,13 +55,43 @@ export let signed = (change: Bundle[], who: Actor | null): Bundle[] =>
     return out
   })
 
-/** The actor a change names: the first `$actor` in it. A change has one
- * writer, so the first one found is the writer for the whole change. */
+/** The change's writer: the first `$actor` in it. It writes whatever entity
+ * names no writer of its own (`writers`). */
 export let actorOf = (bundles: Bundle[]): Actor =>
   bundles.find((b) => b.$actor)?.$actor ?? {}
 
+/**
+ * Who writes each entity a change names: the `$actor` the first of its bundles
+ * to name one says, and otherwise the change's writer.
+ *
+ * ```ts
+ * import { writers } from '@yaks/graph'
+ * import { assertEquals } from '@std/assert'
+ *
+ * let writer = writers([
+ *   { entity: { eid: 's' }, $actor: { by: 'ada', via: 's' } },
+ *   { entity: { eid: 'e1' }, $actor: { via: 's' } },
+ *   { entity: { eid: 'e2' } },
+ * ])
+ * assertEquals(writer('e1'), { via: 's' })
+ * assertEquals(writer('e2'), { by: 'ada', via: 's' })
+ * ```
+ */
+export let writers = (bundles: Bundle[]): (eid: Eid) => Actor => {
+  let named = new Map<Eid, Actor>()
+  for (let b of bundles) {
+    if (b.$actor && !named.has(b.entity.eid)) named.set(b.entity.eid, b.$actor)
+  }
+  let change = actorOf(bundles)
+  return (eid) => named.get(eid) ?? change
+}
+
+// The writer a rule stamps an entity with: the one its own bundles named
+// (rules.ts `fire` keeps it on the entity it hands a rule), else the change's.
+let writer = (b: Bound): Actor => b.$actor ?? b.Actor
+
 // The stamp for one entity, narrowed to the properties this vocabulary declares
-// on that component — `at`, and whichever of `by`/`via` the change's actor
+// on that component — `at`, and whichever of `by`/`via` the entity's writer
 // supplied. An empty result means there is nothing to write.
 type Attribution = { by?: string | null; via?: string | null }
 
@@ -110,7 +147,7 @@ export let provenance = (policy?: StampPolicy): Rule[] =>
       run: (b: Bound) => {
         let choice = policy(b)
         if (!choice) return
-        return wear(choice.kind, b.Vocab, b.Now.at, b.Actor, choice)
+        return wear(choice.kind, b.Vocab, b.Now.at, writer(b), choice)
       },
     }]
     : [
@@ -118,13 +155,13 @@ export let provenance = (policy?: StampPolicy): Rule[] =>
         name: 'created',
         phase: 'stamp',
         match: '.entity, +!created, *created, #Vocab, #Actor, #Now',
-        run: ({ Vocab, Now, Actor }) => wear('created', Vocab, Now.at, Actor),
+        run: (b) => wear('created', b.Vocab, b.Now.at, writer(b)),
       },
       {
         name: 'updated',
         phase: 'stamp',
         match: '.entity, .created, +updated, *updated, #Vocab, #Actor, #Now',
-        run: ({ Vocab, Now, Actor }) => wear('updated', Vocab, Now.at, Actor),
+        run: (b) => wear('updated', b.Vocab, b.Now.at, writer(b)),
       },
     ]
 
@@ -158,7 +195,7 @@ export let marks = (vocab: Vocab): Rule[] =>
     phase: 'stamp',
     match: `.${comp}, !${comp}.at, *${comp}, #Vocab, #Actor, #Now`,
     run: (b: Bound) =>
-      wear(comp, b.Vocab, b.Now.at, b.Actor, undefined, b[comp] as Comp),
+      wear(comp, b.Vocab, b.Now.at, writer(b), undefined, b[comp] as Comp),
   }))
 
 // One rule's patch: the component, narrowed to the properties this vocabulary

@@ -155,6 +155,18 @@ test('a history reads who wrote each change through its transaction', () => {
   ])
 })
 
+test('a change carrying two writers’ work records each one’s as theirs', () => {
+  let { apply, rows } = build()
+  apply([
+    { entity: { eid: 'p3' }, page: { title: 'Plan' }, $actor: ada },
+    { entity: { eid: 'p4' }, page: { title: 'Minutes' }, $actor: bob },
+  ])
+  let by = '_change.tx._tx.by'
+  let who = (eid: string) =>
+    rows(`._change.target=${eid}&.fields=${by}`).map((r) => r[by])
+  assertEquals([who('p3'), who('p4')], [['ada'], ['bob']])
+})
+
 test('an entity counts its changes by the reverse association', () => {
   let { read } = fixture()
   assertEquals(read('.page&._changes_target>=2').map((b) => b.entity.eid), [

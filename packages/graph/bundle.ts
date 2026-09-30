@@ -75,7 +75,8 @@ export type Bundle =
     $delete?: boolean
     /** a per-property precondition that must still hold */
     $was?: Was
-    /** who is writing this transaction */
+    /** who is writing this entity: an entity whose bundles name nobody is
+     * written by the change's writer, the first one it names */
     $actor?: Actor
     /** the `$name` alias this bundle was referred to by, when the graph picked
      * its id */

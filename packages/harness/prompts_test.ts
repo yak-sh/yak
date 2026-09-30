@@ -1,10 +1,11 @@
 import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assertEquals, assertRejects } from '@std/assert'
-import { promptEntry } from '@yaks/context'
+import { promptEntry, snapshot } from '@yaks/context'
 import { instructionFiles } from '@yaks/context/host'
 import { input } from '../openai/responses.ts'
 import { voice, wear } from '@yaks/persona'
+import { begin } from './agent.ts'
 import { harness } from './testing.ts'
 
 test('instruction admission snapshots files in stable ancestor order', async () => {
@@ -35,6 +36,29 @@ test('instruction admission snapshots files in stable ancestor order', async () 
     await assertRejects(() => instructionFiles(dir + '/absent'))
   } finally {
     await Deno.remove(dir, { recursive: true })
+  }
+})
+
+test('a session begun for a person holds their words, and none of the instructions', async () => {
+  let h = await harness()
+  try {
+    let [ada] = await h.g.apply([{ entity: { eid: '$ada' }, doc: {} }])
+    let session = await begin(h.g, 'work', {
+      files: [await snapshot('Repository guidance.', 'AGENTS.md')],
+      using: {},
+      by: ada.entity.eid,
+    })
+    let said = (await h.g.read(`.entry.session=${session}&*`)).map((b) => [
+      String((b.content as Comp).body),
+      (b.created as Comp).by ?? null,
+      (b.created as Comp).via,
+    ])
+    assertEquals(said.sort(), [
+      ['Repository guidance.', null, session],
+      ['work', ada.entity.eid, session],
+    ])
+  } finally {
+    await h.close()
   }
 })
 
