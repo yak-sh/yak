@@ -1,7 +1,7 @@
 /**
- * The kit: every part, by the name of the file its CSS is in, and what a
- * theme becomes for each place that paints. A new component is its module
- * and its CSS file, and one line here.
+ * The kit: every part, by the name of the file its CSS is in, every theme,
+ * and what a theme becomes for each place that paints. A new component is
+ * its module and its CSS file, and one line here.
  *
  * @module
  */
@@ -33,6 +33,7 @@ import * as tile from './Tile.ts'
 import * as timeline from './Timeline.ts'
 import * as tip from './Tip.ts'
 import * as value from './Value.ts'
+import { everforest } from './everforest.ts'
 import type { Kit, Theme } from './theme.ts'
 
 /** Every part: the document's defaults first, then each component. */
@@ -64,6 +65,9 @@ export let kit: Record<string, Kit> = {
   Say: say,
   Index: index,
 }
+
+/** Every theme, by name. */
+export let themes: Record<string, Theme> = { everforest }
 
 /** What @yaks/tui's painter dresses the kit with, in `theme`'s colours. */
 export let sheet = (theme: Theme): Sheet =>

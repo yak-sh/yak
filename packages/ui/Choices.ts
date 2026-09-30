@@ -18,9 +18,11 @@ export let Choices: Part & Record<'Item' | 'Text' | 'Note', Part> = block(
   { Item: 'div', Text: 'span', Note: 'span' },
 )
 
-/** A choice is a row of its own; the picked one is raised. */
+/** A choice is a row of its own, its word and note a space apart; the one
+ * under the pointer is raised a little, the picked one more. */
 export let sheet = (c: Colors): Sheet => ({
-  Choices_Item: { block: true },
+  Choices_Item: { block: true, spaced: true },
+  'Choices_Item-hover': { bg: c.surface },
   'Choices_Item-on': { bg: c.card, bold: true },
   Choices_Note: { fg: c.dim },
 })

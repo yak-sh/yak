@@ -65,7 +65,34 @@ test('a text field paints its value, its placeholder, and its caret', () => {
     ['ab', false, false],
     [' ', true, false],
   ])
-  assertEquals(line({ type: 'checkbox', value: 'on' }), [])
+  assertEquals(line({ type: 'number', value: 2 }), [['2', false, false]])
+  assertEquals(line({ type: 'password', value: 'abc' }), [[
+    '•••',
+    false,
+    false,
+  ]])
+  assertEquals(line({ type: 'checkbox', value: 'on' }), [['☐', false, false]])
+  assertEquals(line({ type: 'checkbox', checked: true }), [['☑', false, false]])
+  assertEquals(line({ type: 'hidden', value: 'x' }), [])
+})
+
+test('a select paints its chosen option, as it shows closed', () => {
+  let shown = (attrs: Record<string, unknown>, ...options: TElement[]) =>
+    seen(el('root', {}, el('div', {}, el('select', attrs, ...options))))[0]
+  let option = (text: string, attrs = {}) => el('option', attrs, text)
+  assertEquals(shown({ value: 'b' }, option('a'), option('b')), 'b ▾')
+  assertEquals(
+    shown({ value: '' }, option('+ add', { value: '' }), option('x')),
+    '+ add ▾',
+  )
+  assertEquals(
+    shown({}, option('a'), option('b', { selected: '' })),
+    'b ▾',
+  )
+  assertEquals(
+    shown({}, el('optgroup', {}, option('a')), option('b')),
+    'a ▾',
+  )
 })
 
 test('an href is sanitized and rides in an OSC 8', () => {

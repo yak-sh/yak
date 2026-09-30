@@ -47,9 +47,9 @@ export let relative = (
   return 'just now'
 }
 
-/** Dim. */
+/** Dim, its parts a space apart, as their gap keeps them in a browser. */
 export let sheet = (c: Colors): Sheet => ({
-  Stamp: { fg: c.dim, dim: true },
+  Stamp: { fg: c.dim, dim: true, spaced: true },
 })
 
 /** One moment, and one with a second part. */

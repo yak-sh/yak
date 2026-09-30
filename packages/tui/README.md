@@ -132,8 +132,9 @@ a field carrying `data-caret` paints the `Cursor` cell at that offset.
 widgets are without colour: the painted cursor is inverse, a table header bold.
 Class names use the repository's `Block_Element-modifier` convention. Pass
 `sheet` to `run` or `ansiBackend`; its entries replace `base` entries with the
-same names. Colours come from a theme: `@yaks/ui` builds a sheet for its
-components and for these widgets from one (`sheet(everforest)`).
+same names. A sheet given as a function is read at every paint, so an app can
+change its theme while it runs. Colours come from a theme: `@yaks/ui` builds a
+sheet for its components and for these widgets from one (`sheet(everforest)`).
 
 A `Style` may set `fg`, `bg`, `bold`, `dim`, `italic`, `underline`, `strike`,
 `inverse`, `glyph`, `indent`, `gap`, and `block`, which lays an inline tag (a

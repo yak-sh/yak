@@ -18,8 +18,10 @@ export let Tabs: Part & Record<'Tab' | 'Badge', Part> = block('div', 'Tabs', {
   Badge: 'span',
 })
 
-/** A tab is its face; the lit one is raised. */
+/** A tab is its face, a space between two where a browser pads them; the lit
+ * one is raised. */
 export let sheet = (c: Colors): Sheet => ({
+  Tabs: { spaced: true },
   Tabs_Tab: { fg: c.dim },
   'Tabs_Tab-hover': { fg: c.muted },
   'Tabs_Tab-on': { fg: c.text, bg: c.card },

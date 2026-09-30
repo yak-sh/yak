@@ -11,9 +11,10 @@
  *   `Edit`, `Table`, `Pager`, `Panes`, `Head`, `Notes`, `Say`, `Index`: the
  *   parts.
  * - `relative`: a moment in words, what a `Stamp` says.
- * - `everforest`: the first theme; `stylesheet(theme)` dresses a browser,
- *   `sheet(theme)` a terminal (kit.ts).
- * - `Guide`: every part in every variant, the page `./routes` serves at `/ui`.
+ * - `everforest`: the first theme, and `themes`, every one by name;
+ *   `stylesheet(theme)` dresses a browser, `sheet(theme)` a terminal (kit.ts).
+ * - `Guide`: every part in every variant, the page `./routes` serves at `/ui`
+ *   and `./cli` paints as `yak ui`; `Specimens`, one part's section of it.
  *
  * @module
  */
@@ -45,6 +46,6 @@ export { Tile } from './Tile.ts'
 export { Timeline } from './Timeline.ts'
 export { Value } from './Value.ts'
 export { everforest } from './everforest.ts'
-export { kit, sheet, stylesheet } from './kit.ts'
-export { Guide } from './guide.ts'
+export { kit, sheet, stylesheet, themes } from './kit.ts'
+export { Guide, Specimens } from './guide.ts'
 export type { Colors, Kit, Specimen, Theme } from './theme.ts'

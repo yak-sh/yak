@@ -23,8 +23,10 @@ import { scrollbar } from './scrollbar.ts'
  * an element sits in the width it is cut or padded to, as CSS's
  * `text-overflow` and `text-align` do. Everything else flows: block elements
  * stack as lines, inline elements run into them, class names look up the
- * sheet. A text field (`input`, `textarea`) paints its `value`, or its
- * `placeholder` while empty, with a painted cursor at `data-caret`.
+ * sheet. A form field paints what a browser shows of it: a text field
+ * (`input`, `textarea`) its `value`, or its `placeholder` while empty, with a
+ * painted cursor at `data-caret`; a checkbox or a radio its mark; a `select`
+ * its chosen option.
  *
  * The boundary. Every text node and every href loses the C0/DEL/C1 class
  * before anything is painted (`@yaks/text`'s `safe`, with `\n` kept because a
@@ -151,6 +153,7 @@ let INLINE = new Set([
   'label',
   'input',
   'textarea',
+  'select',
 ])
 
 // Whether a node runs into its line: text does, and an inline tag does unless
@@ -191,6 +194,9 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   if (el.localName == 'input' || el.localName == 'textarea') {
     return field(el, s, c)
   }
+  if (el.localName == 'select') {
+    return [{ text: `${chosen(el)} ▾`, style: s, owner: el }]
+  }
   // A block the sheet makes of an element keeps its runs apart, as it would
   // on a line of its own, even where it is painted inline (a `dd`); so does
   // one its sheet spaces, wherever it is painted.
@@ -202,16 +208,25 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   }, [])
 }
 
-// A text field paints what a browser shows in it: its value, its placeholder
-// (dimmed, as the text entry's hint is) while empty, and a painted cursor
-// where `data-caret` puts the caret, since a terminal has no focus to show it
-// by. Any other input (a checkbox) has no text to paint.
+// What a checkbox and a radio show, unchecked and checked.
+let MARKS: Record<string, [string, string]> = {
+  checkbox: ['☐', '☑'],
+  radio: ['○', '◉'],
+}
+
+// A field paints what a browser shows in it: a checkbox or a radio its mark,
+// a password its dots, and any other its value, its placeholder (dimmed, as
+// the text entry's hint is) while empty, and a painted cursor where
+// `data-caret` puts the caret, since a terminal has no focus to show it by.
 let field = (el: TElement, s: Style, c: Ctx): Seg[] => {
-  let type = el.attr('type')
-  if (type && type != 'text' && type != 'search') return []
+  let type = el.attr('type') ?? 'text'
   let seg = (text: string, style: Style): Seg[] =>
     text ? [{ text, style, owner: el }] : []
+  let mark = MARKS[type]
+  if (mark) return seg(mark[el.attr('checked') == null ? 0 : 1], s)
+  if (type == 'hidden') return []
   let value = safe(el.attr('value') ?? '')
+  if (type == 'password') value = '•'.repeat(value.length)
   let hint = value ? [] : seg(
     safe(el.attr('placeholder') ?? ''),
     inherit(s, c.sheet.Entry_Hint ?? base.Entry_Hint),
@@ -236,6 +251,18 @@ let text = (n: TNode): string =>
   n instanceof TText
     ? safe(n.data)
     : (n as TElement).childNodes.map(text).join('')
+
+// A select's chosen option, as it shows closed: the one its value names, or
+// the one marked selected, or the first.
+let chosen = (el: TElement): string => {
+  let options = kids(el).flatMap((k) =>
+    k.localName == 'optgroup' ? kids(k) : [k]
+  ).filter((k) => k.localName == 'option')
+  let value = el.attr('value')
+  let pick = options.find((o) => (o.attr('value') ?? text(o)) == value) ??
+    options.find((o) => o.attr('selected') != null) ?? options[0]
+  return pick ? text(pick) : ''
+}
 
 let kids = (el: TElement) =>
   el.childNodes.filter((n) => !(n instanceof TText)) as TElement[]
@@ -833,10 +860,12 @@ export let clipboard = (text: string): string =>
 /**
  * The ANSI backend. Paints only the lines that changed since the last frame:
  * a keystroke moves one line, so a keystroke writes one line. `size` and
- * `write` are injected so a test can drive it without a terminal.
+ * `write` are injected so a test can drive it without a terminal. A `sheet`
+ * given as a function is read at every paint, so the theme can change while
+ * the app runs.
  */
 export let ansiBackend = (opts: {
-  sheet?: Sheet
+  sheet?: Sheet | (() => Sheet)
   size?: () => { columns: number; rows: number }
   write?: (s: string) => void
   graphics?: 'kitty' | 'none'
@@ -847,7 +876,7 @@ export let ansiBackend = (opts: {
     tmux: opts.tmux,
     changed: touch,
   })
-  let sheet = { ...base, ...opts.sheet }
+  let sheet = () => typeof opts.sheet == 'function' ? opts.sheet() : opts.sheet
   let size = opts.size ?? (() => Deno.consoleSize())
   let write = opts.write ??
     ((s: string) => void Deno.stdout.writeSync(enc.encode(s)))
@@ -874,7 +903,7 @@ export let ansiBackend = (opts: {
     },
     draw: (root) => {
       let { columns, rows } = size()
-      let { lines, metrics } = screenful(root, columns, rows, sheet)
+      let { lines, metrics } = screenful(root, columns, rows, sheet())
       let annotated = pictures.annotate(lines)
       let out = ''
       let written = 0

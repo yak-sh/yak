@@ -2156,6 +2156,7 @@
       "packages/ui": {
         "dependencies": [
           "jsr:@std/assert@1",
+          "npm:@preact/signals@^2.9.0",
           "npm:preact-render-to-string@6.7.0",
           "npm:preact@^10.29.1"
         ]

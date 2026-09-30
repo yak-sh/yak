@@ -29,9 +29,9 @@ export let Crumbs: Part & Record<'Item', Part> = Object.assign(
   { Item: Nav.Item },
 )
 
-/** Dim steps, and the last one ink. */
+/** Dim steps a space apart, and the last one ink. */
 export let sheet = (c: Colors): Sheet => ({
-  Crumbs: { fg: c.dim },
+  Crumbs: { fg: c.dim, spaced: true },
   Crumbs_Sep: { fg: c.dim },
   'Crumbs_Item-here': { fg: c.text },
 })

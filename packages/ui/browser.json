@@ -1,5 +1,5 @@
 {
-  "_": "The browser gate: @yaks/ui's front door, the components web's page imports, must type-check with only the web platform in scope. `./routes` runs on the host and is not part of it.",
+  "_": "The browser gate: @yaks/ui's front door, the components web's page imports, must type-check with only the web platform in scope. `./routes` and `./cli` run on the host and are not part of it.",
   "compilerOptions": {
     "lib": [
       "dom",

@@ -86,6 +86,7 @@ is in (an anchor, a `Pager.Step`), in a browser and in a terminal alike. Every
 component's CSS reads the properties through `var()`, and every component's
 terminal entries are a function of the colours. Everforest is the first theme:
 `everforest.css`, with a light face for a light system, and `everforest.ts`.
+`themes` names every one.
 
 ```ts ignore
 import { everforest, sheet, stylesheet } from '@yaks/ui'
@@ -99,21 +100,31 @@ text entry), the way the base stylesheet colours a browser's scrollbars.
 
 ## The style guide
 
-`Guide` is every part in every variant, on one page built of plain HTML. The
-routes facet (`@yaks/ui/routes`) answers it at `/ui` as a static page with the
-stylesheet inline, and web's terminal shows it on `:ui`.
+`Guide` is every part in every variant, on one page built of plain HTML, and
+`Specimens` is one part's section of it. The routes facet (`@yaks/ui/routes`)
+answers it at `/ui` as a static page with the stylesheet inline, and web's
+terminal shows it on `:ui`.
+
+The cli facet (`@yaks/ui/cli`) holds it in a terminal as `yak ui`, painted
+through each part's terminal sheet: the themes as tabs over an index of the
+parts, and beside them the whole guide or one part's section. j and k walk the
+index and the page follows, ↑ ↓ PgUp PgDn scroll the page, t paints it all in
+the next theme, and q quits; a press on an entry or a tab picks it. It reads
+nothing from a graph.
 
 ## Files
 
 | file            | owns                                                                  |
 | --------------- | --------------------------------------------------------------------- |
 | `el.ts`         | `el`, `block`, and the link nesting                                   |
-| `kit.ts`        | the parts, and `stylesheet(theme)` and `sheet(theme)` over them       |
+| `kit.ts`        | the parts, `themes`, and `stylesheet(theme)` and `sheet(theme)`       |
 | `theme.ts`      | the `Theme`, `Colors`, `Kit` and `Specimen` types                     |
 | `base.*`        | the document's defaults: prose, code, tables, syntax, scrollbars      |
 | `<Part>.ts/css` | one component: the part, its terminal entries, its specimens; its CSS |
 | `everforest.*`  | the first theme                                                       |
 | `guide.ts`      | the style guide                                                       |
 | `routes.ts`     | `/ui`                                                                 |
+| `cli.ts`        | `yak ui`                                                              |
+| `tui.ts`        | the style guide in a terminal                                         |
 
 A new component is its module and its CSS file, and one line in `kit.ts`.

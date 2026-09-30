@@ -44,13 +44,14 @@ export let quit = (): void => stop.fn()
 
 /**
  * Run an app until it quits. `backend` swaps the renderer (the ANSI painter by
- * default); `sheet` extends the widgets' `base`; Ctrl-C quits unless a widget takes it.
+ * default); `sheet` extends the widgets' `base`, and as a function it is read
+ * at every paint; Ctrl-C quits unless a widget takes it.
  */
 export let run = async (
   App: ComponentType,
   opts: {
     backend?: Backend
-    sheet?: Sheet
+    sheet?: Sheet | (() => Sheet)
     graphics?: 'kitty' | 'none'
     tmux?: boolean
     /** First interrupt drains; a second invokes force. Input stays open meanwhile. */
