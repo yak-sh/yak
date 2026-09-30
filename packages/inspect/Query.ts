@@ -15,6 +15,7 @@ import type { Bundle, Io } from './host.ts'
 import { Grid, paged } from './grid.ts'
 import { comp, comps, count, face, line, shape, str } from './read.ts'
 import { rows, waiting } from './rows.ts'
+import { useSets } from './notes.ts'
 import { key } from './state.ts'
 
 let AGGREGATES = new Set(['count', 'tally', 'distinct'])
@@ -100,6 +101,7 @@ let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
     total: { query: conjoin(text, '.count'), once: true },
   })
   let all = rows(got.rows)
+  useSets(io, all)
   let titled = all.some((b) => str(b, 'doc', 'title'))
   let cols = shared(all).filter((n) => !(titled && n == 'doc'))
   return waiting(got.rows) ?? h(Grid, {

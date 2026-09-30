@@ -23,7 +23,7 @@
         },
         "edit": {
           "type": "string",
-          "description": "the value being typed over, `<eid> <component> <property>`"
+          "description": "the value being typed over, `<eid> <component> <property> <place>`: one value can show on the page and beside it"
         },
         "note": {
           "type": "string",

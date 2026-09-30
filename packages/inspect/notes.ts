@@ -21,7 +21,7 @@ import { type ComponentChildren, h, type JSX } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { Button, Field, Notes, Say, Section } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
-import { comp, count, line, str } from './read.ts'
+import { comp, count, line, named, str } from './read.ts'
 import { rows } from './rows.ts'
 import { key, me, put, refusal, write } from './state.ts'
 
@@ -110,6 +110,23 @@ export let about = (io: Io, e: Bundle): string =>
 export let useNamed = (io: Io, eids: (string | undefined)[]): void => {
   let ids = [...new Set(eids.filter((e): e is string => !!e))].slice(0, 60)
   io.ask(ids.length ? { named: `.entity.eid=${ids.join(',')}` } : {})
+}
+
+/** The component sets `rows` are made of, asked for so each row's kind (and
+ * its id) is known when it came carrying one component: a hook. */
+export let useSets = (io: Io, rows: Bundle[]): void => {
+  let sets = [
+    ...new Set(rows.map((b) => comp(b, 'entity').archetype).filter(named)),
+  ].slice(0, 60)
+  io.ask(
+    sets.length
+      ? {
+        sets: `.archetype&.entity.eid=${
+          sets.join(',')
+        }&.fields=archetype.tables`,
+      }
+      : {},
+  )
 }
 
 /** The notes left on `eid`, and their authors named: a hook. */

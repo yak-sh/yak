@@ -15,7 +15,7 @@
  */
 
 import { h, type JSX } from 'preact'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { useId, useLayoutEffect, useRef } from 'preact/hooks'
 import { edit } from '@yaks/render'
 import { Value } from '@yaks/ui'
 import type { Prop } from '@yaks/vocab'
@@ -70,7 +70,9 @@ export let Cell = ({ io, e, name, prop }: CellProps): JSX.Element => {
   let eid = e.entity.eid
   let v = comp(e, name)[prop]
   let p = io.vocab.prop(name, prop)
-  let at = key(eid, name, prop)
+  // The same value can show twice, on the page and beside it: the one pressed
+  // is the one typed over.
+  let at = key(eid, name, prop, useId())
   let editing = me(io).edit == at
   let el = useRef<HTMLElement>(null)
   useLayoutEffect(() => {

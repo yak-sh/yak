@@ -17,13 +17,14 @@
  */
 
 import { type Signal, signal } from '@preact/signals'
-import { useLayoutEffect, useState } from 'preact/hooks'
+import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import type { Client, Watch } from '@yaks/client'
 import { aggregate, dead, type Reduced } from '@yaks/graph'
 import { human, short } from '@yaks/id'
 import { parse } from '@yaks/query'
 import { relative } from '@yaks/ui'
 import type { Answer, Ask, Asks, Bundle, Front, Host } from './host.ts'
+import { comp, tables } from './read.ts'
 import { picked } from './state.ts'
 import { pagePath, queryPath } from './where.ts'
 
@@ -31,6 +32,10 @@ import { pagePath, queryPath } from './where.ts'
 type Held = { answer: () => Answer; drop: () => void }
 
 let PENDING: Answer = { rows: [], ready: false }
+
+// Whether an answer had something to draw.
+let drawn = (a: Answer): boolean =>
+  !!a.rows.length || a.count != null || !!a.tally
 
 // An aggregate's answer, read the way a view reads one: a count, or each
 // value by how many (a distinct value counts once).
@@ -123,6 +128,9 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
 
   // A view's asks, held while it is mounted: opened after its first render
   // (which draws them pending) and let go when it unmounts or asks others.
+  // A name asked anew (the next page, another order) answers with the rows
+  // it had, not ready, until the new line answers, so nothing on the page
+  // jumps.
   let useAnswers = (asks: Asks): Record<string, Answer> => {
     let key = JSON.stringify(asks)
     let [held, set] = useState<{ key: string; all: [string, Held][] }>()
@@ -135,16 +143,42 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
       return () => all.forEach(([, h]) => h.drop())
     }, [key])
     let now = new Map(held?.key == key ? held.all : [])
-    return Object.fromEntries(
-      Object.keys(asks).map((n) => [n, now.get(n)?.answer() ?? PENDING]),
+    let had = useRef<Record<string, Answer>>({})
+    let got = Object.fromEntries(
+      Object.keys(asks).map((n) => {
+        let a = now.get(n)?.answer() ?? PENDING
+        let was = had.current[n]
+        let out = was && drawn(was) && !a.ready && !a.error && !a.rows.length
+          ? { ...was, ready: false }
+          : a
+        return [n, out]
+      }),
     )
+    had.current = got
+    return got
+  }
+
+  // A row asked by one component carries no other, so which kind it is (and
+  // its id's prefix) is read off its archetype, the components it carries,
+  // where that is held (./notes.ts `useSets`).
+  let kinded = (b: Bundle): Bundle => {
+    let at = comp(b, 'entity').archetype
+    let set = typeof at == 'string' ? get(at) : undefined
+    let has = set ? tables(set) : []
+    return has.length
+      ? { ...Object.fromEntries(has.map((t) => [t, {}])), ...b }
+      : b
   }
 
   // What an entity is called: its title, or the id a person reads.
   let name = (eid: string): string => {
     let b = get(eid)
     let title = (b?.doc as { title?: unknown } | undefined)?.title
-    return typeof title == 'string' && title ? title : b ? id(b) : short(eid)
+    return typeof title == 'string' && title
+      ? title
+      : b
+      ? id(kinded(b))
+      : short(eid)
   }
 
   return {
@@ -163,8 +197,8 @@ export let live = ({ box, front, edits }: LiveOpts): Host => {
     },
     find: queryPath,
     pick: (eid) => void front.mutate(picked(eid)),
-    id,
-    kind: (b) => vocab.kindOf(b) || 'entity',
+    id: (b) => id(kinded(b)),
+    kind: (b) => vocab.kindOf(kinded(b)) || 'entity',
     name,
     when: (at) => relative(at),
   }

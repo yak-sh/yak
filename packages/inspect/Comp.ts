@@ -20,7 +20,15 @@ import type { Answer, Bundle, Io, Props, View } from './host.ts'
 import { Cell } from './cell.ts'
 import { Grid, paged, SIZE } from './grid.ts'
 import { chip, chips } from './links.ts'
-import { NoteButton, Part, Said, under, useNamed, useNotes } from './notes.ts'
+import {
+  NoteButton,
+  Part,
+  Said,
+  under,
+  useNamed,
+  useNotes,
+  useSets,
+} from './notes.ts'
 import { comp, count, flags, line, str, tables, typed } from './read.ts'
 import { rows, waiting } from './rows.ts'
 import { grid, key } from './state.ts'
@@ -240,6 +248,7 @@ let Entities = ({ e, io, notes }: Part_) => {
     rows(got.titles).map((b) => [b.entity.eid, str(b, 'doc', 'title')]),
   )
   let refs = props.filter((p) => io.vocab.prop(name, p)?.category == 'ref')
+  useSets(io, rows(got.rows))
   useNamed(
     io,
     rows(got.rows).flatMap((b) => refs.map((p) => comp(b, name)[p] as string)),
