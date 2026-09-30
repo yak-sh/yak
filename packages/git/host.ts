@@ -396,25 +396,49 @@ export let linked = async (common: string): Promise<string[]> => {
     .slice(1)
 }
 
+// What `git status` says of a checkout, from one process: whether it has
+// uncommitted files, the commit it stands at and the branch it is on, by its
+// short name. Nothing when the path is not a checkout.
+let standing = async (path: string) => {
+  let said = await quiet(path, ['status', '--porcelain=v2', '--branch'])
+  if (said == null) return undefined
+  let lines = said.split('\n')
+  let header = (key: string) =>
+    lines.find((l) => l.startsWith(`# branch.${key} `))?.split(' ')[2]
+  let head = header('oid')
+  let branch = header('head')
+  return {
+    dirty: lines.some((l) => l && !l.startsWith('#')),
+    head: head == '(initial)' ? undefined : head,
+    branch: branch == '(detached)' ? undefined : branch,
+  }
+}
+
+// What a checkout holds, beside the branch it stands on.
+let holding = async (
+  path: string,
+): Promise<{ held?: Held; branch?: string }> => {
+  let at = await standing(path)
+  if (at?.dirty) return { held: 'dirty' }
+  if (!at?.head) return { held: 'unlanded' }
+  let own = at.branch && `refs/heads/${at.branch}`
+  let elsewhere = (await quiet(path, [
+    'for-each-ref',
+    '--contains',
+    at.head,
+    '--format=%(refname)',
+    'refs/heads/',
+  ]) ?? '').split('\n').filter((ref) => ref && ref != own)
+  return { held: elsewhere.length ? undefined : 'unlanded', branch: at.branch }
+}
+
 /** What this worktree still holds, `undefined` when it holds nothing: a clean
  * working tree whose HEAD already exists on some other branch — the base it was
  * created from, a parent's branch, main. Its own branch never counts; that is
  * what "unlanded" means. A path that is not a worktree at all is reported as
  * `unlanded` — kept, never guessed at. */
-export let holds = async (path: string): Promise<Held | undefined> => {
-  if (await quiet(path, ['status', '--porcelain'])) return 'dirty'
-  let head = await quiet(path, ['rev-parse', '--verify', 'HEAD'])
-  if (!head) return 'unlanded'
-  let own = await quiet(path, ['symbolic-ref', '--quiet', 'HEAD'])
-  let elsewhere = (await quiet(path, [
-    'for-each-ref',
-    '--contains',
-    head,
-    '--format=%(refname)',
-    'refs/heads/',
-  ]) ?? '').split('\n').filter((ref) => ref && ref != own)
-  return elsewhere.length ? undefined : 'unlanded'
-}
+export let holds = async (path: string): Promise<Held | undefined> =>
+  (await holding(path)).held
 
 /** Remove one worktree — the directory and the branch it was created on —
  * unless it still holds something. Returns what kept it, or nothing. A worktree
@@ -425,9 +449,8 @@ export let reclaim = async (path: string): Promise<Held | undefined> => {
     return await Deno.remove(path, { recursive: true })
       .then(() => undefined, () => 'failed' as Held)
   }
-  let held = await holds(path)
+  let { held, branch } = await holding(path)
   if (held) return held
-  let branch = await quiet(path, ['symbolic-ref', '--short', '--quiet', 'HEAD'])
   let common = await quiet(path, [
     'rev-parse',
     '--path-format=absolute',
