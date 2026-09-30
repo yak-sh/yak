@@ -59,7 +59,7 @@ import type {
   Value,
   Walk,
 } from '@yaks/query'
-import { bare, directive } from '@yaks/query'
+import { absent, bare, directive, present } from '@yaks/query'
 import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab'
 import { Unknown } from '@yaks/vocab'
 import {
@@ -88,6 +88,7 @@ import {
   type DerivedProp,
   eidAt,
   idOf,
+  ladders,
 } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
@@ -1059,16 +1060,68 @@ let spineOf = (
   cs: Clause[],
 ): string | undefined => cs.flatMap((c) => wants(v, backed, c))[0]
 
+// A filter on a ladder's status (@yaks/vocab's `status` keyword), as the
+// presence tests it means: `.effect.status=pending` is `.effect !failed
+// !completed`, the entity wearing the component and none of the rungs above
+// the status. A status some rung gives is that rung present and every rung
+// before it absent; a list of statuses is any of those. Bound that way it is a
+// lookup on the archetype index, where the `case` the status reads as
+// (./derived.ts `ladders`) is evaluated for every row. Only an equality with
+// statuses the ladder gives, on the entity's own component and read through
+// the ladder rather than a caller's expression, is rewritten: anything else
+// reads the `case`.
+let rungs = (ctx: Ctx, c: Clause): Clause | null => {
+  if (c.kind != 'pred' || c.op != '=' || c.not || c.where || c.facet) {
+    return null
+  }
+  if (claims(ctx, 'pred') || ctx.v.assoc(c.path[0])) return null
+  let hops: Hop[]
+  try {
+    hops = ctx.v.aim(c.path.join('.'), bare(c))
+  } catch {
+    return null // a name that does not route: clause() owns the refusal
+  }
+  let [hop] = hops
+  let l = hops.length == 1 && hop.prop == 'status' &&
+    ctx.v.comp(hop.comp)?.ladder
+  let key = `${hop.comp}.status`
+  if (!l || !worn(ctx, hop.comp)) return null
+  if (ctx.derived[key] !== ladders(ctx.v)[key]) return null
+  let raw = flat(c.value)
+  let said = raw.includes('..') ? [] : raw.split(',')
+  let given = [...l.rungs.map((r) => r.status), l.default]
+  if (!said.length || said.some((s) => !given.includes(s))) return null
+  let facet = (p: Pred): Pred => ({ ...p, facet: true })
+  let arm = (up: number, rung?: string): Clause => ({
+    kind: 'and',
+    clauses: [
+      present(hop.comp),
+      ...rung ? [present(rung)] : [],
+      ...l.rungs.slice(0, up).map((r) => absent(r.comp)),
+    ].map(facet),
+  })
+  let arms = said.flatMap((s) => [
+    ...l.rungs.flatMap((r, i) => r.status == s ? [arm(i, r.comp)] : []),
+    ...s == l.default ? [arm(l.rungs.length)] : [],
+  ])
+  return arms.length == 1 ? arms[0] : { kind: 'or', clauses: arms }
+}
+
 // A conjunction of presence tests is one lookup on the archetype column.
 // Compiled one clause at a time, what `.kind=memory` expands to — the kind
 // present and every earlier kind absent — bound its own list of archetype ids
 // per test: kinds × archetypes parameters, past both SQLite's limit on bound
 // variables and V8's argument limit for a spread (`task list memory yaks`,
-// T-37437). Compiled together it binds at most one id per archetype.
-let conjuncts = (ctx: Ctx, cs: Clause[]): Cond[] => {
+// T-37437). Compiled together it binds at most one id per archetype. A status
+// filter on a ladder joins in as the presence tests it means (`rungs`).
+let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
   let rest: Clause[] = []
+  let cs = clauses.flatMap((c) => {
+    let x = rungs(ctx, c)
+    return x?.kind == 'and' ? x.clauses : [x ?? c]
+  })
   for (let c of cs) {
     let f = facetOf(ctx, c)
     if (!f) rest.push(c)
@@ -1125,6 +1178,8 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     if (c.path[0] == 'kind' && c.path.length == 1) {
       return kindScope(ctx, flat(c.value))
     }
+    let status = rungs(ctx, c)
+    if (status) return clause(ctx, status)
     // A request to project a component this vocabulary does not declare is a
     // question, not an assertion: `.loan` over an unknown component name must
     // be refused, because an empty result would state that there are none.

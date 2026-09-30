@@ -104,3 +104,58 @@ test('an AND of facets binds one archetype list, not one per facet', () => {
   let mixed = compile(parse('.task !claim .title=hello'), v, { archetypes })
   assertEquals(mixed.params, ['[12]', 'hello'])
 })
+
+// A status ladder's filter is the presence tests it means, so it is answered
+// by the archetype index rather than by a `case` evaluated for every row.
+test('a status filter on a ladder binds as a lookup on the archetype index', () => {
+  let v = loadVocab([
+    {
+      $defs: {
+        task: {
+          component: true,
+          type: 'object',
+          status: {
+            cancelled: 'cancelled',
+            completed: 'done',
+            default: 'open',
+          },
+        },
+        cancelled: { component: true, type: 'object' },
+        completed: { component: true, type: 'object' },
+        claim: { component: true, type: 'object' },
+        doc: { component: true, type: 'object' },
+      },
+    },
+    {
+      $defs: {
+        task: { component: true, extends: true, status: { claim: 'wip' } },
+      },
+    },
+  ])
+  let cache = new Archetypes()
+  let ids = new Map([
+    [cache.intern(['task']).eid, 11],
+    [cache.intern(['task', 'completed']).eid, 12],
+    [cache.intern(['task', 'claim']).eid, 13],
+    [cache.intern(['task', 'cancelled', 'completed']).eid, 14],
+    [cache.intern(['task', 'claim', 'completed']).eid, 15],
+    [cache.intern(['doc', 'completed']).eid, 16],
+    [cache.intern(['doc', 'task']).eid, 17],
+  ])
+  let archetypes = archetypeSet(cache, ids)
+  let chosen = (q: string) => {
+    let sql = compile(parse(q), v, { archetypes })
+    assertEquals(bind(parse(q), v, { archetypes }).joins, [], q)
+    assert(!sql.sql.includes('case'), sql.sql)
+    return sql.params.flatMap((p) => JSON.parse(String(p))).sort()
+  }
+  assertEquals(chosen('.task.status=open'), [11, 17])
+  assertEquals(chosen('.task.status=done'), [12, 15])
+  assertEquals(chosen('.status=wip'), [13])
+  assertEquals(chosen('.task.status=cancelled'), [14])
+  assertEquals(chosen('.status=open,wip'), [11, 13, 17])
+  // beside another presence test, still one lookup
+  assertEquals(chosen('.doc .task.status=open'), [17])
+  // a status no rung gives reads the `case`, and finds what it finds
+  assert(compile(parse('.status=gone'), v, { archetypes }).sql.includes('case'))
+})
