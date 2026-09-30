@@ -32,12 +32,14 @@ ordinary JSON. The package also implements a comment-creation tool.
   component input schema). A graph that wants human-readable ids adds
   [@yaks/id](../id), whose document adds `num` to this same row.
 - the marks recording what happened to something and who did it — `created`,
-  `updated`, `opened`, `archived`, `verified` — each with `at`, `by` and `via`
-  properties that @yaks/graph stamps rather than a caller. `by` is the entity
-  that wrote it and `via` is what it was written through (a session, a client).
-  `verified` says somebody checked the entity against what it claims and found
-  it holds; a `cites` edge is one thing that carries it. Only the act of
-  checking writes it, never an edit to the entity.
+  `updated`, `opened`, `archived`, `resolved`, `verified` — each with `at`, `by`
+  and `via` properties that @yaks/graph stamps rather than a caller. `by` is the
+  entity that wrote it and `via` is what it was written through (a session, a
+  client). `resolved` says the problem an entity records (a bug, a thread, a
+  conflict) stopped happening, which is not `completed`: a problem can stop with
+  no task done. `verified` says somebody checked the entity against what it
+  claims and found it holds; a `cites` edge is one thing that carries it. Only
+  the act of checking writes it, never an edit to the entity.
 - the marks recording what was decided about something — `proposed`, `decided`
   (with a verdict of `approved` or `declined`), `quarantined` (an annotation for
   applications to exclude a readable record from guidance), and `redaction`,

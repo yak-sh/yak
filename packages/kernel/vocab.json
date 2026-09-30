@@ -286,6 +286,33 @@
       "properties": {},
       "description": "edge tag: this entity refers to that one"
     },
+    "resolved": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was resolved"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who resolved it — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write was made through — the session or client it came in on, or the deploy that resolved it"
+        }
+      },
+      "description": "The problem this entity records has stopped happening: a bug a deploy fixed, a comment thread that was settled, a conflict between two sessions that is over. It is not `completed`, which says a piece of work was finished; a problem can stop with no task done. Removing the mark says the problem is back."
+    },
     "supersedes": {
       "component": true,
       "type": "object",
