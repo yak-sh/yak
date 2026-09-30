@@ -71,7 +71,8 @@ change has no `comp`. `tx` refers to the `_tx` entity, and `target`, `by` and
 
 So history is asked in the query grammar, at every door: `._change.target=T-5`
 is an entity's history, oldest first, and `._change.target=T-5&.limit=20` its
-latest twenty; `._tx.via=S-7` is what one session wrote, and
+latest twenty; `._change.comp=<its _comp>&.limit=20` is a component's latest
+twenty writes; `._tx.via=S-7` is what one session wrote, and
 `._change.tx._tx.via=S-7` the changes it made. Each record's eid is its row id
 written ahead of a tag for the store and the component, so `yak graph show` and
 a link open one directly.

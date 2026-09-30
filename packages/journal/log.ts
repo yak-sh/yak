@@ -188,6 +188,8 @@ export let ddl = (spine = 'entity'): Stmt[] => {
     index('journal_tx_via', 'journal_tx', ['via']),
     index('journal_change_tx', 'journal_change', ['tx', 'ordinal']),
     index('journal_change_ent', 'journal_change', ['entity', 'component']),
+    // a component's writes, newest first by the rowid that ends each key
+    index('journal_change_comp', 'journal_change', ['component']),
     index('journal_field_change', 'journal_field', ['change', 'ordinal']),
     index('journal_field_ref', 'journal_field', ['ref'], notNull(col('ref'))),
   ]
