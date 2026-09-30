@@ -457,8 +457,8 @@ cache-retention registry, automatic prompt refresh or supersession. Provider
 cached-token counts do not guarantee that a particular prefix remains cached.
 
 Task completion receipts use `completed.by`, the author of the completion. Graph
-tools sign writes with their calling session; `@yaks/task` fills a missing `by`
-from that actor on the first completion mark. A named completion author is
+tools sign writes with their calling session; `@yaks/kernel` fills a missing
+`by` from that actor on the first completion mark. A named completion author is
 preserved, including when recording a completion after the fact. If the
 receiving parent authored the completion, its previously delivered child result
 is not echoed back or used to wake it again. New child responses still arrive.

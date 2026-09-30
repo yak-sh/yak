@@ -8,11 +8,12 @@
 // Map holding the bundles, with the same apply() and the same query grammar as
 // a database.
 
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, pick, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { kernel, kernelDoc } from '@yaks/kernel'
 import { projectDoc, projects } from '@yaks/project'
 import { taskDoc } from './comp.ts'
 import { tasks } from './plugin.ts'
@@ -44,17 +45,19 @@ let doc: VocabDoc = {
   },
 }
 
-/** The team's vocabulary: this package's components, the portfolio they are
- * filed in (@yaks/project), `doc`, edges, and their own. */
+/** The team's vocabulary: this package's components, the kernel's `completed`
+ * mark, the portfolio they are filed in (@yaks/project), `doc`, edges, and
+ * their own. */
 export let team: Vocab = loadVocab(
-  [docDoc, edgeDoc, taskDoc, projectDoc, doc],
+  [docDoc, edgeDoc, pick(kernelDoc, ['completed']), taskDoc, projectDoc, doc],
   [edgeKeywords],
 )
 
 /** A fresh in-memory storage over that vocabulary. */
 export let store = (): Storage => ram(team, { number: true })
 
-/** A graph over a fresh store, with the edge and task plugins loaded. */
+/** A graph over a fresh store, with the kernel, edge and task plugins
+ * loaded. */
 export let teamGraph = (
   storage: Storage = store(),
   marks?: Mark[],
@@ -62,7 +65,7 @@ export let teamGraph = (
   g: graph({
     storage,
     vocab: team,
-    plugins: [edges(team), tasks(), projects(team, marks)],
+    plugins: [kernel(), edges(team), tasks(), projects(team, marks)],
   }),
   storage,
 })

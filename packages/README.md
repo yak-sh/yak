@@ -324,13 +324,15 @@ grouped approximately by function, **not** by dependency order.
   chat messages out, either of the catalog's answer shapes back.
 - **[@yaks/kernel](./kernel)** — Shared identity, provenance and metadata
   schemas: `entity`, `created`, `updated`, `decided`, `quarantined`, `comment`,
-  `image`, `favorite` and relationship tags. It also defines schema keywords
-  such as `governed`, `lazy` and `well`. It ships no plugins.
+  `image`, `favorite` and relationship tags, and the lifecycle marks a status is
+  read from (`completed`, `failed`, `broken`, `resolved`, `verified`). It also
+  defines schema keywords such as `governed`, `lazy` and `well`. Its one plugin
+  keeps who completed something.
 
 - **[@yaks/task](./task)** — Task records, plans and containment relationships.
-  Status is computed from marks such as `completed` and `cancelled`, using rules
-  for both SQL and in-memory evaluation. Projects and saved boards belong to
-  @yaks/project, not this package.
+  Status is computed from marks such as @yaks/kernel's `completed` and its own
+  `cancelled`, using rules for both SQL and in-memory evaluation. Projects and
+  saved boards belong to @yaks/project, not this package.
 
 - **[@yaks/wake](./wake)** — coming back to something later, as data: a
   `wake{at, every, target, note}` on any entity, the wakes due at an instant,

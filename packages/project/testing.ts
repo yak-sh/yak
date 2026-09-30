@@ -5,12 +5,12 @@
 // in. Storage is @yaks/ram, so a test builds exactly what a browser page
 // would.
 
-import { loadVocab, type Vocab } from '@yaks/vocab'
+import { loadVocab, pick, type Vocab } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
-import { kernelKeywords } from '@yaks/kernel'
+import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { type Mark, taskDoc, tasks } from '@yaks/task'
 import { projectDoc } from './comp.ts'
 import { projects } from './plugin.ts'
@@ -36,18 +36,20 @@ let doc = {
   },
 }
 
-/** The team's vocabulary: the portfolio, the tasks in it, `doc` and edges.
- * The kernel keywords are registered too, because a task declares `governed` —
- * the keyword meaning a project answers for it. */
+/** The team's vocabulary: the portfolio, the tasks in it, the kernel's
+ * `completed` mark, `doc` and edges. The kernel keywords are registered too,
+ * because a task declares `governed` — the keyword meaning a project answers
+ * for it. */
 export let team: Vocab = loadVocab(
-  [docDoc, edgeDoc, taskDoc, projectDoc, doc],
+  [docDoc, edgeDoc, pick(kernelDoc, ['completed']), taskDoc, projectDoc, doc],
   [edgeKeywords, kernelKeywords],
 )
 
 /** A fresh in-memory storage over that vocabulary. */
 export let store = (): Storage => ram(team, { number: true })
 
-/** A graph over a fresh store, with the edge, task and portfolio plugins. */
+/** A graph over a fresh store, with the kernel, edge, task and portfolio
+ * plugins. */
 export let teamGraph = (
   storage: Storage = store(),
   marks?: Mark[],
@@ -55,7 +57,7 @@ export let teamGraph = (
   g: graph({
     storage,
     vocab: team,
-    plugins: [edges(team), tasks(), projects(team, marks)],
+    plugins: [kernel(), edges(team), tasks(), projects(team, marks)],
   }),
   storage,
 })

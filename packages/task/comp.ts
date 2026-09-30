@@ -2,7 +2,6 @@
 // your own.
 //
 //   task{}                            a to-do item, with a computed status
-//   completed{at, by}                 it got done, when, and by whom
 //   cancelled{at, by, reason}         it got called off, and why
 //   blocked{on}                       something outside is in the way
 //   requires / contains               the two relations between tasks
@@ -16,7 +15,8 @@
 //
 // Status is not stored. `task.status` is declared `computed: true`: it is
 // readable and filterable, and no writer sets it. Its value is computed from
-// the `completed` and `cancelled` components (./status.ts), which is why
+// the `completed` and `cancelled` components (./status.ts) — `completed` is
+// @yaks/kernel's, the mark anything finished wears — which is why
 // finishing a task means writing a fact with a time and an author rather than
 // overwriting a value. Both evaluators get that rule from one list, so
 // `.status=done` selects the same tasks in a database and in a page. The `enum`
@@ -35,9 +35,9 @@
 // children are not blocking either; they are ordinary work, counted and shown,
 // never an alarm.
 //
-// The marks outlive the people. `completed.by` and `cancelled.by` are
-// `death: keep` — deleting the person who finished a task does not unfinish it.
-// The reference stands as history.
+// The marks outlive the people. `cancelled.by` is `death: keep`, as the
+// kernel's `completed.by` is — deleting the person who finished a task does not
+// unfinish it. The reference stands as history.
 //
 // The document itself is `./vocab.json` — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the name callers
@@ -48,9 +48,6 @@ import doc from './vocab.json' with { type: 'json' }
 
 /** The component that makes an entity a task. */
 export let TASK = 'task'
-
-/** The mark on a finished task. */
-export let COMPLETED = 'completed'
 
 /** The mark on a task that was called off. */
 export let CANCELLED = 'cancelled'

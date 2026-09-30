@@ -12,11 +12,11 @@
  *   without making it stop being what it was. @yaks/project's optional
  *   `filed{project, priority, domain, assignee}` places it in a portfolio.
  * - **Where does it stand?** No stored property holds the answer. A task with a
- *   `completed` component is done, one with `cancelled` is cancelled, and one
- *   with neither is open. `status` is computed from those components, so
- *   finishing something records when and by whom instead of overwriting a
- *   value, and reopening it means removing a component rather than guessing
- *   what the status used to be.
+ *   `completed` component (@yaks/kernel's mark) is done, one with `cancelled`
+ *   is cancelled, and one with neither is open. `status` is computed from
+ *   those components, so finishing something records when and by whom instead
+ *   of overwriting a value, and reopening it means removing a component rather
+ *   than guessing what the status used to be.
  * - **How do you look at the list?** A `board{query}` is a saved filter. Its
  *   membership is never stored — no row records that a task is on a board — so
  *   a board is always current, and a task that starts matching the query is on
@@ -52,11 +52,15 @@
  * import { loadVocab } from '@yaks/vocab'
  * import { graph } from '@yaks/graph'
  * import { ram } from '@yaks/ram'
+ * import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
  * import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
  * import { taskDoc, tasks } from '@yaks/task'
  *
- * let vocab = loadVocab([edgeDoc, taskDoc], [edgeKeywords])
- * let plugins = [edges(vocab), tasks()]
+ * let vocab = loadVocab([kernelDoc, edgeDoc, taskDoc], [
+ *   kernelKeywords,
+ *   edgeKeywords,
+ * ])
+ * let plugins = [kernel(), edges(vocab), tasks()]
  * let g = graph({ storage: ram(vocab), vocab, plugins })
  * await g.apply([{ entity: { eid: 't1' }, task: {}, completed: {} }])
  * ```

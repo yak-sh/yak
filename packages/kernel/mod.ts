@@ -1,9 +1,11 @@
 /**
  * The components most graphs of work need: the `entity` row every entity has,
  * the marks recording what happened to a thing and who did it (`created`,
- * `updated`, `proposed`, `decided`, `quarantined`), the things that attach to
- * an entity (`comment`, `image`, `favorite`), and the tags that give an edge
- * its meaning (`about`, `reads`, `references`, `supersedes`, …).
+ * `updated`, `proposed`, `decided`, `quarantined`), the lifecycle marks a
+ * status is read from (`completed`, `failed`, `broken`, `resolved`,
+ * `verified`), the things that attach to an entity (`comment`, `image`,
+ * `favorite`), and the tags that give an edge its meaning (`about`, `reads`,
+ * `references`, `supersedes`, …).
  *
  * It ships the vocabulary, three keywords that describe what the core
  * meta-model does not (see {@link kernelKeywords}), and the pure content hash
@@ -20,4 +22,5 @@
  */
 export { KERNEL_URI, kernelKeywords } from './keywords.ts'
 export { kernelDoc, marksDoc, spineDoc } from './vocab.ts'
+export { kernel } from './plugin.ts'
 export * from './cites.ts'

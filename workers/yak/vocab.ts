@@ -285,8 +285,9 @@ export let teach = (env: Host = {}) =>
  * The words the platform gives every app to reach for rather than invent
  * (public/docs/components.md §The platform's vocabulary), picked from the
  * packages that declare them: a task and the two marks that end one
- * (@yaks/task), what work is filed under and the thing it belongs to
- * (@yaks/project), a note aimed at anything and a star (@yaks/kernel). They
+ * (@yaks/task's `task` and `cancelled`, @yaks/kernel's `completed`), what work
+ * is filed under and the thing it belongs to (@yaks/project), a note aimed at
+ * anything and a star (@yaks/kernel). They
  * mean the same thing in every store on the platform, which is the whole reason
  * they are the platform's and not each app's own — a `task` in one app is the
  * same word as a `task` in the next, so one filter reads both.
@@ -296,9 +297,9 @@ export let teach = (env: Host = {}) =>
  * the expression that reads it.
  */
 let givenDocs: VocabDoc[] = [
-  pick(taskDoc, ['cancelled', 'completed', 'task']),
+  pick(taskDoc, ['cancelled', 'task']),
   pick(projectDoc, ['filed', 'project']),
-  pick(kernelWords, ['comment', 'favorite']),
+  pick(kernelWords, ['comment', 'completed', 'favorite']),
 ]
 
 /**

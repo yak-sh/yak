@@ -68,38 +68,6 @@
         }
       }
     },
-    "completed": {
-      "component": true,
-      "type": "object",
-      "index": [
-        [
-          "at"
-        ]
-      ],
-      "description": "the mark on a finished task",
-      "properties": {
-        "at": {
-          "type": "string",
-          "format": "date-time",
-          "description": "when it was finished",
-          "stamped": true
-        },
-        "by": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "description": "who finished it — kept as history when that entity is deleted",
-          "stamped": true
-        },
-        "via": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true,
-          "description": "what the write came in through — the session or client that made it"
-        }
-      }
-    },
     "contains": {
       "component": true,
       "type": "object",

@@ -1,9 +1,10 @@
 # @yaks/kernel
 
 Shared identity and metadata components for a graph: the entity row, creation
-and update provenance, decisions, comments, images, favorites and relationship
-types. They are exported as JSON Schema documents, with a tool for creating
-comments.
+and update provenance, the lifecycle marks a status is read from, decisions,
+comments, images, favorites and relationship types. They are exported as JSON
+Schema documents, with a plugin that keeps who finished a piece of work and a
+tool for creating comments.
 
 ## Terms this README uses
 
@@ -40,6 +41,14 @@ ordinary JSON. The package also implements a comment-creation tool.
   no task done. `verified` says somebody checked the entity against what it
   claims and found it holds; a `cites` edge is one thing that carries it. Only
   the act of checking writes it, never an edit to the entity.
+- the lifecycle marks, shared by every package whose entities finish, fail or
+  stop working, each with the same stamped `at`, `by` and `via`: `completed`
+  (the work was finished; [@yaks/task](../task) reads a task as done from it),
+  `failed{reason}` (it was tried and given up on) and `broken{code}` (something
+  outside the graph stopped honoring it, `code` being the other side's word for
+  it). A status is computed from which of these an entity wears, never stored.
+  The `kernel()` plugin keeps `completed.by` across later writes of the mark, so
+  saying a thing is done again does not change who finished it.
 - the marks recording what was decided about something — `proposed`, `decided`
   (with a verdict of `approved` or `declined`), `quarantined` (an annotation for
   applications to exclude a readable record from guidance), and `redaction`,
@@ -102,14 +111,15 @@ makes it one, and the core meta-model already has a keyword for that:
 
 ## Entry points
 
-`deno.json` names three, and a program imports only the ones it needs:
+`deno.json` names four, and a program imports only the ones it needs:
 
 - `@yaks/kernel` — `kernelDoc`, the `spineDoc` and `marksDoc` subsets,
-  `kernelKeywords`, `KERNEL_URI`, and the citation content, status and verify
-  functions. It does not re-export the tool factory.
+  `kernelKeywords`, `KERNEL_URI`, the `kernel()` plugin, and the citation
+  content, status and verify functions. It does not re-export the tool factory.
 - `@yaks/kernel/vocab` — the vocabulary documents and keywords, and nothing
   else. It reaches no storage, no SQL and no runtime API, so a browser tab can
   load it on its own.
+- `@yaks/kernel/rules` — `rules()`, the `kernel()` plugin in an array.
 - `@yaks/kernel/tools` — the implementation of `comment_new`.
 
 ## Example

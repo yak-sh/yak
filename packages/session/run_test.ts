@@ -20,6 +20,7 @@ import { mem } from '../sqlite/testing.ts'
 import { effectDoc, effects, LEASE, leaseEid } from '@yaks/effects'
 import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { taskDoc } from '@yaks/task/vocab'
+import { kernelDoc } from '@yaks/kernel/vocab'
 import { processDoc } from '@yaks/process'
 import { type Model, modelDoc, type Request } from '@yaks/model'
 import { toolEid } from '@yaks/tools'
@@ -397,7 +398,8 @@ test('a graph with tasks and no claims runs its transcripts', async () => {
       'dispatch',
       'session_run',
     ]),
-    pick(taskDoc, ['task', 'completed', 'cancelled']),
+    pick(taskDoc, ['task', 'cancelled']),
+    pick(kernelDoc, ['completed']),
     toolsDoc,
     modelDoc,
   ])

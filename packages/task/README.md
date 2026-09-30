@@ -1,8 +1,8 @@
 # @yaks/task
 
 Task components and operations for [@yaks/graph](../graph). The package defines
-open, completed and cancelled tasks, records completion attribution, counts
-unfinished dependencies, and supplies create, list and update tools.
+open, completed and cancelled tasks, counts unfinished dependencies, and
+supplies create, list and update tools.
 
 A task is an entity with a `task` component. It can also carry a title from
 [@yaks/doc](../doc), filing information from [@yaks/project](../project), or
@@ -15,25 +15,26 @@ deno add jsr:@yaks/task
 # or: npx jsr add @yaks/task
 ```
 
-The examples also use `@yaks/graph`, `@yaks/vocab`, `@yaks/ram`, `@yaks/doc` and
-`@yaks/edge`.
+The examples also use `@yaks/graph`, `@yaks/vocab`, `@yaks/ram`, `@yaks/kernel`,
+`@yaks/doc` and `@yaks/edge`.
 
 ## What it is
 
 The package declares these stored components:
 
-| Component                        | Meaning                                                                      |
-| -------------------------------- | ---------------------------------------------------------------------------- |
-| `task{}`                         | Identifies an entity as a task.                                              |
-| `completed{at, by, via}`         | Records when the task finished, who finished it and the source of the write. |
-| `cancelled{at, by, via, reason}` | Records cancellation and an optional reason.                                 |
-| `blocked{on, since}`             | Describes an external obstacle; `since` is declared server-owned.            |
-| `accept{body}`                   | Describes the conditions for completion.                                     |
-| `requires{}`, `contains{}`       | Relation components on an `edge{from, to}` entity.                           |
+| Component                        | Meaning                                                           |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `task{}`                         | Identifies an entity as a task.                                   |
+| `cancelled{at, by, via, reason}` | Records cancellation and an optional reason.                      |
+| `blocked{on, since}`             | Describes an external obstacle; `since` is declared server-owned. |
+| `accept{body}`                   | Describes the conditions for completion.                          |
+| `requires{}`, `contains{}`       | Relation components on an `edge{from, to}` entity.                |
 
 `task.status` is computed from component presence; it is never stored. The first
 matching entry in `MARKS` wins: `cancelled` means `cancelled`, otherwise
-`completed` means `done`, otherwise a task is `open`. An entity without `task`
+`completed` means `done`, otherwise a task is `open`. `completed{at, by, via}`
+is [@yaks/kernel](../kernel)'s mark, shared with anything else that finishes, so
+a graph of tasks loads the kernel's words beside these. An entity without `task`
 has no task status. If both completion and cancellation are present,
 cancellation takes precedence.
 
@@ -58,13 +59,17 @@ and their dependency in an in-memory graph:
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { openDeps, statusOf, taskDoc, tasks } from '@yaks/task'
 
-let vocab = loadVocab([docDoc, edgeDoc, taskDoc], [edgeKeywords])
+let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, taskDoc], [
+  kernelKeywords,
+  edgeKeywords,
+])
 let storage = ram(vocab)
-let g = graph({ storage, vocab, plugins: [edges(vocab), tasks()] })
+let g = graph({ storage, vocab, plugins: [kernel(), edges(vocab), tasks()] })
 
 await g.apply([
   { entity: { eid: 't1' }, task: {}, doc: { title: 'Buy the cake' } },
@@ -84,7 +89,7 @@ await g.apply([{ entity: { eid: 't2' }, completed: null }]) // reopen
 Write `completed: {}` to finish a task. The graph fills the server-owned `at`,
 `by` and `via` fields from its clock and the batch's `$actor`; an anonymous
 write has no actor identity to record. Client-supplied values for those fields
-are dropped. Trusted server writes may supply them. The `tasks()` plugin
+are dropped. Trusted server writes may supply them. The `kernel()` plugin
 preserves the original completion author when an existing completion is edited.
 To attribute a new completion, supply an authenticated actor beside it:
 `{ entity: { eid: 't2' }, completed: {}, $actor: { by: 'dana' } }`.
@@ -104,11 +109,15 @@ known, because it computes the edge id immediately.
 import { loadVocab } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { taskDoc, tasks } from '@yaks/task'
 
-let vocab = loadVocab([docDoc, edgeDoc, taskDoc], [edgeKeywords])
+let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, taskDoc], [
+  kernelKeywords,
+  edgeKeywords,
+])
 let g = graph({ storage: ram(vocab), vocab, plugins: [edges(vocab), tasks()] })
 
 let plan = [
@@ -150,9 +159,10 @@ already-loaded bundles with `@yaks/match`:
 ```ts
 import { loadVocab } from '@yaks/vocab'
 import { matcher } from '@yaks/match'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { compute, taskDoc } from '@yaks/task'
 
-let vocab = loadVocab([taskDoc])
+let vocab = loadVocab([kernelDoc, taskDoc], [kernelKeywords])
 let open = matcher('.task.status=open', vocab, { computed: compute() })
 open([
   { entity: { eid: 't1' }, task: {} },
@@ -255,10 +265,10 @@ and Cloudflare Workers with suitable storage and package resolution.
 
 ## Interface
 
-| Import path        | Exports                                                                                                                                                                                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/task`       | `taskDoc`, `tasks`, `MARKS`, `OPEN`, `statuses`, `declared`, `settled`, `statusOf`, `compute`, `derived`, `gated`, `openDeps`, `done`; types `Mark`, `Status`, `Compute`, `DepOpts`; constants `TASK`, `COMPLETED`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`. |
-| `@yaks/task/vocab` | `taskDoc`, `docs`, and the default SQL `derived()` definitions.                                                                                                                                                                                                     |
-| `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                                                                                                                             |
-| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                                                                                                    |
-| `@yaks/task/views` | `views`: the `Status` renderer, `open`, `done` or `cancelled` computed with `statusOf`.                                                                                                                                                                             |
+| Import path        | Exports                                                                                                                                                                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/task`       | `taskDoc`, `tasks`, `MARKS`, `OPEN`, `statuses`, `declared`, `settled`, `statusOf`, `compute`, `derived`, `gated`, `openDeps`, `done`; types `Mark`, `Status`, `Compute`, `DepOpts`; constants `TASK`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`. |
+| `@yaks/task/vocab` | `taskDoc`, `docs`, and the default SQL `derived()` definitions.                                                                                                                                                                                        |
+| `@yaks/task/rules` | `rules()`, returning the task graph plugin in an array.                                                                                                                                                                                                |
+| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                                                                                       |
+| `@yaks/task/views` | `views`: the `Status` renderer, `open`, `done` or `cancelled` computed with `statusOf`.                                                                                                                                                                |

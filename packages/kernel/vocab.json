@@ -40,6 +40,37 @@
       },
       "description": "Hidden from ordinary listings, without stopping execution or deleting history."
     },
+    "broken": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was found broken"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who found it broken — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        },
+        "code": {
+          "type": "string",
+          "description": "the other side's word for what broke: an OAuth error code, a hostname check's status"
+        }
+      },
+      "description": "Something outside the graph stopped honoring what this entity holds: a connection whose grant was revoked, a hostname whose check failed. It is a standing condition of a long-lived thing, not one refusal. Removing the mark says it holds again."
+    },
     "comment": {
       "component": true,
       "type": "object",
@@ -65,6 +96,38 @@
         }
       },
       "description": "this entity cites that one; its hash says whether the cited content still holds"
+    },
+    "completed": {
+      "component": true,
+      "type": "object",
+      "index": [
+        [
+          "at"
+        ]
+      ],
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was finished"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who finished it — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        }
+      },
+      "description": "The work this entity records was finished: a task done. Who finished it is kept across later writes of the mark. Removing the mark reopens the work."
     },
     "created": {
       "component": true,
@@ -144,6 +207,37 @@
         }
       },
       "description": "every entity has one: the identity row, carrying the archetype its set of components adds up to and whatever else a plugin keeps beside every entity"
+    },
+    "failed": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it failed"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who gave up on it — kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through — the session or client that made it"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why it failed, in the words of whatever refused"
+        }
+      },
+      "description": "The work this entity records was tried and given up on, and is not tried again on its own: a checkout that could not be made. Removing the mark says it is being tried again."
     },
     "favorite": {
       "component": true,
