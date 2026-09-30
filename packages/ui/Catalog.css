@@ -1,0 +1,53 @@
+/* Things to browse, in groups. A group's heading is small, spaced capitals
+   over a rule; an entry's title is large and ink, what it is muted under it,
+   then what it shows. Entries stand well apart and groups further, so the
+   eye finds each at a glance; a wide window gets a wider margin. The entry
+   a link jumped to lights its title. */
+.Catalog {
+  display: grid;
+  gap: calc(var(--gap) * 4);
+  min-width: 0;
+}
+@media (min-width: 56rem) {
+  .Catalog {
+    padding: var(--gap) calc(var(--gap) * 2);
+  }
+}
+.Catalog_Group {
+  display: grid;
+  gap: calc(var(--gap) * 2.5);
+  min-width: 0;
+  scroll-margin-top: var(--gap);
+}
+.Catalog_Heading {
+  margin: 0;
+  max-width: none;
+  padding-bottom: var(--half-gap);
+  border-bottom: 1px solid var(--border2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--heading);
+}
+.Catalog_Entry {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  scroll-margin-top: var(--gap);
+}
+.Catalog_Title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text);
+}
+.Catalog_Entry:target > .Catalog_Title {
+  color: var(--accent);
+}
+.Catalog_Sub {
+  margin: 0 0 var(--gap);
+  max-width: var(--measure);
+  color: var(--muted);
+}

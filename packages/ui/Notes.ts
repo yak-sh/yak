@@ -26,6 +26,9 @@ export let Notes: Part & Record<'Item' | 'Text' | 'Who' | 'When', Part> = block(
   },
 )
 
+/** What it is, in a line. */
+export let description = 'Notes left on something: who left each, and when.'
+
 /** A note is a line of its own; when is dim, and so is a done one. */
 export let sheet = (c: Colors): Sheet => ({
   Notes_Item: { block: true, spaced: true },

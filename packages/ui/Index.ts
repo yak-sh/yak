@@ -19,6 +19,9 @@ export let Index: Part & Record<'Group' | 'Head' | 'Item', Part> = block(
   { Group: 'div', Head: 'a', Item: 'a' },
 )
 
+/** What it is, in a line. */
+export let description = 'Groups of entries to jump to, where you are lit.'
+
 /** Each head and entry a line of its own, the entries indented under their
  * head; where you are in the accent. */
 export let sheet = (c: Colors): Sheet => ({

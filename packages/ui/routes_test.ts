@@ -1,5 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
+import { stops } from './guide.ts'
+import { kit } from './kit.ts'
 import { routes } from './routes.ts'
 
 let [ui] = routes()
@@ -14,6 +16,14 @@ test('/ui answers the style guide, dressed, with no script', async () => {
   assert(page.includes('<span class="Dot Dot-ring"></span>'))
   assert(page.includes('--bg:'))
   assert(!page.includes('<script'))
+})
+
+test("/ui's contents jump to every group's and every part's section", async () => {
+  let page = await get()
+  for (let stop of [...stops, ...Object.keys(kit)]) {
+    assert(page.includes(`href="#${stop}"`), `a link to ${stop}`)
+    assert(page.includes(`id="${stop}"`), `a section for ${stop}`)
+  }
 })
 
 test('/ui switches theme and scheme by link', async () => {

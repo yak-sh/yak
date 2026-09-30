@@ -1,0 +1,36 @@
+/* Things side by side: as many figures to a line as fit, each as wide as
+   what it shows asks, and no wider than the line. A figure is its caption,
+   small and mono, over a stage: a raised panel with room all round, where
+   what is shown sits as it would anywhere else. */
+.Gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  min-width: 0;
+}
+.Gallery_Figure {
+  flex: 0 1 max-content;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.Gallery_Caption {
+  padding: 0 2px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.Gallery_Stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Roomy, and less so on a phone, where the room is the line's. */
+  padding: clamp(var(--gap), 4vw, calc(var(--gap) * 1.75));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto; /* what is wider than the line scrolls within its stage */
+}

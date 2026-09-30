@@ -28,6 +28,10 @@ export let Section:
     },
   )
 
+/** What it is, in a line. */
+export let description =
+  'A titled part of a page: what it is about, then what it holds.'
+
 /** A blank line after it, as the margin after it in a browser. */
 export let sheet = (c: Colors): Sheet => ({
   Section: { gap: true },

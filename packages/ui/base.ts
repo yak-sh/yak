@@ -14,6 +14,10 @@ import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 import type { Colors, Specimen } from './theme.ts'
 
+/** What it is, in a line. */
+export let description =
+  'The page before any part: prose, code, quotes, tables and lists.'
+
 /** The terminal entries, in `c`. */
 export let sheet = (c: Colors): Sheet => ({
   Code: { fg: c.text, bg: c.card },

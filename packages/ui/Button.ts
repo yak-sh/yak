@@ -15,6 +15,9 @@ import type { Colors, Specimen } from './theme.ts'
 /** A button. */
 export let Button: Part = el('button', 'Button')
 
+/** What it is, in a line. */
+export let description = 'A word or a glyph that does something when pressed.'
+
 /** A press in a terminal is its word, bracketed by its colour. */
 export let sheet = (c: Colors): Sheet => ({
   Button: { fg: c.accent },

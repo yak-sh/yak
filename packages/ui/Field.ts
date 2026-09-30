@@ -29,6 +29,9 @@ export let Field: FunctionComponent<FieldProps> = (
   { lines, caret, ...p },
 ) => h(lines ? Area : Line, { ...p, 'data-caret': caret })
 
+/** What it is, in a line. */
+export let description = 'A text field: one line to type in, or several.'
+
 /** Typed text is ink, whatever it sits in. */
 export let sheet = (c: Colors): Sheet => ({
   Field: { fg: c.text },

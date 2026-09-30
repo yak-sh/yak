@@ -29,6 +29,10 @@ export let Panes: Part & Record<'Pane' | 'Top' | 'Body', Part> = block(
   },
 )
 
+/** What it is, in a line. */
+export let description =
+  'The screen in columns: a nav to find the way, the page, an aside.'
+
 /** Columns in a row, each framed, quiet but for the accent where the
  * keyboard is. */
 export let sheet = (c: Colors): Sheet => ({
@@ -52,7 +56,7 @@ export let specimens = (): Specimen[] => [
     'Panes, Pane-nav, Pane-main, Pane-on, Pane-aside, Top, Body',
     h(
       Panes,
-      { style: 'height: 12rem' },
+      { style: 'height: 12rem; width: 40rem; max-width: 100%' },
       h(
         Pane,
         { mod: 'nav' },

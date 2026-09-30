@@ -47,6 +47,9 @@ export let relative = (
   return 'just now'
 }
 
+/** What it is, in a line. */
+export let description = 'A moment, said the human way: 5 minutes ago.'
+
 /** Dim, its parts a space apart, as their gap keeps them in a browser. */
 export let sheet = (c: Colors): Sheet => ({
   Stamp: { fg: c.dim, dim: true, spaced: true },

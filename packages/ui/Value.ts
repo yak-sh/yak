@@ -18,6 +18,10 @@ export let Value: Part = el('span', 'Value')
 /** The shapes a value comes in. */
 export let shapes = ['text', 'num', 'bool', 'id', 'time', 'json', 'nil']
 
+/** What it is, in a line. */
+export let description =
+  'A stored value, as it was stored: its shape is its variant.'
+
 /** A shape is a colour. */
 export let sheet = (c: Colors): Sheet => ({
   Value: { fg: c.text },

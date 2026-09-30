@@ -17,6 +17,10 @@ import { Field } from './Field.ts'
 /** A line to send something on. */
 export let Say: Part = el('form', 'Say')
 
+/** What it is, in a line. */
+export let description =
+  'One line to send something on: what is typed, and its button.'
+
 /** Its parts stay apart, as in a browser. */
 export let sheet = (_c: Colors): Sheet => ({
   Say: { spaced: true },

@@ -14,6 +14,9 @@ import type { Colors, Specimen } from './theme.ts'
 /** A tooltip. */
 export let Tip: Part = el('div', 'Tip')
 
+/** What it is, in a line. */
+export let description = 'The words a pointer resting on something reveals.'
+
 /** A raised line. */
 export let sheet = (c: Colors): Sheet => ({
   Tip: { fg: c.text, bg: c.surface },

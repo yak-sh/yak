@@ -1,13 +1,17 @@
 /* An index: each group a small head, its entries in mono under it, one line
-   each and cut short. Where you are is lit in the accent. */
+   each and cut short. Where you are is lit in the accent. Given the room (a
+   phone's whole width, where a nav stacks over the page) the groups flow
+   into columns, so the page is not a long scroll away. */
 .Index {
-  display: grid;
-  gap: var(--half-gap);
+  columns: 9rem;
+  column-gap: var(--gap);
   min-width: 0;
 }
 .Index_Group {
   display: grid;
   min-width: 0;
+  break-inside: avoid;
+  padding-bottom: var(--half-gap);
 }
 .Index_Head,
 .Index_Item {
@@ -19,6 +23,7 @@
   border-radius: calc(var(--radius) / 2);
   padding: 0 4px;
   min-height: var(--tap);
+  align-content: center; /* the words sit in the middle of a fat target */
 }
 .Index_Head {
   font-size: 12px;

@@ -36,6 +36,10 @@ export let tones = [
   'special',
 ] satisfies (keyof Colors)[]
 
+/** What it is, in a line. */
+export let description =
+  'A pip: its shape says a state, and its tone colours it.'
+
 /** In a terminal, a shape is a glyph and a tone its colour. */
 export let sheet = (c: Colors): Sheet => ({
   Dot: { glyph: '●', fg: c.dim },

@@ -32,6 +32,10 @@ export let Prop:
     Query: 'span',
   })
 
+/** What it is, in a line. */
+export let description =
+  "A property's value that knows how to be changed, and its editors."
+
 /** The face is ink; what is not there, and a handle, are dim. */
 export let sheet = (c: Colors): Sheet => ({
   Prop_Val: { fg: c.text },

@@ -18,6 +18,9 @@ export let Pairs: Part & Record<'Key' | 'Value', Part> = block('dl', 'Pairs', {
   Value: 'dd',
 })
 
+/** What it is, in a line. */
+export let description = 'Names beside their values, one pair to a row.'
+
 /** A key is dim, so the value reads first. */
 export let sheet = (c: Colors): Sheet => ({
   Pairs_Key: { fg: c.dim },

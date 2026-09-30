@@ -28,6 +28,9 @@ export let Tile:
     },
   )
 
+/** What it is, in a line. */
+export let description = 'One thing on one line, standing for it in a list.'
+
 /** The id and the kind are dim beside the title; a count stands out. A tile
  * is a line of its own even as a link, so its parts stand apart. */
 export let sheet = (c: Colors): Sheet => ({

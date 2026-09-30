@@ -2,9 +2,10 @@
  * The routes facet, exported as `@yaks/ui/routes`: `/ui` answers the style
  * guide (guide.ts) as one static page, the kit's stylesheet inline, in the
  * theme its `theme` names and the colour scheme its `scheme` names (`light`,
- * `dark`, or the system's). Over the guide, a row of links switches each, so
- * every part is seen in every theme; the parts have no behaviour, so the page
- * needs no script.
+ * `dark`, or the system's). The page is `Panes`: beside the guide, a nav of
+ * the guide's contents to jump to, under the switchers for each choice, so
+ * every part is seen in every theme. The parts have no behaviour, so the
+ * page needs no script.
  *
  * @module
  */
@@ -12,8 +13,10 @@
 import type { Route } from '@yaks/api'
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
-import { Guide } from './guide.ts'
+import { Contents, Guide, title } from './guide.ts'
 import { stylesheet, themes } from './kit.ts'
+import { Pairs } from './Pairs.ts'
+import { Panes } from './Panes.ts'
 import { Tabs } from './Tabs.ts'
 
 // The colour schemes the page can be seen in: the system's, or one forced.
@@ -38,13 +41,33 @@ let tabs = (all: string[], on: string, href: (pick: string) => string) =>
     ),
   )
 
-/** The switcher: which theme, and which scheme. */
+/** The switchers: which theme, and which scheme. */
 let Switch = ({ theme, scheme }: { theme: string; scheme: string }) =>
   h(
-    'nav',
-    { style: 'display: flex; flex-wrap: wrap; gap: var(--gap)' },
-    tabs(Object.keys(themes), theme, (t) => at(t, scheme)),
-    tabs(schemes, scheme, (s) => at(theme, s)),
+    Pairs,
+    {},
+    h(Pairs.Key, {}, 'theme'),
+    h(Pairs.Value, {}, tabs(Object.keys(themes), theme, (t) => at(t, scheme))),
+    h(Pairs.Key, {}, 'scheme'),
+    h(Pairs.Value, {}, tabs(schemes, scheme, (s) => at(theme, s))),
+  )
+
+/** The guide beside its contents, the switchers over them. */
+let Shell = ({ theme, scheme }: { theme: string; scheme: string }) =>
+  h(
+    Panes,
+    {},
+    h(
+      Panes.Pane,
+      { mod: 'nav' },
+      h(Panes.Top, {}, h(Switch, { theme, scheme })),
+      h(
+        Panes.Body,
+        {},
+        h(Contents, { entry: (stop: string) => ({ href: `#${stop}` }) }),
+      ),
+    ),
+    h(Panes.Pane, { mod: 'main' }, h(Panes.Body, {}, h(Guide, null))),
   )
 
 /** The style guide's page, dressed in the theme named `theme` (the first,
@@ -58,13 +81,9 @@ export let page = async (
   let forced = s == 'system' ? '' : ` style="color-scheme: ${s}"`
   return `<!doctype html><html${forced}><head><meta charset="utf-8">` +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<title>@yaks/ui</title>' +
+    `<title>${title}</title>` +
     `<style>${await stylesheet(themes[t])}</style></head>` +
-    `<body><main style="padding: var(--gap)">${
-      renderToString(
-        h('div', null, h(Switch, { theme: t, scheme: s }), h(Guide, null)),
-      )
-    }</main></body></html>`
+    `<body>${renderToString(h(Shell, { theme: t, scheme: s }))}</body></html>`
 }
 
 /** `GET /ui`: the style guide, `?theme=` and `?scheme=` picking its look. */

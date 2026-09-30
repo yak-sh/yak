@@ -17,6 +17,10 @@ import type { Colors, Specimen } from './theme.ts'
 /** A value, typed over where it stands. */
 export let Edit: Part = el('span', 'Edit')
 
+/** What it is, in a line. */
+export let description =
+  'A value where it can be changed, typed over where it stands.'
+
 /** A value is ink; a terminal paints a control's value as its text. */
 export let sheet = (c: Colors): Sheet => ({
   Edit: { fg: c.text },

@@ -80,6 +80,10 @@ export let Table:
       },
     )
 
+/** What it is, in a line. */
+export let description =
+  'Things in rows under column headings, each cell one line.'
+
 /** A grid of rows in a terminal too: every cell one line, cut with an
  * ellipsis, a number set right and prose wrapped; headings dim until they
  * sort; the picked row raised. */

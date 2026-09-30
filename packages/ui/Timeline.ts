@@ -22,6 +22,9 @@ export let Timeline: Part & Record<'Item' | 'When' | 'Who' | 'What', Part> =
     What: 'div',
   })
 
+/** What it is, in a line. */
+export let description = 'Moments in order: when each happened, who, and what.'
+
 /** When is dim, who wears its own colour, and what hangs under them. */
 export let sheet = (c: Colors): Sheet => ({
   Timeline_When: { fg: c.dim },

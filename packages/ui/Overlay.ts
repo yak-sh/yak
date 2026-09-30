@@ -17,6 +17,10 @@ import { Tip } from './Tip.ts'
 /** A floating position. */
 export let Overlay: Part = el('div', 'Overlay')
 
+/** What it is, in a line. */
+export let description =
+  'A place floating above the page, for a picker or a tip.'
+
 /** A terminal has nowhere to float: what is in one stays in the flow. */
 export let sheet = (_c: Colors): Sheet => ({})
 

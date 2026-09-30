@@ -17,6 +17,10 @@ export let Menu: Part & Record<'Item' | 'Rule', Part> = block('div', 'Menu', {
   Rule: 'hr',
 })
 
+/** What it is, in a line. */
+export let description =
+  'Things to do, one to a row, with a rule between groups.'
+
 /** An item is a row of its own, as it is in a browser. */
 export let sheet = (c: Colors): Sheet => ({
   Menu_Item: { block: true },

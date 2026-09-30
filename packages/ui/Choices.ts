@@ -18,6 +18,9 @@ export let Choices: Part & Record<'Item' | 'Text' | 'Note', Part> = block(
   { Item: 'div', Text: 'span', Note: 'span' },
 )
 
+/** What it is, in a line. */
+export let description = 'A list of choices, one to a row, one of them picked.'
+
 /** A choice is a row of its own, its word and note a space apart; the one
  * under the pointer is raised a little, the picked one more. */
 export let sheet = (c: Colors): Sheet => ({

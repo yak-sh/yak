@@ -13,6 +13,9 @@ import type { Colors, Specimen } from './theme.ts'
 /** An identifier. */
 export let Id: Part = el('span', 'Id')
 
+/** What it is, in a line. */
+export let description = 'An identifier, one token: T-123.'
+
 /** Dim, and struck when retired. */
 export let sheet = (c: Colors): Sheet => ({
   Id: { fg: c.dim },

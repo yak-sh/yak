@@ -83,9 +83,11 @@ export type Theme = {
 /** One sample in the style guide: what it shows, and the tree. */
 export type Specimen = [label: string, node: VNode]
 
-/** What each part of the kit brings besides its component: its terminal
- * entries, and its samples. Its CSS is the file its key in the kit names. */
+/** What each part of the kit brings besides its component: a line saying
+ * what it is, its terminal entries, and its samples. Its CSS is the file its
+ * key in the kit names. */
 export type Kit = {
+  description: string
   sheet: (c: Colors) => Sheet
   specimens: () => Specimen[]
 }

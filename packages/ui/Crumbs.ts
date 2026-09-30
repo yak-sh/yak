@@ -29,6 +29,10 @@ export let Crumbs: Part & Record<'Item', Part> = Object.assign(
   { Item: Nav.Item },
 )
 
+/** What it is, in a line. */
+export let description =
+  'The way here, a step at a time, the last one where you stand.'
+
 /** Dim steps a space apart, and the last one ink. */
 export let sheet = (c: Colors): Sheet => ({
   Crumbs: { fg: c.dim, spaced: true },

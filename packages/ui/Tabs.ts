@@ -18,6 +18,9 @@ export let Tabs: Part & Record<'Tab' | 'Badge', Part> = block('div', 'Tabs', {
   Badge: 'span',
 })
 
+/** What it is, in a line. */
+export let description = 'A row of tabs, one of them on.'
+
 /** A tab is its face, a space between two where a browser pads them; the lit
  * one is raised. */
 export let sheet = (c: Colors): Sheet => ({

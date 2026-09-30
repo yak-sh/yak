@@ -19,6 +19,10 @@ export let Chip: Part = el('span', 'Chip')
 /** How many hues a chip comes in. */
 export let hues = 6
 
+/** What it is, in a line. */
+export let description =
+  'A name set as a token, in one of six hues that tell names apart.'
+
 /** A hue is a colour; a ghost is dim. */
 export let sheet = (c: Colors): Sheet => ({
   Chip: { fg: c.muted },

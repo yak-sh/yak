@@ -64,6 +64,8 @@ follow (web's nav.tsx listens for it).
 | `Notes`    | `Item`, `Text`, `Who`, `When`                                          | `Item-done`                                                                                                                             |
 | `Say`      | one line to send something on                                          |                                                                                                                                         |
 | `Index`    | `Group`, `Head`, `Item`                                                | `Head-on`, `Item-on`, `Item-hover`                                                                                                      |
+| `Catalog`  | `Group`, `Heading`, `Entry`, `Title`, `Sub`                            |                                                                                                                                         |
+| `Gallery`  | `Figure`, `Caption`, `Stage`                                           |                                                                                                                                         |
 
 A variant for a pseudo-class (`hover`) lets the style guide show that state.
 
@@ -121,33 +123,40 @@ text entry), the way the base stylesheet colours a browser's scrollbars.
 
 ## The style guide
 
-`Guide` is every part in every variant, on one page built of plain HTML, and
-`Specimens` is one part's section of it. The routes facet (`@yaks/ui/routes`)
-answers it at `/ui` as a static page with the stylesheet inline, and web's
-terminal shows it on `:ui`. `/ui` takes the theme and the scheme it is seen in,
-`?theme=rosepine&scheme=light`, and a row of links over the guide switches each.
+`Guide` is every part in every variant, built of the kit's own parts: a
+`Catalog` of the kit's `groups` (kit.ts), each part an entry saying what it is
+(its module's `description`) over a `Gallery` of its specimens, a figure each.
+`Specimens` is one part's entry. Its places are `stops`: the whole guide, then
+each group and the parts in it, each also the id of its section.
+
+The routes facet (`@yaks/ui/routes`) answers it at `/ui` as a static page with
+the stylesheet inline, in `Panes`: beside the guide, a nav of the theme and
+scheme switchers over `Contents`, an `Index` of the stops, each a link that
+jumps to its section. `/ui` takes the theme and the scheme it is seen in,
+`?theme=rosepine&scheme=light`. Web's terminal shows the guide on `:ui`.
 
 The cli facet (`@yaks/ui/cli`) holds it in a terminal as `yak ui`, painted
-through each part's terminal sheet: the themes as tabs over an index of the
-parts, and beside them the whole guide or one part's section. j and k walk the
-index and the page follows, ↑ ↓ PgUp PgDn scroll the page, t paints it all in
-the next theme, and q quits; a press on an entry or a tab picks it. It reads
-nothing from a graph.
+through each part's terminal sheet and framed the same way: the theme switcher
+and the contents beside the page, which is the stop the walk is on (`Page`). j
+and k walk the contents and the page follows, ↑ ↓ PgUp PgDn scroll the page, t
+paints it all in the next theme, and q quits; a press on an entry or a theme
+picks it. It reads nothing from a graph.
 
 ## Files
 
-| file            | owns                                                                  |
-| --------------- | --------------------------------------------------------------------- |
-| `el.ts`         | `el`, `block`, and the link nesting                                   |
-| `kit.ts`        | the parts, `themes`, and `stylesheet(theme)` and `sheet(theme)`       |
-| `theme.ts`      | the `Theme`, `Colors`, `Kit` and `Specimen` types                     |
-| `base.*`        | the document's defaults: prose, code, tables, syntax, scrollbars      |
-| `<Part>.ts/css` | one component: the part, its terminal entries, its specimens; its CSS |
-| `everforest.*`  | the first theme                                                       |
-| `rosepine.*`    | the second                                                            |
-| `guide.ts`      | the style guide                                                       |
-| `routes.ts`     | `/ui`                                                                 |
-| `cli.ts`        | `yak ui`                                                              |
-| `tui.ts`        | the style guide in a terminal                                         |
+| file            | owns                                                                 |
+| --------------- | -------------------------------------------------------------------- |
+| `el.ts`         | `el`, `block`, and the link nesting                                  |
+| `kit.ts`        | the parts in their `groups`, `themes`, `stylesheet()` and `sheet()`  |
+| `theme.ts`      | the `Theme`, `Colors`, `Kit` and `Specimen` types                    |
+| `base.*`        | the document's defaults: prose, code, tables, syntax, scrollbars     |
+| `<Part>.ts/css` | one component: the part, what it is, its terminal entries, specimens |
+| `everforest.*`  | the first theme                                                      |
+| `rosepine.*`    | the second                                                           |
+| `guide.ts`      | the style guide, its stops and its contents                          |
+| `routes.ts`     | `/ui`                                                                |
+| `cli.ts`        | `yak ui`                                                             |
+| `tui.ts`        | the style guide in a terminal                                        |
 
-A new component is its module and its CSS file, and one line in `kit.ts`.
+A new component is its module and its CSS file, and one line in its group in
+`kit.ts`.
