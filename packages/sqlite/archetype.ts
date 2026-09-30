@@ -23,7 +23,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { componentTables, shape, tables as listed } from './physical.ts'
+import { componentTables, shape } from './physical.ts'
 import { mintSql } from './write.ts'
 import { unit } from './unit.ts'
 
@@ -202,8 +202,10 @@ export let reclassifyAll = (driver: Driver, number = false): Backfill =>
 /**
  * Idempotent, atomic boot maintenance, after additive DDL has installed the
  * column and archetype vocabulary. Reads presence from the physical file, not
- * vocab. Retires missing-table descriptors forever; reclassifies their owners,
- * plus null assignments, in table-sized scans. No per-owner component census.
+ * vocab. Retires forever a descriptor naming a table that is missing or no
+ * longer a component table (a key renamed away from `entity`); reclassifies
+ * their owners, plus null assignments, in table-sized scans. No per-owner
+ * component census.
  */
 export function backfill(driver: Driver, number = false): Backfill {
   let run: Run = (s) => driver.query(s)
@@ -211,10 +213,10 @@ export function backfill(driver: Driver, number = false): Backfill {
   return unit(driver, () => {
     let cache = new Archetypes()
     // What the file holds is read once, and only when something is asked of
-    // it: a fresh file reads neither, and one whose every entity is already
-    // classified never reads its component tables.
+    // it: a fresh file reads nothing, and a file with descriptors reads which
+    // of its tables are component tables, once, to know none names another.
     let tables = once(() => componentTables(driver))
-    let present = once(() => new Set(listed(driver)))
+    let present = once(() => new Set(tables()))
     let ids = new Map<string, number>()
     let stale: number[] = []
     for (

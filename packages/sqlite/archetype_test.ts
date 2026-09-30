@@ -269,6 +269,26 @@ test('archetype: additive boot, physical hidden table, idempotent backfill, reti
   assert(indexes(d, 'entity').includes('entity_archetype'))
 })
 
+test('archetype: a table rekeyed away from entity leaves every set that named it', () => {
+  let d = mem()
+  d.query(OLD_SPINE)
+  d.query(HIDDEN)
+  d.query(insert('entity', { id: 1, eid: 'old', num: 1 }))
+  d.query(insert('hidden', { entity: 1 }))
+  let s = storage(d, vocab)
+  s.install()
+  let read = () => s.tx((tx) => tx.get(['old']))[0]
+  assertEquals(read().entity.archetype, eidOf(['hidden']))
+  d.query({
+    t: 'alter table',
+    table: 'hidden',
+    rename: { column: 'entity', to: 'owner' },
+  })
+  assertEquals(backfill(d).retired, 1)
+  assertEquals(read().entity.archetype, eidOf([]))
+  assertEquals(drift(d).drifted, 0)
+})
+
 test('archetype: pre-existing reference stub can become a descriptor', () => {
   let { g, get } = setup()
   g.apply([
