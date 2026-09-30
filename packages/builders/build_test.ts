@@ -330,6 +330,25 @@ test('a malformed output cannot write and leaves its build retryable', async () 
   assert(failed.length > 0)
 })
 
+test('a model reply cut short leaves its build to be asked again', async () => {
+  let { g, runner, failed } = await shop()
+  await g.apply([source('a'), {
+    ...builder('$s .doc.title=Source', toolEid('builder_model')),
+    using: { model: ids.model },
+  }])
+  let build = run(ids.builder, ['a'])
+  await drive(g, runner, build)
+  let [session] = await rows(g, '.session')
+  let s = session.entity.eid
+  await g.apply([
+    asked(s, 2, 'ask-1', 'completed'),
+    replied(s, 3, 'ask-1', '{"outputs": [{"slot": "main", "inputs": ["a"]'),
+  ])
+  assertEquals((await rows(g, '.built')).length, 0)
+  assertEquals(comp(await one(g, build), 'build')?.key, null)
+  assert(failed.length > 0)
+})
+
 test('shadow builds have distinct ids and cannot feed another builder', async () => {
   let { g, runner, vocab } = await shop({}, [], [code()])
   await g.apply([source('a'), builder()])

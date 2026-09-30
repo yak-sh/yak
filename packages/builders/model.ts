@@ -183,14 +183,17 @@ export let adapted = async (
     let ask = str(comp(said, 'output')?.source)
     if (ask && (await tx.read(`.call.source=${ask}&.limit=1`)).length) return
     // Its outputs alone: what a model session spent is its entries', never
-    // what its answer says (./cost.ts).
+    // what its answer says (./cost.ts). A reply that is not the contract (JSON
+    // cut short, prose) is still answered, as the text it said, so the build
+    // refuses it and leaves its key clear to be asked again.
+    let text = textOf(said)
     try {
-      let told = JSON.parse(textOf(said))
+      let told = JSON.parse(text)
       value = told && typeof told == 'object' && !Array.isArray(told)
         ? { outputs: told.outputs }
-        : told
+        : { said: text }
     } catch {
-      value = textOf(said)
+      value = { said: text }
     }
   } else return
   return {
