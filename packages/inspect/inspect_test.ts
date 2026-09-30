@@ -29,11 +29,12 @@ import {
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
-import { INDEX } from './Index.ts'
+import { compEid } from './links.ts'
 
 // A graph of tasks, their owners and the edges between them.
 let vocab = loadVocab([{
   $vocabulary: { [EDGE_URI]: true },
+  package: '@t/tasks',
   $defs: {
     doc: {
       component: true,
@@ -382,21 +383,8 @@ test('a query that counts shows the count', () => {
   assert(p.text('.Stack_Pane').includes('12,403'))
 })
 
-test("what is typed in the index's field narrows the index as it is typed", async () => {
-  let pack = (eid: string, name: string) => ({
-    entity: { eid },
-    _package: { name },
-  })
-  let comp = (eid: string, name: string, pkg: string) => ({
-    entity: { eid },
-    _comp: { name, package: pkg },
-  })
-  using t = host({
-    [INDEX.packs]: { rows: [pack('p1', '@yaks/task')] },
-    [INDEX.comps]: {
-      rows: [comp('c1', 'task', 'p1'), comp('c2', 'blocked', 'p1')],
-    },
-  })
+test('the index lists what the vocabulary serves, narrowed by what is typed in its field', async () => {
+  using t = host()
   let Page = frame(t.door, {
     fields: t.fields,
     Bar: () => null,
@@ -406,10 +394,15 @@ test("what is typed in the index's field narrows the index as it is typed", asyn
   let listed = () =>
     [...p.root.querySelectorAll('[data-pane="index"] .Index_Item')]
       .map((a) => a.textContent)
-  assertEquals(listed(), ['task', 'blocked'])
-  t.fields.type(INSPECT, 'bl')
+  assertEquals(listed(), ['comment', 'doc', 'edge', 'requires', 'task'])
+  t.fields.type(INSPECT, 're')
   await tick()
-  assertEquals(listed(), ['blocked'])
+  assertEquals(listed(), ['requires'])
+  // Each links to the page of the entity the graph describes it in.
+  assertEquals(
+    p.$('[data-pane="index"] .Index_Item').getAttribute('href'),
+    t.io.link(compEid('requires')),
+  )
 })
 
 test('a terminal paints a page as values, with nothing to type in', () => {

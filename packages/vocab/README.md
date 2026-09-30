@@ -624,7 +624,7 @@ await g.read('._prop.package._package.name=@yaks/id ?doc') // what @yaks/id adds
 
 A host composes the meta vocabulary by listing `@yaks/vocab` among its plugins
 (its `./vocab` export), beside `@yaks/edge` and `@yaks/doc`. `@yaks/code` fills
-it from each package's `vocab.json` as the files change.
+it with the vocabulary the graph is served with, each time a process starts.
 
 ## Exports
 

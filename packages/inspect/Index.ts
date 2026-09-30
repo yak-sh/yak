@@ -1,6 +1,10 @@
 /**
- * The index beside every page: every package, and under it every component
- * it declares, always there, each a link to its page; the one shown lit.
+ * The index beside every page: every package the graph's vocabulary is
+ * served from, and under it every component it declares, always there, each
+ * a link to its page; the one shown lit. It is read off the vocabulary the
+ * host was served (@yaks/api `/vocab`), so it lists what the server serves and
+ * nothing else, and each link names the entity a name derives
+ * (./links.ts), the one the graph describes it in.
  * What is typed in the field above it (`text`, the page hands it down from
  * @yaks/filter) narrows it as it is typed: to the components whose name holds
  * it, and to every component of a package whose name does. The field runs it
@@ -11,47 +15,43 @@
 
 import { h, type JSX } from 'preact'
 import * as ui from '@yaks/ui'
-import type { Bundle, Io } from './host.ts'
-import { str } from './read.ts'
-import { rows, waiting } from './rows.ts'
-
-/** What the index asks for: every package and every component, by name. */
-export let INDEX = {
-  packs: '._package&.fields=_package.name&.order=_package.name',
-  comps: '._comp&.fields=_comp.name,_comp.package&.order=_comp.name',
-}
+import type { Vocab } from '@yaks/vocab'
+import type { Io } from './host.ts'
+import { compEid, packEid } from './links.ts'
 
 /**
- * The groups an index shows for `text`: each package with the components of
- * it that match, a package matching by its own name keeping all of them.
- * Components no package declares come last, under none.
+ * The groups an index shows for `text`: each package with the components it
+ * declares that match, a package matching by its own name keeping all of
+ * them. Components no package declares come last, under none.
  *
  * ```ts
+ * import { loadVocab } from '@yaks/vocab'
  * import { grouped } from './Index.ts'
- * let pack = (eid: string, name: string) => ({ entity: { eid }, _package: { name } })
- * let comp = (eid: string, name: string, pkg: string) => ({ entity: { eid }, _comp: { name, package: pkg } })
- * let packs = [pack('p1', '@yaks/task'), pack('p2', '@yaks/doc')]
- * let comps = [comp('c1', 'task', 'p1'), comp('c2', 'blocked', 'p1'), comp('c3', 'doc', 'p2')]
- * grouped(packs, comps, 'bl').map(([p, cs]) => [p?.entity.eid, cs.length]) // [['p1', 1]]
- * grouped(packs, comps, 'doc').map(([p, cs]) => [p?.entity.eid, cs.length]) // [['p2', 1]]
+ * let comp = { component: true, properties: {} }
+ * let vocab = loadVocab([
+ *   { package: '@yaks/task', $defs: { task: comp, blocked: comp } },
+ *   { package: '@yaks/doc', $defs: { doc: comp } },
+ * ])
+ * grouped(vocab, 'bl') // [['@yaks/task', ['blocked']]]
+ * grouped(vocab, 'doc') // [['@yaks/doc', ['doc']]]
  * ```
  */
 export let grouped = (
-  packs: Bundle[],
-  comps: Bundle[],
+  vocab: Pick<Vocab, 'docs' | 'all' | 'comp'>,
   text: string,
-): [Bundle | undefined, Bundle[]][] => {
+): [string | undefined, string[]][] => {
   let t = text.trim().toLowerCase()
   let has = (s: string) => !t || s.toLowerCase().includes(t)
-  let by = Map.groupBy(comps, (c) => str(c, '_comp', 'package'))
-  let own = new Set(packs.map((p) => p.entity.eid))
-  let groups: [Bundle | undefined, Bundle[]][] = [
-    ...packs.map((p): [Bundle, Bundle[]] => [p, by.get(p.entity.eid) ?? []]),
-    [undefined, comps.filter((c) => !own.has(str(c, '_comp', 'package')))],
+  let packs = [...new Set(vocab.docs.flatMap((d) => d.package ?? []))]
+    .toSorted()
+  let by = Map.groupBy(vocab.all, (n) => vocab.comp(n)?.package ?? '')
+  let groups: [string | undefined, string[]][] = [
+    ...packs.map((p): [string, string[]] => [p, by.get(p) ?? []]),
+    [undefined, by.get('') ?? []],
   ]
-  return groups.flatMap(([p, cs]): [Bundle | undefined, Bundle[]][] => {
-    let whole = !!p && has(str(p, '_package', 'name'))
-    let shown = whole ? cs : cs.filter((c) => has(str(c, '_comp', 'name')))
+  return groups.flatMap(([p, cs]): [string | undefined, string[]][] => {
+    let whole = !!p && has(p)
+    let shown = whole ? cs : cs.filter(has)
     return whole || shown.length ? [[p, shown]] : []
   })
 }
@@ -61,9 +61,10 @@ export let grouped = (
 export let Index = (
   { io, here, text }: { io: Io; here?: string; text: string },
 ): JSX.Element => {
-  let got = io.ask(INDEX)
-  let groups = grouped(rows(got.packs), rows(got.comps), text)
-  return waiting(got.comps) ?? h(
+  let groups = grouped(io.vocab, text)
+  let item = (Part: typeof ui.Index.Item, eid: string, name: string) =>
+    h(Part, { key: eid, href: io.link(eid), mod: eid == here && 'on' }, name)
+  return h(
     ui.Index,
     {},
     h(
@@ -74,20 +75,11 @@ export let Index = (
     groups.map(([p, cs]) =>
       h(
         ui.Index.Group,
-        { key: p?.entity.eid ?? 'none' },
+        { key: p ?? 'none' },
         p
-          ? h(ui.Index.Head, {
-            href: io.link(p.entity.eid),
-            mod: p.entity.eid == here && 'on',
-          }, str(p, '_package', 'name'))
+          ? item(ui.Index.Head, packEid(p), p)
           : h(ui.Index.Head, {}, 'no package'),
-        cs.map((c) =>
-          h(ui.Index.Item, {
-            key: c.entity.eid,
-            href: io.link(c.entity.eid),
-            mod: c.entity.eid == here && 'on',
-          }, str(c, '_comp', 'name'))
-        ),
+        cs.map((n) => item(ui.Index.Item, compEid(n), n)),
       )
     ),
     !groups.length ? h(ui.Rows.More, {}, `nothing is named ${text}`) : null,

@@ -209,7 +209,9 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/code](./code)** — a codebase read into the graph: a `package` per
   manifest, a `module` per file (wearing @yaks/git's `file`), a `symbol` per
   export and an `imports` link per import, each with its doc comment in `doc`
-  for search. `code sync` reads only the files whose Git blob moved.
+  for search. `code sync` reads only the files whose Git blob moved. Each
+  process starting describes the vocabulary the graph is served with as
+  @yaks/vocab's `_package`, `_comp` and `_prop` rows (`vocab_describe`).
 
 - **[@yaks/mirror](./mirror)** — one sync between files and a graph: a binding
   names its files and carries a `read` (files → graph), a `values` (graph →

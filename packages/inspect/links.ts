@@ -1,8 +1,9 @@
 /**
- * The links every page makes to the vocabulary: a component's page and a
- * property's, by the eids their names derive (@yaks/vocab identifies each
- * `_comp` by its name and each `_prop` by its component and its name), so a
- * name links to its page without asking the graph where that is.
+ * The links every page makes to the vocabulary: a package's page, a
+ * component's and a property's, by the eids their names derive (@yaks/vocab
+ * identifies each `_package` and `_comp` by its name and each `_prop` by its
+ * component and its name), so a name links to its page without asking the
+ * graph where that is.
  *
  * @module
  */
@@ -12,6 +13,9 @@ import { identityEid } from '@yaks/graph'
 import { Chip } from '@yaks/ui'
 import type { Io } from './host.ts'
 import { tone } from './read.ts'
+
+/** The eid of the package named `name`. */
+export let packEid = (name: string): string => identityEid('_package', [name])
 
 /** The eid of the component named `name`. */
 export let compEid = (name: string): string => identityEid('_comp', [name])

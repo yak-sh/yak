@@ -99,6 +99,11 @@
           "description": "read every file, not only the ones that moved"
         }
       }
+    },
+    "vocab_describe": {
+      "effect": true,
+      "created": ["process"],
+      "description": "describe the vocabulary this graph is served with as @yaks/vocab's _package, _comp, _extends, _prop and _before entities whenever a process starts, clearing what it no longer declares; a graph already describing it is read once and written nothing"
     }
   }
 }

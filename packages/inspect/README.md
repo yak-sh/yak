@@ -16,8 +16,10 @@ this package serves it.
 
 ## A tour
 
-- **The index**, on the left, always there: every package with the components it
-  declares under it. The field above it narrows it as it is typed (a component
+- **The index**, on the left, always there: every package the server's
+  vocabulary is served from (`/vocab`), with the components it declares under
+  it, each linked to the entity the graph describes it in (@yaks/code
+  `vocab_describe`). The field above it narrows it as it is typed (a component
   by its name, a package with all of its own), and runs the line as a query on
   Enter.
 - **The stack**, beside it: each page gone to (a link followed, a row pressed, a

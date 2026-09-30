@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
   "description": "Reads a codebase into a graph: packages, modules, exported symbols and imports, with their doc comments as searchable text, synced incrementally by Git blob.",

@@ -22,14 +22,19 @@ symbol{module, name, kind, line}   one per export; id from module + name
 imports                            @yaks/edge relation: module → module
 ```
 
-Where the config also lists `@yaks/vocab`, a package's own `vocab.json` (beside
-its `deno.json`) is read into the components it declares, as
+Where the config also lists `@yaks/vocab`, the vocabulary the graph is served
+with is described in it as
 [@yaks/vocab](../vocab/README.md#a-vocabulary-as-entities)'s `_package`,
-`_comp`, `_prop` and `_before` entities, each file on its own. The `_package`
-carries the manifest's name and description, and each row points at the
-`_package` that declares it, so `._prop.package._package.name=@yaks/id` lists
-every property @yaks/id declares, on its own components and on the ones it
-extends. A row a package stops declaring is cleared like a gone export.
+`_comp`, `_extends`, `_prop` and `_before` entities, by the `vocab_describe`
+effect every process starting owes (`created: ["process"]`, ./described.ts). It
+is the composed vocabulary, not the files: a package the checkout holds and the
+config does not list is not described. Only the difference is written, so a
+graph already describing it is read once and written nothing. The `_package`
+carries its name and its manifest's description (from `package`, as the codebase
+was last read), and each row points at the `_package` that declares it, so
+`._prop.package._package.name=@yaks/id` lists every property @yaks/id declares,
+on its own components and on the ones it extends. A row the served vocabulary
+stops declaring is cleared like a gone export.
 
 Each one's text is in `doc`: a package's description, a module's opening comment
 (the `/** */` block or the run of `//` lines it starts with), the whole of a
@@ -51,8 +56,8 @@ tracks in the checkout the command runs in. Each module records the Git blob id
 of the text it was read from, and a sync reads a file again only when that blob
 moved. Nothing is deleted: a file or export that is gone has its components
 cleared, and a later sync fills them in when the path or name comes back.
-`task land` runs an incremental sync of the checkout it landed into, when the
-yak config lists `@yaks/code`.
+Nothing runs a sync on its own: `yak code sync` reads what moved since the last
+one.
 
 A citation of code (`cites`, [@yaks/git](../git)) points at a `symbol`, and
 `cites check` asks Git which commits touched that definition since the citation
