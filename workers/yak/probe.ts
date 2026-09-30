@@ -1398,6 +1398,44 @@ export let subscribed = async (
 }
 
 /**
+ * A subscription whose first invoice was never paid, as Stripe leaves it once
+ * its 23 hours have run out: `incomplete_expired`, which bills nobody again.
+ * The day passes on a test clock of its own, which takes the sandbox a few
+ * seconds; deleting the clock deletes its customer and the subscription.
+ */
+export let lapsed = async (
+  k: Pick<Kernel, 'made'>,
+  key: string,
+  metadata: Record<string, string>,
+) => {
+  metadata = { ...metadata, apex: apex() }
+  let now = Math.floor(Date.now() / 1000)
+  let clock = String(
+    (await charged(key, '/v1/test_helpers/test_clocks', { frozen_time: now }))
+      .id,
+  )
+  let at = `/v1/test_helpers/test_clocks/${clock}`
+  k.made.add(at)
+  let customer = await charged(key, '/v1/customers', {
+    test_clock: clock,
+    metadata,
+  })
+  let sub = await charged(key, '/v1/subscriptions', {
+    customer: String(customer.id),
+    items: { 0: { price: await plusPrice(key) } },
+    payment_behavior: 'default_incomplete',
+    metadata,
+  })
+  await charged(key, `${at}/advance`, { frozen_time: now + 24 * 60 * 60 })
+  await until(async () => (await charged(key, at)).status == 'ready', {
+    timeout: 60_000,
+    poll: 500,
+    label: 'the test clock a day on',
+  })
+  return await charged(key, `/v1/subscriptions/${sub.id}`)
+}
+
+/**
  * The checkout session a door's `url` opened, read back off the sandbox with
  * `query` (`?expand[]=line_items`). billing.ts mints a space its customer the
  * first time it opens checkout, so that customer is kernel `k`'s to delete.

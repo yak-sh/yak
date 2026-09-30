@@ -1,9 +1,15 @@
 // Closing a space through the whole kernel (T-33166): the whole act — an agent that
 // deletes nothing, a letter that does, a slug back in circulation with none
-// of the last space's bytes or rows behind it — and the custom domain the
-// erase gives back. The pure seams are erase_test.ts's.
+// of the last space's bytes or rows behind it — the custom domain the erase
+// gives back, and a subscription that ended at Stripe not holding it up. The
+// pure seams are erase_test.ts's.
 
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertObjectMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { ticket } from './erase.ts'
 import type { Space } from './directory.ts'
@@ -12,10 +18,14 @@ import {
   attached,
   client,
   connector,
+  delivered,
   kernel,
+  lapsed,
   letters,
   meta,
   seed,
+  stripeKey,
+  WEBHOOK_SECRET,
 } from './probe.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
@@ -190,6 +200,45 @@ test('an erased space gives its domain back', async () => {
       [],
     )
     assertEquals(await dir.query(`id=${them.eids.domainlab20}`), [])
+  } finally {
+    await k.stop()
+  }
+})
+
+// A subscription whose first payment never came ends at Stripe as
+// `incomplete_expired` and bills nobody again, so its space goes like one
+// whose subscription was cancelled (erase.ts `refused`, billing.ts `ending`).
+test('a space whose subscription lapsed unpaid may be erased', async () => {
+  let key = stripeKey()
+  let k = await kernel()
+  try {
+    let them = await seed(k, [{ slug: 'lapsed21', apps: [] }])
+    let eid = them.eids.lapsed21
+    let sub = await lapsed(k, key, { space: eid, slug: 'lapsed21' })
+    await delivered(
+      k,
+      '/stripe/webhook',
+      WEBHOOK_SECRET,
+      'customer.subscription.updated',
+      sub,
+    )
+    let dir = meta(k)
+    let [row] = await dir.query(`id=${eid}`)
+    assertObjectMatch(row, {
+      plan: { subscription: sub.id, status: 'incomplete_expired' },
+    })
+    let out = await k.at('yaks.app', '/space/lapsed21/delete', {
+      method: 'POST',
+      headers: {
+        cookie: them.cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        t: await ticket(space({ eid }), them.person, k.secret, true),
+      }).toString(),
+    })
+    assertEquals(out.status, 200, await out.text())
+    assertEquals(await dir.query(`id=${eid}`), [])
   } finally {
     await k.stop()
   }

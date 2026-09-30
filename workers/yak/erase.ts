@@ -86,6 +86,7 @@ import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { defect } from './sentry.ts'
+import { ending } from './billing.ts'
 import { NOTES } from './standing.ts'
 import {
   draftFiles,
@@ -200,15 +201,17 @@ export let nobodys = async (dir: Directory, d: Doomed) => {
 //   space, app and membership on the platform with it, whoever owns `yak`
 //   (tools.ts app_delete holds the same line for its app);
 //
-//   a space that is paying has a Stripe subscription this door does not
-//   cancel, and a subscription with nothing left to bill for is a charge
-//   every month for a space that is gone. Cancelling is the person's own, at
-//   their billing page, and it is one click away.
+//   a space whose Stripe subscription has not ended holds one this door does
+//   not cancel, and a subscription with nothing left to bill for is a charge
+//   every month for a space that is gone. Over is billing.ts `ending`, the
+//   statuses Stripe never moves a subscription out of. Cancelling is the
+//   person's own, at their billing page, and it is one click away.
 export let refused = (space: Space, env: HostEnv = {}) =>
   space.slug == META.space
     ? `${META.space} is the platform itself`
-    : space.plan?.subscription && space.plan.status != 'canceled'
-    ? `${space.slug} is paying for Plus. Cancel the subscription first — ` +
+    : space.plan?.subscription && !ending(space.plan.status)
+    ? `${space.slug} is subscribed to the Plus plan. ` +
+      'Cancel the subscription first — ' +
       `https://${apex(env)}/connect, "Manage billing" — and delete it after ` +
       'that, so nothing keeps billing for a space that is gone'
     : ''
