@@ -120,13 +120,13 @@ test('every memory tool is declared and implemented', () => {
 
 test('a topic is its name, and a name said twice is one topic', async () => {
   let g = fresh()
-  await write(
-    g,
-    await ask('topic_new', {
-      name: 'UI  Components',
-      body: 'how the interface is built from display-only parts',
-    }, g),
-  )
+  let answer = await ask('topic_new', {
+    name: 'UI  Components',
+    body: 'how the interface is built from display-only parts',
+  }, g)
+  // The answer names the id itself, for whoever asked to use.
+  assertEquals(eids(answer), [topicEid('ui components')])
+  await write(g, answer)
   let [made] = await g.read('.topic&*')
   assertEquals(made.entity.eid, topicEid('ui components'))
   assertEquals(part(made, 'doc').title, 'UI Components')
