@@ -323,6 +323,18 @@ export let Status = () => {
     }
     document.addEventListener('selectionchange', sel)
 
+    // INSERT is derived too: the keyboard in a value typed over in place.
+    let typed = (t: EventTarget | null) =>
+      t instanceof HTMLElement && t.isContentEditable
+    let focus = (e: FocusEvent) => {
+      if (typed(e.target) && mode.value != 'command') mode.value = 'insert'
+    }
+    let unfocus = (e: FocusEvent) => {
+      if (typed(e.target) && mode.value == 'insert') mode.value = 'normal'
+    }
+    addEventListener('focusin', focus)
+    addEventListener('focusout', unfocus)
+
     // Pointer clicks don't keep keyboard focus: a clicked tab/×/link would
     // otherwise swallow the next <space> (browsers activate the focused
     // button on space). Keyboard activations (detail == 0) keep theirs.
@@ -335,6 +347,8 @@ export let Status = () => {
     return () => {
       removeEventListener('keydown', key)
       document.removeEventListener('selectionchange', sel)
+      removeEventListener('focusin', focus)
+      removeEventListener('focusout', unfocus)
       removeEventListener('click', declick)
     }
   }, [])

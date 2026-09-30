@@ -118,6 +118,13 @@ let page = (more: Partial<Host> = {}) => {
     fire,
     $,
     draw: (node: ComponentChild) => render(h(Ux, { host }, node), root),
+    // Take the tree off the page as a browser does, blurring what is typed in
+    // as it goes.
+    drop: () => {
+      root.querySelector('[contenteditable]')
+        ?.dispatchEvent(new window.Event('blur'))
+      render(null, root)
+    },
     // Type over a value in place: its text, then the key that ends it.
     type: async (el: HTMLElement, text: string, end = 'Enter') => {
       el.textContent = text
@@ -245,7 +252,9 @@ test('what is typed lives in the page graph, and a remount types on from it', as
     open: true,
     text: 'Fix the ma',
   })
-  render(null, p.root) // unmounted mid-typing, nothing emitted
+  p.drop() // unmounted mid-typing: nothing emitted, the draft kept
+  await tick()
+  assertEquals(p.emitted, [])
   p.draw(title)
   await tick()
   assert(p.$('.Edit').isContentEditable)
@@ -258,21 +267,20 @@ test('what is typed lives in the page graph, and a remount types on from it', as
   assertEquals(p.front.ent(at('', T, 'doc', 'title'))?.Edit, undefined)
 })
 
-test('the same value under two owners keeps two states', async () => {
+test('the same value drawn in each view of each card keeps a state of its own', async () => {
   using p = page()
-  let title = (owner: string) =>
-    h(
-      Ux,
-      { at: owner },
-      h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }),
-    )
-  p.draw(h('div', null, title('a'), title('b')))
-  let [a, b] = [...p.root.querySelectorAll<HTMLElement>('.Edit')]
-  await p.fire(a, 'dblclick')
-  let [a2, b2] = [...p.root.querySelectorAll<HTMLElement>('.Edit')]
-  assert(a2.isContentEditable)
-  assert(!b2.isContentEditable)
-  assert(b == b2)
+  let title = (view: string) =>
+    h(Ux, { at: view }, h(Edit.Text, { e: task(), comp: 'doc', prop: 'title' }))
+  let card = (eid: string) => h(Ux, { at: eid }, title('bar'), title('body'))
+  p.draw(h('div', null, card('c1'), card('c2')))
+  let edits = () => [...p.root.querySelectorAll<HTMLElement>('.Edit')]
+  await p.fire(edits()[3], 'dblclick')
+  assertEquals(edits().map((e) => e.isContentEditable), [
+    false,
+    false,
+    false,
+    true,
+  ])
 })
 
 test('a body the bundle does not carry is not offered', async () => {

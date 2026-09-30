@@ -83,6 +83,7 @@ import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
 import { viaName } from './Comments.tsx'
 import { block } from '@yaks/ui'
+import { Ux } from '@yaks/ux'
 import { favoriteChange, favoriteLabel } from '../navigation.ts'
 
 // Convenience re-exports: Entity.tsx is the front door, registry.ts the
@@ -484,7 +485,9 @@ let EntityFace = (
       </Veil>
     )
   }
-  return renderView(e, view, rest)
+  // A view drawn is a consumer of its own: the title in a card's bar and the
+  // same title in its body keep two states (@yaks/ux).
+  return <Ux at={view ?? 'default'}>{renderView(e, view, rest)}</Ux>
 }
 
 export let Entity = memo(EntityFace)

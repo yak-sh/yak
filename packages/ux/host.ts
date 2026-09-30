@@ -91,8 +91,9 @@ let Given = createContext<Given>({ at: '' })
 /**
  * `<Ux host={host}>…</Ux>`: every UX component under it reads through
  * `host`. `at` names the consumer that owns what is under it (a card's own
- * eid), so the same value drawn in two places keeps two states, and a remount
- * finds its own again; an inner `Ux` given only `at` keeps the host above it.
+ * eid, a view drawn on it), so the same value drawn in two places keeps two
+ * states, and a remount finds its own again. An inner `Ux` names a consumer
+ * within the one above it, and keeps its host unless given one.
  */
 export let Ux = (
   { host, at, children }: {
@@ -103,7 +104,10 @@ export let Ux = (
 ): JSX.Element => {
   let up = useContext(Given)
   return h(Given.Provider, {
-    value: { host: host ?? up.host, at: at ?? up.at },
+    value: {
+      host: host ?? up.host,
+      at: at == null ? up.at : up.at ? `${up.at}/${at}` : at,
+    },
     children,
   })
 }
@@ -115,5 +119,6 @@ export let useHost = (): Host => {
   return host
 }
 
-/** The consumer that owns what is drawn here: the nearest `Ux`'s `at`. */
+/** The consumer that owns what is drawn here: every `Ux`'s `at` above it,
+ * outermost first. */
 export let useOwner = (): string => useContext(Given).at

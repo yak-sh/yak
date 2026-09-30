@@ -22,7 +22,7 @@ import { Float } from '@yaks/ui'
 import { h } from 'preact'
 import { short } from '@yaks/id'
 import { parseProp, propAt } from '../props.ts'
-import { cache, ent, findEid, mode, mutate, problem, row } from '../live.ts'
+import { cache, ent, findEid, mutate, problem, row } from '../live.ts'
 import { and, present } from '@yaks/query'
 import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
@@ -166,11 +166,3 @@ export let ux: Host = {
     comp == 'task' && prop == 'status' ? h(Dot, { status: v }) : null,
   Float,
 }
-
-// Typing over a value in place is insert mode: the page reads it off the
-// `Edit` states in its graph, whatever put it there.
-front.watch('.Edit').subscribe((rows) => {
-  let typing = rows.some((b) => (b.Edit as { text?: string })?.text != null)
-  if (typing && mode.peek() == 'normal') mode.value = 'insert'
-  else if (!typing && mode.peek() == 'insert') mode.value = 'normal'
-})

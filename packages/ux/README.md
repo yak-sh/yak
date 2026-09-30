@@ -70,19 +70,18 @@ h(Edit.Control, { e, comp: 'task', prop: 'status', anchor, onChange })
 
 Both are `sync: none`: nothing leaves the page. `Edit` is `durable: connection`,
 gone with the page and kept across every remount before that; closing it removes
-it. `Refused` is `durable: "0s"`, which is how a vocabulary marks an event: a
-graph applies it and carries it back in the applied change, and never stores it
-(@yaks/vocab).
-
-A page reads its UX components' state as it reads anything in its graph: web
-goes into insert mode while any `Edit` holds `text`.
+it. Leaving a value typed over emits it, and being taken off the page is not
+leaving it: the draft waits in the graph for the remount. `Refused` is
+`durable: "0s"`, which is how a vocabulary marks an event: a graph applies it
+and carries it back in the applied change, and never stores it (@yaks/vocab).
 
 ## The host
 
 `h(Ux, { host }, tree)` hands a host to every UX component under it, so one page
-may hold several. An inner `h(Ux, { at: eid }, …)` names the owner of what is
-under it, keeping the host above: web's cards each own theirs, so the same value
-on two cards keeps two states. The host supplies:
+may hold several. An inner `h(Ux, { at }, …)` names a consumer within the one
+above it, keeping the host: web names each card by its eid and each view drawn
+on it by the view's name, so a title in a card's bar and in its body, or on two
+cards, keeps a state of its own. The host supplies:
 
 - `vocab`: what a property is, and whether a client may write it.
 - `front`: the page's own graph, where each state lives (a @yaks/client over

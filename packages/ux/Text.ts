@@ -80,12 +80,17 @@ export let Text = (
     if (still && edit.row?.open) edit.end()
   }, [still])
 
-  let finish = (t: HTMLElement) => {
-    if (!t.isContentEditable || !edit.now()?.open) return
-    let text = (t.textContent ?? '').trim()
-    if (text && text != value) emit(host, onChange, e, comp, prop, text)
-    edit.end()
-  }
+  // Leaving it emits. Being taken off the page (a remount) is not leaving
+  // it: a browser blurs the focused element as it removes it, so finishing
+  // waits a microtask and asks whether it is still there, and the draft stays
+  // in the graph for the remount.
+  let finish = (t: HTMLElement) =>
+    queueMicrotask(() => {
+      if (!t.isConnected || !t.isContentEditable || !edit.now()?.open) return
+      let text = (t.textContent ?? '').trim()
+      if (text && text != value) emit(host, onChange, e, comp, prop, text)
+      edit.end()
+    })
 
   let key = (ev: KeyboardEvent) => {
     let t = ev.currentTarget as HTMLElement
