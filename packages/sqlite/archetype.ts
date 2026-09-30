@@ -23,7 +23,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { componentTables, tables as listed } from './physical.ts'
+import { componentTables, shape, tables as listed } from './physical.ts'
 import { mintSql } from './write.ts'
 import { unit } from './unit.ts'
 
@@ -60,18 +60,18 @@ let point = (target: number | null, which: Expr): Stmt => ({
 /** Counts from a boot: existing assignments stay untouched on a repeated run. */
 export type Backfill = { entities: number; archetypes: number; retired: number }
 
-// The component tables of a file change only with its schema, so one
-// `pragma schema_version` validates the cached list instead of a table_info per
-// table per call.
-let facetsHeld = new WeakMap<Driver, { version: number; tables: string[] }>()
+// The component tables of a file change only with its schema, so the schema's
+// shape (./physical.ts `shape`) validates the cached list instead of a
+// table_info per table per call: the fingerprint install's mark trusts, read
+// from `sqlite_schema`, since a Durable Object's SQLite refuses
+// `pragma schema_version`.
+let facetsHeld = new WeakMap<Driver, { print: string; tables: string[] }>()
 let facets = (driver: Driver): string[] => {
-  let version = Number(
-    driver.query({ t: 'pragma', name: 'schema_version' })[0].schema_version,
-  )
+  let print = shape(driver)
   let held = facetsHeld.get(driver)
-  if (held?.version == version) return held.tables
+  if (held?.print == print) return held.tables
   let tables = componentTables(driver)
-  facetsHeld.set(driver, { version, tables })
+  facetsHeld.set(driver, { print, tables })
   return tables
 }
 
@@ -390,6 +390,43 @@ export function drift(driver: Driver, sample = 12): Drift {
     }
   }
   return out
+}
+
+/**
+ * One unit's account of what its writes did to each entity's archetype, kept
+ * by the store that opened the unit (./mod.ts `storage`). `moved` hears a row
+ * come or go (./write.ts `patch`), `born` a spine minted, `pointed` a pointer
+ * written. `owed` is every entity whose rows ended the unit other than they
+ * began it, or that was born, with no pointer written since: the ones no
+ * tracker classified. A batch that adds a component and drops it again owes
+ * nothing, and neither does anything @yaks/graph wrote, since its tracker
+ * points every entity it moved after the rows are written.
+ */
+export let ledger = () => {
+  // Per entity, per table: whether it held a row before the unit's first
+  // write to it, and whether it holds one now.
+  let rows = new Map<string, Map<string, [boolean, boolean]>>()
+  let born = new Set<string>()
+  let pointed = new Set<string>()
+  return {
+    moved: (eid: string, table: string, held: boolean) => {
+      let of = rows.get(eid) ?? new Map<string, [boolean, boolean]>()
+      rows.set(eid, of)
+      of.set(table, [of.get(table)?.[0] ?? !held, held])
+      pointed.delete(eid)
+    },
+    born: (eid: string) => {
+      born.add(eid)
+      pointed.delete(eid)
+    },
+    pointed: (eid: string) => void pointed.add(eid),
+    owed: (): string[] =>
+      [...new Set([...born, ...rows.keys()])].filter((eid) =>
+        !pointed.has(eid) &&
+        (born.has(eid) ||
+          [...rows.get(eid)!.values()].some(([was, now]) => was != now))
+      ),
+  }
 }
 
 /**

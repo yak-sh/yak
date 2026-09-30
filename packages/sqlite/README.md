@@ -304,13 +304,24 @@ information even for single entities. Readers ignore tables outside their
 vocabulary without changing the descriptor. Only table sets are cached, allowing
 rollback, other writers, and schema changes to remain visible.
 
-A raw SQL writer must call `reclassify(driver, eids)` inside its transaction
-after changing component rows. It returns changed pointers and new descriptors
-as bundles that the application can broadcast; descriptor entities and unknown
-ids are ignored. Stores without archetypes and unclassified low-level writes
-fall back to inspecting component presence. An incomplete catalog declines the
-query optimization instead of hiding entities. The fixture benchmarks compare
-the classified and fallback read paths.
+Every unit `tx(body)` opens keeps the pointers in step, whichever door wrote. It
+notes each entity a patch gave a spine or a row it lacked, took a row from, or
+brought back, and each one a pointer was written for since; what is still owed
+when the body returns is classified from the rows it holds, in the same unit.
+Through the graph that is nothing, since the plugin's tracker points every
+entity it moved; a hook writing through a detached transaction, a boot-time reap
+or a script patching through `tx` is classified by the store. Removal points
+what it removes at the tombstone set itself.
+
+A raw SQL writer, past the store, must call `reclassify(driver, eids)` inside
+its transaction after changing component rows. It returns changed pointers and
+new descriptors as bundles that the application can broadcast; descriptor
+entities and unknown ids are ignored. `drift(driver)` is the audit
+(`archetype_check`): it reads every owner's presence and counts the pointers
+that disagree, writing nothing. Stores without archetypes and unclassified
+low-level writes fall back to inspecting component presence. An incomplete
+catalog declines the query optimization instead of hiding entities. The fixture
+benchmarks compare the classified and fallback read paths.
 
 ### Selective human numbering
 

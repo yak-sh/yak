@@ -419,6 +419,10 @@ let wears = (driver: Driver, comp: string, eid: string): boolean =>
  * nothing, which a yaks app pointing into another app's store makes on
  * purpose, and @yaks/graph brings no entity into being for it. It is numbered
  * when a bundle of its own arrives, in this batch or a later one.
+ *
+ * `moved` hears each component row this patch brought or took away, as the
+ * table and whether the entity holds one now: what may have moved its
+ * archetype (./archetype.ts `ledger`). A value-only patch says nothing.
  */
 export let patch = (
   driver: Driver,
@@ -426,6 +430,7 @@ export let patch = (
   bundles: Bundle[],
   number: boolean | { except: readonly string[] } = false,
   adopt = false,
+  moved?: Moved,
 ): Entity[] => {
   // A computed component's rows are another package's (@yaks/sql `Backing`):
   // there is no table here to write one to.
@@ -538,22 +543,26 @@ export let patch = (
     }
     return need.every((prop) => comp[prop] != null)
   }
+  // A spine minted here holds no row yet, so a whole component is one
+  // INSERT…ON CONFLICT and certainly a row that came. Anywhere else a write's
+  // own count says whether a row came or went: the UPDATE hit, or the absent
+  // INSERT or the drop did something.
+  let fresh = new Set(born.map((e) => e.eid))
   for (let b of alive) {
+    let eid = b.entity.eid
     for (let [name, comp] of comps(b)) {
-      if (comp != null && full(name, comp)) {
-        effect(driver, upsertSql(vocab, b.entity.eid, name, comp))
+      if (comp != null && fresh.has(eid) && full(name, comp)) {
+        effect(driver, upsertSql(vocab, eid, name, comp))
+        moved?.(eid, name, true)
         continue
       }
-      let { first, fallback } = patchOne(vocab, b.entity.eid, name, comp)
-      let changes = driver.run?.(first)
-      if (changes === undefined) {
-        changes = driver.query(
-          fallback ? { ...first, returning: [col('entity')] } : first,
-        ).length
-      }
+      let { first, fallback } = patchOne(vocab, eid, name, comp)
+      let changes = ran(driver, first)
       // A write's own result avoids the absent INSERT when UPDATE hit. D1
       // still sends the complete plan atomically via patchSql; no read/merge.
-      if (fallback && !changes) effect(driver, fallback())
+      if (fallback && !changes) changes = ran(driver, fallback())
+      else if (fallback) continue
+      if (changes) moved?.(eid, name, comp != null)
     }
   }
 
@@ -562,11 +571,22 @@ export let patch = (
   return born
 }
 
+// How many rows a write changed: the driver's own count where it keeps one,
+// else the rows the statement returns.
+let ran = (driver: Driver, w: Insert | Update | Delete): number =>
+  driver.run?.(w) ?? driver.query({ ...w, returning: [col('entity')] }).length
+
+/** What hears a component row come (`held`) or go, entity by entity. */
+export type Moved = (eid: string, table: string, held: boolean) => void
+
 /** Bring these tombstoned entities back: each tombstone row goes, and the
  * identity keeps its eid, number and integer id. No component returns; the
- * patch after it gives them. An eid with no tombstone is left alone. */
-export let revive = (driver: Driver, eids: string[]): void => {
-  for (let eid of eids) effect(driver, unburySql(eid))
+ * patch after it gives them. An eid with no tombstone is left alone; `moved`
+ * hears each tombstone that went, as {@link patch} tells its rows. */
+export let revive = (driver: Driver, eids: string[], moved?: Moved): void => {
+  for (let eid of eids) {
+    if (ran(driver, unburySql(eid))) moved?.(eid, TOMBSTONE, false)
+  }
 }
 
 /**

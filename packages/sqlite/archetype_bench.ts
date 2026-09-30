@@ -25,7 +25,9 @@ let store = storage(driver, vocab)
 store.install()
 let data = workload()
 store.tx((tx) => tx.patch(data.bundles))
-let size = tally(driver, 'entity')
+// The owners: a unit through the store has already classified the seed, and
+// the backfill below starts from no descriptors at all.
+let size = tally(driver, 'entity') - tally(driver, 'archetype')
 Deno.bench(`archetype/${loc.mode}/backfill`, (b) => {
   driver.query({ t: 'savepoint', name: 'sample' })
   let descriptors = scan(driver, 'archetype', undefined, ['entity'])

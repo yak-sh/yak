@@ -9,6 +9,7 @@ import {
   col,
   type Driver,
   eq,
+  insert,
   join,
   scan,
   select,
@@ -197,9 +198,10 @@ for (let fault of ['occupied', 'invalid']) {
     }
     // Fail on the last descriptor so earlier verified renames must roll back.
     if (fault == 'occupied') {
-      s.tx((tx) =>
-        tx.patch([{ entity: { eid: rows.at(-1)!.eid as string }, doc: {} }])
-      )
+      // Past every door, as only a raw writer could: a unit through the store
+      // classifies what it writes, and refuses the occupied address itself.
+      d.query(insert('entity', { eid: String(rows.at(-1)!.eid) }))
+      d.query(insert('doc', { entity: spine(d).at(-1)!.id }))
     } else {
       legacy(d, Number(rows.at(-1)!.id), 'not-a-legacy-descriptor')
     }

@@ -87,16 +87,19 @@ descriptors; legacy ids are not accepted on new writes. Startup backfilling is a
 storage migration rather than a graph apply; graph-time descriptor creations are
 journaled when the journal plugin is composed in.
 
-Use `g.apply()` for ongoing writes. Low-level storage `patch` bypasses this
-plugin. A low-level `remove` does not: `@yaks/sqlite` points each entity it
-removes at the tombstone set (`entomb`), since a removal leaves it nothing else,
-so the dead leave their archetype by every door. A later install classifies
-newly created entities lacking an archetype, but does not detect arbitrary
-direct changes to already-classified entities. An application that must write a
-component row outside the graph calls `@yaks/sqlite`'s
+Use `g.apply()` for ongoing writes. A low-level storage `patch`, `remove` or
+`revive` bypasses this plugin but not the pointer: every unit `@yaks/sqlite`
+opens classifies, before it closes, each entity whose rows came or went without
+a pointer written after, and its removal points the dead at the tombstone set
+(`entomb`). So an effect hook writing through a detached transaction, a reap at
+boot or a script patching through storage leaves no pointer behind, and the
+graph's own writes pay nothing for it. Raw SQL is below every door: an
+application that must write a component row that way calls `@yaks/sqlite`'s
 `reclassify(driver, eids)` in that same transaction; there is no trigger or
-queue to maintain. Arbitrary SQL and component-table drops require
-reopening/installing before graph writes resume.
+queue to maintain. `drift` (the `archetype_check` tool) finds a pointer a raw
+writer forgot. A later install classifies newly created entities lacking an
+archetype. Arbitrary SQL and component-table drops require reopening/installing
+before graph writes resume.
 
 ## Compatibility
 

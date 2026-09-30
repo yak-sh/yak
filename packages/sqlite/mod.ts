@@ -59,6 +59,7 @@ import type {
   ReadOpts,
 } from '@yaks/graph'
 import { sha256 } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import type { Query } from './read.ts'
 import {
   analyzed,
@@ -74,7 +75,7 @@ import {
 import { epoch, epochAt, installed, meta, SCHEMA } from './meta.ts'
 import { doom, get, read, rows, tagOf } from './read.ts'
 import { unit } from './unit.ts'
-import { backfill, entomb } from './archetype.ts'
+import { backfill, entomb, ledger, reclassify } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
@@ -91,7 +92,6 @@ export {
   objects,
   type Stood,
 } from './physical.ts'
-export { fold, pointers } from './fold.ts'
 export { GONE, OVER, type Overlay, overlay } from './overlay.ts'
 export { bindings, matched } from './rules.ts'
 export * from './bundle.ts'
@@ -321,6 +321,47 @@ export let storage = (
     },
     revive: (eids) => revive(driver, eids),
   }
+  // A unit over a store that keeps archetypes keeps every pointer in step,
+  // whichever door wrote: @yaks/graph's tracker, a hook writing through a
+  // detached transaction, a script patching through `tx`. Its ledger hears
+  // each row that came or went and each pointer written (./archetype.ts
+  // `ledger`); what it still owes when the body returns is classified from
+  // what those entities hold (`reclassify`), in the same unit. Through the
+  // graph that is nothing, since its tracker points every entity it moved, so
+  // its writes gain no read. Removal points what it removes at the tombstone
+  // set itself.
+  let tracked = (): { tx: Tx; settle: () => void } => {
+    let l = ledger()
+    return {
+      tx: {
+        ...tx,
+        patch: (bundles) => {
+          let born = patch(
+            driver,
+            vocab,
+            bundles,
+            base.number,
+            base.adopt,
+            l.moved,
+          )
+          for (let e of born) l.born(e.eid)
+          for (let b of bundles) {
+            if (b.entity.archetype !== undefined) l.pointed(b.entity.eid)
+          }
+          return born
+        },
+        remove: (entities) => {
+          tx.remove(entities)
+          for (let e of entities) l.pointed(e.eid)
+        },
+        revive: (eids) => revive(driver, eids, l.moved),
+      },
+      settle: () => {
+        let owed = l.owed()
+        if (owed.length) reclassify(driver, owed, numbered)
+      },
+    }
+  }
   return {
     worn: worn(vocab, base.derived),
     // A caller replaying these statements over a standing file must add new
@@ -418,7 +459,17 @@ export let storage = (
       read(driver, vocab, query, { ...opts(), ...o }, comps),
     rows: (query, o) => rows(driver, vocab, query, { ...opts(), ...o }),
     get: (eids, comps) => unit(driver, () => identity(eids, comps), 'read'),
-    tx: (body) => unit(driver, () => body(tx)),
+    tx: <R>(body: (tx: Tx) => R): R =>
+      unit(driver, (): R => {
+        if (!classified) return body(tx)
+        let { tx: t, settle } = tracked()
+        // An async body settles what it owes before the unit closes, as the
+        // unit waits for it (./unit.ts).
+        return after(body(t), (out) => {
+          settle()
+          return out
+        }) as R
+      }),
   }
 }
 

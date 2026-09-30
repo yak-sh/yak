@@ -1,7 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes, eidOf } from '@yaks/archetype'
-import { type Bundle, graph, type Plugin, token } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import { type Bundle, detached, graph, type Plugin, token } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ddl, journal, log } from '@yaks/journal'
 import {
@@ -157,6 +158,31 @@ test('archetype: a removal past the graph leaves its archetype, and its tombston
   assertEquals(get('a').entity.archetype, eidOf(['tombstone']))
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'C' } }])
   assertEquals(get('a').entity.archetype, eidOf(['doc']))
+})
+
+test('archetype: a write past the graph keeps its pointer in step, by every door', () => {
+  // An effect hook writes through the detached transaction, as an audit row,
+  // a lease reaped at boot or an effect's own write does.
+  let { g, store, driver, get } = setup([{
+    name: 'echo',
+    hooks: {
+      effect: (b, tx) =>
+        b.some((x) => x.entity.eid == 'a' && x.doc)
+          ? after(tx.patch([{ entity: { eid: 'a' }, task: {} }]), () => b)
+          : b,
+    },
+  }])
+  g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' } }])
+  assertEquals(get('a').entity.archetype, eidOf(['doc', 'task']))
+  store.tx((tx) => tx.patch([{ entity: { eid: 'a' }, task: null }]))
+  assertEquals(get('a').entity.archetype, eidOf(['doc']))
+  detached(store).patch([{ entity: { eid: 'b' }, link: { to: 'c' } }])
+  assertEquals(get('b').entity.archetype, eidOf(['link']))
+  assertEquals(get('c').entity.archetype, eidOf([]))
+  store.tx((tx) => tx.remove([{ eid: 'b' }]))
+  store.tx((tx) => tx.revive(['b']))
+  assertEquals(get('b').entity.archetype, eidOf([]))
+  assertEquals(drift(driver), { checked: 3, drifted: 0, sample: [] })
 })
 
 test('archetype: dry run and late rollback cannot poison cached sets', () => {
@@ -346,7 +372,8 @@ test('archetype: boot respects number exclusions and the persistent high-water m
     })
     // A file an older install wrote, holding an owner nothing classified.
     for (let stmt of s.ddl()) d.query(stmt)
-    s.tx((tx) => tx.patch([{ entity: { eid: 'owner' }, doc: {} }]))
+    d.query(insert('entity', { eid: 'owner' }))
+    d.query(insert('doc', { entity: idOf(d, 'owner') }))
     let num = (n: number | null) =>
       d.query({
         t: 'update',
